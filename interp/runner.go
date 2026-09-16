@@ -1266,15 +1266,24 @@ type Runner struct {
 	// dispatch routes skip the value of a frozen name and the ordinary check
 	// does not report the same names a second time.
 	prefixCheckedFirst bool
-	// prefixTraceValues holds this command's assignment-prefix values, keyed
-	// by the assignment they came from, for the one command being traced.
-	// `set -x` has to write the value it is about to hand over and the route
-	// that applies it has to hand over the same one, and the expansion may
-	// run a command substitution — so it happens once, here, and both read
-	// it. Nil for every command not under `set -x`, which is what keeps this
-	// from moving the expansion of an untraced prefix. See
+	// prefixTraceAssigns and prefixTraceValues hold this command's
+	// assignment-prefix values, for the one command being traced. `set -x`
+	// has to write the value it is about to hand over and the route that
+	// applies it has to hand over the same one, and the expansion may run a
+	// command substitution — so it happens once and both read it. Empty for
+	// every command not under `set -x`, which is what keeps this from moving
+	// the expansion of an untraced prefix. See
 	// Runner.expandPrefixTraceValues.
-	prefixTraceValues map[*syntax.Assign]string
+	//
+	// Two parallel slices rather than a map keyed by the assignment, which
+	// is what this was: a prefix is one, two or three assignments, so the
+	// scan is shorter than hashing a pointer — and a map here is a *table*
+	// on the Runner, which every clone then has to own or be excused from
+	// sharing. TestACloneOwnsEveryTable says so, and it is right to: a
+	// per-command scratch value is not a table and should not have to
+	// pretend to be one.
+	prefixTraceAssigns []*syntax.Assign
+	prefixTraceValues  []string
 	// expandingWord is the word being expanded and expandingSpan which of
 	// its spans, so a diagnostic about an expansion can name the text around
 	// it: two dialects blame the word rather than the `${…}`, and by the
@@ -4746,7 +4755,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if r.refusePrefixesEarly(c.Assigns, argv) {
 		return nil
 	}
-	defer func() { r.prefixTraceValues = nil }()
+	defer func() { r.prefixTraceAssigns, r.prefixTraceValues = nil, nil }()
 	if tracesPrefix && !prefixFollows {
 		// Ahead of the redirections, which is measured and not incidental:
 		// `z=1 cmd >/nope/f` writes `+ z=1` and `+ cmd` and *then* the
@@ -5230,7 +5239,7 @@ func (r *Runner) prefixValue(a *syntax.Assign) string {
 // operator names, and `.append` is entered with the appended part alone —
 // see interp/prefixdiscipline.go.
 func (r *Runner) prefixExpansion(a *syntax.Assign) string {
-	if value, ok := r.prefixTraceValues[a]; ok {
+	if value, ok := r.prefixTraceValue(a); ok {
 		// Already expanded, to be written by `set -x` before the command
 		// runs. Reading it back rather than expanding again is what keeps
 		// `x=$(date) cmd` from running the substitution twice under a trace

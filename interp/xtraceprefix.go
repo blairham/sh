@@ -213,18 +213,32 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 			// See Runner.refusePrefixesEarly.
 			continue
 		}
-		if r.prefixTraceValues == nil {
-			r.prefixTraceValues = map[*syntax.Assign]string{}
-		}
-		r.prefixTraceValues[a] = r.prefixExpansion(a)
+		// The value first and the two slices afterwards, in that order: the
+		// lookup reads them as a pair, and an assignment recorded before its
+		// value would be found with nothing beside it.
+		value := r.prefixExpansion(a)
+		r.prefixTraceAssigns = append(r.prefixTraceAssigns, a)
+		r.prefixTraceValues = append(r.prefixTraceValues, value)
 	}
+}
+
+// prefixTraceValue is the value expanded for this assignment's trace, and
+// whether there is one. A scan rather than a lookup: a prefix is one, two or
+// three assignments.
+func (r *Runner) prefixTraceValue(a *syntax.Assign) (string, bool) {
+	for i, held := range r.prefixTraceAssigns {
+		if held == a {
+			return r.prefixTraceValues[i], true
+		}
+	}
+	return "", false
 }
 
 // prefixTraceWords renders the assignments that have a value, in order.
 func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d Diagnostics) []string {
 	words := make([]string, 0, len(assigns))
 	for _, a := range assigns {
-		value, ok := r.prefixTraceValues[a]
+		value, ok := r.prefixTraceValue(a)
 		if !ok {
 			continue
 		}

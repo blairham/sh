@@ -1242,6 +1242,8 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 				} else {
 					elems = []string{joinedFirst}
 				}
+			} else if joined, ok := r.joinsTheListBeforeAnOperator(e, elems, mapped, apply); ok {
+				elems = joined
 			} else {
 				elems = mapped
 			}
@@ -3142,6 +3144,68 @@ func elementOp(op syntax.ParamOp) bool {
 		return true
 	}
 	return false
+}
+
+// listBoundary is what the fields of `$@` are strung together with in the
+// dialect that runs an operator over the list once instead of over each
+// element.
+//
+// A byte rather than a separator anyone chose: it has to be one that cannot
+// be in a word and cannot be matched by a literal in the pattern, because
+// what a script sees is that the pattern does not reach across a field.
+// Measured 2026-09-16, `set -- ab cd; printf "[%s]" "${@#ab c}"` is `[ab][cd]`
+// in dash and BusyBox ash — the pattern `ab c` is a prefix of the fields
+// written out with a space between them and matches nothing here, so the
+// boundary is not a space. `IFS=:` does not move the answer either, so it is
+// not the field separator. A `*` does cross it: `"${@##a*}"` over
+// `aa ab ba` is one empty field in both, so the boundary goes when the
+// pattern takes everything.
+const listBoundary = "\x00"
+
+// joinsTheListBeforeAnOperator runs a trim or a replacement over `$@` as one
+// string rather than over each field, and reports whether it did.
+//
+// dash and BusyBox ash do, and it is visible whenever a second field also
+// matches: `set -- aa ab ba; printf "[%s]" "${@#a}"` is `[a][b][ba]` in bash,
+// zsh and ksh93 — each field trimmed — and `[a][ab][ba]` in dash and ash,
+// where the leading `a` comes off the joined string once and what is left is
+// split back into the fields it was made of. Measured 2026-09-16 on Apple's
+// dash-16, Debian's and Alpine's dash 0.5.12 and BusyBox ash 1.37.0.
+//
+// It matters to a script that trims a prefix off its own arguments —
+// `set -- "${@#--}"` — which reaches every argument in three shells and only
+// the first here.
+//
+// Asked only where the two readings differ, which is the rule the `[*]` axis
+// beside it follows: `set -- aa ab; "${@%b}"` is `aa a` either way and needs
+// no answer. An empty list is not asked at all, because joining nothing and
+// splitting it back would turn no fields into one empty one.
+func (r *Runner) joinsTheListBeforeAnOperator(e *syntax.ParamExpr, elems, mapped []string,
+	apply func(string) string,
+) ([]string, bool) {
+	if len(elems) == 0 || !r.keepsFieldsUnderAnOperator(e) {
+		return nil, false
+	}
+	joined := strings.Split(apply(strings.Join(elems, listBoundary)), listBoundary)
+	if slices.Equal(joined, mapped) {
+		return nil, false
+	}
+	if r.ask(r.sem().OperatorDistributesOverTheFieldList,
+		"an operator on `$@` applying to each field") {
+		return nil, false
+	}
+	return joined, true
+}
+
+// keepsFieldsUnderAnOperator is the shape the axis above is about: the one
+// that stays several fields in quotes, which is `$@` and every spelling of it.
+//
+// `[*]` is the other side of the same line and has an axis of its own a few
+// lines up, asked with the separator a script chose rather than with a
+// boundary nothing can match — a join a script can see the seam of is a
+// different question from one it cannot.
+func (r *Runner) keepsFieldsUnderAnOperator(e *syntax.ParamExpr) bool {
+	return !r.subscriptJoinsElements(e)
 }
 
 // elementOpApplier expands the operator's words once and returns the operator

@@ -744,6 +744,12 @@ func Semantics() interp.Semantics {
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	// `kill %1` reaches the job's process here, as it does in bash.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// A trim on `$@` runs over the whole list once, as it does in dash.
+	s.OperatorDistributesOverTheFieldList = interp.No
+	// And nor does it over `"$*"`, which is dash's and zsh's answer:
+	// `"${*#a}"` over `aa ab ba` is `a ab ba`. Measured 2026-09-16, and
+	// unanswered until now, so the construct was a refusal.
+	s.OperatorDistributesOverStarSubscript = interp.No
 	// And it counts a clustered word at its first letter, which is dash's
 	// answer and not bash's: `-abc` reads `a` with OPTIND already 2.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.Yes

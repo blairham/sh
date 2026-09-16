@@ -2394,6 +2394,41 @@ type Semantics struct {
 	// has to keep the pid here.
 	KillJobSpecAimsAtTheGroup Answer
 
+	// OperatorDistributesOverTheFieldList runs a trim or a replacement over
+	// each field of `$@` rather than over the whole list once.
+	//
+	// The counterpart of OperatorDistributesOverStarSubscript on the other
+	// side of the `@`/`*` line, and it is a separate question because the
+	// join is a different one. `[*]` joins with the separator a script chose
+	// and can see the seam of; `$@` keeps its fields, so the dialect that
+	// runs the operator once has to string them together with a boundary
+	// nothing in a pattern can match and split the result back on it.
+	//
+	// The difference is invisible while only the first field matches, which
+	// is why it needs a case where a second one does:
+	//
+	//	set -- aa ab ba; printf '[%s]' "${@#a}"
+	//
+	//	bash 5.3.20, zsh 5.9.2, ksh93u+   [a][b][ba]
+	//	dash 0.5.12, BusyBox ash 1.37.0   [a][ab][ba]
+	//
+	// Measured 2026-09-16 on Apple's dash-16 and Debian's and Alpine's
+	// 0.5.12 builds, and `${@%a}` over `xa ya za` splits the same way. Two
+	// further readings say what the boundary is rather than guessing:
+	// `"${@#ab c}"` over `ab cd` changes nothing there, so the fields are
+	// not joined with a space, and `IFS=:` does not move the answer, so they
+	// are not joined with the field separator either. A `*` does cross it —
+	// `"${@##a*}"` is one empty field — so the boundary is taken with
+	// everything else when the pattern reaches that far.
+	//
+	// It matters to `set -- "${@#--}"`, which strips a prefix from every
+	// argument in three shells and from the first one only here.
+	//
+	// Asked only where the two readings differ, and never over an empty
+	// list: joining nothing and splitting it back would turn no fields into
+	// one empty one.
+	OperatorDistributesOverTheFieldList Answer
+
 	// GetoptsCountsTheWordAtItsFirstLetter moves OPTIND past a clustered
 	// word as soon as its *first* letter has been read, keeping the place
 	// inside the word somewhere a script cannot see.
@@ -15654,8 +15689,11 @@ func PosixSemantics() Semantics {
 		GetoptsCountsTheWordAtItsFirstLetter: No,
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
-		KillJobSpecAimsAtTheGroup:      No,
-		SignalHandlerSeesEarlierStatus: No,
+		KillJobSpecAimsAtTheGroup: No,
+		// A trim on `$@` runs over each field; dash and BusyBox ash run it
+		// over the whole list once and say so themselves.
+		OperatorDistributesOverTheFieldList: Yes,
+		SignalHandlerSeesEarlierStatus:      No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
 		// entered — which is what six of the seven columns do. Measured
@@ -16467,6 +16505,9 @@ func CoreSemantics() Semantics {
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,
+		// A trim on `$@` runs over each field; dash and BusyBox ash run it
+		// over the whole list once and say so themselves.
+		OperatorDistributesOverTheFieldList: Yes,
 		// Whether `$_` exists at all is left unanswered here, which is the
 		// substrate refusing it. *How* it moves is answered anyway, at the
 		// reading two of the three shells that have the parameter share:

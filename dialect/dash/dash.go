@@ -659,6 +659,15 @@ func Semantics() interp.Semantics {
 	// `kill %1` aims at the job's process group, which a script never has:
 	// the monitor is off, the job leads no group, and the send is ESRCH.
 	s.KillJobSpecAimsAtTheGroup = interp.Yes
+	// A trim on `$@` runs over the whole list once, not over each field:
+	// `set -- aa ab ba` makes `"${@#a}"` into `a ab ba` here and
+	// `a b ba` in bash, zsh and ksh93.
+	s.OperatorDistributesOverTheFieldList = interp.No
+	// And nor does it over `"$*"`: `set -- aa ab ba` makes `"${*#a}"`
+	// into `a ab ba` here and in zsh and BusyBox ash, against `a b ba` in
+	// bash and ksh93. Measured 2026-09-16. Unanswered until now, so the
+	// construct was a refusal in a shell that has it.
+	s.OperatorDistributesOverStarSubscript = interp.No
 	// OPTIND names the word *after* a cluster from its first letter on, so
 	// `-abc` reads `a` with OPTIND already 2. The place inside the word is
 	// kept somewhere a script cannot see. bash, ksh93 and zsh all leave

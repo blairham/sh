@@ -1624,6 +1624,8 @@ func Semantics() interp.Semantics {
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// A trim on `$@` runs over each field, as it does in bash.
+	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// bash's answer here: OPTIND names the word until its last letter.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.No
 	s.GetoptsClearsOptarg = interp.No

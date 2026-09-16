@@ -601,13 +601,6 @@ func biEval(r *Runner, ctx context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
-	if len(args) == 0 {
-		// Every word was a marker and nothing is left to run, which is the
-		// same success a bare `eval` reports: measured, `eval --` is a
-		// silent 0 in bash 5.3.20, bash 3.2.57, zsh 5.9.2 and ksh93u+ —
-		// every column that reads the marker at all.
-		return 0
-	}
 	return r.runSourced(ctx, strings.Join(args, " "), sourced{
 		eval:         true,
 		label:        "eval",
@@ -631,6 +624,14 @@ func biEval(r *Runner, ctx context.Context, args []string) int {
 // a bare `-` in command position discarded — a separate fact about that
 // shell, filed as issue 3236. A reading that ate the dash here would have
 // made `eval - -- echo hi` run `echo hi`, and it runs `--`.
+//
+// It may hand back nothing — `eval --` is every word being a marker — and the
+// caller runs the empty text rather than short-circuiting to 0. A branch that
+// returned early was here and was taken out: no probe could tell the two
+// apart. `eval --` after a `false` is 0 either way, and the pair is identical
+// under `set -x`, under `set -v` and in what `$_` holds afterwards, in this
+// shell and in bash 5.3.20. A branch nothing can distinguish reads as a case
+// somebody covered.
 func (r *Runner) evalOptions(args []string) ([]string, int) {
 	if len(args) == 0 || len(args[0]) < 2 || args[0][0] != '-' {
 		return args, 0

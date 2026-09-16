@@ -1351,6 +1351,13 @@ func Semantics() interp.Semantics {
 	// is the one column of the three that neither declines the pattern nor
 	// treats it as an ordinary one.
 	s.EmptyReplacementPattern = interp.EmptyReplacementPatternMatchesAnEmptyValue
+	// The anchors are here — `v=abcabc` gives `Xbcabc` for `${v/#a/X}` and
+	// `abcabX` for `${v/%c/X}` — and an **empty** pattern behind one is
+	// declined, which is this shell alone: `${v/#/X}` and `${v/%/X}` are both
+	// `abcabc` here where bash and zsh write the `X`. The axis above has
+	// recorded that in prose since #1857 and nothing read it until #3272.
+	s.ReplacementAnchors = interp.Yes
+	s.AnchoredEmptyReplacementPattern = interp.No
 	// And the empty match it refuses is the one where the match before it
 	// ended, which is the classic global-replace rule: `${v//@(b|)/<>}` is
 	// `<>a<>c<>` here against `<>a<><>c` in the other two — no replacement

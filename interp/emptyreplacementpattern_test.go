@@ -98,22 +98,63 @@ func TestWhatAnEmptyReplacementPatternMatches(t *testing.T) {
 	}
 }
 
-// The anchored spellings are a row of their own and do not ask the axis.
+// The anchored spellings are a row of their own, and they ask an axis of
+// their own.
 //
-// Written down because it is the boundary the axis was placed at: `${v/#/X}`
-// and `${v/%/X}` have an empty pattern too, and two of the three columns that
-// answer the unanchored question agree about them — so an axis asked wherever
-// the pattern is empty would have refused a construct nobody disputes.
-func TestAnAnchoredEmptyPatternAsksNothing(t *testing.T) {
-	for _, tc := range []struct{ name, src, want string }{
-		{"anchored at the front", `v=abc; printf "[%s]" "${v/#/X}"`, "[Xabc]"},
-		{"anchored at the end", `v=abc; printf "[%s]" "${v/%/X}"`, "[abcX]"},
-		{"anchored over an empty value", `v=; printf "[%s]" "${v/#/X}"`, "[X]"},
+// This test used to assert that they asked *nothing*, on the reading that
+// "two of the three columns that answer the unanchored question agree about
+// them". They do not: ksh93 declines an anchor behind an empty pattern and
+// takes every other anchor there is, and EmptyReplacementPattern's own doc
+// has said so in prose since #1857. The assertion was the bug, written down
+// (#3272).
+//
+// Measured 2026-09-16 from a script file, `v=abcabc`: `${v/#/X}` is
+// `Xabcabc` in bash 5.3, that binary as `sh`, bash 3.2 and zsh, and
+// `abcabc` in ksh93u+; `${v/%/X}` splits the same way. BusyBox ash reads no
+// anchor at all, so the question never reaches it there.
+func TestAnAnchoredEmptyPatternAsksItsOwnAxis(t *testing.T) {
+	for _, tc := range []struct{ name, src, fires, declines string }{
+		{"anchored at the front", `v=abc; printf "[%s]" "${v/#/X}"`, "[Xabc]", "[abc]"},
+		{"anchored at the end", `v=abc; printf "[%s]" "${v/%/X}"`, "[abcX]", "[abc]"},
+		{"anchored over an empty value", `v=; printf "[%s]" "${v/#/X}"`, "[X]", "[]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// The axis left unanswered on purpose: reaching it would print a
-			// refusal and end at status 2, which is what this asserts against.
+			// EmptyReplacementPattern is left unanswered throughout, which
+			// is the other half of the claim: the unanchored axis must not
+			// be consulted here, and reaching it would refuse at status 2.
 			sem := testSemantics()
+			sem.EmptyReplacementPattern = EmptyReplacementPatternUnspecified
+			sem.AnchoredEmptyReplacementPattern = Yes
+			out, st := runGrammar(t, tc.src, patternGrammar, withSem(sem))
+			if out != tc.fires || st != 0 {
+				t.Errorf("yes: %s = %q (status %d), want %q at 0", tc.src, out, st, tc.fires)
+			}
+			sem.AnchoredEmptyReplacementPattern = No
+			out, st = runGrammar(t, tc.src, patternGrammar, withSem(sem))
+			if out != tc.declines || st != 0 {
+				t.Errorf("no: %s = %q (status %d), want %q at 0", tc.src, out, st, tc.declines)
+			}
+			// And unanswered is refused by name rather than guessed at.
+			sem.AnchoredEmptyReplacementPattern = Unspecified
+			out, st = runGrammar(t, tc.src, patternGrammar, withSem(sem))
+			if st != 2 || !strings.Contains(out, "an anchored replacement whose pattern is empty") {
+				t.Errorf("unspecified: %s = %q (status %d), want a refusal naming the axis at 2", tc.src, out, st)
+			}
+		})
+	}
+}
+
+// And a pattern with a byte in it behind an anchor asks neither axis, which
+// is the boundary both of them were placed at.
+func TestAnAnchoredPatternWithBytesAsksNeitherEmptyAxis(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"anchored at the front", `v=abcabc; printf "[%s]" "${v/#a/X}"`, "[Xbcabc]"},
+		{"anchored at the end", `v=abcabc; printf "[%s]" "${v/%c/X}"`, "[abcabX]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := testSemantics()
+			sem.EmptyReplacementPattern = EmptyReplacementPatternUnspecified
+			sem.AnchoredEmptyReplacementPattern = Unspecified
 			out, st := runGrammar(t, tc.src, patternGrammar, withSem(sem))
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)

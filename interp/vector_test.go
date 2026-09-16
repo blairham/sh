@@ -72,6 +72,14 @@ func testSemantics() Semantics {
 	s.DollarSingleQuestionEscape = Yes
 	s.DollarSingleUnicodeEscapes = Yes
 
+	// The span replacement's anchors, and an empty pattern behind one. Every
+	// suite that writes `${v/#a/X}` on its way to something else reaches the
+	// first, and it is an axis since #3272 — BusyBox ash has the replacement
+	// and no anchors. The suite that is *about* them is
+	// emptyreplacementpattern_test.go, which sets both sides.
+	s.ReplacementAnchors = Yes
+	s.AnchoredEmptyReplacementPattern = Yes
+
 	s.ArraysAreSparse = Yes
 	s.ArrayScalarIsTheWholeArray = No
 	// And which element the one-element answer means on a keyed table: the

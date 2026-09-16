@@ -45,6 +45,11 @@ func trimArmRun(t *testing.T, src string, answer Answer) (string, int) {
 		// two positions ReplacementEmptyMatchDeclined parts on. Answered so
 		// the rows measure the arm order and nothing else.
 		sem.ReplacementEmptyMatchDeclined = EmptyMatchDeclinedAtTheEnd
+		// And the anchor itself, which became an axis at #3272 — BusyBox ash
+		// has the replacement and reads no `#` or `%` behind the `/`. The
+		// anchored rows here are about which arm the match takes, so the
+		// anchor has to be read before they can ask anything.
+		sem.ReplacementAnchors = Yes
 		r.Semantics = &sem
 	})
 }

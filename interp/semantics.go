@@ -10644,6 +10644,74 @@ type Semantics struct {
 	// ksh93, which is that shell declining an *anchor* it takes nowhere else
 	// (#1857).
 	EmptyReplacementPattern EmptyReplacementPatternPolicy
+	// ReplacementAnchors reads a `#` or a `%` written immediately after the
+	// `/` of a span replacement as an **anchor** rather than as the first
+	// character of the pattern.
+	//
+	// syntax.Dialect.ParamSubstitution's comment calls the two halves one
+	// feature — "`${x/pat/rep}` and its anchored forms" — and in BusyBox ash
+	// they are not: that shell has the replacement and has no anchors, so
+	// `#` and `%` are ordinary first characters of the pattern there (#3272).
+	//
+	// Measured 2026-09-16, `v=abcabc`, in the digest-pinned Alpine image
+	// internal/oracle reaches, under `--init`:
+	//
+	//	                     ${v/b/X}  ${v//b/X}  ${v/#a/X}  ${v/%c/X}
+	//	bash 5.3, as `sh`    aXcabc    aXcaXc     Xbcabc     abcabX
+	//	bash 3.2.57          aXcabc    aXcaXc     Xbcabc     abcabX
+	//	zsh 5.9.2, ksh93u+   aXcabc    aXcaXc     Xbcabc     abcabX
+	//	dash 0.5.12          `Bad substitution`, 2 — no replacement at all
+	//	BusyBox ash 1.37.0   aXcabc    aXcaXc     **abcabc**  **abcabc**
+	//
+	// The first two columns are the controls and they are right wherever the
+	// construct exists at all: this is "no anchor", not "no replacement".
+	//
+	// The **discriminating** probe is a value that holds the anchor
+	// character, because `abcabc` answers `abcabc` under both "the anchor is
+	// honoured and `a` does not start it" and "the pattern is `#a` and is not
+	// there". Measured in the same run with `w='x#ay%bz'`:
+	//
+	//	                     ${w/#a/Q}   ${w/%b/Q}   ${w/#/Q}
+	//	six columns          x#ay%bz     x#ay%bz     Qx#ay%bz or x#ay%bz
+	//	BusyBox ash 1.37.0   **xQy%bz**  **x#ayQz**  **xQay%bz**
+	//
+	// The `#a` was found *inside* the value and replaced, which no reading
+	// but "an ordinary pattern" produces.
+	//
+	// A Semantics answer rather than a syntax.Dialect flag, and that is
+	// measured too: BusyBox **parses** `${v/#a/X}` without complaint, so
+	// nothing about the construct's acceptance differs and syntax.Core()
+	// would have had to claim one reading for every column. What differs is
+	// what the `#` means. Where the answer is No the character goes back on
+	// the front of the pattern, which is exactly what the shell does with it.
+	//
+	// Asked only where an anchor was actually written.
+	ReplacementAnchors Answer
+	// AnchoredEmptyReplacementPattern is whether an **anchored** span
+	// replacement whose pattern is empty matches the empty string at that
+	// end — `${v/#/X}` and `${v/%/X}`.
+	//
+	// It is EmptyReplacementPattern's question at the other spelling and it
+	// does not have the same answer, which is why it is a field of its own.
+	// Measured 2026-09-16, `v=abcabc`, from a script file:
+	//
+	//	                    ${v/#/X}   ${v/%/X}
+	//	bash 5.3, as `sh`   Xabcabc    abcabcX
+	//	bash 3.2.57         Xabcabc    abcabcX
+	//	zsh 5.9.2           Xabcabc    abcabcX
+	//	ksh93u+             **abcabc** **abcabc**
+	//
+	// ksh93 declines an anchor it takes everywhere else — `${v/#a/X}` is
+	// `Xbcabc` there, in the same run — and EmptyReplacementPattern's own doc
+	// has said so in prose since #1857 without anything reading it (#3272).
+	//
+	// One answer for both ends, measured rather than assumed: no column
+	// splits `/#` from `/%` here.
+	//
+	// Asked only where the pattern is empty **and** an anchor was read, so a
+	// pattern with a byte in it never reaches it and neither does an
+	// unanchored empty one — that is EmptyReplacementPattern's row.
+	AnchoredEmptyReplacementPattern Answer
 
 	// ReplacementEmptyMatchDeclined is which empty match a global replacement
 	// refuses to take, once the pattern is one that can match empty at all.

@@ -858,6 +858,9 @@ None of these are POSIX, and they do not all arrive together.
 | `${x//pat/rep}` | replace every match | **no** | yes | yes | yes |
 | `${x/#pat/rep}` | replace an anchored prefix | **no** | yes | yes | yes |
 | `${x/%pat/rep}` | replace an anchored suffix | **no** | yes | yes | yes |
+
+The two anchored rows are acceptance and not meaning. BusyBox ash accepts
+both and anchors neither — see *Whether the `#` and `%` anchor at all* below.
 | `${x:off:len}` | substring | **no** | yes | yes | yes |
 | `${x^^}` `${x,,}` | upper- and lower-case | **no** | **yes** | **no** | **no** |
 | `${!x}` | indirection | **no** | **yes** | *other* | **no** |
@@ -1066,10 +1069,36 @@ the empty string — is `<>a<>b<>c` in bash and `<>a<>b<>c<>` in ksh93, so
 neither shell is refusing empty matches. Those two answers are the axis above,
 seen again.
 
-The anchored spellings are their own row and ask nothing: `${v/#/X}` is
-`Xabc` and `${v/%/X}` is `abcX` in bash and zsh alike, and ksh93 leaves both
-alone — that shell declining an anchor it takes everywhere else, which is
-recorded here and not yet answered (#1857).
+The anchored spellings are their own row and their own axis,
+`Semantics.AnchoredEmptyReplacementPattern`: `${v/#/X}` is `Xabc` and
+`${v/%/X}` is `abcX` in bash and zsh alike, and ksh93 leaves both alone —
+that shell declining an anchor it takes everywhere else. Recorded here from
+#1857 and read by nothing until #3272, when `--dialect=ksh` was still giving
+bash's answer.
+
+### Whether the `#` and `%` anchor at all
+
+`${x/#pat/rep}` **parses** in every shell that has the replacement, and in
+BusyBox ash it is not an anchor: the character is the pattern's own first
+byte. `Semantics.ReplacementAnchors` is that answer — yes in bash 5.3, that
+binary as `sh`, bash 3.2, ksh93 and zsh, no in BusyBox ash, and unanswerable
+in dash, which has no replacement at all.
+
+Measured 2026-09-16, and the value has to hold the anchor character or the
+two readings coincide — `abcabc` answers `abcabc` whether the anchor is
+honored or the pattern is `#a`:
+
+    w='x#ay%bz'
+
+| | `${w/#a/Q}` | `${w/%b/Q}` | `${w/#/Q}` |
+| --- | --- | --- | --- |
+| bash 5.3, as `sh`, bash 3.2, zsh | `x#ay%bz` | `x#ay%bz` | `Qx#ay%bz` |
+| ksh93u+ | `x#ay%bz` | `x#ay%bz` | `x#ay%bz` |
+| **BusyBox ash 1.37.0** | **`xQy%bz`** | **`x#ayQz`** | **`xQay%bz`** |
+
+The `#a` was found *inside* the value and replaced, which no reading but "an
+ordinary pattern" produces. `${w/x/Q}` is `Q#ay%bz` everywhere, which is the
+control saying the replacement itself works there.
 
 ## The `!` that lists names instead of following one
 
@@ -6057,7 +6086,9 @@ reason: `${$((6*7))[1]}`.
 
 ## Dialect flags
 
-    ParamSubstitution      ${x/pat/rep} and its anchored forms
+    ParamSubstitution      ${x/pat/rep}, and the spellings with a # or %
+                           after the / (whether those anchor is the axis
+                           interp.Semantics.ReplacementAnchors, not this flag)
     ParamSubstring         ${x:off:len}
     ParamCaseChange        ${x^^} ${x,,} ${x~~} and their single forms — bash only
     ParamIndirection       ${!x}, ${!prefix*}, ${!a[@]} — parses in bash and ksh;

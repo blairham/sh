@@ -86,6 +86,31 @@ case 'a\c' in a[a\-z]c) printf 'the left bound: yes\n';; *) printf 'the left bou
 case 'beta' in bet\a) printf 'outside a bracket: yes\n';; *) printf 'outside a bracket: no\n';; esac
 case 'abc' in a[b]c) printf 'an ordinary set: yes\n';; *) printf 'an ordinary set: no\n';; esac
 
+printf -- '--- the anchored span replacement ---\n'
+
+# This shell has `${v/pat/rep}` and has no anchors, so a `#` or a `%` after
+# the `/` is the pattern's own first character (#3272). The two controls come
+# first: they are right wherever the construct exists at all, so every row
+# below is "no anchor" rather than "no replacement".
+v=abcabc
+printf 'unanchored: %s\n' "${v/b/X}"
+printf 'global:     %s\n' "${v//b/X}"
+
+# The rows six columns answer Xbcabc and abcabX. Here the patterns are `#a`
+# and `%c`, which this value does not contain.
+printf 'start:      %s\n' "${v/#a/X}"
+printf 'end:        %s\n' "${v/%c/X}"
+
+# The discriminator, and the reason the rows above cannot stand alone:
+# `abcabc` answers `abcabc` under both readings. A value that *holds* the
+# anchor character tells them apart — the `#a` is found where it really
+# stands and replaced, which no other reading produces.
+w='x#ay%bz'
+printf 'inside:     %s\n' "${w/#a/Q}"
+printf 'inside end: %s\n' "${w/%b/Q}"
+printf 'alone:      %s\n' "${w/#/Q}"
+printf 'global too: %s\n' "${w//#a/Q}"
+
 printf -- '--- a name-shaped value in arithmetic ---\n'
 
 # dash reads the value as a literal and stops at `Illegal number: y`. Six of

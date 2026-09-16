@@ -2152,8 +2152,16 @@ type Dialect struct {
 	// is how ksh93 came to accept a form it rejects.
 	FunctionKeywordParens bool
 
-	// ParamSubstitution enables `${x/pat/rep}` and its anchored forms.
-	// Absent from dash.
+	// ParamSubstitution enables `${x/pat/rep}` and the spellings that put a
+	// `#` or a `%` after the `/`. Absent from dash.
+	//
+	// It used to say "and its anchored forms", which read the two as one
+	// feature and they are not: BusyBox ash accepts every spelling and reads
+	// no anchor in any of them — `${w/#a/Q}` on `x#ay%bz` is `xQy%bz` there,
+	// the `#a` found where it really stands. Acceptance is what this flag
+	// answers and it is unanimous among the shells that have the construct;
+	// what the `#` *means* is interp.Semantics.ReplacementAnchors, which is
+	// where the divergence lives (#3272).
 	ParamSubstitution bool
 
 	// BadSubstitutionAtParseTime refuses a `${...}` with an unrecognized

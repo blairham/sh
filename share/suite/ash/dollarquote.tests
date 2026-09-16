@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# $'…' in BusyBox ash — the ext/ area this column does not run.
+#
+# ext/dollarquote.tests is asked of bash, zsh and ksh93 only, because dash
+# refuses the construct and the ext/ boundary was drawn around dash. BusyBox
+# has it, with a shorter escape table: **no `\u`, no `\U`, no `\e`, no `\E`
+# and no `\c`**. Each of those is the backslash and the letters kept as they
+# were written, where bash and ksh93 decode all five (measured 2026-09-16). Run through the image,
+# ext/dollarquote.tests agreed with BusyBox up to its first array, which this
+# shell has no syntax for.
+#
+# Held out, with the issue that owns it: an octal escape past `\377`, which
+# BusyBox reads as its first two digits (#3415).
+#
+# Every row prints bytes rather than characters, because an escape kept as
+# written and one decoded to something unprintable can look alike on a
+# terminal.
+
+bytes() { printf '%s' "$1" | od -An -tx1 | tr -s ' \n' '  '; printf '(%s)\n' "$2"; }
+
+printf -- '--- the escapes it decodes ---\n'
+
+printf '%s\n' $'plain'
+printf '[%s]\n' $'tab\there' $'line\nbreak' $'back\\slash'
+printf '[%s]\n' $'single \' quote' $'double " quote'
+bytes $'\a\b\f\r\v\t' 'the C escapes'
+bytes $'\101\102\103' 'octal'
+bytes $'\0101' 'three digits, a leading zero among them'
+bytes $'\1011' 'and a fourth digit is a character'
+bytes $'\x41\x42' 'hex'
+bytes $'\x414' 'hex takes two digits'
+bytes $'\x4z' 'and one where the second is not a digit'
+bytes $'\"' 'an escaped double quote'
+
+printf -- '--- kept as written: the answer only this shell has ---\n'
+
+# In bash and ksh93 each of these is one character, and so are the first
+# four in zsh, which drops the backslash of `\cA` and keeps the `cA`.
+bytes $'\u41' 'no \u'
+bytes $'\U00000041' 'no \U'
+bytes $'\e' 'no \e'
+bytes $'\E' 'no \E'
+bytes $'\cA' 'no \c'
+
+# The control for the block above: an escape this shell does not know is
+# kept the same way — as bash 5.3 keeps it, where zsh and ksh93 drop the
+# backslash — so the rows above are the table and not a shell that keeps
+# everything.
+bytes $'\q' 'an unknown escape'
+bytes $'\x' 'hex with no digits'
+
+printf -- '--- the quoting ---\n'
+
+printf '[%s]\n' $''
+set -- $'' x
+printf 'empty is still a word: %s\n' "$#"
+v=$'ab\tcd'
+printf 'length: %s\n' "${#v}"
+printf '[%s]\n' pre$'\tmid'post
+novar=set
+printf '[%s]\n' $'$novar ${novar} $(echo no) `echo no`'
+set -- $'one two' $'three\tfour'
+printf 'words: %s\n' "$#"
+case $'a\tb' in
+  $'a\tb') printf 'case matched the escaped word\n' ;;
+  *) printf 'case did not match\n' ;;
+esac
+
+# Inside double quotes it is not a quote at all.
+bytes "$'\t'" 'inside double quotes'

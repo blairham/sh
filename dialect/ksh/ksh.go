@@ -1712,11 +1712,13 @@ func Semantics() interp.Semantics {
 	// A frozen *name* is refused, and the refusal is not fatal: `read`
 	// writes `warning: x: is read only` and the script runs on.
 	s.ReadonlyRefusalInABuiltinIsFatal = interp.No
-	// The scan position is shared with the caller across a shell function
-	// call, which is why an option-parsing helper here has to reset
-	// OPTIND itself: without it a second call starts where the first
-	// stopped and reads nothing.
-	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsShared
+	// The scan position is the call's own — OPTIND and the place inside a
+	// word both, reset on the way in and the caller's put back at the
+	// return — for a function written with the `function` word, and shared
+	// with the caller for one written `name() { … }`, which is why a
+	// POSIX-form option-parsing helper here has to reset OPTIND itself
+	// (#3321).
+	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsLocalToAKeywordFunction
 	// Reached through `typeset` in a function defined with the `function`
 	// word, this shell having no `local`: the caller's position inside a
 	// clustered word comes back with the number.

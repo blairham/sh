@@ -702,7 +702,7 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 	position := GetoptsFunctionPositionIsShared
 	if !fresh {
 		askedIn = true
-		position = r.getoptsFunctionPosition()
+		position = r.getoptsFunctionPosition(sc)
 		switch position {
 		case GetoptsFunctionPositionIsLocal:
 			// Quietly, because this is the shell handing the call a cursor
@@ -751,7 +751,7 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 				r.optindAssigned == assigned && r.optCursorWord() == cursor {
 				return
 			}
-			position = r.getoptsFunctionPosition()
+			position = r.getoptsFunctionPosition(sc)
 		}
 		if position == GetoptsFunctionPositionIsShared {
 			return
@@ -805,12 +805,23 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 // getoptsFunctionPosition resolves the axis, reporting a dialect that has not
 // answered it the way ask does — the call is about to be told apart by it, so
 // a guess would be an invention.
-func (r *Runner) getoptsFunctionPosition() GetoptsFunctionPositionPolicy {
+//
+// The answer keyed on the definition form is resolved here, against the call
+// being asked about, into the one of the other answers that call gets — so
+// nothing below has a fourth case to carry, and a POSIX-form call in that
+// dialect is the shared answer in every respect.
+func (r *Runner) getoptsFunctionPosition(sc *scope) GetoptsFunctionPositionPolicy {
 	p := r.sem().GetoptsFunctionPosition
-	if p == GetoptsFunctionPositionUnspecified {
+	switch p {
+	case GetoptsFunctionPositionUnspecified:
 		r.diagf("%s\n", r.unanswered(getoptsLocalAxis))
 		r.status = 2
 		r.unspecified = true
+		return GetoptsFunctionPositionIsShared
+	case GetoptsFunctionPositionIsLocalToAKeywordFunction:
+		if sc.keyword {
+			return GetoptsFunctionPositionIsLocal
+		}
 		return GetoptsFunctionPositionIsShared
 	}
 	return p

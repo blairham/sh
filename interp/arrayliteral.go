@@ -432,7 +432,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// two shells that evaluate a literal's subscript report the
 			// arithmetic failure and end the script. The third reads the
 			// text as a key and never reaches this.
-			r.fatal("%s\n", r.subscriptFailure(e.sub, err))
+			r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
 			return nil, false
 		}
 		pos, ok := r.elemPos(a, idx)
@@ -444,7 +444,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			if wording == "" {
 				wording = r.diag().BadArraySubscript
 			}
-			r.fatal("%s\n", Wording(wording,
+			r.failedSubscript("%s\n", Wording(wording,
 				"%[1]s[%[2]s]: bad array subscript", name, e.sub, e.value))
 			return nil, false
 		}

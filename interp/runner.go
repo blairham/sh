@@ -6087,6 +6087,38 @@ func (r *Runner) failedExpansion() {
 	r.ctl, r.abandonLine = controlAbandon, r.line
 }
 
+// failedSubscript is what an element assignment the shell *refuses* ends: the
+// diagnostic, the dialect's fatal status, and then exactly as much unwinding
+// as that dialect does for any other failed expansion.
+//
+// A door of its own rather than Runner.fatal, because fatal ends the shell and
+// one column does not. Measured 2026-09-16 from a script file — the refusal on
+// one line and `echo "NEXT=$?"` on the next, which is the pairing this
+// question has to be asked on, since on one line giving up the list and giving
+// up the shell print the same nothing:
+//
+//	                            bash 5.3  bash 3.2  zsh 5.9  ksh93
+//	a[1+]=q                     NEXT=1    NEXT=1    stops    stops
+//	a[1+]+=q                    NEXT=1    NEXT=1    stops    stops
+//	v="1+"; a[$v]=q             NEXT=1    NEXT=1    stops    stops
+//	a=(1 2 3); a[-9]=q          NEXT=1    NEXT=1    —        —
+//	a=([1+]=x)                  NEXT=1    NEXT=1    stops    —
+//	a=(1 2 3); a[1]=(q)         NEXT=1    NEXT=1    —        —
+//
+// That is Semantics.FailedExpansionAbandonsTheLine's split exactly, and the
+// axis already names "a bad subscript" among the failures it governs — these
+// sites were simply never wired to it and ended the file instead. An em dash
+// is a column that does not refuse the line at all and so never arrives here.
+//
+// Two neighbouring subscript refusals already spell the unwinding out by hand
+// — Runner.assignWholeArraySubscript and Runner.assocAssignKey — and both are
+// reached by one column only, so neither had an axis to read. These four are
+// reached by three, which is why this one asks.
+func (r *Runner) failedSubscript(format string, args ...any) {
+	r.diagf(format, args...)
+	r.failedExpansion()
+}
+
 // setFatalStatus is the status half of fatalQuiet, for the caller that wants
 // the number without the unwinding.
 // setFatalStatus writes the dialect's generic status for a fatal error.
@@ -7637,7 +7669,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// as the operator it is (#2160).
 		idx, err := r.subscriptValueAsWritten(subject, text)
 		if err != nil {
-			r.fatal("%s\n", r.subscriptFailure(text, err))
+			r.failedSubscript("%s\n", r.subscriptFailure(text, err))
 			return
 		}
 		// The number, for the trace that writes it — see

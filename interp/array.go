@@ -451,7 +451,7 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 		if r.unspecified {
 			return
 		}
-		r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
+		r.failedSubscript("%s\n", Wording(r.diag().BadArraySubscript,
 			"%[1]s[%[2]s]: bad array subscript", name, sub))
 		return
 	}

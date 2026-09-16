@@ -27,6 +27,10 @@ func Dialect() syntax.Dialect {
 	// `ABC` document. dash and BusyBox ash take only a join that began at
 	// the start of a line, and ksh93 takes neither (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
+	// A `<<-` delimiter written with leading tabs has them stripped the way
+	// the body lines do, so `EOF` ends a `<tab>EOF` document. ksh93 agrees;
+	// bash and dash do not. See syntax.HeredocDelimiterTabs.
+	d.StrippedHeredocDelimiter = syntax.HeredocDelimiterTabsAreStrippedToo
 	// A backslash the input ends immediately after is dropped and the word
 	// it was in stays: `printf "[%s][%s]" a \` prints `[a][]` here and
 	// `[a][\]` in bash 5.3, dash and BusyBox ash. Measured 2026-09-13; see

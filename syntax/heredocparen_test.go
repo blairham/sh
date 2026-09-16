@@ -242,3 +242,84 @@ func parseErr(t *testing.T, src string) *Error {
 	}
 	return pe
 }
+
+// Where the delimiter carrying the `)` is not the last line that could end
+// the body: a line reading the delimiter alone comes further down.
+//
+//	v=$(cat <<EOF
+//	a
+//	EOF)
+//	echo "[$v]"
+//	EOF
+//
+// The shells that end a body at the closing parenthesis end it at `EOF)`
+// still — bash 5.3 and ksh93 print `[a]` and then run the later `EOF` as a
+// command. Reading the body from the whole input first found that later line,
+// so the substitution took the `echo` and the rest with it and nothing warned:
+// the `)` was only ever looked for once nothing further down could end the
+// body. Three shapes, each with a later delimiter, and the substitution's text
+// is what is compared, since that is where the difference lives.
+func TestADelimiterCarryingTheParenEndsTheBodyEvenWithALaterDelimiter(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name, src, value string
+	}{
+		{
+			name:  "a command substitution",
+			src:   "v=$(cat <<EOF\na\nEOF)\necho \"[$v]\"\nEOF\n",
+			value: "cat <<EOF\na\nEOF",
+		},
+		{
+			name:  "the tab-stripping operator",
+			src:   "v=$(cat <<-EOF\n\ta\n\tEOF)\necho \"[$v]\"\nEOF\n",
+			value: "cat <<-EOF\n\ta\n\tEOF",
+		},
+		{
+			name:  "a quoted delimiter",
+			src:   "v=$(cat <<'EOF'\na\nEOF)\necho \"[$v]\"\nEOF\n",
+			value: "cat <<'EOF'\na\nEOF",
+		},
+		{
+			name:  "nested, closing both",
+			src:   "v=$(echo $(cat <<EOF\na\nEOF))\necho \"[$v]\"\nEOF\n",
+			value: "echo $(cat <<EOF\na\nEOF)",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p := NewParser(c.src, withParenEnd())
+			f, _ := p.NextLine()
+			if f == nil || len(f.Stmts) != 1 {
+				t.Fatalf("first line: %v, err %v", f, p.Err())
+			}
+			sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+			got := sc.Assigns[0].Value.Spans[0].Value
+			if got != c.value {
+				t.Errorf("substitution text = %q, want %q", got, c.value)
+			}
+			if rest := p.Parse(); p.Err() != nil || len(rest.Stmts) != 2 {
+				t.Errorf("the lines after it: %d statements, err %v; want the echo and the later delimiter run as commands", len(rest.Stmts), p.Err())
+			}
+			var remarked bool
+			for _, r := range p.Remarks() {
+				remarked = remarked || r.Kind == RemarkHeredocAtEOF && r.Pos.Line == 3
+			}
+			if !remarked {
+				t.Errorf("no remark on line 3; the shell that warns about `EOF)` warns with a later delimiter present too: %v", p.Remarks())
+			}
+		})
+	}
+}
+
+// And the dialects that read a body from the whole input keep doing so: the
+// later delimiter ends it, and the `)` after it closes the substitution.
+func TestAWholeInputBodyStillTakesTheLaterDelimiter(t *testing.T) {
+	t.Parallel()
+	const src = "v=$(cat <<EOF\na\nEOF)\necho x\nEOF\n)\necho \"{$v}\"\n"
+	f, err := Parse(src, Core())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(f.Stmts) != 2 {
+		t.Fatalf("Stmts = %d, want 2", len(f.Stmts))
+	}
+}

@@ -154,6 +154,11 @@ func Dialect() syntax.Dialect {
 	// BusyBox ash take only a join that began at the start of a line and
 	// ksh93 takes neither (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
+	// A `<<-` delimiter written with a leading tab — quoted, since nothing
+	// else can start with one — is met by a body line spelled exactly like
+	// it before its tabs are stripped. zsh and ksh93 strip the delimiter too
+	// and dash meets it with nothing. See syntax.HeredocDelimiterTabs.
+	d.StrippedHeredocDelimiter = syntax.HeredocLineAsWrittenMeetsTheDelimiter
 	// The end of the input at a `case` arm's pattern is the newline that
 	// would have ended the line, so `case x in x) :;; zzz` names the newline
 	// where the other five columns name the end of the file or the `case`

@@ -387,6 +387,14 @@ type Lexer struct {
 	// same scanner reading the same bytes to find out where the subscript
 	// ends — so this is what stops that question asking itself.
 	assumeSubscriptCloses bool
+
+	// inProgramParens is set on the lexer that reads the program inside a
+	// pair of parentheses holding one — `$( )`, `<( )`, `>( )` — from
+	// [Lexer.parseToClose]. It is what lets a here-document's body end on a
+	// line that carries the closing parenthesis after the delimiter, in the
+	// dialects that read a body from between the parentheses. See
+	// [Lexer.delimiterClosesParens].
+	inProgramParens bool
 }
 
 // queueHeredoc registers a redirection whose body is still to be read. The
@@ -3542,7 +3550,10 @@ func (l *Lexer) takeRemarks(text string, from int) ([]Remark, bool) {
 // the lexer's current line is the opener's, and the offsets the caller uses
 // are untouched by it.
 func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
-	sub := NewParserAt(l.src[from:], l.dialect, l.line)
+	lex := NewLexer(l.src[from:], l.dialect)
+	lex.line = l.line
+	lex.inProgramParens = true
+	sub := newParserOn(lex, l.dialect)
 	sub.parseList()
 	if sub.err != nil || !sub.at(TokRightParen) {
 		return 0, nil, false
@@ -4659,8 +4670,35 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			break
 		}
 		linePos := l.pos()
+		if l.delimiterClosesParens(delim, strip) {
+			// The delimiter, then the `)` of the parentheses this body sits
+			// in. The body ends here and the rest of the line — the `)`
+			// first — is program text again, so the cursor stops in front of
+			// it rather than at the next line.
+			//
+			// The one shell that remarks on this says the document was
+			// delimited by end of file, and names this line: from the
+			// document's own point of view the line matched nothing and the
+			// parentheses' text ran out under it.
+			if strip {
+				for !l.eof() && l.peek() == '\t' {
+					l.advance()
+				}
+			}
+			for range len(delim) {
+				l.advance()
+			}
+			l.remarks = append(l.remarks, Remark{
+				Kind:  RemarkHeredocAtEOF,
+				Pos:   linePos,
+				At:    r.OpPos,
+				Token: delim,
+			})
+			l.markHeredocEnd(linePos)
+			break
+		}
 		line, done, join := l.heredocLine(strip, !quoted)
-		if done == delim && l.delimiterIsReachable(join) {
+		if l.delimiterMatches(line, done, delim, strip, join) {
 			// The delimiter's own line is the command's last, and it is not
 			// part of the body.
 			l.markHeredocEnd(linePos)
@@ -4682,6 +4720,71 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 		Start: start,
 		Stop:  l.pos(),
 	}
+}
+
+// delimiterMatches reports whether a body line just read ends the document.
+//
+// line is the line as written — tabs already stripped from it where the
+// operator strips them — and done is what the delimiter is compared against.
+// Where the operator is `<<-` the panel parts three ways over tabs the
+// *delimiter* was written with; see [Dialect.StrippedHeredocDelimiter].
+func (l *Lexer) delimiterMatches(line, done, delim string, strip bool, join heredocJoin) bool {
+	if !l.delimiterIsReachable(join) {
+		return false
+	}
+	if done == delim {
+		return true
+	}
+	if !strip || !strings.HasPrefix(delim, "\t") {
+		return false
+	}
+	switch l.dialect.StrippedHeredocDelimiter {
+	case HeredocDelimiterTabsAreStrippedToo:
+		return done == strings.TrimLeft(delim, "\t")
+	case HeredocLineAsWrittenMeetsTheDelimiter:
+		return join == heredocOnePhysicalLine && l.lineAsWritten(line) == delim
+	}
+	return false
+}
+
+// lineAsWritten is the body line just read, before its tabs were stripped
+// and without its newline: the text between the start of the line the
+// cursor has just left and that line's end.
+func (l *Lexer) lineAsWritten(stripped string) string {
+	end := l.off
+	if end > 0 && l.src[end-1] == '\n' {
+		end--
+	}
+	begin := end - len(strings.TrimSuffix(stripped, "\n"))
+	for begin > 0 && l.src[begin-1] == '\t' {
+		begin--
+	}
+	return l.src[begin:end]
+}
+
+// delimiterClosesParens reports whether the line at the cursor is the
+// delimiter with the closing parenthesis of the construct around it written
+// straight after it — `EOF)` — in a dialect that ends a body there.
+//
+// Asked before the line is read, because the answer decides where reading
+// stops: in front of the `)`, which is the construct's and not the body's.
+// That is the difference from the reading [Lexer.takeRemarks] makes after the
+// fact. There the parentheses were found by counting, which only happens when
+// nothing further down could end the body; here the body ends at this line
+// even when a line reading exactly `EOF` comes later, which is what bash 5.3
+// and ksh93 do and what reading the body from the whole input got wrong.
+func (l *Lexer) delimiterClosesParens(delim string, strip bool) bool {
+	if !l.inProgramParens || !l.dialect.HeredocEndsAtClosingParen || delim == "" {
+		return false
+	}
+	i := l.off
+	if strip {
+		for i < len(l.src) && l.src[i] == '\t' {
+			i++
+		}
+	}
+	rest := l.src[i:]
+	return strings.HasPrefix(rest, delim) && strings.HasPrefix(rest[len(delim):], ")")
 }
 
 // markHeredocEnd records how far a here-document reached, keeping the furthest

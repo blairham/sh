@@ -130,7 +130,7 @@ func TestTheFormatAndTheBArgumentAskTheirOwnEscapeAxes(t *testing.T) {
 
 // An axis is asked only where its escape is in the format, so a format that
 // carries neither letter needs no dialect at all — the same rule the `%b`
-// site's pair follows, and the reason a script with no colours in it is not
+// site's pair follows, and the reason a script that writes no escape sequences is not
 // refused by a shell with no dialect.
 func TestPrintfFormatEscapeAxesAreAskedOnlyWhenTheEscapeIsThere(t *testing.T) {
 	sem := CoreSemantics()

@@ -14432,6 +14432,16 @@ type Semantics struct {
 	// three times for one failure two compounds deep (#2793).
 	ErrTrapRefiresForTheCommandItFiredInside ErrTrapRefiring
 
+	// FailingPipelineWhoseLastElementRanHere says how `set -e` and the ERR
+	// trap judge a pipeline of more than one command whose last element ran
+	// in this shell rather than in a subshell. See LastElementJudging for
+	// the three answers and the measurements behind them.
+	//
+	// Asked only there, and only where something can be judged: with the last
+	// element in a subshell every shell judges the pipeline's status once,
+	// which is what a statement already does.
+	FailingPipelineWhoseLastElementRanHere LastElementJudging
+
 	// DebugTrapRunsInsideCalls fires the DEBUG trap before commands inside
 	// a function or a sourced file the trap was not set in. bash does not;
 	// ksh93 and zsh do. Not the ERR axis under another name, and not only
@@ -17718,6 +17728,80 @@ func (e ErrTrapRefiring) String() string {
 		return "the ERR trap refires where it was set before the command"
 	case ErrTrapAlwaysRefires:
 		return "the ERR trap always refires for the command"
+	}
+	return "unspecified"
+}
+
+// LastElementJudging is how a failing pipeline is judged when its last
+// element ran in this shell. See
+// Semantics.FailingPipelineWhoseLastElementRanHere.
+//
+// A statement is judged once, after it finishes, and a pipeline is a
+// statement. Where the last element is a subshell that is the whole story.
+// Where it is the shell itself, the element has already been through the
+// shell's own judging — a failure inside a group fired the ERR trap there,
+// and a `!` inside one was exempt there — and the three shells that run it
+// there disagree about what the pipeline then owes.
+//
+// Measured 2026-09-16 on script files under `env -i`, against ksh93u+
+// 2012-08-01, zsh 5.9.2 and bash 5.3.20 with `lastpipe` on, each row run as
+// `( trap 'printf E' ERR; <row>; printf ' .' )`:
+//
+//	row                                ksh93  zsh  bash+lastpipe
+//	true | false                       EE     E    EE
+//	true | /usr/bin/false              E      E    EE
+//	true | ( false )                   E      EE   EE
+//	f() { false; }; true | f           EEE    E    EE
+//	true | { false; }                  EE     E    EE
+//	true | { :; false; }               E      E    EE
+//	true | for i in 1; do false; done  E      E    EE
+//	true | [[ a == b ]]                E      E    EE
+//	true | { ! true; }                 -      -    E
+//	set -o pipefail; false | true      -      E    E
+//	set -o pipefail; true | false      EE     E    EE
+//
+// zsh's second E for the subshell is ErrTrapRunsInSubshells and not this.
+// `set -e` follows the same rows: `true | { false && true; }` carries on in
+// ksh93 and zsh and stops bash.
+type LastElementJudging uint8
+
+const (
+	// LastElementJudgingUnspecified is no answer, and is refused where it
+	// decides something.
+	LastElementJudgingUnspecified LastElementJudging = iota
+
+	// PipelineJudgedUnlessItsLastElementJudgedItself judges the pipeline's
+	// status once, except where the last element is a compound whose body
+	// ran: that body's last statement was already judged or was exempt, the
+	// rule a compound standing alone follows. zsh.
+	PipelineJudgedUnlessItsLastElementJudgedItself
+
+	// PipelineJudgedAsItsLastElement judges the pipeline by its last
+	// element's own status rather than the pipeline's, with the same
+	// compound rule — so a failure only pipefail saw is not one — and judges
+	// a command the shell ran itself twice: once as the element and once as
+	// the pipeline. ksh93.
+	//
+	// "Ran itself" is a builtin, a function, an `eval`, a `.`, or a group of
+	// exactly one such command; a command on PATH, a command not found, a
+	// subshell, a loop, `[[ ]]`, and a group of two statements are judged
+	// once. `true | { :; false; }` is one E where `true | { false; }` is two.
+	PipelineJudgedAsItsLastElement
+
+	// LastElementJudgedThenThePipeline judges the last element as a
+	// statement of its own, by its own status and with the compound rule,
+	// and then judges the pipeline's status as well. bash with `lastpipe`.
+	LastElementJudgedThenThePipeline
+)
+
+func (j LastElementJudging) String() string {
+	switch j {
+	case PipelineJudgedUnlessItsLastElementJudgedItself:
+		return "the pipeline is judged unless its last element judged itself"
+	case PipelineJudgedAsItsLastElement:
+		return "the pipeline is judged as its last element"
+	case LastElementJudgedThenThePipeline:
+		return "the last element is judged, then the pipeline"
 	}
 	return "unspecified"
 }

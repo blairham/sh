@@ -145,6 +145,10 @@ func (r *Runner) setPseudoTrap(name, body string) {
 // a field so that the discard stays the default.
 func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees int) int {
 	st, ctl, raised := r.status, r.ctl, r.pipefailRaised
+	// The action's commands are not the command it fired at, so what that
+	// command's own dispatch recorded survives them.
+	onPath := r.lastSimpleRanOnPath
+	defer func() { r.lastSimpleRanOnPath = onPath }()
 	r.status = sees
 	r.ctl = controlNone
 	outer := r.inCommandTrap

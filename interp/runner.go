@@ -2426,6 +2426,17 @@ type Runner struct {
 	// body ran one — see reportsItsBody for why that decides whether the
 	// compound is judged at all.
 	stmtSerial uint64
+	// execSerial is stmtSerial as it stood when a command last reached the
+	// exec path, and lastSimpleRanOnPath is whether the last simple command
+	// dispatched was that command rather than one the shell ran itself — a
+	// builtin, a function, an `eval`. One dialect judges a pipeline's last
+	// element twice for the second kind and once for the first; see
+	// PipelineJudgedAsItsLastElement.
+	execSerial          uint64
+	lastSimpleRanOnPath bool
+	// pipeLast is what the last multi-element pipeline left for its own
+	// statement to judge. See judgePipeline.
+	pipeLast pipelineLast
 	// returnSeenStatus is `$?` as it was when `return` began. The RETURN
 	// trap's body sees this rather than the argument the `return` carried
 	// — measured: `f(){ trap 'echo R=$?' RETURN; return 3; }; f` prints
@@ -4201,7 +4212,13 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 		(!reportsItsBody(st.Expr) || r.stmtSerial == serial) {
 		// A chain judges itself, inside expr, because only its final operand
 		// counts and only when that operand actually ran.
-		r.checkErrExit(ctx)
+		if p, ok := st.Expr.(*syntax.Pipeline); ok && len(p.Cmds) > 1 {
+			// A pipeline whose last element ran in this shell is judged by
+			// the dialect's reading of that element. See judgePipeline.
+			r.judgePipeline(ctx)
+		} else {
+			r.checkErrExit(ctx)
+		}
 	}
 	return nil
 }
@@ -4233,7 +4250,13 @@ func reportsItsBody(e syntax.Expr) bool {
 	if !ok || p.Negated || len(p.Cmds) != 1 {
 		return false
 	}
-	switch p.Cmds[0].(type) {
+	return commandReportsItsBody(p.Cmds[0])
+}
+
+// commandReportsItsBody is reportsItsBody asked of one command, which is the
+// question a pipeline's last element needs as well as a statement.
+func commandReportsItsBody(c syntax.Command) bool {
+	switch c.(type) {
 	case *syntax.Group, *syntax.TryClause, *syntax.IfClause, *syntax.LoopClause,
 		*syntax.ForClause, *syntax.ForArithClause, *syntax.CaseClause,
 		*syntax.SelectClause, *syntax.RepeatClause:
@@ -4552,10 +4575,17 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// of one column's answer, so it is read here, before the command
 		// runs, and not afterwards when the body may have set one.
 		set := r.errTrapIsSet()
+		r.execSerial = 0
+		serial := r.stmtSerial
 		err := r.simple(ctx, x, fired)
 		// What a function body, an `eval` or a `.` ended on is theirs; the
 		// command reporting it is not an arithmetic command.
 		r.arithZeroLeft = false
+		// Whether this command was handed to the exec path rather than run
+		// by the shell itself: a command a body ran is at a later statement,
+		// so a function whose body ran an external command still ran here.
+		// See Runner.lastSimpleRanOnPath.
+		r.lastSimpleRanOnPath = r.execSerial == serial && serial != 0
 		r.reopenErrJudgment(set)
 		return err
 	case *syntax.Group:
@@ -5500,6 +5530,7 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 }
 
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {
+	r.execSerial = r.stmtSerial
 	// This runner's PATH, not the process's — see lookpath.go for why that
 	// distinction is the whole bug and not a detail.
 	path, lookErr := r.lookPath(argv[0])

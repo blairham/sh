@@ -905,6 +905,9 @@ func Semantics() interp.Semantics {
 	// call at all, so only the outermost of the three is a place it can
 	// fire.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapAlwaysRefires
+	// unanswered FailingPipelineWhoseLastElementRanHere: every element of a
+	// pipeline is a subshell here and nothing moves one into this shell, so a
+	// pipeline is judged once by its status and the question is never put.
 	s.TrapHasDebugCondition = interp.No
 	// No DEBUG condition, so no head to fire one at. Not an unanswered
 	// axis — DebugTrapHeads has no unspecified value, because a head

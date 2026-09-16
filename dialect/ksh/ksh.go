@@ -1784,6 +1784,11 @@ func Semantics() interp.Semantics {
 	// the failure and each of the three calls — where bash writes one and
 	// zsh writes one.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapAlwaysRefires
+	// A pipeline whose last element ran here is judged by that element's own
+	// status, and a builtin or a function there is judged twice: `true |
+	// false` writes EE and `true | /usr/bin/false` writes E, and `set -o
+	// pipefail; false | true` writes nothing (#2921).
+	s.FailingPipelineWhoseLastElementRanHere = interp.PipelineJudgedAsItsLastElement
 	s.DebugTrapRunsInsideCalls = interp.Yes
 	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	// The same heads as the bash columns, and two measured departures: the

@@ -99,6 +99,7 @@ ash   ExitTrapFiresPastTheEnd
 ash   ExpansionResultSuppliesGroupSyntax
 ash   ExportLetterDeclaresAGlobal
 ash   ExportedCompoundReachesAChildAsItsFirstValue
+ash   FailingPipelineWhoseLastElementRanHere
 ash   FloatFormatLetterE
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNamesUnderPlus
@@ -321,6 +322,7 @@ dash  ExitTrapFiresPastTheEnd
 dash  ExpansionResultSuppliesGroupSyntax
 dash  ExportLetterDeclaresAGlobal
 dash  ExportedCompoundReachesAChildAsItsFirstValue
+dash  FailingPipelineWhoseLastElementRanHere
 dash  FloatFormatLetterE
 dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns

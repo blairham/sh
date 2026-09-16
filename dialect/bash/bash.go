@@ -1543,6 +1543,10 @@ func Semantics() interp.Semantics {
 	// twice with nothing asked, because a sourced file never bounded this
 	// trap in the first place.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapRefiresWhereItWasSetFirst
+	// Reached only under `shopt -s lastpipe`: the last element is judged as a
+	// statement and then the pipeline is, so `true | false` and `true |
+	// /usr/bin/false` both write EE there.
+	s.FailingPipelineWhoseLastElementRanHere = interp.LastElementJudgedThenThePipeline
 	s.DebugTrapRunsInsideCalls = interp.No
 	s.DebugTrapRefiresOnEnteringAFunction = interp.Yes
 	// The heads whose own work is a word or an expression: `case`, `[[`,

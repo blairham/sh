@@ -782,6 +782,9 @@ func Semantics() interp.Semantics {
 	// and RETURN with it. Measured, and the refusal does not end the
 	// script — the status is 1 and the next command runs.
 	s.TrapHasErrCondition = interp.No
+	// unanswered FailingPipelineWhoseLastElementRanHere: every element of a
+	// pipeline is a subshell here and nothing moves one into this shell, so a
+	// pipeline is judged once by its status and the question is never put.
 	// unanswered ErrTrapRefiresForTheCommandItFiredInside: the axis is how
 	// many times one failure fires the ERR trap, and this shell has no ERR
 	// trap for it to fire. The question is only reached where a trap with a

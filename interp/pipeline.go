@@ -263,6 +263,7 @@ func (r *Runner) lockReader(in io.Reader) io.Reader {
 // for a `time` clause whose layout reports per element. One slot per element,
 // already sized by the caller, so the goroutines write disjoint slots.
 func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pipelineTiming) error {
+	r.pipeLast = pipelineLast{}
 	n := len(p.Cmds)
 	readers := make([]*os.File, n)
 	writers := make([]*os.File, n)
@@ -309,6 +310,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		r.status = 2
 		return nil
 	}
+	var hereBodyRan bool
 	last := n
 	if inCurrent {
 		last = n - 1
@@ -567,7 +569,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// dispatch must not fire again.
 			r.elementFired = fired
 			start := time.Now()
+			serialBefore := r.stmtSerial
 			errs[i] = r.command(ctx, p.Cmds[i])
+			hereBodyRan = r.stmtSerial != serialBefore
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)
 			}
@@ -611,6 +615,14 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	// is exactly why the others are worth keeping.
 	r.recordPipeStatus(statuses)
 	r.status = statuses[n-1]
+	r.pipeLast = pipelineLast{
+		cmd:     p.Cmds[len(p.Cmds)-1],
+		ranHere: r.lastElementsRunHere(),
+		bodyRan: inCurrent && hereBodyRan && commandReportsItsBody(p.Cmds[len(p.Cmds)-1]),
+		onPath:  !inCurrent || r.lastSimpleRanOnPath,
+		status:  r.status,
+	}
+	r.judgeLastElement(ctx)
 	if r.pipefail && r.status == 0 {
 		// Recorded before the status changes, because "only pipefail saw it"
 		// means exactly that the last element did not.

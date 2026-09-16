@@ -6,11 +6,11 @@
     },
     {
       "name": "bash",
-      "version": "GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)"
+      "version": "GNU bash, version 5.3.20(1)-release (aarch64-apple-darwin25.6.0)"
     },
     {
       "name": "bash-as-sh",
-      "version": "GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)"
+      "version": "GNU bash, version 5.3.20(1)-release (aarch64-apple-darwin25.6.0)"
     },
     {
       "name": "bash32",
@@ -66177,6 +66177,108 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: not an identifier: m[a]b]",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-declaration-with-no-letters-and-no-value": {
+      "ash": {
+        "Stdout": "none=127~st=127~[unset]",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "none=1~declare -- xyz~st=0~[unset]~declare -i att~declare -- xyz=\"v\"",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: nope: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "none=1~declare -- xyz~st=0~[unset]~declare -i att~declare -- xyz=\"v\"",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: nope: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "none=1~declare -- xyz=\"\"~st=0~[]~declare -i att=\"\"~declare -- xyz=\"v\"",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: nope: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "none=127~st=127~[unset]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 5: typeset: not found~\u003cshell\u003e: 5: typeset: not found~\u003cshell\u003e: 6: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "none=0~st=0~[unset]~typeset -i att~xyz=v",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "none=1~typeset xyz=''~st=0~[]~typeset -i att=0~typeset xyz=v",
+        "Stderr": "\u003cshell\u003e:typeset:1: no such variable: nope",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-declaration-with-no-letters-ends-with-the-call": {
+      "ash": {
+        "Stdout": "in=127~[unset]~after=127",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -- lo~in=0~[unset]~after=1",
+        "Stderr": "\u003cshell\u003e: line 3: typeset: lo: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -- lo~in=0~[unset]~after=1",
+        "Stderr": "\u003cshell\u003e: line 3: typeset: lo: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -- lo=\"\"~in=0~[]~after=1",
+        "Stderr": "\u003cshell\u003e: line 2: typeset: lo: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=127~[unset]~after=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 3: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=0~[unset]~after=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset lo=''~in=0~[]~after=1",
+        "Stderr": "\u003cshell\u003e:typeset:3: no such variable: lo",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

@@ -297,8 +297,15 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 			d.isArr, d.unset = true, true
 			return d, true
 		}
-		// Only a surviving attribute keeps a name with neither listable.
-		return d, attributed
+		// Only a surviving attribute keeps a name with neither listable —
+		// or a bare declaration made *after* the removal, which is a name
+		// brought back into being rather than one that survived it:
+		// measured 2026-09-15, `declare xyz; unset xyz; declare xyz;
+		// declare -p xyz` writes `declare -- xyz` in bash 5.3.20 where
+		// `declare xyz; xyz=v; unset xyz` is `xyz: not found`. `unset`
+		// clears the record with the attributes, so what is read here can
+		// only be a later declaration's.
+		return d, attributed || r.bareDeclarationListed(name)
 	}
 	// A compound variable, ahead of every table because it is in none of
 	// them: its value is the members stored under it, and markCompoundVariable
@@ -384,6 +391,15 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		// the caller's to fill in.
 		return d, true
 	}
+	if r.bareDeclarationListed(name) {
+		// Declared with no letters and no value, so there is neither a
+		// value to write nor a letter to write it with: the row is the name
+		// alone. Last, because every table above it holds something this
+		// one does not — an assignment after the declaration gives the row
+		// its value back, and the record is what is left when none of them
+		// answer. See baredeclaration.go.
+		return d, true
+	}
 	if v, ok := r.inheritedValue(name); ok {
 		// Born in the environment and never assigned to, so the value is
 		// still the one that came in. Whether it is exported was settled
@@ -438,6 +454,22 @@ func (r *Runner) declarableNames() []string {
 	}
 	for name := range r.unique {
 		seen[name] = true
+	}
+	for name := range r.declaredBare {
+		// A name with no value and no attribute is in none of the tables
+		// above, so the bare listing reaches it only from here.
+		//
+		// Asked rather than added, which is not the economy it looks like:
+		// the record is kept for every dialect, so a dialect whose listing
+		// has no row for it would collect the name here, find nothing in
+		// declarationOf, and reach the *missing name* path — which is a
+		// second axis, unanswered in the two dialects that have no
+		// declaration listing at all. Measured: `f(){ local x; export -p;
+		// }` in the dash dialect complained about a name nobody had asked
+		// about.
+		if r.bareDeclarationListed(name) {
+			seen[name] = true
+		}
 	}
 	for name, on := range r.compoundVariable {
 		if on {

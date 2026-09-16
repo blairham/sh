@@ -73,6 +73,12 @@ func permissive() Semantics {
 	// failure's location, so the question is live for every such row, and
 	// the one suite that is about the axis sets it itself.
 	s.CaseSubjectKeepsThePreviousLine = No
+	// What a listing does with a name a declaration brought into being with
+	// no letters and no value, at bash's answer: it writes a row. Every
+	// suite here that lists a `local x` back expects one — see
+	// TestBareLocalLists — and the suite that is *about* the axis runs both
+	// sides itself (#2999).
+	s.ValuelessDeclarationRecordsTheName = Yes
 	s.BuiltinSyntaxErrorFatal = No
 	s.DotMissingFileFatal = No
 	s.DotWithNoOperandIsAnError = Yes

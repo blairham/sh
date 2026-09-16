@@ -412,6 +412,11 @@ func Semantics() interp.Semantics {
 	// `[outer]` in dash. That pairing is bash's, and it is the sharpest of
 	// the five places this shell takes bash's side over its sibling's.
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// And no record of it, for dash's reason rather than bash's: `local` is
+	// the only declaration word here and there is no listing to read a
+	// record back with. Answered rather than left unanswered because `local
+	// x` reaches the axis (#2999).
+	s.ValuelessDeclarationRecordsTheName = interp.No
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	// `local` outside a function is refused and the refusal is fatal:
 	// `local x=1` at the top level is `local: not in a function` and the

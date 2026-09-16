@@ -80,6 +80,9 @@ func (c *Runner) ownTables(r *Runner) {
 	//	declaredOnlyCompound
 	//	               an array or table a declaration made and nothing has
 	//	               written to, which is not the same as an emptied one
+	//	declaredBare   the scalar of that: a name a declaration made with no
+	//	               letters and no value, which the listing writes and
+	//	               nothing else can see
 	//	compoundVariable
 	//	               ksh93's fourth kind: the name is a compound variable,
 	//	               so what a bare `$c` reads and what `typeset -p` writes
@@ -89,6 +92,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.absentParams = maps.Clone(r.absentParams)
 	c.declaredEmpty = maps.Clone(r.declaredEmpty)
 	c.declaredOnlyCompound = maps.Clone(r.declaredOnlyCompound)
+	c.declaredBare = maps.Clone(r.declaredBare)
 	c.compoundVariable = maps.Clone(r.compoundVariable)
 
 	// The attribute tables `declare` and `typeset` write. A subshell's

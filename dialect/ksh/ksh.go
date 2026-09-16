@@ -892,6 +892,12 @@ func Semantics() interp.Semantics {
 	// frozen name is `typeset: x: is read only` and ends the script.
 	s.ReadonlyAttributeCanBeRemoved = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// And nothing is recorded either: `typeset xyz; typeset -p xyz` writes
+	// nothing at 0 and a bare `typeset` does not name it. An *attributed*
+	// valueless operand does list — `typeset -i xyz` comes back as itself —
+	// so this is the unattributed one alone. Measured 2026-09-15 on ksh93u+
+	// under `env -i PATH=/usr/bin:/bin` (#2999).
+	s.ValuelessDeclarationRecordsTheName = interp.No
 	// A keyword-defined function's `typeset -x` is local like any other
 	// declaration; the POSIX-style function that leaks it has no scope to
 	// leak out of, which TypesetLocalNeedsKeywordFunction already answers.

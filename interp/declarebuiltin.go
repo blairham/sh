@@ -3363,10 +3363,19 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 	if r.unspecified {
 		return
 	}
-	// The name exists unset here — but whether the *outer* value still shows
-	// through is a second disagreement, and it only arises where a shadow
-	// was actually taken: `declare u` at the top level leaves the global
-	// alone in every shell measured.
+	// The name is unset here, and whether it is *recorded* is the second
+	// question — the one bash and ksh93 part on. Noted for every dialect and
+	// asked of none: the axis is read where the record is, which is the
+	// listing and nothing else, so `local u` — a line every dialect runs —
+	// asks nothing. Only for an operand that named no attribute, because a
+	// letter is already a record: every shell that has one lists `typeset
+	// -i xyz` for a name holding nothing. See baredeclaration.go.
+	if !namesAnAttribute {
+		r.recordBareDeclaration(name)
+	}
+	// Whether the *outer* value still shows through is a third disagreement,
+	// and it only arises where a shadow was actually taken: `declare u` at
+	// the top level leaves the global alone in every shell measured.
 	//
 	// Taken *by this declaration*, which is what `fresh` says and what the
 	// question turns on. A second declaration of a name its own scope already

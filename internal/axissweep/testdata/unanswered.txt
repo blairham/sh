@@ -473,3 +473,4 @@ zsh   TrapPrintsBareWithP
 zsh   TrapPrintsWithP
 zsh   TrapSingleUnknownConditionIsUsage
 zsh   UnsetReferenceLetterRemovesANonReference
+zsh   ValuelessDeclarationRecordsTheName

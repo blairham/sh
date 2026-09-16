@@ -5362,9 +5362,60 @@ type Semantics struct {
 
 	// DeclaredNameWithoutValueIsEmpty gives a name a value when it is
 	// declared without one: `local u` or `typeset u`. zsh alone says yes, so
-	// `${u-UNSET}` is empty there and UNSET in bash and ksh93 — the name
-	// exists in all three, but only zsh considers it set.
+	// `${u-UNSET}` is empty there and UNSET in bash and ksh93.
+	//
+	// It used to say here that the name exists in all three and only zsh
+	// considers it set. The first half was wrong, and
+	// ValuelessDeclarationRecordsTheName below is the half that was missing:
+	// where this says no the name may still be *recorded*, and bash and
+	// ksh93 part on exactly that (#2999).
 	DeclaredNameWithoutValueIsEmpty Answer
+
+	// ValuelessDeclarationRecordsTheName brings a name into being with no
+	// value at all — declared, unset, and visible to nothing but the
+	// declaration listing.
+	//
+	// Asked only where DeclaredNameWithoutValueIsEmpty said no and the
+	// declaration named no attribute: `typeset u`, `declare u`, `local u`.
+	// An attribute is already a record in every shell that has one — the
+	// listing writes the letter back and the name is unset beside it — and
+	// a dialect that sets the declared name empty has a value to list and
+	// never arrives here.
+	//
+	// So this is the third answer to a question that reads like two. The
+	// panel splits three ways, measured 2026-09-15, `env -i
+	// PATH=/usr/bin:/bin`, through `-c`:
+	//
+	//	typeset xyz; typeset -p xyz; echo "st=$?"; echo "[${xyz-unset}]"
+	//
+	//	bash 5.3.20   declare -- xyz       st=0   [unset]
+	//	bash-as-sh    declare -- xyz       st=0   [unset]
+	//	bash 3.2.57   declare -- xyz=""    st=0   []
+	//	zsh 5.9.2     typeset xyz=''       st=0   []
+	//	ksh93u+       (nothing)            st=0   [unset]
+	//	dash, ash     no such builtin
+	//
+	// The middle two are DeclaredNameWithoutValueIsEmpty = yes and are not
+	// this field; bash 5.3 against ksh93 is, and the two facts are wanted at
+	// once — `${xyz-unset}` fires its default *and* `typeset -p xyz` writes
+	// a row. A name that merely existed would answer the first differently.
+	//
+	// The record is narrow, and that is measured rather than assumed. In
+	// bash 5.3 the name reaches `declare -p` with an operand, and the bare
+	// `declare -p` listing, and nothing else: `set` does not write it,
+	// `compgen -v` does not list it, `[ -v xyz ]` is false, and `${!x@}`
+	// does not match it. An assignment afterwards gives the row its value
+	// back — `declare -- xyz="v"` — and `unset xyz` takes the record away
+	// entirely, after which a fresh `declare xyz` starts it over.
+	//
+	// This is the scalar sibling of the state compounddeclaredonly.go
+	// already keeps, and it is the reason a bare declaration was silent
+	// here: an attributed operand left something in an attribute table for
+	// the listing to find and an unattributed one left nothing at all, so
+	// `typeset xyz; typeset -p xyz` answered `xyz: not found` at status 1 —
+	// which is no column's answer, since the two that record say 0 with a
+	// row and the one that does not says 0 with silence.
+	ValuelessDeclarationRecordsTheName Answer
 	// ExportLetterDeclaresAGlobal makes the `x` letter on a declaration ask
 	// for `-g` as well, so `typeset -x v=1` written inside a function
 	// declares no local and the name outlives the call.

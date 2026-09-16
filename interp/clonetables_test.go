@@ -261,6 +261,7 @@ func seedTables(r *Runner) {
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
 	r.declaredEmpty = map[string]bool{"seed": true}
 	r.declaredOnlyCompound = map[string]bool{"seed": true}
+	r.declaredBare = map[string]bool{"seed": true}
 	r.compoundVariable = map[string]bool{"seed": true}
 	r.declaring = map[string]bool{"seed": true}
 	r.disabledBuiltins = map[string]bool{"seed": true}

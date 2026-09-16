@@ -915,6 +915,12 @@ type Runner struct {
 	// this one rather than its complement.
 	declaredOnlyCompound map[string]bool
 
+	// declaredBare are names a declaration brought into being with no
+	// letters, no value and nothing in them — declared and unset at once.
+	// See baredeclaration.go for the measurement, and for why the record is
+	// carried by nameAttributes rather than saved and restored again here.
+	declaredBare map[string]bool
+
 	// compoundVariable is the set of names that are ksh93 compound
 	// variables — `c=(a=1 b=2)` and `typeset -C c`, the fourth kind of thing
 	// a name can be beside a scalar, an indexed array and a table.

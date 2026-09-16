@@ -1292,6 +1292,13 @@ func Semantics() interp.Semantics {
 	// `(( ))` — see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
 	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	// And inside a bracket expression the backslash protects the character
+	// behind it and puts nothing of its own in the set: `[\)]` is the
+	// one-character set `)`, and `[a\-z]` is the three members a, `-` and z,
+	// the escape being what stops the dash reading as the range operator.
+	// zsh adds the backslash to the set as well and BusyBox ash protects
+	// nothing, so this value is what five of the seven columns share (#3271).
+	s.BracketEscape = interp.BracketEscapeProtectsTheMember
 	// The parameter whose patterns take names back out of a pathname
 	// expansion, spelled `FIGNORE` here and `GLOBIGNORE` in bash. The
 	// facility is the same and the model is not: measured on ksh93u+,

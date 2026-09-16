@@ -1197,6 +1197,13 @@ func Semantics() interp.Semantics {
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	// And inside a bracket expression the backslash protects the character
+	// behind it and puts nothing of its own in the set: `[\)]` is the
+	// one-character set `)`, and `[a\-z]` is the three members a, `-` and z,
+	// the escape being what stops the dash reading as the range operator.
+	// zsh adds the backslash to the set as well and BusyBox ash protects
+	// nothing, so this value is what five of the seven columns share (#3271).
+	s.BracketEscape = interp.BracketEscapeProtectsTheMember
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
 	// `[[:]` is a bracket holding `[` and `:`: nothing closes the name, so there is no name and the two characters are ordinary members.
 	// See interp.Semantics.UnterminatedCharacterClass (#1431).

@@ -195,6 +195,23 @@ func Semantics() interp.Semantics {
 	// read as a literal: `case a in [a) echo one;; *) echo def;; esac`
 	// reaches the default arm.
 	s.UnterminatedBracket = interp.BracketNoMatch
+	// But inside a bracket expression it escapes nothing at all: the
+	// backslash is an ordinary member of the set and the character behind it
+	// keeps whatever meaning it has there. `case 'a]c' in a[\]]c)` reaches
+	// the arm in the other six columns and not here — `[\]` is the
+	// one-character set `\` and the second `]` is a literal — while
+	// `a[a\-z]c` matches `abc` and `a\c` and does **not** match `a-c`,
+	// because the `-` behind the backslash is still the range operator and
+	// the backslash is its left bound. A shell that merely refused the
+	// pattern would answer no to all three, which is what makes this a
+	// reading rather than a refusal.
+	//
+	// Measured 2026-09-16 in the pinned alpine image under `--init`, over 37
+	// values of X in `a[\X]c` and both routes a bracket can be written on.
+	// `bet\a` matches `beta` here as everywhere, which is the control: the
+	// escape is spent outside a bracket in this shell too, so this is about
+	// the bracket and not about patterns in general (#3271).
+	s.BracketEscape = interp.BracketEscapeIsOnlyAMember
 	// `[[ x =~ "" ]]` matches rather than being refused, which is ksh93's
 	// answer among the shells that have the operator and not bash's or
 	// zsh's. Measured 2026-09-16 in the pinned alpine image: status 0 here,

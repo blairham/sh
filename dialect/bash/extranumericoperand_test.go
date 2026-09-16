@@ -83,6 +83,12 @@ func TestAWordBehindANumericOperandIsTooManyArguments(t *testing.T) {
 			"bash: line 2: shift: too many arguments\nA=2 n=3\n",
 		},
 		{
+			// The marker is consumed, so what is behind it is one operand
+			// and not two — the row the first writing of this got wrong.
+			"a taken marker is not an operand", "for i in 1 2; do break -- 1; echo IN; done\necho \"A=$?\"\n",
+			"A=0\n",
+		},
+		{
 			"one operand is the ordinary reading", "set -- a b c\nshift 2\necho \"A=$? n=$#\"\n",
 			"A=0 n=1\n",
 		},

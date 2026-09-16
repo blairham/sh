@@ -88,7 +88,7 @@ func init() {
 // ordinary control flow and modeling it as a failure would make every caller
 // check for something that is not one.
 func biBreak(r *Runner, _ context.Context, args []string) int {
-	want, st, done := r.loopControlCount("break", args)
+	rest, want, st, done := r.loopControlCount("break", args)
 	if done {
 		return st
 	}
@@ -102,7 +102,7 @@ func biBreak(r *Runner, _ context.Context, args []string) int {
 	// Semantics.LoopControlPlaceIsJudgedBeforeTheCount read at a second site
 	// rather than a reading of its own. Inside a loop both columns say too
 	// many, and neither leaves the loop.
-	if st, done := r.extraNumericOperands("break", args); done {
+	if st, done := r.extraNumericOperands("break", rest); done {
 		return st
 	}
 	r.ctl, r.ctlDepth = controlBreak, reach
@@ -110,7 +110,7 @@ func biBreak(r *Runner, _ context.Context, args []string) int {
 }
 
 func biContinue(r *Runner, _ context.Context, args []string) int {
-	want, st, done := r.loopControlCount("continue", args)
+	rest, want, st, done := r.loopControlCount("continue", args)
 	if done {
 		return st
 	}
@@ -118,7 +118,7 @@ func biContinue(r *Runner, _ context.Context, args []string) int {
 	if done {
 		return st
 	}
-	if st, done := r.extraNumericOperands("continue", args); done {
+	if st, done := r.extraNumericOperands("continue", rest); done {
 		return st
 	}
 	r.ctl, r.ctlDepth = controlContinue, reach
@@ -216,26 +216,31 @@ func (r *Runner) numericOperandMarker(args []string) ([]string, bool) {
 // cited bash's place complaint as the evidence for it, so the code refused
 // `break abc` where bash names the loops and carries on (#2299).
 //
+// The operands *past* the end-of-options marker come back with the count,
+// because the caller has one more question to ask of them and asking it of
+// the words as written would count the marker: `break -- 1` is one operand
+// and not two. See Runner.extraNumericOperands.
+//
 // `return` is the counter-case and is not this question: `return abc` outside
 // a function writes the operand's complaint *and* the place's, in that order
 // (#2762), so the two builtins do not share a rule here.
 //
 // See Diagnostics.LoopControlCount for the panel's sentences and for why the
 // script's ending is not an axis: all seven end there.
-func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
+func (r *Runner) loopControlCount(name string, args []string) ([]string, int, int, bool) {
 	args, marked := r.numericOperandMarker(args)
 	if !marked {
 		// The axis went unanswered; ask told the script so and the builtin
 		// stops rather than guessing which of `--` and the word behind it
 		// is the count.
-		return 0, r.status, true
+		return nil, 0, r.status, true
 	}
 	if len(args) == 0 {
-		return 1, 0, false
+		return args, 1, 0, false
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(args[0]))
 	if err == nil && n > 0 {
-		return n, 0, false
+		return args, n, 0, false
 	}
 	d := r.diag()
 	// Both complaints are available from here, and the dialect decides which
@@ -248,15 +253,15 @@ func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
 		case r.unspecified:
 			// A boundary axis went unanswered inside the floor, and it is
 			// the first question asked here.
-			return 0, r.status, true
+			return args, 0, r.status, true
 		case r.ask(r.sem().LoopControlPlaceIsJudgedBeforeTheCount,
 			"a misplaced `break` being judged before its count is read"):
 			// The place is judged first, so the word is never read and never
 			// quoted: a count of one carries through to loopControlReach,
 			// which finds no loop and writes the place's complaint.
-			return 1, 0, false
+			return args, 1, 0, false
 		case r.unspecified:
-			return 0, r.status, true
+			return args, 0, r.status, true
 		}
 	}
 	// The number this reading produced, for the one dialect whose sentence
@@ -270,7 +275,7 @@ func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
 		// A number, and not positive, in the one column that parts the two:
 		// it complains, takes the count as 1 and lets the script carry on.
 		r.diagf("%s\n", Wording(d.LoopControlCountOutOfRange, "", name, operand))
-		return 1, 0, false
+		return args, 1, 0, false
 	}
 	// The fallback chain is a chain of *formats*, not of rendered text: the
 	// operand can hold a `%` and rendering twice would read it as a verb.
@@ -287,7 +292,7 @@ func (r *Runner) loopControlCount(name string, args []string) (int, int, bool) {
 	// says Yes to that axis and reports **2** here, where ksh93 and zsh
 	// report 1, so the two are different facts. See fatalAtStatus.
 	r.fatalAtStatus(orDefault(d.LoopControlCountStatus, 2))
-	return 0, r.status, true
+	return args, 0, r.status, true
 }
 
 // loopControlReach is how many loops a `break` or `continue` can see, plus

@@ -28,6 +28,7 @@ func TestAWordBehindANumericOperandIsOneTooMany(t *testing.T) {
 		s.ShiftCountIsArithmetic = No
 		s.ShiftOptionWords = ShiftOptionWordsNone
 		s.BadOptionToSpecialBuiltinFatal = No
+		s.NumericOperandDoubleDashEndsOptions = Yes
 		return s
 	}
 	dg := Diagnostics{
@@ -110,6 +111,12 @@ func TestAWordBehindANumericOperandIsOneTooMany(t *testing.T) {
 			"break 1 2\necho \"A=$?\"\n",
 			"sh: break: not in a loop\nA=0\n",
 			"outside a loop bash writes the place's sentence, which is LoopControlPlaceIsJudgedBeforeTheCount read at a second site",
+		},
+		{
+			"the marker is not an operand", ExtraNumericOperandGivesUpTheStatement,
+			"for i in 1 2; do break -- 1; echo IN; done\necho TAIL\n",
+			"TAIL\n",
+			"`break -- 1` is one operand: counting the words as written would make every taken marker one too many",
 		},
 		{
 			"one operand asks nothing", ExtraNumericOperandUnspecified,

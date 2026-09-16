@@ -172,21 +172,22 @@ const (
 //	zsh 5.9.2          ends       ends       ends            ends
 //	ksh93u+ 2012       ends       ends       ends            ends
 //	dash 0.5.12        runs out   runs out   runs out        runs out
+//	BusyBox ash 1.37   runs out   runs out   runs out        runs out
 //
 // So bash compares the line as written as well as the stripped line, zsh and
 // ksh93 strip the delimiter's tabs as they strip the line's, and dash compares
 // the stripped line against the delimiter as written, which nothing can equal.
 // A tab anywhere but the front of the delimiter is unanimous and is not this
 // question, and neither is `<<` without the dash, which strips nothing in any
-// column. BusyBox ash was not reachable when this was measured and keeps the
-// core answer until it is.
+// column. BusyBox ash was measured the same day through the pinned Alpine
+// image and answers as dash does.
 type HeredocDelimiterTabs uint8
 
 const (
 	// HeredocDelimiterTabsAreKept compares the stripped line against the
 	// delimiter as it was written, so a delimiter that opens with a tab is
-	// never met and the body runs to the end of the input. dash, and the
-	// core.
+	// never met and the body runs to the end of the input. dash, BusyBox
+	// ash, and the core.
 	HeredocDelimiterTabsAreKept HeredocDelimiterTabs = iota
 
 	// HeredocLineAsWrittenMeetsTheDelimiter also compares the line as it was

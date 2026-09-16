@@ -2325,9 +2325,17 @@ func (p *Parser) parseRedirect() *Redirect {
 		// if removing quotes changed the text, it was quoted. `\EOF` and
 		// `"EOF"` both differ from their literal; a bare `EOF` does not.
 		quoted := p.tok.Text != p.tok.Literal()
-		// The body starts after the next newline, which the lexer reaches;
-		// the delimiter is here, which the parser has. Hence the handoff.
-		p.lex.queueHeredoc(r, quoted)
+		if b := p.tok.aliasBody; b != nil {
+			// The alias value held the body as well as the operator, and
+			// it was read from there when the value was. See
+			// Parser.readAliasHeredocs.
+			r.Heredoc = b.Heredoc
+		} else {
+			// The body starts after the next newline, which the lexer
+			// reaches; the delimiter is here, which the parser has. Hence
+			// the handoff.
+			p.lex.queueHeredoc(r, quoted)
+		}
 	}
 	p.next()
 	return r

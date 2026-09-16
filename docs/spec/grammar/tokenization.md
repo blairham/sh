@@ -761,6 +761,46 @@ quote nothing closes, and the quote that closes it is the one `b` is about to
 contribute. Carrying at splice time reads that open quote over the input and
 swallows the rest of the file.
 
+### A here-document the body opens reads its body from the body
+
+The same textual reading reaches a here-document. A body is read from the
+lines after the operator's line, and where the operator is in an alias value
+holding newlines, those lines are the value's own — then the text of any
+value it was spliced into, then the input after the alias word. Measured
+2026-09-16 from script files, with `shopt -s expand_aliases` where bash needs
+it:
+
+| value(s) | used as | bash 5.3.20, ksh93u+, dash, BusyBox ash | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `hd='cat <<EOF⏎in alias⏎EOF⏎'` | `hd` | `in alias` | `in alias` |
+| `hd='cat <<EOF⏎in alias⏎EOF'` | `hd` | `in alias` | body runs on: `in alias`, `EOF␠`, … |
+| `hd='cat <<EOF⏎in alias⏎EOF'` | `hd; echo same` | body runs on: `in alias`, `EOF; echo same`, … | the same, `EOF ; echo same` |
+| `hd='cat <<EOF⏎in alias⏎'` | `hd` ⏎ `from file` ⏎ `EOF` | `in alias`, an empty line, `from file` | `in alias`, `␠`, `from file` |
+| `hd='cat <<EOF⏎in alias'` | `hd x` ⏎ `from file` ⏎ `EOF` | `in alias x`, `from file` | the same |
+| `Y='cat <<\END'`, `X='Y⏎text⏎END⏎echo inX'` | `X` | `text`, `inX` | the same |
+| `Y='cat <<-END⏎<tab>in Y'`, `X='Y⏎<tab>in X⏎<tab>END'` | `X` | `in Y`, `in X` | `in Y␠`, `in X` |
+
+So the seam is crossed in both directions — a body goes on from a value into
+the value around it and into the input, and a line the value ends in the
+middle of is finished by what follows the alias word. The last row but two is
+the one that shows it is text and not tokens: the delimiter written as the
+value's last line is only the delimiter when nothing follows the alias word
+on its line.
+
+zsh is the one column that reads the seam as a **blank**, unless one is
+already there: `EOF` at a value's end is `EOF␠` and ends nothing, and `in Y`
+finished by a newline is `in Y␠`. It is the same blank that keeps a backslash
+ending a value from joining the next line there, so
+`Dialect.AliasBodyBackslashJoinsTheNextLine` answers both.
+
+Not modeled: a body that the *input* runs out inside after crossing the seam,
+which is a remark about where the input ended and is left to the input's own
+route — so `hd; echo same` above, with no later `EOF`, still reads the value's
+body lines as commands here. And the seam blank is inserted only at the end
+of the value being expanded, not at the end of each value it was spliced
+into, so zsh's `EOF␠` for a delimiter the *outer* value ends in is not
+reproduced.
+
 ### The table reaches every text this shell reads, and the *option* is its only gate
 
 Alias expansion is not a property of the *outermost* parse. Every place this
@@ -1092,8 +1132,9 @@ ksh93 strip the delimiter's leading tabs as they strip the lines'; dash
 compares the stripped line against the delimiter as written, which nothing
 can equal. Without the dash nothing is stripped and `<tab>EOF` ends a
 `<tab>EOF` document in all four, and a tab *inside* the delimiter
-(`'E<tab>OF'`) is unanimous. BusyBox ash was not reachable on the day and
-is unmeasured. `syntax.Dialect.StrippedHeredocDelimiter` carries it.
+(`'E<tab>OF'`) is unanimous. BusyBox ash, measured the same day through the
+pinned Alpine image, runs out on all four rows as dash does.
+`syntax.Dialect.StrippedHeredocDelimiter` carries it.
 
 ## `<<<` is a redirection, not a heredoc
 

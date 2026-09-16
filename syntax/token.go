@@ -409,6 +409,11 @@ type Token struct {
 
 	// Spans is set for [TokWord] tokens and is empty otherwise.
 	Spans []Span
+
+	// aliasBody is set on a here-document's delimiter when the token came
+	// out of an alias value that also held the body, already read from that
+	// value. See [Parser.readAliasHeredocs].
+	aliasBody *Redirect
 }
 
 // IsQuoted reports whether any part of the word was quoted. A word can be

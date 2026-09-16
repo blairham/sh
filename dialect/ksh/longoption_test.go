@@ -15,7 +15,7 @@ import (
 //
 // ksh93's own manual page states the rule on the machine these were measured
 // on: "Options -o name can also be specified with --name and +o name can be
-// specifed with --noname except that options names beginning with no are
+// specif[i]ed with --noname except that options names beginning with no are
 // turned on by omitting no." Measured against 93u+ 2012-08-01 on 2026-09-16,
 // what that comes to is three readings tried in order — an `=value`, then the
 // whole word as a name, then the word with a leading `no` taken off. See

@@ -6,7 +6,7 @@
 #
 # **Every `set -o` name is also a `--name` word.** ksh93's own manual page on
 # this machine states it under `-o[option]`: "Options -o name can also be
-# specified with --name and +o name can be specifed with --noname except that
+# specified with --name and +o name can be specif[i]ed with --noname except that
 # options names beginning with no are turned on by omitting no." So there is
 # no table of long options to enumerate — the roster is the `-o` roster, and
 # a name absent from one is absent from both. `ksh --xtrace script` traces,

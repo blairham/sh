@@ -7740,7 +7740,9 @@ type Semantics struct {
 	//
 	// Yes in ksh93, whose own manual page states the rule on the machine
 	// here — "Options -o name can also be specified with --name and +o name
-	// can be specifed with --noname". Measured 2026-09-16 on 93u+
+	// can be specif[i]ed with --noname". The bracket is the page's own typo
+	// corrected in place, so the quotation stays a quotation and the spelling
+	// check stays useful. Measured 2026-09-16 on 93u+
 	// 2012-08-01 across the whole roster:
 	//
 	//	ksh --xtrace -c 'echo hi'     + echo hi, then hi
@@ -7768,7 +7770,7 @@ type Semantics struct {
 	// reader is shown the word they typed rather than the one the shell
 	// was left holding after a strip that did not help.
 	//
-	// Unanswered is a refusal, which is the front end's behaviour before
+	// Unanswered is a refusal, which is the front end's behavior before
 	// this axis existed and is still what every dialect but ksh93 gets.
 	LongOptionNamesASetOption Answer
 

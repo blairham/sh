@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Redirection operators and file descriptors in ksh93 — #2308.
+#
+# Three operators here belong to this shell alone, and all three are about a
+# descriptor's *position* in a file rather than about where its bytes go.
+#
+#	cmd >; file      run with the output held aside, and replace `file`
+#	                 with it only if the command succeeded
+#	exec n<#((expr)) move the read position of descriptor n to that offset
+#	exec n>#((expr)) the same for a write position
+#
+# `>;` is the one a script would reach for: `sed … f >; f` is the in-place
+# edit every other shell needs a temporary file and a `mv` to write, and its
+# whole point is the failure case — a command that ends non-zero leaves the
+# target exactly as it was, so a half-written filter cannot destroy the file
+# it was reading. bash, zsh and dash all parse `>;` as a redirection to a
+# file named `;` or refuse the line, and none of them has `<#` at all.
+#
+# Each section is a subshell. These operators are fatal where they are not
+# understood — a parse error takes the whole input in every shell here — and
+# a section that stops should cost its own lines rather than the file's.
+#
+# The seek operators are written through `eval` rather than inline. A parse
+# error is the one failure a subshell cannot contain — the whole file is read
+# before any of it runs — so an inline `<#((0))` in a shell without the
+# operator costs every section, including the ones that already agree. Behind
+# an `eval` the refusal is a runtime one and stays inside its own section,
+# which is the same reason share/suite/ksh/status.tests reaches `.sh.pipestatus`
+# that way.
+#
+# Two spellings are deliberately absent. `<>;` is documented for ksh93 and
+# this build refuses it (`syntax error … `<>;' unexpected`), so there is no
+# behaviour on this machine to record. A coprocess (`cmd |&` with `print -p`
+# and `read -p`) is left out for the suite's own rule rather than for a gap:
+# whether a reply is readable depends on when the other program flushes, and
+# a case whose answer moves with libc buffering is not a case this suite may
+# hold. See the note on determinism in internal/suite/own.go.
+
+printf -- '--- >; replaces the file when the command succeeds ---\n'
+(
+  printf 'one\ntwo\n' > rewritten
+  sed 's/one/ONE/' rewritten >; rewritten
+  printf 'the edit -> %s, file is [%s]\n' "$?" "$(tr '\n' ',' < rewritten)"
+)
+
+printf -- '--- and leaves it alone when the command fails ---\n'
+(
+  printf 'one\ntwo\n' > kept
+  ( cat kept; exit 3 ) >; kept
+  printf 'the failed edit -> %s, file is [%s]\n' "$?" "$(tr '\n' ',' < kept)"
+)
+
+printf -- '--- >; on a file that did not exist ---\n'
+(
+  rm -f made
+  printf 'fresh\n' >; made
+  printf 'the write -> %s, file is [%s]\n' "$?" "$(tr '\n' ',' < made)"
+)
+
+printf -- '--- <#((expr)) moves a read position ---\n'
+(
+  printf 'abcdefghij' > seekable
+  exec 3< seekable
+  read -n4 v <&3; printf 'the first four: [%s]\n' "$v"
+  eval 'exec 3<#((0))' 2>/dev/null
+  read -n2 v <&3; printf 'after seeking back to 0: [%s]\n' "$v"
+  eval 'exec 3<#((6))' 2>/dev/null
+  read -n2 v <&3; printf 'after seeking to 6: [%s]\n' "$v"
+  exec 3<&-
+)
+
+printf -- '--- the offset is an arithmetic expression, not a number ---\n'
+(
+  printf 'abcdefghij' > computed
+  exec 3< computed
+  n=2
+  eval 'exec 3<#((n * 3 + 1))' 2>/dev/null
+  read -n2 v <&3; printf 'from 2 * 3 + 1: [%s]\n' "$v"
+  exec 3<&-
+)
+
+printf -- '--- >#((expr)) moves a write position ---\n'
+(
+  printf '0123456789' > overwritten
+  exec 4<> overwritten
+  eval 'exec 4>#((3))' 2>/dev/null
+  printf 'XY' >&4
+  exec 4>&-
+  printf 'after writing at 3: [%s]\n' "$(cat overwritten)"
+)

@@ -1868,6 +1868,10 @@ func Semantics() interp.Semantics {
 	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
+	// The one column with neither construct: `[[.a.]]` is the three-member
+	// set `[`, `.`, `a` followed by a literal `]`, so it matches `a]` where
+	// every other column matches `a`. Measured 2026-09-16 on 5.9.2.
+	s.CollatingSymbols = interp.No
 	// `[[:]` is a bracket holding `[` and `:`, the same reading bash 5.3 gives it.
 	// See interp.Semantics.UnterminatedCharacterClass (#1431).
 	s.UnterminatedCharacterClass = interp.UnterminatedClassIsOrdinaryCharacters

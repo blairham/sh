@@ -247,6 +247,11 @@ func Semantics() interp.Semantics {
 	// unanswered IgnoredNamesMatchTheLastComponent: see above.
 	// unanswered IgnoredNamesFollowTheParameter: see above.
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
+	// Unmeasured: no BusyBox was reachable on the machine this axis was
+	// taken on, so this keeps the reading the shell already had rather than
+	// borrowing dash's — #3368 is what borrowing that column costs. #3379
+	// holds the measurement.
+	s.CollatingSymbols = interp.No
 	// `[[:]` takes the `]` as part of the name it is still looking for, so the bracket never ends and UnterminatedBracket decides: `${w#[[:]}` on `[:y` is `y` here, a literal `[` and then `[:]` matching the colon, where every other column matches nothing.
 	// See interp.Semantics.UnterminatedCharacterClass (#1431).
 	s.UnterminatedCharacterClass = interp.UnterminatedClassSwallowsTheClosingBracket

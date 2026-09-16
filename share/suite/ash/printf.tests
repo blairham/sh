@@ -46,10 +46,10 @@ printf 'the prefix overflows [%#05x] [%#06x] and then does not [%#07x]\n' 65535 
 printf 'a nought [%#05x]\n' 0
 
 # `\e` at both sites and `\E` at neither, which is zsh's split rather than
-# dash's silence. This column is the one the presets had wrong at the `%b`
-# site: the golden record has said the escape character since the row was
-# recorded and nothing probed the pair, so a preset saying the two characters
-# looked exactly like a preset nobody had checked.
+# dash's silence. The `%b` line is here as the control the format's line
+# needs and not as a new claim — #3233 measured that site and corrected this
+# column's preset — but the pair went wrong there because nothing probed it,
+# and this file is where the two sites are asked side by side.
 #
 # Read as bytes, because an ESC written to a terminal is invisible.
 printf 'a\eZ:a\EZ' | od -An -c | tr -s ' '

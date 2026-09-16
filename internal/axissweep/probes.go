@@ -749,10 +749,11 @@ func Probes() []Probe {
 			Cases: []string{"printf/a-b-escape-splits-esc-from-capital-esc"},
 			// The `%b` site's own row, read the same way and with the same
 			// split. Nothing probed this pair until #3225, and the ash
-			// preset had said `No` since it was written while the recorded
-			// cell said `1b` — a disagreement no instrument was asking
-			// about, which is the blind spot graded.txt exists to make
-			// visible.
+			// preset said `No` for years while the recorded cell said
+			// `1b` — a disagreement no instrument was asking about, which
+			// is the blind spot graded.txt exists to make visible. #3233
+			// corrected the preset from its own measurement; this is what
+			// would have caught it.
 			Reading: "`printf '%b' 'a\\eZ' | od -An -tx1` is `61 1b 5a` where a `%b` argument's `\\e` is the escape character and `61 5c 65 5a` where it is a backslash and an `e`",
 			Read: func(cells map[string]oracle.Result) (string, string) {
 				return escHalf(cells["printf/a-b-escape-splits-esc-from-capital-esc"], 0, "65")

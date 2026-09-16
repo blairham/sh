@@ -80,3 +80,10 @@ kill -l 256
 kill -l 257
 kill -l 300
 printf 'status: %s\n' "$?"
+# `exec` has `-a` and `-c` here and no `-l`: the letter is an option this
+# shell does not know, and `exec` is special, so the subshell it is written
+# in ends there. bash and zsh take `-l`; dash and BusyBox ash take neither
+# letter. The complaints are discarded because they carry the script's path.
+( exec -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
+( exec -l /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -l -> %s\n' "$?"
+( export KEEP=1; exec -c /bin/sh -c 'printf "with -c: [%s]\n" "${KEEP-unset}"' )

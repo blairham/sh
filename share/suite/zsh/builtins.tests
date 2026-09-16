@@ -143,3 +143,12 @@ kill -l 128
 kill -l 160
 kill -l 257
 printf 'status: %s\n' "$?"
+# `exec`'s own option letters, where this shell parts from bash on how the
+# two compose: `-a` wins over `-l` outright, in either order, so `exec -l -a
+# NAME` hands over `NAME` and bash hands over `-NAME`. Each `exec` is in a
+# subshell so the file survives it.
+( exec -l /bin/sh -c 'printf "[%s]\n" "$0"' )
+( exec -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
+( exec -l -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
+( exec -a NAME -l /bin/sh -c 'printf "[%s]\n" "$0"' )
+( export KEEP=1; exec -c /bin/sh -c 'printf "with -c: [%s]\n" "${KEEP-unset}"' )

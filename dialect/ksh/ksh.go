@@ -1317,6 +1317,11 @@ func Semantics() interp.Semantics {
 	s.DotDirectoryOperandIsAnError = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	// `-a` and `-c`, and no `-l`: this shell reports the letter as an
+	// option it does not know and ends the script, `exec` being special.
+	s.ExecTakesTheLoginLetter = interp.No
+	s.ExecTakesTheEmptyEnvironmentLetter = interp.Yes
+	s.ExecLoginPrefixesTheGivenName = interp.No
 	// A file the kernel would not start is run as a script here as it is
 	// everywhere, and `$0` inside it is the word that was typed rather than
 	// the path the PATH search resolved. Measured 2026-09-13: with the file

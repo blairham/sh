@@ -70,3 +70,12 @@ printf '%s\n' "${#p}"
 # read takes a line, and -r is what keeps a backslash.
 printf 'a\\tb\n' | { read -r line; printf '%s\n' "$line"; }
 printf 'a\\tb\n' | { read line; printf '%s\n' "$line"; }
+
+# `exec -a name` is BusyBox's, and the other two letters are not: `-l` and
+# `-c` are refused at the same door any unknown letter is, and `exec` is
+# special here, so the subshell ends there. This column had `-a` refused as a
+# command until #3056, which is the dash answer given to a shell that is not
+# dash.
+( exec -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
+( exec -l /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -l -> %s\n' "$?"
+( exec -c /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -c -> %s\n' "$?"

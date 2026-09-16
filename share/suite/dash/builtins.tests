@@ -129,3 +129,10 @@ kill -l 128 2> /dev/null; printf '128 -> %s\n' "$?"
 kill -l 160 2> /dev/null; printf '160 -> %s\n' "$?"
 kill -l 257 2> /dev/null; printf '257 -> %s\n' "$?"
 kill -l 32 2>&1 > /dev/null | sed 's/.*kill: //'
+# `exec` takes no options here, which is not three missing letters but one
+# answer: a leading dash-word is the *command*, so each of them is looked up
+# on PATH and reported as not found at 127. bash, zsh and ksh93 all read at
+# least one of the three.
+( exec -a NAME /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -a -> %s\n' "$?"
+( exec -l /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -l -> %s\n' "$?"
+( exec -c /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -c -> %s\n' "$?"

@@ -12132,6 +12132,39 @@ type Semantics struct {
 	// decides which word the command is.
 	ExecTakesOptions Answer
 
+	// ExecTakesTheLoginLetter is `exec -l`, which puts a `-` on the front of
+	// the argv[0] the replacement sees — the mark `login` and every terminal
+	// emulator use to say "this is a login shell", and the only way a script
+	// can start one.
+	//
+	// True in bash and zsh; false in ksh93, which has `-a` and `-c` and not
+	// this, and reports the letter as an option it does not know. dash and
+	// BusyBox ash never reach the question: ExecTakesOptions is false there,
+	// so `-l` is the name of a command.
+	//
+	// The prefix goes on the word as it was written, path and all, rather
+	// than on its basename: `exec -l /bin/sh` is `-/bin/sh`.
+	ExecTakesTheLoginLetter Answer
+
+	// ExecTakesTheEmptyEnvironmentLetter is `exec -c`, which hands the
+	// replacement no environment at all — the `env -i` a launcher would
+	// otherwise have to put on the front of the line.
+	//
+	// True in bash, zsh and ksh93. It clears everything, including a prefix
+	// assignment on the same command: `FOO=bar exec -c env` prints nothing.
+	ExecTakesTheEmptyEnvironmentLetter Answer
+
+	// ExecLoginPrefixesTheGivenName decides what `-l` and `-a` do together.
+	//
+	// True in bash, where the `-` goes on the name `-a` chose, so `exec -l -a
+	// NAME cmd` is `-NAME`. False in zsh, where `-a` wins outright and the
+	// same line is `NAME` — in either order, so it is not a last-one-wins
+	// rule.
+	//
+	// Asked only when both letters are present, which is the one place the
+	// two shells that have `-l` disagree about it.
+	ExecLoginPrefixesTheGivenName Answer
+
 	// DotFallsBackToCurrentDirectory looks in the current directory for a
 	// `.` operand with no slash in it, after PATH has missed.
 	//
@@ -14270,6 +14303,11 @@ func PosixSemantics() Semantics {
 		KillListReducesRepeatedly:         No,
 		KillListPrintsANumberItCannotName: No,
 		KillListNamesZeroAsExit:           No,
+		// POSIX gives `exec` no options at all, so none of its three letters
+		// is one: a leading `-l` there is the name of a command.
+		ExecTakesTheLoginLetter:            No,
+		ExecTakesTheEmptyEnvironmentLetter: No,
+		ExecLoginPrefixesTheGivenName:      No,
 		// POSIX shows the mask in a form that can be read back; three of the
 		// four write four octal digits.
 		UmaskPrintsFourDigits: Yes,

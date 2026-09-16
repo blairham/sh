@@ -68,7 +68,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	// and dash takes none, so a leading `-a` is a command called "-a" there.
 	// The axis is asked before the lookup, because which word is the command
 	// depends on the answer.
-	argv, argv0, code := r.execOptions(argv)
+	argv, flags, code := r.execOptions(argv)
 	if code != 0 {
 		return code
 	}
@@ -145,7 +145,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// which is only reached when the replacement failed. See
 		// umaskscope.go.
 		releaseMask := r.holdMaskForFork()
-		err := r.ReplaceProcess(path, withArgv0(argv, argv0), r.environ(), r.replacementFiles())
+		err := r.ReplaceProcess(path, r.execArgv(argv, flags), r.execEnviron(flags), r.replacementFiles())
 		releaseMask()
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.
@@ -153,7 +153,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// A file the kernel will not start may still be a shell script — see
 		// noexecscript.go, and execImageAsScript for why the same helper
 		// answers both this door and a command word's.
-		if st, ran := r.execImageAsScript(ctx, action, path, argv, r.environ(), err); ran {
+		if st, ran := r.execImageAsScript(ctx, action, path, argv, r.execEnviron(flags), err); ran {
 			return st
 		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
@@ -168,12 +168,9 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	// The name the command finds in argv[0]: `-a` where it was given, and
 	// otherwise the word that was typed. os/exec puts the resolved path
 	// there, which is the one thing it should never be.
-	cmd.Args[0] = argv[0]
-	if argv0 != "" {
-		cmd.Args[0] = argv0
-	}
+	cmd.Args[0] = r.execArgv(argv, flags)[0]
 	cmd.Dir = r.Dir
-	cmd.Env = r.environ()
+	cmd.Env = r.execEnviron(flags)
 	cmd.Stdin = childIn(r.Stdin)
 	cmd.Stdout = childOut(r.stdout())
 	cmd.Stderr = childOut(r.stderr())
@@ -318,47 +315,112 @@ func orElse(preferred, fallback string) string {
 //
 // It returns the remaining words, the argv[0] override if one was given, and a
 // status if the words could not be read at all.
-func (r *Runner) execOptions(argv []string) (rest []string, argv0 string, code int) {
+func (r *Runner) execOptions(argv []string) (rest []string, flags execFlags, code int) {
 	if len(argv) == 0 || !strings.HasPrefix(argv[0], "-") || argv[0] == "-" {
-		return argv, "", 0
+		return argv, flags, 0
 	}
 	if !r.ask(r.sem().ExecTakesOptions, "`exec` taking options of its own") {
 		// Not an error: the word is the command, and looking it up will
 		// produce the dialect's own "not found" for it.
-		return argv, "", 0
+		return argv, flags, 0
 	}
 	for len(argv) > 0 && strings.HasPrefix(argv[0], "-") && argv[0] != "-" {
 		switch argv[0] {
 		case "--":
-			return argv[1:], argv0, 0
+			return argv[1:], flags, 0
 		case "-a":
 			if len(argv) < 2 {
 				r.diagf("exec: -a: %s\n", "option requires an argument")
-				return nil, "", 2
+				return nil, flags, 2
 			}
-			argv0, argv = argv[1], argv[2:]
-		case "-c", "-l":
-			// Accepted and not implemented, which is a real answer rather
-			// than a pretense: -c would need an empty environment and -l a
-			// login argv[0], and neither is measured by anything here yet.
-			// Silently ignoring them would be the pretense.
-			r.diagf("exec: %s is not implemented\n", argv[0])
-			return nil, "", 2
+			flags.argv0, argv = argv[1], argv[2:]
+			continue
+		case "-l":
+			if !r.ask(r.sem().ExecTakesTheLoginLetter, "`exec -l`") {
+				return nil, flags, r.execBadOption(argv[0])
+			}
+			flags.login = true
+		case "-c":
+			if !r.ask(r.sem().ExecTakesTheEmptyEnvironmentLetter, "`exec -c`") {
+				return nil, flags, r.execBadOption(argv[0])
+			}
+			flags.clearEnv = true
 		default:
-			r.diagf("exec: %s: invalid option\n", argv[0])
-			return nil, "", 2
+			return nil, flags, r.execBadOption(argv[0])
 		}
+		argv = argv[1:]
 	}
-	return argv, argv0, 0
+	return argv, flags, 0
 }
 
-// withArgv0 builds the argument vector a replacement receives, with argv[0]
-// overridden if `-a` asked for it.
-func withArgv0(argv []string, argv0 string) []string {
-	if argv0 == "" {
+// execBadOption is a letter this dialect's `exec` has not got, reported the
+// way every other builtin reports one — the dialect's wording, its usage
+// line, and its rule about a special builtin's failure ending the script,
+// which `exec` is in dash and ksh93.
+//
+// It replaced a sentence of this package's own that three dialects printed
+// and none of them writes (#3056): ksh93 says `exec: -l: unknown option` and
+// then its usage line, and the script stops there.
+func (r *Runner) execBadOption(opt string) int {
+	if r.unspecified {
+		return r.status
+	}
+	return r.badBuiltinOption("exec", opt)
+}
+
+// execFlags is what `exec`'s own options asked for, gathered rather than
+// passed one at a time: they arrive together and are spent together, at the
+// two seams a replacement has — its argument vector and its environment.
+type execFlags struct {
+	// argv0 is `-a name`, the name the replacement finds in argv[0].
+	argv0 string
+	// login is `-l`, which marks the argv[0] as a login shell's.
+	login bool
+	// clearEnv is `-c`, which hands the replacement no environment.
+	clearEnv bool
+}
+
+// argv builds the argument vector a replacement receives.
+//
+// The two letters meet here, and they do not compose the same way in the two
+// shells that have both: bash puts the `-` on the name `-a` chose, and zsh
+// lets `-a` win outright — in either order, so it is not a rule about which
+// was written last. See Semantics.ExecLoginPrefixesTheGivenName.
+//
+// The prefix goes on the word as written, path and all, which is what the
+// reference shells do: `exec -l /bin/sh` hands over `-/bin/sh`.
+func (r *Runner) execArgv(argv []string, flags execFlags) []string {
+	name := argv[0]
+	switch {
+	case flags.argv0 != "" && flags.login:
+		if r.ask(r.sem().ExecLoginPrefixesTheGivenName, "`exec -l -a name`") {
+			name = "-" + flags.argv0
+		} else {
+			name = flags.argv0
+		}
+	case flags.argv0 != "":
+		name = flags.argv0
+	case flags.login:
+		name = "-" + name
+	}
+	if name == argv[0] {
 		return argv
 	}
 	out := append([]string(nil), argv...)
-	out[0] = argv0
+	out[0] = name
 	return out
+}
+
+// execEnviron is the environment a replacement is handed: this shell's,
+// unless `-c` asked for none.
+//
+// An empty slice and not nil, which is the difference between "no variables"
+// and "whatever the process happens to hold": os/exec reads a nil Env as the
+// caller's own environment, so `exec -c` written that way would have handed
+// over everything and looked like it worked.
+func (r *Runner) execEnviron(flags execFlags) []string {
+	if flags.clearEnv {
+		return []string{}
+	}
+	return r.environ()
 }

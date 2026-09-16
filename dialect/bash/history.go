@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
 )
 
 // `history`, which is bash's list of what was typed and the two files it
@@ -55,15 +56,31 @@ import (
 const (
 	// historyStore is the list itself, an indexed array oldest-first.
 	historyStore = ".bash.history"
-	// historyAppended is how many entries `-a` has already written, which is
-	// the whole of what makes it an *append* rather than a second write.
+	// historyUnwritten is how many of the newest entries this session added
+	// and no `-a` has written yet — a **count** from the end of the list and
+	// not a position in it, which is the whole of what makes `-a` an
+	// *append* rather than a second write.
 	//
 	// Measured: two `-a` to the same file write each entry once, and a `-w`
 	// in between does not reset it — `history -s one; history -w k; history
 	// -s two; history -a k` leaves `one` twice and `two` once, because the
 	// write put the whole list down and the append then added everything
 	// since the last *append*, which was none.
-	historyAppended = ".bash.history.appended"
+	//
+	// A count rather than a position, measured 2026-09-16 on bash 5.3.20 by
+	// what the file holds when the shell ends, which appends the same count
+	// `-a` does:
+	//
+	//   - a line the reader records and an entry `-s` adds each count one, and
+	//     an entry `-r` or `-n` reads from a file counts nothing — `history -r`
+	//     then `history` leaves the file with `gamma three` and `history`,
+	//     the newest two entries, because two lines were recorded and the
+	//     three read are older than neither;
+	//   - `-d` takes one off, whichever entry it removed: three `history -d 1`
+	//     after `echo q` leave only the last `history -d 1` appended;
+	//   - the builtin's own line that `-p` and `-s` drop takes one off;
+	//   - `-c` puts it back to nothing.
+	historyUnwritten = ".bash.history.unwritten"
 	// historyReadAt is how far `-n` has read each file, keyed by path.
 	//
 	// Per file rather than one counter, because that is what the letter
@@ -74,6 +91,12 @@ const (
 	// difference between the two letters and is measured as `-r` twice
 	// leaving two copies.
 	historyReadAt = ".bash.history.readat"
+	// historyOwnLine says the line the reader handed over last joined the
+	// list, which is the entry `-p` and `-s` drop as their own. Measured
+	// 2026-09-16 on bash 5.3.20: with `HISTIGNORE=history`, `history -p x`
+	// is not recorded and the entry before it survives the call, so a builtin
+	// whose line was left out has nothing of its own to drop.
+	historyOwnLine = ".bash.history.ownline"
 )
 
 // historyUsage is the line a refused option prints after the complaint, in
@@ -88,7 +111,8 @@ func registerHistory(r *interp.Runner) {
 	// joins the list the designators index. Functions taking a runner rather
 	// than closures over this one — see interp.Runner.SetHistoryStore, where
 	// the subshell reason is written down.
-	r.SetHistoryStore(historyEntries, func(r *interp.Runner, line string) { historyAdd(r, line) })
+	r.SetHistoryStore(historyEntries, historyRecord)
+	r.SetHistoryFile(historyStartFile, historyFinishFile)
 }
 
 // historyFlags is the letters one call carried.
@@ -151,10 +175,10 @@ func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 
 	if flags.clear {
 		r.SetArray(historyStore, nil)
-		// The append mark goes with it. A cleared list has written nothing,
-		// and leaving the mark behind would make the next `-a` skip entries
-		// that no longer have anything to do with the ones it counted.
-		r.SetVar(historyAppended, "0")
+		// The count goes with it: a cleared list holds nothing for `-a` to
+		// write, and measured, `echo 1; history -c; echo 2` leaves only
+		// `echo 2` appended when the shell ends.
+		historySetUnwritten(r, 0)
 	}
 	if flags.delete {
 		if code := historyDelete(r, flags.offset); code != 0 {
@@ -283,6 +307,7 @@ func historyDelete(r *interp.Runner, offset string) int {
 		return 1
 	}
 	r.SetArray(historyStore, append(entries[:n-1:n-1], entries[n:]...))
+	historySetUnwritten(r, historyUnwrittenCount(r)-1)
 	return 0
 }
 
@@ -336,29 +361,24 @@ func historyFile(r *interp.Runner, letter byte, rest []string) int {
 	}
 	switch letter {
 	case 'w':
-		return historyWriteFile(r, name, historyEntries(r), false)
+		return historyWriteFile(r, name, historyEntries(r), false, false)
 	case 'a':
-		entries := historyEntries(r)
-		from := historyMark(r)
-		if from > len(entries) {
-			from = len(entries)
-		}
-		if code := historyWriteFile(r, name, entries[from:], true); code != 0 {
+		if code := historyWriteFile(r, name, historyNewest(r), true, false); code != 0 {
 			return code
 		}
-		r.SetVar(historyAppended, strconv.Itoa(len(entries)))
+		historySetUnwritten(r, 0)
 		return 0
 	case 'r':
-		lines, ok := historyReadFile(r, name)
+		lines, ok := historyReadFile(r, name, false)
 		if !ok {
 			return 1
 		}
 		for _, line := range lines {
-			historyAdd(r, line)
+			historyLoad(r, line)
 		}
 		return 0
 	default: // 'n'
-		lines, ok := historyReadFile(r, name)
+		lines, ok := historyReadFile(r, name, false)
 		if !ok {
 			return 1
 		}
@@ -367,7 +387,7 @@ func historyFile(r *interp.Runner, letter byte, rest []string) int {
 			at = len(lines)
 		}
 		for _, line := range lines[at:] {
-			historyAdd(r, line)
+			historyLoad(r, line)
 		}
 		r.SetAssocElement(historyReadAt, shellPath(r, name), strconv.Itoa(len(lines)))
 		return 0
@@ -390,19 +410,76 @@ func historyDropOwnLine(r *interp.Runner) {
 	if !r.HistoryListFilledByTheReader() {
 		return
 	}
+	if own, _ := r.GetVar(historyOwnLine); own != "1" {
+		return
+	}
 	entries := historyEntries(r)
 	if len(entries) == 0 {
 		return
 	}
 	r.SetArray(historyStore, entries[:len(entries)-1])
+	historySetUnwritten(r, historyUnwrittenCount(r)-1)
 }
 
+// historyRecord is a command the reader hands over, which joins the list unless
+// HISTCONTROL or HISTIGNORE leaves it out — the same rules a prompt reads, see
+// repl.HistoryIgnores.
+//
+// `erasedups` is the one word of HISTCONTROL a prompt does not read here, and
+// a script's list does: measured, `echo a`, `echo b`, `echo a` under
+// `HISTCONTROL=erasedups` lists `echo b` and then `echo a`, the earlier copy
+// gone and the new one kept at the end.
+func historyRecord(r *interp.Runner, line string) {
+	entries := historyEntries(r)
+	previous := ""
+	if len(entries) > 0 {
+		previous = entries[len(entries)-1]
+	}
+	if repl.HistoryIgnores(HistoryStyle(), r, line, previous) {
+		r.SetVar(historyOwnLine, "0")
+		return
+	}
+	if historyErasesDups(r) {
+		kept := entries[:0]
+		for _, entry := range entries {
+			if entry != line {
+				kept = append(kept, entry)
+			}
+		}
+		if len(kept) != len(entries) {
+			r.SetArray(historyStore, kept)
+		}
+	}
+	historyAdd(r, line)
+	r.SetVar(historyOwnLine, "1")
+}
+
+// historyErasesDups reports `erasedups` in HISTCONTROL's colon-separated words.
+func historyErasesDups(r *interp.Runner) bool {
+	v, _ := r.GetVar("HISTCONTROL")
+	for _, word := range strings.Split(v, ":") {
+		if word == "erasedups" {
+			return true
+		}
+	}
+	return false
+}
+
+// historyAdd is an entry this session made — a line the reader recorded or
+// one `-s` stored — which a later `-a`, or the shell ending, will write.
 func historyAdd(r *interp.Runner, line string) {
+	historyLoad(r, line)
+	historySetUnwritten(r, historyUnwrittenCount(r)+1)
+}
+
+// historyLoad is an entry read from a file, which is already written and is
+// not counted.
+func historyLoad(r *interp.Runner, line string) {
 	r.SetArray(historyStore, append(historyEntries(r), line))
 }
 
-func historyMark(r *interp.Runner) int {
-	value, ok := r.GetVar(historyAppended)
+func historyUnwrittenCount(r *interp.Runner) int {
+	value, ok := r.GetVar(historyUnwritten)
 	if !ok {
 		return 0
 	}
@@ -411,6 +488,19 @@ func historyMark(r *interp.Runner) int {
 		return 0
 	}
 	return n
+}
+
+// historySetUnwritten stores the count, which never goes below nothing.
+func historySetUnwritten(r *interp.Runner, n int) {
+	r.SetVar(historyUnwritten, strconv.Itoa(max(n, 0)))
+}
+
+// historyNewest is the entries the count covers: the newest ones, or the
+// whole list where it has lost some since they were counted.
+func historyNewest(r *interp.Runner) []string {
+	entries := historyEntries(r)
+	n := min(historyUnwrittenCount(r), len(entries))
+	return entries[len(entries)-n:]
 }
 
 func historyReadMark(r *interp.Runner, name string) int {
@@ -442,7 +532,7 @@ func historyReadMark(r *interp.Runner, name string) int {
 //
 // A refusal is silent here because AllowModify has already reported it, in
 // the same words a refused redirection gets.
-func historyWriteFile(r *interp.Runner, name string, entries []string, appendTo bool) int {
+func historyWriteFile(r *interp.Runner, name string, entries []string, appendTo, quiet bool) int {
 	path := shellPath(r, name)
 	if !r.AllowModify(r.ShellContext(), path) {
 		return 1
@@ -453,17 +543,29 @@ func historyWriteFile(r *interp.Runner, name string, entries []string, appendTo 
 	}
 	f, err := os.OpenFile(path, flags, 0o600)
 	if err != nil {
-		r.Diagnosef("history: %s: %s\n", name, historyReason(err))
+		historyFileComplaint(r, quiet, name, err)
 		return 1
 	}
 	defer func() { _ = f.Close() }()
 	for _, entry := range entries {
 		if _, err := fmt.Fprintf(f, "%s\n", entry); err != nil {
-			r.Diagnosef("history: %s: %s\n", name, historyReason(err))
+			historyFileComplaint(r, quiet, name, err)
 			return 1
 		}
 	}
 	return 0
+}
+
+// historyFileComplaint says why a history file could not be read or written,
+// unless the caller is the shell reading or writing one on its own account —
+// the list being turned on, or the shell ending — which says nothing:
+// measured, a HISTFILE in a missing directory is silent at both. A refusal by
+// the gate is not this, and is reported the way AllowModify and AllowReadPath
+// report every one.
+func historyFileComplaint(r *interp.Runner, quiet bool, name string, err error) {
+	if !quiet {
+		r.Diagnosef("history: %s: %s\n", name, historyReason(err))
+	}
 }
 
 // historyReadFile reads a history file's lines, having asked whether the
@@ -472,14 +574,14 @@ func historyWriteFile(r *interp.Runner, name string, entries []string, appendTo 
 // A refused read is reported the way a refused redirection's is — reading a
 // file's contents is an open, and a builtin that answered with an empty list
 // and said nothing would leave a script believing the file was empty.
-func historyReadFile(r *interp.Runner, name string) ([]string, bool) {
+func historyReadFile(r *interp.Runner, name string, quiet bool) ([]string, bool) {
 	path := shellPath(r, name)
 	if !r.AllowReadPath(r.ShellContext(), path) {
 		return nil, false
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		r.Diagnosef("history: %s: %s\n", name, historyReason(err))
+		historyFileComplaint(r, quiet, name, err)
 		return nil, false
 	}
 	text := strings.TrimSuffix(string(data), "\n")

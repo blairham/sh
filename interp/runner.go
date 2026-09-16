@@ -1525,6 +1525,13 @@ type Runner struct {
 	// one.
 	histEntries func(*Runner) []string
 	histAdd     func(*Runner, string)
+	// histStart and histFinish are what the dialect does with its history
+	// file when a script first turns the list on and when the shell ends,
+	// and histStarted says the first of them has happened. See
+	// SetHistoryFile.
+	histStart   func(*Runner)
+	histFinish  func(*Runner)
+	histStarted bool
 	// histFromReader says the front end is putting the program's own
 	// commands into that list, which is what makes a builtin's own line the
 	// last entry. See SetHistoryListFilledByTheReader.
@@ -3858,6 +3865,7 @@ func (r *Runner) Finish(ctx context.Context) int {
 	r.runPendingTraps(ctx)
 	r.runExitTrap(ctx)
 	r.runExitHook(ctx)
+	r.finishHistoryFile()
 	if !r.inSubshell {
 		r.stopSignalsAndRestore()
 	}

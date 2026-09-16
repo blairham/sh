@@ -230,3 +230,46 @@ func (r *Runner) HistoryExpansionRefusal(err error) string {
 	// somebody's prompt without at least being legible.
 	return err.Error()
 }
+
+// SetHistoryFile hands the Runner the two moments a **script's** history
+// list meets a file: start runs the first time the list is turned on, and
+// finish runs as the shell ends with the list still on.
+//
+// Measured 2026-09-16 on bash 5.3.20, from a script file with no terminal
+// anywhere: `HISTFILE=f; set -o history; history` lists f's lines, and the
+// same script leaves f with its own two lines appended. Neither happens in a
+// subshell's ending, a shell killed by a signal, a shell `exec` replaced, or
+// a shell that turned the list off again before it ended — each measured.
+//
+// The file is the dialect's business, as the list is, and a front end with an
+// interactive session keeps its own: repl reads and writes the file around a
+// prompt, and a Runner that is Interactive never runs either of these.
+func (r *Runner) SetHistoryFile(start, finish func(*Runner)) {
+	r.histStart, r.histFinish = start, finish
+}
+
+// setHistoryRecording is `set -o history` and `set +o history`.
+//
+// The start runs **once**, at the first time the state goes from off to on:
+// measured, `set -o history` a second time, or after a `set +o history`,
+// neither reads the file again nor puts back a HISTSIZE the script unset. A
+// first `set -o history` with no HISTFILE to read still counts as the first,
+// so naming the file afterwards and toggling reads nothing.
+func (r *Runner) setHistoryRecording(on bool) {
+	first := on && !r.histRecord && !r.histStarted
+	r.histRecord = on
+	if !first || r.Interactive || r.histStart == nil {
+		return
+	}
+	r.histStarted = true
+	r.histStart(r)
+}
+
+// finishHistoryFile runs the dialect's finish, where the shell that is ending
+// is one the file is written for.
+func (r *Runner) finishHistoryFile() {
+	if r.histFinish == nil || !r.histStarted || !r.histRecord || r.inSubshell || r.Interactive || r.killedBy != "" {
+		return
+	}
+	r.histFinish(r)
+}

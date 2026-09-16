@@ -3,7 +3,11 @@
 
 package repl
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/blairham/sh/interp"
+)
 
 // What a session declines to remember.
 //
@@ -55,6 +59,11 @@ type historyRules struct {
 	// means in the history what it means in a `case`. Nil matches nothing,
 	// which is a session with no interpreter to ask.
 	match func(pattern, line string) bool
+
+	// patternsReadTheLineBefore gives a pattern that is `&` alone the
+	// meaning bash documents for it: the newest entry already in the list.
+	// A list of patterns only; see splitIgnorePatterns.
+	patternsReadTheLineBefore bool
 }
 
 // historyRulesFrom reads what this session was told.
@@ -111,7 +120,8 @@ func historyRulesFrom(
 			if style.IgnoreIsOnePattern {
 				rules.patterns = []string{v}
 			} else {
-				rules.patterns = strings.Split(v, ":")
+				rules.patterns = splitIgnorePatterns(v)
+				rules.patternsReadTheLineBefore = true
 			}
 		}
 	}
@@ -172,11 +182,60 @@ func (r historyRules) ignored(line, previous string) (ignored, recallable bool) 
 		//
 		// An empty pattern needs no guard: it matches only the empty string,
 		// and a blank line is never recorded by anything.
+		if pattern == "&" && r.patternsReadTheLineBefore {
+			if previous != "" && line == previous {
+				return true, r.keepIgnored
+			}
+			continue
+		}
 		if r.match(pattern, line) {
 			return true, r.keepIgnored
 		}
 	}
 	return false, false
+}
+
+// splitIgnorePatterns splits a list of patterns at every colon a backslash
+// does not quote.
+//
+// Measured 2026-09-16 on bash 5.3.20 in a script keeping a list:
+// `HISTIGNORE='a\:b'` leaves out a line reading `a:b` and keeps a line
+// reading `a`, so the quoted colon is part of one pattern rather than the
+// boundary between two. The backslash stays in the pattern, where the matcher
+// already reads `\:` as the character it quotes.
+//
+// And a pattern that is `&` alone is the line before: measured,
+// `HISTIGNORE='true*:&'` over `echo a`, `echo a`, `true`, `echo a` keeps the
+// first `echo a` and nothing else, so `&` is compared with the newest entry
+// the list holds rather than with the line read just before — the `true` in
+// between was never an entry. See historyRules.ignored, which reads it.
+func splitIgnorePatterns(v string) []string {
+	var out []string
+	start := 0
+	for i := 0; i < len(v); i++ {
+		switch v[i] {
+		case '\\':
+			i++
+		case ':':
+			out = append(out, v[start:i])
+			start = i + 1
+		}
+	}
+	return append(out, v[start:])
+}
+
+// HistoryIgnores reports whether a list outside any session — bash's
+// **script** list, which dialect/bash keeps — leaves this line out.
+//
+// The same rules a session reads, from the same variables, rather than a
+// second copy of them that would drift: measured 2026-09-16 on bash 5.3.20,
+// `HISTCONTROL=ignorespace`, `ignoredups`, `ignoreboth` and `HISTIGNORE`
+// patterns each keep a line out of the list a script builds with `set -o
+// history` exactly as they keep one out of the list at a prompt. previous is
+// the newest entry the list holds, and empty when it holds none.
+func HistoryIgnores(style HistoryStyle, r *interp.Runner, line, previous string) bool {
+	ignored, _ := historyRulesFrom(style, r.GetVar, r.DialectOption, r.MatchPattern).ignored(line, previous)
+	return ignored
 }
 
 // optionOn reports whether a named option is on, for a name a dialect may have

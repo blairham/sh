@@ -4,10 +4,13 @@
 package coverage_test
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/coverage"
 	"github.com/blairham/sh/syntax"
 )
@@ -311,4 +314,135 @@ func first(s string, n int) string {
 		lines = lines[:n]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// TestAGrammarReadingIsNotAMention is #3258. `ParamExpr.RawTailRead` holds a
+// BraceQuotePolicy, the parse writes it only under a dialect whose POSIX mode
+// moves the reading, and a reflection walk cannot tell that field unset from
+// set to the zero. So `BraceQuoteProtectsAPatternOnly` read as mentioned by
+// every parameter expansion under every dialect that never wrote it, and
+// `BraceQuoteProtectsNothing` — zsh's reading, which no parse writes to a
+// node — was a permanent zero. A type syntax.Dialect declares a field of is a
+// reading, not a vocabulary a case spells.
+func TestAGrammarReadingIsNotAMention(t *testing.T) {
+	readings, err := coverage.ReadingTypes()
+	if err != nil {
+		t.Fatalf("ReadingTypes: %v", err)
+	}
+	if !readings["BraceQuotePolicy"] {
+		t.Fatal("BraceQuotePolicy is not read as a Dialect field's type — the exclusion below would pass for the wrong reason")
+	}
+	ops, err := coverage.OperatorTypes()
+	if err != nil {
+		t.Fatalf("OperatorTypes: %v", err)
+	}
+	if slices.Contains(ops, "BraceQuotePolicy") {
+		t.Errorf("a grammar reading is an operator vocabulary: %v", ops)
+	}
+	surface, err := coverage.Surface(nil)
+	if err != nil {
+		t.Fatalf("Surface: %v", err)
+	}
+	for _, e := range surface {
+		if strings.HasPrefix(e.Name, "BraceQuote") {
+			t.Errorf("%s is in the surface", e)
+		}
+	}
+	// The false mention itself, under a grammar that never writes the field
+	// and under the one that does.
+	src := `v=V; printf '[%s]\n' "${v-'a}b'}" "${v}"`
+	for name, d := range map[string]syntax.Dialect{"core": syntax.Core(), "bash": bash.Dialect(), "zsh": zsh.Dialect()} {
+		f, err := syntax.Parse(src, d)
+		if err != nil {
+			t.Fatalf("%s: parse: %v", name, err)
+		}
+		into := map[coverage.Element]int{}
+		if err := coverage.Mentions(f, func(string) bool { return false }, into); err != nil {
+			t.Fatalf("%s: mentions: %v", name, err)
+		}
+		for e := range into {
+			if strings.HasPrefix(e.Name, "BraceQuote") {
+				t.Errorf("%s: %q mentions %s", name, src, e)
+			}
+		}
+		if !has(into, coverage.OperatorKind("ParamOp"), "ParamDefault") {
+			t.Errorf("%s: the real operator in %q was not reached, so the exclusion took too much", name, src)
+		}
+	}
+}
+
+// TestEveryOperatorVocabularyHadItsZeroConsidered is a tripwire, and says so.
+// A walk over a node field cannot tell unset from the type's zero (#3258).
+// For the two vocabularies here that is sound: TokEOF, Kind's zero, is not a
+// redirection and is never an element, and ParamNone is what the parse
+// decides for an expansion with no operator. A new node field of a new named
+// type needs the same question asked of its zero before this list grows.
+func TestEveryOperatorVocabularyHadItsZeroConsidered(t *testing.T) {
+	ops, err := coverage.OperatorTypes()
+	if err != nil {
+		t.Fatalf("OperatorTypes: %v", err)
+	}
+	if want := []string{"Kind", "ParamOp"}; !slices.Equal(ops, want) {
+		t.Errorf("operator vocabularies are %v, want %v. For each new one: is its zero a value the parse "+
+			"decides, or what an unset field holds? If the second, a mention of it is false — see #3258", ops, want)
+	}
+}
+
+// TestTheLedgerIsCheckedAgainstTheColumns. An unreachable element leaves the
+// headline and is printed with its measurement; an entry the columns
+// contradict is printed as stale rather than silently subtracted, because a
+// ledger that could only grow would hide exactly what this report exists to
+// show.
+func TestTheLedgerIsCheckedAgainstTheColumns(t *testing.T) {
+	col, err := coverage.Run("core", syntax.Core(), []string{"echo", "suspend", "read"}, []coverage.Source{
+		{Label: "x", Text: `echo hi`},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	surfaceSize := len(col.Surface)
+	ledger := []coverage.Unreachable{
+		{Element: coverage.Element{Kind: coverage.KindBuiltin, Name: "suspend"}, Issue: 1, Measured: "it stops the harness"},
+		{Element: coverage.Element{Kind: coverage.KindBuiltin, Name: "echo"}, Issue: 2, Measured: "claimed, and asked anyway"},
+		{Element: coverage.Element{Kind: coverage.KindBuiltin, Name: "gone"}, Issue: 3, Measured: "no longer a builtin"},
+	}
+	out := coverage.ReportWithLedger([]coverage.Column{col}, 0, nil, ledger)
+	roll := out[strings.Index(out, "no dialect mentions these at all"):]
+	names := rolledUp(t, roll, coverage.KindBuiltin)
+	if slices.Contains(names, "suspend") {
+		t.Errorf("a ledgered element is still in the work-list: %v", names)
+	}
+	if !slices.Contains(names, "read") {
+		t.Errorf("an unledgered element left the work-list: %v", names)
+	}
+	unasked := len(col.Unasked())
+	head := fmt.Sprintf("no dialect mentions these at all — %d of %d reachable", unasked-1, surfaceSize-1)
+	if !strings.Contains(roll, head) {
+		t.Errorf("the headline does not count reachable elements; want %q in\n%s", head, first(roll, 3))
+	}
+	for _, want := range []string{
+		"builtin suspend (#1)", "it stops the harness",
+		"builtin echo (#2) — some case mentions it",
+		"builtin gone (#3) — no dialect's surface holds it",
+	} {
+		if !strings.Contains(roll, want) {
+			t.Errorf("the roll-up does not say %q:\n%s", want, roll)
+		}
+	}
+	if strings.Contains(roll, "builtin suspend (#1) —") {
+		t.Error("an entry the columns agree with is printed as stale")
+	}
+}
+
+// TestTheCommittedLedgerCarriesItsEvidence. An entry with no issue and no
+// measurement is a forgiveness, which is not what the ledger is for.
+func TestTheCommittedLedgerCarriesItsEvidence(t *testing.T) {
+	for _, u := range coverage.UnreachableByConstruction {
+		if u.Issue == 0 || len(u.Measured) < 40 {
+			t.Errorf("%s is ledgered without the measurement that says it is unreachable", u.Element)
+		}
+		if u.Element.Kind == "" || u.Element.Name == "" {
+			t.Errorf("a ledger entry names no element: %+v", u)
+		}
+	}
 }

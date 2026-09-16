@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/blairham/sh/dialect/ash"
@@ -208,10 +209,18 @@ func TestASubstitutionRefusalQuotesOnlyItsOwnText(t *testing.T) {
 			if c.shell != "" {
 				sh = echoShells()[c.shell]
 			}
-			var out, errs strings.Builder
+			// Locked, because a process substitution's body writes from a
+			// goroutine of its own. `cat` has read the body to its end before
+			// the script finishes, so what it wrote is there to read.
+			var out, errs lockedText
 			sh.Stdout, sh.Stderr = &out, &errs
 			driver.MainArgs(sh, []string{sh.Name, "s.sh"})
 			got := errs.String()
+			if !strings.Contains(got, "`)'") {
+				// Without the refusal the rows below pass for a shell that
+				// never reached the body at all.
+				t.Fatalf("wrote\n%s\nwith no refusal of the body in it", got)
+			}
 			if c.want != "" && !strings.HasSuffix(got, c.want) {
 				t.Errorf("wrote\n%s\nwant it to end with the quote %q", got, c.want)
 			}
@@ -220,6 +229,25 @@ func TestASubstitutionRefusalQuotesOnlyItsOwnText(t *testing.T) {
 			}
 		})
 	}
+}
+
+// lockedText is standard output or error collected from every goroutine the
+// shell writes from.
+type lockedText struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (l *lockedText) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedText) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 func echoShells() map[string]driver.Shell {

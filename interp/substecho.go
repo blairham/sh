@@ -94,7 +94,7 @@ func (r *Runner) textInForce() (string, int) {
 //
 // The parenthesised spellings only. The backquoted one is placed by a rule of
 // its own in the dialect that tags it — at the line its command *ends* on,
-// plus the body's — and that is not modelled here; see #3354.
+// plus the body's — and that is not modeled here; see #3354.
 func (r *Runner) substFailureAtItsLine(span syntax.Span, failure error) func() {
 	d := r.diag()
 	line := d.ParseFailureLine(failure)

@@ -8142,6 +8142,17 @@ than missing:
   way that leaves this option alone (`bindkey -v`, measured), which is why
   what repl reads is a dialect's answer rather than this state.
 
+  **In zsh the option's whole effect on the editor is that it selects a
+  keymap**, and the dialect performs that selection itself (#3140). `setopt
+  vi` and `set -o vi` alias `main` to `viins` exactly as `bindkey -v` does —
+  measured through `bindkey -lL main` — so the two commands write one piece
+  of state and the option is a report of one of the writes. Turning it *off*
+  moves no keymap: `setopt vi; unsetopt vi` leaves `main` on `viins`, and
+  `setopt vi; bindkey -e` leaves the option on with the editor in emacs. Both
+  of those rows are why zsh's `ViEditing` reads the keymap and not this
+  state; before the selection existed, the option moved this state alone and
+  the editor never heard about it.
+
   **Nothing is selected until something selects it** (#1858). A
   non-interactive bash reports both `vi` and `emacs` off, and so does this
   shell now; under `-i` bash reports `emacs on` and so does this one, which

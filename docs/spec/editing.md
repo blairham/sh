@@ -399,11 +399,33 @@ asks instead, and why it is not a number.
 ## vi command mode
 
 The second state the editor can be in, where a letter is a motion rather than a
-character. `set -o vi` asks for it in bash; `bindkey -v` and `set -o vi` both
-ask for it in zsh, and **only the second of those sets the option** — measured,
-`bindkey -v` gives a working command mode and leaves `set -o` reporting
-`emacs off` and `vi off`. That is why the question repl asks is a dialect's
-(`Shell.ViEditing`) rather than interp's editing mode read directly.
+character. `set -o vi` asks for it in bash; `bindkey -v`, `setopt vi` and `set
+-o vi` all ask for it in zsh.
+
+**In zsh the three write one piece of state — which keymap `main` is an alias
+for — and only two of them also move the option.** Measured on zsh 5.9.2 by
+reading `bindkey -lL main` and `[[ -o vi ]]` back together:
+
+| what was run | `bindkey -lL main` | `[[ -o vi ]]` |
+| --- | --- | --- |
+| nothing | `bindkey -A emacs main` | off |
+| `bindkey -v` | `bindkey -A viins main` | off |
+| `setopt vi`, `set -o vi`, `zsh -o vi` | `bindkey -A viins main` | on |
+| `setopt vi; bindkey -e` | `bindkey -A emacs main` | **on** |
+| `setopt vi; unsetopt vi` | `bindkey -A viins main` | off |
+
+So the option is a *report* of one of the two ways the keymap gets written, and
+neither half can be read off the other: the fourth row has the option on with
+the editor plainly in emacs, and the fifth has it off with the editor plainly
+in vi. Turning the option on selects a keymap; turning it off is not a request
+to go back. `Shell.ViEditing` is a dialect's answer for exactly this reason,
+and zsh's reads the keymap.
+
+That seam was missing until #3140: the option moved interp's editing mode and
+nothing else, so `setopt vi` reported itself on and the editor went on reading
+the emacs keymap — the Escape a person pressed was typed into the line. `bindkey
+-lL` is the listing that makes the keymap readable from a script, and it is
+what pins the rows above in `share/suite/zsh/options.tests`.
 
 Measured 2026-09-12, the same way as everything else here and with one
 addition: the cursor is read back rather than reasoned about. Type a line,

@@ -338,7 +338,7 @@ var zshOptions = []zshOption{
 	// was recorded as on here, which was one of four entries holding *this*
 	// shell's state where zsh's differed — and the only one of the four the
 	// state behind it could be corrected for (#1858).
-	setOptBacked("emacs", false, "emacs", false),
+	editingOption("emacs", "emacs"),
 	recorded("equals", true),
 	setOptBacked("errexit", false, "errexit", false),
 	recorded("errreturn", false),
@@ -725,7 +725,7 @@ var zshOptions = []zshOption{
 	recorded("typesettounset", false),
 	setOptBacked("unset", true, "nounset", true),
 	setOptBacked("verbose", false, "verbose", false),
-	setOptBacked("vi", false, "vi", false),
+	editingOption("vi", "viins"),
 	recorded("warncreateglobal", false),
 	recorded("warnnestedvar", false),
 	setOptBacked("xtrace", false, "xtrace", false),
@@ -1390,4 +1390,46 @@ func spellOption(base string, on bool) string {
 		return base
 	}
 	return "no" + base
+}
+
+// editingOption is `vi` and `emacs`: the two option names that are also the
+// two ways to choose a keymap.
+//
+// **Turning one of these on selects a keymap, and that is the whole of what
+// this adds to setOptBacked.** In zsh the option and `bindkey` write the same
+// piece of state from two directions, measured on zsh 5.9.2 by reading
+// `bindkey -lL main` back after each:
+//
+//	setopt vi                 -> bindkey -A viins main
+//	set -o vi                 -> bindkey -A viins main
+//	zsh -o vi                 -> bindkey -A viins main
+//	setopt emacs              -> bindkey -A emacs main
+//	bindkey -v                -> bindkey -A viins main
+//
+// Without this the option moved the substrate's editing mode and nothing
+// else, so `setopt vi` reported itself on — `[[ -o vi ]]` was true — while
+// the editor went on reading the emacs keymap and the Escape a person pressed
+// was typed into the line. An option that reports itself on and does nothing
+// is worse than one this shell does not have, because nothing says so (#3140).
+//
+// **Only turning one *on* moves the keymap**, which is measured rather than
+// assumed and is the half that is easy to get wrong: `setopt vi; unsetopt vi`
+// leaves `main` aliased to `viins` in zsh, and `bindkey -v; set +o vi` leaves
+// it there too. Turning the option off is not a request to go back.
+//
+// The keymap name is spelled here and not in the substrate for the reason
+// interp.EditingMode gives: the core holds *which* mode, and the two dialects
+// with a line editor spell it — `vi-insert` in one and `viins` in the other.
+func editingOption(base, keymap string) zshOption {
+	return zshOption{
+		base: base, def: false,
+		get: func(r *interp.Runner) bool { on, _ := r.NamedOption(base); return on },
+		set: func(r *interp.Runner, on bool) int {
+			code := r.ApplyNamedOption(base, on)
+			if code == 0 && on {
+				selectKeymap(r, keymap)
+			}
+			return code
+		},
+	}
 }

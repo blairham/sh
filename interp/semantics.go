@@ -10521,6 +10521,57 @@ type Semantics struct {
 	// isSetNameKind.
 	ParameterIsSetSeesSpecials bool
 
+	// ConditionIsSetReadsTheWrittenSubscript decides where the subscript of
+	// `[[ -v a[k] ]]` ends: at the bracket the script *wrote*, or at the
+	// bracket left standing once the operand has been expanded and its
+	// quotes removed.
+	//
+	// The two readings agree on every subscript that neither contains a
+	// bracket nor produces one, which is nearly all of them. They part when
+	// a key has a bracket in it, and then they part completely — one finds
+	// the element and the other does not look at a subscript at all, because
+	// what is left over is not a name.
+	//
+	// Measured 2026-09-16 on an associative array holding the two keys `x]`
+	// and `q[r`, each probe from a script file with standard input on
+	// /dev/null:
+	//
+	//	                       bash 5.3.20  bash as sh  zsh 5.9.2  ksh93u+
+	//	[[ -v a[x]] ]]         unset        unset       unset      unset
+	//	[[ -v a["x]"] ]]       set          set         unset      unset
+	//	[[ -v a['x]'] ]]       set          set         unset      unset
+	//	[[ -v a[x\]] ]]        set          set         unset      unset
+	//	[[ -v a[$key] ]]       set          set         unset      unset
+	//	[[ -v a[$k2] ]]        set          set         unset      unset
+	//	[[ -v a[q[r] ]]        unset        unset       unset      unset
+	//
+	// Row one and row seven are the control the two readings answer the same
+	// way, and they are why this is a rule about *written* brackets rather
+	// than a rule about the last bracket in the word. Written out, `a[x]]`
+	// closes its subscript at the third character and then has a bracket
+	// nobody opened, and `a[q[r]` opens one nobody closes; bash refuses both.
+	// So the reading is the same balance the rest of this shell applies to a
+	// subscripted operand — see Runner.subscriptOperand — moved one stage
+	// earlier, to before quote removal and expansion. A quoted bracket and a
+	// bracket that arrives out of an expansion are both *content*, and
+	// neither opens or closes anything.
+	//
+	// bash 3.2 has neither the operator nor an associative array, and dash
+	// and BusyBox ash have no `[[` at all, so four of the seven columns
+	// cannot be asked. Of the three that can, bash is alone.
+	//
+	// The `test` builtin is deliberately not this. Its operand arrives as
+	// one word that has already been expanded, so there are no written
+	// brackets left to read, and bash agrees: `test -v "a[$key]"` is **unset**
+	// in bash 5.3.20 where `[[ -v a[$key] ]]` is set. That is the one row on
+	// which the two spellings of this operator part, and it is the reason
+	// parameterIsSet takes text and this takes a word.
+	//
+	// Asked only where the two readings reach different elements, which is
+	// where a bracket was quoted or expanded into the subscript. A written
+	// subscript that survives expansion unchanged never reaches the question.
+	ConditionIsSetReadsTheWrittenSubscript Answer
+
 	// ScalarSubscriptIsACharacter reads `${s[2]}` on a plain string as its
 	// second character, rather than as an element of the one-element array a
 	// scalar reads as.
@@ -16000,6 +16051,11 @@ func PosixSemantics() Semantics {
 		// reaches into. Both are also what every panel member but one does.
 		SubscriptCommaIsARange:      No,
 		ScalarSubscriptIsACharacter: No,
+		// The standard has no `[[` and so no `-v`; the nearest thing it
+		// has is a word, which is expanded before anything reads it. The
+		// preset follows that and the two panel members that can be asked
+		// and say no.
+		ConditionIsSetReadsTheWrittenSubscript: No,
 		// XCU defines ${#parameter} as the length of the value "in
 		// characters", and defines a character as what the locale's
 		// LC_CTYPE category says one is. So the standard's answer is yes,

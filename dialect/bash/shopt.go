@@ -515,9 +515,31 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 // Every name #1429 and #1445 collected is now wired; nothing in the table
 // below is a behavior somebody asked for and did not get. The last two,
 // `dirspell` and `direxpand`, are in shoptSwitches above.
+// `array_expand_once` and `assoc_expand_once` are on for the same reason and
+// are one switch under two names — measured on bash 5.3.20, `shopt -s
+// array_expand_once` turns `assoc_expand_once` on too, and the reverse.
+// They name the suppression of a *second* expansion of an associative array
+// subscript, and the observable that separates the two states is a subscript
+// the shell never expanded in the first place:
+//
+//	declare -A a; k='x y'; a[$k]=hello
+//	unset -v 'a[$k]'          # quoted, so unset receives the dollar sign
+//	echo "${a[$k]-UNSET}"
+//
+// bash with the names off — its default — prints UNSET, because `unset`
+// expands the subscript itself and finds the key. With them on it prints
+// hello, because the subscript is taken as the literal three characters
+// `$k`, which is not a key of that array. This shell prints hello, so the
+// state the names describe is the state it is already in, and asking for it
+// is a request that has been granted. Asking to move *off* them is refused
+// out loud, and rightly: nothing here expands a subscript twice, and
+// granting the write would promise a second expansion that never happens.
+//
+// Recorded off until #3291, where the refusal was costing bash's own
+// quotearray file five sentences and everything the file did after each one.
 var shoptStates = map[string]bool{
-	"array_expand_once":    false,
-	"assoc_expand_once":    false,
+	"array_expand_once":    true,
+	"assoc_expand_once":    true,
 	"bash_source_fullpath": false,
 	"cdable_vars":          false,
 	"cmdhist":              true,

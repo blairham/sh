@@ -48,15 +48,151 @@ func (r *Runner) parameterIsSet(name string) (bool, error) {
 	if !subscripted {
 		base = name
 	}
+	return r.elementIsSet(base, sub, subscripted), nil
+}
+
+// elementIsSet is the lookup both routes end at, once the operand has been
+// split into a base and a subscript by whichever of the two readings applies.
+func (r *Runner) elementIsSet(base, sub string, subscripted bool) bool {
 	if !r.isSetNameKind(base) {
-		return false, nil
+		return false
 	}
 	e := &syntax.ParamExpr{Name: base}
 	if subscripted {
 		e.Index = literalWord(sub)
 	}
 	_, set, _ := r.paramSource(e)
-	return set, nil
+	return set
+}
+
+// condParameterIsSet answers `[[ -v w ]]`, where the operand is still a word
+// and not yet a string.
+//
+// That is the whole difference from `test -v`, and it is a real one: the word
+// still carries which of its brackets were *written* unquoted and which
+// arrived inside quotes or out of an expansion, and one shell in the panel
+// reads the subscript by the first of those rather than the second. See
+// Semantics.ConditionIsSetReadsTheWrittenSubscript for the row, including the
+// row on which bash's own two spellings of this operator disagree.
+//
+// s is the operand already expanded, because the caller needed it anyway for
+// the trace and because it is what the other reading works from.
+func (r *Runner) condParameterIsSet(w *syntax.Word, s string) (bool, error) {
+	base, sub, ok := writtenSubscript(w)
+	if !ok {
+		return r.parameterIsSet(s)
+	}
+	name := strings.Join(r.expandWordNoSplit(base), "")
+	key := strings.Join(r.expandWordNoSplit(sub), "")
+	// Asked at the disagreement and nowhere else. A subscript whose brackets
+	// survive expansion unchanged reaches the same element under either
+	// reading, and the overwhelming majority of them do — so the axis is not
+	// consulted for `[[ -v a[1] ]]`, and a dialect that has never been
+	// measured on a bracketed key is not recorded as having an answer.
+	if flat, fkey, fok := r.subscriptOperand(s); fok && flat == name && fkey == key {
+		return r.parameterIsSet(s)
+	}
+	if !r.ask(r.sem().ConditionIsSetReadsTheWrittenSubscript,
+		"`[[ -v a[k] ]]` reading the subscript the script wrote rather than the one left after expansion") {
+		return r.parameterIsSet(s)
+	}
+	return r.elementIsSet(name, key, true), nil
+}
+
+// writtenSubscript splits a condition operand into its base and its subscript
+// by the brackets the script wrote, before quote removal and expansion.
+//
+// Only an unquoted literal bracket counts. A bracket inside quotes, one
+// behind a backslash — the lexer gives that a span of its own — and one that
+// arrives out of a substitution are all content, so `a["x]"]`, `a[x\]]` and
+// `a[$k]` each have exactly one subscript however many brackets the value
+// holds.
+//
+// The structure is the same one Runner.subscriptOperand requires of a flat
+// operand and for the same recorded reason: the brackets have to balance and
+// the closing one has to be the word's last character, so `a[x]]` has a
+// bracket nobody opened and `a[q[r]` one nobody closed, and neither is a
+// subscripted name. Only the stage differs.
+func writtenSubscript(w *syntax.Word) (base, sub *syntax.Word, ok bool) {
+	if w == nil {
+		return nil, nil, false
+	}
+	var open, close position
+	depth := 0
+	for i, sp := range w.Spans {
+		if sp.Kind != syntax.Literal || sp.Quoting != syntax.Unquoted {
+			continue
+		}
+		for j := 0; j < len(sp.Value); j++ {
+			switch sp.Value[j] {
+			case '[':
+				if depth == 0 {
+					if i == 0 && j == 0 {
+						// Nothing before the bracket, so nothing the
+						// subscript could be a subscript of.
+						return nil, nil, false
+					}
+					open = position{i, j}
+				}
+				depth++
+			case ']':
+				if depth == 0 {
+					return nil, nil, false
+				}
+				depth--
+				if depth == 0 {
+					close = position{i, j}
+				}
+			}
+		}
+	}
+	if depth != 0 || (close == position{}) {
+		return nil, nil, false
+	}
+	if close.span != len(w.Spans)-1 || close.off != len(w.Spans[close.span].Value)-1 {
+		// The subscript closed before the word ended, so what follows it is
+		// neither name nor subscript.
+		return nil, nil, false
+	}
+	return spansBefore(w, open), spansBetween(w, open, close), true
+}
+
+// position is one byte of one span: which span, and how far into its value.
+type position struct {
+	span, off int
+}
+
+// spansBefore is the word up to a position, exclusive.
+func spansBefore(w *syntax.Word, at position) *syntax.Word {
+	out := &syntax.Word{Start: w.Start, Stop: w.Stop}
+	out.Spans = append(out.Spans, w.Spans[:at.span]...)
+	if head := w.Spans[at.span]; at.off > 0 {
+		head.Value = head.Value[:at.off]
+		out.Spans = append(out.Spans, head)
+	}
+	return out
+}
+
+// spansBetween is the word strictly between two positions.
+func spansBetween(w *syntax.Word, from, to position) *syntax.Word {
+	out := &syntax.Word{Start: w.Start, Stop: w.Stop}
+	if from.span == to.span {
+		one := w.Spans[from.span]
+		one.Value = one.Value[from.off+1 : to.off]
+		out.Spans = append(out.Spans, one)
+		return out
+	}
+	head := w.Spans[from.span]
+	head.Value = head.Value[from.off+1:]
+	if head.Value != "" {
+		out.Spans = append(out.Spans, head)
+	}
+	out.Spans = append(out.Spans, w.Spans[from.span+1:to.span]...)
+	if tail := w.Spans[to.span]; to.off > 0 {
+		tail.Value = tail.Value[:to.off]
+		out.Spans = append(out.Spans, tail)
+	}
+	return out
 }
 
 // isSetNameKind reports whether this shell lets `-v` ask about a name of this

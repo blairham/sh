@@ -2151,6 +2151,14 @@ func Semantics() interp.Semantics {
 	// ]]` is unset here and set in zsh. Measured on bash 5.3.15, and it is
 	// the operator rather than the lookup — `[[ -n ${?+s} ]]` is set here.
 	s.ParameterIsSetSeesPositionals = true
+
+	// And `[[ -v a[k] ]]` reads the subscript the script wrote rather than
+	// the one left standing after the operand is expanded, so a key with a
+	// bracket in it is found when the bracket was quoted or came out of an
+	// expansion. bash is alone in the panel here — see
+	// interp.Semantics.ConditionIsSetReadsTheWrittenSubscript, including the
+	// row where bash's own `test -v` answers the other way.
+	s.ConditionIsSetReadsTheWrittenSubscript = interp.Yes
 	return s
 }
 

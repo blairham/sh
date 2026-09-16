@@ -1726,15 +1726,14 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 		name = r.invokedAs()
 	}
 	r.errf("%s%s\n", d.invocationPrefix(name), strings.TrimPrefix(msg, "set: "))
-	u := d.InvocationUsage
-	if r.longSetOptionSpelling && d.InvocationLongOptionUsage != "" {
-		// A `--name` gets the block that names long options, where the
-		// dialect writes a second one. See
-		// Diagnostics.InvocationLongOptionUsage for the two measured rows.
-		u = d.InvocationLongOptionUsage
-	}
-	if u != "" {
-		r.errf("%s\n", Wording(u, u, r.name(), filepath.Base(r.name())))
+	// A `--name` gets the block that names long options, where the dialect
+	// writes a second one — see Diagnostics.InvocationLongOptionUsage for the
+	// two measured rows. Drawn through the vector's own helper rather than
+	// rendered here, because the front end writes the same block under a word
+	// it stopped before the option table ever saw it, and a shell that wrote
+	// that block two ways would be two shells.
+	if u := d.invocationUsageBlock(r.name(), r.longSetOptionSpelling); u != "" {
+		r.errf("%s\n", u)
 	}
 }
 

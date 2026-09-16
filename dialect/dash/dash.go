@@ -262,6 +262,13 @@ func Semantics() interp.Semantics {
 	// bad variable name rather than an option — so nothing can ask it, and
 	// nothing will reach the refusal an unanswered axis makes.
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// And no record of the bare declaration is kept. `local x` is the only
+	// way to write one here and this shell has no declaration listing to
+	// read it back with, so nothing in it can tell the two answers apart —
+	// measured 2026-09-15, `f(){ local x; set; }; f` names nothing. The axis
+	// is still answered rather than left out, because `local x` reaches it
+	// and an unanswered axis refuses at run time (#2272, #2999).
+	s.ValuelessDeclarationRecordsTheName = interp.No
 	// $(( )) with nothing in it wants a primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.Yes
 	// A bare read wants a name here, where the other three fill REPLY.

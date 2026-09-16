@@ -1123,6 +1123,12 @@ func Semantics() interp.Semantics {
 	// (#2561).
 	s.AttributeOverAFrozenNameIsRefused = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
+	// unanswered ValuelessDeclarationRecordsTheName: that answer is yes, so
+	// a declaration without a value leaves the name holding the empty string
+	// and `typeset xyz; typeset -p xyz` writes `typeset xyz=''`. The axis
+	// asks what is recorded where the name is left *unset*, which is a state
+	// this shell's valueless declaration never produces, so it is never
+	// asked here (#2999).
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still
 	// does, and a name this scope has already made local stays local.

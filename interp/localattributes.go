@@ -85,6 +85,11 @@ type nameAttributes struct {
 	// interp/nameref.go.
 	nameref   string
 	isNameref bool
+	// declaredBare is not a letter and is here for the reason the letters
+	// are: a bare `local u` over a caller's bare `typeset u` is a fresh
+	// binding whose record must not outlive the call, and `unset` takes it
+	// off with everything else. See baredeclaration.go.
+	declaredBare bool
 }
 
 // captureAttributes reads what the tables hold for a name, so a scope can put
@@ -96,6 +101,8 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 		upper:   r.uppered[name],
 		unique:  r.unique[name],
 		hidden:  r.hidden[name],
+
+		declaredBare: r.declaredBare[name],
 	}
 	a.base, a.baseSet = r.integerBase[name]
 	a.precision, a.isFloat = r.floatPrecision[name]
@@ -129,6 +136,7 @@ func (r *Runner) dropNameAttributes(name string) {
 	delete(r.unique, name)
 	delete(r.hidden, name)
 	delete(r.nameref, name)
+	delete(r.declaredBare, name)
 }
 
 // restoreAttributes puts back what captureAttributes read.
@@ -142,6 +150,7 @@ func (r *Runner) restoreAttributes(name string, a nameAttributes) {
 	setBool(&r.uppered, name, a.upper)
 	setBool(&r.unique, name, a.unique)
 	setBool(&r.hidden, name, a.hidden)
+	setBool(&r.declaredBare, name, a.declaredBare)
 	setInt(&r.integerBase, name, a.base, a.baseSet)
 	setInt(&r.floatPrecision, name, a.precision, a.isFloat)
 	setBool(&r.floatExponent, name, a.floatExponent)

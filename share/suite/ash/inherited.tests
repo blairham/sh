@@ -15,22 +15,6 @@
 # also passes, so a column that agrees by accident is visible as one that
 # agrees on the control alone.
 
-printf -- '--- a name-shaped value in arithmetic ---\n'
-
-# dash reads the value as a literal and stops at `Illegal number: y`. Six of
-# the seven columns look the name up in turn.
-y=5; x=y
-printf 'one step:  %s\n' "$((x+1))"
-
-# And it recurses as far as the values lead, which is what says the first row
-# is a lookup and not one extra step.
-y=z; z=7; x=y
-printf 'two steps: %s\n' "$((x+1))"
-
-# The control: a numeral, which every column adds to.
-n=5
-printf 'a numeral: %s\n' "$((n+1))"
-
 printf -- '--- an empty regex operand ---\n'
 
 # 0 here and in ksh93; 2 in the three bash builds and 1 in zsh, each with a
@@ -56,3 +40,23 @@ PATH="$PWD/elsewhere:/usr/bin:/bin"
 printf 'printf "only here\\n"\n' > only.sh
 . only.sh
 printf 'after the fallback -> %s\n' "$?"
+
+# The arithmetic block is last on purpose. A shell that refuses a
+# name-shaped value ends the script at that line, so with it first a
+# regression there would take the other two blocks' rows with it and
+# one wrong answer would read as three.
+printf -- '--- a name-shaped value in arithmetic ---\n'
+
+# dash reads the value as a literal and stops at `Illegal number: y`. Six of
+# the seven columns look the name up in turn.
+y=5; x=y
+printf 'one step:  %s\n' "$((x+1))"
+
+# And it recurses as far as the values lead, which is what says the first row
+# is a lookup and not one extra step.
+y=z; z=7; x=y
+printf 'two steps: %s\n' "$((x+1))"
+
+# The control: a numeral, which every column adds to.
+n=5
+printf 'a numeral: %s\n' "$((n+1))"

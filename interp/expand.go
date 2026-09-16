@@ -2376,7 +2376,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// indirection, because what a *written* subscript does to this
 			// subject is a question of its own — `${a[9]?m}` is `a[9]: m` in
 			// both bash columns and no refusal at all in ksh93u+, which is a
-			// second split and not this one (#3232).
+			// second split and not this one (#3241).
 			subject := e.Name
 			if e.Indirect {
 				subject = r.indirectSubject(e)

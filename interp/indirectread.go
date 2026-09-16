@@ -83,9 +83,13 @@ func (r *Runner) indirectTargetValue(e *syntax.ParamExpr, text string) (string, 
 // So the node *becomes* the target and everything below answers it, which is
 // the rewrite namerefAimedAtTheWholeArray and bareArrayAsList already make on
 // this path. Only for the plain spelling — no operator, no length, no
-// subscript of its own — because those shapes take the scalar road in bash
-// 3.2 and the list road in bash 5.3, which is a split of its own and not this
-// one (`${!v:1}` on `v='a[@]'` is `B C` in 5.3 and ` B C` in 3.2).
+// subscript of its own — which is the shape the two bash columns agree about.
+// An operator on a list-valued target is three questions and none of them is
+// this one: the trims map over the elements in both columns and join here,
+// `@Q` arrived after bash 3.2, and a slice takes the list in bash 5.3 and a
+// substring of the join in bash 3.2 — `${!v:1}` on `v='a[@]'` is `B C`
+// against ` B C` — which wants an axis before either is written down. The
+// table is in #3243.
 //
 // The axis is read rather than asked here. An unanswered
 // Semantics.IndirectionYieldsName has to be reported once, and the scalar path

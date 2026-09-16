@@ -318,7 +318,7 @@ func TestAnIndirectionIsRefusedOnlyOnce(t *testing.T) {
 // than counted against a number, because the number is not this change's:
 // measured 2026-09-16, bash 5.3.20 runs it **once** for both spellings and
 // this shell runs it once per reader for both, which is a defect of its own
-// (#3231). What belongs here is that the indirection adds nothing — asking
+// (#3240). What belongs here is that the indirection adds nothing — asking
 // wholeArrayIndex about the parsed node instead of about the text added one
 // more run, and the arithmetic rows above cannot see it.
 func TestAnIndirectionAddsNoReadOfItsSubscript(t *testing.T) {

@@ -391,10 +391,10 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 // b c); typeset -n r=v` is `r: reference variable cannot be an array` at 1 in
 // bash 5.3.20 and in ksh93u+ 2012, for the indexed and the associative kind
 // alike and with or without a target. This shell accepts that line today,
-// which is #3089 and not this — so the guard below stands on a case that
+// which is #3103 and not this — so the guard below stands on a case that
 // should never have reached here, and hiding the cell on it would leave the
 // name reading as unset while still counting its elements. Wrong in one way
-// rather than two is where that case stays until #3089 decides it.
+// rather than two is where that case stays until #3103 decides it.
 //
 // Nothing here runs on a refusal. A `-n` declaration the shell will not make
 // leaves the name exactly as it found it — measured, `r=OUTER` followed by

@@ -1328,6 +1328,16 @@ func Semantics() interp.Semantics {
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
+	// A freeze on OPTARG or OPTIND is consulted here — `readonly OPTARG;
+	// getopts a: o` writes `OPTARG: readonly variable` — and costs the
+	// builtin nothing: the name is still filled in and the status is still
+	// 0. Both measured 2026-09-16 on 5.3.20 and 3.2.57 alike.
+	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
+	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// And the refusal is not the end of the script: `getopts a: o; echo
+	// reached` prints `reached`, where a plain `x=2` over a frozen `x` gives
+	// up the rest of the line in every shell here.
+	s.ReadonlyRefusalInABuiltinIsFatal = interp.No
 	// The scan position is shared with the caller across a shell function
 	// call, which is why every option-parsing helper here begins with
 	// `local OPTIND=1`: without it a second call starts where the first

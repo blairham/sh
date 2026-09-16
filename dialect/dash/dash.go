@@ -638,6 +638,15 @@ func Semantics() interp.Semantics {
 	// ask whether the option it just read carried a value. zsh agrees here
 	// and disagrees on the row above, which is why the two are two axes.
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.Yes
+	// A freeze on OPTARG stops the builtin: `readonly OPTARG; getopts a: o`
+	// is `getopts: OPTARG: is read only` at status 2 with the name unset and
+	// OPTIND still at 1 — so the word count had not moved and nothing after
+	// the refusal ran. Measured 2026-09-16 on 0.5.12.
+	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
+	s.GetoptsRefusedWriteEndsTheBuiltin = interp.Yes
+	// The builtin stops; the script does not. `echo reached` on the same
+	// line runs, where `readonly x=1; x=2` ends this shell outright.
+	s.ReadonlyRefusalInABuiltinIsFatal = interp.No
 	// Measured 2026-09-12: `OLDPWD=/nonexistent dash -c 'echo $OLDPWD'` answers
 	// the path it was given, and `cd -` then answers `can't cd to` it at 2.
 	s.InheritedOldpwd = interp.InheritedOldpwdTaken
@@ -1170,10 +1179,18 @@ func Diagnostics() interp.Diagnostics {
 		// measured 2026-09-07, `readonly x=1; f() { local x=2; }; f` is
 		// `local: x: is read only`. It names all three of them, where bash
 		// names only the two POSIX has not got (#1168).
-		ReadonlyRefusalNamesBuiltin: map[string]bool{"export": true, "readonly": true, "local": true},
-		ReadonlyVariable:            "%s: is read only",
-		UnsetReadonly:               "unset: %s: is read only",
-		InvalidNumber:               "Illegal number: %s",
+		// And `getopts`, which names itself for a refused write to OPTARG,
+		// to OPTIND or to the name it was given: measured 2026-09-16,
+		// `readonly OPTARG; getopts a: o` is `getopts: OPTARG: is read
+		// only`. It is the one entry here that is not a declaration utility,
+		// which is the point — a builtin filling in its own output parameter
+		// reports like one.
+		ReadonlyRefusalNamesBuiltin: map[string]bool{
+			"export": true, "readonly": true, "local": true, "getopts": true,
+		},
+		ReadonlyVariable: "%s: is read only",
+		UnsetReadonly:    "unset: %s: is read only",
+		InvalidNumber:    "Illegal number: %s",
 		// A conditional with no `:` says which byte it wanted; a missing
 		// value is the ordinary `expecting primary`, so ArithConditionalValue
 		// stays empty.

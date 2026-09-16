@@ -1515,6 +1515,10 @@ func Semantics() interp.Semantics {
 	s.APrefixedPathEmptiesTheCommandHash = interp.No
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
+	// The parameter exists before anything has put a value in it: `${_+x}`
+	// is non-empty and `set -u` reads it, even though what it holds is the
+	// empty string until the first command runs.
+	s.UnderscoreIsAParameterAtAll = interp.Yes
 	s.UnderscoreMovesOnlyBetweenInputCommands = interp.No
 	// Alone in the panel, this shell writes the call's own last argument
 	// into `$_` before the body runs: `: outer` then `f one two` reads `two`

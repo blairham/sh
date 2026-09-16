@@ -12004,6 +12004,45 @@ type Semantics struct {
 	// shell actually finds.
 	UnderscoreInheritsFromTheEnvironment Answer
 
+	// UnderscoreIsAParameterAtAll says the shell has `$_` even when nothing
+	// has put a value in it — so `${_+x}` is non-empty and `set -u` reads it
+	// without complaint.
+	//
+	// The three axes above decide what the value *is*. This one decides
+	// whether there is a parameter to hold one, and they are different
+	// questions: a shell can have `$_` and leave it empty, which is what two
+	// of the panel do, or have no such name, which is what the other two do.
+	// Conflating them is what this shell did — [Runner.ensureSpecials]
+	// registered the producer for every dialect, so `$_` read as the empty
+	// string in all five and the two that have no such parameter said `[]`
+	// at 0 where their references stop the script.
+	//
+	// Measured 2026-09-16, each over `-c` under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, with `_` scrubbed from the environment:
+	//
+	//	                  ${_+x}       set -u; printf '[%s]' "$_"
+	//	bash 5.3.20       non-empty    [-u]                    0
+	//	zsh 5.9.2         non-empty    [-u]                    0
+	//	ksh93 93u+ 2012   non-empty    []                      0
+	//	dash (dash-16)    empty        _: parameter not set    2
+	//	BusyBox 1.37.0    empty        _: parameter not set    2
+	//
+	// The two that answer No still read an `_` the environment brought —
+	// that is UnderscoreInheritsFromTheEnvironment and it is Yes for both,
+	// measured with `_=inherited` in front of the same probe. `_` is an
+	// ordinary name there: assigning to it works and the value stays.
+	//
+	// The preset answers No because POSIX has no such parameter, and the two
+	// columns that follow the text are the two that have not got it.
+	//
+	// Read rather than asked, and deliberately: the registration happens
+	// before a script has run, so [Runner.ask] here would report an
+	// unanswered axis for every script that never mentions the name. What
+	// keeps an unanswered dialect from taking the majority's behaviour in
+	// silence is internal/axissweep's ledger, which fails a build for an
+	// axis no dialect answers — the check that exists because of #2272.
+	UnderscoreIsAParameterAtAll Answer
+
 	// FdVariableOutlivesTheCommand keeps a `{name}>f` descriptor open past
 	// the simple command that carried it — two of the three that have the
 	// grammar; ksh93 takes it back with the command's other redirections,
@@ -17211,6 +17250,10 @@ func PosixSemantics() Semantics {
 		// through — which is also the majority, five of the six.
 		UnderscoreStartsAtTheInvocation:      No,
 		UnderscoreInheritsFromTheEnvironment: Yes,
+		// POSIX names no `$_`, and the two columns that follow the text have
+		// no such parameter: `${_+x}` is empty in dash and in BusyBox ash,
+		// and `set -u` stops both. The three that grew one override.
+		UnderscoreIsAParameterAtAll: No,
 		// POSIX gives `test`'s `-eq` family two *integers* to compare, so
 		// the standard's reading is a numeral and not an expression. It is
 		// five of the six as well.

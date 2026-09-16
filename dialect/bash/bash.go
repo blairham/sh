@@ -850,6 +850,10 @@ func Semantics() interp.Semantics {
 	s.AutoCdAnnouncesTheSubstitution = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
+	// And there is a parameter to move: `${_+x}` is non-empty before a
+	// command has run, which the preset denies because POSIX names no such
+	// parameter and dash and BusyBox ash have not got one.
+	s.UnderscoreIsAParameterAtAll = interp.Yes
 	// And every simple command moves it, wherever that command stands —
 	// inside a loop, inside a function body, behind a `;` on one line. The
 	// narrowed reading is ksh93's alone.

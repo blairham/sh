@@ -23,6 +23,26 @@ import (
 // does, and a type declared in `syntax` that no node holds is out, because a
 // case has no way to mention it and a permanent zero in a report is a false
 // work item.
+//
+// And a type that [syntax.Dialect] also carries is out, because its constants
+// are not something a case spells. They are a grammar's *reading*: the same
+// text `"${v-'a}b'}"` is read three ways by three dialects, and which way is
+// decided by the dialect, not by the case. A node that keeps such a value
+// keeps a copy of the reading — `ParamExpr.RawTailRead` is the one today, and
+// the parse writes it only under a dialect whose POSIX mode moves the reading.
+// Walking that field produced two wrong answers at once (#3258): a field the
+// parse never set holds the type's zero, so `BraceQuoteProtectsAPatternOnly`
+// read as mentioned under four dialects that never wrote it, and
+// `BraceQuoteProtectsNothing` — zsh's reading, and never written to a node by
+// any parse — was a permanent zero nobody could retire. A reflection walk
+// cannot tell an unset field from one set to the zero, so the fix is not to
+// ask it to. These readings are the same kind of fact as the Semantics axes
+// the package comment already leaves out: they leave no mark in the text, and
+// the corpus rows each Dialect field cites are what measure them.
+//
+// Derived, not listed: a type joins the exclusion by being the declared type
+// of a Dialect field, so a reading added tomorrow and copied onto a node
+// stays out of the surface without an edit here.
 func OperatorTypes() ([]string, error) {
 	files, err := syntaxSource()
 	if err != nil {
@@ -40,30 +60,20 @@ func OperatorTypes() ([]string, error) {
 	for _, n := range nodes {
 		isNode[n] = true
 	}
+	readings, err := ReadingTypes()
+	if err != nil {
+		return nil, err
+	}
 	seen := map[string]bool{}
 	for _, f := range files {
-		for _, d := range f.Decls {
-			gd, ok := d.(*ast.GenDecl)
-			if !ok || gd.Tok != token.TYPE {
-				continue
-			}
-			for _, s := range gd.Specs {
-				ts, ok := s.(*ast.TypeSpec)
-				if !ok || !isNode[ts.Name.Name] {
+		for _, st := range structTypes(f, func(name string) bool { return isNode[name] }) {
+			for _, fld := range st.Fields.List {
+				id, ok := fld.Type.(*ast.Ident)
+				if !ok || readings[id.Name] {
 					continue
 				}
-				st, ok := ts.Type.(*ast.StructType)
-				if !ok || st.Fields == nil {
-					continue
-				}
-				for _, fld := range st.Fields.List {
-					id, ok := fld.Type.(*ast.Ident)
-					if !ok {
-						continue
-					}
-					if _, has := consts[id.Name]; has {
-						seen[id.Name] = true
-					}
+				if _, has := consts[id.Name]; has {
+					seen[id.Name] = true
 				}
 			}
 		}
@@ -74,6 +84,54 @@ func OperatorTypes() ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// ReadingTypes is every named type [syntax.Dialect] declares a field of —
+// the grammar readings, which [OperatorTypes] leaves out.
+//
+// An empty answer is an error rather than an empty set: it can only mean the
+// struct was not found, and an empty exclusion would put the readings back
+// into the surface without a word.
+func ReadingTypes() (map[string]bool, error) {
+	files, err := syntaxSource()
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, f := range files {
+		for _, st := range structTypes(f, func(name string) bool { return name == "Dialect" }) {
+			for _, fld := range st.Fields.List {
+				if id, ok := fld.Type.(*ast.Ident); ok && ast.IsExported(id.Name) {
+					out[id.Name] = true
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("coverage: syntax.Dialect declares no field of a named type — the struct is how the readings are recognized, so this means the source was not read")
+	}
+	return out, nil
+}
+
+// structTypes is every struct type declared in f whose name want accepts.
+func structTypes(f *ast.File, want func(string) bool) []*ast.StructType {
+	var out []*ast.StructType
+	for _, d := range f.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok || gd.Tok != token.TYPE {
+			continue
+		}
+		for _, s := range gd.Specs {
+			ts, ok := s.(*ast.TypeSpec)
+			if !ok || !want(ts.Name.Name) {
+				continue
+			}
+			if st, ok := ts.Type.(*ast.StructType); ok && st.Fields != nil {
+				out = append(out, st)
+			}
+		}
+	}
+	return out
 }
 
 // Surface is every element of one dialect's surface.
@@ -173,7 +231,20 @@ func Mentions(f *syntax.File, isBuiltin func(string) bool, into map[Element]int)
 	for _, c := range conds {
 		isCondOp[c] = true
 	}
-	m := &mentioner{consts: consts, isNode: isNode, isBuiltin: isBuiltin, isCondOp: isCondOp, into: into}
+	ops, err := OperatorTypes()
+	if err != nil {
+		return err
+	}
+	// Only the vocabularies the surface holds. A field of any other named
+	// type is a reading the grammar copied onto the node (see
+	// [OperatorTypes]), and recording its value as a mention — even of an
+	// element no report lists — is the false mention #3258 found, one lookup
+	// away from being printed.
+	opConsts := make(map[string]map[int64]string, len(ops))
+	for _, o := range ops {
+		opConsts[o] = consts[o]
+	}
+	m := &mentioner{consts: opConsts, isNode: isNode, isBuiltin: isBuiltin, isCondOp: isCondOp, into: into}
 	m.value(reflect.ValueOf(f), map[uintptr]bool{})
 	return nil
 }

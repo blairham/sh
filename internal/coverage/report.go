@@ -128,6 +128,12 @@ type Origin struct {
 // per kind; 0 prints them all. read is where the cases came from, and it is
 // printed under the title — see [Origin].
 func Report(cols []Column, list int, read []Origin) string {
+	return ReportWithLedger(cols, list, read, UnreachableByConstruction)
+}
+
+// ReportWithLedger is [Report] held against a ledger of unreachable elements
+// other than the committed one. For tests.
+func ReportWithLedger(cols []Column, list int, read []Origin, ledger []Unreachable) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n  coverage — what the cases never mention\n")
 	if len(read) > 0 {
@@ -174,7 +180,7 @@ func Report(cols []Column, list int, read []Origin) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(rollup(cols, list))
+	b.WriteString(rollup(cols, list, ledger))
 	b.WriteString(caveat)
 	return b.String()
 }
@@ -187,7 +193,13 @@ func Report(cols []Column, list int, read []Origin) string {
 // case that pins it does not parse under zsh and the operator reads as never
 // mentioned *there* — which is right and is not a work item. An element
 // missing from every column has no such excuse.
-func rollup(cols []Column, list int) string {
+//
+// An element in the ledger (see [Unreachable]) is taken out of that count and
+// printed below it with its measurement, so the headline is the number of
+// *reachable* elements nothing asks about — the one that can be driven to
+// zero. The subtraction is checked rather than trusted: a ledger entry some
+// column mentions, or that no column's surface holds, is printed as stale.
+func rollup(cols []Column, list int, ledger []Unreachable) string {
 	if len(cols) == 0 {
 		return ""
 	}
@@ -201,16 +213,33 @@ func rollup(cols []Column, list int) string {
 			}
 		}
 	}
+	ledgered := map[Element]Unreachable{}
+	for _, u := range ledger {
+		ledgered[u.Element] = u
+	}
 	var never []Element
+	var unreachable, stale []Unreachable
 	for e := range union {
-		if !mentioned[e] {
-			never = append(never, e)
+		if mentioned[e] {
+			continue
+		}
+		if u, ok := ledgered[e]; ok {
+			unreachable = append(unreachable, u)
+			continue
+		}
+		never = append(never, e)
+	}
+	for _, u := range ledger {
+		if !union[u.Element] || mentioned[u.Element] {
+			stale = append(stale, u)
 		}
 	}
 	byKindThenName(never)
+	byLedgerOrder(unreachable)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "  no dialect mentions these at all — %d of %d\n\n", len(never), len(union))
+	fmt.Fprintf(&b, "  no dialect mentions these at all — %d of %d reachable\n", len(never), len(union)-len(unreachable))
+	fmt.Fprintf(&b, "    (%d in the surface, %d unreachable by construction and listed below)\n\n", len(union), len(unreachable))
 	byKind := map[string][]string{}
 	for _, e := range never {
 		byKind[e.Kind] = append(byKind[e.Kind], e.Name)
@@ -232,7 +261,62 @@ func rollup(cols []Column, list int) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("\n")
+	if len(kinds) > 0 {
+		b.WriteString("\n")
+	}
+
+	fmt.Fprintf(&b, "  unreachable by construction — %d, each measured rather than covered\n\n", len(unreachable))
+	for _, u := range unreachable {
+		fmt.Fprintf(&b, "    %s (#%d)\n", u.Element, u.Issue)
+		b.WriteString(wrap(u.Measured, "      ", 72))
+	}
+	if len(unreachable) > 0 {
+		b.WriteString("\n")
+	}
+	if len(stale) > 0 {
+		fmt.Fprintf(&b, "  STALE ledger entries — %d: listed as unreachable, and the columns say otherwise\n\n", len(stale))
+		for _, u := range stale {
+			why := "some case mentions it"
+			if !union[u.Element] {
+				why = "no dialect's surface holds it"
+			}
+			fmt.Fprintf(&b, "    %s (#%d) — %s; delete the entry\n", u.Element, u.Issue, why)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func byLedgerOrder(us []Unreachable) {
+	es := make([]Element, len(us))
+	byEl := make(map[Element]Unreachable, len(us))
+	for i, u := range us {
+		es[i] = u.Element
+		byEl[u.Element] = u
+	}
+	byKindThenName(es)
+	for i, e := range es {
+		us[i] = byEl[e]
+	}
+}
+
+// wrap fills text to width under indent, one line per chunk.
+func wrap(text, indent string, width int) string {
+	var b strings.Builder
+	line := indent
+	for _, w := range strings.Fields(text) {
+		if len(line) > len(indent) && len(line)+1+len(w) > width {
+			b.WriteString(line + "\n")
+			line = indent
+		}
+		if len(line) > len(indent) {
+			line += " "
+		}
+		line += w
+	}
+	if len(line) > len(indent) {
+		b.WriteString(line + "\n")
+	}
 	return b.String()
 }
 
@@ -258,6 +342,16 @@ const caveat = `  What this counts, and what it does not
     what fails to object. Both are better questions than counting the
     cases that mention an axis — which could not be counted anyway, since
     an axis leaves no mark in the text.
+
+    The grammar readings are absent for the same reason. A type
+    syntax.Dialect declares a field of — BraceQuotePolicy is the one a
+    node carries — is decided by the dialect and not spelled by the
+    case, and a node field holding one cannot tell unset from its zero
+    (#3258). The corpus rows each Dialect field cites measure those.
+
+    The roll-up counts reachable elements. An element no case can ask
+    without stopping the harness is listed with its measurement instead,
+    and a listing the columns contradict is printed as stale.
 
     Report only. Nothing here gates anything.
 `

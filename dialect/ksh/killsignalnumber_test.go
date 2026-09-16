@@ -51,7 +51,7 @@ func TestThisPresetSendsASignalNumberItCannotName(t *testing.T) {
 		t.Errorf("kill -s 99 said %q, want the refusal", out)
 	}
 	// And a letter is still an option here, which is the half of the old
-	// behaviour that was right: only the all-digit word was misread.
+	// behavior that was right: only the all-digit word was misread.
 	if out, _ := answersRun(t, `kill -Q $$ 2>&1 >/dev/null; echo "st=$?"`); !strings.Contains(out, "unknown option") {
 		t.Errorf("kill -Q said %q, want an option complaint", out)
 	}

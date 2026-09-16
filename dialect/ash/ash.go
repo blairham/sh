@@ -1537,7 +1537,7 @@ func Diagnostics() interp.Diagnostics {
 		// measured 2026-09-16 against BusyBox 1.37.0, all four. The wording
 		// is KillInvalidSignal's because the reading is the same one, and
 		// the status follows: this shell has no route to 2 for a signal it
-		// did not recognise (#3139).
+		// did not recognize (#3139).
 		KillIllegalOption: "bad signal name '%[1]s'",
 		KillNotAPid:       "Illegal number: %[1]s",
 		KillUsageStatus:   2,

@@ -24,7 +24,7 @@ import (
 //
 // This column had dash's answer — `illegal option -9` at 2 — which named a
 // letter nobody typed, at a status this shell has no route to for a signal it
-// did not recognise. The whole-word rows are what tell the two readings
+// did not recognize. The whole-word rows are what tell the two readings
 // apart: `-NOPE` under dash's reading names `-N`.
 //
 // The wording is asserted here rather than in the suite because it cannot be

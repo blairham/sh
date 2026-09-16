@@ -21,6 +21,10 @@ func cshRedir(dir string, form GreatAmpTargetForm, dg Diagnostics) func(*Runner)
 		sem.GlobExpansionResults = Yes
 		sem.GlobNoMatchIsError = No
 		sem.RedirectTargetIsAnOrdinaryWord = No
+		// The column this models matches a pattern written into the target
+		// and splits one, which is the reading the axis above used to imply
+		// and which is now asked separately (#3207).
+		sem.RedirectTargetTakesPathnameExpansion = Yes
 		sem.MultiDigitDuplicationTargetIsAnError = No
 		sem.RedirectErrorOnSpecialBuiltinFatal = No
 		sem.DuplicationTargetError = DuplicationTargetErrorCarriesOn

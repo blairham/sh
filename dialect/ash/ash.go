@@ -995,6 +995,10 @@ func Semantics() interp.Semantics {
 	// 2 — its own sentence for any word after `<&` that is not a descriptor.
 	s.FdMove = interp.FdMoveIsNotAnOperator
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
+	// And no pathname expansion, as in dash and ksh93: `cat < only-*.txt`
+	// is `can't open only-*.txt: no such file` with the match sitting there.
+	// Measured in the pinned 1.37.0 image, 2026-09-16 (#3207).
+	s.RedirectTargetTakesPathnameExpansion = interp.No
 	// A here-document body and a redirection target are both expanded in the
 	// shell rather than in the process the redirection is for, so what they
 	// assign is still there afterwards: `cat /dev/null > "${u:=made}"` leaves

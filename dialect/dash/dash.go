@@ -1011,6 +1011,11 @@ func Semantics() interp.Semantics {
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
+	// And no pathname expansion: POSIX's rule, followed here. `cat <
+	// only-*.txt` is `cannot open only-*.txt: No such file` at 2 with the
+	// match sitting there, and the output side creates a file by that name
+	// (#3207).
+	s.RedirectTargetTakesPathnameExpansion = interp.No
 
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.No

@@ -396,6 +396,10 @@ func TestARedirectionTargetReadAsFieldsAsksTheTail(t *testing.T) {
 			sem.SplitParamExpansion = interp.Yes
 			sem.GlobExpansionResults = interp.No
 			sem.RedirectTargetIsAnOrdinaryWord = interp.Yes
+			// bash splits and matches a redirection target as part of expanding it
+			// as an ordinary word, and only its POSIX mode turns that half off —
+			// a separate axis since #3207.
+			sem.RedirectTargetTakesPathnameExpansion = interp.Yes
 			sem.TrailingSeparatorEndsAField = tail
 			r.Semantics, r.Dir = &sem, dir
 		})

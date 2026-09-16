@@ -1040,14 +1040,50 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
 		return []string{plain}, false
 	}
 
-	if !r.ask(r.sem().RedirectTargetIsAnOrdinaryWord, "a redirection target expanded as an ordinary word") {
+	// The wider question first, so that a run with no dialect at all is
+	// refused by the name a script can act on: the count a target may come
+	// to is what `> $two` is about, and the narrower question below decides
+	// nothing once this one has no answer.
+	ordinary := r.ask(r.sem().RedirectTargetIsAnOrdinaryWord, "a redirection target expanded as an ordinary word")
+	if !ordinary && r.unspecified {
+		// Refused, so the command must not run: acting on either reading
+		// after saying the shells disagree would be answering the question
+		// anyway.
+		r.redirErr = true
+		return nil, true
+	}
+
+	if !r.ask(r.sem().RedirectTargetTakesPathnameExpansion,
+		"a redirection target field-split and matched as a pattern") {
+		// POSIX's own sentence, and the narrowest of the three questions
+		// here: the word after a redirection operator is not field-split and
+		// not pathname-expanded, whatever else the shell makes of it. So
+		// `cat < only-*.txt` opens a file by that name and fails even where
+		// one matches, and `e="a b"; > $e` writes a file called `a b`.
+		//
+		// Both views collapse onto the text, which is the one that never
+		// split and never matched. The *count* survives: a target that
+		// expanded to nothing is still nothing, and the reading below turns
+		// that into `ambiguous redirect` in the one column that does — it is
+		// how many words there are that this axis does not answer.
+		//
+		// Reached only where the views already differ, so `> f` and a
+		// pattern that matched nothing ask it nothing. Four columns answer
+		// no outright, and the two that answer yes both move to no in POSIX
+		// mode — see Runner.SetPosixMode (#3207).
 		if r.unspecified {
-			// Refused, so the command must not run: acting on either reading
-			// after saying the shells disagree would be answering the
-			// question anyway.
 			r.redirErr = true
 			return nil, true
 		}
+		if len(fields) > 0 {
+			fields = []string{plain}
+		}
+		if len(words) > 0 {
+			words = []string{plain}
+		}
+	}
+
+	if !ordinary {
 		if len(words) > 1 {
 			if r.ask(r.sem().RedirectsUseEveryTarget,
 				"a redirection target that came to several words") {
@@ -1063,13 +1099,13 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
 			return []string{plain}, false
 		}
 		if len(words) == 1 {
-			// One word, and it is the word rather than the text: a *pattern*
-			// written in the source is matched under this reading too —
-			// `cat <p?` opens the one file it found, measured — where the
-			// text view still holds `p?`. A pattern that arrived through an
-			// expansion is not matched, and does not need excluding here:
-			// the expansion's own text carries no glob marks, which is the
-			// axis about globbing a result rather than this one.
+			// One word, and it is the word rather than the text: the
+			// dialect that reaches here matches a pattern written in the
+			// source, so `cat <p?` opens the one file it found where the
+			// text view still holds `p?`. zsh alone among the four, now
+			// that RedirectTargetTakesPathnameExpansion is asked above —
+			// ksh93, dash and BusyBox ash match no pattern at all, and
+			// arrive here with the text already in this view (#3207).
 			return words, false
 		}
 		// Nothing at all, which is a name of no characters and is opened as

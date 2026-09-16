@@ -556,6 +556,7 @@ func (r *Runner) SetPosixMode(on bool) {
 		return
 	}
 	redir, unsetRO := r.posixSaved, r.posixSavedUnsetReadonly
+	targetPattern := r.posixSavedTargetPattern
 	forName := r.posixSavedForName
 	funcName := r.posixSavedFuncName
 	exportListing := r.posixSavedExportListing
@@ -600,6 +601,15 @@ func (r *Runner) SetPosixMode(on bool) {
 		quoteProtects = r.dialect().QuoteProtectsTheClosingBraceInPosixMode.
 			Policy(r.posixSavedQuoteProtects)
 		redir, unsetRO = Yes, Yes
+		// The tenth, and it takes the standard's own answer like the seven
+		// that do: POSIX says a non-interactive shell does not pathname-expand
+		// a redirection's target, and both columns that match one otherwise
+		// were measured to stop in the mode — bash 5.3.20 and 3.2.57 under
+		// `set -o posix` and under the `sh` name, and zsh 5.9.2 invoked as
+		// `sh`. Saved all the same, because leaving the mode has to reach the
+		// dialect's own answer and not the standard's opposite (#3207).
+		r.posixSavedTargetPattern = r.sem().RedirectTargetTakesPathnameExpansion
+		targetPattern = No
 		// The one-way axis, written here rather than through the swap
 		// below's restore half: see the paragraph on it above. Set on the
 		// way in and never read back out, which is the whole of the latch.
@@ -623,6 +633,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	}
 	r.swapSemantics(func(s *Semantics) {
 		s.RedirectErrorOnSpecialBuiltinFatal = redir
+		s.RedirectTargetTakesPathnameExpansion = targetPattern
 		// The second axis the mode moves, and measured the same way: `set -o
 		// posix` makes bash 5.3 stop on `readonly x=1; unset x` and `set +o
 		// posix` makes bash invoked as `sh` carry on past it. It needs a

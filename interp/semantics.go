@@ -4382,6 +4382,43 @@ type Semantics struct {
 	// and `> $e` with a pattern truncated whichever file happened to match.
 	RedirectTargetIsAnOrdinaryWord Answer
 
+	// RedirectTargetTakesPathnameExpansion field-splits a redirection's
+	// target and matches it as a pattern.
+	//
+	// The narrowest of the three questions about a target, and the one POSIX
+	// writes down in so many words: the word after a redirection operator is
+	// subjected to tilde, parameter, command and arithmetic expansion and to
+	// quote removal — and to neither field splitting nor pathname expansion,
+	// in a non-interactive shell. How many words the result may be is
+	// RedirectTargetIsAnOrdinaryWord's question and not this one, which is
+	// what keeps the two apart: bash turns this off in POSIX mode and still
+	// calls `> {c,d}` ambiguous, brace expansion having made two words before
+	// either axis is reached.
+	//
+	// Measured 2026-09-16 in a directory holding exactly `only-one.txt`:
+	//
+	//	                     cat < only-*.txt        printf X > only-*.txt
+	//	bash 5.3.20          reads the file, 0       truncates only-one.txt
+	//	bash 3.2.57          reads the file, 0       truncates only-one.txt
+	//	zsh 5.9.2            reads the file, 0       truncates only-one.txt
+	//	bash as `sh`         No such file, 1         creates `only-*.txt`
+	//	ksh93u+ 2012-08-01   cannot open, 1          creates `only-*.txt`
+	//	dash 0.5.12          cannot open, 2          creates `only-*.txt`
+	//	BusyBox ash 1.37.0   can't open, 1           creates `only-*.txt`
+	//
+	// bash changing sides with the mode is what makes it an axis rather than a
+	// property of the grammar, and the output column is what makes it worth
+	// more than a diagnostic: three of our dialects were truncating a file the
+	// script never named. A pattern that matches *nothing* stays as written in
+	// every column, which is why `> out-*.txt` looked like agreement — and why
+	// the axis is asked only where the views differ (#3207).
+	//
+	// Both halves move together because every column measured moves them
+	// together: in POSIX mode bash stops matching `only-*.txt` *and* stops
+	// splitting `e="a b"`, writing a file of that name where its own mode
+	// calls the redirection ambiguous.
+	RedirectTargetTakesPathnameExpansion Answer
+
 	// TypePrintsFunctionBody makes `type name` follow "name is a function"
 	// with the function itself, reformatted. True in bash alone — all three
 	// builds — where the other four stop at the sentence. What that sentence
@@ -16308,6 +16345,12 @@ func PosixSemantics() Semantics {
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,
+		// One of the few axes the standard writes down in so many words: a
+		// non-interactive shell shall not pathname-expand the word after a
+		// redirection operator, and an interactive one may. Four of the seven
+		// columns follow it, bash's POSIX mode joins them, and the two that do
+		// not are the columns that override this.
+		RedirectTargetTakesPathnameExpansion: No,
 	}
 }
 

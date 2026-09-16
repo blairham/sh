@@ -78,6 +78,10 @@ func TestARedirectionTargetIsMatchedByTheSameAxisAsAWord(t *testing.T) {
 				sem.GlobExpansionResults = tc.globs
 				sem.GlobNoMatchIsError = No
 				sem.RedirectTargetIsAnOrdinaryWord = No
+				// The column this models matches a pattern written into the target
+				// and splits one, which is the reading the axis above used to imply
+				// and which is now asked separately (#3207).
+				sem.RedirectTargetTakesPathnameExpansion = Yes
 				r.Semantics, r.Dir = &sem, dir
 			})
 			if st != 0 {
@@ -98,6 +102,10 @@ func TestALiteralPatternTargetIsMatched(t *testing.T) {
 	sem := CoreSemantics()
 	sem.GlobNoMatchIsError = No
 	sem.RedirectTargetIsAnOrdinaryWord = No
+	// The column this models matches a pattern written into the target
+	// and splits one, which is the reading the axis above used to imply
+	// and which is now asked separately (#3207).
+	sem.RedirectTargetTakesPathnameExpansion = Yes
 	out, st := run(t, `printf 'a\n' > p1; printf "[%s]" "$(cat <p?)"`, func(r *Runner) {
 		r.Semantics, r.Dir = &sem, dir
 	})
@@ -191,6 +199,10 @@ func TestATildeExpandsInARedirectionTarget(t *testing.T) {
 	if _, st := run(t, `echo hi > ~/tf`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.RedirectTargetIsAnOrdinaryWord = No
+		// The column this models matches a pattern written into the target
+		// and splits one, which is the reading the axis above used to imply
+		// and which is now asked separately (#3207).
+		sem.RedirectTargetTakesPathnameExpansion = Yes
 		r.Semantics, r.Dir = &sem, dir
 		r.Vars = map[string]string{"HOME": dir}
 	}); st != 0 {
@@ -212,6 +224,10 @@ func TestAnEmptyTargetCanHaveAWordingOfItsOwn(t *testing.T) {
 			out, st := run(t, tc.src, func(r *Runner) {
 				sem := CoreSemantics()
 				sem.RedirectTargetIsAnOrdinaryWord = No
+				// The column this models matches a pattern written into the target
+				// and splits one, which is the reading the axis above used to imply
+				// and which is now asked separately (#3207).
+				sem.RedirectTargetTakesPathnameExpansion = Yes
 				sem.SplitParamExpansion = Yes
 				dg := Diagnostics{EmptyRedirectTarget: "%[1]s: cannot open"}
 				r.Semantics, r.Diagnostics, r.Dir = &sem, &dg, t.TempDir()
@@ -239,6 +255,10 @@ func TestAnEmptyTargetIsNotTheWorkingDirectory(t *testing.T) {
 	out, st := run(t, `e=; cat < $e; echo "st=$?"`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.RedirectTargetIsAnOrdinaryWord = No
+		// The column this models matches a pattern written into the target
+		// and splits one, which is the reading the axis above used to imply
+		// and which is now asked separately (#3207).
+		sem.RedirectTargetTakesPathnameExpansion = Yes
 		sem.SplitParamExpansion = Yes
 		r.Semantics, r.Dir = &sem, dir
 	})
@@ -261,6 +281,10 @@ func literalTargets(dir string) func(*Runner) {
 		sem.GlobExpansionResults = Yes
 		sem.GlobNoMatchIsError = No
 		sem.RedirectTargetIsAnOrdinaryWord = No
+		// The column this models matches a pattern written into the target
+		// and splits one, which is the reading the axis above used to imply
+		// and which is now asked separately (#3207).
+		sem.RedirectTargetTakesPathnameExpansion = Yes
 		r.Semantics, r.Dir = &sem, dir
 	}
 }
@@ -273,6 +297,10 @@ func ordinaryTargets(dir string) func(*Runner) {
 		sem.GlobExpansionResults = Yes
 		sem.GlobNoMatchIsError = No
 		sem.RedirectTargetIsAnOrdinaryWord = Yes
+		// bash splits and matches a redirection target as part of expanding it
+		// as an ordinary word, and only its POSIX mode turns that half off —
+		// a separate axis since #3207.
+		sem.RedirectTargetTakesPathnameExpansion = Yes
 		sem.BraceExpansion = Yes
 		dg := Diagnostics{AmbiguousRedirect: "%[1]s: ambiguous redirect"}
 		r.Semantics, r.Diagnostics, r.Dir = &sem, &dg, dir

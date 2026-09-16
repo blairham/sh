@@ -29,9 +29,11 @@ import "testing"
 //
 //	[[ ( 1 -gt 0 ) ]]      the condition's own grouping paren — the first word
 //	[[ -n ( a ) ]]         parse error near `(` — the second
-//	[[ -pfx ( a ) ]]       parse error near `(` — the second again
-//	[[ -pfx 1 ( a ) ]]     parsed — the third
-//	[[ -pfx 1 2 ( a ) ]]   parse error near `(` — the fourth
+//	[[ -prefix ( a ) ]]    parse error near `(` — the second again
+//	[[ -n x ( a ) ]]       parsed — the third, whatever the operator took
+//	[[ -prefix 1 ( a ) ]]  parsed — the third
+//	[[ -n x y ( a ) ]]     parse error near `(` — the fourth
+//	[[ -prefix 1 2 ( a ) ]] parse error near `(` — the fourth
 //
 // A `!` or a connective starts the count over: `[[ ! -pfx 1 ( a ) ]]` and
 // `[[ x == y || -pfx 1 ( a ) ]]` both parse.
@@ -49,6 +51,10 @@ func condOperandGroupGrammar(d *Dialect) {
 	// One row is a named condition with two arguments, which this dialect
 	// accepts and refuses when it runs.
 	d.ConditionArityIsCheckedWhenItRuns = true
+	// And the completion-context tests, so the rows written with `-prefix`
+	// are refused for the position of the `(` rather than for the operator
+	// not being one.
+	d.CompletionConditions = true
 }
 
 // condRightOperand is the source text of the right-hand word of the first
@@ -102,12 +108,25 @@ func TestAConditionGroupOperandIsTheThirdWordOnly(t *testing.T) {
 	d := Core()
 	condOperandGroupGrammar(&d)
 	for _, src := range []string{
+		// The second word.
 		"[[ -n ( a ) ]]",
 		"[[ -prefix ( a ) ]]",
+		// And the fourth, which is where the reading has to stop again.
+		"[[ -n x y ( a ) ]]",
 		"[[ -prefix 1 2 ( a ) ]]",
 	} {
 		if _, err := Parse(src, d); err == nil {
 			t.Errorf("%s parsed, and the shell this is measured from refuses it", src)
+		}
+	}
+	// And the third word is taken whatever the operator did with it: a
+	// one-operand test that already has its operand still reads a group
+	// where the surplus word stands. `[[ -n x ( a ) ]]` is `unknown
+	// condition: -n` at 2 on the shell this is measured from, which is a
+	// refusal when it runs and so a line that parsed.
+	for _, src := range []string{"[[ -n x ( a ) ]]", "[[ -prefix 1 ( a ) ]]"} {
+		if _, err := Parse(src, d); err != nil {
+			t.Errorf("%s: %v — the shell this is measured from parses it", src, err)
 		}
 	}
 	// And the first word is the grouping paren, which is a different node

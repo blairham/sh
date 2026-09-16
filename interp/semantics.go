@@ -8329,6 +8329,23 @@ type Semantics struct {
 	// which is what those two really do with it.
 	IntegerOptions string
 
+	// FloatOptions is the set of letters the `float` builtin takes, spelled
+	// the way IntegerOptions is and empty for the same reason: empty means
+	// the builtin is not registered at all, which is the answer everywhere
+	// but zsh.
+	//
+	// zsh alone has it as a builtin. ksh93 has the word as the preset alias
+	// `typeset -lE`, so its letters are `typeset`'s and reach it through
+	// that; bash, dash and BusyBox ash answer `float: not found`.
+	//
+	// Narrower than DeclareOptions and narrowed the way `integer` is —
+	// measured 2026-09-16 on zsh 5.9.2 under `-f`, a letter at a time
+	// against `float -X zz=1.5`: it refuses `-a`, `-A`, `-G`, `-i`, `-m`,
+	// `-T`, `-U` and `-z`, and takes every other declaration letter. So it
+	// is `integer`'s set with the integer letter traded for the two float
+	// ones, which is exactly what the two words mean.
+	FloatOptions string
+
 	// ExportOptions is the set of *declaration* letters `export` takes on top
 	// of its own, spelled the way DeclareOptions is, for the shell whose
 	// `export` is `typeset -gx` under another word.

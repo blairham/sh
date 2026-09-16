@@ -9327,6 +9327,22 @@ differently.** zsh's `integer` refuses `-a`, `-A`, `-f`, `-F`, `-T` and
 a shell that reused `DeclareOptions` would accept `integer -A m`, which
 is an associative array in neither shell.
 
+**`float` is the same word one letter along, and zsh alone has it as a
+builtin.** ksh93 has the word as the preset alias `typeset -lE`; bash,
+dash and BusyBox ash answer `float: not found`. Its letters are
+`Semantics.FloatOptions`, `integer`'s set with the integer letter traded
+for the two float ones — measured 2026-09-16 on zsh 5.9.2 under `-f`, a
+letter at a time against `float -X zz=1.5`, it refuses `-a`, `-A`, `-G`,
+`-i`, `-m`, `-T`, `-U` and `-z` and takes the rest.
+
+The attribute the name carries is `E` and not `F`: `float c=1.5; typeset
+-p c` is `typeset -E c=1.500000000e+00`, byte for byte what `typeset -E
+c=1.5` lists. A written letter wins over the name's, which is the
+discriminating case — `float -F 2 d=1.5` is `typeset -F d=1.50`, so an
+implementation that always added `E` looks right on every other row and
+wrong on that one. The word resolved to nothing at all here until #3291,
+in a shell whose own `$reswords` names it.
+
 **A plus word on `integer` removes nothing in ksh93 and everything in
 zsh** — `Semantics.IntegerPlusFormTakesAttributesOff`:
 

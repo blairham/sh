@@ -83,6 +83,31 @@ var zshReservedWords = []string{
 	"until", "local", "fi", "nocorrect", "foreach", "elif",
 }
 
+// zshReservedWordSet is the same table as a lookup, built once.
+var zshReservedWordSet = func() map[string]bool {
+	m := make(map[string]bool, len(zshReservedWords))
+	for _, w := range zshReservedWords {
+		m[w] = true
+	}
+	return m
+}()
+
+// zshReserves is what [interp.Runner.SetReservedWords] is handed: the
+// classification `whence -w`, `type` and `command -v` answer with.
+//
+// The same list `$reswords` prints, which is the point. Before #3291 the
+// classification came from the *parser's* table instead, and the two say
+// different things about nine names in this shell: `whence -w export` was
+// `builtin` where zsh 5.9.2 says `reserved`, and `whence -w in` was
+// `reserved` where zsh says `none`. A shell that printed one list and
+// classified by another was answering the same question two ways.
+//
+// Confirmed against the shell rather than inferred from the list: measured
+// 2026-09-16 under `-f`, `whence -w` answers `reserved` for all thirty-one of
+// these and `none` or `builtin` for every other candidate tried — `in`, `]]`
+// and `((` included.
+func zshReserves(name string) bool { return zshReservedWordSet[name] }
+
 // zshReservedWordsView is `$reswords` as the parameter reads it.
 //
 // A copy rather than the slice itself. The parameter is readonly and the

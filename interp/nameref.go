@@ -477,30 +477,28 @@ func (r *Runner) warnAboutACycle(name string) {
 	}
 }
 
-// warnAboutASelfReference is what a *declaration* of `local -n r=r` says in
-// the dialect that takes one, and it says it twice.
+// warnAboutASelfReferenceOnTheBuiltin is the first half of what a
+// *declaration* of `local -n r=r` says in the dialect that takes one, which
+// says it twice.
 //
 // Measured 2026-09-15 on bash 5.3.20, `f() { local -n r=r; }; f`:
 //
 //	f.sh: line 1: local: warning: r: circular name reference
 //	f.sh: line 1: warning: r: circular name reference
 //
-// The first carries the builtin's name and the second does not, and the same
-// pair comes out of `declare -n` and `typeset -n` with their own word in
-// front. Two sentences and not one because that is what the shell writes; a
-// single warning left the line count short wherever this shape is scored.
+// This is the first, carrying the builtin's name; warnAboutACycle is the
+// second, spoken as the shell. The same pair comes out of `declare -n` and
+// `typeset -n` with their own word in front. Two sentences and not one
+// because that is what the shell writes; a single warning left the line count
+// short wherever this shape is scored.
+//
+// The two are written at the call site rather than joined in one helper
+// because a refusal can land **between** them: measured, `f(){ local r=(a b);
+// local -n r=r; }` in bash writes this half, then `r: reference variable
+// cannot be an array`, and never the second half. See declareNameref.
 //
 // Nothing at all in the dialect with no wording for it, which is the one that
 // refuses this declaration outright and never reaches here.
-// Written as its two halves because a refusal can land between them: see
-// declareNameref, where the array check does exactly that.
-func (r *Runner) warnAboutASelfReference(builtin, name string) {
-	r.warnAboutASelfReferenceOnTheBuiltin(builtin, name)
-	r.warnAboutACycle(name)
-}
-
-// warnAboutASelfReferenceOnTheBuiltin is the first of the two, the one
-// carrying the builtin's name.
 func (r *Runner) warnAboutASelfReferenceOnTheBuiltin(builtin, name string) {
 	w := r.diag().NamerefCircularWarning
 	if w == "" {

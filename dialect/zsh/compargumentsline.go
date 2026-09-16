@@ -699,29 +699,41 @@ func (a *argumentsState) reportStack(r *interp.Runner, cs *completionState, name
 	return boolStatus(a.stackInProgress)
 }
 
-// continuingAStack is that question asked of the word under the cursor: a
-// `-x…` under `-s`, where a long option and a lone `-` are not, and neither
-// is a word that is already an option of its own.
+// continuingAStack is that question asked of the word under the cursor: is
+// this a `-xy…` under `-s` with another letter still to come.
 //
-// **Every letter after the dash has to be a single-letter option** for the
-// word to be a stack. Measured on zsh 5.9.2, 2026-09-16 from inside a
-// `zle -C` widget with `-s` in force:
+// **Every letter after the dash has to be a single-letter option, and the
+// word must not be a longer option of its own.** Measured on zsh 5.9.2,
+// 2026-09-16 from inside a `zle -C` widget with `-s` in force, asking
+// `comparguments -s`:
 //
-//	specs                        typed        -s
-//	-ab[two]:x: -a[plain] -p     cmd -ab      1  — `-b` is not an option
-//	-ab[two]:x: -a[plain] -p     cmd -a       0
-//	-o=[out]: -f+[file]: -p      cmd -o=val   1  — nor `=`, `v`, `a`, `l`
-//	-o=[out]: -f+[file]: -p      cmd -fval    1
-//	-n: -a -p                    cmd -na      0  — both are
+//	specs                           typed        -s
+//	-n:nx: -a -p                    cmd -a       0  — a letter they know
+//	-n:nx: -a -p                    cmd -na      0  — and so is the next
+//	-n:nx: -a -p                    cmd -z       1  — `-z` is not one
+//	-n:nx: -a -p                    cmd -az      1  — nor is `-z` here
+//	-ab:x: -a -p                    cmd -ab      1  — `-b` is not one
+//	-ab:x: -a -b -p                 cmd -ab      1  — and `-ab` is an option
+//	-o=[out]: -f+[file]: -p         cmd -o=val   1  — nor `=`, `v`, `a`, `l`
+//	-o=[out]: -f+[file]: -p         cmd -fval    1
+//	-a -m                           uname --a    1  — `--` is not one
 //
-// So a word that reaches a letter the specs do not know stops being a stack
-// rather than becoming one with a typo in it, and `-ab` — a *declared*
-// option three characters long — is that same rule arriving at the right
-// answer for a second reason.
+// The last two rows of the first group are what separate the two halves of
+// the rule: with `-b` undeclared the letter walk already refuses `-ab`, and
+// with it declared only "the word is itself a longer option" does. A lone `-`
+// and a `--` fall out of the letter walk, which is why neither is spelled
+// out here: the mutation that removed a `word[1] == '-'` guard killed no
+// test, so the guard was not carrying the answer.
+//
+// The point of the rule is that a word reaching a letter the specs do not
+// know stops being a stack rather than becoming one with a typo in it — and
+// see takeStack, where the same words are read off the line.
 func (a *argumentsState) continuingAStack(cs *completionState) bool {
 	word := cs.prefix
-	if !a.stacking || len(word) < 2 ||
-		(word[0] != '-' && word[0] != '+') || word[1] == '-' {
+	if !a.stacking || len(word) < 2 || (word[0] != '-' && word[0] != '+') {
+		return false
+	}
+	if len(word) > 2 && a.optionNamed(word) != nil {
 		return false
 	}
 	for i := 1; i < len(word); i++ {
@@ -736,7 +748,7 @@ func (a *argumentsState) continuingAStack(cs *completionState) bool {
 // where the stack is one letter whose argument is its own word, and nothing
 // otherwise.
 func (a *argumentsState) singleOption() string {
-	if !a.stackInProgress || len(a.cursorOption) != 2 {
+	if !a.stackInProgress {
 		return ""
 	}
 	if spec := a.optionNamed(a.cursorOption); spec != nil &&

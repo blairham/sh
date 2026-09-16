@@ -484,6 +484,18 @@ func TestComparguments(t *testing.T) {
 			 say "$?/${l[*]}/${(ko)oa}"`,
 			"1//-ab",
 		},
+		// And the two halves of that rule pulled apart: with `-b` declared as
+		// well, the letter walk accepts `-ab` and only "the word is itself a
+		// longer option" refuses it. Measured: zsh answers 1 and records
+		// `-ab` in `$opt_args`, with `-a` and `-b` untouched.
+		{
+			"a longer option beats the letters that spell it", "cmd -ab",
+			`comparguments -i '' -s : '-ab[two]:x:' '-a[plain]' '-b[bee]' '-p[proc]'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${(ko)oa}"`,
+			"1/-ab",
+		},
 		{
 			"and every letter known is", "cmd -na",
 			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]' '1:first:(x y)'

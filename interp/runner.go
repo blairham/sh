@@ -3571,9 +3571,33 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// this is about *is* the pipe a body is reading. See endHeldProcSubs.
 	r.endHeldProcSubs()
 	r.cleanUpAtEnd()
-	if r.killedBy != "" && r.DieBySignal != nil {
+	if r.killedBy != "" && !r.inSubshell && r.DieBySignal != nil {
 		// Last, because a shell that is dying still runs its EXIT trap first
 		// where the dialect says so. This does not come back.
+		//
+		// And only for the shell at the top, which is the same boundary
+		// stopSignalsAndRestore is held behind four lines above. Finish is
+		// reached by three runners that are not the shell — a `<(cmd)` body,
+		// a `>(cmd)` body and a command substitution's — and in every shell
+		// on the panel each of those is a *process of its own*. A fatal
+		// signal one of them takes ends that process and the shell that
+		// named it carries on: measured 2026-09-15 against bash 5.3, where
+		// a body writing more than a pipe will hold into a reader that has
+		// gone leaves `read x < <(…)` at status 0, and the same write inside
+		// `x=$(…)` leaves `$?` at 141 with the next command still running.
+		// The status is already what the signal made it — signalDeath set it
+		// before it stopped the body — so dropping the raise here is the
+		// whole difference between the two answers.
+		//
+		// Raising it anyway killed *this* process, which is the shell, and
+		// that is the regression #3015 records: a body is a goroutine here
+		// rather than a fork, so its death had nowhere else to land. Two
+		// files of bash's own suite ended on SIGPIPE where bash exits 0.
+		//
+		// A signal a body aims at the shell on purpose — `<(kill -TERM $$)`
+		// — does not come through here at all. It is recorded in the box the
+		// clone shares with its parent and raised by the parent's own Finish;
+		// see recordSharedDeath, which is where that boundary already lived.
 		if err := r.DieBySignal(r.killedBySig); err != nil {
 			r.diagf("kill: %v\n", err)
 		}

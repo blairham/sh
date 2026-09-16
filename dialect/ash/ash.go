@@ -176,6 +176,10 @@ func Semantics() interp.Semantics {
 	// `${#@}` with three parameters is 5 — the width of `a b c` — rather than
 	// the count.
 	s.LengthOfSpecialIsCount = interp.No
+	// And a substring of `$@` or `$*` is a substring of that same joined
+	// string: `set -- one two three four; "${*:1:2}"` is `ne` here and
+	// `one two` in bash, zsh and ksh93.
+	s.SubstringOfPositionalsSlicesTheList = interp.No
 	// The panel's dash column is the one with no multibyte decoder; this
 	// shell has one and does not need a locale to use it. Measured with the
 	// harness's fixed `LC_ALL=C`: `s=héllo; echo ${#s}` is 5 here and 6 in

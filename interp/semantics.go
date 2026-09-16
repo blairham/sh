@@ -1320,6 +1320,25 @@ type Semantics struct {
 	// written down as the first one where dash stood alone. It never did.
 	LengthOfSpecialIsCount Answer
 
+	// SubstringOfPositionalsSlicesTheList makes `${@:o:n}` and `${*:o:n}` a
+	// slice of the positional list, counted from `$0`, rather than a
+	// substring of the parameters joined into one string.
+	//
+	// Yes in bash, zsh and ksh93, where `set -- one two three four;
+	// "${*:1:2}"` is `one two`. No in BusyBox ash, where the same word is
+	// `ne`: the list is joined on the first character of IFS first and the
+	// offset counts characters of that, so `IFS=:; "${*:1:3}"` is `ne:`, an
+	// unquoted `${@:2}` is the fields of `e two three four`, and `${*:0}`
+	// with no parameters is empty rather than the shell's name. It is the
+	// same reading as LengthOfSpecialIsCount's No, which this shell also
+	// gives, but a separate question — dash measures that one and has no
+	// substring operator to ask this one with.
+	//
+	// Asked only where the two readings part: a substring operator on `@` or
+	// `*` with no subscript. Measured 2026-09-16 against BusyBox v1.37.0 in
+	// the digest-pinned Alpine image internal/oracle reaches (#2291).
+	SubstringOfPositionalsSlicesTheList Answer
+
 	// TransformLetterCheckedOnlyWhenValued delays the check of a `@`
 	// operator's letter until the name has a value. Yes makes `${u@QQ}` on
 	// an unset name empty at status 0 while the identical spelling on a set
@@ -16706,6 +16725,9 @@ func PosixSemantics() Semantics {
 		JobsPidsOnlyOption:      Yes,
 		LengthOfSpecialIsCount:  Yes,
 		ArithLeadingZeroIsOctal: Yes,
+		// The standard has no substring operator, so this is the reading
+		// every shell that has one gives but BusyBox ash, which says so.
+		SubstringOfPositionalsSlicesTheList: Yes,
 		// One reader: the value a name holds goes through the same octal
 		// rule the literal does, so `k=010; $((k))` is eight. ksh93 is the
 		// one shell whose two readers part.

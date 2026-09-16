@@ -2643,6 +2643,20 @@ type Semantics struct {
 	// local to every call whether or not anything was declared, which is
 	// GetoptsPositionIsFunctionLocal. ksh93 has no `local`, and answers this
 	// through `typeset` in a function defined with the `function` word.
+	//
+	// It composes with GetoptsFunctionPosition and the order is the whole of
+	// #3293: a call that is handed a cursor of its own has the caller's half
+	// put back when it returns, and that restore ran *after* this one and
+	// wrote over it. dash and BusyBox ash are where the two answers differ —
+	// their calls have a cursor of their own and this one is no — so they
+	// were the only columns where the composition was visible, and the answer
+	// nobody had measured was the one that won. What comes back in that
+	// dialect is the word half alone: the caller resumes at the start of the
+	// word OPTIND names, which with the eager count of
+	// GetoptsCountsTheWordAtItsFirstLetter is the word *after* the one it was
+	// part-way through. `set -- -ab -c` is what shows that, and is the only
+	// shape that can: with one word to scan, a cursor that was dropped and a
+	// scan that ran out both print a question mark at status 1.
 	GetoptsLocalOptindRestoresTheCursor Answer
 
 	// GetoptsClearsOptarg empties OPTARG when `getopts` reports a bad option

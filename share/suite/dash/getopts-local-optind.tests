@@ -1,0 +1,159 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# A call that declares a local OPTIND, and the half of the `getopts` position
+# that is not a parameter — #3293.
+#
+# OPTIND counts words. How far into a clustered word the letters have been
+# read is the builtin's own bookkeeping and no parameter holds it, so a shell
+# has two separate decisions to make about it: what a *call* does to it, and
+# what a *declaration of OPTIND* does to it. dash answers the two differently
+# and is the only column on the panel where both answers are visible in the
+# same script, which is what makes the file dash's alone:
+#
+#   * a plain call hands the caller its place back, even across a callee that
+#     ran a whole scan of its own words. bash and ksh93 share the cursor, so
+#     the callee's scan spends the caller's options too.
+#   * a `local OPTIND` takes the place inside the word away and does not give
+#     it back. bash 5.3, ksh93 and zsh all hand it back.
+#
+# bash 3.2 does not hand it back either, so the second answer is not dash's
+# alone — but it has no cursor of its own for the first, and the difference
+# shows in what the caller reads next: dash resumes at the word OPTIND names
+# and moves on, where bash 3.2 reads the same letter again.
+#
+# Each probe is its own subshell, for the reason getopts.tests gives: the scan
+# position is shell-wide state and a case that inherited the last one's would
+# be measuring the file's order rather than any shell's answer.
+
+# --- the controls ---
+#
+# Nothing declared. The caller is half-way through `-ab` and comes back to the
+# same place, so the second call reads `b`. Without this row a fix that simply
+# stopped restoring the cursor would pass everything below.
+( set -- -ab
+  getopts ab o; printf 'plain call:   1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { :; }
+  f
+  getopts ab o; st=$?
+  printf 'plain call:   2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# The sharper control: the callee scans a whole set of words of its own and
+# the caller still comes back to the middle of `-ab`.
+( set -- -ab
+  getopts ab o; printf 'callee scans: 1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { while getopts cd x "$@"; do printf 'callee saw %s\n' "$x"; done
+        printf 'callee end ind=%s\n' "$OPTIND"; }
+  f -cd
+  getopts ab o; st=$?
+  printf 'callee scans: 2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# --- the declaration ---
+#
+# The shape the issue was filed from, with a word of three letters so that
+# OPTIND and the place inside the word are further apart. The callee runs no
+# `getopts` at all, which is what makes it a clean question: the only thing
+# that happened was the declaration.
+( set -- -abc
+  getopts abc o; printf 'declared:     1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { local OPTIND=1; :; }
+  f
+  getopts abc o; st=$?
+  printf 'declared:     2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# The declaration and not the value it carried.
+( set -- -abc
+  getopts abc o; printf 'no value:     1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { local OPTIND; :; }
+  f
+  getopts abc o; st=$?
+  printf 'no value:     2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# And with the callee scanning its own words as well, which is the shape a
+# helper that parses options is actually written in.
+( set -- -ab
+  getopts ab o; printf 'both:         1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { local OPTIND=1
+        while getopts cd x "$@"; do printf 'callee saw %s\n' "$x"; done
+        printf 'callee end ind=%s\n' "$OPTIND"; }
+  f -cd
+  getopts ab o; st=$?
+  printf 'both:         2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# --- what the scan resumes at ---
+#
+# The discriminating case, and the reason there is a second word. Everything
+# above has one word to scan, so "the place inside the word was dropped" and
+# "the options ran out" print the same `?` at status 1. With `-c` behind it
+# the two part company: the scan resumes at the word OPTIND *names*, reads
+# `c`, and only then runs out.
+( set -- -ab -c
+  getopts abc o; printf 'next word:    1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { local OPTIND=1; :; }
+  f
+  getopts abc o; st=$?
+  printf 'next word:    2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND"
+  getopts abc o; st=$?
+  printf 'next word:    3=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# Longer, so that a scan which went backwards rather than forwards is visible
+# as a letter and not only as a number.
+( set -- -ab -c -d
+  getopts abcd o; printf 'three words:  1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { local OPTIND=1; :; }
+  f
+  for n in 2 3 4; do
+    getopts abcd o; st=$?
+    printf 'three words:  %s=[%s] st=%s ind=%s\n' "$n" "$o" "$st" "$OPTIND"
+  done )
+
+# --- nothing to take away ---
+#
+# Written as separate words there is no place inside one to lose, so the
+# declaration costs nothing and the next option is read. This is what says the
+# rule is about the intra-word half alone rather than about the whole cursor.
+( set -- -a -b
+  getopts ab o; printf 'separate:     1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { local OPTIND=1; :; }
+  f
+  getopts ab o; st=$?
+  printf 'separate:     2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# And where the caller had already restarted the scan itself, the declaration
+# has nothing left to drop: an assignment to OPTIND is how a scan is restarted,
+# so the place inside the word was gone before the call was made.
+( set -- -ab
+  getopts ab o; printf 'reassigned:   1=[%s] ind=%s\n' "$o" "$OPTIND"
+  OPTIND=1
+  f() { local OPTIND=1; :; }
+  f
+  getopts ab o; st=$?
+  printf 'reassigned:   2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# And the other way round: an assignment the script makes *after* the call
+# outranks what the call left behind, because writing OPTIND is how a scan is
+# restarted. A cursor saved across the call and still read over the top of the
+# restart would resume at the word after the one asked for — an option skipped
+# rather than an option repeated, which is the quieter of the two failures.
+( set -- -ab -c
+  getopts abc o; printf 'outranked:    1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { :; }
+  f
+  OPTIND=1
+  getopts abc o; st=$?
+  printf 'outranked:    2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND"
+  getopts abc o; st=$?
+  printf 'outranked:    3=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# The same with a declaration in the call, where the two rules meet: the
+# declaration took the place inside the word away and the assignment then
+# restarted the scan, so there is nothing left for either to disagree about.
+( set -- -ab -c
+  getopts abc o; printf 'both rules:   1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { local OPTIND=1; :; }
+  f
+  OPTIND=1
+  getopts abc o; st=$?
+  printf 'both rules:   2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND"
+  getopts abc o; st=$?
+  printf 'both rules:   3=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )

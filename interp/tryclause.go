@@ -323,13 +323,21 @@ func (r *Runner) errorCondition() bool {
 }
 
 // hasSomethingToReturnFrom reports whether a `return` has a frame to leave: a
-// function call, or a file being sourced.
+// function call, a file being sourced, or the body of a `${ …; }`.
+//
+// The third is measured rather than assumed, and it is a correction rather
+// than an axis: `v=${ echo hi; return 42; }` at the top level of a script is
+// `[hi]` with `$?` 42 in bash 5.3.20 and ksh93u+ alike, the two columns that
+// have the spelling, and the script carries on. This shell refused it with
+// `return: can only 'return' from a function or sourced script` and left 2,
+// which is the answer bash gives for the *forked* spelling `$(…)` — where the
+// body really is a shell of its own with no frame in it.
 //
 // Shared with the `return` builtin rather than spelled twice, because the two
 // have to agree — a `return` the builtin obeys is one the try-always block
 // must treat as caught, and a `return` it refuses is one that ends the script.
 func (r *Runner) hasSomethingToReturnFrom() bool {
-	return r.inFunc != "" || r.sourceDepth != 0
+	return r.inFunc != "" || r.sourceDepth != 0 || r.currentShellSubstDepth != 0
 }
 
 // insideFunctionCall reports whether execution is inside a function call of

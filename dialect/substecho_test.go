@@ -132,27 +132,67 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 	}
 }
 
-// A trap body is text of its own, and nothing it reports may be quoted from
-// the lines of the script it interrupted. The trap here is set on line 2, and
-// line 2 holds the very text of the body, which is what would make a quote
-// read off the script's lines look right.
+// Three routes the text in force is not the script's line for the span, where
+// a quote read off the script would look plausible and be wrong. Each script
+// is built so that the wrong line *would* pass the check that the text holds
+// the substitution, or would be quoted outright without it — so each row
+// fails if its route stops saying which text it runs.
 //
-// bash 5.3.20 locates it as `exit trap: line 1` and quotes the body; this
-// engine does not yet name the trap in the location (filed with #3331), so the
-// row pins only that the script's line is not what comes back.
-func TestATrapBodyRefusalQuotesNothingFromTheScript(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "s.sh"),
-		[]byte("echo one\ntrap 'v=$(echo hi; for)' EXIT\necho two\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Chdir(dir)
-	sh := bashShell()
-	var out, errs strings.Builder
-	sh.Stdout, sh.Stderr = &out, &errs
-	driver.MainArgs(sh, []string{sh.Name, "s.sh"})
-	if strings.Contains(errs.String(), "trap 'v=") {
-		t.Errorf("quoted the script's line for a trap body:\n%s", errs.String())
+// The first messages are not asserted: bash 5.3.20 tags the first two
+// `exit trap:` and `command substitution:`, and places the third at line 3,
+// and this engine does neither yet (filed with #3331). What is pinned is the
+// quote alone. Measured 2026-09-16, the same way as the table above.
+func TestASubstitutionRefusalQuotesOnlyItsOwnText(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want, never string
+	}{
+		{
+			// A trap body is text of its own. The script's line 3 carries
+			// the body's text in a comment, and it is the line the body is
+			// numbered from when it fires there.
+			name:  "a trap body",
+			src:   "echo one\ntrap 'v=$(echo hi; for)' EXIT\necho two; exit # v=$(echo hi; for)\n",
+			want:  "`v=$(echo hi; for)'\n",
+			never: "echo two",
+		},
+		{
+			// A `$( … )` inside the older spelling's body quotes that body,
+			// which is the text it was read from: bash 5.3.20 writes
+			// “ `echo $(for)' “, and the script's line holds `$(for` too.
+			name:  "a backquoted body holding a substitution",
+			src:   "q=1; v=`echo $(for)`; z=2\n",
+			want:  "`echo $(for)'\n",
+			never: "q=1",
+		},
+		{
+			// A process substitution's body is numbered from its own first
+			// line here, so the refusal lands on the script's line 1, which
+			// does not hold it. bash quotes line 3; writing nothing is the
+			// honest answer until the body is placed, and quoting line 1 is
+			// the wrong one.
+			name:  "a process substitution's body",
+			src:   "echo one\necho two\ncat <(v=$(echo hi; for))\n",
+			never: "`echo one'",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "s.sh"), []byte(c.src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			t.Chdir(dir)
+			sh := bashShell()
+			var out, errs strings.Builder
+			sh.Stdout, sh.Stderr = &out, &errs
+			driver.MainArgs(sh, []string{sh.Name, "s.sh"})
+			got := errs.String()
+			if c.want != "" && !strings.HasSuffix(got, c.want) {
+				t.Errorf("wrote\n%s\nwant it to end with the quote %q", got, c.want)
+			}
+			if strings.Contains(got, c.never) {
+				t.Errorf("wrote\n%s\nwhich quotes %q, a line of the script rather than of the text that failed", got, c.never)
+			}
+		})
 	}
 }
 

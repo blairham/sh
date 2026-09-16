@@ -130,10 +130,6 @@ func (r *Runner) enterTrapBody(cond string) func() {
 	case TrapBodyLineWhereItFired:
 		r.linePin = r.firedAt()
 	}
-	// A trap body is text of its own and this runner is not told it, so it
-	// runs with none: nothing it reports is quoted against the lines of the
-	// script it interrupted. See runningText.
-	r.runText = runningText{borrowed: true}
 	// Cleared for the run of the body itself. The flag says which condition
 	// *this* body belongs to, and a trap that fires while it runs is a
 	// question of its own — without this, a signal delivered inside a DEBUG

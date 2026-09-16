@@ -207,10 +207,12 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 // function and the line within it. It reads a body where the definition is,
 // so its own second message there is numbered in the *file* — `s.sh:4` for a
 // body refused on line 3 — and a runner that reaches the body only when it is
-// called has no location that says that.
+// called has no location that says that. A trap body is the same case from
+// the other side: this dialect reads the action when the trap is *set*, and
+// refuses it there with a message of its own.
 func (r *Runner) substWordEcho(span syntax.Span, lines []string, start, own, line int) (string, int) {
 	w := r.expandingWord
-	if r.diag().LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {
+	if r.inTrapBody || r.diag().LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {
 		return "", 0
 	}
 	if w == nil || w != r.expandingOuterWord || span.Quoting != syntax.Unquoted ||

@@ -1966,7 +1966,7 @@ func (r *Runner) setOption(name string, on bool) bool {
 		// exactly as it is refused in a script, in the wording it already
 		// had. Granting it here would trade `bad option(s)` for a
 		// `not implemented` those shells never say.
-		if !(r.atInvocation && r.sem().ImmovableOptionsSetAtInvocation == Yes && o.apply != nil) {
+		if !r.atInvocation || r.sem().ImmovableOptionsSetAtInvocation != Yes || o.apply == nil {
 			return r.badSetOptionName(name)
 		}
 	}

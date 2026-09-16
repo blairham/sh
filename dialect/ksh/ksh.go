@@ -472,6 +472,12 @@ func Semantics() interp.Semantics {
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// And a quoted empty word written behind a separator in the word a `-`
+	// or `+` substitutes is not a field here: `set -- a b; v=x; printf
+	// "[%s]" ${v:+"$@" ""}` is `[a][b]`, where bash 5.3.20, dash and BusyBox
+	// ash all write a third, empty one. See
+	// interp.Semantics.EmptyQuotesAfterASeparatorAreAField.
+	s.EmptyQuotesAfterASeparatorAreAField = interp.No
 	// `${1:=abc}` is `${1:=abc}: bad substitution` — the whole expansion
 	// refused, exactly as `${@:=abc}` is, so the positional is not a name
 	// an assignment through an expansion may reach (#1541).

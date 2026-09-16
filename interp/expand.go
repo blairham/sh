@@ -177,24 +177,21 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 			continue
 		}
 		if !split && splitting.splits(r, s, text) {
-			// Text of the word a `-` or `+` substituted, which is part of an
-			// unquoted expansion's result and separates fields with it. It
-			// is laid in rather than split through the path below, because
-			// the separators a script *wrote* are boundaries of their own:
-			// a span holding nothing else ends the field in front of it and
-			// opens the one behind, where an expansion whose value came to
-			// blanks produces no field at all.
-			ifs, set := r.ifs()
-			if separatorEdge(text, ifs, set, true) {
-				b.separate()
-			}
-			b.add(s, r.splitFieldsAsk(text, ifs, set))
-			if separatorEdge(text, ifs, set, false) {
-				b.separate()
-			}
-			continue
+			// Text of the word a `-` or `+` substituted is part of an
+			// unquoted expansion's result and splits with it. See
+			// splittingTheSubstitutedWord.
+			split = true
 		}
 		if !split {
+			if text == "" && s.Quoting != syntax.Unquoted && b.separated() &&
+				r.ask(r.sem().EmptyQuotesAfterASeparatorAreAField,
+					"an empty quoted word behind a separator being a field of its own") {
+				// `${v:+p ""}` — the quoted nothing behind the blank is a
+				// field in bash, dash and BusyBox ash and is not one in
+				// ksh93. It is the one span that carries no text and still
+				// has to open the field the separator asked for.
+				b.flush()
+			}
 			b.text(text)
 			b.any = b.any || text != "" || s.Quoting != syntax.Unquoted
 			continue
@@ -211,7 +208,26 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// so ordinarily nothing is appended and nothing is started — which
 		// add answers, along with the one reading that is not "nothing":
 		// a distributive span with no elements takes the word with it.
+		// A separator at either end of what was split is a boundary in its
+		// own right, and the field it closes is closed even where nothing
+		// stands on the other side of it. `v=" "; printf "[%s]" a${v}b` is
+		// two fields in bash 5.3.20, ksh93u+, dash and BusyBox ash and was
+		// one here, because splitting a value that is nothing but separators
+		// produces no field and the text on either side went on sharing one.
+		// The same shape reaches an ordinary value with a separator at one
+		// end — `v=" b"; … a$v` and `v="b "; … ${v}c` — and, in every column
+		// including zsh, a command substitution whose output is blanks.
+		//
+		// A value that is *empty* is not this: `v=""; … a${v}b` is `ab` in
+		// all five, so it is the separator that closes the field rather than
+		// the expansion having produced no field.
+		if separatorEdge(text, ifs, set, true) {
+			b.separate()
+		}
 		b.add(s, r.tildeFlagElements(s, head, r.splitFieldsAsk(text, ifs, set)))
+		if separatorEdge(text, ifs, set, false) {
+			b.separate()
+		}
 	}
 
 	return b.result()
@@ -276,6 +292,10 @@ func (b *wordFields) separate() {
 	}
 }
 
+// separated reports whether a separator is waiting for something to put in
+// the field behind it.
+func (b *wordFields) separated() bool { return b.sep }
+
 // flush opens the field a separator asked for, once something arrives to go
 // in it.
 func (b *wordFields) flush() {
@@ -287,17 +307,38 @@ func (b *wordFields) flush() {
 	b.open = len(b.all) - 1
 }
 
-// separatorEdge reports whether text begins (or ends) with an IFS separator,
-// which is what says the field in front of it — or behind it — is finished.
+// separatorEdge reports whether text begins (or ends) with IFS *whitespace*,
+// which is what says the field in front of it — or behind it — is finished
+// with nothing to show for the separator itself.
+//
+// Whitespace only, because that is the run the splitter absorbs: a
+// non-whitespace separator writes the empty field itself, and asking for one
+// here as well is the field twice. `IFS=:` over `a${v}b` with `v=":"` is two
+// fields in bash 5.3.20, ksh93u+ and dash, and the splitter's own empty is
+// the one that makes it two.
 func separatorEdge(text, ifs string, ifsSet, leading bool) bool {
 	if text == "" || ifsSet && ifs == "" {
 		return false
 	}
-	c := text[0]
-	if !leading {
-		c = text[len(text)-1]
+	// The whole run of separators at that end, because one delimiter is a run
+	// of whitespace, at most one non-whitespace separator, and another run of
+	// whitespace — and a run holding the non-whitespace one has already
+	// written its own empty field.
+	whitespace := false
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if !leading {
+			c = text[len(text)-1-i]
+		}
+		if strings.IndexByte(ifs, c) < 0 {
+			break
+		}
+		if c != ' ' && c != '\t' && c != '\n' {
+			return false
+		}
+		whitespace = true
 	}
-	return strings.IndexByte(ifs, c) >= 0
+	return whitespace
 }
 
 // add puts the fields one span produced into the word, by whichever of the

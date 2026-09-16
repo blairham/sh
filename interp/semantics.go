@@ -13125,6 +13125,26 @@ type Semantics struct {
 	// it is a path in every reading and is not searched for at all.
 	DotTakesTheSearchPathOption Answer
 
+	// EvalOptions is how much of a leading dash-word `eval` reads as options
+	// before the rest becomes the text it runs — see EvalOptionReading for
+	// the three answers and the panel behind them.
+	//
+	// The sibling of DotReadsOptions and a third answer wider, which is the
+	// reason it is not the same field. `.` splits two ways: the shells that
+	// read a dash-word as an option and the one that does not. `eval` splits
+	// three, because zsh reads the `--` marker for it and refuses no letter
+	// behind it, and a boolean would have had to call that either "reads
+	// options" — making `eval -q cmd` a usage error there, which it is not —
+	// or "reads none", making `eval -- cmd` run the marker, which it does
+	// not.
+	//
+	// Asked where the first word begins with a dash and is more than one
+	// character, which is the only shape the columns disagree about. `eval
+	// echo hi` reaches no question, and neither does a lone `-`: that is a
+	// command word in every column here, and what one of them then does with
+	// it is #3236 rather than an option.
+	EvalOptions EvalOptionReading
+
 	// TestAcceptsDoubleEqual makes `==` a synonym for `=` in `test` and `[`,
 	// so `test a == a` is a string comparison. True in bash, ksh93 and zsh.
 	//
@@ -15030,6 +15050,75 @@ func (n NameOperands) String() string {
 		return "AnythingIsAName"
 	}
 	return "NameOperandsUnspecified"
+}
+
+// EvalOptionReading is how much of a leading dash-word `eval` reads as
+// options before the rest becomes the text it runs.
+//
+// Three answers over seven columns, measured 2026-09-16 under `env -i` with a
+// scratch `HOME` and no startup files, from a script file, both streams
+// captured separately, the status printed after each line and a marker after
+// that — so the table says whether the script continued as well as what it
+// wrote:
+//
+//	column               eval -q echo hi                  eval -- echo hi  continued
+//	bash 5.3.20          `eval: -q: invalid option` + usage, 2   `hi`, 0    yes
+//	bash as `sh`         the same two lines, 2            `hi`, 0          **no**
+//	bash 3.2.57          the same two lines, 2            `hi`, 0          yes
+//	ksh93u+ 2012-08-01   `eval: -q: unknown option` + usage, 2   `hi`, 0    **no**
+//	zsh 5.9.2            `command not found: -q`, 127     `hi`, 0          yes
+//	dash 0.5.12          `eval: -q: not found`, 127       `--: not found`, 127  yes
+//	BusyBox ash 1.37.0   `eval: -q: not found`, 127       `--: not found`, 127  yes
+//
+// The two columns that end the script do so because `eval` is a POSIX special
+// builtin and a usage error in one is fatal where the shell is in that mode —
+// which is the fatality the refusal machinery already carries, not a second
+// question here.
+//
+// The `--` half is the one worth having measured rather than assumed. #3216
+// expected dash and BusyBox ash to part company with bash there, the way they
+// do over NumericOperandDoubleDashEndsOptions, and they do — but it also
+// expected ksh93 to take no options, and ksh93 reads them.
+type EvalOptionReading int
+
+const (
+	// EvalOptionReadingUnspecified is no answer, and is refused like any
+	// other.
+	EvalOptionReadingUnspecified EvalOptionReading = iota
+	// EvalReadsNoOptions makes the first word the start of the text
+	// whatever it looks like, so `eval -- cmd` runs `--` as a command and
+	// `eval -q` runs `-q`. dash and BusyBox ash.
+	EvalReadsNoOptions
+	// EvalTakesTheEndMarkerOnly eats a leading `--` and reads nothing else:
+	// `eval -- cmd` runs `cmd`, and `eval -q cmd` runs `-q` as a command
+	// rather than refusing the letter. zsh.
+	//
+	// It is the *marker* and not a lone `-`, which is the reading a probe
+	// that only ever writes the dash as a word of its own cannot tell apart.
+	// `eval - echo hi` prints `hi` in zsh, which reads as `eval` eating the
+	// dash — but `eval "- echo hi"`, one argument, prints `hi` too, and
+	// `eval - -- echo hi` reports `--` as the command. Both are the *text*
+	// running with a bare `-` in command position discarded, which is a
+	// separate fact about that shell (#3236) and not an option at all.
+	EvalTakesTheEndMarkerOnly
+	// EvalReadsOptions reads a leading dash-word the way every other builtin
+	// of the shell does: `--` ends the options, and a letter the builtin has
+	// not got is a usage error rather than a command. bash and ksh93, which
+	// have no option letters for it either — the refusal is the whole of
+	// what the reading does.
+	EvalReadsOptions
+)
+
+func (e EvalOptionReading) String() string {
+	switch e {
+	case EvalReadsNoOptions:
+		return "EvalReadsNoOptions"
+	case EvalTakesTheEndMarkerOnly:
+		return "EvalTakesTheEndMarkerOnly"
+	case EvalReadsOptions:
+		return "EvalReadsOptions"
+	}
+	return "EvalOptionReadingUnspecified"
 }
 
 // ReadPromptOperand is what `read` makes of a `?` in its first operand.

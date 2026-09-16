@@ -1789,6 +1789,12 @@ func Semantics() interp.Semantics {
 	// A leading dash-word is the file here, so `. -p dir f` is a complaint
 	// about a file called `-p` and not about an option.
 	s.DotReadsOptions = interp.No
+	// `eval` is the exception to the line above: it reads the `--` marker
+	// and nothing else. `eval -- echo hi` prints `hi`, and `eval -q echo
+	// hi` runs `-q` as a command at 127 rather than refusing the letter —
+	// which `unset -q` here does refuse, so it is this builtin's answer
+	// and not the shell's.
+	s.EvalOptions = interp.EvalTakesTheEndMarkerOnly
 	s.DotTakesTheSearchPathOption = interp.No
 	// zsh opens a directory operand, reads no commands out of it and calls
 	// that a script that did nothing: measured, `. ./` is silent at status

@@ -1394,6 +1394,12 @@ func Semantics() interp.Semantics {
 	// Reads options and has none to read, which is a different answer from
 	// reading the word as a filename: `unknown option` and a usage line.
 	s.DotReadsOptions = interp.Yes
+	// And `eval` reads one too — which #3216 expected it not to. Measured
+	// on ksh93u+ 2012-08-01: `eval -q echo hi` is `eval: -q: unknown
+	// option` with `Usage: eval [ options ] [arg...]` under it, at 2, and
+	// the script ends there because a special builtin's usage error is
+	// fatal here. `eval -- echo hi` prints `hi`.
+	s.EvalOptions = interp.EvalReadsOptions
 	s.DotTakesTheSearchPathOption = interp.No
 	// A directory operand is an error, and a fatal one through
 	// DotMissingFileFatal: measured, `. ./` is `.: ./: cannot open [Is a

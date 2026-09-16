@@ -106,3 +106,35 @@ g() { printf 'g orig\n'; }
 fi
 }' ) 2>/dev/null; printf 'a refused body -> %s\n' "$?"
 g
+
+# `eval`'s own options — #3216, and this shell is the third of the three
+# answers. It eats the `--` marker and reads nothing else: a letter it has not
+# got is not refused at all, it is the first word of the text and the text
+# runs it as a command.
+#
+# That is this builtin's answer rather than the shell's, which the control at
+# the end says: `unset -q` here *is* refused, in this shell's own words.
+printf -- '--- an option letter is not an option\n'
+( eval -q echo hi ) 2>&1 > /dev/null
+( eval -q echo hi ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+( eval -q echo hi; printf 'carried on\n' ) 2>/dev/null
+
+printf -- '--- the letter alone\n'
+( eval -q ) 2>&1 > /dev/null
+( eval -q ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+
+# The marker is read, and one of them: behind it a dash-word is a command.
+printf -- '--- the end-of-options marker\n'
+eval -- echo hi; printf 'status -> %s\n' "$?"
+eval --; printf 'the marker alone -> %s\n' "$?"
+( eval -- -q ) 2>&1 > /dev/null
+( eval -- -q ) > /dev/null 2>&1; printf 'behind the marker -> %s\n' "$?"
+
+eval echo plain; printf 'plain -> %s\n' "$?"
+
+# The control. The machinery is present and this builtin simply is not wired
+# to it: the same letter given to `unset` is refused here, so `eval` reading
+# no letters is a fact about `eval`.
+printf -- '--- the control\n'
+( unset -q zz ) 2>&1 > /dev/null
+( unset -q zz ) > /dev/null 2>&1; printf 'unset -q -> %s\n' "$?"

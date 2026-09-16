@@ -623,7 +623,7 @@ func Semantics() interp.Semantics {
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
 	// `set -e` is the one option a `$(…)` body does not simply inherit
 	// here. Measured 2026-09-15, `set -e; echo "end[$(false; echo no)]"` is
-	// `end[no]` in bash 5.3.15 and in bash 3.2.57, and the option is
+	// `end[no]` in bash 5.3.20 and in bash 3.2.57, and the option is
 	// genuinely off in the body rather than unenforced — `$-` inside it
 	// carries no `e` and `set -o` reports `errexit off`. The starting value
 	// only: this is the `inherit_errexit` switch below, and `set -o posix`

@@ -408,7 +408,7 @@ var extraSetOptions = map[string]setOption{
 // **One axis it moves is one-way**, and it is the exception to everything the
 // paragraph on the saved fields below says. `set -o posix` turns bash's
 // `inherit_errexit` on, and `set +o posix` does *not* turn it off: measured
-// 2026-09-15 on bash 5.3.15, `set -o posix; set +o posix; set -e; echo
+// 2026-09-15 on bash 5.3.20, `set -o posix; set +o posix; set -e; echo
 // "end[$(false; echo no)]"` is `end[]`, where the same line without the mode
 // is `end[no]`. What the mode entered was a shell option with a name of its
 // own, and leaving the mode leaves the option where it put it — `shopt -u

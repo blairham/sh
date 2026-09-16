@@ -8576,7 +8576,7 @@ type Semantics struct {
 	// column agrees about. Every column reaches `after` at 0; the word is the
 	// whole of the difference:
 	//
-	//	bash 5.3.15, bash 3.2.57   end[no]   the `false` did not end the body
+	//	bash 5.3.20, bash 3.2.57   end[no]   the `false` did not end the body
 	//	BusyBox ash 1.37.0         end[no]   the same
 	//	bash under the name `sh`   end[]     the body stopped at `false`
 	//	dash, ksh93, zsh 5.9.2     end[]     the same

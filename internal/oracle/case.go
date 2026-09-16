@@ -5838,6 +5838,31 @@ echo "st=$?"`,
 		Why:     "an assignment reports what the substitution reported, so this ends the script where `echo \"$(false)\"` does not",
 	},
 	{
+		ID: "errexit/a-substitution-body-runs-past-a-failure", Category: "shell options",
+		Snippet: `set -e; echo "end[$(false; echo no)]"; echo after`,
+		Why:     "whether the shell a `$(…)` body runs in holds `set -e`, and it is a disagreement rather than a gap. Written with the substitution in a *command word* rather than in an assignment so that nothing here is the row above — the assignment reporting the body's status, which every column does — and so that every column reaches `after` at 0 and the word is the whole of the difference. bash 5.3, bash 3.2 and BusyBox ash write `end[no]`: the inner `false` did not end the body. bash under the name `sh`, dash, ksh93 and zsh write `end[]`. `Semantics.ErrExitEntersACommandSubstitution`, and ours answered as the second group in every dialect — a wrong answer at status 0 in the direction that hides work, because the variable comes back short and nothing is printed to say so (#3001)",
+	},
+	{
+		ID: "errexit/a-substitution-body-reads-its-own-errexit", Category: "shell options",
+		Snippet: `set -e; echo "[$(case $- in (*e*) echo E;; (*) echo none;; esac)]"`,
+		Why:     "the same axis asked of the *state* rather than of the outcome, and it is what makes the row above a shell option being off rather than a failure being let through: the three columns that run the body to the end also report no `e` in `$-` inside it — bash 5.3, bash 3.2 and BusyBox ash write `[none]` against the other four's `[E]` — and `set -o` run in the same body writes `errexit off` there. So an implementation that kept the letter and merely declined to stop would be wrong about itself, and this row is where it shows. The patterns are written with the optional opening parenthesis for a reason that is not style: bash 3.2 scans a `$( … )` body by counting parentheses, so a bare `*e*)` closes the substitution there and the row measured its parser instead of its errexit",
+	},
+	{
+		ID: "errexit/a-subshell-body-still-stops-at-a-failure", Category: "shell options",
+		Snippet: `set -e; (false; echo no); echo after`,
+		Why:     "the bound on the two rows above, and unanimous: the parentheses are not what the axis is about. Every column stops here with nothing written — bash and BusyBox ash included, which are the two that run a `$(…)` body to the end — so it is the substitution's own shell that does not take the option and not a subshell in general. A process substitution's body takes it in all three columns that have the construct — bash, ksh93 and zsh all run `cat <(false; echo no)` to `after` with nothing between — and `shopt -s inherit_errexit` does not move that one either",
+	},
+	{
+		ID: "errexit/posix-mode-moves-the-substitution-and-does-not-move-back", Category: "shell options",
+		Snippet: `set -o posix 2>/dev/null; set +o posix 2>/dev/null; set -e; echo "end[$(false; echo no)]"; echo after`,
+		Why:     "the axis moved by POSIX mode, and the half an implementation that models the mode as save-and-restore gets wrong. What `set -o posix` turns on in bash 5.3 is the `inherit_errexit` shell option, which leaving the mode does not turn off: `end[]` here, where the same line without the two `set -o` words is `end[no]`. `shopt -u inherit_errexit` is the only way back. bash 3.2 has no such option name and no latch with it — it writes `end[no]`, so the two bash columns disagree on purpose and the preset carries 5.3's reading. BusyBox ash takes the option word without complaint and is unmoved by it. The other three have no `posix` option at all and their refusal is fatal, so they stop on the first word and write nothing — which is itself the answer to `does this shell have a mode to move`, and is why the row cannot be written to reach them",
+	},
+	{
+		ID: "errexit/inherit-errexit-moves-the-substitution", Category: "shell options",
+		Snippet: `shopt -s inherit_errexit 2>/dev/null; shopt inherit_errexit 2>/dev/null; set -e; echo "end[$(false; echo no)]"`,
+		Why:     "the switch by its own name, and the state read back beside it so the row cannot pass on a refusal nobody sees — the `2>/dev/null` that the rest of the `shopt` family carries would otherwise hide exactly that. bash 5.3 writes the `on` row and then `end[]`. bash 3.2 has no such option name, so both `shopt` words fail quietly and it writes `end[no]`; the four shells without the builtin at all write `end[]` for the axis's own reason. Ours listed `off` while behaving as though it were on, which is the misleading refusal #2361 named one option over",
+	},
+	{
 		ID: "procsub/reads-a-command-as-a-file", Category: "redirection",
 		Snippet: `cat <(echo hi)`,
 		Why:     "`<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected",

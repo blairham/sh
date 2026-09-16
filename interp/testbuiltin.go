@@ -278,9 +278,17 @@ func (r *Runner) testExpr(args []string) (bool, error) {
 		}
 		blamed := args[1]
 		if r.diag().TestNamesFirstOperand {
-			// dash names the first word instead of the one that should have
-			// been an operator.
+			// dash names the last word of the expression that *did* parse
+			// rather than the one that should have been an operator, which
+			// for three words is the first — unless the first is a unary
+			// operator, in which case its operand went with it. Measured
+			// 2026-09-16: `test a b c` is `a: unexpected operator` and
+			// `test -n a b` is `a`, where naming the first word alone would
+			// say `-n`. See Diagnostics.TestNamesFirstOperand.
 			blamed = args[0]
+			if r.isTestUnary(args[0]) {
+				blamed = args[1]
+			}
 		}
 		return false, &testError{kind: errBinaryExpected, operand: blamed}
 	case 4:
@@ -298,9 +306,29 @@ func (r *Runner) testExpr(args []string) (bool, error) {
 		return false, err
 	}
 	if p.pos != len(p.args) {
-		return false, &testError{kind: errTooManyArguments}
+		// The operand is the last word the parse took, which is what the
+		// one dialect with no "too many arguments" sentence names: dash
+		// calls the leftover `<that word>: unexpected operator`. Measured
+		// 2026-09-16 — `test a = b = c` names `b`, `test x = y z` names
+		// `y`, `test a -a b c` names `b` and `test a b c d` names `a`, one
+		// past the end of the expression each time. Every other dialect's
+		// format ignores it.
+		return false, &testError{kind: errTooManyArguments, operand: p.lastTaken()}
 	}
 	return v, nil
+}
+
+// lastTaken is the final word the parse consumed, for the complaint about
+// what came after it.
+//
+// Empty where nothing was taken, which cannot happen on the path that asks —
+// a parse that consumed nothing has already failed with a complaint of its
+// own — and is written out rather than assumed.
+func (p *testParser) lastTaken() string {
+	if p.pos < 1 || p.pos > len(p.args) {
+		return ""
+	}
+	return p.args[p.pos-1]
 }
 
 // testParser is the grammar that takes over past four arguments: `-a` binds

@@ -1449,9 +1449,15 @@ func Diagnostics() interp.Diagnostics {
 		TestUnaryExpected:       "%[2]s: %[1]s: unexpected operator",
 		TestBinaryExpected:      "%[2]s: %[1]s: unexpected operator",
 		TestIntegerExpected:     "%[2]s: Illegal number: %[1]s",
-		TestTooManyArguments:    "%[2]s: too many arguments",
-		TestOperandExpected:     "%[2]s: argument expected",
-		TestMissingBracket:      "[: missing ]",
+		// No "too many arguments" sentence at all: a well-formed expression
+		// with words left over is the *last word the parse took* called an
+		// unexpected operator. `test a = b = c` is `test: b: unexpected
+		// operator` and `test a b c d` is `test: a:` — one past the end of
+		// what parsed, never the leftover itself. Measured 2026-09-16 on
+		// Apple's dash-16 and Debian's dash 0.5.12, which agree.
+		TestTooManyArguments: "%[2]s: %[1]s: unexpected operator",
+		TestOperandExpected:  "%[2]s: argument expected",
+		TestMissingBracket:   "[: missing ]",
 		// Six decimal places, the most of any shell in the panel.
 		TimesDecimals: 6,
 		// dash hands the path to execve rather than checking first, so a

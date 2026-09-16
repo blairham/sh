@@ -2410,6 +2410,10 @@ type Runner struct {
 	// failing subshell command with its own flag still clear — which is
 	// what keeps zsh's two E lines for `(false)`.
 	errTrapFired bool
+	// stmtSerial counts statements begun, so a compound can tell whether its
+	// body ran one — see reportsItsBody for why that decides whether the
+	// compound is judged at all.
+	stmtSerial uint64
 	// returnSeenStatus is `$?` as it was when `return` began. The RETURN
 	// trap's body sees this rather than the argument the `return` carried
 	// — measured: `f(){ trap 'echo R=$?' RETURN; return 3; }; f` prints
@@ -4157,6 +4161,11 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	// at the head of a statement, so that a compound clears it before its
 	// body runs and still sees the body's firing when it is judged itself.
 	r.errTrapFired = false
+	// Counted before the handlers run, so the compound this statement may be
+	// can tell afterwards whether its body ran a statement of its own. See
+	// Runner.stmtSerial.
+	r.stmtSerial++
+	serial := r.stmtSerial
 	r.statusBefore = r.status
 	if st.Coprocess {
 		// Before Background, because a coprocess is a background job with
@@ -4170,12 +4179,49 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	if err := r.expr(ctx, st.Expr); err != nil {
 		return err
 	}
-	if _, isChain := st.Expr.(*syntax.BinaryExpr); !isChain && !lastIsNegated(st.Expr) {
+	if _, isChain := st.Expr.(*syntax.BinaryExpr); !isChain && !lastIsNegated(st.Expr) &&
+		(!reportsItsBody(st.Expr) || r.stmtSerial == serial) {
 		// A chain judges itself, inside expr, because only its final operand
 		// counts and only when that operand actually ran.
 		r.checkErrExit(ctx)
 	}
 	return nil
+}
+
+// reportsItsBody reports whether a statement is a compound command that
+// answers with the status the last statement of its body left — a group, a
+// loop, an `if`, a `case` — rather than with a status of its own.
+//
+// Such a statement is not judged by `set -e` or the ERR trap once its body
+// has run a statement, because that statement was already judged or was
+// exempt. Judged, a failure has already stopped the script or fired the trap
+// and there is nothing left to add. Exempt — the left operand of an `&&` that
+// short-circuited, a `!`, a condition — and judging the compound in its place
+// ends the script over a status the shell was told not to act on:
+//
+//	set -e; for i in 1 2; do [ "$i" = 3 ] && echo three; done; echo survived
+//
+// writes `survived` in bash 5.3.20, bash 3.2, zsh 5.9.2, ksh93u+ 2012 and
+// dash, and ended at 1 here in every column (#3344). POSIX XCU 2.8.1 says the
+// same of `set -e`: a compound other than a subshell whose status came from a
+// failure while the option was being ignored is not a failure it sees.
+//
+// A compound whose body never ran is still judged, because then the status is
+// the compound's own: `{ :; } >/nonexistent/f` fails at the redirection.
+// A subshell is not in the list, because its status is a child's exit — the
+// child's own judgment happened in a copy — and every shell judges it.
+func reportsItsBody(e syntax.Expr) bool {
+	p, ok := e.(*syntax.Pipeline)
+	if !ok || p.Negated || len(p.Cmds) != 1 {
+		return false
+	}
+	switch p.Cmds[0].(type) {
+	case *syntax.Group, *syntax.TryClause, *syntax.IfClause, *syntax.LoopClause,
+		*syntax.ForClause, *syntax.ForArithClause, *syntax.CaseClause,
+		*syntax.SelectClause, *syntax.RepeatClause:
+		return true
+	}
+	return false
 }
 
 // lastIsNegated reports whether the command `set -e` would judge carries a

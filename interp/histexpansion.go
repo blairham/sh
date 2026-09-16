@@ -221,6 +221,8 @@ func (r *Runner) HistoryExpansionRefusal(err error) string {
 		return Wording(d.HistoryEventNotFound, "%[1]s: event not found", e.Ref, bare)
 	case *histexpand.SubstFailed:
 		return Wording(d.HistorySubstitutionFailed, "%[1]s: substitution failed", e.Ref, e.Bare)
+	case *histexpand.BadWordSpecifier:
+		return Wording(d.HistoryBadWordSpecifier, "%[1]s: bad word specifier", e.Ref)
 	case *histexpand.BadModifier:
 		return Wording(d.HistoryBadModifier, "%[1]s: unrecognized history modifier", e.Mod, e.Mod)
 	}

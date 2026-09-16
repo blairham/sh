@@ -93,6 +93,14 @@ type BadModifier struct{ Mod string }
 
 func (e *BadModifier) Error() string { return e.Mod + ": unrecognized history modifier" }
 
+// BadWordSpecifier is a word designator naming a word the event does not have,
+// or a range running backwards. Ref is the designator as written, from its
+// colon where it has one — bash and ksh93 both say `:2-9: bad word specifier`
+// and `-9: bad word specifier` — and zsh names nothing.
+type BadWordSpecifier struct{ Ref string }
+
+func (e *BadWordSpecifier) Error() string { return e.Ref + ": bad word specifier" }
+
 // SubstFailed is an `s/old/new/` or `^old^new^` whose left side is not in the
 // event it was applied to.
 //
@@ -447,10 +455,25 @@ func search(hist List, want string, substring bool) (string, bool) {
 func fields(entry string) []string { return strings.Fields(entry) }
 
 // designate applies a word designator, reporting whether one was written.
+//
+// Measured 2026-09-16 over `echo a b c d e` on bash 5.3.20 from a script, and
+// on zsh 5.9.2 and ksh93u+ at a prompt through a pseudo-terminal, where the
+// three agree on every rule below:
+//
+//   - `x-$` runs to the last word — `!!:2-$` is `b c d e`;
+//   - a range with no start begins at word zero — `!!:-3` is `echo a b c`,
+//     `!!:-` is `echo a b c d` — and so does one written with no colon at
+//     all, `!!-3` and `!-2-3` alike;
+//   - `*` is not a range start, so `!!:*-` is `a b c d e-` with the `-` left
+//     as text;
+//   - a word the event does not have is an error that stops the line — `:9`,
+//     `:2-9`, `:3-2`, `:9-` and `:9*` are each refused — rather than the
+//     nothing this used to put in its place.
 func designate(src []rune, j int, words []string, c Chars, st *state) ([]string, int, bool, error) {
 	if j >= len(src) {
 		return nil, j, false, nil
 	}
+	from := j
 	colon := false
 	if src[j] == ':' {
 		colon = true
@@ -477,6 +500,10 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 	}
 	// A number, or one of the single-character designators.
 	start, end := -1, -1
+	// ranged says a `-` or `*` after the start makes a range of it, which
+	// every start but `*` and `%` does.
+	ranged := true
+	bad := func(to int) error { return &BadWordSpecifier{Ref: string(src[from:to])} }
 	switch r := src[j]; {
 	case c.Quick != 0 && r == c.Quick:
 		start, end = 1, 1
@@ -489,6 +516,7 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 			return nil, j + 1, true, nil
 		}
 		start, end = 1, last
+		ranged = false
 		j++
 	case r == '%':
 		for i, w := range words {
@@ -500,6 +528,7 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 		if start < 0 {
 			return nil, j + 1, true, nil
 		}
+		ranged = false
 		j++
 	case r >= '0' && r <= '9':
 		k := j
@@ -509,6 +538,10 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 		n, _ := strconv.Atoi(string(src[j:k]))
 		start, end = n, n
 		j = k
+	case r == '-':
+		// No start written, so the range begins at word zero. The `-` is
+		// read by the range below.
+		start, end = 0, 0
 	default:
 		if colon {
 			// A `:` that named no word is a modifier's colon; hand it back.
@@ -516,23 +549,42 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 		}
 		return nil, j, false, nil
 	}
-	// A range: `x-y`, `x-` (up to the last but one) or `x*` (up to the last).
-	if j < len(src) && src[j] == '-' {
+	// A range: `x-y`, `x-$`, `x-` (up to the last but one) or `x*` (up to
+	// the last).
+	if ranged && j < len(src) && src[j] == '-' {
 		k := j + 1
 		for k < len(src) && src[k] >= '0' && src[k] <= '9' {
 			k++
 		}
-		if k > j+1 {
+		switch {
+		case k > j+1:
 			n, _ := strconv.Atoi(string(src[j+1 : k]))
+			if start > last || n > last || start > n {
+				return nil, k, false, bad(k)
+			}
 			return pick(start, n), k, true, nil
+		case k < len(src) && src[k] == '$':
+			if start > last {
+				return nil, k + 1, false, bad(k + 1)
+			}
+			return pick(start, last), k + 1, true, nil
+		}
+		if start > last {
+			return nil, j + 1, false, bad(j + 1)
 		}
 		if last-1 >= start {
 			return pick(start, last-1), j + 1, true, nil
 		}
 		return nil, j + 1, true, nil
 	}
-	if j < len(src) && src[j] == '*' {
+	if ranged && j < len(src) && src[j] == '*' {
+		if start > last {
+			return nil, j + 1, false, bad(j + 1)
+		}
 		return pick(start, last), j + 1, true, nil
+	}
+	if start > last {
+		return nil, j, false, bad(j)
 	}
 	return pick(start, end), j, true, nil
 }
@@ -638,9 +690,37 @@ func substitute(src []rune, j int, text, ref string, global bool, st *state) (st
 	if old == "" {
 		return "", 0, &SubstFailed{Ref: ref}
 	}
+	repl = replacement(repl, old)
 	st.old, st.new = old, repl
 	out, err := apply(text, old, repl, global, ":"+string(src[start:j]))
 	return out, j, err
+}
+
+// replacement reads the right side of a substitution: an `&` in it is the text
+// being replaced, and a backslash before one makes it an ordinary `&`.
+//
+// Unanimous, measured 2026-09-16 on bash 5.3.20 from a script and on zsh
+// 5.9.2 and ksh93u+ at a prompt: after `echo one two one`, `:s/o/&&/` is
+// `echoo one two one` in all three, and `:s/o/\&/` puts a lone `&` where the
+// `o` was — which, being an `&`, then runs `ech` in the background in both
+// columns whose output could be read. Any other backslash stays as written.
+func replacement(raw, old string) string {
+	if !strings.Contains(raw, "&") {
+		return raw
+	}
+	var b strings.Builder
+	for i := 0; i < len(raw); i++ {
+		switch {
+		case raw[i] == '\\' && i+1 < len(raw) && raw[i+1] == '&':
+			b.WriteByte('&')
+			i++
+		case raw[i] == '&':
+			b.WriteString(old)
+		default:
+			b.WriteByte(raw[i])
+		}
+	}
+	return b.String()
 }
 
 // apply is the substitution itself, which fails rather than doing nothing when
@@ -690,6 +770,7 @@ func quick(line string, hist List, c Chars, st *state) (Result, error) {
 	if !strings.Contains(entry, old) {
 		return Result{}, &SubstFailed{Ref: ":s" + written, Bare: written}
 	}
+	repl = replacement(repl, old)
 	st.old, st.new = old, repl
 	out := strings.Replace(entry, old, repl, 1)
 	// Anything after the closing character is a modifier chain on the result.

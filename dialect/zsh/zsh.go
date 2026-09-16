@@ -3377,6 +3377,7 @@ func Diagnostics() interp.Diagnostics {
 		// that introduced it, and a failed substitution names nothing at all.
 		HistoryEventNotFound:      "event not found: %[2]s",
 		HistorySubstitutionFailed: "substitution failed",
+		HistoryBadWordSpecifier:   "no such word in event",
 		UnimplementedOptionLetters: map[string]string{
 			// **`set` has left this table entirely**, and the emptiness is
 			// the measurement. zsh gives a single letter to far more of its

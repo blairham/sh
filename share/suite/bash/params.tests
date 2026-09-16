@@ -130,3 +130,68 @@ printf 'after-nested [%s]\n' "$_"
 suiteset() { _=SET_IN_BODY; }
 suiteset qq
 printf 'after-explicit [%s]\n' "$_"
+
+# ---- `${!v}` reads the resolved text as a parameter *reference* ----
+#
+# bash reads what `v` came to as the expansion it spells and not as a plain
+# variable name, so a positional parameter, a special parameter and a
+# subscripted element all resolve; only an ordinary unset name comes back
+# empty. This shell handed the text to the plain-name store, so every row but
+# the last two was the empty string at status 0 — a wrong value and not a
+# missing diagnostic (#3213).
+#
+# ksh93 gives back the name it was written on for every one of these, and zsh
+# and dash have no such expansion at all, which is what keeps the section in
+# this directory.
+set -- p q r
+arr=(A B C)
+for spec in '@' '*' '#' '1' '2' '9' '?' 'arr[1]' 'arr[@]' 'arr[*]' 'arr' 'nosuch'; do
+	printf '%s=' "$spec"
+	printf '<%s>' "${!spec}"
+	printf '\n'
+done
+
+# The field count is the half a joined read cannot carry, so it is printed on
+# its own: `@` and `[@]` keep one field per parameter and per element where
+# `*` and `[*]` are one joined field, exactly as the written spellings do.
+ifs_at='@'; ifs_arr='arr[@]'; ifs_star='*'; ifs_astar='arr[*]'
+printf 'fields at=%s arr=%s star=%s astar=%s\n' \
+	$(set -- "${!ifs_at}"; echo $#) \
+	$(set -- "${!ifs_arr}"; echo $#) \
+	$(set -- "${!ifs_star}"; echo $#) \
+	$(set -- "${!ifs_astar}"; echo $#)
+
+# The subscript in a resolved text is live and is evaluated **once**: the
+# counter moves one place per expansion and not one per reader, which is the
+# guarantee #3104 wrote down for a written subscript and this road now shares.
+counted=(x y z); idx=0; moving='counted[idx++]'
+printf 'once=[%s] idx=%s\n' "${!moving}" "$idx"
+printf 'twice=[%s][%s] idx=%s\n' "${!moving}" "${!moving}" "$idx"
+
+# ---- `set -u` reaches the *target* of an indirection ----
+#
+# The refusal is about the second read and names the parameter with its `!` on
+# it, subscript and all. A set `v` naming an unset parameter expanded to empty
+# at status 0 here where bash ends the script (#3214). Each row is a subshell
+# so the file carries on past a fatal one, and the status is printed beside it.
+unbound_v=nope
+unbound_w='arr[9]'
+unbound_q=1
+(set -u; printf 'u1=[%s]\n' "${!unbound_v}"); printf 'u1rc=%s\n' "$?"
+(set -u; printf 'u2=[%s]\n' "${!arr[9]}"); printf 'u2rc=%s\n' "$?"
+(set -u; printf 'u3=[%s]\n' "${!unbound_w}"); printf 'u3rc=%s\n' "$?"
+(set -u; set --; printf 'u4=[%s]\n' "${!unbound_q}"); printf 'u4rc=%s\n' "$?"
+
+# The operator guard is the one every other expansion gets: a form that
+# supplies a value is no error, and `${!v}` through a name holding `@` is the
+# positional list rather than an unset parameter.
+unbound_at='@'
+(set -u; printf 'u5=[%s]\n' "${!unbound_v-D}"); printf 'u5rc=%s\n' "$?"
+(set -u; printf 'u6=[%s]\n' "${!unbound_v:-D}"); printf 'u6rc=%s\n' "$?"
+(set -u; printf 'u7=[%s]\n' "${!unbound_v+S}"); printf 'u7rc=%s\n' "$?"
+(set -u; printf 'u8=[%s]\n' "${!unbound_at}"); printf 'u8rc=%s\n' "$?"
+
+# `${!v?word}` names the same subject, which is what says the `!` belongs to
+# the parameter and not to the `set -u` sentence.
+(printf 'q1=[%s]\n' "${!unbound_v?missing}"); printf 'q1rc=%s\n' "$?"
+(printf 'q2=[%s]\n' "${!arr[9]?missing}"); printf 'q2rc=%s\n' "$?"

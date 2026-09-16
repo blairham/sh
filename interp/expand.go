@@ -709,10 +709,14 @@ func (r *Runner) readParamSource(e *syntax.ParamExpr) (value string, set, subscr
 		// three other callers read it that way — and answering false would
 		// send `$!` off to look for a variable of that name.
 		//
-		// An indirection cannot reach this and needs no guard of its own:
-		// `${!x}` parses with the name `x` and the indirect flag set, so the
-		// name here is never `!` for one. A `!e.Indirect` clause was written
-		// and was dead — a surviving mutant is what said so.
+		// A node *written* as an indirection cannot reach this — `${!x}`
+		// parses with the name `x` and the indirect flag set, so the name
+		// here is never `!` for one, and a `!e.Indirect` clause was written
+		// and was dead. The target of an indirection does reach it, on a node
+		// this shell built rather than one the parser read: `v='!'; ${!v}`
+		// resolves the target `!` here and gets the same answer the written
+		// `$!` gets, which is the point of reading the resolved text as the
+		// expansion it spells (#3213).
 		set = false
 	}
 	return value, set, false
@@ -1001,6 +1005,18 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// expansion. It already reads a name reference first, asks
 		// IndirectionYieldsName, and looks the resolved text up.
 		return nil, false
+	}
+	// `${!v}` whose text names the positional parameters or the whole of an
+	// array is that expansion, fields and all: the node becomes the target
+	// and every rewrite below acts on it, exactly as it would on the written
+	// spelling. See Runner.indirectAimedAtAList, which holds the panel — a
+	// scalar read joins, and an element holding a space is what that loses.
+	//
+	// Ahead of the three rewrites below because the target is what they are
+	// about: a text of `@` wants positionalsAsList and a text of `a[@]` wants
+	// the array path, and neither is reachable off a node still named `v`.
+	if aimed, ok := r.indirectAimedAtAList(e); ok {
+		e = aimed
 	}
 	// A name reference aimed at the whole of an array is that array's
 	// expansion, fields and all — the same rewrite the scalar path makes, and
@@ -2172,7 +2188,10 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 	value, set, subscript = r.paramSource(e)
 
-	if !set {
+	if !set && !e.Indirect {
+		// An indirection's refusal is the **target's** and is asked below,
+		// once, after the text has been resolved — asking here as well would
+		// write the sentence twice for the one expansion. See #3214.
 		r.checkNounset(e)
 	}
 
@@ -2201,6 +2220,14 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// parses the same text and yields the name itself, so the grammar
 		// having accepted it is not enough to know what it means.
 		if r.ask(r.sem().IndirectionYieldsName, "${!x} yielding the name") {
+			if !set {
+				// The value is never read in this dialect, so the refusal is
+				// the *written* parameter's — which is what it was before the
+				// check moved below, and the reason it is repeated here.
+				// Measured 2026-09-16, ksh93u+ under `set -u` refuses
+				// `${!v}` with `v: parameter not set`.
+				r.checkNounset(e)
+			}
 			// The name *with its subscript*, which is what was written and
 			// what that shell answers: measured 2026-09-14, ksh93u+ gives
 			// `a[0]` for `${!a[0]}` and `w[k]` for `${!w[k]}`, and `a[1]`
@@ -2213,10 +2240,39 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			return e.Name
 		}
 		if !set || value == "" {
-			return ""
+			// Nothing to resolve, so there is no target and the operators see
+			// an **unset** parameter — which is what they saw before the
+			// early return that used to be here, and what bash 3.2.57 does.
+			// Measured 2026-09-16 with `unset u` and `b=''`: `${!u-D}` and
+			// `${!b-D}` are `D` there, `${!u?m}` is `!u: m` and `${!b+S}` is
+			// empty. Returning the empty string instead answered every one of
+			// them at status 0, matching neither bash column — and
+			// `${!a[9]?m}` is `!a[9]: m` in **both**, which is the row that
+			// says this is a missing refusal rather than a wording (#3214).
+			//
+			// bash 5.3.20 refuses the unresolvable text outright — `u:
+			// invalid indirect expansion` and `: invalid variable name` — and
+			// that sentence is its own and is still #2891's.
+			value, set = "", false
+		} else {
+			name = value
+			// The text is read as the **parameter reference** it spells and
+			// not as a plain variable name, so a positional parameter, a
+			// special parameter and a subscripted element all resolve. See
+			// interp/indirectread.go, which holds the panel.
+			value, set = r.indirectTargetValue(e, name)
 		}
-		name = value
-		value, set = r.getVar(name)
+		if !set {
+			// `set -u` is about the read that produced the value, which for
+			// an indirection is this one and not the outer name's. Asked of
+			// the node as *written*, so the operator guard inside — `${!v-d}`
+			// supplies a value and is no error — is the same one every other
+			// expansion gets, and the subject carries the `!`. Measured, a
+			// set `v` naming an unset parameter ends the script in both bash
+			// columns where this answered the empty string at status 0
+			// (#3214).
+			r.checkNounset(e)
+		}
 	}
 
 	if e.Length {
@@ -2313,8 +2369,20 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// Fatal in all four, and with the same four statuses an unset
 			// parameter under `set -u` gets — so it goes through the same
 			// door rather than carrying a status of its own.
+			// The subject is the name as written, except that an
+			// indirection wears its `!`: measured 2026-09-16, `${!v?msg}` is
+			// `!v: msg` and `${!a[9]?msg}` is `!a[9]: msg` in bash 5.3.20 and
+			// bash 3.2.57 alike, where this wrote `v` and `w`. Only for an
+			// indirection, because what a *written* subscript does to this
+			// subject is a question of its own — `${a[9]?m}` is `a[9]: m` in
+			// both bash columns and no refusal at all in ksh93u+, which is a
+			// second split and not this one (#3232).
+			subject := e.Name
+			if e.Indirect {
+				subject = r.indirectSubject(e)
+			}
 			r.fatalParamError("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
-				e.Name, r.paramErrorWord(e, set)))
+				subject, r.paramErrorWord(e, set)))
 			return ""
 		}
 		return value
@@ -4965,6 +5033,17 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		// v; ${v::=new}` is `new` at status 0.
 		return
 	}
+	if e.Indirect {
+		// The parameter this refusal is about is the whole `!name`, so none
+		// of the three name tests below applies to it: the sigil is the `!`
+		// and not the `$` a positional gets, and an *outer* name that happens
+		// to be `@` or `1` says nothing about what the indirection resolved
+		// to. Measured, `set -u; q=1; ${!q}` with no positional parameters is
+		// `!q: unbound variable` in both bash columns — the written name,
+		// under the indirection's own sigil (#3214).
+		r.fatalExpansion("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", r.unboundSubject(e)))
+		return
+	}
 	switch e.Name {
 	case "@", "*":
 		// No parameters is not the same as unset: `"$@"` with none is empty
@@ -5028,22 +5107,33 @@ func (r *Runner) unboundSubject(e *syntax.ParamExpr) string {
 		// This named the bare `a` for all three, which reads as a refusal
 		// about the array rather than about the element.
 		//
-		// Not for an indirection, which is a different sentence and not this
-		// one: bash 5.3 refuses `${!nope}` with `nope: invalid indirect
-		// expansion`, and where it does say `unbound variable` for a
-		// subscripted indirection it writes the `!` back too — `${!a[9]}` is
-		// `!a[9]: unbound variable`. Neither is this refusal wearing a
-		// subject.
+		// An indirection writes the `!` back in front of all of it —
+		// `${!a[9]}` is `!a[9]: unbound variable` in bash 5.3 and in bash
+		// 3.2 alike — so it is the same subject under a sigil, and
+		// indirectSubject is where the sigil is decided. This used to answer
+		// the bare `a`, which reads as a refusal about the array and names
+		// neither the indirection nor the element (#3214). bash 5.3's
+		// `nope: invalid indirect expansion` for an unset *outer* name is a
+		// different sentence and is still #2891's.
 		//
 		// Not for a whole-array subscript either. `${nope[@]}` is refused
 		// by zsh 5.9.2 and by bash 3.2.57, and passed over in silence by
 		// bash 5.3 — the same binary as `sh` included — and by ksh93u+, so
 		// `[@]` is a question of its own with a split of its own. Answering
 		// it here would make every column refuse it.
-		if e.Indirect || r.wholeArrayIndex(e) {
+		if r.wholeArrayIndex(e) {
 			return e.Name
 		}
+		if e.Indirect {
+			return r.indirectSubject(e)
+		}
 		return e.Name + "[" + r.unboundSubscript(e) + "]"
+	}
+	if e.Indirect {
+		// An indirection with no subscript of its own, which is the common
+		// spelling: the `!` is written back here for the same reason it is
+		// written back above.
+		return r.indirectSubject(e)
 	}
 	if !r.diag().UnboundBareArrayNamesElementZero {
 		return e.Name

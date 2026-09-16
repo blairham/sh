@@ -184,3 +184,119 @@ func TestWhatBashSaysAboutABadReference(t *testing.T) {
 		})
 	}
 }
+
+// A reference aimed at its **own name**, which is refused at the top level
+// and taken inside a function — the two answers bash has for one spelling,
+// and the shape `local -n r=r` is written for (#3048).
+//
+// Measured 2026-09-15 against bash 5.3.20, `env -i` with a scratch HOME and
+// no startup files, every row run against the real shell and this one side by
+// side. The declaration says the same sentence twice, once with the builtin's
+// name in front of it and once without; each read through says it again; and
+// a write says `maximum nameref depth` instead and lands on the **global**
+// cell, past any local of the same name in between.
+func TestAReferenceToItsOwnNameRefersOutward(t *testing.T) {
+	dir := t.TempDir()
+	const warn = "bash: line 1: warning: r: circular name reference\n"
+	const declared = "bash: line 1: local: warning: r: circular name reference\n" + warn
+	const depth = "bash: line 1: warning: r: maximum nameref depth (8) exceeded\n"
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{
+			// The whole of the issue in one line: the read reaches the
+			// caller's value and the write reaches the caller's variable.
+			"a read reaches out and a write lands out there",
+			`r=OUTER; f(){ local -n r=r; echo "in=[$r]"; r=SET; }; f; echo "after=[$r]"`,
+			declared + warn + "in=[OUTER]\n" + depth + "after=[SET]\n",
+			0,
+		},
+		{
+			// The discriminator between "the caller's cell" and "the global
+			// cell", which is the reading a probe with one function cannot
+			// tell apart: two callers' locals are stepped straight over.
+			"it is the global cell and not the caller's",
+			`r=L0; h(){ local r=L1; g; echo "h=[$r]"; }; g(){ local r=L2; f; echo "g=[$r]"; };` +
+				` f(){ local -n r=r; echo "f=[$r]"; r=SET; }; h; echo "top=[$r]"`,
+			declared + warn + "f=[L0]\n" + depth + "g=[L2]\nh=[L1]\ntop=[SET]\n",
+			0,
+		},
+		{
+			"an unset outer cell reads unset and is still written",
+			`g(){ local r=L2; f; echo "g=[$r]"; }; f(){ local -n r=r; echo "f=[${r-UNSET}]"; r=SET; };` +
+				` g; echo "top=[$r]"`,
+			declared + warn + "f=[UNSET]\n" + depth + "g=[L2]\ntop=[SET]\n",
+			0,
+		},
+		{
+			// `-g` puts the reference *on* the global cell, so there is
+			// nothing outside it to refer to and the loop closes: an empty
+			// read, and a write that lands nowhere and is a **failed**
+			// assignment — reported as the circle rather than as the depth,
+			// at status 1, with the rest of the command list given up. So
+			// there is no `after=` line here at all.
+			"a global self reference is a closed loop",
+			`r=OUTER; f(){ declare -gn r=r; echo "in=[$r]"; r=SET; }; f; echo "after=[$r]"`,
+			"bash: line 1: declare: warning: r: circular name reference\n" + warn + warn +
+				"in=[]\n" + warn,
+			1,
+		},
+		{
+			// The same failure from the other side. What is given up is the
+			// *command list* the assignment stood in — the shape a readonly
+			// reassignment already takes — and on the `-c` route these three
+			// commands are one list, so nothing after the write runs at all
+			// and the shell ends at 1. Written from a file, where `f` and
+			// the two echoes are separate lines, bash gives up the function
+			// body and prints `st=1` and `AFTER`; the file route is measured
+			// in the pull request rather than here, because this harness has
+			// only the one.
+			"and the write that lands nowhere gives up the list",
+			`f(){ declare -gn r=r; r=SET; echo NOPE; }; f; echo "st=$?"; echo AFTER`,
+			"bash: line 1: declare: warning: r: circular name reference\n" + warn + warn,
+			1,
+		},
+		{
+			// A reference with nothing to point at is aimed by its first
+			// assignment, and a value that is its own name aims it here —
+			// the same state, reached without the `-n` operand.
+			"an assignment can aim one at itself",
+			`r=OUTER; f(){ local -n r; r=r; declare -p r; echo "in=[$r]"; r=SET; }; f; echo "after=[$r]"`,
+			`declare -n r="r"` + "\n" + warn + "in=[OUTER]\n" + depth + "after=[SET]\n",
+			0,
+		},
+		{
+			// The top level keeps the refusal, which is the half that was
+			// already right: there is no scope for the name to refer out to.
+			"the top level still refuses",
+			`r=OUTER; typeset -n r=r; echo "top=[$r]"; r=SET; echo "after=[$r]"`,
+			"bash: line 1: typeset: r: nameref variable self references not allowed\n" +
+				"top=[OUTER]\nafter=[SET]\n",
+			0,
+		},
+		{
+			// A plain `unset` says it twice and removes the binding it was
+			// standing in front of rather than the cell it reads, so the
+			// outer value survives. `unset -n` is the other door and is
+			// silent.
+			"a plain unset warns twice and leaves the outer cell",
+			`r=OUTER; f(){ local -n r=r; unset r; }; f; echo "after=[${r-GONE}]"`,
+			declared + warn + warn + "after=[OUTER]\n",
+			0,
+		},
+		{
+			"the declaration reports success",
+			`r=OUTER; f(){ local -n r=r; echo "st=$?"; }; f`,
+			declared + "st=0\n",
+			0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runBash(t, dir, tc.src)
+			if out != tc.want || st != tc.status {
+				t.Errorf("%s = %q at %d, want %q at %d", tc.src, out, st, tc.want, tc.status)
+			}
+		})
+	}
+}

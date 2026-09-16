@@ -74,6 +74,20 @@ func TestACycleIsRefusedAtTheDeclaration(t *testing.T) {
 			want: "ksh: typeset: r: invalid self reference\n", status: 1,
 		},
 		{
+			// **Inside a function too**, which is where bash parts company:
+			// there `local -n r=r` is a warning and a handle on the outer
+			// variable, and here it is the same refusal that ends the same
+			// script. Measured 2026-09-15 on ksh93u+ 2012-08-01 (#3048).
+			name: "a self reference inside a function is refused as well",
+			src:  `r=OUTER; f(){ typeset -n r=r; echo "in=[$r]"; r=SET; }; f; echo "after=[$r]"`,
+			want: "ksh: typeset: r: invalid self reference\n", status: 1,
+		},
+		{
+			name: "and under nameref inside one",
+			src:  `r=OUTER; f(){ nameref r=r; echo "in=[$r]"; }; f; echo after`,
+			want: "ksh: typeset: r: invalid self reference\n", status: 1,
+		},
+		{
 			// A bad name under the second spelling is the first's complaint
 			// too, which is what says the word is a front rather than a
 			// builtin of its own. It ends the script here as every bad name

@@ -3810,6 +3810,14 @@ type Diagnostics struct {
 	// builtin's name.
 	NamerefCircularWarning string
 
+	// NamerefDepthWarning is what a *write* through a self reference says in
+	// the same dialect, which is a different sentence from the read's: bash
+	// writes `warning: r: maximum nameref depth (8) exceeded` where the read
+	// writes `circular name reference`. One verb, the name, and the bound is
+	// part of the wording because it is bash's own number rather than this
+	// shell's. Spoken as the shell, like the warning above it.
+	NamerefDepthWarning string
+
 	// DeclareUnknownMapping is what `typeset -M nosuch` says in the dialect
 	// whose `M` letter names a character mapping. Two verbs: the builtin's
 	// complaint name and the mapping asked for. See

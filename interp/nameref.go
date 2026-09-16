@@ -315,12 +315,35 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 			"%[1]s: invalid variable name for name reference", target))
 	}
 	if target == name {
-		// A reference aimed straight at itself, which **both** shells refuse
-		// — measured, `typeset -n r=r` is `nameref variable self references
-		// not allowed` in bash 5.3.15 and `invalid self reference` in
-		// ksh93u+ — so it is the core's answer and not the axis below.
-		return r.refuseNameref(builtin, Wording(d.NamerefSelfReference,
-			"%[1]s: invalid self reference", name))
+		// A reference aimed straight at itself, and **where it is written
+		// decides what happens to it**.
+		//
+		// At the top level both shells refuse — measured, `typeset -n r=r`
+		// is `nameref variable self references not allowed` in bash 5.3.20
+		// and `invalid self reference` in ksh93u+ — so that much is the
+		// core's answer and no axis is asked. There is nowhere for the name
+		// to refer *out* to, which is the whole of why it is refused.
+		//
+		// Inside a function there is somewhere, and `local -n r=r` is the
+		// ordinary spelling of "give me a handle on the outer variable of
+		// the same name". bash takes it, says so twice, and resolves it
+		// outward; ksh93 refuses it in the same words it uses at the top
+		// level and ends the script. That is exactly the split
+		// [Semantics.NamerefCycleIsRefused] already records for the pair
+		// `typeset -n a=b; typeset -n b=a` — refuse at the declaration, or
+		// make it and complain at the read — so it is asked here rather than
+		// given a second field of its own (#3048).
+		if len(r.scopes) == 0 ||
+			r.ask(r.sem().NamerefCycleIsRefused, "a name reference that reaches itself") {
+			return r.refuseNameref(builtin, Wording(d.NamerefSelfReference,
+				"%[1]s: invalid self reference", name))
+		}
+		if r.unspecified {
+			return r.status
+		}
+		r.warnAboutASelfReference(builtin, name)
+		r.setNameref(name, target)
+		return 0
 	}
 	if r.namerefSelfReference(name, target) {
 		if r.ask(r.sem().NamerefCycleIsRefused, "a name reference that reaches itself") {
@@ -359,6 +382,136 @@ func (r *Runner) unsetNameref(name string) { delete(r.nameref, name) }
 func (r *Runner) warnAboutACycle(name string) {
 	if w := r.diag().NamerefCircularWarning; w != "" {
 		r.DiagnoseAsTheShellf("%s\n", Wording(w, "warning: %[1]s: circular name reference", name))
+	}
+}
+
+// warnAboutASelfReference is what a *declaration* of `local -n r=r` says in
+// the dialect that takes one, and it says it twice.
+//
+// Measured 2026-09-15 on bash 5.3.20, `f() { local -n r=r; }; f`:
+//
+//	f.sh: line 1: local: warning: r: circular name reference
+//	f.sh: line 1: warning: r: circular name reference
+//
+// The first carries the builtin's name and the second does not, and the same
+// pair comes out of `declare -n` and `typeset -n` with their own word in
+// front. Two sentences and not one because that is what the shell writes; a
+// single warning left the line count short wherever this shape is scored.
+//
+// Nothing at all in the dialect with no wording for it, which is the one that
+// refuses this declaration outright and never reaches here.
+func (r *Runner) warnAboutASelfReference(builtin, name string) {
+	w := r.diag().NamerefCircularWarning
+	if w == "" {
+		return
+	}
+	r.diagf("%s: %s\n", builtin, Wording(w, "warning: %[1]s: circular name reference", name))
+	r.warnAboutACycle(name)
+}
+
+// warnAboutNamerefDepth is what a *write* through a self reference says,
+// which is a different sentence from the read's.
+//
+// Measured on bash 5.3.20 over the same function: reading `$r` writes
+// `warning: r: circular name reference` and `r=SET` writes `warning: r:
+// maximum nameref depth (8) exceeded`, both as the shell. The 8 is bash's own
+// bound and travels with the wording rather than with namerefDepth here,
+// because it is a number this shell reports rather than one it enforces — the
+// resolution below is a single step to the outer cell and never a walk.
+func (r *Runner) warnAboutNamerefDepth(name string) {
+	if w := r.diag().NamerefDepthWarning; w != "" {
+		r.DiagnoseAsTheShellf("%s\n", Wording(w, "warning: %[1]s: maximum nameref depth exceeded", name))
+	}
+}
+
+// A self reference resolves **outward**, to the cell the name had before any
+// function took it over.
+//
+// Measured 2026-09-15 on bash 5.3.20, and the discriminator is a caller that
+// has a local of the same name in between:
+//
+//	r=L0
+//	h() { local r=L1; g; echo "h=[$r]"; }
+//	g() { local r=L2; f; echo "g=[$r]"; }
+//	f() { local -n r=r; echo "f=[$r]"; r=SET; }
+//	h; echo "top=[$r]"
+//
+// writes `f=[L0]`, `g=[L2]`, `h=[L1]`, `top=[SET]`. So it is not "the
+// caller's" cell — two callers' locals are stepped straight over — it is the
+// global one, and both the read and the write land there.
+//
+// In this engine there is one table and a stack of saved outer values, so the
+// global cell is the copy held by the **oldest** scope that shadowed the name
+// — the value the last return will put back — which is the same walk
+// setGlobalVar takes. What is deliberately different is the answer when no
+// scope shadowed it at all: there the reference *is* the global cell and the
+// loop closes on itself, which bash reports as a circular read of an empty
+// value. `f() { declare -gn r=r; echo "[$r]"; r=SET; }` over an outer `r`
+// writes `[]` and leaves the outer value alone, where the same line without
+// `-g` writes `[OUTER]` and sets it.
+
+// selfNameref reports whether a name is a reference aimed at its own name,
+// which is the one shape that resolves outward rather than to another name.
+func (r *Runner) selfNameref(name string) bool {
+	target, ok := r.nameref[name]
+	return ok && target == name
+}
+
+// selfNamerefValue is the read: what the global cell of `name` holds, and
+// whether it holds anything. The second result is false where nothing
+// shadowed the name, which is the closed loop above and not an unset cell —
+// the two answer alike here, an empty value, and no caller has to tell them
+// apart.
+func (r *Runner) selfNamerefValue(name string) (string, bool) {
+	for _, sc := range r.scopes {
+		v, saved := sc.saved[name]
+		if !saved {
+			continue
+		}
+		if sc.removedBefore[name] || !sc.existed[name] {
+			return "", false
+		}
+		return v, true
+	}
+	return "", false
+}
+
+// selfNamerefStore is the write, and it reports whether the value landed
+// anywhere: a reference that is itself the global cell has nothing outside it
+// to write to, and bash says `circular name reference` there rather than the
+// depth it says when the write does land.
+func (r *Runner) selfNamerefStore(name, value string) bool {
+	for _, sc := range r.scopes {
+		if _, saved := sc.saved[name]; !saved {
+			continue
+		}
+		sc.saved[name] = value
+		sc.existed[name] = true
+		if sc.removedBefore != nil {
+			sc.removedBefore[name] = false
+		}
+		return true
+	}
+	return false
+}
+
+// selfNamerefAssignment is setVarAs's one line for the shape above.
+//
+// A write that lands nowhere is a **failed assignment** and not merely a
+// quiet one: measured on bash 5.3.20, `f() { declare -gn r=r; r=SET; echo
+// NOPE; }; f; echo AFTER` writes the warning, reports 1, never writes `NOPE`,
+// and runs `AFTER` — which is the shape a readonly reassignment already
+// takes here, the command list given up and the caller carrying on. See
+// refuseReadonly, whose two lines these are.
+func (r *Runner) selfNamerefAssignment(name, value string, form assignForm) {
+	if r.selfNamerefStore(name, value) {
+		r.warnAboutNamerefDepth(name)
+		return
+	}
+	r.warnAboutACycle(name)
+	r.status, r.assignFailed = 1, true
+	if !form.declaresRatherThanAssigns() {
+		r.ctl, r.abandonLine = controlAbandon, r.line
 	}
 }
 

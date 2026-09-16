@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# A name reference aimed at its **own name** — #3048, out of #2299's
+# `127 / 0` row.
+#
+# `local -n r=r` is the ordinary spelling of "give me a handle on the outer
+# variable of the same name", and bash has two answers for it decided by
+# whether there is a function scope to refer out of. At the top level it is
+# refused; inside a function it is a *warning* and the reference resolves
+# outward, so a write through it reaches the outer variable and outlives the
+# call. Only bash on this panel says both — ksh93 refuses in both scopes and
+# ends the script, and zsh, dash and ash have no `-n` letter at all — which
+# is why this file is in the bash tier rather than in ext/.
+#
+# The diagnostics are the point as much as the values are, so every case
+# keeps stderr and drops nothing: the declaration says the same sentence
+# twice, a read through says it again, and a write says `maximum nameref
+# depth` instead. A file that compared only the values would call a silent
+# shell a matching one.
+#
+# Each case is a subshell. Two of them end in a failed assignment, which
+# gives up the command list it stood in, and a file that ran them inline
+# would stop at the first.
+
+say() { printf -- '--- %s\n' "$1"; }
+
+say 'the top level refuses, and carries on'
+( r=OUTER; typeset -n r=r; printf 'top=[%s]\n' "$r"; r=SET; printf 'after=[%s]\n' "$r" ) 2>&1
+
+say 'inside a function it warns and reads the outer value'
+( r=OUTER; f() { local -n r=r; printf 'in=[%s]\n' "$r"; }; f; printf 'after=[%s]\n' "$r" ) 2>&1
+
+say 'and the write reaches the outer variable'
+( r=OUTER; f() { local -n r=r; r=SET; }; f; printf 'after=[%s]\n' "$r" ) 2>&1
+
+say 'the cell it reaches is the global one, past a caller local'
+( r=L0
+  h() { local r=L1; g; printf 'h=[%s]\n' "$r"; }
+  g() { local r=L2; f; printf 'g=[%s]\n' "$r"; }
+  f() { local -n r=r; printf 'f=[%s]\n' "$r"; r=SET; }
+  h; printf 'top=[%s]\n' "$r" ) 2>&1
+
+say 'an outer cell nobody set reads unset and is still written'
+( g() { local r=L2; f; printf 'g=[%s]\n' "$r"; }
+  f() { local -n r=r; printf 'f=[%s]\n' "${r-UNSET}"; r=SET; }
+  g; printf 'top=[%s]\n' "${r-UNSET}" ) 2>&1
+
+say 'declare and typeset say it in their own words'
+( r=OUTER; f() { declare -n r=r; printf 'in=[%s]\n' "$r"; }; f ) 2>&1
+( r=OUTER; f() { typeset -n r=r; printf 'in=[%s]\n' "$r"; }; f ) 2>&1
+
+say 'the declaration reports success'
+( r=OUTER; f() { local -n r=r; printf 'st=%s\n' "$?"; }; f ) 2>&1
+
+say 'an assignment can aim a reference at its own name'
+( r=OUTER; f() { local -n r; r=r; declare -p r; printf 'in=[%s]\n' "$r"; r=SET; }
+  f; printf 'after=[%s]\n' "$r" ) 2>&1
+
+say 'a plain unset warns twice and leaves the outer cell alone'
+( r=OUTER; f() { local -n r=r; unset r; }; f; printf 'after=[%s]\n' "${r-GONE}" ) 2>&1
+
+say 'a reference that is itself the global cell is a closed loop'
+( r=OUTER; f() { declare -gn r=r; printf 'in=[%s]\n' "$r"; }; f ) 2>&1
+
+say 'and a write through that one lands nowhere and gives up the list'
+( f() { declare -gn r=r; r=SET; printf 'NOPE\n'; }; f; printf 'st=%s\n' "$?" ) 2>&1
+printf 'and the file carries on\n'

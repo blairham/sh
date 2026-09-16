@@ -6952,6 +6952,38 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	return true
 }
 
+// frozenNameOfAnAssignment is the name a plain assignment's freeze is asked
+// about, which is **where the value lands** and not what was written.
+//
+// A reference and what it points at are frozen separately, and only the
+// second one can refuse a write through it: measured 2026-09-16 on bash
+// 5.3.20, `v=1; declare -rn r=v; r=5` is a silent 0 leaving `v` at 5, where
+// `v=1; readonly v; declare -n r=v; r=5` is `v: readonly variable` and gives
+// up the rest of the line. Both the name consulted and the name in the
+// sentence are the **target**. This shell asked about the reference, so a
+// frozen reference made every write through it a refusal the shell being
+// modeled does not make.
+//
+// The store below already resolves the reference before its own
+// refuseReadonly, so this is the one check that was reading the wrong name —
+// and it is here rather than in the store because a refused assignment gives
+// up the rest of the line and the store is past that point.
+//
+// A reference aimed at an **element** keeps the name it was written with: the
+// base array's freeze is what refuses `declare -n e=ra[0]; e=7`, and both
+// shells name the array in it — a route storeThroughNamerefElement already
+// takes.
+func (r *Runner) frozenNameOfAnAssignment(name string) string {
+	target, aimed := r.namerefTarget(name)
+	if !aimed {
+		return name
+	}
+	if _, _, element := r.indirectElement(target); element {
+		return name
+	}
+	return target
+}
+
 func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.selfNameref(name) {
 		// The write half of the read above: a reference aimed at its own
@@ -7669,7 +7701,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		outer := r.retypingFrozen
 		r.retypingFrozen = a.Name
 		defer func() { r.retypingFrozen = outer }()
-	} else if r.refuseReadonly(a.Name, assignedAlone) {
+	} else if r.refuseReadonly(r.frozenNameOfAnAssignment(a.Name), assignedAlone) {
 		return
 	}
 	if r.unspecified {

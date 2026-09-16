@@ -2247,15 +2247,34 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// *not* a reference — a real disagreement, and one this branch does
 		// not reach. See interp/nameref.go.
 		rest := args[:0:0]
+		status := 0
 		for _, name := range args {
 			if !r.isNameref(name) {
 				rest = append(rest, name)
 				continue
 			}
+			if r.readonly[name] {
+				// A **frozen reference**, which `declare -rn r=v` makes and
+				// which this branch used to take away in silence. The freeze
+				// is the reference's own — measured 2026-09-16 on bash
+				// 5.3.20, `v=1; declare -rn r=v; unset -n r` is `unset: r:
+				// cannot unset: readonly variable` at 1 and leaves `r` still
+				// aimed at `v`, while `unset -n` over an unfrozen reference
+				// is the silent 0 above. Same sentence and same route as the
+				// plain `unset` refusal, so a script cannot use `-n` to take
+				// apart what it may not unset.
+				if code := r.unsetReadonly(name); code != 0 {
+					status = code
+				}
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				continue
+			}
 			r.unsetNameref(name)
 		}
 		if len(rest) == 0 {
-			return 0
+			return status
 		}
 		args = rest
 	}
@@ -5178,12 +5197,22 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// reference belongs to this call and the caller's own name of
 			// the same spelling gets itself back on return. See
 			// interp/nameref.go.
-			if code := r.declareNameref("local", name, value, hasValue); code != 0 {
+			if code := r.declareNameref("local", name, value, hasValue,
+				r.readonly[name] && !f.readonlyOff); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status
 				}
 				r.assignFailed = true
+				continue
+			}
+			// The readonly letter, which is marked at the bottom of this
+			// loop and which this branch's `continue` walked past — the same
+			// line biDeclare's reference branch was missing. `local -rn`
+			// freezes the call's own reference and the caller gets its own
+			// back on return, which is what the shadow is for.
+			if f.readonly && !f.readonlyOff {
+				r.markReadonly(name)
 			}
 			continue
 		}

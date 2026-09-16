@@ -358,7 +358,31 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 // name, and both complain about a reference that reaches itself; what they do
 // about the second one is [Semantics.NamerefCycleIsRefused], where the
 // measurements are.
-func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int {
+func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen bool) int {
+	// The readonly refusal a **frozen reference** makes, in the one place its
+	// order against the other two is measured. bash 5.3.20 puts the bad
+	// target ahead of it and nothing else: `v=1; declare -rn r=v` then
+	// `declare -n r=1x` is ``declare: `1x': invalid variable name for name
+	// reference`` where `declare -n r=ok` is `declare: r: readonly
+	// variable`. So it sits behind the target's own check and in front of
+	// everything that changes the name.
+	//
+	// A frozen name that is **not** a reference refuses a `-n` declaration in
+	// bash too — `readonly v=1; declare -n v=w` is `declare: v: readonly
+	// variable` at 1 there and a silent 0 here — and that half is left alone
+	// deliberately. It is not this change's claim, and refusing on it turns a
+	// *second* defect into a diagnostic the reference shell does not write:
+	// three of the panel's shells unset OPTARG when `getopts` runs out of
+	// options, which takes a freeze on it away, and this shell keeps both.
+	// See #3146. Every row below is a reference this shell made frozen
+	// itself, so this shell's own record is what it consults.
+	refuseFrozen := func() bool {
+		if !frozen || !r.isNameref(name) {
+			return false
+		}
+		r.refuseReadonly(name, assignedByDeclaration)
+		return true
+	}
 	if !hasValue {
 		if !r.isNameref(name) {
 			// The valueless form over a name carrying an array, which both
@@ -370,12 +394,20 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 				return r.refuseNameref(builtin, Wording(r.diag().NamerefCannotBeAnArray,
 					"%[1]s: reference variable cannot be an array", name))
 			}
+			if refuseFrozen() {
+				return 1
+			}
 			r.namerefEmptiesTheCell(name)
 			r.setNameref(name, "")
+			return 0
 		}
 		// A second `typeset -n r` over a reference that is already aimed
 		// leaves it aimed, measured in both: the letter says what the name
-		// *is*, and saying it twice says nothing new.
+		// *is*, and saying it twice says nothing new — unless the reference
+		// is frozen, where saying it again is refused.
+		if refuseFrozen() {
+			return 1
+		}
 		return 0
 	}
 	d := r.diag()
@@ -402,6 +434,9 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 	if !r.namerefTargetIsAName(target) {
 		return r.refuseNameref(builtin, Wording(d.NamerefBadTarget,
 			"%[1]s: invalid variable name for name reference", target))
+	}
+	if refuseFrozen() {
+		return 1
 	}
 	if target == name {
 		// A reference aimed straight at itself, and **where it is written

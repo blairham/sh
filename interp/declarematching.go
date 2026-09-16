@@ -240,7 +240,8 @@ func (f DeclarationFilterForm) String() string {
 // arm can ask before the dialect is consulted — see declareMatching.
 func (f declareFlags) attributeLetterWritten() bool {
 	return f.integer || f.float || f.readonly || f.export || f.array ||
-		f.assoc || f.lower || f.upper || f.unique || f.hidden
+		f.assoc || f.lower || f.upper || f.unique || f.hidden ||
+		f.nameref
 }
 
 // attributeFilter is the test the attribute letters make of a declaration, or
@@ -276,6 +277,21 @@ func (r *Runner) attributeFilter(f declareFlags) (func(declaration) bool, bool) 
 	add(f.upper, func(d declaration) bool { return d.upper }, &attrs)
 	add(f.unique, func(d declaration) bool { return d.unique }, &attrs)
 	add(f.hidden, func(d declaration) bool { return d.hidden }, &attrs)
+	// The reference letter selects like any other attribute, and it is the
+	// one letter this filter did not read. `declare -n` over a table holding
+	// one reference, one integer and one export writes the reference alone
+	// in bash 5.3.20, and `typeset -n` writes ksh93u+'s own single reference;
+	// `declare -ni` writes the integers and the reference together, which is
+	// the join the other letters already take. This engine keeps the record
+	// in r.nameref rather than in an attribute table, which is why a letter
+	// that reads the tables missed it — `declare -n` came back empty and
+	// `declare -p -n` wrote the whole table at 0.
+	//
+	// A plus never reaches here: `f.nameref` is `!f.remove`, and `declare +n`
+	// is measured to be no filter at all — bash writes every name it has for
+	// it, which is the bare listing and is what the arm below this one
+	// already gives it.
+	add(f.nameref, func(d declaration) bool { return d.isNameref }, &attrs)
 	switch len(kinds) + len(attrs) {
 	case 0:
 		return nil, true

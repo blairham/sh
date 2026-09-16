@@ -277,7 +277,14 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 				items = append(items, r.expandWord(w)...)
 			}
 		} else {
-			items = r.Params
+			// A copy, because one dialect's loop variable may be a
+			// positional parameter's *number* — `set -- p q r; for 1; do`
+			// — and writing `$1` on each pass would otherwise rewrite the
+			// list being walked. Measured 2026-09-15 on zsh 5.9.2: that
+			// loop reads `p`, `q`, `r` and leaves `r q r` behind, so the
+			// list is taken once at the top and the writes land in the
+			// live one.
+			items = append([]string(nil), r.Params...)
 		}
 		if r.failedHeading() {
 			// The word list is what the loop iterates, so a failure in it
@@ -355,7 +362,7 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 					r.setNameref(name, it)
 					continue
 				}
-				r.setVar(name, it)
+				r.setLoopName(name, it)
 			}
 			// After the assignments, because zsh traces the assignments
 			// themselves — one line per name, measured `a=1` then `b=2` then

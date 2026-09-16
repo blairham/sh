@@ -324,6 +324,19 @@ func Dialect() syntax.Dialect {
 	// drawing one fails to autoload (#1744). See
 	// syntax.Dialect.CasePatternListSpansBlanks.
 	d.CasePatternListSpansBlanks = true
+	// A `;` may stand in the header wherever a newline may — `case x; in`
+	// and `case x in;` both run here, and both are a syntax error in the
+	// other six. Nine of the completion functions this shell ships open a
+	// `case` that way, so without it they cannot be read at all. `;;` and
+	// `&` are not this: both are refused in the same position by this shell
+	// too. See syntax.Dialect.CaseHeaderSpansSeparators.
+	d.CaseHeaderSpansSeparators = true
+	// A loop's variable may be a positional parameter's number: `for 1 in a
+	// b` sets `$1` on each pass. The other six columns refuse the header,
+	// calling `1` an invalid identifier or a bad loop variable. Seven of the
+	// completion functions this shell ships are written that way. See
+	// syntax.Dialect.ForNameMayBeAPositionalParameter.
+	d.ForNameMayBeAPositionalParameter = true
 	// `<->` is a number and `<1-9>` a bounded one, where every other panel
 	// shell reads the `<` as a redirection. Measured 2026-09-05 on zsh
 	// 5.9.2: `[[ 1 = <-> ]]` is 0 here and a syntax error in bash 5.3, bash

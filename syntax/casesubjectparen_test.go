@@ -135,12 +135,34 @@ func TestACaseSubjectMayOpenWithAParen(t *testing.T) {
 	}
 }
 
-// TestACaseSubjectParenIsTheDialectsAndNotEveryShells is the other half: the
+// TestACaseSubjectParenIsOneDialectsAndNotEveryShells is the other half: the
 // six columns that refuse the line are refused here too, so the reading is
 // not handed to a dialect whose reference shell says no.
-func TestACaseSubjectParenIsTheDialectsAndNotEveryShells(t *testing.T) {
-	d := Core()
-	if _, err := Parse("case (x) in (y) :;; esac", d); err == nil {
-		t.Error("`case (x) in` parsed without the grammar that reads a leading `(` as a word's")
+//
+// The grammar is turned on one flag at a time, because a single Core() row
+// could not tell the flags apart — Core reads no bare group at all, so it
+// refuses the line for a reason that has nothing to do with the subject.
+// The row that discriminates is the one with the *group* grammar on and the
+// flag that puts a group where an argument may stand off.
+func TestACaseSubjectParenIsOneDialectsAndNotEveryShells(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		with func(*Dialect)
+	}{
+		{"the core grammar", func(*Dialect) {}},
+		{
+			// A shell that reads `case x in (a|b))` as a group and still
+			// refuses `case (a|b) in`, which is every column but one.
+			"a dialect that reads groups but not a group where an argument stands",
+			func(d *Dialect) { d.PatternAlternation = true },
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := Core()
+			tc.with(&d)
+			if _, err := Parse("case (x) in (y) :;; esac", d); err == nil {
+				t.Error("`case (x) in` parsed without the flag that reads a leading `(` as a word's")
+			}
+		})
 	}
 }

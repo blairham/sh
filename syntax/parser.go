@@ -1107,6 +1107,18 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
+// skipCaseHeaderSeparators steps over what may stand inside a `case` header:
+// newlines everywhere, and a `;` where the dialect takes one. See
+// [Dialect.CaseHeaderSpansSeparators].
+//
+// TokSemi and not the rest of the family: `;;` is the arm terminator and `&`
+// is an operator, and the one shell that takes this refuses both here.
+func (p *Parser) skipCaseHeaderSeparators() {
+	for p.at(TokNewline) || (p.dialect.CaseHeaderSpansSeparators && p.at(TokSemi)) {
+		p.next()
+	}
+}
+
 // skipArrayElementSeparators steps over what may stand between the elements of
 // an array literal: newlines everywhere, and a `;` as far as the dialect takes
 // one. See [syntax.ArraySemicolon].
@@ -5147,7 +5159,30 @@ func (p *Parser) forNameIsUsable() bool {
 		// says so for both spellings at once.
 		return false
 	}
+	if p.dialect.ForNameMayBeAPositionalParameter && isAllDigits(p.tok.Literal()) {
+		// A positional parameter's number, which is not a name and is a loop
+		// variable in one dialect. See
+		// [Dialect.ForNameMayBeAPositionalParameter].
+		return true
+	}
 	return isNameIn(p.tok.Literal(), p.dialect.DottedName)
+}
+
+// isAllDigits reports whether s is one or more decimal digits and nothing
+// else, which is the whole of what a positional parameter is named by.
+//
+// Not a number: `01` is taken and is the first parameter, so the digits are
+// read as a name rather than parsed as a value.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // forNameAsWritten is the word's source text, which is what a diagnostic
@@ -5451,7 +5486,7 @@ func (p *Parser) parseCase() Command {
 	if p.refuseProcSubstOutOfPlace(c.Word) {
 		return c
 	}
-	p.skipNewlines()
+	p.skipCaseHeaderSeparators()
 	inEnd := p.tok.End
 	// An arm begins where no command may, so `((` there is the arm's own
 	// paren in front of a group rather than an arithmetic command, and a
@@ -5480,7 +5515,7 @@ func (p *Parser) parseCase() Command {
 	// before the newlines are skipped and cleared if any were.
 	// See Dialect.CaseTerminatorIsAPatternAfterTheHeader.
 	esacIsAPattern := p.dialect.CaseTerminatorIsAPatternAfterTheHeader && !p.at(TokNewline)
-	p.skipNewlines()
+	p.skipCaseHeaderSeparators()
 
 	// Only the word `esac` is taken away by that reading, and never the `}`:
 	// the shell with both takes `case x { }` as an empty `case` and reads

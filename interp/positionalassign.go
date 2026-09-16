@@ -191,3 +191,21 @@ func (r *Runner) prefixAssignsPositional(ctx context.Context, a *syntax.Assign) 
 	r.assign(ctx, a)
 	return true
 }
+
+// setLoopName writes one pass of a loop's variable, which in one dialect may
+// be a positional parameter's number rather than a name.
+//
+// It is the grammar flag [syntax.Dialect.ForNameMayBeAPositionalParameter]
+// that decides whether such a header parses at all, so nothing here asks
+// which dialect it is: a name of digits cannot reach this in a shell whose
+// parser refused the header. What it writes is the same parameter `1=value`
+// writes — measured 2026-09-15 on zsh 5.9.2, `set -- p q; for 1 in a b; do
+// :; done` leaves `$1` as `b` and `$2` still `q` — so the store is the one
+// assignPositional already owns rather than a second one beside it.
+func (r *Runner) setLoopName(name, value string) {
+	if n, ok := positionalAssignIndex(name); ok {
+		r.assignPositional(&syntax.Assign{Name: name, Value: literalWord(value)}, n)
+		return
+	}
+	r.setVar(name, value)
+}

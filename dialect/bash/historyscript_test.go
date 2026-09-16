@@ -275,6 +275,16 @@ func TestTheListAScriptBuilds(t *testing.T) {
 			"one two\nx\n    1  case foo in foo) echo one two; ;; esac\n" +
 				"    2  if true; then echo $(echo x); fi\n    3  history\n",
 		},
+		// And the balance is read over the whole command rather than the
+		// line, where a `2))` closing an expression opened on the line
+		// before looks unmatched on its own. The `$((` also makes the
+		// boundary inside it a newline, which is the quote rule arriving
+		// from the parser.
+		{
+			"an expression spanning lines is still balanced",
+			"set -o history\nif true; then\necho $((1 +\n2))\necho after\nfi\nhistory\n",
+			"3\nafter\n    1  if true; then echo $((1 +\n2)); echo after; fi\n    2  history\n",
+		},
 		// And a blank line *inside* a command is kept, with the separators
 		// that say the semicolon was not doubled over it.
 		{

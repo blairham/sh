@@ -211,7 +211,17 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		// Non-nil even when empty: the array exists, so `${m[@]:-d}` on an
 		// empty one is zero fields rather than the default — the same answer
 		// an empty indexed array gives.
-		return a.values()
+		values := a.values()
+		if e.Length || e.Indirect {
+			// A count and a list of keys, neither of which reads a value —
+			// the same pair the indexed whole-array branch leaves alone.
+			return values
+		}
+		// A `.get` per key, in the order the values came out, which is what
+		// a.values already walks. Measured on ksh93u+ 2012-08-01,
+		// 2026-09-16: `${m[@]}` on a two-key table enters the hook with each
+		// key in turn.
+		return r.disciplinedElements(e.Name, a.keys(), values)
 	}
 	key := r.assocKey(e.Subscript())
 	if r.reportEmptyAssocKeyRead(e, key) {
@@ -221,7 +231,15 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		return nil
 	}
 	if v, ok := a[key]; ok {
-		return []string{v.scalar()}
+		// The key is the subscript a discipline is entered with, exactly as
+		// a number is for an indexed array. See interp/discipline.go.
+		return []string{r.disciplinedElement(e.Name, key, v.scalar())}
+	}
+	// A key the table has not got fires all the same, and a hook that
+	// assigns answers for it — measured, `${m[zz]}` on a table without `zz`
+	// enters the hook with `zz` there.
+	if v, replaced := r.disciplineElementRead(e.Name, key); replaced {
+		return []string{v}
 	}
 	return r.absentAssocElement(e, key)
 }

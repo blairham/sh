@@ -126,3 +126,102 @@ printf -- '--- return takes the low byte ---\n'
   big
   printf 'return 300 -> %s\n' "$?"
 )
+
+printf -- '--- a .get is entered for one element, with its subscript ---\n'
+(
+  a=(p q r)
+  function a.get { printf 'get sub=[%s] name=[%s]\n' "${.sh.subscript}" "${.sh.name}"; }
+  printf 'one element: %s\n' "${a[1]}"
+  printf 'a subscript nothing was assigned at: [%s]\n' "${a[9]}"
+
+  # A count and a list of names are not reads of a value, and neither enters
+  # the hook. The length of *one* element is a read and does.
+  printf 'how many: %s\n' "${#a[@]}"
+  printf 'which subscripts: %s\n' "${!a[@]}"
+  printf 'the length of one: %s\n' "${#a[1]}"
+)
+
+printf -- '--- every element of a whole-array read is its own event ---\n'
+(
+  a=(p q r)
+  function a.get { .sh.value="<${.sh.subscript}>"; }
+  printf '[%s]' "${a[@]}"
+  printf '\n'
+  # A bare read of an array is a read of its first element, and the hook is
+  # told which one: the subscript here is 0 and not the empty string a scalar
+  # read carries.
+  printf 'bare: [%s]\n' "$a"
+  # Counting back from the end arrives counted forwards.
+  printf 'last: [%s]\n' "${a[-1]}"
+)
+
+printf -- '--- a keyed table hands the discipline its key ---\n'
+(
+  typeset -A m=([x]=1 [y]=2)
+  function m.get { .sh.value="<${.sh.subscript}>"; }
+  printf 'one key: [%s]\n' "${m[x]}"
+  printf 'a key the table has not got: [%s]\n' "${m[zz]}"
+  printf '[%s]' "${m[@]}"
+  printf '\n'
+)
+
+printf -- '--- what a .set returns is the assignment status ---\n'
+(
+  function s.set { return 5; }
+  s=1
+  # Both halves, because the status alone cannot tell a hook that decided it
+  # from an assignment that failed: the store happens either way.
+  printf 'status=%s value=[%s]\n' "$?" "$s"
+
+  # A substitution on the right-hand side does not outrank it.
+  s=$(false)
+  printf 'over a failed substitution: %s\n' "$?"
+
+  # The declaration, the read and the loop fire the very same hook and report
+  # none of it.
+  typeset s=2
+  printf 'typeset: %s\n' "$?"
+  printf 'x\n' | read s
+  printf 'read: %s\n' "$?"
+  for s in one; do :; done
+  printf 'for: %s\n' "$?"
+
+  # And the status belongs to the assignment that ran the hook. A plain
+  # assignment to a name with no discipline of its own, straight after one
+  # that failed, is 0 — which is what says the answer is read from this
+  # command rather than left lying about from the last one.
+  plain=ok
+  printf 'a name with no hook: %s\n' "$?"
+)
+
+printf -- '--- an exported name reaches a child through its .get ---\n'
+(
+  g=raw
+  function g.get { .sh.value=A; }
+  export g
+  env | grep '^g='
+)
+
+printf -- '--- writing the level selects a frame ---\n'
+(
+  function inner {
+    printf 'where it is: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"
+    .sh.level=1
+    printf 'one frame out: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"
+    # A level outside the stack is heard and moves nothing — it neither
+    # clamps to the innermost frame nor puts the selection back.
+    .sh.level=9
+    printf 'out of range: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"
+    .sh.level=0
+    printf 'the top: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"
+  }
+  function outer { inner; printf 'back in the caller: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; }
+  outer
+
+  # The name is separately assignable, and the selection lasts no longer than
+  # the frame that made it: the next call answers for itself.
+  function named { .sh.fun=zzz; printf 'named: fun=[%s]\n' "${.sh.fun}"; }
+  named
+  function after { printf 'the next call: fun=[%s]\n' "${.sh.fun}"; }
+  after
+)

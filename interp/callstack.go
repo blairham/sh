@@ -336,3 +336,162 @@ func (r *Runner) locationIsInsideAFunctionBody() bool {
 // sourced file, or a startup file it read for itself — rather than a function
 // body it is running.
 func (f Frame) readsAFile() bool { return f.Name == sourceFrameName || f.Startup }
+
+// The frame a script has *pointed* the shell's own location parameters at,
+// which is not always the one it is standing in.
+//
+// One dialect has a pair of parameters naming the function running now and
+// how deep it is, and writing to the depth one **selects a frame**: the name
+// then answers for that frame instead. It is how a debug trap looks at its
+// caller without the caller having handed anything down. The core keeps the
+// mechanism and names neither parameter — see dialect/ksh, where the two are
+// registered as produced parameters with writers.
+//
+// Measured on AT&T ksh93u+ 2012-08-01, 2026-09-16, and the shape is not the
+// obvious one:
+//
+//   - Levels count *function* frames, innermost last: `1` is the outermost
+//     function on the stack and the current depth is the innermost. `0` is
+//     the top level, where the name is empty.
+//   - A level outside `0…depth` **does nothing at all** — it does not clamp
+//     and it does not reset. Inside a function two deep, `.sh.level=1`
+//     followed by `.sh.level=9` still reads `1`.
+//   - Except at the top level, where there is no frame to be out of range of
+//     and the number is simply kept: `.sh.level=7` there reads back `7` and
+//     `.sh.level=-1` reads back `-1`, both with an empty name.
+//   - The selection lasts as long as the frame that made it. A function that
+//     selects its caller and then calls something sees the callee's own
+//     answers while it runs, and the top level is back to `0` when
+//     everything returns.
+//   - The name is separately assignable, and an assignment to it is a plain
+//     string: `.sh.fun=zzz` reads back `zzz` until the frame ends. Writing
+//     the level afterwards replaces it, because the level's answer is
+//     computed from the stack.
+//
+// The *frame* the selection was made in is recorded with it, which is the
+// whole of "lasts as long as the frame": a read from anywhere else finds the
+// stamp stale and takes the stack's own answer. The frame's serial and not
+// its depth, because two functions called one after the other stand at the
+// same depth and are not the same frame — with a depth stamp, a name written
+// in the first was still there in the second. A scalar rather than a stack,
+// so a subshell gets its own copy of it the way every other scalar here does.
+//
+// One measured behavior is deliberately not modeled: selecting a frame in
+// ksh93 moves the *variable scope* with it, so a function that selects its
+// caller reads the caller's locals. That is a second mechanism rather than a
+// second answer from this one, and it is #3115.
+
+// FunctionDepth is how many function calls the shell is inside, not counting
+// sourced files or the startup files it read of its own accord.
+func (r *Runner) FunctionDepth() int {
+	depth := 0
+	for _, f := range r.CallStack() {
+		if f.IsFunction() {
+			depth++
+		}
+	}
+	return depth
+}
+
+// SelectedCallFrame is the frame the location parameters answer about — the
+// one a script selected, or the innermost — and the function running there.
+//
+// The name is empty for level 0 and for a level with no frame at it, which is
+// the same answer the top level gives when nothing has been called.
+func (r *Runner) SelectedCallFrame() (level int, name string) {
+	depth := r.FunctionDepth()
+	if !r.frameSelected || r.frameSelectedAt != r.innermostFrameSerial() {
+		return depth, r.functionAtLevel(depth, depth)
+	}
+	if r.frameNamed {
+		return r.selectedFrame, r.selectedFrameName
+	}
+	return r.selectedFrame, r.functionAtLevel(r.selectedFrame, depth)
+}
+
+// functionAtLevel is the function running at one level, counting the
+// outermost as 1 — empty at level 0 and at any level the stack has no frame
+// for.
+func (r *Runner) functionAtLevel(level, depth int) string {
+	if level <= 0 || level > depth {
+		return ""
+	}
+	// CallStack is innermost first, so the innermost function is the current
+	// depth and each one out is a level lower.
+	at := depth
+	for _, f := range r.CallStack() {
+		if !f.IsFunction() {
+			continue
+		}
+		if at == level {
+			return f.Name
+		}
+		at--
+	}
+	return ""
+}
+
+// SelectCallFrame points the location parameters at a frame, reading the text
+// a script assigned as arithmetic — which is what an assignment to an integer
+// parameter is, and is why `n=1; .sh.level=n` selects frame 1 rather than
+// nothing.
+//
+// A level outside the stack is heard and does nothing, leaving whatever was
+// selected before. The top level is the exception the comment above records.
+func (r *Runner) SelectCallFrame(text string) {
+	level, ok := r.arithLevel(text)
+	if !ok {
+		return
+	}
+	depth := r.FunctionDepth()
+	if depth > 0 && (level < 0 || level > depth) {
+		return
+	}
+	r.selectedFrame, r.frameSelected = level, true
+	r.frameSelectedAt = r.innermostFrameSerial()
+	// A level names a frame, so it replaces whatever name was written into
+	// the pair: measured, `.sh.fun=zzz` then `.sh.level=0` reads the name
+	// back empty, where the two in the other order keep `zzz`.
+	r.frameNamed, r.selectedFrameName = false, ""
+}
+
+// NameSelectedCallFrame writes the name the location parameters answer with,
+// which the dialect's own naming parameter is assignable to. It lasts as long
+// as the frame that wrote it, exactly as a selected level does.
+func (r *Runner) NameSelectedCallFrame(name string) {
+	if serial := r.innermostFrameSerial(); !r.frameSelected || r.frameSelectedAt != serial {
+		r.selectedFrame, r.frameSelected, r.frameSelectedAt = r.FunctionDepth(), true, serial
+	}
+	r.frameNamed, r.selectedFrameName = true, name
+}
+
+// innermostFrameSerial identifies the frame a selection belongs to. Zero at
+// the top level, where there is no frame and the selection lasts until one is
+// entered and left again.
+func (r *Runner) innermostFrameSerial() int {
+	for i := len(r.frames) - 1; i >= 0; i-- {
+		if r.frames[i].IsFunction() {
+			return r.frames[i].serial
+		}
+	}
+	return 0
+}
+
+// arithLevel reads an assigned level. A text that is not an expression at all
+// is `0` rather than a refusal — measured, `.sh.level=abc` selects the top
+// level and reports success, which is what an unset name comes to in
+// arithmetic.
+func (r *Runner) arithLevel(text string) (int, bool) {
+	if text == "" {
+		return 0, true
+	}
+	tree, err := r.arithTreeRead(text)
+	if err != nil || tree == nil {
+		return 0, true
+	}
+	n, err := r.evalArith(tree)
+	if err != nil {
+		return 0, true
+	}
+	return n, true
+}

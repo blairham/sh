@@ -8,6 +8,30 @@
 # fails. And `\xHH` in the *format* is not an escape — bash, zsh and ksh93 all
 # write the byte, dash writes the backslash, the x and the digits. A script
 # reaching for either is writing for three shells out of four.
+#
+# ---- which dash this is measured against ----
+#
+# Upstream dash 0.5.12, which is the build every `dash 0.5.12` comment under
+# interp/ and dialect/dash names. **Debian and Ubuntu patch this file's
+# subject**, so this file will not go strict on a Debian-family runner and
+# that is not a defect in the shell:
+#
+#	printf 'a\eZ' | od -An -tx1
+#
+#	Apple dash-16 (macOS /bin/dash)   61 5c 65 5a   the two characters
+#	Alpine dash 0.5.12-r2            61 5c 65 5a   the two characters
+#	Debian dash 0.5.12-12            61 1b 5a      an ESC
+#
+# Measured 2026-09-16. Two builds of the *same upstream version* disagree,
+# which is what says it is the distribution's patch rather than a version
+# this file is behind on. Matching Debian here would make cmd/dash wrong
+# against upstream and wrong on the machine these cases were written on.
+#
+# It cannot be read off the column header either, and that is the other half
+# of it: dash answers no version probe in any spelling, so the report prints
+# `could not determine` and has nothing to raise a WRONG BUILD banner from —
+# the banner the bash, zsh and ksh93 columns carry for exactly this. See
+# #2291.
 
 ( printf '[%q]\n' 'a b' ) 2> /dev/null
 printf 'percent q -> %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"

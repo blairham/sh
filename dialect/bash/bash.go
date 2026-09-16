@@ -2468,11 +2468,18 @@ func Diagnostics() interp.Diagnostics {
 		WaitForJobStopped: "warning: wait_for_job: job %[1]d is stopped",
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters bash has and this shell does not: -b job
-			// notices, -k assignment-anywhere, -p privileged, -B brace
-			// expansion, -H history expansion, -P physical paths. Measured
-			// 2026-09-05 by asking bash 5.3 for every letter of the alphabet
-			// in both cases and both signs; the ones missing from here it
-			// refuses itself, and those get SetInvalidOptionLetter.
+			// notices, -k assignment-anywhere, -r restricted, -H history
+			// expansion, -P physical paths. Measured 2026-09-05 by asking
+			// bash 5.3 for every letter of the alphabet in both cases and
+			// both signs; the ones missing from here it refuses itself, and
+			// those get SetInvalidOptionLetter.
+			//
+			// Two names have left this sentence without leaving the string,
+			// which is the drift #3088 swept for — a comment naming a letter
+			// as missing is read the same way the string is. `-B` is gone
+			// because brace expansion is built and `set -B` is silently 0;
+			// `-p` is gone because it is refused under its *name*, `set:
+			// privileged: not implemented`, and never reaches this table.
 			//
 			// `-t` left this list when the option behind it was built. The
 			// two tables are one table: the letter and `set -o onecmd` are

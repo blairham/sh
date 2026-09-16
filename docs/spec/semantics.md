@@ -2730,13 +2730,26 @@ recorded rather than pinned: a conversion no strftime has keeps its letter
 and loses the `%` on the system this was measured on, and glibc has
 letters this does not.
 
-`ksh93`'s `%T` is deferred rather than missed. Its operand is a date
-*string* — `now`, `tomorrow`, a date written out — and a number earns
-`printf: warning: invalid argument of type T` and the time it is now.
-Reading a date the way ksh93 reads one is its own feature with its own
-grammar, so `PrintfTimeConversion` is No there and four corpus rows show
-the ksh93 column diverging, which is the honest record of an unbuilt
-feature rather than a silent one.
+`ksh93`'s `%T` **is built** (#3088 corrected this paragraph, which said
+it was deferred). Its operand is a date *string* — `now`, `tomorrow`, a
+date written out — and a number earns `printf: warning: invalid argument
+of type T` and the time it is now. That grammar is
+`Semantics.PrintfTimeOperandIsADateString`, asked only where
+`PrintfTimeConversion` already said yes, and `interp/printfdate.go`
+carries the strings taken and the ones that meet that shell's own
+warning instead of a guess. `PrintfTimeConversion` is **Yes** for ksh,
+not No.
+
+Measured 2026-09-15 on `cmd/ksh`, and the three probes separate a built
+grammar from a passed-through format:
+
+    printf '%(%Y-%m-%d)T\n' 2020-01-02   2020-01-02
+    printf '%(%Y-%m-%d)T\n' tomorrow     the day after today
+    printf '%(%Y)T\n' 12345              the warning, then this year
+
+The middle row is the discriminating one: a shell that merely handed the
+operand to a clock could not answer `tomorrow` at all, and one that read
+it as an epoch would answer 1970.
 
 ### A width nobody lays out
 
@@ -5007,8 +5020,17 @@ It is a status and not a truth, so `if (( 1+ ))` reaches it the same way:
 the condition is false and the status behind it is the dialect's.
 
 ksh93 is not in the split because it does not stay to answer — a math
-error there abandons the input, which is a separate divergence from this
-one and is not implemented here.
+error there abandons the input. That **is** built here; this paragraph
+said it was not until #3088 re-measured it. On `if (( 1+ )); then :; fi;
+echo REACHED`, 2026-09-15:
+
+    cmd/ksh    ` 1+ : more tokens expected`, and no REACHED
+    ksh93u+     the same line, and no REACHED
+    cmd/bash · cmd/zsh · cmd/dash   a diagnostic, then REACHED
+
+The `REACHED` marker is what discriminates: the diagnostic alone is
+written by every column, so a probe that read only the message could not
+separate a shell that abandons the input from one that carries on.
 
 ## Two spellings of an option, and only one of them is portable
 
@@ -6266,9 +6288,20 @@ for it to be a view of.
   `hash -p name` both read back. This shell reads every `-p` path back.
 - **zsh's `$commands`.** It is that shell's `BASH_CMDS`, and it removes an
   entry where bash's does not: `unset "commands[ls]"` really takes `ls` out.
-  The read side here is still a PATH search rather than a view of the table,
-  so the writes stay refused by name until the read is moved with them —
-  #2631.
+  The read side here is still a PATH search rather than a view of the table.
+
+  This bullet said the writes "stay refused by name"; re-measured
+  2026-09-15 for #3088, they are **not refused — they are silently
+  dropped**, which is the one answer this document says everywhere else
+  is worse than a refusal. Both halves of the probe are needed, because
+  a status of 0 is what a working write gives too:
+
+      ours  zmodload zsh/parameter; commands[ls]=/tmp/x   0, no output
+            then `$commands[ls]` is /bin/ls — the PATH search
+      zsh   the same two lines: 0, then /tmp/x
+
+  Filed as #3092. #2631, whose title still says the writes are refused,
+  is closed, so the sentence outlived whatever made it true.
 
 ## A bundle of option letters is one word and several options
 
@@ -6446,8 +6479,19 @@ whose argument follows it. Measured (oracle runs, 2026-09-04, bash 5.3 and
 
     bash   rsa:d:i:n:N:p:t:u:  plus -e -E, unimplemented here
     ksh93  rspAd:n:N:t:u:      plus -C -S -v and --version, unimplemented
-    zsh    rsnpAd:t:u:         plus -e -E -k -q -z -c -l, unimplemented
+    zsh    rsnpAd:t:u:k#       plus -e -E -q -z -c -l, unimplemented
     dash   rp:
+
+Re-measured 2026-09-15 against the built binaries, a letter at a time
+(#3088). Three of the four rows were already right; zsh's was not. `-k`
+had joined `ReadOptions` — spelled `k#`, a number and optional, the one
+letter in the panel with that shape — and was still named unimplemented
+beside it, so a script asking for it was told the letter was missing
+while `interp/readkeys.go` answered it. The two tables move together on
+purpose, and that is the shape of the drift they are meant to catch:
+`zsh -c 'read -k v'` off a terminal is `not interactive and can't open
+terminal`, which is the letter *taken*, where a letter that is really
+missing is `read: -k is not implemented yet`.
 
 Before any letter, the backslash. Without `-r` it removes the special
 meaning of the character after it and is itself removed, and the four
@@ -8420,11 +8464,20 @@ not a valid identifier `` and a name already declared associative is
 dialect's usage refusal at status 2, carrying whichever of the two names
 the script used — `readarray -q` says `readarray`.
 
-**`-C` and `-c` are deferred**, not silently accepted: the callback letters
-run shell code every *quantum* elements, which is a second evaluation
-context inside a read, and the dialect's letter table refuses them by name.
-Parsing and ignoring them would be the wrong answer, because a script that
-passes `-C` is asking for something to happen.
+**`-C` and `-c` are built** — this paragraph said they were deferred
+until #3088 re-measured it. The callback letters run shell code every
+*quantum* elements, which is a second evaluation context inside a read,
+and it is the index and the line that reach it. Measured 2026-09-15 on
+`cmd/bash`:
+
+    printf 'a\nb\nc\n' |
+      bash -c 'cb(){ echo "CB idx=$1 line=$2"; }
+               readarray -C cb -c 1 arr; echo "n=${#arr[@]}"'
+
+writes `CB idx=0 line=a`, `CB idx=1 line=b`, `CB idx=2 line=c`, then
+`n=3`. That probe discriminates: a letter parsed and ignored writes no
+`CB` line, and a letter refused by name writes none either and fails the
+read — and a script that passes `-C` is asking for something to happen.
 
 ## The declaration long tail: letters, listings, and one letter with an axis inside it
 
@@ -8436,19 +8489,39 @@ ids.
 spelling `ReadOptions` uses — `Semantics.DeclareOptions` and
 `Semantics.LocalOptions`:
 
+Re-measured 2026-09-15 against the built binaries, a letter at a time in
+both cases, inside a function so every word is reachable (#3088). The two
+halves below are **one table**: a letter in the accepted set *and* named
+unimplemented is refused as missing while it works, and a letter in
+neither is the substrate's `bad option` for something the modeled shell
+has. Each row's left column is `Semantics.DeclareOptions` /
+`Semantics.LocalOptions`, its right column that dialect's
+`Diagnostics.UnimplementedOptionLetters`:
+
     declare/typeset
-      bash   aAfFgilprux   plus -I -n -t, unimplemented here
-      zsh    aAfFgHilpruUTx
-                           plus floats, padding, namerefs…, unimplemented;
-                           -F taken in silence, see below
-      ksh93  aAilprux      plus -f -F -b -n… and its own -H, unimplemented
+      bash   aAfFgilnprux  plus -I -t, unimplemented here
+      zsh    aAEfFgHhiLlmpRruUTxZz
+                           plus -k -t, unimplemented; -F taken in
+                           silence, see below. No -n: zsh has not got one
+      ksh93  aACEFfHhilmMnprtTux
+                           plus -b -L -R -s -S -X -Z, unimplemented
       dash   —             no typeset at all
     local
-      bash   aAgilprux     plus -f -F -I -n -t, unimplemented
-      zsh    aAHilpruUTx
+      bash   aAgilnprux    plus -f -F -I -t, unimplemented
+      zsh    aAFHhiLlpRruUTxZ
+                           plus -t, unimplemented
       dash   (none)        `local -r x` declares a name `-r`, then refuses
                            it: `local: -r: bad variable name`, fatal
       ksh93  —             no local at all
+
+Four of those rows were stale in the same direction — they named as
+unimplemented letters this shell had since built, which is the failure
+#3088 is about. `-n` is the loudest: it sat in bash's and ksh93's right
+columns after #2553 built the name reference, and zsh's row claimed
+namerefs as a gap in a shell that has no such letter. `-f`, `-F` and
+`-H` left ksh93's right column with #1494 and the hide-value work, and
+zsh's padding letters `-L -R -Z` are implemented rather than "padding…,
+unimplemented".
 
 What the letters mean, where measured to agree, is implemented once:
 `-f` says the functions back and `-F` names them (`declare -f name` per
@@ -9140,10 +9213,20 @@ other `#` is quoted there, and that wider rule is #1271. Corpus:
 
 **`integer` with no names is a filtered listing** — the integer
 variables in ksh93 and every integer parameter, its own specials
-included, in zsh — which is the listing `typeset -i` with no names is
-and is not built either. It refuses by name rather than falling through
-to the bare declaration listing, which would answer with the whole
-variable table: a wrong answer rather than a missing one.
+included, in zsh — which is the listing `typeset -i` with no names is.
+Re-measured 2026-09-15 (#3088): **ksh has it and zsh has not**, where
+this paragraph said neither did.
+
+    ksh -c 'integer n=5; s=str; a=7; integer'   n=5
+    zsh -c 'integer n=5; integer'               integer: a listing is
+                                                not implemented yet
+
+The ksh row is the discriminating one, and the two names beside `n` are
+why: a shell that fell through to the bare declaration listing would
+write `s` and `a` as well, which is the wrong answer this refusal was
+written to avoid, and a shell that had not got the listing would refuse.
+zsh still refuses by name, so the sentence below stays true of that
+dialect alone.
 
 **A bare `local` writes three different things**
 (`Semantics.BareLocalListing`): bash lists the running function's own
@@ -9212,17 +9295,43 @@ Oracle runs, 2026-09-05, bash 5.3.15, dash, ksh93u+ 2012-08-01, zsh
 agreement until #462 stopped merging the two captures before grading, and
 they are the reason it does not.
 
-### Out of scope, recorded rather than silent: namerefs
+### Namerefs, which were out of scope and are not (#2553, #3088)
 
 `declare -n` / `typeset -n` — a name that is a reference to another
-name — is deferred, not missed. It is a second variable model: every
-read and write through the nameref has to resolve to the target,
-`unset -n` addresses the reference where `unset` addresses the target,
-and ksh93's `nameref` inside functions interacts with its scope rule.
-That is its own project with its own measurements. The letters sit in
-each dialect's `UnimplementedOptionLetters`, so `declare -n ref=x` is
-refused today as "not implemented yet" rather than misread as an
-ordinary declaration. Filed as part of #430's scope decision.
+name — **is built**, under `declare`, `typeset`, `local` and ksh93's
+`nameref`, and `interp/nameref.go` is the whole of it. This section
+said it was deferred until #3088; the paragraph outlived the feature by
+several releases and shipped in v0.0.4 telling a reader the opposite of
+what the binary does.
+
+The three probes that settle it, each one discriminating — a shell
+without the model cannot pass any of them, because the letter would be
+refused before the value was reached:
+
+    bash -c 'x=VAL; typeset -n ref=x; echo "[$ref]"'        [VAL]
+    bash -c 'x=VAL; typeset -n ref=x; ref=NEW; echo "[$x]"' [NEW]
+    bash -c 'r=OUTER; f(){ local -n p=r; p=SET; }; f
+             echo "[$r]"'                                   [SET]
+
+The read resolves outward, the write reaches the target, and a write
+through a nameref bound inside a function reaches the caller's name.
+`unset -n` addresses the reference where `unset` addresses the target:
+`typeset -n ref=x; unset -n ref` leaves `x` standing and `ref` gone.
+`ksh` answers the same three, spelling the declaration `typeset -n` or
+`nameref` — it has no `local` at all.
+
+**zsh is the one that has no `-n`**, and that is zsh's own answer rather
+than a gap here: measured 2026-09-15, `typeset -n`, `declare -n` and
+`local -n` are each `bad option: -n` in zsh 5.9.2, so the letter is in
+neither of that dialect's tables and the substrate's own bad-letter
+refusal is what a script meets.
+
+The letters have left every `UnimplementedOptionLetters` that held
+them; `Semantics.DeclareOptions` spells `n` for bash and ksh, and the
+two tables are one table. What is still open is *detail* rather than
+scope — #3084 is a bug against what `unset -n` exposes in the cell a
+`local -n` shadowed — and a bug against the details of a feature is the
+clearest evidence there is that the feature exists.
 
 ## The bare declaration listing, and the sign that reaches it
 
@@ -10575,6 +10684,18 @@ only about how they fail it in a script. Deferred, with this paragraph
 as the record; a shell embedding this engine that needs it can register
 the builtin through the extension seam. Filed as part of #430's scope
 decision.
+
+**Re-measured 2026-09-15 and still true** (#3088, which found the
+nameref section beside this one stale). The probe has to ask about the
+*builtin*, because `/usr/bin/newgrp` exists on the machines this is
+measured on and a bare `newgrp foo` finds it and answers in its own
+words — a non-discriminating probe that reads as a built builtin:
+
+    bash -c 'builtin newgrp foo'   builtin: newgrp: not a shell builtin
+    bash -c 'newgrp foo'           newgrp: foo: bad group name
+
+The second line is `/usr/bin/newgrp` talking, and `type newgrp` naming a
+path rather than a builtin says so.
 
 ## Asking about one slot in the jobs table, without reading a listing
 

@@ -68,8 +68,24 @@ after it reading the `!` that was left.
 
 zsh reverses the first two when `PROMPT_SUBST` is set: with the option on
 and `x='%n'`, `PS1='$x'` drew the user name, so its table is read *after*
-substitution. That option is not implemented here yet; when it is, the
-order is a second question and not a consequence of the first.
+substitution.
+
+**The option is implemented** — this paragraph said it was not, until
+#3088 re-measured it. `PromptStyle.Expand` is asked at **every draw**
+rather than read once, which is the whole reason it is a function: three
+of the panel expand always and zsh lets a running script move the answer
+with `setopt PROMPT_SUBST` and `unsetopt`. Leaving it a constant cost a
+whole prompt theme, whose `PROMPT` is `${…}` that means nothing
+unexpanded. The same option gates `${(%)}`, which is where it can be
+measured without a terminal, and the pair discriminates:
+
+    zsh -c "V=WORLD; s='a\${V}b'
+            setopt promptsubst;   printf '%s\n' \"\${(%%)s}\"   aWORLDb
+            unsetopt promptsubst; printf '%s\n' \"\${(%%)s}\"   a\${V}b"
+
+What is still open is the *order* above — whether the percent table is
+read before or after the substitution — which is a second question and
+not a consequence of the first.
 
 Both parameters take all of it. Measured with `PS2` set to a prompt of
 codes: bash drew the user name, the directory, the privilege character and
@@ -430,13 +446,31 @@ language is the thing that would drift. The clock is still each reader's
 own, which is the resolver split doing what it is for: a prompt is tested
 with an injected clock and a script's expansion with the runner's.
 
-The `%(x.a.b)` ternary is measured and not implemented, and it is the one
-shape left that needs a *mechanism* rather than a row: a question the
-substrate can ask itself. Nor are `%i`, `%L`, `%l` and the `%N~`
-truncations, each of which is a value nothing has been asked for yet; they
-are recorded here so that adding one is a lookup rather than another
-measuring session. Every one of them is refused by name when a script asks
-for the expansion, so nothing on this list can be reached by accident.
+**The `%(x.a.b)` ternary is built**, and so are the `%N~` truncations —
+this paragraph said both were measured and not implemented until #3088
+re-measured it. Graded against zsh 5.9.2 (`-f`) on 2026-09-15, through
+`${(%)}` so no terminal is needed, and the two columns are byte-identical
+on every row:
+
+    in /tmp/a/b/c/d/e      ours        zsh 5.9.2
+    %(?.ok.bad)            ok          ok
+    %(!.r.u)               u           u
+    %(1.YES.NO)            ES.NO)      ES.NO)
+    %1~                    e           e
+    %2~                    d/e         d/e
+
+The third row is the one that discriminates hardest, and it is why the
+pair has to be run together: a shape with no test character after the
+integer is mangled the same way by both, so a shell that had merely
+*dropped* the construct could not produce it. `%1~` against `%2~`
+separates a truncation from a path printed whole.
+
+What is left is `%i`, `%L`, `%l` and the `%<` truncations, each a value
+nothing has been asked for yet; they are recorded here so that adding one
+is a lookup rather than another measuring session. Each is **refused by
+name** when a script asks for the expansion — `the %i prompt escape is
+not implemented`, measured the same day — so nothing on this list can be
+reached by accident.
 
 ## What the panel does with a code it has never heard of
 

@@ -2720,12 +2720,17 @@ func Diagnostics() interp.Diagnostics {
 		// ksh93 has `--version` here, which this shell does not.
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters ksh93 has and this shell does not: -b job
-			// notices, -k assignment-anywhere, -p privileged, -r
-			// restricted, -s sorting the positional parameters, and -B -G
-			// -H, its brace expansion, globstar and history-expansion
-			// switches. Measured
-			// 2026-09-05 by asking ksh93 for every letter of the alphabet
-			// in both cases and both signs.
+			// notices, -k assignment-anywhere, -r restricted, -s sorting
+			// the positional parameters, and -G -H, its globstar and
+			// history-expansion switches. Measured 2026-09-05 by asking
+			// ksh93 for every letter of the alphabet in both cases and both
+			// signs.
+			//
+			// `-B` and `-p` have left this sentence without leaving the
+			// string, the drift #3088 swept for: brace expansion is built
+			// and `set -B` is silently 0, and `-p` is refused under its
+			// *name* rather than through this table. A comment naming a
+			// letter as missing is read the way the string is.
 			// `-A` has left this list: it assigns an array and is
 			// implemented, in Semantics.SetArrayLetter.
 			// `-t` is not here: this shell really does stop after one

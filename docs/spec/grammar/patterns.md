@@ -1305,7 +1305,7 @@ is the fourth place the same two answers apply:
     for x in a (#i)b; do :; done            accepted
     select x in (#i)a; do :; done           accepted
     for x (a (#i)b); do :; done             accepted
-    for x ((#i)a); do :; done               *refused* — see below
+    for x ((#i)a); do :; done               accepted
     case x in (#i)a) :;; esac               accepted
     case x in ((#i)a) :;; esac              accepted
     case x in ((#i)*.zip) :;; esac          accepted
@@ -1348,17 +1348,25 @@ Both are accepted by that shell. Neither is a regression — both were
 refused before as well — and neither is derivable from the rule above,
 which is why they are named here instead of being answered wrong.
 
-**And the parenthesised list's own opening paren**, which is a lexing
-question rather than a word-position one: `for x ((#i)a)` reaches the
-lexer as `((`, is taken for an arithmetic command, and never gets as far
-as being a list at all. A *later* element there does read the flag —
-`for x (a (#i)b)` — because its paren stands after a word. The suspension
-a `case` arm gets would fix it, and it wants a position of its own to be
-told about; nothing measured needs it, so it is named here instead.
+**The parenthesised list's own opening paren** used to be the one shape
+here that was refused, and it was a lexing question rather than a
+word-position one: `for x ((#i)a)` reaches the lexer as `((`, was taken
+for an arithmetic command, and never got as far as being a list at all. A
+*later* element — `for x (a (#i)b)` — read the flag because its paren
+stands after a word.
 
-**`;` as an element separator inside an array literal** is the other
-thing still outstanding from this family, which that shell and ksh93
-accept.
+It needed no position of its own in the end. `((` is ambiguous wherever a
+command may begin, and the arithmetic reading is now *tried* and
+abandoned where it does not close on an adjacent `))` — see
+[commands.md](commands.md#-is-ambiguous-and-the-reading-is-given-up-where-it-does-not-close). The `)` in
+`((#i)a)` is followed by `a`, so the reading is given up and the `(` is
+the list's, which is exactly what that shell does with it:
+`setopt extendedglob; for x ((#i)a); do echo "[$x]"; done` prints `[a]`
+on zsh 5.9.2, and without the option the same line is `no matches found:
+(#i)a` — a match failure, so the header parsed either way (#3052).
+
+**`;` as an element separator inside an array literal** is the thing
+still outstanding from this family, which that shell and ksh93 accept.
 
 ### Access rights, ownership, and following a link
 

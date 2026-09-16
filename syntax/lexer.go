@@ -697,9 +697,22 @@ func (l *Lexer) next() Token {
 	// Measured on zsh 5.9.2: `case x in ((a|b))`, `case x in ((a))` and
 	// `case x in ((1))` are all accepted there and were all `parse error
 	// near 'arithmetic command'` here (#1161).
+	// `((` is ambiguous even where an arithmetic command may stand: it opens
+	// one, or it is a subshell whose first command is itself a subshell.
+	// `((cmd); cmd)` is the second and the whole panel runs it, so the
+	// reading is *tried* here and abandoned when it does not close — see
+	// scanArithCommand, which is what says so, and #3052 for the rows. The
+	// lexer is put back where it stood and the `(` falls through to the
+	// operator table, which takes one character: the next token is read from
+	// the second `(`, so a `((` that opens an arithmetic command one paren
+	// in still finds it.
 	if l.dialect.ArithCommand && !l.inCondition && !l.inCaseArm && !l.inOperand &&
 		l.peek() == '(' && l.peekAt(1) == '(' {
-		return l.scanArithCommand(start)
+		saved := *l
+		if tok, ok := l.scanArithCommand(start); ok {
+			return tok
+		}
+		*l = saved
 	}
 
 	// A regular expression's operand owns its parentheses even at the start
@@ -4251,16 +4264,42 @@ func (l *Lexer) peekIsArithCommand() bool {
 //
 // The closing `))` is found the same way substitutions find theirs — tracking
 // quoting and nesting rather than counting — so `(( (1+2)*3 ))` works.
-func (l *Lexer) scanArithCommand(start Pos) Token {
+//
+// It reports whether the arithmetic reading held. `((` is ambiguous at the
+// start of a command: it opens an arithmetic command, or it is a subshell
+// whose first command is itself a subshell, and nothing but the text ahead
+// says which. The two closing parentheses have to be **adjacent** and stand
+// where the expression's own nesting is closed; a `)` that arrives anywhere
+// else is a grouping paren and not this construct's. Measured 2026-09-15 and
+// unanimous in bash 5.3.20, bash 3.2.57, bash-as-sh, zsh 5.9.2 and ksh93u+:
+//
+//	((echo a); echo b)      a b        — the `)` is followed by `;`
+//	((echo a) )             a          — the two closers are not adjacent
+//	(( (echo a) ))          arithmetic — they are, so the expression is read
+//	((echo a))              arithmetic — and a bad expression is a *run-time*
+//	                                     error, which `echo B; ((echo a)); echo A`
+//	                                     shows by printing B and A around it
+//
+// A failed reading says so rather than reporting: the caller puts the lexer
+// back and the `(` is read as a grouping paren instead. Running out of input
+// is still a refusal — every shell on the panel refuses `((1+1` and
+// `((echo a` alike — so the diagnostic below stays where it is and the
+// prompt still asks for the rest of an unfinished expression (#3052).
+func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 	l.advance() // (
 	l.advance() // (
-	depth := 2
+	// The depth the *expression* is nested to, so zero is where its own
+	// closing parenthesis stands. The two opening parens are not counted
+	// because they are not the expression's.
+	depth := 0
 	exprStart := l.off
+	exprEnd := -1
 
-	for depth > 0 {
+	for exprEnd < 0 {
 		if l.eof() {
 			l.ranOut("$((")
 			l.fail(start, "unterminated arithmetic command")
+			exprEnd = l.off
 			break
 		}
 		switch l.peek() {
@@ -4317,25 +4356,35 @@ func (l *Lexer) scanArithCommand(start Pos) Token {
 			depth++
 			l.advance()
 		case ')':
-			depth--
+			if depth > 0 {
+				depth--
+				l.advance()
+				continue
+			}
+			// The expression's own nesting is closed, so this `)` is where
+			// the construct ends — if the next character closes it too.
+			// Anything else and there was never an arithmetic command here:
+			// `((echo a); echo b)` is two groupings, and every shell on the
+			// panel runs it as one.
+			if l.peekAt(1) != ')' {
+				return Token{}, false
+			}
+			exprEnd = l.off
+			l.advance()
 			l.advance()
 		default:
 			l.advance()
 		}
 	}
 
-	end := l.off
-	for n := 0; n < 2 && end > exprStart && l.src[end-1] == ')'; n++ {
-		end--
-	}
-	expr := l.src[exprStart:end]
+	expr := l.src[exprStart:exprEnd]
 	return Token{
 		Kind:  TokArithCmd,
 		Pos:   start,
 		End:   l.pos(),
 		Text:  expr,
 		Spans: []Span{{Kind: ArithSubst, Value: expr, Quoting: Unquoted, Pos: start}},
-	}
+	}, true
 }
 
 // peekIsFuncParens reports whether `()` follows the current position with only

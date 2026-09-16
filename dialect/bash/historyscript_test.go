@@ -265,6 +265,16 @@ func TestTheListAScriptBuilds(t *testing.T) {
 			"set -o history\n   \n\t\necho a\nhistory\n",
 			"a\n    1     \n    2  \t\n    3  echo a\n    4  history\n",
 		},
+		// A `case` pattern on a line of its own is the one `)` still waiting
+		// for a command, and takes a space where a closed substitution takes
+		// a `;`. Both shapes, because the discriminator is the balance and
+		// not the character.
+		{
+			"a case pattern takes a space and a closed substitution a semicolon",
+			"set -o history\ncase foo in\nfoo)\necho one two\n;;\nesac\nif true; then\necho $(echo x)\nfi\nhistory\n",
+			"one two\nx\n    1  case foo in foo) echo one two; ;; esac\n" +
+				"    2  if true; then echo $(echo x); fi\n    3  history\n",
+		},
 		// And a blank line *inside* a command is kept, with the separators
 		// that say the semicolon was not doubled over it.
 		{

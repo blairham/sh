@@ -290,6 +290,22 @@ func (g *histGate) separator() string {
 		// that says the blank was kept and the semicolon was not doubled.
 		return " "
 	}
+	if strings.HasSuffix(last, ")") && g.unclosedParen() {
+		// A `case` pattern, which is the one `)` that is still waiting for a
+		// command. Measured: `case foo in` / `foo)` / `echo one two` / `;;` /
+		// `esac` comes back as `case foo in foo) echo one two; ;; esac`, with
+		// no `;` after the pattern.
+		//
+		// The balance rather than the character, because a line ending in `)`
+		// is far more often a substitution that closed, and that one *does*
+		// take a `;`. Two shapes measured, and each is why one half of this
+		// test is there: `if true; then` / `echo $(echo x)` / `fi` is `echo
+		// $(echo x); fi`, so the character alone is not enough; and `echo
+		// $((1 +` / `2))` / `echo after` is `2)); echo after`, so the balance
+		// has to be read over the whole command and not over the line, where
+		// `2))` looks unmatched on its own.
+		return " "
+	}
 	for _, word := range awaitingACommand {
 		if strings.HasSuffix(last, word) {
 			// A word only counts as a word: `dado` does not end in `do`.
@@ -301,6 +317,17 @@ func (g *histGate) separator() string {
 		}
 	}
 	return "; "
+}
+
+// unclosedParen reports whether the command collected so far has more `)`
+// than `(` — which a case pattern does and a closed substitution does not.
+func (g *histGate) unclosedParen() bool {
+	opens, closes := 0, 0
+	for _, line := range g.cur {
+		opens += strings.Count(line, "(")
+		closes += strings.Count(line, ")")
+	}
+	return closes > opens
 }
 
 // awaitingACommand are the line endings that take a space rather than a `;`,

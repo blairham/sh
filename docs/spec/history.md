@@ -575,6 +575,7 @@ bash's own list back:
 | `for i in 1 2` / `do` / `echo $i` / `done` | `for i in 1 2; do echo $i; done` |
 | `f() {` / `echo c` / `}` | `f() { echo c; }` |
 | `echo a \|` / `cat` | `echo a \| cat` |
+| `case foo in` / `foo)` / `echo one two` / `;;` / `esac` | `case foo in foo) echo one two; ;; esac` |
 | `cat <<EOD` / `body` / `EOD` | the three lines and a newline after them |
 | `echo a &` / `wait` | **two** entries — the `&` ended the command |
 
@@ -585,6 +586,20 @@ takes a newline instead, because a `;` there would be text.
 
 A comment line is an entry of its own. A line of **blanks** is an entry too;
 only a truly empty line is not.
+
+A `)` is read by the **balance** of the command so far rather than by the
+character, which is what tells a `case` pattern still waiting for its command
+from a substitution that closed: `if true; then` / `echo $(echo x)` / `fi` is
+`echo $(echo x); fi` and `echo $((1 +` / `2))` / `echo after` is `2)); echo
+after`, so the balance also has to be read over the whole command and not over
+the line, where `2))` looks unmatched on its own.
+
+**One entry shape is not modeled and is measured**: a here-document attached
+to a *compound* command's terminator — `while … do` / `echo` / `done <<EOD` —
+where bash writes a newline before the `done` line and a bare space after the
+delimiter. bash is building that string from its own reader's here-document
+bookkeeping, which this does not have; a here-document standing as its own
+command, which is every ordinary use, is byte-identical.
 
 ### The echo, and a reference nothing answers
 

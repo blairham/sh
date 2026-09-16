@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# ${v:offset:length} in BusyBox ash — the ext/ area this column does not run.
+#
+# ext/substrings.tests is asked of bash, zsh and ksh93, because dash refuses
+# the construct and the ext/ boundary was drawn around dash. BusyBox is not
+# dash and has it, so the area had a column that owned the construct and
+# nothing asking it. Run through the image, that file agreed with BusyBox on
+# every row but two, and the two were one rule:
+#
+# **A substring of `$@` or `$*` counts characters of the parameters joined
+# together**, where the other three slice the list. `set -- one two three
+# four; "${*:1:2}"` is `one two` in bash, zsh and ksh93 and `ne` here. The
+# dialect gave the list reading until 2026-09-16, because no axis asked
+# (Semantics.SubstringOfPositionalsSlicesTheList).
+#
+# Every positional row prints the field count before the fields, because one
+# field and two that print alike are the difference being asked.
+
+n() { printf '%s:' "$#"; printf '<%s>' "$@"; printf '\n'; }
+
+printf -- '--- a named value ---\n'
+
+v=abcdefgh
+printf '%s\n' "from 3:          ${v:3}"
+printf '%s\n' "from 3 len 2:    ${v:3:2}"
+printf '%s\n' "len 0:           [${v:2:0}]"
+printf '%s\n' "past the end:    [${v:20}]"
+printf '%s\n' "len past the end: ${v:6:99}"
+printf '%s\n' "last three:      ${v: -3}"
+printf '%s\n' "parenthesized:   ${v:(-3)}"
+printf '%s\n' "negative length: ${v:1:-2}"
+unset u
+printf '%s\n' "a default, not an offset: ${u:-fallback}"
+k=2
+printf '%s\n' "arithmetic:      ${v:$k+1:$k}"
+printf '%s\n' "all but the last: ${v:0:${#v}-1}"
+e=
+printf '[%s] [%s]\n' "${e:0:3}" "${u:0:3}"
+
+printf -- '--- the positional parameters: a substring of the joined string ---\n'
+
+# The discriminator. The list reading is `one two` and `two three four`.
+set -- one two three four
+n "${*:1:2}"
+n "${*:2}"
+
+# Offset 0 is the first character of `$1`. In the list reading it is `$0`,
+# the shell's own name, which is also why no row here prints `$0`.
+n "${@:0:1}"
+
+# The length already reads the joined string, and has for as long as the
+# dialect has existed (LengthOfSpecialIsCount): the control that says the
+# rows above are the same reading reaching one more operator.
+n "${#*}"
+
+# Unquoted, the substring is cut first and split afterwards.
+n ${@:2}
+
+printf -- '--- where the parameters were, inside the string ---\n'
+
+# A quoted `$@` keeps the parameters it spans apart, and the joint between
+# two of them counts as one character.
+set -- 'a b' c 'd e'
+n "${@:1}"
+n "${@:1:4}"
+
+# An offset that lands on the joint begins with an empty field.
+n "${@:3}"
+
+# A quoted `$*` is the substring of `"$*"` itself: joined on IFS's first
+# character, and on nothing at all when IFS is empty — where `$@` still counts
+# a character for the joint and still gives two fields, quoted or not.
+IFS=
+n "${*:1:4}"
+n "${@:1:4}"
+n ${*:1:4}
+IFS=ab
+n "${*:1:4}"
+n "${@:1:4}"
+unset IFS
+
+# Counting back from the end of the string, not of the list.
+n "${*: -1}"
+n "${*:1:-1}"
+
+# With no parameters it is empty — the list reading's `${*:0}` is the shell's
+# name again.
+set --
+n "${*:0}"
+n "${@:1}"

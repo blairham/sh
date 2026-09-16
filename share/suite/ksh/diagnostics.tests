@@ -93,6 +93,9 @@ say 'printf given a number that is not one'
 say 'test given an operand too many'
 ( test a = b = c ) 2>&1 > /dev/null
 
+say 'a ulimit resource letter this shell has not got'
+( ulimit -Z ) 2>&1 > /dev/null
+
 say 'waiting for a pid that is not a child'
 ( wait 999999 ) 2>&1 > /dev/null
 

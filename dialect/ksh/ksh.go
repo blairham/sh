@@ -2655,10 +2655,19 @@ func Diagnostics() interp.Diagnostics {
 		LetNoExpression:            "Usage: let [ options ] [expr ...]",
 		LetNoExpressionStatus:      2,
 		LetNoExpressionUnprefixed:  true,
-		UlimitBadOption:            "not supported",
-		UlimitBadNumber:            "ulimit: %[1]s: parameter not set",
-		BuiltinBadOption:           "%[1]s: %[2]s: unknown option",
-		BadOptionNaming:            interp.BadOptionWholeWord,
+		// `ulimit -Z` is `ulimit: -Z: unknown option` here, with the usage
+		// line under it and status 2 — the same shape every other bad
+		// option in this dialect takes. It had been the string `not
+		// supported`, which is the text this shell writes in the *-a
+		// listing* for a resource the platform has no limit for; the two
+		// are different sentences about different things and the listing's
+		// had been pasted here. Nothing caught it because the field takes
+		// the letter as its one verb and that copy had no verb in it at
+		// all, so the letter the reader has to change was never printed.
+		UlimitBadOption:  "ulimit: -%[1]s: unknown option",
+		UlimitBadNumber:  "ulimit: %[1]s: parameter not set",
+		BuiltinBadOption: "%[1]s: %[2]s: unknown option",
+		BadOptionNaming:  interp.BadOptionWholeWord,
 		// `ls=/bin/ls`: ksh93's hash is `alias -t`, so its listing is the
 		// alias shape — which is zsh's too, by a different road.
 		HashListing:      interp.HashListingNameEqualsPath,

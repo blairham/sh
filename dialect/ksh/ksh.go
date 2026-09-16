@@ -3317,22 +3317,75 @@ func Apply(r *interp.Runner) {
 	// predates the letter reaching it.
 	if alias, ok := r.Builtin("alias"); ok {
 		r.Register("alias", func(rr *interp.Runner, ctx context.Context, args []string) int {
-			for i, a := range args {
-				if a == "--" || !strings.HasPrefix(a, "-") || a == "-" {
+			call := readTrackedAliasCall(args)
+			if !call.tracked {
+				return alias(rr, ctx, args)
+			}
+			if foreignAliasLetters(call.letters) != "" {
+				// A letter this builtin has not got, beside the one that
+				// reroutes. The refusal is `alias`'s and it names the letter
+				// `alias` lacks rather than the one it has: measured,
+				// `alias -tq`, `alias -qt` and `alias -t -q` are all
+				// `alias: -q: unknown option` with `alias`'s usage line. So
+				// the call reaches the builtin with the tracked letter
+				// already gone, and the builtin does the refusing (#3036).
+				return alias(rr, ctx, call.untracked)
+			}
+			hash, ok := rr.Builtin("hash")
+			if !ok {
+				return alias(rr, ctx, args)
+			}
+			operands := call.operands
+			for i, w := range operands {
+				if w == "--" {
+					operands = operands[i+1:]
 					break
 				}
-				if !strings.ContainsRune(a[1:], 't') {
+				// `-r` is the one letter the cache has here — `hash -r` is
+				// `alias -t -- -r` — and it is the only word starting with a
+				// dash this reading accepts. Every other one is refused
+				// whole, including `-` alone and a `--name`: measured
+				// 2026-09-15 on ksh93u+ 2012-08-01 over
+				// `-t -p -x -r -d -a -q -tp -z - +t --help --r -rz -R`, where
+				// `-r` and `+t` pass and the rest are `bad option(s)`.
+				if w == "-r" {
 					continue
 				}
-				rest := append(append([]string{}, args[:i]...), args[i+1:]...)
-				rest = trimTrackedSeparator(rest, strings.Replace(a, "t", "", 1))
-				hash, ok := rr.Builtin("hash")
-				if !ok {
+				if !strings.HasPrefix(w, "-") {
 					break
 				}
-				return hash(rr, ctx, rest)
+				// `bad option(s)` rather than `unknown option`, no usage
+				// line, and fatal at 1 — all three unlike the refusal two
+				// lines up, and all three `alias`'s, because `alias` is what
+				// the script wrote. `hash` is not a command in this dialect
+				// and naming it sent the reader to options that do not
+				// exist here (#3036).
+				rr.RefuseBuiltinUsagef("alias", "alias: %s: bad option(s)\n", w)
+				return 1
 			}
-			return alias(rr, ctx, args)
+			if len(operands) == 0 {
+				// Two of `alias`'s own letters still mean something beside
+				// the tracked one, and neither is a letter the cache builtin
+				// has. Measured with `ls` hashed: `alias -xt` writes nothing
+				// — a tracked alias is never an exported one — and
+				// `alias -pt` writes `alias ls=/bin/ls`, the bare listing
+				// with the word that would define it back in front. With an
+				// operand both are the plain `alias -t name`.
+				if strings.ContainsRune(call.letters, 'x') {
+					return 0
+				}
+				if strings.ContainsRune(call.letters, 'p') {
+					for _, name := range rr.HashedCommandNames() {
+						path, ok := rr.HashedCommandPath(name)
+						if !ok {
+							continue
+						}
+						_, _ = fmt.Fprintf(rr.Stdout, "alias %s=%s\n", name, path)
+					}
+					return 0
+				}
+			}
+			return hash(rr, ctx, operands)
 		})
 	}
 	r.Register("builtin", func(rr *interp.Runner, _ context.Context, args []string) int {
@@ -3445,21 +3498,65 @@ func Apply(r *interp.Runner) {
 	r.SetFunctionLayout(FunctionLayout(), FunctionLayout())
 }
 
-// trimTrackedSeparator puts back the option word `-t` was taken out of, and
-// drops the `--` that `hash` has no letters to need.
+// aliasCall is a call to `alias` read the way this dialect has to route it.
+type aliasCall struct {
+	// letters are every option letter of the leading option words, in the
+	// order they were written.
+	letters string
+	// operands are the words past those, with the `--` that ended them gone.
+	operands []string
+	// untracked is the same call with every `t` taken out of those words,
+	// which is what a refusal is raised from — see the use in Extend.
+	untracked []string
+	// tracked is whether `t` was among the letters at all. Only then is any
+	// of this the cache's business.
+	tracked bool
+}
+
+// readTrackedAliasCall splits a call to `alias` at the end of its options.
 //
-// `hash` is `alias -t --` and `hash -r` is `alias -t -- -r`, so the operands
-// reaching the cache are everything after the separator — including a word
-// that looks like an option, which is why the separator goes rather than
-// being handed on.
-func trimTrackedSeparator(args []string, remainder string) []string {
-	if remainder != "-" && remainder != "+" {
-		args = append([]string{remainder}, args...)
-	}
-	for i, a := range args {
+// `hash` is `alias -t --` in this dialect and `hash -r` is `alias -t -- -r`,
+// so the operands reaching the cache are everything past the separator —
+// including a word that looks like an option, which is why the separator goes
+// rather than being handed on. The scan ends at the first word that is not an
+// option, the way option parsing does everywhere: a `--` after an operand is
+// an operand.
+func readTrackedAliasCall(args []string) aliasCall {
+	call := aliasCall{untracked: make([]string, 0, len(args))}
+	i := 0
+	for ; i < len(args); i++ {
+		a := args[i]
 		if a == "--" {
-			return args[i+1:]
+			call.untracked = append(call.untracked, a)
+			i++
+			break
+		}
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			break
+		}
+		call.letters += a[1:]
+		if rest := strings.ReplaceAll(a, "t", ""); rest != "-" {
+			call.untracked = append(call.untracked, rest)
 		}
 	}
-	return args
+	call.operands = args[i:]
+	call.untracked = append(call.untracked, args[i:]...)
+	call.tracked = strings.ContainsRune(call.letters, 't')
+	return call
+}
+
+// foreignAliasLetters is the letters of a word that `alias` has not got here.
+//
+// The set it does have is `ptx`, which is what its own usage line says. `t`
+// is in it even though the substrate's `alias` does not implement the letter:
+// the reroute above is this dialect's implementation of it, so a call naming
+// it is well formed and one naming anything else is not.
+func foreignAliasLetters(letters string) string {
+	foreign := ""
+	for _, c := range letters {
+		if !strings.ContainsRune("ptx", c) {
+			foreign += string(c)
+		}
+	}
+	return foreign
 }

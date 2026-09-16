@@ -12,7 +12,7 @@ import (
 	"github.com/blairham/sh/interp"
 )
 
-// The axis, asserted beside the behaviour for the reason dialect/zsh's twin
+// The axis, asserted beside the behavior for the reason dialect/zsh's twin
 // gives: ksh93 refuses `set -o history`, so no ksh script can turn the list
 // on and no transcript can reach the answer.
 func TestKshAnswersNoToHistoryExpansionInAScript(t *testing.T) {

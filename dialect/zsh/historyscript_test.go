@@ -12,14 +12,14 @@ import (
 	"github.com/blairham/sh/interp"
 )
 
-// The axis itself, asserted beside the behaviour: zsh has an expander and
+// The axis itself, asserted beside the behavior: zsh has an expander and
 // does not use it where nobody is typing.
 //
 // Worth asserting rather than leaving to the transcript below, because the
 // transcript cannot reach it — zsh has no `set -o history`, so a zsh script
 // can never turn the list on and the axis is never read there at all. A
 // preset flipped to Yes would change nothing this shell can be made to do,
-// and would change bash's neighbours the moment one of them grew the option.
+// and would change bash's neighbors the moment one of them grew the option.
 func TestZshAnswersNoToHistoryExpansionInAScript(t *testing.T) {
 	if got := zsh.Semantics().HistoryExpansionInAScript; got != interp.No {
 		t.Errorf("HistoryExpansionInAScript is %v, want No", got)

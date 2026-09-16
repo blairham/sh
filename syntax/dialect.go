@@ -596,6 +596,33 @@ type Dialect struct {
 	// [Parser.forName] rather than here (#1076).
 	ForNameMayBeQuoted bool
 
+	// ForNameMayBeAPositionalParameter lets a loop's variable be a run of
+	// digits — `for 1 in a b` — which sets the positional parameter of that
+	// number on each pass rather than a variable with a digit for a name.
+	//
+	// One shell in the panel has it, and seven of the completion functions it
+	// ships are written with it. Measured 2026-09-15, each probe in a script
+	// file of its own:
+	//
+	//	| probe                    | zsh 5.9.2 | bash 5.3 | bash-as-sh | bash 3.2 | ksh93u+ | dash | ash |
+	//	| `for 1 in a b`           | `a` `b`   | refused  | refused    | refused  | refused | refused | refused |
+	//	| `for 1 2 in a b c d`     | `a-b` `c-d` | refused | refused   | refused  | refused | refused | refused |
+	//	| `set -- p q r; for 1;`   | `p` `q` `r` | refused | refused   | refused  | refused | refused | refused |
+	//
+	// The three bash columns call it `` `1': not a valid identifier ``, ksh93
+	// `invalid variable name`, dash and BusyBox ash `bad for loop variable`.
+	// So no column but one has it and this is a dialect's grammar.
+	//
+	// **Digits and nothing else**, measured in the same run: `for 0`, `for
+	// 12` and `for 01` are all taken, `for 1x` is `` parse error near `1x' ``
+	// and `for @` is `` parse error near `@' ``. So it is a positional
+	// parameter's *number* rather than "a name the core would refuse", which
+	// is why the flag admits one shape and not a class.
+	//
+	// The parameter it sets is the real one: after `set -- p q; for 1 in a b;
+	// do :; done`, `$1` is `b` and `$2` is still `q`.
+	ForNameMayBeAPositionalParameter bool
+
 	// ForNameCheckedWhenTheLoopRuns makes a `for` or `select` whose variable
 	// is not a name **parse**, with the word carried on the clause and the
 	// complaint raised when the loop is reached.
@@ -784,10 +811,17 @@ type Dialect struct {
 	// Foreach is `foreach name (a b) … end`, the same loop a `for` is under
 	// a different pair of words. One shell in the panel has it.
 	//
-	// `end` is the whole of what it adds: the list is the parenthesized one
-	// ShortForm already reads, and `for name (a b); …; end` is refused —
-	// measured — so the terminator belongs to the opening word rather than
-	// to the list.
+	// The list is the parenthesized one ShortForm already reads, or an `in`
+	// list, and `for name (a b); …; end` is refused — measured — so the
+	// terminator belongs to the opening word rather than to the list.
+	//
+	// **`end` is not the whole of what it adds**, which this said until it
+	// was measured against a shipped function that writes the other
+	// spelling. All of `foreach c (a b); do … done`, `foreach c (a b) do …
+	// done`, `foreach c (a b) { … }` and `foreach c in a b; do … done` run
+	// on zsh 5.9.2 (2026-09-15). The closers pair rather than mixing:
+	// `foreach c (a b); do … end` is refused there, as `for` closed by
+	// `end` is.
 	Foreach bool
 
 	// TryAlways is `{ … } always { … }`: a brace group whose second half runs
@@ -1038,6 +1072,66 @@ type Dialect struct {
 	// has and the reason the two adjacent parens can settle the spelling
 	// before anything else is read (#2725).
 	BracedArithmeticExpansion bool
+
+	// ConditionOperandMayOpenWithAGroup lets a `(` at the front of a
+	// condition's **third word** belong to that word rather than being an
+	// operator. `[[ 9 -gt ( 1 + 2 ) ]]` and `[[ -prefix 1 (f|ht)tp:// ]]`
+	// are the two shapes, and four of the completion functions one shell
+	// ships are written with them.
+	//
+	// Measured 2026-09-15, each probe in a script file of its own:
+	//
+	//	| probe                 | zsh 5.9.2 | bash 5.3 | bash-as-sh | bash 3.2 | ksh93u+ | dash | ash |
+	//	| `[[ 9 -gt ( 1 ) ]]`   | true      | refused  | refused    | refused  | refused | refused | refused |
+	//	| `[[ 2 -gt ( 1 + 2 ) ]]` | false   | refused  | refused    | refused  | refused | refused | refused |
+	//	| `[[ -pfx 1 (a\|b)c ]]` | parsed   | refused  | refused    | refused  | refused | refused | refused |
+	//
+	// The three bash columns say `` unexpected argument `(' to conditional
+	// binary operator ``, ksh93 `` `(' unexpected ``, and dash and BusyBox
+	// ash — which have no `[[ ]]` at all — name the `(` where they wanted a
+	// `then`. One column against six, so this is a dialect's grammar.
+	//
+	// **The position is the whole of the rule**, measured in the same run:
+	// `[[ ( 1 -gt 0 ) ]]` is the condition's own grouping paren at the first
+	// word, `[[ -n ( a ) ]]` and `[[ -pfx ( a ) ]]` are `` parse error near
+	// `(' `` at the second, `[[ -pfx 1 ( a ) ]]` parses at the third, and
+	// `[[ -pfx 1 2 ( a ) ]]` is refused again at the fourth. A `!` or a
+	// connective starts the count over.
+	//
+	// The group is not a *pattern* — that is [Lexer.inPattern], which is set
+	// for `==`, `=` and `!=` and was already right for them. What this adds
+	// is the same lexing for every other operator, and what becomes of the
+	// word afterwards is the operator's business: `[[ 9 -gt ( 1 -gt 0 ) ]]`
+	// hands `( 1 -gt 0 )` to the arithmetic evaluator, which complains about
+	// it.
+	ConditionOperandMayOpenWithAGroup bool
+
+	// CaseHeaderSpansSeparators lets a `;` stand in a `case` header wherever
+	// a newline may: between the subject and the `in`, and after the `in`.
+	//
+	// One shell in the panel takes it, and nine of the completion functions
+	// zsh ships write the first spelling. Measured 2026-09-15, each probe in
+	// a script file of its own, against a `case` with one arm:
+	//
+	//	| probe          | zsh 5.9.2 | bash 5.3 | bash-as-sh | bash 3.2 | ksh93u+ | dash | ash |
+	//	| `case x; in`   | runs      | refused  | refused    | refused  | refused | refused | refused |
+	//	| `case x ; ; in`| runs      | refused  | refused    | refused  | refused | refused | refused |
+	//	| `case x;⏎in`   | runs      | refused  | refused    | refused  | refused | refused | refused |
+	//	| `case x in;`   | runs      | refused  | refused    | refused  | refused | refused | refused |
+	//	| `case x;; in`  | refused   | refused  | refused    | refused  | refused | refused | refused |
+	//	| `case x in ;;` | refused   | refused  | refused    | refused  | refused | refused | refused |
+	//	| `case x & in`  | refused   | refused  | refused    | refused  | refused | refused | refused |
+	//
+	// So it is the `;` and not the whole separator family: `;;` is the arm
+	// terminator and `&` is a job-control operator, and neither becomes a
+	// newline here. The last three rows are why this is one flag and not
+	// "anything that ends a statement".
+	//
+	// Separate from [Dialect.SeparatorWhereACommandBelongs], which is about a
+	// `;` where a *command* belongs: no command belongs in a `case` header,
+	// so that flag says nothing about this and a shell could have either
+	// without the other.
+	CaseHeaderSpansSeparators bool
 
 	// CasePatternAcceptsOperator lets an operator stand where a case pattern
 	// belongs, which produces an arm with no patterns at all.

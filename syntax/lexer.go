@@ -74,6 +74,34 @@ type Lexer struct {
 	// exactly the same reason.
 	inPattern bool
 
+	// inCondOperandGroup is set while the token being read is the **third
+	// word of a condition** — the right operand of a binary operator, or the
+	// second argument of a named one — in a dialect where a `(` there opens
+	// a group belonging to the word.
+	//
+	// Separate from inPattern, which says the operand is a *pattern* and is
+	// set for `==`, `=` and `!=` alone. This one is set whatever the
+	// operator is, because the reading is positional rather than the
+	// operator's: `[[ 9 -gt ( 1 + 2 ) ]]` is true on zsh 5.9.2 and the group
+	// is handed to the arithmetic evaluator, not to the matcher.
+	//
+	// The position is the whole of the rule and is measured, 2026-09-15,
+	// each probe in a script file of its own:
+	//
+	//	[[ 9 -gt ( 1 ) ]]        the group — 0, and `( 1 + 2 )` is 3
+	//	[[ -pfx 1 ( a ) ]]       the group — `unknown condition: -pfx`, so it parsed
+	//	[[ -n ( a ) ]]           parse error near `(` — the *second* word
+	//	[[ -pfx ( a ) ]]         parse error near `(` — the second word again
+	//	[[ -pfx 1 2 ( a ) ]]     parse error near `(` — the *fourth*
+	//	[[ ( 1 -gt 0 ) ]]        the condition grouping, which is the first word
+	//
+	// So a `(` is a condition's grouping paren at the first word, is refused
+	// at the second and beyond the third, and belongs to the word at the
+	// third. The `!` and the two connectives start a condition over — `[[ !
+	// -pfx 1 ( a ) ]]` and `[[ x == y || -pfx 1 ( a ) ]]` both parse — so the
+	// count is per primary rather than per `[[ ]]`.
+	inCondOperandGroup bool
+
 	// inArgument is set while the token being read stands where an
 	// *argument* may, rather than where a command may begin. One dialect
 	// reads a `(` there as part of the word — a pattern with a list of glob
@@ -98,6 +126,27 @@ type Lexer struct {
 	// [Dialect.SubscriptSpansSeparators], where the measurement is, and
 	// opensArrayElementSubscript for what the flag decides.
 	inArrayLiteral bool
+
+	// inCaseSubject is set while the token being read is the word a `case`
+	// matches its arms against. It exists for one question the flags beside
+	// it cannot answer: whether a `(` at the front of that word opens
+	// something of the shell's or is text.
+	//
+	// It is text in one dialect, because the subject stands where an
+	// argument does there. Measured 2026-09-15 on zsh 5.9.2 and on zsh 5.9,
+	// each probe in a script file of its own: `case (x) in "(x)") …` runs
+	// that arm and `case (x) in x) …` runs none, so the parentheses reach
+	// the matcher as two characters of the subject rather than grouping
+	// anything. The other six columns — bash 5.3, bash as `sh`, bash 3.2,
+	// ksh93u+, dash and BusyBox ash — all refuse `case (x) in` outright,
+	// which is why the reading is the dialect's and the flag is read only
+	// where [Dialect.GlobQualifiers] already says a leading `(` may be a
+	// word's.
+	//
+	// Separate from noAssignment, which is true here too: that flag answers
+	// what an `=` means and this one answers what a `(` does, and a shell
+	// could have either without the other.
+	inCaseSubject bool
 
 	// noAssignment is set while the token being read stands where no
 	// *assignment* may be written, in the two positions the flags above do
@@ -662,7 +711,7 @@ func (l *Lexer) next() Token {
 	// Before the arithmetic command below, not after it: a nested group
 	// starts `((`, and `[[ $k == ((a|b)|x) ]]` is a pattern rather than the
 	// one place in the grammar where two parentheses are one token.
-	if l.inPattern && l.peek() == '(' && l.opensPatternGroup() {
+	if (l.inPattern || l.inCondOperandGroup) && l.peek() == '(' && l.opensPatternGroup() {
 		return l.scanWord(start)
 	}
 
@@ -818,6 +867,38 @@ func (l *Lexer) atAssignValue() bool {
 		head = head[:i]
 	}
 	return isNameIn(head, l.dialect.DottedName)
+}
+
+// arrayLiteralCouldStandHere reports whether an array literal may be written
+// at the cursor, which is what decides that a `(` straight after an `=` is
+// not a group.
+//
+// The `=` is what makes the question narrow: an array literal is `name=( … )`
+// and nothing else, so the reading is available only where an assignment is.
+// A `case` **pattern** is one of the places it is not — no assignment may be
+// written there — so the `=` is an ordinary character and the `(` behind it
+// is the group it looks like. Measured 2026-09-15 on zsh 5.9.2, each probe
+// in a script file of its own, the subject `a=b`:
+//
+//	case a=b in ((a)=(b)) echo m;; *) echo n;; esac    `m`
+//	case a=b in (a=(b))   echo m;; *) echo n;; esac    `m`
+//	a=(x y); print -r -- $#a                           2
+//
+// The last row is the one this must not lose, and it is the case the guard
+// was written for. The first two are what it was too wide for: read as an
+// array literal, each ended the word at the `(` and the parenthesis was then
+// an operator with nowhere to go. A `case` arm that captures on both sides of
+// an `=` is a shape a shipped completion function writes, and this is what it
+// stopped at (#3040).
+//
+// **An *argument* is a fourth position and is deliberately not here.**
+// `print -r -- x=(a|b)c` is one word in that shell and is still refused here,
+// because the array reading is what a declaration utility's operand needs —
+// `local a=(x y)` reaches the parser as the word `a=` and then a parenthesis
+// — and the lexer cannot see the command's name. Filed rather than guessed
+// at; see #3087.
+func (l *Lexer) arrayLiteralCouldStandHere() bool {
+	return !l.inCondition && !l.inCaseArm && !l.inCaseParenList
 }
 
 // startsNumericRange reports whether the cursor is on a numeric range
@@ -1538,7 +1619,9 @@ func (l *Lexer) blankIsText() bool {
 // leadingParenBelongsToTheWord reports whether a `(` at the *front* of a
 // token is part of the word rather than an operator.
 //
-// Where an argument may stand it always is, which is what `inArgument` says.
+// Where an argument may stand it always is, which is what `inArgument` says,
+// and a `case` subject is such a position in the dialect that reads this at
+// all — see inCaseSubject, where that measurement is.
 // At the start of a `case` arm both readings are available at the same
 // character — the arm carries an optional paren of its own, and a pattern
 // may be a group — and what separates them is not the character but whether
@@ -1569,7 +1652,7 @@ func (l *Lexer) blankIsText() bool {
 // the token is known to be a word, `inArgument` alone decides how a leading
 // group is scanned; see the note at that call.
 func (l *Lexer) leadingParenBelongsToTheWord() bool {
-	if l.inArgument {
+	if l.inArgument || l.inCaseSubject {
 		return true
 	}
 	if !l.inCaseArm || l.peek() != '(' {
@@ -1699,7 +1782,7 @@ func (l *Lexer) opensPatternGroup() bool {
 	// It is what stopped powerlevel10k parsing, and so what left a real
 	// startup with no prompt: its `prompt[$' \t']#=([^$'\n']#)` matches the
 	// `=` of a `prompt = value` line and captures what follows (#1585).
-	if l.off > 0 && l.src[l.off-1] == '=' && !l.inCondition {
+	if l.off > 0 && l.src[l.off-1] == '=' && l.arrayLiteralCouldStandHere() {
 		return false
 	}
 	if l.dialect.PatternAlternation {

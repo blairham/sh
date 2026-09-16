@@ -277,6 +277,19 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 				items = append(items, r.expandWord(w)...)
 			}
 		} else {
+			// The list a loop over the parameters walks is fixed when the
+			// loop starts, which matters in the one dialect whose loop
+			// variable may be a positional parameter's *number*: `set -- p
+			// q r; for 1; do` writes `$1` on every pass and still reads
+			// `p`, `q`, `r`, leaving `r q r` behind. Measured 2026-09-15 on
+			// zsh 5.9.2.
+			//
+			// No copy is taken here, and that is asserted rather than
+			// assumed: every store that writes a parameter replaces the
+			// slice rather than writing through it — see paramsExtendedTo,
+			// which builds a new one — so this keeps the list it was given.
+			// A copy added as a belt survived its own mutant, which is the
+			// evidence that it decided nothing.
 			items = r.Params
 		}
 		if r.failedHeading() {
@@ -355,7 +368,7 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 					r.setNameref(name, it)
 					continue
 				}
-				r.setVar(name, it)
+				r.setLoopName(name, it)
 			}
 			// After the assignments, because zsh traces the assignments
 			// themselves — one line per name, measured `a=1` then `b=2` then

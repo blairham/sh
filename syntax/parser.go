@@ -1107,6 +1107,18 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
+// skipCaseHeaderSeparators steps over what may stand inside a `case` header:
+// newlines everywhere, and a `;` where the dialect takes one. See
+// [Dialect.CaseHeaderSpansSeparators].
+//
+// TokSemi and not the rest of the family: `;;` is the arm terminator and `&`
+// is an operator, and the one shell that takes this refuses both here.
+func (p *Parser) skipCaseHeaderSeparators() {
+	for p.at(TokNewline) || (p.dialect.CaseHeaderSpansSeparators && p.at(TokSemi)) {
+		p.next()
+	}
+}
+
 // skipArrayElementSeparators steps over what may stand between the elements of
 // an array literal: newlines everywhere, and a `;` as far as the dialect takes
 // one. See [syntax.ArraySemicolon].
@@ -5147,7 +5159,30 @@ func (p *Parser) forNameIsUsable() bool {
 		// says so for both spellings at once.
 		return false
 	}
+	if p.dialect.ForNameMayBeAPositionalParameter && isAllDigits(p.tok.Literal()) {
+		// A positional parameter's number, which is not a name and is a loop
+		// variable in one dialect. See
+		// [Dialect.ForNameMayBeAPositionalParameter].
+		return true
+	}
 	return isNameIn(p.tok.Literal(), p.dialect.DottedName)
+}
+
+// isAllDigits reports whether s is one or more decimal digits and nothing
+// else, which is the whole of what a positional parameter is named by.
+//
+// Not a number: `01` is taken and is the first parameter, so the digits are
+// read as a name rather than parsed as a value.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // forNameAsWritten is the word's source text, which is what a diagnostic
@@ -5365,9 +5400,39 @@ func (p *Parser) parseForeach() Command {
 		end = p.itemList(&c.Items, end)
 	}
 	c.Header = p.slice(c.Start, end)
+	// The body has three spellings and `end` is only one of them. Measured
+	// 2026-09-15 on zsh 5.9.2, each probe in a script file of its own and
+	// each printing both passes:
+	//
+	//	foreach c (a b); do … done    the keyword body, separator or not
+	//	foreach c (a b) do … done
+	//	foreach c (a b) { … }         a brace group, no separator needed
+	//	foreach c (a b); … end        the word's own closer
+	//	foreach c (a b) … end
+	//	foreach c in a b; do … done   the `in` list with a keyword body
+	//	foreach c (a b); do … end     refused — the closers pair
+	//
+	// The parenthesized list ends the header itself, which is why the brace
+	// needs no separator in front of it where `for i in a b { … }` is
+	// refused by every shell that takes `for i in a b; { … }`.
+	if p.braceBodyFollows() {
+		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
 	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
 		p.next()
 		p.skipNewlines()
+	}
+	if p.braceBodyFollows() {
+		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
+	if p.atWord("do") {
+		p.next()
+		c.Body = p.parseBody()
+		c.Stop = p.tok.End
+		p.expectWord("done")
+		return c
 	}
 	c.Body = p.parseBody()
 	c.Stop = p.tok.End
@@ -5434,9 +5499,14 @@ func (p *Parser) parseCase() Command {
 	// `a==(echo hi)` assigns a path. Told to the
 	// lexer before the `p.next()` that reads it, for the reason inCaseArm is
 	// below. See Lexer.noAssignment.
-	p.lex.noAssignment = true
+	// A `(` at the front of the subject is text in one dialect and an
+	// operator in the rest, and the lexer cannot tell on its own: `(` is in
+	// the operator table, so a token beginning with one never reaches the
+	// word scanner. Told here for the same reason noAssignment is, and taken
+	// back on the same line. See Lexer.inCaseSubject.
+	p.lex.noAssignment, p.lex.inCaseSubject = true, true
 	p.next()
-	p.lex.noAssignment = false
+	p.lex.noAssignment, p.lex.inCaseSubject = false, false
 	if c.Word = p.word(); c.Word == nil {
 		p.fail("expected a word after `case`")
 		return c
@@ -5446,7 +5516,7 @@ func (p *Parser) parseCase() Command {
 	if p.refuseProcSubstOutOfPlace(c.Word) {
 		return c
 	}
-	p.skipNewlines()
+	p.skipCaseHeaderSeparators()
 	inEnd := p.tok.End
 	// An arm begins where no command may, so `((` there is the arm's own
 	// paren in front of a group rather than an arithmetic command, and a
@@ -5475,7 +5545,7 @@ func (p *Parser) parseCase() Command {
 	// before the newlines are skipped and cleared if any were.
 	// See Dialect.CaseTerminatorIsAPatternAfterTheHeader.
 	esacIsAPattern := p.dialect.CaseTerminatorIsAPatternAfterTheHeader && !p.at(TokNewline)
-	p.skipNewlines()
+	p.skipCaseHeaderSeparators()
 
 	// Only the word `esac` is taken away by that reading, and never the `}`:
 	// the shell with both takes `case x { }` as an empty `case` and reads

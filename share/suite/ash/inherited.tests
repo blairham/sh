@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Three answers this dialect never gave, and so gave dash's.
+#
+# #3248 was the sixth axis where `dialect/ash` set no value and the POSIX
+# preset's — dash's, every time — was taken in silence. These are what a
+# sweep of the rest of that shape turned up, and they are here because the
+# reason none of them was caught is the same reason #3248 was not: `core/`
+# can only hold what every reference agrees on, `dash/` holds the answers of
+# the shell this one is *not*, and until #3248 the `ash/` tier had three
+# files and none of them came near these questions.
+#
+# Each block asks the discriminating case and then a control the wrong answer
+# also passes, so a column that agrees by accident is visible as one that
+# agrees on the control alone.
+
+printf -- '--- a name-shaped value in arithmetic ---\n'
+
+# dash reads the value as a literal and stops at `Illegal number: y`. Six of
+# the seven columns look the name up in turn.
+y=5; x=y
+printf 'one step:  %s\n' "$((x+1))"
+
+# And it recurses as far as the values lead, which is what says the first row
+# is a lookup and not one extra step.
+y=z; z=7; x=y
+printf 'two steps: %s\n' "$((x+1))"
+
+# The control: a numeral, which every column adds to.
+n=5
+printf 'a numeral: %s\n' "$((n+1))"
+
+printf -- '--- an empty regex operand ---\n'
+
+# 0 here and in ksh93; 2 in the three bash builds and 1 in zsh, each with a
+# sentence on standard error. dash has no `[[ ]]` to ask it in.
+[[ abc =~ "" ]]; printf 'empty regex -> %s\n' "$?"
+
+# The two controls, which say the operator works at all.
+[[ abc =~ b ]]; printf 'a regex that matches -> %s\n' "$?"
+[[ abc =~ x ]]; printf 'a regex that does not -> %s\n' "$?"
+
+printf -- '--- `.` looking in the current directory ---\n'
+
+# PATH is searched first in every column, and where it has the name it wins:
+# that half is unanimous and is the control.
+mkdir -p elsewhere
+printf 'printf "the PATH copy ran\\n"\n' > elsewhere/both.sh
+printf 'printf "the current directory copy ran\\n"\n' > both.sh
+PATH="$PWD/elsewhere:/usr/bin:/bin"
+. both.sh
+
+# The discriminator: a name PATH has not got. bash and this shell read the
+# copy in the current directory; dash, zsh and ksh93 report not found.
+printf 'printf "only here\\n"\n' > only.sh
+. only.sh
+printf 'after the fallback -> %s\n' "$?"

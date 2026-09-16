@@ -139,12 +139,15 @@ type argumentsState struct {
 	args []argumentSpec
 
 	// What the line analysis found.
-	optionsHere bool     // an option could be written at the cursor
-	here        []int    // indices into args of the specs applying at the cursor
-	line        []string // the normal arguments, `$line`
-	optArgs     map[string]string
-	spent       map[string]bool // option names already on the line
-	shutOff     map[string]bool // what an option on the line excluded
+	optionsHere bool // an option could be written at the cursor
+	// cursorIsOption records that the word being typed is already a whole
+	// option the specs know — see analyze, where the measurement is.
+	cursorIsOption bool
+	here           []int    // indices into args of the specs applying at the cursor
+	line           []string // the normal arguments, `$line`
+	optArgs        map[string]string
+	spent          map[string]bool // option names already on the line
+	shutOff        map[string]bool // what an option on the line excluded
 }
 
 // defaultArgumentsMatcher is what `-M` answers when `_arguments` was given no
@@ -176,7 +179,7 @@ func compargumentsBuiltin(r *interp.Runner, ctx context.Context, args []string) 
 func compargumentsQuery(r *interp.Runner, cs *completionState, a *argumentsState, args []string) int {
 	switch args[0] {
 	case "-D":
-		return a.describeArguments(r, args[1:])
+		return a.describeArguments(r, cs, args[1:])
 	case "-O":
 		return a.offerOptions(r, args[1:])
 	case "-M":
@@ -294,19 +297,35 @@ func (a *argumentsState) readSpecs(r *interp.Runner, specs []string) bool {
 }
 
 // specPrefixes takes the three things that may stand in front of any spec:
-// the `(…)` exclusion list, the `!` that keeps a spec off the offering, and
-// the `*` that makes it repeatable — in that order, which is the order the
-// shipped specs are written in (`(-)*:: :->option-or-argument`).
+// the `!` that keeps a spec off the offering, the `(…)` exclusion list, and
+// the `*` that makes it repeatable — **in that order**, which is the order
+// the shipped specs are written in (`(-)*:: :->option-or-argument`,
+// `!(--no-guess)--guess`).
+//
+// The `!` goes *before* the list and not after it, and that is measured
+// rather than chosen. On zsh 5.9.2, 2026-09-16, asking `comparguments -i`
+// from inside a widget with `-y[why]` beside each:
+//
+//	!(-y)-x      accepted; `-x` is understood, never offered, and `-y` is
+//	             gone from the offering once `-x` is on the line
+//	(-y)!-x      refused — `invalid argument: (-y)!-x`
+//	!-x          accepted, with no exclusion list
+//	*!(-y)-x     refused — `invalid rest argument definition`
+//
+// Reading the list first is what refused `!(--no-guess)--guess`, and the
+// refusal is *printed*: `git checkout <TAB>` scribbled
+// `_arguments:comparguments:327: invalid argument: !(--no-guess)--guess`
+// over the line, twice, before offering anything.
 func specPrefixes(spec string) (excl []string, body string, star, hidden bool) {
 	body = spec
+	if strings.HasPrefix(body, "!") {
+		hidden, body = true, body[1:]
+	}
 	if strings.HasPrefix(body, "(") {
 		if end := strings.IndexByte(body, ')'); end >= 0 {
 			excl = strings.Fields(body[1:end])
 			body = body[end+1:]
 		}
-	}
-	if strings.HasPrefix(body, "!") {
-		hidden, body = true, body[1:]
 	}
 	if strings.HasPrefix(body, "*") {
 		star, body = true, body[1:]

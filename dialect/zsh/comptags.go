@@ -5,6 +5,7 @@ package zsh
 
 import (
 	"context"
+	"strings"
 
 	"github.com/blairham/sh/interp"
 )
@@ -88,23 +89,28 @@ func comptagsBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
-	if args[0] == "-i" {
+	verb, level := tagsVerb(args[0], tagsLevel(r))
+	if verb == "-i" {
 		if len(args) < 3 {
 			r.Diagnosef("not enough arguments\n")
 			return 1
 		}
-		st.tags = &tagsState{
+		if st.tags == nil {
+			st.tags = map[int]*tagsState{}
+		}
+		t := &tagsState{
 			context: args[1], offered: args[2:],
 			used: map[string]bool{}, at: -1, labeled: map[string]bool{},
 		}
+		st.tags[level], st.tagsLatest = t, t
 		return 0
 	}
-	t := st.tags
+	t := st.tags[level]
 	if t == nil {
 		r.Diagnosef("no tags registered\n")
 		return 1
 	}
-	switch args[0] {
+	switch verb {
 	case "-T":
 		return boolStatus(len(t.sets) > 0)
 	case "-N":
@@ -121,6 +127,22 @@ func comptagsBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	}
 	r.Diagnosef("invalid option: %s\n", args[0])
 	return 1
+}
+
+// tagsLevel is the function nesting level the call is being made at — zsh's
+// own `$#funcstack`, read from where a builtin stands, which is inside the
+// function that called it.
+func tagsLevel(r *interp.Runner) int { return len(funcstackNames(r)) }
+
+// tagsVerb splits the trailing `-` off a verb: `comptags -i-`, `-T-`, `-N-`
+// mean "the level before this one", which is what `_tags --` is for. The
+// shipped `_tags` writes the flag straight into the verb — `comptags
+// "-i$prev"` — so it arrives as one word.
+func tagsVerb(word string, level int) (string, int) {
+	if len(word) > 2 && strings.HasSuffix(word, "-") {
+		return word[:len(word)-1], level - 1
+	}
+	return word, level
 }
 
 // requested is whether a tag is in the set `-N` last stepped to.
@@ -167,7 +189,12 @@ func comptryBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if !ok {
 		return 1
 	}
-	t := st.tags
+	// The loop most recently installed, not the one at this level.
+	// `comptry` is written beside the `comptags -i` that opened the loop and
+	// acts on it even where that `-i` named the level before this one:
+	// measured on zsh 5.9.2, 2026-09-16, a helper doing `comptags -i- ctx p
+	// q; comptry p q` leaves `comptags -R p` answering 0 in its *caller*.
+	t := st.tagsLatest
 	if t == nil {
 		r.Diagnosef("no tags registered\n")
 		return 1

@@ -494,7 +494,30 @@ func (r *Runner) SetDynamicArray(name string, value func(*Runner) []string) {
 	if r.DynamicArrays == nil {
 		r.DynamicArrays = map[string]func(*Runner) []string{}
 	}
-	r.DynamicArrays[name] = value
+	// **Cloned here, so that a read cannot be a write.** A producer answers
+	// with the elements the name holds *now*, and the shortest way to write
+	// one is to hand back the storage those elements already live in —
+	// `argv` returns `r.Params`, `$words` returns the completion's own word
+	// list. Expansion then walks the slice it was given and several of its
+	// steps write into it as they go, because every other array reaching
+	// them is a copy made at the read: `${(U)a}` upper-cases each element in
+	// place and `${(@)a%%p}` trims each one.
+	//
+	// So `${(@)argv%%:*}` — a *read* of the positional parameters, with a
+	// modifier — replaced them. Measured 2026-09-16 with `f() { :
+	// ${(@)argv%%:*}; print -r -- "$argv" }; f a:1 b:2`: zsh 5.9.2 prints
+	// `a:1 b:2` and this shell printed `a b`. `${argv%%:*}` without the flag
+	// and `${@%%:*}` in the other spelling were both unaffected, and a
+	// stored array is unaffected in every spelling, which is what says the
+	// fault is the seam and not the operator.
+	//
+	// It is the seam rather than each of the half-dozen read sites, and
+	// rather than each producer, because the rule is a property of the
+	// contract: what a producer answers with belongs to the caller. A reader
+	// that forgot to copy would be a bug nothing local to it could show, and
+	// a producer that forgot would be a bug in a file that has never heard
+	// of expansion.
+	r.DynamicArrays[name] = func(rr *Runner) []string { return slices.Clone(value(rr)) }
 }
 
 // SetDynamic registers a parameter whose value is produced when it is read.

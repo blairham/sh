@@ -73,7 +73,7 @@ func TestABracketLeftOpenByASubExpressionHasItsOwnAnswer(t *testing.T) {
 
 // matchesWith answers a `case` arm, which is the surface that asks *both*
 // bracket axes — the trim above is on the path where a bare `[` is literal
-// whatever the dialect says, so it can show this axis and not its neighbour.
+// whatever the dialect says, so it can show this axis and not its neighbor.
 func matchesWith(t *testing.T, plain, sub BracketPolicy, pattern, subject string) bool {
 	t.Helper()
 	src := `case "` + subject + `" in ` + pattern + `) echo Y;; *) echo n;; esac`

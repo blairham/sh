@@ -2012,7 +2012,7 @@ type Semantics struct {
 	//
 	// BusyBox ash is unmeasured: no BusyBox was reachable when this was
 	// taken, so its preset keeps the answer it already gave, which is the
-	// one dash gives. #3379 holds the same gap on the neighbouring axis.
+	// one dash gives. #3379 holds the same gap on the neighboring axis.
 	UnterminatedBracketAfterASubExpression BracketPolicy
 	// UnknownCharacterClass is what a bracket does with a `[:name:]` whose
 	// name this shell has never heard of — including the empty one, `[::]`,

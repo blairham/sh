@@ -494,7 +494,24 @@ func Semantics() interp.Semantics {
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// dash single-quotes every listed value; it has no declare, so this
 	// style exists for the two -p listings alone.
-	s.DeclareValueQuoting = interp.ListingQuoteAlwaysEscaped
+	//
+	// Doubled out and never escaped, which is the same rule AliasQuoting,
+	// TrapQuoting and SetListingQuoting below already carry. It has to be:
+	// this shell has no `$'…'` and a backslash inside single quotes is a
+	// backslash, so `'a'\''b'` would read back as five characters and the
+	// listing's whole job is to be re-readable. Measured 2026-09-16 on
+	// Apple's dash-16 and on upstream 0.5.12 built from source, both:
+	//
+	//	v="a'b"; export v      export v='a'"'"'b'
+	//	r="a'b"; readonly r    readonly r='a'"'"'b'
+	//
+	// It was ListingQuoteAlwaysEscaped until now, so the two -p listings
+	// wrote zsh's spelling while a bare `set` three fields down wrote dash's
+	// — one shell's single-quoting rule held in four places and wrong in the
+	// one whose comment did not repeat the rule. Found by
+	// share/suite/dash/variables.tests, which asks the two listings and the
+	// bare `set` in one file for exactly that reason.
+	s.DeclareValueQuoting = interp.ListingQuoteAlwaysDoubled
 	// unanswered ChainedSubscriptReadsANestedValue: the grammar for a chained
 	// subscript is not this shell's — `${a[1][2]}` is a bad substitution or
 	// a pattern here — so there is no chain for a reading to be about.

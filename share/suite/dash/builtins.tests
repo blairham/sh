@@ -13,13 +13,23 @@
 # Measured 2026-09-16, and both are named so that nobody closes them by
 # making cmd/dash wrong somewhere else.
 #
-# The `set -o` listing is **patched by Debian and Ubuntu**. Upstream dash
+# The `set -o` listing is **patched by the Debian family**. Upstream dash
 # 0.5.12 lists seventeen names and Apple's dash-16 lists the same seventeen;
-# Debian's dash 0.5.12-12 lists nineteen, adding `privileged` after `nounset`
-# and `pipefail` after `nolog`. Two builds of one upstream version disagree,
-# so it is the distribution's patch and not a version this file is behind on.
-# Matching it would put two names in cmd/dash's listing that upstream dash
-# does not have.
+# Debian's dash 0.5.12-12 was measured at nineteen, adding `privileged` after
+# `nounset` and `pipefail` after `nolog`. Two builds of one upstream version
+# disagree, so it is the distribution's patch and not a version this file is
+# behind on. Matching it would put names in cmd/dash's listing that upstream
+# dash does not have.
+#
+# **Half of that reading does not hold on the CI runner**, and the column's
+# own fingerprint is what said so. `Suite.AgainstProbe` asks this shell two
+# questions, and on Ubuntu 24.04 — the runner that installs `dash` for the
+# suite job — it answers `esc=3 pipefail-listed=n`: the `\e` escape is
+# patched and `pipefail` is **not** in the `set -o` listing. Measured by the
+# probe itself on `main` at 43f11d351, CI run 35130386523. So the two
+# distributions' packages differ from each other as well as from upstream,
+# and what this file may rely on is only that the listing is not upstream's —
+# not which names were added.
 #
 # The `kill -l` rows are **the operating system's signal table**, not the
 # shell's. `kill -l 32` is `32` at 0 under every dash on Linux — Debian's and

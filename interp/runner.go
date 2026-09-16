@@ -4246,7 +4246,7 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 	} else if err := r.runPipeline(ctx, p, timing); err != nil {
 		return err
 	}
-	if p.Negated {
+	if p.Negated && r.negationInverts() {
 		// `!` applies to the whole pipeline and inverts its status.
 		if r.status == 0 {
 			r.status = 1
@@ -4255,6 +4255,28 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		}
 	}
 	return nil
+}
+
+// negationInverts reports whether the `!` in front of a pipeline moves the
+// status.
+//
+// Always, when the pipeline ran: inverting is the whole of what a `!` is for,
+// and no shell disagrees. The question is only for `set -n`, where nothing
+// under the negation ran and the status being inverted was reported by no
+// command — six of the seven panel columns leave it alone there and zsh
+// inverts it anyway. See Semantics.UnrunNegationInvertsTheStatus, where the
+// panel is measured.
+//
+// The vector is read only under `set -n`, so an ordinary negated pipeline
+// neither consults it nor can refuse over it: asking on the running route
+// would make `! grep -q pat file` unanswerable in the core, which is a
+// question the shells never posed.
+func (r *Runner) negationInverts() bool {
+	if !r.noexec {
+		return true
+	}
+	return r.ask(r.sem().UnrunNegationInvertsTheStatus,
+		"a `!` inverting the status of a pipeline `set -n` never ran")
 }
 
 func (r *Runner) command(ctx context.Context, c syntax.Command) error {

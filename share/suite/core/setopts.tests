@@ -21,6 +21,9 @@
 #   `set -f`             is noglob in three shells and "read no rc files" in
 #                        zsh, which has -F for the globbing one
 #   `set -o` with a name no shell has — zsh answers 1, the others 2
+#   the status left by a `!` in front of a pipeline `set -n` never ran — zsh
+#                        inverts it and the other five leave it alone, so the
+#                        rows are in zsh/options.tests (#3179)
 
 sub() {
   ( eval "$1" ) 2> /dev/null

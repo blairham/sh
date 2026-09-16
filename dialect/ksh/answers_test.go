@@ -107,6 +107,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.No},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
+		{"UnrunNegationInvertsTheStatus", s.UnrunNegationInvertsTheStatus, interp.No},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
 		// bash's answer on this one against its own on the axis above: the
 		// two partition the panel differently, which is why neither can

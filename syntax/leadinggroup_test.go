@@ -157,10 +157,7 @@ func TestTheParenthesisedItemListReadsTheSameWords(t *testing.T) {
 		mustParse(t, src, on, "a reserved word is an ordinary item there too")
 	}
 	// And a group beginning a *later* element of it, which is the position
-	// the flag reaches there. The first element cannot be reached the same
-	// way — `for x ((#i)a)` is lexed as an arithmetic command before the
-	// list's own paren is ever seen, which is a different question and is
-	// recorded in the spec as still refused.
+	// the flag reaches there.
 	off := Core()
 	off.ShortForm = true
 	for _, src := range []string{
@@ -170,9 +167,18 @@ func TestTheParenthesisedItemListReadsTheSameWords(t *testing.T) {
 		mustParse(t, src, on, "a group beginning a later parenthesised item")
 		mustFail(t, src, off, "and it does not, without the flag")
 	}
-	mustFail(t, `for x ((#i)a); do :; done`, on,
-		"the list's own opening paren is lexed as an arithmetic command, which "+
-			"this change does not reach")
+	// The *first* element reaches it too, and used not to: `for x ((#i)a)`
+	// opens with two adjacent parentheses, and the arithmetic command took
+	// them before the list's own paren was ever seen. It no longer does,
+	// because the arithmetic reading is abandoned where it does not close on
+	// an adjacent `))` — the `)` here is followed by `a` — so the `(` falls
+	// through to the list. Measured 2026-09-15 on zsh 5.9.2, from a script
+	// file: `setopt extendedglob; for x ((#i)a); do echo "[$x]"; done`
+	// prints `[a]`, and the same line without the option is `no matches
+	// found: (#i)a` — a *match* failure, so the header parsed in both
+	// (#3052).
+	mustParse(t, `for x ((#i)a); do :; done`, on,
+		"the list's own opening paren is the list's, not an arithmetic command's")
 }
 
 // A `case` arm's leading `(` may be the *pattern's* rather than the arm's

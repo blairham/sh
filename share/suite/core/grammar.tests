@@ -268,3 +268,41 @@ refuses '!'                         'a lone negation with nothing to negate'
 # are share/suite/zsh/grammar.tests, which is where an answer one shell has
 # alone belongs. `while true; do done` is left out even there: zsh accepts it
 # and then loops forever, and a case that does not finish grades nothing.
+
+# --- two parentheses with nothing between them ------------------------------
+#
+# `((cmd); cmd)` is a subshell whose first command is itself a subshell, and
+# the two `(` are adjacent because nothing says they may not be. Every shell
+# here runs it, the four with an arithmetic command included: the arithmetic
+# reading is tried and given up, because the expression's own nesting is not
+# closed by two adjacent `)`. This is core rather than ext/ precisely because
+# the answer does not depend on having `(( ))` at all — dash and ash, which
+# have never had one, read the same two groupings and print the same lines
+# (#3052).
+
+((printf 'plain %s\n' a); printf 'plain %s\n' b)
+((printf 'two %s\n' a; printf 'two %s\n' b); printf 'two %s\n' c)
+(((printf 'deep %s\n' a); printf 'deep %s\n' b); printf 'deep %s\n' c)
+
+# The closers matter as much as the openers: a blank between them is not the
+# arithmetic command's `))` either, so this is two groupings everywhere too.
+((printf 'spaced %s\n' a) )
+(( printf 'inner blank %s\n' a ); printf 'inner blank %s\n' b)
+
+# And the first `)` reached at the outer level need not be a closer at all.
+((printf 'and %s\n' a)&&(printf 'and %s\n' b))
+((printf 'pipe %s\n' a)|(cat))
+((printf 'trailing %s\n' a);)
+
+# The grouping is real and not a spelling: an assignment made inside it does
+# not reach the shell that wrote the line. A shell that read the first form
+# below as arithmetic would print 5 for both.
+sub=0; ((sub=5); printf 'inner sees %s\n' "$sub"); printf 'outer sees %s\n' "$sub"
+sub=0; ( (sub=5); printf 'spaced inner sees %s\n' "$sub" ); printf 'spaced outer sees %s\n' "$sub"
+
+# Where the whole line stands changes nothing about how the parentheses are
+# read: a pipeline, a brace group and a function body each hold it.
+((printf 'piped %s\n' a); printf 'piped %s\n' b) | cat
+{ ((printf 'braced %s\n' a); printf 'braced %s\n' b); }
+nested_group() { ((printf 'in a function %s\n' a); printf 'in a function %s\n' b); }
+nested_group

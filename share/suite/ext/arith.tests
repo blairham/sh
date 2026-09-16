@@ -102,3 +102,32 @@ let 'c = 1' 'd = 0'
 printf 'the last word decides: status %s, c=%s d=%s\n' "$?" "$c" "$d"
 let 'e = 0' 'f = 1'
 printf 'and it decides the other way too: status %s, e=%s f=%s\n' "$?" "$e" "$f"
+
+# --- `((` is ambiguous, and what keeps the arithmetic reading ----------------
+#
+# core/grammar.tests has the other half of this: `((cmd); cmd)` is two
+# groupings in every shell here, dash and ash included, because the
+# arithmetic reading is given up where the expression's own nesting is not
+# closed by two *adjacent* `)`. These are the rows the reading holds for, and
+# they are ext/ because only the four shells with `(( ))` have them at all.
+#
+# The discriminator throughout is where the assignment lands. An arithmetic
+# command runs in the shell that wrote it and a subshell does not, so a
+# reading demoted to two groupings shows up as a value that did not change —
+# which no status and no diagnostic would report (#3052).
+
+n=0; (( n = 5 )); printf 'the ordinary form: %s\n' "$n"
+n=0; ((n=5)); printf 'with no blanks at all: %s\n' "$n"
+n=0; (( (n=5) )); printf 'an expression that opens with a paren: %s\n' "$n"
+n=0; (((n=5))); printf 'and with no blanks around it: %s\n' "$n"
+n=0; ((((n=5)))); printf 'one deeper again: %s\n' "$n"
+
+# The two closers have to be adjacent. Both of these are two groupings, so
+# the assignment stays in the subshell and 0 is what the shell keeps.
+n=0; (((n=5)) ); printf 'a blank before the last closer: %s\n' "$n"
+n=0; ((n=5) ); printf 'and with one paren fewer: %s\n' "$n"
+n=0; ( ((n=5)) ); printf 'a subshell written with blanks: %s\n' "$n"
+
+# An expression that is nothing but parentheses still evaluates.
+(( (1+2)*3 == 9 )); printf 'a parenthesised expression: %s\n' "$?"
+(( ((2)) )); printf 'parentheses and nothing else: %s\n' "$?"

@@ -5400,9 +5400,39 @@ func (p *Parser) parseForeach() Command {
 		end = p.itemList(&c.Items, end)
 	}
 	c.Header = p.slice(c.Start, end)
+	// The body has three spellings and `end` is only one of them. Measured
+	// 2026-09-15 on zsh 5.9.2, each probe in a script file of its own and
+	// each printing both passes:
+	//
+	//	foreach c (a b); do … done    the keyword body, separator or not
+	//	foreach c (a b) do … done
+	//	foreach c (a b) { … }         a brace group, no separator needed
+	//	foreach c (a b); … end        the word's own closer
+	//	foreach c (a b) … end
+	//	foreach c in a b; do … done   the `in` list with a keyword body
+	//	foreach c (a b); do … end     refused — the closers pair
+	//
+	// The parenthesized list ends the header itself, which is why the brace
+	// needs no separator in front of it where `for i in a b { … }` is
+	// refused by every shell that takes `for i in a b; { … }`.
+	if p.braceBodyFollows() {
+		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
 	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
 		p.next()
 		p.skipNewlines()
+	}
+	if p.braceBodyFollows() {
+		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
+	if p.atWord("do") {
+		p.next()
+		c.Body = p.parseBody()
+		c.Stop = p.tok.End
+		p.expectWord("done")
+		return c
 	}
 	c.Body = p.parseBody()
 	c.Stop = p.tok.End

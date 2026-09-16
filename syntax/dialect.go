@@ -811,10 +811,17 @@ type Dialect struct {
 	// Foreach is `foreach name (a b) … end`, the same loop a `for` is under
 	// a different pair of words. One shell in the panel has it.
 	//
-	// `end` is the whole of what it adds: the list is the parenthesized one
-	// ShortForm already reads, and `for name (a b); …; end` is refused —
-	// measured — so the terminator belongs to the opening word rather than
-	// to the list.
+	// The list is the parenthesized one ShortForm already reads, or an `in`
+	// list, and `for name (a b); …; end` is refused — measured — so the
+	// terminator belongs to the opening word rather than to the list.
+	//
+	// **`end` is not the whole of what it adds**, which this said until it
+	// was measured against a shipped function that writes the other
+	// spelling. All of `foreach c (a b); do … done`, `foreach c (a b) do …
+	// done`, `foreach c (a b) { … }` and `foreach c in a b; do … done` run
+	// on zsh 5.9.2 (2026-09-15). The closers pair rather than mixing:
+	// `foreach c (a b); do … end` is refused there, as `for` closed by
+	// `end` is.
 	Foreach bool
 
 	// TryAlways is `{ … } always { … }`: a brace group whose second half runs

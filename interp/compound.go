@@ -277,14 +277,20 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 				items = append(items, r.expandWord(w)...)
 			}
 		} else {
-			// A copy, because one dialect's loop variable may be a
-			// positional parameter's *number* — `set -- p q r; for 1; do`
-			// — and writing `$1` on each pass would otherwise rewrite the
-			// list being walked. Measured 2026-09-15 on zsh 5.9.2: that
-			// loop reads `p`, `q`, `r` and leaves `r q r` behind, so the
-			// list is taken once at the top and the writes land in the
-			// live one.
-			items = append([]string(nil), r.Params...)
+			// The list a loop over the parameters walks is fixed when the
+			// loop starts, which matters in the one dialect whose loop
+			// variable may be a positional parameter's *number*: `set -- p
+			// q r; for 1; do` writes `$1` on every pass and still reads
+			// `p`, `q`, `r`, leaving `r q r` behind. Measured 2026-09-15 on
+			// zsh 5.9.2.
+			//
+			// No copy is taken here, and that is asserted rather than
+			// assumed: every store that writes a parameter replaces the
+			// slice rather than writing through it — see paramsExtendedTo,
+			// which builds a new one — so this keeps the list it was given.
+			// A copy added as a belt survived its own mutant, which is the
+			// evidence that it decided nothing.
+			items = r.Params
 		}
 		if r.failedHeading() {
 			// The word list is what the loop iterates, so a failure in it

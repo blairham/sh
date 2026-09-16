@@ -841,6 +841,38 @@ func (l *Lexer) atAssignValue() bool {
 	return isNameIn(head, l.dialect.DottedName)
 }
 
+// arrayLiteralCouldStandHere reports whether an array literal may be written
+// at the cursor, which is what decides that a `(` straight after an `=` is
+// not a group.
+//
+// The `=` is what makes the question narrow: an array literal is `name=( … )`
+// and nothing else, so the reading is available only where an assignment is.
+// A `case` **pattern** is one of the places it is not — no assignment may be
+// written there — so the `=` is an ordinary character and the `(` behind it
+// is the group it looks like. Measured 2026-09-15 on zsh 5.9.2, each probe
+// in a script file of its own, the subject `a=b`:
+//
+//	case a=b in ((a)=(b)) echo m;; *) echo n;; esac    `m`
+//	case a=b in (a=(b))   echo m;; *) echo n;; esac    `m`
+//	a=(x y); print -r -- $#a                           2
+//
+// The last row is the one this must not lose, and it is the case the guard
+// was written for. The first two are what it was too wide for: read as an
+// array literal, each ended the word at the `(` and the parenthesis was then
+// an operator with nowhere to go. A `case` arm that captures on both sides of
+// an `=` is a shape a shipped completion function writes, and this is what it
+// stopped at (#3040).
+//
+// **An *argument* is a fourth position and is deliberately not here.**
+// `print -r -- x=(a|b)c` is one word in that shell and is still refused here,
+// because the array reading is what a declaration utility's operand needs —
+// `local a=(x y)` reaches the parser as the word `a=` and then a parenthesis
+// — and the lexer cannot see the command's name. Filed rather than guessed
+// at; see #3087.
+func (l *Lexer) arrayLiteralCouldStandHere() bool {
+	return !l.inCondition && !l.inCaseArm && !l.inCaseParenList
+}
+
 // startsNumericRange reports whether the cursor is on a numeric range
 // pattern — `<->`, `<1-9>`, `<2->`, `<-9>` — in a dialect that has one.
 func (l *Lexer) startsNumericRange() bool {
@@ -1722,7 +1754,7 @@ func (l *Lexer) opensPatternGroup() bool {
 	// It is what stopped powerlevel10k parsing, and so what left a real
 	// startup with no prompt: its `prompt[$' \t']#=([^$'\n']#)` matches the
 	// `=` of a `prompt = value` line and captures what follows (#1585).
-	if l.off > 0 && l.src[l.off-1] == '=' && !l.inCondition {
+	if l.off > 0 && l.src[l.off-1] == '=' && l.arrayLiteralCouldStandHere() {
 		return false
 	}
 	if l.dialect.PatternAlternation {

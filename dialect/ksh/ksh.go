@@ -1567,6 +1567,11 @@ func Semantics() interp.Semantics {
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
+	// No keyword either way here; the operand is an expression instead,
+	// so `hard` is a parameter and the complaint is that it is not set.
+	s.UlimitTakesHardKeyword = interp.No
+	s.UlimitTakesSoftKeyword = interp.No
+	s.UlimitOperandIsArithmetic = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
 	// A redirection that cannot be made is a special builtin's failure too,
 	// and this shell keeps the POSIX rule without needing a mode to be in:
@@ -2664,10 +2669,12 @@ func Diagnostics() interp.Diagnostics {
 		// had been pasted here. Nothing caught it because the field takes
 		// the letter as its one verb and that copy had no verb in it at
 		// all, so the letter the reader has to change was never printed.
-		UlimitBadOption:  "ulimit: -%[1]s: unknown option",
-		UlimitBadNumber:  "ulimit: %[1]s: parameter not set",
-		BuiltinBadOption: "%[1]s: %[2]s: unknown option",
-		BadOptionNaming:  interp.BadOptionWholeWord,
+		UlimitBadOption: "ulimit: -%[1]s: unknown option",
+		UlimitBadNumber: "ulimit: %[1]s: parameter not set",
+		// ksh93 names the operand as written and brackets the reason.
+		UlimitCannotChange: "ulimit: %[2]s: limit exceeded [%[3]s]",
+		BuiltinBadOption:   "%[1]s: %[2]s: unknown option",
+		BadOptionNaming:    interp.BadOptionWholeWord,
 		// `ls=/bin/ls`: ksh93's hash is `alias -t`, so its listing is the
 		// alias shape — which is zsh's too, by a different road.
 		HashListing:      interp.HashListingNameEqualsPath,

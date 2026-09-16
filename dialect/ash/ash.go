@@ -703,6 +703,9 @@ func Semantics() interp.Semantics {
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
+	s.UlimitTakesHardKeyword = interp.No
+	s.UlimitTakesSoftKeyword = interp.No
+	s.UlimitOperandIsArithmetic = interp.No
 
 	// ---- traps, signals and jobs ----
 
@@ -1455,6 +1458,7 @@ func Diagnostics() interp.Diagnostics {
 		UmaskBadSymbolicMode: "illegal mode: %[1]s",
 		UmaskBadMaskStatus:   2,
 		UlimitBadNumber:      "bad number",
+		UlimitCannotChange:   "error setting limit: %[3]s",
 
 		// The jobs family: the spec first and the sentence after it, which is
 		// the reverse of dash's order.

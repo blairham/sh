@@ -1362,6 +1362,10 @@ func Semantics() interp.Semantics {
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
+	// `ulimit -n hard` and `-n soft`, which bash alone has both of.
+	s.UlimitTakesHardKeyword = interp.Yes
+	s.UlimitTakesSoftKeyword = interp.Yes
+	s.UlimitOperandIsArithmetic = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.No
 	// `alias` is no more special here than POSIX makes it: the complaint is
 	// said and the next command runs. Measured with `alias -g x`.
@@ -2408,10 +2412,12 @@ func Diagnostics() interp.Diagnostics {
 			{Prefix: "max user processes                  (-u) ", Res: interp.ResourceProcesses, Scale: 1},
 			{Prefix: "virtual memory              (kbytes, -v) ", Res: interp.ResourceAddressSpace, Scale: 1024},
 		},
-		UlimitBadNumber:  "ulimit: %[1]s: invalid number",
-		BuiltinBadOption: "%[1]s: %[2]s: invalid option",
-		WaitBadJob:       "wait: `%[1]s': not a pid or valid job spec",
-		WaitNoSuchJob:    "wait: %[1]s: no such job",
+		UlimitBadNumber: "ulimit: %[1]s: invalid number",
+		// bash names the resource by the same label `ulimit -a` gives it.
+		UlimitCannotChange: "ulimit: %[1]s: cannot modify limit: %[3]s",
+		BuiltinBadOption:   "%[1]s: %[2]s: invalid option",
+		WaitBadJob:         "wait: `%[1]s': not a pid or valid job spec",
+		WaitNoSuchJob:      "wait: %[1]s: no such job",
 		// `fg` and `bg` in a script, which has no job control: bash refuses
 		// before it reads the operand and words it the same for both. Spelled
 		// out rather than left to the shared fallback because empty here

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"syscall"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -156,5 +157,136 @@ func TestUlimitWithoutHooks(t *testing.T) {
 	}
 	if st == 0 || buf.String() == "" {
 		t.Errorf("status %d saying %q, want a refusal", st, buf.String())
+	}
+}
+
+// The words `hard` and `soft` in a limit's place, which name the limits this
+// resource has now. Two axes rather than one: zsh takes `hard` and refuses
+// `soft`, so a single switch would have to be wrong about one of them.
+func TestUlimitKeywordOperands(t *testing.T) {
+	both := func(s *Semantics) { s.UlimitTakesHardKeyword, s.UlimitTakesSoftKeyword = Yes, Yes }
+	held := limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
+	out, st, held := ulimitRun(t, held, both, `ulimit -n hard`)
+	if st != 0 || out != "" {
+		t.Errorf("-n hard: %q status %d, want it taken in silence", out, st)
+	}
+	if got := held[ResourceOpenFiles]; got.soft != 4096 {
+		t.Errorf("-n hard: soft=%d, want the ceiling 4096", got.soft)
+	}
+	// The floor written back, which is what `soft` is for beside -H.
+	held = limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
+	_, st, held = ulimitRun(t, held, both, `ulimit -Hn soft`)
+	if got := held[ResourceOpenFiles]; st != 0 || got.hard != 256 {
+		t.Errorf("-Hn soft: hard=%d status %d, want the floor 256", got.hard, st)
+	}
+	// The keyword is spent before a name can be looked up, which is the one
+	// line where this shell and ksh93 answer differently for the same text.
+	held = limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
+	_, _, held = ulimitRun(t, held, both, "hard=333\nulimit -n hard")
+	if got := held[ResourceOpenFiles]; got.soft != 4096 {
+		t.Errorf("hard=333 then -n hard: soft=%d, want the ceiling 4096 and not the variable", got.soft)
+	}
+	// And where the dialect has no such word it is a number it could not read.
+	for _, c := range []struct {
+		src   string
+		tweak func(*Semantics)
+	}{
+		{`ulimit -n hard`, nil},
+		{`ulimit -n soft`, nil},
+		{`ulimit -n soft`, func(s *Semantics) { s.UlimitTakesHardKeyword = Yes }},
+	} {
+		held = limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
+		out, st, held = ulimitRun(t, held, c.tweak, c.src)
+		if st == 0 || !strings.Contains(out, "invalid number") {
+			t.Errorf("%s without the word: %q status %d, want a bad-number refusal", c.src, out, st)
+		}
+		if got := held[ResourceOpenFiles]; got.soft != 256 {
+			t.Errorf("%s without the word: soft moved to %d", c.src, got.soft)
+		}
+	}
+}
+
+// A signed number is a number to Go's reader and to no shell on the panel.
+// Four dialects set a limit from `+1999` at status 0 and in silence until
+// #3060, which is the shape #2298 is about.
+func TestUlimitRefusesWhatIsNotAPlainNumber(t *testing.T) {
+	for _, word := range []string{"+1999", "-1999", " 99", "0x10", "1000+999", "99abc", ""} {
+		held := limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
+		out, st, held := ulimitRun(t, held, nil, `ulimit -n `+quoteOperand(word))
+		if st == 0 {
+			t.Errorf("-n %q: status 0 saying %q, want it refused", word, out)
+		}
+		if got := held[ResourceOpenFiles]; got.soft != 256 {
+			t.Errorf("-n %q: soft moved to %d", word, got.soft)
+		}
+	}
+	// The word every shell does take is still taken.
+	held := limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
+	_, st, held := ulimitRun(t, held, nil, `ulimit -n unlimited`)
+	if got := held[ResourceOpenFiles]; st != 0 || got.soft != RlimitInfinity {
+		t.Errorf("-n unlimited: soft=%d status %d", got.soft, st)
+	}
+}
+
+func quoteOperand(s string) string { return "'" + s + "'" }
+
+// ksh93's reading: the operand is an expression, and a bare name in it must
+// be set — which is the one place this position is stricter than `$(( ))`.
+func TestUlimitArithmeticOperand(t *testing.T) {
+	arith := func(s *Semantics) { s.UlimitOperandIsArithmetic = Yes }
+	for _, c := range []struct {
+		src  string
+		want int64
+	}{
+		{`ulimit -n '+1999'`, 1999},
+		{`ulimit -n 1000+999`, 1999},
+		{`ulimit -n 0x10`, 16},
+		{`ulimit -n ' 99'`, 99},
+		{"hard=333\nulimit -n hard", 333},
+	} {
+		held := limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
+		out, st, held := ulimitRun(t, held, arith, c.src)
+		if got := held[ResourceOpenFiles]; st != 0 || got.soft != c.want {
+			t.Errorf("%s: soft=%d status %d saying %q, want %d", c.src, got.soft, st, out, c.want)
+		}
+	}
+	// An unset name is the refusal, not a zero: `ulimit -n hard` is how that
+	// shell says it has no keyword.
+	held := limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
+	out, st, held := ulimitRun(t, held, arith, `ulimit -n hard`)
+	if st == 0 {
+		t.Errorf("-n hard as arithmetic: status 0 saying %q, want the unset name refused", out)
+	}
+	if got := held[ResourceOpenFiles]; got.soft != 256 {
+		t.Errorf("-n hard as arithmetic: soft moved to %d", got.soft)
+	}
+}
+
+// The kernel's refusal names the resource and keeps the C string's capital.
+func TestUlimitCannotChangeNamesTheResource(t *testing.T) {
+	f, err := syntax.Parse(`ulimit -n 200`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	sem := permissive()
+	dg := Diagnostics{
+		UlimitCannotChange: "ulimit: %[1]s: cannot modify limit: %[3]s",
+		UlimitListing: []UlimitListingRow{
+			{Prefix: "open files                          (-n) ", Res: ResourceOpenFiles, Scale: 1},
+		},
+	}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
+	r.GetRlimit = func(Resource) (int64, int64, error) { return 100, 100, nil }
+	r.SetRlimit = func(Resource, int64, int64) error { return syscall.EPERM }
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if want := "ulimit: open files: cannot modify limit: Operation not permitted"; !strings.Contains(buf.String(), want) {
+		t.Errorf("output = %q, want it to contain %q", buf.String(), want)
+	}
+	if st != 1 {
+		t.Errorf("status = %d, want 1", st)
 	}
 }

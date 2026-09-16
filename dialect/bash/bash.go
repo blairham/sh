@@ -1374,6 +1374,8 @@ func Semantics() interp.Semantics {
 	// reads a different escape out of the same spelling (#2345).
 	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaAbsent
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// `kill %1` reaches the job's process. dash aims at the group.
+	s.KillJobSpecAimsAtTheGroup = interp.No
 	// OPTIND names the word until its last letter has been read: `-abc`
 	// reads `a` with OPTIND still 1. dash and BusyBox ash count it at the
 	// first letter instead.

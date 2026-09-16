@@ -656,6 +656,9 @@ func Semantics() interp.Semantics {
 	// dollar included — so the grammar refuses the form before any of them
 	// can be asked. An answer here would be an invention.
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// `kill %1` aims at the job's process group, which a script never has:
+	// the monitor is off, the job leads no group, and the send is ESRCH.
+	s.KillJobSpecAimsAtTheGroup = interp.Yes
 	// OPTIND names the word *after* a cluster from its first letter on, so
 	// `-abc` reads `a` with OPTIND already 2. The place inside the word is
 	// kept somewhere a script cannot see. bash, ksh93 and zsh all leave

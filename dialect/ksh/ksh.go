@@ -1622,6 +1622,8 @@ func Semantics() interp.Semantics {
 	s.DollarSingleHexReadsEveryDigit = interp.Yes
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// `kill %1` reaches the job's process. dash aims at the group.
+	s.KillJobSpecAimsAtTheGroup = interp.No
 	// bash's answer here: OPTIND names the word until its last letter.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.No
 	s.GetoptsClearsOptarg = interp.No

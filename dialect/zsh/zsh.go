@@ -2044,6 +2044,8 @@ func Semantics() interp.Semantics {
 	// the value names the reading rather than saying yes (#2345).
 	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaMaskedWithAnOptionalDash
 	s.GetoptsAssignmentRestartsWord = interp.No
+	// `kill %1` reaches the job's process. dash aims at the group.
+	s.KillJobSpecAimsAtTheGroup = interp.No
 	// OPTIND names the word until its last letter has been read.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.No
 	// OPTIND is local to a shell function here: the call starts at 1 and the

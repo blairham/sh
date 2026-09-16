@@ -742,6 +742,8 @@ func Semantics() interp.Semantics {
 	s.FatalErrorEndsAtTheCommandWord = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// `kill %1` reaches the job's process here, as it does in bash.
+	s.KillJobSpecAimsAtTheGroup = interp.No
 	// And it counts a clustered word at its first letter, which is dash's
 	// answer and not bash's: `-abc` reads `a` with OPTIND already 2.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.Yes

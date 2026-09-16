@@ -2367,6 +2367,33 @@ type Semantics struct {
 	// a second time where zsh carries on to `b`.
 	GetoptsAssignmentRestartsWord Answer
 
+	// KillJobSpecAimsAtTheGroup points a `%` job specification at the job's
+	// *process group* rather than at its process.
+	//
+	// dash alone does, and in a script it is the difference between `kill
+	// %1` working and not working at all. A group id is its leader's pid, so
+	// a job the monitor never put in a group of its own has no group of its
+	// number — and `set -m` is refused without a controlling terminal, which
+	// is every script. So the send is ESRCH:
+	//
+	//	mkfifo gate; cat < gate & kill -0 %1
+	//
+	//	bash 5.3.20, zsh 5.9.2, ksh93u+, BusyBox ash 1.37.0   0
+	//	dash                            `kill: No such process`, 1
+	//
+	// The job is held open on a fifo so that it cannot have finished, which
+	// is what makes the two answers a rule rather than a race. Measured
+	// 2026-09-16 on Apple's dash-16 and on Debian's and Alpine's 0.5.12
+	// builds, all three the same; `kill -0 "$!"` on that same job is 0 in
+	// dash and `kill -0 -"$!"` draws the identical refusal, which is what
+	// says the group and not the word is what it could not reach.
+	//
+	// So it is a missing *reach* rather than a missing spelling: dash reads
+	// the spec, finds the job and aims one process-group number past
+	// anything that exists. A script that stops a background job from a trap
+	// has to keep the pid here.
+	KillJobSpecAimsAtTheGroup Answer
+
 	// GetoptsCountsTheWordAtItsFirstLetter moves OPTIND past a clustered
 	// word as soon as its *first* letter has been read, keeping the place
 	// inside the word somewhere a script cannot see.
@@ -15625,7 +15652,10 @@ func PosixSemantics() Semantics {
 		// what four of the six columns do. dash and BusyBox ash count the
 		// word at its first letter and say so themselves.
 		GetoptsCountsTheWordAtItsFirstLetter: No,
-		SignalHandlerSeesEarlierStatus:       No,
+		// `kill %1` reaches the job's process; dash aims at its group and
+		// says so itself.
+		KillJobSpecAimsAtTheGroup:      No,
+		SignalHandlerSeesEarlierStatus: No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
 		// entered — which is what six of the seven columns do. Measured
@@ -16434,6 +16464,9 @@ func CoreSemantics() Semantics {
 		// substrate is a shell somebody runs: an unanswered axis would make
 		// every clustered `getopts` read a refusal.
 		GetoptsCountsTheWordAtItsFirstLetter: No,
+		// `kill %1` reaches the job's process; dash aims at its group and
+		// says so itself.
+		KillJobSpecAimsAtTheGroup: No,
 		// Whether `$_` exists at all is left unanswered here, which is the
 		// substrate refusing it. *How* it moves is answered anyway, at the
 		// reading two of the three shells that have the parameter share:

@@ -311,7 +311,7 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) int {
 	sent, failed := 0, 0
 	for _, t := range targets {
-		aims, bad := r.killTarget(t)
+		aims, fromJob, bad := r.killTarget(t)
 		switch bad {
 		case jobSpecUnanswered:
 			return r.status
@@ -325,6 +325,21 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			return r.killReport(killNoSuchJob, t)
 		case killTargetNotAPid:
 			return r.killReport(killNotAPid, t)
+		}
+		if fromJob && r.aimsAJobSpecAtItsGroup(aims) {
+			// dash names the job's *process group* rather than its process.
+			// With the monitor off — which is every script — the job's
+			// process leads no group, so there is no group of that number
+			// and the send is ESRCH. Measured 2026-09-16 on Apple's dash-16
+			// and on Debian's and Alpine's dash 0.5.12, on a job blocked
+			// opening a fifo so that it cannot have finished: `kill -0 %1`,
+			// `%%` and `%+` are all `kill: No such process` at 1, where
+			// `kill -0 "$!"` on the same job is 0 and `kill -0 -"$!"` is the
+			// same refusal. bash, zsh and ksh93 aim at the process and
+			// succeed.
+			failed++
+			r.killFailed(&killError{kind: killNoSuchProcess, operand: t, errno: syscall.ESRCH})
+			continue
 		}
 		if len(aims) == 0 {
 			// A target that is there with nothing to reach, which is a job
@@ -424,11 +439,11 @@ const killTargetNotAPid = jobSpecUnanswered + 1
 // carries whether its number names a process group, because reaching a group
 // is a different call from reaching a process and only one of them is this
 // package's to make.
-func (r *Runner) killTarget(t string) (targets []jobProcess, bad int) {
+func (r *Runner) killTarget(t string) (targets []jobProcess, fromJob bool, bad int) {
 	if !strings.HasPrefix(t, "%") {
 		n, err := strconv.Atoi(t)
 		if err != nil {
-			return nil, killTargetNotAPid
+			return nil, false, killTargetNotAPid
 		}
 		if j := r.jobByIdent(n); j != nil {
 			// A number this shell invented for a job that has no process of
@@ -439,15 +454,41 @@ func (r *Runner) killTarget(t string) (targets []jobProcess, bad int) {
 			// it would find nothing. Reading it here is what makes
 			// `p=$!; kill "$p"` mean the job the script started. See
 			// jobident.go.
-			return r.jobProcesses(j)
+			// A number, so it is a pid as far as `kill` is concerned even
+			// here: the job spec this shell reads it back as is an
+			// arrangement of ours, not a `%` word the script wrote, and the
+			// panel aims a number at the process in every column.
+			targets, code := r.jobProcesses(j)
+			return targets, false, code
 		}
-		return []jobProcess{{pid: n}}, jobFound
+		return []jobProcess{{pid: n}}, false, jobFound
 	}
 	j, code := r.findJobQuietly(t)
 	if code != jobFound {
-		return nil, code
+		return nil, true, code
 	}
-	return r.jobProcesses(j)
+	targets, found := r.jobProcesses(j)
+	return targets, true, found
+}
+
+// aimsAJobSpecAtItsGroup reports whether this dialect points a `%` spec at
+// the job's process group, and the group is one that cannot be there.
+//
+// The pair is one question because only the second half is reachable in a
+// script: a group id is its leader's pid, and a process that leads no group
+// has no group of its number for anything to receive. So where the dialect
+// aims at the group and the job's first process leads none, the send is
+// ESRCH by construction and no call has to be made to find that out — which
+// also keeps this shell from ever handing a negative number to the kernel on
+// a job that shares its own group. Where the monitor did put the job in a
+// group of its own, the ordinary group send below is already the right call.
+func (r *Runner) aimsAJobSpecAtItsGroup(aims []jobProcess) bool {
+	if !r.ask(r.sem().KillJobSpecAimsAtTheGroup, "`kill` aiming a job spec at the job's process group") {
+		return false
+	}
+	// dash names the first process of the job, so that is the one whose
+	// group is asked for.
+	return len(aims) == 0 || !aims[0].ownGroup
 }
 
 // jobProcesses is what signaling a job aims at, whether the script named the

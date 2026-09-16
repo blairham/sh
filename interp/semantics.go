@@ -12544,6 +12544,43 @@ type Semantics struct {
 	// question of any shell in the panel.
 	HistoryExpansionAtAPrompt Answer
 
+	// HistoryExpansionInAScript reads a **script** one physical line at a
+	// time, keeping the history list and expanding against it once the
+	// options that turn the two on have been written.
+	//
+	// The third of the three questions, and the one that splits the shells
+	// that answer Yes to the first two. Measured 2026-09-16 with a file
+	// holding `set -o history`, `set -H`, `echo one two three`, `echo !!`,
+	// `echo !$`, `echo hello world`, `^hello^goodbye^`:
+	//
+	//   - bash 5.3.20, bash 3.2.57 and bash-as-`sh` write each expanded line
+	//     to standard error and run it — `echo echo one two three`, `echo
+	//     three`, `echo goodbye world`;
+	//   - zsh 5.9.2 refuses `set -o history` outright (`no such option`), and
+	//     with its own `setopt banghist` written instead it still prints the
+	//     two characters;
+	//   - ksh93u+ 2012-08-01 refuses `set -o history` (`bad option(s)`), and
+	//     with `set -H` — which it *does* take — still prints the two
+	//     characters;
+	//   - dash 0.5.12 and BusyBox ash 1.37.0 have neither option.
+	//
+	// So two shells with an expander apiece use it only where somebody is
+	// typing, and bash uses it wherever it reads. It is bash's row alone, and
+	// it is not the same question as HistoryExpansion above: a dialect
+	// answering Yes there and No here has the feature and confines it to a
+	// prompt, which is what zsh and ksh93 both do.
+	//
+	// Both halves hang on this one answer, because in bash they arrive
+	// together: `set -o history` starts the list, `set -H` starts expanding
+	// against it, and a shell that did the second without the first would
+	// have every reference resolve against nothing.
+	//
+	// Not in the golden record, for the reason the two above give: the
+	// harness runs each case as a command string, and while bash *does*
+	// expand on that route too, the other five would record the same "nothing
+	// happened" and the row would read as agreement.
+	HistoryExpansionInAScript Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -15600,6 +15637,7 @@ func PosixSemantics() Semantics {
 		// that agrees with the preset, and it agrees by refusing the letter.
 		HistoryExpansion:          No,
 		HistoryExpansionAtAPrompt: No,
+		HistoryExpansionInAScript: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
 		// dash is the one shell that refuses the letter, and overrides.

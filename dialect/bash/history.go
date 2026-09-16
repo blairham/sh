@@ -83,6 +83,12 @@ const historyUsage = "history: usage: history [-c] [-d offset] [n] or " +
 
 func registerHistory(r *interp.Runner) {
 	r.Register("history", historyBuiltin)
+	// And the same list to the front end, which is what fills it when bash
+	// reads a *script* with `set -o history` written: every command it runs
+	// joins the list the designators index. Functions taking a runner rather
+	// than closures over this one — see interp.Runner.SetHistoryStore, where
+	// the subshell reason is written down.
+	r.SetHistoryStore(historyEntries, func(r *interp.Runner, line string) { historyAdd(r, line) })
 }
 
 // historyFlags is the letters one call carried.
@@ -123,6 +129,18 @@ func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	// `-p` and `-s` take every remaining operand and answer on their own,
 	// which is why bash's usage line prints them as a third form rather than
 	// alongside the others.
+	// Both of these drop the builtin's **own** line from the list first.
+	// `-s` is documented to — "the last command in the history list is
+	// removed before the args are added" — and `-p` is measured to: after
+	// `history -p "!!"`, a later `history` does not list the `-p` line.
+	//
+	// Only where the front end put that line there. Measured, `history -s a`
+	// followed by `history -s b` in a shell with no list leaves both, because
+	// neither line was ever recorded and there is nothing of the builtin's
+	// own to drop.
+	if flags.print || flags.store {
+		historyDropOwnLine(r)
+	}
 	if flags.print {
 		return historyPrint(r, rest)
 	}
@@ -270,20 +288,30 @@ func historyDelete(r *interp.Runner, offset string) int {
 
 // historyPrint is `-p`: each operand after history expansion, one per line.
 //
-// This shell has no history expansion, and that is the whole of the answer
-// rather than a gap in it. An operand with no `!` in it expands to itself and
-// is written back — measured, `history -p foo bar` writes two lines at 0. One
-// carrying a `!` has nothing to expand against, and bash's own answer in a
-// shell that cannot expand it is `history: !!: history expansion failed` at
-// 1, which is the same sentence for the same reason.
+// Against the same list everything else here keeps, and **without** asking
+// whether `set -H` is on: measured, `set -o history; echo one two three;
+// history -p "!!"` writes `echo one two three` with the letter never written.
+// The letter decides whether the shell expands what it *reads*; this operand
+// was handed to the builtin on purpose.
+//
+// An operand with no reference in it expands to itself and is written back —
+// measured, `history -p foo bar` writes two lines at 0. A reference the list
+// does not hold is `history: !!: history expansion failed` at 1, which is
+// also bash's answer in a shell whose list is empty, and none of the operands
+// is written when one of them fails. Nothing is added to the list: `-p` is
+// the way to look at what a reference resolves to without committing to it.
 func historyPrint(r *interp.Runner, rest []string) int {
+	out := make([]string, 0, len(rest))
+	entries := historyEntries(r)
 	for _, arg := range rest {
-		if strings.Contains(arg, "!") {
+		res, err := r.ExpandHistoryAlways(arg, entries, 1)
+		if err != nil {
 			r.Diagnosef("history: %s: history expansion failed\n", arg)
 			return 1
 		}
+		out = append(out, res.Line)
 	}
-	for _, arg := range rest {
+	for _, arg := range out {
 		_, _ = fmt.Fprintf(r.Out(), "%s\n", arg)
 	}
 	return 0
@@ -354,6 +382,19 @@ func historyEntries(r *interp.Runner) []string {
 		return nil
 	}
 	return append([]string(nil), entries...)
+}
+
+// historyDropOwnLine removes the line the builtin was written on, which the
+// front end reading the program has already recorded.
+func historyDropOwnLine(r *interp.Runner) {
+	if !r.HistoryListFilledByTheReader() {
+		return
+	}
+	entries := historyEntries(r)
+	if len(entries) == 0 {
+		return
+	}
+	r.SetArray(historyStore, entries[:len(entries)-1])
 }
 
 func historyAdd(r *interp.Runner, line string) {

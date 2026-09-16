@@ -48,6 +48,17 @@ func (r *Runner) StartInteractiveHistory() {
 // line is parsed.
 func (r *Runner) HistoryExpansion() bool { return r.histExpand }
 
+// HistoryExpansionInAScript reports whether this dialect reads a script one
+// physical line at a time, keeping the list and expanding against it. See
+// Semantics.HistoryExpansionInAScript, which is bash's row alone.
+//
+// Read through the runner rather than off the vector, because a nil vector
+// means bash's and a front end testing the field directly would give every
+// embedder without one bash's answer.
+func (r *Runner) HistoryExpansionInAScript() bool {
+	return r.sem().HistoryExpansionInAScript == Yes
+}
+
 // SetHistoryRecording and HistoryRecording are the same pair for bash's
 // `set -o history`: whether accepted lines join the list at all.
 func (r *Runner) SetHistoryRecording(on bool) { r.histRecord = on }
@@ -101,10 +112,96 @@ const historyCharsParameter = "histchars"
 // A shell with the state off hands the line straight back, so the caller can
 // call unconditionally and the one place that decides is here.
 func (r *Runner) ExpandHistory(line string, lines []string, first int) (histexpand.Result, error) {
+	return r.ExpandHistoryIn(line, histexpand.Unquoted, lines, first)
+}
+
+// ExpandHistoryAlways expands whether or not `set -H` is on, which is what
+// `history -p` wants: the letter decides whether the shell expands the lines
+// it *reads*, and an operand handed to that builtin was handed to it on
+// purpose. Measured — `set -o history; echo one two three; history -p "!!"`
+// writes `echo one two three` with the letter never written.
+func (r *Runner) ExpandHistoryAlways(line string, lines []string, first int) (histexpand.Result, error) {
+	return histexpand.Expand(line, histexpand.List{Lines: lines, First: first}, r.HistoryChars())
+}
+
+// ExpandHistoryIn is the same for a front end handing over one **physical**
+// line of a script, which may begin inside a quote an earlier line opened.
+//
+// See histexpand.Quote: the state seeds the scanner, and the scanner still
+// closes the quote where the line closes it.
+func (r *Runner) ExpandHistoryIn(line string, in histexpand.Quote, lines []string, first int) (histexpand.Result, error) {
 	if !r.histExpand {
 		return histexpand.Result{Line: line}, nil
 	}
-	return histexpand.Expand(line, histexpand.List{Lines: lines, First: first}, r.HistoryChars())
+	return histexpand.ExpandIn(line, in, histexpand.List{Lines: lines, First: first}, r.HistoryChars())
+}
+
+// SetHistoryStore hands the Runner the list `history` keeps, so that the
+// front end reading a script can add to it and the expander can index it.
+//
+// A pair of functions rather than a slice on the Runner, and they take a
+// *Runner rather than closing over one, because the list is a **dialect's**
+// and lives where that dialect keeps it — bash's is a shell array under a
+// name no script can reach, which is what gives `(history -s x)` a copy of
+// its parent's list rather than a handle on it. Closures capturing the runner
+// they were registered on would have written a subshell's entry into the
+// parent's array, which is the one thing that storage shape exists to
+// prevent.
+//
+// A dialect with no list leaves these nil, and a front end then records
+// nothing and expands against an empty list, which is what a shell without
+// the feature does anyway.
+func (r *Runner) SetHistoryStore(entries func(*Runner) []string, add func(*Runner, string)) {
+	r.histEntries, r.histAdd = entries, add
+}
+
+// SetHistoryListFilledByTheReader records that the front end reading this
+// program is putting its commands into the list, which is the state bash's
+// `remember_on_history` names.
+//
+// Two builtins turn on it. `history -s` is documented to remove the last
+// entry before adding its own — the last entry being the `history -s` line
+// itself — and measured, `history -p` drops its own line too. Both are
+// conditional on the line being there in the first place: measured, `history
+// -s a` followed by `history -s b` in a shell with no list leaves *both*,
+// because neither line was ever recorded.
+//
+// Asked of the front end rather than derived from HistoryRecording, because
+// the two are not the same thing here: an interactive session records into
+// the editor's own history and not into this list, so a prompt would drop a
+// planted entry that nothing had pushed the line in front of. Joining those
+// two lists is a real question and not this one — see dialect/bash's
+// history.go, which has said so since the builtin landed.
+func (r *Runner) SetHistoryListFilledByTheReader(on bool) { r.histFromReader = on }
+
+// HistoryListFilledByTheReader reports it.
+func (r *Runner) HistoryListFilledByTheReader() bool { return r.histFromReader }
+
+// HistoryEntries is the list, oldest first.
+func (r *Runner) HistoryEntries() []string {
+	if r.histEntries == nil {
+		return nil
+	}
+	return r.histEntries(r)
+}
+
+// RecordHistoryEntry appends one command to the list.
+//
+// The **expanded** text, which is what every reference after it resolves
+// against: measured on bash 5.3.20 with `echo one two three`, `!!`, `!!`, the
+// list holds `echo one two three`, `echo echo one two three`, `echo echo echo
+// one two three`.
+//
+// Empty text is refused here and nowhere else, which is the one guard for the
+// one rule: a blank line is not a command and does not join the list. A line
+// of *blanks* is — measured, a script whose second line is three spaces has
+// those three spaces as its first entry — so the test is emptiness and not
+// blankness, and a caller trimming before it called would lose that.
+func (r *Runner) RecordHistoryEntry(line string) {
+	if r.histAdd == nil || line == "" {
+		return
+	}
+	r.histAdd(r, line)
 }
 
 // HistoryExpansionRefusal renders what this dialect says about a reference the

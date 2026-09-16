@@ -2191,6 +2191,14 @@ func (sh Shell) executeLines(
 		// shell it turns on — and the line after it can only be found once
 		// every line before it has been walked past.
 		say(int(line.Last.Line))
+		// The command joins the history list **before** it runs, which is
+		// measured and is not a detail: `history` written in a script lists
+		// itself, and `history -s planted` followed by `!!` recalls what it
+		// planted rather than the `history -s` that planted it — the line was
+		// already in the list when the builtin appended to it. Nothing at all
+		// where the program has no gate, which is every script that never
+		// wrote `set -o history`.
+		pr.recordHistory()
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
@@ -2214,6 +2222,35 @@ func (sh Shell) executeLines(
 		// waits for a prompt to tell them: bash under `-i -c` announces the
 		// job's start and never its end. See reportFinishedJobs.
 		sh.reportFinishedJobs(r)
+		// And the line may have asked for a history list, which is what
+		// turns this route into a per-physical-line read. Asked after the
+		// line has run, because that is the semantics: measured, `set -H;
+		// echo !!` written on one line expands nothing, since the whole line
+		// was read before any of it ran.
+		//
+		// The list is the gate on both halves rather than the expander,
+		// because in bash they arrive in that order — `set -o history`
+		// starts the list and `set -H` starts expanding against it — and a
+		// shell that began expanding without having recorded anything would
+		// resolve every reference against an empty list. Measured: `set -o
+		// history` alone records, and bash's own `history` reads the list
+		// back with `set -H` never written.
+		//
+		// echoed.off is where the `set -v` echo has walked to, which is the
+		// end of the line that just ran. Reusing it rather than computing a
+		// second answer: the position has to keep up whether the option is
+		// on or off, which is exactly what makes it the right bound here.
+		if pr.gate == nil && r.HistoryRecording() && r.HistoryExpansionInAScript() {
+			pr.handOver(&histGate{
+				r:      r,
+				report: func(line int, msg string) string { return in.dg.Report(in.diagName(), line, msg) },
+			}, echoed.off)
+			// And the list now holds the line a builtin is written on, which
+			// is the state `history -s` and `history -p` each drop one entry
+			// for. Told rather than derived: a prompt records into the
+			// editor's history and not into this list.
+			r.SetHistoryListFilledByTheReader(true)
+		}
 		if r.Exited() {
 			break
 		}

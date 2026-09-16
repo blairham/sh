@@ -394,6 +394,13 @@ func Semantics() interp.Semantics {
 	s.KeywordAssignments = interp.Yes
 	s.KeywordPromotesADeclarationsOperand = interp.Yes
 	s.HistoryExpansionAtAPrompt = interp.Yes
+	// And bash is the one column that uses the expander where nobody is
+	// typing. Measured 2026-09-16 from a script file, from `-c` and from
+	// standard input alike: after `set -o history` and `set -H`, `echo !!`
+	// writes `echo echo one two three` to standard error and runs it, while
+	// zsh with `setopt banghist` and ksh93 with `set -H` both print the two
+	// characters. See Semantics.HistoryExpansionInAScript.
+	s.HistoryExpansionInAScript = interp.Yes
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.

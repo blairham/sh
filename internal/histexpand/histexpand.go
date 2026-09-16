@@ -126,24 +126,59 @@ type state struct {
 	new     string
 }
 
-// Expand rewrites one line.
+// Quote is what the text handed to ExpandIn begins inside.
+//
+// A shell at a prompt hands over a whole logical line and the answer is always
+// Unquoted. A shell reading a **script** hands over one physical line at a
+// time, and a quote opened on an earlier line is still open when the next one
+// arrives: measured on bash 5.3.20, `echo 'a` / `!!` / `b'` leaves the two
+// characters alone and `echo "a` / `!!` / `b"` expands them, so the state has
+// to cross the line boundary or half the rule is lost.
+//
+// It seeds the scanner and nothing more — the scanner still closes the quote
+// when it reaches the character that closes it, which is what makes `echo 'a`
+// / `b' !!` expand the reference *after* the quote ends. Measured.
+type Quote uint8
+
+const (
+	// Unquoted is a line that begins outside any quote.
+	Unquoted Quote = iota
+	// InSingleQuotes is a line continuing a single-quoted string, where
+	// nothing expands until the quote closes.
+	InSingleQuotes
+	// InDoubleQuotes is a line continuing a double-quoted string, where
+	// references expand exactly as they do outside one.
+	InDoubleQuotes
+)
+
+// Expand rewrites one whole line, which is what a prompt hands over.
+func Expand(line string, hist List, c Chars) (Result, error) {
+	return ExpandIn(line, Unquoted, hist, c)
+}
+
+// ExpandIn rewrites one line that begins in a known quoting state.
 //
 // The line is scanned left to right rather than split into words, because the
 // quoting rules are the scanner's: text inside single quotes is never
 // expanded, text inside double quotes is, and a `'` inside double quotes opens
 // nothing — measured, `echo "it's !!"` expands where `echo '!!'` does not.
-func Expand(line string, hist List, c Chars) (Result, error) {
+//
+// A `^old^new^` quick substitution is only one when the line begins outside a
+// quote. Inside one the character is ordinary text, and a line of a here
+// document or of a continued string that happened to start with it would
+// otherwise be rewritten into something nobody wrote.
+func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 	if c.Event == 0 {
 		return Result{Line: line}, nil
 	}
 	var st state
-	if c.Quick != 0 && strings.HasPrefix(line, string(c.Quick)) {
+	if in == Unquoted && c.Quick != 0 && strings.HasPrefix(line, string(c.Quick)) {
 		return quick(line, hist, c, &st)
 	}
 	src := []rune(line)
 	var out strings.Builder
 	res := Result{}
-	single, double := false, false
+	single, double := in == InSingleQuotes, in == InDoubleQuotes
 	for i := 0; i < len(src); {
 		r := src[i]
 		switch {
@@ -261,12 +296,20 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	ref := func(end int) string { return string(src[i:end]) }
 
 	var words []string
+	// raw is the event's own text, which is what a reference with no word
+	// designator on it becomes. Kept beside the words rather than rebuilt
+	// from them: measured, `echo   spaced    words` recalled by `!!` comes
+	// back with its spacing intact, where `!!:*` joins the words with one
+	// space each. A prompt never showed the difference because a line typed
+	// at one is a line; a **script** puts whole multi-line commands in the
+	// list, and joining those with spaces turns a here-document into gibberish.
+	var raw string
 	var haveWords bool
 	switch {
 	case j < len(src) && src[j] == '#':
 		// The line up to here, which is the one event that is not in the
 		// list at all.
-		words = fields(sofar)
+		words, raw = fields(sofar), sofar
 		haveWords = true
 		j++
 	case j < len(src) && (src[j] == c.Event):
@@ -274,7 +317,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(j + 1)}
 		}
-		words = fields(entry)
+		words, raw = fields(entry), entry
 		haveWords = true
 		j++
 	case j < len(src) && isWordDesignator(src[j], c):
@@ -284,7 +327,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(j + 1)}
 		}
-		words = fields(entry)
+		words, raw = fields(entry), entry
 		haveWords = true
 	case j < len(src) && src[j] == '?':
 		k := j + 1
@@ -300,7 +343,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			return "", 0, false, &NotFound{Ref: ref(k)}
 		}
 		st.matched = want
-		words = fields(entry)
+		words, raw = fields(entry), entry
 		haveWords = true
 		j = k
 	default:
@@ -324,7 +367,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			if !ok {
 				return "", 0, false, &NotFound{Ref: ref(digits)}
 			}
-			words = fields(entry)
+			words, raw = fields(entry), entry
 			haveWords = true
 			j = digits
 			break
@@ -342,7 +385,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(k)}
 		}
-		words = fields(entry)
+		words, raw = fields(entry), entry
 		haveWords = true
 		j = k
 	}
@@ -354,10 +397,10 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	if err != nil {
 		return "", 0, false, err
 	}
-	if !ok {
-		chosen = words
+	text := raw
+	if ok {
+		text = strings.Join(chosen, " ")
 	}
-	text := strings.Join(chosen, " ")
 	text, j, print, err := modifiers(src, j, text, ref(j), st)
 	if err != nil {
 		return "", 0, false, err
@@ -678,20 +721,37 @@ func tail(s string) string {
 	return s
 }
 
+// root is `:r` and ext is `:e`, and both are about the last `.` in the **whole
+// word** rather than in its last path component — which is measured and is the
+// opposite of what a basename-first reading gives. Eight words on bash 5.3.20,
+// 2026-09-16, each against a fresh one-line history:
+//
+//	word          :r          :e
+//	plain         plain       plain
+//	c.txt         c           .txt
+//	/a/b/c.txt    /a/b/c      .txt
+//	/a/b/c        /a/b/c      /a/b/c
+//	a.b.c         a.b         .c
+//	.hidden       (empty)     .hidden
+//	/a.b/c        /a          .b/c
+//	x.            x           .
+//
+// `/a.b/c` is the discriminator for the whole-word reading and `.hidden` for
+// the position-zero one; `plain` and `/a/b/c` say that a word with no `.` at
+// all comes back **whole** from both, which is the answer neither name
+// suggests and is why it is written down rather than reasoned about.
 func root(s string) string {
-	base := tail(s)
-	if i := strings.LastIndexByte(base, '.'); i > 0 {
-		return s[:len(s)-(len(base)-i)]
+	if i := strings.LastIndexByte(s, '.'); i >= 0 {
+		return s[:i]
 	}
 	return s
 }
 
 func ext(s string) string {
-	base := tail(s)
-	if i := strings.LastIndexByte(base, '.'); i > 0 {
-		return base[i:]
+	if i := strings.LastIndexByte(s, '.'); i >= 0 {
+		return s[i:]
 	}
-	return ""
+	return s
 }
 
 // String renders the three characters the way `histchars` holds them, which is

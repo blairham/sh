@@ -4124,7 +4124,14 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 		// shell that failed is the one that stops, and two different numbers
 		// where it is not — see scriptStop.status.
 		r.status = status
-		r.ctl, r.errexitStopped = controlExit, false
+		// The same kind the failure was raised under one shell down, and
+		// for the same reason: what comes out of the box is the error that
+		// shell reported, so a boundary above — an interactive prompt most
+		// of all — has to see an error rather than a request to stop
+		// (#3300). Without it `( v=$(echo hi; for) )` typed at a prompt
+		// ended the session where the plain shape had been fixed, which is
+		// the half a fix at the raise site alone cannot reach.
+		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonSubstParse, false
 		return nil
 	}
 	// Whatever arrived while the previous command ran. A shell finishes what

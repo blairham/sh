@@ -176,7 +176,17 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 			r.recordScriptStop(r.diag().SyntaxStatus())
 		}
 		r.status = r.diag().SyntaxStatus()
-		r.stopTheShell()
+		// **An error the shell reported, not a request to stop**, which is
+		// what every boundary in fileabandon.go splits on. It was raised
+		// through stopTheShell and so arrived at those boundaries as
+		// abandonRequested — the zero value that file calls "the answer for
+		// a site that has not thought about it" — and the one that pays for
+		// it is the interactive prompt: `v=$(echo hi; for)` typed at a
+		// prompt ended the *session* in every dialect, where all seven
+		// reference columns report it and draw the next prompt (#3300). The
+		// annotation is the whole fix; Runner.GiveUpTheLine already catches
+		// an error and already lets a request through.
+		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonSubstParse, false
 		return ""
 	}
 

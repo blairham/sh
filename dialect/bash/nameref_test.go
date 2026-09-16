@@ -3,7 +3,10 @@
 
 package bash_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // `declare -n` — a **name reference**, which is a language feature rather
 // than an option letter and is why #2553 was split out of #2412.
@@ -562,5 +565,73 @@ func TestAReferenceIsRefusedOverAnArray(t *testing.T) {
 				t.Errorf("%s = %q at %d, want %q at %d", tc.src, out, st, tc.want, tc.status)
 			}
 		})
+	}
+}
+
+// The warning a read through a warned reference carries is **per read**, and
+// an expansion is one read however many operators it carries.
+//
+// `${r-word}` said it twice here — once for the test that decides whether the
+// word is substituted and once for the value behind it — so the function
+// shape of #3048 wrote four warnings where bash writes three. The count is
+// the assertion and not the text: a probe that printed them without counting
+// could not tell four from three, which is the whole of this bug (#3104).
+//
+// Measured 2026-09-16 against bash 5.3.20, `env -i` with a scratch HOME and
+// no startup files; every row was run against the real shell and this one
+// side by side. ksh93 refuses this declaration outright and zsh, dash, bash
+// 3.2 and BusyBox ash have no `-n` letter, so bash is the only column that
+// answers.
+func TestAWarnedReferenceSaysItOncePerRead(t *testing.T) {
+	dir := t.TempDir()
+	const warning = "warning: r: circular name reference"
+	for _, tc := range []struct {
+		name, read, value string
+	}{
+		// Three: two from the declaration, which says it with the builtin's
+		// name and then again as the shell, and one from the read.
+		{"a plain read", `$r`, "OUTER"},
+		{"a set-ness test", `${r+S}`, "S"},
+		{"a length", `${#r}`, "5"},
+		// The two that said it twice. The value was right in both, so the
+		// count is the only tell.
+		{"a default word", `${r-GONE}`, "OUTER"},
+		{"and its colon form", `${r:-D}`, "OUTER"},
+		// The rest of the conditionals, which were already right and are
+		// here so a fix that quietened one form cannot pass by quietening
+		// all of them.
+		{"an alternate word", `${r:+S}`, "S"},
+		{"an assigning word", `${r=A}`, "OUTER"},
+		{"and its colon form", `${r:=A}`, "OUTER"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `r=OUTER; f(){ local -n r=r; echo "in=[` + tc.read + `]"; }; f`
+			out, st := runBash(t, dir, src)
+			if n := strings.Count(out, warning); n != 3 {
+				t.Errorf("%s said the warning %d times, want 3\n%s", tc.read, n, out)
+			}
+			if want := "in=[" + tc.value + "]\n"; !strings.HasSuffix(out, want) {
+				t.Errorf("%s = %q, want it to end %q", tc.read, out, want)
+			}
+			if st != 0 {
+				t.Errorf("%s status %d, want 0", tc.read, st)
+			}
+		})
+	}
+}
+
+// Three deep, which is the shape that discriminates: with one caller "the
+// outer cell" and "the global cell" are the same thing, and the count has to
+// stay at three while the value comes from past two intervening locals.
+func TestTheCountHoldsThreeDeep(t *testing.T) {
+	dir := t.TempDir()
+	const warning = "warning: r: circular name reference"
+	for _, read := range []string{`$r`, `${r-D}`, `${r:-D}`, `${r+S}`, `${#r}`} {
+		src := `r=L0; h(){ local r=L1; g; }; g(){ local r=L2; f; }; ` +
+			`f(){ local -n r=r; echo "in=[` + read + `]"; }; h`
+		out, _ := runBash(t, dir, src)
+		if n := strings.Count(out, warning); n != 3 {
+			t.Errorf("%s said the warning %d times three deep, want 3\n%s", read, n, out)
+		}
 	}
 }

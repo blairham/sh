@@ -182,3 +182,52 @@ say 'and the refusal does not end the script'
 
 say 'a reference aimed at an array is the feature, not the question'
 ( v=(a b c); declare -n r=v; printf 'st=%s [%s] n=%s\n' "$?" "${r[1]}" "${#r[@]}" ) 2>&1
+
+# The warning is **per read** — #3104, and the third thing this file pins
+# about the same declaration. A read through a reference bash has warned about
+# says the sentence once, so a function that declares one and reads it writes
+# three: the builtin's copy, the shell's, and the read's. `${r-word}` wrote a
+# fourth, because the shell resolved the reference once to ask whether the
+# name was set and again to take its value, and the word forms were the only
+# ones that asked twice.
+#
+# Every line here is counted rather than eyeballed. Four warnings and three
+# read the same at a glance, which is why the count is printed beside the
+# value and not left in the diff.
+
+count() { printf -- '--- %s: %s warnings, %s\n' "$1" "$2" "$3"; }
+
+say 'one warning per read, whatever the expansion carries'
+( r=OUTER
+  for read in 'plain' 'alternate' 'length' 'default' 'colon-default'; do
+    case $read in
+    plain)         out=$( { f() { local -n r=r; printf 'v=[%s]\n' "$r"; }; f; } 2>&1 ) ;;
+    alternate)     out=$( { f() { local -n r=r; printf 'v=[%s]\n' "${r+S}"; }; f; } 2>&1 ) ;;
+    length)        out=$( { f() { local -n r=r; printf 'v=[%s]\n' "${#r}"; }; f; } 2>&1 ) ;;
+    default)       out=$( { f() { local -n r=r; printf 'v=[%s]\n' "${r-GONE}"; }; f; } 2>&1 ) ;;
+    colon-default) out=$( { f() { local -n r=r; printf 'v=[%s]\n' "${r:-D}"; }; f; } 2>&1 ) ;;
+    esac
+    n=$( printf '%s\n' "$out" | grep -c 'circular name reference' )
+    count "$read" "$n" "$( printf '%s\n' "$out" | grep '^v=' )"
+  done ) 2>&1
+
+# A subscript is **arithmetic**, so a second read of the same expansion is a
+# different element. `a[i++]` is the counter that makes the reads visible, and
+# it is the same bug wearing a value rather than a diagnostic: the word forms
+# read four times, so by the fourth the counter was past the end of the array
+# and the *word* came back.
+
+say 'a subscript is evaluated once, whatever the operator'
+( for op in '${a[i++]}' '${a[i++]-D}' '${a[i++]:-D}' '${a[i++]+S}' '${a[i++]:+S}' \
+            '${a[i++]=D}' '${a[i++]?}' '${#a[i++]}' '${a[i++]#x}' '${a[i++]/x/y}' \
+            '${a[i++]:0:1}' '${a[@]:i++:1}'; do
+    a=(x y z); i=0
+    eval "v=\"$op\""
+    printf -- '--- %-14s [%s] i=%s\n' "$op" "$v" "$i"
+  done ) 2>&1
+
+say 'and a loop walks the array one element per pass'
+( a=(x y z); i=0
+  for n in 1 2 3; do printf '%s ' "${a[i++]-D}"; done
+  printf 'i=%s\n' "$i" ) 2>&1
+( c=(1 2); m=0; printf '[%s][%s] m=%s\n' "${c[m++]-D}" "${c[m++]-D}" "$m" ) 2>&1

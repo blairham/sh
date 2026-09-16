@@ -4435,6 +4435,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	}
 	raw := strings.Contains(opts, "r")
 
+	// Whether the name being filled is the shell's own REPLY rather than one
+	// the script wrote, and whether a freeze refused a write the builtin went
+	// on past. Both are read by readFill and by the status below.
+	defaulted := false
+	refused := false
+
 	// The prompt operand: `read "v?Name: "` reads into v and writes `Name: `
 	// where there is a terminal to write it to. Two of the six spell it, it
 	// is the *first* operand alone — `read v "w?p"` is a bad name `w?p` in
@@ -4793,6 +4799,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			return 2
 		}
 		args = []string{"REPLY"}
+		// Not a name the script wrote, which one status rule turns on: see
+		// Runner.readFrozenStatus.
+		defaulted = true
 	}
 	// The names, judged in the order they are filled. The array goes first
 	// because it is filled first: `read -a 1bad` in bash refuses and leaves
@@ -4868,22 +4877,36 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// five characters in x and nothing in y, measured in both shells
 		// with the letter.
 		if array != "" {
-			r.setArray(array, exactElems(text))
+			if !r.readMayWrite(array) {
+				if r.ctl == controlExit {
+					return r.status
+				}
+				if r.readRefusalEndsTheBuiltin() {
+					return r.readFrozenStatus(len(args[:fill]), !defaulted)
+				}
+				refused = true
+			} else {
+				r.setArray(array, exactElems(text))
+			}
 			if clearRest {
-				for _, name := range args[:fill] {
-					r.storeThroughOperand(name, "")
+				for i, name := range args[:fill] {
+					if st, stop := r.readFill(name, "", fill-i-1, defaulted, &refused); stop {
+						return st
+					}
 				}
 			}
-			return r.readAfterABadName(status, badName, bad)
+			return r.readRefusedOrStatus(refused, status, badName, bad)
 		}
 		for i, name := range args[:fill] {
 			v := ""
 			if i == 0 {
 				v = text
 			}
-			r.storeThroughOperand(name, v)
+			if st, stop := r.readFill(name, v, fill-i-1, defaulted, &refused); stop {
+				return st
+			}
 		}
-		return r.readAfterABadName(status, badName, bad)
+		return r.readRefusedOrStatus(refused, status, badName, bad)
 	}
 	// Splitting sees the escapes: an escaped separator is data and does not
 	// split, which is why the mask rides along rather than the processing
@@ -4911,13 +4934,25 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		r.setArray(array, fields)
+		if !r.readMayWrite(array) {
+			if r.ctl == controlExit {
+				return r.status
+			}
+			if r.readRefusalEndsTheBuiltin() {
+				return r.readFrozenStatus(len(args[:fill]), !defaulted)
+			}
+			refused = true
+		} else {
+			r.setArray(array, fields)
+		}
 		if clearRest {
-			for _, name := range args[:fill] {
-				r.storeThroughOperand(name, "")
+			for i, name := range args[:fill] {
+				if st, stop := r.readFill(name, "", fill-i-1, defaulted, &refused); stop {
+					return st
+				}
 			}
 		}
-		return r.readAfterABadName(status, badName, bad)
+		return r.readRefusedOrStatus(refused, status, badName, bad)
 	}
 	// The last name takes the remainder of the *line* from where its own
 	// field began — the text as it was read, separators and all. Rebuilding
@@ -4959,18 +4994,62 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// than `args` — or the tail answer carried a count that was equal, which
 	// leaves `at` exactly as long.
 	for i, name := range args[:fill] {
+		var v string
 		switch {
 		case i >= len(fields):
-			r.storeThroughOperand(name, "")
+			v = ""
 		case i == len(args)-1 && len(fields) > len(args):
-			r.storeThroughOperand(name, r.readRemainderValue(text, at, fields, i, ifs))
+			v = r.readRemainderValue(text, at, fields, i, ifs)
 		case i == len(args)-1:
-			r.storeThroughOperand(name, r.readLastFieldValue(fields[i], ifs))
+			v = r.readLastFieldValue(fields[i], ifs)
 		default:
-			r.storeThroughOperand(name, fields[i])
+			v = fields[i]
+		}
+		if st, stop := r.readFill(name, v, fill-i-1, defaulted, &refused); stop {
+			return st
 		}
 	}
-	return r.readAfterABadName(status, badName, bad)
+	return r.readRefusedOrStatus(refused, status, badName, bad)
+}
+
+// readRefusedOrStatus folds a refusal the builtin went on past into the
+// status it reports.
+//
+// The one column that carries on reports 1 for it, whatever the read itself
+// did, and reports it once however many names were frozen — measured
+// 2026-09-16 on ksh93u+ with two frozen names, which writes two sentences and
+// one status. A bad name is reported ahead of it, being the older complaint
+// and the one that already decides its own status.
+func (r *Runner) readRefusedOrStatus(refused bool, status int, badName string, bad bool) int {
+	if st := r.readAfterABadName(status, badName, bad); bad || !refused {
+		return st
+	}
+	return 1
+}
+
+// readFill writes one of `read`'s names, reporting the status to return where
+// a freeze stopped the builtin there.
+//
+// left is how many names are still to come, which decides the status in the
+// one column that parts "I stopped early" from "a write failed"; written says
+// the name is one the script wrote rather than the shell's own REPLY.
+func (r *Runner) readFill(name, value string, left int, defaulted bool, refused *bool) (int, bool) {
+	if r.readMayWrite(name) {
+		r.storeThroughOperand(name, value)
+		return 0, false
+	}
+	if r.ctl == controlExit {
+		// The dialect whose refusal ends the script has already said so.
+		return r.status, true
+	}
+	if !r.readRefusalEndsTheBuiltin() {
+		// ksh93: every frozen name is reported and every other name is
+		// filled, and the builtin reports 1 at the end of it. Recorded
+		// rather than returned, because the loop goes on.
+		*refused = true
+		return 0, false
+	}
+	return r.readFrozenStatus(left, !defaulted), true
 }
 
 // readRemainder is the value the last name on a `read` takes when the line

@@ -1639,6 +1639,14 @@ func Semantics() interp.Semantics {
 	// Unreachable while the answer above is yes — answered so that nothing
 	// reports an axis this shell cannot be asked.
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// And `read` does not stop either: every frozen name is reported and
+	// every other name is filled — `readonly a; printf 'x y\n' | { read a b; }`
+	// leaves b holding `y` here, where bash, dash and BusyBox ash leave it
+	// alone. The builtin reports 1 for it, whatever the read itself did, and
+	// reports it once however many names were frozen (#3208).
+	s.ReadRefusedWriteEndsTheBuiltin = interp.No
+	// Not reached: the builtin does not stop, so there is no early stop to
+	// part from a failed write. Left unanswered on purpose.
 	// A frozen *name* is refused, and the refusal is not fatal: `read`
 	// writes `warning: x: is read only` and the script runs on.
 	s.ReadonlyRefusalInABuiltinIsFatal = interp.No
@@ -3077,7 +3085,11 @@ func Diagnostics() interp.Diagnostics {
 		// plain assignment to the same name does not: `set: ro: is read
 		// only` against `ro: is read only`.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
-		ReadonlyRefusalNamesBuiltin:   map[string]bool{"set": true},
+		// And `read`, which names itself in its builtin location as `set`
+		// does — and then calls itself a warning, which nothing else in the
+		// panel does. See ReadonlyVariableInRead.
+		ReadonlyRefusalNamesBuiltin: map[string]bool{"set": true, "read": true},
+		ReadonlyVariableInRead:      "%[2]s: warning: %[1]s: is read only",
 		// A failed history substitution names what was *typed* here, where
 		// bash names the modifier it rewrote the line into: measured
 		// 2026-09-15 through a pseudo-terminal, `^hello^goodbye^` against a

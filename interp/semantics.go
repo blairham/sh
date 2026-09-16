@@ -2572,6 +2572,33 @@ type Semantics struct {
 	// than an axis — see getoptsRefusedStatus.
 	GetoptsRefusedWriteEndsTheBuiltin Answer
 
+	// ReadRefusedWriteEndsTheBuiltin stops `read` at the first name a freeze
+	// refuses, leaving the names after it alone. bash 5.3, dash and BusyBox
+	// ash yes; ksh93 no — it reports every frozen name and fills the rest.
+	//
+	// Measured 2026-09-16, `a=A; b=B; readonly a; printf 'x y\n' | { read a
+	// b; printf '[%s][%s]' "$a" "$b"; }`: `[A][B]` in the three that stop and
+	// `[A][y]` in ksh93, which is the one row that says whether the builtin
+	// gave up or merely complained. The two-frozen case says it again from
+	// the other side — bash writes one sentence and ksh93 writes two.
+	//
+	// zsh never reaches it: its refusal ends the script, which is
+	// ReadonlyRefusalInABuiltinIsFatal and is asked first (#3208).
+	ReadRefusedWriteEndsTheBuiltin Answer
+	// ReadRefusedWriteIsOneOnTheLastName reports 1 rather than 2 when the
+	// freeze stopped `read` with no name left to fill. bash 5.3 yes; dash and
+	// BusyBox ash no, both answering 2 wherever the freeze was.
+	//
+	// Measured 2026-09-16 over three names: bash answers 2 for the first and
+	// the middle and 1 for the last, which is the shape of a builtin that
+	// reports "I stopped early" and "a write failed" as different things.
+	//
+	// Asked only where a name was left to be the last one. A `read` with no
+	// operands has none — the name it fills is the shell's own REPLY — and
+	// answers 2 there in bash 5.3.20 and 3.2.57 alike, so the question is not
+	// put (#3208).
+	ReadRefusedWriteIsOneOnTheLastName Answer
+
 	// InheritedOldpwd is what becomes of an `OLDPWD` the shell was handed in
 	// its environment: taken as it stands, taken only when it names a
 	// directory, or not read at all. See InheritedOldpwdPolicy, which carries

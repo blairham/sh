@@ -2068,6 +2068,9 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.Yes
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// Neither `read` axis is reached here: this is the one column whose
+	// refused write inside a builtin ends the script, which is asked first.
+	// Left unanswered on purpose, the way an unexhibited value always is.
 	// The freeze on the *name* is reached, and this is the one shell where a
 	// builtin's refused write ends the script: `readonly o; getopts a: o;
 	// echo reached` prints neither `reached` nor anything after it.

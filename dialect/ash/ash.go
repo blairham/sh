@@ -771,6 +771,10 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.Yes
+	// And `read` the same, at 2 wherever the frozen name stood. Measured in
+	// the pinned 1.37.0 image, 2026-09-16 (#3208).
+	s.ReadRefusedWriteEndsTheBuiltin = interp.Yes
+	s.ReadRefusedWriteIsOneOnTheLastName = interp.No
 	s.ReadonlyRefusalInABuiltinIsFatal = interp.No
 	// `alias` reads no options at all, so `-p` is a name it cannot find and
 	// `-g` and `-s` are neither kinds nor letters.
@@ -1505,7 +1509,10 @@ func Diagnostics() interp.Diagnostics {
 		// names it fills in: measured 2026-09-16 in the pinned image,
 		// `readonly OPTARG; getopts a: o` is `ash: getopts: line 4: OPTARG:
 		// is read only`.
-		ReadonlyRefusalNamesBuiltin: map[string]bool{"getopts": true},
+		// And `read`, which names itself in the location the same way:
+		// measured 2026-09-16 in the pinned image, `a=A; readonly a; printf
+		// 'x\n' | read a` is `ash: read: line N: a: is read only`.
+		ReadonlyRefusalNamesBuiltin: map[string]bool{"getopts": true, "read": true},
 		UnsetReadonly:               "%s: is read only",
 		LocalOutsideAFunction:       "not in a function",
 

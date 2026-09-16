@@ -27,19 +27,23 @@ repos:
   hooks:
   - id: go-mod-tidy-repo
 
+  # gofumpt, run as `go tool` so the version is go.mod's pin. `-l -d` reports
+  # rather than rewrites, for the #1267 reason above. Not `golangci-lint fmt`:
+  # that also runs goimports, which resolves imports by scanning the module
+  # cache and measured ~10s per 130 files here -- about 200s over the tree, on
+  # every Go commit, since the hook formats the whole repository. gofumpt alone
+  # is 1s. Import grouping is still enforced, by the formatters block the Lint
+  # job applies.
+  - id: my-cmd-repo
+    alias: gofumpt
+    name: gofumpt
+    args: [--hook:error-on-output, go, tool, gofumpt, -l, -d, .]
+
   # golangci-lint at commit time, run as `go tool` so the version comes from
   # go.mod's tool block -- the same binary the Lint job uses. The upstream
   # golangci-lint hooks download one of their own, which is a second pin to
-  # keep in step and a formatter that can disagree with CI.
+  # keep in step.
   #
-  # `fmt --diff` reports gofumpt and goimports drift without rewriting, for
-  # the #1267 reason above. `-l -d` gofumpt used to do half of this; the
-  # formatters block in .golangci.yml is the other half, and this covers both.
-  - id: my-cmd-repo
-    alias: golangci-lint-fmt
-    name: golangci-lint fmt
-    args: [--hook:error-on-output, go, tool, golangci-lint, fmt, --diff]
-
   # `--new-from-rev HEAD` reports what this commit introduces rather than the
   # repository's backlog. It filters *output* only: golangci type-checks the
   # whole module either way, so this buys signal, not seconds. The whole-tree,

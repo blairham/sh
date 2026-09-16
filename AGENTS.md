@@ -397,10 +397,11 @@ fault shows only in a real terminal, use the pty harness and say so.
 ## Conventions
 
 - **Formatter**: gofumpt, pinned in `go.mod`'s `tool` block, run as
-  `go tool gofumpt` — by `make fmt`, and at commit time through
-  `golangci-lint fmt --diff`, which applies the `formatters` block in
-  `.golangci.yml` (gofumpt *and* goimports) and *reports* rather than
-  rewrites, so it does not reopen the #1267 window.
+  `go tool gofumpt` — by `make fmt`, and at commit time by a pre-commit
+  hook that runs the same pinned binary and *reports* rather than
+  rewrites (`-l -d`, never `-w`). Not `golangci-lint fmt`: it adds
+  goimports, which scans the module cache and took ~200s over this tree
+  against gofumpt's 1s.
 - **Linter**: golangci-lint v2, also `go tool`-pinned, config in
   `.golangci.yml` — the same file in every Go repository here. **It is
   invoked by the pre-commit hook and by CI's `Lint` job, and never by
@@ -477,9 +478,8 @@ cannot.
 
 **Local, on every commit.** The hooks in `.pre-commit-config.yaml`:
 hygiene, secrets, license headers, `go mod tidy`, the toolchain-pin
-invariant, the conflict-marker scan, misspell over prose, and golangci-lint
-in both of its modes — `fmt --diff` for the formatters, and `run
---new-from-rev HEAD` for the linters. It is the only feedback that arrives
+invariant, the conflict-marker scan, misspell over prose, gofumpt, and
+golangci-lint (`run --new-from-rev HEAD`). It is the only feedback that arrives
 before the code leaves the machine.
 
 `--new-from-rev HEAD` scopes the *report* to what this commit introduces,

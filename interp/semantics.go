@@ -2527,6 +2527,72 @@ type Semantics struct {
 	// carries on where it was.
 	GetoptsCountsTheWordAtItsFirstLetter Answer
 
+	// GetoptsCountsTheWordOnTheNextCall leaves OPTIND on the word whose last
+	// letter has just been read and lets the *following* call move it, so
+	// the parameter lags a word behind the scan all the way along.
+	//
+	// The third answer to the question above and its opposite end: one
+	// dialect counts a word at its first letter, four count it at its last,
+	// and one does not count it until it needs the next one. Measured
+	// 2026-09-16 over a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+	// stdin from `/dev/null`, in a fresh directory —
+	//
+	//	set -- -ab -c rest; OPTIND=1
+	//	getopts abc o; echo "$o $OPTIND"   # four of these
+	//
+	//	bash 5.3.20, bash as `sh`, bash 3.2.57, ksh93u+   1  2  3  3
+	//	dash 0.5.12, BusyBox ash 1.37.0                   2  2  3  3
+	//	zsh 5.9.2                                         1  1  2  3
+	//
+	// — and the operand count every column ends at is the same, which is why
+	// this is quiet: `shift $((OPTIND-1))` after the scan leaves `rest` in
+	// all seven. Only a script that reads OPTIND *during* the scan can tell,
+	// and one that does — a `while getopts` body reporting how far it has
+	// got, a helper counting words as it goes — reads a different number.
+	//
+	// It is asked only of a letter that consumed no argument. An option that
+	// took one, the rest of its own word or the word after it, leaves OPTIND
+	// at the first word neither of them occupies in all seven columns:
+	// `-bval` and `-b val` are 2 and 3 everywhere, zsh included. A missing
+	// argument is the same question by another door and is asked there too —
+	// nothing was consumed, so `set -- -ab` against `ab:c` is `?` at 2 in
+	// six columns and `?` at 1 in zsh.
+	//
+	// The place inside the word is [Runner.optChar] here as it is for the
+	// axis above, and this answer says the word is *spent* rather than
+	// moving the count: optChar is left past the end and the next call walks
+	// on to the following word by the check it already makes. That is zsh's
+	// own model rather than a simulation of it — the next call is what
+	// advances.
+	GetoptsCountsTheWordOnTheNextCall Answer
+
+	// GetoptsEndOfOptionsNamesIt writes `?` into the name operand on the run
+	// that reports "no more options", rather than leaving whatever the name
+	// held.
+	//
+	// zsh alone leaves it, and leaving it is not the same as writing the
+	// last letter again — which is what the shape that found this looked
+	// like, because the previous call's letter was still standing. Measured
+	// 2026-09-16 over a script file under `env -i PATH=/usr/bin:/bin`, with
+	// `o=INIT` in front of a `getopts ab o` that finds no options at all:
+	//
+	//	bash 5.3.20   o=?    st=1
+	//	bash as `sh`  o=?    st=1
+	//	bash 3.2.57   o=?    st=1
+	//	ksh93u+       o=?    st=1
+	//	dash 0.5.12   o=?    st=1
+	//	BusyBox ash   o=?    st=1
+	//	zsh 5.9.2     o=INIT st=1
+	//
+	// and the three ways of running out — a non-option word, a `--`, and no
+	// words at all — give the same answer in every column. The status is 1
+	// everywhere, so a `while getopts` loop ends either way and only a
+	// script that reads the name afterwards can tell.
+	//
+	// POSIX has the name set to a question mark at the end of the options,
+	// which is why the standard's preset and the substrate both answer yes.
+	GetoptsEndOfOptionsNamesIt Answer
+
 	// GetoptsFunctionPosition is what a shell function call does to the
 	// `getopts` scan position. See GetoptsFunctionPositionPolicy for the
 	// three answers and the measurements that separate them.
@@ -15914,6 +15980,12 @@ func PosixSemantics() Semantics {
 		// what four of the six columns do. dash and BusyBox ash count the
 		// word at its first letter and say so themselves.
 		GetoptsCountsTheWordAtItsFirstLetter: No,
+		// And it does not wait for the next call either: the standard's
+		// wording is the same one, and zsh is the only column that lags.
+		GetoptsCountsTheWordOnTheNextCall: No,
+		// The standard has the name set to a question mark when the options
+		// run out.
+		GetoptsEndOfOptionsNamesIt: Yes,
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,
@@ -16743,6 +16815,15 @@ func CoreSemantics() Semantics {
 		// substrate is a shell somebody runs: an unanswered axis would make
 		// every clustered `getopts` read a refusal.
 		GetoptsCountsTheWordAtItsFirstLetter: No,
+		GetoptsCountsTheWordOnTheNextCall:    No,
+		// `getopts` writes `?` into the name when it runs out of options,
+		// which is the standard's own words and six of the seven columns.
+		// The substrate answers it rather than refusing it because the run
+		// that asks is the one that ends every `while getopts` loop ever
+		// written: a refusal there would be the substrate refusing the
+		// builtin's ordinary use rather than a disagreement about it. zsh,
+		// the one column that leaves the name alone, says so itself.
+		GetoptsEndOfOptionsNamesIt: Yes,
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,

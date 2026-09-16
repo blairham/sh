@@ -1635,6 +1635,10 @@ func Semantics() interp.Semantics {
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// bash's answer here: OPTIND names the word until its last letter.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.No
+	// Counted at its last letter here too, and the name gets a `?` when the
+	// scan runs out (#3275).
+	s.GetoptsCountsTheWordOnTheNextCall = interp.No
+	s.GetoptsEndOfOptionsNamesIt = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
 	// OPTARG and OPTIND are the builtin's own here: `readonly OPTARG;

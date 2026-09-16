@@ -1403,6 +1403,12 @@ func Semantics() interp.Semantics {
 	// reads `a` with OPTIND still 1. dash and BusyBox ash count it at the
 	// first letter instead.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.No
+	// And it does not wait for the next call to count it either: the word is
+	// counted at its last letter, which is POSIX's own wording and four of
+	// the seven columns. The run that reports "no more options" writes `?`
+	// into the name (#3275).
+	s.GetoptsCountsTheWordOnTheNextCall = interp.No
+	s.GetoptsEndOfOptionsNamesIt = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
 	// A freeze on OPTARG or OPTIND is consulted here — `readonly OPTARG;

@@ -158,6 +158,23 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 			// holds the word is about to run and report its own.
 			return ""
 		}
+		// **How far the abandonment reaches**, which is a second question and
+		// the one #3274 was: a subshell contains it in ksh93 and does not in
+		// bash 5.3, bash as `sh`, zsh, dash or BusyBox ash, where the script
+		// ends wherever the substitution was written. See
+		// Semantics.SubstitutionParseErrorEscapesASubshell for the panel and
+		// substitutionstop.go for why the answer is recorded in a box every
+		// clone shares rather than checked at each of the seven boundaries a
+		// shell clones at.
+		//
+		// Asked only from inside one, which is where the columns differ: at
+		// the top level there is nothing to escape and every column already
+		// agrees, so a script without subshells never reaches the axis.
+		if r.inSubshell &&
+			r.ask(r.sem().SubstitutionParseErrorEscapesASubshell,
+				"a substitution body that does not parse ending the script from inside a subshell") {
+			r.recordScriptStop(r.diag().SyntaxStatus())
+		}
 		r.status = r.diag().SyntaxStatus()
 		r.stopTheShell()
 		return ""

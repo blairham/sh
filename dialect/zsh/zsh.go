@@ -2628,6 +2628,9 @@ func Semantics() interp.Semantics {
 	// zsh 5.9.2 has one wording for every builtin it has: `whence -v .` is
 	// `. is a shell builtin`. Its `export` is a third answer — a reserved
 	// word — and belongs to the grammar rather than to this axis.
+	// zsh 5.9.2 ends the script from inside a subshell too, at its own
+	// syntax status of 1 (#3274).
+	s.SubstitutionParseErrorEscapesASubshell = interp.Yes
 	s.TypeDistinguishesSpecialBuiltins = interp.No
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes

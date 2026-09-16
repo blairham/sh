@@ -4371,6 +4371,58 @@ type Semantics struct {
 	// the failure is the word's, the wording says which word.
 	SubstitutionParseErrorIsFatal Answer
 
+	// SubstitutionParseErrorEscapesASubshell lets that abandonment out of the
+	// `( … )`, the pipeline element or the enclosing `$( … )` the failing
+	// substitution was written in, so that the *script* ends rather than the
+	// body holding it.
+	//
+	// It is a separate question from SubstitutionParseErrorIsFatal, and the
+	// two controls say so. At the **top level**, with no subshell around it,
+	// every column and every dialect already agree; and a **plain** parse
+	// error inside a subshell — `( for; do :; done )` — ends the script in
+	// every column, so it is not "a subshell swallows a parse error" either.
+	// It is the pair: a substitution's failure, inside a subshell.
+	//
+	// Measured 2026-09-16 from a script file,
+	//
+	//	printf 'start\n'
+	//	( v=$(echo hi; for); printf 'inner carried on\n' )
+	//	printf 'after the subshell st=%s\n' "$?"
+	//
+	// with `env -i PATH=/usr/bin:/bin LC_ALL=C` and stdin from /dev/null.
+	// BusyBox v1.37.0 in the digest-pinned Alpine image internal/oracle
+	// reaches, under `--init`. What matters is the third column — whether the
+	// script continued — and not the status alone:
+	//
+	//	                     output                 shell status  continued
+	//	bash 5.3.20          start                  2             no
+	//	that binary as `sh`  start                  2             no
+	//	bash 3.2.57          start, inner, after=0  0             yes
+	//	zsh 5.9.2            start                  1             no
+	//	ksh93u+ 2012-08-01   start, after st=3      0             yes
+	//	dash 0.5.12          start                  2             no
+	//	BusyBox ash 1.37.0   start                  2             no
+	//
+	// bash 3.2 is a third answer rather than the other side of this one: it
+	// does not end the *subshell* either, printing `inner carried on`, which
+	// is SubstitutionParseErrorIsFatal's question and not this one. ksh93 is
+	// the column that is on the other side, and it is there however the body
+	// is reached — a pipeline element, a subshell inside a subshell and an
+	// enclosing `$( … )` all contain it there and all end the script in bash,
+	// zsh and dash.
+	//
+	// The five columns that end the script read the body while they are
+	// reading the script's line, so when the failure happens there is no
+	// subshell yet to contain it. This engine reads the body at expansion
+	// time on purpose — see the note at the head of Runner.subst — so the
+	// outcome is produced without moving when the body is read. That is the
+	// same shape Diagnostics.BackquotedSubstitutionRestartsLines takes one
+	// message over, and Runner.scriptStop is where it is kept.
+	//
+	// Asked only from inside a subshell, which is the only place the columns
+	// differ: the top-level row is unanimous and pays nothing.
+	SubstitutionParseErrorEscapesASubshell Answer
+
 	// ConditionArithmeticErrorIsFatal abandons the input when an operand of a
 	// word-spelled comparison — `[[ 1+ -eq 0 ]]` — is not an expression the
 	// arithmetic parser can read.
@@ -16036,6 +16088,14 @@ func PosixSemantics() Semantics {
 		// at all do exit — so the base is the fatal reading, and the one
 		// column that scopes the failure to the word says so for itself.
 		SubstitutionParseErrorIsFatal: Yes,
+		// And the abandonment is the *script's* rather than the subshell's.
+		// 2.11 has the shell read its input and execute commands as it goes,
+		// so a body that will not parse stops the reading — and the reading
+		// is the script's, whatever construct the word was written inside.
+		// The three shells written to this text agree: bash invoked as `sh`,
+		// dash and BusyBox ash each print `start` and exit 2 for a failure
+		// inside `( … )`. ksh93 is the departure (#3274).
+		SubstitutionParseErrorEscapesASubshell: Yes,
 		// POSIX has no `[[ ]]` to fail in, so this is the substrate's floor
 		// rather than a reading of the text: an error is diagnosed and the
 		// shell goes on, which is what POSIX asks of every failure that is

@@ -2216,6 +2216,11 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	// `whence -v .` and `type .` alike are `. is a special shell builtin` in
 	// ksh93u+ 2012-08-01, where `echo` is a plain one.
+	// The one column that contains it. `( v=$(echo hi; for) ); printf 'after
+	// st=%s\n' "$?"` prints `after st=3` in ksh93u+ 2012-08-01 and the script
+	// runs on, where the other five end it; and it contains it however deep,
+	// so a pipeline element and an enclosing `$( … )` answer the same (#3274).
+	s.SubstitutionParseErrorEscapesASubshell = interp.No
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes

@@ -1055,6 +1055,11 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	// `type .` is `. is a special shell builtin` in dash 0.5.12, and `type
 	// echo` is a plain one.
+	// dash 0.5.12 ends the script from inside `( … )`, printing `start` and
+	// exiting 2 where ksh93 carries on (#3274). The POSIX preset answers the
+	// same way and this says so out loud, because an answer inherited in
+	// silence is how six axes came to hold dash's value for another shell.
+	s.SubstitutionParseErrorEscapesASubshell = interp.Yes
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No

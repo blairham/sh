@@ -60,6 +60,23 @@ func TestAFatalErrorCostsTheLineAndNotTheSession(t *testing.T) {
 			"the rest of the line is given up with it",
 			"set -u\necho X${NOPE}; echo same-line\necho after\n", "after\n",
 		},
+		{
+			// A command substitution whose body will not parse, which is
+			// the one fatal error that reached this boundary as a *request
+			// to stop* and so went straight past it (#3300). All seven
+			// reference columns draw the next prompt for it, dash included.
+			"a substitution body that will not parse",
+			"v=$(echo hi; for)\necho after\n", "after\n",
+		},
+		{
+			// The same failure inside a subshell, which since #3274 escapes
+			// it. The typed line *ends* at the subshell, so the stop it
+			// recorded in the shared box is still there when the line is
+			// over — and was taken at the first command of the next line,
+			// which is this `echo`.
+			"the same failure inside a subshell",
+			"( v=$(echo hi; for) )\necho after\n", "after\n",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, errs := runPiped(t, tc.input, nil)
@@ -145,6 +162,10 @@ func TestTheStatusAfterAGivenUpLine(t *testing.T) {
 		// Not zero, which is the shape that would let `&&` on the next line
 		// read a failed line as a success.
 		{"the operand with its own message", "echo X${NOPE?gone}\necho \"st=$?\"\n", "st=2\n"},
+		// The syntax status, which is the one this site does not invent: a
+		// substitution that will not parse leaves the number the dialect
+		// gives a parse failure, and the default semantics gives 2.
+		{"a substitution body that will not parse", "v=$(echo hi; for)\necho \"st=$?\"\n", "st=2\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, _ := runPiped(t, tc.input, nil)

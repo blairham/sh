@@ -236,15 +236,16 @@ func (r *Runner) giveUpTheCommand() {
 		// this function existed, one control value along.
 		r.ctl, r.abandonLine = controlNone, 0
 	case r.abandon == abandonSubstParse && r.ctl == controlExit:
-		// The one fatal error this boundary does not catch, and the reason
-		// is measured rather than structural: a substitution body that will
-		// not parse costs the *command* here in bash 5.3.20 and ksh93 and
-		// costs the *script* in zsh 5.9.2 and dash, and the two shapes a
-		// redirection has do not even agree with each other inside one
-		// column. See abandonSubstParse for the panel. Catching it would
-		// have answered an axis nobody has measured, so the stop stands and
-		// the question is filed.
-		return
+		// A substitution body that will not parse costs the command the
+		// same way — no column runs `cat` with a here-document whose body
+		// holds one — and the stop is deliberately **not** taken. How far
+		// it reaches from a redirection is a second question and the
+		// columns split on it: measured, `cat <<END` with such a body
+		// leaves bash 5.3.20 and ksh93 carrying on at 1 and at 3 where zsh
+		// 5.9.2 and dash end the script. Leaving the stop standing is the
+		// half both sides agree on at a prompt, where the line boundary
+		// catches it and every column draws the next prompt. See
+		// abandonSubstParse.
 	case r.pendingFileError():
 		r.takeFileError()
 	default:

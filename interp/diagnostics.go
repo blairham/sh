@@ -312,6 +312,13 @@ type Diagnostics struct {
 	// A builtin that runs a script — `.`, `eval` — is not the author of what
 	// that script reports, and zsh agrees: an unset parameter inside a sourced
 	// file is `./f.sh:2: NOPE: parameter not set`, with no `.` anywhere in it.
+	//
+	// Read as a *gate* in one place as well as as a layout: `test`'s complaint
+	// about a word standing where a binary operator belonged is the shell's
+	// rather than the builtin's, and the only shape that measurement has is
+	// the missing segment here. Clearing the speaker elsewhere would also
+	// swap BuiltinLocation for Location, which is a second claim no column
+	// asked for — see Runner.runTest and #3035.
 	NamesBuiltinInLocation bool
 
 	// UnsetReadonlyIsTheShellsOwn takes `unset` out of the location for the

@@ -163,6 +163,28 @@ func (r *Runner) In() io.Reader { return r.stdin() }
 // is here because writing one found it missing.
 func (r *Runner) Diagnosef(format string, args ...any) { r.diagf(format, args...) }
 
+// RefuseBuiltinUsagef writes a builtin's complaint about **how it was
+// called** — located the way this dialect locates that builtin's complaints,
+// which for some builtins in some dialects is not located at all — and then
+// ends the script the way a usage error ends it.
+//
+// Exported for a dialect that spells one builtin as another. ksh93's `hash`
+// is the preset alias `alias -t --`, so a refusal reached through it is
+// `alias`'s refusal and carries `alias`'s fatality: measured 2026-09-15 on
+// AT&T ksh93u+ 2012-08-01, `hash -t x; echo AFTER` writes
+// `alias: -t: bad option(s)` and never reaches `echo`. A registered builtin
+// could already write the sentence with Diagnosef but had no way to stop the
+// script, which is the half of the reference's answer a `$?` cannot see.
+//
+// The stop is unconditional here because the caller is the dialect that
+// rerouted the call: it knows whether the builtin it rerouted *to* is one
+// whose usage error is fatal, and nothing else does. See
+// Semantics.AliasBadOptionFatal for the axis this mirrors.
+func (r *Runner) RefuseBuiltinUsagef(builtin, format string, args ...any) {
+	r.complainAboutOption(builtin, format, args...)
+	r.fatalUsageQuiet()
+}
+
 // DiagnoseAsTheShellf is Diagnosef for a complaint that is not the running
 // builtin's own.
 //

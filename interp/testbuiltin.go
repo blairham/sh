@@ -73,15 +73,27 @@ func (r *Runner) runTest(name string, args []string) int {
 			if r.unspecified {
 				return 2
 			}
-			if te.kind == errBinaryExpected {
+			if te.kind == errBinaryExpected && r.diag().NamesBuiltinInLocation {
 				// An expression that never parsed is not the builtin's
-				// complaint. The one dialect that names a builtin in the
-				// location bears this out: `test a b c` is `zsh:1: condition
-				// expected: b` with no `test` in it, and so is `[[ a b c ]]`,
-				// which is not a builtin at all — while `test -Q x` and
-				// `test 1 -eq a`, which failed *evaluating* an expression
-				// that did parse, are `zsh:test:1:`. Same wordings, two
-				// speakers.
+				// complaint, *in the dialects that write the builtin's name
+				// into the location*. Those are what the measurement is
+				// about: `test a b c` is `zsh:1: condition expected: b` with
+				// no `test` in it, and so is `[[ a b c ]]`, which is not a
+				// builtin at all — while `test -Q x` and `test 1 -eq a`,
+				// which failed *evaluating* an expression that did parse, are
+				// `zsh:test:1:`. Same wordings, two speakers.
+				//
+				// Gated on NamesBuiltinInLocation because clearing the
+				// speaker does a second thing nothing measured asked for: it
+				// also picks Diagnostics.Location over BuiltinLocation, and a
+				// dialect that locates a builtin differently from its parser
+				// then writes the parser's location for a builtin's sentence.
+				// ksh93 is the case — `test a b c` in a script is
+				// `<file>[1]: test: b: unknown operator` there, the bracket
+				// form every other `test` complaint in that column already
+				// takes, and this shell wrote `<file>: line 1: ` for it
+				// alone (#3035). bash and dash have one location for both, so
+				// neither can see the difference either way.
 				outer := r.inBuiltin
 				r.inBuiltin = ""
 				defer func() { r.inBuiltin = outer }()

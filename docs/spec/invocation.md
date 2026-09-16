@@ -83,6 +83,32 @@ agreement and one direction of its disagreement.
   ever drawn. Without `-i`, `i` appears only where the shell decided to
   prompt on its own. See "Interactive, and `$-`" below.
 
+### `+i`
+
+The letter's other sign, and six of the seven columns read it. Measured
+2026-09-16 with the program on a pipe, `SH +i -c 'echo $-'` and `SH -i +i
+-c 'echo $-'` both report a `$-` with no `i` in it and say nothing about a
+terminal: bash 5.3.20 and bash as `sh` and bash 3.2.57 write `hBc`, zsh
+5.9.2 writes `569X`, ksh93u+ 2012-08-01 writes `chsB`, and dash 0.5.12
+writes nothing at all. So the letter is a **last-wins pair** there like any
+other: `-i +i` is not interactive and `+i -i` is.
+
+BusyBox ash 1.37.0 is the seventh column and does not read the sign. `ash
++i -c` writes `can't access tty; job control turned off` and reports `ci`,
+byte for byte with `ash -i -c`, and so do `ash -i +i -c` and `ash +i -i
+-c`; a shell started with neither letter reports `c` and says nothing. The
+letter there is a request that only ever arrives, which is what makes this
+`Semantics.PlusSignedInteractiveLetterStillPrompts` rather than a rule
+about the plus sign. The core with no dialect chosen refuses the letter,
+which is what a front end must do with a question the panel splits on.
+
+Ours read only the minus until #3221, and the plus fell through to the
+runner as an ordinary `set` letter: `ksh +i` answered `+i: unknown
+option`, `bash +i` printed its whole usage, `dash +i` said `+i is not
+implemented yet`, and `zsh -i +i` gave the letter away to another option
+and reported `569Jg` where real zsh reports `569X` — four dialects
+refusing or mistaking a letter every shell in the panel takes.
+
 ## Interactive, and `$-`
 
 **The rule.** A shell is interactive when `-i` was given, or when it

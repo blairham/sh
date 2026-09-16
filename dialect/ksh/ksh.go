@@ -576,6 +576,10 @@ func Semantics() interp.Semantics {
 	// ksh93's rule for `s` is "no script file was named" where the other
 	// three's is "the program came from standard input"; this is the one
 	// invocation where those two differ.
+	// `+i` takes the prompt back. Measured 2026-09-16 on ksh93u+ 2012-08-01
+	// with the program on a pipe: `ksh -i +i -c 'echo $-'` and `ksh +i -c
+	// 'echo $-'` both report `chsB`, where `ksh -i -c` reports `icmsBE`.
+	s.PlusSignedInteractiveLetterStillPrompts = interp.No
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.Yes
@@ -2073,6 +2077,33 @@ func Semantics() interp.Semantics {
 	// line spells the form, `[-o[option]]`.
 	s.SetOLetterAttachesItsName = interp.Yes
 	s.LongOptionNamesASetOption = interp.Yes
+	// The second column with a route split inside one shell: the three names
+	// Apply declares immovable are refused to a script and taken on the
+	// command line that started it. Measured 2026-09-16 on ksh93u+
+	// 2012-08-01, the program on a pipe so that nothing but the invocation
+	// could make the shell interactive — `ksh -o interactive` prompts, runs
+	// the line and prompts again at status 0, and `ksh -o rc` and `ksh -o
+	// login_shell` are 0 and silent, while `set -o interactive`, `set -o rc`
+	// and `set -o login_shell` are all `bad option(s)` in both directions
+	// from inside that same shell.
+	//
+	// The axis governs the refusal and not the applying, so this moves the
+	// one of the three that has something to move: `interactive` writes the
+	// field `$-`'s `i` and the prompt decision read, and `rc` and
+	// `login_shell` are rows the table records without acting on and keep
+	// the refusal they had. See the reading of ksh93's own `set -o` listing
+	// under those two names in Apply (#3221).
+	s.ImmovableOptionsSetAtInvocation = interp.Yes
+	// The namespace's own way of saying `-i`, in both senses. Measured
+	// 2026-09-16 with the program on a pipe: `ksh -o interactive` and `ksh
+	// +o nointeractive` each draw a prompt around the line, and `ksh +o
+	// interactive` and `ksh -o nointeractive` each draw none, all four at
+	// status 0 — the same composition of sign and sense zsh has. The
+	// negative spelling is not a row of the listing here: `set -o` names
+	// only `interactive`, and the `no` half is the shell's own prefix over
+	// it (#3221).
+	s.InteractiveOptionName = "interactive"
+	s.NonInteractiveOptionName = "nointeractive"
 	// And the `set` builtin reads such a word the same way, which is this
 	// column and not zsh's: `set --xtrace q` here traces and leaves `q` as
 	// `$1`, where zsh swallows the word whole. Two axes since #3129, because
@@ -3547,6 +3578,8 @@ func Apply(r *interp.Runner) {
 	// of, while all three rows move with how the shell was started. The
 	// substrate has `interactive` as a movable name for the shell that does
 	// let a script write it, so this says otherwise for this one.
+	// Three names a *script* may not move, and the command line that started
+	// the shell may — see Semantics.ImmovableOptionsSetAtInvocation.
 	r.AddImmovableSetOptions("interactive", "login_shell", "rc")
 	// And one that is listed, *taken* in both directions, and never moves.
 	// Measured 2026-09-16 on ksh93u+: `set -o privileged` is 0 with nothing

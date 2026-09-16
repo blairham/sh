@@ -887,6 +887,11 @@ func Semantics() interp.Semantics {
 	// directories is a fact about where a shell was installed; see
 	// interp.Semantics.FunctionSearchVariable.
 	s.FunctionSearchVariable = "FPATH"
+	// `+i` takes the prompt back, the letter's half of the name above.
+	// Measured 2026-09-16 on zsh 5.9.2 with the program on a pipe: `zsh -i +i
+	// -c 'echo $-'` reports `569X`, which is what a shell started with no
+	// letter at all reports, and `zsh -i -c` reports it with `i` in front.
+	s.PlusSignedInteractiveLetterStillPrompts = interp.No
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.No

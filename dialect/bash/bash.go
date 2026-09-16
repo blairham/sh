@@ -404,6 +404,11 @@ func Semantics() interp.Semantics {
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.
+	// `+i` takes the prompt back. Measured 2026-09-16 on bash 5.3.20 and
+	// bash 3.2.57, the program on a pipe: `bash -i +i -c 'echo $-'` and
+	// `bash +i -c 'echo $-'` both report `hBc`, with no `i` and no job-control
+	// notice, where `-i` alone reports `hiBHc` and announces one.
+	s.PlusSignedInteractiveLetterStillPrompts = interp.No
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No

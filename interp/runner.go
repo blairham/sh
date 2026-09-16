@@ -1346,6 +1346,11 @@ type Runner struct {
 	// subscriptHeld is the same for one node's subscript, which is
 	// arithmetic and may move — see subscriptHold.
 	subscriptHeld subscriptHold
+	// subscriptSubsts is one subscript's substitutions, run once and kept
+	// for every reader of the same brackets in the same expansion — see
+	// subscriptSubstHold, which is why a subscript's `$( … )` runs once
+	// rather than once per road to it.
+	subscriptSubsts subscriptSubstHold
 	// unspecified records that a script depended on an axis no dialect had
 	// answered, so a caller can tell that from an ordinary failure.
 	unspecified bool

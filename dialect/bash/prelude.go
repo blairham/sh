@@ -58,9 +58,15 @@ func Prelude() string { return identity() + functions }
 // from the zsh dialect's, whose arrays start at 1, and `set -- "$@" "$1";
 // shift` means the same thing in both.
 //
-// `pushd -n` and `popd -n` — do the stack work and stay where you are — are
-// deliberately out of scope, and refused by name rather than read as a
-// directory called `-n`. docs/spec/semantics.md records the rest.
+// `-n` — do the stack work and stay where you are — is the half of the
+// option parser that used to be a refusal (#3036). Measured on bash 5.3.20,
+// 2026-09-15: `pushd -n dir` puts the directory in the slot below the current
+// one, unresolved and unchecked, and lists the stack; `pushd -n` alone and
+// `pushd -n +N` change the stack in silence; `popd -n` takes out the entry
+// below the current one, so it and `popd -n +0` are the same operation. A
+// letter that is neither `-n` nor an index is an index that will not parse,
+// which is why `pushd -L` now answers in `pushd`'s name rather than handing
+// the word to `cd`. docs/spec/semantics.md records the rest.
 const functions = `
 dirs() {
 	local __d __n= __clear= __long= __lines= __numbers= __i= __out=
@@ -130,7 +136,7 @@ dirs() {
 	fi
 }
 __dirs_rotate() {
-	local __spec=$1 __i __new
+	local __spec=$1 __nocd=$2 __i __new
 	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
 	case $__spec in
 	+*) __i=${__spec#+} ;;
@@ -151,33 +157,66 @@ __dirs_rotate() {
 		shift
 		__i=$(( __i - 1 ))
 	done
+	if [ -n "$__nocd" ]; then
+		# The entry the rotation brought to the front is dropped rather
+		# than moved to. Slot zero is wherever the shell is standing and
+		# -n says not to leave it, so what the rotation put there has
+		# nowhere to go — which is why pushd -n +2 on a four-deep stack
+		# lists the current directory twice rather than once.
+		shift
+		DIRSTACK=("$@")
+		return 0
+	fi
 	__new=$1
 	shift
 	cd "$__new" || return 1
 	DIRSTACK=("$@")
 }
 pushd() {
-	local __old=$PWD __spec=
+	local __old=$PWD __spec= __nocd=
 	while [ $# -gt 0 ]; do
 		case $1 in
-		-n)
-			diagnose "-n is not implemented yet"
-			return 2
-			;;
+		-n) __nocd=1; shift ;;
 		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
 		--) shift; break ;;
+		-*|+*)
+			# Every letter but -n is an index that will not parse, and
+			# that is the complaint bash makes: pushd -L is not an
+			# unknown option here and it is not a directory called -L
+			# either. Reading it as one used to hand the word to cd,
+			# which answered in its own name and with its own usage line.
+			diagnose "$1: invalid number"
+			echo "pushd: usage: pushd [-n] [+N | -N | dir]" >&2
+			return 2
+			;;
 		*) break ;;
 		esac
 	done
 	if [ -n "$__spec" ]; then
-		__dirs_rotate "$__spec" || return 1
+		__dirs_rotate "$__spec" "$__nocd" || return 1
+		# A suppressed rotation prints nothing, where every other form of
+		# pushd lists the stack it just changed. Measured, and the one
+		# place -n changes more than where the shell ends up.
+		if [ -n "$__nocd" ]; then
+			return 0
+		fi
 	elif [ $# -eq 0 ]; then
+		if [ -n "$__nocd" ]; then
+			# No directory, no index, and no move: there is nothing left
+			# for this to do, and bash says nothing rather than refusing.
+			return 0
+		fi
 		if [ ${#DIRSTACK[@]} -eq 0 ]; then
 			diagnose "no other directory"
 			return 1
 		fi
 		cd "${DIRSTACK[0]}" || return 1
 		DIRSTACK[0]=$__old
+	elif [ -n "$__nocd" ]; then
+		# Stored as written. Nothing goes there, so nothing resolves it:
+		# a relative word stays relative and a directory that does not
+		# exist is pushed without complaint.
+		DIRSTACK=("$1" ${DIRSTACK[@]+"${DIRSTACK[@]}"})
 	else
 		cd "$1" || return 1
 		DIRSTACK=("$__old" ${DIRSTACK[@]+"${DIRSTACK[@]}"})
@@ -185,14 +224,12 @@ pushd() {
 	dirs
 }
 popd() {
-	local __spec= __i __k __len
+	local __spec= __i __k __len __nocd=
 	while [ $# -gt 0 ]; do
 		case $1 in
-		-n)
-			diagnose "-n is not implemented yet"
-			return 2
-			;;
+		-n) __nocd=1; shift ;;
 		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
+		--) shift; break ;;
 		-*|+*)
 			diagnose "$1: invalid number"
 			echo "popd: usage: popd [-n] [+N | -N]" >&2
@@ -222,6 +259,13 @@ popd() {
 			diagnose "$__spec: directory stack index out of range"
 			return 1
 		fi
+	fi
+	if [ -n "$__nocd" ] && [ "$__i" -eq 0 ]; then
+		# Slot zero is the directory the shell is standing in and -n
+		# says not to leave it, so the entry below is the one that goes.
+		# That makes popd -n and popd -n +0 one operation rather than
+		# a refusal, which is what bash does with the pair.
+		__i=1
 	fi
 	if [ "$__i" -eq 0 ]; then
 		# The entry you are standing in: the shell moves to the next one

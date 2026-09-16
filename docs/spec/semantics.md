@@ -10085,12 +10085,36 @@ A word this loop does not recognize still ends the options and becomes
 the operand, which is why a letter the core's `cd` has not got — zsh's
 `-s` (#1569) — is left alone rather than half-read out of a bundle.
 
-Deliberately out of scope, and refused by name rather than read as a
-directory called `-n`: **`pushd -n` and `popd -n`**, which do the stack
-work and stay where they are. Recorded and not implemented: zsh's
-`pushd old new`, the substitution form; zsh's `dirs -c` in company with
-a printing letter, which that engine measures as doing nothing at all;
-and bash's `DIRSTACK` as an assignable variable.
+**`-n` does the stack work and stays where it is**, and in the bash
+dialect it is implemented rather than refused (#3036). Measured on bash
+5.3.20, 2026-09-15:
+
+- `pushd -n dir` puts `dir` in the slot below the current directory and
+  lists the stack. Nothing goes there, so nothing resolves it: a
+  relative word is stored relative and a directory that does not exist
+  is pushed at status 0.
+- `pushd -n` with no operand and no index does nothing and says nothing.
+- `pushd -n +N` rotates and prints **nothing**, which is the one place
+  `-n` changes more than where the shell ends up. What the rotation
+  brings to the front is dropped rather than moved to, so `pushd -n +2`
+  on a four-deep stack lists the current directory twice.
+- `popd -n` takes out the entry *below* the current one, and `popd -n
+  +0` does the same: slot zero is where the shell is standing, and `-n`
+  says not to leave it, so bash takes the next one rather than refusing.
+  `popd -n +N` and `popd -n -N` remove entry N and print the rest.
+
+A letter that is neither `-n` nor an index is **an index that will not
+parse**: `pushd -L` is `pushd: -L: invalid number` at 2, with `pushd`'s
+own usage line under it. It used to break the option loop and reach
+`cd`, which answered in `cd`'s name, with `cd`'s usage, at 1 — three
+wrong halves of one line. `popd --` ends the options, as `pushd --`
+already did.
+
+Recorded and not implemented: zsh's `pushd old new`, the substitution
+form; zsh's `dirs -c` in company with a printing letter, which that
+engine measures as doing nothing at all; and bash's `DIRSTACK` as an
+assignable variable. zsh's own `-n` is a different question and is not
+this: that engine reads the word as a directory.
 
 **How a prelude function says where it is** (#603). The rotation work
 made this visible rather than causing it: a `pushd` whose directory does

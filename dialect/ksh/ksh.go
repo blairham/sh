@@ -540,6 +540,13 @@ func Semantics() interp.Semantics {
 	// taken silently, and `echo !!` after it expands and echoes the expanded
 	// line. So the letter is not in InteractiveOptionLetters above either.
 	s.HistoryExpansion = interp.Yes
+	// `set -k` and `set -o keyword`, and this is the column that leaves a
+	// declaration's own operand where it stands: measured 2026-09-16, `set
+	// -k; export E1=e1` exports `E1` here where bash lists and exports
+	// nothing. ksh93 also decides the option at *parse* time, which
+	// keywordassign.go records rather than models.
+	s.KeywordAssignments = interp.Yes
+	s.KeywordPromotesADeclarationsOperand = interp.No
 	s.HistoryExpansionAtAPrompt = interp.No
 	// Login-ness written out, in both spellings. Measured 2026-09-05 with a
 	// scratch home directory: `ksh -l -c cmd` and `ksh --login -c cmd` each
@@ -585,7 +592,7 @@ func Semantics() interp.Semantics {
 	// stands in front of a `c` it sorts after, and `l` stands behind
 	// capitals it sorts before. Both are stable across runs and both differ
 	// from every other member of the panel.
-	s.DollarDashLetterOrder = "icaefhmnstuvxBCEHTl"
+	s.DollarDashLetterOrder = "icaefhkmnstuvxBCEHTl"
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	// A numeral a double cannot hold is lost rather than saturated:
 	// `$((1e400))` is `-0` here where the same value *computed*,
@@ -2764,7 +2771,7 @@ func Diagnostics() interp.Diagnostics {
 			// there lists `histexpand off` and the letter moves that row —
 			// and a letter refused while the name is wired would refuse what
 			// the name grants.
-			"set": "bkrsG",
+			"set": "brsG",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",

@@ -12251,6 +12251,70 @@ entire value, blanks allowed on either end, sign and decimal digits and
 nothing else — because it is the only one of the four that is a rule, and
 no shell's own startup writes a value the four disagree about. #3097.
 
+**`KeywordAssignments`** — bash yes · dash no · ksh93 yes · zsh no · ash
+no
+
+`set -k`, POSIX's *keyword* option: with it on, **every** `name=value`
+word of a simple command is a prefix assignment and not only the ones
+written in front of the command name. Measured 2026-09-16, C locale, from
+a script file, with `f() { echo "1=[$1] KV=[${KV-unset}] n=$#"; }` and
+`f KV=2 a`:
+
+| shell | first line |
+| --- | --- |
+| bash 5.3.20, bash-as-`sh`, bash 3.2.57 | `1=[a] KV=[2] n=1` |
+| ksh93u+ 2012-08-01 | `1=[a] KV=[2] n=1` |
+| zsh 5.9.2 | `1=[KV=2] KV=[unset] n=2` |
+| dash 0.5.12 | `set: Illegal option -k`, and the file ends |
+| BusyBox ash 1.37.0 | `set: illegal option -k`, and the file ends |
+
+**The letter is not the option.** zsh spells `interactivecomments` with
+`-k` and answers `no such option` to `set -o keyword`, so zsh's
+positional is zsh's answer and not a gap; dash and BusyBox ash have
+neither spelling. That is what makes this an axis rather than a plain
+core gap.
+
+The two shells that have it agree about everything else: several on one
+command, each taken; a `--` does not stop it; the value may hold anything
+a written assignment's may and is never split and never a pattern; the
+**name** must be written, unquoted and a name, so `'Q=q'` and `1Q=b` stay
+positionals and a word that *expands* to `A=9` stays one; it reaches
+builtins, functions and externals alike, and an external is handed the
+name in its environment. `set +k`, `set +o keyword` and the `k` in `$-`
+all follow.
+
+Whether a promoted assignment outlives the command is **not** this axis:
+it is an ordinary prefix assignment from the moment it is promoted, so
+`AssignmentPrefixPersistsAfterAFunction` answers for it — bash drops it
+and ksh93 keeps it, exactly as each does for a written one.
+
+Recorded rather than modeled, both in `interp/keywordassign.go`: ksh93
+decides the option while **parsing**, so `set -k; f A=1 x` on one line
+reaches nothing there and works in bash — this engine answers as bash
+does, which agrees with ksh93 for the way the option is written in
+practice; and a subscripted name is refused by bash (``arr[0]': not a
+valid identifier``) and assigned silently by ksh93, so ours leaves the
+word a positional, which is the only answer that loses nothing. #3095.
+
+**`KeywordPromotesADeclarationsOperand`** — bash yes · dash unanswered ·
+ksh93 no · zsh unanswered · ash unanswered
+
+Whether `set -k` also takes the `name=value` **operand of a declaration
+utility** — `declare`, `export`, `readonly`, `typeset` — and turns it
+into a prefix assignment to that utility, leaving the utility with no
+operand at all. The two shells that have the option split over it,
+measured 2026-09-16 with `set -k` on a line of its own:
+
+|                         | bash 5.3.20 | ksh93u+ |
+| --- | --- | --- |
+| `export E1=e1` then `${E1-unset}` | lists the environment, `unset` | `e1` |
+| `readonly R1=r1` then `${R1-unset}` | lists, `unset` | `r1` |
+| `declare -i N1=3*3` / `typeset -i` | lists, `unset` | `9` |
+
+Both are silent and both report 0, which is what makes it worth an axis
+rather than a note: a script with `set -k` and `export NAME=value` in it
+exports nothing in one of the two shells. #3095.
+
 **`UnsetReferenceLetterRemovesANonReference`** — bash no · dash
 unanswered · ksh93 yes · zsh unanswered · ash unanswered
 

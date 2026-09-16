@@ -174,6 +174,16 @@ func (r *Runner) optionLetters() string {
 		// Unanimous in the two shells that have the option, so no axis.
 		b.WriteByte('t')
 	}
+	if r.keywordAssignments {
+		// `k` while `set -k` is on, in both shells that have the option and
+		// in neither of the two that refuse the letter. zsh writes the same
+		// letter for a different option entirely and reaches it through its
+		// own table, so this is not the site that answers for zsh. Measured
+		// 2026-09-16, `set -aefhkmuvxBC` from a script file: bash writes
+		// `aefhkmuvxBC` and ksh93 `aefhkmuvxBC` — the letter sits behind `h`
+		// in both, which is what DollarDashLetterOrder carries.
+		b.WriteByte('k')
+	}
 	if r.monitor {
 		b.WriteByte('m')
 	}

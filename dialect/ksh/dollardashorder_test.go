@@ -29,7 +29,7 @@ import (
 // is neither "sorted" nor "sorted with capitals last": `i` stands in front of
 // a `c` it sorts after, and `l` stands behind capitals it sorts before.
 func TestDollarDashLetterOrder(t *testing.T) {
-	if got, want := ksh.Semantics().DollarDashLetterOrder, "icaefhmnstuvxBCEHTl"; got != want {
+	if got, want := ksh.Semantics().DollarDashLetterOrder, "icaefhkmnstuvxBCEHTl"; got != want {
 		t.Errorf("DollarDashLetterOrder = %q, want %q", got, want)
 	}
 }

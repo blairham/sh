@@ -11914,6 +11914,47 @@ type Semantics struct {
 	// `opt/set-t-stops-after-one-command`.
 	SetHasTheTLetter Answer
 
+	// KeywordAssignments is `set -k`: with it on, **every** `name=value` word
+	// of a simple command is a prefix assignment and not only the ones
+	// written in front of the command name.
+	//
+	// Measured 2026-09-16 from a script file: bash 5.3.20, bash-as-`sh`, bash
+	// 3.2.57 and ksh93u+ 2012-08-01 have the option; zsh 5.9.2 spells
+	// `interactivecomments` with the same letter and has no `keyword` name at
+	// all; dash and BusyBox ash have neither spelling and end the file over
+	// the letter. See keywordassign.go for the whole of what the two shells
+	// that have it agree about, and for the two things recorded there rather
+	// than modeled.
+	//
+	// The letter is not the option, which is why this axis is not about the
+	// letter: zsh reaches `set -k` through its own letter table and never
+	// asks this.
+	KeywordAssignments Answer
+
+	// KeywordPromotesADeclarationsOperand decides whether `set -k` also takes
+	// the `name=value` **operand of a declaration utility** — `declare`,
+	// `export`, `readonly`, `typeset` — and turns it into a prefix assignment
+	// to that utility, leaving the utility with no operand at all.
+	//
+	// The two shells that have `set -k` split over it. Measured 2026-09-16
+	// from a script file, with `set -k` on a line of its own:
+	//
+	//	set -k; declare -i n=3*3; echo "n=[${n-u}]"
+	//	bash 5.3.20   declare lists every integer name, then n=[u]
+	//	ksh93u+       n=[9]
+	//
+	//	set -k; export E1=e1; echo "E1=[${E1-u}]"
+	//	bash 5.3.20   export lists the environment, then E1=[u]
+	//	ksh93u+       E1=[e1]
+	//
+	// So in bash the option reaches past the one class of command whose
+	// operands are already assignments, and the utility is left listing
+	// because nothing was passed to it; ksh93 leaves a declaration's operand
+	// where it stands. Both are silent and both report 0, which is what makes
+	// this worth an axis rather than a note: `set -k` in a script that also
+	// uses `export NAME=value` exports nothing in one of the two shells.
+	KeywordPromotesADeclarationsOperand Answer
+
 	// HistoryExpansion gives the shell a history expander at all: `!!` for the
 	// previous command, `!$` for its last word, `^old^new^` for the previous
 	// command with one word changed, and the `set -H` that switches it.

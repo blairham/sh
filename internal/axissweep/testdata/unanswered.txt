@@ -120,6 +120,7 @@ ash   JobsStateFiltersAccumulate
 ash   KeptTrapListingIncludesExit
 ash   KeyedLiteralAppendJoinsTheReplacedValue
 ash   KeyedTableScalarIsTheFirstValue
+ash   KeywordPromotesADeclarationsOperand
 ash   ListedAssignmentPrefixIsBare
 ash   ListedBangIsOrdinary
 ash   ListedCaretIsOrdinary
@@ -334,6 +335,7 @@ dash  JobsStateFiltersAccumulate
 dash  KeptTrapListingIncludesExit
 dash  KeyedLiteralAppendJoinsTheReplacedValue
 dash  KeyedTableScalarIsTheFirstValue
+dash  KeywordPromotesADeclarationsOperand
 dash  ListedAssignmentPrefixIsBare
 dash  ListedBangIsOrdinary
 dash  ListedCaretIsOrdinary
@@ -456,6 +458,7 @@ zsh   IgnoredNamesMatchTheLastComponent
 zsh   IgnoredNamesValueIsOnePattern
 zsh   IndirectionYieldsName
 zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
+zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
 zsh   NamerefArrayRefusal
 zsh   NamerefCycleIsRefused

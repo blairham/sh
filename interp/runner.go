@@ -1362,6 +1362,11 @@ type Runner struct {
 	// here and the stopping lives in the front end: this package runs what
 	// it is handed and has no say in whether there is more.
 	onecmd bool
+	// keywordAssignments is `set -k`: with it on, a `name=value` word
+	// standing *after* the command name is a prefix assignment rather than a
+	// positional argument. See keywordassign.go, which carries the panel and
+	// the two shapes recorded there rather than modeled.
+	keywordAssignments bool
 	// monitor is `set -m`. Background jobs already run in process groups of
 	// their own here (see setProcessGroup), so in a non-interactive shell
 	// what the option adds is the state itself: the listings and `$-`
@@ -4401,6 +4406,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// precommand.go for the family and what was measured about each of them.
 	scanning := len(r.precommands) > 0
 	noglob := false
+	// The words `set -k` takes out of the argument list and puts in front of
+	// the command, in the order they were written. Collected here and applied
+	// below by rewriting the command, so that from the moment one is promoted
+	// it is an ordinary prefix assignment and every axis that already answers
+	// for one answers for it — whether it reaches a child's environment,
+	// whether it outlives a call, what `set -x` writes for it. See
+	// keywordassign.go.
+	var promoted []*syntax.Assign
 	for i, w := range c.Args {
 		if r.expandErr || r.ctl == controlExit {
 			// The command is abandoned at its first failed expansion rather
@@ -4414,9 +4427,29 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// expand as ones, which is what keeps `typeset -i n=3*3` from being
 		// read as a pattern. Only after the first word is expanded is it
 		// known which utility this is, so the test is inside the loop.
-		if i > 0 && len(argv) > 0 && r.declares(argv[0]) && assignShaped(w) {
-			argv = append(argv, r.expandAssignArg(w))
-			continue
+		if i > 0 && len(argv) > 0 && assignShaped(w) {
+			declaring := r.declares(argv[0])
+			// `set -k` takes the word before the declaration route can,
+			// where the dialect says it reaches that far. bash's does and
+			// ksh93's does not, which is measured and is why this is asked
+			// rather than assumed — see
+			// Semantics.KeywordPromotesADeclarationsOperand. A non-declaring
+			// command never asks it.
+			if r.keywordAssignments && keywordPromotable(w) &&
+				(!declaring || r.ask(r.sem().KeywordPromotesADeclarationsOperand,
+					"`set -k` reaching a declaration utility's own operand")) {
+				if a := keywordAssign(w); a != nil {
+					promoted = append(promoted, a)
+					continue
+				}
+			}
+			if r.unspecified {
+				break
+			}
+			if declaring {
+				argv = append(argv, r.expandAssignArg(w))
+				continue
+			}
 		}
 		// expandWord split in two, so the match can be decided between the
 		// halves rather than before the word is read.
@@ -4444,6 +4477,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			fields = fields[1:]
 		}
 		argv = append(argv, r.globFieldsUnlessSuppressed(fields, noglob)...)
+	}
+	if len(promoted) > 0 {
+		// The command as though the assignments had been written in front of
+		// it. A copy rather than a write through the pointer: the tree is the
+		// script and a loop body runs it again, so promoting into `c` would
+		// make the second pass through a `while` see assignments the source
+		// does not hold — and `set +k` inside the loop would then be unable
+		// to put them back.
+		rewritten := *c
+		rewritten.Assigns = append(append([]*syntax.Assign{}, c.Assigns...), promoted...)
+		c = &rewritten
 	}
 	// An array assignment written as an operand — `local a=(x y)` — reaches
 	// the utility as the bare name, and the array itself is applied once the

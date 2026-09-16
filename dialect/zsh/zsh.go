@@ -787,6 +787,17 @@ func Semantics() interp.Semantics {
 	// reached. The spellings that reach the expander are `setopt banghist`
 	// and the borrowed `set -o histexpand`.
 	s.HistoryExpansion = interp.Yes
+	// No keyword option. The letter is not the option here: zsh spells
+	// `interactivecomments` with `-k` and answers `no such option` to `set
+	// -o keyword`, both measured 2026-09-16, so a `name=value` word after
+	// the command name stays a positional and that is zsh's answer rather
+	// than a gap. See Semantics.KeywordAssignments.
+	s.KeywordAssignments = interp.No
+	// unanswered KeywordPromotesADeclarationsOperand: there is no keyword
+	// option here to reach a declaration with. `-k` is this shell's
+	// `interactivecomments` and `set -o keyword` is `no such option`, both
+	// measured 2026-09-16, so the question cannot be put to it.
+
 	s.HistoryExpansionAtAPrompt = interp.Yes
 	// The startup files, and zsh has more of them than the rest of the panel
 	// put together. Measured 2026-09-05 through a pseudo-terminal with a

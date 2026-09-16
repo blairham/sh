@@ -11,12 +11,17 @@
 # different build with a different roster while a case that prints them says
 # which ones moved.
 #
-# Six `set -o` names are deliberately not here: bash takes `keyword`,
-# `privileged`, `histexpand` and `history`, and the letters `-k`, `-p`, `-H`,
-# `-b`, `-r` and `-P` with them, and this shell refuses all of them by
+# Three `set -o` names are deliberately not here: bash takes `privileged` and
+# the letters `-b`, `-r` and `-P`, and this shell refuses all of them by
 # design — `dialect/bash`'s UnimplementedOptionLetters records the letters
 # and the long names are paired to them, so a case here would be asking bash
 # a question this shell has already answered "not built".
+#
+# The list was six. `histexpand` and `history` left it when the expander was
+# built (#3093) and `keyword` when the option was (#3095), and the last of
+# those has a block of its own at the end of this file — the two tables are
+# one table, so a name refused here while the letter is wired would be a case
+# asserting the opposite of what the shell does.
 
 shopt | head -6
 printf 'and the listing is %s rows\n' "$(shopt | grep -c .)"
@@ -63,3 +68,84 @@ shopt -s extglob
 case ":$BASHOPTS:" in *:extglob:*) printf 'and turning one on puts it in\n' ;; *) printf 'and it did not\n' ;; esac
 shopt -u extglob
 case ":$BASHOPTS:" in *:extglob:*) printf 'still there\n' ;; *) printf 'and turning it off takes it out\n' ;; esac
+
+# ---- `set -k`, the keyword option ----
+#
+# POSIX's keyword option: with it on, **every** `name=value` word of a simple
+# command is a prefix assignment and not only the ones in front of the command
+# name. bash and ksh93 have it, zsh spells `interactivecomments` with the same
+# letter, and dash and BusyBox ash end the file over it — so it cannot be a
+# core or an ext case, and this half of it is graded against bash.
+#
+# What is bash's alone here is the last block: the option reaches past a
+# declaration utility and takes its operand too, leaving the utility with
+# nothing to act on. ksh93 leaves a declaration's operand where it stands, and
+# ksh/shell-options.tests holds the same rows with that answer.
+#
+# `set -k` stands on a line of its own throughout. ksh93 decides the option
+# while **parsing**, so `set -k; f A=1 x` on one line reaches nothing there
+# even though it works here, and a case written that way would be asking the
+# two columns different questions.
+
+f() { printf 'f: 1=[%s] KV=[%s] n=%s\n' "${1-.}" "${KV-unset}" "$#"; }
+set -k
+f KV=2 zz
+printf 'the promoted name does not outlive the call [%s]\n' "${KV-unset}"
+
+# Several on one command, and the last of a repeated name wins.
+g() { printf 'g: 1=[%s] A=[%s] B=[%s] n=%s\n' "${1-.}" "${A-unset}" "${B-unset}" "$#"; }
+g A=1 xx B=2
+g A=4 A=5 yy
+
+# A `--` does not stop it: it is not an end-of-options marker for this.
+g -- C=3
+printf 'C after the double dash [%s]\n' "${C-unset}"
+
+# The **written** word decides and not the expanded one.
+w='A=9'
+g $w yy
+g 'A=10' yy
+g 1A=11 yy
+
+# The value may hold what a written assignment's may, and is neither split nor
+# matched against the filesystem.
+h() { printf 'h: 1=[%s] Q=[%s] n=%s\n' "${1-.}" "${Q-unset}" "$#"; }
+V=vv
+h Q=$V yy
+h Q="$V" yy
+h Q=x$V yy
+h Q=$(printf cs) yy
+h Q=$((1+1)) yy
+h Q= yy
+h Q=a=b yy
+
+# It reaches a builtin and an external alike, and an external is handed the
+# name in its environment — which is what the option is for.
+printf 'echo drops it -> [%s]\n' "$(echo A=12 kept)"
+env A=13 > k.env
+printf 'an external is told -> %s\n' "$(grep -c '^A=13$' k.env)"
+printf 'and the shell did not keep it [%s]\n' "${A-unset}"
+
+# The letter shows in `$-`, and the long name is the same state.
+case "$-" in *k*) printf 'the letter is in $-\n' ;; *) printf 'the letter is not in $-\n' ;; esac
+set +k
+case "$-" in *k*) printf 'and set +k left it\n' ;; *) printf 'and set +k took it out\n' ;; esac
+g A=14 yy
+set -o keyword
+printf 'set -o keyword -> %s\n' "$?"
+g A=15 yy
+set +o keyword
+printf 'set +o keyword -> %s\n' "$?"
+g A=16 yy
+
+# bash's own answer, and the row ksh93 does not share: the option takes a
+# declaration utility's operand too, so the utility is left with none and
+# lists instead of declaring.
+set -k
+export E1=e1 > /dev/null
+printf 'export under -k [%s]\n' "${E1-unset}"
+readonly R1=r1 > /dev/null
+printf 'readonly under -k [%s]\n' "${R1-unset}"
+declare -i N1=3*3 > /dev/null
+printf 'declare under -k [%s]\n' "${N1-unset}"
+set +k

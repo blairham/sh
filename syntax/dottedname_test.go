@@ -90,3 +90,21 @@ func assignedNames(f *File) []string {
 	}
 	return names
 }
+
+// A subscript on a name that begins with a dot, which is the only way to read
+// `.sh.match` past its whole match and the only way to count `.sh.pipestatus`
+// (#2916). A dot *inside* a name was already subscriptable; the leading one was
+// taken for a special parameter and the bracket left for the word to refuse.
+func TestALeadingDotNameTakesASubscript(t *testing.T) {
+	t.Parallel()
+	dotted := Dialect{DottedName: true, ArraySubscript: true, BadSubstitutionAtParseTime: true}
+	for _, src := range []string{
+		`echo "${.sh.match[1]}"`,
+		`echo "${#.sh.pipestatus[@]}"`,
+		`echo "${.sh.pipestatus[0]:-d}"`,
+		`echo "${.[0]}"`,
+		`echo "${c.a[0]}"`,
+	} {
+		mustParse(t, src, dotted, "a subscript on a dotted name")
+	}
+}

@@ -1053,8 +1053,16 @@ scan:
 // of the panel refuse the expansion outright. Leaving the bracket unconsumed
 // is what produces that refusal, in each grammar's own words and at each
 // grammar's own moment.
+//
+// A name that *begins* with a dot is a name too, in the grammar where a dot is
+// a name character: `${.sh.match[1]}` is the second capture of the last `=~`
+// and `${#.sh.pipestatus[@]}` a count, and both are ordinary subscripted
+// expansions in ksh93u+ 2012-08-01, as is `${.[0]}`. isParamName looks only at
+// the first byte, so a dotted name read as a name everywhere else and as a
+// special parameter here, and the bracket was left for the word to refuse as
+// a syntax error (#2916). A name a dot *follows* — `${c.a[0]}` — already read.
 func (p *Parser) subscriptableName(name string) bool {
-	if isParamName(name) {
+	if isParamName(name) || (p.dialect.DottedName && strings.HasPrefix(name, ".")) {
 		return true
 	}
 	return p.dialect.SpecialParamSubscript

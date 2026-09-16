@@ -6110,7 +6110,7 @@ func (r *Runner) failedExpansion() {
 // sites were simply never wired to it and ended the file instead. An em dash
 // is a column that does not refuse the line at all and so never arrives here.
 //
-// Two neighbouring subscript refusals already spell the unwinding out by hand
+// Two neighboring subscript refusals already spell the unwinding out by hand
 // — Runner.assignWholeArraySubscript and Runner.assocAssignKey — and both are
 // reached by one column only, so neither had an axis to read. These four are
 // reached by three, which is why this one asks.

@@ -3,7 +3,11 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // A **name reference**: a parameter whose value is another parameter's *name*,
 // through which every read, every write and every `unset` reaches that other
@@ -175,6 +179,61 @@ func (r *Runner) namerefReadsAnElement(name string) (string, bool, bool) {
 	}
 	v, set := r.readThroughNamerefElement(base, sub)
 	return v, set, true
+}
+
+// namerefAimedAtTheWholeArray answers a reference aimed at **all** of an
+// array — `typeset -n r=a[@]`, `typeset -n r=a[*]` — with the node that
+// expansion stands for, so that every reading of the name goes on to be the
+// reading of `${a[@]}` or `${a[*]}`.
+//
+// Distinct from Runner.namerefReadsAnElement one function down, which answers
+// a reference aimed at *one* element and answers it with a string. A whole
+// array is not a string in any of the ways that matter: it is one field per
+// element under `[@]` even inside quotes, one joined field under `[*]`, and
+// `${#r}` is the element count rather than a length. Reading it as a scalar
+// meant Runner.subscriptValue was handed `@`, refused it as arithmetic, and
+// the reference came back **empty at status 0** — a silent wrong answer, and
+// under `set -u` a fatal one, which is what left `nameref.tests` of bash's
+// own suite exiting 127 where bash exits 0 (#2299).
+//
+// Measured on bash 5.3.20, 2026-09-16, with `a=(x y z)`:
+//
+//	typeset -n r=a[@]; printf "<%s>" "$r"      <x><y><z>   was <>
+//	typeset -n r=a[*]; printf "<%s>" "$r"      <x y z>     was <>
+//	typeset -n r=a[*]; printf "<%s>" $r        <x><y><z>   was <>
+//	typeset -n r=a[@]; echo ${#r}              3           was 0
+//	typeset -A m=([k]=v [j]=w); typeset -n r=m[@]; echo "$r"
+//	                                           v w         was empty
+//
+// and under `set -u` with `a` never set, `typeset -n r=a[@]; : "$r"` is
+// silent at 0 there, because `${a[@]}` on an unset array is not an unbound
+// parameter in bash and never was.
+//
+// The rewrite rather than a reading of its own, for the reason
+// Runner.bareArrayAsList is a rewrite: what a whole-array subscript means is
+// already written once, and a second copy of it would drift. The parse comes
+// from Runner.reference, which is the same door the `(P)` flag opens on the
+// same text.
+//
+// Not for `${!r}`, which is the *target's own text* — `a[@]` — in bash and
+// already answers that way, and not for a node that carries a subscript of
+// its own: `${r[1]}` and `${#r[@]}` subscript the reference, which is not an
+// array, and bash answers both with nothing.
+func (r *Runner) namerefAimedAtTheWholeArray(e *syntax.ParamExpr) (*syntax.ParamExpr, bool) {
+	if e == nil || e.Index != nil || e.Indirect || e.Prefix != 0 || e.Inner != nil {
+		return nil, false
+	}
+	target, is := r.namerefTarget(e.Name)
+	if !is {
+		return nil, false
+	}
+	ref, ok := r.reference(target)
+	if !ok || !r.wholeArrayIndex(ref) {
+		return nil, false
+	}
+	aimed := *e
+	aimed.Name, aimed.Index, aimed.IndexFlags = ref.Name, ref.Index, ref.IndexFlags
+	return &aimed, true
 }
 
 // readThroughNamerefElement reads the one element a reference to `a[2]` is

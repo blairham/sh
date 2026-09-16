@@ -2217,6 +2217,21 @@ func Semantics() interp.Semantics {
 	// `whence -v .` and `type .` alike are `. is a special shell builtin` in
 	// ksh93u+ 2012-08-01, where `echo` is a plain one.
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
+	// And this shell's special side is three names longer than POSIX's.
+	// Measured 2026-09-16 on ksh93u+ 2012-08-01, each probe with its
+	// control: `type alias` is `alias is a special shell builtin` where
+	// `type echo` is plain; `V=1 alias` leaves V at 1 where `V2=1 cd .`
+	// leaves V2 unset; `alias -Z` ends the script at 2 where `cd -Z` writes
+	// its usage and carries on; and `set -x; V=1 alias` traces `+ V=1`
+	// before `+ alias`, the order this shell keeps for `export` and not for
+	// `cd`. `unalias` and `typeset` answer all four the same way — `typeset
+	// -Q` is the usage error that reaches the fatality, since `typeset
+	// -Z9Z` is accepted here.
+	//
+	// `newgrp` is ksh93's fourth and is left out: this dialect has no such
+	// builtin, so `type newgrp` is the PATH hit rather than a sentence, and
+	// putting the name here would claim a builtin that does not exist.
+	s.SpecialBuiltinsBeyondPosix = "alias unalias typeset"
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
 	// whence -v's letters, and no `-t` among them: that letter is refused

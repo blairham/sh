@@ -103,7 +103,7 @@ func (r *Runner) sayKind(k typeKind, name, bare, named string) bool {
 func (r *Runner) BuiltinSentence(name string) string {
 	dg := r.diag()
 	plain := Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name)
-	if !specialBuiltins[name] {
+	if !r.IsSpecialBuiltinHere(name) {
 		return plain
 	}
 	if !r.ask(r.sem().TypeDistinguishesSpecialBuiltins, "`type` calling a special builtin special") {

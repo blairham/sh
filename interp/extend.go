@@ -128,7 +128,46 @@ func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
 // builtins, which a dialect layer needs in order to match the two behaviors
 // that follow from that list: an assignment prefixed to one persists, and a
 // failure in one is fatal to a non-interactive shell.
+//
+// POSIX's list alone, which is the substrate's. A *running* shell's list can
+// be longer — see Semantics.SpecialBuiltinsBeyondPosix, and
+// [Runner.IsSpecialBuiltinHere] for the question with a dialect behind it.
 func IsSpecialBuiltin(name string) bool { return specialBuiltins[name] }
+
+// IsSpecialBuiltinHere is IsSpecialBuiltin asked of this runner, which is the
+// form every consequence of the list reads.
+//
+// The two differ because the panel does not agree on the membership: dash and
+// BusyBox ash mark `local` special and ksh93 marks `alias`, `unalias` and
+// `typeset`, each with the sentence, the fatality and the assignment
+// persistence to match. See Semantics.SpecialBuiltinsBeyondPosix for the
+// measurement and for why this is a roster rather than a flag per name.
+func (r *Runner) IsSpecialBuiltinHere(name string) bool {
+	if specialBuiltins[name] {
+		return true
+	}
+	return nameInRoster(r.sem().SpecialBuiltinsBeyondPosix, name)
+}
+
+// nameInRoster reports whether a space-separated roster holds this name.
+//
+// Written out rather than strings.Fields + a loop because it is asked on
+// every command that has a prefix or a bad option, and the roster is empty in
+// three of the six presets: the common case is one length check.
+func nameInRoster(roster, name string) bool {
+	for len(roster) > 0 {
+		var field string
+		if i := strings.IndexByte(roster, ' '); i >= 0 {
+			field, roster = roster[:i], roster[i+1:]
+		} else {
+			field, roster = roster, ""
+		}
+		if field == name {
+			return true
+		}
+	}
+	return false
+}
 
 // The accessors below are what a registered builtin needs, and they are here
 // because writing one found them missing.
@@ -179,7 +218,7 @@ func (r *Runner) Diagnosef(format string, args ...any) { r.diagf(format, args...
 // The stop is unconditional here because the caller is the dialect that
 // rerouted the call: it knows whether the builtin it rerouted *to* is one
 // whose usage error is fatal, and nothing else does. See
-// Semantics.AliasBadOptionFatal for the axis this mirrors.
+// Semantics.SpecialBuiltinsBeyondPosix for the membership this mirrors.
 func (r *Runner) RefuseBuiltinUsagef(builtin, format string, args ...any) {
 	r.complainAboutOption(builtin, format, args...)
 	r.fatalUsageQuiet()

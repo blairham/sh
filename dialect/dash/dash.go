@@ -1056,6 +1056,15 @@ func Semantics() interp.Semantics {
 	// `type .` is `. is a special shell builtin` in dash 0.5.12, and `type
 	// echo` is a plain one.
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
+	// And `local` is on that side here, which POSIX's list does not have at
+	// all. Measured 2026-09-16 against both builds — Apple's dash-16 and
+	// 0.5.12 in `debian:stable-slim`, which agree line for line: `type
+	// local` is `local is a special shell builtin` where `type echo` is
+	// plain; `local qq` outside a function ends the script at 2; and inside
+	// one, `LV=1 local x` leaves LV at 1 where `CV=1 command true` leaves CV
+	// unset. The fatality was already right here and reached from somewhere
+	// else, which is exactly the drift a membership closes (#3290).
+	s.SpecialBuiltinsBeyondPosix = "local"
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
 

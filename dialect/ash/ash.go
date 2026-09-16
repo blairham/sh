@@ -825,6 +825,15 @@ func Semantics() interp.Semantics {
 	// BusyBox ash 1.37.0 draws the distinction exactly as dash does, so this
 	// is the preset's value measured rather than inherited (#3248's shape).
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
+	// And it draws the *membership* as dash does too, `local` included:
+	// measured 2026-09-16 in the digest-pinned Alpine image under `--init`,
+	// `type local` is `local is a special shell builtin` where `type echo`
+	// is plain, `local qq` outside a function ends the script at 2, and
+	// `LV=1 local x` inside one leaves LV at 1 where `CV=1 command true`
+	// leaves CV unset. `source` is the one name where the two columns part
+	// — BusyBox has it and marks it special, dash has no such builtin — and
+	// it is already in the substrate's own list, so it is not repeated here.
+	s.SpecialBuiltinsBeyondPosix = "local"
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
 	// `ulimit -a` is laid out with bash's labels and letters rather than

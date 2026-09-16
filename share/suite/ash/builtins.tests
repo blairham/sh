@@ -205,3 +205,19 @@ type eval
 type echo
 command -V .
 command -V echo
+
+# And *which* names are special is not POSIX's list here either: BusyBox puts
+# `local` on the special side, as dash does and as no other column of the
+# panel does (#3290). `alias` is the control and is a plain builtin here.
+type local
+type alias
+type echo
+
+# The behaviour the sentence comes with. Inside a function, because `local`
+# outside one ends this shell; `command` is the ordinary-builtin control.
+f() { LV=1 local x; }
+f
+printf 'local LV=[%s]\n' "${LV-UNSET}"
+g() { CV=1 command true; }
+g
+printf 'command CV=[%s]\n' "${CV-UNSET}"

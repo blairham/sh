@@ -4905,7 +4905,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// rather than reaching the next command. Asked only there: on
 		// anything else no shell in the panel stops, so there is nothing to
 		// ask about `true 3>/nope/x`.
-		if specialBuiltins[argv[0]] &&
+		if r.IsSpecialBuiltinHere(argv[0]) &&
 			r.ask(r.sem().RedirectErrorOnSpecialBuiltinFatal, "a failed redirection on a special builtin ending the script") {
 			r.fatalUsageQuiet()
 			return nil
@@ -5096,7 +5096,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// x=2 env`.
 				continue
 			}
-			if !specialBuiltins[argv[0]] || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
+			if !r.IsSpecialBuiltinHere(argv[0]) || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
 				undo = append(undo, r.saveVar(a.Name))
 			}
 			// Whether a discipline hears about it is whether there is a

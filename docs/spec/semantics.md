@@ -17791,10 +17791,57 @@ an axis: one binary, two answers. zsh's `export` is a third answer — `export
 is a reserved word` — and belongs to that shell's grammar rather than here.
 
 *Which* names are special is a separate question this axis does not ask, and
-the panel does not agree about that either: dash and BusyBox also call
-`local` special and ksh93 also calls `alias` special, in both cases with the
-behavior to match. The membership used here is the substrate's own, so a
-dialect that later carries its own list moves the sentence with it.
+the panel does not agree about that either. That membership is
+`SpecialBuiltinsBeyondPosix`, below.
+
+**`SpecialBuiltinsBeyondPosix`** — bash — · dash `local` · ksh93 `alias
+unalias typeset` · zsh — · ash `local` · POSIX preset —
+
+The names a dialect marks **special** beyond POSIX's own fourteen, space
+separated. Empty is POSIX's list alone, which is what the substrate holds:
+the fourteen plus `source`, the other spelling of `.` in the two dialects
+that have it.
+
+A roster rather than a flag per name, for the reason `PatternClasses` is one:
+what differs between shells is **which names are on the special side**, and
+that is data. What being special *means* is not in dispute — every column
+that draws the line draws it for the same consequences — so there is no axis
+to switch, only a set to declare.
+
+Four consequences follow from the one answer, and they had already drifted
+apart when this was written: `local` outside a function ended a dash script
+here while `type local` called it ordinary, and ksh93's extra three reached
+the fatality through a `name == "alias"` written in Go beside the table, with
+nothing at all behind the other three.
+
+    type alias / type local        the sentence
+    V=1 alias / LV=1 local x       the assignment prefix persisting
+    alias -Z  / local qq           the failure being fatal
+    set -x; V=1 alias              the prefix traced before the command
+
+Measured 2026-09-16 over every builtin name the panel has, `env -i
+PATH=/usr/bin:/bin LC_ALL=C <shell> case.sh` with stdin from /dev/null, in a
+fresh directory. dash was read twice — Apple's `dash-16` here and 0.5.12 in
+`debian:stable-slim` — and the two agree line for line:
+
+    bash 5.3.20          — (it draws no line at all)
+    that binary as sh    source
+    bash 3.2.57          — (it draws no line at all)
+    zsh 5.9.2            — (it draws no line at all)
+    ksh93u+ 2012-08-01   alias, unalias, typeset, newgrp
+    dash 0.5.12          local
+    BusyBox ash 1.37.0   source, local
+
+`newgrp` is ksh93's fourth and is left out: this shell has no such builtin,
+so putting the name on the roster would make a PATH hit answer as a builtin.
+ksh93 is also the column that *drops* two — `times` and `source` are preset
+aliases there rather than builtins, which is already how that dialect spells
+them — so nothing is subtracted. A roster that had to remove names would be a
+different field.
+
+zsh's `V=1 alias` keeping the value is **not** this list: that shell drops
+`V=1 :` and `V=1 shift 0`, which are POSIX's own, so whatever holds `alias`
+there is not specialness.
 
 **`TypePrintsFunctionBody`** — bash yes · dash no · ksh93 no · zsh no
 

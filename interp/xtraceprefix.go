@@ -165,7 +165,7 @@ func (r *Runner) tracePrefixFollowsTheCommand(argv []string) bool {
 	if r.diag().TracePrefixAssignment != TracePrefixOwnLineAfter || len(argv) == 0 {
 		return false
 	}
-	if specialBuiltins[argv[0]] {
+	if r.IsSpecialBuiltinHere(argv[0]) {
 		return false
 	}
 	if _, ok := r.funcs[argv[0]]; ok {

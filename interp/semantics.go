@@ -14147,6 +14147,81 @@ type Semantics struct {
 	// where it was, so the same line there can be undone.
 	UlimitSetsBothLimits Answer
 
+	// SpecialBuiltinsBeyondPosix is the names a dialect marks **special**
+	// beyond POSIX's own fourteen, space separated. Empty is POSIX's list
+	// alone, which is what the substrate holds — the fourteen plus `source`,
+	// the other spelling of `.` in the two dialects that have it.
+	//
+	// A roster rather than a flag per name, for the reason PatternClasses is
+	// one: what differs between shells is **which names are on the special
+	// side**, and that is data. What being special *means* is not in dispute
+	// — every column that draws the line draws it for the same three
+	// consequences — so there is no axis to switch, only a set to declare.
+	//
+	// The three consequences are why this is a membership and not a third
+	// wording. A name on this list gets all of them from the one answer:
+	//
+	//   - `type` and `command -V` call it special, where the dialect answers
+	//     TypeDistinguishesSpecialBuiltins yes;
+	//   - an assignment prefixed to it persists, where the dialect answers
+	//     AssignmentPrefixPersistsOnSpecialBuiltin yes;
+	//   - its failure is fatal to a non-interactive shell, where the dialect
+	//     answers BadOptionToSpecialBuiltinFatal or
+	//     RedirectErrorOnSpecialBuiltinFatal yes.
+	//
+	// They had already drifted apart when this was written. `local` outside
+	// a function ended a dash script here and `type local` called it
+	// ordinary, one concept answered from two places; and ksh93's extra
+	// three reached the fatality through a hard-coded `name == "alias"`
+	// beside the table, with nothing at all behind the other two.
+	//
+	// Measured 2026-09-16 over every builtin name the panel has, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C <shell> case.sh` with stdin from
+	// /dev/null, in a fresh directory. BusyBox v1.37.0 is the digest-pinned
+	// Alpine image internal/oracle reaches, under `--init`; dash was read
+	// twice, Apple's dash-16 here and 0.5.12 in `debian:stable-slim`, and
+	// the two agree line for line:
+	//
+	//	column                 special beyond POSIX's fourteen
+	//	bash 5.3.20            — (it draws no line at all)
+	//	that binary as `sh`    source
+	//	bash 3.2.57            — (it draws no line at all)
+	//	zsh 5.9.2              — (it draws no line at all)
+	//	ksh93u+ 2012-08-01     alias, unalias, typeset, newgrp
+	//	dash 0.5.12 / dash-16  local
+	//	BusyBox ash 1.37.0     source, local
+	//
+	// `newgrp` is ksh93's fifth and is not here: we have no such builtin, so
+	// there is no membership to declare for it, and adding the name to this
+	// roster would make a PATH hit answer as a shell builtin.
+	//
+	// ksh93 is also the column that *drops* two — `times` and `source` are
+	// preset aliases there rather than builtins, which is already how this
+	// dialect spells them, so nothing is subtracted here. A roster that had
+	// to remove names would be a different field.
+	//
+	// Three probes rather than one, each with its control beside it, because
+	// a shell that had simply lengthened one phrase would move the control
+	// too:
+	//
+	//	type alias        special in ksh93 alone; `type echo` plain in all
+	//	V=1 alias         V stays 1 in ksh93; `V2=1 cd .` UNSET in all
+	//	alias -Z          ends the script in ksh93; `cd -Z` carries on
+	//
+	// and for `local`, which no ksh93 has:
+	//
+	//	type local        special in dash and BusyBox; `type echo` plain
+	//	LV=1 local x      LV stays 1 in dash and BusyBox, inside a function;
+	//	                  `CV=1 command true` UNSET in every column
+	//	local qq          ends a dash and a BusyBox script at 2, outside a
+	//	                  function; alive at 1 in bash, 0 in zsh
+	//
+	// zsh's `V=1 alias` keeping the value is *not* this list — that shell
+	// answers AssignmentPrefixPersistsOnSpecialBuiltin no and drops `V=1 :`
+	// and `V=1 shift 0`, which are POSIX's own, so whatever holds `alias`
+	// there is not specialness. Filed separately rather than read as one.
+	SpecialBuiltinsBeyondPosix string
+
 	// BadOptionToSpecialBuiltinFatal ends the script when a special builtin is
 	// given an option it does not have. True in dash and ksh93, which is the
 	// POSIX rule that a special builtin's failure is fatal; bash and zsh
@@ -14206,20 +14281,31 @@ type Semantics struct {
 	// one reason above. It pins in the other four (#2583).
 	BadOptionToSpecialBuiltinFatalInPosixMode Answer
 
-	// AliasBadOptionFatal ends the script when `alias` or `unalias` is given
-	// an option it does not have. True in ksh93 alone.
+	// AliasBadOptionFatal ends the script over `unalias` **with no operand
+	// at all**, which is a usage error rather than a bad option. True in
+	// ksh93 alone.
 	//
-	// Its own field rather than a widening of the axis above, for the same
-	// reason TypesetBadOptionFatal is: `alias` is not a special builtin in
-	// POSIX, and the substrate's table is POSIX's. What ksh93 has is a
-	// *longer* list of its own — `alias`, `typeset` and `unalias` beside the
-	// fifteen — and a dialect saying "these too" is a measurement about
-	// three names, not a claim that the standard's list is wrong.
+	// Its reach used to be wider: it was also asked for a bad option to
+	// `alias` or `unalias`, from a `name == "alias"` written in Go beside
+	// the special-builtin table, because `alias` is not one of POSIX's
+	// fourteen and the substrate's table was POSIX's. That was the same
+	// question the sentence and the assignment persistence were answering
+	// from two other places and getting wrong, so the longer list moved into
+	// SpecialBuiltinsBeyondPosix and the bad option reads it (#3290). The
+	// answers do not move: ksh93 is the column with the longer list and the
+	// column that answers BadOptionToSpecialBuiltinFatal yes.
+	//
+	// What is left is the operand-less call, which no membership covers: a
+	// special builtin whose *usage* is wrong is fatal by the same POSIX rule,
+	// but the rule is spelled per builtin here and only this one shell has
+	// been measured for it.
 	//
 	// Measured 2026-09-12 on ksh93u+ 2012-08-01: `alias -g x; echo after`
 	// prints the complaint, the usage block, and nothing else, with status
 	// 2. The zsh-flavored `alias -g` and `alias -s` are how a real script
-	// reaches it, and sixteen corpus rows did (#2345).
+	// reaches it, and sixteen corpus rows did (#2345). Measured 2026-09-13,
+	// `unalias; echo alive` and `unalias -q; echo alive`: ksh93 alone ends
+	// the script, at 2.
 	AliasBadOptionFatal Answer
 
 	// AliasNameRefusedCharacters is the characters an alias **name** may not

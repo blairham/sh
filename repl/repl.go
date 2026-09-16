@@ -347,6 +347,22 @@ type Shell struct {
 	// before writing one that does I/O.
 	Completers []Completer
 
+	// RunCompletion asks this shell's own completion system what the word
+	// under the cursor could become, by the name of the action a key's
+	// binding named — see Binding.Candidates. Nil is a session whose shell
+	// has no completion system of its own, which is three of the four.
+	//
+	// A dialect's seam and not a value, for the reason RunWidget is one: what
+	// running it means is finding a widget's definition, publishing the word
+	// under the parameters that shell names, calling the function and reading
+	// back what it collected. All of that is the dialect's, and a table of
+	// values cannot hold it.
+	//
+	// Asked **before** Completers and before this shell's own completion, and
+	// never instead of either: nothing it returns is merged and nothing it
+	// fails to return costs the word its other answers. See completerFor.
+	RunCompletion func(ctx context.Context, name string, c Completion) []string
+
 	// HistoryRecorders are told every line this session records, besides the
 	// history file, which is always told too. Nil is a session whose history
 	// is the file and nothing else.
@@ -1826,6 +1842,10 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// And how one of the shell's own actions is run, with this session's
 		// context closed over.
 		runFunc: s.shellWidgets(ctx),
+		// And how the shell's own completion system is asked, with the same
+		// context closed over for the same reason. Nil where the front end
+		// named none, which is what makes a key's Candidates cost nothing.
+		shellComplete: s.shellCompletion(ctx),
 		// What the shell wants waited on beside the terminal, how it answers
 		// a descriptor that woke, and which descriptor a key arrives on. All
 		// three nil-or-negative in a session with nothing armed, which is

@@ -266,7 +266,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// rather than of the name, because the name is whatever the
 			// completion loader chose to call it.
 			if def.completer != "" {
-				out[seq] = completionBinding(def.completer)
+				out[seq] = completionBinding(widget, def.completer)
 				continue
 			}
 			out[seq] = repl.Binding{Function: widget}
@@ -357,8 +357,26 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 // surface that gates the keystroke** — the missing `compset` builtin is the
 // one the widget reaches first. Registering the module would have moved the
 // diagnostic, not removed it.
-func completionBinding(completer string) repl.Binding {
-	return repl.Binding{Widget: bindkeyWidgets[strings.TrimPrefix(completer, ".")]}
+func completionBinding(widget, completer string) repl.Binding {
+	editorAction := bindkeyWidgets[strings.TrimPrefix(completer, ".")]
+	if editorAction != repl.WidgetComplete {
+		// One of the six completers this editor has not got. The key does
+		// nothing, as it did before #2776, and naming a source of candidates
+		// for a completion that will not happen would be a table saying
+		// something untrue — repl.Binding.Candidates is empty for every key
+		// whose Widget is not WidgetComplete.
+		return repl.Binding{Widget: editorAction}
+	}
+	return repl.Binding{
+		Widget: editorAction,
+		// And the widget's own name, so that the candidates its *function*
+		// produces reach the editor too — which is the half this used to
+		// drop. See repl.Binding.Candidates and compsys.go: the editor asks
+		// the function first and completes its own way when the function has
+		// nothing to say, so the key goes on completing whatever happens to
+		// the function.
+		Candidates: widget,
+	}
 }
 
 // keymapBindings is what the editor is told about one of its two states.

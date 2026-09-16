@@ -42,7 +42,8 @@ func TestTabKeepsCompletingWhenCompinitTakesTheWidget(t *testing.T) {
 	r := bindkeyRunner(t, "zle -C complete-word .complete-word _main_complete\n"+
 		"bindkey '^i' complete-word\n")
 	got, bound := zsh.KeyBindings(r, repl.KeymapMain)["\t"]
-	if want := (repl.Binding{Widget: repl.WidgetComplete}); !bound || got != want {
+	want := repl.Binding{Widget: repl.WidgetComplete, Candidates: "complete-word"}
+	if !bound || got != want {
 		t.Errorf("^I after compinit = %v, %v, want %v — the editor's own completion", got, bound, want)
 	}
 }
@@ -63,16 +64,18 @@ func TestACompletionWidgetIsAnsweredByItsCompleterNotItsFunction(t *testing.T) {
 	}{
 		// A completer this editor has, under a name nothing would guess.
 		{"arbitrary name", "zle -C _correct_filename .complete-word _cf\n" +
-			"bindkey '^G' _correct_filename\n", repl.Binding{Widget: repl.WidgetComplete}},
+			"bindkey '^G' _correct_filename\n", repl.Binding{
+			Widget: repl.WidgetComplete, Candidates: "_correct_filename",
+		}},
 		// The dotless spelling is the same action.
 		{
 			"no leading dot", "zle -C w complete-word f\nbindkey '^G' w\n",
-			repl.Binding{Widget: repl.WidgetComplete},
+			repl.Binding{Widget: repl.WidgetComplete, Candidates: "w"},
 		},
 		// zsh's own default completer, which `compinit` replaces.
 		{
 			"expand-or-complete", "zle -C w .expand-or-complete f\nbindkey '^G' w\n",
-			repl.Binding{Widget: repl.WidgetComplete},
+			repl.Binding{Widget: repl.WidgetComplete, Candidates: "w"},
 		},
 		// A completer this editor has not got: present and doing nothing,
 		// which is what a key bound to `menu-select` does here already with

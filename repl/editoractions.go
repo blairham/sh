@@ -130,7 +130,7 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	// up-line-or-history` must be the same action, including where the cursor
 	// lands and what the walk leaves behind at each step. A second
 	// implementation here is how the two would come to disagree.
-	a.e.runWidget(w, a.prompt)
+	a.e.runWidget(Binding{Widget: w}, a.prompt)
 	return a.e.give(), true
 }
 

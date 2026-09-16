@@ -151,3 +151,25 @@ func (s Shell) runElapsed(ctx context.Context) {
 	}
 	s.Runner.SetExitStatus(status)
 }
+
+// shellCompletion is how a session asks the shell's own completion system,
+// with the ctx the session was started under closed over — the same shape and
+// the same reason as shellWidgets above.
+//
+// Behind the same guard, and the reason is the stronger version of that one: a
+// completion system is the largest body of shell code a startup file loads,
+// it runs on a keystroke, and a panic in it must cost a Tab rather than the
+// session. A guarded panic answers with no matches, which this editor reads as
+// "nothing to say about this word" and completes its own way.
+func (s Shell) shellCompletion(ctx context.Context) func(string, Completion) []string {
+	if s.RunCompletion == nil {
+		return nil
+	}
+	guard := s.guard()
+	return func(name string, c Completion) (matches []string) {
+		if guard.Do(func() { matches = s.RunCompletion(ctx, name, c) }) {
+			return nil
+		}
+		return matches
+	}
+}

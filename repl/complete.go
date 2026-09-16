@@ -421,3 +421,50 @@ func (e *editor) confirmList(matches []string, prompt drawnPrompt) bool {
 		}
 	}
 }
+
+// completerFor is what answers this Tab: the shell's own completion system
+// first where the key's binding named one, and this package's completion
+// after it.
+//
+// Before rather than instead, which is the rule Binding.Candidates states and
+// the reason a startup file's completion system can be wired here at all. A
+// shell action that offers nothing — because it is not defined, because it
+// failed, or because it had nothing to say about this word — leaves the
+// answer this editor would have given on its own standing, so the worst a
+// broken one can do is cost a call. #2770 is the failure that makes this the
+// only acceptable ordering: a real `~/.zshrc` replaced a working Tab with one
+// that diagnosed on every keystroke and completed nothing.
+//
+// The name is per keystroke and the chain is not cached, because the two
+// facts it is built from move independently: a key's binding is read fresh on
+// every key, and the session's own completer is built once.
+func (e *editor) completerFor(name string) Completer {
+	if name == "" || e.shellComplete == nil {
+		return e.comp
+	}
+	return completers{CompleterFunc(func(c Completion) []string {
+		return e.shellComplete(name, c)
+	}), e.comp}
+}
+
+// completeKey is the whole of what a completion key does, including the part
+// that takes two of them.
+//
+// One copy for the two callers — the Tab this editor has by default, and a key
+// a shell rebound to completion — because everything either of them needs is
+// the same, and because the two had drifted: a rebound key ran the completion
+// and dropped the matches on the floor, so it could never list. See the case
+// in editor.go that calls this, and lastTab for why the listing is the second
+// keystroke's and not the first's.
+func (e *editor) completeKey(c Completer, wasTab bool, prompt drawnPrompt) {
+	var matches []string
+	e.change(false, func() { matches = e.complete(c) })
+	if len(matches) > 0 && wasTab && e.confirmList(matches, prompt) {
+		e.list(matches, prompt)
+	}
+	e.redraw(prompt)
+	// Set after the redraw, and the only key that leaves it set: two
+	// completions in a row are a request to see the matches, and anything
+	// between them is not.
+	e.lastTab = true
+}

@@ -3621,6 +3621,11 @@ func Apply(r *interp.Runner) {
 	registerSetopt(r)
 	registerZcompile(r)
 	registerCompctl(r)
+	// And the new completion system's own two, which are what a `zle -C`
+	// widget's function is written in. See compsys.go for the context they
+	// refuse outside of, and #2776 for the rest of the module they belong to.
+	registerCompadd(r)
+	registerCompset(r)
 	registerLocalOptions(r)
 	// `**/` crosses directory levels here with no option asked for, and
 	// there is no `setopt` name that turns it off — which is why this is a

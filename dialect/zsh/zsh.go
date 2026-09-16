@@ -1553,6 +1553,10 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-15 on zsh 5.9.2, `env -i` with a scratch HOME, inside
 	// a function so all three words are reachable: `typeset -n v=1`,
 	// `declare -n v=1` and `local -n v=1` are each `bad option: -n`.
+	// unanswered NamerefArrayRefusal: the letter is the same missing one, so
+	// there is no declaration for an array to be refused under. Measured
+	// 2026-09-16, `r=(a b); typeset -n r=v` is `typeset: bad option: -n` at 1
+	// and the array is untouched (#3103).
 	// unanswered UnsetReferenceLetterRemovesANonReference: `-n` is not one of
 	// this shell's letters. Measured 2026-09-12, `unset -n x` is
 	// `unset: bad option: -n` at 1 and `x` keeps its value (#932).

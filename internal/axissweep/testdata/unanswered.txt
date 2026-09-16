@@ -126,6 +126,7 @@ ash   ListedCaretIsOrdinary
 ash   ListedEqualsIsOrdinary
 ash   ListedNonAsciiIsOrdinary
 ash   LongestMatchTakesTheWrittenArm
+ash   NamerefArrayRefusal
 ash   NamerefCycleIsRefused
 ash   NegatedTestRecordsThePostNegationStatus
 ash   NegativeSubscriptCountsOverAPromotedScalar
@@ -339,6 +340,7 @@ dash  ListedCaretIsOrdinary
 dash  ListedEqualsIsOrdinary
 dash  ListedNonAsciiIsOrdinary
 dash  LongestMatchTakesTheWrittenArm
+dash  NamerefArrayRefusal
 dash  NamerefCycleIsRefused
 dash  NegatedTestRecordsThePostNegationStatus
 dash  NegativeSubscriptCountsOverAPromotedScalar
@@ -455,6 +457,7 @@ zsh   IgnoredNamesValueIsOnePattern
 zsh   IndirectionYieldsName
 zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
 zsh   LocalOutsideAFunctionIsFatal
+zsh   NamerefArrayRefusal
 zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   OperatorAfterTheSubscriptListingIsBad

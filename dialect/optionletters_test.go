@@ -166,6 +166,7 @@ func TestNoSetLetterIsBothAnsweredYesAndRefused(t *testing.T) {
 				{'B', d.sem.SetBTurnsOffBraceExpansion, "SetBTurnsOffBraceExpansion"},
 				{'t', d.sem.SetHasTheTLetter, "SetHasTheTLetter"},
 				{'h', d.sem.SetHasTheHLetter, "SetHasTheHLetter"},
+				{'s', d.sem.SetSLetterSortsTheOperands, "SetSLetterSortsTheOperands"},
 			} {
 				if l.answer == interp.Yes && strings.IndexByte(refused, l.letter) >= 0 {
 					t.Errorf("set: %s says this shell has -%c, and UnimplementedOptionLetters %q "+

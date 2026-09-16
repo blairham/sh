@@ -9965,6 +9965,27 @@ type Semantics struct {
 	// disagree — the rule `set -t` and `onecmd` already follow.
 	SetHasThePrivilegedLetter Answer
 
+	// SetSLetterSortsTheOperands makes `set -s` sort: the operands the call
+	// is given, or the positional parameters already there when it is given
+	// none, and the values of a `set -A` or `set +A` in the same call.
+	//
+	// ksh93 alone. It is not an option — `$-` does not gain an `s` and `+s`
+	// sorts exactly as `-s` does — and the positional parameters are left
+	// alone when the call assigns an array. Measured 2026-09-16 on 93u+
+	// 2012-08-01 under LC_ALL=C:
+	//
+	//	set -- c b a; set -s             a b c
+	//	set -s -- c -b a                 -b a c
+	//	set -- B a 10 9 ''; set +s       '' 10 9 B a
+	//	set -sA a z y                    a is y z, $@ untouched
+	//	a=(z 2); set -s +A a b a         a is a b
+	//
+	// bash refuses the letter (`-s: invalid option`); zsh has it and means
+	// the invocation's read-from-standard-input option, which its own letter
+	// table answers before this is asked; dash takes it silently as that
+	// same invocation letter.
+	SetSLetterSortsTheOperands Answer
+
 	// TestHasTheFileExistsLetter gives `test` a *unary* `-a`, which asks the
 	// question `-e` asks: `test -a f` is true when f exists.
 	//
@@ -17171,6 +17192,8 @@ func PosixSemantics() Semantics {
 		// POSIX gives `umask` `-S` and no more, and `set` no `-p`.
 		UmaskHasTheReusableLetter: No,
 		SetHasThePrivilegedLetter: No,
+		// POSIX's `set` has no `-s` at all; the letter is the invocation's.
+		SetSLetterSortsTheOperands: No,
 		// POSIX gives `test` neither a unary `-a`, a `-o`, a `-N`, nor `<`
 		// and `>`: its `-a` and `-o` are the connectives alone, and the
 		// string comparisons it has are `=` and `!=`. So the core has none

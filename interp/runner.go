@@ -2003,6 +2003,12 @@ type Runner struct {
 	// call of the builtin.
 	setRefusalOwed bool
 
+	// setSortsOperands is `set -s` in the dialect whose letter sorts: the
+	// letter is read before the operands are, so what it asks for has to
+	// wait for them. Set and consumed inside one call of the builtin; see
+	// Semantics.SetSLetterSortsTheOperands.
+	setSortsOperands bool
+
 	// pendingOptionListing is the `set -o` listing a deferred parse still
 	// owes, and which form it is in. One dialect writes one listing after
 	// the whole option parse rather than at each `-o`, so the form has to

@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `.` with words after the filename, from BusyBox ash's side — and this is
+# the tier that did not exist.
+#
+# core/ asks `.` with no operands and says in so many words that "passing
+# operands is asked in dash/, which is the shell that does not take them";
+# ext/evaldot.tests asks it for the three shells that do. ash is in neither
+# body, so the one question `.` splits the panel on was asked of every column
+# but this one, and the dialect quietly held dash's answer (#3248).
+#
+# It is not dash's answer. dash is alone on the panel in ignoring the words:
+# bash 5.3, that binary as `sh`, bash 3.2, zsh 5.9.2, ksh93u+ and this shell
+# all give the sourced file its own positional parameters and put the
+# caller's back afterwards.
+#
+# The restore is the half a one-line probe cannot see, so every row below
+# reports what the caller has after the file returns as well as what the file
+# saw.
+
+printf 'printf "n=%%s [%%s] [%%s]\\n" "$#" "$1" "$2"\n' > args.sh
+set -- outer1 outer2
+
+# The discriminator. The sourced file sees the two words, not the caller's
+# two — dash writes `n=2 [outer1] [outer2]` here — and the caller has its own
+# back on the next line.
+. ./args.sh inner1 inner2
+printf 'the caller still has n=%s [%s] [%s]\n' "$#" "$1" "$2"
+
+# One word, so the list is one long rather than the caller's two. `$#` is
+# what says so: an absent second parameter and an empty one both print as
+# `[]`, so the count is the only part of the row that can tell them apart.
+. ./args.sh only
+printf 'and after one word n=%s [%s]\n' "$#" "$1"
+
+# The control every column agrees on, and the one that says the rows above
+# are about the *words*: with none, the sourced file reads the caller's.
+. ./args.sh
+printf 'and after none n=%s [%s]\n' "$#" "$1"
+
+# Inside a function it is the function's parameters that are saved and put
+# back, because the function's list is the one in force when `.` runs.
+h() {
+  . ./args.sh from-fn
+  printf 'the function still has n=%s [%s] [%s]\n' "$#" "$1" "$2"
+}
+h fnarg1 fnarg2
+printf 'and the file still has n=%s [%s]\n' "$#" "$1"
+
+# The shell's name is not one of the words: `$0` inside the sourced file is
+# the shell's own, unchanged. Reported through a marker rather than printed
+# raw, because the name differs between a reference run and ours by
+# construction and the question here is only whether the words moved it.
+printf 'printf "zero moved: %%s\\n" "$([ "$0" = "$1" ] && printf yes || printf no)"\n' > zero.sh
+. ./zero.sh moved-if-equal
+
+# A word that needs quoting stays one word, and an empty word is a word.
+. ./args.sh 'one word' ''
+printf 'after a quoted pair n=%s [%s]\n' "$#" "$1"
+
+# `set --` inside the sourced file replaces the file's list and not the
+# caller's: the restore puts the caller's back over whatever the file left.
+printf 'set -- replaced\nprintf "the file set n=%%s [%%s]\\n" "$#" "$1"\n' > setter.sh
+. ./setter.sh given
+printf 'after the file set its own n=%s [%s] [%s]\n' "$#" "$1" "$2"
+
+# And the restore happens however the file leaves: a `return` partway through
+# is the other exit, and the caller's list comes back from it too.
+printf 'printf "before the return n=%%s [%%s]\\n" "$#" "$1"\nreturn 3\nprintf "not reached\\n"\n' > early.sh
+. ./early.sh returned; printf 'the early return -> %s\n' "$?"
+printf 'after the early return n=%s [%s] [%s]\n' "$#" "$1" "$2"

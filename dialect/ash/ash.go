@@ -977,6 +977,16 @@ func Semantics() interp.Semantics {
 	s.EvalOptions = interp.EvalReadsNoOptions
 	s.DotTakesTheSearchPathOption = interp.No
 	s.DotDirectoryOperandIsAnError = interp.No
+	// Words after the filename become the sourced file's own positional
+	// parameters, and the caller's come back afterwards. This is the panel's
+	// six-to-one split rather than its sibling's answer: dash alone ignores
+	// them, and taking the preset's `No` here put this shell on the wrong
+	// side of it (#3248). Measured 2026-09-16 in the pinned alpine image,
+	// BusyBox v1.37.0: with `set -- outer1 outer2 outer3` and a body of
+	// `echo "[$1][$2][$#]"`, `. ./sub.sh arg` writes `[arg][][1]` and the
+	// line after it writes `[outer1][outer2][3]`. dash writes the caller's
+	// three at both sites.
+	s.DotPassesArguments = interp.Yes
 	// Only the last of several targets is used: `echo hi >a >b` leaves a
 	// empty.
 	s.RedirectsUseEveryTarget = interp.No

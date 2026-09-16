@@ -306,9 +306,10 @@ func TestTheRefiringAxisIsRefusedOnlyWhereItDecides(t *testing.T) {
 	// And where the *frame* axis is the unanswered one, the end of a call
 	// adds no refusal of its own. The refusal belongs to the failing
 	// statement inside the body, which runErrTrap reaches and already
-	// makes: one for `g(){ false; }`, two for a body whose group reports
-	// the failure again, and none at all for a body that failed by `return`
-	// alone, since that statement is never judged. Counted rather than
+	// makes: one for `g(){ false; }`, one for a body whose group reports
+	// the failure — the group ran a statement, so it is not judged again and
+	// is not a second place to be asked (#3344) — and none at all for a body
+	// that failed by `return` alone, since that statement is never judged. Counted rather than
 	// matched, because the regression was a *second* copy of a complaint
 	// that was already correct.
 	s.ErrTrapRunsInsideFunctions = Unspecified
@@ -317,7 +318,7 @@ func TestTheRefiringAxisIsRefusedOnlyWhereItDecides(t *testing.T) {
 		want int
 	}{
 		{`trap 'echo E' ERR; g() { false; }; g; echo done`, 1},
-		{`trap 'echo E' ERR; g() { { false; }; }; g; echo done`, 2},
+		{`trap 'echo E' ERR; g() { { false; }; }; g; echo done`, 1},
 		{`trap 'echo E' ERR; g() { return 1; }; g; echo done`, 0},
 	} {
 		out, _ := run(t, tc.src, withSem(s))

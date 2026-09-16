@@ -28,6 +28,13 @@
 # which is the reason to have the file rather than a reason to leave the
 # case out.
 #
+# Each section runs in a subshell, which is this directory's usual shape and
+# is load-bearing here: refusing a discipline definition is *fatal* in ksh93
+# and in any shell that copies the refusal, so a section written at the top
+# level would take every later section down with it and the file would
+# measure one line. Inside a subshell a gap costs its own section and the
+# rest of the file is still evidence.
+#
 # A `function` whose name contains a dot is not a namespace here. ksh93 reads
 # it as a discipline for the variable named by the part before the dot, so
 # `function ns.thing` with no `ns` in scope is refused as an *invalid
@@ -35,77 +42,87 @@
 # file the other shells accept and run.
 
 printf -- '--- .get is entered with an empty value ---\n'
-
-g=raw
-function g.get { .sh.value="[${.sh.value}]"; }
-printf 'read once: %s\n' "$g"
-printf 'read twice: %s\n' "$g"
-printf 'expanded in a word: <%s>\n' "${g}"
+(
+  g=raw
+  function g.get { .sh.value="[${.sh.value}]"; }
+  printf 'read once: %s\n' "$g"
+  printf 'read twice: %s\n' "$g"
+  printf 'expanded in a word: <%s>\n' "${g}"
+)
 
 printf -- '--- .set sees the value on its way in ---\n'
+(
+  function s.set { .sh.value="<${.sh.value}>"; }
+  s=first
+  printf 's after the assignment: %s\n' "$s"
+  s=second
+  printf 's after a second: %s\n' "$s"
 
-function s.set { .sh.value="<${.sh.value}>"; }
-s=first
-printf 's after the assignment: %s\n' "$s"
-s=second
-printf 's after a second: %s\n' "$s"
-
-# The discipline decorates once per assignment rather than once per read, so
-# the wrapping does not accumulate. That is the half that tells .set from
-# .get, and it is why both are here.
+  # The discipline decorates once per assignment rather than once per read, so
+  # the wrapping does not accumulate. That is the half that tells .set from
+  # .get, and it is why both are here.
+)
 
 printf -- '--- the name and the subscript a discipline was entered for ---\n'
-
-function n.set { printf 'set name=[%s] value=[%s] subscript=[%s]\n' "${.sh.name}" "${.sh.value}" "${.sh.subscript}"; }
-n=plain
-n[3]=indexed
+(
+  function n.set { printf 'set name=[%s] value=[%s] subscript=[%s]\n' "${.sh.name}" "${.sh.value}" "${.sh.subscript}"; }
+  n=plain
+  n[3]=indexed
+)
 
 printf -- '--- .append is given only what was appended ---\n'
-
-function p.append { printf 'append was given [%s]\n' "${.sh.value}"; }
-p=base
-p+=more
-printf 'p=[%s]\n' "$p"
+(
+  function p.append { printf 'append was given [%s]\n' "${.sh.value}"; }
+  p=base
+  p+=more
+  printf 'p=[%s]\n' "$p"
+)
 
 printf -- '--- .unset runs before the name goes ---\n'
-
-u=here
-function u.unset { printf 'the unset discipline ran, and u is still [%s]\n' "$u"; }
-unset u
-printf 'after the unset: [%s]\n' "${u-gone}"
+(
+  u=here
+  function u.unset { printf 'the unset discipline ran, and u is still [%s]\n' "$u"; }
+  unset u
+  printf 'after the unset: [%s]\n' "${u-gone}"
+)
 
 printf -- '--- the function running now, and how deep ---\n'
-
-function outer { printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; inner; }
-function inner { printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; }
-outer
-posixform() { printf 'the POSIX form answers too: fun=[%s]\n' "${.sh.fun}"; }
-posixform
-printf 'at the top: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"
+(
+  function outer { printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; inner; }
+  function inner { printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; }
+  outer
+  posixform() { printf 'the POSIX form answers too: fun=[%s]\n' "${.sh.fun}"; }
+  posixform
+  printf 'at the top: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"
+)
 
 printf -- '--- a dotted name is a discipline, not a namespace ---\n'
-
-( eval 'function ns.thing { printf "ran\n"; }' ) 2>&1 | sed 's/^.*: ns\./ns./'
+(
+  ( eval 'function ns.thing { printf "ran\n"; }' ) 2>&1 | sed 's/^.*: ns\./ns./'
+)
 
 printf -- '--- typeset -f writes the definition back out ---\n'
-
-function shown { printf 'in shown\n'; }
-plain() { printf 'in plain\n'; }
-typeset -f shown
-typeset -f plain
-printf 'names alone: [%s]\n' "$(typeset +f | sort | tr '\n' ' ')"
+(
+  function shown { printf 'in shown\n'; }
+  plain() { printf 'in plain\n'; }
+  typeset -f shown
+  typeset -f plain
+  printf 'names alone: [%s]\n' "$(typeset +f | sort | tr '\n' ' ')"
+)
 
 printf -- '--- autoload finds a definition on FPATH ---\n'
-
-mkdir -p fns
-printf 'function auto { printf "autoloaded\\n"; }\n' > fns/auto
-FPATH=$PWD/fns
-autoload auto
-auto
-printf 'the autoloaded call -> %s\n' "$?"
+(
+  mkdir -p fns
+  printf 'function auto { printf "autoloaded\\n"; }\n' > fns/auto
+  FPATH=$PWD/fns
+  autoload auto
+  auto
+  printf 'the autoloaded call -> %s\n' "$?"
+)
 
 printf -- '--- return takes the low byte ---\n'
-
-function big { return 300; }
-big
-printf 'return 300 -> %s\n' "$?"
+(
+  function big { return 300; }
+  big
+  printf 'return 300 -> %s\n' "$?"
+)

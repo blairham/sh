@@ -1,3 +1,10 @@
+# `pre-commit install` wires both hook types, so the pre-push hook below is
+# installed by the same command everyone already runs. Without this key a
+# plain `install` writes only .git/hooks/pre-commit and the push-stage hook
+# is configured but never fires -- silent in the green direction, which is
+# the failure mode #1495 and #2150 were both about.
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -46,15 +53,42 @@ repos:
         name: gofumpt
         args: [--hook:error-on-output, go, tool, gofumpt, -l, -d, .]
 
-  # golangci-lint is NOT run here. It type-checks the whole module on every
-  # commit -- measured on this repository, ~3GB resident and 300% CPU per run,
-  # and with several worktrees committing at once it took an 18-core machine to
-  # a load average of 89 and made the editor unusable. Capping it to 4 workers
-  # helped (240MB, 115%) but a linter has no business costing that at `git
-  # commit` time.
+  # golangci-lint is not on the *commit* path and stays off it. It type-checks
+  # the whole module -- 77 packages, 657k lines -- and measured on this
+  # repository that is ~3GB resident and 300% CPU per run; with several
+  # worktrees committing at once it took an 18-core machine to a load average
+  # of 89 and made the editor unusable. Capping it to 4 workers helped (240MB,
+  # 115%) but a linter has no business costing that at `git commit` time.
   #
-  # AGENTS.md already said so -- "it runs in CI, not pre-commit -- it's too slow
-  # for every commit" -- and this file disagreed with it.
+  # It runs at **push** instead. That is the same work against a much smaller
+  # denominator: agents commit constantly across worktrees and push once or
+  # twice per pull request. The cost here is loading and typechecking the
+  # package graph, and that does not shrink by touching fewer files -- so the
+  # lever is how *often* it is paid, never how much of the tree it covers.
+  # Scoping to changed packages was considered and rejected for the same
+  # reason: it keeps the load and loses the coverage.
+  #
+  # **`unused` is the one linter held back**, and for correctness rather than
+  # for time. It is whole-program reachability, so it is both the most
+  # expensive of the seven and the only one whose answer depends on packages
+  # you did not touch. CI runs it over the whole tree, which is the only place
+  # it can be right.
+  #
+  # Not `--fast-only`. Of the seven linters enabled in .golangci.yml only
+  # ineffassign and misspell carry golangci's `fast` tag, and misspell already
+  # has a hook of its own below -- so `--fast-only` would buy ineffassign alone
+  # in exchange for loading all 77 packages. Once the load is paid, running
+  # errcheck, govet, staticcheck and forbidigo on top of it is nearly free.
+  #
+  # **This does not replace the Lint job and must not be allowed to.** CI runs
+  # the full set over the whole tree and is the required check. A hook can be
+  # skipped with `--no-verify`, can be left uninstalled, and never runs on
+  # `main` at all -- and a lint that never examines `main` is exactly how five
+  # findings accumulated unreported (#1302, #1640). This is early warning,
+  # roughly two minutes ahead of CI; the Lint job is the gate.
+  #
+  # `types: [go]` comes from the hook's manifest, so a docs-only push skips it
+  # without a filter here.
   #
   # **The formatters it used to apply are covered above, and were not for a
   # year.** `golangci-lint-fmt` applied gofumpt and goimports, the change that
@@ -64,11 +98,14 @@ repos:
   # block above is that hook; goimports is not separately covered, because
   # gofumpt is a superset of gofmt and the import *grouping* rule is a
   # golangci-lint formatter setting the Lint job applies.
-  #
-  # CI runs golangci-lint instead, in the Lint job, over the whole tree. It
-  # used to diff from the merge base there, which meant `main` — where the
-  # merge base is HEAD — was never linted at all; see the job's own comment
-  # for why that is now a full-tree run (#1302, #1640).
+  - repo: https://github.com/TekWizely/pre-commit-golang
+    rev: v1.0.0-rc.4
+    hooks:
+      - id: my-cmd-repo
+        alias: golangci-lint
+        name: golangci-lint (whole tree, minus unused)
+        stages: [pre-push]
+        args: [go, tool, golangci-lint, run, -D, unused]
 
   # US English over prose, which is where most of this repository is.
   # `.golangci.yml` sets `locale: US` and AGENTS.md cites it as enforced, but

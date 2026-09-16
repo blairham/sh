@@ -400,8 +400,29 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 	// unquoted — and that is the only stage at which anything can know it.
 	// The two readings are one expansion, which is what the operand must
 	// have however many readers it has.
+	var scan syntax.ArithBracketScan
 	return r.wordTextNoSplit(w, func(sp syntax.Span, text string) string {
 		if sp.Kind == syntax.Literal && sp.Quoting == syntax.Unquoted {
+			for i := 0; i < len(text); i++ {
+				switch b := text[i]; {
+				case scan.Content(b):
+				case b == '[':
+					scan.Depth++
+				case b == ']':
+					scan.Depth--
+				}
+			}
+			return text
+		}
+		if scan.Depth <= 0 {
+			// Not inside brackets the script wrote, so there are no brackets
+			// of the script's for a value's to be told apart from — and the
+			// value's are then the only ones there are. Measured 2026-09-16:
+			// `m[k]=5; key=k; e='m[$key]'; [[ $e -eq 5 ]]` holds in bash
+			// 5.3.20, the whole subscript having come out of the value, where
+			// `[[ a[$k] -eq 9 ]]` with `k='x]'` reads the value's bracket as
+			// part of the key. The same rule expandArithText draws with the
+			// same type, and drawn here for the same reason (#3303).
 			return text
 		}
 		// A bracket behind a quote, and one out of an expansion, are
@@ -498,7 +519,12 @@ func (r *Runner) conditionOperand(text string) (value int, failure string) {
 	// prefix as well, so `[[ 0x10 -eq 16 ]]` is false in that shell (#1627).
 	text = r.conditionLeadingNumeral(text)
 	p := syntax.NewParser("", r.dialect())
-	tree := p.ParseArithFor(text, syntax.Pos{})
+	// An operand arrives already expanded — the doc above measures that with
+	// `x=7; v='$x'`, which no column reads as 7 — so it is read as the
+	// result it is. Reading it as a program left a `$` with no tree and no
+	// complaint, which evaluated to a silent 0 where bash writes `$x:
+	// arithmetic syntax error: operand expected` (#3303).
+	tree := p.ParseArithExpanded(text, syntax.Pos{})
 	// The text a complaint quotes back is the one a script would recognize,
 	// which is this one without the marks: they are this implementation's
 	// bookkeeping, and a refusal carrying one prints a stray NUL into the

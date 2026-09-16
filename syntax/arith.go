@@ -503,7 +503,51 @@ type arithParser struct {
 // expression with a `$` or a backtick in it has no tree until it runs, and a
 // tree built now would be built from something that is not the program.
 func hasExpansion(src string) bool {
-	return strings.ContainsAny(src, "$`")
+	if strings.IndexByte(src, ArithValueMark) < 0 {
+		return strings.ContainsAny(src, "$`")
+	}
+	return UnmarkedExpansion(src)
+}
+
+// UnmarkedExpansion reports whether text holds a `$` or a backtick the
+// *script* wrote, as against one a value carried.
+//
+// A marked byte is a character of a value and begins nothing. Measured
+// 2026-09-15 and recorded on [Parser.ParseArithExpanded]: `k='$(cmd)';
+// a[$k]=V` runs nothing in any column, so a `$` that arrived inside a
+// subscript's brackets is not an expansion waiting to happen. The same text
+// arriving with the *brackets* — `e='a[$k]'; $(( $e ))` — has no mark on it
+// and is expanded once, which is what every column with arrays does (#3303).
+//
+// Exported for the interpreter, which asks the same question of a subscript
+// before deciding whether to expand it. See ArithValueMark.
+func UnmarkedExpansion(src string) bool {
+	for i := 0; i < len(src); i++ {
+		switch src[i] {
+		case ArithValueMark:
+			i++
+		case '$', '`':
+			return true
+		}
+	}
+	return false
+}
+
+// MarkedExpansion reports whether text holds a `$` or a backtick a *value*
+// carried, which is the half UnmarkedExpansion does not count.
+//
+// Exported for the same reader and for the conservative half of its rule: a
+// subscript holding both is read as it stands rather than half expanded.
+func MarkedExpansion(src string) bool {
+	for i := 0; i+1 < len(src); i++ {
+		if src[i] == ArithValueMark {
+			if src[i+1] == '$' || src[i+1] == '`' {
+				return true
+			}
+			i++
+		}
+	}
+	return false
 }
 
 // parseArithLater is parseArith for the places where the text is read as part
@@ -1701,7 +1745,11 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 	// an earlier failure on the path where one is already
 	// recorded — either way the state the caller had.
 	held := a.p.err
-	sub := &arithParser{src: inner, at: a.at, p: a.p, dial: a.dial, stopped: -1}
+	// The subscript arrives in the same condition the expression did, so a
+	// `$` standing in it is a character of a result there too — and a reader
+	// that took it for a variable reference would answer `m[$key]` with the
+	// element `key` names rather than with the one the panel expands to.
+	sub := &arithParser{src: inner, at: a.at, p: a.p, dial: a.dial, stopped: -1, expanded: a.expanded}
 	e := sub.expr()
 	sub.space()
 	if e == nil || sub.off < len(sub.src) {

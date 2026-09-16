@@ -376,7 +376,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// answer `$(( m[k] ))` with 7. Evaluating it instead read the wrong
 	// element and said nothing, which is the silent half of a wrong answer.
 	if a, ok := r.assocFor(x.Name); ok {
-		return r.arithElemValue(a[r.arithAssocKey(x.SubMarked)].scalar())
+		return r.arithElemValue(a[r.arithAssocKey(r.arithSubscriptRead(x.SubMarked))].scalar())
 	}
 	if r.reportArithWholeArraySubscript(x) {
 		// Named and answered: the operand is zero and the expression keeps
@@ -584,9 +584,14 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 		n, err := r.evalNum(x.Index)
 		return r.blamedOnTheSubscript(x, n, err)
 	}
+	// Read from the marked text and *shown* from the plain one: the marks
+	// are what keep a value's own bracket or quote out of the reading, and
+	// they are no part of what a script wrote. See syntax.ArithValueMark.
+	marked := r.arithSubscriptRead(x.SubMarked)
+	sub := stripArithValueMarks(marked)
 	p := syntax.NewParser("", r.dialect())
-	tree := p.ParseArithFor(x.Sub, syntax.Pos{})
-	err := p.Err()
+	tree := p.ParseArithExpanded(marked, syntax.Pos{})
+	err := unmarkArithFailure(p.Err())
 	if err == nil && tree == nil {
 		// Brackets holding only space, which is the shape `a[$w]` takes once
 		// a `$w` holding spaces has gone in. There is no expression in them
@@ -615,10 +620,10 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 		// array is `operand expected at end of string`, the same sentence
 		// `$(( 1+ ))` earns. Worded through the same path every other
 		// subscript failure takes rather than a second copy of it.
-		err = &syntax.Error{Kind: syntax.ErrArithOperandEnd, Expr: x.Sub, Token: x.Sub}
+		err = &syntax.Error{Kind: syntax.ErrArithOperandEnd, Expr: sub, Token: sub}
 	}
 	if err != nil {
-		return intNum(0), arithError{msg: r.subscriptFailure(x.Sub, err), complete: true}
+		return intNum(0), arithError{msg: r.subscriptFailure(sub, err), complete: true}
 	}
 	n, evalErr := r.evalNum(tree)
 	return r.blamedOnTheSubscript(x, n, evalErr)
@@ -1038,7 +1043,7 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		p.sub, p.subMarked, p.flags = operand, operand, nil
 	}
 	if r.assocDeclared(p.name) {
-		r.setAssocElem(p.name, r.arithAssocKey(p.subMarked), text)
+		r.setAssocElem(p.name, r.arithAssocKey(r.arithSubscriptRead(p.subMarked)), text)
 		return nil
 	}
 	// Through the same reader the element is read by, so a text that is no
@@ -1774,8 +1779,15 @@ func (r *Runner) arithNumOfStored(value string) (arithNum, error) {
 func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 	text := strings.TrimSpace(value)
 	p := syntax.NewParser("", r.dialect())
-	tree := p.ParseArithFor(value, syntax.Pos{})
-	err := p.Err()
+	// A stored value has been through its expansions already, so a `$` in it
+	// is a character of the result — which is what the doc above says and
+	// what the reader that waits for expansions could not be told. It
+	// mattered for the subscript inside one: `m[k]=5; key=k; f='m[$key]';
+	// $(( f ))` is 5 in bash 5.3.20, bash 3.2.57, zsh 5.9.2 and ksh93u+, and
+	// was a silent 0 here because a nil tree with no complaint evaluates to
+	// nothing at all (#3303).
+	tree := p.ParseArithExpanded(value, syntax.Pos{})
+	err := unmarkArithFailure(p.Err())
 	if err == nil && tree == nil {
 		// No tree and no complaint means the text holds an expansion, which
 		// the parser leaves for its caller to substitute first. A stored
@@ -2693,7 +2705,16 @@ func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string) (syntax.Arith
 	}
 	expanded := r.expandArithText(text)
 	p := syntax.NewParser("", r.dialect())
-	out := p.ParseArithFor(expanded, syntax.Pos{})
+	// Read as the *result* it now is. A `$` still standing after the
+	// expansion came out of a value, and begins no operand: measured
+	// 2026-09-16 from a script file, `x=2; e='1+$x'; $(( $e ))` is `$x :
+	// arithmetic syntax error: operand expected` in bash 5.3.20, the
+	// operand sentence in zsh 5.9.2 and `arithmetic syntax error` in
+	// ksh93u+. Handing it back to the reader that waits for expansions
+	// left no tree and no complaint either, which evaluated to a silent
+	// **0** — the worst of the three answers, and the one this shell gave
+	// (#3303).
+	out := p.ParseArithExpanded(expanded, syntax.Pos{})
 	// The marks go no further than the reader they were put on for. Every
 	// caller of this uses the text it gets back to *show* something — a
 	// trace, a refusal, the value a reader stopped at — and a dialect
@@ -2847,7 +2868,15 @@ func markArithValue(part string) string {
 // out of the key. Measured 2026-09-16, `typeset -A a; a["'q'"]=21; a[q]=22;
 // k="'q'"` makes `$(( a[$k] ))` 21 in bash 5.3.20 and ksh93u+ 2012-08-01,
 // where the same two characters written in the source name `q`.
-const arithValueMarked = "[]'\"\\\x00"
+//
+// The `$` and the backtick for the third reason on the same list: a subscript
+// that still holds an expansion has it performed, and a `$` a value carried
+// is not one. Measured 2026-09-16 from a script file, `a=(9 8 7); i=1;
+// k='$i'`: `$(( a[$k] ))` is `$i: arithmetic syntax error: operand expected`
+// in bash 5.3.20 — the `$i` the value carried begins nothing — where
+// `e='a[$i]'; $(( $e ))` is 8, the brackets having come out of a value too
+// and nothing being marked (#3303, #3047).
+const arithValueMarked = "[]'\"\\$`\x00"
 
 // stripArithValueMarks takes the marks off text that is about to be *shown*.
 //
@@ -2860,6 +2889,42 @@ func stripArithValueMarks(text string) string {
 		return text
 	}
 	return syntax.UnmarkArithValue(text)
+}
+
+// arithSubscriptRead is the subscript text its readers read.
+//
+// A subscript that still holds an expansion has it performed, once, here —
+// which is where the panel performs it and nowhere else in the expression.
+// Measured 2026-09-16 from a script file with standard input on /dev/null,
+// `typeset -A m; m[k]=5; key=k; a=(10 20 30); i=1`:
+//
+//	                          bash 5.3.20  bash 3.2  zsh 5.9.2  ksh93u+
+//	e='m[$key]'; $(( $e ))              5         5          5        5
+//	f='a[$i]';   $(( $f ))             20        20         10       20
+//	$(( 1+$x ))  through a value    refused   refused    refused  refused
+//
+// So it is the *subscript* that is read again and not the expression: a `$`
+// left anywhere else is an operand failure in every column. Unanimous among
+// the four with arrays, so it is core and not an axis; dash and BusyBox ash
+// have no arrays to ask.
+//
+// Once. The counter #3252 built reads 1 on `$(( $e ))` with a command
+// substitution in the subscript, in bash and here — running it *is* the side
+// effect, so nothing can hide behind it.
+//
+// Not where a *value* put the `$` there. That is #3047's rule and the other
+// half of this one: with `k='$i'`, `$(( a[$k] ))` is `$i: arithmetic syntax
+// error: operand expected` in bash 5.3.20, bash 3.2.57, ksh93u+ and zsh —
+// none of the four reads the `i` behind it — because the brackets were the
+// script's and only what they held came out of a value. The marks are how
+// that is known, and a subscript carrying both a marked expansion and an
+// unmarked one is read as it stands: half an expansion is an answer no column
+// gives.
+func (r *Runner) arithSubscriptRead(marked string) string {
+	if !syntax.UnmarkedExpansion(marked) || syntax.MarkedExpansion(marked) {
+		return marked
+	}
+	return r.expandArithText(syntax.UnmarkArithValue(marked))
 }
 
 // arithAssocKey is the key an associative array's subscript names when the

@@ -68,7 +68,7 @@ import (
 // A locale naming a single-byte encoding that is not ASCII refuses the code
 // point *here* and is asked again afterwards, which is the split
 // [Runner.CodePointEscapeText] makes: this reports that the locale is not
-// UTF-8, and [Runner.localeCharsetByte] is what knows whether the charset it
+// UTF-8, and [Runner.localeCharsetBytes] is what knows whether the charset it
 // does name has room for the character. The two are separate because the
 // shells divide there — ksh93 never consults a locale at all — and because a
 // charset holds *some* of Unicode rather than all or none of it.
@@ -147,8 +147,8 @@ func (r *Runner) CodePointEscapeText(n int) (string, bool) {
 		// never reading one — writes UTF-8 there as it does everywhere. That
 		// is why this sits inside the policy rather than in
 		// [Runner.localeRefusesCodePoint] beside the UTF-8 answer.
-		if b, ok := r.localeCharsetByte(n); ok {
-			return string([]byte{b}), false
+		if b, ok := r.localeCharsetBytes(n); ok {
+			return string(b), false
 		}
 	}
 	switch policy {
@@ -167,28 +167,42 @@ func (r *Runner) CodePointEscapeText(n int) (string, bool) {
 	return "", true
 }
 
-// localeCharsetByte is the byte the locale's own charset stands a code point
+// localeCharsetBytes is the bytes the locale's own charset stands a code point
 // in, and false when it has no room for it or when this shell holds no table
 // for the charset the locale names.
+//
+// **Bytes and not a byte**, which is the whole of #3029: a charset a locale
+// names need not be single-byte, and the two this shell now has that are not
+// write most of what they hold in two. Measured 2026-09-15, `printf '%s'
+// $'\uHHHH' | od -An -tx1` under `env -i` with `LC_ALL` and `LANG` both set,
+// and bash 5.3.20 and zsh 5.9.2 agree on every row:
+//
+//	locale         code point   bytes
+//	ja_JP.SJIS     U+FF9F       df
+//	ja_JP.SJIS     U+4E00       88 ea
+//	zh_TW.Big5     U+4E00       a4 40
+//
+// so width is a property of the code point rather than of the charset, and
+// Shift-JIS writing the halfwidth katakana in one byte and the kanji in two is
+// the ordinary case rather than the exception.
 //
 // The table is generated rather than imported — internal/charset, and
 // internal/charsetgen beside it, for the same reason internal/eastasian and
 // internal/unorm are generated: this module ships with no dependencies of its
 // own and the standard library carries no legacy charset. What is there is
-// every single-byte charset Unicode publishes a mapping for. What is not is
-// the multibyte ones a locale may also name — SJIS, Big5, eucJP, GB18030 —
-// each of which is a table two orders of magnitude larger, and each of which
-// takes this path's false branch and has the escape written back. That is a
-// measured gap rather than a hidden one: bash writes U+FF9F as the byte `df`
-// under `ja_JP.SJIS` and this shell writes `\uFF9F`.
+// every single-byte charset Unicode publishes a mapping for, plus Shift-JIS
+// and Big5. What is not is eucJP, GB18030 and Big5-HKSCS, and the rows
+// macOS's own Big5 has that Unicode's table does not — each of which takes
+// this path's false branch and has the escape written back, which is a
+// measured gap rather than a hidden one. docs/spec/semantics.md counts them.
 //
 // The guard on the value is not defensive. `\U` reads up to eight digits and
 // the escape sites hand on whatever they read, including values past the last
 // code point, so a conversion to rune without it would wrap a large value
 // into a small one and could find it in a table.
-func (r *Runner) localeCharsetByte(n int) (byte, bool) {
+func (r *Runner) localeCharsetBytes(n int) ([]byte, bool) {
 	if n < 0 || n > unicodeMax {
-		return 0, false
+		return nil, false
 	}
 	return charset.Encode(LocaleCodeset(r.LocaleFor("LC_CTYPE")), rune(n))
 }

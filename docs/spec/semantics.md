@@ -4807,12 +4807,50 @@ the axis at all. ksh93 writes `61 c3 a9 5a` in every one of those, which is
 what `OutsideLocaleEscapeEncoded` means by never reading a locale — so the
 charset is consulted inside the policy and not before it (#3004).
 
+The charset need not be single-byte. Measured 2026-09-15 under `env -i`
+with `LC_ALL` and `LANG` both set, bash 5.3.20 and zsh 5.9.2 agreeing on
+every row:
+
+    ja_JP.SJIS   U+FF9F    df        a halfwidth katakana, one byte
+    ja_JP.SJIS   U+4E00    88 ea     the same charset, two
+    zh_TW.Big5   U+4E00    a4 40     the same character, another charset
+    ja_JP.SJIS   U+20AC    the escape written back — neither predates the euro
+
+so **width is a property of the code point and not of the charset**, and a
+charset that writes most things in two bytes still writes some in one
+(#3029).
+
 The tables are generated into the tree rather than imported, which is what
 `internal/eastasian` and `internal/unorm` already do and for the same
 reason: this module ships with no dependencies of its own and the standard
 library carries no legacy charset. See `internal/charsetgen`.
 
-Two limits are stated rather than hidden.
+**The retired tables are the platform's and the vendors' are not**, which
+had to be measured rather than assumed, because a table that is subtly not
+the platform's replaces a *visible* gap with a *wrong byte* and that is
+strictly worse. Unicode moved `SHIFTJIS.TXT` and `BIG5.TXT` to `OBSOLETE/`
+in 2001 and the files themselves say the mappings "may not be the same as
+those used by actual products". So every code point in each candidate table
+was encoded through the real bash on this machine and the bytes compared:
+
+    table          agrees   writes a different byte   platform refuses a row it has
+    SHIFTJIS.TXT     6941                         0                              0
+    CP932.TXT        6936                         0                            453
+    BIG5.TXT        13703                         0                              0
+    CP950.TXT       13489                         2                              2
+
+The last two columns are the ones that matter and only the obsolete files
+are zero in both. Microsoft's code pages would have written `a2 41` where
+the platform writes `a1 fe` for U+FF0F, and would have written a byte for
+each of 453 Shift-JIS code points the platform refuses outright.
+
+**Encoding only, and by decision.** A charset is a two-way mapping and
+`internal/charset` implements one way, because one way is the whole of the
+question: an escape names a code point and the shell writes bytes. Nothing
+in this tree decodes a multibyte charset — the shell reads its input as
+UTF-8 or as bytes — so a decoder would be a table nobody searches.
+
+Three limits are stated rather than hidden.
 
 **An unset locale is a question of its own**, and it decides whether this
 axis is reached at all rather than what it answers: under `env -i`, bash
@@ -4822,13 +4860,24 @@ while zsh refuses the escape and answers 6. That is
 below — and with it answered, a dialect reading an unset locale as C
 reaches this axis there exactly as it does under `LC_ALL=C` (#2020).
 
-**Only the single-byte charsets are held.** A locale naming a multibyte
-encoding that is not UTF-8 — `ja_JP.SJIS`, `zh_TW.Big5`, `eucJP`,
-`GB18030` — reaches the axis for every code point above ASCII, so this
-shell writes `\uFF9F` where bash writes the byte `df` under
-`ja_JP.SJIS`. Each of those is a table two orders of magnitude larger and
-a decoder as well as an encoder, and `multibyteLocale` records the same
-limit from the other side: every non-UTF-8 encoding counts bytes.
+**Two multibyte charsets are held and the rest are not.** Shift-JIS and
+Big5 are, since #3029. `eucJP`, `GB18030` and `Big5-HKSCS` are not, and a
+locale naming one of them reaches the axis for every code point above
+ASCII. `multibyteLocale` records the same limit from the other side: every
+non-UTF-8 encoding counts bytes.
+
+**The Big5 held here is the base one and macOS's is extended.** Unicode's
+table and macOS agree on every one of its 13,703 rows, and macOS has
+**6,672 more** — the ETen and HKSCS extension regions, lead bytes
+`81`–`A0`, `C6`–`C8` and `F9`–`FE`, of which 6,174 stand a Private Use Area
+code point. `/usr/share/i18n/csmapper/mapper.dir` names the composition:
+`Big5-ETen/UCS` is `ETen/UCS` over `Big5UDA/UCS` over `Big5:1984/UCS`, and
+only the last of those is what Unicode publishes. Those 6,672 code points
+reach the axis and have the escape written back, so the gap is the same
+shape it was — a missing byte and never a wrong one. Shift-JIS has the
+same gap two code points wide: macOS writes U+2014 as `81 5c` and U+FF3C as
+`81 5f` and the table has neither, standing U+2015 and U+005C in those
+codes instead.
 
 **Transliteration is not attempted.** A character the charset genuinely
 lacks gets the axis's answer here, where bash on macOS is measured

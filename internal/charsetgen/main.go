@@ -24,11 +24,55 @@
 //	https://www.unicode.org/Public/MAPPINGS/VENDORS/MISC/KOI8-R.TXT
 //	https://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/PC/CP866.TXT
 //	https://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/WINDOWS/CP125N.TXT
+//	https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/JIS/SHIFTJIS.TXT
+//	https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/OTHER/BIG5.TXT
 //
-// Only the *high* half of each charset is emitted. Every charset here agrees
-// with ASCII below 0x80 and the generator refuses one that does not, so the
-// table is 128 code points rather than 256 and the ASCII branch in the
-// encoder is a fact about the data rather than an assumption about it.
+// # Two shapes, decided by the data
+//
+// A file whose every code is one byte is a single-byte charset, and only the
+// *high* half of it is emitted: every one of them agrees with ASCII below
+// 0x80, the generator refuses one that does not, and so the table is 128 code
+// points rather than 256 and the ASCII branch in the encoder is a fact about
+// the data rather than an assumption about it.
+//
+// A file holding any two-byte code is a multibyte charset, and it is emitted
+// as a sorted key/value pair of arrays for binary search — the shape
+// internal/unorm already uses — because 7,000 and 13,700 rows do not fit the
+// other one. Two filters, each measured rather than assumed:
+//
+//   - A row whose **code point** is below 0x80 is dropped, because the encoder
+//     answers ASCII from the code point and never consults a table. SHIFTJIS.TXT
+//     maps 0x815F to U+005C, and macOS writes U+005C as the byte 0x5C.
+//     A row whose *byte* is below 0x80 but whose code point is not — SHIFTJIS.TXT
+//     maps 0x5C to U+00A5, YEN SIGN — is **kept**, and macOS agrees: it writes
+//     U+00A5 as 0x5C too. So "the low half is ASCII" is true of a single-byte
+//     charset here and false of Shift-JIS, which is why the refusal is not
+//     applied to both.
+//   - A row mapping to U+FFFD is dropped. BIG5.TXT spells an unassigned Big5
+//     code that way — `# *** NO MAPPING ***` — and it is the one code point
+//     the file names more than once. Read as an encoding it would make
+//     REPLACEMENT CHARACTER writable, which macOS refuses.
+//
+// # Why the obsolete tables and not the vendors'
+//
+// Unicode retired SHIFTJIS.TXT and BIG5.TXT to OBSOLETE/ in 2001 and the files
+// themselves say the mappings "may not be the same as those used by actual
+// products". That is a provenance warning worth measuring rather than
+// believing, and it was measured, 2026-09-15, by encoding every code point in
+// each file through the real bash on this machine under `ja_JP.SJIS` and
+// `zh_TW.Big5` and comparing the bytes:
+//
+//	table          agrees   writes a different byte   platform refuses a row it has
+//	SHIFTJIS.TXT     6941                         0                              0
+//	CP932.TXT        6936                         0                            453
+//	BIG5.TXT        13703                         0                              0
+//	CP950.TXT       13489                         2                              2
+//
+// The retired tables are the platform's; the vendor code pages are not. A
+// wrong byte is strictly worse than a missing one — it turns a visible gap
+// into a silent corruption — so the columns that matter are the last two, and
+// only the obsolete files are zero in both. See docs/spec/semantics.md for what
+// the platform has that these do not.
 package main
 
 import (
@@ -57,6 +101,14 @@ func charsetName(file string) string {
 type charset struct {
 	name string
 	high [128]rune
+
+	// multibyte is set when the file holds a code wider than one byte, and
+	// then keys/vals carry the whole charset instead of high. The two shapes
+	// do not share a representation because they do not share a lookup: 128
+	// entries are scanned and 13,700 are searched.
+	multibyte bool
+	keys      []rune
+	vals      []uint16
 }
 
 func main() {
@@ -82,13 +134,41 @@ func main() {
 	}
 	sort.Slice(sets, func(i, j int) bool { return sets[i].name < sets[j].name })
 
-	if err := write(*out, sets); err != nil {
+	var single, multi []charset
+	for _, set := range sets {
+		if set.multibyte {
+			multi = append(multi, set)
+		} else {
+			single = append(single, set)
+		}
+	}
+
+	if err := write(*out, single); err != nil {
+		fmt.Fprintln(os.Stderr, "charsetgen:", err)
+		os.Exit(1)
+	}
+	// A second file rather than a second half of the first, because it is two
+	// orders of magnitude longer and a diff that mixes the two would bury a
+	// one-row change to a single-byte charset under thousands of lines.
+	if err := writeMultibyte(multibyteFile(*out), multi); err != nil {
 		fmt.Fprintln(os.Stderr, "charsetgen:", err)
 		os.Exit(1)
 	}
 }
 
+// multibyteFile is where the multibyte tables go, derived from -out so that
+// the two generated files cannot be pointed at different packages.
+func multibyteFile(out string) string {
+	return strings.TrimSuffix(out, ".go") + "_multibyte.go"
+}
+
 // read parses one Format A mapping file.
+//
+// The rows are collected once and the shape is decided by them: a file with a
+// code wider than a byte anywhere in it is a multibyte charset and every other
+// one is a single-byte charset. Deciding from the data rather than from the
+// file's name is what keeps a newly added mapping file from needing a list
+// here as well.
 //
 // A byte with no mapping is left at -1 rather than at 0, because 0 is a code
 // point: U+0000 is what 0x00 maps to in every one of these, and a hole that
@@ -105,6 +185,13 @@ func read(file string) (charset, error) {
 	}
 	defer func() { _ = f.Close() }()
 
+	type row struct {
+		code uint32
+		cp   rune
+	}
+	var rows []row
+	wide := false
+
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := sc.Text()
@@ -117,31 +204,84 @@ func read(file string) (charset, error) {
 			// hole and not a parse failure.
 			continue
 		}
-		b, err := strconv.ParseUint(strings.TrimPrefix(fields[0], "0x"), 16, 8)
+		code, err := strconv.ParseUint(strings.TrimPrefix(fields[0], "0x"), 16, 16)
 		if err != nil {
-			return set, fmt.Errorf("%s: byte %q: %w", file, fields[0], err)
+			return set, fmt.Errorf("%s: code %q: %w", file, fields[0], err)
 		}
 		cp, err := strconv.ParseUint(strings.TrimPrefix(fields[1], "0x"), 16, 32)
 		if err != nil {
 			return set, fmt.Errorf("%s: code point %q: %w", file, fields[1], err)
 		}
-		if b < 0x80 {
-			// The encoder answers ASCII from the code point itself and never
-			// consults a table for it. A charset that disagreed here would
-			// make that shortcut wrong, so it is refused rather than
-			// silently half-honored.
-			if rune(cp) != rune(b) {
-				return set, fmt.Errorf("%s: byte %#02x is not ASCII (%#04x)", file, b, cp)
-			}
-			continue
+		if code > 0xff {
+			wide = true
 		}
-		set.high[b-0x80] = rune(cp)
+		rows = append(rows, row{uint32(code), rune(cp)})
 	}
 	if err := sc.Err(); err != nil {
 		return set, err
 	}
+	if len(rows) == 0 {
+		return set, fmt.Errorf("%s: no mappings", file)
+	}
+
+	if !wide {
+		for _, r := range rows {
+			if r.code < 0x80 {
+				// The encoder answers ASCII from the code point itself and
+				// never consults a table for it. A single-byte charset that
+				// disagreed here would make that shortcut wrong, so it is
+				// refused rather than silently half-honored. A *multibyte*
+				// charset is allowed to disagree — Shift-JIS stands YEN SIGN
+				// in 0x5C — and takes the branch below instead.
+				if r.cp != rune(r.code) {
+					return set, fmt.Errorf("%s: byte %#02x is not ASCII (%#04x)", file, r.code, r.cp)
+				}
+				continue
+			}
+			set.high[r.code-0x80] = r.cp
+		}
+		return set, nil
+	}
+
+	set.multibyte = true
+	seen := make(map[rune]uint32, len(rows))
+	for _, r := range rows {
+		if r.cp < 0x80 {
+			// Answered by the encoder's ASCII branch, which is measured to be
+			// what the platform does: SHIFTJIS.TXT stands U+005C in 0x815F and
+			// macOS writes it as 0x5C.
+			continue
+		}
+		if r.cp == replacementChar {
+			// BIG5.TXT spells an unassigned Big5 code as a mapping to U+FFFD.
+			// That is the decoder's answer for a hole and not a character the
+			// charset can write, and it is also the file's only duplicate — so
+			// dropping it has to come before the duplicate check below or the
+			// check fires on a row that was never a mapping.
+			continue
+		}
+		if had, dup := seen[r.cp]; dup {
+			return set, fmt.Errorf("%s: U+%04X is mapped twice, to %#04x and %#04x — "+
+				"an encoder has to pick one and the file does not say which", file, r.cp, had, r.code)
+		}
+		seen[r.cp] = r.code
+	}
+
+	set.keys = make([]rune, 0, len(seen))
+	for cp := range seen {
+		set.keys = append(set.keys, cp)
+	}
+	sort.Slice(set.keys, func(i, j int) bool { return set.keys[i] < set.keys[j] })
+	set.vals = make([]uint16, len(set.keys))
+	for i, cp := range set.keys {
+		set.vals[i] = uint16(seen[cp])
+	}
 	return set, nil
 }
+
+// replacementChar is U+FFFD, which a Format A file uses to spell a code the
+// charset does not assign. It is never a character the charset can write.
+const replacementChar = 0xfffd
 
 func write(path string, sets []charset) error {
 	var b strings.Builder
@@ -182,6 +322,68 @@ func write(path string, sets []charset) error {
 	src, err := format.Source([]byte(b.String()))
 	if err != nil {
 		return fmt.Errorf("the generated file does not parse: %w", err)
+	}
+	return os.WriteFile(path, src, 0o644)
+}
+
+// writeMultibyte writes the multibyte charsets as sorted key/value arrays.
+//
+// The shape is internal/unorm's, and for its reason: the lookup is a binary
+// search over the code points the charset can write, and two parallel arrays
+// keep that search over a run of `rune` rather than over a struct with a hole
+// in it. The value is the charset's own code, big-endian in a uint16 — so a
+// value below 0x100 is one byte on the wire and everything else is two, which
+// is the whole of what a Format A file says about width.
+func writeMultibyte(path string, sets []charset) error {
+	var b strings.Builder
+	b.WriteString("// SPDX-FileCopyrightText: 2026 Blair Hamilton\n")
+	b.WriteString("// SPDX-License-Identifier: Apache-2.0\n\n")
+	b.WriteString("// Code generated by internal/charsetgen. DO NOT EDIT.\n\n")
+	b.WriteString("package charset\n\n")
+	b.WriteString("// multibyteTables is every charset this shell can write a code point in\n")
+	b.WriteString("// that needs more than one byte to do it, keyed by the normalized\n")
+	b.WriteString("// spelling of its name. Each holds only the code points the charset\n")
+	b.WriteString("// *can* write: a code point absent from the keys is one it cannot, and\n")
+	b.WriteString("// the encoder says so rather than guessing a byte.\n")
+	b.WriteString("var multibyteTables = map[string]*mbTable{\n")
+	for i := range sets {
+		b.WriteString("\t" + strconv.Quote(Normalize(sets[i].name)) + ": {keys: " +
+			ident(sets[i].name) + "Keys[:], vals: " + ident(sets[i].name) + "Vals[:]},\n")
+	}
+	b.WriteString("}\n")
+	for i := range sets {
+		set := sets[i]
+		fmt.Fprintf(&b, "\n// %sKeys are the code points %s can write, sorted for binary\n",
+			ident(set.name), set.name)
+		fmt.Fprintf(&b, "// search. %d of them.\n", len(set.keys))
+		fmt.Fprintf(&b, "var %sKeys = [...]rune{", ident(set.name))
+		for j, r := range set.keys {
+			if j%8 == 0 {
+				b.WriteString("\n\t")
+			} else {
+				b.WriteString(" ")
+			}
+			fmt.Fprintf(&b, "%#04x,", r)
+		}
+		b.WriteString("\n}\n")
+
+		fmt.Fprintf(&b, "\n// %sVals are the codes %s stands those code points in,\n",
+			ident(set.name), set.name)
+		b.WriteString("// index for index with the keys: one byte below 0x100 and two above it.\n")
+		fmt.Fprintf(&b, "var %sVals = [...]uint16{", ident(set.name))
+		for j, v := range set.vals {
+			if j%8 == 0 {
+				b.WriteString("\n\t")
+			} else {
+				b.WriteString(" ")
+			}
+			fmt.Fprintf(&b, "%#04x,", v)
+		}
+		b.WriteString("\n}\n")
+	}
+	src, err := format.Source([]byte(b.String()))
+	if err != nil {
+		return fmt.Errorf("the generated multibyte file does not parse: %w", err)
 	}
 	return os.WriteFile(path, src, 0o644)
 }

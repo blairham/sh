@@ -258,6 +258,31 @@ func (r Report) CaseDefects() []string {
 	return out
 }
 
+// CaseDefectReports is the same files with what actually moved, one line each.
+//
+// The names alone were what this had, and they are not enough to act on: a
+// suite file is hundreds of lines and "it is not deterministic" sends a
+// reader to read all of them. The lines come from [difference] and are our
+// own file's own output, under the carve-out that already lets the name be
+// printed.
+func (r Report) CaseDefectReports() []string {
+	if !r.Suite.Ours {
+		return nil
+	}
+	var out []string
+	for _, c := range r.Cases {
+		if c.Name == "" || !c.Result.Unstable {
+			continue
+		}
+		if c.Moved == "" {
+			out = append(out, c.Name+" — what moved was not recorded")
+			continue
+		}
+		out = append(out, c.Name+" — "+c.Moved)
+	}
+	return out
+}
+
 // ProseAsked says this column has a [Suite.SelfDoc], so [Report.Prose] is a
 // measurement rather than a question nobody put. Zero means two different
 // things without it, and the report may not print them alike.
@@ -341,6 +366,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	// reference binary and does not change between files.
 	doc := SelfDocumentation(ctx, s, reference)
 	results := make([]Result, len(files))
+	moved := make([]string, len(files))
 	sem := make(chan struct{}, opts.jobs())
 	var wg sync.WaitGroup
 	for i, f := range files {
@@ -349,7 +375,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, dial, haveDialect, doc, opts)
+			results[i], moved[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, dial, haveDialect, doc, opts)
 		}()
 	}
 	wg.Wait()
@@ -360,7 +386,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	statuses := map[[2]int]int{}
 	var meanSum float64
 	for i, res := range results {
-		rep.Cases = append(rep.Cases, NamedResult{Name: s.attribute(files[i].Name), Result: res})
+		rep.Cases = append(rep.Cases, NamedResult{Name: s.attribute(files[i].Name), Result: res, Moved: moved[i]})
 		switch {
 		case res.Parsed:
 			rep.Parsed++
@@ -465,12 +491,16 @@ func plan(s Suite, dir string, opts Options) ([]file, error) {
 }
 
 // grade is one file, both ways.
-func grade(ctx context.Context, s Suite, tests, name, ours, reference string, dial syntax.Dialect, haveDialect bool, doc Doc, opts Options) Result {
+//
+// The second return is how the reference disagreed with itself, and it is
+// empty for every column but ours — see [difference], which is where that
+// carve-out is made rather than here.
+func grade(ctx context.Context, s Suite, tests, name, ours, reference string, dial syntax.Dialect, haveDialect bool, doc Doc, opts Options) (Result, string) {
 	var res Result
 	src, err := os.ReadFile(filepath.Join(tests, name))
 	if err != nil {
 		res.Cause = "unreadable"
-		return res
+		return res, ""
 	}
 	if !haveDialect {
 		res.Cause = "no dialect"
@@ -496,19 +526,19 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	switch {
 	case ref.Failed:
 		res.OracleFailed = true
-		return res
+		return res, ""
 	case ref.TimedOut:
 		res.OracleHung = true
-		return res
+		return res, ""
 	}
 	own := runIn(ctx, s, tests, name, ours, opts)
 	switch {
 	case own.Failed:
 		res.DialectFailed = true
-		return res
+		return res, ""
 	case own.TimedOut:
 		res.DialectHung = true
-		return res
+		return res, ""
 	}
 
 	res.OurStatus, res.RefStatus = own.Status, ref.Status
@@ -518,7 +548,8 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	agreed := identical || (mine == theirs && own.Status == ref.Status)
 
 	if !agreed || s.mustRepeat() {
-		if !repeats(ctx, s, tests, name, reference, opts, theirs, ref.Status) {
+		steady, moved := repeats(ctx, s, tests, name, reference, opts, theirs, ref.Status)
+		if !steady {
 			// The reference does not produce the same run twice, so the two
 			// shells were never going to agree and this file is evidence
 			// about neither. A process id, a clock reading, a scheduling
@@ -528,7 +559,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 			// In a suite of ours it means the opposite thing, and
 			// [Suite.mustRepeat] is why the question was even asked here.
 			res.Unstable = true
-			return res
+			return res, moved
 		}
 	}
 	if agreed {
@@ -542,7 +573,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 		l := lines(text)
 		res.Common, res.Longest = len(l), len(l)
 		res.OurLines, res.RefLines = len(l), len(l)
-		return res
+		return res, ""
 	}
 	res.Scored = true
 	ourLines, refLines := lines(mine), lines(theirs)
@@ -550,7 +581,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	res.Common, res.Longest, res.LineCapped = agreement(ourLines, refLines)
 	res.Prose = min(doc.Attribute(ourLines, refLines), res.Longest-res.Common)
 	res.Excuses = excuses(ourLines, refLines)
-	return res
+	return res, ""
 }
 
 // placed is a run and the directory it was given, which normalization needs
@@ -585,12 +616,86 @@ func runIn(ctx context.Context, s Suite, tests, name, shell string, opts Options
 // For a fetched column, only where the two shells differed: that is the one
 // place the answer changes anything. For a suite of ours, every file — see
 // [Suite.mustRepeat].
-func repeats(ctx context.Context, s Suite, tests, name, reference string, opts Options, want string, status int) bool {
+func repeats(ctx context.Context, s Suite, tests, name, reference string, opts Options,
+	want string, status int,
+) (steady bool, moved string) {
 	again := runIn(ctx, s, tests, name, reference, opts)
 	if again.TimedOut {
-		return false
+		return false, "the second run of the reference was killed on the timeout"
 	}
-	return normalize(again.Output, reference, again.Dir) == want && again.Status == status
+	got := normalize(again.Output, reference, again.Dir)
+	if got == want && again.Status == status {
+		return true, ""
+	}
+	return false, difference(s, want, status, got, again.Status)
+}
+
+// movedLines is how many of the differing lines are reported.
+//
+// A bound rather than the whole of it, because a file that loses its footing
+// early disagrees with itself for the rest of its length and the first few
+// lines are the ones that say where.
+const movedLines = 6
+
+// difference is what the reference did differently the second time, in words,
+// and it is empty for every column but ours.
+//
+// The carve-out is exactly [Suite.attribute]'s and is made for the same
+// reason. Another project's suite is its expression and a report may not
+// quote it; ours are committed, Apache-2.0 and meant to be opened — and
+// "jobs.tests is not deterministic" without the line is not a work list.
+// #2291's assessment named that file off a CI log and nothing in the tree
+// could say which of its two hundred lines had moved; the flake shows on
+// about two runs in fourteen, on a machine nobody can log into, so it is only
+// ever fixed by the run that catches it saying what it caught.
+func difference(s Suite, want string, status int, got string, gotStatus int) string {
+	if !s.Ours {
+		return ""
+	}
+	var parts []string
+	if status != gotStatus {
+		parts = append(parts, fmt.Sprintf("status %d the first time and %d the second", status, gotStatus))
+	}
+	first, second := lines(want), lines(got)
+	if gone := onlyIn(first, second); len(gone) > 0 {
+		parts = append(parts, "first run only: "+strings.Join(atMost(gone), " · "))
+	}
+	if came := onlyIn(second, first); len(came) > 0 {
+		parts = append(parts, "second run only: "+strings.Join(atMost(came), " · "))
+	}
+	if len(parts) == 0 {
+		// The same lines in a different order, which a difference of
+		// multisets cannot see and which is a defect of the same kind.
+		parts = append(parts, "the same lines in a different order")
+	}
+	return strings.Join(parts, "; ")
+}
+
+// onlyIn is the lines of a that b does not have, counted rather than set-wise
+// so that a line printed twice in one run and once in the other is reported.
+func onlyIn(a, b []string) []string {
+	left := map[string]int{}
+	for _, l := range b {
+		left[l]++
+	}
+	var out []string
+	for _, l := range a {
+		if left[l] > 0 {
+			left[l]--
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// atMost bounds a list for a report and says how much it left out.
+func atMost(ls []string) []string {
+	if len(ls) <= movedLines {
+		return ls
+	}
+	return append(append([]string{}, ls[:movedLines]...),
+		fmt.Sprintf("(and %d more)", len(ls)-movedLines))
 }
 
 // Files is the suite's runnable files, sorted.

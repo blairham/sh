@@ -359,6 +359,15 @@ type NamedResult struct {
 	// [Suite.attribute].
 	Name   string
 	Result Result
+	// Moved is how the reference disagreed with itself over a case it would
+	// not repeat. Empty for every fetched column and for every file that did
+	// repeat.
+	//
+	// It lives here rather than on [Result] because [Result] may hold no
+	// text at all — that is the no-path rule made structural rather than
+	// remembered — and this is our own file's own output, under the same
+	// carve-out that lets [Suite.attribute] name it. See [difference].
+	Moved string
 }
 
 // Missing returns the directories a native column claims and does not have.

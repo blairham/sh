@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,8 +20,9 @@ import (
 func gradeOurs(t *testing.T, tests, name, ours, reference string) Result {
 	t.Helper()
 	s := Suite{ShellVar: "THIS_SH", TestDir: "tests", Ext: ".tests", Ours: true}
-	return grade(context.Background(), s, tests, name, ours, reference,
+	res, _ := grade(context.Background(), s, tests, name, ours, reference,
 		bash.Dialect(), true, Doc{}, Options{Timeout: 2 * time.Second})
+	return res
 }
 
 // TestOurOwnSuiteIsAskedToRepeatEvenWhereTheTwoShellsAgreed is the half of
@@ -57,9 +59,10 @@ printf '%s\n' "$n"`)
 	run := func(s Suite) Result {
 		t.Helper()
 		zero(t, counter)
-		return grade(context.Background(), s, tests, "drift.tests", ours, reference,
+		res, _ := grade(context.Background(), s, tests, "drift.tests", ours, reference,
 			bash.Dialect(), true, Doc{},
 			Options{Timeout: 2 * time.Second, Extra: []string{"SUITE_COUNTER=" + counter}})
+		return res
 	}
 
 	// The old rule, unchanged: the two shells agreed, so nothing asked, and
@@ -143,5 +146,89 @@ func TestMustRepeatIsOursAndOnlyOurs(t *testing.T) {
 		if !s.mustRepeat() {
 			t.Errorf("the %s column does not re-run its own cases", s.Name)
 		}
+	}
+}
+
+// TestAnUnstableCaseSaysWhatMoved is the half of the report that turns a
+// defect into a work list.
+//
+// #2291's assessment named `jobs.tests` as non-deterministic off a CI log,
+// and nothing in the tree could say which of that file's two hundred lines
+// had moved — the flake shows on about two runs in fourteen, on a runner
+// nobody can log into, and 64 runs of the same file under contention on the
+// machine this was written on would not reproduce it. A name alone sends a
+// reader to read the whole file; the run that catches it is the only thing
+// that can say where.
+//
+// The carve-out is [Suite.attribute]'s: our own files are committed and meant
+// to be opened, and a fetched suite is another project's expression, so this
+// says nothing at all for a fetched column even though the same measurement
+// was made.
+func TestAnUnstableCaseSaysWhatMoved(t *testing.T) {
+	tests := testDir(t, map[string]string{"drift.tests": "exec_the_shell\n"})
+	bin := t.TempDir()
+	counter := filepath.Join(t.TempDir(), "n")
+	// Two lines that stand still and one that does not, so the report has
+	// something to leave out as well as something to name.
+	reference := fakeShell(t, bin, "counts", `n=$(cat "$SUITE_COUNTER" 2>/dev/null || echo 0)
+n=$((n + 1))
+printf '%s\n' "$n" > "$SUITE_COUNTER"
+printf 'steady one\n'
+printf 'run %s\n' "$n"
+printf 'steady two\n'`)
+	ours := fakeShell(t, bin, "says-one", `printf 'steady one\nrun 1\nsteady two\n'`)
+
+	run := func(s Suite) (Result, string) {
+		t.Helper()
+		zero(t, counter)
+		return grade(context.Background(), s, tests, "drift.tests", ours, reference,
+			bash.Dialect(), true, Doc{},
+			Options{Timeout: 2 * time.Second, Extra: []string{"SUITE_COUNTER=" + counter}})
+	}
+
+	mine, moved := run(Suite{ShellVar: "THIS_SH", TestDir: "tests", Ext: ".tests", Ours: true})
+	if !mine.Unstable {
+		t.Fatalf("the case was supposed to be unstable: %+v", mine)
+	}
+	// The line that moved, both ways round, and neither of the two that did
+	// not — a report that named every line would be the file again.
+	for _, want := range []string{"first run only: run 1", "second run only: run 2"} {
+		if !strings.Contains(moved, want) {
+			t.Errorf("what moved does not carry %q: %q", want, moved)
+		}
+	}
+	if strings.Contains(moved, "steady") {
+		t.Errorf("a line that did not move was reported: %q", moved)
+	}
+
+	// And the same measurement says nothing for a fetched column, where
+	// quoting the file is what the whole no-path rule forbids.
+	_, fetched := run(Suite{ShellVar: "THIS_SH", TestDir: "tests", Ext: ".tests"})
+	if fetched != "" {
+		t.Errorf("a fetched column quoted its suite: %q", fetched)
+	}
+}
+
+// TestCaseDefectReportsIsOursAlone reads the same rule off the report, which
+// is where a person meets it.
+func TestCaseDefectReportsIsOursAlone(t *testing.T) {
+	cases := []NamedResult{{
+		Name:   "jobs.tests",
+		Result: Result{Unstable: true},
+		Moved:  "first run only: a running child answers -> 1",
+	}}
+	ours := Report{Suite: Suite{Ours: true}, Cases: cases, Unstable: 1}
+	got := ours.CaseDefectReports()
+	if len(got) != 1 || !strings.HasPrefix(got[0], "jobs.tests — first run only:") {
+		t.Errorf("a native column did not say what moved: %v", got)
+	}
+
+	fetched := Report{
+		Suite:    Suite{Ours: false},
+		Cases:    []NamedResult{{Result: Result{Unstable: true}}},
+		Unstable: 1,
+	}
+	if got := fetched.CaseDefectReports(); len(got) != 0 {
+		t.Errorf("a fetched column reported a case defect: %v", got)
 	}
 }

@@ -241,6 +241,13 @@ func printOwnColumn(rep suite.Report) {
 		fmt.Println("             scheduling order, a path the harness did not normalize. Fix")
 		fmt.Println("             the case. This is the one place our columns invert the")
 		fmt.Println("             fetched rule, and it is why this run exits non-zero.")
+		for _, line := range rep.CaseDefectReports() {
+			// What moved, and not only which file. A suite file is hundreds
+			// of lines, and the flake this was added for shows on about two
+			// runs in fourteen on a machine nobody can log into — so the run
+			// that catches it is the only thing that will ever say where.
+			fmt.Printf("             %s\n", line)
+		}
 	}
 	if rep.OracleFailed+rep.DialectFailed > 0 {
 		// Loud, and never folded into the score. A run that did not start

@@ -113,6 +113,13 @@ func TestTheNarrowedReadingIgnoresEverythingButALoneCommand(t *testing.T) {
 		{"a group", ": alpha\n{ : beta\n}\n", "alpha"},
 		{"a subshell", ": alpha\n( : beta )\n", "alpha"},
 		{"an eval's text", ": alpha\neval ': beta'\n", ": beta"},
+		// The gate is cleared by the command that uses it, so what must not
+		// happen is a *substitution* in that command's own words consuming
+		// it first: the words are expanded before the command records
+		// anything, and the shell the substitution runs on is a clone. Both
+		// rows would read `alpha` if the outer command had lost its turn.
+		{"a substitution in the words", ": alpha\necho \"$(: sub)\" > /dev/null\n", ""},
+		{"a substitution in a prefix", ": alpha\nv=$(: sub) : tail\n", "tail"},
 	} {
 		got := underscoreOut(t, tc.src+"printf '[%s]' \"$_\"\n", sem)
 		if got != "["+tc.want+"]" {

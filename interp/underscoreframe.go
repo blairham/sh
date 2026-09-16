@@ -114,29 +114,20 @@ func (r *Runner) noteInputLevelArgument(argv []string) {
 		// `eval` both read what stood before the line they were started
 		// from, and both leave the line's own last argument behind them.
 		// Writing it here instead put the call's argument inside the call.
-		r.pendingInputArg = underscorePending{
-			arg: argv[len(argv)-1], armed: true, depth: r.indirection,
-		}
+		r.pendingInputArg = underscorePending{arg: argv[len(argv)-1], armed: true}
 	}
 }
 
-// underscorePending is a last argument waiting for its command to finish, and
-// the indirection it was recorded at.
-//
-// The depth is what keeps a nested read — an `eval`'s text, a sourced file —
-// from committing the outer line's value early: those run through the same
-// statement loop, and a commit that fired there would put the `eval` command's
-// own argument inside the `eval`.
+// underscorePending is a last argument waiting for its command to finish.
 type underscorePending struct {
 	arg   string
 	armed bool
-	depth int
 }
 
 // takeInputLevelArgument hands back the argument this level recorded, once its
 // command has finished.
 func (r *Runner) takeInputLevelArgument() (string, bool) {
-	if !r.pendingInputArg.armed || r.pendingInputArg.depth != r.indirection {
+	if !r.pendingInputArg.armed {
 		return "", false
 	}
 	arg := r.pendingInputArg.arg

@@ -3627,12 +3627,8 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 			continue
 		}
 		// The one place a statement is read at the level a shell reads its
-		// input, which is the level one dialect's `$_` moves at. Inside an
-		// `eval` or a sourced file this runs again with indirection above
-		// zero, where nothing is at the input level — see
-		// Runner.aLoneSimpleCommandOnItsLine.
-		r.atInputLevel = r.indirection == 0 && !r.inSubshell &&
-			r.aLoneSimpleCommandOnItsLine(f.Stmts, i)
+		// input, which is the level one dialect's `$_` moves at.
+		r.atInputLevel = r.aLoneSimpleCommandOnItsLine(f.Stmts, i)
 		err := r.stmt(ctx, st)
 		if arg, ok := r.takeInputLevelArgument(); ok {
 			// The statement is over, so the line's own last argument is what

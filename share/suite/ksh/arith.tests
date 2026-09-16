@@ -143,8 +143,10 @@ printf 'a hexadecimal one:            %s\n' "$(( 0xffffffffffffffffff ))"
 # machine, where the same addition inside `$(( ))` is the largest value. A
 # double of 2^63 stored into an integer variable comes back as zero, which is
 # neither the arithmetic above nor a clamp, and is a defect in a shell from
-# 2012 rather than a rule this dialect has. It is written here rather than run,
-# for the reason the negative divisor above is.
+# 2012 rather than a rule this dialect has: the same variable holding
+# 9007199254740993 reads back as -1 there, and 2^64 as -4, which is no reading
+# at all. It is written here rather than run, for the reason the negative
+# divisor above is. The whole panel is on #3211.
 
 # --- a value that is not a number --------------------------------------------
 #

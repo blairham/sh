@@ -384,3 +384,74 @@ typeset -p dj
 dk=1
 dk+=()
 typeset -p dk
+
+# ---- `$_`, which this shell has and which moves under a rule of its own ----
+#
+# The first block is the function call, where all three shells that have the
+# parameter agree about the last line of each pair — the caller reads the
+# **call's** own last argument, not whatever the body last ran (#3134) — and
+# part company on the first, which is what the caller had here and in bash and
+# the call's own argument in zsh.
+#
+# The second block is this shell's alone, and it is why the record had this
+# column down as having no `$_` at all. It has one. It moves only for a
+# **simple command standing alone on a line at the top level of the input** —
+# not across a `;`, an `&&`, a pipe, a `!`, an `&`, not for a bare assignment,
+# and not for anything inside a loop, a branch, a group, a subshell or an
+# `eval`. The probe that column was measured with is a `;`-list, which is the
+# one shape where a shell with the parameter and a shell without it both
+# answer empty.
+#
+# The consequence worth naming is that the idiom does not work here:
+# `mkdir -p "$d" && cd "$_"` reaches an empty `$_`, because the `&&` is what
+# stops it moving. The same two written as two lines work.
+
+suiteinner() { :; }
+suitepeek() { printf 'body [%s]\n' "$_"; suiteinner zz; printf 'body-after [%s]\n' "$_"; }
+: outer
+suitepeek one two
+printf 'after-call [%s]\n' "$_"
+suitepeek
+printf 'after-argless [%s]\n' "$_"
+A=2 suitepeek three
+printf 'after-prefixed [%s]\n' "$_"
+suitewrap() { suitepeek aa bb; }
+: before
+suitewrap xx yy
+printf 'after-nested [%s]\n' "$_"
+suiteset() { _=SET_IN_BODY; }
+suiteset qq
+printf 'after-explicit [%s]\n' "$_"
+
+# The second block: which commands move it, and which leave it where it stood.
+: alpha
+echo one two > /dev/null
+printf 'a lone command [%s]\n' "$_"
+echo three four > /dev/null; printf 'behind a semicolon [%s]\n' "$_"
+echo five six > /dev/null && printf 'behind an and [%s]\n' "$_"
+echo seven eight > /dev/null
+printf 'and the and left it [%s]\n' "$_"
+echo nine ten | cat > /dev/null
+printf 'after a pipeline [%s]\n' "$_"
+! echo eleven twelve > /dev/null
+printf 'after a negation [%s]\n' "$_"
+zz=13
+printf 'after a bare assignment [%s]\n' "$_"
+for suitei in fourteen
+do
+	: fifteen
+	printf 'inside a loop [%s]\n' "$_"
+done
+printf 'after the loop [%s]\n' "$_"
+if : sixteen
+then
+	printf 'inside a branch [%s]\n' "$_"
+fi
+{ : seventeen
+	printf 'inside a group [%s]\n' "$_"
+}
+( : eighteen
+	printf 'inside a subshell [%s]\n' "$_" )
+eval ': nineteen
+printf "inside an eval [%s]\n" "$_"'
+printf 'after the eval [%s]\n' "$_"

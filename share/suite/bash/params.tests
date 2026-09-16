@@ -99,3 +99,34 @@ printf 'count=%s\n' "${#b[@]}"
 # learned to quote rather than one operator's reading of it.
 printf 'length=%s\n' "${#b['x]y']}"
 printf 'absent default=[%s]\n' "${b['no]such']-fallback}"
+
+# ---- `$_` across a function call ----
+#
+# `$_` is the previous command's last argument, and `mkdir -p "$d" && cd "$_"`
+# is the idiom it exists for. A *function call* is a command like any other, so
+# what the caller reads once it returns is the **call's** own last argument and
+# not whatever the body last ran — which this shell answered with the body's,
+# so `make_dir /tmp/x` then `cd "$_"` went to a directory named `:` (#3134).
+#
+# That row is unanimous across bash, ksh93 and zsh, and it is the last line of
+# each pair below. The *first* line of each pair is where they part: this shell
+# opens a body with what the **caller** had, ksh93 does too, and zsh opens it
+# with the call's own last argument. So the three files hold the same rows and
+# three different answers.
+
+suiteinner() { :; }
+suitepeek() { printf 'body [%s]\n' "$_"; suiteinner zz; printf 'body-after [%s]\n' "$_"; }
+: outer
+suitepeek one two
+printf 'after-call [%s]\n' "$_"
+suitepeek
+printf 'after-argless [%s]\n' "$_"
+A=2 suitepeek three
+printf 'after-prefixed [%s]\n' "$_"
+suitewrap() { suitepeek aa bb; }
+: before
+suitewrap xx yy
+printf 'after-nested [%s]\n' "$_"
+suiteset() { _=SET_IN_BODY; }
+suiteset qq
+printf 'after-explicit [%s]\n' "$_"

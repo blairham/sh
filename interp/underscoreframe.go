@@ -45,44 +45,28 @@ import "github.com/blairham/sh/syntax"
 // the parameter at all: a shell that keeps no `$_` has nothing to decide, and
 // asking there would report an unanswered axis on every function call in a
 // script that never reads the name.
-func (r *Runner) underscoreAcrossAFunctionCall(before underscoreRecord) func() {
-	call := r.underscoreRecord()
+func (r *Runner) underscoreAcrossAFunctionCall(beforeArg string, beforeSet bool) func() {
+	callArg, callSet := r.lastArg, r.lastArgSet
 	if r.sem().UnderscoreTracksTheLastArgument == Yes &&
 		!r.ask(r.sem().UnderscoreMovesBeforeAFunctionBody,
 			"`$_` holding the call's own last argument inside the body") {
 		// The body sees what the caller had. bash and ksh93 — measured on
 		// the table above, where the first line of the body reads `outer`
 		// and not `two`.
-		r.setUnderscoreRecord(before)
+		r.lastArg, r.lastArgSet = beforeArg, beforeSet
 	}
 	return func() {
 		// And the caller reads the call's, whatever the body left behind.
 		// Unanimous, and the whole of #3134's first defect: without this the
 		// body's last command leaked out through `$_`.
-		r.setUnderscoreRecord(call)
+		r.lastArg, r.lastArgSet = callArg, callSet
 	}
 }
 
-// underscoreRecord is both of the trackers at once, because a function call
-// has to put both back: the narrowed one is written before the body runs for
-// the same reason the general one is, and a restore that moved only one would
-// leave the dialect that reads the other looking into the body.
-type underscoreRecord struct {
-	arg, inputArg string
-	set, inputSet bool
-}
-
-func (r *Runner) underscoreRecord() underscoreRecord {
-	return underscoreRecord{
-		arg: r.lastArg, set: r.lastArgSet,
-		inputArg: r.inputLastArg, inputSet: r.inputLastArgSet,
-	}
-}
-
-func (r *Runner) setUnderscoreRecord(u underscoreRecord) {
-	r.lastArg, r.lastArgSet = u.arg, u.set
-	r.inputLastArg, r.inputLastArgSet = u.inputArg, u.inputSet
-}
+// The narrowed record needs no such bracket. It is not written until the
+// statement that recorded it is over — see [Runner.takeInputLevelArgument] —
+// so a body never sees the call's own argument and never has to be given back
+// what it overwrote.
 
 // noteInputLevelArgument records a command's last argument for the one dialect
 // whose `$_` moves only between the commands the shell *reads*.
@@ -125,8 +109,39 @@ func (r *Runner) noteInputLevelArgument(argv []string) {
 	}
 	r.atInputLevel = false
 	if len(argv) > 0 {
-		r.inputLastArg, r.inputLastArgSet = argv[len(argv)-1], true
+		// Held rather than written, because this shell moves `$_` when the
+		// command is *over*: the body of a function and the text of an
+		// `eval` both read what stood before the line they were started
+		// from, and both leave the line's own last argument behind them.
+		// Writing it here instead put the call's argument inside the call.
+		r.pendingInputArg = underscorePending{
+			arg: argv[len(argv)-1], armed: true, depth: r.indirection,
+		}
 	}
+}
+
+// underscorePending is a last argument waiting for its command to finish, and
+// the indirection it was recorded at.
+//
+// The depth is what keeps a nested read — an `eval`'s text, a sourced file —
+// from committing the outer line's value early: those run through the same
+// statement loop, and a commit that fired there would put the `eval` command's
+// own argument inside the `eval`.
+type underscorePending struct {
+	arg   string
+	armed bool
+	depth int
+}
+
+// takeInputLevelArgument hands back the argument this level recorded, once its
+// command has finished.
+func (r *Runner) takeInputLevelArgument() (string, bool) {
+	if !r.pendingInputArg.armed || r.pendingInputArg.depth != r.indirection {
+		return "", false
+	}
+	arg := r.pendingInputArg.arg
+	r.pendingInputArg = underscorePending{}
+	return arg, true
 }
 
 // aLoneSimpleCommandOnItsLine reports whether this top-level statement is the

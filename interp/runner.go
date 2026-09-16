@@ -1375,6 +1375,7 @@ type Runner struct {
 	inputLastArg    string
 	inputLastArgSet bool
 	atInputLevel    bool
+	pendingInputArg underscorePending
 	// noexec is `set -n`: read, never run, never unset — even the `set +n`
 	// that would clear it is a command.
 	noexec bool
@@ -3632,10 +3633,17 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		// Runner.aLoneSimpleCommandOnItsLine.
 		r.atInputLevel = r.indirection == 0 && !r.inSubshell &&
 			r.aLoneSimpleCommandOnItsLine(f.Stmts, i)
-		if err := r.stmt(ctx, st); err != nil {
-			return err
+		err := r.stmt(ctx, st)
+		if arg, ok := r.takeInputLevelArgument(); ok {
+			// The statement is over, so the line's own last argument is what
+			// the next one reads. See interp/underscoreframe.go for the
+			// dialect this is the whole of `$_` for.
+			r.inputLastArg, r.inputLastArgSet = arg, true
 		}
 		r.atInputLevel = false
+		if err != nil {
+			return err
+		}
 		if r.ctl == controlAbandon {
 			// The statement gave up; the shell has not. This is the one
 			// place that consumes it, which is what keeps the give-up from
@@ -4629,7 +4637,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// assignment moves it to empty. Tracked unconditionally and cheaply;
 	// whether a read of `$_` answers with it is the dialect's question,
 	// asked where the read happens rather than on every command here.
-	beforeUnderscore := r.underscoreRecord()
+	beforeLastArg, beforeLastArgSet := r.lastArg, r.lastArgSet
 	r.noteInputLevelArgument(argv)
 	if len(argv) > 0 {
 		r.lastArg, r.lastArgSet = argv[len(argv)-1], true
@@ -4964,7 +4972,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// `$_` belongs to the *call* and not to the body: whatever the last
 		// command inside it was handed, the caller reads what the call was.
 		// Unanimous across bash, ksh93 and zsh, and #3134's first defect.
-		defer r.underscoreAcrossAFunctionCall(beforeUnderscore)()
+		defer r.underscoreAcrossAFunctionCall(beforeLastArg, beforeLastArgSet)()
 		return r.callFunc(ctx, fn, argv[1:])
 	}
 

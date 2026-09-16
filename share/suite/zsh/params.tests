@@ -149,3 +149,32 @@ printf 'empty literal kept: [%s]\n' "$aliases[suitealC]"
 hash -d suitedirA=/tmp
 unset "nameddirs[suitedirA]"
 printf 'nameddirs unset: [%s] %s\n' "$nameddirs[suitedirA]" "${#nameddirs}"
+
+# ---- `$_` across a function call ----
+#
+# `$_` is the previous command's last argument. A function call is a command
+# like any other, so what the caller reads once it returns is the **call's**
+# own last argument and not whatever the body last ran — unanimous across this
+# shell, bash and ksh93, and the last line of each pair below (#3134).
+#
+# The first line of each pair is this shell's own answer and the reason these
+# rows are here rather than in core/: a body opens with the **call's** last
+# argument here, where bash and ksh93 open it with what the caller had. So
+# `f one two` reads `two` on the first line of the body here and `outer` there.
+
+suiteinner() { :; }
+suitepeek() { printf 'body [%s]\n' "$_"; suiteinner zz; printf 'body-after [%s]\n' "$_"; }
+: outer
+suitepeek one two
+printf 'after-call [%s]\n' "$_"
+suitepeek
+printf 'after-argless [%s]\n' "$_"
+A=2 suitepeek three
+printf 'after-prefixed [%s]\n' "$_"
+suitewrap() { suitepeek aa bb; }
+: before
+suitewrap xx yy
+printf 'after-nested [%s]\n' "$_"
+suiteset() { _=SET_IN_BODY; }
+suiteset qq
+printf 'after-explicit [%s]\n' "$_"

@@ -273,6 +273,7 @@ say 'n on the same line keeps the letters on the reference'
 
 say 'a fresh binding is a declaration of that binding'
 ( u=1; declare -n s=u; f() { local -i s; declare -p s u; }; f; declare -p s u ) 2>&1
+( u=1; declare -n s=u; f() { declare -i s; declare -p s u; }; f; declare -p s u ) 2>&1
 ( f() { local u=1; local -n s=u; local -i s; declare -p s u; }; f ) 2>&1
 ( u=1; declare -n s=u; f() { declare -g -r s; }; f; declare -p s u ) 2>&1
 

@@ -146,6 +146,13 @@ func TestAnAttributeLetterLandsOnWhatTheReferencePointsAt(t *testing.T) {
 			src:  `u=1; declare -n s=u; f() { local -i s; declare -p s u; }; f`,
 			want: "declare -i s\ndeclare -- u=\"1\"\n",
 		},
+		// The same for `declare`, which is the other loop and the one that
+		// takes the shadow itself: inside a function it is a local too.
+		{
+			name: "a fresh declare is not the reference either",
+			src:  `u=1; declare -n s=u; f() { declare -i s; declare -p s u; }; f; declare -p s u`,
+			want: "declare -i s\ndeclare -- u=\"1\"\ndeclare -n s=\"u\"\ndeclare -- u=\"1\"\n",
+		},
 		// Where the binding is already the function's own, the letter follows
 		// again — which is what says the rule is about the binding and not
 		// about being inside a function.

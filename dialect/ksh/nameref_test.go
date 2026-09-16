@@ -104,3 +104,74 @@ func TestACycleIsRefusedAtTheDeclaration(t *testing.T) {
 		})
 	}
 }
+
+// The other spelling of #3084: the cell a reference lands on holds nothing
+// here too, and ksh93 is the column that says so without a function anywhere
+// near the line.
+//
+// Measured 2026-09-15 on ksh93u+ 2012-08-01, `env -i` with a scratch HOME and
+// no startup files, every row run against the real shell and this one side by
+// side. Where the scope rows differ from bash's it is the axis this dialect
+// already carries — `typeset` declares a local only inside a `function`-word
+// function — and not this rule, which is the same in both shells.
+func TestAReferenceEmptiesTheCellHereToo(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"at the top level", `r=OUTER; v=VEE; typeset -n r=v; unset -n r; echo "[${r-GONE}]"`,
+			"[GONE]\n",
+		},
+		{
+			// A keyword-defined function, which is the only one that gets a
+			// scope here: the cell is the local's, so the caller's value is
+			// back after the return.
+			"in a keyword function the local cell is the empty one",
+			`r=OUTER; v=VEE; function f { typeset -n r=v; unset -n r; echo "in=[${r-GONE}]"; }; ` +
+				`f; echo "after=[${r-GONE}]"`,
+			"in=[GONE]\nafter=[OUTER]\n",
+		},
+		{
+			// And in a POSIX-style one there is no scope, so the cell
+			// emptied is the global and the value does not come back. The
+			// row that pins the rule to the `n` letter rather than to the
+			// local: bash restores OUTER on the same source.
+			"and in a POSIX function it is the global cell",
+			`r=OUTER; v=VEE; f(){ typeset -n r=v; unset -n r; echo "in=[${r-GONE}]"; }; ` +
+				`f; echo "after=[${r-GONE}]"`,
+			"in=[GONE]\nafter=[GONE]\n",
+		},
+		{
+			// The second spelling of the declaration reaches the same rule,
+			// which is what says the word is a front and not a builtin of
+			// its own.
+			"nameref empties it as well",
+			`r=OUTER; v=VEE; nameref r=v; unset -n r; echo "[${r-GONE}]"`,
+			"[GONE]\n",
+		},
+		{
+			"an inherited value goes with it",
+			`export E=ENV; v=VEE; typeset -n E=v; unset -n E; echo "[${E-GONE}]"`,
+			"[GONE]\n",
+		},
+		{
+			// What the opened cell is: an ordinary local of the keyword
+			// function, so a write stays in the call.
+			"the opened cell is an ordinary local",
+			`r=OUTER; v=VEE; function f { typeset -n r=v; unset -n r; r=NEW; echo "in=[$r]"; }; ` +
+				`f; echo "after=[${r-GONE}]"`,
+			"in=[NEW]\nafter=[OUTER]\n",
+		},
+		{
+			"and the target is untouched",
+			`v=VEE; typeset -n r=v; unset -n r; echo "[${r-GONE}] v=[$v]"`,
+			"[GONE] v=[VEE]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runKsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

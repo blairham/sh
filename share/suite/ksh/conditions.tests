@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `test` and `[` in ksh93 — #2312.
+#
+# **ksh93 has no operand count.** Every other shell on this panel, and this
+# substrate with them, reads the whole operand list and complains `too many
+# arguments` when an expression finishes with words left over. ksh93 has no
+# such sentence at all: it reads an expression off the *front* of the list
+# and silently discards whatever follows. `test x = x y` is 0 there and a
+# refusal everywhere else.
+#
+# That is one rule rather than a pile of wordings, and the rule has a seam in
+# it. Measured on 93u+ 2012-08-01 across the rows below, what it does is:
+#
+#	1. read the leading fixed-arity form — the one-, two-, three- and
+#	   four-word readings POSIX XCU specifies for `test`;
+#	2. look at the word straight after it. If that word is `-a` or `-o`,
+#	   commit to the full expression grammar, which then has to consume
+#	   *everything* and says `incorrect syntax` if it cannot;
+#	3. otherwise take the reading from (1) and drop the rest without a
+#	   word.
+#
+# The seam is what makes it a rule rather than a leniency. `test x = x junk
+# -a junk` is 0 — the connective is there, but it is not the word after the
+# reading, so nothing past `x = x` is ever looked at. Move the same
+# connective up against the reading and the whole list becomes load-bearing:
+# `test x = x -a x = x junk` is `incorrect syntax`. Both spellings hold the
+# same words.
+#
+# So ksh93's only two complaints here are about a *word* — `b: unknown
+# operator` for a word standing where an operator was required, `argument
+# expected` for a form that ran out — plus `incorrect syntax` for an
+# expression the grammar could not finish. None of the three is a count, and
+# none of them can be reached by adding operands to a well-formed expression.
+#
+# Each row keeps its status beside its diagnostic, because half of these
+# rows *have* no diagnostic and the status is the whole of the answer. A row
+# graded on the text alone would read a silent 0 and a silent 1 as the same.
+
+row() {
+	printf -- '--- %s\n' "$1"
+	shift
+	( "$@" ) 2>&1 > /dev/null
+	printf 'status %s\n' "$?"
+}
+
+printf -- '=== the readings that consume everything ===\n'
+
+row 'a three-word comparison'            test x = x
+row 'a two-word file test'               test -n x
+row 'a negated three-word comparison'    test ! x = x
+row 'a parenthesised comparison'         test \( x = x \)
+row 'a connective, both sides used'      test x = x -a x = x
+row 'a connective that is false'         test x = x -a x = y
+
+printf -- '=== an expression with words left after it ===\n'
+
+row 'one word after a comparison'        test x = x y
+row 'three words after a comparison'     test x = x junk1 junk2 junk3
+row 'a word after a file test'           test -n x y
+row 'a word after a numeric comparison'  test 1 -eq 1 2
+row 'a word after a negation'            test ! x = x junk
+row 'a word after a group'               test \( x = x \) junk
+row 'a second comparison after the first' test a = b = c
+
+printf -- '=== the seam: where the connective sits ===\n'
+
+row 'a connective past the reading'      test x = x junk -a junk
+row 'a connective against the reading'   test x = x -a x = x junk
+row 'the same, with a file test'         test -n x -a -n y junk
+row 'a connective that consumes the word' test x = x -o junk
+
+printf -- '=== the complaints it does have ===\n'
+
+row 'a word where an operator belongs'   test a b c
+row 'the same with a word after it'      test a b c d
+row 'a connective after a bad reading'   test a b c -a x = x
+row 'a two-word form that ran out'       test x junk
+
+printf -- '=== and the same through `[` ===
+'
+
+printf -- '--- a word where an operator belongs, in brackets
+'
+( [ a b c d ] ) 2>&1 > /dev/null
+printf 'status %s\n' "$?"
+
+printf -- '--- words left after a comparison, in brackets
+'
+( [ x = x junk ] ) 2>&1 > /dev/null
+printf 'status %s\n' "$?"

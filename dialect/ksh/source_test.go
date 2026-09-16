@@ -423,6 +423,28 @@ func TestUlimit(t *testing.T) {
 	if got := held[interp.ResourceCPUTime]; got[1] != 50 {
 		t.Errorf("hard limit is %d, want both", got[1])
 	}
+	// A letter this shell has not got, which is the same sentence every
+	// other bad option here takes and names the letter the reader has to
+	// change. Measured against ksh93 93u+ on 2026-09-15:
+	//
+	//	$ ksh -c 'ulimit -Z'
+	//	ksh: ulimit: -Z: unknown option
+	//	Usage: ulimit [-HSalimits] [limit]
+	//
+	// It had been the bare string `not supported`, which is what the `-a`
+	// listing writes for a resource the platform has no limit for — a
+	// different sentence about a different thing, and one with no verb, so
+	// the letter never reached the reader.
+	out, st := run("ulimit -Z")
+	if want := "ulimit: -Z: unknown option"; !strings.Contains(out, want) {
+		t.Errorf("a letter it has not got: said %q, want it to contain %q", out, want)
+	}
+	if !strings.Contains(out, "Usage: ulimit") {
+		t.Errorf("a letter it has not got: said %q, want the usage line under it", out)
+	}
+	if st != 2 {
+		t.Errorf("a letter it has not got: status %d, want 2", st)
+	}
 }
 
 // TestABadBuiltinOption: this dialect's wording, status, usage line and

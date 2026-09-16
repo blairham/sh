@@ -121,6 +121,26 @@ func TestTheNarrowedReadingIgnoresEverythingButALoneCommand(t *testing.T) {
 	}
 }
 
+// TestTheNarrowedReadingIsBlindInsideAnEval is the row read from *inside* the
+// nested text rather than after it, and it is the one that says where the
+// level is.
+//
+// Two separate things have to hold for it. The statements an `eval` runs are
+// not at the input level, so `: beta` in there moves nothing; and the line's
+// own argument — which is the whole eval string — must not arrive early, even
+// though the nested text runs through the very same statement loop that
+// delivers it. Reading `$_` after the eval cannot see either: the answer is
+// the eval string whichever way round it happened.
+func TestTheNarrowedReadingIsBlindInsideAnEval(t *testing.T) {
+	sem := tracks()
+	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
+	got := underscoreOut(t, ": alpha\neval ': beta\nprintf \"in [%s] \" \"$_\"'\n"+
+		"printf 'out [%s]' \"$_\"\n", sem)
+	if want := "in [alpha] out [: beta\nprintf \"in [%s] \" \"$_\"]"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 // TestTheGeneralReadingMovesForAllOfThem is the control beside it: with the
 // narrowing off, every row above moves the parameter. Without this the table
 // would pass for a shell that had simply stopped tracking `$_`.

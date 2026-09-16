@@ -411,6 +411,15 @@ func TestComparguments(t *testing.T) {
 			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]'
 			 local one; comparguments -s one; say "$?/$one"`, "0/",
 		},
+		// And without `-s` the same word fills nothing, because there is no
+		// stack for `_arguments` to be told to stop building. Measured: the
+		// `cmd -n` that answers `0/next` with the switch answers `1/`
+		// without it.
+		{
+			"no stacking, nothing to say about one", "cmd -n",
+			`comparguments -i '' : '-n[next]:nx:' '-a[plain]' '-p[proc]'
+			 local one; comparguments -s one; say "$?/$one"`, "1/",
+		},
 		// **A stack spends every letter in it.** Measured with `-s` and
 		// `-a -m -p`: `cmd -am <TAB>` leaves `-p` and nothing else, and
 		// `$line` has neither `-am` nor its letters on it.

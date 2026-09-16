@@ -51,6 +51,13 @@ type Chars struct {
 	Event   rune
 	Quick   rune
 	Comment rune
+
+	// DoubleQuotesProtect makes a double-quoted string as safe from this
+	// pass as a single-quoted one. Not a character, but carried beside them
+	// because it is the same kind of fact: how the text being scanned is
+	// read. See Semantics.HistoryExpansionSparesDoubleQuotesInPosixMode for
+	// the shell that sets it and when.
+	DoubleQuotesProtect bool
 }
 
 // Default is what a shell starts with: `!^#`.
@@ -65,6 +72,22 @@ var Default = Chars{Event: '!', Quick: '^', Comment: '#'}
 type List struct {
 	Lines []string
 	First int
+
+	// Memory is what earlier expansions left for later ones, and nil gives
+	// each call a fresh one. See Memory.
+	Memory *Memory
+}
+
+// Memory is the last substitution and the last `?string?` search, which
+// outlive the line that wrote them.
+//
+// Measured 2026-09-16 on bash 5.3.20 from a script, and on zsh 5.9.2 and
+// ksh93u+ at a prompt: after `!!:s/o/0/` on one line, `!!:&` on the **next**
+// repeats it and `!!:s//X/` replaces the `o` it named — in all three. So the
+// state is the shell's, kept by whoever calls Expand for it, rather than one
+// line's.
+type Memory struct {
+	state
 }
 
 // number is the history number of the last entry, or First-1 for an empty
@@ -101,6 +124,28 @@ type BadWordSpecifier struct{ Ref string }
 
 func (e *BadWordSpecifier) Error() string { return e.Ref + ": bad word specifier" }
 
+// NoPreviousSubstitution is a `:&`, or a substitution with an empty left side,
+// in a shell that has not substituted anything yet. Ref is the modifier as
+// written with the colon and any `g` in front of it: measured 2026-09-16,
+// bash says `:g&: no previous substitution` and `:s//X/: no previous
+// substitution`, and `:s^^X^` for a quick substitution; ksh93 says the same
+// of `:g&`; zsh says `no previous substitution` and names nothing.
+type NoPreviousSubstitution struct{ Ref string }
+
+func (e *NoPreviousSubstitution) Error() string { return e.Ref + ": no previous substitution" }
+
+// modifierRef is a substitution modifier as written, from the colon before
+// any `g` or `a` in front of it to end.
+func modifierRef(src []rune, start, end int) string {
+	for start > 0 && (src[start-1] == 'g' || src[start-1] == 'a') {
+		start--
+	}
+	if start > 0 && src[start-1] == ':' {
+		start--
+	}
+	return string(src[start:end])
+}
+
 // SubstFailed is an `s/old/new/` or `^old^new^` whose left side is not in the
 // event it was applied to.
 //
@@ -132,6 +177,18 @@ type state struct {
 	matched string
 	old     string
 	new     string
+}
+
+// previousOld is what an empty left side stands for: the last substitution's
+// left side, or where nothing has been substituted, the last `?string?`
+// searched for. Measured 2026-09-16 on bash 5.3.20 from a script: after
+// `echo !?two?%`, `!!:s//X/` and `^^X^` each replace `two`, and with neither
+// before them both are `no previous substitution`.
+func (st *state) previousOld() string {
+	if st.old != "" {
+		return st.old
+	}
+	return st.matched
 }
 
 // Quote is what the text handed to ExpandIn begins inside.
@@ -179,9 +236,12 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 	if c.Event == 0 {
 		return Result{Line: line}, nil
 	}
-	var st state
+	st := &state{}
+	if hist.Memory != nil {
+		st = &hist.Memory.state
+	}
 	if in == Unquoted && c.Quick != 0 && strings.HasPrefix(line, string(c.Quick)) {
-		return quick(line, hist, c, &st)
+		return quick(line, hist, c, st)
 	}
 	src := []rune(line)
 	var out strings.Builder
@@ -213,13 +273,13 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 			out.WriteRune(r)
 			i++
 			continue
-		case r == c.Event && !single:
+		case r == c.Event && !single && !(double && c.DoubleQuotesProtect):
 			if literal(src, i, c, double) {
 				out.WriteRune(r)
 				i++
 				continue
 			}
-			text, next, print, err := one(src, i, out.String(), hist, c, &st)
+			text, next, print, err := one(src, i, out.String(), hist, c, st)
 			if err != nil {
 				return Result{}, err
 			}
@@ -654,7 +714,7 @@ func substitute(src []rune, j int, text, ref string, global bool, st *state) (st
 	if src[j] == '&' {
 		j++
 		if st.old == "" {
-			return "", 0, &SubstFailed{Ref: ":" + string(src[start:j])}
+			return "", 0, &NoPreviousSubstitution{Ref: modifierRef(src, start, j)}
 		}
 		out, err := apply(text, st.old, st.new, global, ":"+string(src[start:j]))
 		return out, j, err
@@ -685,10 +745,10 @@ func substitute(src []rune, j int, text, ref string, global bool, st *state) (st
 	old, _ := read()
 	repl, _ := read()
 	if old == "" {
-		old = st.old
+		old = st.previousOld()
 	}
 	if old == "" {
-		return "", 0, &SubstFailed{Ref: ref}
+		return "", 0, &NoPreviousSubstitution{Ref: modifierRef(src, start, j)}
 	}
 	repl = replacement(repl, old)
 	st.old, st.new = old, repl
@@ -765,7 +825,10 @@ func quick(line string, hist List, c Chars, st *state) (Result, error) {
 	repl, i := read(i)
 	written := string(src[:i])
 	if old == "" {
-		return Result{}, &SubstFailed{Ref: ":s" + written, Bare: written}
+		old = st.previousOld()
+	}
+	if old == "" {
+		return Result{}, &NoPreviousSubstitution{Ref: ":s" + written}
 	}
 	if !strings.Contains(entry, old) {
 		return Result{}, &SubstFailed{Ref: ":s" + written, Bare: written}

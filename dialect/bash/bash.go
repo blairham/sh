@@ -442,6 +442,9 @@ func Semantics() interp.Semantics {
 	// zsh with `setopt banghist` and ksh93 with `set -H` both print the two
 	// characters. See Semantics.HistoryExpansionInAScript.
 	s.HistoryExpansionInAScript = interp.Yes
+	// And POSIX mode takes double-quoted text out of its reach. See
+	// Semantics.HistoryExpansionSparesDoubleQuotesInPosixMode.
+	s.HistoryExpansionSparesDoubleQuotesInPosixMode = interp.Yes
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.

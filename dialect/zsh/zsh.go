@@ -3375,9 +3375,10 @@ func Diagnostics() interp.Diagnostics {
 		// unlike anybody else — measured 2026-09-15 through a
 		// pseudo-terminal. The reference goes at the *end* and loses the `!`
 		// that introduced it, and a failed substitution names nothing at all.
-		HistoryEventNotFound:      "event not found: %[2]s",
-		HistorySubstitutionFailed: "substitution failed",
-		HistoryBadWordSpecifier:   "no such word in event",
+		HistoryEventNotFound:          "event not found: %[2]s",
+		HistorySubstitutionFailed:     "substitution failed",
+		HistoryBadWordSpecifier:       "no such word in event",
+		HistoryNoPreviousSubstitution: "no previous substitution",
 		UnimplementedOptionLetters: map[string]string{
 			// **`set` has left this table entirely**, and the emptiness is
 			// the measurement. zsh gives a single letter to far more of its

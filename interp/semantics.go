@@ -14042,6 +14042,23 @@ type Semantics struct {
 	// happened" and the row would read as agreement.
 	HistoryExpansionInAScript Answer
 
+	// HistoryExpansionSparesDoubleQuotesInPosixMode leaves a `!` inside
+	// double quotes alone while the shell is in POSIX mode, as it leaves one
+	// inside single quotes alone everywhere.
+	//
+	// Measured 2026-09-16 on bash 5.3.20 from a script holding `set -o
+	// history`, `echo a`, `set -H`: `echo "!!"` writes `echo "echo a"` and
+	// runs it, and the same line after `set -o posix` writes the two
+	// characters, as does `echo "!x"` where the reference would otherwise be
+	// `event not found`. An unquoted `!!` on the same line still expands.
+	//
+	// bash's row alone: POSIX mode is the state `set -o posix` names, and the
+	// other shells with an expander either have no such option or, as zsh
+	// invoked as `sh`, turn the expander off along with it. Read rather than
+	// asked, because the expander scans every line a history-keeping shell
+	// reads and an unanswered preset would put a refusal in front of each.
+	HistoryExpansionSparesDoubleQuotesInPosixMode Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -17439,6 +17456,8 @@ func PosixSemantics() Semantics {
 		HistoryExpansion:          No,
 		HistoryExpansionAtAPrompt: No,
 		HistoryExpansionInAScript: No,
+		// And so no POSIX mode of the standard's own spares anything from it.
+		HistoryExpansionSparesDoubleQuotesInPosixMode: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
 		// dash is the one shell that refuses the letter, and overrides.

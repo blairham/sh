@@ -75,6 +75,7 @@ func (r *Runner) HistoryRecording() bool { return r.histRecord }
 // value turns the expander off, which is measured in both shells that have it.
 func (r *Runner) HistoryChars() histexpand.Chars {
 	c := histexpand.Default
+	c.DoubleQuotesProtect = r.posixMode && r.sem().HistoryExpansionSparesDoubleQuotesInPosixMode == Yes
 	v, ok := r.GetVar(historyCharsParameter)
 	if !ok {
 		return c
@@ -121,7 +122,7 @@ func (r *Runner) ExpandHistory(line string, lines []string, first int) (histexpa
 // purpose. Measured — `set -o history; echo one two three; history -p "!!"`
 // writes `echo one two three` with the letter never written.
 func (r *Runner) ExpandHistoryAlways(line string, lines []string, first int) (histexpand.Result, error) {
-	return histexpand.Expand(line, histexpand.List{Lines: lines, First: first}, r.HistoryChars())
+	return histexpand.Expand(line, histexpand.List{Lines: lines, First: first, Memory: r.historyMemory()}, r.HistoryChars())
 }
 
 // ExpandHistoryIn is the same for a front end handing over one **physical**
@@ -133,7 +134,16 @@ func (r *Runner) ExpandHistoryIn(line string, in histexpand.Quote, lines []strin
 	if !r.histExpand {
 		return histexpand.Result{Line: line}, nil
 	}
-	return histexpand.ExpandIn(line, in, histexpand.List{Lines: lines, First: first}, r.HistoryChars())
+	return histexpand.ExpandIn(line, in, histexpand.List{Lines: lines, First: first, Memory: r.historyMemory()}, r.HistoryChars())
+}
+
+// historyMemory is the shell's histexpand.Memory, made the first time a line
+// needs one.
+func (r *Runner) historyMemory() *histexpand.Memory {
+	if r.histMemory == nil {
+		r.histMemory = &histexpand.Memory{}
+	}
+	return r.histMemory
 }
 
 // SetHistoryStore hands the Runner the list `history` keeps, so that the
@@ -221,6 +231,8 @@ func (r *Runner) HistoryExpansionRefusal(err error) string {
 		return Wording(d.HistoryEventNotFound, "%[1]s: event not found", e.Ref, bare)
 	case *histexpand.SubstFailed:
 		return Wording(d.HistorySubstitutionFailed, "%[1]s: substitution failed", e.Ref, e.Bare)
+	case *histexpand.NoPreviousSubstitution:
+		return Wording(d.HistoryNoPreviousSubstitution, "%[1]s: no previous substitution", e.Ref)
 	case *histexpand.BadWordSpecifier:
 		return Wording(d.HistoryBadWordSpecifier, "%[1]s: bad word specifier", e.Ref)
 	case *histexpand.BadModifier:

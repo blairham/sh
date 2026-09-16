@@ -68,4 +68,5 @@ var _ = []error{
 	(*histexpand.SubstFailed)(nil),
 	(*histexpand.BadModifier)(nil),
 	(*histexpand.BadWordSpecifier)(nil),
+	(*histexpand.NoPreviousSubstitution)(nil),
 }

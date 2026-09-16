@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/blairham/sh/internal/histexpand"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -1516,6 +1517,9 @@ type Runner struct {
 	// the whole reason: the file runs before the session's first prompt, and
 	// a default applied afterwards would put back the thing it turned off.
 	histExpandMoved bool
+	// histMemory is the last substitution and search history expansion made,
+	// which the next line's `:&` and `%` read. See histexpand.Memory.
+	histMemory *histexpand.Memory
 	// histRecord is bash's `set -o history`: whether accepted lines are added
 	// to the list at all. On for an interactive session and off for a script,
 	// measured the same way.

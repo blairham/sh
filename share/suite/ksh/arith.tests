@@ -209,3 +209,47 @@ printf 'a float divisor is refused: %s\n' "$?"
 printf 'even a whole one: %s\n' "$?"
 ( printf 'value [%s]\n' "$(( 1.5 & 1 ))" ) 2>/dev/null
 printf 'and a bitwise operator refuses either side: %s\n' "$?"
+
+# --- a numeral with a radix, and the unsigned word it is read in --------------
+#
+# Every value in this shell's arithmetic is a C double, which is what makes
+# `$(( 18446744073709551615 ))` 1.84467440737096e+19 where bash and BusyBox
+# ash wrap it, zsh truncates the digits and dash stops at the signed maximum.
+# But a numeral with an **explicit radix** does not go straight to the double:
+# it is read in the unsigned word first and wraps in it, and becomes the
+# double only when that word overflows.
+#
+# So the same magnitude answers two ways depending on how it was spelt, and
+# the octal pair below is what makes that a rule rather than a width. 2^64-1
+# in octal is held exactly and reads as -1; 2^64 in octal overflows, and the
+# reader it falls back to has never heard of octal — so the answer is the
+# decimal reading of the same digits with the leading zero along for the ride.
+printf 'the unsigned maximum in octal: %s\n' "$(( 01777777777777777777777 ))"
+printf 'and one past it:               %s\n' "$(( 02000000000000000000000 ))"
+printf 'a longer octal run:            %s\n' "$(( 017777777777777777777770 ))"
+printf 'the same magnitude in decimal: %s\n' "$(( 18446744073709551615 ))"
+
+# The hexadecimal fallback is the hexadecimal float the same reader takes, so
+# one past the unsigned word is 2^64 rather than 2·10^16.
+printf 'one past the unsigned word: %s\n' "$(( 0x10000000000000000 ))"
+printf 'and well past it:           %s\n' "$(( 0x1ffffffffffffffff ))"
+
+# The wrapped value is an integer, so the integer operators do integer work on
+# it — a reader that handed back a float would answer -0.333333333333333 here.
+printf 'a wrapped value divided: %s\n' "$(( 0xffffffffffffffff / 3 ))"
+
+# And it is carried in the double like every other integer, which the unsigned
+# word is wider than: 2^63+1 is held exactly by the word and not by the double
+# it is then stored in, so the answer is one below the exact reading.
+printf 'a value the double cannot keep: %s\n' "$(( 0x8000000000000001 ))"
+
+# --- and when a double is written as an integer -------------------------------
+#
+# A value is written as an integer whenever a saturating `(intmax_t)` cast of
+# it converts back to the same double, and in floating notation when it does
+# not. It is not a magnitude and not a question of where the value came from:
+# `1e19/3` is an integer and `1e19` is not, from a float literal either way.
+printf 'a float literal divided: %s\n' "$(( 1e19/3 ))"
+printf 'the literal itself:      %s\n' "$(( 1e19 ))"
+printf 'the numeral at 2^63:     %s\n' "$(( 9223372036854775808 ))"
+printf 'and 2^64 divided:        %s\n' "$(( 18446744073709551616 / 3 ))"

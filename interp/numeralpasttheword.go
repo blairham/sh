@@ -25,10 +25,15 @@ import (
 //	ksh93u+ 2012-08-01      1e+19                 -1
 //
 // Every column answers, and every column reports status 0 — refusing the
-// numeral is a reading nobody has. ksh93's is not one of these: it has no word
-// to overflow, and the numeral simply becomes the double its arithmetic is
-// carried in, which is [Semantics.ArithValuesAreCarriedInADouble] and is asked
-// before this axis.
+// numeral is a reading nobody has. ksh93's is not one of these:
+// [Semantics.ArithValuesAreCarriedInADouble] is asked before this axis and
+// answers the question there instead.
+//
+// Not by going straight to the double, which the `-1` in the table above has
+// always said and the sentence that used to stand here denied. A numeral with
+// an explicit radix is read in the unsigned word there too, and becomes the
+// double only when *that* overflows — `01777777777777777777777` is -1 and
+// `02000000000000000000000` is `2e+21`. See readArithNum and #3257.
 type NumeralPastTheWord uint8
 
 const (

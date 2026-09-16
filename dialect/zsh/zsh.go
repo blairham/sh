@@ -4366,7 +4366,7 @@ func Apply(r *interp.Runner) {
 	// alone: ksh93 has the word as the preset alias `typeset -lE` and the
 	// other three answer `float: not found`. It was missing outright until
 	// #3291 — `float c=1.5` was `command not found` here, in a shell whose
-	// own `$reswords` names the word — so `add-zsh-hook`'s neighbours in a
+	// own `$reswords` names the word — so `add-zsh-hook`'s neighbors in a
 	// startup file had one declaration keyword of the seven that did not
 	// exist.
 	r.Register("float", interp.FloatBuiltin())

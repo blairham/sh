@@ -191,6 +191,12 @@ func (r *Runner) HistoryEntries() []string {
 // against: measured on bash 5.3.20 with `echo one two three`, `!!`, `!!`, the
 // list holds `echo one two three`, `echo echo one two three`, `echo echo echo
 // one two three`.
+//
+// Empty text is refused here and nowhere else, which is the one guard for the
+// one rule: a blank line is not a command and does not join the list. A line
+// of *blanks* is — measured, a script whose second line is three spaces has
+// those three spaces as its first entry — so the test is emptiness and not
+// blankness, and a caller trimming before it called would lose that.
 func (r *Runner) RecordHistoryEntry(line string) {
 	if r.histAdd == nil || line == "" {
 		return

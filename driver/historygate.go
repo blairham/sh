@@ -153,13 +153,6 @@ func (g *histGate) next() (string, bool) {
 			g.keep(body)
 			return line, true
 		}
-		if strings.TrimSpace(body) == "" && len(g.cur) == 0 {
-			// A blank line between commands is not one. Measured: bash's
-			// list holds the comment lines of a script and not its blank
-			// ones.
-			g.at++
-			return line, true
-		}
 		res, err := g.r.ExpandHistoryIn(body, quoteOf(g.open), g.r.HistoryEntries(), 1)
 		if err != nil {
 			// A reference the list does not hold. bash complains, does not
@@ -244,6 +237,13 @@ func (g *histGate) separator() string {
 		return "\n"
 	}
 	last := strings.TrimRight(g.cur[len(g.cur)-1], " \t")
+	if last == "" {
+		// A blank line inside a command contributes nothing that a `;` could
+		// follow. Measured: `if true` / (blank) / `then` / `echo hi` / `fi`
+		// comes back as `if true;  then echo hi; fi`, with the two spaces
+		// that says the blank was kept and the semicolon was not doubled.
+		return " "
+	}
 	for _, word := range awaitingACommand {
 		if strings.HasSuffix(last, word) {
 			// A word only counts as a word: `dado` does not end in `do`.

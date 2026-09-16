@@ -238,6 +238,21 @@ func TestTheListAScriptBuilds(t *testing.T) {
 			"set -o history\n# a comment\n\necho a\nhistory\n",
 			"a\n    1  # a comment\n    2  echo a\n    3  history\n",
 		},
+		// A line of *blanks* is an entry, which is the discriminator for
+		// where the rule lives: the test is emptiness and not blankness, and
+		// a shell trimming first would drop these two.
+		{
+			"a line of blanks is an entry",
+			"set -o history\n   \n\t\necho a\nhistory\n",
+			"a\n    1     \n    2  \t\n    3  echo a\n    4  history\n",
+		},
+		// And a blank line *inside* a command is kept, with the separators
+		// that say the semicolon was not doubled over it.
+		{
+			"a blank line inside a command",
+			"set -o history\nif true\n\nthen\necho hi\nfi\nhistory\n",
+			"hi\n    1  if true;  then echo hi; fi\n    2  history\n",
+		},
 		// What goes in is the **expanded** text, so each reference resolves
 		// against what the one before it produced.
 		{

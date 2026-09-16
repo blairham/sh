@@ -56,7 +56,7 @@ import (
 // completion seam is answered with replacement words and has nowhere to put a
 // description. That is the visible difference between a listing here and
 // zsh's `checkout -- checkout branch or paths to working tree`, and it is
-// #3031 rather than this file.
+// #3041 rather than this file.
 //
 // **Grouping, menus and match specifications are read and ignored.** `-J`,
 // `-V`, `-1`, `-2`, `-o` and `-M` name behavior this editor has not got —

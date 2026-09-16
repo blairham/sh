@@ -228,17 +228,38 @@ What a real startup file does is worth stating, because it is what a
 person actually runs. zsh's `compinit` ends by putting a completion
 widget on the Tab key — `zle -C complete-word .complete-word
 _main_complete` — and that widget's function is the whole of the
-per-command language above. **The core answers such a key with its own
-completion rather than with the widget's function**, so Tab goes on
-completing filenames and command names exactly as specified here, and
-the rc's per-command rules do not run: `git che<TAB>` offers nothing
-where zsh offers seven subcommands with a description against each —
-`check-attr`, `check-ignore`, `check-mailmap`, `checkout`,
-`checkout-index`, `cherry` and `cherry-pick`. Measured 2026-09-14
-through a pseudo-terminal against a real `~/.zshrc`.
+per-command language above.
 
-Answering with the function instead is not the alternative it looks
-like. The function needs `compadd`, `compset` and `$compstate`, which
-the core does not have, so it fails on every keystroke — and a shell
-whose Tab key broke the moment a startup file was read would be worse
-off than one with no completion system at all.
+**A key bound to such a widget asks the widget's function first and
+falls back to the completion specified here.** The function contributes
+candidates with `compadd`; if it has none — because it is not defined,
+because it failed, or because it had nothing to say about this word —
+the answer above stands unchanged, and Tab goes on completing filenames
+and command names exactly as specified. That ordering is the rule and
+not a recovery: a completion function that breaks costs one call, never
+the key. A shell whose Tab broke the moment a startup file was read
+would be worse off than one with no completion system at all, and that
+is what the fallback exists to make impossible.
+
+So a completion somebody writes by hand runs here. Measured 2026-09-15
+through a pseudo-terminal, with `_c() { compadd checkout cherry
+cherry-pick }` on a `zle -C` widget bound to Tab: `git chec<TAB>`
+completes to `git checkout `, and a second Tab on `git che<TAB>` lists
+all three — the same three, in the same order, that zsh lists for the
+same widget.
+
+**The shipped completion system still does not.** `_main_complete`
+reaches `_git` through `_arguments`, and `_arguments` is
+`comparguments`, one of the eight builtins of `zsh/computil` — none of
+which are implemented. So `git che<TAB>` on a real `~/.zshrc` offers
+what this document specifies rather than the eight subcommands with a
+description against each that zsh offers: `check-attr`, `check-ignore`,
+`check-mailmap`, `check-ref-format`, `checkout`, `checkout-index`,
+`cherry` and `cherry-pick`. Measured 2026-09-15 through a
+pseudo-terminal against `compinit` on this machine's own zsh functions.
+
+**Descriptions are not carried either.** `compadd -d`, `-X` and `-x`
+are read and their argument consumed, and the listing this editor draws
+is names only — there is nowhere in a replacement word to put a
+description. That is the visible difference between a listing here and
+zsh's `checkout  -- checkout branch or paths to working tree`.

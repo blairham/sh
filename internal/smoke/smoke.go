@@ -271,6 +271,11 @@ func Zsh() Dialect {
 		// machine and still cannot complete, so a shell that completes here
 		// only because the function is missing would be passing for the wrong
 		// reason. What the row asks is that the *completer* answers the key.
+		//
+		// Since #2776 the function is asked first where one is defined, and
+		// this row is then the other half of that rule: a function with
+		// nothing to say leaves the editor's own completion standing, and an
+		// undefined one is the simplest thing with nothing to say.
 		CompletionWidget: "zle -C complete-word .complete-word _smoke_main_complete\n" +
 			"bindkey '^I' complete-word",
 	}

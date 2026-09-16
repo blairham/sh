@@ -278,8 +278,12 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 }
 
 // completionBinding is what a key bound to a `zle -C` widget does here: the
-// editor's own completion, named by the widget's *completer* — and never the
-// widget's function.
+// editor's own completion, named by the widget's *completer*, with the
+// widget's own *function* asked first for the candidates.
+//
+// Both halves, since #2776. The rest of this comment is #2770, which is the
+// first half and the reason the order is the way round it is; what the second
+// half added is at the end.
 //
 // # The failure this exists to stop
 //
@@ -341,14 +345,21 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 // a diagnostic per keystroke. Menu completion and a listing widget are the
 // editor's to grow, and #2776 is where the rest of this lives.
 //
-// # What this does not do
+// # What the second half added, and what is still missing
 //
-// It does not run the rc's completions. `_main_complete` knows how to complete
-// a `git` subcommand and this does not; what a person gets on a real rc is
-// this shell's own completion of files and commands, which is what they get
-// with no rc at all. The gap is the completion system itself — `zsh/complete`
-// and `zsh/computil`, some sixty builtins and parameters between them — and it
-// is #2776 rather than this issue.
+// The function runs now, and what it collects with `compadd` is what the key
+// offers — see compsys.go, where the parameters and the two builtins are, and
+// repl.Binding.Candidates, which is how the name reaches the editor. **The
+// order above is unchanged and is what makes that safe**: the function is
+// asked first and this editor's own completion answers whenever the function
+// has nothing to say, so a completion that fails costs a call rather than the
+// key.
+//
+// It still does not run the rc's *own* completions, and the reason is no
+// longer this file's. `_main_complete` reaches `_git` through `_arguments`,
+// and `_arguments` is `comparguments` — one of the eight builtins of
+// `zsh/computil`, none of which are here. A completion somebody wrote by hand
+// works; the shipped completion system does not yet. See #3039 and #3040.
 //
 // Nor is it the module table, and that is worth saying because the issue was
 // filed as though it were. `zmodload zsh/complete` is refused here, before

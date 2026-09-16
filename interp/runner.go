@@ -1656,6 +1656,13 @@ type Runner struct {
 	posixMode               bool
 	posixSaved              Answer
 	posixSavedUnsetReadonly Answer
+	// Whether a pattern written into a redirection's target is matched.
+	// Saved like the rest: POSIX forbids it and both columns that do it were
+	// measured to stop in the mode, so the mode asserts the standard's answer
+	// on the way in — and has to put the dialect's own back on the way out,
+	// since zsh matches one and would otherwise leave `set +o posix` having
+	// quietly turned its own reading off (#3207).
+	posixSavedTargetPattern Answer
 	posixSavedForName       ForNameRunForm
 	posixSavedFuncName      FuncNameRunForm
 	posixSavedBadOption     Answer

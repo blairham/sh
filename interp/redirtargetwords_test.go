@@ -39,6 +39,10 @@ func severalWords(fans Answer) func(*Runner) {
 	// answer is the ambiguous-redirect reading, which has no several-words
 	// case to fan.
 	sem.RedirectTargetIsAnOrdinaryWord = No
+	// The column this models matches a pattern written into the target
+	// and splits one, which is the reading the axis above used to imply
+	// and which is now asked separately (#3207).
+	sem.RedirectTargetTakesPathnameExpansion = Yes
 	sem.RedirectsUseEveryTarget = fans
 	// The array readings the shell with that answer also holds, so that what
 	// a row shows is the redirection and not an unanswered expansion.
@@ -78,6 +82,10 @@ func TestATargetThatCameToSeveralWordsWritesToEachOfThem(t *testing.T) {
 	dir := t.TempDir()
 	sem := permissive()
 	sem.RedirectTargetIsAnOrdinaryWord = No
+	// The column this models matches a pattern written into the target
+	// and splits one, which is the reading the axis above used to imply
+	// and which is now asked separately (#3207).
+	sem.RedirectTargetTakesPathnameExpansion = Yes
 	sem.RedirectsUseEveryTarget = Yes
 	sem.ArrayScalarIsTheWholeArray = Yes
 	sem.ArrayNameWithoutSubscriptIsTheList = Yes
@@ -131,6 +139,10 @@ func TestAScalarHoldingASpaceIsStillOneName(t *testing.T) {
 func TestTheFanIsNotAskedAboutAnOrdinaryTarget(t *testing.T) {
 	sem := permissive()
 	sem.RedirectTargetIsAnOrdinaryWord = No
+	// The column this models matches a pattern written into the target
+	// and splits one, which is the reading the axis above used to imply
+	// and which is now asked separately (#3207).
+	sem.RedirectTargetTakesPathnameExpansion = Yes
 	sem.RedirectsUseEveryTarget = Unspecified
 	sem.ArrayScalarIsTheWholeArray = Yes
 	sem.ArrayNameWithoutSubscriptIsTheList = Yes

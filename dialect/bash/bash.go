@@ -1977,6 +1977,16 @@ func Semantics() interp.Semantics {
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.Yes
+	// The target is split and matched, which is the half of the reading
+	// above that POSIX forbids — and this is the shell that changes sides
+	// with the mode. `set -o posix` and the `sh` name both turn it off:
+	// `cat < only-*.txt` becomes `No such file or directory` with the match
+	// sitting there, `printf X > only-*.txt` creates a file called
+	// `only-*.txt`, and `e="a b"; > $e` writes a file called `a b` rather
+	// than being ambiguous. `> {c,d}` stays ambiguous in both modes, which
+	// is what keeps this axis apart from the one above. Measured in 5.3.20
+	// and 3.2.57, 2026-09-16 (#3207).
+	s.RedirectTargetTakesPathnameExpansion = interp.Yes
 
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.Yes

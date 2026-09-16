@@ -4,8 +4,12 @@
 package bash_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/internal/dialecttest"
 )
 
 // This shell's own answer is that a redirection which cannot be made is a
@@ -98,5 +102,57 @@ func TestPosixModeMakesUnsettingAReadonlyNameFatal(t *testing.T) {
 	out, st = answersRun(t, "set -o posix\nset +o posix\nexec 3>/nope/x\necho after\n")
 	if !strings.Contains(out, "after") || st != 0 {
 		t.Errorf("out %q status %d, want the redirection answer restored as well", out, st)
+	}
+}
+
+// And the mode moves what a redirection's target is expanded *into*.
+//
+// This shell's own answer field-splits the target and matches it as a
+// pattern, which is the half POSIX forbids; `set -o posix` turns it off and
+// `set +o posix` puts it back. Measured 2026-09-16 on bash 5.3.20 and 3.2.57
+// alike, in a directory holding exactly `only-one.txt` — and the same answers
+// come out of the binary invoked as `sh`, which is the door the driver opens
+// to the same mode (#3207).
+func TestPosixModeStopsMatchingARedirectionTarget(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "only-one.txt"), []byte("CONTENT\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runHere := func(src string) (string, int) {
+		t.Helper()
+		out, st, err := preset.Combined(t, dialecttest.Base{
+			Name: "sh", Dir: dir, Env: []string{"PATH=/usr/bin:/bin"},
+		}, src)
+		if err != nil {
+			return out + "unsupported: " + err.Error(), -1
+		}
+		return out, st
+	}
+
+	if out, st := runHere("cat < only-*.txt\n"); out != "CONTENT\n" || st != 0 {
+		t.Errorf("out %q status %d, want this shell's own answer, which matches the pattern", out, st)
+	}
+	out, st := runHere("set -o posix\ncat < only-*.txt\n")
+	if st == 0 || strings.Contains(out, "CONTENT") {
+		t.Errorf("out %q status %d, want posix mode to open the literal name and fail", out, st)
+	}
+	if !strings.Contains(out, "only-*.txt") {
+		t.Errorf("out %q, want the name as written in the complaint", out)
+	}
+	if out, st := runHere("set -o posix\nset +o posix\ncat < only-*.txt\n"); out != "CONTENT\n" || st != 0 {
+		t.Errorf("out %q status %d, want leaving the mode to restore the answer", out, st)
+	}
+	// Splitting moves with it, which is the row that says the mode takes the
+	// whole of POSIX's sentence rather than only the pattern half.
+	if out, st := runHere("set -o posix\ne=\"a b\"\nprintf 'X\\n' > $e\n"); out != "" || st != 0 {
+		t.Errorf("out %q status %d, want a file called `a b` written", out, st)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, "a b")); err != nil || string(got) != "X\n" {
+		t.Errorf("`a b` = %q (%v), want one file of that name", got, err)
+	}
+	// And the count is still the other axis's: braces make two words before
+	// either question is reached.
+	if out, _ := runHere("set -o posix\nprintf 'X\\n' > {c,d}\n"); !strings.Contains(out, "ambiguous redirect") {
+		t.Errorf("out %q, want a brace target still ambiguous in the mode", out)
 	}
 }

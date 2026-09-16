@@ -17128,6 +17128,53 @@ Doing bash's expansion and then quietly taking the first field is the
 answer no shell gives, and it is the one this had: `> $e` wrote to `a`,
 and `> $e` with a pattern truncated whichever file happened to match.
 
+**`RedirectTargetTakesPathnameExpansion`** — bash yes · dash no · ksh93
+no · zsh yes
+
+Field-splits a redirection's target and matches it as a pattern. The
+narrowest of the three questions about a target, and the only one POSIX
+writes down in so many words: the word after a redirection operator takes
+tilde, parameter, command and arithmetic expansion and quote removal, and
+in a non-interactive shell neither field splitting nor pathname
+expansion.
+
+Measured 2026-09-16 in a directory holding exactly `only-one.txt`:
+
+    cat < only-*.txt        printf X > only-*.txt
+    bash 5.3.20          reads the file, 0       truncates only-one.txt
+    bash 3.2.57          reads the file, 0       truncates only-one.txt
+    zsh 5.9.2            reads the file, 0       truncates only-one.txt
+    bash as `sh`         No such file, 1         creates `only-*.txt`
+    ksh93u+ 2012-08-01   cannot open, 1          creates `only-*.txt`
+    dash 0.5.12          cannot open, 2          creates `only-*.txt`
+    BusyBox ash 1.37.0   can't open, 1           creates `only-*.txt`
+
+bash changing sides with the mode is what makes it an axis rather than a
+property of the grammar, and the output column is what makes it worth
+more than a diagnostic: three of this shell's dialects were truncating a
+file the script never named. A pattern that matches *nothing* stays as
+written in every column, which is why `> out-*.txt` reads as agreement —
+and why the axis is asked only where the two views of the word differ.
+
+How many words the result may come to is `RedirectTargetIsAnOrdinaryWord`
+above and stays there, which is what keeps the two apart: bash turns this
+half off in POSIX mode and still calls `> {c,d}` ambiguous, brace
+expansion having made two words before either axis is reached.
+
+Both halves — splitting and matching — move together, because every
+column measured moves them together. In POSIX mode bash stops matching
+`only-*.txt` *and* stops splitting `e="a b"`, writing a file of that name
+where its own mode calls the same redirection ambiguous. The mode swaps
+the axis and restores the dialect's own answer on the way out, so bash
+invoked as `sh` and zsh invoked as `sh` both reach it through the door
+the driver already opens.
+
+No suite tier can hold this one. bash and zsh answer alike and ksh93 and
+dash answer alike, so `core/` cannot have it — the references disagree —
+and no per-dialect tier can either, since none of the four is alone in
+its answer. It is end-to-end Go rows instead, one per dialect, which is
+the shape #3179 established.
+
 
 ### `getopts`, `shift`, `times`, `type`, `ulimit` and `fc`
 

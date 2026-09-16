@@ -31,7 +31,7 @@ import "github.com/blairham/sh/syntax"
 // subscript is being read from. Both roads reach [Runner.commandSubst], so
 // caching there is what lets one run serve a reader that only ever asks for
 // the rendered text and a reader that asks for it with its quotes still on —
-// which is why equalising the two roads separately would have left two runs
+// which is why equalizing the two roads separately would have left two runs
 // rather than one.
 //
 // An arithmetic substitution written into the brackets is held the same way
@@ -60,7 +60,7 @@ type subscriptSubstHold struct {
 	// for this span. `${!d}` with `d='a[$(f)]'` reads its target through a
 	// node built from that text, and building it again for each of the four
 	// readers gave each of them brackets of its own — a fresh word, which
-	// no hold keyed on a word can recognise. See referenceNode.
+	// no hold keyed on a word can recognize. See referenceNode.
 	refText string
 	refNode *syntax.ParamExpr
 	// vals is the spans already run, keyed by position. A subscript holds a

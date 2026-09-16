@@ -5368,8 +5368,8 @@ first is unanimous across the table.** Every name is one of five kinds:
 | axis- or matcher-backed | 14 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and one of the four is taken at the *invocation* — see `singlecommand` below |
 | store-backed, read by the front end | 7 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All seven are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
-| switch-backed | 4 | `aliases`, `autocd`, `checkjobs` and `cprecedences`: each moves a capability the substrate holds under no option name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, a job still running really does hold the exit, and the arithmetic operators really do change the order they bind in |
-| **recorded** | 141 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| switch-backed | 5 | `aliases`, `autocd`, `banghist`, `checkjobs` and `cprecedences`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, and the arithmetic operators really do change the order they bind in |
+| **recorded** | 140 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -5505,7 +5505,15 @@ own option on. So the core keeps two switches, `interp.MatchFoldsCase` and
 `interp.RegexFoldsCase`, and each dialect wires the name it spells: this one
 reaches the second alone.
 
-So 141 of 185 are recorded, the count above is the one produced by counting
+`banghist` is the most recent to leave the recorded set (#3093), and it left
+for the reason the history knobs did: the option now gates something. It is
+the switch zsh's history expander reads, so `unsetopt banghist` at a prompt
+stops `!!` being rewritten rather than only being remembered. Its *reading*
+did not move — `[[ -o banghist ]]` is on in `zsh -c` where nothing expands,
+because zsh gates the expander on being interactive and leaves the option
+alone, and that was measured before the entry changed.
+
+So 140 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

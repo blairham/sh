@@ -241,7 +241,31 @@ var zshOptions = []zshOption{
 	// since #1527 — its `unset "options[name]"` measurement moves `equals`
 	// and `banghist` *off* to show that an unset is a move rather than a
 	// reset, which an option already off could not have demonstrated (#2542).
-	recorded("banghist", true),
+	{
+		// BANG_HIST, and since #3093 moving it moves something: it is the
+		// switch the expander reads. On by default,
+		// measured 2026-09-13 across all four surfaces it shows on — `[[ -o
+		// banghist ]]`, `[[ -o histexpand ]]`, the `unsetopt` listing and
+		// `${options[banghist]}` — and measured again 2026-09-15 through a
+		// pseudo-terminal, where `echo !!` at a fresh zsh prompt expands with
+		// nothing configured.
+		//
+		// The option and the expander are two states here, which is measured
+		// rather than a convenience: `[[ -o banghist ]]` in `zsh -c` reports
+		// **on** while that same shell expands nothing, because zsh gates the
+		// expander on being interactive and leaves the option where it is. So
+		// the reading stays the recorded one — on unless something moved it —
+		// and moving it also moves the switch the front end reads, so that
+		// `unsetopt banghist` at a prompt stops the expansion rather than
+		// only being remembered.
+		base: "banghist", def: true,
+		get: func(r *interp.Runner) bool { return !recordedDeviates(r, "banghist") },
+		set: func(r *interp.Runner, on bool) int {
+			setRecordedDeviation(r, "banghist", !on)
+			r.SetHistoryExpansion(on)
+			return 0
+		},
+	},
 	// BARE_GLOB_QUAL: whether a trailing `(…)` on a pattern is a glob
 	// qualifier list or part of the pattern. On by default and implemented
 	// rather than recorded since #1729 — see

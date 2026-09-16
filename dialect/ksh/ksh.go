@@ -532,6 +532,15 @@ func Semantics() interp.Semantics {
 	// control on there and the front end does not is measured, recorded in
 	// docs/spec/invocation.md, and a separate question.
 	s.InteractiveOptionLetters = "BE"
+	// ksh93 has a history expander and starts with it **off**, at a prompt as
+	// well as in a script — the one shell in the panel that does, and the
+	// reason the second half of this is an axis rather than a constant.
+	// Measured 2026-09-15 through a pseudo-terminal with a two-row prompt:
+	// `echo !!` at a fresh prompt prints the two characters, `set -H` is
+	// taken silently, and `echo !!` after it expands and echoes the expanded
+	// line. So the letter is not in InteractiveOptionLetters above either.
+	s.HistoryExpansion = interp.Yes
+	s.HistoryExpansionAtAPrompt = interp.No
 	// Login-ness written out, in both spellings. Measured 2026-09-05 with a
 	// scratch home directory: `ksh -l -c cmd` and `ksh --login -c cmd` each
 	// read `~/.profile`, which is the file the POSIX preset already names.
@@ -2736,7 +2745,12 @@ func Diagnostics() interp.Diagnostics {
 			// `-t` is not here: this shell really does stop after one
 			// command, and the letter is the only spelling it has for the
 			// option — see Semantics.SetHasTheTLetter.
-			"set": "bkrsGH",
+			// `H` left this list in #3093, when the expander behind it was
+			// built: ksh93's `-H` is `set -o histexpand`, measured — `set -o`
+			// there lists `histexpand off` and the letter moves that row —
+			// and a letter refused while the name is wired would refuse what
+			// the name grants.
+			"set": "bkrsG",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",
@@ -2886,6 +2900,13 @@ func Diagnostics() interp.Diagnostics {
 		// only` against `ro: is read only`.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
 		ReadonlyRefusalNamesBuiltin:   map[string]bool{"set": true},
+		// A failed history substitution names what was *typed* here, where
+		// bash names the modifier it rewrote the line into: measured
+		// 2026-09-15 through a pseudo-terminal, `^hello^goodbye^` against a
+		// line without `hello` is `ksh: ^hello^goodbye^: substitution
+		// failed`. The event-not-found wording is bash's and stays at the
+		// fallback.
+		HistorySubstitutionFailed: "%[2]s: substitution failed",
 		// And `typeset` names itself for a refused *removal* alone. Measured
 		// 2026-09-07: `typeset +r x` is `<script>[2]: typeset: x: is read
 		// only` where `typeset x=2` on the same name is `<script>: line 2:

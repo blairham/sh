@@ -2438,6 +2438,33 @@ type Diagnostics struct {
 	// refusal is ImmovableOptionLetters, which reads the letter pair.
 	SetImmovableOptionName string
 
+	// HistoryEventNotFound is what this shell says about a `!` reference the
+	// history list does not hold — the error a person meets when a `!string`
+	// has a typo in it, and the one that stops the line running.
+	//
+	// Two spellings are supplied because the panel does not agree on the
+	// shape, measured 2026-09-15 through a pseudo-terminal with a two-row
+	// prompt: `%[1]s` is the reference as written (`!nosuch`) and `%[2]s` is
+	// the same without the event character (`nosuch`). bash and ksh93 put the
+	// first at the front — `!nosuch: event not found` — and zsh puts the
+	// second at the *end* — `event not found: nosuch`. A single argument
+	// would have made one of the two a different sentence rather than a
+	// different format.
+	HistoryEventNotFound string
+
+	// HistorySubstitutionFailed is a `^old^new^` or `:s/old/new/` whose left
+	// side is not in the event it was applied to. Measured the same day:
+	// `bash: :s^hello^goodbye^: substitution failed`, `zsh: substitution
+	// failed`, `ksh: ^hello^goodbye^: substitution failed` — so one column
+	// names nothing at all and the wording has to be able to ignore what it
+	// is given.
+	HistorySubstitutionFailed string
+
+	// HistoryBadModifier is a `:` in a history reference followed by
+	// something that is not a modifier — `bash: |: unrecognized history
+	// modifier`.
+	HistoryBadModifier string
+
 	// ImmovableOptionLetters are, per builtin, the option letters this shell
 	// *has* and will not move — the letter half of SetImmovableOptionName,
 	// and a third answer beside "does not have it" and "has not built it".

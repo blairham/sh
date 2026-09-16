@@ -358,3 +358,141 @@ comment-aware tokenizer was chosen. That was the symptom #2536 was filed for,
 and fixing the *option* that chooses that tokenizer (#2516, #2530) uncovered
 this rather than completing it — the two faults had one appearance and no
 connection.
+
+## History expansion: `!!`, `!$`, `!foo` and `^old^new^`
+
+The oldest feature in any interactive shell, and the one this tree had none
+of at all until #3093 — `set -H` was `set: -H is not implemented yet`, and
+`!!` reached the parser as two literal characters, so a shell used at a prompt
+answered a different command from the one its user typed.
+
+Measured on 2026-09-15, macOS 26 on arm64, through a pseudo-terminal with a
+**two-row prompt** (`internal/cmd/histprobe`) and again from a script under
+`set -o history; set -H`. A two-row prompt rather than a one-line `PS1`
+deliberately: components can each match the shell they imitate while the
+composition of them does not.
+
+By hand rather than through `internal/cmd/oracle`, and for a reason stronger
+than the one above: the harness runs each case as a **command string**, where
+every shell in the panel has the expander off. A row there would have
+measured the same "nothing happened" in all six columns and looked like
+agreement.
+
+### The panel
+
+| shell | at a prompt | in a script | the switch | `set -H` |
+| --- | --- | --- | --- | --- |
+| bash 5.3.20 | **on** | off | `set -o histexpand`, `set -o history` | history expansion |
+| bash 3.2.57 (`/bin/bash`) | **on** | off | same | same |
+| bash as `sh` | **on** | off | same | same |
+| zsh 5.9.2 | **on** | off | `setopt banghist` (`set -o histexpand`) | **`rmstarsilent`** — a different option |
+| ksh93u+ 2012-08-01 | **off** | off | `set -o histexpand` | history expansion |
+| dash | none | none | none | `Illegal option -H` |
+| BusyBox ash | none | none | none | the same shell's answer |
+
+Three rows in that table are traps for an implementation that assumed one
+behavior:
+
+- **zsh's `set -H` is not this feature.** Diffing `setopt` across it shows the
+  one name that moves is `rmstarsilent`. zsh reaches the expander through
+  `setopt banghist` and the borrowed `set -o histexpand` alone.
+- **ksh93 starts with it off, at a prompt as well as in a script.** It is the
+  one shell in the panel that does, which is why
+  `Semantics.HistoryExpansionAtAPrompt` is an axis and not a constant.
+- **zsh's option and zsh's expander are two states.** `[[ -o banghist ]]`
+  reports **on** in `zsh -c`, where nothing expands: zsh gates the expander on
+  being interactive and leaves the option where it is.
+
+### What bash was measured doing
+
+A script holding `set -o history`, `set -H`, `echo one two three`, and then
+the line in the first column. The second column is what bash echoed to
+**standard error** — the expanded line, written before it runs. A row with no
+echo is one bash says the expansion did not change.
+
+| typed | expanded |
+| --- | --- |
+| `echo !!` | `echo echo one two three` |
+| `echo !1`, `echo !-1`, `echo !e`, `echo !?two?` | `echo echo one two three` |
+| `echo !$` | `echo three` |
+| `echo !^`, `echo !:1` | `echo one` |
+| `echo !*` | `echo one two three` |
+| `echo !:0` | `echo echo` |
+| `echo !:2-3` | `echo two three` |
+| `^one^ONE^` | `echo ONE two three` |
+| `echo !!:s/one/1/` | `echo echo 1 two three` |
+| `echo "!!"` | `echo "echo one two three"` |
+| `echo '!!'` | *(nothing — single quotes protect)* |
+| `echo a\!b` | *(nothing — the backslash protects, and stays)* |
+
+Against `echo /a/b/c.txt other`, the modifiers that take a path apart:
+`!:1:h` is `/a/b`, `!:1:t` is `c.txt`, `!:1:r` is `/a/b/c`, `!:1:e` is
+`.txt`. `:p` prints the expansion, remembers it, and runs nothing.
+
+### The echo, the history, and the status
+
+Three facts an implementation gets wrong by leaving them out:
+
+- **The echo goes to standard error**, not standard output. Redirecting a
+  command's output does not hide what the shell is about to run.
+- **What goes into the history is the expanded text.** `echo AAA` then `!!`
+  twice leaves `echo AAA`, `echo echo AAA`, `echo echo echo AAA` in the list,
+  so each reference resolves against what the one before it produced.
+- **A failed expansion leaves `$?` alone.** The line does not run and the
+  status stays where the command before it put it — measured, `echo a`,
+  `echo !nosuch`, `echo "rc=$?"` prints `rc=0`.
+
+The three complaints are worded three ways, which is why they are
+`Diagnostics` fields and not constants:
+
+| | event not found | substitution failed |
+| --- | --- | --- |
+| bash | `bash: !nosuch: event not found` | `bash: :s^nope^x^: substitution failed` |
+| ksh93 | `ksh: !nosuch: event not found` | `ksh: ^nope^x^: substitution failed` |
+| zsh | `zsh: event not found: nosuch` | `zsh: substitution failed` |
+
+bash names the *modifier it rewrote the line into* and ksh93 names what was
+typed; zsh puts the reference last, without the character that introduced it,
+and names nothing at all for a substitution.
+
+### When a `!` is not an expansion
+
+Measured one character at a time on bash 5.3.20, by asking
+`printf '%s\n' "T<c>|!<c>|"` after a seeded history. A `!` is ordinary text
+when:
+
+- it is the last character of the line, or what follows it is one of
+  `` \t\n\r=|&;()<>"' `` (a space included) — so `echo end!`, `echo hi ! there`,
+  `[[ ! -e x ]]`, `! false` and `$((3 != 4))` are all safe;
+- it stands **immediately** after `[`, so `[!a-z]` is still a glob. Only
+  immediately: `[a!s]` *is* an event reference, and bash reads it as one;
+- it stands directly after `${`, so `${!v}` is still an indirect expansion.
+  The two characters together, not the brace — `$ {!s}` is an event reference.
+
+Everything else after a `!` starts one, `,` `.` `/` `@` `+` `~` `` ` `` `[` `]`
+`{` `}` and `\` included.
+
+Quoting is the scanner's question and not the parser's, which is why the
+engine here is a pass over a string rather than a stage of lexing: text inside
+single quotes is never expanded, text inside double quotes is, and a `'` inside
+double quotes opens nothing — `echo "it's !!"` expands where `echo '!!'` does
+not. Nothing that had already tokenized the line could tell those apart from a
+parameter expansion's rules.
+
+### What is implemented, and what is not
+
+Implemented: every event designator (`!!`, `!n`, `!-n`, `!string`,
+`!?string?`, `!#`, `!{…}`), every word designator (`^`, `$`, `*`, `%`, `n`,
+`x-y`, `x-`, `x*`), the modifiers `h t r e p q x s/// & g a`, quick
+substitution, the quoting rules above, and `histchars`.
+
+**Not implemented: the script route.** bash expands in a script too, once
+`set -o history; set -H` has been written, because it expands each physical
+line as it reads it. This shell parses a script's text as a whole, so there is
+no per-line read to hook — the expander runs at the prompt only. The option is
+still honest there: `set -H` in a script is taken and moves the state, and the
+state is what `set -o` reports.
+
+Also not implemented: `shopt histverify`, which puts the expansion back on the
+editing line instead of running it, and the `history` builtin's interaction
+with the list the designators index.

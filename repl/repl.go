@@ -581,6 +581,23 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		case err != nil:
 			return s.status(), err
 		}
+		// History expansion, before anything has looked at the line: `!!`
+		// is the previous command, `!$` its last word, `^old^new^` the
+		// previous command with one word changed. Per physical line and not
+		// per accepted construct, which is where bash does it — a `!!` on
+		// the second line of a `for` loop is expanded when that line is read
+		// — and before the parser, because the expansion decides what the
+		// parser is given (#3093).
+		if expanded, ok := s.expanded(line, ed.history, ed.remember); !ok {
+			// A reference nothing matched, or a `:p` that asked to see the
+			// expansion and run nothing. Either way the construct in hand is
+			// abandoned the way ^C abandons it: measured, bash draws a fresh
+			// prompt rather than a continuation one.
+			pending.Reset()
+			continue
+		} else {
+			line = expanded
+		}
 		// Counted here rather than per line read. A construct typed over
 		// four lines is one entry in the history and one command, which is
 		// what bash draws: `: x`, a for loop, `: y` numbered 1, 2, 3 and not

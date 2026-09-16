@@ -776,6 +776,18 @@ func Semantics() interp.Semantics {
 	// plus the line-editor letter. Measured 2026-09-05 under `-i script.sh`
 	// and at a pseudo-terminal alike; `i` comes from the runner.
 	s.InteractiveOptionLetters = "569XZ"
+	// zsh has a history expander and starts a prompt with it on — measured
+	// 2026-09-15 through a pseudo-terminal with a two-row prompt, where
+	// `echo one two three` then `echo !!` echoes the expanded line and runs
+	// it, with nothing configured.
+	//
+	// The letter is not `H` here and must not be: zsh's `set -H` is
+	// `rmstarsilent`, measured by diffing `setopt` across it, and this
+	// dialect's own letter table answers that before the core's `-H` is
+	// reached. The spellings that reach the expander are `setopt banghist`
+	// and the borrowed `set -o histexpand`.
+	s.HistoryExpansion = interp.Yes
+	s.HistoryExpansionAtAPrompt = interp.Yes
 	// The startup files, and zsh has more of them than the rest of the panel
 	// put together. Measured 2026-09-05 through a pseudo-terminal with a
 	// scratch home directory: `zsh -l -i` reads `.zshenv`, `.zprofile`,
@@ -3101,6 +3113,12 @@ func Diagnostics() interp.Diagnostics {
 		// implemented yet`, which is this implementation confessing to
 		// something the shell itself refuses (#1716).
 		ImmovableOptionLetters: map[string]string{"set": "t"},
+		// History expansion's three complaints, and zsh words all three
+		// unlike anybody else — measured 2026-09-15 through a
+		// pseudo-terminal. The reference goes at the *end* and loses the `!`
+		// that introduced it, and a failed substitution names nothing at all.
+		HistoryEventNotFound:      "event not found: %[2]s",
+		HistorySubstitutionFailed: "substitution failed",
 		UnimplementedOptionLetters: map[string]string{
 			// **`set` has left this table entirely**, and the emptiness is
 			// the measurement. zsh gives a single letter to far more of its

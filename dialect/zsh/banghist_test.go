@@ -64,9 +64,13 @@ func TestBangHistIsListedTheWayZshListsIt(t *testing.T) {
 
 // Turning it off still works, and puts every surface back together.
 //
-// The option is recorded rather than acted on — nothing reads it to decide
-// whether to expand a `!` — so what has to hold is that the four views agree
-// with each other however it is moved, not that anything behaves differently.
+// Since #3093 the option gates something — it is the switch zsh's history
+// expander reads, so `unsetopt banghist` at a prompt really does stop `!!`
+// being rewritten. What this row holds is the other half, and the half that
+// did not move: the four views agree with each other however it is moved, and
+// the *reading* stays what it was. `[[ -o banghist ]]` is on in a shell with
+// no prompt, where nothing expands, because zsh gates the expander on being
+// interactive and leaves the option alone.
 func TestBangHistCanStillBeTurnedOff(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		"unsetopt banghist\n"+

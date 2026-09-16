@@ -11896,6 +11896,42 @@ type Semantics struct {
 	// `opt/set-t-stops-after-one-command`.
 	SetHasTheTLetter Answer
 
+	// HistoryExpansion gives the shell a history expander at all: `!!` for the
+	// previous command, `!$` for its last word, `^old^new^` for the previous
+	// command with one word changed, and the `set -H` that switches it.
+	//
+	// Measured 2026-09-15 through a pseudo-terminal with a two-row prompt and
+	// again from a script under `set -o history; set -H`: bash 5.3.20, bash
+	// 3.2.57, bash-as-sh, zsh 5.9.2 and ksh93u+ 2012-08-01 all have one and
+	// dash has none — `set -H` there is `Illegal option -H`, and BusyBox ash
+	// is the same shell's answer.
+	//
+	// Whether a *prompt* starts with it on is the separate question below;
+	// this one is whether the feature exists to be turned on.
+	//
+	// Not in the golden record, and it cannot be: the harness runs each case
+	// as a command string, where every shell in the panel has the expander
+	// off, so a row there would measure the same "no" in all six columns. The
+	// measurement behind this is a pty transcript — see
+	// internal/cmd/histprobe, which is what produced it.
+	HistoryExpansion Answer
+
+	// HistoryExpansionAtAPrompt starts an interactive session with it on.
+	//
+	// The half of the feature that splits the shells that have it, measured
+	// the same day and the reason this is an axis rather than a constant:
+	// bash and zsh expand `!!` at a fresh prompt with nothing configured, and
+	// ksh93 does not — there, `echo !!` prints two characters until `set -H`
+	// is typed. A script starts with it off in all three, which is why this
+	// names the prompt and not the shell.
+	//
+	// It says nothing about whether the shell *has* the feature: a dialect
+	// answering No here still expands after `set -H`, and a dialect answering
+	// No to HistoryExpansion above never reaches this. Measured through a pty
+	// for the reason the axis above gives — a command string cannot ask this
+	// question of any shell in the panel.
+	HistoryExpansionAtAPrompt Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -14923,6 +14959,12 @@ func PosixSemantics() Semantics {
 		// override. dash — the closest reading of the standard here — is the
 		// one that refuses it outright, which is the same answer.
 		SetHasTheTLetter: No,
+		// The standard has no history expansion — it is a csh feature four
+		// of the panel grew and one did not — so the preset claims neither
+		// half and every shell that has one overrides. dash is the column
+		// that agrees with the preset, and it agrees by refusing the letter.
+		HistoryExpansion:          No,
+		HistoryExpansionAtAPrompt: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
 		// dash is the one shell that refuses the letter, and overrides.

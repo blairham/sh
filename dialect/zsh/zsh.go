@@ -2058,6 +2058,18 @@ func Semantics() interp.Semantics {
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// OPTIND names the word until its last letter has been read.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.No
+	// The other end of that question: the word is not counted when its last
+	// letter is read either. OPTIND stays on it and the *next* call moves
+	// the count, so the parameter lags a word behind the scan all the way
+	// along and catches up only where the options run out. An option that
+	// took an argument is the exception and counts as it does everywhere
+	// else (#3275).
+	s.GetoptsCountsTheWordOnTheNextCall = interp.Yes
+	// And the run that reports "no more options" leaves the name holding
+	// whatever it held, where the other six write `?`. After a scan that
+	// read something that is the last letter still standing, which is how it
+	// reads as a written value and is not one.
+	s.GetoptsEndOfOptionsNamesIt = interp.No
 	// OPTIND is local to a shell function here: the call starts at 1 and the
 	// caller's position — words and the place inside a clustered word alike —
 	// comes back on return. It is what lets this shell's own function

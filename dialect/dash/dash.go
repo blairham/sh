@@ -680,6 +680,10 @@ func Semantics() interp.Semantics {
 	// kept somewhere a script cannot see. bash, ksh93 and zsh all leave
 	// OPTIND naming the word until its last letter has been read.
 	s.GetoptsCountsTheWordAtItsFirstLetter = interp.Yes
+	// Counting a word early is the opposite end of the same question from
+	// counting it late, and this shell is at the early end (#3275).
+	s.GetoptsCountsTheWordOnTheNextCall = interp.No
+	s.GetoptsEndOfOptionsNamesIt = interp.Yes
 	// A shell function call gets a `getopts` scan of its own here, while
 	// OPTIND itself stays the shell's: a helper called twice reads its
 	// arguments twice, and `$OPTIND` inside the call is still the caller's

@@ -164,6 +164,14 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 			return r.getoptsSetName(name, string(c), 0)
 		}
 		if ind >= len(words) {
+			// The argument is missing, so nothing was consumed and this is
+			// the same question advance asks: the word is spent and the
+			// count stays where it was in the one column that lags.
+			if r.ask(r.sem().GetoptsCountsTheWordOnTheNextCall,
+				"OPTIND staying on a spent word until the next `getopts` call") {
+				r.optChar = len(word)
+				return r.getoptsBad(name, string(c), silent, true, func() bool { return r.setOptind(ind) })
+			}
 			r.optChar = 1
 			return r.getoptsBad(name, string(c), silent, true, func() bool { return r.setOptind(ind + 1) })
 		}
@@ -289,8 +297,22 @@ func (r *Runner) getoptsRefusalEndsTheBuiltin() bool {
 
 // advance moves past the character just read, staying inside the word while
 // there is more of the cluster to come.
+//
+// The letter that got here consumed no argument, which is what makes this the
+// one place both counting axes are asked: an option that took an argument
+// leaves OPTIND at the first word neither it nor its argument occupies in
+// every column.
 func (r *Runner) advance(word string, ind int) bool {
 	if r.optChar+1 >= len(word) {
+		if r.ask(r.sem().GetoptsCountsTheWordOnTheNextCall,
+			"OPTIND staying on a spent word until the next `getopts` call") {
+			// zsh has not counted the word at all. Leaving optChar past the
+			// end is what says it is spent, and the next call walks on to
+			// the following word by the check it already makes at the top —
+			// which is this shell's own model, not a simulation of it.
+			r.optChar++
+			return r.setOptind(ind)
+		}
 		r.optChar = 1
 		return r.setOptind(ind + 1)
 	}
@@ -317,6 +339,12 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 	}
 	if !r.setOptind(ind) && r.getoptsRefusalEndsTheBuiltin() {
 		return getoptsRefusedStatus
+	}
+	if !r.ask(r.sem().GetoptsEndOfOptionsNamesIt,
+		"`getopts` writing `?` into the name when it runs out of options") {
+		// One column leaves the name holding whatever it held, which reads
+		// as the last letter again to anyone whose probe scanned first.
+		return 1
 	}
 	if r.getoptsWrite(name, "?") {
 		return 1

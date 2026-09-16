@@ -4903,14 +4903,19 @@ type Dialect struct {
 	// MultiDigitFdNumber lets a redirection's descriptor number have more
 	// than one digit: `exec 10>file` opens the file on ten.
 	//
-	// bash alone reads it that way. To dash, ksh93 and zsh the digits are an
-	// ordinary word and the operator is a redirection of its own, so
-	// `exec 10>f` is `exec 10 >f` and reports that no command called `10` was
-	// found — measured on all five panel members, and the same answer for
-	// every width from two digits up. Those three still hold descriptors
-	// above nine perfectly well; they simply have no way to *write* one, and
-	// `exec {v}>f` is what puts them there — the shell picks 10 or 11 and the
-	// variable says which.
+	// bash and BusyBox ash read it that way. To dash, ksh93 and zsh the
+	// digits are an ordinary word and the operator is a redirection of its
+	// own, so `exec 10>f` is `exec 10 >f` and reports that no command called
+	// `10` was found — the same answer for every width from two digits up.
+	// Those three still hold descriptors above nine perfectly well; they
+	// simply have no way to *write* one, and `exec {v}>f` is what puts them
+	// there — the shell picks 10 or 11 and the variable says which.
+	//
+	// The ash column was measured late and reads the other way from what
+	// this comment used to claim: 2026-09-16, BusyBox v1.37.0, `exec
+	// 10>f10; echo hi >&10` leaves three bytes in `f10`, while a bare `10`
+	// is still a command that is not found. The flag is not set for that
+	// dialect yet — #3238.
 	//
 	// It is the lexer's because the token is: digits immediately before `<`
 	// or `>` are either a number or the tail of a word, and nothing later can

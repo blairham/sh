@@ -756,6 +756,17 @@ func Semantics() interp.Semantics {
 	// `set -e; echo "end[$(false; echo no)]"` is `end[]` here, and `$-`
 	// inside the body still carries `e`.
 	s.ErrExitEntersACommandSubstitution = interp.Yes
+	// And the shared-state spelling is a boundary for a *stop* even though
+	// it is not a subshell. Measured 2026-09-16 from a script file: `x=${
+	// echo pre; exit 7; }` is `[pre]` at status 7 with the next line of the
+	// script still run here, where bash 5.3.20 — the only other column with
+	// the construct — ends the shell at 7. It holds for an error the shell
+	// reported too (`q: is read only`, `shift: 99: bad number`, `nope:
+	// parameter not set`), and however deep the raise is: a function called
+	// from the body that runs `exit 4` leaves the substitution at 4 and no
+	// more. Only `break` and `continue` still leave, which they do in bash
+	// as well.
+	s.CurrentShellSubstitutionBoundsAnUnwind = interp.Yes
 	// The listing runs the other way here: descending by signal number,
 	// which puts EXIT last where the other six put it first.
 	s.TrapListingOrder = interp.TrapListingHighestFirst

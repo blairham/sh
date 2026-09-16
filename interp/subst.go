@@ -230,6 +230,20 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syntax.Span) string {
 	var out bytes.Buffer
 	savedOut, savedBase := r.Stdout, r.lineBase
+	// The body is a command list of its own, and the fields that say what
+	// *this* command's assignments did are the running command's rather than
+	// the shell's. Saved across the body for that reason: an assignment
+	// inside one clears Runner.substRan on its way in — see the assignment
+	// branch of Runner.cmd — so
+	//
+	//	readonly q=1; a=${ q=2; }; echo $?
+	//
+	// reported 0 here against ksh93's 1, the assignment with no command name
+	// having been told by its own body that no substitution had run in it.
+	// Invisible until the stop above was contained, because the shell used
+	// to leave before anything read the status.
+	saved := r.assignBookkeeping()
+	defer func() { saved() }()
 	putBackReply := func() {}
 	if span.ReplyValue {
 		putBackReply = r.localizeReply()
@@ -249,13 +263,15 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 			return ""
 		}
 		if r.ctl != controlNone {
-			// `exit` or a `break` inside the body stops it, and carries on
-			// stopping whatever it was written in — this is the current
-			// shell, so there is no boundary here to absorb it.
+			// `exit`, a `return` or a `break` inside the body stops it.
+			// What that does to the shell the body was written in is
+			// boundCurrentShellBody's, below, and it is not one answer for
+			// all three.
 			break
 		}
 	}
 	r.Stdout, r.lineBase = savedOut, savedBase
+	r.boundCurrentShellBody()
 	if span.ReplyValue {
 		// Read before the name is put back, and taken whole: this is a
 		// parameter's value rather than captured output, so the trailing
@@ -266,6 +282,75 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 		return v
 	}
 	return strings.TrimRight(out.String(), "\n")
+}
+
+// assignBookkeeping saves the fields an assignment with no command name reads
+// to decide its status, and hands back what puts them all back.
+//
+// One function rather than five locals at the call site: they are read
+// together in one `else if` chain and a restore that dropped one of them would
+// be a status bug nothing else in the package could catch. Runner.unspecified
+// is deliberately not among them — an axis no dialect answered is the shell's
+// news and not the command's, and it has to reach the caller.
+func (r *Runner) assignBookkeeping() func() {
+	substRan, assignFailed, expandErr := r.substRan, r.assignFailed, r.expandErr
+	disciplineSet, disciplineStatus := r.disciplineStatusSet, r.disciplineStatus
+	return func() {
+		r.substRan, r.assignFailed, r.expandErr = substRan, assignFailed, expandErr
+		r.disciplineStatusSet, r.disciplineStatus = disciplineSet, disciplineStatus
+	}
+}
+
+// boundCurrentShellBody says what a `${ … ;}` body's unwinding costs the
+// shell that held it.
+//
+// Three kinds of control reach here and they do not answer alike, which is
+// why this is a switch and not the single `break` it replaced.
+//
+// **A loop control goes out.** `for i in 1 2 3; do echo "top $i"; x=${ break;
+// }; echo "bottom $i"; done` prints `top 1` and stops, in ksh93 93u+ and bash
+// 5.3.20 both — the `break` leaves the substitution, leaves the assignment it
+// was the value of, and breaks the loop. `continue` the same. Unanimous, so
+// nothing is asked and nothing changes.
+//
+// **A `return` is contained**, and so is a statement given up over an error a
+// dialect does not call fatal. Both are ones this engine had wrong in every
+// dialect. For the give-up, measured 2026-09-16 on bash 5.3.20 — the only
+// column that has both the construct and a survivable readonly reassignment:
+//
+//	readonly q=1
+//	a=${ q=2; }; echo "funsub after=$?"
+//
+// reports the refusal and then `funsub after=1` there, where here the
+// give-up left the substitution and took the rest of the line with it. For
+// the `return`, measured the same day,
+//
+//	f() { r=${ return 3; }; echo "after-funsub $?"; echo still-in-f; }
+//	f; echo "after f $?"
+//
+// prints `after-funsub 3`, `still-in-f` and `after f 0` in ksh93 and bash
+// alike, and here the function returned 3 on the spot. Both columns that have
+// the construct agree, so this is a fix rather than an axis — the value of
+// the substitution is what the body printed before the `return` and its
+// status is the `return`'s.
+//
+// **A stop is the dialect's**, and the one the two columns split on. See
+// Semantics.CurrentShellSubstitutionBoundsAnUnwind: bash ends the shell,
+// ksh93 ends the substitution and carries on with the script. It covers an
+// error the shell reported as well as a requested `exit`, because ksh93's
+// containment does — takeFileError is what clears both, and clearing the kind
+// with the control is what keeps a later `exit` from being read as an error
+// by the next boundary up.
+func (r *Runner) boundCurrentShellBody() {
+	switch r.ctl {
+	case controlReturn, controlAbandon:
+		r.ctl = controlNone
+	case controlExit:
+		if r.ask(r.sem().CurrentShellSubstitutionBoundsAnUnwind,
+			"a stop raised inside `${ … ;}` ending the substitution rather than the shell") {
+			r.takeFileError()
+		}
+	}
 }
 
 // localizeReply hides `$REPLY` for the duration of a `${| … ;}` body and hands

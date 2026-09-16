@@ -9045,6 +9045,41 @@ type Semantics struct {
 	// mode, no option name, and answers with bash anyway.
 	ErrExitEntersACommandSubstitution Answer
 
+	// CurrentShellSubstitutionBoundsAnUnwind says whether a `${ … ;}` body is
+	// a boundary for a `controlExit` — an `exit` builtin, or an error the
+	// shell reported and gave up over — the way a forked `$(…)` body is.
+	//
+	// The two spellings differ in exactly one thing everywhere else: whether
+	// what the body does outlives it. `${ x=1;}` leaves x set and `$(x=1)`
+	// does not, and every other difference between them follows from that one.
+	// So the natural reading is that the shared-state form is *not* a
+	// boundary — it is this shell, there is nothing to unwind to — and that is
+	// what bash 5.3.20 does:
+	//
+	//	x=${ echo pre; exit 7; }; echo "[$x] $?"; echo alive
+	//	  bash 5.3.20   (nothing)            the shell ended at 7
+	//	  ksh93 93u+    [pre] 7 / alive      the substitution ended at 7
+	//
+	// ksh93 makes it a boundary anyway, and not only for a requested stop.
+	// Measured 2026-09-16 with each body's line reached from a script file,
+	// every one of these ends the substitution at status 1 and lets the next
+	// line of the script run there, where bash ends the shell for the third:
+	//
+	//	readonly q=1; x=${ q=2; echo after; }     q: is read only
+	//	z=${ shift 99; echo after; }              shift: 99: bad number
+	//	v=${ set -u; echo "${nope}"; }            nope: parameter not set
+	//
+	// and the containment holds however deep the raise is: `g() { exit 4; };
+	// u=${ g; }` is status 4 with the shell alive there. Only the two loop
+	// controls are unanimous the other way — a `break` in a body does break
+	// the loop the substitution was written in, in ksh93 and bash alike — so
+	// this is about controlExit and nothing else.
+	//
+	// zsh 5.9.2 and dash have no such spelling to ask, which is why this is a
+	// two-column axis: `${ ` is `bad substitution` in zsh and a parse error in
+	// dash. See Runner.currentShellSubst, and `ksh/cmdsub.tests`.
+	CurrentShellSubstitutionBoundsAnUnwind Answer
+
 	// TrapListingOrder is the order a bare `trap` listing prints its
 	// conditions in. See TrapListingSequence.
 	TrapListingOrder TrapListingSequence
@@ -14969,7 +15004,14 @@ func PosixSemantics() Semantics {
 		// exists to assert here: bash calls the standard's reading
 		// `inherit_errexit` and turns it on with `set -o posix`.
 		ErrExitEntersACommandSubstitution: Yes,
-		GreatAmpTarget:                    GreatAmpTargetIsADescriptor,
+		// The standard has no `${ … ;}` at all, so there is no text to
+		// follow and the preset takes the reading that the spelling's own
+		// definition gives: the body runs in *this* shell, so a stop raised
+		// in it is this shell's stop. That is bash 5.3.20's answer and the
+		// only other column that has the construct; ksh93 says otherwise
+		// and says so itself.
+		CurrentShellSubstitutionBoundsAnUnwind: No,
+		GreatAmpTarget:                         GreatAmpTargetIsADescriptor,
 		// XCU's `[n]<&word` and `[n]>&word` take a number or `-`, and the
 		// standard has no third reading: there is no move operator in it, so
 		// `5-` is a word naming no descriptor and is refused as one. The core

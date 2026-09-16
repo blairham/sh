@@ -252,6 +252,14 @@ func Semantics() interp.Semantics {
 	// `$-` under `-c` is `c`, and `set -e -u` makes it `uce` — so the letter
 	// is shown, where dash shows nothing at all on that route.
 
+	// The one column that does not read the sign: `+i` asks for a prompt
+	// here exactly as `-i` does. Measured 2026-09-16 on BusyBox ash 1.37.0 in
+	// the pinned Alpine image, the program on a pipe — `ash +i -c 'echo $-'`,
+	// `ash -i +i -c` and `ash +i -i -c` each write `can't access tty; job
+	// control turned off` and report `ci`, byte for byte with `ash -i -c`,
+	// while a shell started with neither letter reports `c` and says nothing.
+	// So the letter is a request that only ever arrives (#3221).
+	s.PlusSignedInteractiveLetterStillPrompts = interp.Yes
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No

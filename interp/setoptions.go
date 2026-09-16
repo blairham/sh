@@ -1177,6 +1177,19 @@ func (r *Runner) lookupSetOption(name string) (setOption, bool) {
 		}
 		return negatedOption(o), true
 	}
+	if base, ok := r.negativeInteractiveSpelling(name); ok {
+		// The `no`-prefixed spelling of this shell's own name for being
+		// interactive, which is the same state read and written upside
+		// down. Resolved here rather than declared as a row, because the
+		// shell does not *list* it: measured 2026-09-16, ksh93u+ 2012-08-01
+		// takes `ksh -o nointeractive` and `ksh +o nointeractive` at an
+		// invocation and its `set -o` listing names only `interactive`.
+		o, known := r.lookupSetOption(base)
+		if !known {
+			return setOption{}, false
+		}
+		return negatedOption(o), true
+	}
 	o, ok := commonSetOptions[name]
 	if !ok {
 		if !r.extraOptions[name] {
@@ -1188,6 +1201,47 @@ func (r *Runner) lookupSetOption(name string) (setOption, bool) {
 		o = extraSetOptions[name]
 	}
 	return o, true
+}
+
+// negativeInteractiveSpelling reports the name a dialect's
+// Semantics.NonInteractiveOptionName stands for, which is always its
+// Semantics.InteractiveOptionName read upside down.
+//
+// The pair is declared for the front end — an invocation says whether the
+// shell prompts by either spelling, and which words mean it is the dialect's
+// to say (#3195). This is the other half of the same declaration: a shell
+// that grants `+o nointeractive` on its command line has to *move* something
+// when it does, and the state is the one `interactive` already names.
+//
+// Only reached by a dialect whose option namespace is the substrate's own
+// table. The one shell with a namespace of its own installs a mover
+// (Runner.SetOptionTable) and answers both spellings there, so this asks a
+// question that namespace has already answered.
+func (r *Runner) negativeInteractiveSpelling(name string) (string, bool) {
+	s := r.sem()
+	if s.NonInteractiveOptionName == "" || s.InteractiveOptionName == "" {
+		return "", false
+	}
+	if name != s.NonInteractiveOptionName {
+		return "", false
+	}
+	return s.InteractiveOptionName, true
+}
+
+// immovableName reports whether `set` will refuse this name outright, in
+// either direction — [Runner.AddImmovableSetOptions] and, with it, the
+// negative spelling of an immovable name for being interactive.
+//
+// The two spellings are one fact and are refused together, which is measured
+// rather than inferred: ksh93u+ 2012-08-01 answers `set: interactive: bad
+// option(s)` and `set: nointeractive: bad option(s)` in a script, word for
+// word, and takes both on its own command line.
+func (r *Runner) immovableName(name string) bool {
+	if r.immovableOptions[name] {
+		return true
+	}
+	base, ok := r.negativeInteractiveSpelling(name)
+	return ok && r.immovableOptions[base]
 }
 
 // negatedOption is one option read and written upside down, which is the whole

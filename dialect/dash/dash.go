@@ -235,6 +235,12 @@ func Semantics() interp.Semantics {
 	// measured 2026-09-11, `dash --version` is `Illegal option --` at status
 	// 2, the same refusal every long option but `--login`'s absence gets.
 	// This shell is the panel's only one that will not name its version.
+	// `+i` takes the prompt back, and it is the only spelling that does —
+	// there is no negative option name here. Measured 2026-09-16 with the
+	// program on a pipe: `dash -i +i -c 'echo $-'` writes an empty `$-` and
+	// nothing about a terminal, where `dash -i -c` writes `can't access tty;
+	// job control turned off` first.
+	s.PlusSignedInteractiveLetterStillPrompts = interp.No
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No

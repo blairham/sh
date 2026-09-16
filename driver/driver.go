@@ -1219,6 +1219,24 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			inv.plusC = !on
 		case ch == 'i' && on:
 			inv.interactive, inv.interactiveWritten = true, true
+		case ch == 'i' && sh.Semantics.PlusSignedInteractiveLetterStillPrompts != interp.Unspecified:
+			// The plus spelling, which was the half missing from the letter
+			// above: this front end read only the minus and let `+i` fall
+			// through to the runner as a `set` letter, where ksh93 answered
+			// `+i: unknown option`, bash printed its whole usage, dash said
+			// `+i is not implemented yet` and zsh gave the letter away to
+			// another option — four dialects refusing or mistaking a letter
+			// every shell in the panel takes (#3221).
+			//
+			// Which way it is taken is the dialect's, because one column
+			// does not read the sign — see
+			// Semantics.PlusSignedInteractiveLetterStillPrompts. Written as
+			// the same pair the minus writes for the same reason the `-o`
+			// name is: the letter and the name are one last-wins sequence,
+			// so `-i +i` is not interactive where the sign is read, and
+			// `+i -i` is interactive everywhere.
+			inv.interactive, inv.interactiveWritten =
+				sh.Semantics.PlusSignedInteractiveLetterStillPrompts == interp.Yes, true
 		case ch == 's' && on:
 			inv.fromStdin = true
 		case on && sh.namesStartupOption("-"+string(ch)):

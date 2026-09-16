@@ -3912,6 +3912,30 @@ type Semantics struct {
 	// is dash of the three columns that take the name at all.
 	NonInteractiveOptionName string
 
+	// PlusSignedInteractiveLetterStillPrompts is `+i`: whether the plus sign
+	// asks for a prompt the way the minus does, instead of taking one back.
+	//
+	// Six of the seven columns read the sign, and the letter is a last-wins
+	// pair there like any other. Measured 2026-09-16 with `SH +i -c 'echo
+	// $-'` and with `SH -i +i -c 'echo $-'`, the program on a pipe: bash
+	// 5.3.20, bash as `sh`, bash 3.2.57, zsh 5.9.2, ksh93u+ 2012-08-01 and
+	// dash 0.5.12 each report a `$-` with no `i` in it and say nothing about
+	// a terminal — `hBc`, `569X`, `chsB` and dash's empty string.
+	//
+	// BusyBox ash 1.37.0 is the seventh column and does not read the sign at
+	// all: `ash +i -c` writes `can't access tty; job control turned off` and
+	// reports `ci`, byte for byte with `ash -i -c`, and `ash -i +i -c` and
+	// `ash +i -i -c` write the same. So the letter there is a request that
+	// only ever arrives, which is what makes this an axis rather than a rule
+	// about the plus sign (#3221).
+	//
+	// Unspecified is the core with no dialect chosen, and it refuses: the
+	// letter goes to the runner, where `set +i` is refused exactly as it was
+	// before this axis existed. The minus spelling asks nothing here — every
+	// column prompts for `-i` — so this is the one-sided question its own
+	// name states.
+	PlusSignedInteractiveLetterStillPrompts Answer
+
 	// CommandStringShowsCInDollarDash puts `c` in `$-` when the program came
 	// from `-c`. Two against two: bash and ksh93 do, dash and zsh do not, so
 	// there is no majority to follow and this is a switch.

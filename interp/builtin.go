@@ -1941,7 +1941,7 @@ func (r *Runner) setOption(name string, on bool) bool {
 	if !ok {
 		return r.badSetOptionName(name)
 	}
-	if r.immovableOptions[name] {
+	if r.immovableName(name) {
 		// A name this shell lists and will not take, in either direction —
 		// see Runner.AddImmovableSetOptions. Refused exactly as a name it
 		// does not have, which is what makes this one line rather than a
@@ -1949,7 +1949,26 @@ func (r *Runner) setOption(name string, on bool) bool {
 		// `bad option(s)` and prints its usage for `interactive` word for
 		// word as it does for a name it has never heard of, while the row
 		// stays in its listing and still reports which state it is in.
-		return r.badSetOptionName(name)
+		//
+		// Unless the words the shell was *started* with are asking, in the
+		// dialect that lets them — the same route split the `t` letter
+		// takes above, and the reason Semantics.ImmovableOptionsSetAtInvocation
+		// is asked where the route is known. Measured 2026-09-16 on ksh93u+
+		// 2012-08-01 with the program on a pipe: `ksh -o interactive` draws
+		// a prompt, runs the line and draws another, while `set -o
+		// interactive` in that same shell is `bad option(s)` in both
+		// directions. So the three names it will not move are three a
+		// *script* may not move (#3221).
+		//
+		// And only where there is something to move: the axis governs the
+		// refusal and not the applying, so a name the table records without
+		// acting on — `rc`, `login_shell` — is refused at the invocation
+		// exactly as it is refused in a script, in the wording it already
+		// had. Granting it here would trade `bad option(s)` for a
+		// `not implemented` those shells never say.
+		if !(r.atInvocation && r.sem().ImmovableOptionsSetAtInvocation == Yes && o.apply != nil) {
+			return r.badSetOptionName(name)
+		}
 	}
 	if r.inertOptions[name] {
 		// A name this shell lists and takes in both directions with nothing

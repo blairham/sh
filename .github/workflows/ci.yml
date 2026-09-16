@@ -62,9 +62,10 @@ jobs:
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
     - name: Run pre-commit hooks
-      # golangci-lint is no longer among these hooks -- see
-      # .pre-commit-config.yaml for why, and the Lint job below for where it
-      # went. Everything else here still runs on every commit.
+      # golangci-lint is among these hooks again, scoped with
+      # --new-from-rev HEAD so a developer is shown what the commit
+      # introduces. The Lint job below is the unscoped, whole-tree run and
+      # is the required check -- see its comment for why it is not scoped.
       uses: blairham/go-pre-commit@v4.6.6
 
   # golangci-lint, in a job of its own, because it does not belong at `git

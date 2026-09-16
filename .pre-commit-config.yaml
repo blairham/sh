@@ -1,133 +1,81 @@
+# Pre-commit configuration for sh
+# Install: pre-commit install
+# Run:     pre-commit run --all-files
+# Update:  pre-commit autoupdate
+
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      # These two rewrite in place, so they are the hooks that can still
-      # change a file between `make check` and the commit object — the window
-      # #1267 is about. The generated record is held out of both: it has to be
-      # byte-for-byte what `make oracle` wrote, and a hook tidying it would
-      # desync it from the corpus that generated it. Measured, neither hook
-      # changes either file today; the exclusion makes that a property rather
-      # than a coincidence of how the generator happens to format.
-      - id: trailing-whitespace
-        exclude: ^(internal/oracle/testdata/golden\.json|docs/spec/measurements\.md)$
-      - id: end-of-file-fixer
-        exclude: ^(internal/oracle/testdata/golden\.json|docs/spec/measurements\.md)$
-      - id: check-yaml
-      - id: check-added-large-files
-      - id: detect-private-key
-  # Go hygiene, at commit time. This repository had none of it, so a
-  # formatting slip or an untidy go.mod was only caught by CI — minutes later,
-  # on a different machine, for something the editor could have fixed.
-  - repo: https://github.com/TekWizely/pre-commit-golang
-    rev: v1.0.0-rc.4
-    hooks:
-      - id: go-mod-tidy-repo
-      # gofumpt, back on the commit path. #1495 removed `golangci-lint-fmt`,
-      # which was what applied it, and said `go-fumpt-repo` would carry it —
-      # and no such hook had ever been in this file, so from that commit until
-      # #1903 there was no formatter here at all.
-      #
-      # `my-cmd-repo` and not `go-fumpt-repo`, because that hook shells out to
-      # a `gofumpt` on PATH and this repository does not have one: the
-      # formatter is pinned in go.mod's `tool` block and run as `go tool
-      # gofumpt`, which is the only way the hook, `make fmt` and the Lint job
-      # are guaranteed to be the same gofumpt. A system install would be some
-      # other version, and a formatter that disagrees with CI is worse than
-      # none.
-      #
-      # `-l -d` and not `-w`: it reports, it does not rewrite. An autofixing
-      # hook reopens the window #1267 is about — a file changing between the
-      # `make check` that was run and the commit object that lands — and the
-      # fix here is cheap, since `make fmt` is the first thing `make check`
-      # does.
-      - id: my-cmd-repo
-        alias: gofumpt
-        name: gofumpt
-        args: [--hook:error-on-output, go, tool, gofumpt, -l, -d, .]
+# General hygiene
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v6.0.0
+  hooks:
+  # These two rewrite in place, so they are the hooks that can still change a
+  # file between the check you ran and the commit object that lands (#1267).
+  # The generated record is held out of both: it has to stay byte-for-byte
+  # what `make oracle` wrote, and a hook tidying it desyncs it from the corpus
+  # that generated it.
+  - id: trailing-whitespace
+    exclude: ^(internal/oracle/testdata/golden\.json|docs/spec/measurements\.md)$
+  - id: end-of-file-fixer
+    exclude: ^(internal/oracle/testdata/golden\.json|docs/spec/measurements\.md)$
+  - id: check-yaml
+  - id: check-added-large-files
+  - id: detect-private-key
 
-  # golangci-lint is NOT run here. It type-checks the whole module on every
-  # commit -- measured on this repository, ~3GB resident and 300% CPU per run,
-  # and with several worktrees committing at once it took an 18-core machine to
-  # a load average of 89 and made the editor unusable. Capping it to 4 workers
-  # helped (240MB, 115%) but a linter has no business costing that at `git
-  # commit` time.
-  #
-  # AGENTS.md already said so -- "it runs in CI, not pre-commit -- it's too slow
-  # for every commit" -- and this file disagreed with it.
-  #
-  # **The formatters it used to apply are covered above, and were not for a
-  # year.** `golangci-lint-fmt` applied gofumpt and goimports, the change that
-  # removed it said they would go on running "through go-fumpt-repo above",
-  # and no such hook had ever been in this file — so from #1495 until #1903
-  # there was no formatter on the commit path at all. The gofumpt hook in the
-  # block above is that hook; goimports is not separately covered, because
-  # gofumpt is a superset of gofmt and the import *grouping* rule is a
-  # golangci-lint formatter setting the Lint job applies.
-  #
-  # CI runs golangci-lint instead, in the Lint job, over the whole tree. It
-  # used to diff from the merge base there, which meant `main` — where the
-  # merge base is HEAD — was never linted at all; see the job's own comment
-  # for why that is now a full-tree run (#1302, #1640).
+# Go housekeeping
+- repo: https://github.com/TekWizely/pre-commit-golang
+  rev: v1.0.0-rc.4
+  hooks:
+  - id: go-mod-tidy-repo
 
-  # US English over prose, which is where most of this repository is.
-  # `.golangci.yml` sets `locale: US` and AGENTS.md cites it as enforced, but
-  # golangci-lint reaches Go files and nothing else, so every `.md` under
-  # docs/ was outside the rule it is cited for — #541 found British spellings
-  # sitting in the spec with the linter green. The Go half stays where it is;
-  # this is the other half.
+  # golangci-lint at commit time, run as `go tool` so the version comes from
+  # go.mod's tool block -- the same binary the Lint job uses. The upstream
+  # golangci-lint hooks download one of their own, which is a second pin to
+  # keep in step and a formatter that can disagree with CI.
   #
-  # Report-only — no `-w`. Unlike gofumpt above, misspell *can* reach the
-  # inside of a string, so an autofixing pass here could rewrite the text of a
-  # recorded measurement or a corpus snippet, which is exactly the class of
-  # change #1267 is about. The generated record is held out as well, for the
-  # same reason the two rewriting hooks above hold it out.
-  #
-  # Two words are exempt, and neither is prose. `colour` is one shell's
-  # parameter *name* — `.golangci.yml` says why at more length — and
-  # `cancelled` is the Agent Client Protocol's spelling of a `stopReason`,
-  # already carrying a `//nolint:misspell` at each of its five sites in Go.
-  # The prose in docs/design/acp.md is about that value, and a corrected
-  # sentence beside an uncorrected literal reads worse than either.
-  - repo: https://github.com/golangci/misspell
-    rev: v0.8.0
-    hooks:
-      - id: misspell
-        args: [-locale, US, -i, "colour,cancelled", -error]
-        files: \.(md|ya?ml)$
-        exclude: ^docs/spec/measurements\.md$
+  # `fmt --diff` reports gofumpt and goimports drift without rewriting, for
+  # the #1267 reason above. `-l -d` gofumpt used to do half of this; the
+  # formatters block in .golangci.yml is the other half, and this covers both.
+  - id: my-cmd-repo
+    alias: golangci-lint-fmt
+    name: golangci-lint fmt
+    args: [--hook:error-on-output, go, tool, golangci-lint, fmt, --diff]
 
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
-    hooks:
-      - id: gitleaks
-  - repo: https://github.com/blairham/pre-commit-hooks
-    rev: v0.4.0
-    hooks:
-      - id: check-license-headers
-        args: [--license, Apache-2.0]
-      # go.mod's `go` directive and .tool-versions' golang pin must match.
-      - id: check-go-version-sync
-      # Replaces upstream's check-merge-conflict, which missed a diff3 base
-      # marker that lived in docs/spec/semantics.md until an audit found it by
-      # eye. Upstream knows only the three markers of the default conflict
-      # style, and scans only while a merge is in progress — so it cannot see a
-      # marker that was already committed, which is the only kind still here.
-      - id: check-conflict-markers
-      # Known vulnerabilities in code this module actually calls, from Go's
-      # own database. It runs here and not on every commit because the answer
-      # can only change when the module graph does — the hook's own default is
-      # to watch go.mod and go.sum, and that is left as it is.
-      #
-      # It is worth saying what this does not cover, so nobody reads a green
-      # commit as more than it is: an advisory published while nobody is
-      # committing is invisible to a commit hook, and belongs to CI on a
-      # schedule. This catches the case a person can act on — a dependency
-      # arriving or moving — at the moment they are choosing it.
-      #
-      # It is quiet enough to sit here because it is symbol-aware. Measured on
-      # a module pinned to a vulnerable x/text, it reported 29 findings across
-      # imported packages and required modules and failed on the one the code
-      # reached. A manifest scanner would have failed that commit 29 times,
-      # and a hook that cries wolf is a hook that gets disabled.
-      - id: go-vulncheck
+  # `--new-from-rev HEAD` reports what this commit introduces rather than the
+  # repository's backlog. It filters *output* only: golangci type-checks the
+  # whole module either way, so this buys signal, not seconds. The whole-tree,
+  # enforced run is the Lint job in CI, which is the required check -- and the
+  # only one that ever examines `main` (#1302, #1640).
+  - id: my-cmd-repo
+    alias: golangci-lint
+    name: golangci-lint
+    args: [go, tool, golangci-lint, run, --new-from-rev, HEAD]
+
+# US English over prose, which is where most of this repository is.
+# .golangci.yml sets locale: US, but golangci-lint reaches Go files and
+# nothing else, so docs/ was outside the rule AGENTS.md cites it for (#541).
+- repo: https://github.com/golangci/misspell
+  rev: v0.8.0
+  hooks:
+  - id: misspell
+    args: [-locale, US, -i, "colour,cancelled", -error]
+    files: \.(md|ya?ml)$
+    exclude: ^docs/spec/measurements\.md$
+
+# Secret scanning
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.30.1
+  hooks:
+  - id: gitleaks
+
+# check-conflict-markers, not upstream's check-merge-conflict: upstream knows
+# only git's three default markers, so the `|||||||` a diff3 merge writes goes
+# unreported, and without --assume-in-merge it does not scan outside a merge
+# at all. A diff3 base marker lived in the spec for weeks and was found by eye.
+- repo: https://github.com/blairham/pre-commit-hooks
+  rev: v0.4.0
+  hooks:
+  - id: check-license-headers
+    args: [--license, Apache-2.0]
+  - id: check-go-version-sync
+  - id: check-conflict-markers
+  - id: go-vulncheck

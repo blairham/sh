@@ -150,7 +150,8 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		if span.Backquoted && r.diag().SubstitutionParseFailureNamesTheConstruct {
 			construct = "command substitution"
 		}
-		r.errf("%s", r.diagLineNamed(construct, "%s\n", r.diag().ParseFailure(shiftParseError(err, base))))
+		r.errf("%s", r.diagLineNamed(construct, "%s\n",
+			r.diag().ParseFailure(shiftParseError(r.substParseErrorAtItsCloser(span, src, err), base))))
 		if span.Backquoted && !r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {
 			// The word expands to nothing and the statement goes on, which
 			// is a failed *expansion* rather than a failed script. The
@@ -510,4 +511,82 @@ func (r *Runner) ArithPrecedence() syntax.ArithPrecedencePolicy {
 // standing.
 func (r *Runner) SetArithPrecedence(p syntax.ArithPrecedencePolicy) {
 	r.arithPrecedence, r.arithPrecedenceMoved = p, true
+}
+
+// substParseErrorAtItsCloser re-reads a `$( … )` body with the parenthesis
+// that closed it on the end, and hands back the refusal that produces.
+//
+// # The token every shell in the panel names, and the one we named instead
+//
+// The body is read on its own here, so when its parse runs out it has run out
+// of *input* — and every dialect has a measured rule for what that means,
+// each of which this engine already implements. The script's own reader never
+// runs out: it meets the `)`. So the rule that fired was the right rule for
+// the wrong question, and the answer was a token the reference never writes
+// (#3296).
+//
+// Measured 2026-09-16 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C
+// <shell> case.sh` with stdin from /dev/null, over ten bodies of the form
+// `v=$(echo hi; X)` — `for`, `if`, `while`, `until`, `case`, `{`, `(`, `f()`,
+// a trailing `|` and a trailing `&&`. BusyBox v1.37.0 in the digest-pinned
+// Alpine image internal/oracle reaches, under `--init`.
+//
+//	bash 5.3.20   names `)` in all ten
+//	ksh93u+       names `)` in eight; `case` and `(` consume the closer and
+//	              are `` `(' unmatched `` instead, and `f()` parses
+//	zsh 5.9.2     names `)` in six of the eight it refuses; `while` and
+//	              `until` read on and block
+//	dash, ash     name `)` in **nine**; `for` alone is their own sentence
+//
+// So it is not a dialect disagreement and it is not asked as one. It is a
+// fact about where the body ends, and the right token falls out of each
+// dialect's *existing* rules once the parser is shown the closer — including
+// dash's, which judges whatever stands in a loop variable's place as a name
+// and so goes on writing `Bad for loop variable` for `for` while gaining
+// `")" unexpected` for the other nine.
+//
+// That last column is why the issue's premise was narrower than the bug: it
+// measured `for` alone, found dash and BusyBox byte-perfect there, and
+// recorded them as already right. They were right on the one construct every
+// shell on the panel treats specially.
+//
+// # Only the parenthesised spelling
+//
+// The older spelling is left alone because it is already right: “ v=`echo
+// hi; for` “ is `newline` in both bash builds, `for` in zsh and `for` in
+// ksh93, which is what this shell writes for it today. A backquoted body ends
+// at its backquote rather than where its contents end — see
+// syntax.Span.Backquoted — and the columns read it with the script, which is
+// the same reason Diagnostics.BackquotedSubstitutionRestartsLines exists one
+// message over.
+//
+// `${ … ;}` is named in the guard as a statement of scope rather than as a
+// live branch, and that is said here because a mutant which took it out
+// survived. Its spelling *requires* a `;` or a newline before the closing
+// brace, so such a body always ends at a token the parser meets and can never
+// run out at its end — which is the only thing this function changes.
+// Measured 2026-09-16: `v=${ echo hi; for ;}` is “ `;' unexpected “ and the
+// same body written over three lines is “ `newline' unexpected “, both
+// byte-identical to ksh93u+ before this change and after it. Taking the name
+// out would be relying on that; leaving it in says which spelling this is
+// about.
+//
+// # Diagnostic only
+//
+// The tree from the first parse is already being thrown away — the parse
+// failed — so nothing runs from this and nothing is kept. It is on the error
+// path alone, so the ordinary body pays nothing for it. And where the body
+// *with* the closer parses, there is no second refusal to prefer and the
+// first one stands: `v=$( (echo hi )` is the shape, where the missing
+// parenthesis is the body's own.
+func (r *Runner) substParseErrorAtItsCloser(span syntax.Span, src string, err error) error {
+	if span.Backquoted || span.CurrentShell {
+		return err
+	}
+	p := r.ParseWithAliases(src+")", r.bodyDialect(span))
+	p.Parse()
+	if closed := p.Err(); closed != nil {
+		return closed
+	}
+	return err
 }

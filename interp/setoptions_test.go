@@ -141,13 +141,19 @@ func TestADeclaredNameWithNothingBehindItIsStillRefused(t *testing.T) {
 // interp/clonetables.go, which is where that is enforced rather than
 // remembered.
 func TestARecordedOptionDoesNotEscapeASubshell(t *testing.T) {
-	// The subshell's listing first and the parent's second, so reading the
-	// last row of each says whether the state crossed back out.
-	inside, _ := run(t, "(set -o notify; set -o)\n", withExtras)
+	// The parent moves a recorded name *first*, and that is the whole of what
+	// makes this discriminating. The store is allocated lazily, and
+	// maps.Clone keeps a nil map nil — so a parent that has never recorded
+	// anything hands the subshell a nil, the subshell builds a table of its
+	// own, and a shared field leaks nothing yet. Written the other way round
+	// this test passed with the clone deleted. See interp/clonetables.go,
+	// which is where that trap is recorded.
+	const seed = "set -o ignoreeof\n"
+	inside, _ := run(t, seed+"(set -o notify; set -o)\n", withExtras)
 	if got := listedState(inside, "notify"); got != "on" {
 		t.Errorf("inside the subshell notify was %q, want on", got)
 	}
-	after, _ := run(t, "(set -o notify)\nset -o\n", withExtras)
+	after, _ := run(t, seed+"(set -o notify)\nset -o\n", withExtras)
 	if got := listedState(after, "notify"); got != "off" {
 		t.Errorf("after the subshell notify was %q, want it left where the parent had it", got)
 	}

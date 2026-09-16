@@ -5174,14 +5174,58 @@ history this shell does not keep), `braceexpand` (below), `onecmd`
 (below), and `errtrace`/`functrace`, which are the long spellings of
 `set -E` and `set -T` and write the same state those letters do — see
 *the two options that override all four* under the ERR, DEBUG, RETURN and
-EXIT conditions. The rest are recorded with the state we are already in, so that
-turning them off succeeds honestly: `interactive-comments` is **on**,
-because we do honor comments wherever they are written; everything else is
-**off**. That is not a claim about what any other shell defaults to. The
-standing example here was `hashall`, on the grounds that nothing was
-hashed; since #2554 something is, the option gates it in the dialects
-that read it as a stop, and its state comes from the startup letters
-rather than from this table — see *The command hash*.
+EXIT conditions. The rest are **recorded**: remembered, reported back by the
+listing, and acted on by nothing. Each starts at the state we are already in
+— `interactive-comments` and ksh93's `multiline` and `viraw` are **on**,
+everything else is **off** — and that is not a claim about what any other
+shell defaults to. The standing example here was `hashall`, on the grounds
+that nothing was hashed; since #2554 something is, the option gates it in
+the dialects that read it as a stop, and its state comes from the startup
+letters rather than from this table — see *The command hash*.
+
+**Recorded used to mean refused, and #3128 is where that changed.** A name
+with nothing behind it could be turned *off* — the request had already been
+granted — and turning one on was `set: globstar: not implemented` at 2, on
+the argument that accepting would be promising to behave differently
+afterwards. That was the honest answer while the listing was short. It
+stopped being one when #2925 made the listing carry ksh93's whole roster,
+because the listing is a capture surface and a row it writes that `set`
+declines is a line the shell hands out and then rejects.
+
+Measured 2026-09-16 by asking each reference shell for every name in its
+**own** listing, in both directions — which is the sweep that finds the
+plus-only half, three names the minus direction cannot see:
+
+| shell | names it lists and refuses |
+| --- | --- |
+| bash 5.3.20 | none |
+| bash 3.2.57 | none |
+| dash 0.5.12 | none |
+| BusyBox ash 1.37.0 | none |
+| ksh93u+ 2012-08-01 | `interactive`, `login_shell`, `rc` — both directions |
+| zsh 5.9.2 | `interactive`, `monitor`, `shinstdin`, `singlecommand`, `zle` |
+
+So five of the six take every name they advertise, and the two that do not
+refuse only names about *being interactive*. Ours refused thirteen in ksh —
+`bgnice`, `globstar`, `gmacs`, `ignoreeof`, `letoctal`, `markdirs`,
+`notify`, `privileged`, `restricted`, `showme`, and `log`, `multiline` and
+`viraw` in the plus direction — and `notify`, `ignoreeof` and `nolog` in
+every dialect but zsh, which reaches `set -o` through a table of its own.
+
+`dialect.TestEveryListedOptionNameIsOneAScriptCanMove` is the invariant, and
+it is the roster's half of the one
+`dialect.TestNoLetterIsBothImplementedAndNot` keeps for the letters: a name
+added to a roster without a mover fails on the commit that adds it.
+
+**One name is taken and does not move.** ksh93's `set -o privileged` is
+status 0 with nothing on standard error and the row still reads `off`
+afterwards, and `ksh -p` reports it off too — the shell does not hand out
+privilege because a script asked. bash takes the same word and *does* move
+it, in 3.2 and 5.3 alike, so this is a fact about the shell being imitated
+and a dialect declares it (`interp.Runner.AddInertSetOptions`). It is a
+fourth answer beside implemented, recorded and refused, and the difference
+from the refusal below is the whole of it: an immovable name is declined out
+loud, an inert one is granted and then reports the state it was already in.
 
 ### The listing is a roster, and ksh93 spells five of it the other way round
 
@@ -5236,6 +5280,21 @@ name for it, `ignorebraces`, had gone the other way in #1739 and was
 following from it. A request remembered is worse than a request refused,
 because only one of the two tells the script the truth.
 
+That argument is about a name **wired to something**, and it is worth
+separating from the recorded set above rather than letting the two collide.
+`braceexpand` was a lie because the behavior it names was running: the option
+said off and the braces went on expanding, so a script could read the state
+and watch it be false in the same breath. A recorded name is one this shell
+does not do **in either state**, so nothing it says can be contradicted by
+what the shell then does — the request is remembered and the feature is
+absent, which is the same bargain the 140 recorded `setopt` names strike.
+The bill is real and it is deferred rather than waived: `globstar` on with no
+`**` crossing is a weaker answer than `globstar` implemented, which is why
+each name that is recorded rather than built carries an issue of its own. A
+name that becomes real must leave the recorded set in the same change, and
+`braceexpand`, `keyword`, `history`, `histexpand` and `onecmd` are the five
+that already have.
+
 What it needed was a run-time switch beside the dialect's answer, and the
 two are different questions: `Semantics.BraceExpansion` is whether this
 shell has braces at all — dash does not — and the option is whether the
@@ -5262,12 +5321,15 @@ so a switch asserted in one direction only would be a trap.
 
 The table above is still a subset of what these shells actually have — it
 was short of ksh93's `bgnice`, `globstar`, `letoctal`, `markdirs` and eight
-more until #2925, and zsh's own namespace runs to 185. Names outside it are
-refused by name rather than accepted and ignored: under `set -o`, accepting an option we do not honor would be a
-promise. zsh's `setopt` answers the same question differently and on
-purpose — see **zsh's option names** below — because the names a zsh rc
-file writes are overwhelmingly about features this shell does not have at
-all, where recording a request promises nothing.
+more until #2925, and zsh's own namespace runs to 185. A name **outside**
+the roster is still refused by name, which is a different question from what
+happens to a name inside it: `set -o zzznosuch` is `bad option(s)` because
+the shell does not have the name, not because it declines to act on it. A
+name the roster carries is recorded — see above — which is the answer zsh's
+`setopt` had reached first, and for the reason given under **zsh's option
+names** below: the names a zsh rc file writes are overwhelmingly about
+features this shell does not have at all, where recording a request promises
+nothing.
 
 ### `onecmd`, and the letter `set -t`
 

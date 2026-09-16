@@ -143,6 +143,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}
+	// `[[.a.]]` is the collating element `a`.
+	if got, want := s.CollatingSymbols, interp.Yes; got != want {
+		t.Errorf("CollatingSymbols = %v, want %v", got, want)
+	}
 	// And the `[:` that nothing closes, which is the axis beside it
 	// rather than a corner of it — see #1431.
 	if got, want := s.UnterminatedCharacterClass, interp.UnterminatedClassIsOrdinaryCharacters; got != want {

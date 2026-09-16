@@ -1230,6 +1230,13 @@ func Semantics() interp.Semantics {
 	// nothing, so this value is what five of the seven columns share (#3271).
 	s.BracketEscape = interp.BracketEscapeProtectsTheMember
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
+	// `[[.a.]]` is the collating element `a` and `[[=a=]]` its equivalence
+	// class, so both match `a`; zsh is the one column where they are the
+	// ordinary characters they spell. A body of more than one character is
+	// not an element in the C locale, and what that does to the bracket is
+	// the axis above — here, nothing: `[a[.nosuch.]b]` matches a and b and
+	// no letter of the body (#3378 is the names bash reads such a body as).
+	s.CollatingSymbols = interp.Yes
 	// `[[:]` is a bracket holding `[` and `:`: nothing closes the name, so there is no name and the two characters are ordinary members.
 	// See interp.Semantics.UnterminatedCharacterClass (#1431).
 	s.UnterminatedCharacterClass = interp.UnterminatedClassIsOrdinaryCharacters

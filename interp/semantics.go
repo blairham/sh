@@ -1966,6 +1966,40 @@ type Semantics struct {
 	// The class is properly closed here, which is what makes this a question
 	// of its own rather than part of #1431's unterminated `[:`.
 	UnknownCharacterClass UnknownClassPolicy
+	// CollatingSymbols reads `[.x.]` and `[=x=]` inside a bracket expression
+	// as a collating element and an equivalence class rather than as the
+	// ordinary characters they spell.
+	//
+	// Measured 2026-09-16 under `LC_ALL=C`, `case a in [[.a.]])`:
+	//
+	//	bash 5.3, bash 3.2, bash-as-sh   a collating element
+	//	ksh93u+, dash                    a collating element
+	//	zsh 5.9.2                        no construct: `[`, `.` and `a` are members
+	//
+	// zsh is the column that has neither, and it is visible as a *shape*
+	// rather than only as a missed match: the bracket it reads ends at the
+	// `.]`'s own `]`, so `[[.a.]]` there is the three-member set followed by
+	// a literal `]` and matches `a]`. Every other column matches `a`.
+	//
+	// In the C locale every collating element is one character, so a body of
+	// more than one is not an element. What a shell does with one it cannot
+	// read is [UnknownCharacterClass] — measured rather than assumed to be
+	// the same question, with `[a[.nosuch.]b]`: bash matches a and b and
+	// nothing of the body, dash matches a alone, ksh93 matches neither,
+	// which is each column's own value for that axis. The same three
+	// readings answer a `[.` that nothing closes, `[x[.a]y]`, where the
+	// inert column's answer is the characters standing for themselves.
+	//
+	// bash reads a body of more than one character as a *name* from the
+	// portable character set — `[[.hyphen.]]` is `-` there — which this
+	// shell does not and #3378 holds. Until it does, such a body is a
+	// body it cannot read, which is the reading above.
+	//
+	// BusyBox ash is unmeasured here: no BusyBox was reachable on the
+	// machine this was measured on, so the preset keeps the reading the
+	// shell already had rather than borrowing dash's — #3368 is what
+	// borrowing that column costs.
+	CollatingSymbols Answer
 	// UnterminatedCharacterClass is what a bracket does with a `[:` that
 	// nothing closes — `[[:]`, whose four characters hold no class name at
 	// all because the `:]` that would end one never arrives.
@@ -19996,6 +20030,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		escapes:           r.sem().PatternEscapeReaches,
 		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),
+		collating:         r.readsCollatingSymbols(pattern),
 		unknownClass:      r.unknownClassPolicy(pattern),
 		unterminatedClass: r.unterminatedClassPolicy(pattern),
 	}

@@ -738,6 +738,14 @@ type patternOpts struct {
 	// character after it stands on its own. See
 	// Semantics.PatternEscapeReaches, which is where it is measured.
 	escapes string
+	// collating reads `[.x.]` and `[=x=]` inside a bracket expression as one
+	// collating element and one equivalence class — see
+	// Semantics.CollatingSymbols. Off, the delimiters are ordinary members,
+	// which is the one column that has neither.
+	//
+	// Set only where the pattern really opens one, so a shell without the
+	// construct is asked nothing by a bracket that never spells it.
+	collating bool
 	// bracketMember says a backslash *inside* a bracket expression escapes
 	// nothing and is an ordinary member of the set — the third reading of
 	// [Semantics.BracketEscape], which BusyBox ash holds. The escape rule
@@ -1877,10 +1885,38 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		// ASCII, so none of them can be mistaken for the `-` of a range or
 		// the `]` that ends the expression, and the scan above stays a byte
 		// scan.
-		lo, next := bracketMember(p, i, o)
+		lo, next, read := bracketMember(p, i, o)
+		if !read {
+			// A `[.x.]` or `[=x=]` this shell cannot read as one collating
+			// element, which in the C locale is any body but a single
+			// character. It is [Semantics.UnknownCharacterClass]'s question
+			// and not a second one: measured 2026-09-16 with
+			// `[a[.nosuch.]b]`, each column answers it exactly as it answers
+			// a `[:name:]` it has not got.
+			switch o.unknownClass {
+			case UnknownClassEndsTheScan:
+				frozen = true
+			case UnknownClassEmptiesTheBracket:
+				frozen, matched = true, false
+			}
+			if next > i {
+				// A closed body, so there is an element to step over. The
+				// inert column steps over it holding nothing, which is what
+				// keeps `[a[.nosuch.]b]` matching a and b and no letter of
+				// the body.
+				i = next
+				continue
+			}
+			// Nothing closed it, so there is no element and no length to
+			// skip. Where the reading is inert the delimiter's characters
+			// are members like any other — `[[.a]` is the three-member set
+			// `[`, `.`, `a` in bash — which is what falls through here, with
+			// the frozen columns carrying their freeze past it.
+			lo, next, _ = plainBracketMember(p, i, o)
+		}
 		// A `-` is literal at the end, which is why `[a-]` matches a dash.
 		if next+1 < len(p) && p[next] == '-' && p[next+1] != ']' {
-			hi, after := bracketMember(p, next+1, o)
+			hi, after, _ := bracketMember(p, next+1, o)
 			// Ranked rather than compared as text: `[a-é]` has to hold ç,
 			// which is between them by code point and is not between them
 			// byte for byte.
@@ -1953,13 +1989,52 @@ func unterminatedBracket(p, c string, o *patternOpts) (rest string, ok bool) {
 // the panel, where `[a-z]` is the range — the escape is what stops the dash
 // being read as the operator. A bound that needed no protection keeps its
 // range, so `[\a-z]` is still a through z.
-func bracketMember(p string, i int, o *patternOpts) (unit string, next int) {
+// The third result says the member was read. It is false only where the
+// pattern opened a `[.` or a `[=` this shell has the construct for and the
+// text behind it is not one collating element — a body of more than one
+// character, an empty one, or a delimiter nothing closes. The caller decides
+// what that does to the bracket around it, which is the dialect's answer and
+// not this function's; where nothing closed the delimiter, next comes back
+// unmoved, which is how the caller tells the two apart.
+func bracketMember(p string, i int, o *patternOpts) (unit string, next int, read bool) {
+	if o.collating && i+1 < len(p) && p[i] == '[' && (p[i+1] == '.' || p[i+1] == '=') {
+		// The closer is looked for **after** the opening delimiter, exactly
+		// as a class name's `:]` is, so the `.` that opens one cannot also
+		// be the `.` that closes it and `[[..]]` is a body of nothing rather
+		// than a body of one period.
+		closer := string(p[i+1]) + "]"
+		end := strings.Index(p[i+2:], closer)
+		if end < 0 {
+			return "", i, false
+		}
+		body, after := p[i+2:i+2+end], i+2+end+2
+		// One collating element is one character in the C locale, and a
+		// locale that had a two-character one would name it in a table this
+		// shell does not carry. So a longer body is a body this shell cannot
+		// read — which is also where bash's names for the portable character
+		// set would go.
+		if body != "" && o.unitWidth(body) == len(body) {
+			return body, after, true
+		}
+		return "", after, false
+	}
+	return plainBracketMember(p, i, o)
+}
+
+// plainBracketMember is one ordinary member: the unit at i, or the unit a
+// backslash protects.
+//
+// Split out so that the collating delimiters above can fall back to it
+// character by character where the dialect reads an unclosed one as ordinary
+// text, rather than a second copy of the escape rule growing beside the
+// first.
+func plainBracketMember(p string, i int, o *patternOpts) (unit string, next int, read bool) {
 	if p[i] == '\\' && i+1 < len(p) && !o.bracketMember && o.escapeReaches(p[i+1]) {
 		w := o.unitWidth(p[i+1:])
-		return p[i+1 : i+1+w], i + 1 + w
+		return p[i+1 : i+1+w], i + 1 + w, true
 	}
 	w := o.unitWidth(p[i:])
-	return p[i : i+w], i + w
+	return p[i : i+w], i + w, true
 }
 
 // hasBracketEscape reports whether a pattern holds a backslash inside a
@@ -2336,7 +2411,52 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		escapes:           r.sem().PatternEscapeReaches,
 		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),
+		collating:         r.readsCollatingSymbols(pattern),
 	}, pattern, 1), pattern)
+}
+
+// readsCollatingSymbols resolves [Semantics.CollatingSymbols] for the
+// matcher, and only for a pattern that really opens a `[.` or a `[=` inside a
+// bracket expression — the shape bracketEscapeIsOnlyAMember uses, and for the
+// same reason: a shell that has no answer must not be asked a question the
+// pattern never poses.
+func (r *Runner) readsCollatingSymbols(pattern string) bool {
+	if !hasCollatingDelimiter(pattern) {
+		return false
+	}
+	return r.ask(r.sem().CollatingSymbols, "`[.x.]` and `[=x=]` inside a bracket expression")
+}
+
+// hasCollatingDelimiter reports whether a pattern opens a `[.` or a `[=`
+// inside a bracket expression.
+//
+// The bracket has to be found first: `a[.b` outside one is an ordinary `[`
+// followed by a period in every column, and asking the axis about it would
+// record a measurement the pattern never took.
+func hasCollatingDelimiter(p string) bool {
+	for i := 0; i < len(p); i++ {
+		if p[i] == '\\' {
+			i++
+			continue
+		}
+		if p[i] != '[' {
+			continue
+		}
+		// To the bracket's close, or to the end of the pattern where nothing
+		// closes it — an unclosed `[.` is one of the shapes the axis
+		// decides, so the scan must reach text no `]` stands behind.
+		end := len(p)
+		if e, ok := bracketEnd(p, i); ok {
+			end = e
+		}
+		for j := i + 1; j+1 < end; j++ {
+			if p[j] == '[' && (p[j+1] == '.' || p[j+1] == '=') {
+				return true
+			}
+		}
+		i = end
+	}
+	return false
 }
 
 // bracketEscapeIsOnlyAMember resolves [Semantics.BracketEscape] for the

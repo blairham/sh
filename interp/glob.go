@@ -788,6 +788,21 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		held = 0
 	}
 
+	// The names the dialect's ignore parameter takes back out. Read once for
+	// the whole expansion rather than per word, because the parameter cannot
+	// change while one runs — and read *before* the walk, because one of the
+	// two readings is applied to each listing as the walk produces it. See
+	// interp/ignorednames.go, and Semantics.IgnoredNamesMatchTheLastComponent
+	// for which reading a dialect holds.
+	ignore := r.ignoredNamePatterns()
+	filterListing := false
+	if len(ignore) > 0 {
+		filterListing = r.ignoredNamesFilterTheListing()
+		if r.unspecified {
+			ignore = nil
+		}
+	}
+
 	// Where the walk may go on from, set by a `**` component and read by the
 	// gate below it — nil for every other component, which is what makes the
 	// restriction belong to `**` and not to descent in general.
@@ -901,7 +916,19 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// rather than listed, so it reaches through the link in every
 			// column — `*/a/**` is `t/a/b …` there too, which is why this
 			// asks the same question globZeroLevelSource asks.
-			physical := holdsAStarStar && r.describesRatherThanSpells(part)
+			describes := r.describesRatherThanSpells(part)
+			physical := holdsAStarStar && describes
+			// A component that spelled a name rather than describing one
+			// reaches the filesystem by a lookup and not by a listing, so
+			// the listing filter has nothing to look at. Measured on
+			// ksh93u+ 2026-09-16: `FIGNORE='b.txt'` takes nothing out of
+			// `*/b.txt` while it empties `d/*` of everything but `.` and
+			// `..`, and `FIGNORE='d'` leaves `d/*` alone while it makes
+			// `*/b.txt` a word with no match at all.
+			var listingIgnore []string
+			if filterListing && describes {
+				listingIgnore = ignore
+			}
 			o := r.patternOpts(part)
 			o.fold = r.MatchOption(GlobFoldsCase)
 			// The subjects are the names in each directory, which are not
@@ -914,7 +941,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 				if physical && r.linkedToAPhysicalWalk(dir) {
 					continue
 				}
-				next = append(next, r.matchIn(dir, part, o, seeHidden)...)
+				next = append(next, r.matchIn(dir, part, o, seeHidden, listingIgnore)...)
 			}
 		}
 		if len(next) == 0 {
@@ -1044,15 +1071,17 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		}
 	}
 
-	// The names the dialect's ignore parameter takes back out, matched
-	// against the word rather than against the path the walk is holding —
-	// the same subject the `~` exclusions above are matched against, and for
-	// the same reason: `GLOBIGNORE='./a.txt'` takes `./a.txt` out where
-	// `GLOBIGNORE='a.txt'` does not, so it is the word as the pattern
-	// spelled it. See interp/ignorednames.go.
+	// And the other reading of the same parameter: the whole word the
+	// expansion produced, matched against the word rather than against the
+	// path the walk is holding — the same subject the `~` exclusions above
+	// are matched against, and for the same reason: `GLOBIGNORE='./a.txt'`
+	// takes `./a.txt` out where `GLOBIGNORE='a.txt'` does not, so it is the
+	// word as the pattern spelled it. See interp/ignorednames.go.
 	//
-	// Read once for the whole expansion rather than per word, because the
-	// parameter cannot change while one runs.
+	// Only where the dialect does not filter the listings, which is where
+	// the two readings genuinely part: one of them has already run, once per
+	// component, and running this one over it as well would take out a word
+	// whose *last* component matched a pattern the listing did not produce.
 	//
 	// Where it stands against the qualifiers below is not observable and is
 	// not claimed to be: the one dialect with this parameter has no
@@ -1060,14 +1089,13 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// mutation that moves this block past them survives, which is recorded
 	// here so the next reader does not go hunting for the row that would
 	// kill it.
-	ignore := r.ignoredNamePatterns()
 	out := make([]string, 0, len(dirs))
 	for _, d := range dirs {
 		w, ok := render(d)
 		if !ok {
 			continue
 		}
-		if len(ignore) > 0 && r.ignoredName(w, ignore) {
+		if !filterListing && len(ignore) > 0 && r.ignoredName(w, ignore) {
 			continue
 		}
 		out = append(out, w)
@@ -1365,7 +1393,7 @@ func sortMatches(names []string) { slices.SortFunc(names, shellOrder) }
 // lifts the leading-period rule, which is the run-time option's doing and not
 // the pattern's. A method so the listing passes the gate; a denied directory
 // matches nothing, as an unreadable one does.
-func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []string {
+func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ignore []string) []string {
 	entries, err := r.readDir(dir)
 	if err != nil {
 		return nil
@@ -1386,9 +1414,25 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 		if strings.HasPrefix(name, ".") && !hidden {
 			continue
 		}
-		if matchPattern(pattern, name, o) {
-			out = append(out, globJoin(dir, name))
+		if !matchPattern(pattern, name, o) {
+			continue
 		}
+		// The names the dialect's ignore parameter takes back out, in the
+		// reading where the subject is the entry rather than the word — so
+		// the filter belongs to the *listing*, at every component of the
+		// walk, and a directory it removes is a directory the walk never
+		// descends into. See Runner.ignoredNamesFilterTheListing.
+		//
+		// Empty for the other reading and for every dialect with no such
+		// parameter, and empty for a component that spelled a name rather
+		// than describing one: a literal reaches the filesystem by a lookup
+		// and not by a listing, which is measured — `FIGNORE='b.txt'` takes
+		// nothing out of `*/b.txt` where it empties `d/*` of everything but
+		// `.` and `..`.
+		if len(ignore) > 0 && r.ignoredListedName(name, ignore) {
+			continue
+		}
+		out = append(out, globJoin(dir, name))
 	}
 	return out
 }

@@ -1012,6 +1012,20 @@ func (s Shell) reportFinishedJobs(continuing bool) {
 //
 // The prompt goes to the error stream, where a shell always puts it: the
 // output of `sh -i < script > out` is the commands' output and nothing else.
+//
+// **The whole prompt**, which is the half this loop was missing. drawnPrompt
+// is split at its last newline because the *editor* needs the two halves at
+// different times — the rows above are written once and the last row is
+// rewritten at every keystroke — and this loop, which redraws nothing, wrote
+// only the half the editor redraws. So `PS1=$'A1\nA2\nA3> '` on a pipe drew
+// `A3> ` and dropped the two rows carrying the directory, the branch and the
+// status, leaving the one character that looks the same in every shell (#3222).
+//
+// Measured 2026-09-16 with that prompt and `echo T` on a pipe: bash 5.3.20,
+// bash as `sh`, bash 3.2.57, zsh 5.9.2, ksh93u+ 2012, dash 0.5.12 and BusyBox
+// ash 1.37.0 all write every row, at the first prompt and at the second. The
+// continuation prompt is the same: with `PS2=$'B1\nB2> '`, zsh writes both of
+// its rows before each continued line and this wrote `B2> `.
 func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outputCapture) (int, error) {
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
@@ -1023,7 +1037,7 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 			// the prompt this had ready is not written either.
 			return s.status(), nil
 		}
-		s.errf("%s", drawn.text)
+		s.errf("%s", drawn.lead+drawn.text)
 
 		line, err := in.ReadString('\n')
 		if line == "" && err != nil {

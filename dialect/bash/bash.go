@@ -714,6 +714,14 @@ func Semantics() interp.Semantics {
 	// direct `declare -n r=r` is refused in both shells and is the core's
 	// answer rather than this axis — see interp/nameref.go.
 	s.NamerefCycleIsRefused = interp.No
+	// A `-n` declaration over a name carrying an array is refused **after**
+	// the two refusals about the name itself, and the array *attribute* is
+	// enough: measured 2026-09-16 on 5.3.20, `typeset -a r; typeset -n r=v`
+	// is `r: reference variable cannot be an array` at 1 even though `r`
+	// holds nothing, while `r=(a b); typeset -n r=r` is the self-reference
+	// sentence instead. ksh93 answers both halves the other way round
+	// (#3103).
+	s.NamerefArrayRefusal = interp.NamerefArrayCheckedLastOnTheAttribute
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
@@ -2558,6 +2566,10 @@ func Diagnostics() interp.Diagnostics {
 		// which is the sentence this replaces for the `n` letter alone.
 		NamerefBadTarget:     "`%[1]s': invalid variable name for name reference",
 		NamerefSelfReference: "%[1]s: nameref variable self references not allowed",
+		// The same sentence ksh93 writes, and the only one the two shells
+		// share on this letter — carried here so the dialect says which
+		// wording it means rather than leaning on a fallback.
+		NamerefCannotBeAnArray: "%[1]s: reference variable cannot be an array",
 		// Spoken as the shell rather than as the builtin, measured: the line
 		// is `bash: line 1: warning: a: circular name reference` with no
 		// `declare:` in it, where the two refusals above carry the name.

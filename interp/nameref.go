@@ -302,6 +302,15 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int {
 	if !hasValue {
 		if !r.isNameref(name) {
+			// The valueless form over a name carrying an array, which both
+			// shells refuse on the attribute alone and in the same words —
+			// no axis, and no other refusal to race, because there is no
+			// target here to be a bad name or a self reference. See
+			// [NamerefArrayRefusal].
+			if r.namerefArrayAttribute(name) {
+				return r.refuseNameref(builtin, Wording(r.diag().NamerefCannotBeAnArray,
+					"%[1]s: reference variable cannot be an array", name))
+			}
 			r.namerefEmptiesTheCell(name)
 			r.setNameref(name, "")
 		}
@@ -311,6 +320,26 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 		return 0
 	}
 	d := r.diag()
+	// Resolved once, before anything is reported, because the answer decides
+	// which of three refusals speaks for this line — and asked only where the
+	// name really carries an array, so an ordinary `typeset -n r=v` over a
+	// scalar never reaches an unanswered field. See [NamerefArrayRefusal].
+	arrayed := r.namerefArrayAttribute(name)
+	var shape NamerefArrayRefusal
+	if arrayed {
+		shape = r.namerefArrayRefusal()
+		if r.unspecified {
+			return r.status
+		}
+		if shape == NamerefArrayCheckedFirstOnTheContents && r.namerefArrayContents(name) {
+			return r.refuseNameref(builtin, Wording(d.NamerefCannotBeAnArray,
+				"%[1]s: reference variable cannot be an array", name))
+		}
+	}
+	// The one shape the late answer still reaches: a bare attribute under the
+	// contents reading is *not* an array, so the late check must not fire on
+	// it either.
+	refusedLate := arrayed && shape == NamerefArrayCheckedLastOnTheAttribute
 	if !r.namerefTargetIsAName(target) {
 		return r.refuseNameref(builtin, Wording(d.NamerefBadTarget,
 			"%[1]s: invalid variable name for name reference", target))
@@ -342,7 +371,18 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 		if r.unspecified {
 			return r.status
 		}
-		r.warnAboutASelfReference(builtin, name)
+		// Between the two halves of the warning, and that is measured rather
+		// than convenient: `f(){ typeset r=(a b); typeset -n r=r; }` in bash
+		// 5.3.20 writes the *builtin's* `warning: r: circular name
+		// reference` and then the array refusal at 1, and never the shell's
+		// second copy. So the array check sits inside the warning rather
+		// than before or after it.
+		r.warnAboutASelfReferenceOnTheBuiltin(builtin, name)
+		if refusedLate {
+			return r.refuseNameref(builtin, Wording(d.NamerefCannotBeAnArray,
+				"%[1]s: reference variable cannot be an array", name))
+		}
+		r.warnAboutACycle(name)
 		// The cell is emptied here too, and it is not the one the reference
 		// reads: `local -n r=r` refers *out*, to the copy the oldest scope
 		// that shadowed the name is holding, which is untouched by this
@@ -367,6 +407,10 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 		// by an empty line — so nothing is said here. See warnAboutACycle,
 		// which is the read's half.
 	}
+	if refusedLate {
+		return r.refuseNameref(builtin, Wording(d.NamerefCannotBeAnArray,
+			"%[1]s: reference variable cannot be an array", name))
+	}
 	r.namerefEmptiesTheCell(name)
 	r.setNameref(name, target)
 	return 0
@@ -386,15 +430,16 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 // take them straight back off; and the reference itself is recorded after
 // this, in the nameref table rather than in a parameter one.
 //
-// A name holding an array is left alone entirely, which is a measurement
-// rather than an omission: neither shell lets a reference land on one. `r=(a
-// b c); typeset -n r=v` is `r: reference variable cannot be an array` at 1 in
-// bash 5.3.20 and in ksh93u+ 2012, for the indexed and the associative kind
-// alike and with or without a target. This shell accepts that line today,
-// which is #3103 and not this — so the guard below stands on a case that
-// should never have reached here, and hiding the cell on it would leave the
-// name reading as unset while still counting its elements. Wrong in one way
-// rather than two is where that case stays until #3103 decides it.
+// The **array attribute goes with it**, and that is measured rather than
+// assumed. Almost no array reaches here at all — a `-n` declaration over one
+// is refused, see [NamerefArrayRefusal] — but one shape does: ksh93 takes
+// `typeset -a r; typeset -n r=v`, because a bare indexed attribute is not yet
+// an array there. Its own listing then writes `typeset -n r=v` with no `-a`
+// left in it, and `unset -n r` afterwards leaves `typeset -p r` with nothing
+// to print and `${r-GONE}` reading GONE (#3103). So the attribute is
+// discarded with the value rather than surviving under the reference, which
+// is also the only reading that keeps `${#r[@]}` from answering for a name
+// that reads as unset.
 //
 // Nothing here runs on a refusal. A `-n` declaration the shell will not make
 // leaves the name exactly as it found it — measured, `r=OUTER` followed by
@@ -402,9 +447,8 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue bool) int
 // leaves `r` holding OUTER in both shells — so every caller is on a path that
 // has already decided the reference is going to be made.
 func (r *Runner) namerefEmptiesTheCell(name string) {
-	if r.Arrays[name] != nil || r.AssocArrays[name] != nil {
-		return
-	}
+	delete(r.Arrays, name)
+	delete(r.AssocArrays, name)
 	// hideVar rather than a bare delete: a name that came from the
 	// environment is not in Vars to begin with, so deleting nothing would
 	// leave the inherited value answering every read of the cell the
@@ -448,13 +492,21 @@ func (r *Runner) warnAboutACycle(name string) {
 //
 // Nothing at all in the dialect with no wording for it, which is the one that
 // refuses this declaration outright and never reaches here.
+// Written as its two halves because a refusal can land between them: see
+// declareNameref, where the array check does exactly that.
 func (r *Runner) warnAboutASelfReference(builtin, name string) {
+	r.warnAboutASelfReferenceOnTheBuiltin(builtin, name)
+	r.warnAboutACycle(name)
+}
+
+// warnAboutASelfReferenceOnTheBuiltin is the first of the two, the one
+// carrying the builtin's name.
+func (r *Runner) warnAboutASelfReferenceOnTheBuiltin(builtin, name string) {
 	w := r.diag().NamerefCircularWarning
 	if w == "" {
 		return
 	}
 	r.diagf("%s: %s\n", builtin, Wording(w, "warning: %[1]s: circular name reference", name))
-	r.warnAboutACycle(name)
 }
 
 // warnAboutNamerefDepth is what a *write* through a self reference says,

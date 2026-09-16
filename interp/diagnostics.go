@@ -3801,6 +3801,17 @@ type Diagnostics struct {
 	// Semantics.NamerefCycleIsRefused. One verb: the name being declared.
 	NamerefSelfReference string
 
+	// NamerefCannotBeAnArray is a declaration refusing a reference over a
+	// name that carries an array. One verb: the name being declared.
+	//
+	// The same sentence in both shells, measured 2026-09-16 — bash 5.3.20
+	// and ksh93u+ 2012 alike write `r: reference variable cannot be an
+	// array` — so the fallback below is the wording and a dialect carries
+	// it only to say the letter is one it has. What the two disagree about
+	// is when the check runs and what counts as an array, which is
+	// Semantics.NamerefArrayRefusal.
+	NamerefCannotBeAnArray string
+
 	// NamerefCircularWarning is the other answer to the same question: the
 	// reference is made and this is said. One verb, the name.
 	//

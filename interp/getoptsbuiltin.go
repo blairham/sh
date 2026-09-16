@@ -468,14 +468,30 @@ func (r *Runner) getoptsBadOptionComplaint(letter string, missingArg bool) {
 // The override follows it rather than being dropped, because the call still
 // has a cursor of its own afterwards.
 func (r *Runner) optIndex() int {
+	return r.optCursorWord() - r.optWordAlreadyCounted()
+}
+
+// optCursorWord is the same position in OPTIND's own units — the number the
+// parameter holds, which in the dialect that counts a clustered word at its
+// first letter is one ahead of the word the scan is at.
+//
+// Separate from optIndex because the two units are not interchangeable and
+// mixing them is a bug that only one pair of dialects can see. The override
+// and the parameter are both in *these* units — setOptind writes the one and
+// the other with the same number — so a cursor saved across a call has to be
+// saved here and not from optIndex, which has already taken the word off.
+// Saved from optIndex and put back into the override, a call made part-way
+// through `-ab` in dash came back to word *zero*: the one ahead was
+// subtracted going in and again coming out.
+func (r *Runner) optCursorWord() int {
 	if r.optWord > 0 && !r.optindAssigned {
-		return r.optWord - r.optWordAlreadyCounted()
+		return r.optWord
 	}
 	n := r.optindValue()
 	if r.optWord > 0 {
 		r.optWord = n
 	}
-	return n - r.optWordAlreadyCounted()
+	return n
 }
 
 // optWordAlreadyCounted is the one word OPTIND is ahead by, in the dialect
@@ -674,8 +690,9 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 	char, assigned := r.optChar, r.optindAssigned
 	// The caller's place in words, which is what a call with a cursor of its
 	// own hands back — and which is *not* OPTIND once a call has already made
-	// the two part company. Read before anything here moves it.
-	cursor := r.optIndex()
+	// the two part company. Read before anything here moves it, and in the
+	// units the override is put back in: see optCursorWord.
+	cursor := r.optCursorWord()
 
 	// Whether the caller had read anything yet. A cursor at the first
 	// character of the first word is indistinguishable from the fresh one a
@@ -694,12 +711,14 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 			// record drops the position inside a word on the strength of it.
 			r.setVarQuietly("OPTIND", "1")
 			r.optChar, r.optindAssigned = 1, false
+			sc.optindCallCursor = true
 		case GetoptsFunctionPositionIsTheCallsOwn:
 			// The scan starts over and the parameter is left exactly as the
 			// caller had it: a script reading `$OPTIND` on the way in sees
 			// the caller's number, which is what separates this answer from
 			// the one above.
 			r.optWord, r.optChar, r.optindAssigned = 1, 1, false
+			sc.optindCallCursor = true
 		default:
 			return
 		}
@@ -722,7 +741,21 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 		// The scan position comes back whatever became of the parameter: it
 		// is the caller's place in the caller's words, and a name the call
 		// took away says nothing about that.
-		r.optChar, r.optindAssigned = char, assigned
+		//
+		// Unless a declaration of OPTIND inside the call took the intra-word
+		// half away and this dialect does not hand it back, which is
+		// GetoptsLocalOptindRestoresTheCursor and is asked where the
+		// declaration is. Put back unconditionally here, that answer was
+		// overwritten by this one and the axis that was never measured won:
+		// dash and BusyBox ash read the same letter for ever where the real
+		// shells restart at the next word (#3293). The *word* half still
+		// comes back — only the place inside it is lost — so what the caller
+		// resumes at is the start of the word OPTIND names.
+		if sc.optindCursorDropped {
+			r.optChar = 1
+		} else {
+			r.optChar, r.optindAssigned = char, assigned
+		}
 		if position == GetoptsFunctionPositionIsTheCallsOwn {
 			// The parameter is the shell's, so only the scan's own position
 			// is put back — and it is put back as an override rather than
@@ -811,13 +844,24 @@ func (r *Runner) restoreGetoptsCursor(sc *scope) {
 	if !sc.optindShadowed {
 		return
 	}
-	if r.optChar == sc.savedOptChar && r.optindAssigned == sc.savedOptindAssigned {
+	if !sc.optindCallCursor &&
+		r.optChar == sc.savedOptChar && r.optindAssigned == sc.savedOptindAssigned {
 		// The body left the position where the declaration put it, so both
 		// answers produce the same cursor and there is nothing to ask about.
+		//
+		// Only where the declaration saved the *caller's* position. A call
+		// handed a cursor of its own had it reset on the way in, so what the
+		// declaration saved is that reset and a body that left it alone has
+		// still cost the caller its place inside a word — the answers differ
+		// and the question is a real one. See scope.optindCallCursor.
 		return
 	}
 	if !r.ask(r.sem().GetoptsLocalOptindRestoresTheCursor,
 		"a local `OPTIND` handing back the caller's position inside a word") {
+		// Recorded rather than merely not done, because in a dialect that
+		// gives every call a cursor of its own the caller's half is held by
+		// the call's restore and would be put back over the top of this.
+		sc.optindCursorDropped = true
 		return
 	}
 	r.optChar, r.optindAssigned = sc.savedOptChar, sc.savedOptindAssigned

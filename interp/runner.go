@@ -6266,6 +6266,23 @@ type scope struct {
 	savedOptChar        int
 	savedOptindAssigned bool
 
+	// optindCallCursor says this call was handed a `getopts` cursor of its
+	// own on the way in, so the caller's intra-word half is held by the
+	// call's restore rather than by a declaration's — see
+	// Semantics.GetoptsFunctionPosition. It is what tells the declaration's
+	// restore that "the body left the position where the declaration put
+	// it" no longer means the caller's place is unchanged: the entry reset
+	// moved it first, so the two answers do differ and the axis has to be
+	// asked.
+	optindCallCursor bool
+
+	// optindCursorDropped records that a declaration of OPTIND in this call
+	// asked GetoptsLocalOptindRestoresTheCursor and the answer was no, so
+	// the caller's place *inside* a word does not come back. Read by the
+	// call's own restore, which would otherwise put it back over the top
+	// and make the answer that was never measured win.
+	optindCursorDropped bool
+
 	// savedTraps is what this call displaced while its dialect was scoping
 	// traps to the function, keyed by the canonical condition. Nil until the
 	// first such modification, so a call that traps nothing carries nothing.

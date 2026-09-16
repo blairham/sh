@@ -2436,6 +2436,14 @@ func Semantics() interp.Semantics {
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
 	// and `set -oe` is `no such option: e`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// unanswered LongOptionNamesASetOption: zsh does read a `--name` word as
+	// one of its options — measured 2026-09-16, `zsh --xtrace -c 'echo ran'`
+	// traces — but not by ksh93's rule. Its own namespace holds the `no`
+	// forms, it folds case and underscores (`--NO_GLOB` is `noglob`), and a
+	// refused word is `no such option: …` at 1 with no usage block. Answering
+	// yes here would hand it ksh93's resolver and its refusal. #3129.
+	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
+	// `--name` option word, and the axis above is unanswered here. There is no site here to put the question to.
 	// Where the `-o` does stand alone it takes the next word regardless of
 	// how it is spelled, which is the half of the panel ksh93 leaves it on
 	// here: `set -o -e` is `no such option: -e` at 1.

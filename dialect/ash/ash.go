@@ -480,6 +480,15 @@ func Semantics() interp.Semantics {
 	// also the probe that showed the seam above is the *spelling* refused
 	// rather than the `-o` route (#2629).
 	s.SetOLetterAttachesItsName = interp.No
+	// Measured 2026-09-16 on BusyBox 1.37.0: `sh --xtrace -c 'echo ran'`
+	// prints `ran` untraced at 0, and so does `--zzznosuch`. The word is
+	// neither read as a name nor refused — it is dropped — so the answer to
+	// *this* axis is no. What it does with the word instead is a separate
+	// question and is not claimed here.
+	s.LongOptionNamesASetOption = interp.No
+	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
+	// `--name` option word, and the axis above says this shell has no such
+	// word. There is no site here to put the question to.
 	// And as in dash the next word is taken whatever it looks like:
 	// `set -o -e` is `illegal option -o -e` at 1, errexit left off.
 	s.SetODeclinesADashWord = interp.No

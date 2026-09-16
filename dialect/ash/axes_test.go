@@ -81,6 +81,18 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 			"EchoLastEscapeFlagWins",
 		},
 		{
+			"an integer numeral past the machine word",
+			`echo $((10000000000000000000))`,
+			"ArithNumeralPastTheWord — this column wraps where dash, the other " +
+				"POSIX shell here, clamps",
+		},
+		{
+			"the same numeral out of a variable",
+			`n=10000000000000000000; echo $((n))`,
+			"ArithStoredNumeralPastTheWordIsRefused — reachable only once the " +
+				"axis above was answered",
+		},
+		{
 			"a NUL inside $'…'",
 			`x=$'a\0b'; echo ${#x}`,
 			"DollarSingleNul — the third reading, which had no value to be " +

@@ -35,3 +35,25 @@ printf 'the divisor from a variable: %s\n' "$?"
 # measured above is the failure and not the subshell.
 ( : "$(( 1 / 1 ))" ) 2>/dev/null
 printf 'a division that works:       %s\n' "$?"
+
+# --- a numeral past the machine word ------------------------------------------
+#
+# The second claim this file has, and the same shape as the first: every shell
+# answers a numeral too large for the word and dash is alone in what it
+# answers. It clamps at the largest signed value, whatever the numeral and
+# whatever its base — bash wraps, zsh truncates, ksh93 gives the double
+# (#3202).
+printf 'one past the word:       %s\n' "$(( 10000000000000000000 ))"
+printf 'at the unsigned maximum: %s\n' "$(( 18446744073709551615 ))"
+printf 'several words past:      %s\n' "$(( 99999999999999999999999 ))"
+printf 'hexadecimal:             %s\n' "$(( 0xffffffffffffffffff ))"
+printf 'octal:                   %s\n' "$(( 01777777777777777777777 ))"
+printf 'negated:                 %s\n' "$(( -10000000000000000000 ))"
+printf 'and still arithmetic:    %s\n' "$(( 10000000000000000000 - 1 ))"
+
+# And the one place this shell's two number readers part: the same digits out
+# of a variable are refused, where written down they clamp. Status only, the
+# wording being each shell's own.
+big=10000000000000000000
+( : "$(( big ))" ) 2>/dev/null
+printf 'the same digits stored:  %s\n' "$?"

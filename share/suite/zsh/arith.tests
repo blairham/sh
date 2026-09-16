@@ -57,3 +57,39 @@ setopt octal_zeroes
 printf '%s\n' "with octal_zeroes: $(( 010 )) $(( 0100 ))"
 unsetopt octal_zeroes
 printf '%s\n' "and back again: $(( 010 ))"
+
+# --- a numeral past the machine word ------------------------------------------
+#
+# All four shells answer one and all four answer differently: bash lets the
+# unsigned word go round, dash clamps at the largest signed value, ksh93 has
+# no word to overflow and gives the double, and zsh reads part of the numeral
+# and says how much it read. So the numbers below are this column's alone
+# (#3202).
+#
+# The rule is not "the digits that fit". The accumulator is unsigned and it
+# wraps: reading stops only when a digit fails to make the running value
+# larger, and where the digits run out with the value merely past the signed
+# word the last one comes off by dividing what it has. Three of the rows below
+# separate those two readings and the first two do not, which is why they are
+# here together.
+printf '%s\n' "one past the word:        $(( 10000000000000000000 ))"
+printf '%s\n' "at the unsigned maximum:  $(( 18446744073709551615 ))"
+printf '%s\n' "one past that:            $(( 18446744073709551616 ))"
+printf '%s\n' "several words past:       $(( 99999999999999999999999 ))"
+printf '%s\n' "divided rather than cut:  $(( 50000000000000000000 ))"
+printf '%s\n' "read whole and silently:  $(( 22222222222222222222 ))"
+printf '%s\n' "hexadecimal:              $(( 0xffffffffffffffffff ))"
+printf '%s\n' "out of a variable:        $( n=10000000000000000000; printf '%s' $(( n )) 2>/dev/null )"
+
+# And what it says while doing it, which no other column says at all. Stdout
+# is dropped so that what is compared is the diagnostic: the count of digits
+# it got through, and the expression from the numeral to the end of it —
+# the blank before the `))` included.
+( : $(( 9999999999999999999 )) ) 2>&1 > /dev/null
+( : $((9999999999999999999 + 1)) ) 2>&1 > /dev/null
+( : $(( 0xfffffffffffffffff )) ) 2>&1 > /dev/null
+
+# The control: a numeral the word holds is answered with nothing said, so the
+# lines above are read as the size of the numeral rather than as this shell
+# complaining about arithmetic in general.
+( printf '%s\n' "the largest that fits: $(( 9223372036854775807 ))" ) 2>&1

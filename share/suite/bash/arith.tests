@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Arithmetic, the answer only bash gives — #3202.
+#
+# One claim: a well-formed integer numeral larger than the machine word is
+# read in an unsigned word that goes round, and the result is then read as
+# signed. That is C's `strtoull` with the range error thrown away, and it is
+# bash's alone on this panel — zsh reads part of the numeral and says so, dash
+# clamps at the largest signed value, and ksh93 has no word to overflow and
+# answers the double its arithmetic is carried in.
+#
+# Measured identically in 5.3.20, in 3.2.57 and under the `sh` name, so this
+# is the shell's reading rather than a version's.
+
+# The pair that says it is modular rather than a stop at the top of the
+# unsigned word: a reader that saturated there would answer -1 twice.
+printf 'at the unsigned maximum: %s\n' "$(( 18446744073709551615 ))"
+printf 'one past it:             %s\n' "$(( 18446744073709551616 ))"
+
+printf 'one past the word:       %s\n' "$(( 10000000000000000000 ))"
+printf 'several words past:      %s\n' "$(( 99999999999999999999999 ))"
+printf 'hexadecimal:             %s\n' "$(( 0xffffffffffffffffff ))"
+printf 'octal:                   %s\n' "$(( 01777777777777777777777 ))"
+printf 'negated:                 %s\n' "$(( -10000000000000000000 ))"
+printf 'and still arithmetic:    %s\n' "$(( 10000000000000000000 - 1 ))"
+
+# The same digits out of a variable, which is the row dash answers differently
+# from its own written numeral and every other column answers the same way
+# twice.
+big=10000000000000000000
+printf 'the same digits stored:  %s\n' "$(( big ))"
+
+# The control: a numeral the word holds is untouched by any of this.
+printf 'the largest that fits:   %s\n' "$(( 9223372036854775807 ))"

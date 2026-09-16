@@ -2181,6 +2181,36 @@ type Semantics struct {
 	// standing example of a value no vector holds and a real shell
 	// exhibits (#2060).
 	FunctionLocalTraps TrapLocality
+	// FunctionLocalOptions is whether the shell options a function *moves*
+	// go back when that function returns. See OptionLocality for the answers
+	// and for why it is a form rather than a flag.
+	//
+	// Not the same question as FunctionLocalTraps with a different table in
+	// it, though one shell answers both by the definition form: a `function`
+	// call there is handed an **empty** trap table and the caller's **live**
+	// options, so the trap answer is a reset and this one is a restore.
+	//
+	// only-ksh: measured 2026-09-16 over a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, stdin from /dev/null. `function g { set
+	// -o noglob; }; g` leaves noglob on in bash 5.3.20, bash 3.2.57,
+	// bash-as-`sh`, BusyBox ash 1.37.0 and zsh 5.9.2, and off in ksh93u+;
+	// the same body written `g() { … }` leaves it on everywhere, ksh93
+	// included. dash has neither the keyword nor a body to put it in, so the
+	// shape does not run there and the preset answers for it.
+	//
+	// The **pairing** is the claim and a row with one form in it is not:
+	// `function g { … }` alone would pass in any shell that scopes both
+	// forms, and there is one — zsh under `setopt localoptions`, which is a
+	// run-time option rather than a preset and is wired in
+	// dialect/zsh/localoptions.go.
+	//
+	// zsh's column wants a word of warning, because `$-` is the wrong
+	// instrument there: that shell's letter for noglob is `F`, so a probe
+	// asking `case $- in *f*)` reads "off" in zsh whatever the option is
+	// doing, and `set -f` there is NO_RCS and not noglob at all. Measured
+	// with `[[ -o noglob ]]` instead, zsh scopes **neither** form by
+	// default.
+	FunctionLocalOptions OptionLocality
 	// SIGPrefixAccepted reads `SIGINT` as a name for the same signal `INT`
 	// names, wherever a signal can be named.
 	//
@@ -16162,6 +16192,10 @@ func PosixSemantics() Semantics {
 		BracketCaretNegates:     No,
 		ExitTrapIsFunctionLocal: No,
 		FunctionLocalTraps:      TrapsSurviveTheFunction,
+		// The standard has no `function` keyword, so it has no second
+		// definition form to scope anything to: the preset takes the
+		// majority's answer, which is also every panel member's but one.
+		FunctionLocalOptions: OptionsSurviveTheFunction,
 		// The standard says nothing about what a function call does to the
 		// scan position — `local` is not in it — so the preset keeps the
 		// answer it has always had rather than following a member: a call
@@ -17243,6 +17277,85 @@ const (
 	//     putting back what it displaced.
 	TrapsGoBackAtTheReturnOfAKeywordFunction
 )
+
+// OptionLocality is what happens to the shell options a function moved when
+// that function returns. See Semantics.FunctionLocalOptions.
+//
+// A form rather than a flag for the reason TrapLocality is one, and it is the
+// same shell asking the same question about a second table: what turns the
+// scoping on is not agreed. One shell has an option — zsh's `localoptions`,
+// which is wired in dialect/zsh/localoptions.go rather than here because it
+// moves at run time. The other keys it on the definition form, and that is
+// the value below.
+//
+// The two tables are separate mechanisms in the shell as well as here.
+// Measured on zsh 5.9.2, which has both as options: `setopt localoptions`
+// leaves a function's trap installed and `setopt localtraps` leaves its
+// options moved.
+type OptionLocality int
+
+const (
+	// OptionLocalityUnspecified is no answer, and is refused like any other.
+	OptionLocalityUnspecified OptionLocality = iota
+
+	// OptionsSurviveTheFunction leaves the shell holding whatever the body
+	// set, whichever way the function was written: bash 5.3, bash 3.2,
+	// bash-as-`sh`, BusyBox ash — and zsh, until a script turns its option
+	// on.
+	OptionsSurviveTheFunction
+
+	// OptionsGoBackAtTheReturnOfAKeywordFunction hands a `function name { …
+	// }` call the option table as it stands and puts that table back at the
+	// return, where the same body written `name() { … }` writes the shell's:
+	// ksh93, where the definition form is the whole of what asks for the
+	// scoping.
+	//
+	// **Restored, not reset.** The body is handed the caller's table rather
+	// than a default one, which is what separates this from the trap answer
+	// beside it — a `function` call is handed an *empty* trap table and the
+	// caller's *live* options. Measured 2026-09-16 on AT&T 93u+ 2012-08-01,
+	// a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin
+	// from /dev/null, in both directions so that neither reading can be an
+	// accident of which way the default points:
+	//
+	//	set -o noglob; function g { case $- in (*f*) echo body-on;;
+	//	  (*) echo body-off;; esac; }; g            body-on
+	//	set +o trackall; function g { [[ -o trackall ]] &&
+	//	  echo body-on || echo body-off; }; g       body-off
+	//
+	// The caller had one option on that starts off and one off that starts
+	// on, and the body read both as the caller left them. A table cleared on
+	// the way in would have answered the opposite to each.
+	//
+	// And the return is the *restore* rather than a reset too, which is the
+	// row the panel was filed with: `set -o noglob; function g { set +o
+	// noglob; }; g` leaves noglob **on** — the caller's state came back,
+	// where a reset to the shell's defaults would have left it off.
+	//
+	// It is the whole table and not a chosen few. Measured a name at a time
+	// over nineteen of ksh93's own `set -o` names — allexport, errexit,
+	// noglob, nounset, noclobber, xtrace, verbose, notify, monitor, keyword,
+	// trackall, markdirs, nolog, bgnice, ignoreeof, emacs, vi, gmacs,
+	// pipefail — with the caller setting each and the body clearing it:
+	// every one of them was back at the return.
+	//
+	// The boundary is the `function` word and not the call, as it is for
+	// traps: `function o { set -o noglob; function i { set +o noglob; }; i;
+	// … }` reads noglob **on** inside `o` after `i` returns, because `i` had
+	// a table of its own; a POSIX-form function called from `o` would have
+	// moved `o`'s.
+	OptionsGoBackAtTheReturnOfAKeywordFunction
+)
+
+func (o OptionLocality) String() string {
+	switch o {
+	case OptionsSurviveTheFunction:
+		return "options survive the function"
+	case OptionsGoBackAtTheReturnOfAKeywordFunction:
+		return "options go back at the return of a `function` call"
+	}
+	return "unspecified"
+}
 
 func (t TrapLocality) String() string {
 	switch t {

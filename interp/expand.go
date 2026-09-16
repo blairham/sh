@@ -5352,6 +5352,16 @@ func (r *Runner) expandDollarSingle(s string) string {
 			b.WriteString(EncodeCodePoint(n))
 			i += 2 + used
 		case c == 'u' || c == 'U':
+			if !r.ask(r.sem().DollarSingleUnicodeEscapes, `$'\u': a code point escape`) {
+				// A shell whose `$'…'` has no Unicode escape at all, so
+				// the backslash is before a character nothing here claims
+				// and the unknown rule decides it — the digits after it
+				// are ordinary characters of the text. bash 3.2 and
+				// BusyBox ash (#3270).
+				r.writeUnknownEscape(&b, c)
+				i += 2
+				continue
+			}
 			width := 4
 			if c == 'U' {
 				width = 8
@@ -5412,7 +5422,7 @@ func (r *Runner) expandDollarSingle(s string) string {
 				i += 2
 				continue
 			}
-			v, next, ok := caretMetaEscape(p, s, i)
+			v, next, ok := r.caretMetaEscape(p, s, i)
 			if !ok {
 				// Nothing left to make a byte out of: measured, `$'x\C'`
 				// and `$'x\M-'` are both `x` in the shell that has them,
@@ -5434,7 +5444,7 @@ func (r *Runner) expandDollarSingle(s string) string {
 				i += 2
 				continue
 			}
-			x, next, ok := controlArgument(p, s, i+2)
+			x, next, ok := r.controlArgument(p, s, i+2)
 			if !ok {
 				// Nothing left to make a control character out of. ksh93
 				// drops the escape and produces nothing; bash keeps the two
@@ -5450,7 +5460,7 @@ func (r *Runner) expandDollarSingle(s string) string {
 			}
 			i = next
 		default:
-			if v, ok := simpleEscape(c); ok {
+			if v, ok := r.dollarSingleEscape(c); ok {
 				b.WriteByte(v)
 				i += 2
 				continue
@@ -5465,10 +5475,21 @@ func (r *Runner) expandDollarSingle(s string) string {
 // simpleEscape is the byte a one-character escape stands for, and whether the
 // character names one at all.
 //
-// Every entry is unanimous across bash, ksh93 and zsh — dash has no `$'…'` to
-// disagree with — so nothing here is an axis. It is a function rather than
-// part of the loop because `\c` has to read the same table: ksh93 controls
-// the character an escape *produced*, so `$'\c\t'` is control-tab there.
+// Every entry here is unanimous across **all six** columns that have the form
+// — bash 5.3, that binary as `sh`, bash 3.2, ksh93, zsh and BusyBox ash; dash
+// has no `$'…'` to disagree with — so nothing left in this table is an axis.
+//
+// The comment this replaces said the same thing of a longer table and named
+// three shells to prove it, which was a panel written before ash had a column
+// (#3270). `\e`, `\E` and `\?` were in it and BusyBox has none of the
+// three, so they left for DollarSingleEscEscape and DollarSingleQuestionEscape
+// and Runner.dollarSingleEscape is what reads the whole set now. A table
+// declared unanimous over the columns that happened to be in the room is the
+// shape of #3226 and #3248 as well.
+//
+// It is a function rather than part of the loop because `\c` has to read the
+// same table: ksh93 controls the character an escape *produced*, so
+// `$'\c\t'` is control-tab there.
 func simpleEscape(c byte) (byte, bool) {
 	switch c {
 	case 'n':
@@ -5485,12 +5506,30 @@ func simpleEscape(c byte) (byte, bool) {
 		return '\f', true
 	case 'v':
 		return '\v', true
-	case 'e', 'E':
-		return 0x1b, true
-	case '\\', '\'', '"', '?':
+	case '\\', '\'', '"':
 		return c, true
 	}
 	return 0, false
+}
+
+// dollarSingleEscape is the whole one-character escape set: simpleEscape's
+// unanimous entries, and the two a dialect answers for itself.
+//
+// Both answers are asked here rather than at the loop because `\c` and `\C-`
+// read the same set — the argument of a control escape may be written as an
+// escape, and the shell that decodes before controlling decodes with this
+// table. Only ksh93 and zsh reach those readers — the other two dialects
+// answer Absent at both `\c` and `\C` — and both answer Yes to both axes, so
+// threading the answers through changes nothing there while keeping the two
+// ends of one table from drifting apart, which is what #556 was.
+func (r *Runner) dollarSingleEscape(c byte) (byte, bool) {
+	switch c {
+	case 'e', 'E':
+		return 0x1b, r.ask(r.sem().DollarSingleEscEscape, `$'\e': the escape character`)
+	case '?':
+		return '?', r.ask(r.sem().DollarSingleQuestionEscape, `$'\?'`)
+	}
+	return simpleEscape(c)
 }
 
 // controlArgument is the character `\c` applies to, where the escape ends, and
@@ -5501,7 +5540,7 @@ func simpleEscape(c byte) (byte, bool) {
 // so `$'\c\t'` is control-backslash followed by a `t` — with the one
 // exception that a doubled backslash is read as the single character it
 // stands for. ksh93 decodes first, so the same text is control-tab.
-func controlArgument(p DollarSingleControlPolicy, s string, i int) (byte, int, bool) {
+func (r *Runner) controlArgument(p DollarSingleControlPolicy, s string, i int) (byte, int, bool) {
 	switch {
 	case i >= len(s):
 		return 0, i, false
@@ -5529,7 +5568,7 @@ func controlArgument(p DollarSingleControlPolicy, s string, i int) (byte, int, b
 		n, used := scanBase(s[i+1:], 8, 3)
 		return byte(n), i + 1 + used, true
 	default:
-		if v, ok := simpleEscape(c); ok {
+		if v, ok := r.dollarSingleEscape(c); ok {
 			return v, i + 2, true
 		}
 	}
@@ -5560,7 +5599,7 @@ func controlArgument(p DollarSingleControlPolicy, s string, i int) (byte, int, b
 // already applied. A doubled control is written nowhere — the flag that
 // writes these never nests one — and reproducing it would mean carrying the
 // argument's *spelling* past the point it became a byte.
-func caretMetaEscape(p DollarSingleCaretMetaPolicy, s string, i int) (byte, int, bool) {
+func (r *Runner) caretMetaEscape(p DollarSingleCaretMetaPolicy, s string, i int) (byte, int, bool) {
 	meta := s[i+1] == 'M'
 	if p == DollarSingleCaretMetaFoldedWithNoDash {
 		if meta {
@@ -5572,7 +5611,7 @@ func caretMetaEscape(p DollarSingleCaretMetaPolicy, s string, i int) (byte, int,
 		}
 		// No dash in the spelling, so the character after `\C` *is* the
 		// argument — `$'\C-A'` is this escape applied to `-`.
-		x, next, ok := caretMetaArgument(p, s, i+2)
+		x, next, ok := r.caretMetaArgument(p, s, i+2)
 		if !ok {
 			return 0, next, false
 		}
@@ -5588,7 +5627,7 @@ func caretMetaEscape(p DollarSingleCaretMetaPolicy, s string, i int) (byte, int,
 	if j < len(s) && s[j] == '-' {
 		j++
 	}
-	x, next, ok := caretMetaArgument(p, s, j)
+	x, next, ok := r.caretMetaArgument(p, s, j)
 	if !ok {
 		return 0, j, false
 	}
@@ -5636,7 +5675,7 @@ func caretMetaWritten(p DollarSingleCaretMetaPolicy, s string, i int) bool {
 // It is this file's own reading rather than controlArgument's, because that
 // one answers for `\c` and carries three shells' policies for it; the two
 // agree on the ordinary escapes and only this one takes a nested `\C-`.
-func caretMetaArgument(p DollarSingleCaretMetaPolicy, s string, i int) (byte, int, bool) {
+func (r *Runner) caretMetaArgument(p DollarSingleCaretMetaPolicy, s string, i int) (byte, int, bool) {
 	switch {
 	case i >= len(s):
 		return 0, i, false
@@ -5645,7 +5684,7 @@ func caretMetaArgument(p DollarSingleCaretMetaPolicy, s string, i int) (byte, in
 	}
 	switch c := s[i+1]; {
 	case (c == 'C' || c == 'M') && caretMetaWritten(p, s, i):
-		return caretMetaEscape(p, s, i)
+		return r.caretMetaEscape(p, s, i)
 	case c == 'x':
 		if n, used := scanBase(s[i+2:], 16, 2); used > 0 {
 			return byte(n), i + 2 + used, true
@@ -5654,7 +5693,7 @@ func caretMetaArgument(p DollarSingleCaretMetaPolicy, s string, i int) (byte, in
 		n, used := scanBase(s[i+1:], 8, 3)
 		return byte(n), i + 1 + used, true
 	default:
-		if v, ok := simpleEscape(c); ok {
+		if v, ok := r.dollarSingleEscape(c); ok {
 			return v, i + 2, true
 		}
 	}

@@ -319,6 +319,13 @@ func Semantics() interp.Semantics {
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
+	// unanswered DollarSingleEscEscape, DollarSingleQuestionEscape and
+	// DollarSingleUnicodeEscapes: dash has no `$'…'` at all, so the `$` is an
+	// ordinary character and what follows it is an ordinary quoted string —
+	// measured 2026-09-16, `printf '%s' $'\e'` writes `$` then `\e`, three
+	// bytes, where every other column writes one. The five other axes of that
+	// construct are unanswered here for the same reason and have been since
+	// the dialect was written (#3270).
 	// unanswered TraceArrayLiteralShowsTheExpandedElements: there is no
 	// array literal to trace. Measured 2026-09-14, `a=(1 2)` is `Syntax
 	// error: "(" unexpected` at 2 — the parenthesis, not the assignment — so

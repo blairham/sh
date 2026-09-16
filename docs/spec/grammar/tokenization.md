@@ -96,29 +96,40 @@ the quoting was once recorded and nothing decoded it), `\e`, `\xHH`,
 `\NNN`, the code-point pair, `\cX` twice, the NUL, and an escape with no
 meaning.
 
-Unanimous across bash 3.2, bash 5.3, ksh93 and zsh, and decoded here:
+Unanimous across **all six** columns that have the form — bash 3.2, bash
+5.3, that binary as `sh`, ksh93, zsh and BusyBox ash — and decoded here:
 
 | escape | value |
 | --- | --- |
 | `\n` `\t` `\r` `\a` `\b` `\f` `\v` | the C control characters |
-| `\e`, `\E` | ESC (0x1b), both spellings |
-| `\\` `\'` `\"` `\?` | the character itself |
+| `\\` `\'` `\"` | the character itself |
 | `\xHH` | the byte, one or two hex digits — `$'\x4'` is 0x04 |
 | `\NNN` | the byte, one to three octal digits — `$'\101'` is `A` |
+
+The list used to be longer and used to say "bash 3.2, bash 5.3, ksh93
+and zsh", which was a panel written before BusyBox had a column. `\e`,
+`\E` and `\?` were in it and BusyBox reads none of the three, so they
+are axes now and are listed below (#3270). The same shape as #3226 and
+#3248: **a table is unanimous only over the columns that were in the
+room.**
 
 The octal form is one rule and not two: `\0101` is three digits counted
 from the zero onward, so it is a backspace and then a `1` rather than
 0x41. A value past a byte wraps into one — `$'\400'` is a zero byte,
 which is the truncation rule below and not a separate answer.
 
-Two escapes are decoded here on the current shells' agreement, with
-bash 3.2 keeping the text as written — dated, not vetoed, per
-`../core.md`:
+The two code-point escapes are an axis,
+`DollarSingleUnicodeEscapes` — bash 5.3, that binary as `sh`, ksh93 and
+zsh read both, and **bash 3.2 and BusyBox ash read neither**, keeping
+the backslash and every digit. Measured 2026-09-16 by `od`:
 
-| escape | value | bash 3.2 |
+| escape | value | bash 3.2, BusyBox ash |
 | --- | --- | --- |
 | `\uHHHH` | the code point, up to four hex digits, as UTF-8 | literal |
-| `\UHHHHHHHH` | the same, up to eight digits | literal (as `sh` and as `bash` alike) |
+| `\UHHHHHHHH` | the same, up to eight digits | literal |
+
+One axis for both spellings, measured rather than assumed: no column
+reads one and not the other.
 
 **What a shell does with a code point outside ASCII depends on the
 locale.** Under `LC_ALL=C`, bash 5.3 prints `$'é'` as the eight
@@ -130,6 +141,20 @@ which is a divergence recorded rather than fixed here.
 Three places the panel splits, and each is an axis on the semantics
 vector rather than a decision taken here:
 
+- **`\e` and `\E`, the escape character** — `DollarSingleEscEscape`.
+  1b in bash 5.3, bash 3.2, that binary as `sh`, ksh93 and zsh; BusyBox
+  ash has neither spelling, so `$'\e'` is a backslash and an `e` there
+  and `DollarSingleUnknownEscape` decides the backslash. One axis for
+  both letters here, where the `echo -e` site needs two — and the two
+  sites **disagree inside BusyBox**: `echo -e 'a\eZ'` writes 1b there
+  and `$'a\eZ'` does not (#3226, #3270). An answer carried from one
+  site to the other is a guess.
+- **`\?`, the question mark** — `DollarSingleQuestionEscape`. The
+  question mark alone in the five columns that have it; BusyBox ash
+  keeps the backslash. It is the one entry of the C set that shell
+  leaves out — `\n`, `\r`, `\a`, `\b`, `\f`, `\v`, `\\`,
+  `\'`, `\"` and the octal forms were measured beside it and are
+  unanimous.
 - **`\cX`, the control character** — `DollarSingleBackslashC`. bash and
   ksh93 decode it and zsh has no such escape at all, so `$'\cA'` is
   0x01, 0x01 and `cA`. The two that decode use *different arithmetic*,

@@ -729,6 +729,21 @@ func TestDollarSingleAnswers(t *testing.T) {
 	if got, want := s.DollarSingleNul, interp.DollarSingleNulEndsTheSpan; got != want {
 		t.Errorf("DollarSingleNul = %v, want %v", got, want)
 	}
+	// `\e`, `\E`, `\?` and both Unicode spellings are all read here, which
+	// is what made them axes rather than a shared table: BusyBox ash has
+	// none of the five (#3270).
+	for _, tc := range []struct {
+		axis string
+		got  interp.Answer
+	}{
+		{"DollarSingleEscEscape", s.DollarSingleEscEscape},
+		{"DollarSingleQuestionEscape", s.DollarSingleQuestionEscape},
+		{"DollarSingleUnicodeEscapes", s.DollarSingleUnicodeEscapes},
+	} {
+		if tc.got != interp.Yes {
+			t.Errorf("%s = %v, want %v", tc.axis, tc.got, interp.Yes)
+		}
+	}
 }
 
 // A login shell reads ~/.profile whether or not it is going to prompt.

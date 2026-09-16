@@ -1373,6 +1373,14 @@ func Semantics() interp.Semantics {
 	// are kept as written, where zsh reads them as one byte apiece and ksh93
 	// reads a different escape out of the same spelling (#2345).
 	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaAbsent
+	// `$'\e'` and `$'\E'` are both the escape character, `$'\?'` is the
+	// question mark alone, and both Unicode spellings are read as a code
+	// point: $'\u0041' and $'\U00000041' are `41`. The last is a bash 4 feature
+	// and the 3.2 macOS ships keeps the characters as written, which is a
+	// version this dialect does not model — the preset is 5.3 (#3270).
+	s.DollarSingleEscEscape = interp.Yes
+	s.DollarSingleQuestionEscape = interp.Yes
+	s.DollarSingleUnicodeEscapes = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No

@@ -983,6 +983,35 @@ So the exception is not "a prefix ends the body" but "the substitution's
 closer may follow the delimiter" — four of the six columns take it and
 two refuse — and it is the only place the whole-line rule bends.
 
+**A line reading the delimiter alone further down does not move it.**
+Measured 2026-09-16, script files under `env -i`:
+
+    x=$(cat <<EOF
+    body
+    EOF)
+    echo "[$x]"
+    EOF
+    )
+    echo "{$x}"
+
+bash 5.3.20 and ksh93u+ print `[body]`, then run `EOF` as a command and
+refuse the `)` under it — the body ended at `EOF)` although a later line
+could have ended it, and bash warns about end of file there exactly as it
+does with nothing further down. zsh 5.9.2 and dash read the body from the
+whole input, so it ends at the later `EOF` and the `)` under that closes the
+substitution: `{body`, `EOF)`, `echo "[]"}`. The same holds for `<<-` over
+`<tab>EOF)`, a quoted delimiter, `EOF))` closing two substitutions, `EOF)x`
+(the `x` joins the word the substitution is in), `EOF);cmd`, and `<(`.
+The reading that only looked for the `)` once nothing further down could
+end the body was wrong in bash and ksh93 whenever the file went on to hold
+the delimiter again, which a file of several such documents always does.
+
+bash reads further than ksh93 here, and it is not modeled: `EOF )`, with a
+blank before the parenthesis, and `EOF X )` both end the body in bash and
+are body in ksh93, zsh and dash — bash appears to end it at a line that
+opens with the delimiter and holds a `)` anywhere, since `EOF "a)"` does
+too. `EOF X` with no parenthesis is body in all four.
+
 bash 5.3 also *warns* there that the document was delimited by end of
 file, which is the same remark `<<-` with a space-indented delimiter
 earns below. **Where that warning comes from is the interesting part**
@@ -1044,6 +1073,27 @@ and the heredoc swallows the rest of the input. bash warns about that
 (`here-document delimited by end-of-file`); dash, ksh93 and zsh take it
 silently. Reaching the end of input without the delimiter is therefore
 **unfinished input**, not a syntax error.
+
+**A delimiter written with a leading tab is where the panel parts three
+ways.** Only a quoted delimiter can begin with one — `<<- '<tab>EOF'` — and
+the stripped body lines can then never be spelled like it. Measured
+2026-09-16, script files under `env -i`, the body printed by `cat`:
+
+| delimiter written | `<tab>EOF` | `<tab>EOF` | `<tab>EOF` | `<tab><tab>EOF` |
+| --- | --- | --- | --- | --- |
+| end line | `<tab>EOF` | `EOF` | `<tab><tab>EOF` | `<tab><tab>EOF` |
+| bash 5.3.20 | ends | runs out, warns | runs out, warns | ends |
+| zsh 5.9.2 | ends | ends | ends | ends |
+| ksh93u+ 2012 | ends | ends | ends | ends |
+| dash 0.5.12 | runs out | runs out | runs out | runs out |
+
+bash compares the line as written as well as the stripped line; zsh and
+ksh93 strip the delimiter's leading tabs as they strip the lines'; dash
+compares the stripped line against the delimiter as written, which nothing
+can equal. Without the dash nothing is stripped and `<tab>EOF` ends a
+`<tab>EOF` document in all four, and a tab *inside* the delimiter
+(`'E<tab>OF'`) is unanimous. BusyBox ash was not reachable on the day and
+is unmeasured. `syntax.Dialect.StrippedHeredocDelimiter` carries it.
 
 ## `<<<` is a redirection, not a heredoc
 

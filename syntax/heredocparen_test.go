@@ -251,10 +251,11 @@ func parseErr(t *testing.T, src string) *Error {
 //	EOF)
 //	echo "[$v]"
 //	EOF
+//	)
 //
 // The shells that end a body at the closing parenthesis end it at `EOF)`
 // still — bash 5.3 and ksh93 print `[a]` and then run the later `EOF` as a
-// command. Reading the body from the whole input first found that later line,
+// command and refuse the `)` under it. Reading the body from the whole input first found that later line,
 // so the substitution took the `echo` and the rest with it and nothing warned:
 // the `)` was only ever looked for once nothing further down could end the
 // body. Three shapes, each with a later delimiter, and the substitution's text
@@ -266,22 +267,22 @@ func TestADelimiterCarryingTheParenEndsTheBodyEvenWithALaterDelimiter(t *testing
 	}{
 		{
 			name:  "a command substitution",
-			src:   "v=$(cat <<EOF\na\nEOF)\necho \"[$v]\"\nEOF\n",
+			src:   "v=$(cat <<EOF\na\nEOF)\necho \"[$v]\"\nEOF\n)\n",
 			value: "cat <<EOF\na\nEOF",
 		},
 		{
 			name:  "the tab-stripping operator",
-			src:   "v=$(cat <<-EOF\n\ta\n\tEOF)\necho \"[$v]\"\nEOF\n",
+			src:   "v=$(cat <<-EOF\n\ta\n\tEOF)\necho \"[$v]\"\nEOF\n)\n",
 			value: "cat <<-EOF\n\ta\n\tEOF",
 		},
 		{
 			name:  "a quoted delimiter",
-			src:   "v=$(cat <<'EOF'\na\nEOF)\necho \"[$v]\"\nEOF\n",
+			src:   "v=$(cat <<'EOF'\na\nEOF)\necho \"[$v]\"\nEOF\n)\n",
 			value: "cat <<'EOF'\na\nEOF",
 		},
 		{
 			name:  "nested, closing both",
-			src:   "v=$(echo $(cat <<EOF\na\nEOF))\necho \"[$v]\"\nEOF\n",
+			src:   "v=$(echo $(cat <<EOF\na\nEOF))\necho \"[$v]\"\nEOF\n))\n",
 			value: "echo $(cat <<EOF\na\nEOF)",
 		},
 	} {
@@ -296,8 +297,12 @@ func TestADelimiterCarryingTheParenEndsTheBodyEvenWithALaterDelimiter(t *testing
 			if got != c.value {
 				t.Errorf("substitution text = %q, want %q", got, c.value)
 			}
-			if rest := p.Parse(); p.Err() != nil || len(rest.Stmts) != 2 {
-				t.Errorf("the lines after it: %d statements, err %v; want the echo and the later delimiter run as commands", len(rest.Stmts), p.Err())
+			// The next line is the echo, run as a command of the program. Read
+			// from the whole input, the substitution would have taken it and
+			// ended at the `)` under the later delimiter instead.
+			next, _ := p.NextLine()
+			if next == nil || len(next.Stmts) != 1 || next.Stmts[0].Pos().Line != 4 {
+				t.Errorf("the line after it is not a statement of the program of its own: %v, err %v", next, p.Err())
 			}
 			var remarked bool
 			for _, r := range p.Remarks() {

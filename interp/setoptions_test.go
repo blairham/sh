@@ -35,29 +35,154 @@ func TestTurningOffWhatThisShellNeverDoesSucceeds(t *testing.T) {
 	}
 }
 
-// And turning one *on* is refused, because accepting would be promising to
-// behave differently afterwards.
+// listedState reads one row out of a `set -o` listing, for the assertions
+// about a state rather than a status. It answers "on", "off", or the empty
+// string where the listing has no such row; the *last* listing a script
+// printed is the one read, so a subshell's rows do not hide the parent's.
 //
-// `posix` was on this list until it became a mode this shell really has —
-// which is the shape of the rule rather than an exception to it: the promise
-// can be made now, so the request is granted. TestPosixModeMovesAnAxis is
-// where it is held to it. `vi` left the list the same way, and
-// TestTheTwoEditingModesAreOneStateWithThreeValues is where it is held to it.
-func TestTurningOnWhatThisShellDoesNotDoIsRefused(t *testing.T) {
-	for _, name := range []string{"notify"} {
+// The split is on the name rather than on whitespace, because the substrate's
+// own listing pads to a fixed width and a name longer than that runs straight
+// into its state — `interactive-commentsoff` is a row this shell writes. The
+// state has to be one of the two words for the row to count, so a longer name
+// beginning with a shorter one is not mistaken for it.
+func listedState(out, name string) string {
+	state := ""
+	for _, line := range strings.Split(out, "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), name)
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(rest) {
+		case "on":
+			state = "on"
+		case "off":
+			state = "off"
+		}
+	}
+	return state
+}
+
+// And turning one *on* is remembered rather than refused, which is the answer
+// #3128 replaced a refusal with.
+//
+// A refusal was the honest answer while the listing was short. It stopped
+// being one once the listing carried a shell's whole roster, because the
+// listing is a capture surface: `eval "$(set +o)"` writes back what it read,
+// so a row the shell advertises and then declines is a line it hands out and
+// rejects. Measured 2026-09-16 — every shell in the panel that lists `notify`
+// takes it in both directions at 0, and so does every other name any of them
+// lists, bar the handful about being interactive.
+//
+// What recording promises is exactly this much: the request succeeds, the
+// listing reports it back, and nothing else in the shell reads it. So the
+// state is what is asserted rather than the status alone — a status of 0 on
+// its own cannot tell a request that was remembered from one dropped on the
+// floor, and one name in ksh93's roster really is the second of those (see
+// TestAnInertOptionIsTakenAndDoesNotMove).
+//
+// `posix` and `vi` left this kind by being *built*, which is the other way
+// out: TestPosixModeMovesAnAxis and
+// TestTheTwoEditingModesAreOneStateWithThreeValues hold those two to it.
+func TestANameThisShellDoesNotDoIsRememberedRatherThanRefused(t *testing.T) {
+	for _, name := range []string{"notify", "ignoreeof", "nolog"} {
 		t.Run(name, func(t *testing.T) {
 			// The status of `set` itself, which a later command would
 			// otherwise replace — the first version of this test asserted
 			// the script's status and passed on the strength of the `echo`
 			// after it.
-			out, _ := run(t, "set -o "+name+"\necho \"st=$?\"\n", withExtras)
-			if !strings.Contains(out, "not implemented") {
-				t.Errorf("set -o %s said %q, want it refused as unimplemented", name, out)
+			out, _ := run(t, "set -o "+name+"\necho \"st=$?\"\nset -o\n", withExtras)
+			if strings.Contains(out, "not implemented") || !strings.Contains(out, "st=0") {
+				t.Errorf("set -o %s said %q, want it taken at 0", name, out)
 			}
-			if !strings.Contains(out, "st=2") {
-				t.Errorf("set -o %s said %q, want status 2", name, out)
+			if got := listedState(out, name); got != "on" {
+				t.Errorf("set -o %s left the row %q, want on (listing %q)", name, got, out)
+			}
+			// And off again, which is the half a one-way write would pass.
+			out, _ = run(t, "set -o "+name+"\nset +o "+name+"\nset -o\n", withExtras)
+			if got := listedState(out, name); got != "off" {
+				t.Errorf("set +o %s left the row %q, want off (listing %q)", name, got, out)
 			}
 		})
+	}
+}
+
+// The refusal is still there for a name with nothing behind it at all.
+//
+// It is the substrate's answer to a name a dialect declared and the table
+// knows nothing about — every entry in the table is now implemented, recorded
+// or read-only, so the two names that reach this are `rc` and `login_shell`,
+// which report a fact about the invocation and have no state to write. The one
+// shell that lists them refuses them out loud in both directions and declares
+// so with AddImmovableSetOptions, which is why the branch is reached here by a
+// runner that declares the name and not the refusal.
+//
+// Pinned rather than left to the table, because a branch nothing can reach is
+// dead data that reads as a rule: this is where an embedder's own name lands
+// the day it is declared without an answer.
+func TestADeclaredNameWithNothingBehindItIsStillRefused(t *testing.T) {
+	setup := func(r *Runner) { r.AddSetOptions("rc") }
+	out, _ := run(t, "set -o rc\necho \"st=$?\"\n", setup)
+	if !strings.Contains(out, "not implemented") || !strings.Contains(out, "st=2") {
+		t.Errorf("set -o rc said %q, want it refused as unimplemented at 2", out)
+	}
+	// And the other direction is the state it is already in, so it is granted
+	// — which is what says the refusal is about the promise and not the name.
+	out, _ = run(t, "set +o rc\necho \"st=$?\"\n", setup)
+	if strings.Contains(out, "not implemented") || !strings.Contains(out, "st=0") {
+		t.Errorf("set +o rc said %q, want it granted at 0", out)
+	}
+}
+
+// A recorded state is the subshell's, exactly as an implemented one is.
+//
+// The states behind the implemented options are plain fields on the runner and
+// a clone copies them by value; a recorded one lives in a table, and a table a
+// clone shares is one state with two shells writing it. See
+// interp/clonetables.go, which is where that is enforced rather than
+// remembered.
+func TestARecordedOptionDoesNotEscapeASubshell(t *testing.T) {
+	// The parent moves a recorded name *first*, and that is the whole of what
+	// makes this discriminating. The store is allocated lazily, and
+	// maps.Clone keeps a nil map nil — so a parent that has never recorded
+	// anything hands the subshell a nil, the subshell builds a table of its
+	// own, and a shared field leaks nothing yet. Written the other way round
+	// this test passed with the clone deleted. See interp/clonetables.go,
+	// which is where that trap is recorded.
+	const seed = "set -o ignoreeof\n"
+	inside, _ := run(t, seed+"(set -o notify; set -o)\n", withExtras)
+	if got := listedState(inside, "notify"); got != "on" {
+		t.Errorf("inside the subshell notify was %q, want on", got)
+	}
+	after, _ := run(t, seed+"(set -o notify)\nset -o\n", withExtras)
+	if got := listedState(after, "notify"); got != "off" {
+		t.Errorf("after the subshell notify was %q, want it left where the parent had it", got)
+	}
+}
+
+// And a name a dialect declares inert is taken and does not move.
+//
+// ksh93's `privileged` is the one: `set -o privileged` is 0 with nothing on
+// standard error and the row still reads off afterwards, and `ksh -p` reports
+// it off too — so the request is granted and the state is out of a script's
+// reach. That is neither a refusal nor a move, and it is the reason this test
+// reads the listing rather than the status. See Runner.AddInertSetOptions.
+func TestAnInertOptionIsTakenAndDoesNotMove(t *testing.T) {
+	setup := func(r *Runner) {
+		withExtras(r)
+		r.AddInertSetOptions("privileged")
+	}
+	out, _ := run(t, "set -o privileged\necho \"st=$?\"\nset -o\n", setup)
+	if strings.Contains(out, "not implemented") || !strings.Contains(out, "st=0") {
+		t.Errorf("set -o privileged said %q, want it taken at 0", out)
+	}
+	if got := listedState(out, "privileged"); got != "off" {
+		t.Errorf("set -o privileged left the row %q, want it still off (listing %q)", got, out)
+	}
+	// Without the declaration the same name is recorded and does move, which
+	// is what says the declaration is doing the work rather than the table.
+	out, _ = run(t, "set -o privileged\nset -o\n", withExtras)
+	if got := listedState(out, "privileged"); got != "on" {
+		t.Errorf("an undeclared privileged left the row %q, want on (listing %q)", got, out)
 	}
 }
 
@@ -80,23 +205,31 @@ func TestANameThisShellDoesNotHaveIsStillInvalid(t *testing.T) {
 	}
 }
 
-// A name we are already doing goes the other way round: it can be turned on
-// and not off. Comments are honored wherever they are written here, so a
-// script may ask for that and may not ask us to stop.
+// A name whose recorded state starts *on* is a request in the plus direction,
+// and it is taken there too.
+//
+// Comments are honored wherever they are written here, so the row is on and
+// nothing reads it — which used to make `set +o interactive-comments` a
+// refusal. bash takes that word at 0, measured 2026-09-16, and it is the one
+// name in bash's own listing this shell refused in the plus direction: the
+// half of #3128 that only a sweep of a listing in *both* directions finds.
 //
 // It used to be `braceexpand` standing here, and that was the wrong name for
 // the shape: braces are something this shell *does*, so the switch beside them
 // is buildable and was built in #1856. The names left in this kind are the
 // ones with nothing behind them to move.
-func TestANameThisShellAlreadyDoesTurnsOnAndNotOff(t *testing.T) {
+func TestANameThisShellAlreadyDoesIsTakenInBothDirections(t *testing.T) {
 	setup := func(r *Runner) { r.AddSetOptions("interactive-comments") }
 	out, st := run(t, "set -o interactive-comments\necho \"st=$?\"\n", setup)
 	if st != 0 || !strings.Contains(out, "st=0") {
 		t.Errorf("set -o interactive-comments gave %q (status %d), want it accepted", out, st)
 	}
-	out, _ = run(t, "set +o interactive-comments\necho \"st=$?\"\n", setup)
-	if !strings.Contains(out, "not implemented") || !strings.Contains(out, "st=2") {
-		t.Errorf("set +o interactive-comments gave %q, want it refused — comments are honored here", out)
+	out, _ = run(t, "set +o interactive-comments\necho \"st=$?\"\nset -o\n", setup)
+	if strings.Contains(out, "not implemented") || !strings.Contains(out, "st=0") {
+		t.Errorf("set +o interactive-comments gave %q, want it taken at 0", out)
+	}
+	if got := listedState(out, "interactive-comments"); got != "off" {
+		t.Errorf("set +o interactive-comments left the row %q, want off (listing %q)", got, out)
 	}
 }
 
@@ -976,11 +1109,35 @@ func TestThePrivilegedLetter(t *testing.T) {
 	if !strings.Contains(out, "st=0") {
 		t.Errorf("out = %q, want the name granted too", out)
 	}
-	// The move this shell cannot make is refused, and refused by the *name*
-	// — the letter is not a second complaint about the same request.
+	// And the move, which is granted and lands wherever the name lands.
+	//
+	// It used to be refused here, by the *name* rather than by the letter —
+	// and that was the name's answer rather than the letter's then too. The
+	// name is recorded since #3128 and the letter followed it without being
+	// told, which is the point of routing the letter through the table: two
+	// spellings of one question cannot answer differently. Measured
+	// 2026-09-16, `set -p` is status 0 in bash 5.3.20, bash 3.2.57 and
+	// ksh93u+ alike, and the two shells differ only in where the row lands
+	// afterwards — on in bash, off in ksh93, which is
+	// Runner.AddInertSetOptions and not the letter's business.
 	out, _ = run(t, `set -p; echo "st=$?"`, has(Yes))
-	if !strings.Contains(out, "privileged") || !strings.Contains(out, "st=2") {
-		t.Errorf("out = %q, want the name refused at 2", out)
+	if !strings.Contains(out, "st=0") || strings.Contains(out, "not implemented") {
+		t.Errorf("out = %q, want the letter granted through the name", out)
+	}
+	// And the row it leaves behind, which is the half a status cannot see:
+	// recorded here, so the letter really did move the state the name holds.
+	out, _ = run(t, "set -p\nset -o\n", has(Yes))
+	if got := listedState(out, "privileged"); got != "on" {
+		t.Errorf("set -p left the row %q, want on (listing %q)", got, out)
+	}
+	// Where the dialect declares the name inert the same letter is still
+	// granted and the row does not move, which is ksh93's answer.
+	out, _ = run(t, "set -p\nset -o\n", func(r *Runner) {
+		has(Yes)(r)
+		r.AddInertSetOptions("privileged")
+	})
+	if got := listedState(out, "privileged"); got != "off" {
+		t.Errorf("set -p under an inert name left the row %q, want off (listing %q)", got, out)
 	}
 	// Where the dialect has not got the letter at all, both directions are a
 	// bad option rather than a granted no-op.

@@ -1858,6 +1858,13 @@ func (r *Runner) setOption(name string, on bool) bool {
 		// stays in its listing and still reports which state it is in.
 		return r.badSetOptionName(name)
 	}
+	if r.inertOptions[name] {
+		// A name this shell lists and takes in both directions with nothing
+		// behind it moving — see Runner.AddInertSetOptions. Granted before
+		// the table is consulted, because what the substrate could do with
+		// the state is exactly what this says does not happen.
+		return true
+	}
 	if o.try != nil {
 		// A request the dialect may refuse, handed the spelling it was asked
 		// with — the refusal echoes it back.

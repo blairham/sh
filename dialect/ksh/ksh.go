@@ -3412,6 +3412,14 @@ func Apply(r *interp.Runner) {
 	// substrate has `interactive` as a movable name for the shell that does
 	// let a script write it, so this says otherwise for this one.
 	r.AddImmovableSetOptions("interactive", "login_shell", "rc")
+	// And one that is listed, *taken* in both directions, and never moves.
+	// Measured 2026-09-16 on ksh93u+: `set -o privileged` is 0 with nothing
+	// on stderr and the listing still says `privileged off` afterwards, and
+	// `ksh -p` reports it off too — so the request is granted and the state
+	// is out of a script's reach, which is neither a refusal nor a move.
+	// bash takes the same word and does move it, which is why this is the
+	// dialect's to say. See Runner.AddInertSetOptions (#3128).
+	r.AddInertSetOptions("privileged")
 	// ksh93 has a `builtin` of its own and it is a different command: it
 	// *registers* builtins rather than running one. With no operands it
 	// lists the table; each operand is a name to add, and one that is not

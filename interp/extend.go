@@ -1341,6 +1341,32 @@ func (r *Runner) AddImmovableSetOptions(names ...string) {
 	}
 }
 
+// AddInertSetOptions declares `set -o` names this shell **lists** and
+// **takes** in both directions, and whose state never moves.
+//
+// The fourth answer beside the three above, and the difference from
+// [Runner.AddImmovableSetOptions] is the whole of it: an immovable name is
+// refused out loud, and an inert one is granted and then reports the state it
+// was already in. Both are facts about the shell being imitated rather than
+// about this implementation, which is why both are a dialect's to declare and
+// neither is written in the option table.
+//
+// One name in the panel is this. Measured 2026-09-16 on ksh93u+ 2012-08-01:
+// `set -o privileged` is status 0 with nothing on stderr and `set -o` then
+// reports `privileged off`, and so does `ksh -p`, so the state is not one a
+// request can reach. bash 5.3.20 and bash 3.2.57 take the same word and
+// report `privileged on` afterwards — the name is taken in both shells and
+// only one of them moves, which is what makes this a declaration rather than
+// an entry beside `privileged` in setoptions.go (#3128).
+func (r *Runner) AddInertSetOptions(names ...string) {
+	if r.inertOptions == nil {
+		r.inertOptions = make(map[string]bool, len(names))
+	}
+	for _, n := range names {
+		r.inertOptions[n] = true
+	}
+}
+
 // SetOptionTable installs the `set -o` namespace of a dialect that has one of
 // its own: the rows `set -o` and `set +o` write, and what moving one name
 // does.

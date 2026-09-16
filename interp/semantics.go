@@ -2405,6 +2405,75 @@ type Semantics struct {
 	// call in a shell empties it as the table says.
 	GetoptsEmptiesOptargForAnArgumentlessOption Answer
 
+	// GetoptsUnsetsOptargAtEndOfOptions takes OPTARG away on the call that
+	// reports "no more options", rather than leaving the last option's
+	// argument standing.
+	//
+	// The run that says the scan is over is also the one that clears OPTARG
+	// in five of the seven columns, and a script reading `$OPTARG` after its
+	// `while getopts` loop gets the previous option's value in the other two.
+	// Measured 2026-09-16 over a script file under `env -i
+	// PATH=/usr/bin:/bin`, `OPTARG=PRESET; OPTIND=1; set -- x; getopts a: o`
+	// — and identically over `-- x`, over no words at all, and over the call
+	// after an option that was read:
+	//
+	//	bash 5.3.20   OPTARG unset
+	//	bash as `sh`  OPTARG unset
+	//	bash 3.2.57   OPTARG unset
+	//	ksh93u+       OPTARG unset
+	//	BusyBox ash   OPTARG unset
+	//	dash 0.5.12   PRESET stands
+	//	zsh 5.9.2     PRESET stands
+	//
+	// Five and two, so it is an axis. It is **not** the empty-or-unset
+	// question GetoptsClearsOptarg and
+	// GetoptsEmptiesOptargForAnArgumentlessOption ask: every column that
+	// clears here unsets, so there is no second answer for that to hold —
+	// and the two columns that keep the value are dash and zsh, which is a
+	// third grouping again. dash and BusyBox ash part company here for the
+	// third time in this builtin, which is what keeps the three apart (#3146).
+	GetoptsUnsetsOptargAtEndOfOptions Answer
+
+	// GetoptsClearingOptargIsARealUnset makes `getopts` clear OPTARG by
+	// **taking the name away** rather than by writing over it — so a
+	// `readonly` on OPTARG neither stops the clearing nor survives it.
+	//
+	// bash alone, and both halves are one answer rather than two: removing a
+	// name removes what was recorded about it. Measured 2026-09-16 over a
+	// script file under `env -i PATH=/usr/bin:/bin`, with `OPTARG=P; readonly
+	// OPTARG` in front of each and reading OPTARG and then whether a later
+	// assignment is taken:
+	//
+	//	                     bash 5.3.20   ksh93u+   dash 0.5.12   BusyBox ash   zsh 5.9.2
+	//	a bad option          gone, free   gone, frozen   P, frozen   P, frozen   "", frozen
+	//	a missing argument    gone, free   gone, frozen   P, frozen   P, frozen   "", frozen
+	//	the end of options    gone, free   gone, frozen   P, frozen   P, frozen   P, frozen
+	//
+	// bash 3.2.57 and bash called as `sh` answer as 5.3.20 does. "free" is
+	// `OPTARG=written` succeeding on the line after; everywhere else it is
+	// still refused. So a `readonly OPTARG` early in a file left this shell
+	// believing in a freeze bash had dropped, and a later assignment or
+	// `typeset -n OPTARG=…` got a refusal out of nowhere — one whole line of
+	// bash's own `getopts` file, measured both ways (#3146).
+	//
+	// The other columns reach their rows through answers this builtin
+	// already has: ksh93 and zsh write past the freeze without a word
+	// (GetoptsOwnParametersIgnoreAFreeze), and dash and BusyBox ash are
+	// refused by it (GetoptsRefusedWriteEndsTheBuiltin decides what that
+	// costs).
+	//
+	// # The one clearing this is not asked of
+	//
+	// An option the string *has* and that takes no argument. bash goes
+	// through the ordinary refusal there: measured the same day, `set -- -b;
+	// OPTARG=P; readonly OPTARG; getopts a:b o` writes `OPTARG: readonly
+	// variable`, leaves `P` standing and leaves the freeze on — against the
+	// three rows above, which are silent in the same shell. Two clearings
+	// spelled the same way in the manual and answered differently by the
+	// shell, which is why clearOptargForAnArgumentlessOption does not ask
+	// this.
+	GetoptsClearingOptargIsARealUnset Answer
+
 	// GetoptsOwnParametersIgnoreAFreeze lets `getopts` write OPTARG and
 	// OPTIND over a `readonly` on them, without a word.
 	//

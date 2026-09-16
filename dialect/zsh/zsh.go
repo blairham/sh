@@ -2013,6 +2013,12 @@ func Semantics() interp.Semantics {
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.Yes
 	// OPTARG and OPTIND are written through a freeze without a word, as in
 	// ksh93 — measured 2026-09-16 on 5.9.2.
+	// The last option's argument stands after the scan runs out, as in dash.
+	s.GetoptsUnsetsOptargAtEndOfOptions = interp.No
+	// The clearings this shell does make write an empty string through the
+	// freeze rather than removing the name, so the freeze is still on
+	// afterwards.
+	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.Yes
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
 	// The freeze on the *name* is reached, and this is the one shell where a

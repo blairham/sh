@@ -121,3 +121,21 @@ p=$!
 ( kill -9 $p ) 2>&1 | said
 wait $p 2> /dev/null
 printf 'a signal this shell has -> nothing said above\n'
+
+# --- getopts: OPTARG when the scan runs out of options ---
+#
+# This shell unsets OPTARG on the call that reports "no more options", which
+# is where it parts from dash for the third time in one builtin: dash leaves
+# the last option's argument standing, and bash and ksh93 unset it as this
+# shell does. The two are otherwise the closest pair on the panel (#3146).
+
+( OPTIND=1; set -- -a val x
+  getopts 'a:' o; getopts 'a:' o
+  printf 'after the scan: st=%s o=[%s] OPTARG=[%s]\n' "$?" "$o" "${OPTARG-unset}" )
+
+# And the clearing is an ordinary write, so a frozen OPTARG refuses it: the
+# value stands, the builtin stops at 2 with the name unwritten, and OPTIND has
+# not moved past the `--`.
+( OPTIND=1; OPTARG=PRESET; set -- -- operand; o=kept; readonly OPTARG
+  getopts 'a:' o 2>/dev/null
+  printf 'frozen, at the end: st=%s o=[%s] OPTIND=%s OPTARG=[%s]\n' "$?" "$o" "$OPTIND" "${OPTARG-unset}" ) 2>/dev/null

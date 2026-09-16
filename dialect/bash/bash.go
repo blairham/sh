@@ -1332,6 +1332,16 @@ func Semantics() interp.Semantics {
 	// getopts a: o` writes `OPTARG: readonly variable` — and costs the
 	// builtin nothing: the name is still filled in and the status is still
 	// 0. Both measured 2026-09-16 on 5.3.20 and 3.2.57 alike.
+	// The call that reports "no more options" unsets OPTARG, so the last
+	// option's argument is not left standing for a script to read after its
+	// loop.
+	s.GetoptsUnsetsOptargAtEndOfOptions = interp.Yes
+	// And that clearing — like the ones a bad option and a missing argument
+	// make, and unlike the one an argument-less option makes — takes the name
+	// away rather than writing over it, so a `readonly OPTARG` neither stops
+	// it nor survives it. bash alone; measured 2026-09-16 on 5.3.20, on
+	// 3.2.57 and under the name `sh`.
+	s.GetoptsClearingOptargIsARealUnset = interp.Yes
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
 	// And the refusal is not the end of the script: `getopts a: o; echo

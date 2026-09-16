@@ -18,6 +18,8 @@ func getoptsSem() Semantics {
 	s := CoreSemantics()
 	s.GetoptsClearsOptarg = No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = No
+	s.GetoptsUnsetsOptargAtEndOfOptions = No
+	s.GetoptsClearingOptargIsARealUnset = No
 	s.GetoptsAssignmentRestartsWord = Yes
 	return s
 }
@@ -473,6 +475,125 @@ func TestGetoptsRefusalNamesTheBuiltin(t *testing.T) {
 	out, _ := run(t, `set -- -a val; readonly OPTARG; getopts "a:" o; echo "[$o]"`,
 		func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
 	if want := "sh: getopts: OPTARG: frozen\n[a]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestGetoptsUnsetsOptargAtEndOfOptionsIsAnAxis. The call that reports "no
+// more options" is also the one that clears OPTARG in five of the seven
+// columns; the other two leave the last option's argument standing, so a
+// script reading `$OPTARG` after its `while getopts` loop gets the previous
+// option's value there (#3146).
+func TestGetoptsUnsetsOptargAtEndOfOptionsIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"the last argument stands", No, "st=1 [?] OPTARG=[val]\n"},
+		{"cleared with the scan", Yes, "st=1 [?] OPTARG=[gone]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsSem()
+			sem.GetoptsUnsetsOptargAtEndOfOptions = tc.answer
+			out, _ := run(t, `set -- -a val x; getopts "a:" o; getopts "a:" o; echo "st=$? [$o] OPTARG=[${OPTARG-gone}]"`,
+				func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// And it happens on every call that runs out, not only the first: a second
+// `getopts` after the loop has ended finds nothing to report and clears again.
+func TestGetoptsClearsOptargEveryTimeItRunsOut(t *testing.T) {
+	sem := getoptsSem()
+	sem.GetoptsUnsetsOptargAtEndOfOptions = Yes
+	out, _ := run(t, `set -- -a val x
+getopts "a:" o
+getopts "a:" o
+OPTARG=again
+getopts "a:" o
+echo "st=$? OPTARG=[${OPTARG-gone}]"`, func(r *Runner) { r.Semantics = &sem })
+	if want := "st=1 OPTARG=[gone]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestGetoptsClearingOptargIsARealUnsetIsAnAxis. A `delete` from the value map
+// is not an unset: it leaves the name's attributes where they were, so a
+// `readonly OPTARG` neither stopped the clearing nor was taken away by it.
+// bash removes the name, and removing a name removes what was recorded about
+// it — so an assignment made after the loop is taken where it was refused
+// before.
+func TestGetoptsClearingOptargIsARealUnsetIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"an ordinary write the freeze refuses", No, "sh: OPTARG: frozen\nend OPTARG=[PRESET]\nsh: OPTARG: frozen\nafter OPTARG=[PRESET]\n"},
+		{"the name is taken away", Yes, "end OPTARG=[gone]\nafter OPTARG=[written]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsFrozenSem()
+			sem.GetoptsUnsetsOptargAtEndOfOptions = Yes
+			sem.GetoptsClearingOptargIsARealUnset = tc.answer
+			dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
+			out, _ := run(t, `OPTARG=PRESET
+set -- operand
+readonly OPTARG
+getopts "a:" o
+echo "end OPTARG=[${OPTARG-gone}]"
+OPTARG=written
+echo "after OPTARG=[${OPTARG-gone}]"`, func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// The error paths ask the same question, and the one clearing that does not is
+// the option that takes no argument: bash goes through the ordinary refusal
+// there, reports it and leaves the value standing, where the same shell is
+// silent on the three rows above.
+func TestGetoptsRealUnsetDoesNotReachTheArgumentlessClearing(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a bad option", `set -- -z; getopts "a:b" o`, "sh: bad -z\nOPTARG=[gone]\n"},
+		{"a missing argument", `set -- -a; getopts "a:b" o`, "sh: need -a\nOPTARG=[gone]\n"},
+		{"no argument wanted", `set -- -b; getopts "a:b" o`, "sh: OPTARG: frozen\nOPTARG=[PRESET]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsFrozenSem()
+			sem.GetoptsClearingOptargIsARealUnset = Yes
+			dg := Diagnostics{
+				ReadonlyVariable:       "%s: frozen",
+				GetoptsBadOption:       "bad -%[1]s",
+				GetoptsMissingArgument: "need -%[1]s",
+			}
+			out, _ := run(t, "OPTARG=PRESET\nreadonly OPTARG\n"+tc.src+"\necho \"OPTARG=[${OPTARG-gone}]\"",
+				func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetoptsClearingComesBeforeTheWordCount. The order the two writes happen
+// in is invisible until one of them is refused, and then it is the whole of
+// the difference between "reported" and "stopped": dash and BusyBox ash refuse
+// a frozen OPTARG with OPTIND still at its old value, so neither had counted
+// past the word.
+func TestGetoptsClearingComesBeforeTheWordCount(t *testing.T) {
+	sem := getoptsFrozenSem()
+	sem.GetoptsRefusedWriteEndsTheBuiltin = Yes
+	dg := Diagnostics{ReadonlyVariable: "%s: frozen", GetoptsBadOption: "bad -%[1]s"}
+	out, _ := run(t, `set -- -z -z; OPTIND=1; readonly OPTARG; getopts "a:b" o; echo "st=$? ind=$OPTIND"`,
+		func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+	if want := "sh: bad -z\nsh: OPTARG: frozen\nst=2 ind=1\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }

@@ -111,3 +111,30 @@ printf 'frozen name at the end reports -> '
 printf 'frozen name over a bad option -> '
 ( OPTIND=1; set -- -z; N=kept; readonly N
   getopts 'a:' N 2>&1 >/dev/null | wc -l | tr -d ' ' )
+
+# --- the clearing of OPTARG, which is three clearings ---
+#
+# bash takes the *name away* when a bad option, a missing argument or the end
+# of the options clears OPTARG — so a `readonly OPTARG` neither stops the
+# clearing nor survives it, and the loop leaves nothing behind for a script to
+# read. An option the string has and that takes no argument is the exception,
+# and it is spelled the same way in the manual: there the clearing is an
+# ordinary write, the freeze refuses it, and the value stands (#3146).
+
+( OPTIND=1; set -- -a val x
+  getopts 'a:' o; getopts 'a:' o
+  printf 'after the scan: st=%s o=[%s] OPTARG=[%s]\n' "$?" "$o" "${OPTARG-unset}" )
+
+frozen() {
+  # Each in a subshell of its own, because the freeze is the subject and a
+  # `readonly` does not come off.
+  ( OPTIND=1; OPTARG=PRESET; set -- $2; readonly OPTARG
+    getopts 'a:b' o 2>/dev/null
+    OPTARG=written 2>/dev/null
+    printf '%s: OPTARG=[%s] freeze=%s\n' "$1" "${OPTARG-unset}" \
+      "$(if [ "${OPTARG-unset}" = written ]; then echo gone; else echo on; fi)" ) 2>/dev/null
+}
+frozen 'a bad option      ' -z
+frozen 'a missing argument' -a
+frozen 'the end           ' operand
+frozen 'no argument       ' -b

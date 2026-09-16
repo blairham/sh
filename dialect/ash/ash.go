@@ -717,6 +717,15 @@ func Semantics() interp.Semantics {
 	// The same three answers dash gives, measured the same day in the pinned
 	// alpine image on BusyBox v1.37.0: `getopts: OPTARG: is read only` at
 	// status 2, OPTIND still 1, and the next command on the line still runs.
+	// The end of the options unsets OPTARG, which is where this shell parts
+	// from dash for the third time in one builtin. It is an ordinary write,
+	// so a frozen OPTARG refuses it: measured 2026-09-16 in the pinned image,
+	// `OPTARG=PRESET; readonly OPTARG; set -- -- x; getopts a: o` is
+	// `getopts: OPTARG: is read only` at 2 with `PRESET` standing, the name
+	// unwritten and OPTIND still 1 — so the clearing happens before the word
+	// count moves.
+	s.GetoptsUnsetsOptargAtEndOfOptions = interp.Yes
+	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.Yes
 	s.ReadonlyRefusalInABuiltinIsFatal = interp.No

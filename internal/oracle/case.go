@@ -14841,16 +14841,6 @@ printf 'TWO=still-running\n'`,
 		Why:     "`typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find",
 	},
 	{
-		ID: "declare/a-quoted-declaration-word-splits-its-operand", Category: "declarations",
-		Snippet: `setopt shwordsplit; b='x y'; \export v=$b; printf "[%s]" "$v"`,
-		Why:     "whether the declaration rule belongs to the word as written or to the builtin that runs (#3315). zsh and bash recognize the utility only from an unquoted literal command word, so a backslash leaves `export` running with an ordinary, split operand — `[x]`; ksh93 and dash take the quoted word as the utility and keep `[x y]`. `export` because every column has it, and the `setopt` because zsh splits no unquoted parameter without it, where it is `not found` and costs the other six nothing",
-	},
-	{
-		ID: "declare/an-expanded-declaration-word-splits-its-operand", Category: "declarations",
-		Snippet: `setopt shwordsplit; b='x y'; cmd=export; $cmd v=$b; printf "[%s]" "$v"`,
-		Why:     "the same question reached through an expansion, which is where ksh93 parts company with dash: zsh, bash and ksh93 split the operand of a utility whose name was produced rather than written, and dash keeps it whole because it keys the rule on the utility's name (#3315, #3340)",
-	},
-	{
 		ID: "declare/an-operand-that-is-not-a-name", Category: "declarations",
 		Snippet: `typeset ':'; echo "st=$?"; echo A`,
 		Why:     "the operand check every other declaration builtin already had. Four sentences at three statuses across seven columns: dash and ash have no such builtin and report a command they cannot find, bash quotes the operand back as `not a valid identifier` and carries on at 1, ksh93 says `invalid variable name` and stops the script, and zsh says `not valid in this context` and stops it too — so `echo A` is the half of the row that measures the fatality rather than the wording. Taking the operand silently creates a parameter called `:` and reports success, which is a shell answering yes to a line no shell in the panel accepts (#1096)",

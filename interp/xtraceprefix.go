@@ -106,7 +106,7 @@ func (r *Runner) tracesItsPrefix(assigns []*syntax.Assign, argv []string) bool {
 			// `1=$(seq 1) f` would run the substitution twice. That is the
 			// double run #1915 fixed for a scalar's value and it is not
 			// worth reopening for a construct one column has. Tracked as
-			// #3149.
+			// #3157.
 			continue
 		}
 		return true

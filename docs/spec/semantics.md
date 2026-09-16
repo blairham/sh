@@ -5020,8 +5020,17 @@ It is a status and not a truth, so `if (( 1+ ))` reaches it the same way:
 the condition is false and the status behind it is the dialect's.
 
 ksh93 is not in the split because it does not stay to answer — a math
-error there abandons the input, which is a separate divergence from this
-one and is not implemented here.
+error there abandons the input. That **is** built here; this paragraph
+said it was not until #3088 re-measured it. On `if (( 1+ )); then :; fi;
+echo REACHED`, 2026-09-15:
+
+    cmd/ksh    ` 1+ : more tokens expected`, and no REACHED
+    ksh93u+     the same line, and no REACHED
+    cmd/bash · cmd/zsh · cmd/dash   a diagnostic, then REACHED
+
+The `REACHED` marker is what discriminates: the diagnostic alone is
+written by every column, so a probe that read only the message could not
+separate a shell that abandons the input from one that carries on.
 
 ## Two spellings of an option, and only one of them is portable
 
@@ -6279,9 +6288,20 @@ for it to be a view of.
   `hash -p name` both read back. This shell reads every `-p` path back.
 - **zsh's `$commands`.** It is that shell's `BASH_CMDS`, and it removes an
   entry where bash's does not: `unset "commands[ls]"` really takes `ls` out.
-  The read side here is still a PATH search rather than a view of the table,
-  so the writes stay refused by name until the read is moved with them —
-  #2631.
+  The read side here is still a PATH search rather than a view of the table.
+
+  This bullet said the writes "stay refused by name"; re-measured
+  2026-09-15 for #3088, they are **not refused — they are silently
+  dropped**, which is the one answer this document says everywhere else
+  is worse than a refusal. Both halves of the probe are needed, because
+  a status of 0 is what a working write gives too:
+
+      ours  zmodload zsh/parameter; commands[ls]=/tmp/x   0, no output
+            then `$commands[ls]` is /bin/ls — the PATH search
+      zsh   the same two lines: 0, then /tmp/x
+
+  Filed as #3092. #2631, whose title still says the writes are refused,
+  is closed, so the sentence outlived whatever made it true.
 
 ## A bundle of option letters is one word and several options
 

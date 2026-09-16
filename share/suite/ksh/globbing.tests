@@ -1,0 +1,196 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pathname expansion in ksh93 — `FIGNORE`, `set -G`, and the sub-patterns
+# this shell has on without being asked. Part of #2345.
+#
+# Three facilities, and each is the whole of a column nobody else has:
+#
+# **`FIGNORE` is a pattern that takes names out of an expansion**, and it is
+# not bash's parameter of a similar shape. bash's `GLOBIGNORE` is a colon
+# list matched against the word; ksh93's is **one pattern**, colons and all,
+# matched against the name the *directory listing* gave — so it filters every
+# component of the walk rather than the word at the end, and a directory it
+# removes is one the walk never enters. `FIGNORE='*.txt:*.log'` takes nothing
+# out here because no name holds a colon; the alternation a script wants is
+# `@(*.txt|*.log)`, which does work. zsh and dash have no such parameter at
+# all and read the name as an ordinary variable.
+#
+# **Setting it is also what shows the hidden names**, including `.` and `..`,
+# and unsetting it puts them back out of reach. That is one facility and not
+# two: there is no `dotglob` here for a script to write, so the leading-period
+# rule is read off whether the parameter is set. A null value counts as set.
+#
+# **`set -G` is what makes `**` cross directory levels.** bash spells it
+# `shopt -s globstar` and refuses the letter; zsh crosses levels always and
+# has no switch to answer; dash refuses the letter while parsing. ksh93 takes
+# both `-G` and `-o globstar`, and off again.
+#
+# **The sub-patterns are on.** `@(…)`, `!(…)`, `*(…)`, `+(…)` and `?(…)` are
+# always available in pathname expansion here, where bash needs `extglob` and
+# refuses them as a syntax error without it, zsh finds no match, and dash
+# refuses the parenthesis while parsing. `ksh/patterns.tests` has them as
+# *matching* patterns; these rows are the pathname half.
+#
+# Each section is its own subshell, with its own directory: a section that
+# leaves `FIGNORE` set would change what the next one's `*` sees, and that is
+# exactly the facility under test.
+#
+# Held out, and each for a reason:
+#
+#   `~(N)` and the seven other pattern-modifier letters — refused here as not
+#     implemented, and `~(N)` on a *matching* pattern is silently left in the
+#     word as literal text. #3186, which is where the panel table for them is.
+#   `~(i)` in a pathname expansion — the prefix is not applied to a glob at
+#     all, so the whole family is #3186's rather than this file's.
+#   `[[=c=]]` — ksh93 matches an equivalence class and so do bash and dash,
+#     while this shell leaves the word literal in every dialect. Three of four
+#     columns agree, so it is not a ksh answer: #3396.
+
+show() {
+	printf -- '--- %s -> [%s] status %s\n' "$1" "$2" "$3"
+}
+
+# Every section runs in a directory of its own, because the parameter under
+# test changes what a listing of the directory reports.
+fixture() {
+	mkdir -p "$1" && cd "$1" || exit 1
+}
+
+printf -- '=== the parameter is one pattern, not a list ===\n'
+(
+	fixture g1
+	: > a.txt
+	: > b.txt
+	: > c.log
+	FIGNORE='*.txt'
+	show 'one pattern takes both names out' "$(printf '[%s]' *)" "$?"
+)
+(
+	fixture g2
+	: > a.txt
+	: > c.log
+	FIGNORE='*.txt:*.log'
+	show 'a colon is a character in it' "$(printf '[%s]' *)" "$?"
+)
+(
+	fixture g3
+	: > a.txt
+	: > c.log
+	FIGNORE='@(*.txt|*.log)'
+	show 'the alternation a script wants is written out' "$(printf '[%s]' *)" "$?"
+)
+(
+	fixture g4
+	: > a.txt
+	: > b.txt
+	FIGNORE='*'
+	show 'a pattern that takes everything leaves the word' "$(printf '[%s]' *)" "$?"
+)
+
+printf -- '=== setting it is what shows the hidden names ===\n'
+(
+	fixture g5
+	: > a.txt
+	: > .hidden
+	show 'unset, and a leading period is out of reach' "$(printf '[%s]' *)" "$?"
+	FIGNORE='zz'
+	show 'set to a name nothing has, and they are all in' "$(printf '[%s]' *)" "$?"
+	unset FIGNORE
+	show 'unset again, and they are out again' "$(printf '[%s]' *)" "$?"
+)
+(
+	fixture g6
+	: > a.txt
+	: > .hidden
+	FIGNORE=
+	show 'a null value counts as set' "$(printf '[%s]' *)" "$?"
+)
+(
+	fixture g7
+	: > a.txt
+	: > .hidden
+	FIGNORE='.hidden'
+	show 'and the pattern still takes its name out' "$(printf '[%s]' *)" "$?"
+)
+
+printf -- '=== the subject is the entry, at every component ===\n'
+(
+	fixture g8
+	mkdir -p d
+	: > a.txt
+	: > d/b.txt
+	FIGNORE='d'
+	show 'a directory it removes is one the walk will not enter' "$(printf '[%s]' */*.txt)" "$?"
+)
+(
+	fixture g9
+	mkdir -p d
+	: > d/b.txt
+	FIGNORE='d'
+	show 'so a word whose only match was under it has none' "$(printf '[%s]' */b.txt)" "$?"
+)
+(
+	fixture g10
+	mkdir -p d
+	: > d/b.txt
+	FIGNORE='b.txt'
+	show 'a component that spelled a name is exempt' "$(printf '[%s]' */b.txt)" "$?"
+)
+(
+	fixture g11
+	mkdir -p d
+	: > d/b.txt
+	FIGNORE='b.txt'
+	show 'and the same pattern against a listing takes it' "$(printf '[%s]' d/*)" "$?"
+)
+(
+	fixture g12
+	mkdir -p sub
+	: > sub/x.txt
+	FIGNORE='sub/x.txt'
+	show 'a pattern holding a separator matches no entry' "$(printf '[%s]' sub/*)" "$?"
+)
+(
+	fixture g13
+	mkdir -p sub
+	: > sub/x.txt
+	FIGNORE='sub'
+	show 'a name, against the directories a trailing slash keeps' "$(printf '[%s]' */)" "$?"
+	FIGNORE='sub/'
+	show 'and the same name with the slash on it takes nothing' "$(printf '[%s]' */)" "$?"
+)
+
+printf -- '=== the letter that makes ** cross levels ===\n'
+(
+	fixture g14
+	mkdir -p d/sub
+	: > d/c.txt
+	: > d/sub/e.txt
+	: > top.txt
+	show 'off, and ** is an ordinary component' "$(printf '[%s]' **/*.txt)" "$?"
+	set -G
+	show 'on, and it crosses them' "$(printf '[%s]' **/*.txt)" "$?"
+	show 'with a slash behind it, the directories' "$(printf '[%s]' **/)" "$?"
+	set +G
+	show 'and off again' "$(printf '[%s]' **/*.txt)" "$?"
+)
+(
+	fixture g15
+	set -o globstar
+	show 'the same switch under its long name' '' "$?"
+	set +o globstar
+	show 'and off' '' "$?"
+)
+
+printf -- '=== the sub-patterns, with nothing turned on ===\n'
+(
+	fixture g16
+	: > a.txt
+	: > b.log
+	show 'an alternation' "$(printf '[%s]' @(a.txt|b.log))" "$?"
+	show 'a negation with no match to make' "$(printf '[%s]' !(a).txt)" "$?"
+	show 'none or more' "$(printf '[%s]' *(a).txt)" "$?"
+	show 'one or more' "$(printf '[%s]' +(a).txt)" "$?"
+	show 'none or one' "$(printf '[%s]' ?(a).txt)" "$?"
+)

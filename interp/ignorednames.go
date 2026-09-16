@@ -71,8 +71,39 @@ func (r *Runner) ignoredNamePatterns() []string {
 	return out
 }
 
+// ignoredNamesFilterTheListing answers *where* the patterns are applied: to
+// the names a directory listing gave, as each component of the walk produces
+// them, or to the whole word the expansion produced at the end.
+//
+// See Semantics.IgnoredNamesMatchTheLastComponent, which holds the panel.
+func (r *Runner) ignoredNamesFilterTheListing() bool {
+	return r.ask(r.sem().IgnoredNamesMatchTheLastComponent,
+		"an ignore pattern being matched against the name in the directory rather than the word")
+}
+
+// ignoredListedName reports whether one name a directory listing gave is
+// taken back out by one of the patterns.
+//
+// One component against one component: the subject is the entry, with no
+// `./` in front of it and no `/` behind it, so a pattern holding a separator
+// matches nothing here — which is the measurement, `FIGNORE='sub/x.txt'`
+// taking nothing out of `sub/*` where `FIGNORE='*.txt'` takes `x.txt`.
+func (r *Runner) ignoredListedName(name string, patterns []string) bool {
+	for _, p := range patterns {
+		if r.ignoredNameMatches([]string{name}, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // ignoredName reports whether one word a pathname expansion produced is taken
 // back out by one of the patterns.
+//
+// This is the whole-word reading, which is bash's: the subject is the word as
+// the pattern spelled it, `GLOBIGNORE='./a.txt'` taking `./a.txt` out of `./*`
+// where `GLOBIGNORE='a.txt'` does not. The other reading never reaches here —
+// it is applied to each listing as the walk produces it, in Runner.matchIn.
 //
 // The word is matched **component by component**, which is the half that
 // separates this from the `~` exclusions one component along in glob.go: a
@@ -87,24 +118,6 @@ func (r *Runner) ignoredNamePatterns() []string {
 // separators line up before any matching happens.
 func (r *Runner) ignoredName(word string, patterns []string) bool {
 	parts := strings.Split(word, "/")
-	if r.ask(r.sem().IgnoredNamesMatchTheLastComponent,
-		"an ignore pattern being matched against the name in the directory rather than the word") {
-		// The name the directory listing gave, which is the last component
-		// of the word with a trailing slash taken off. Measured on ksh93u+:
-		// `FIGNORE='*.txt'` takes `sub/x.txt` out of `sub/*` where bash's
-		// `GLOBIGNORE` does not, `FIGNORE='a.txt'` takes `./a.txt` out of
-		// `./*` where bash's does not, and `FIGNORE='sub/'` takes nothing
-		// out of `*/` where `FIGNORE='sub'` takes `sub/`. All four say the
-		// subject is the entry rather than the word.
-		last := parts[len(parts)-1]
-		if last == "" && len(parts) > 1 {
-			last = parts[len(parts)-2]
-		}
-		parts = []string{last}
-	}
-	if r.unspecified {
-		return false
-	}
 	for _, p := range patterns {
 		if r.ignoredNameMatches(parts, p) {
 			return true

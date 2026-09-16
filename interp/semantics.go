@@ -497,6 +497,24 @@ type Semantics struct {
 	// The last pair is the sharpest, because the two shells are exactly
 	// opposite there.
 	//
+	// **The entry reading is a filter on every listing the walk makes**, and
+	// not a rule about the last component of the word it produced. Re-measured
+	// 2026-09-16 with `d` holding `b.txt`, which is where the two readings of
+	// "the entry" part:
+	//
+	//	                             ksh93               last component only
+	//	FIGNORE='d';      echo */b.txt   no match at all     d/b.txt
+	//	FIGNORE='b.txt';  echo */b.txt   d/b.txt             no match at all
+	//	FIGNORE='?d';     echo dd/*      dd/. dd/..          dd/. dd/.. dd/b.txt
+	//
+	// So a directory the patterns remove is a directory the walk never
+	// descends into — which is what makes the first row a word with nothing
+	// to match rather than a word whose match was filtered afterwards — and
+	// a component that **spelled** a name is exempt, because a literal
+	// reaches the filesystem by a lookup and not by a listing. See
+	// Runner.matchIn, which is where the filter now stands, and
+	// Runner.describesRatherThanSpells for the exemption.
+	//
 	// Asked only where there is a pattern to match, and only in a dialect
 	// that has the parameter.
 	IgnoredNamesMatchTheLastComponent Answer

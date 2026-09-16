@@ -495,3 +495,57 @@ func TestTheListingHasDotAndDotDotOrItDoesNot(t *testing.T) {
 		}
 	}
 }
+
+// The entry reading is applied to every listing the walk makes, and not only
+// to the last component of the word it produced. Two things follow, and
+// neither is visible in a one-component pattern.
+//
+// **A directory the filter removes is one the walk never enters.** So a
+// pattern naming a directory turns `*/x.txt` into a word with no match at
+// all, where the word reading would have kept it: the last component is
+// `x.txt` and the pattern is not.
+//
+// **A component that spelled a name is exempt**, because a literal reaches
+// the filesystem by a lookup and not by a listing. So a pattern naming the
+// *file* takes nothing out of `*/x.txt` while it empties `sub/*` of
+// everything the listing there produced.
+//
+// Both are the same sentence read twice, and the word reading answers the
+// opposite way on each — which is what makes them rows rather than notes.
+// Measured on the shell that holds this answer; see
+// Semantics.IgnoredNamesMatchTheLastComponent.
+func TestTheEntryReadingFiltersEveryListing(t *testing.T) {
+	dir := ignoreTree(t)
+	word := func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesMatchTheLastComponent = No
+	}
+	entry := func(r *Runner) {
+		ignoring(dir)(r)
+		r.Semantics.IgnoredNamesMatchTheLastComponent = Yes
+	}
+	for _, tc := range []struct{ name, src, word, entry string }{
+		{
+			"a pattern naming the directory a component listed",
+			`GLOBIGNORE='sub'; printf "[%s]" */x.txt`,
+			"[sub/x.txt]", "[*/x.txt]",
+		},
+		{
+			"a pattern naming the whole word the last component spelled",
+			`GLOBIGNORE='sub/x.txt'; printf "[%s]" */x.txt`,
+			"[*/x.txt]", "[sub/x.txt]",
+		},
+		{
+			"and the same pattern where a listing did produce the name",
+			`GLOBIGNORE='x.txt'; printf "[%s]" sub/*`,
+			"[sub/.y][sub/x.txt]", "[sub/.y]",
+		},
+	} {
+		if out, _ := run(t, tc.src, word); out != tc.word {
+			t.Errorf("%s, against the word: got %q, want %q", tc.name, out, tc.word)
+		}
+		if out, _ := run(t, tc.src, entry); out != tc.entry {
+			t.Errorf("%s, against the entry: got %q, want %q", tc.name, out, tc.entry)
+		}
+	}
+}

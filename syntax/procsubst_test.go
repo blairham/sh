@@ -14,6 +14,7 @@ import (
 // decide, before it reaches the operator table, that a `<` followed by `(` is
 // the start of a word rather than a redirection.
 func TestProcessSubstitutionScansAsAWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		kind      syntax.SpanKind
@@ -47,6 +48,7 @@ func TestProcessSubstitutionScansAsAWord(t *testing.T) {
 // target is another redirection, and says so. Not a special case anywhere —
 // the lexer simply never takes the word branch.
 func TestProcessSubstitutionIsADialectFeature(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ProcessSubstitution = false
 	for _, src := range []string{`cat <(echo hi)`, `echo x > >(cat)`} {

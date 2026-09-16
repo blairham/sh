@@ -15,6 +15,7 @@ import (
 // runtime report needs the construct as written.
 
 func TestABadOperatorIsDeferredByDefault(t *testing.T) {
+	t.Parallel()
 	f, err := Parse(`echo "${foo ~}"`, Core())
 	if err != nil {
 		t.Fatalf("the default grammar should defer, got %v", err)
@@ -34,6 +35,7 @@ func TestABadOperatorIsDeferredByDefault(t *testing.T) {
 }
 
 func TestABadOperatorIsAParseErrorWhenAsked(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.BadSubstitutionAtParseTime = true
 	_, err := Parse(`echo "${foo ~}"`, d)
@@ -56,6 +58,7 @@ func TestABadOperatorIsAParseErrorWhenAsked(t *testing.T) {
 // carries it and an empty one reads as “ `' “ — a diagnostic that names
 // nothing at all, which is what this used to print.
 func TestTheEmptyBracesRefusalNamesTheClosingBrace(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.BadSubstitutionAtParseTime = true
 	for _, tc := range []struct{ src, token string }{
@@ -99,6 +102,7 @@ func walkParams(f *File, visit func(*ParamExpr)) {
 
 // The deferred node still prints back to source that parses to the same tree.
 func TestABadNodeRoundTripsThroughThePrinter(t *testing.T) {
+	t.Parallel()
 	src := `echo "${foo ~}"`
 	f, err := Parse(src, Core())
 	if err != nil {

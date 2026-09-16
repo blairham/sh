@@ -17,6 +17,7 @@ import (
 // at a time would leave the caller to decide what goes between, which is
 // exactly the part an arrangement is for.
 func TestAFileIsPrintedInTheArrangementAsked(t *testing.T) {
+	t.Parallel()
 	lines := syntax.Layout{
 		Indent: "\t", Nested: true, Lines: true,
 		ThenOnItsOwnLine:         true,
@@ -57,6 +58,7 @@ func TestAFileIsPrintedInTheArrangementAsked(t *testing.T) {
 // Nothing to print is the empty string rather than a panic, which is what
 // every other entry point in this file answers for nil.
 func TestPrintingNoFileIsNothing(t *testing.T) {
+	t.Parallel()
 	if got := syntax.PrintFileWith(nil, syntax.Layout{Lines: true}); got != "" {
 		t.Errorf("printing no file gave %q, want nothing", got)
 	}

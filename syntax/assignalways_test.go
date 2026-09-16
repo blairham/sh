@@ -16,6 +16,7 @@ func alwaysAssigning() Dialect {
 
 // `::=` parses as its own operator, with the text after it as the word.
 func TestTheAlwaysAssignOperatorParses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -57,6 +58,7 @@ func TestTheAlwaysAssignOperatorParses(t *testing.T) {
 // `${v::?new}` fails in arithmetic on the word `new` — so the second colon is
 // part of an offset in all three.
 func TestOnlyTheEqualsMakesTheOperator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src string
 		op  ParamOp
@@ -88,6 +90,7 @@ func TestOnlyTheEqualsMakesTheOperator(t *testing.T) {
 // `=word`, which is where their arithmetic error comes from. The reading has
 // to stay that, because the error is the evidence for it.
 func TestWithoutTheFlagItIsASubstring(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${v::=new}`, Core())
 	if e.Op != ParamSubstring {
 		t.Fatalf("op = %v (%q), want %v (%q)", e.Op, e.Op, ParamSubstring, ParamSubstring)
@@ -108,6 +111,7 @@ func TestWithoutTheFlagItIsASubstring(t *testing.T) {
 // of its own, so `${v::=$w}` assigns what `w` came to rather than the three
 // characters.
 func TestTheWordIsExpanded(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${v::=$w}`, alwaysAssigning())
 	if e.Arg == nil || len(e.Arg.Spans) != 1 || e.Arg.Spans[0].Kind != ParamExp {
 		t.Fatalf("word = %#v, want one parameter-expansion span", e.Arg)
@@ -120,6 +124,7 @@ func TestTheWordIsExpanded(t *testing.T) {
 // The operator spells itself back as written, which is what a diagnostic
 // naming it has to print.
 func TestTheAlwaysAssignOperatorSpellsItself(t *testing.T) {
+	t.Parallel()
 	if got := ParamAssignAlways.String(); got != "::=" {
 		t.Errorf("String() = %q, want %q", got, "::=")
 	}

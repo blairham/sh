@@ -33,6 +33,7 @@ func caseBlankGrammar(d *Dialect) {
 }
 
 func TestABlankInAParenthesizedCasePatternList(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseBlankGrammar(&d)
 	for _, tc := range []struct {
@@ -131,6 +132,7 @@ func TestABlankInAParenthesizedCasePatternList(t *testing.T) {
 // `case $'a\nb'` does not, so neither the blanks nor the newline is dropped
 // and none of them is folded into another.
 func TestABlankBesideANewlineIsTextToo(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseBlankGrammar(&d)
 	d.CasePatternListSpansNewlines = true
@@ -143,6 +145,7 @@ func TestABlankBesideANewlineIsTextToo(t *testing.T) {
 // Without the flag every one of those is a parse error, which is five of the
 // six shells' answer and this grammar's default.
 func TestABlankInACasePatternListIsRefusedWithoutTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"case x in (a b) echo m;; esac",
 		"case x in (a  b) echo m;; esac",
@@ -164,6 +167,7 @@ func TestABlankInACasePatternListIsRefusedWithoutTheFlag(t *testing.T) {
 // one that closes it. Without this row the flag would read as "a word may
 // follow a pattern", which is a different and much larger claim.
 func TestOnlyAParenthesizedListTakesTheBlank(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseBlankGrammar(&d)
 	if _, err := Parse("case x in a b) echo m;; esac", d); err == nil {
@@ -176,6 +180,7 @@ func TestOnlyAParenthesizedListTakesTheBlank(t *testing.T) {
 // and a reading that swallowed the blank would have made the pattern `a ` and
 // blamed the `)` instead.
 func TestAnOperatorAfterTheBlankStillEndsThePattern(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseBlankGrammar(&d)
 	for _, src := range []string{
@@ -193,6 +198,7 @@ func TestAnOperatorAfterTheBlankStillEndsThePattern(t *testing.T) {
 // words. Without clearing the flag at the closing paren the body's first
 // command would arrive as one word.
 func TestTheArmsBodyGetsItsBlanksBack(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseBlankGrammar(&d)
 	f, err := Parse("case x in (a b) echo one two;; esac", d)

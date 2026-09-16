@@ -42,6 +42,7 @@ func numeralText(t *testing.T, expr string, stops bool) (text string, rest bool)
 }
 
 func TestANumeralTakesEveryCharacterTheAlphabetKnows(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, want string }{
 		{`1abc`, "1abc"},
 		{`0y`, "0y"},
@@ -57,6 +58,7 @@ func TestANumeralTakesEveryCharacterTheAlphabetKnows(t *testing.T) {
 }
 
 func TestANumeralStopsAtACharacterItsBaseCannotUse(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, blamed string }{
 		// Decimal, so a letter ends it and is left where an operator belongs.
 		{`1abc`, "abc"},
@@ -98,6 +100,7 @@ func TestANumeralStopsAtACharacterItsBaseCannotUse(t *testing.T) {
 // alphabet already had: nothing in `65#5` stops the scan either, because no
 // character's value reaches 65 (#2575).
 func TestABaseWithNoAlphabetTakesTheWholeRunAnyway(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, want string }{
 		{`1#5`, "1#5"},
 		{`1#z`, "1#z"},

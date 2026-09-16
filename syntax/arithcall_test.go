@@ -20,6 +20,7 @@ func mathCall(on bool) syntax.Dialect {
 // TestAMathFunctionCallReadsItsArguments — the shape of the node, which is
 // what the evaluator dispatches on.
 func TestAMathFunctionCallReadsItsArguments(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -54,6 +55,7 @@ func TestAMathFunctionCallReadsItsArguments(t *testing.T) {
 // which is what makes it a node in the tree rather than a statement about the
 // whole expression.
 func TestACallComposesWithTheRestOfAnExpression(t *testing.T) {
+	t.Parallel()
 	x, ok := arithOf(t, "echo $(( mf(5) + 1 ))", mathCall(true)).(*syntax.ArithBinary)
 	if !ok {
 		t.Fatalf("parse: not a binary node")
@@ -68,6 +70,7 @@ func TestACallComposesWithTheRestOfAnExpression(t *testing.T) {
 // — which is the half that makes the construct additive rather than a second
 // reading of text the other dialects already accept.
 func TestTheParenthesisHasToTouchTheName(t *testing.T) {
+	t.Parallel()
 	if _, ok := arithOf(t, "echo $(( mf ))", mathCall(true)).(*syntax.ArithVar); !ok {
 		t.Errorf("a bare name is not a variable reference")
 	}
@@ -80,6 +83,7 @@ func TestTheParenthesisHasToTouchTheName(t *testing.T) {
 // without the construct report — the grammar's absence rather than a different
 // meaning for the same text.
 func TestWithoutTheFlagACallIsALeftoverParenthesis(t *testing.T) {
+	t.Parallel()
 	if err := arithErr("mf(5)", mathCall(false)); err == nil {
 		t.Errorf("a call was read in a dialect without the form, want a refusal")
 	}
@@ -94,6 +98,7 @@ func TestWithoutTheFlagACallIsALeftoverParenthesis(t *testing.T) {
 
 // TestAnUnclosedCallIsRefused rather than read to the end of the expression.
 func TestAnUnclosedCallIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, expr := range []string{"mf(5", "mf(5 6)", "mf(,)", "mf(5,,6)"} {
 		if err := arithErr(expr, mathCall(true)); err == nil {
 			t.Errorf("$((%s)) was read, want a refusal", expr)

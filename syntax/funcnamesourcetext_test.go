@@ -33,6 +33,7 @@ func sourceTextName() Dialect {
 }
 
 func TestAQuotedNameAfterTheKeywordIsTheQuotedWord(t *testing.T) {
+	t.Parallel()
 	d := sourceTextName()
 	for _, tc := range []struct{ name, src, refused string }{
 		{"single quotes", `function 'f' { echo p; }`, `'f'`},
@@ -54,6 +55,7 @@ func TestAQuotedNameAfterTheKeywordIsTheQuotedWord(t *testing.T) {
 }
 
 func TestAQuotedNameBeforeParensIsTheQuotedWord(t *testing.T) {
+	t.Parallel()
 	d := sourceTextName()
 	// The `name()` spelling of the same rule, which is the half #1566 left
 	// as a question: the parentheses announce the definition, and the word
@@ -75,6 +77,7 @@ func TestAQuotedNameBeforeParensIsTheQuotedWord(t *testing.T) {
 }
 
 func TestANameThatIsOneIsStillDefinedEitherSpelling(t *testing.T) {
+	t.Parallel()
 	d := sourceTextName()
 	// The other side of the control: reading the source text must not refuse
 	// the names that are names. The punctuated one is here because this
@@ -96,6 +99,7 @@ func TestANameThatIsOneIsStillDefinedEitherSpelling(t *testing.T) {
 }
 
 func TestWithoutTheFlagTheQuotesComeOff(t *testing.T) {
+	t.Parallel()
 	// The two shells that remove them, which is the same site read the other
 	// way: `function 'f'` defines `f` and refuses nothing.
 	d := sourceTextName()
@@ -110,6 +114,7 @@ func TestWithoutTheFlagTheQuotesComeOff(t *testing.T) {
 }
 
 func TestAnArrayAssignmentIsNotADefinitionOfAQuotedName(t *testing.T) {
+	t.Parallel()
 	// The reading the widened gate must not swallow: `a=()` is an empty
 	// array everywhere, and a parenthesis after a word is what both look
 	// like. The `=` has to be bare to make one.

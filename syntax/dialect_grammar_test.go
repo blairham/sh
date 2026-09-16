@@ -64,6 +64,7 @@ func arithErr(expr string, d Dialect) error {
 // are about what the core refuses, and globquals_test.go is about what the
 // flag allows.
 func TestParenAfterAWordIsASyntaxError(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo (`, `echo a (b)`, `function f() { echo x; }`} {
 		mustFail(t, src, POSIX(), "paren after a word")
 	}
@@ -78,6 +79,7 @@ func TestParenAfterAWordIsASyntaxError(t *testing.T) {
 // dialect without the keyword: the `}` has nothing open, and parsing used to
 // stop there quietly, silently discarding the rest of the script.
 func TestStrayStopWordIsASyntaxError(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`}`, `echo hi; }`, `done`, `then`, `function f { echo kw; }`} {
 		mustFail(t, src, POSIX(), "stray stop word")
 	}
@@ -95,6 +97,7 @@ func TestStrayStopWordIsASyntaxError(t *testing.T) {
 }
 
 func TestArrayLiteralIsADialectQuestion(t *testing.T) {
+	t.Parallel()
 	mustFail(t, `a=(x y)`, POSIX(), "dash has no arrays")
 	mustParse(t, `a=(x y)`, Core(), "every other panel shell has arrays")
 	// Not adjacent, and not a subshell either: dash, bash and zsh all call
@@ -107,6 +110,7 @@ func TestArrayLiteralIsADialectQuestion(t *testing.T) {
 // packages assert per shell: the keyword and the hybrid are independent, so a
 // dialect can have one without the other.
 func TestFunctionFormsAreSeparateFlags(t *testing.T) {
+	t.Parallel()
 	const kw, hybrid = `function f { echo x; }`, `function f() { echo x; }`
 	keywordOnly := Core()
 	both := Core()
@@ -123,6 +127,7 @@ func TestFunctionFormsAreSeparateFlags(t *testing.T) {
 // TestIndirectionIsAFlag likewise. Whether `${!x}` then means the name is a
 // semantics question and belongs to the interpreter, not here.
 func TestIndirectionIsAFlag(t *testing.T) {
+	t.Parallel()
 	on := Core()
 	on.ParamIndirection = true
 	mustParse(t, `echo ${!x}`, on, "flag on")
@@ -135,6 +140,7 @@ func TestIndirectionIsAFlag(t *testing.T) {
 // nothing to open. That makes it a grammar flag rather than a semantic one —
 // a dialect *adds* it, and nothing about it conflicts.
 func TestSelectIsADialectConstruct(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`select x in a b; do echo "$x"; done`,
 		`select x; do echo "$x"; done`,
@@ -152,6 +158,7 @@ func TestSelectIsADialectConstruct(t *testing.T) {
 // draws: without `in` the menu is the positional parameters, and with `in` and
 // nothing after it there is no menu at all. A nil slice cannot say which.
 func TestSelectKeepsTheAbsentListDistinct(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`select x in a b; do :; done`, "select x in(a,b) do[cmd[:]]"},
 		{`select x; do :; done`, "select x no-list do[cmd[:]]"},
@@ -171,6 +178,7 @@ func TestSelectKeepsTheAbsentListDistinct(t *testing.T) {
 // substitution, because dash diagnoses it only when the expansion is reached:
 // one inside a branch never taken prints nothing at all.
 func TestArraySubscriptIsADialectConstruct(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo ${a[0]}`, `echo ${a[@]}`, `echo ${a[*]}`, `a=1; echo ${a[@]}`} {
 		mustParse(t, src, Core(), "a subscript in a dialect with arrays")
 		mustDefer(t, src, POSIX(), "a subscript in a dialect without them")
@@ -202,6 +210,7 @@ func mustDefer(t *testing.T, src string, d Dialect, what string) {
 // wherever a word may stand is what lets a group close with no terminator, and
 // it is the same thing that stops `echo }` printing a brace.
 func TestCloseBraceAlwaysReserved(t *testing.T) {
+	t.Parallel()
 	reserved := Core()
 	reserved.CloseBraceAlwaysReserved = true
 
@@ -228,6 +237,7 @@ func TestCloseBraceAlwaysReserved(t *testing.T) {
 // only when the group had something in it, which is the one shell that says
 // both and the reason the two cases are separate.
 func TestABraceGroupNamesTheWordItStoppedOn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, token, expected string }{
 		{`{ echo a; do :; done; }`, "do", "}"},
 		{`{ echo a; esac; }`, "esac", "}"},
@@ -257,6 +267,7 @@ func TestABraceGroupNamesTheWordItStoppedOn(t *testing.T) {
 // twice. The interpreter reads the same flag for the half the parser cannot
 // answer: a float arriving in a variable.
 func TestArithFloatIsAGrammarFlag(t *testing.T) {
+	t.Parallel()
 	float := Core()
 	float.ArithFloat = true
 	for _, expr := range []string{`1.5`, `.5`, `1.5e2`, `3.0/2`} {
@@ -288,6 +299,7 @@ func TestArithFloatIsAGrammarFlag(t *testing.T) {
 // parser has to say which it was — it is a question about what the text could
 // have been, which is grammar rather than wording.
 func TestLeftoverTextIsBlamedForWhatItCouldHaveBeen(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		kind ErrorKind
@@ -320,6 +332,7 @@ func TestLeftoverTextIsBlamedForWhatItCouldHaveBeen(t *testing.T) {
 // sees a token. Three flags, because the three shells that allow one do not
 // allow the same one.
 func TestPatternGroupsBelongToTheWord(t *testing.T) {
+	t.Parallel()
 	ext, alt := Core(), Core()
 	ext.ExtendedPattern = true
 	alt.PatternAlternation = true
@@ -348,6 +361,7 @@ func TestPatternGroupsBelongToTheWord(t *testing.T) {
 // never entered — which made a group belong to a pattern everywhere but at
 // the front of one, where it is written most often (#826).
 func TestAPatternOperandMayStartWithAGroup(t *testing.T) {
+	t.Parallel()
 	alt := Core()
 	alt.PatternAlternation = true
 
@@ -395,6 +409,7 @@ func TestAPatternOperandMayStartWithAGroup(t *testing.T) {
 // a different pattern. The corpus round trip cannot reach this — every case
 // that uses it is a syntax error under the core dialect it prints with.
 func TestAPatternOperandGroupSurvivesPrinting(t *testing.T) {
+	t.Parallel()
 	alt := Core()
 	alt.PatternAlternation = true
 	for _, src := range []string{
@@ -423,6 +438,7 @@ func TestAPatternOperandGroupSurvivesPrinting(t *testing.T) {
 // separate question from whether the shell has one. bash reads them inside
 // `[[ ]]` and calls the same text a syntax error in a `case` pattern.
 func TestQuantifiedGroupsMayBeConditionOnly(t *testing.T) {
+	t.Parallel()
 	cond := Core()
 	cond.ExtendedPatternInCondition = true
 
@@ -441,6 +457,7 @@ func TestQuantifiedGroupsMayBeConditionOnly(t *testing.T) {
 // one question, asked in the two places that need it — `${a[i]}` and inside an
 // expression. A dialect with no arrays has neither.
 func TestAnArithmeticSubscriptNeedsTheSameFlag(t *testing.T) {
+	t.Parallel()
 	for _, expr := range []string{` a[0] `, ` a[i+1] `, ` a[0] = 1 `} {
 		mustReadArith(t, expr, Core(), "a subscript where the dialect has them")
 		mustRefuseArith(t, expr, POSIX(), "a subscript where it does not")

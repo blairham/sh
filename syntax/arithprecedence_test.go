@@ -21,6 +21,7 @@ func shiftsAndBitwiseFirst() Dialect {
 }
 
 func TestTheShiftsAndTheBitwiseOperatorsCanBindTighter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, c, moved string }{
 		// The shifts, against both rungs they move above.
 		{`1<<2+1`, `(1 << (2 + 1))`, `((1 << 2) + 1)`},
@@ -59,6 +60,7 @@ func TestTheShiftsAndTheBitwiseOperatorsCanBindTighter(t *testing.T) {
 // Parentheses are what say this is precedence and not a broken operator: told
 // which grouping to use, the two ladders build the same tree.
 func TestParenthesesSettleBothLadders(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`1<<(2+1)`, `(1 << (2 + 1))`},
 		{`(1+2)<<1`, `((1 + 2) << 1)`},
@@ -77,6 +79,7 @@ func TestParenthesesSettleBothLadders(t *testing.T) {
 // the rest left-associative under both orders, which is what keeps the moved
 // ladder a reordering rather than a second grammar.
 func TestTheLadderMovesWithoutMovingAssociativity(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`2**3**2`, `(2 ** (3 ** 2))`},
 		{`1+2-3`, `((1 + 2) - 3)`},
@@ -94,6 +97,7 @@ func TestTheLadderMovesWithoutMovingAssociativity(t *testing.T) {
 // all, so the operands come from the one below it and nothing is refused for
 // the operator being absent.
 func TestTheExponentRungIsSkippedWhereTheDialectHasNoExponent(t *testing.T) {
+	t.Parallel()
 	d := shiftsAndBitwiseFirst()
 	d.ArithExponent = false
 	if got := arith(parseArithOf(t, `6|1+1`, d)); got != `((6 | 1) + 1)` {

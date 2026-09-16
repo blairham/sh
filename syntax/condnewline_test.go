@@ -17,6 +17,7 @@ import (
 // formatting rather than a curiosity. Nothing multi-line parsed before: not
 // only after `&&`, but after `[[` itself and before `]]`.
 func TestANewlineContinuesACondition(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.DoubleBracket = true
 	for _, c := range []struct{ name, src string }{
@@ -71,6 +72,7 @@ func TestANewlineContinuesACondition(t *testing.T) {
 // operator having nothing after it, the other is the left operand having no
 // operator yet. Testing only the first left the second ungraded.
 func TestANewlineDoesNotSurroundABinaryOperator(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.DoubleBracket = true
 	for _, c := range []struct{ name, src string }{
@@ -93,6 +95,7 @@ func TestANewlineDoesNotSurroundABinaryOperator(t *testing.T) {
 // that a word, a second operand or a `;` on the next line is still refused —
 // unanimously, in every shell that has the construct.
 func TestANewlineDoesNotJoinTwoConditions(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.DoubleBracket = true
 	for _, c := range []struct{ name, src string }{
@@ -115,6 +118,7 @@ func TestANewlineDoesNotJoinTwoConditions(t *testing.T) {
 // An unterminated condition is still unterminated: skipping newlines must not
 // swallow the end of the input and call it a complete clause.
 func TestANewlineDoesNotHideAnUnterminatedCondition(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.DoubleBracket = true
 	for _, src := range []string{"[[ 1 == 1\n", "[[\n", "[[ 1 == 1 &&\n"} {

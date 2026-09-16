@@ -79,6 +79,7 @@ func lex(t *testing.T, src string, d Dialect) string {
 }
 
 func TestSpansWithinAWord(t *testing.T) {
+	t.Parallel()
 	// The case docs/spec/grammar/expansion.md's per-span requirement rests on:
 	// one word, three spans, only the unquoted ones split later.
 	got := lex(t, `a"b c"d`, Core())
@@ -99,6 +100,7 @@ func TestSpansWithinAWord(t *testing.T) {
 }
 
 func TestQuoting(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{
 			"double quotes escape their own quote",
@@ -143,6 +145,7 @@ func TestQuoting(t *testing.T) {
 }
 
 func TestOperatorsDelimitWithoutWhitespace(t *testing.T) {
+	t.Parallel()
 	// a>b is three tokens. A lexer that split on whitespace would be wrong
 	// before it started.
 	if got, want := lex(t, `a>b`, Core()), `word(a) > word(b)`; got != want {
@@ -151,6 +154,7 @@ func TestOperatorsDelimitWithoutWhitespace(t *testing.T) {
 }
 
 func TestLongestMatchWins(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`a>>b`, `word(a) >> word(b)`},
 		{`a&&b`, `word(a) && word(b)`},
@@ -166,6 +170,7 @@ func TestLongestMatchWins(t *testing.T) {
 }
 
 func TestIONumberNeedsStrictAdjacency(t *testing.T) {
+	t.Parallel()
 	// One space changes what the digit *is*: a file descriptor or an argument.
 	if got, want := lex(t, `echo 1>b`, Core()), `word(echo) io(1) > word(b)`; got != want {
 		t.Errorf("adjacent: got %s, want %s", got, want)
@@ -184,6 +189,7 @@ func TestIONumberNeedsStrictAdjacency(t *testing.T) {
 }
 
 func TestCommentsNeedAWordBoundary(t *testing.T) {
+	t.Parallel()
 	if got, want := lex(t, `echo a#b`, Core()), `word(echo) word(a#b)`; got != want {
 		t.Errorf("mid-word: got %s, want %s", got, want)
 	}
@@ -193,6 +199,7 @@ func TestCommentsNeedAWordBoundary(t *testing.T) {
 }
 
 func TestLineContinuationJoinsAWord(t *testing.T) {
+	t.Parallel()
 	if got, want := lex(t, "ab\\\ncd", Core()), `word(abcd)`; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
@@ -203,12 +210,14 @@ func TestLineContinuationJoinsAWord(t *testing.T) {
 }
 
 func TestNewlineIsAToken(t *testing.T) {
+	t.Parallel()
 	if got, want := lex(t, "a\nb", Core()), `word(a) nl word(b)`; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
 }
 
 func TestAmpersandRedirectIsADialectDecision(t *testing.T) {
+	t.Parallel()
 	// The dangerous axis. With the operator, `&>` redirects both streams.
 	// Without it the same text still lexes — as `&` then `>` — which is a
 	// background command followed by a truncating redirection. Nothing errors;
@@ -223,6 +232,7 @@ func TestAmpersandRedirectIsADialectDecision(t *testing.T) {
 }
 
 func TestDialectGatesOtherConstructs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, src string
 		d         Dialect
@@ -275,6 +285,7 @@ func TestDialectGatesOtherConstructs(t *testing.T) {
 }
 
 func TestIncompleteIsNotInvalid(t *testing.T) {
+	t.Parallel()
 	// A half-typed line is the normal case at a prompt. The caller needs to
 	// tell "ask for another line" from "this is wrong".
 	//
@@ -297,6 +308,7 @@ func TestIncompleteIsNotInvalid(t *testing.T) {
 }
 
 func TestPositionsAreTracked(t *testing.T) {
+	t.Parallel()
 	toks := NewLexer("ab\ncd", Core()).Tokens()
 	if p := toks[0].Pos; p.Line != 1 || p.Col != 1 || p.Offset != 0 {
 		t.Errorf("first token at %v (offset %d), want 1:1 offset 0", p, p.Offset)
@@ -310,6 +322,7 @@ func TestPositionsAreTracked(t *testing.T) {
 }
 
 func TestNeverPanics(t *testing.T) {
+	t.Parallel()
 	// This runs on the keystroke path, so malformed and half-typed input is
 	// the normal case rather than the exception.
 	inputs := []string{
@@ -350,6 +363,7 @@ func FuzzLexerNeverPanics(f *testing.F) {
 }
 
 func TestSubstitutionsDoNotEndTheWord(t *testing.T) {
+	t.Parallel()
 	// $(printf a)b is one word. A lexer that emitted the substitution as its
 	// own token could not reconstruct that, and the paren operator used to
 	// win here — `echo $(cat b)` lexed as word($) ( word(cat) word(b) ).
@@ -369,6 +383,7 @@ func TestSubstitutionsDoNotEndTheWord(t *testing.T) {
 }
 
 func TestClosingDelimiterIsNotFoundByCounting(t *testing.T) {
+	t.Parallel()
 	// The rule that decides the implementation: a ) inside quotes does not
 	// close the substitution. Counting parens truncates it and silently
 	// changes the program.
@@ -391,6 +406,7 @@ func TestClosingDelimiterIsNotFoundByCounting(t *testing.T) {
 }
 
 func TestSubstitutionsInsideDoubleQuotes(t *testing.T) {
+	t.Parallel()
 	// "$(cmd)" is how most scripts spell a substitution, so a double-quoted
 	// section yields several spans rather than one literal.
 	tests := []struct{ src, want string }{
@@ -412,6 +428,7 @@ func TestSubstitutionsInsideDoubleQuotes(t *testing.T) {
 }
 
 func TestUnterminatedSubstitutionsAreIncomplete(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`$(echo`, `${x`, "`echo", `$((1+2`} {
 		l := NewLexer(src, Core())
 		l.Tokens()
@@ -422,6 +439,7 @@ func TestUnterminatedSubstitutionsAreIncomplete(t *testing.T) {
 }
 
 func TestArithmeticCommand(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, src string
 		d         Dialect
@@ -462,6 +480,7 @@ func TestArithmeticCommand(t *testing.T) {
 }
 
 func TestArithmeticCommandUnterminatedIsIncomplete(t *testing.T) {
+	t.Parallel()
 	l := NewLexer(`(( 1+1`, Core())
 	l.Tokens()
 	if !l.Incomplete() {
@@ -470,6 +489,7 @@ func TestArithmeticCommandUnterminatedIsIncomplete(t *testing.T) {
 }
 
 func TestDoubleBracketIsLeftToTheParser(t *testing.T) {
+	t.Parallel()
 	// `[[ ]]` deliberately gets no lexer mode. Inside it, < and > are
 	// comparisons rather than redirections, which sounds like a lexer
 	// concern — but `[[` is only special in command position (`echo [[ a ]]`
@@ -519,6 +539,7 @@ func withDollarDoubleQuote() Dialect {
 // The word lexer was used here instead, and the result had no error and no
 // non-zero status — `don't` simply arrived as `dont`.
 func TestHeredocSpansTreatQuotesAsOrdinary(t *testing.T) {
+	t.Parallel()
 	literal := func(spans []Span) string {
 		var b strings.Builder
 		for _, s := range spans {

@@ -17,6 +17,7 @@ import (
 // other way to be told, because the first token is read in the constructor and
 // a line that *is* a `#` has no second token to correct.
 func TestADialectCanReadAHashAsAnOrdinaryCharacter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		skipped   []string
@@ -76,6 +77,7 @@ func TestADialectCanReadAHashAsAnOrdinaryCharacter(t *testing.T) {
 // this asserts is that the fact survives the trip, which is the half that was
 // missing and the half a re-parse cannot recover.
 func TestASubstitutionBodyRecordsHowItsHashWasRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		want      syntax.CommentMode

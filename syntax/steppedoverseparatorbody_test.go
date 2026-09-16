@@ -17,6 +17,7 @@ func withSeparatorBody() Dialect {
 // A `;` the dialect steps over may be the whole of a compound command's body,
 // and it reaches every construct that has one.
 func TestASteppedOverSeparatorMayStandForABody(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"{ ; }\n",
 		"( ; )\n",
@@ -46,6 +47,7 @@ func TestASteppedOverSeparatorMayStandForABody(t *testing.T) {
 // how many separators may be written is still the count the dialect carries.
 // A body written as two is refused, and the refusal names the second `;`.
 func TestOnlyAsManySeparatorsAsTheDialectStepsOverMayBeABody(t *testing.T) {
+	t.Parallel()
 	d := withSeparatorBody()
 	f, err := Parse("{ ; ; }\n", d)
 	if err == nil {
@@ -69,6 +71,7 @@ func TestOnlyAsManySeparatorsAsTheDialectStepsOverMayBeABody(t *testing.T) {
 // A dialect that takes an empty body has no use for the flag, and the two are
 // independent rather than one implying the other.
 func TestAnEmptyBodyDialectNeedsNoSeparatorBody(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.EmptyCompoundBody = true
 	d.SeparatorWhereACommandBelongs = AnySeparatorWhereACommandBelongs

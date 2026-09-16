@@ -43,6 +43,7 @@ func braceScanExtent(t *testing.T, src string, d Dialect) (body, tail string) {
 // brace in some operands and not others, and which is a grammar question with
 // three answers rather than two. See Dialect.QuoteProtectsTheClosingBrace.
 func TestQuoteProtectsTheClosingBrace(t *testing.T) {
+	t.Parallel()
 	word := `echo "[${v-'a}b'}]"`
 	pattern := `echo "[${v#'a}b'}]"`
 
@@ -80,6 +81,7 @@ func TestQuoteProtectsTheClosingBrace(t *testing.T) {
 // unanimous across the panel. Without these the flag reads as "a quote in an
 // expansion", which is wider than what was measured.
 func TestQuoteProtectsTheClosingBraceBoundaries(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		src        string
@@ -110,6 +112,7 @@ func TestQuoteProtectsTheClosingBraceBoundaries(t *testing.T) {
 // A dialect without `${x/pat/rep}` has no `/` operator, so nothing there
 // introduces a pattern for a quote to be honored in.
 func TestASlashIsAPatternOperatorOnlyWhereTheFormExists(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	if !d.ParamSubstitution {
 		t.Fatal("the core is expected to have the replacement form")
@@ -126,6 +129,7 @@ func TestASlashIsAPatternOperatorOnlyWhereTheFormExists(t *testing.T) {
 // One expansion written inside another's operand: the innermost one decides
 // what a quote written in it does, measured six columns to one.
 func TestTheInnermostOperandDecidesWhatAQuoteDoes(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.NestedParamExpansion = true
 	// The quote stands in the inner expansion's *pattern* operand while the
@@ -141,6 +145,7 @@ func TestTheInnermostOperandDecidesWhatAQuoteDoes(t *testing.T) {
 // 3.2 write `[Vx}y]` there and the other five `[Vx}yb'}]`, exactly as they do
 // inside `""`.
 func TestAHereDocumentBodyTakesTheQuotedReading(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		policy     BraceQuotePolicy
 		body, tail string
@@ -177,6 +182,7 @@ func TestAHereDocumentBodyTakesTheQuotedReading(t *testing.T) {
 // reason its braces are. Measured `printf '[%s]' "${ echo '}' ;}"`, which is
 // `[}]` in the two panel columns that have the construct.
 func TestTheCommandFormsQuotesAreItsProgramsInEveryReading(t *testing.T) {
+	t.Parallel()
 	for _, p := range []BraceQuotePolicy{
 		BraceQuoteProtectsAPatternOnly, BraceQuoteProtectsNothing, BraceQuoteProtectsEveryOperand,
 	} {
@@ -195,6 +201,7 @@ func TestTheCommandFormsQuotesAreItsProgramsInEveryReading(t *testing.T) {
 // `a=(p a}b); printf '[%s]' "${a[1]#'a}'}"`, which is `[b]` in every column
 // with the construct but zsh.
 func TestASubscriptIsPartOfTheNameNotTheOperand(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.QuoteProtectsTheClosingBrace = BraceQuoteProtectsAPatternOnly
 	if body, tail := braceScanExtent(t, `echo "[${a[1]#'a}b'}]"`, d); body != `a[1]#'a}b'` || tail != `]` {

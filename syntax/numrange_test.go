@@ -19,6 +19,7 @@ func numRange() Dialect {
 // The four shapes are one operator with either bound left out, so all four
 // are asserted rather than the bare one standing in for the rest.
 func TestANumericRangeIsAWordAndNotARedirection(t *testing.T) {
+	t.Parallel()
 	on, off := numRange(), Core()
 	for _, src := range []string{
 		`[[ 1 = <-> ]]`,
@@ -73,6 +74,7 @@ func parsed(t *testing.T, src string, d Dialect) *File {
 // `<1-2-3>`, `<-->` and `<>` are parse errors there too. The shape is the
 // whole of the disambiguation.
 func TestOnlyTheMeasuredShapeIsARange(t *testing.T) {
+	t.Parallel()
 	on := numRange()
 	// A redirection with a target still parses; it is just not a pattern.
 	if _, err := Parse(`echo <1`, on); err != nil {
@@ -116,6 +118,7 @@ func TestOnlyTheMeasuredShapeIsARange(t *testing.T) {
 // because `echo 2<->` parses either way: as one word, or as `echo` with a
 // redirection, which is a different program with the same text.
 func TestDigitsInFrontOfANumericRangeAreNotADescriptor(t *testing.T) {
+	t.Parallel()
 	on := numRange()
 	for _, tc := range []struct{ src, want string }{
 		{`echo 2<->`, "2<->"},
@@ -187,6 +190,7 @@ func onlySimpleCommand(t *testing.T, f *File, src string) *SimpleCmd {
 // writes a bare range is a syntax error under the dialect that round trip
 // uses. Asserted here on the whole printed line.
 func TestANumericRangePrintsBackAsAPattern(t *testing.T) {
+	t.Parallel()
 	on := numRange()
 	for _, tc := range []struct{ src, want string }{
 		{`echo <->`, "echo <->"},
@@ -253,6 +257,7 @@ func numRangeInWordGroup() Dialect {
 // did not, which is the shape every powerlevel10k config's version gate is
 // written in (#1217).
 func TestANumericRangeIsReachedFromInsideALeadingGroup(t *testing.T) {
+	t.Parallel()
 	on := numRangeInGroup()
 	for _, src := range []string{
 		// The controls: each half alone, which always worked.
@@ -285,6 +290,7 @@ func TestANumericRangeIsReachedFromInsideALeadingGroup(t *testing.T) {
 // `inPattern`, so a fix that only satisfied the condition would leave these
 // refusing. That is what says the gap was the scanner's and not `[[ ]]`'s.
 func TestTheSameScannerIsReachedFromACaseArmAndAnArgument(t *testing.T) {
+	t.Parallel()
 	on := numRangeInWordGroup()
 	for _, src := range []string{
 		// A `case` arm's own paren, then a group: `((`.
@@ -314,6 +320,7 @@ func TestTheSameScannerIsReachedFromACaseArmAndAnArgument(t *testing.T) {
 // only the nine-row set makes the assertion discriminating — a `Parse`
 // succeeding on any of them would read as a fix.
 func TestOnlyARangeSurvivesALeadingGroupsOperators(t *testing.T) {
+	t.Parallel()
 	on := numRangeInGroup()
 	for _, src := range []string{
 		// The four characters that end the word, unchanged.
@@ -353,6 +360,7 @@ func TestOnlyARangeSurvivesALeadingGroupsOperators(t *testing.T) {
 // `origin/main` without this change and without a range in sight, so it is
 // filed rather than asserted here.
 func TestARangeInALeadingGroupPrintsBackAsAPattern(t *testing.T) {
+	t.Parallel()
 	on := numRangeInGroup()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ $k == (<6->) ]]`, `[[ $k == (<6->) ]]`},

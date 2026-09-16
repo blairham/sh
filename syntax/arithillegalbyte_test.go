@@ -38,6 +38,7 @@ func arithKind(t *testing.T, expr string, d syntax.Dialect) *syntax.Error {
 // positional rule, which is the whole of this feature: the byte alone does
 // not decide.
 func TestARefusedByteAnswersForItselfWhereTheExpressionCouldHaveStopped(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		expr  string
 		kind  syntax.ErrorKind
@@ -82,6 +83,7 @@ func TestARefusedByteAnswersForItselfWhereTheExpressionCouldHaveStopped(t *testi
 // and for them this must be invisible: the same expressions keep exactly the
 // kinds they had before the table existed.
 func TestAnEmptyTableChangesNothing(t *testing.T) {
+	t.Parallel()
 	if got := syntax.Core().ArithBytesRefusedOutright; got != "" {
 		t.Fatalf("the core names %q; a dialect with no such sentence must name nothing", got)
 	}
@@ -104,6 +106,7 @@ func TestAnEmptyTableChangesNothing(t *testing.T) {
 // TestAByteOutsideTheTableIsUnaffected. The table is a table: a byte not in
 // it keeps the reading it had, in the same dialect that refuses others.
 func TestAByteOutsideTheTableIsUnaffected(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		expr string
 		kind syntax.ErrorKind
@@ -127,6 +130,7 @@ func TestAByteOutsideTheTableIsUnaffected(t *testing.T) {
 // untouched by it — including the two shapes whose own syntax uses a byte
 // near the table's.
 func TestARefusedByteDoesNotBreakWhatReads(t *testing.T) {
+	t.Parallel()
 	d := refusing()
 	d.ArithCharacterCode = true
 	d.ArraySubscript = true

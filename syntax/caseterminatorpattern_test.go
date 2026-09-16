@@ -15,6 +15,7 @@ func withEsacAsAPattern() Dialect {
 // arm's pattern however it is spelled, so a `case` may match the text `esac`.
 // That is the acceptance the flag is for; the refusal below is its shadow.
 func TestTheCaseTerminatorIsAPatternDirectlyAfterIn(t *testing.T) {
+	t.Parallel()
 	const src = "case esac in esac) echo hit;; esac\n"
 	if _, err := Parse(src, withEsacAsAPattern()); err != nil {
 		t.Errorf("%q: %v", src, err)
@@ -27,6 +28,7 @@ func TestTheCaseTerminatorIsAPatternDirectlyAfterIn(t *testing.T) {
 // The shadow: with the word read as a pattern there is no terminator left, so
 // a `case` written with none of its own on one line is refused.
 func TestAnArmlessCaseOnOneLineIsRefusedWithTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"case x in esac\n",
 		"case x in esac; echo done\n",
@@ -46,6 +48,7 @@ func TestAnArmlessCaseOnOneLineIsRefusedWithTheFlag(t *testing.T) {
 // from being a rule about a `case` needing an arm: with one written in front
 // of the `esac` the same armless `case` parses.
 func TestANewlineRestoresTheCaseTerminator(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"case x in\nesac\n",
 		"case x in\nesac; echo done\n",
@@ -65,6 +68,7 @@ func TestANewlineRestoresTheCaseTerminator(t *testing.T) {
 // Only the first arm's position, and only before any arm has been read: an
 // `esac` after a `;;` is the terminator again.
 func TestOnlyTheFirstArmTakesTheTerminatorAsAPattern(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"case x in y) ;; esac) echo hit;; esac\n",
 		"case x in\nesac) echo hit;; esac\n",

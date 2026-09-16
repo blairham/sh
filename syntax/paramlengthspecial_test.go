@@ -14,6 +14,7 @@ import "testing"
 // readings differ in the node they build and the flag is the only input that
 // separates them.
 func TestWhenALengthOverASpecialNameYieldsToTheParameter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		rest        string
 		final, fall bool

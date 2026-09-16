@@ -27,6 +27,7 @@ import (
 // neither can pass for the other; a table of only one shape would be
 // satisfied by "always the quote" or "always the substitution".
 func TestWhichNestedConstructIsBlamedWhenTheInputRunsOut(t *testing.T) {
+	t.Parallel()
 	inner := Core()
 	outer := Core()
 	outer.UnmatchedBlamesTheOutermost = true
@@ -95,6 +96,7 @@ func TestWhichNestedConstructIsBlamedWhenTheInputRunsOut(t *testing.T) {
 // these are the rows that say the flag does not simply move every answer:
 // there is only one construct, so the innermost and the outermost are it.
 func TestOneConstructAloneIsBlamedTheSameEitherWay(t *testing.T) {
+	t.Parallel()
 	inner := Core()
 	outer := Core()
 	outer.UnmatchedBlamesTheOutermost = true
@@ -120,6 +122,7 @@ func TestOneConstructAloneIsBlamedTheSameEitherWay(t *testing.T) {
 // outermost must not turn some *other* refusal into a report about a
 // delimiter that merely happened to be open when it was raised.
 func TestBlamingTheOutermostDoesNotReplaceADifferentRefusal(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.UnmatchedBlamesTheOutermost = true
 	// A bad substitution operator inside a quote: the expansion is refused
@@ -157,6 +160,7 @@ func unmatchedOpener(t *testing.T, src string, d Dialect) string {
 // do not call ranOut, and these are the values from before this change,
 // asserted unchanged.
 func TestTheOpenWordIsUnchangedByTheSkippersReporting(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, word string }{
 		{"echo $( echo 'x\n", "$("},
 		{"echo \"$( echo hi\n", "$("},

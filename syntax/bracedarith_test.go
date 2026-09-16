@@ -41,6 +41,7 @@ func firstArgSpan(t *testing.T, src string, d syntax.Dialect) (syntax.Span, bool
 // two adjacent parens are the whole of the discriminator: one space makes it
 // the subshell spelling, whose body is a command list.
 func TestABracedArithmeticExpansionIsToldByTheAdjacentParens(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.BracedArithmeticExpansion = true
 	d.SubshellSubstitution = true
@@ -76,6 +77,7 @@ func TestABracedArithmeticExpansionIsToldByTheAdjacentParens(t *testing.T) {
 // The brace has to sit directly behind the `))` with nothing in between, and
 // a construct that never closes is refused rather than read as something else.
 func TestABracedArithmeticExpansionNeedsItsBraceBehindTheParens(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.BracedArithmeticExpansion = true
 	for _, src := range []string{
@@ -93,6 +95,7 @@ func TestABracedArithmeticExpansionNeedsItsBraceBehindTheParens(t *testing.T) {
 // goes on to be read as a parameter whose name begins with a paren, which is
 // not a name.
 func TestWithoutTheFlagTheBracedSpellingIsRefused(t *testing.T) {
+	t.Parallel()
 	sp, ok := firstArgSpan(t, "echo ${((1+2))}", syntax.Core())
 	if !ok {
 		t.Fatalf("`${((1+2))}` was refused while reading; the dialects without the construct defer it to the run")
@@ -108,6 +111,7 @@ func TestWithoutTheFlagTheBracedSpellingIsRefused(t *testing.T) {
 // The spelling that was read is the spelling that is written back — the two
 // are one node and are not one syntax, so normalizing would edit a script.
 func TestABracedArithmeticExpansionIsPrintedAsItWasRead(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.BracedArithmeticExpansion = true
 	const src = "echo ${((1+2))}x"

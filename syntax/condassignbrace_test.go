@@ -32,6 +32,7 @@ import "testing"
 // second pass and every assertion is made twice. Without that pass this test
 // would pass on a grammar no shell has.
 func TestAParenAfterEqualsIsAGroupInAConditionAndALiteralOutsideOne(t *testing.T) {
+	t.Parallel()
 	for _, withFileSubst := range []bool{false, true} {
 		d := Core()
 		d.PatternAlternation = true
@@ -87,6 +88,7 @@ func TestAParenAfterEqualsIsAGroupInAConditionAndALiteralOutsideOne(t *testing.T
 // `a=x; echo "${a/x/\${y}"` is `${y` in zsh 5.9.2 and bash 5.3.15 alike, and
 // `"${a/x/{y}"` is `{y` in both.
 func TestABareBraceInAQuotedExpansionDoesNotNest(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo "${a/x/\${y}"`,
 		`echo "${a/x/\${y\}}"`,
@@ -116,6 +118,7 @@ func TestABareBraceInAQuotedExpansionDoesNotNest(t *testing.T) {
 // not have: with the flag on and no off row it is "a bare brace always
 // balances", and with it off and no on row it is "a bare brace never nests".
 func TestBareBraceNestingInAnUnquotedExpansionFollowsTheFlag(t *testing.T) {
+	t.Parallel()
 	on, off := Core(), Core()
 	on.BareBraceNestsInExpansion = true
 
@@ -156,6 +159,7 @@ func TestBareBraceNestingInAnUnquotedExpansionFollowsTheFlag(t *testing.T) {
 // In double quotes the flag is not consulted at all: every column in the
 // panel stops at the first `}` there, which is what #1586 settled.
 func TestBareBraceNestingIsNotConsultedInsideQuotes(t *testing.T) {
+	t.Parallel()
 	on := Core()
 	on.BareBraceNestsInExpansion = true
 	for _, d := range []Dialect{Core(), on} {

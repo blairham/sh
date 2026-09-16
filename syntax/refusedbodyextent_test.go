@@ -48,6 +48,7 @@ func mustBeSyntaxError(t *testing.T, src string, d syntax.Dialect, want string) 
 // — which is why it survived. The dialect is built here by hand for that
 // reason rather than borrowed from a shell.
 func TestACoprocMeasuresNoRefusedDefinition(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.Coproc = true
 	d.FuncDefAtParen = true
@@ -66,6 +67,7 @@ func TestACoprocMeasuresNoRefusedDefinition(t *testing.T) {
 // a short form may open are covered, because the extent is taken in one place
 // for all of them and a test of one would not say so.
 func TestAShortFormBodyMeasuresNoRefusedDefinition(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ShortForm = true
 	d.FuncDefAtParen = true
@@ -78,6 +80,7 @@ func TestAShortFormBodyMeasuresNoRefusedDefinition(t *testing.T) {
 // End, which is what the two measurements above were relying on without
 // saying so.
 func TestARefusedDefinitionHasAnEmptyExtent(t *testing.T) {
+	t.Parallel()
 	fn := &syntax.FuncDecl{Name: "f", Start: syntax.Pos{Offset: 3, Line: 2, Col: 4}}
 	if got, want := fn.End(), fn.Pos(); got != want {
 		t.Errorf("End() = %+v, want %+v", got, want)

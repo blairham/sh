@@ -52,6 +52,7 @@ var nodeBudget = []struct {
 }
 
 func TestTheTwoShapesATreeIsMadeOfStayWithinTheirBudget(t *testing.T) {
+	t.Parallel()
 	for _, b := range nodeBudget {
 		if b.got != b.want {
 			t.Errorf("%s is %d bytes, budgeted %d — one startup keeps %d of them, "+
@@ -72,6 +73,7 @@ func TestTheTwoShapesATreeIsMadeOfStayWithinTheirBudget(t *testing.T) {
 // the wrong place, which is silent. Writing the bound down as a test is what
 // makes it a decision rather than an accident of a type.
 func TestPositionsCoverAnyInputTheParserCanHold(t *testing.T) {
+	t.Parallel()
 	const twoGiB = 1<<31 - 1
 	p := syntax.Pos{Offset: twoGiB, Line: twoGiB, Col: twoGiB}
 	if int64(p.Offset) != twoGiB || int64(p.Line) != twoGiB || int64(p.Col) != twoGiB {

@@ -21,6 +21,7 @@ import (
 // If this package decided any of that, only one of these could be written.
 // That is the test: not that either is right, but that both are sayable.
 func TestAnArrangementIsTheCallersAndNotThisPackages(t *testing.T) {
+	t.Parallel()
 	// Four spaces, `;` terminators, `then` kept with its `if`, the `do` of a
 	// loop over words on its own line.
 	first := syntax.Layout{
@@ -93,6 +94,7 @@ func TestAnArrangementIsTheCallersAndNotThisPackages(t *testing.T) {
 // next shell to want a nested indent with the brace on its own line would
 // have to unpick it. They are separate, and this says so.
 func TestIndentingAndTheOutermostBraceAreSeparateQuestions(t *testing.T) {
+	t.Parallel()
 	body := functionBody(t, "f(){ if true; then echo y; fi; }")
 
 	nestedInline := syntax.Layout{
@@ -119,6 +121,7 @@ func TestIndentingAndTheOutermostBraceAreSeparateQuestions(t *testing.T) {
 // source's own line structure, which is what a round trip wants and what a
 // caller that has not chosen should get rather than somebody's house style.
 func TestTheZeroArrangementIsNobodys(t *testing.T) {
+	t.Parallel()
 	body := functionBody(t, "f(){ if true; then echo y; fi; }")
 	if got, want := syntax.PrintWith(body, syntax.Layout{}), "{ if true; then echo y; fi; }"; got != want {
 		t.Errorf("got %q, want %q", got, want)

@@ -34,6 +34,7 @@ func paramOf(t *testing.T, src string, d syntax.Dialect) *syntax.ParamExpr {
 // route an unreadable expansion takes — which is what produces each grammar's
 // own refusal without this flag having to word one.
 func TestASubscriptOnASpecialParameterNeedsTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -72,6 +73,7 @@ func TestASubscriptOnASpecialParameterNeedsTheFlag(t *testing.T) {
 // this flag separate from ArraySubscript: `${a[1]}` is read by four of the six
 // shells measured and `${@[1]}` by one, so a single flag could not say both.
 func TestASubscriptOnANameIgnoresTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"echo ${a[1]}", "echo ${a[@]}", "echo ${_x[1,3]}", "echo ${A1[0]}",
 	} {
@@ -91,6 +93,7 @@ func TestASubscriptOnANameIgnoresTheFlag(t *testing.T) {
 // this one there too, rather than deferring it — the same split every other
 // unreadable expansion follows.
 func TestASubscriptOnASpecialParameterIsRefusedWhileReadingWhereThatIsTheRule(t *testing.T) {
+	t.Parallel()
 	d := specialSub(false)
 	d.BadSubstitutionAtParseTime = true
 	if _, err := syntax.Parse("echo ${@[1]}", d); err == nil {

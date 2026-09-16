@@ -19,6 +19,7 @@ func nameExpands() Dialect {
 // Both spellings, because they are two parsers: the parenthesised form is
 // found by looksLikeFuncDef and the keyword form reads its name directly.
 func TestAFunctionNameMayHoldAnExpansion(t *testing.T) {
+	t.Parallel()
 	on, off := nameExpands(), Core()
 	for _, src := range []string{
 		`_p_${w}() { :; }`,
@@ -59,6 +60,7 @@ func TestAFunctionNameMayHoldAnExpansion(t *testing.T) {
 // what "did it parse" cannot see. `_p_${w}` and `_p_w` both parse and are
 // different functions.
 func TestAnExpandedFunctionNameKeepsItsWord(t *testing.T) {
+	t.Parallel()
 	on := nameExpands()
 	for _, src := range []string{`_p_${w}() { :; }`, `function _p_${w} { :; }`} {
 		f, err := Parse(src, on)
@@ -92,6 +94,7 @@ func TestAnExpandedFunctionNameKeepsItsWord(t *testing.T) {
 // answers from colliding the moment one does, and without it every expanded
 // name in such a dialect is `Bad function name`.
 func TestAnExpandedNameIsNotCheckedAsTextAtTheParen(t *testing.T) {
+	t.Parallel()
 	d := nameExpands()
 	d.FuncDefAtParen = true
 	d.FunctionNamePunctuation = false
@@ -117,6 +120,7 @@ func TestAnExpandedNameIsNotCheckedAsTextAtTheParen(t *testing.T) {
 // Printed source has to mean the same thing, and this is exactly where it
 // would not: printing the literal names a different function.
 func TestAnExpandedFunctionNamePrintsBackAsAWord(t *testing.T) {
+	t.Parallel()
 	on := nameExpands()
 	for _, tc := range []struct{ src, want string }{
 		// `${w}` prints as `$w`: the printer's existing normalization of a
@@ -153,6 +157,7 @@ func TestAnExpandedFunctionNamePrintsBackAsAWord(t *testing.T) {
 // An array assignment is a parenthesis after a word too, and quoting is not
 // an expansion.
 func TestTheFlagDoesNotWidenWhatADefinitionIs(t *testing.T) {
+	t.Parallel()
 	on := nameExpands()
 	on.ArrayLiteral = true
 	on.ArraySubscript = true

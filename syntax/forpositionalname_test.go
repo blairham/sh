@@ -51,6 +51,7 @@ func forNames(t *testing.T, src string, d Dialect) []string {
 }
 
 func TestALoopVariableMayBeAPositionalParametersNumber(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	forPositionalNameGrammar(&d)
 	for _, tc := range []struct {
@@ -90,6 +91,7 @@ func TestALoopVariableMayBeAPositionalParametersNumber(t *testing.T) {
 // is digits and then something else, and refuses a special parameter's name
 // outright.
 func TestALoopVariableOfDigitsIsDigitsAndNothingElse(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	forPositionalNameGrammar(&d)
 	for _, src := range []string{
@@ -106,6 +108,7 @@ func TestALoopVariableOfDigitsIsDigitsAndNothingElse(t *testing.T) {
 // TestALoopVariableOfDigitsIsOneDialectsAndNotEveryShells is the panel's other
 // side: six columns refuse the header, so the core grammar must too.
 func TestALoopVariableOfDigitsIsOneDialectsAndNotEveryShells(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	if _, err := Parse("for 1 in a b; do :; done", d); err == nil {
 		t.Error("`for 1 in a b` parsed without the flag that reads a number as a loop variable")

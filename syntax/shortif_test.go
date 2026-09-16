@@ -10,6 +10,7 @@ import "testing"
 // ShortLoop, and the name was the whole of why its coverage stopped at the
 // loops (#827).
 func TestAConditionThatEndedItselfTakesItsBody(t *testing.T) {
+	t.Parallel()
 	short := Core()
 	short.ShortForm = true
 	short.DoubleBracket = true
@@ -76,6 +77,7 @@ func TestAConditionThatEndedItselfTakesItsBody(t *testing.T) {
 // Three constructs, three flags, because a shell could have any one without
 // the others.
 func TestTheOtherShortForms(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ShortForm = true
 	d.Repeat = true
@@ -146,6 +148,7 @@ func TestTheOtherShortForms(t *testing.T) {
 // Printing has to produce source that means the same thing, and for these
 // that means the long spelling wherever one exists.
 func TestTheShortFormsPrintBack(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ShortForm = true
 	d.Repeat = true
@@ -192,6 +195,7 @@ func TestTheShortFormsPrintBack(t *testing.T) {
 // "an empty short arm is an error" the first row below would have been
 // refused too, and the shell runs it.
 func TestAnArmNotWrittenShortPutsTheRestInTheLongForm(t *testing.T) {
+	t.Parallel()
 	short := Core()
 	short.ShortForm = true
 	short.DoubleBracket = true
@@ -252,6 +256,7 @@ func TestAnArmNotWrittenShortPutsTheRestInTheLongForm(t *testing.T) {
 // the `else`. Every row here is `parse error near `else“ on the shell with
 // the construct, with or without a `fi` after it.
 func TestASeparatedShortArmEndsTheWholeIf(t *testing.T) {
+	t.Parallel()
 	short := Core()
 	short.ShortForm = true
 	short.DoubleBracket = true
@@ -280,6 +285,7 @@ func TestASeparatedShortArmEndsTheWholeIf(t *testing.T) {
 // A brace body is closed by its own `}` and takes no terminator with it,
 // however deeply a short form written inside it took one of its own.
 func TestABraceBodyTakesNoTerminatorFromWithin(t *testing.T) {
+	t.Parallel()
 	short := Core()
 	short.ShortForm = true
 	short.CloseBraceAlwaysReserved = true
@@ -307,6 +313,7 @@ func TestABraceBodyTakesNoTerminatorFromWithin(t *testing.T) {
 // refuses, so a `fi` accepted unconditionally after the chain would take input
 // real zsh does not read. #2242.
 func TestARedundantFiClosesAShortIfWithNoElse(t *testing.T) {
+	t.Parallel()
 	short := Core()
 	short.ShortForm = true
 	short.ForBraceBody = true
@@ -362,6 +369,7 @@ func TestARedundantFiClosesAShortIfWithNoElse(t *testing.T) {
 // the second row the one worth having: with the long form written out, the
 // trailing `fi` is a plain second terminator and every dialect refuses it.
 func TestTheRedundantFiIsNotInTheCore(t *testing.T) {
+	t.Parallel()
 	core := Core()
 	core.ArithCommand = true
 

@@ -16,6 +16,7 @@ func rcExpandFlagged(t *testing.T, src string) *ParamExpr {
 
 // The count is what is read, not a bool, because parity is the meaning.
 func TestParamRcExpandFlagCounts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		count int
@@ -45,6 +46,7 @@ func TestParamRcExpandFlagCounts(t *testing.T) {
 // The operator and the subscript are still read after the run: the flag is a
 // prefix on the expansion and not a different expansion.
 func TestParamRcExpandFlagKeepsTheRestOfTheGrammar(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamRcExpandFlag = true
 	d.ArraySubscript = true
@@ -86,6 +88,7 @@ func TestParamRcExpandFlagKeepsTheRestOfTheGrammar(t *testing.T) {
 // which is measured — and each is counted on its own, because parity is per
 // flag and not per character.
 func TestParamRcExpandFlagSharesTheSlot(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamRcExpandFlag = true
 	d.ParamSplitFlag = true
@@ -116,6 +119,7 @@ func TestParamRcExpandFlagSharesTheSlot(t *testing.T) {
 // is still read. That order is measured, and the reverse is a bad
 // substitution rather than a different order.
 func TestParamRcExpandFlagFollowsTheFlagGroup(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamRcExpandFlag = true
 	d.ParamExpansionFlags = true
@@ -145,6 +149,7 @@ func TestParamRcExpandFlagFollowsTheFlagGroup(t *testing.T) {
 // unreadable — and *which* way it is unreadable is the split
 // BadSubstitutionAtParseTime already records.
 func TestParamRcExpandFlagOffIsUnreadable(t *testing.T) {
+	t.Parallel()
 	if e := firstParam(t, `echo ${^x}`, Core()); !e.Bad || e.Src != "^x" {
 		t.Errorf(`${^x} in the core: %+v, want Bad with Src "^x"`, e)
 	}
@@ -164,6 +169,7 @@ func TestParamRcExpandFlagOffIsUnreadable(t *testing.T) {
 // cannot be confused: with only that dialect's flag on, `${x^}` is the case
 // change and `${^x}` is unreadable.
 func TestParamRcExpandFlagDoesNotCollideWithCaseChange(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamCaseChange = true
 	e := firstParam(t, `echo ${x^}`, d)
@@ -177,6 +183,7 @@ func TestParamRcExpandFlagDoesNotCollideWithCaseChange(t *testing.T) {
 
 // The span round-trips as written, because the printer writes it back raw.
 func TestParamRcExpandFlagRoundTrips(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamRcExpandFlag = true
 	d.ParamSplitFlag = true

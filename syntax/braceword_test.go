@@ -49,6 +49,7 @@ func refuses(t *testing.T, d Dialect, src string) {
 }
 
 func TestAnOpenBraceNeedsNoBlankAfterIt(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	braceWords(&d)
 	for _, tc := range []struct{ name, src, want string }{
@@ -87,6 +88,7 @@ func TestAnOpenBraceNeedsNoBlankAfterIt(t *testing.T) {
 }
 
 func TestAnOpenBraceIsOnlyReservedWhereACommandMayBegin(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	braceWords(&d)
 	for _, tc := range []struct{ name, src, want string }{
@@ -119,6 +121,7 @@ func TestAnOpenBraceIsOnlyReservedWhereACommandMayBegin(t *testing.T) {
 }
 
 func TestAQuotedOpenBraceOpensNoGroup(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	braceWords(&d)
 	// Quoting takes the reserved reading away, so the word is a command name
@@ -130,6 +133,7 @@ func TestAQuotedOpenBraceOpensNoGroup(t *testing.T) {
 }
 
 func TestACloseBraceEndsTheWordItStandsAtTheEndOf(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	braceWords(&d)
 	for _, tc := range []struct{ name, src, want string }{
@@ -156,6 +160,7 @@ func TestACloseBraceEndsTheWordItStandsAtTheEndOf(t *testing.T) {
 }
 
 func TestACloseBraceInTheMiddleOfAWordIsText(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	braceWords(&d)
 	for _, tc := range []struct{ name, src, want string }{
@@ -172,6 +177,7 @@ func TestACloseBraceInTheMiddleOfAWordIsText(t *testing.T) {
 }
 
 func TestACloseBraceThatPairsWithNothingEndsTheWord(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	braceWords(&d)
 	// Each of these leaves a bare `}` standing where no group is open, which
@@ -193,6 +199,7 @@ func TestACloseBraceThatPairsWithNothingEndsTheWord(t *testing.T) {
 }
 
 func TestAnAssignmentValueKeepsItsCloseBrace(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	braceWords(&d)
 	for _, tc := range []struct{ name, src, want string }{
@@ -205,6 +212,7 @@ func TestAnAssignmentValueKeepsItsCloseBrace(t *testing.T) {
 }
 
 func TestTheCoreLeavesBothBracesInTheWord(t *testing.T) {
+	t.Parallel()
 	// Without the flags the braces are ordinary characters, which is what
 	// every other shell in the panel does: `a(){print A}` names a command
 	// `{print` there.

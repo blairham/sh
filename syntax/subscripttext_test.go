@@ -16,6 +16,7 @@ import (
 // a[$i]=q` is `a[$i]: bad array subscript` in the column that names it, not
 // `a[-9]` (#1373).
 func TestAnAssignmentKeepsItsSubscriptAsWritten(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ArraySubscript = true
 	d.ArrayLiteral = true
@@ -52,6 +53,7 @@ func TestAnAssignmentKeepsItsSubscriptAsWritten(t *testing.T) {
 // And a parameter expansion's, which is the same field on the read side: the
 // `${a[$i]:=v}` route writes an element and earns the same refusal.
 func TestAParameterExpansionKeepsItsSubscriptAsWritten(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ArraySubscript = true
 	d.ArraySubscriptFlags = true
@@ -78,6 +80,7 @@ func TestAParameterExpansionKeepsItsSubscriptAsWritten(t *testing.T) {
 // The text is the source and not the position, so a subscript that stands on a
 // later line or after another assignment is still its own.
 func TestASubscriptAsWrittenIsCutFromItsOwnPlace(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ArraySubscript = true
 

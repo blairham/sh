@@ -19,6 +19,7 @@ import (
 // The span kind is what the assertion is on rather than the parse succeeding:
 // the old reading parsed everything here — that is what made it silent.
 func TestAnExpansionInsideAPatternGroupIsASpan(t *testing.T) {
+	t.Parallel()
 	on := patGroup()
 	on.DollarSingleQuote = true
 	on.DollarBracketArith = true
@@ -99,6 +100,7 @@ func conditionRightOperand(t *testing.T, src string, f *File) []Span {
 // the group closes at the last `)` in the word rather than at the first one
 // the command happens to contain.
 func TestASubstitutionsParenthesesAreNotTheGroups(t *testing.T) {
+	t.Parallel()
 	on := patGroup()
 	for _, tc := range []struct{ src, text string }{
 		{`echo ($(echo ')')x)`, "(x)"},
@@ -143,6 +145,7 @@ func TestASubstitutionsParenthesesAreNotTheGroups(t *testing.T) {
 // reading one here would make two constructs work that the shell does not
 // have.
 func TestAProcessSubstitutionInsideAGroupIsNotOne(t *testing.T) {
+	t.Parallel()
 	on := patGroup()
 	on.ProcessSubstitution = true
 	for _, src := range []string{
@@ -175,6 +178,7 @@ func TestAProcessSubstitutionInsideAGroupIsNotOne(t *testing.T) {
 // where `($L)` was written is a different pattern, and escaping the `$` is a
 // different one again.
 func TestAPatternGroupsExpansionPrintsBackAsItWasWritten(t *testing.T) {
+	t.Parallel()
 	on := patGroup()
 	for _, tc := range []struct{ src, group string }{
 		{`echo ($L)`, `($L)`},

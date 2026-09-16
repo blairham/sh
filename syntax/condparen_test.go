@@ -17,6 +17,7 @@ import (
 // intersection is unanimous, so this is core rather than a dialect flag
 // (#859).
 func TestCondTouchingParensAreGroups(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`[[ ((1 -eq 1)) ]]`, `[[(1 -eq 1)]]`},
 		{`[[ ( (1 -eq 1) ) ]]`, `[[(1 -eq 1)]]`},
@@ -43,6 +44,7 @@ func TestCondTouchingParensAreGroups(t *testing.T) {
 // The spaced and unspaced forms are the *same* tree, which is the property
 // the bug broke: a space made the condition parse and its absence did not.
 func TestCondSpacingGroupingParensChangesNothing(t *testing.T) {
+	t.Parallel()
 	spaced := cond(parseCond(t, `[[ ( (1 -eq 1) ) ]]`))
 	touching := cond(parseCond(t, `[[ ((1 -eq 1)) ]]`))
 	if spaced != touching {
@@ -54,6 +56,7 @@ func TestCondSpacingGroupingParensChangesNothing(t *testing.T) {
 // `]]` the arithmetic command is back, and an expression of its own that
 // opens with a parenthesis was never in doubt.
 func TestArithCommandOutsideAConditionIsUnaffected(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`(( (1+2)*3 ))`, ` (1+2)*3 `},
 		{`(( x++ ))`, ` x++ `},
@@ -78,6 +81,7 @@ func TestArithCommandOutsideAConditionIsUnaffected(t *testing.T) {
 // The flag is cleared when the condition ends rather than leaking into what
 // follows it — the regression a lexer mode invites.
 func TestArithCommandAfterATestClause(t *testing.T) {
+	t.Parallel()
 	f, err := Parse(`[[ 1 -eq 1 ]] && (( x++ ))`, Core())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -95,6 +99,7 @@ func TestArithCommandAfterATestClause(t *testing.T) {
 // And a subshell that opens with a subshell still needs its space, which is
 // the rule the condition is the exception to.
 func TestTouchingParensAtCommandPositionAreArithmetic(t *testing.T) {
+	t.Parallel()
 	// The file reads: `echo hi` is kept as the command's text and nothing
 	// asks whether it is an expression until the command runs, which is what
 	// bash, ksh93 and zsh all do — `bash -n` takes this file (#865).
@@ -146,6 +151,7 @@ func TestTouchingParensAtCommandPositionAreArithmetic(t *testing.T) {
 // whole rendered line is asserted, location included: a diagnostic that moves
 // to the wrong position is the failure this catches.
 func TestCondUnbalancedTouchingParens(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`[[ ((1 -eq 1) ]]`, `1:15: expected ) in a condition`},
 		// The token the reading stopped on, which is what every shell in the

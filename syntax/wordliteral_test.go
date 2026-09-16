@@ -17,6 +17,7 @@ import (
 // allocated a byte slice and a string to copy something the tree already held:
 // 17.5MB of a 154MB interactive startup (#2070).
 func TestLiteralJoinsTheSpansHoweverManyThereAre(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{
@@ -44,6 +45,7 @@ func TestLiteralJoinsTheSpansHoweverManyThereAre(t *testing.T) {
 // And nil is the empty string, which several callers rely on: a redirect with
 // no descriptor word asks this without checking first.
 func TestLiteralOfNoWordIsEmpty(t *testing.T) {
+	t.Parallel()
 	var w *syntax.Word
 	if got := w.Literal(); got != "" {
 		t.Errorf("Literal() of a nil word = %q, want empty", got)

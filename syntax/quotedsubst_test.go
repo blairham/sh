@@ -41,6 +41,7 @@ func innerOf(t *testing.T, src string) *ParamExpr {
 // stripped the quotes would build a tree that parses and means the other
 // program.
 func TestAQuotedSubstitutionStandsWhereANameBelongs(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src     string
 		kind    SpanKind
@@ -72,6 +73,7 @@ func TestAQuotedSubstitutionStandsWhereANameBelongs(t *testing.T) {
 // the last two are the pair that says the rule inside the quotes is the same
 // rule as outside them.
 func TestTheQuotesDoNotWidenWhatMayStandThere(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`${"abc"}`,  // a quoted string is not a substitution
 		`${'$(c)'}`, // single quotes are literal text

@@ -27,6 +27,7 @@ func firstArg(t *testing.T, src string, d Dialect) *Word {
 }
 
 func TestPrintWordGivesTheWordBack(t *testing.T) {
+	t.Parallel()
 	d := transformDialect()
 	for _, c := range []struct{ src, want string }{
 		{`echo "[${x@QQ}]"`, `"[${x@QQ}]"`},
@@ -47,6 +48,7 @@ func TestPrintWordGivesTheWordBack(t *testing.T) {
 // written in one pair of quotes answers whole and a word that changes quoting
 // mid-way answers with the part around the index asked for.
 func TestPrintWordQuotingRunStopsAtAChangeOfQuoting(t *testing.T) {
+	t.Parallel()
 	d := transformDialect()
 	for _, c := range []struct {
 		src  string
@@ -83,6 +85,7 @@ func TestPrintWordQuotingRunStopsAtAChangeOfQuoting(t *testing.T) {
 // the family: without the flag the whole construct is unknown rather than the
 // letter, which is a different failure and carries a different status.
 func TestBadTransformMarksOnlyTheFamilyAndOnlyWhereItExists(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src        string
 		withFamily bool

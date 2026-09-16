@@ -21,6 +21,7 @@ func fileSubstDialect() syntax.Dialect {
 // which is why this is decided inside the word scanner rather than in front
 // of the operator table. Measured 2026-09-11 on zsh 5.9.2.
 func TestFileProcessSubstitutionScansAsAWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, inner string
 	}{
@@ -54,6 +55,7 @@ func TestFileProcessSubstitutionScansAsAWord(t *testing.T) {
 // 5.9.2: the accepting ones by what they print, the refusing ones by
 // `missing end of string`.
 func TestFileProcessSubstitutionOpensOnlyAtAWordOrAValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		want      bool
@@ -97,6 +99,7 @@ func TestFileProcessSubstitutionOpensOnlyAtAWordOrAValue(t *testing.T) {
 // The construct belongs to one dialect, so the core reads the same text as a
 // word ending at its parenthesis and refuses what follows.
 func TestFileProcessSubstitutionIsADialectFeature(t *testing.T) {
+	t.Parallel()
 	if _, err := syntax.Parse(`cat =(echo hi)`, syntax.Core()); err == nil {
 		t.Error("parse succeeded, want a refusal where the dialect has no such construct")
 	}
@@ -109,6 +112,7 @@ func TestFileProcessSubstitutionIsADialectFeature(t *testing.T) {
 // out as its literal text, which reads as an ordinary word and would make the
 // formatter silently rewrite the construct away.
 func TestFileProcessSubstitutionPrintsBack(t *testing.T) {
+	t.Parallel()
 	const src = "cat =(echo hi)"
 	f, err := syntax.Parse(src, fileSubstDialect())
 	if err != nil {
@@ -124,6 +128,7 @@ func TestFileProcessSubstitutionPrintsBack(t *testing.T) {
 // for. Without a case of its own the kind describes itself in prose instead —
 // "process substitution", which is not something anybody typed.
 func TestFileProcessSubstitutionRunsOutNamingItsOpener(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("cat =(echo hi", fileSubstDialect())
 	p.Parse()
 	if !p.Incomplete() {

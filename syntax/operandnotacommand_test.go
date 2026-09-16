@@ -33,6 +33,7 @@ import (
 // at. The dialect is [syntax.Core] with the operators switched on one at a
 // time, so no shell is named here; which shell reads what lives in dialect/.
 func TestAnExpansionsOperandIsNotACommandPosition(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ArithCommand = true
 	d.ParamSubstitution = true
@@ -87,6 +88,7 @@ func TestAnExpansionsOperandIsNotACommandPosition(t *testing.T) {
 // whole: a `$((` that stopped being read would leave its text behind as
 // literal characters and the row above would still pass.
 func TestAnOperandStillTakesAnArithmeticSubstitution(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ArithCommand = true
 	d.ParamSubstitution = true
@@ -122,6 +124,7 @@ func TestAnOperandStillTakesAnArithmeticSubstitution(t *testing.T) {
 // An arithmetic command is still one where a command may begin, which is the
 // other half of the same control: the operand suspends it, nothing else does.
 func TestACommandPositionStillTakesAnArithmeticCommand(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ArithCommand = true
 
@@ -186,6 +189,7 @@ func quotedPartsOf(w *syntax.Word) string {
 // Which is why both halves are asserted. The text was already right for the
 // rows with no quoting in them, so a text-only test passes against the bug.
 func TestAnExpansionsOperandHasNoComment(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamSubstitution = true
 
@@ -254,6 +258,7 @@ func TestAnExpansionsOperandHasNoComment(t *testing.T) {
 // different questions, and CommentMode's own documentation says it exists for
 // ShellWords and is never used by a parse.
 func TestASubstitutionInsideAnOperandStillHasComments(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamSubstitution = true
 

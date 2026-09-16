@@ -30,6 +30,7 @@ func withParenEnd() Dialect {
 // paren-counting that finds the `)` counts the same in every dialect, so all
 // four accepted what two of the four refuse.
 func TestAHereDocumentBodyEndingAtAClosingParenIsADialectQuestion(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -81,6 +82,7 @@ func TestAHereDocumentBodyEndingAtAClosingParenIsADialectQuestion(t *testing.T) 
 // equal position is a fact about where the failure is attributed and not a
 // coincidence — and a fix that reported this somewhere else would be caught.
 func TestABodyThatTookTheParenLeavesTheOrdinaryUnterminatedConstruct(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, control string
 	}{
@@ -126,6 +128,7 @@ func TestABodyThatTookTheParenLeavesTheOrdinaryUnterminatedConstruct(t *testing.
 // the delimiter's line, which is three lines early for the shape below and
 // was what six corpus rows caught.
 func TestTheRefusalIsLocatedWhereTheInputRanOut(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		src     string
@@ -171,6 +174,7 @@ func TestTheRefusalIsLocatedWhereTheInputRanOut(t *testing.T) {
 // it has: the body is still open, which is exactly what the input running out
 // inside a construct means.
 func TestABodyThatTookTheParenLeavesTheInputIncomplete(t *testing.T) {
+	t.Parallel()
 	p := NewParser("v=$(cat <<EOF\na\nEOF)\n", Core())
 	p.Parse()
 	if p.Err() == nil {
@@ -183,6 +187,7 @@ func TestABodyThatTookTheParenLeavesTheInputIncomplete(t *testing.T) {
 
 // The controls: two shapes that look like this one and are not it.
 func TestWhatDoesNotReachTheQuestion(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, why string }{
 		{
 			name: "the delimiter is alone on its line",

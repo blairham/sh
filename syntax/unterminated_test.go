@@ -18,6 +18,7 @@ import (
 // rather than the shells, which is the rule for a test in this package; what
 // each dialect makes of them lives in dialect/.
 func TestUnterminatedCarriesTheStateItFailedIn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src       string
 		construct string
@@ -67,6 +68,7 @@ func TestUnterminatedCarriesTheStateItFailedIn(t *testing.T) {
 // A construct that closes leaves nothing behind, which is what makes the stack
 // safe to read at the point of failure.
 func TestClosedConstructsAreNotRemembered(t *testing.T) {
+	t.Parallel()
 	src := "if true; then echo x; fi\nfor i in a; do echo y; done\n{ echo z; }\nif"
 	_, err := syntax.Parse(src, syntax.Core())
 	var se *syntax.Error

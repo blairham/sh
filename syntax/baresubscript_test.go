@@ -46,6 +46,7 @@ func spansOf(t *testing.T, src string, d syntax.Dialect) []syntax.Span {
 // the spans rather than on a result. Off, the `[1]` is a *pattern* by the time
 // anything expands it, so the two readings do not even fail the same way.
 func TestABareSubscriptIsPartOfTheExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -100,6 +101,7 @@ func TestABareSubscriptIsPartOfTheExpansion(t *testing.T) {
 // The pair is the point: a grammar that read the subscript anyway would turn
 // every `$dir[0-9]*` in a portable script into an element lookup, silently.
 func TestWithoutTheFlagTheBracketsAreText(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, value, after string }{
 		{"echo $a[1]", "a", "[1]"},
 		{"echo $a[1,3]", "a", "[1,3]"},
@@ -129,6 +131,7 @@ func TestWithoutTheFlagTheBracketsAreText(t *testing.T) {
 // without it. A flag that read one more character than the shell does would
 // differ only where nothing looks.
 func TestABareLengthStopsWhereTheShellStops(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, value, after string }{
 		{"echo $#a", "#a", ""},
 		{"echo $#0", "#0", ""},
@@ -161,6 +164,7 @@ func TestABareLengthStopsWhereTheShellStops(t *testing.T) {
 // of them, and this is the row that keeps the flag from granting the form to
 // every `$`.
 func TestAPositionalDigitTakesNoBareSubscript(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo $1[2]", "echo $9[2]"} {
 		spans := spansOf(t, src, bare())
 		if len(spans) != 2 || spans[1].Value != "[2]" {
@@ -178,6 +182,7 @@ func TestAPositionalDigitTakesNoBareSubscript(t *testing.T) {
 // subscript, which is what the shell says too: it reports an invalid subscript
 // rather than reading across the quote.
 func TestAnUnclosedBareSubscriptIsText(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -217,6 +222,7 @@ func TestAnUnclosedBareSubscriptIsText(t *testing.T) {
 // shell reads `"$a[1\n]"` as the first element, and nothing here noticed until
 // the stop was mutated away and produced a *better* shell.
 func TestAQuotedSubscriptMaySpanALine(t *testing.T) {
+	t.Parallel()
 	spans := spansOf(t, "echo \"$a[1\n]\"", bare())
 	if len(spans) != 1 || spans[0].Value != "a[1\n]" {
 		t.Errorf("spans are %+v, want one expansion of `a[1\n]`", spans)
@@ -226,6 +232,7 @@ func TestAQuotedSubscriptMaySpanALine(t *testing.T) {
 // The span a bare subscript produces is the span the braced spelling produces,
 // which is what keeps the parser, the interpreter and the printer out of it.
 func TestABareSubscriptParsesAsTheBracedSpelling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ bareSrc, braced string }{
 		{"echo $a[1]", "echo ${a[1]}"},
 		{"echo $#a", "echo ${#a}"},
@@ -250,6 +257,7 @@ func TestABareSubscriptParsesAsTheBracedSpelling(t *testing.T) {
 // same tree — the braced spelling, since the printer has no dialect and the
 // braces are correct in every grammar that has subscripts at all.
 func TestPrintingABareSubscript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"echo $a[1]", "echo ${a[1]}"},
 		{"echo $#a", "echo ${#a}"},
@@ -285,6 +293,7 @@ func TestPrintingABareSubscript(t *testing.T) {
 // is why the field is nil there and why the field is what tells the two
 // spellings apart once they are parsed.
 func TestABareSubscriptIsKeptAsTextAsWell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -341,6 +350,7 @@ func TestABareSubscriptIsKeptAsTextAsWell(t *testing.T) {
 // between the brackets is performed exactly as the word around it would
 // perform it. Inside double quotes the spans are the quoted ones.
 func TestABareSubscriptsTextKeepsTheExpansionsQuoting(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -383,6 +393,7 @@ func TestABareSubscriptsTextKeepsTheExpansionsQuoting(t *testing.T) {
 // one does not. A backtick is not stepped over at all, and the word is
 // refused instead — see TestABacktickInABareSubscriptIsNotKept.
 func TestAnUnbalancedSubstitutionGivesTheBracketsBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, kept string }{
 		// The `]` inside closes the subscript.
 		{`echo $a[$(: ]; echo 2)]`, `[$(: ]; echo 2)]`},
@@ -417,6 +428,7 @@ func TestAnUnbalancedSubstitutionGivesTheBracketsBack(t *testing.T) {
 // is kept. So the run is not kept when a backtick stands in it, and the
 // unclosed-subscript refusal is what the word gets instead.
 func TestABacktickInABareSubscriptIsNotKept(t *testing.T) {
+	t.Parallel()
 	spans := spansOf(t, "echo $a[`: ]; echo 2`]", bare())
 	if len(spans) == 0 || spans[0].Kind != syntax.ParamExp || spans[0].Value != "a" {
 		t.Fatalf("first span is not the bare expansion: %+v", spans)

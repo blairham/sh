@@ -47,6 +47,7 @@ func casePatterns(t *testing.T, src string, d syntax.Dialect) []string {
 // Measured 2026-09-06 on zsh 5.9.2 with `-n` over a script file: all seven
 // parse there.
 func TestASeparatorMayHaveNoPatternOnEitherSideOfIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		want      []string
@@ -81,6 +82,7 @@ func TestASeparatorMayHaveNoPatternOnEitherSideOfIt(t *testing.T) {
 // blank between the parentheses, which that dialect trims either side of a
 // list.
 func TestTheWholeListMayBeWrittenAsNothingInsideTheArmsParens(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"case a in ( ) echo m;; esac",
 		"case a in (  ) echo m;; esac",
@@ -96,6 +98,7 @@ func TestTheWholeListMayBeWrittenAsNothingInsideTheArmsParens(t *testing.T) {
 // And nowhere else: written without the arm's parentheses there is nothing to
 // hold an empty list, and the shell that accepts every line above refuses it.
 func TestAPatternListMayNotBeEmptyWithoutTheArmsParens(t *testing.T) {
+	t.Parallel()
 	mustFailHere(t, "case a in ) echo m;; esac", emptyAlt(), "no parens to hold an empty list")
 }
 
@@ -108,6 +111,7 @@ func TestAPatternListMayNotBeEmptyWithoutTheArmsParens(t *testing.T) {
 // error near `()' “ and `case a in (a) echo m;; () esac` is the same, where
 // this parser named the `)' alone (#1111).
 func TestEmptyParensDoNotOpenAnArm(t *testing.T) {
+	t.Parallel()
 	d := emptyAlt()
 	d.EmptyParensAreOneToken = true
 	for _, src := range []string{
@@ -139,6 +143,7 @@ func TestEmptyParensDoNotOpenAnArm(t *testing.T) {
 // off it stays the operator it was lexed as, which is the token the four
 // shells without this blame.
 func TestTheDoubledSeparatorIsTwoOfThemAndNotAnOperator(t *testing.T) {
+	t.Parallel()
 	got := casePatterns(t, "case a in (x||y) echo m;; esac", emptyAlt())
 	if want := "x,,y"; strings.Join(got, ",") != want {
 		t.Errorf("patterns = %q, want %q", got, want)
@@ -160,6 +165,7 @@ func TestTheDoubledSeparatorIsTwoOfThemAndNotAnOperator(t *testing.T) {
 // nothing prints as nothing, so the separators are the only thing carrying it
 // and a printer that dropped an empty word would round-trip to a shorter list.
 func TestAnEmptyAlternativeSurvivesBeingPrinted(t *testing.T) {
+	t.Parallel()
 	const src = "case a in (|x|y) echo m;; esac"
 	f, err := syntax.Parse(src, emptyAlt())
 	if err != nil {
@@ -177,6 +183,7 @@ func TestAnEmptyAlternativeSurvivesBeingPrinted(t *testing.T) {
 // at the separator that says it is there, so a diagnostic about the arm has a
 // position to point at.
 func TestAnEmptyAlternativeIsLocatedAtItsSeparator(t *testing.T) {
+	t.Parallel()
 	const src = "case a in (|x) echo m;; esac"
 	c, ok := onlyCommand(t, src, emptyAlt()).(*syntax.CaseClause)
 	if !ok {
@@ -206,6 +213,7 @@ func TestAnEmptyAlternativeIsLocatedAtItsSeparator(t *testing.T) {
 // operator standing where a pattern belongs, because the other order consumes
 // the `|` and then finds a word where the `)` should be.
 func TestTheEmptyAlternativeIsAskedBeforeTheOperatorSlot(t *testing.T) {
+	t.Parallel()
 	d := emptyAlt()
 	d.CasePatternAcceptsOperator = true
 	got := casePatterns(t, "case a in (|x|y) echo m;; esac", d)

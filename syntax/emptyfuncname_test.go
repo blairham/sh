@@ -30,6 +30,7 @@ func keywordOnly() Dialect {
 // word when they are bare, so a wider set of *name characters* cannot be what
 // this is — the quoting is.
 func TestAnyWordIsAKeywordFunctionName(t *testing.T) {
+	t.Parallel()
 	on, off := anyWordNamed(), keywordOnly()
 	for _, src := range []string{
 		`function '' { echo b; }`,
@@ -72,6 +73,7 @@ func TestAnyWordIsAKeywordFunctionName(t *testing.T) {
 // table at status 0. Quoting is what decides it and is read per span, which
 // only the last two rows can say: `a*'b'` still has a bare `*`.
 func TestABarePatternIsNotAKeywordFunctionName(t *testing.T) {
+	t.Parallel()
 	on := anyWordNamed()
 	for _, src := range []string{
 		`function a*b { :; }`,
@@ -102,6 +104,7 @@ func TestABarePatternIsNotAKeywordFunctionName(t *testing.T) {
 // definition whose Name came back as `'a b'` would be a five-character name
 // that `'a b'` never calls.
 func TestAKeywordFunctionNameIsTheWordsText(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`function '' { echo b; }`, ""},
 		{`function 'a b' { echo b; }`, "a b"},
@@ -133,6 +136,7 @@ func TestAKeywordFunctionNameIsTheWordsText(t *testing.T) {
 // checked, opens the other two — and each of those is a construct the shell
 // with the flag reads as something else entirely.
 func TestTheKeywordsOtherRefusalsStand(t *testing.T) {
+	t.Parallel()
 	on := anyWordNamed()
 	// The first: what follows the keyword is not a word at all.
 	for _, src := range []string{
@@ -176,6 +180,7 @@ func TestTheKeywordsOtherRefusalsStand(t *testing.T) {
 // functions and we do not. A fix that let the name check pass on anything
 // would land here instead, and the failure would read as an unbalanced brace.
 func TestTheWidenedNameIsNotTheMultiNameForm(t *testing.T) {
+	t.Parallel()
 	on := anyWordNamed()
 	for _, src := range []string{
 		`function a b { :; }`,
@@ -205,6 +210,7 @@ func TestTheWidenedNameIsNotTheMultiNameForm(t *testing.T) {
 // different site, and pinning it here is what keeps the two from being
 // confused for one (#1561).
 func TestThePosixFormStillRefusesAQuotedName(t *testing.T) {
+	t.Parallel()
 	on := anyWordNamed()
 	for _, src := range []string{
 		`''() { :; }`,
@@ -225,6 +231,7 @@ func TestThePosixFormStillRefusesAQuotedName(t *testing.T) {
 // A name that cannot be written bare is printed quoted, because printing it
 // bare is a different program that parses.
 func TestAKeywordFunctionNamePrintsBackAsItself(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`function '' { echo b; }`,
 		`function 'a b' { echo b; }`,

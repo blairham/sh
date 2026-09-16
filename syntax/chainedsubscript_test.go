@@ -33,6 +33,7 @@ func subscriptTexts(e *ParamExpr) []string {
 
 // Every subscript is read, in written order, with the *last* one in Index.
 func TestAChainOfSubscriptsIsRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want []string
@@ -66,6 +67,7 @@ func TestAChainOfSubscriptsIsRead(t *testing.T) {
 // into Leading, rather than staying on whichever subscript happened to be read
 // last.
 func TestAFlagGroupStaysWithItsOwnSubscript(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${a[(r)y][1]}`, subChained())
 	if len(e.Leading) != 1 {
 		t.Fatalf("leading subscripts %d, want 1", len(e.Leading))
@@ -86,6 +88,7 @@ func TestAFlagGroupStaysWithItsOwnSubscript(t *testing.T) {
 // makes the expansion unreadable — which is how the grammars without the
 // chain answer `${a[1][2]}`.
 func TestWithoutTheFlagOnlyTheFirstSubscriptIsRead(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ArraySubscript = true
 	e := firstParam(t, `echo ${a[1][2]}`, d)
@@ -103,6 +106,7 @@ func TestWithoutTheFlagOnlyTheFirstSubscriptIsRead(t *testing.T) {
 // The bare spelling takes one subscript however many are written, which is
 // measured: the rest is ordinary text there rather than a second link.
 func TestTheBareSpellingTakesOneSubscript(t *testing.T) {
+	t.Parallel()
 	d := subChained()
 	d.BareSubscript = true
 	e := firstParam(t, `echo "$a[1][2]"`, d)

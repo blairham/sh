@@ -31,6 +31,7 @@ func argText(w *syntax.Word) string {
 // same node the plain spelling produces, so a test that only checked the
 // operator would miss a stray Colon flag nothing reads.
 func TestAColonBeforeATrimIsReadAsTheTrim(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamColonBeforeTrimIsIgnored = true
 	d.ParamSubstring = true
@@ -64,6 +65,7 @@ func TestAColonBeforeATrimIsReadAsTheTrim(t *testing.T) {
 // an arithmetic expression beginning `#p`. That is the difference the flag
 // exists to make, so it is asserted rather than assumed.
 func TestWithoutTheFlagAColonBeforeATrimIsAnOffset(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamSubstring = true
 	e := paramOf(t, "echo ${v:#p}", d)
@@ -78,6 +80,7 @@ func TestWithoutTheFlagAColonBeforeATrimIsAnOffset(t *testing.T) {
 // Only the four trims. The flag must not widen to every colon, and the
 // substring is what it would swallow if it did.
 func TestTheFlagLeavesEveryOtherColonAlone(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamColonBeforeTrimIsIgnored = true
 	d.ParamSubstring = true
@@ -110,6 +113,7 @@ func TestTheFlagLeavesEveryOtherColonAlone(t *testing.T) {
 // never both on in the panel. The order is fixed anyway, so the pair has a
 // defined reading rather than one that depends on which case came first.
 func TestElementSelectionWinsOverTheColonTrim(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamColonBeforeTrimIsIgnored = true
 	d.ParamElementSelection = true

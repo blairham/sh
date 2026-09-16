@@ -21,6 +21,7 @@ func transformDialect() Dialect {
 }
 
 func TestTransformParsesEachLetter(t *testing.T) {
+	t.Parallel()
 	for _, letter := range []byte("QEPAaKkLUu") {
 		src := "echo ${x@" + string(letter) + "}"
 		f, err := Parse(src, transformDialect())
@@ -43,6 +44,7 @@ func TestTransformParsesEachLetter(t *testing.T) {
 }
 
 func TestTransformNeedsItsFlag(t *testing.T) {
+	t.Parallel()
 	// Off, the operator is unrecognized and defers like any other — the
 	// dialects without the family call it a bad substitution when reached.
 	f, err := Parse(`echo "${x@Q}"`, Core())
@@ -60,6 +62,7 @@ func TestTransformNeedsItsFlag(t *testing.T) {
 // defers the `@` family: measured, `${x@Q}` in a branch never taken is silent
 // there and `${x^^}` in the same branch is a parse-time syntax error.
 func TestTransformIsDeferredEvenByTheParseTimeRefuser(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.BadSubstitutionAtParseTime = true
 
@@ -81,6 +84,7 @@ func TestTransformIsDeferredEvenByTheParseTimeRefuser(t *testing.T) {
 }
 
 func TestTransformRefusesWhatTheShellRefuses(t *testing.T) {
+	t.Parallel()
 	// Measured: `${x@}`, `${x@Z}`, `${x@QQ}` and `${x@ Q}` are all bad
 	// substitutions in the shell that has the family, so the flag being on
 	// must not start accepting them.
@@ -106,6 +110,7 @@ func TestTransformRefusesWhatTheShellRefuses(t *testing.T) {
 // indirection; the family arriving must not disturb the first or claim the
 // second is anything else.
 func TestTransformLeavesThePrefixListingAlone(t *testing.T) {
+	t.Parallel()
 	d := transformDialect()
 	d.ParamIndirection = true
 
@@ -131,6 +136,7 @@ func TestTransformLeavesThePrefixListingAlone(t *testing.T) {
 }
 
 func TestTransformPrintsBackAsWritten(t *testing.T) {
+	t.Parallel()
 	src := `echo "${x@Q}"`
 	f, err := Parse(src, transformDialect())
 	if err != nil {

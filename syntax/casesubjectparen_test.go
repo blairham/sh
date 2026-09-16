@@ -65,6 +65,7 @@ func caseSubject(t *testing.T, src string, d Dialect) string {
 }
 
 func TestACaseSubjectMayOpenWithAParen(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseSubjectParenGrammar(&d)
 	for _, tc := range []struct {
@@ -145,6 +146,7 @@ func TestACaseSubjectMayOpenWithAParen(t *testing.T) {
 // The row that discriminates is the one with the *group* grammar on and the
 // flag that puts a group where an argument may stand off.
 func TestACaseSubjectParenIsOneDialectsAndNotEveryShells(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		with func(*Dialect)

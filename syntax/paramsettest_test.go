@@ -16,6 +16,7 @@ func setFlagged(t *testing.T, src string) *ParamExpr {
 
 // What the flag reads, and what name it may carry.
 func TestParamSetTestFlagReadsANameOrAPositional(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		name string
@@ -47,6 +48,7 @@ func TestParamSetTestFlagReadsANameOrAPositional(t *testing.T) {
 // Every parameter that is not a name or a positional is refused, which is the
 // measured answer and not the one "is it set" suggests.
 func TestParamSetTestFlagRefusesEverythingElse(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo ${+}`,   // nothing at all
 		`echo ${+@}`,  //
@@ -73,6 +75,7 @@ func TestParamSetTestFlagRefusesEverythingElse(t *testing.T) {
 // leading `+` is not a name, so the expansion is unreadable for the older
 // reason and is still named by its token.
 func TestParamSetTestFlagOffIsUnreadable(t *testing.T) {
+	t.Parallel()
 	if e := firstParam(t, `echo ${+x}`, Core()); !e.Bad || e.Src != "+x" {
 		t.Errorf(`${+x} in the core: %+v, want Bad with Src "+x"`, e)
 	}
@@ -91,6 +94,7 @@ func TestParamSetTestFlagOffIsUnreadable(t *testing.T) {
 // idiom the construct is reached for — and so is an operator, which the
 // interpreter then answers with the value rather than the count.
 func TestParamSetTestFlagKeepsTheRestOfTheGrammar(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamSetTestFlag = true
 	d.ArraySubscript = true
@@ -118,6 +122,7 @@ func TestParamSetTestFlagKeepsTheRestOfTheGrammar(t *testing.T) {
 // The tilde run comes first and the `+` second, and the flag group before
 // both. That order is measured; the reverses are not shapes at all.
 func TestParamSetTestFlagSitsAfterTheTildeAndTheGroup(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamSetTestFlag = true
 	d.ParamTildeFlag = true
@@ -162,6 +167,7 @@ func TestParamSetTestFlagSitsAfterTheTildeAndTheGroup(t *testing.T) {
 // `${#+x}` is not this construct: the `#` is read first, so what follows is
 // the length's business and the flag never reaches it.
 func TestParamSetTestFlagIsNotTheLengthsAlternate(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamSetTestFlag = true
 	e := firstParam(t, `echo ${#+x}`, d)
@@ -172,6 +178,7 @@ func TestParamSetTestFlagIsNotTheLengthsAlternate(t *testing.T) {
 
 // The span round-trips as written, because the printer writes it back raw.
 func TestParamSetTestFlagRoundTrips(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamSetTestFlag = true
 	d.ArraySubscript = true

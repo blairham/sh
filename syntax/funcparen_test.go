@@ -16,6 +16,7 @@ import (
 // This names the flag rather than the shells that set it, which is the rule
 // for a test in this package.
 func TestFuncDefAtParenDecidesWhereTheParserStops(t *testing.T) {
+	t.Parallel()
 	commits, waits := syntax.Core(), syntax.Core()
 	commits.FuncDefAtParen = true
 

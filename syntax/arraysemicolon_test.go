@@ -21,6 +21,7 @@ func arraySemicolonDialect(v syntax.ArraySemicolon) syntax.Dialect {
 // wherever a newline stands — three parses of the same characters, which is
 // why this is a grammar flag rather than a semantics axis.
 func TestHowFarASemicolonReachesIntoAnArrayLiteral(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		elems map[syntax.ArraySemicolon]int
@@ -102,6 +103,7 @@ func TestHowFarASemicolonReachesIntoAnArrayLiteral(t *testing.T) {
 // A refusal names the token it found rather than asking for the `)` that is
 // written right there. The dialect words it; the grammar decides what is named.
 func TestAnArrayLiteralRefusalNamesTheTokenItFound(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		value syntax.ArraySemicolon

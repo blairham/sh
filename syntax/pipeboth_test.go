@@ -18,6 +18,7 @@ func withPipeBothStreams() Dialect {
 // the two are the reading the shells without the operator give the same text:
 // a bar, then an ampersand. Nothing is invented in either direction.
 func TestPipeBothStreamsIsADialectDecision(t *testing.T) {
+	t.Parallel()
 	if got, want := lex(t, `a |& b`, withPipeBothStreams()), `word(a) |& word(b)`; got != want {
 		t.Errorf("with the operator: got %s, want %s", got, want)
 	}
@@ -30,6 +31,7 @@ func TestPipeBothStreamsIsADialectDecision(t *testing.T) {
 // shell that has it, and reading it as one would take a construct away from
 // the dialects that spell a background command that way.
 func TestPipeBothStreamsNeedsNoBlankBetween(t *testing.T) {
+	t.Parallel()
 	if got, want := lex(t, `a | & b`, withPipeBothStreams()), `word(a) | & word(b)`; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
@@ -41,6 +43,7 @@ func TestPipeBothStreamsNeedsNoBlankBetween(t *testing.T) {
 // The flag gates the construct rather than the text: without it the line does
 // not silently mean something else, it is refused where the shells refuse it.
 func TestPipeBothStreamsGatesTheConstruct(t *testing.T) {
+	t.Parallel()
 	mustParse(t, `a |& b`, withPipeBothStreams(), "with the operator")
 	mustParse(t, `{ a; } |& b |& c`, withPipeBothStreams(), "chained and compound")
 	mustParse(t, `for i in 1; do a |& b; done`, withPipeBothStreams(), "inside a loop")
@@ -53,6 +56,7 @@ func TestPipeBothStreamsGatesTheConstruct(t *testing.T) {
 // comment for the two shapes that measure it — so the position in the list is
 // asserted rather than merely its presence.
 func TestPipeBothStreamsIsATrailingRedirection(t *testing.T) {
+	t.Parallel()
 	f, err := Parse(`a 2>/dev/null |& b`, withPipeBothStreams())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -98,6 +102,7 @@ func TestPipeBothStreamsIsATrailingRedirection(t *testing.T) {
 // the two spellings has to keep them apart, which a single flag on the
 // pipeline could not do.
 func TestPipeBothStreamsIsPerBar(t *testing.T) {
+	t.Parallel()
 	f, err := Parse(`a |& b | c`, withPipeBothStreams())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -114,6 +119,7 @@ func TestPipeBothStreamsIsPerBar(t *testing.T) {
 // A round trip that spelled it `2>&1 |` would still parse and still be
 // settled, and would have thrown away what the script said.
 func TestPrintingPipeBothStreams(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a |& b`, `a |& b`},
 		{`a 2>/dev/null |& b`, `a 2> /dev/null |& b`},
@@ -156,6 +162,7 @@ func TestPrintingPipeBothStreams(t *testing.T) {
 // of #1115 that was wrong in every dialect: the substrate invented a sentence
 // — "expected a command after |" — that no shell writes.
 func TestABarWithNoCommandNamesTheToken(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, token string
 		class      TokenClass
@@ -198,6 +205,7 @@ func TestABarWithNoCommandNamesTheToken(t *testing.T) {
 // so: it is the one case the token-naming path must not take, because there
 // is no token to name.
 func TestABarAtTheEndOfInputIsUnfinished(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"a |", "a |&"} {
 		_, err := Parse(src, withPipeBothStreams())
 		se, ok := err.(*Error)
@@ -223,6 +231,7 @@ func TestABarAtTheEndOfInputIsUnfinished(t *testing.T) {
 //	% echo b |&
 //	[errpipe]cat
 func TestAPipeOfBothStreamsIsOpenUnderItsOwnName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"echo x |\n", "|"},
 		{"echo x |&\n", "|&"},

@@ -29,6 +29,7 @@ func withCompounds() syntax.Dialect {
 // absorb whatever follows, so `true echo x` is one command with an argument
 // and there is nothing to refuse.
 func TestTwoCommandsWithNoSeparatorAreRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`(( 1 )) echo x`,
 		`[[ -n x ]] echo y`,
@@ -58,6 +59,7 @@ func TestTwoCommandsWithNoSeparatorAreRefused(t *testing.T) {
 // parser used to produce: it read on, absorbed the rest, and only noticed
 // there was trouble once there was no more input to absorb.
 func TestTheTokenAfterTheMissingSeparatorIsNamed(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src      string
 		token    string
@@ -100,6 +102,7 @@ func TestTheTokenAfterTheMissingSeparatorIsNamed(t *testing.T) {
 // A statement written with a separator after it is still a statement, and the
 // list carries on: the refusal above must not reach the ordinary line.
 func TestASeparatedListStillParses(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src   string
 		stmts int
@@ -129,6 +132,7 @@ func TestASeparatedListStillParses(t *testing.T) {
 // body closed by its own word is not: `done` and `}` end the body without any
 // separator reaching the enclosing list.
 func TestAShortBodySTerminatorTerminatesTheLoopToo(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ShortForm = true
 	d.ForBraceBody = true
@@ -173,6 +177,7 @@ func TestAShortBodySTerminatorTerminatesTheLoopToo(t *testing.T) {
 // again — and the separator is exactly what a printer can drop without any
 // other test noticing, since every case above hands it a tree it built itself.
 func TestPrintingPutsTheSeparatorBack(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`(echo a); echo b`,
 		`{ :; }; echo x`,

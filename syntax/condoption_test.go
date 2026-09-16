@@ -18,6 +18,7 @@ import (
 // for a dialect to switch — the disagreement is about which *names* exist,
 // which is a question the parser never asks.
 func TestTheOptionTestIsAUnaryCondition(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -52,6 +53,7 @@ func TestTheOptionTestIsAUnaryCondition(t *testing.T) {
 // operand would look up a name spelled with them and never find it, and the
 // failure would be a silent false rather than anything anybody could see.
 func TestTheOptionTestsOperandKeepsItsQuoting(t *testing.T) {
+	t.Parallel()
 	cmd := onlyCommand(t, `[[ ! -o 'aliases' ]]`, syntax.Core())
 	clause, ok := cmd.(*syntax.TestClause)
 	if !ok {
@@ -77,6 +79,7 @@ func TestTheOptionTestsOperandKeepsItsQuoting(t *testing.T) {
 // by `&&` and `||` — which is the shape the plugin loader on this machine
 // writes, and the one neither of the other two third-party files exercises.
 func TestTheOptionTestCombinesLikeAnyOtherCondition(t *testing.T) {
+	t.Parallel()
 	const src = `[[ ! -o functionargzero || ${options[posixargzero]} = on || ${ZI[ZERO]} != */* ]]`
 	cmd := onlyCommand(t, src, syntax.Core())
 	clause, ok := cmd.(*syntax.TestClause)
@@ -110,6 +113,7 @@ func TestTheOptionTestCombinesLikeAnyOtherCondition(t *testing.T) {
 // operand — a parser that let the `]]` *be* the operand would answer a
 // question about an option named `]]`.
 func TestTheOptionTestNeedsAnOperand(t *testing.T) {
+	t.Parallel()
 	if _, err := syntax.Parse(`[[ -o ]]`, syntax.Core()); err == nil {
 		t.Fatal("parsed `[[ -o ]]`, want a refusal")
 	}
@@ -118,6 +122,7 @@ func TestTheOptionTestNeedsAnOperand(t *testing.T) {
 // The printer writes it back, which is what says the node carries everything
 // the source did.
 func TestTheOptionTestPrintsBack(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[ -o errexit ]]`,
 		`[[ ! -o errexit ]]`,

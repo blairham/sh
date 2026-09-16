@@ -52,6 +52,7 @@ func firstArm(t *testing.T, src string, d Dialect) []string {
 }
 
 func TestANewlineInAParenthesizedCasePatternList(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseGrammar(&d)
 	for _, tc := range []struct {
@@ -109,6 +110,7 @@ func TestANewlineInAParenthesizedCasePatternList(t *testing.T) {
 // Without the flag every one of those is a parse error, which is five of the
 // six shells' answer and this grammar's default.
 func TestANewlineInACasePatternListIsRefusedWithoutTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"case a in (a|\nb) echo m;; esac",
 		"case a in (a\n|b) echo m;; esac",
@@ -127,6 +129,7 @@ func TestANewlineInACasePatternListIsRefusedWithoutTheFlag(t *testing.T) {
 // newline` there — so a newline is only text between the paren the arm carries
 // and the one that closes it.
 func TestOnlyAParenthesizedListTakesTheNewline(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseGrammar(&d)
 	if _, err := Parse("case a in a|\nb) echo m;; esac", d); err == nil {
@@ -138,6 +141,7 @@ func TestOnlyAParenthesizedListTakesTheNewline(t *testing.T) {
 // statements. Without clearing the flag at the closing paren, the body's first
 // line would swallow the rest of the arm.
 func TestTheArmsBodyGetsItsNewlinesBack(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseGrammar(&d)
 	f, err := Parse("case a in (a|\nb)\necho one\necho two\n;; esac", d)
@@ -179,6 +183,7 @@ func TestTheArmsBodyGetsItsNewlinesBack(t *testing.T) {
 // made the paren unsettled — it went in on the first pass and came back out
 // on the second.
 func TestABareNewlineInAWordSurvivesPrinting(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseGrammar(&d)
 	// The blank half of the same grammar, which two rows below need: the

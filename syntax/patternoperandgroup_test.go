@@ -15,6 +15,7 @@ import (
 // The flag is named here and never a shell. Both sides are asserted, because
 // asserting only the refusal asserts a default.
 func TestAGroupOpeningAPatternOperandCanBeRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo "${v#(a)}"`,
 		`echo "${v%(b)}"`,
@@ -52,6 +53,7 @@ func TestAGroupOpeningAPatternOperandCanBeRefused(t *testing.T) {
 // every column, an escaped parenthesis is an ordinary character, and a group
 // written the way the refusing shell spells its own — `@(` — is read.
 func TestAGroupOpeningAPatternOperandLeavesTheRestAlone(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo "${u:-(a)}"`,
 		`echo "${u-(a)}"`,

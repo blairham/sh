@@ -46,6 +46,7 @@ func onlyCommand(t *testing.T, src string, d syntax.Dialect) syntax.Command {
 // command needs a separator, and a separator there belongs to whatever encloses
 // the loop.
 func TestAShortBodyIsOneCommand(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -94,6 +95,7 @@ func TestAShortBodyIsOneCommand(t *testing.T) {
 // whole suite stayed green when the body was widened to a list, because every
 // other case here ends at the loop.
 func TestWhatFollowsAShortBodyIsOutsideTheLoop(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src   string
 		stmts int // statements at the top level
@@ -142,6 +144,7 @@ func TestWhatFollowsAShortBodyIsOutsideTheLoop(t *testing.T) {
 // other way makes `while (( i < 2 )); { i=$((i+1)) }` terminate, where the
 // shell that has the construct counts up without stopping.
 func TestAnOmittedBodyLeavesTheHeaderTheWholeLoop(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -170,6 +173,7 @@ func TestAnOmittedBodyLeavesTheHeaderTheWholeLoop(t *testing.T) {
 // A `for` or `select` whose header ended itself may be left with no body too,
 // and the parenthesized list is one of the two ways it ends.
 func TestAForHeaderThatEndsItselfNeedsNoBody(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		src   string
@@ -199,6 +203,7 @@ func TestAForHeaderThatEndsItselfNeedsNoBody(t *testing.T) {
 // The parenthesized list says exactly what `in` says, so the two spellings give
 // the same tree and only the header text remembers which was written.
 func TestTheParenthesizedListIsTheInList(t *testing.T) {
+	t.Parallel()
 	paren, ok := onlyCommand(t, "for i (a b) echo $i", short()).(*syntax.ForClause)
 	if !ok {
 		t.Fatal("not a for")
@@ -234,6 +239,7 @@ func TestTheParenthesizedListIsTheInList(t *testing.T) {
 // body; `for i (a b) { echo hi } > /tmp/f$i` writes /tmp/f, so that one was
 // expanded once before the loop and is the loop's.
 func TestAShortFormTakesARedirection(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src       string
 		onTheLoop int
@@ -268,6 +274,7 @@ func TestAShortFormTakesARedirection(t *testing.T) {
 // as another word of `true`, so the loop never sees a body and the `}` has
 // nothing to close — which is what the shell with the construct reports too.
 func TestAWordHeaderTakesNoShortBody(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"while true { echo hi; }",
 		"until false { echo hi; }",
@@ -291,6 +298,7 @@ func TestAWordHeaderTakesNoShortBody(t *testing.T) {
 // the union of dialects would let a script written for one silently mean
 // something in another.
 func TestTheShortFamilyNeedsTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"while (( 0 )) echo hi",
 		"until (( 0 )) echo hi",
@@ -339,6 +347,7 @@ func TestTheShortFamilyNeedsTheFlag(t *testing.T) {
 // ask them here, because it round-trips under Core and every case below is a
 // syntax error there.
 func TestPrintingAShortForm(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		// A body that was written short has a long spelling and gets it. The
 		// text is not the input and is not meant to be; the tree is.
@@ -401,6 +410,7 @@ func TestPrintingAShortForm(t *testing.T) {
 // failure #614 describes. What it must not do is print the long form, where
 // `do` would stand with nothing after it.
 func TestPrintingAnOmittedBodyThatRedirects(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("for i (a b)", short())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -446,6 +456,7 @@ func TestPrintingAnOmittedBodyThatRedirects(t *testing.T) {
 // no short loops at all, which is what makes the choice safe: only the omitted
 // body needs the flag to be read again.
 func TestAShortBodyPrintsBackToTheCommonForm(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"while (( i < 2 )) echo hi",
 		"for i (a b) { echo $i; }",

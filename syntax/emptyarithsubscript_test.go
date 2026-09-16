@@ -16,6 +16,7 @@ import "testing"
 // before it parses, so `$(( a[$w] ))` with an empty `$w` *is* `$(( a[] ))` by
 // the time the expression exists (#1745).
 func TestAnEmptyArithmeticSubscriptParses(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	x, ok := parseArithOf(t, `a[]`, d).(*ArithIndex)
 	if !ok {
@@ -46,6 +47,7 @@ func TestAnEmptyArithmeticSubscriptParses(t *testing.T) {
 // accepted", which is the same answer `a[0]` gets without the flag and the
 // answer `a[]` got in every dialect before this.
 func TestAnEmptyArithmeticSubscriptNeedsTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`a[]`, `a[0]`} {
 		if got := parseArithOf(t, src, POSIX()); got != nil {
 			t.Errorf("%s parsed as %T without ArraySubscript, want nothing", src, got)

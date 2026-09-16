@@ -26,6 +26,7 @@ func shortLoop() syntax.Dialect {
 // was the stop word two tokens later — so `while & do :; done` was refused at
 // the `do`.
 func TestAShortBodyRefusesTheTokenThatIsThere(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"while & do :; done\n",
 		"until & do :; done\n",
@@ -49,6 +50,7 @@ func TestAShortBodyRefusesTheTokenThatIsThere(t *testing.T) {
 // And the short body still reads the one statement it is for, so the refusal
 // above is not a loop that stopped taking bodies.
 func TestAShortBodyStillTakesItsStatement(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"while false; echo x\n",
 		"for i in a b; echo $i\n",

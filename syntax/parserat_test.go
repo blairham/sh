@@ -14,6 +14,7 @@ import (
 // has to be able to say which line of the *input* a piece began at, or every
 // diagnostic after the first piece names line 1.
 func TestNewParserAtNumbersFromTheLineItIsGiven(t *testing.T) {
+	t.Parallel()
 	p := NewParserAt("echo one\necho two\n", Core(), 7)
 	for _, want := range []int{7, 8} {
 		line, ok := p.NextLine()
@@ -32,6 +33,7 @@ func TestNewParserAtNumbersFromTheLineItIsGiven(t *testing.T) {
 // NewParser is NewParserAt from line 1, and nothing about a whole input
 // changes because the other constructor exists.
 func TestNewParserIsNewParserAtLineOne(t *testing.T) {
+	t.Parallel()
 	one, _ := NewParser("echo hi\n", Core()).NextLine()
 	at, _ := NewParserAt("echo hi\n", Core(), 1).NextLine()
 	if one.Stmts[0].Pos() != at.Stmts[0].Pos() {
@@ -42,6 +44,7 @@ func TestNewParserIsNewParserAtLineOne(t *testing.T) {
 // An offset stays relative to the text handed in, because it is only ever
 // used to quote what a node was written as, and that text is what is here.
 func TestNewParserAtKeepsOffsetsRelativeToItsOwnText(t *testing.T) {
+	t.Parallel()
 	line, ok := NewParserAt("echo hi\n", Core(), 42).NextLine()
 	if !ok {
 		t.Fatal("no line")
@@ -57,6 +60,7 @@ func TestNewParserAtKeepsOffsetsRelativeToItsOwnText(t *testing.T) {
 //
 // Counted rather than looked for — an escaped backslash ends nothing.
 func TestEndsWithContinuation(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		text string
 		more bool

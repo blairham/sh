@@ -50,6 +50,7 @@ func blamedToken(t *testing.T, src string, d syntax.Dialect) string {
 }
 
 func TestAPipeInAParenthesizedPatternListDoesNotJoinWhatFollows(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, with, without string }{
 		{"case a in (a|&b) echo m;; esac", "&", "|&"},
 		{"case a in (a|&|b) echo m;; esac", "&|", "|&"},
@@ -74,6 +75,7 @@ func TestAPipeInAParenthesizedPatternListDoesNotJoinWhatFollows(t *testing.T) {
 // `|&` cannot stand in a pattern list under either reading, so every line the
 // flag changes was already refused.
 func TestTheSeparatorRuleChangesNoLineThatParses(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"case a in (a|b) echo m;; esac",
 		"case a in (a) echo m;; esac",

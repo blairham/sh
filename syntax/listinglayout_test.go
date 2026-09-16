@@ -22,6 +22,7 @@ import (
 // ignored the field and wrote the arrangement unconditionally, which is the
 // same defect one level along: a listing shape nobody chose.
 func TestTheFieldsOfAListingArrangement(t *testing.T) {
+	t.Parallel()
 	// The common half, written out rather than taken from a dialect: what is
 	// under test is the arrangement, and which shell arranges things this
 	// way is not this package's business.
@@ -208,6 +209,7 @@ func TestTheFieldsOfAListingArrangement(t *testing.T) {
 // the tree carries the distinction on FuncDecl.Keyword for a reason — one
 // dialect scopes a `typeset` by it.
 func TestTheHeaderOfADeclarationIsRespelledOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
 	base := syntax.Layout{
 		Indent: "    ", Nested: true, Lines: true,
 		Separator: ";", KeywordTerminator: ";",
@@ -282,6 +284,7 @@ func TestTheHeaderOfADeclarationIsRespelledOnlyWhenAsked(t *testing.T) {
 // respelled `f ()` is a *different* declaration where `typeset` scopes by the
 // word, so the loss is real and the field is what consents to it.
 func TestRespellingAHeaderKeepsTheKeywordInTwoOfThreeAnswers(t *testing.T) {
+	t.Parallel()
 	base := syntax.Layout{Lines: true, BraceOpenSuffix: " ", Separator: ";"}
 	for _, tc := range []struct {
 		name    string
@@ -326,6 +329,7 @@ func TestRespellingAHeaderKeepsTheKeywordInTwoOfThreeAnswers(t *testing.T) {
 // 0. The rows that keep the space are the discriminating ones — a printer
 // that wrote every delimiter tight passes the first four.
 func TestAHereDocumentOperatorIsWrittenTightExceptWhereThatMakesAnotherOperator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want, why string
 	}{

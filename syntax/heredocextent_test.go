@@ -19,6 +19,7 @@ import (
 // triggers the read sits at the end of the first and the body is consumed
 // behind it.
 func TestALineEndsAtItsHereDocumentDelimiter(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string

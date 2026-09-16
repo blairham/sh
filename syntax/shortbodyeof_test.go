@@ -28,6 +28,7 @@ func shortFormDialect() Dialect {
 // out inside the construct — which is the only thing that can tell a prompt to
 // ask for the next line rather than to run a loop over nothing (#1298).
 func TestAShortBodyThatNeverArrivedLeavesTheInputIncomplete(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"for i in 1 2\n",
 		"for i in 1 2\n\n",
@@ -71,6 +72,7 @@ func TestAShortBodyThatNeverArrivedLeavesTheInputIncomplete(t *testing.T) {
 // error rather than a finished one. TestASeparatedShortArmEndsTheWholeIf has
 // it now, with the rest of that rule.
 func TestAShortFormWithItsBodyIsComplete(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"for i in 1 2; do echo $i; done\n",
 		"for i (1 2) echo $i\n",
@@ -99,6 +101,7 @@ func TestAShortFormWithItsBodyIsComplete(t *testing.T) {
 // Without the flag there is no short form to be part-way through, so the same
 // text is unfinished for the ordinary reason: `do` never came.
 func TestWithoutTheShortFormTheHeaderIsStillIncomplete(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"for i in 1 2\n", "while true\n"} {
 		p := NewParser(src, Core())
 		p.Parse()
@@ -115,6 +118,7 @@ func TestWithoutTheShortFormTheHeaderIsStillIncomplete(t *testing.T) {
 // fetch runs what it has, and `for i in 1 2` on the last line of a script is a
 // loop that iterates twice over nothing rather than a syntax error.
 func TestTheUnfinishedShortFormIsStillAWholeLoop(t *testing.T) {
+	t.Parallel()
 	p := NewParser("for i in 1 2\n", shortFormDialect())
 	f := p.Parse()
 	if err := p.Err(); err != nil {

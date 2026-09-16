@@ -52,6 +52,7 @@ func countingDialect(counts bool) syntax.Dialect {
 // word and the next line stays where it was written; with it on the body's
 // second command is on line 2 and the next line has moved to 3.
 func TestAnAliasBodyNewlineMovesWhatFollowsIt(t *testing.T) {
+	t.Parallel()
 	a := table("two", "echo one\necho body")
 	const src = "two\necho after\n"
 
@@ -65,6 +66,7 @@ func TestAnAliasBodyNewlineMovesWhatFollowsIt(t *testing.T) {
 
 // The shift is per newline, so a three-line body moves what follows by two.
 func TestTheShiftIsOnePerNewlineInTheBody(t *testing.T) {
+	t.Parallel()
 	a := table("three", "echo one\necho two\necho three")
 	const src = "three\necho after\n"
 
@@ -76,6 +78,7 @@ func TestTheShiftIsOnePerNewlineInTheBody(t *testing.T) {
 // And it belongs to the expansion rather than to the table: an alias that is
 // defined and never used moves nothing, whatever the flag says.
 func TestAnAliasThatIsNotUsedMovesNothing(t *testing.T) {
+	t.Parallel()
 	a := table("two", "echo one\necho body")
 	const src = "echo first\necho after\n"
 
@@ -89,6 +92,7 @@ func TestAnAliasThatIsNotUsedMovesNothing(t *testing.T) {
 // Using it twice shifts twice, which a single expansion cannot tell from a
 // one-off adjustment.
 func TestEachExpansionShiftsAgain(t *testing.T) {
+	t.Parallel()
 	a := table("two", "echo one\necho body")
 	const src = "two\ntwo\necho after\n"
 
@@ -100,6 +104,7 @@ func TestEachExpansionShiftsAgain(t *testing.T) {
 // LineShift is what a caller reading a program in pieces needs: the lines an
 // expansion added are in no text, so counting newlines cannot find them.
 func TestLineShiftReportsWhatTheExpansionsAdded(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		counts bool
 		want   int
@@ -119,6 +124,7 @@ func TestLineShiftReportsWhatTheExpansionsAdded(t *testing.T) {
 // The set of routes a dialect expands on, which is a set because one shell in
 // the panel answers differently on two of the three.
 func TestProgramRoutesIsASet(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		set   syntax.ProgramRoutes

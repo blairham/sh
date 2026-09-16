@@ -116,6 +116,7 @@ import (
 const keywordFunctionsInTheCorpus = 37
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
+	t.Parallel()
 	// The arrangement a formatter asks for, alongside the zero value that a
 	// round trip asks for: both are printed, reparsed and compared, because
 	// nothing says a printer that keeps the program under one layout keeps
@@ -200,6 +201,7 @@ func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 // The controls are the last block: a parenthesis the source protected stays
 // protected, because there the backslash is the script's and not ours.
 func TestAPatternGroupPrintsBackAsAPattern(t *testing.T) {
+	t.Parallel()
 	bare := syntax.Core()
 	bare.PatternAlternation = true
 	bare.NumericRangePattern = true
@@ -288,6 +290,7 @@ func TestAPatternGroupPrintsBackAsAPattern(t *testing.T) {
 // wrong: it would print an unbalanced word for the literal case and lose the
 // distinction the flag exists to keep.
 func TestAnUnmarkedParenthesisIsStillProtected(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		span syntax.Span

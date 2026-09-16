@@ -43,6 +43,7 @@ func stagedFuncName() syntax.Dialect {
 // The parse succeeds and the word is carried on the declaration, as the
 // source text: what the shells quote is what was written.
 func TestARefusedFunctionNameParsesUnderTheFlag(t *testing.T) {
+	t.Parallel()
 	d := stagedFuncName()
 	for _, tc := range []struct{ src, want string }{
 		{`function _p_${w} { echo HI; }`, "_p_${w}"},
@@ -78,6 +79,7 @@ func TestARefusedFunctionNameParsesUnderTheFlag(t *testing.T) {
 // Without the flag the refusal stays where it was, which is the other half of
 // the same claim: the predicate did not move, only the stage did.
 func TestARefusedFunctionNameIsStillRefusedWithoutTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`function _p_${w} { echo HI; }`,
 		`function _p_$@ { echo HI; }`,
@@ -91,6 +93,7 @@ func TestARefusedFunctionNameIsStillRefusedWithoutTheFlag(t *testing.T) {
 // A usable name is unaffected by the flag, in either direction — the point
 // being that nothing about an ordinary definition reads it.
 func TestTheStageFlagDoesNotTouchAUsableFunctionName(t *testing.T) {
+	t.Parallel()
 	for _, d := range []syntax.Dialect{syntax.Core(), stagedFuncName()} {
 		f, err := syntax.Parse("function f { echo HI; }\n", d)
 		if err != nil {
@@ -111,6 +114,7 @@ func TestTheStageFlagDoesNotTouchAUsableFunctionName(t *testing.T) {
 // grammar's, and whether the word is a name is the definition's. Without this
 // the flag would have carried a `;` to the interpreter as a refused name.
 func TestANonWordAfterTheKeywordIsStillASyntaxError(t *testing.T) {
+	t.Parallel()
 	d := stagedFuncName()
 	for _, src := range []string{
 		`function ; { :; }`,
@@ -126,6 +130,7 @@ func TestANonWordAfterTheKeywordIsStillASyntaxError(t *testing.T) {
 // The dialect that *expands* such a name is untouched by the stage flag: the
 // word is a name there and never reaches the refusal at all.
 func TestAnExpandingDialectKeepsTheWordAsAName(t *testing.T) {
+	t.Parallel()
 	d := stagedFuncName()
 	d.FunctionNameExpands = true
 	f, err := syntax.Parse("function _p_${w} { echo HI; }\n", d)
@@ -144,6 +149,7 @@ func TestAnExpandingDialectKeepsTheWordAsAName(t *testing.T) {
 // quoted — after a round trip. Quoting it would hand back a program the shell
 // refuses for a different reason, or accepts.
 func TestARefusedFunctionNamePrintsBack(t *testing.T) {
+	t.Parallel()
 	d := stagedFuncName()
 	for _, tc := range []struct{ src, want string }{
 		{`function _p_${w} { echo HI; }`, "function _p_${w} { echo HI; }"},

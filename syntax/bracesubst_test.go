@@ -13,6 +13,7 @@ import (
 // `${ cmd;}` is a command substitution and `${x}` is a parameter, and the
 // space after the brace is the whole of the difference.
 func TestABracedCommandSubstitutionIsToldByTheSpace(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
 	for _, c := range []struct {
@@ -61,6 +62,7 @@ func TestABracedCommandSubstitutionIsToldByTheSpace(t *testing.T) {
 // substitution, and only a dialect that refuses while reading says so at parse
 // time.
 func TestWithoutTheFlagItIsNotASubstitution(t *testing.T) {
+	t.Parallel()
 	// The deferring majority: it parses, marked bad, and is diagnosed only
 	// if the expansion is ever reached.
 	f, err := syntax.Parse("echo ${ echo one;}", syntax.Core())
@@ -89,6 +91,7 @@ func TestWithoutTheFlagItIsNotASubstitution(t *testing.T) {
 
 // The spelling is written back as it was read, so a round trip keeps it.
 func TestTheBracedFormRoundTrips(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
 	for _, src := range []string{

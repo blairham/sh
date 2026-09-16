@@ -19,6 +19,7 @@ func wholeElementReplacing() Dialect {
 // replacement split on the first unquoted slash — the replacement's operands
 // under the element family's reading.
 func TestTheWholeElementReplacementParses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name           string
 		src            string
@@ -66,6 +67,7 @@ func TestTheWholeElementReplacementParses(t *testing.T) {
 // The flag decides, and without it the same characters are the substring the
 // rest of the panel reads — which is what makes the grammar additive.
 func TestWithoutTheFlagTheSlashStartsAnOffset(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo ${a:/foo/Z}`, `echo ${a:/foo}`} {
 		on := firstParam(t, src, wholeElementReplacing())
 		off := firstParam(t, src, Core())
@@ -87,6 +89,7 @@ func TestWithoutTheFlagTheSlashStartsAnOffset(t *testing.T) {
 // character wide, and only if the length half of `${v:off:len}` keeps its
 // arithmetic.
 func TestTheSlashIsReadOnlyDirectlyAfterTheFirstColon(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		op   ParamOp
@@ -132,6 +135,7 @@ func TestTheSlashIsReadOnlyDirectlyAfterTheFirstColon(t *testing.T) {
 // still reads `:/` as an offset, and a grammar with this one and not the
 // selectors still reads `:#` as one. Neither flag is quietly the other.
 func TestTheTwoWholeElementFlagsAreIndependent(t *testing.T) {
+	t.Parallel()
 	selectorsOnly := Core()
 	selectorsOnly.ParamElementSelection = true
 	if got := firstParam(t, `echo ${a:/foo/Z}`, selectorsOnly).Op; got != ParamSubstring {
@@ -146,6 +150,7 @@ func TestTheTwoWholeElementFlagsAreIndependent(t *testing.T) {
 // of expansions — which is what `${a:/(#m)*/<$MATCH>}` needs to be readable at
 // all.
 func TestTheWholeElementReplacementOperandsAreWords(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${a:/$p/$MATCH}`, wholeElementReplacing())
 	if e.Op != ParamElementReplace {
 		t.Fatalf("op = %v, want the whole-element replacement", e.Op)

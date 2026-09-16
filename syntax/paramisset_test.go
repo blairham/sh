@@ -21,6 +21,7 @@ func isSet() Dialect {
 // error near `x”. dash has no `[[ ]]` at all. That is the same head count
 // that made `-o` core, failing by one.
 func TestAnIsSetTestIsAUnaryOperatorWhereTheDialectHasIt(t *testing.T) {
+	t.Parallel()
 	on, off := isSet(), Core()
 	for _, src := range []string{
 		`[[ -v x ]]`,
@@ -45,6 +46,7 @@ func TestAnIsSetTestIsAUnaryOperatorWhereTheDialectHasIt(t *testing.T) {
 // The operand is an ordinary word, exactly as `-o`'s is, which is what says
 // the flag adds an operator and nothing else about how a word is read.
 func TestAnIsSetTestsOperandIsAnOrdinaryWord(t *testing.T) {
+	t.Parallel()
 	on := isSet()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ -v x ]]`, `[[ -v x ]]`},

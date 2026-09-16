@@ -28,6 +28,7 @@ func tryAlways() Dialect {
 }
 
 func TestABraceGroupMayTakeACleanupHalf(t *testing.T) {
+	t.Parallel()
 	on, off := tryAlways(), Core()
 	for _, src := range []string{
 		`{ echo t; } always { echo a; }`,
@@ -65,6 +66,7 @@ func TestABraceGroupMayTakeACleanupHalf(t *testing.T) {
 // stopWords or reservedWords would take four working spellings away from every
 // dialect to add one to a single dialect.
 func TestTheCleanupKeywordIsAnOrdinaryWordEverywhereElse(t *testing.T) {
+	t.Parallel()
 	on := tryAlways()
 	for _, src := range []string{
 		`always`,
@@ -88,6 +90,7 @@ func TestTheCleanupKeywordIsAnOrdinaryWordEverywhereElse(t *testing.T) {
 // shell that has the construct. They are what make this a production hanging
 // off the brace group rather than "a word that may follow anything".
 func TestTheCleanupHalfHasABoundary(t *testing.T) {
+	t.Parallel()
 	on := tryAlways()
 	for _, src := range []string{
 		// A newline is a separator wherever a `;` is.
@@ -145,6 +148,7 @@ func TestTheCleanupHalfHasABoundary(t *testing.T) {
 // there whatever precedes it, so a probe without one measures the route rather
 // than the grammar.
 func TestATryAlwaysBlockEndsAHeaderThatWouldNotEndItself(t *testing.T) {
+	t.Parallel()
 	on := tryAlways()
 	on.ShortForm = true
 	for _, src := range []string{
@@ -164,6 +168,7 @@ func TestATryAlwaysBlockEndsAHeaderThatWouldNotEndItself(t *testing.T) {
 // halves have to be separable and the redirections have to be the
 // construct's.
 func TestATryAlwaysBlockIsOneCommandWithTwoLists(t *testing.T) {
+	t.Parallel()
 	f, err := Parse(`{ echo one; echo two; } always { echo a; } > /dev/null`, tryAlways())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -202,6 +207,7 @@ func TestATryAlwaysBlockIsOneCommandWithTwoLists(t *testing.T) {
 // thing that has to know how the construct is spelled, so a node it renders as
 // two unrelated groups would be a silently lossy round trip.
 func TestATryAlwaysBlockSurvivesBeingPrinted(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`{ echo t; } always { echo a; }`,
 		`{ { echo t; } always { echo a; }; } always { echo b; }`,

@@ -25,6 +25,7 @@ func multiDigit() syntax.Dialect {
 // the two readings apart, and both readings produce a word that expands
 // without complaint.
 func TestAMultiDigitPositionalIsOneExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -89,6 +90,7 @@ func TestAMultiDigitPositionalIsOneExpansion(t *testing.T) {
 // change that made the braced form conditional would pass every unbraced row
 // above and still be wrong.
 func TestTheBracedSpellingDoesNotNeedTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, on := range []bool{true, false} {
 		d := syntax.Core()
 		if on {
@@ -105,6 +107,7 @@ func TestTheBracedSpellingDoesNotNeedTheFlag(t *testing.T) {
 // parameters that carry a bare `[ … ]` are the names, `@` and `*`, and a
 // wider run of digits does not join them.
 func TestAMultiDigitPositionalStillTakesNoSubscript(t *testing.T) {
+	t.Parallel()
 	d := multiDigit()
 	d.BareSubscript = true
 	spans := spansOf(t, "echo $10[2]", d)
@@ -117,6 +120,7 @@ func TestAMultiDigitPositionalStillTakesNoSubscript(t *testing.T) {
 // rather than being a rule of its own: `$#10` is the length of the tenth
 // parameter where a dialect has both.
 func TestALengthReadsTheWholeRun(t *testing.T) {
+	t.Parallel()
 	d := multiDigit()
 	d.BareSubscript = true
 	spans := spansOf(t, "echo $#10", d)

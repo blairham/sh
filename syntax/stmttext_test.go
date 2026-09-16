@@ -12,6 +12,7 @@ import "testing"
 // the positions it passes are its own tokens over its own input — so a test
 // is the only thing that can.
 func TestTextBetweenRefusesPositionsItCannotUse(t *testing.T) {
+	t.Parallel()
 	p := NewParser("echo hi", Core())
 	for _, tc := range []struct {
 		name     string

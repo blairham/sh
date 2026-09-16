@@ -11,6 +11,7 @@ import "testing"
 // is a grammar flag rather than an axis because the other four dialects have
 // no reading of the construct to disagree with: they refuse the paren.
 func TestATildeGroupBelongsToTheWord(t *testing.T) {
+	t.Parallel()
 	group := Dialect{TildeGroup: true, DoubleBracket: true}
 	plain := Dialect{DoubleBracket: true}
 	for _, src := range []string{
@@ -29,6 +30,7 @@ func TestATildeGroupBelongsToTheWord(t *testing.T) {
 // matcher as written — the same contract scanPatternGroup already has for a
 // pattern group.
 func TestATildeGroupIsOneWord(t *testing.T) {
+	t.Parallel()
 	d := Dialect{TildeGroup: true}
 	for _, c := range []struct{ src, want string }{
 		{`echo ~(E)abc`, "~(E)abc"},

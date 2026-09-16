@@ -25,6 +25,7 @@ import (
 // already begun, and a `|` opening it is a pipeline with nothing on its left. A
 // single flag reading "a blank *or* a pipe after the brace" would take it.
 func TestAReplySubstitutionIsToldByTheAdjacentPipe(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
 	d.ReplySubstitution = true
@@ -72,6 +73,7 @@ func TestAReplySubstitutionIsToldByTheAdjacentPipe(t *testing.T) {
 // and this one off, the body is never extracted and the refusal stays the
 // parameter form's.
 func TestWithoutTheFlagThePipeIsNotAMarker(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"the core", "a dialect with the blank form"} {
 		t.Run(name, func(t *testing.T) {
 			d := syntax.Core()
@@ -93,6 +95,7 @@ func TestWithoutTheFlagThePipeIsNotAMarker(t *testing.T) {
 // trip has to put back rather than reprint, because the lexer took it off the
 // body — see Span.ReplyValue.
 func TestTheReplyFormRoundTrips(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
 	d.ReplySubstitution = true
@@ -121,6 +124,7 @@ func TestTheReplyFormRoundTrips(t *testing.T) {
 // the end. Measured on bash 5.3.15, `echo "${| REPLY=hi # it's fine\n}"` is
 // `hi` — the same shape #1397 is about, one spelling over.
 func TestTheReplyFormsBodyTakesAComment(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
 	d.ReplySubstitution = true

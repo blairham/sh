@@ -27,6 +27,7 @@ func dollarBracket(on bool) syntax.Dialect {
 // pathname expansion, which is why the failure people see is `no matches
 // found` and points at globbing (#900).
 func TestADollarBracketIsAnArithmeticSpan(t *testing.T) {
+	t.Parallel()
 	spans := spansOf(t, "echo $[1+1]", dollarBracket(true))
 	if len(spans) != 1 {
 		t.Fatalf("on: got %d spans, want 1", len(spans))
@@ -59,6 +60,7 @@ func TestADollarBracketIsAnArithmeticSpan(t *testing.T) {
 // past nesting and past quotes. A scan taking the first one gets every shape
 // here wrong, and the first is not exotic — a subscript is arithmetic too.
 func TestTheClosingBracketIsFoundPastNesting(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a subscript inside", "echo $[a[1]+1]", "a[1]+1"},
 		{"the spelling inside itself", "echo $[$[2+2]*2]", "$[2+2]*2"},
@@ -84,6 +86,7 @@ func TestTheClosingBracketIsFoundPastNesting(t *testing.T) {
 // what says it scanned past them — `$[']'+1]` earns `']'+1: arithmetic syntax
 // error`, which is the whole text between the brackets.
 func TestAQuotedBracketDoesNotEndIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"single quotes", "echo $[']'+1]", "']'+1"},
 		{"double quotes", `echo $["]"+1]`, `"]"+1`},
@@ -114,6 +117,7 @@ func TestAQuotedBracketDoesNotEndIt(t *testing.T) {
 // double quotes, and in an unquoted here-document body. A lexer that added it
 // to the word scanner alone would pass every case above and fail these.
 func TestADollarBracketIsReadWhereverASubstitutionIs(t *testing.T) {
+	t.Parallel()
 	d := dollarBracket(true)
 	spans := spansOf(t, `echo "a$[1+1]b"`, d)
 	var found bool
@@ -163,6 +167,7 @@ func TestADollarBracketIsReadWhereverASubstitutionIs(t *testing.T) {
 // editing a script rather than printing it — and printing is the one thing
 // that has to leave a program alone.
 func TestTheSpellingSurvivesPrinting(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"echo $[1+1]",
 		"echo $((1+1))",
@@ -184,6 +189,7 @@ func TestTheSpellingSurvivesPrinting(t *testing.T) {
 // An unfinished one is unfinished rather than literal, which is how a prompt
 // knows to keep reading — the same answer the other spelling gives.
 func TestAnUnterminatedDollarBracketIsIncomplete(t *testing.T) {
+	t.Parallel()
 	_, err := syntax.Parse("echo $[1+1", dollarBracket(true))
 	if err == nil {
 		t.Fatal("no error for an unterminated $[")

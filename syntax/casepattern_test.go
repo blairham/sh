@@ -16,6 +16,7 @@ import (
 // failure says: `case a in & ) … esac` is a running script in the dialect
 // that has it, and an arm that matches nothing.
 func TestCasePatternAcceptsOperator(t *testing.T) {
+	t.Parallel()
 	takes, refuses := syntax.POSIX(), syntax.POSIX()
 	takes.CasePatternAcceptsOperator = true
 
@@ -55,6 +56,7 @@ func TestCasePatternAcceptsOperator(t *testing.T) {
 // names a token's class says so — the difference is invisible until something
 // asks for the class, which is why it went unnoticed until one case did.
 func TestReservedWordsAreOnlyReservedWhereACommandCouldBegin(t *testing.T) {
+	t.Parallel()
 	d := syntax.POSIX()
 	d.CasePatternAcceptsOperator = true
 	_, err := syntax.Parse("case a in a) echo x;;& esac", d)

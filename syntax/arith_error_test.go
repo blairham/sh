@@ -26,6 +26,7 @@ func arithErr(expr string, d syntax.Dialect) error {
 // `)`. It carries the whole expression and the part blamed for it, because one
 // shell quotes the first and another names the second.
 func TestArithmeticFailureIsItsOwnKind(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		kind  syntax.ErrorKind
@@ -66,6 +67,7 @@ func TestArithmeticFailureIsItsOwnKind(t *testing.T) {
 // the refused byte to the end of the expression, which is what the shells that
 // name anything here name.
 func TestAnOperandMissingIsTwoKinds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		kind  syntax.ErrorKind

@@ -17,6 +17,7 @@ import (
 // bare groups as well, which is a different flag answering a question that is
 // not its.
 func TestASubscriptFlagGroupHoldsAnAssignmentTogether(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ArraySubscript = true
 	d.ArraySubscriptFlags = true

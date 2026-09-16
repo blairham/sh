@@ -22,6 +22,7 @@ import (
 // corpus has 490 snippets and none of them does either of these, because
 // nobody writes a case to exercise a printer.
 func TestPrintingWhatTheCorpusDoesNotReach(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{
 			// A here-document body ends the line, so what closes the block
@@ -76,6 +77,7 @@ func TestPrintingWhatTheCorpusDoesNotReach(t *testing.T) {
 // body back, and so the only place a printer can be checked against something
 // other than its own opinion.
 func TestPrintingADupRedirection(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the descriptor read from is filled in", "echo hi >&2", "echo hi 1>&2"},
 		{"and the one read into", "echo hi <&3", "echo hi 0<&3"},
@@ -138,6 +140,7 @@ func TestPrintingADupRedirection(t *testing.T) {
 // that tree. It also now parses identically in a dialect without the flag,
 // which the original did not.
 func TestPrintingATranslatableString(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.DollarDoubleQuote = true
 	for _, tc := range []struct{ name, src, want string }{
@@ -174,6 +177,7 @@ func TestPrintingATranslatableString(t *testing.T) {
 // `f() { true &; }`, which parses nowhere. The one file of 1093 installed
 // scripts that failed the parse→print→reparse sweep reduced to this.
 func TestABackgroundStatementBeforeAClosingWord(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"f() { true & }",
 		"{ true & }",
@@ -214,6 +218,7 @@ func TestABackgroundStatementBeforeAClosingWord(t *testing.T) {
 // them to be lost. dash has no `function` keyword at all and no tree here
 // can carry the flag under its grammar.
 func TestTheFunctionKeywordIsPrintedBack(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.FunctionKeyword = true
 	d.FunctionKeywordParens = true
@@ -270,6 +275,7 @@ func TestTheFunctionKeywordIsPrintedBack(t *testing.T) {
 // the word into a position the parser reads as something else would pass the
 // text comparison above.
 func TestAPrintedKeywordFunctionParsesBackAsOne(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.FunctionKeyword = true
 	d.FunctionKeywordParens = true

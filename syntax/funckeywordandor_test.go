@@ -24,6 +24,7 @@ func keywordAndOrBody() Dialect {
 }
 
 func TestABodyThatIsNotABraceGroupTakesTheAndOrList(t *testing.T) {
+	t.Parallel()
 	d := keywordAndOrBody()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -75,6 +76,7 @@ func TestABodyThatIsNotABraceGroupTakesTheAndOrList(t *testing.T) {
 }
 
 func TestABraceGroupBodyEndsTheDeclaration(t *testing.T) {
+	t.Parallel()
 	d := keywordAndOrBody()
 	// The one shape that stops at its own `}`: the `&&` after it continues
 	// the *declaration*, so it runs where the definition stands.
@@ -88,6 +90,7 @@ func TestABraceGroupBodyEndsTheDeclaration(t *testing.T) {
 }
 
 func TestTheParenthesisSpellingKeepsOneCommand(t *testing.T) {
+	t.Parallel()
 	// `a() echo X && echo Y` is a definition of `echo X` and an `echo Y`
 	// that runs where it stands — the flag is the keyword's and this is the
 	// row that says so.
@@ -96,6 +99,7 @@ func TestTheParenthesisSpellingKeepsOneCommand(t *testing.T) {
 }
 
 func TestOneCommandIsStillTheBodyItAlwaysWas(t *testing.T) {
+	t.Parallel()
 	// A body that is one pipeline of one command is handed back bare rather
 	// than wrapped, so nothing that was already a definition prints back
 	// differently for having crossed this branch.
@@ -110,6 +114,7 @@ func TestOneCommandIsStillTheBodyItAlwaysWas(t *testing.T) {
 }
 
 func TestWithoutTheReachTheBodyIsOneCommand(t *testing.T) {
+	t.Parallel()
 	d := keywordAndOrBody()
 	d.FunctionKeywordBodyIsAnAndOrList = false
 	// The other four shells' reading, and the one this had before: the body

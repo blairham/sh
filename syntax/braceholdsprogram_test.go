@@ -19,6 +19,7 @@ import (
 //	echo ${ echo hi   line 3 — the line after the input's last
 //	echo ${x          line 1 — the line the `${` is on
 func TestAnUnmatchedBraceSaysWhetherItHeldAProgram(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.CurrentShellSubstitution = true
 	for _, tc := range []struct {
@@ -50,6 +51,7 @@ func TestAnUnmatchedBraceSaysWhetherItHeldAProgram(t *testing.T) {
 // Without the grammar for the command form there is no form to tell apart, so
 // the flag is never set and the two spellings are one construct again.
 func TestABraceHoldsNoProgramWhereTheGrammarHasNoSuchForm(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo ${ echo hi\n", "echo ${x\n"} {
 		_, err := Parse(src, Core())
 		var se *Error

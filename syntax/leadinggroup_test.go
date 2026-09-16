@@ -25,6 +25,7 @@ func loopGlobQuals() Dialect {
 }
 
 func TestAParenWhereALoopItemBeginsBelongsToTheItem(t *testing.T) {
+	t.Parallel()
 	on := loopGlobQuals()
 	off := Core()
 	off.Select = true
@@ -40,6 +41,7 @@ func TestAParenWhereALoopItemBeginsBelongsToTheItem(t *testing.T) {
 }
 
 func TestAParenWhereACaseArmsPatternBeginsBelongsToThePattern(t *testing.T) {
+	t.Parallel()
 	on := loopGlobQuals()
 	off := Core()
 	for _, src := range []string{
@@ -63,6 +65,7 @@ func TestAParenWhereACaseArmsPatternBeginsBelongsToThePattern(t *testing.T) {
 // what says the `((` half is not about the flag's spelling: it is the lexer
 // reading two parens as an arithmetic command where no command may begin.
 func TestAnArmsParenInFrontOfAGroupIsNotAnArithmeticCommand(t *testing.T) {
+	t.Parallel()
 	on := loopGlobQuals()
 	for _, src := range []string{
 		`case x in ((a|b)) :;; esac`,
@@ -85,6 +88,7 @@ func TestAnArmsParenInFrontOfAGroupIsNotAnArithmeticCommand(t *testing.T) {
 // The rows that were already right, kept so the boundary is legible: an arm
 // whose leading paren is its own, and a group standing *after* pattern text.
 func TestTheOrdinaryCaseArmShapesStillParse(t *testing.T) {
+	t.Parallel()
 	for _, d := range []Dialect{loopGlobQuals(), Core()} {
 		for _, src := range []string{
 			`case x in a) :;; esac`,
@@ -112,6 +116,7 @@ func TestTheOrdinaryCaseArmShapesStillParse(t *testing.T) {
 //	for x in do; do :; done      taken by all five
 //	for x in done; do :; done    taken by all five
 func TestNoWordInALoopsItemListIsReserved(t *testing.T) {
+	t.Parallel()
 	for _, d := range []Dialect{Core(), loopGlobQuals()} {
 		for _, src := range []string{
 			`for x in do; do :; done`,
@@ -147,6 +152,7 @@ func TestNoWordInALoopsItemListIsReserved(t *testing.T) {
 // position: `for x (do)` and `for x (a do)` are taken by the shell that has
 // the form, and `for x ((#i)a)` reads the flag.
 func TestTheParenthesisedItemListReadsTheSameWords(t *testing.T) {
+	t.Parallel()
 	on := loopGlobQuals()
 	for _, src := range []string{
 		`for x (do); do :; done`,
@@ -192,6 +198,7 @@ func TestTheParenthesisedItemListReadsTheSameWords(t *testing.T) {
 // makes it one dialect's answer rather than the core's, and the opposite of
 // what the issue expected.
 func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
+	t.Parallel()
 	on := loopGlobQuals()
 	off := Core()
 	for _, src := range []string{
@@ -257,6 +264,7 @@ func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
 // where the arm's `)` belongs — which is what zsh 5.9.2 answers, “parse
 // error near `)' “.
 func TestACaseArmsLeadingParenIsItsOwnWhenNoParenIsLeftForIt(t *testing.T) {
+	t.Parallel()
 	on := loopGlobQuals()
 	// One `)` and a body behind it: the arm's paren, however much pattern
 	// language the list holds.

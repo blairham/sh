@@ -18,6 +18,7 @@ import (
 // comment names — one spelling, two readings — so both are pinned here rather
 // than only the one being added (#918).
 func TestTheRenameOnSuccessOperatorIsBehindItsFlag(t *testing.T) {
+	t.Parallel()
 	const src = "echo x >; f"
 	t.Run("off", func(t *testing.T) {
 		p := syntax.NewParser(src, syntax.Core())
@@ -52,6 +53,7 @@ func TestTheRenameOnSuccessOperatorIsBehindItsFlag(t *testing.T) {
 // the flag adds one operator rather than a marker that generalizes — the
 // mistake `ClobberOverrideMarker` records making once already.
 func TestTheOperatorIsOneSpellingAndNotAMarker(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.RenameOnSuccessRedirect = true
 	for _, src := range []string{"echo x > ; f", "echo x >>; f", "echo x <; f"} {
@@ -69,6 +71,7 @@ func TestTheOperatorIsOneSpellingAndNotAMarker(t *testing.T) {
 // turn a write that only lands on success into one that always lands, which
 // is the failure a round trip through the parser cannot see.
 func TestTheOperatorIsPrintedBack(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.RenameOnSuccessRedirect = true
 	f, err := syntax.Parse("echo a >; b", d)

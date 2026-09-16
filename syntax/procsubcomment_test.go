@@ -27,6 +27,7 @@ import (
 // input. A real script refused 214 lines from its comment is what found it
 // (#1397).
 func TestACommentInAProcessSubstitutionBodyIsAComment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		kind      syntax.SpanKind
@@ -99,6 +100,7 @@ func TestACommentInAProcessSubstitutionBodyIsAComment(t *testing.T) {
 // fallback then finds that `)` and calls the substitution closed. Every panel
 // member that has the construct refuses these.
 func TestACommentDoesNotEndAtAClosingParenthesis(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"cat < <(echo hi # cmt )\necho after\n",
 		"echo x > >(cat # cmt )\necho after\n",
@@ -117,6 +119,7 @@ func TestACommentDoesNotEndAtAClosingParenthesis(t *testing.T) {
 // This is the row a fix that skipped to the newline on every `#` would fail:
 // that fix eats `#b)` and the substitution never closes.
 func TestAHashMidWordInAProcessSubstitutionBodyIsNotAComment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, inner string }{
 		{"cat < <(echo a#b)\n", "echo a#b"},
 		{"cat < <(echo a#b\n)\n", "echo a#b\n"},
@@ -148,6 +151,7 @@ func TestAHashMidWordInAProcessSubstitutionBodyIsNotAComment(t *testing.T) {
 // all four call `$(( 1 # c ))` an arithmetic syntax error rather than reading
 // a comment. The gate is `holdsCommands`, and this is what it is for.
 func TestAHashInArithmeticIsNotAComment(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("echo $(( 16#ff ))\n", syntax.Core())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -169,6 +173,7 @@ func TestAHashInArithmeticIsNotAComment(t *testing.T) {
 // `${x#a}` and the length operator in `${#x}`. So the rule is gated on the
 // form, which is why both halves are asserted here.
 func TestACommentInACurrentShellSubstitutionBodyIsAComment(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
 

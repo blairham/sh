@@ -13,6 +13,7 @@ import "testing"
 // rule that took the expansion alone would carry nothing in any of the rows
 // below it.
 func TestAFlagGroupErrorCarriesTheRestOfItsWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the expansion is the whole word", `echo ${(!)v}`, `${(!)v}`},
 		{"a literal behind it", `echo ${(!)v}rest more`, `${(!)v}rest`},
@@ -43,6 +44,7 @@ func TestAFlagGroupErrorCarriesTheRestOfItsWord(t *testing.T) {
 // in — so a pair that does not describe a range of *this* source has to
 // produce nothing, and the report falls back to the expansion alone.
 func TestSourceBetweenAnswersOnlyForRealRanges(t *testing.T) {
+	t.Parallel()
 	p := NewParser("echo hi", Core())
 	at := func(off int32) Pos { return Pos{Offset: off, Line: 1, Col: off + 1} }
 	for _, tc := range []struct {

@@ -20,6 +20,7 @@ import (
 // a tree nobody wrote and said nothing — which only reading the tree back
 // showed.
 func TestASubstitutionEndsWhereItsContentsDo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"an arm inside one", `x=$(case a in a) echo yes;; esac)`},
 		{"an arm with several patterns", `x=$(case a in a|b) echo yes;; esac)`},
@@ -41,6 +42,7 @@ func TestASubstitutionEndsWhereItsContentsDo(t *testing.T) {
 // An unfinished one is still unfinished, and says so rather than being read
 // as something else — which is what a prompt needs in order to ask for more.
 func TestAnUnfinishedSubstitutionIsIncomplete(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser(`x=$(echo hi`, syntax.Core())
 	p.Parse()
 	if p.Err() == nil {
@@ -56,6 +58,7 @@ func TestAnUnfinishedSubstitutionIsIncomplete(t *testing.T) {
 // holding a here-document whose delimiter never matches is terminated by the
 // first and not by the second — which is a real script on this machine.
 func TestTheOlderSpellingIsWrittenBackAsItself(t *testing.T) {
+	t.Parallel()
 	// A here-document whose body holds a `)` and whose delimiter never
 	// matches, which is the shape /usr/local/bin/prlcopy has. Written back
 	// as `$( … )` the parenthesis in the body ends the substitution and

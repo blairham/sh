@@ -47,6 +47,7 @@ func words(ws []*Word) string {
 // which is what keeps `nocorrect x=1 echo hi` an assignment prefix and a
 // command, rather than a command called `x=1`.
 func TestAReservedPrecommandIsTakenOffTheCommand(t *testing.T) {
+	t.Parallel()
 	d := precommandGrammar()
 	for _, tc := range []struct{ src, mods, args, assigns string }{
 		{`nocorrect echo hi`, "nocorrect", "echo hi", ""},
@@ -83,6 +84,7 @@ func TestAReservedPrecommandIsTakenOffTheCommand(t *testing.T) {
 // used as a command name at all, and the shell it comes from reports `command
 // not found` for `\nocorrect echo hi`.
 func TestAQuotedReservedPrecommandIsACommandName(t *testing.T) {
+	t.Parallel()
 	d := precommandGrammar()
 	for _, src := range []string{`\nocorrect echo hi`, `"nocorrect" echo hi`, `'nocorrect' echo hi`} {
 		c := simpleOf(t, src, d)
@@ -98,6 +100,7 @@ func TestAQuotedReservedPrecommandIsACommandName(t *testing.T) {
 // TestADialectWithoutTheWordReadsAnOrdinaryCommand is the control: the same
 // four shapes in a grammar that names no precommand.
 func TestADialectWithoutTheWordReadsAnOrdinaryCommand(t *testing.T) {
+	t.Parallel()
 	c := simpleOf(t, `nocorrect echo hi`, Core())
 	if len(c.Precommands) != 0 {
 		t.Errorf("precommands = %q, want none", words(c.Precommands))
@@ -119,6 +122,7 @@ func TestADialectWithoutTheWordReadsAnOrdinaryCommand(t *testing.T) {
 // nowhere to go behind one, which is what says the word was consumed by the
 // grammar rather than kept as an argument.
 func TestOnlyASimpleCommandMayFollowAReservedPrecommand(t *testing.T) {
+	t.Parallel()
 	d := precommandGrammar()
 	for _, src := range []string{
 		`nocorrect if true; then echo hi; fi`,
@@ -142,6 +146,7 @@ func TestOnlyASimpleCommandMayFollowAReservedPrecommand(t *testing.T) {
 // that was read, and `nocorrect mv a b` printed back as `mv a b` is a
 // different program in a shell that corrects spelling.
 func TestPrintingKeepsAReservedPrecommand(t *testing.T) {
+	t.Parallel()
 	d := precommandGrammar()
 	for _, tc := range []struct{ src, want string }{
 		{`nocorrect echo hi`, "nocorrect echo hi"},
@@ -165,6 +170,7 @@ func TestPrintingKeepsAReservedPrecommand(t *testing.T) {
 // another behave alike. Without the second lookup the alias is an ordinary
 // name and the shell reports `command not found`.
 func TestAnAliasBehindAReservedPrecommandExpands(t *testing.T) {
+	t.Parallel()
 	d := precommandGrammar()
 	aliases := func(name string) (string, bool) {
 		v, ok := map[string]string{"e": "echo", "n": "nocorrect "}[name]

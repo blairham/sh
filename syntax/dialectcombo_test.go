@@ -261,6 +261,7 @@ func casesFor(index int) []oracle.Case {
 }
 
 func TestNoDialectCombinationPanics(t *testing.T) {
+	t.Parallel()
 	offset, stride := vectorShard(t)
 	for i, v := range combinationVectors() {
 		if i%stride != offset {

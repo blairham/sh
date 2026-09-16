@@ -14,6 +14,7 @@ import (
 // refuses the name once the parens close.
 
 func TestPunctuatedFunctionNamesFollowTheFlag(t *testing.T) {
+	t.Parallel()
 	allow := Core()
 	if !allow.FunctionNamePunctuation {
 		t.Fatal("the core should allow the punctuation three of the four accept")
@@ -60,6 +61,7 @@ func TestPunctuatedFunctionNamesFollowTheFlag(t *testing.T) {
 // whole names rather than as a set of bytes, because what the parser is asked
 // is whether a name is one.
 func TestTheFunctionNamePunctuationIsTheMeasuredSet(t *testing.T) {
+	t.Parallel()
 	allow := Core()
 	for _, name := range []string{
 		"f!g", "f#g", "f%g", "f+g", "f,g", "f-g", "f.g", "f/g", "f:g",
@@ -107,6 +109,7 @@ func TestTheFunctionNamePunctuationIsTheMeasuredSet(t *testing.T) {
 // TestASimpleCommandBodyFollowsTheFlag — one grammar refuses `f() echo hi`
 // and three read it as a one-command body; the flag says which this is.
 func TestASimpleCommandBodyFollowsTheFlag(t *testing.T) {
+	t.Parallel()
 	strict := Core()
 	strict.FuncBodyMustBeCompound = true
 	if _, err := Parse(`f() echo hi`, strict); err == nil {
@@ -133,6 +136,7 @@ func TestASimpleCommandBodyFollowsTheFlag(t *testing.T) {
 // sentence, so the dialect that repeats the source printed one line where the
 // shell it grades against prints two.
 func TestARefusedFunctionBodyNamesTheTokenItBeganWith(t *testing.T) {
+	t.Parallel()
 	strict := Core()
 	strict.FuncBodyMustBeCompound = true
 	for _, c := range []struct{ src, token string }{
@@ -170,6 +174,7 @@ func TestARefusedFunctionBodyNamesTheTokenItBeganWith(t *testing.T) {
 // rather than describing the function. Running out of input instead is the
 // unterminated kind, with no construct left open to name.
 func TestAFunctionWithNoBodyAtAllNamesWhatStoodThere(t *testing.T) {
+	t.Parallel()
 	for _, d := range []Dialect{Core(), POSIX()} {
 		_, err := Parse(`f() ;`, d)
 		var se *Error
@@ -199,6 +204,7 @@ func TestAFunctionWithNoBodyAtAllNamesWhatStoodThere(t *testing.T) {
 // it, and rejects `f() echo hi >out` at the operator with the command already
 // read.
 func TestARedirectionOnlyBodyFollowsItsOwnFlag(t *testing.T) {
+	t.Parallel()
 	noRedir := Core()
 	noRedir.FuncBodyTakesNoRedirection = true
 	for _, c := range []struct{ src, token string }{
@@ -240,6 +246,7 @@ func TestARedirectionOnlyBodyFollowsItsOwnFlag(t *testing.T) {
 // end-of-input error names is `()` there and `)` everywhere else, which is the
 // only place the granularity shows.
 func TestEmptyParensAreOneTokenToTheGrammarThatSaysSo(t *testing.T) {
+	t.Parallel()
 	joined := Core()
 	joined.EmptyParensAreOneToken = true
 	for _, c := range []struct {
@@ -271,6 +278,7 @@ func TestEmptyParensAreOneTokenToTheGrammarThatSaysSo(t *testing.T) {
 // two shapes below are an unexpected token and an end of input, and both are a
 // body that never began.
 func TestAMissingFunctionBodyIsMarkedAsOne(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`f() ;`, `f()`, `f() &`, `f() }`} {
 		_, err := Parse(src, Core())
 		var se *Error

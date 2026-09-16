@@ -27,6 +27,7 @@ func withAnySeparator() Dialect {
 // Measured 2026-09-07 over a script file with a scratch HOME, ZDOTDIR and
 // HISTFILE. dash, bash 5.3, bash 3.2 and bash-as-`sh` refuse all of them.
 func TestASeparatorWhereACommandBelongsIsSteppedOver(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"; echo two\n",
 		"echo one ; ; echo two\n",
@@ -56,6 +57,7 @@ func TestASeparatorWhereACommandBelongsIsSteppedOver(t *testing.T) {
 // nothing — and it is why this is a separator rule rather than an absent
 // operand one.
 func TestTheSeparatorIsSkippedAndNotAnOperand(t *testing.T) {
+	t.Parallel()
 	for _, d := range []Dialect{withOneSeparator(), withAnySeparator()} {
 		f, err := Parse("false || ; echo two\n", d)
 		if err != nil {
@@ -86,6 +88,7 @@ func TestTheSeparatorIsSkippedAndNotAnOperand(t *testing.T) {
 // written. Measured: `a || ; ; b` is “ `;' unexpected “ in ksh93 and runs in
 // zsh, and the same for `echo one | ; ; cat -n`.
 func TestHowManySeparatorsAreSteppedOver(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"echo one || ; ; echo two\n",
 		"; ; echo two\n",
@@ -103,6 +106,7 @@ func TestHowManySeparatorsAreSteppedOver(t *testing.T) {
 // probe: ksh93 takes `a || ; b` and `a |& ; b` and refuses `a | ; b`, so the
 // bar is a separate position and not one rule about control operators.
 func TestASeparatorAfterABarIsItsOwnQuestion(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"echo one | ; cat\n",
 		"echo one |\n; cat\n",
@@ -126,6 +130,7 @@ func TestASeparatorAfterABarIsItsOwnQuestion(t *testing.T) {
 // ([Dialect.OpenEndedAndOr]), and the two answer `false || ;` differently —
 // 0 against 1 — which is why they are separate fields.
 func TestAnAbsentOperandAfterASeparatorIsAnEmptyCommand(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"false || ;\n",
 		"{ false || ; }\n",
@@ -160,6 +165,7 @@ func TestAnAbsentOperandAfterASeparatorIsAnEmptyCommand(t *testing.T) {
 // separator is not the end of anything, so it is still refused and still
 // names itself — which is what the shell that has this does.
 func TestTheEmptyCommandDoesNotStandInForASecondSeparator(t *testing.T) {
+	t.Parallel()
 	_, err := Parse("false || ; ; echo two\n", withOneSeparator())
 	se, ok := err.(*Error)
 	if !ok {
@@ -214,6 +220,7 @@ func firstAndOr(stmts []*Stmt) *BinaryExpr {
 // and-or ends with nothing on its right and `echo two` is the statement after
 // it — two statements. The count is what says which happened.
 func TestANewlineAfterTheSeparatorIsTheDialectSAnswer(t *testing.T) {
+	t.Parallel()
 	const src = "true || ;\necho two\n"
 	f, err := Parse(src, withOneSeparator())
 	if err != nil {
@@ -256,6 +263,7 @@ func TestANewlineAfterTheSeparatorIsTheDialectSAnswer(t *testing.T) {
 //	$ ksh s.sh          # { ; echo two; }
 //	two
 func TestASeparatorAtTheHeadOfACompoundBody(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"{ ; echo two; }\n",
 		"( ; echo two )\n",
@@ -295,6 +303,7 @@ func TestASeparatorAtTheHeadOfACompoundBody(t *testing.T) {
 // handful of probes. What is certain either way is that the resolved `||` is
 // not it, which is what this pins.
 func TestTheOperatorIsGivenBackWhenAnEmptyCommandStandsIn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want []string

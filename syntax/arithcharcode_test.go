@@ -31,6 +31,7 @@ func arithOf(t *testing.T, src string, d syntax.Dialect) syntax.ArithExpr {
 
 // The two spellings and what each reads: a name, or one character.
 func TestTheCharacterCodeOperatorReadsItsOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -73,6 +74,7 @@ func TestTheCharacterCodeOperatorReadsItsOperand(t *testing.T) {
 // One character and exactly one: the rest is left for the caller to refuse as
 // an operator it cannot read, which is what the shell does.
 func TestTheCharacterCodeOperatorTakesOneCharacter(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"##ab", "###a", `##\x41x`, `##\0101`,
 		`##\u00410`, `##\U000000410`, `#\x41`,
@@ -86,6 +88,7 @@ func TestTheCharacterCodeOperatorTakesOneCharacter(t *testing.T) {
 // Nothing after the operator is its own failure, worded by neither of the two
 // the rest of arithmetic has.
 func TestTheCharacterCodeOperatorWithNothingAfterIt(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"##"} {
 		err := arithErr(src, charCode(true))
 		var se *syntax.Error
@@ -102,6 +105,7 @@ func TestTheCharacterCodeOperatorWithNothingAfterIt(t *testing.T) {
 // ordinary missing-operand one every other unreadable operand gets — which is
 // what the rest of the panel says about the same text.
 func TestWithoutTheFlagTheHashIsNoOperator(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"#b", "##a", "##"} {
 		err := arithErr(src, charCode(false))
 		var se *syntax.Error
@@ -118,6 +122,7 @@ func TestWithoutTheFlagTheHashIsNoOperator(t *testing.T) {
 // digits and is read by the number, where this one stands where an operand
 // belongs.
 func TestTheRadixLiteralIsNotTheCharacterCodeOperator(t *testing.T) {
+	t.Parallel()
 	for _, on := range []bool{true, false} {
 		x, ok := arithOf(t, "echo $((16#ff))", charCode(on)).(*syntax.ArithNum)
 		if !ok {

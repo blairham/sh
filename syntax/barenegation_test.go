@@ -15,6 +15,7 @@ func reach(r BareNegationReach) Dialect {
 // reaches take it and each takes a different set of positions, so every row
 // below is a row for all three.
 func TestWhereABareNegationMayStand(t *testing.T) {
+	t.Parallel()
 	// The columns are the three accepting reaches; the core takes none.
 	for _, tc := range []struct {
 		src                       string
@@ -58,6 +59,7 @@ func TestWhereABareNegationMayStand(t *testing.T) {
 // that refuses does — and returning quietly instead left an empty program
 // that exited 0.
 func TestABareNegationTheReachRefusesIsNamed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		kind ErrorKind
@@ -95,6 +97,7 @@ func TestABareNegationTheReachRefusesIsNamed(t *testing.T) {
 // A second `!` toggles the first where the dialect says so, which is why one
 // flag on the tree is enough: an even count is no negation at all.
 func TestRepeatedNegationToggles(t *testing.T) {
+	t.Parallel()
 	d := reach(BareNegationBeforeATerminator)
 	d.RepeatedNegationToggles = true
 	for _, tc := range []struct {

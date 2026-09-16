@@ -101,6 +101,8 @@ func seedStacks(r *Runner) {
 	r.declaredTypes = append(make([]string, 0, 4), "seed")
 	r.cmdHashOrder = append(make([]string, 0, 4), "seed")
 	r.optionLists = append(make([]optionList, 0, 4), optionList{})
+	r.prefixTraceAssigns = append(make([]*syntax.Assign, 0, 4), nil)
+	r.prefixTraceValues = append(make([]string, 0, 4), "seed")
 }
 
 // TestACloneOwnsEveryStack is TestACloneOwnsEveryTable for the slices, and it

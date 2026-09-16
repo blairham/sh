@@ -304,6 +304,15 @@ func (c *Runner) ownTables(r *Runner) {
 	// truncates it back, so a subshell started from inside a sourced file
 	// would share the array and both would write [len-1].
 	c.borrowed = slices.Clone(r.borrowed)
+	// The prefix values `set -x` expanded for the command that is running
+	// right now. A clone is started *during* one — a command substitution in
+	// a prefix's own value is the case — and the command it goes on to run is
+	// not that one, so it inherits none of them. Cloned rather than left
+	// aliased for the reason the reaped jobs are: "the next command clears
+	// it" is a fact about the caller, and an append into an array the parent
+	// still holds is what this file exists to prevent.
+	c.prefixTraceAssigns = slices.Clone(r.prefixTraceAssigns)
+	c.prefixTraceValues = slices.Clone(r.prefixTraceValues)
 	c.scopes = cloneScopes(r.scopes)
 	// Appended to in place as well, so each needs an array of its own. Their
 	// *elements* stay shared on purpose: a `*Job` is one job to whoever holds

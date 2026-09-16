@@ -3368,6 +3368,12 @@ func Diagnostics() interp.Diagnostics {
 		TraceStyle:        interp.TraceNameLine,
 		TraceForHeader:    interp.TraceForAssign,
 		TraceArrayLiteral: interp.TraceArraySpaced,
+		// The prefix goes on the command's own line, with the trace prefix
+		// written a second time between the assignments and the words when
+		// the command is one this shell runs itself: `+x.sh:3> A=3 +x.sh:3>
+		// f zz` for a function and `+x.sh:4> B=4 /bin/echo c` for an
+		// external.
+		TracePrefixAssignment: interp.TracePrefixOnTheCommandLineRepeatingThePrefix,
 		// The subject and the arm's patterns, once per arm it tries, where
 		// bash prints the header as written once and the other two print
 		// nothing. The line count is the information: it says how far down

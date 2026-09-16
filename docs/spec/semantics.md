@@ -1135,7 +1135,7 @@ boundary set up around the body: the handler writes into the subshell's
 own redirections and into the element's end of the pipe, which is measured
 too.
 
-## One option, fifteen divergences
+## One option, seventeen divergences
 
 `set -x` produced more disagreement than any other single feature
 measured, and almost all of it is decoration. The shells differ on the
@@ -1148,8 +1148,19 @@ that literal's elements are the words the script wrote or what they
 expanded to, on what `case` prints, on how many lines one `[[ … ]]` is
 worth, on whether a condition's operands are quoted, on whether `(( ))`
 gains a space inside each parenthesis, on whether the parts of a
-`for ((;;))` header keep those parentheses at all, and on what the `=~`
-operator is *called* in the line that reports it.
+`for ((;;))` header keep those parentheses at all, on what the `=~`
+operator is *called* in the line that reports it, on **where an assignment
+written in front of a command goes** — a line of its own ahead of the command
+in bash, a line of its own behind it in ksh93, the command's own line in dash,
+BusyBox ash and zsh, and zsh repeating the whole prefix between the two — and
+on whether an **appending** prefix is written as the value it came to, which
+bash does in that position and nowhere else.
+
+The last two are the ones this shell answered by writing *nothing*: the trace
+named the command and left out the assignment that changed how it ran (#3133).
+Their fields are `Diagnostics.TracePrefixAssignment` and
+`TracePrefixAppendIsTheJoinedValue`, and interp/xtraceprefix.go carries the
+panel they were measured from.
 
 **The structure is not what this document said it was.** It said "every
 simple command to stderr, expanded, before it runs, and compound commands

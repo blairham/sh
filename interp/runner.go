@@ -1266,6 +1266,24 @@ type Runner struct {
 	// dispatch routes skip the value of a frozen name and the ordinary check
 	// does not report the same names a second time.
 	prefixCheckedFirst bool
+	// prefixTraceAssigns and prefixTraceValues hold this command's
+	// assignment-prefix values, for the one command being traced. `set -x`
+	// has to write the value it is about to hand over and the route that
+	// applies it has to hand over the same one, and the expansion may run a
+	// command substitution — so it happens once and both read it. Empty for
+	// every command not under `set -x`, which is what keeps this from moving
+	// the expansion of an untraced prefix. See
+	// Runner.expandPrefixTraceValues.
+	//
+	// Two parallel slices rather than a map keyed by the assignment, which
+	// is what this was: a prefix is one, two or three assignments, so the
+	// scan is shorter than hashing a pointer — and a map here is a *table*
+	// on the Runner, which every clone then has to own or be excused from
+	// sharing. TestACloneOwnsEveryTable says so, and it is right to: a
+	// per-command scratch value is not a table and should not have to
+	// pretend to be one.
+	prefixTraceAssigns []*syntax.Assign
+	prefixTraceValues  []string
 	// expandingWord is the word being expanded and expandingSpan which of
 	// its spans, so a diagnostic about an expansion can name the text around
 	// it: two dialects blame the word rather than the `${…}`, and by the
@@ -4706,7 +4724,18 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		return nil
 	}
 
-	r.traceCommand(argv)
+	// Whether this command's assignment prefix is traced, and where. Read
+	// into locals because both questions are asked again below, once the
+	// values have expanded, and neither answer may move in between: `x=1 set
+	// +x` is the command that would move the first, and a function defined
+	// by a redirection the second.
+	tracesPrefix := r.tracesItsPrefix(c.Assigns, argv)
+	prefixFollows := tracesPrefix && r.tracePrefixFollowsTheCommand(argv)
+	if !tracesPrefix || prefixFollows {
+		// With no prefix to write, and in the column that writes it behind
+		// the command, the command's own line comes first and is unchanged.
+		r.traceCommand(argv)
+	}
 
 	// On the record while the redirections are opened, so a dialect that
 	// counts a redirection opened for a builtin as the builtin's own can
@@ -4725,6 +4754,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	defer func() { r.prefixCheckedFirst = false }()
 	if r.refusePrefixesEarly(c.Assigns, argv) {
 		return nil
+	}
+	defer func() { r.prefixTraceAssigns, r.prefixTraceValues = nil, nil }()
+	if tracesPrefix && !prefixFollows {
+		// Ahead of the redirections, which is measured and not incidental:
+		// `z=1 cmd >/nope/f` writes `+ z=1` and `+ cmd` and *then* the
+		// complaint about the file, in bash and in dash alike. After the
+		// frozen-name check, so the column that refuses a prefix before it
+		// evaluates anything still evaluates nothing.
+		r.expandPrefixTraceValues(c.Assigns)
+		r.tracePrefixAndCommand(c.Assigns, argv)
 	}
 
 	// And whether the command is one this shell runs itself, which decides
@@ -4785,6 +4824,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.fatalQuiet()
 		}
 		return nil
+	}
+
+	if prefixFollows {
+		// ksh93 writes the assignment once the redirections are open and the
+		// value has expanded, which is why this stands here and not beside
+		// the branch above: `z=1 cmd >/nope/f` writes the command's line,
+		// then the complaint, and no assignment line at all — the value is
+		// never reached. Measured 2026-09-16 on ksh93u+ 2012-08-01.
+		r.expandPrefixTraceValues(c.Assigns)
+		r.tracePrefixAfterTheCommand(c.Assigns)
 	}
 
 	// A function shadows a builtin and an external command alike.
@@ -5190,6 +5239,15 @@ func (r *Runner) prefixValue(a *syntax.Assign) string {
 // operator names, and `.append` is entered with the appended part alone —
 // see interp/prefixdiscipline.go.
 func (r *Runner) prefixExpansion(a *syntax.Assign) string {
+	if value, ok := r.prefixTraceValue(a); ok {
+		// Already expanded, to be written by `set -x` before the command
+		// runs. Reading it back rather than expanding again is what keeps
+		// `x=$(date) cmd` from running the substitution twice under a trace
+		// and once without one — and it is *this* function and not
+		// prefixValue that holds the check, because a store reaches the
+		// expansion through here without the join.
+		return value
+	}
 	return strings.Join(r.expandWord(a.Value), " ")
 }
 

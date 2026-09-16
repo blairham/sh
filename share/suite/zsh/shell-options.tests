@@ -41,3 +41,44 @@ printf 'an unknown long name -> %s\n' "$?"
 ( set --zzznosuch q; printf 'an unknown one -> %s [%s]\n' "$?" "$*" ) 2>&1
 ( set --noglob q; printf '[%s]' /dev/nul*; printf ' and [%s]\n' "$*" )
 ( set -- --xtrace q; printf 'behind the terminator [%s]\n' "$*" )
+
+# ---- `set -x` and the assignment written in front of a command ----
+#
+# zsh's shape: the assignments go **on the command's own line**, as dash and
+# BusyBox ash write them — and then this shell writes **the trace prefix a
+# second time** between the assignments and the command's words, which no
+# other column does. `+ A=3 + xf zz` is one line and two prefixes.
+#
+# The repeat is a question about the command and not about the line. It
+# appears in front of a command this shell runs itself — a function, a
+# builtin, a `builtin`-forced one — and not in front of one it hands to a
+# process: `D=6 E=7 /bin/echo ext` is a single prefix. `command` counts as
+# handing it over even when what it names is a builtin, and this shell drops
+# the `command` word from the trace as well, which is why no row here uses it.
+#
+# `PS4='+ '` is deliberate and is the only reason these rows can exist. The
+# default prefix here is `+%N:%i> ` — the script's name and the line — so a
+# block written without it would compare where the harness put the file rather
+# than what the shell traced, and would pass or fail by directory.
+#
+# **Held out and named:** a prefix whose value is a command substitution
+# writes a *partial* assignment before it expands — `V=$(printf vv) :` traces
+# `+ V=+ printf vv` and then the finished line — which is an artifact of the
+# order this shell writes and expands in, and is recorded here rather than
+# reproduced. bash/ and ksh/ carry that row, where it is an ordinary one.
+
+xf() { :; }
+PS4='+ '
+exec 3>&2 2> xt.err
+set -x
+A=3 xf zz
+B=4 true
+C=5 :
+D=6 E=7 /bin/echo ext
+Q='a b' :
+v=14
+v+=5 :
+set +x
+exec 2>&3
+cat xt.err
+printf 'and the append did not outlive the command [%s]\n' "$v"

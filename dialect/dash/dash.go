@@ -1006,6 +1006,10 @@ func Semantics() interp.Semantics {
 // Diagnostics is how dash reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// An assignment written in front of a command is traced on the
+		// command's own line, exactly as the script spells it: `+ A=3 f zz`,
+		// where bash writes two lines and ksh93 writes the command first.
+		TracePrefixAssignment: interp.TracePrefixOnTheCommandLine,
 		// This shell names the text a failure came out of in a *run-time*
 		// diagnostic and not only in a parse failure, which is the panel's
 		// fourth answer to that question and the only one the placement enum

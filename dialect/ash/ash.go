@@ -846,6 +846,10 @@ func Semantics() interp.Semantics {
 	// options, so no letter of its own is reachable — `-t` included.
 	// BusyBox ash 1.37.0 draws the distinction exactly as dash does, so this
 	// is the preset's value measured rather than inherited (#3248's shape).
+	// BusyBox ash 1.37.0 ends the script here exactly as dash does — `start`
+	// and 2, measured in the container rather than assumed from the preset,
+	// which is #3248's shape (#3274).
+	s.SubstitutionParseErrorEscapesASubshell = interp.Yes
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No

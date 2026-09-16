@@ -2456,6 +2456,11 @@ type Runner struct {
 	// nothing about a command killed inside `$(…)` and does report one
 	// killed inside `( … )`.
 	inCommandSubst bool
+	// scriptStop is the box a shell and every clone of it share, holding a
+	// substitution parse failure that ends the script rather than the
+	// subshell it was written in. See substitutionstop.go, and
+	// Semantics.SubstitutionParseErrorEscapesASubshell for the panel.
+	scriptStop *scriptStop
 	// umask is the file-creation mask this shell holds, and maskKnown says
 	// it holds one. A mask is process state and a body of this shell is not
 	// a process, so it is kept here instead and applied by hand at the two
@@ -2914,6 +2919,14 @@ func (r *Runner) clone() *Runner {
 	// substitution made only inside a subshell used to leave a directory the
 	// parent could not clean up because it had never been told about it.
 	r.procSubHomeBox()
+	// And before the copy for the same reason, which is the whole of why the
+	// box is made here rather than where it is written: a subshell that made
+	// its own would record a stop nothing above it could ever read. Made on
+	// every clone rather than lazily, so that a script with no subshell in it
+	// carries a nil and pays one nil test per command. See scriptStop.
+	if r.scriptStop == nil {
+		r.scriptStop = &scriptStop{}
+	}
 	c := *r
 	c.inSubshell = true
 	// A subshell body is not running inside the frames the copy inherited.
@@ -3859,6 +3872,10 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	r.exitTrap = nil
 	before := r.status
 	r.ctl = controlNone
+	// And the same treatment for a pending substitution stop, for the same
+	// reason: the handler is more of the script and runs to its end, and the
+	// stop is still the shell's afterwards. See Runner.holdScriptStop.
+	defer r.holdScriptStop()()
 	// Kept for a bare `exit` inside the body, which in three of the four
 	// reports this rather than whatever the body's last command did.
 	r.inExitTrap, r.exitTrapEntryStatus = true, before
@@ -4096,6 +4113,20 @@ func shiftParseError(err error, by int) error {
 }
 
 func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
+	// A substitution somewhere below this shell could not parse its body, and
+	// in the dialects that say so that ends the script rather than the
+	// subshell it was written in. Taken here because this is the one point
+	// every command passes through, and before the handlers because nothing
+	// after the failure is the script's to run. See substitutionstop.go.
+	if status, stopped := r.takeScriptStop(); stopped {
+		// The status is the failure's and not whatever the command that held
+		// the word happened to report. They are the same number wherever the
+		// shell that failed is the one that stops, and two different numbers
+		// where it is not — see scriptStop.status.
+		r.status = status
+		r.ctl, r.errexitStopped = controlExit, false
+		return nil
+	}
 	// Whatever arrived while the previous command ran. A shell finishes what
 	// it is doing and runs the handler between commands, which is measured
 	// and unanimous — so this is the point where a signal becomes visible.

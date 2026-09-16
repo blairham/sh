@@ -250,6 +250,12 @@ func Semantics() interp.Semantics {
 	// shell's answer was until #2703 — so `echo A; echo "`+"`echo \`echo n`"+`"; echo B`
 	// stopped at `A` where bash prints `A`, an empty line and `B`.
 	s.SubstitutionParseErrorIsFatal = interp.No
+	// But where it *is* fatal — the `$( … )` spelling, which this axis is not
+	// asked for — a subshell does not contain it: bash 5.3.20 ends the script
+	// from inside `( … )`, a pipeline element and an enclosing `$( … )`
+	// alike. bash 3.2.57 is the third answer and does not even end the
+	// subshell, which is the row above rather than this one (#3274).
+	s.SubstitutionParseErrorEscapesASubshell = interp.Yes
 	// An associative array's subscript is a quoting context here: the key is
 	// the text inside its quotes, so `m["k"]=W` stores under `k` and
 	// `${m["k"]}` reads it back. zsh takes the subscript as written and

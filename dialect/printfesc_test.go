@@ -61,15 +61,21 @@ func TestEachDialectReadsTheFormatsEscapeCharacter(t *testing.T) {
 		{`printf '%b' 'a\EZ'`, "a" + esc + "Z", `a\EZ`, "a" + esc + "Z", `a\EZ`, `a\EZ`},
 
 		// The controls, unanimous in all seven reference columns: the rest
-		// of the format's escape set, an octal, a doubled backslash and two
-		// letters next to the two that moved. Without these the table would
-		// read as a claim about the escape reader rather than about `\e`
-		// and `\E`.
+		// of the format's escape set, an octal and a doubled backslash.
+		// Without these the table would read as a claim about the escape
+		// reader rather than about `\e` and `\E`.
+		//
+		// A letter next to the two that moved — `\g`, say — would be the
+		// sharpest control of all and is deliberately not here: ksh93u+
+		// *drops* the backslash of an escape it does not know, where the
+		// other six keep it, and this shell keeps it in every dialect. That
+		// divergence is open as #2904 and pinning today's bytes for it here
+		// would make its fix fail a test about something else. The same
+		// control is in `interp`, over a synthetic vector, where the
+		// unknown-escape reading is not a dialect's to disagree about.
 		{`printf 'a\tb\vc\fd\re\af'`, "a\tb\vc\fd\re\af", "a\tb\vc\fd\re\af", "a\tb\vc\fd\re\af", "a\tb\vc\fd\re\af", "a\tb\vc\fd\re\af"},
 		{`printf 'a\0101Z'`, "a\x081Z", "a\x081Z", "a\x081Z", "a\x081Z", "a\x081Z"},
 		{`printf 'a\\eZ'`, `a\eZ`, `a\eZ`, `a\eZ`, `a\eZ`, `a\eZ`},
-		{`printf 'a\gZ'`, `a\gZ`, `a\gZ`, `a\gZ`, `a\gZ`, `a\gZ`},
-		{`printf 'a\FZ'`, `a\FZ`, `a\FZ`, `a\FZ`, `a\FZ`, `a\FZ`},
 	} {
 		for _, d := range []struct {
 			name string

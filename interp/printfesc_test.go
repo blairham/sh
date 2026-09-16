@@ -155,6 +155,11 @@ func TestTheEscapeAxesDoNotReachTheRestOfTheFormatsEscapes(t *testing.T) {
 			{`printf 'a\tb\vc\fd\re\af'`, "a\tb\vc\fd\re\af"},
 			{`printf 'a\0101Z'`, "a\x081Z"},
 			{`printf 'a\\eZ'`, `a\eZ`},
+			// A letter next to the two that moved, which is the control a
+			// reader that had taken the whole range would fail. It is
+			// asked here rather than in the dialect table because ksh93u+
+			// drops the backslash of an unknown escape and this shell does
+			// not — an open divergence, #2904, and not this axis's.
 			{`printf 'a\gZ'`, `a\gZ`},
 			{`printf 'a\FZ'`, `a\FZ`},
 		} {

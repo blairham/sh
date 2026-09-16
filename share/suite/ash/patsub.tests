@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# ${v/pattern/replacement} in BusyBox ash — the ext/ area this column does
+# not run.
+#
+# ext/patsub.tests is asked of bash, zsh and ksh93 only, because dash has no
+# replacement and the ext/ boundary was drawn around dash. BusyBox has one,
+# and it is not quite theirs: it has the replacement and **no anchors**, so a
+# `#` or a `%` written straight after the `/` is the pattern's own first
+# character (#3272). Run through the image, ext/patsub.tests agreed with
+# BusyBox on every row but the two anchored ones.
+#
+# Held out, with the issue that owns them: a non-global replacement on a
+# quoted "$@", which BusyBox ends at the parameter it replaced in, and any
+# operator on an empty "$@", which it answers with one empty field (#3413).
+
+n() { printf '%s:' "$#"; printf '<%s>' "$@"; printf '\n'; }
+
+printf -- '--- the replacement itself ---\n'
+
+v=banana
+printf '%s\n' "first:     ${v/a/X}"
+printf '%s\n' "every:     ${v//a/X}"
+printf '%s\n' "deleted one:  ${v/a/}"
+printf '%s\n' "deleted all:  ${v//a}"
+printf '%s\n' "deleted none: ${v//z}"
+printf '%s\n' "class:    ${v//[an]/.}"
+printf '%s\n' "question: ${v//?/X}"
+printf '%s\n' "star is greedy: ${v/a*a/-}"
+printf '%s\n' "star is all of it: ${v/*/X}"
+path=/usr/local/bin
+printf '%s\n' "every slash: ${path//\//|}"
+rep=REP
+printf '%s\n' "expanded:  ${v/an/$rep}"
+printf '%s\n' "a star in the replacement is a star: ${v/an/*}"
+printf '%s\n' "and an ampersand is an ampersand: ${v/a/&}"
+printf '%s\n' "a backslash: ${v//a/\\}"
+q=an
+printf '%s\n' "pattern from a variable: ${v//$q/X} ${v//"$q"/X}"
+s='a*b'
+printf '%s\n' "a quoted star is literal: ${s//\*/-} ${s//'*'/-}"
+e=
+unset u
+printf '[%s] [%s]\n' "${e//a/X}" "${u//a/X}"
+
+printf -- '--- no anchors: the answer only this shell has ---\n'
+
+# In the other three `${v/#b/X}` is `Xanana`. Here the pattern is `#b`,
+# which `banana` does not contain.
+printf '%s\n' "front: ${v/#b/X}"
+printf '%s\n' "end:   ${v/%a/X}"
+
+# The discriminator. `banana` answers the same under "the anchor was honored
+# and did not match" and "the pattern is #a", so the value has to hold the
+# anchor character for the two to part: here the `#a` is found inside it.
+w='x#ay%bz'
+printf '%s\n' "found where it stands: ${w/#a/Q} ${w/%b/Q}"
+printf '%s\n' "a lone anchor is a one-character pattern: ${w/#/Q}"
+printf '%s\n' "and the global spelling reads it the same way: ${w//#a/Q}"
+
+printf -- '--- the positional parameters ---\n'
+
+# The global replacement goes parameter by parameter, as it does elsewhere;
+# `"$*"` is the joined string.
+set -- alpha beta 'ga ma'
+n "${@//a/-}"
+n "${*/a/-}"
+n "${@#a}"
+n "${*%a}"
+IFS=:
+n "${*//a/-}"
+unset IFS

@@ -1339,8 +1339,16 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			elems = r.subscriptsOf(r.throughNamerefName(e.Name), len(elems))
 		}
 		if e.Op == syntax.ParamSubstring {
-			elems = r.positionalSliceElems(e, elems)
-			elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
+			if (e.Name == "@" || e.Name == "*") &&
+				!r.ask(r.sem().SubstringOfPositionalsSlicesTheList, "`${@:offset}` being a slice of the positional list") {
+				if r.unspecified {
+					return nil, true
+				}
+				elems = r.substringOfTheJoinedList(e, elems, s.Quoting != syntax.Unquoted)
+			} else {
+				elems = r.positionalSliceElems(e, elems)
+				elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
+			}
 		}
 		if zipsElements(e.Op) {
 			// Its own branch beside the four below rather than one of them:
@@ -4657,8 +4665,15 @@ func splitLengthFromModifiers(w *syntax.Word) (*syntax.Word, []string, bool) {
 // and `${s:2}` is `llo`; under `LC_ALL=C` the same shells give `é` and `llo`
 // with the `é` cut in half, which is what indexing bytes produces.
 func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
+	return strings.Join(substringUnits(r.units(value), off, e, r), "")
+}
+
+// substringUnits is substring's arithmetic over units already taken apart,
+// so the one other subject that is counted in characters — the positional
+// list joined into one string, in the dialect that reads it that way — is
+// counted by the same rule rather than by a copy of it.
+func substringUnits(units []string, off int, e *syntax.ParamExpr, r *Runner) []string {
 	lenWord := e.Arg2
-	units := r.units(value)
 	if off < 0 {
 		off += len(units)
 	}
@@ -4666,19 +4681,19 @@ func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
 		off = 0
 	}
 	if off > len(units) {
-		return ""
+		return nil
 	}
 	if lenWord == nil || r.rangeRefused {
 		// A range whose offset was refused evaluates no length: the panel
 		// writes one complaint for it and not two. See Runner.rangeRefused.
-		return strings.Join(units[off:], "")
+		return units[off:]
 	}
 	n := r.numOf(lenWord, e, nil)
 	if n < 0 {
 		if r.ask(r.sem().SubstringNegativeLengthIsEmpty, "a negative substring length") {
 			// One dialect answers a negative length with nothing at all;
 			// the others count it from the end.
-			return ""
+			return nil
 		}
 		// A negative length is an offset from the end.
 		n = len(units) + n - off
@@ -4689,7 +4704,50 @@ func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
 	if off+n > len(units) {
 		n = len(units) - off
 	}
-	return strings.Join(units[off:off+n], "")
+	return units[off : off+n]
+}
+
+// positionalBoundary stands between two parameters while the list is counted
+// as one string. A NUL can be in no parameter, so it cannot be mistaken for a
+// character one of them holds.
+const positionalBoundary = "\x00"
+
+// substringOfTheJoinedList is `${@:o:n}` and `${*:o:n}` where the offset and
+// the length count characters of the parameters joined together — see
+// Semantics.SubstringOfPositionalsSlicesTheList.
+//
+// Two widths of joint, measured rather than chosen. A quoted `"${*:o:n}"` is
+// the substring of `"$*"` itself, so the joint is IFS's first character and
+// is no character at all when IFS is empty: `IFS=; set -- 'a b' c 'd e';
+// "${*:1:4}"` is ` bcd` in BusyBox. Everywhere else the joint is one
+// character wide whatever IFS holds, and the parameters stay apart on either
+// side of it: `"${@:1:4}"` on the same list is the two fields ` b` and `c`,
+// `"${@:3}"` is an empty field followed by `c` and `d e` because the offset
+// lands on the joint itself, and the unquoted `${*:1:4}` under an empty IFS
+// is ` b` and `c` rather than one word. So those come back as elements, and
+// what the fields become after that is the list path's ordinary business.
+func (r *Runner) substringOfTheJoinedList(e *syntax.ParamExpr, params []string, quoted bool) []string {
+	off := r.numOf(e.Arg, e, e.Arg2)
+	if quoted && e.Name == "*" {
+		joined := strings.Join(params, ifsFirst(r.ifs()))
+		return []string{strings.Join(substringUnits(r.units(joined), off, e, r), "")}
+	}
+	var units []string
+	for i, p := range params {
+		if i > 0 {
+			units = append(units, positionalBoundary)
+		}
+		units = append(units, r.units(p)...)
+	}
+	fields := []string{""}
+	for _, u := range substringUnits(units, off, e, r) {
+		if u == positionalBoundary {
+			fields = append(fields, "")
+			continue
+		}
+		fields[len(fields)-1] += u
+	}
+	return fields
 }
 
 func (r *Runner) joinWord(w *syntax.Word) string {

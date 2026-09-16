@@ -51,7 +51,7 @@ func TestTheReplacementHasNoAnchors(t *testing.T) {
 		},
 		{
 			// **The discriminating probe.** `abcabc` answers `abcabc`
-			// under both readings — "the anchor is honoured and `a` does
+			// under both readings — "the anchor is honored and `a` does
 			// not start the value" and "the pattern is `#a` and is not
 			// there" — so a value holding the anchor character is what
 			// tells them apart. Here the `#a` is found *inside* the value

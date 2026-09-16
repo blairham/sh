@@ -10668,7 +10668,7 @@ type Semantics struct {
 	//
 	// The **discriminating** probe is a value that holds the anchor
 	// character, because `abcabc` answers `abcabc` under both "the anchor is
-	// honoured and `a` does not start it" and "the pattern is `#a` and is not
+	// honored and `a` does not start it" and "the pattern is `#a` and is not
 	// there". Measured in the same run with `w='x#ay%bz'`:
 	//
 	//	                     ${w/#a/Q}   ${w/%b/Q}   ${w/#/Q}

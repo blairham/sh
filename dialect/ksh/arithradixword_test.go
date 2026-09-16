@@ -81,8 +81,8 @@ func TestARadixNumeralTakesTheUnsignedWord(t *testing.T) {
 		// answer is one *below* the exact reading.
 		{"a value the double cannot keep", "0x8000000000000001", "-9223372036854775808"},
 
-		// The sign parseNum strips before the conversion, which the
-		// conversion never gets to put back when it fails.
+		// The sign written in front of the numeral in the expression, which
+		// the parser hands to a unary operator rather than to the reader.
 		{"a negated wrapped value", "-0xffffffffffffffff", "1"},
 
 		// Untouched: a numeral under the word, in either spelling.
@@ -98,6 +98,38 @@ func TestARadixNumeralTakesTheUnsignedWord(t *testing.T) {
 			if st != 0 || strings.TrimSpace(out) != tc.want {
 				t.Errorf("$(( %s )): status %d, got %q, want %q",
 					tc.src, st, strings.TrimSpace(out), tc.want)
+			}
+		})
+	}
+}
+
+// TestAStoredRadixNumeralTakesTheUnsignedWordToo is the same reading reached
+// from the other side, and one row of it is reachable from nowhere else.
+//
+// A sign written in an *expression* belongs to a unary operator and never
+// reaches the numeral reader; a sign inside a **variable's value** does, and
+// the reader strips it before the conversion — so a conversion that fails
+// never gets to put it back. `x=-0xffffffffffffffff` is the row that says so:
+// 1 with the sign restored and -1 without, and `-0x8000000000000000` cannot
+// tell them apart because negating 2^63 in the word lands back on itself.
+//
+// Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01.
+func TestAStoredRadixNumeralTakesTheUnsignedWordToo(t *testing.T) {
+	for _, tc := range []struct{ name, value, want string }{
+		{"a stored unsigned maximum", "0xffffffffffffffff", "-1"},
+		{"a stored negative one", "-0xffffffffffffffff", "1"},
+		{"a stored positive sign", "+0xffffffffffffffff", "-1"},
+		{"the sign bit, which negates to itself", "-0x8000000000000000", "-9223372036854775808"},
+		// A leading zero in a stored value is not octal here at all, so this
+		// one never reaches the radix route and is the decimal double.
+		{"a stored octal-looking run", "01777777777777777777777", "1.77777777777778e+21"},
+		{"a stored decimal past the word", "-18446744073709551615", "-1.84467440737096e+19"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, "x="+tc.value+"\n"+`echo "$(( x ))"`+"\n")
+			if st != 0 || strings.TrimSpace(out) != tc.want {
+				t.Errorf("x=%s: status %d, got %q, want %q",
+					tc.value, st, strings.TrimSpace(out), tc.want)
 			}
 		})
 	}

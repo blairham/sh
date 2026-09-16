@@ -225,3 +225,31 @@ set -- a$(printf '')b
 show 'nothing at all, which closes no field' "$@"
 set -- $(printf ' ')
 show 'blanks alone, which open no field' "$@"
+
+# --- a non-whitespace separator at the edge closes the field too -------------
+#
+# The same boundary as the section above, reached by a different route. The
+# splitter writes the empty field a *leading* non-whitespace separator asks
+# for and absorbs a *closing* one, so the two ends are not one question — but
+# the fields are the same count either way, and the text on either side of the
+# separator does not share one.
+#
+# Through a command substitution, for the reason the file gives at the top:
+# zsh does not split a parameter expansion at all. What a trailing separator
+# does with nothing behind it is the one row zsh answers differently, and that
+# row is in share/suite/zsh/word-splitting.tests.
+
+IFS=:
+set -- a$(printf ':')b
+show 'one separator between two words' "$@"
+set -- $(printf 'b:')c
+show 'a separator the output ends with' "$@"
+set -- a$(printf '::')b
+show 'two separators keep the empty field between them' "$@"
+set -- a$(printf ':b')
+show 'a separator the output begins with' "$@"
+set -- x$(printf ':a:')y
+show 'one at each end of what came back' "$@"
+set -- $(printf ':')b
+show 'a separator opening the word' "$@"
+IFS=' '

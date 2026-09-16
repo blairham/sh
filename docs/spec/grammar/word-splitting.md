@@ -377,11 +377,42 @@ nothing but separators produces no field, and the text on either side of it
 still stops sharing one. The empty value is the control that says it is the
 separator doing it rather than the expansion having produced nothing.
 
-A *non-whitespace* separator at the edge is the same question answered by the
-splitter itself, since it writes the empty field: with `IFS=:` and `v=":"`,
-`a${v}b` is `[a][b]` in bash, ksh93 and dash. This implementation still
-writes one field there (`[ab]`) and the rows around it are also short — see
-the issue filed from this measurement.
+### The two edges are not one question
+
+A *non-whitespace* separator at the edge is the same boundary reached by a
+different route, and the two ends of the value answer it differently.
+Measured 2026-09-16 with `IFS=:`:
+
+    v=":";  printf "[%s]" a${v}b       → [a][b]
+    v="b:"; printf "[%s]" ${v}c        → [b][c]
+    v="::"; printf "[%s]" a${v}b       → [a][][b]
+    v=":";  printf "[%s]" a${v}""      → [a][]
+    v=":b"; printf "[%s]" a${v}        → [a][b]
+    v=":a:"; printf "[%s]" x${v}y      → [x][a][y]
+    v=":";  printf "[%s]" ${v}b        → [][b]
+    v="b:"; printf "[%s]" $v           → [b]
+    v=":";  printf "[%s]" a${v}        → [a]
+
+bash 5.3.20, ksh93u+ 2012 and dash 0.5.12 answer every row alike, and BusyBox
+ash 1.37.0 and zsh 5.9.2 join them on the command-substitution spelling of
+each — the last two rows excepted, which is the trailing-separator axis
+of *The leading/trailing asymmetry* above.
+
+At the **leading** end the splitter has already written the empty field the
+separator asks for, so the boundary is in the fields it returned: `":b"` is
+`["", "b"]`, the empty joins whatever text preceded the expansion and `b`
+opens a field of its own. At the **closing** end the splitter absorbs the
+delimiter and writes nothing, whitespace or not — so the boundary has to be
+recorded beside the split, exactly as it is for a whitespace separator, and
+the last two rows are what says the field it closes is opened only by
+something arriving to go in it.
+
+The one reading that writes a closing field is zsh's, where a trailing
+non-whitespace separator ends a field rather than being absorbed. The
+boundary is therefore read off the **split** rather than off the text: where
+the split wrote that field there is nothing left open, and where it absorbed
+the delimiter there is. Recording it from the text in both readings would
+give zsh one field too many.
 
 ## The word a `-` or `+` substitutes is split like the result it is
 

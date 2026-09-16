@@ -221,11 +221,25 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// A value that is *empty* is not this: `v=""; … a${v}b` is `ab` in
 		// all five, so it is the separator that closes the field rather than
 		// the expansion having produced no field.
-		if separatorEdge(text, ifs, set, true) {
+		//
+		// The two edges are not the same question, which is why one is read
+		// off the text and the other off the split. A *leading* delimiter
+		// holding a non-whitespace separator already has the splitter's own
+		// empty field standing for it, so recording a boundary as well would
+		// be the field twice. A *closing* delimiter has nothing standing for
+		// it whether it is whitespace or not — the splitter absorbs it — so
+		// the boundary is the split's own answer, and `IFS=:` over
+		// `a${v}b` with `v=":"` is `[a][b]` in bash 5.3.20, ksh93u+ and dash
+		// where it was the single field `ab` here (#3373). The one reading
+		// that does write a closing field is zsh's, and there the split says
+		// so rather than this line having to know it: see
+		// TrailingSeparatorEndsAField and splitFieldsAskEdge.
+		if leadingSeparatorEdge(text, ifs, set) {
 			b.separate()
 		}
-		b.add(s, r.tildeFlagElements(s, head, r.splitFieldsAsk(text, ifs, set)))
-		if separatorEdge(text, ifs, set, false) {
+		fields, openEnd := r.splitFieldsAskEdge(text, ifs, set)
+		b.add(s, r.tildeFlagElements(s, head, fields))
+		if openEnd {
 			b.separate()
 		}
 	}
@@ -307,29 +321,31 @@ func (b *wordFields) flush() {
 	b.open = len(b.all) - 1
 }
 
-// separatorEdge reports whether text begins (or ends) with IFS *whitespace*,
-// which is what says the field in front of it — or behind it — is finished
-// with nothing to show for the separator itself.
+// leadingSeparatorEdge reports whether text begins with IFS *whitespace*,
+// which is what says the field in front of it is finished with nothing to
+// show for the separator itself.
 //
-// Whitespace only, because that is the run the splitter absorbs: a
-// non-whitespace separator writes the empty field itself, and asking for one
-// here as well is the field twice. `IFS=:` over `a${v}b` with `v=":"` is two
-// fields in bash 5.3.20, ksh93u+ and dash, and the splitter's own empty is
-// the one that makes it two.
-func separatorEdge(text, ifs string, ifsSet, leading bool) bool {
+// Whitespace only, because that is the run the splitter discards: a leading
+// non-whitespace separator makes the splitter write the empty field itself —
+// `IFS=:` over `a${v}` with `v=":b"` is `[a][b]` because that empty joins the
+// `a` and the `b` behind it opens a field — and asking for a boundary here as
+// well would be the field twice.
+//
+// The closing edge is not this function's mirror image and used to be: there
+// the splitter absorbs the whole delimiter, whitespace or not, so the
+// boundary is the split's own answer rather than a reading of the text. See
+// splitFieldsOpenEnd.
+func leadingSeparatorEdge(text, ifs string, ifsSet bool) bool {
 	if text == "" || ifsSet && ifs == "" {
 		return false
 	}
-	// The whole run of separators at that end, because one delimiter is a run
-	// of whitespace, at most one non-whitespace separator, and another run of
-	// whitespace — and a run holding the non-whitespace one has already
-	// written its own empty field.
+	// The whole opening run, because one delimiter is a run of whitespace, at
+	// most one non-whitespace separator, and another run of whitespace — and
+	// a run holding the non-whitespace one has already written its own empty
+	// field, so it is not a boundary to record here.
 	whitespace := false
 	for i := 0; i < len(text); i++ {
 		c := text[i]
-		if !leading {
-			c = text[len(text)-1-i]
-		}
 		if strings.IndexByte(ifs, c) < 0 {
 			break
 		}
@@ -4864,12 +4880,26 @@ func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []str
 // be told apart by looking, since a backslash is a legal character of a value
 // as well as the form's own mark — so it is the caller that knows.
 func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
-	fields, _ := splitFieldsAt(s, literal, ifs, ifsSet, keepEdges, escaped)
+	fields, _, _ := splitFieldsAt(s, literal, ifs, ifsSet, keepEdges, escaped)
 	return fields
 }
 
+// splitFieldsOpenEnd is splitFieldsEdges with the closing delimiter's answer
+// reported beside the fields: openEnd says the value ended on a delimiter the
+// split wrote no field for.
+//
+// It is the splitter that answers it rather than a second walk beside the
+// splitter, for the reason splitFieldsAt's offsets are reported from here:
+// which bytes are a delimiter is a rule with a mask, an escape form and a
+// run in it, and a copy of that rule is a second place for it to drift.
+func splitFieldsOpenEnd(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) ([]string, bool) {
+	fields, _, openEnd := splitFieldsAt(s, literal, ifs, ifsSet, keepEdges, escaped)
+	return fields, openEnd
+}
+
 // splitFieldsAt is splitFieldsEdges with each field's offset in s reported
-// beside it: at[i] is where fields[i] began.
+// beside it: at[i] is where fields[i] began, and openEnd whether the value
+// closed on an absorbed delimiter — see splitFieldsOpenEnd.
 //
 // `read` is what the offsets are for. The last name on its list takes the
 // remainder of the *line* from where its own field started — separators and
@@ -4879,17 +4909,19 @@ func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges, e
 // only thing that makes the difference recoverable. It is reported from the
 // one splitter rather than recomputed beside it, because a second walk of the
 // same rule is a second place for it to drift.
-func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) ([]string, []int) {
+func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) ([]string, []int, bool) {
 	if ifsSet && ifs == "" {
 		// Set and empty disables the stage entirely, which is a different
 		// state from unset rather than a degree of it.
 		if s == "" {
-			return emptyFields(keepEdges)
+			fields, at := emptyFields(keepEdges)
+			return fields, at, false
 		}
-		return []string{s}, []int{0}
+		return []string{s}, []int{0}, false
 	}
 	if s == "" {
-		return emptyFields(keepEdges)
+		fields, at := emptyFields(keepEdges)
+		return fields, at, false
 	}
 
 	// The escaped form spells "this byte was quoted" as a backslash in front
@@ -4927,6 +4959,11 @@ func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges, esca
 	for !keepEdges && i < len(s) && isWS(i) { // leading IFS whitespace is discarded
 		i++
 	}
+	// openEnd: the value ran out inside a delimiter, so the last thing the
+	// walk did was absorb separators rather than write a field. A value that
+	// is nothing but a discarded leading run is the same answer reached
+	// before the loop — nothing follows the delimiter there either.
+	openEnd := i > 0 && i >= len(s)
 	for i < len(s) {
 		start := i
 		for i < len(s) && !isSep(i) {
@@ -4935,6 +4972,7 @@ func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges, esca
 		if i >= len(s) {
 			out = append(out, s[start:i])
 			at = append(at, start)
+			openEnd = false
 			break
 		}
 		out = append(out, s[start:cutAt(i)])
@@ -4962,8 +5000,11 @@ func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges, esca
 			out = append(out, "")
 			at = append(at, i)
 		}
+		// Under keepEdges the field behind the delimiter was just written, so
+		// the end is not open however the value ran out.
+		openEnd = !keepEdges && i >= len(s)
 	}
-	return out, at
+	return out, at, openEnd
 }
 
 // emptyFields is what splitting nothing comes to: no field at all, or the one

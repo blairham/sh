@@ -28,7 +28,25 @@ func (r *Runner) splitFieldsAsking(s string, literal []bool, ifs string, ifsSet,
 // expansion result is carried as; see splitFieldsAt on why that has to be
 // said rather than detected.
 func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
-	return r.splitFieldsAsking(s, nil, ifs, ifsSet, false, true)
+	fields, _ := r.splitFieldsAskEdge(s, ifs, ifsSet)
+	return fields
+}
+
+// splitFieldsAskEdge is splitFieldsAsk with the closing delimiter's answer
+// reported beside the fields: openEnd says the value ended on a delimiter and
+// no field was written for it, so the field it closes is closed by whatever
+// the word does next.
+//
+// The two are one call because they are one answer. Where the axis above says
+// a trailing separator opens a field, the split holds that field already and
+// there is nothing left open; where it says the separator is absorbed, the
+// boundary it marked is still to be recorded. Asking the axis a second time
+// beside the split would both double the question and let the two answers
+// disagree.
+func (r *Runner) splitFieldsAskEdge(s, ifs string, ifsSet bool) (fields []string, openEnd bool) {
+	out, openEnd := splitFieldsOpenEnd(s, nil, ifs, ifsSet, false, true)
+	fields = r.trailingSeparatorField(out, s, nil, ifs, ifsSet, false)
+	return fields, openEnd && len(fields) == len(out)
 }
 
 // splitFieldsAskPlain is splitFieldsAsk for the two callers whose string is

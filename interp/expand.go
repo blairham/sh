@@ -643,6 +643,16 @@ func (r *Runner) withoutGlobbing() func() {
 // asked in one place. Answering it twice is how the joined and the split paths
 // would come to disagree about the same expansion.
 func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript bool) {
+	if v, st, sub, ok := r.heldSource(e); ok {
+		return v, st, sub
+	}
+	value, set, subscript = r.readParamSource(e)
+	r.holdSource(e, value, set, subscript)
+	return value, set, subscript
+}
+
+// readParamSource is paramSource with the hold off: the read itself.
+func (r *Runner) readParamSource(e *syntax.ParamExpr) (value string, set, subscript bool) {
 	if e.Inner != nil {
 		// An expansion standing where a name would. Its fields are joined
 		// here because this is the scalar view; the list view is
@@ -872,6 +882,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// node — a `for` loop expands one node many times, and a value from the
 	// wrong pass is exactly the silent kind of wrong.
 	r.nestedHeld = nestedHold{}
+	r.sourceHeld, r.subscriptHeld = sourceHold{}, subscriptHold{}
 	// The same rewrite the scalar path makes, made first: the shapes below
 	// are read off the node, and a node still carrying a subscript nothing
 	// is going to read would be answered as `$a[@]` rather than as `$a`
@@ -6074,4 +6085,79 @@ func unescapeAll(fields []string) []string {
 		out[i] = globUnescape(f)
 	}
 	return out
+}
+
+// sourceHold is what one expansion's parameter came to, kept for the other
+// readers of the same node in the same span.
+//
+// An expansion asks its source more than once by design — a conditional asks
+// testFires whether its test fires, the list path asks yieldsTheArray what it
+// came to, and the scalar path then asks for the value behind both — and each
+// of those was a **fresh read** of the parameter. That is invisible for a
+// plain name and wrong everywhere a read costs something:
+//
+//   - a subscript is arithmetic and may move, so `a=(x y z); i=0;
+//     echo "${a[i++]-D}"` left `i` at 4 and substituted the word, where bash
+//     5.3.20 and ksh93u+ 2012 both answer `x` with `i` at 1. The word forms
+//     read four times, the operator forms twice.
+//   - a read through a name reference bash has warned about says the warning
+//     once per read, so `${r-word}` said it twice where that shell says it
+//     once (#3104).
+//   - a `.get` discipline runs once per read, so `${x-D}` ran the hook twice
+//     where ksh93u+ runs it once.
+//
+// One value per node per span, which is what both reference shells do: the
+// expansion reads its parameter once and every operator works from that.
+//
+// The same shape as nestedHold above and for the same reason, with one
+// deliberate difference: reading does **not** empty it. A nested expansion has
+// one handoff between two readers; a source has as many readers as the
+// expansion has questions, and a hold emptied by the first of them would leave
+// the third reading again — which is the bug rather than a different one.
+type sourceHold struct {
+	node      *syntax.ParamExpr
+	value     string
+	set       bool
+	subscript bool
+	held      bool
+}
+
+// holdSource keeps a parameter's source for the rest of this span.
+func (r *Runner) holdSource(e *syntax.ParamExpr, value string, set, subscript bool) {
+	r.sourceHeld = sourceHold{node: e, value: value, set: set, subscript: subscript, held: true}
+}
+
+// heldSource is what this node already came to in this span, if anything.
+func (r *Runner) heldSource(e *syntax.ParamExpr) (value string, set, subscript, ok bool) {
+	if !r.sourceHeld.held || r.sourceHeld.node != e {
+		return "", false, false, false
+	}
+	h := r.sourceHeld
+	return h.value, h.set, h.subscript, true
+}
+
+// subscriptHold is what one node's subscript came to, kept for the rest of
+// the span. The value half is sourceHold above; this is the elements, which
+// a subscript that is arithmetic would otherwise recompute — and `a[i++]`
+// recomputed is a different element.
+type subscriptHold struct {
+	node  *syntax.ParamExpr
+	elems []string
+	ok    bool
+	held  bool
+}
+
+// holdSubscript keeps a subscript's elements for the rest of this span.
+func (r *Runner) holdSubscript(e *syntax.ParamExpr, elems []string, ok bool) {
+	r.subscriptHeld = subscriptHold{node: e, elems: elems, ok: ok, held: true}
+}
+
+// heldSubscript is what this node's subscript already came to in this span,
+// if anything.
+func (r *Runner) heldSubscript(e *syntax.ParamExpr) (elems []string, ok, held bool) {
+	if !r.subscriptHeld.held || r.subscriptHeld.node != e {
+		return nil, false, false
+	}
+	h := r.subscriptHeld
+	return h.elems, h.ok, true
 }

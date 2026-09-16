@@ -34,7 +34,24 @@ func starStarTree(t *testing.T, dirs, files []string) string {
 // levels and still crosses them with nothing behind it, which is bash's
 // `globstar` and ksh93's. With the second option off a bare `**` is an
 // ordinary `*` and no zero-level match arises at all.
+//
+// The last two are bash's answers to the questions ksh93 answers the other
+// way, and they are written here rather than left to the zero value because
+// this file is bash's reading throughout — see
+// TestZeroLevelStarStarIsNamedByWhatStandsAheadOfItInKsh93 for the other one.
 func bareCrossing(dir string) func(*Runner) {
+	return withOption(StarStarCrossesDirectories, true,
+		withOption(StarStarAloneCrossesDirectories, true,
+			withOption(RepeatedStarStarIsOneComponent, true,
+				withOption(StarStarZeroLevelIsTheDirectoryItStartsFrom, true,
+					withOption(StarStarPatternsReadLinkedDirectories, true, inDir(dir))))))
+}
+
+// bareCrossingKsh93 is bareCrossing with the two options that shell answers
+// differently turned back off: a zero-level `**` takes its match from what
+// the component ahead of it listed, and a pattern holding a `**` reads no
+// directory through a symbolic link.
+func bareCrossingKsh93(dir string) func(*Runner) {
 	return withOption(StarStarCrossesDirectories, true,
 		withOption(StarStarAloneCrossesDirectories, true,
 			withOption(RepeatedStarStarIsOneComponent, true, inDir(dir))))
@@ -175,6 +192,90 @@ func TestRunOfStarStarStopsAtTheNextComponent(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, _ := run(t, tc.src, bareCrossing(dir))
+			if out != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, out, tc.want)
+			}
+		})
+	}
+}
+
+// TestZeroLevelStarStarIsNamedByWhatStandsAheadOfItInKsh93 is the other
+// reading of the same question, and it is a different question rather than
+// the one above negated — which is the whole reason it is an option and not
+// a `!`.
+//
+// bash asks whether the path ahead of the `**` was **spelled**, and writes a
+// separator where it was. ksh93 asks where the starting directory's name
+// **came from**, and reports it only where a listing produced it: a literal
+// component is joined onto the path and stat'd, a pattern is resolved by
+// reading the directory it sits in, and a literal that follows a `**` is a
+// listing too, because that walk reads every level it crosses on the way
+// past.
+//
+// Measured 2026-09-16 on ksh93u+ 2012-08-01 under `set -o globstar` in this
+// fixture, `[…]` per word throughout. The pair that makes the rule provable
+// is `*/q/**` against `**/q/**`: both spell a literal `q`, both hold a
+// pattern ahead of it, and they differ.
+func TestZeroLevelStarStarIsNamedByWhatStandsAheadOfItInKsh93(t *testing.T) {
+	dir := starStarTree(t,
+		[]string{"p/q/w"},
+		[]string{"topf", "p/pf", "p/q/qf", "p/q/w/leaf"})
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// Spelled out, so nothing listed the starting directory and
+			// there is no zero-level match at all. bash writes `[p/]` here.
+			"a spelled prefix has no zero-level match",
+			`printf "[%s]" p/**`, `[p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf]`,
+		},
+		{
+			// A pattern listed it, so the listing is the match — `topf` and
+			// all, which is a plain file and could never be a directory the
+			// walk stood in. That word is what says the match is the
+			// listing rather than the walk's own position.
+			"a pattern ahead of it reports the whole listing",
+			`printf "[%s]" */**`,
+			`[p][p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf][topf]`,
+		},
+		{
+			"deeper, and still the listing",
+			`printf "[%s]" p/*/**`, `[p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf]`,
+		},
+		{
+			// The literal was joined onto what the `*` matched, so nothing
+			// listed it. bash writes `[p/q]` here.
+			"a literal behind a pattern was joined and not listed",
+			`printf "[%s]" */q/**`, `[p/q/qf][p/q/w][p/q/w/leaf]`,
+		},
+		{
+			// And the same literal after a `**`, which *is* a listing: the
+			// walk read every level it crossed to find it.
+			"a literal behind a crossing was listed on the way past",
+			`printf "[%s]" **/q/**`, `[p/q][p/q/qf][p/q/w][p/q/w/leaf]`,
+		},
+		{
+			// One literal further on and it is a join again, which is the
+			// row that keeps the rule from being read as "a `**` anywhere
+			// ahead of it".
+			"a second literal is a join again",
+			`printf "[%s]" **/q/w/**`, `[p/q/w/leaf]`,
+		},
+		{
+			// Read after the run collapses, unlike the separator question
+			// next door: `p/**/**` is one `**` by the time the walk runs, so
+			// the component ahead of it is the literal `p`. bash writes
+			// `[p]` here, from the same field read before the collapse.
+			"the run collapses before this is asked",
+			`printf "[%s]" p/**/**`, `[p/pf][p/q][p/q/qf][p/q/w][p/q/w/leaf]`,
+		},
+		{
+			// A trailing slash still writes its one slash, and the listing
+			// is filtered to directories by the empty component behind it.
+			"a trailing slash keeps the directories out of the listing",
+			`printf "[%s]" */**/`, `[p/][p/q/][p/q/w/]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, bareCrossingKsh93(dir))
 			if out != tc.want {
 				t.Errorf("%s = %s, want %s", tc.src, out, tc.want)
 			}

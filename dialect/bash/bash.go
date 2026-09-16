@@ -2930,6 +2930,20 @@ func Apply(r *interp.Runner) {
 	// and `b` nested three deep: `shopt -s globstar; echo **/**/` is 14
 	// names here and 48 in zsh, where `a/a/a/` appears four times (#2298).
 	r.SetMatchOption(interp.RepeatedStarStarIsOneComponent, true)
+	// A `**` that matched zero levels is the directory the walk stood in, so
+	// `d/**` names `d/` ahead of what is under it. Set for the same reason as
+	// the three above — `globstar` is the only name this shell has for any of
+	// them — and it is the fourth question that one name has to answer.
+	// Measured 2026-09-16 against ksh93u+, which is the only column that
+	// reads it the other way: `printf '[%s]' d/**` is `[d/][d/e][d/e/f]`
+	// here and `[d/e][d/e/f]` there (#3152).
+	r.SetMatchOption(interp.StarStarZeroLevelIsTheDirectoryItStartsFrom, true)
+	// And a `**` may begin inside a directory the pattern reached through a
+	// symbolic link, which is where the walk starts rather than where it may
+	// go: this shell never follows a link it meets on the way down. Measured
+	// 2026-09-16 with `s` a symlink to `r` and `r/x` under it: `s/**` is
+	// `[s/][s/x]` here and in zsh, and no match at all in ksh93 (#3152).
+	r.SetMatchOption(interp.StarStarPatternsReadLinkedDirectories, true)
 	// An `&` in a `${v/pat/rep}` replacement is the text the pattern
 	// matched, which is this shell alone in the panel — bash 3.2, ksh93 and
 	// zsh all answer `a[&]c` for `v=abc; ${v/b/[&]}` where this one answers

@@ -699,6 +699,24 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	if starstar && r.MatchOption(RepeatedStarStarIsOneComponent) {
 		parts = collapseStarStarRun(parts)
 	}
+	// And whether a zero-level `**` has a match to report at all, for the
+	// dialect that does not report the directory the walk stood in. Read
+	// **after** the collapse, which is the opposite of the line above and is
+	// measured rather than symmetric: `a/**/**` is `a a/a …` in bash and
+	// `a/a …` in ksh93, so the run that collapses away still describes for
+	// the separator and no longer counts for this. See
+	// StarStarZeroLevelIsTheDirectoryItStartsFrom and globZeroLevelSource.
+	zeroLevelFromAListing := globZeroLevelSource(r, parts)
+	// And whether this field holds a level-crossing `**` at all, which is
+	// what makes its listings physical in the dialect that walks such a
+	// field. Hoisted out of the loop because it is a property of the field
+	// and the loop would rescan it once per component.
+	holdsAStarStar := starstar && slices.Contains(parts, "**")
+	// And the listing it reads: the matches the component ahead of the `**`
+	// produced, before the gate below takes the ones that are no directory
+	// out of them. Held one component at a time, because the `**` that reads
+	// it is the next component or none.
+	var listed []string
 
 	// The slashes a pattern ends with are text, and they come back on every
 	// match. `*/` is the standard spelling of "directories only" and the
@@ -799,21 +817,50 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// it. Exactly `**`: anything more — `a**`, an escaped star — is
 			// an ordinary component, where adjacent stars collapse to one.
 			last := lastComponent(parts, i)
+			// Where a zero-level `**` takes its match from, which is the one
+			// question about `**` the panel splits three ways. On, it is the
+			// directory the walk stands in — `d/**` names `d/`. Off, it is
+			// what the component ahead of this one listed, which is nothing
+			// where the path was spelled out and a plain file where the
+			// listing held one. See
+			// StarStarZeroLevelIsTheDirectoryItStartsFrom.
+			selfIsTheStart := r.MatchOption(StarStarZeroLevelIsTheDirectoryItStartsFrom)
 			onward = map[string]bool{}
-			for _, dir := range dirs {
-				next = append(next, dir)
-				// The directory the component starts from is always one the
-				// walk may go on from, however it was reached: measured,
-				// `s/**/x` through a symlink `s` is `s/x` in bash 5.3.15 and
-				// in zsh. The rule bounds where a `**` **descends to**, not
-				// where a pattern says to begin.
-				onward[dir] = true
-				if last {
+			if last && !selfIsTheStart && zeroLevelFromAListing {
+				for _, m := range listed {
 					if selfDirs == nil {
 						selfDirs = map[string]bool{}
 					}
-					selfDirs[dir] = true
+					next = append(next, m)
+					selfDirs[m] = true
 				}
+			}
+			for _, dir := range dirs {
+				if !last || selfIsTheStart {
+					// The directory itself: an answer where this is the last
+					// component, and a place to carry on from where it is
+					// not. The dialect that takes its zero-level match from
+					// the listing above still needs the second of those, so
+					// only the *answer* hangs on the option.
+					next = append(next, dir)
+					if last {
+						if selfDirs == nil {
+							selfDirs = map[string]bool{}
+						}
+						selfDirs[dir] = true
+					}
+				}
+				// The directory the component starts from is one the walk
+				// may go on from however it was reached, in two of the three
+				// — measured, `s/**/x` through a symlink `s` is `s/x` in
+				// bash 5.3.15 and in zsh, and no match at all in ksh93. The
+				// rule bounds where a `**` **descends to**, and this is
+				// whether the pattern naming a starting point is exempt from
+				// it. See StarStarPatternsReadLinkedDirectories.
+				if r.linkedToAPhysicalWalk(dir) {
+					continue
+				}
+				onward[dir] = true
 				next = r.appendDescendants(next, dir, seeHidden, onward)
 			}
 			sortMatches(next)
@@ -845,6 +892,16 @@ func (r *Runner) glob(field string) ([]string, bool) {
 				next = append(next, globJoin(dir, lit))
 			}
 		} else {
+			// A pattern component in a field that holds a level-crossing
+			// `**` is read physically in the dialect that walks such a field
+			// rather than descending it, so a directory reached through a
+			// symbolic link is not listed: `*/*/**` names nothing under a
+			// linked `t` in ksh93 while `*/*` lists three names under it in
+			// the same shell. A **literal** component is joined and stat'd
+			// rather than listed, so it reaches through the link in every
+			// column — `*/a/**` is `t/a/b …` there too, which is why this
+			// asks the same question globZeroLevelSource asks.
+			physical := holdsAStarStar && r.describesRatherThanSpells(part)
 			o := r.patternOpts(part)
 			o.fold = r.MatchOption(GlobFoldsCase)
 			// The subjects are the names in each directory, which are not
@@ -854,6 +911,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// way in every locale.
 			o.foldWide = o.fold && r.caseFoldReachesBeyondASCII(part)
 			for _, dir := range dirs {
+				if physical && r.linkedToAPhysicalWalk(dir) {
+					continue
+				}
 				next = append(next, r.matchIn(dir, part, o, seeHidden)...)
 			}
 		}
@@ -862,6 +922,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		}
 		sortMatches(next)
 		dirs = next
+		listed = next
 		if i < len(parts)-1 {
 			// Only directories can be descended into.
 			// Through the gate, like every stat: a match the policy hides
@@ -1107,13 +1168,15 @@ func (r *Runner) excludedBy(word string, rights []string) bool {
 // all, so no zero-level match arises there without a trailing slash — and
 // with one, the slash comes from the pattern and this never runs.
 //
-// ksh93 *is* a second reading and is deliberately not modeled here, because
-// nothing in this tree can reach it yet: it drops the zero-level match
-// entirely where the prefix is spelled out, so `a/b/**` is the three names
-// beneath `a/b` and `a/*/**` is `a/b a/f1 …` — the mirror image, and it
-// counts a plain file as a zero-level match where bash keeps only
-// directories. `set -o globstar` is not wired into that dialect, so writing
-// the axis today would be writing a branch no run can take.
+// ksh93 *is* a second reading, and since #3152 it is modeled — under an
+// option of its own rather than as this function's other answer, because the
+// two ask different questions about the same prefix. This one asks whether
+// the path was **spelled**, and writes a separator where it was. That one
+// asks where the starting directory's name **came from**, and reports it only
+// where a listing produced it. See globZeroLevelSource and
+// StarStarZeroLevelIsTheDirectoryItStartsFrom, and note that the two are read
+// on either side of the `**` run's collapse: `a/**/**` is `a` here and
+// nothing there.
 func (r *Runner) spelledOut(ahead []string) bool {
 	for _, p := range ahead {
 		if r.describesRatherThanSpells(p) {
@@ -1168,6 +1231,87 @@ func (r *Runner) appendDescendants(out []string, dir string, seeHidden bool, onw
 		}
 	}
 	return out
+}
+
+// linkedToAPhysicalWalk reports whether a directory is one this dialect's `**`
+// walk refuses to read: a symbolic link, in the shell that answers a `**`
+// pattern with a physical walk.
+//
+// The lstat is skipped entirely where the dialect reads such a link like any
+// other directory, which is two of the three columns and every expansion that
+// has no `**` in it — so the cost lands only where the answer can differ. See
+// StarStarPatternsReadLinkedDirectories.
+func (r *Runner) linkedToAPhysicalWalk(dir string) bool {
+	if r.MatchOption(StarStarPatternsReadLinkedDirectories) {
+		return false
+	}
+	info, err := r.lstat(dir)
+	return err == nil && info.Mode()&os.ModeSymlink != 0
+}
+
+// globZeroLevelSource reports whether a zero-level `**` has a match to report
+// in the dialect that does not report the directory the walk stands in.
+//
+// The other reading of [Runner.spelledOut]'s question, and it is a different
+// question rather than that one negated — which is the whole reason this
+// function exists instead of a `!`. bash asks whether the path ahead of the
+// `**` was *spelled*, and writes a separator where it was. ksh93 asks where
+// the starting directory's **name came from**, and reports it only where a
+// listing produced it.
+//
+// A literal component is joined onto the path and stat'd, so nothing listed
+// it. A pattern is resolved by reading the directory it sits in, so its
+// matches are a listing. And a literal that follows a `**` is a listing too,
+// because that walk reads every level it crosses on the way past. That is the
+// whole rule, and it is measured rather than derived — the four rows that
+// pull the three clauses apart, 2026-09-16 on ksh93u+ 2012-08-01 in a tree
+// holding `p/pf`, `p/q/qf`, `p/q/w/leaf` and `p/q/w/q/deepq`:
+//
+//	*/**         [p][topf]…      the `*` listing, a plain file with it
+//	*/q/**       no `p/q`        `q` was joined onto what `*` matched
+//	**/q/**      [p/q]…          the walk past `q` had already listed it
+//	**/q/w/**    no `p/q/w`      and `w` was joined onto that
+//
+// The last two are the pair that says this is not a question about the
+// prefix as a whole: both spell a literal `q`, both hold a `**` ahead of it,
+// and they differ because only one has the `**` immediately behind the
+// component the `**` starts from. `p/**/w/**` reports `p/q/w` and
+// `p/*/w/**` does not, the same split with the run moved one component in.
+//
+// Read on the **collapsed** parts, unlike spelledOut: `a/**/**` is one `**`
+// by the time the walk runs, so the component ahead of it is the literal `a`
+// and ksh93 reports nothing — measured, against bash's `a` for the same
+// pattern.
+func globZeroLevelSource(r *Runner, parts []string) bool {
+	last := -1
+	for j := len(parts) - 1; j >= 0; j-- {
+		if parts[j] == "**" {
+			last = j
+			break
+		}
+	}
+	if last < 0 {
+		return false
+	}
+	// The separators a pattern wrote are not components anybody listed, and
+	// they stand between the ones that are: `d//**` reads `d` as the
+	// component ahead of the `**`, exactly as `d/**` does.
+	ahead := make([]string, 0, last)
+	for _, p := range parts[:last] {
+		if p != "" {
+			ahead = append(ahead, p)
+		}
+	}
+	if len(ahead) == 0 {
+		// Nothing ahead of it at all, so the walk starts where the pattern
+		// does and no listing named that. `**` alone is the case, and the
+		// starting point is left out of it in every column.
+		return false
+	}
+	if r.describesRatherThanSpells(ahead[len(ahead)-1]) {
+		return true
+	}
+	return len(ahead) > 1 && ahead[len(ahead)-2] == "**"
 }
 
 // collapseStarStarRun reads a run of `**` components, separators and all, as
@@ -1281,10 +1425,19 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 //
 // The component match only. A `..` the walk *descended into* would climb out
 // of the tree and never stop, and no column does that — ksh93's `**` lists
-// the tree below and nothing above it. Whether the descent also *lists* the
-// two names beside the entries it finds is a question no dialect here can
-// reach: ksh93 does (`**` under `set -o globstar` writes `sub/.` and
-// `sub/..`), and this preset has no `globstar` to turn its `**` on with.
+// the tree below and nothing above it.
+//
+// Whether the descent also *lists* the two names beside the entries it finds
+// is now reachable and is **not** done: that dialect's `set -o globstar` was
+// wired to the walk in #3152, so the question stopped being hypothetical, and
+// the sentence standing here until then said it could not be reached at all.
+// Measured 2026-09-16, with `FIGNORE` set so that the leading-period rule is
+// off and the names are visible at all: ksh93's `set -o globstar; FIGNORE=zz;
+// printf '[%s]' **` writes `[.][..][p][p/.][p/..][p/pf]…` and this walk
+// writes `[p][p/pf]…`. A gap rather than a decision — the two names come from
+// globListingNames, which the component match consults and appendDescendants
+// does not — and filed as its own row rather than folded in here, because a
+// descent that lists `..` has to say what it then does with it.
 func (r *Runner) globListingNames(entries []os.DirEntry) []string {
 	names := make([]string, 0, len(entries)+2)
 	if r.sem().GlobListsDotAndDotDot == Yes {

@@ -248,7 +248,11 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 	// into this text, and the fallback above is the *caller's* line,
 	// which would quote a line out of the wrong file (#1728).
 	if own > 0 {
-		r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), own, err, src))
+		// `own` indexes the borrowed text and `line` is what goes in front of
+		// the quote. The same number for both is right only where the text
+		// numbers itself from one, and wrong in exactly the dialects the line
+		// above shifts (#3194).
+		r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), line, own, err, src))
 	}
 }
 

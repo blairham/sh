@@ -86,3 +86,39 @@ source -p "$PWD/aside" asidelib.sh; printf 'source -p -> %s\n' "$?"
 # And the two ways to write it wrong.
 ( . -p ) 2>/dev/null; printf 'no argument -> %s\n' "$?"
 ( . -p "$PWD/aside" ) 2>/dev/null; printf 'no file -> %s\n' "$?"
+
+# A definition the parser refused binds nothing — #3194.
+#
+# `eval` reads its text a line at a time and runs what it has read, so a
+# failure on a later line still leaves the lines before it run: the second row
+# below prints `A` before it complains. A failure *inside* a construct is the
+# other half of the same rule, and is the one that was wrong here: the whole
+# logical line goes, so a function definition the parser would not finish
+# leaves whatever `f` was before it standing rather than replacing it with the
+# part that parsed.
+#
+# The empty body is the shape that made it silent rather than loud. The
+# replacement bound here answered 0 and printed nothing, so a script that
+# re-defines a helper wrongly lost the helper with no diagnostic at the point
+# of use — and this is a bash row rather than a core one because zsh *accepts*
+# an empty body and binds exactly that function on purpose (zsh/evaldot.tests).
+f() { printf 'orig\n'; }
+eval 'f() {
+}' 2>/dev/null
+printf 'a refused definition -> %s\n' "$?"
+f
+printf 'and f is still the old one -> %s\n' "$?"
+
+# The lines before the refusal did run, which is what makes the rule above a
+# rule about the line and not about the text.
+eval 'printf "A\n"
+{ fi; }' 2>/dev/null
+printf 'a refusal on the second line -> %s\n' "$?"
+
+# And both sentences name the same line. bash numbers `eval`'s text from the
+# line the `eval` word is on, and the quote underneath the complaint is
+# indexed into the text while being printed with the caller's number — where
+# printing the text's own number in front of it made the second sentence
+# contradict the first.
+eval 'printf "A\n"
+{ fi; }' 2>&1 > /dev/null

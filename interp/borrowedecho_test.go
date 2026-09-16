@@ -78,9 +78,55 @@ func TestInputThatRanOutIsNotEchoed(t *testing.T) {
 	}
 }
 
+// Both sentences name the same line where `eval`'s text continues the
+// caller's — #3194.
+//
+// The echo is indexed into the borrowed text and printed with the caller's
+// number, and those are two numbers rather than one. Passing a single number
+// for both made the second sentence contradict the first: bash 5.3 writes
+// `eval: line 6:` twice for a two-line `eval` on line 5 whose second line
+// will not parse, and this said `line 6` and then `line 2`.
+//
+// The `eval` is on line 5 and the failure on the text's line 2, so all three
+// candidate numbers are different: the text's own is 2, the shifted one is 6,
+// and the physical line the string ends on is 6 as well — which is why the
+// text's first line has to run and be checked for, since a probe that only
+// read the number could not tell the shift from the physical reading.
+func TestTheEchoedLineCarriesTheShiftedNumber(t *testing.T) {
+	src := ":\n:\n:\n:\neval 'echo one\nif; then'\n"
+	got := borrowedRunContinuing(t, src)
+	for _, want := range []string{
+		"sh: eval: line 6: \";\" unexpected\n",
+		"sh: eval: line 6: `if; then'\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("said %q, want %q in it", got, want)
+		}
+	}
+	// And the number the text counts for itself is nowhere in it, which is
+	// what the bug wrote.
+	if strings.Contains(got, "line 2:") {
+		t.Errorf("said %q, want no line 2 in it", got)
+	}
+}
+
+// borrowedRunContinuing is borrowedRun with the answer that moves `eval`'s
+// lines on to the caller's, which is the only place the two numbers differ.
+func borrowedRunContinuing(t *testing.T, src string) string {
+	t.Helper()
+	return borrowedRunWith(t, "", src, true, func(s *Semantics) {
+		s.EvalTextContinuesTheCallersLines = Yes
+	})
+}
+
 // borrowedRun writes inc (when there is one) as inc.sh in a directory of its
 // own, runs src there, and returns standard error.
 func borrowedRun(t *testing.T, inc, src string, echoes bool) string {
+	t.Helper()
+	return borrowedRunWith(t, inc, src, echoes, nil)
+}
+
+func borrowedRunWith(t *testing.T, inc, src string, echoes bool, tune func(*Semantics)) string {
 	t.Helper()
 	dir := t.TempDir()
 	if inc != "" {
@@ -96,6 +142,9 @@ func borrowedRun(t *testing.T, inc, src string, echoes bool) string {
 	sem := PosixSemantics()
 	sem.DotMissingFileFatal = No
 	sem.BuiltinSyntaxErrorFatal = No
+	if tune != nil {
+		tune(&sem)
+	}
 	dg := Diagnostics{
 		Location:               LocationLineWord,
 		SourceFileNaming:       SourceBeforeLocation,

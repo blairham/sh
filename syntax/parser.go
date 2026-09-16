@@ -1078,6 +1078,28 @@ func (p *Parser) NextLine() (*File, bool) {
 	}
 	f.Last = p.lineEnd()
 	f.Refused, p.refused = p.refused, nil
+	if p.err != nil {
+		// The line did not read, so none of it runs. That is this function's
+		// own rule — everything up to the newline is parsed before any of it
+		// runs, and a failure anywhere in it discards the whole line — and
+		// the loop above had a hole in it: parseStmt hands back the tree it
+		// had built when the failure landed *inside* the last construct on
+		// the line, and that tree was appended and run anyway.
+		//
+		// `eval 'f() {` / `}'` is the case that found it. bash refuses the
+		// empty body and leaves an earlier `f` standing; here the refused
+		// definition was still bound, so a helper was silently replaced by a
+		// function that prints nothing and answers 0. The same shape with the
+		// failure between two statements — `echo one; { fi; }` — was already
+		// right, because parseStmt returned nil there and the loop broke
+		// before appending, which is why the hole survived: the two shapes
+		// are one rule and only one of them was covered.
+		//
+		// Not the same as a refusal. Refused is a line the reader gave up and
+		// went on from, and it is carried on the File for the caller to
+		// report; this is the reader stopping, and p.Err is what says so.
+		f.Stmts = nil
+	}
 	return f, true
 }
 

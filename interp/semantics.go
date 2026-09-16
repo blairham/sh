@@ -12568,6 +12568,32 @@ type Semantics struct {
 	// integer operation, and an axis asked unconditionally would report itself
 	// unanswered on `$(( 1 + 1 ))` in a run with no dialect.
 	ArithValuesAreCarriedInADouble Answer
+	// ArithNumeralPastTheWord is what a well-formed integer numeral larger
+	// than the machine word comes to: the panel gives it three readings and
+	// this shell had a fourth, which was to refuse it.
+	//
+	// Refusing is the one answer nobody has. Every column answers and every
+	// column reports status 0, so `$(( 10000000000000000000 ))` ended a script
+	// here that runs everywhere else. See NumeralPastTheWord for the readings
+	// and for the panel they were measured from.
+	//
+	// ksh93 is not one of them and is not asked: it has no word to overflow,
+	// and the numeral becomes the double its arithmetic is carried in —
+	// ArithValuesAreCarriedInADouble above, which is asked first and returns.
+	// The value left unspecified here for that column is the measurement, not
+	// a gap.
+	ArithNumeralPastTheWord NumeralPastTheWord
+	// ArithStoredNumeralPastTheWordIsRefused keeps the reading above for a
+	// numeral written in the expression and refuses one that arrived in a
+	// variable — `n=9223372036854775808; $(( n ))`.
+	//
+	// dash alone, and it is the only place its two number readers part: the
+	// written numeral saturates silently at 9223372036854775807 and the stored
+	// one is `Illegal number: 9223372036854775808` at status 2. The other six
+	// columns answer a stored numeral exactly as they answer a written one,
+	// zsh's diagnostic included — with the one difference that it has no
+	// expression tail to quote and writes the digits alone (#3202).
+	ArithStoredNumeralPastTheWordIsRefused Answer
 	// EmptyArithExpressionIsAnError refuses `$(( ))`: dash wants a primary
 	// and stops the script; the other three answer zero.
 	EmptyArithExpressionIsAnError Answer
@@ -15942,7 +15968,15 @@ func PosixSemantics() Semantics {
 		ArithBaseZeroReadsTheDigitsAsWritten: No,
 		ArithEmptyRadixDigitsAreZero:         No,
 		ArithValuesAreCarriedInADouble:       No,
-		EmptyArithExpressionIsAnError:        No,
+		// The standard says the shell evaluates in signed long arithmetic and
+		// says nothing about a numeral too large for one, so this follows the
+		// POSIX columns: bash as `sh` and BusyBox ash both let the unsigned
+		// word go round. dash is the column that overrides it.
+		ArithNumeralPastTheWord: NumeralPastTheWordWraps,
+		// Two of the three POSIX columns read a stored numeral exactly as they
+		// read a written one; dash is the column that overrides it.
+		ArithStoredNumeralPastTheWordIsRefused: No,
+		EmptyArithExpressionIsAnError:          No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

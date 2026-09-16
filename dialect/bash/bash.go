@@ -1001,6 +1001,15 @@ func Semantics() interp.Semantics {
 	// A radix prefix with nothing after it is a finished number worth zero:
 	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, in 5.3 and 3.2 alike.
 	s.ArithEmptyRadixDigitsAreZero = interp.Yes
+	// A numeral past the word goes round it. `$(( 10000000000000000000 ))`
+	// is -8446744073709551616 and `$(( 18446744073709551616 ))` is 0 — the
+	// second being the row that says this is modular and not a clamp at the
+	// top of the unsigned word. Measured identically in 5.3.20, 3.2.57 and
+	// under the `sh` name (#3202).
+	s.ArithNumeralPastTheWord = interp.NumeralPastTheWordWraps
+	// And the same numeral out of a variable reads identically; only dash
+	// parts the two.
+	s.ArithStoredNumeralPastTheWordIsRefused = interp.No
 	// And for `let`: `let "x=010"` is eight, the same as `(( ))`.
 	s.LetReadsALeadingZeroAsDecimal = interp.No
 	// An arithmetic assignment leaves an ordinary scalar: `(( x = 5 ));

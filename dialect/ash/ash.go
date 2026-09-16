@@ -1130,6 +1130,15 @@ func Semantics() interp.Semantics {
 	// 5 — so this is a fact about the two logical operators rather than about
 	// this shell evaluating everything.
 	s.ArithShortCircuitEvaluatesTheRightOperand = interp.Yes
+	// BusyBox answers an over-large numeral as bash does, by letting the
+	// unsigned word go round: `$(( 10000000000000000000 ))` is
+	// -8446744073709551616 and `$(( 0xffffffffffffffff ))` is -1. Measured in
+	// the pinned 1.37.0 image (#3202) — the column that is easiest to assume
+	// follows dash here, and does not.
+	s.ArithNumeralPastTheWord = interp.NumeralPastTheWordWraps
+	// And the same numeral out of a variable reads identically; only dash
+	// parts the two.
+	s.ArithStoredNumeralPastTheWordIsRefused = interp.No
 
 	// A declaration does not shadow a readonly: `readonly x=1; f() { local
 	// x=2; }; f` is `local: line 1: x: is read only` and the script ends,

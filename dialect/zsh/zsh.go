@@ -1512,6 +1512,14 @@ func Semantics() interp.Semantics {
 	s.ArithBaseZeroReadsTheDigitsAsWritten = interp.Yes
 	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, as in bash.
 	s.ArithEmptyRadixDigitsAreZero = interp.Yes
+	// The one column that reads part of an over-large numeral and says so,
+	// on stderr, with the script carrying on:
+	// `$(( 10000000000000000000 ))` writes `number truncated after 19
+	// digits: 10000000000000000000` and answers 1000000000000000000 (#3202).
+	s.ArithNumeralPastTheWord = interp.NumeralPastTheWordKeepsTheDigitsThatFit
+	// And the same numeral out of a variable reads identically; only dash
+	// parts the two.
+	s.ArithStoredNumeralPastTheWordIsRefused = interp.No
 	// ${#a} of an array counts elements, and a function's $LINENO counts
 	// from the function.
 	s.ArrayLengthWithoutSubscriptIsCount = interp.Yes
@@ -2957,7 +2965,14 @@ func Diagnostics() interp.Diagnostics {
 		// unset parameter under `-c` writes `zsh:1:`. The route is the
 		// split, not the sentence.
 		InvocationOptionRefusalNamesTheInvocation: true,
-		TypeKeyword: "%[1]s is a reserved word",
+		// Read part of a numeral too large for the machine word, and say so —
+		// the only column that says anything at all. The count is of the digits
+		// it got through and the second verb is the digit run as written, with
+		// any radix prefix off it: `$(( 0xffffffffffffffff ))` is `number
+		// truncated after 15 digits: ffffffffffffffff`. Not an error: stderr,
+		// status 0, and the script carries on (#3202).
+		ArithNumberTruncated: "number truncated after %[1]d digits: %[2]s",
+		TypeKeyword:          "%[1]s is a reserved word",
 		// The only one that names where the function came from. The second
 		// verb is the file it was defined in, or the shell's own name where
 		// the shell itself defined it — see Diagnostics.TypeFunctionFrom.

@@ -97,6 +97,12 @@ func periodStartsAt(pattern string, i, depth int) bool {
 // groupEndsAt is the index of the parenthesis closing the group that opens at
 // i, or false where nothing closes it — an unbalanced group is not a group,
 // and the matcher will read those parentheses as text.
+//
+// A bracket expression is stepped over whole, because the parentheses inside
+// one are members rather than nesting: without it `([(]|.b)` had no end at
+// all, so the leading-period question was answered `no` and a dotfile the
+// second alternative names was passed over. Measured 2026-09-15 on zsh
+// 5.9.2, which lists `.b` for that pattern where this listed nothing (#3075).
 func groupEndsAt(pattern string, i int) (int, bool) {
 	depth := 0
 	for j := i; j < len(pattern); j++ {
@@ -104,6 +110,8 @@ func groupEndsAt(pattern string, i int) (int, bool) {
 			continue
 		}
 		switch pattern[j] {
+		case '[':
+			j = skipBracket(pattern, j)
 		case '(':
 			depth++
 		case ')':
@@ -118,6 +126,13 @@ func groupEndsAt(pattern string, i int) (int, bool) {
 
 // groupAlternatives lists where each alternative of a group begins: just
 // inside it, and after every bar standing at its own top level.
+//
+// The bracket expression is stepped over whole, for the reason groupEndsAt
+// does it and with a cost of its own: a `.` inside a bracket after a `|`
+// inside a group was read as the start of an alternative, so `([a|.]b)`
+// looked like a pattern beginning with a period and matched a dotfile.
+// Measured 2026-09-15 on zsh 5.9.2, where that pattern matches nothing and
+// `(x|[a|.]b)` matches `x` alone (#3075).
 func groupAlternatives(pattern string, start, end int) []int {
 	out := []int{start}
 	depth := 0
@@ -126,6 +141,8 @@ func groupAlternatives(pattern string, start, end int) []int {
 			continue
 		}
 		switch pattern[j] {
+		case '[':
+			j = skipBracket(pattern, j)
 		case '(':
 			depth++
 		case ')':

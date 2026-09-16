@@ -44,6 +44,13 @@ func TestAGroupsAlternativesCanBeginWithAPeriod(t *testing.T) {
 		{"past an empty alternative", `printf "[%s]" (|.hidden)(#qN)`, "[.hidden]"},
 		{"past a pattern-flag group", `printf "[%s]" (#i)(.HIDDEN|x)(#qN)`, "[.hidden]"},
 		{"with more pattern after the group", `printf "[%s]" (.hidden|plain)*(#qN)`, "[.hidden][plain]"},
+		// A bracket expression inside an alternative is one member after
+		// another, so the `|` in it is a member and not a split — without
+		// that the text behind the bar read as an alternative of its own,
+		// and a period at the front of it made the pattern look explicit.
+		// Measured on zsh 5.9.2 in this directory: both are `[]` (#3075).
+		{"a bar inside a bracket is not a split", `printf "[%s]" ([a|.]hidden)(#qN)`, "[]"},
+		{"nor is it in a later alternative", `printf "[%s]" (x|[a|.]hidden)(#qN)`, "[]"},
 		// The three that say this is "is one written there" rather than
 		// "could this pattern match one".
 		{"a bracket is not explicit", `printf "[%s]" [.]hidden(#qN)`, "[]"},
@@ -54,6 +61,41 @@ func TestAGroupsAlternativesCanBeginWithAPeriod(t *testing.T) {
 			out, st := runCondition(t, dir, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A parenthesis inside a bracket expression does not end the group (#3075).
+//
+// The other half of the same blind spot, and the half that decides whether
+// the leading-period question is asked at all: the scan looking for the `)`
+// that closes a group counted the ones inside the bracket, so `([(]|.hidden)`
+// had no end, the pattern was judged not to begin with a period, and the
+// dotfile its second alternative names was passed over.
+//
+// The pattern is carried in a variable rather than written, because the shell
+// this is measured from will not read a `(#q…)` group after a literal one —
+// `([(]|.hidden)(#qN)` is `no matches found` there, with the qualifier group
+// still in the text it prints back. Through a variable it answers cleanly.
+// Measured 2026-09-15 in exactly the directory hiddenDir builds.
+func TestAParenthesisInsideABracketDoesNotEndTheGroup(t *testing.T) {
+	dir := hiddenDir(t)
+	for _, tc := range []struct{ name, pattern, want string }{
+		{"a hidden name behind the bracket", "([(]|.hidden)", "[.hidden]"},
+		{"a plain one behind it", "([(]|plain)", "[plain]"},
+		{
+			// The control that says the group was found rather than the
+			// period simply being taken on trust: the same shape with no
+			// bracket in it answered this all along.
+			"no bracket at all", "(x|.hidden)", "[.hidden]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `p='` + tc.pattern + `'; printf "[%s]" ${~p}(#qN)`
+			out, st := runCondition(t, dir, src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s: got %q (status %d), want %q at 0", tc.pattern, out, st, tc.want)
 			}
 		})
 	}

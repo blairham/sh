@@ -250,9 +250,7 @@ func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok 
 		case ')':
 			depth--
 		case '[':
-			if end, found := bracketEnd(p, i); found {
-				i = end
-			}
+			i = skipBracket(p, i)
 		case '~':
 			if depth == 0 {
 				cuts = append(cuts, i)
@@ -319,6 +317,33 @@ func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok 
 // that shell does not read them either: measured, `v=aab; ${v##[[=a=]]##}`
 // is `aab` there, which is the bracket ending at the first `]` and the rest
 // standing as text — the same answer this scan already gives.
+// skipBracket steps a pattern walker past the bracket expression opening at
+// i, answering the index of its closing `]` — or i itself where nothing
+// closes it, since an unterminated `[` is not a bracket expression and its
+// text is ordinary.
+//
+// It exists so that the scans that walk a pattern counting parentheses —
+// [topAlternatives], [splitExclusion], [alternativesAt], [closingParen],
+// [groupEndsAt] and [groupAlternatives] — cannot disagree about where a
+// bracket ends, and so that a seventh added tomorrow has one line to write
+// rather than a rule to remember. Two of the six had it inline and four were
+// missing it, which is exactly the shape of #3075: a `|`, a `(` or a `)`
+// between two members of a bracket is a member, and a walker that does not
+// know it splits the alternation in the wrong place or never finds the
+// group's end.
+//
+// [closesGroup] is the one scan of that family deliberately left alone, and
+// its own comment says why.
+//
+// The scan itself is [bracketEnd], which is the matcher's own, so a walker
+// and the matcher cannot read the same text two ways.
+func skipBracket(p string, i int) int {
+	if end, ok := bracketEnd(p, i); ok {
+		return end
+	}
+	return i
+}
+
 func bracketEnd(p string, i int) (int, bool) {
 	j := i + 1
 	if j < len(p) && (p[j] == '!' || p[j] == '^') {

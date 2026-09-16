@@ -447,6 +447,18 @@ func quantifiesAGroup(s string, i int) bool {
 	return false
 }
 
+// closesGroup reports whether the group opening at i is closed.
+//
+// **It does not step over a bracket expression, and that is deliberate.**
+// Every other scan in this family does — see skipBracket, which #3075 folded
+// the rule into — and adding it here is an equivalent mutant rather than a
+// fix: the only question asked of this is whether the word is a pattern at
+// all, and a word holding a `[` that closes has already answered yes at the
+// bracket branch in extendedGlobTrigger. A parenthesis *inside* the bracket
+// is balanced by the one beside it in every text that reaches here, so the
+// depth count arrives at the same answer either way. Written down so the
+// next reader does not go looking for the row that would kill it: the change
+// was made, and the mutant that took it back passed the whole package.
 func closesGroup(s string, i int) bool {
 	depth := 0
 	for ; i < len(s); i++ {

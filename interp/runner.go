@@ -467,9 +467,15 @@ type Runner struct {
 	// dialect carries functions that way, so the naming comes from it.
 	// functionLayout and exportedFunctionLayout are how this shell arranges
 	// a function it has to say back — see SetFunctionLayout.
-	functionLayout                     syntax.Layout
-	exportedFunctionLayout             syntax.Layout
-	exportedFuncs                      map[string]bool
+	functionLayout         syntax.Layout
+	exportedFunctionLayout syntax.Layout
+	exportedFuncs          map[string]bool
+	// readonlyFuncs are the functions a script has frozen, in the one dialect
+	// with the notion — see Semantics.FunctionAttributeLetters. A name in here
+	// cannot be redefined and cannot be unset, and both refusals are the
+	// function table's rather than the variable table's: `readonly f` and
+	// `readonly -f f` freeze two different things under one word.
+	readonlyFuncs                      map[string]bool
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string
 	// undefinedFunctions is the dialect's answer to "has this function's body

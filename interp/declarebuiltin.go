@@ -1012,6 +1012,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// U mark, and `typeset -f +U f2` takes it off `f2` and writes
 			// nothing whatever `f2` holds. The minus half of that is the
 			// marking branch above; the plus half is not modeled here.
+			// And the same rule for the letters that are *attributes* of a
+			// function rather than marks on one: with no operands they are
+			// a filter over the table and a union, so `declare -Frx` is the
+			// functions holding either. See
+			// Semantics.FunctionAttributeLetters, and the operand form just
+			// below, which sets instead.
+			if attrs := r.functionAttributeLettersWritten(f); attrs != "" {
+				args, narrowed = r.functionsHoldingAttributes(attrs), true
+			}
 			if marked, narrow, plus := r.markedFunctionListing(f); narrow {
 				args, narrowed = marked, true
 				if plus {
@@ -1023,6 +1032,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 					// answers this.
 					namesOnly = true
 				}
+			}
+		}
+		// With operands the same letters *set* the attribute rather than
+		// choosing a population: measured 2026-09-16 on bash 5.3.20,
+		// `declare -fr b`, `declare -Fr b`, `declare -rf b` and `typeset -fr
+		// b` all freeze `b` and write nothing, where without a letter the
+		// same line is a listing. Behind the narrowing above, which only
+		// happens with no operands, so the two readings cannot both fire.
+		if !narrowed && len(args) > 0 {
+			if attrs := r.functionAttributeLettersWritten(f); attrs != "" {
+				return r.setFunctionAttributes(args, attrs)
 			}
 		}
 		// `-p` alongside asks for the reissuable shape, so it is also where
@@ -2815,6 +2835,14 @@ func withoutListingLetters(f declareFlags) declareFlags {
 // the call in declareBuiltin.
 func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclarations, locates bool) int {
 	named := len(names) > 0 || narrowed
+	// Whether a *name* asked, which is not the same question and decides two
+	// other things: `declare -F f` is the bare name where `declare -F` is a
+	// declaration line, and `declare -f f` is the body alone where `declare
+	// -f` writes the attribute line after a body that has one. A narrowed
+	// listing is the *table* filtered rather than a name asked for, and bash
+	// 5.3.20 writes both of those for it — `declare -Fr` is `declare -fr b`
+	// and `declare -fr` is the body and then that same line (#3192).
+	byOperand := len(names) > 0 && !narrowed
 	if !named {
 		// The script's own and not the prelude's: this listing is what a
 		// state capture reads, and the prelude's functions are the shell's
@@ -2834,17 +2862,22 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 		switch {
 		case !namesOnly:
 			r.printf("%s", r.listedFunctionLine(name, fn))
-		case named && asDeclarations && locates:
+			if !byOperand {
+				// And the attributes under the body, where this dialect has
+				// them and this function holds some.
+				r.printf("%s", r.functionAttributeLine(name))
+			}
+		case byOperand && asDeclarations && locates:
 			// Extended debugging: the name, the line the definition begins
 			// on and the file it was read from. See LocatesFunctions — it is
 			// what a shell-level debugger needs to put a breakpoint
 			// anywhere, and this shell already kept both halves.
 			r.printf("%s %d %s\n", name, r.functionDefinitionLine(name, fn),
 				r.functionDefinitionFile(name))
-		case named || !asDeclarations:
+		case byOperand || !asDeclarations:
 			r.printf("%s\n", r.listedFunctionNameOnly(name, fn))
 		default:
-			r.printf("declare -f %s\n", name)
+			r.printf("declare -f%s %s\n", r.functionAttributes(name), name)
 		}
 	}
 	return status

@@ -1,0 +1,108 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# A function's own attributes — #3192, and bash's alone on the whole panel.
+#
+# `readonly f` and `readonly -f f` freeze two different things under one word:
+# the first makes a variable immutable, the second makes a *function*
+# undefinable. Only this shell has the second. zsh 5.9.2 reads `-F` as a
+# float's precision and answers `export -f` with `invalid option(s)`; ksh93u+
+# 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 each call `readonly -f` an
+# option they have not got and end the script over it — so the references part
+# company on the first line here, which is what puts the file in this tier.
+#
+# Three facts about the listing and one about the freeze, and they have to
+# hold together or the listing is wrong in a new way:
+#
+#   the letters print    `declare -F` writes `declare -f<attrs> NAME`, `r`
+#                        before `x`.
+#   the letters filter   with no operands they choose the population, as a
+#                        *union*: `-frx` over one frozen, one exported and one
+#                        of each lists all three.
+#   the letters set      with operands they are not a filter at all — the same
+#                        `declare -fr b` freezes `b` and writes nothing.
+#   a body listing       a whole-table `declare -f` writes the attribute line
+#   carries them         under a body that has one; `declare -f NAME` does not.
+
+a() { :; }
+b() { :; }
+c() { :; }
+d() { :; }
+
+# The freeze and the export, each of which has to answer 0 for the rest of the
+# file to mean anything.
+readonly -f b; printf 'readonly -f -> %s\n' "$?"
+export -f c;   printf 'export -f -> %s\n' "$?"
+readonly -f d; export -f d; printf 'both -> %s\n' "$?"
+
+# The three narrowed listings are filtered to the declaration lines. Not to
+# drop anything of this shell's — every row it writes is one — but because
+# under zsh these letters are a *float's precision* beside a readonly or an
+# exported **parameter**, so the same words there list the environment and
+# `$$` with it, which no file may compare twice.
+printf -- '--- declare -F\n'; declare -F
+printf -- '--- declare -Fr\n'; declare -Fr | grep '^declare -f'
+printf -- '--- declare -Fx\n'; declare -Fx | grep '^declare -f'
+printf -- '--- declare -Frx\n'; declare -Frx | grep '^declare -f'
+
+# `typeset -F` and `declare -Ff` are the same listing, and `declare -F NAME`
+# is the bare name however many attributes the name holds.
+printf -- '--- typeset -F\n'; typeset -F
+printf -- '--- declare -Ff\n'; declare -Ff
+printf -- '--- declare -F d\n'; declare -F d
+
+# The body listings. The whole table carries the attribute line; a name asked
+# for by operand does not.
+printf -- '--- declare -f\n'; declare -f
+printf -- '--- declare -fp\n'; declare -fp
+printf -- '--- declare -f d\n'; declare -f d
+printf -- '--- declare -fr\n'; declare -fr
+printf -- '--- declare -fx\n'; declare -fx
+
+# `readonly -f` and `export -f` with no name are those same two listings.
+printf -- '--- readonly -f\n'; readonly -f
+printf -- '--- readonly -pf\n'; readonly -pf
+printf -- '--- export -f\n'; export -f
+
+# With an operand the letters set rather than choose, whichever order they
+# were written in and whichever of the two words was used.
+e() { :; }; f_() { :; }; g() { :; }
+declare -fr e; printf 'declare -fr e -> %s\n' "$?"
+declare -rf f_; printf 'declare -rf f_ -> %s\n' "$?"
+typeset -fx g; printf 'typeset -fx g -> %s\n' "$?"
+declare -F e; declare -F f_; declare -F g
+declare -F | sed -n 's/^declare -f\([rx][rx]*\) .*/has letters \1/p'
+
+# A name that is not a function is refused by `readonly -f` and is a silent 1
+# in a declaration, and neither stops the operands after it.
+( readonly -f nosuchfn_zz ) 2>&1 > /dev/null
+( readonly -f nosuchfn_zz ) > /dev/null 2>&1; printf 'readonly -f a missing name -> %s\n' "$?"
+( declare -fr nosuchfn_zz ) 2>&1 > /dev/null
+( declare -fr nosuchfn_zz ) > /dev/null 2>&1; printf 'declare -fr a missing name -> %s\n' "$?"
+
+# And the freeze itself. Each stream is taken on its own, because a subshell
+# writing to both of them has no order a file may assert: the diagnostic is
+# unbuffered and the pipe is not. Every case below is a subshell for the same
+# reason the diagnostics file's are — a refusal that turned out to be fatal
+# would otherwise take the rest of the file with it.
+printf -- '--- redefining a frozen function\n'
+( b() { printf 'new\n'; } ) 2>&1 > /dev/null
+( b() { printf 'new\n'; } ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+
+# And it is not fatal: the command after the refusal runs.
+( b() { printf 'new\n'; }; printf 'carried on\n' ) 2>/dev/null
+
+printf -- '--- unsetting one\n'
+( unset -f b ) 2>&1 > /dev/null
+( unset -f b ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+( unset -f b; printf 'carried on\n' ) 2>/dev/null
+
+printf -- '--- and it is still the old one\n'
+b; printf 'calling it -> %s\n' "$?"
+declare -f b
+
+# The freeze reaches a subshell, and one made *inside* a subshell does not
+# reach back out.
+printf -- '--- across a subshell\n'
+( b() { printf 'new\n'; } ) 2>&1 > /dev/null
+( readonly -f a ) ; a() { printf 'a is still writable out here\n'; }; a

@@ -167,6 +167,9 @@ func (r *Runner) setPseudoTrapOrigin(name string, frame int, inherited bool) {
 // moved, while a body that stops asking for *this* still has its traps put
 // back.
 func (r *Runner) restoreLocalTraps(sc *scope) {
+	if sc.trapTableWasTaken {
+		r.emptyTheTrapTable()
+	}
 	for _, name := range sortedTrapNames(sc.savedTraps) {
 		s := sc.savedTraps[name]
 		if s.pseudo {
@@ -187,6 +190,100 @@ func (r *Runner) restoreLocalTraps(sc *scope) {
 // sortedTrapNames orders the restore, so a run that puts several conditions
 // back does it the same way twice.
 func sortedTrapNames(m map[string]savedTrapState) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Traps that are the *call's* rather than the caller's.
+//
+// The shell that keys the scoping on the definition form does not save one
+// condition as the body moves it: it hands a `function name { … }` call a
+// trap table of its own, empty, and gives the caller's back at the return.
+// Measured 2026-09-16 on AT&T 93u+ 2012-08-01, a script file under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C` with stdin from /dev/null —
+//
+//	trap 'echo O' USR1; trap 'echo B' EXIT
+//	function o { trap -p USR1; trap -p EXIT; trap; echo .; }
+//	o; trap
+//
+// writes nothing but the `.` inside the call and lists both traps after it,
+// so neither is *visible* there, let alone installed. The half that says
+// "installed" rather than "listed" is the one below it: `trap 'echo O' USR1;
+// function q { echo mark1; kill -USR1 $$; echo mark2; }; q; echo mark3`
+// writes `mark1` and `mark3` in four runs out of four — the signal found no
+// handler, the rest of the body did not run, and the caller's handler was not
+// reached either.
+//
+// That model explains every row the per-modification save explains and two it
+// does not, which is why this is where the shell's answer lives.
+
+// takeTheTrapTable hands a call a trap table of its own, recording what it
+// displaced for the return. Signals and pseudo-conditions here; EXIT is taken
+// at the same moment in callFunction, where the value it has to put back is
+// already on the stack.
+func (r *Runner) takeTheTrapTable(sc *scope) {
+	if r.sem().FunctionLocalTraps != TrapsGoBackAtTheReturnOfAKeywordFunction || !sc.keyword {
+		return
+	}
+	sc.trapTableWasTaken = true
+	if sc.savedTraps == nil {
+		sc.savedTraps = map[string]savedTrapState{}
+	}
+	for _, name := range pseudoTrapNames {
+		slot := r.pseudoTrapSlot(name)
+		if slot == nil || *slot == nil {
+			continue
+		}
+		s := savedTrapState{name: name, pseudo: true, action: *slot}
+		s.frame, s.inherited = r.pseudoTrapOrigin(name)
+		sc.savedTraps[name] = s
+		*slot = nil
+	}
+	for _, name := range sortedTrapTableNames(r.trapTable()) {
+		sig, ok := trappableSignals[name]
+		if !ok {
+			continue
+		}
+		action := r.trapTable()[name]
+		sc.savedTraps[name] = savedTrapState{
+			name: name, sig: sig, action: &action,
+			ignoredInherited: r.inheritedIgnored[name],
+		}
+		// Through the same door a `trap -` writes, so the arrangement with
+		// the operating system is unmade the way the restore makes it again.
+		r.trapSignal(name, sig, nil)
+	}
+}
+
+// emptyTheTrapTable clears whatever the body set, which the restore needs
+// before it puts the snapshot back: a condition the call raised that the
+// caller never had is not in the snapshot at all, and leaving it would be the
+// call's trap outliving the call. Measured — with no outer handler, `function
+// g { trap 'echo I' USR1; }; g; kill -USR1 $$` kills the shell.
+func (r *Runner) emptyTheTrapTable() {
+	for _, name := range pseudoTrapNames {
+		if slot := r.pseudoTrapSlot(name); slot != nil {
+			*slot = nil
+		}
+	}
+	for _, name := range sortedTrapTableNames(r.trapTable()) {
+		if sig, ok := trappableSignals[name]; ok {
+			r.trapSignal(name, sig, nil)
+		}
+	}
+}
+
+// pseudoTrapNames is the conditions the interpreter fires itself, in one
+// place so the two walks above cannot come to disagree about the list.
+var pseudoTrapNames = [...]string{"DEBUG", "ERR", "RETURN"}
+
+// sortedTrapTableNames is the table's keys in a settled order, and a copy —
+// both walks above write to the table they are reading.
+func sortedTrapTableNames(m map[string]string) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

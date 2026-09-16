@@ -792,6 +792,17 @@ func Semantics() interp.Semantics {
 	// question has the same answer as the first.
 	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
 	s.ExitTrapFiresPastTheEnd = interp.No
+	// A call of `function g { … }` is a scope for the trap table and a call
+	// of `g() { … }` is not, which is the third answer to the locality
+	// question and the only one keyed on how the function was *written*. It
+	// takes the EXIT trap with it: an EXIT trap set inside a `function` body
+	// fires at that call's return and the caller's comes back, where the
+	// POSIX-form call beside it replaces the shell's outright.
+	//
+	// Measured 2026-09-16 on AT&T 93u+ 2012-08-01 — `trap 'echo O' USR1;
+	// function g { trap 'echo I' USR1; }; g; kill -USR1 $$` is `O` and the
+	// same body written `g() { … }` is `I` (#2345).
+	s.FunctionLocalTraps = interp.TrapsGoBackAtTheReturnOfAKeywordFunction
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No
 	s.SelectTakesUnterminatedReply = interp.No

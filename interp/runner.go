@@ -6245,6 +6245,15 @@ type scope struct {
 	// See localtraps.go.
 	savedTraps map[string]savedTrapState
 
+	// trapTableWasTaken says the whole table was taken and emptied when this
+	// call was entered, rather than one condition being saved as the body
+	// moved it. The two are different shells' answers to the same question
+	// and they need different returns: this one has to clear whatever the
+	// body set before putting the snapshot back, because a condition the
+	// call raised that the caller never had is not in the snapshot at all.
+	// See localtraps.go.
+	trapTableWasTaken bool
+
 	// onReturn is what runs when this call unwinds, in reverse order of
 	// registration.
 	//

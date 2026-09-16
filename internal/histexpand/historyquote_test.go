@@ -88,3 +88,36 @@ func TestAReferenceWithNoDesignatorIsTheEntryItself(t *testing.T) {
 		t.Errorf("expanded to %q, want the words joined singly", words.Line)
 	}
 }
+
+// `:r` and `:e` are about the last `.` in the whole word, not in its last
+// path component, and a word with no `.` comes back whole from both.
+//
+// Measured on bash 5.3.20, 2026-09-16, each row against a fresh one-line
+// history. `/a.b/c` is the discriminator for the whole-word reading and
+// `.hidden` for the position-zero one; this shell answered `/a.b/c` and
+// `.hidden` wrongly and handed back an empty string for every word with no
+// extension, which is what `!$:e` on `plain` used to be.
+func TestRootAndExtensionModifiers(t *testing.T) {
+	for _, c := range []struct{ word, root, ext string }{
+		{"plain", "plain", "plain"},
+		{"c.txt", "c", ".txt"},
+		{"/a/b/c.txt", "/a/b/c", ".txt"},
+		{"/a/b/c", "/a/b/c", "/a/b/c"},
+		{"a.b.c", "a.b", ".c"},
+		{".hidden", "", ".hidden"},
+		{"/a.b/c", "/a", ".b/c"},
+		{"x.", "x", "."},
+	} {
+		t.Run(c.word, func(t *testing.T) {
+			hist := list("echo " + c.word)
+			r, err := histexpand.Expand("R!$:rR", hist, histexpand.Default)
+			if err != nil || r.Line != "R"+c.root+"R" {
+				t.Errorf(":r gave %q (%v), want %q", r.Line, err, "R"+c.root+"R")
+			}
+			e, err := histexpand.Expand("E!$:eE", hist, histexpand.Default)
+			if err != nil || e.Line != "E"+c.ext+"E" {
+				t.Errorf(":e gave %q (%v), want %q", e.Line, err, "E"+c.ext+"E")
+			}
+		})
+	}
+}

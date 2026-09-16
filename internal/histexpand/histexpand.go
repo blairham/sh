@@ -721,20 +721,37 @@ func tail(s string) string {
 	return s
 }
 
+// root is `:r` and ext is `:e`, and both are about the last `.` in the **whole
+// word** rather than in its last path component — which is measured and is the
+// opposite of what a basename-first reading gives. Eight words on bash 5.3.20,
+// 2026-09-16, each against a fresh one-line history:
+//
+//	word          :r          :e
+//	plain         plain       plain
+//	c.txt         c           .txt
+//	/a/b/c.txt    /a/b/c      .txt
+//	/a/b/c        /a/b/c      /a/b/c
+//	a.b.c         a.b         .c
+//	.hidden       (empty)     .hidden
+//	/a.b/c        /a          .b/c
+//	x.            x           .
+//
+// `/a.b/c` is the discriminator for the whole-word reading and `.hidden` for
+// the position-zero one; `plain` and `/a/b/c` say that a word with no `.` at
+// all comes back **whole** from both, which is the answer neither name
+// suggests and is why it is written down rather than reasoned about.
 func root(s string) string {
-	base := tail(s)
-	if i := strings.LastIndexByte(base, '.'); i > 0 {
-		return s[:len(s)-(len(base)-i)]
+	if i := strings.LastIndexByte(s, '.'); i >= 0 {
+		return s[:i]
 	}
 	return s
 }
 
 func ext(s string) string {
-	base := tail(s)
-	if i := strings.LastIndexByte(base, '.'); i > 0 {
-		return base[i:]
+	if i := strings.LastIndexByte(s, '.'); i >= 0 {
+		return s[i:]
 	}
-	return ""
+	return s
 }
 
 // String renders the three characters the way `histchars` holds them, which is

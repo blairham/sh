@@ -338,6 +338,36 @@ func TestAReferenceWithNoDesignatorIsVerbatim(t *testing.T) {
 	}
 }
 
+// `:p` shows the expansion and runs nothing, in a script as at a prompt — and
+// the line it was written on is dropped from the parser's count, exactly as an
+// unanswered reference is. It still joins the list, which is what lets the
+// next line recall it.
+func TestThePrintModifierRunsNothing(t *testing.T) {
+	out, errs, _ := historyRun(t, "set -o history; set -H\necho abc\necho !!:p\necho $LINENO\necho !!\nhistory\n")
+	// `3` on the file's line 4 is the dropped line; `echo 4` is the `!!` on
+	// the file's line 5 recalling the line before it, numbered 4 as well.
+	want := "abc\n3\necho 4\n    1  echo abc\n    2  echo echo abc\n    3  echo $LINENO\n" +
+		"    4  echo echo $LINENO\n    5  history\n"
+	if out != want {
+		t.Errorf("ran %q, want %q", out, want)
+	}
+	if errs != "echo echo abc\necho echo $LINENO\n" {
+		t.Errorf("echoed %q", errs)
+	}
+}
+
+// Inside a compound command the same line is part of the entry rather than an
+// entry of its own, and the separator after it is a space: measured, bash
+// writes `if true; then echo echo abc echo inside; fi`, with no `;` after the
+// line it did not run.
+func TestThePrintModifierInsideACompoundCommand(t *testing.T) {
+	out, _, _ := historyRun(t, "set -o history; set -H\necho abc\nif true; then\necho !!:p\necho inside\nfi\nhistory\n")
+	want := "abc\ninside\n    1  echo abc\n    2  if true; then echo echo abc echo inside; fi\n    3  history\n"
+	if out != want {
+		t.Errorf("ran %q, want %q", out, want)
+	}
+}
+
 // `histchars` moves the characters in a script as it does at a prompt.
 func TestHistcharsMovesTheCharactersInAScript(t *testing.T) {
 	out, _, _ := historyRun(t, "set -o history; set -H\nhistchars='@^#'\necho one two three\necho @@\n")

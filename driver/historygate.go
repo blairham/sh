@@ -103,6 +103,11 @@ type histGate struct {
 	// heredoc records that one of those separators was a here-document's,
 	// which changes how the whole entry is joined. See join.
 	heredoc bool
+	// spaceNext makes the next separator a space. One thing sets it: a `:p`
+	// line inside a compound command, which is in the entry and was never
+	// handed to the parser — measured, bash writes `if true; then echo echo
+	// abc echo inside; fi` there, with no `;` after the line it did not run.
+	spaceNext bool
 
 	r *interp.Runner
 	// report words a complaint about a reference the list does not hold, in
@@ -177,6 +182,28 @@ func (g *histGate) next() (string, bool) {
 			// error.
 			g.errf("%s\n", res.Line)
 		}
+		if res.Print {
+			// `:p` shows the expansion and runs nothing, which is what makes
+			// it the safe way to look at what a reference resolves to. The
+			// line still joins the list — that is what lets the next line
+			// recall it — and it is dropped from the parser's count exactly
+			// as an unanswered reference is: measured, a `$LINENO` on the
+			// line after a `:p` reads one less than the file's.
+			g.keep(res.Line)
+			if len(g.cur) == 1 {
+				// It stood on its own, so it is a command and the list takes
+				// it now — there will be no later flush for it, because the
+				// parser is handed nothing and hands back no command for the
+				// front end to record it at. Inside a compound command it is
+				// not a command: the lines around it are still being
+				// collected, and recording there would put half a construct
+				// in the list.
+				g.record()
+			} else {
+				g.spaceNext = true
+			}
+			continue
+		}
 		g.at++
 		g.keep(res.Line)
 		return res.Line + "\n", true
@@ -230,6 +257,10 @@ func (g *histGate) keep(line string) {
 // or a here-document at takes a newline, because a `;` there would be text
 // rather than a separator.
 func (g *histGate) separator() string {
+	if g.spaceNext {
+		g.spaceNext = false
+		return " "
+	}
 	if g.open != "" {
 		if g.open == "<<" {
 			g.heredoc = true
@@ -275,7 +306,7 @@ func (g *histGate) record() {
 		return
 	}
 	entry := g.join()
-	g.cur, g.seps, g.heredoc = nil, nil, false
+	g.cur, g.seps, g.heredoc, g.spaceNext = nil, nil, false, false
 	if !g.r.HistoryRecording() {
 		return
 	}

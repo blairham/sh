@@ -3808,6 +3808,48 @@ type Semantics struct {
 	// real value is asserted in its own package (#2058).
 	InteractiveOptionLetters string
 
+	// InteractiveOptionName is the `set -o` name that *is* this shell's
+	// interactivity, and NonInteractiveOptionName that name's negative
+	// spelling where the dialect's namespace carries one.
+	//
+	// They are read by the front end rather than by this package, and they
+	// are what lets an invocation's `-o <name>` decide whether the shell
+	// prompts. The state itself has always been Runner.Interactive and the
+	// option table has always written it; what these add is that the
+	// *invocation* form reaches the route decision, which is taken before any
+	// option has been applied. See driver.Shell.invocationPrompts (#3195).
+	//
+	// Measured 2026-09-16 with a program on a pipe, so that nothing but the
+	// invocation could make the shell interactive:
+	//
+	//	zsh 5.9.2        `-o interactive` and `+o nointeractive` prompt;
+	//	                 `+o interactive` and `-o nointeractive` do not.
+	//	ksh93u+ 2012-08-01  the same four, at an invocation — though `set -o
+	//	                 interactive` inside the shell is `bad option(s)`
+	//	                 in both directions.
+	//	dash 0.5.12      `-o interactive` prompts; it has no `no` spelling
+	//	                 and answers `-o nointeractive` with `Illegal
+	//	                 option`.
+	//	bash 5.3.20, 3.2.57, and as `sh`   `interactive: invalid option
+	//	                 name`, status 2, for either sign.
+	//	BusyBox ash 1.37.0   `illegal option -o interactive`.
+	//
+	// So a shell with no such name leaves both empty and reaches none of it,
+	// which is what keeps a front end from acting on a word two columns never
+	// grant. Both senses are named rather than one and a prefix rule, because
+	// the prefix is the *namespace's* and reconstructing it in the front end
+	// would be a second copy of the dialect's own table.
+	//
+	// The two spellings compete with the `-i` letter as one last-wins
+	// sequence: `zsh -i +o interactive` draws no prompt and `zsh +o
+	// interactive -i` draws one.
+	InteractiveOptionName string
+
+	// NonInteractiveOptionName is InteractiveOptionName's negative spelling.
+	// See it for the measurement; empty where the namespace has none, which
+	// is dash of the three columns that take the name at all.
+	NonInteractiveOptionName string
+
 	// CommandStringShowsCInDollarDash puts `c` in `$-` when the program came
 	// from `-c`. Two against two: bash and ksh93 do, dash and zsh do not, so
 	// there is no majority to follow and this is a switch.

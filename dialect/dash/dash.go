@@ -204,6 +204,14 @@ func Semantics() interp.Semantics {
 	// and nothing else, so the interactive set is the same empty set. dash is
 	// the one shell in the panel that adds nothing at a prompt, which is what
 	// makes the other three's additions evidence rather than a coincidence.
+	// The namespace's own way of saying `-i`, which this shell has and
+	// prompts for: measured 2026-09-16 with a program on a pipe, `dash -o
+	// interactive` writes `can't access tty; job control turned off` and then
+	// a `$ ` prompt around the line, exactly as `dash -i` does. There is no
+	// negative spelling — `-o nointeractive` is `Illegal option` here — so
+	// the second name stays empty and `+o interactive` is the only way back
+	// (#3195).
+	s.InteractiveOptionName = "interactive"
 	// Login-ness written out, and the short spelling only: measured
 	// 2026-09-05, `dash -l -c cmd` reads `~/.profile` and `dash --login`
 	// is refused outright with `Illegal option --` at status 2, where the

@@ -881,10 +881,24 @@ type optionSpec struct {
 // invocation is the state the option loop accumulates: how to read the words
 // that are not operands, gathered before anything decides what to run.
 type invocation struct {
-	// forcePrompt is `-i`: a prompt even where standard input is not a
-	// terminal, which is how a shell is driven by something that is not a
-	// person — a test, or a program feeding it lines.
-	forcePrompt bool
+	// interactive is the invocation's own last word about whether this shell
+	// is interactive, and interactiveWritten whether anything said so at all.
+	//
+	// Two spellings compete for it and the panel reads them as one last-wins
+	// sequence: the `-i` letter, and — in the shells that have a name for it
+	// — `-o <name>` in the dialect's own option namespace. Measured
+	// 2026-09-16 on zsh 5.9.2 with a program on a pipe, so nothing but the
+	// invocation could make it interactive: `zsh -i +o interactive` draws no
+	// prompt and `zsh +o interactive -i` draws one, and `-o interactive`
+	// alone draws one and reads `~/.zshrc` exactly as `-i` does. ksh93u+ and
+	// dash 0.5.12 prompt for `-o interactive` too; bash 5.3.20 and BusyBox
+	// ash 1.37.0 have no such name and refuse it.
+	//
+	// A pair rather than one bool because "nothing was said" is a third state
+	// and is the ordinary one: with neither spelling written the route asks
+	// the descriptor instead. See Shell.invocationPrompts (#3195).
+	interactive        bool
+	interactiveWritten bool
 	// fromStdin is `-s`: the script arrives on standard input and every
 	// operand is a parameter, none of them a path. An option like any
 	// other, not a terminator — measured, all four shells still read
@@ -1172,6 +1186,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 		if sh.Semantics.LongOptionNamesASetOption == interp.Yes {
 			inv.opts = append(inv.opts,
 				optionSpec{spec: a[2:], isName: true, long: true, on: on})
+			sh.noteInteractivity(inv, a[2:], on)
 			return args, nil
 		}
 		return nil, fmt.Errorf("unknown option %q", a)
@@ -1203,7 +1218,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			// reads a plus-signed command string as its own `$0`.
 			inv.plusC = !on
 		case ch == 'i' && on:
-			inv.forcePrompt = true
+			inv.interactive, inv.interactiveWritten = true, true
 		case ch == 's' && on:
 			inv.fromStdin = true
 		case on && sh.namesStartupOption("-"+string(ch)):
@@ -1241,6 +1256,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 				case interp.Yes:
 					flush()
 					inv.opts = append(inv.opts, optionSpec{spec: rest, isName: true, on: on})
+					sh.noteInteractivity(inv, rest, on)
 					return args, nil
 				case interp.Unspecified:
 					return nil, fmt.Errorf("unknown option %q", a)
@@ -1256,6 +1272,11 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 				return nil, fmt.Errorf("%s requires an argument", a)
 			}
 			inv.opts = append(inv.opts, optionSpec{spec: args[0], isName: true, on: on})
+			// Read here as well as carried, because *where* it was written
+			// decides it: the name and the `-i` letter are one last-wins
+			// sequence, and the option list alone has lost the letter's place
+			// in it. See invocation.interactive.
+			sh.noteInteractivity(inv, args[0], on)
 			args = args[1:]
 			// Whatever was welded behind the `o` is more option letters, and
 			// the loop reads them next. They land in a spec of their own,
@@ -1304,10 +1325,11 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	if err != nil {
 		return source{}, err
 	}
-	// Either half makes the shell interactive: `-i` says so outright on
-	// every route, and a prompt is interactive whether or not `-i` was
-	// given. Measured, all four shells agree on both.
-	in.interactive = inv.forcePrompt || in.prompt
+	// Either half makes the shell interactive: the invocation says so
+	// outright on every route — by the `-i` letter or by the dialect's own
+	// `-o` name — and a prompt is interactive whether or not anything was
+	// written. Measured, all four shells agree on both.
+	in.interactive = (inv.interactiveWritten && inv.interactive) || in.prompt
 	// `-s` as written, carried here for the same reason and in the same
 	// place: it survives a route that overrode it, and `sh -s -c cmd` shows
 	// `s` in `$-` in all four shells while running the command string.
@@ -1317,6 +1339,50 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	// so deciding it per route is how one of them would come to be forgotten.
 	in.startup = inv.startup
 	return in, nil
+}
+
+// noteInteractivity records what a `-o <name>` just said about being
+// interactive, where the dialect has a name for it.
+//
+// The name is matched rather than resolved, because this front end has no
+// option table: which spellings mean this is the dialect's to declare, and
+// both senses are declared so that the `no`-prefixed spelling one namespace
+// carries does not have to be reconstructed here. The sign composes with the
+// sense, which is measured — on zsh 5.9.2 with a program on a pipe, `-o
+// interactive` and `+o nointeractive` each draw a prompt and `+o interactive`
+// and `-o nointeractive` each draw none, all four at status 0.
+//
+// A dialect that declares neither reaches nothing here, which is bash 5.3.20
+// and BusyBox ash 1.37.0: both refuse the name outright, so a front end acting
+// on the spelling alone would act on a word those shells never grant.
+func (sh Shell) noteInteractivity(inv *invocation, name string, on bool) {
+	switch {
+	case sh.Semantics.InteractiveOptionName != "" && name == sh.Semantics.InteractiveOptionName:
+		inv.interactive, inv.interactiveWritten = on, true
+	case sh.Semantics.NonInteractiveOptionName != "" && name == sh.Semantics.NonInteractiveOptionName:
+		inv.interactive, inv.interactiveWritten = !on, true
+	}
+}
+
+// invocationPrompts decides the standard-input route: a prompt, or the program
+// on the descriptor.
+//
+// The invocation wins where it said anything, and the descriptor answers where
+// it did not. That order is the whole of #3195: the option namespace already
+// set the *state* — `$-` gained `i`, `[[ -o interactive ]]` was true and `set
+// -o` listed the row on — while this decision was taken from the letter loop
+// alone, before the invocation's `-o` options had reached the runner. So the
+// two spellings of one request parted company here and nowhere else, and the
+// shell reported itself interactive and drew no prompt.
+//
+// Both directions, which is what makes it the invocation's word rather than a
+// second way to say `-i`: `zsh -f +o interactive` on a terminal draws no
+// prompt, measured through a pseudo-terminal.
+func (sh Shell) invocationPrompts(inv invocation) bool {
+	if inv.interactiveWritten {
+		return inv.interactive
+	}
+	return Interactively(sh, false)
 }
 
 // route is operands without the part that is the same for every route: which
@@ -1364,7 +1430,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// With `-s` every operand is a parameter and none of them is `$0`,
 		// at a prompt as much as in a script: all four answer `sh -s one
 		// two` with `$1` set. Without it there are no operands at all.
-		if inv.forcePrompt || Interactively(sh, false) {
+		if sh.invocationPrompts(inv) {
 			// Nothing to run and someone at a keyboard. Asked before
 			// reading, not after: reading standard input from a terminal
 			// waits for an end-of-file that a person has not typed yet.

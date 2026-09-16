@@ -1106,6 +1106,54 @@ type Dialect struct {
 	// it.
 	ConditionOperandMayOpenWithAGroup bool
 
+	// PidBraceGroupIsText makes a `{ … }` written immediately after `$$` a
+	// run of characters: a blank, a newline or an operator inside it is text
+	// rather than a separator, and the braces are a brace *list* nowhere.
+	//
+	// One shell in the panel has it, and one of the completion functions it
+	// ships is written with it — by accident, on the evidence, since the line
+	// carries `$${(s<,>)…}` where `${(s<,>)…}` was plainly meant and "works"
+	// only because the stray `$` turns the rest into text. Measured
+	// 2026-09-15, each probe in a script file of its own, printed one
+	// argument per `[%s]` so the word count is visible:
+	//
+	//	| probe            | zsh 5.9.2    | bash 5.3 | bash-as-sh | bash 3.2 | ksh93u+ | dash | ash |
+	//	| `$${a b}`        | `{a b}`      | `{a` `b}` | `{a` `b}` | `{a` `b}` | `{a` `b}` | `{a` `b}` | `{a` `b}` |
+	//	| `$${a;b}`        | `{a;b}`      | refused  | refused    | refused  | refused | refused | refused |
+	//	| `$${a>b}`        | `{a>b}`      | redirects | redirects | redirects | redirects | redirects | redirects |
+	//	| `$${a{b,c}d}`    | `{abd}` `{acd}` | `{a{b,c}d}` | `{a{b,c}d}` | `{a{b,c}d}` | `{a{b,c}d}` | `{a{b,c}d}` | `{a{b,c}d}` |
+	//
+	// Six columns against one, so this is a dialect's grammar rather than a
+	// bug. The `>` row is what says the run is lexical and not a quoting
+	// rule: every other column writes the word into a file called `b}`.
+	//
+	// **The outer pair alone is text**, which the fourth row is there to
+	// pin: a brace pair *inside* the run still expands, so a reading that
+	// emitted the whole run as one literal span would be wrong in the other
+	// direction. Everything else inside expands as it always did — `$${a$(echo
+	// X)b}` is `{aXb}` and `v=V; $${x${v}y}` is `{xVy}` — so this is about
+	// the braces and the separators, not about expansion.
+	//
+	// **And the outer pair is text for the list reading only.** A range
+	// written straight into it still fires: `$${1..3}`, `$${a..c}` and
+	// `$${1..5..2}` all expand there, where `$${a,b}`, `$${1,2}`,
+	// `$${a,1..3}` and `$${1..2 3}` are all one word. That is [Span.PidBrace]
+	// and the brace expander rather than anything here, but it belongs beside
+	// the rest of the rule: a reading that made the whole pair inert passes
+	// the table above and loses the ranges, and did.
+	//
+	// **`$$` and nothing else, touching the brace.** `$!{a,b}`, `$?{a,b}`,
+	// `$-{a,b}` and `$#{a,b}` all brace-expand there, and so do `x{a,b}`,
+	// `$x{a,b}` and `${x}{a,b}`; `$$x{a b}` and `$$ {a b}` are refused along
+	// with the rest of the panel, because the `}` left over is the reserved
+	// word. It survives `emulate sh` and `emulate ksh` and the `sh` argv0,
+	// so it is the lexer rather than an option.
+	//
+	// An unmatched one is refused rather than left as text — `closing brace
+	// expected`, reported at the end of the input, because the run swallows
+	// every line after it looking for the match.
+	PidBraceGroupIsText bool
+
 	// CaseHeaderSpansSeparators lets a `;` stand in a `case` header wherever
 	// a newline may: between the subject and the `in`, and after the `in`.
 	//

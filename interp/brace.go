@@ -204,6 +204,29 @@ func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoint
 	if alts, ok := r.rangeAcross(w, open, close, endpoints); ok {
 		return alts, true
 	}
+	if spans[open.span].PidBrace {
+		// The outer pair of a `{ … }` run written immediately after `$$` is
+		// a *list* nowhere and a range wherever one is written, which is why
+		// this stands below the range and not above it. Measured 2026-09-15
+		// on zsh 5.9.2, the one column that has the construct, each probe in
+		// a script file of its own:
+		//
+		//	$${a,b}        {a,b}                  one word
+		//	$${1,2}        {1,2}                  one word
+		//	$${1..3}       <pid>1 <pid>2 <pid>3   the range fired
+		//	$${a..c}       <pid>a <pid>b <pid>c
+		//	$${1..5..2}    <pid>1 <pid>3 <pid>5   a step too
+		//	$${a,1..3}     {a,1..3}               a comma is still no range
+		//	$${1..2 3}     {1..2 3}
+		//
+		// A reading that made the whole pair inert passed the first two rows
+		// and lost the next three, and it was a test of this that found it.
+		// The *contents* are ordinary spans either way, so the `{1..3}` and
+		// the `{a,b}` nested inside `$${x{…}y}` both still expand — the note
+		// is on the outer pair and on nothing else. See
+		// [syntax.Span.PidBrace].
+		return nil, false
+	}
 	var out [][]syntax.Span
 	depth := 0
 	from := next(open)

@@ -360,6 +360,24 @@ type Span struct {
 	// asked.
 	PatternGroup bool
 
+	// PidBrace says this literal span is one of the two braces of a `{ … }`
+	// written immediately after `$$`, which the dialect that reads the
+	// construct makes a character rather than syntax. See
+	// [Dialect.PidBraceGroupIsText].
+	//
+	// The note has to be in the tree for the reason PatternGroup's does:
+	// both braces arrive as the same byte a brace expansion opens with, and
+	// which one this is was decided by what stood in front of it. Two
+	// readers ask. Brace expansion refuses the pair a *list* — `$${a,b}` is
+	// one word — and still reads a range out of it, because that is what the
+	// shell does: `$${1..3}` is three. The flag is on the outer pair and on
+	// nothing else, so the `{b,c}` *inside* `$${a{b,c}d}` is untouched and
+	// expands as it always did.
+	// And the printer writes the run back as it came: the blanks and
+	// operators inside it were characters, so escaping them would leave the
+	// tree identical and make the word a different program (#1221).
+	PidBrace bool
+
 	// Bare says a parameter expansion was written `$name` rather than
 	// `${name}`.
 	//

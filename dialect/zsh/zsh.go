@@ -342,6 +342,15 @@ func Dialect() syntax.Dialect {
 	// `[[ -prefix 1 (f|ht)tp:// ]]` is the completion system's own spelling.
 	// See syntax.Dialect.ConditionOperandMayOpenWithAGroup.
 	d.ConditionOperandMayOpenWithAGroup = true
+	// A `{ … }` written immediately after `$$` is a run of characters: a
+	// blank, a newline or an operator inside is text, and the braces are a
+	// brace list nowhere — though a range written straight into them still
+	// expands, which syntax.Span.PidBrace records. The other six columns split the word at the blank and
+	// refuse the `;`, and every one of them reads the `>` as a redirection.
+	// One shipped completion function is written that way — with `$$` where
+	// `$` was meant — and cannot be read at all without it. See
+	// syntax.Dialect.PidBraceGroupIsText.
+	d.PidBraceGroupIsText = true
 	// `<->` is a number and `<1-9>` a bounded one, where every other panel
 	// shell reads the `<` as a redirection. Measured 2026-09-05 on zsh
 	// 5.9.2: `[[ 1 = <-> ]]` is 0 here and a syntax error in bash 5.3, bash

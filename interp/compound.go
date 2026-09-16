@@ -969,7 +969,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// library, not the script — and the line offset the text it was read
 	// from was running at, which its body goes on being numbered from when
 	// it is called later. See funcOrigin.
-	r.recordFunctionOrigin(c.Name, r.currentFile(), r.lineBase)
+	r.recordFunctionOrigin(c.Name, r.currentFile(), r.lineBase, r.runText)
 	// And, in the dialect that reads a function name as a condition, the
 	// definition *is* the trap — see trapfunction.go. After the tables
 	// above, because binding it looks the function up by name.
@@ -1065,9 +1065,13 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// this engine reported `line 1` (#2565). Where the dialect numbers
 	// `eval`'s text from one there was no offset in force to record, so the
 	// origin holds nothing and this is the zero it always was.
-	savedBase := r.lineBase
+	savedBase, savedText := r.lineBase, r.runText
 	r.lineBase = r.funcOrigins[fn.Name].lineBase
-	defer func() { r.lineBase = savedBase }()
+	// And the text the body was read from, on the same terms: a function
+	// defined in a sourced file quotes that file however it is called. See
+	// runningText.
+	r.runText = r.funcOrigins[fn.Name].text
+	defer func() { r.lineBase, r.runText = savedBase, savedText }()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and
 	// not a sibling entered after it returned.

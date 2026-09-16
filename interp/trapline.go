@@ -83,6 +83,7 @@ func (r *Runner) bodyLineStyle() TrapBodyLineStyle {
 // reads: EXIT is the one trap whose body is not a level of indirection.
 func (r *Runner) enterTrapBody(cond string) func() {
 	base, pin, command, inTrap := r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody
+	text := r.runText
 	indirection := r.indirection
 	// A trap body is text read again, and the one dialect that counts levels
 	// of that counts this one — with EXIT the single exception. Measured on
@@ -120,6 +121,7 @@ func (r *Runner) enterTrapBody(cond string) func() {
 	line := r.line
 	restore := func() {
 		r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody = base, pin, command, inTrap
+		r.runText = text
 		r.line, r.indirection = line, indirection
 	}
 	switch r.bodyLineStyle() {
@@ -128,6 +130,10 @@ func (r *Runner) enterTrapBody(cond string) func() {
 	case TrapBodyLineWhereItFired:
 		r.linePin = r.firedAt()
 	}
+	// A trap body is text of its own and this runner is not told it, so it
+	// runs with none: nothing it reports is quoted against the lines of the
+	// script it interrupted. See runningText.
+	r.runText = runningText{borrowed: true}
 	// Cleared for the run of the body itself. The flag says which condition
 	// *this* body belongs to, and a trap that fires while it runs is a
 	// question of its own — without this, a signal delivered inside a DEBUG

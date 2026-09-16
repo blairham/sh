@@ -1,0 +1,171 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package dialect_test
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/blairham/sh/dialect/ash"
+	"github.com/blairham/sh/driver"
+)
+
+// What follows a `$( … )` body's refusal, from a script file (#3331).
+//
+// The sentence names the closer since #3296. Two dialects then write a second
+// line, and the text it quotes is the **script's** rather than the body's —
+// which a runner that parses the body at expansion time never had, so the
+// front end and every route that runs text now say what text that is. See
+// interp/substecho.go.
+//
+// Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> s.sh` with
+// stdin from /dev/null, in a fresh directory; BusyBox v1.37.0 in the
+// digest-pinned Alpine image internal/oracle reaches. Every want below is
+// that measurement with the path replaced.
+//
+// Through the driver and a real file, because the text is the front end's to
+// hand over: a Runner built in a test has no program text and writes the one
+// line it always wrote.
+func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
+	for _, c := range []struct {
+		name, src string
+		want      map[string]string
+	}{
+		{
+			// Something else on the line, which is what tells the script's
+			// line from the body: bash quotes all of it, zsh the word from
+			// its start cut at twenty bytes and numbered one line on.
+			name: "the line holds more than the substitution",
+			src:  "printf 'start\\n'\nq=1; v=$(echo hi; for); z=2\n",
+			want: map[string]string{
+				"bash": "s.sh: line 2: syntax error near unexpected token `)'\n" +
+					"s.sh: line 2: `q=1; v=$(echo hi; for); z=2'\n",
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: parse error near `v=$(echo hi; for); z...'\n",
+				"ksh":  "s.sh: line 2: syntax error at line 2: `)' unexpected\n",
+				"dash": "s.sh: 2: Syntax error: Bad for loop variable\n",
+				"ash":  "s.sh: line 2: syntax error: bad for loop variable\n",
+			},
+		},
+		{
+			// A body over two lines, refused on the second. Both messages
+			// move to the failure's line in four columns — the prefix used
+			// to name the line the command began on — and ksh93 keeps the
+			// command's line in front because its sentence names the other.
+			// bash quotes the failure's line; zsh the word's own line, to
+			// its newline.
+			name: "the body runs onto a later line",
+			src:  "printf 'start\\n'\n\nq=1; v=$(echo hi\n for); z=2\necho after\n",
+			want: map[string]string{
+				"bash": "s.sh: line 4: syntax error near unexpected token `)'\n" +
+					"s.sh: line 4: ` for); z=2'\n",
+				"zsh": "s.sh:4: parse error near `)'\n" +
+					"s.sh:5: parse error near `v=$(echo hi'\n",
+				"ksh":  "s.sh: line 3: syntax error at line 4: `)' unexpected\n",
+				"dash": "s.sh: 4: Syntax error: Bad for loop variable\n",
+				"ash":  "s.sh: line 4: syntax error: bad for loop variable\n",
+			},
+		},
+		{
+			// No newline at the end of the file, so the reader has none to
+			// take and zsh's second line is not moved on. The word is exactly
+			// twenty bytes, which that dialect marks although nothing is cut.
+			name: "the last line has no newline",
+			src:  "aaaaaaaaaaaaa=$(for)",
+			want: map[string]string{
+				"bash": "s.sh: line 1: syntax error near unexpected token `)'\n" +
+					"s.sh: line 1: `aaaaaaaaaaaaa=$(for)'\n",
+				"zsh": "s.sh:1: parse error near `)'\n" +
+					"s.sh:1: parse error near `aaaaaaaaaaaaa=$(for)...'\n",
+			},
+		},
+		{
+			// A function read out of a sourced file and called from the
+			// script quotes the *file's* line, which is what the text on the
+			// function's origin is for: the script's line 4 is `f`. Standard
+			// error only — bash refuses the body where the definition is read
+			// and so never runs `echo two`, which is the parse-time change
+			// Runner.runCommandSubst declines.
+			name: "a function from a sourced file",
+			src:  "echo one\n. ./lib.sh\necho two\nf\n",
+			want: map[string]string{
+				"bash": "./lib.sh: line 2: syntax error near unexpected token `)'\n" +
+					"./lib.sh: line 2: `  q=1; v=$(echo hi; for); z=2'\n",
+			},
+		},
+		{
+			// The older spelling's body is its own text, and it is quoted
+			// in place of the script's line.
+			name: "a backquoted body",
+			src:  "printf 'start\\n'\nq=1; v=`echo hi; for`; z=2\n",
+			want: map[string]string{
+				"bash": "s.sh: command substitution: line 2: syntax error near unexpected token `newline'\n" +
+					"s.sh: command substitution: line 2: `echo hi; for'\n",
+			},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for name, want := range c.want {
+				t.Run(name, func(t *testing.T) {
+					dir := t.TempDir()
+					write := func(file, text string) {
+						if err := os.WriteFile(filepath.Join(dir, file), []byte(text), 0o644); err != nil {
+							t.Fatal(err)
+						}
+					}
+					write("s.sh", c.src)
+					write("lib.sh", "f() {\n  q=1; v=$(echo hi; for); z=2\n}\n")
+					t.Chdir(dir)
+					sh := echoShells()[name]
+					var out, errs strings.Builder
+					sh.Stdout, sh.Stderr = &out, &errs
+					driver.MainArgs(sh, []string{sh.Name, "s.sh"})
+					if got := errs.String(); got != want {
+						t.Errorf("wrote\n%s\nwant\n%s", errs.String(), want)
+					}
+				})
+			}
+		})
+	}
+}
+
+// A trap body is text of its own, and nothing it reports may be quoted from
+// the lines of the script it interrupted. The trap here is set on line 2, and
+// line 2 holds the very text of the body, which is what would make a quote
+// read off the script's lines look right.
+//
+// bash 5.3.20 locates it as `exit trap: line 1` and quotes the body; this
+// engine does not yet name the trap in the location (filed with #3331), so the
+// row pins only that the script's line is not what comes back.
+func TestATrapBodyRefusalQuotesNothingFromTheScript(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "s.sh"),
+		[]byte("echo one\ntrap 'v=$(echo hi; for)' EXIT\necho two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	sh := bashShell()
+	var out, errs strings.Builder
+	sh.Stdout, sh.Stderr = &out, &errs
+	driver.MainArgs(sh, []string{sh.Name, "s.sh"})
+	if strings.Contains(errs.String(), "trap 'v=") {
+		t.Errorf("quoted the script's line for a trap body:\n%s", errs.String())
+	}
+}
+
+func echoShells() map[string]driver.Shell {
+	return map[string]driver.Shell{
+		"bash": bashShell(),
+		"zsh":  zshShell(),
+		"ksh":  kshShell(),
+		"dash": dashShell(),
+		"ash": {
+			Name: "ash", Dialect: ash.Dialect(), Semantics: ash.Semantics(),
+			Diagnostics: ash.Diagnostics(), Prelude: ash.Prelude(), Register: ash.Apply,
+			PromptStyle: ash.PromptStyle(),
+		},
+	}
+}

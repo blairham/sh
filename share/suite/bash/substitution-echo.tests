@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The second line after a `$( … )` body's refusal — #3331.
+#
+# The sentence names the closer since #3296. This shell then writes a second
+# message, and the text in it is the script's rather than the body's: here
+# bash quotes the **whole script line** the refusal was found on — not the
+# body, and not the text from the substitution on. The body is read at expansion time, so that text has to be handed
+# to the runner by whatever read the script, which is what the file grades.
+#
+# The body runs onto a second line and something else shares both of its
+# lines, which is what separates the three readings: the script's line, the
+# line the command began on, and the body. The failure's line is also the
+# one the first message names, where it used to name the line the command
+# began on.
+#
+# A copy of the shape in zsh/substitution-echo.tests rather than a shared file, because the two
+# answers differ and a <dialect>/ file is one only that column writes.
+#
+# One failing case, and it is last: the failure ends the script.
+
+printf 'the controls first\n'
+
+# A body that parses, which is what says the body is read at all.
+v=$(echo hi); printf 'an ordinary body -> [%s]\n' "$v"
+
+printf 'the case\n'
+q=1; v=$(echo hi
+ for); z=2
+printf 'never reached\n'

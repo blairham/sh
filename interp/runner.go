@@ -1321,6 +1321,12 @@ type Runner struct {
 	// was not.
 	expandingOuterWord *syntax.Word
 
+	// scriptText is the source of the program the front end is running, and
+	// runText the text some other route is running in its place. Read by one
+	// diagnostic and written by the routes that run text; see runningText.
+	scriptText string
+	runText    runningText
+
 	// expandingNestedInner marks the expansion of the *inner* of a nested
 	// `${${…}}`, whose fields are read by the operator around them rather
 	// than by the command line.

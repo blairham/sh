@@ -303,6 +303,12 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 			return 2
 		}
 	}
+	// And the text itself, for a diagnostic that quotes it — at the offset
+	// just settled, so a line of the caller's numbering indexes it. See
+	// runningText.
+	outerText := r.runText
+	r.runText = runningText{text: src, base: r.lineBase, borrowed: true}
+	defer func() { r.runText = outerText }()
 	// What this text is called, for a run-time diagnostic raised inside it:
 	// the value that knows is here and the diagnostic is written far away.
 	r.borrowed = append(r.borrowed, borrowedText{sourced: s, callerLine: r.line})

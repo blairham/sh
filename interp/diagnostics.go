@@ -3068,6 +3068,16 @@ type Diagnostics struct {
 	// the grammar did not want; an input that simply ran out gets no echo,
 	// which EchoesLine decides.
 	EchoesTheOffendingLine bool
+	// SubstitutionParseFailureQuotesTheWord follows a `$( … )` body refused
+	// at expansion time with a second message quoting the script from the
+	// start of the word that holds it, cut the way UnmatchedNearMaxBytes
+	// cuts, and numbered one line past the failure where a newline ends that
+	// line. Measured on zsh 5.9.2, 2026-09-16, `v=$(echo hi; for)` on line
+	// 2 of a script file: `:2: parse error near `)'` and then `:3: parse
+	// error near `v=$(echo hi; for)'`. The dialect that echoes the offending
+	// line quotes the whole line instead, and three write nothing. See
+	// Runner.substWordEcho.
+	SubstitutionParseFailureQuotesTheWord bool
 
 	// ScriptNotFound is what a shell says when the script operand names
 	// nothing at all. Two verbs, positional because the shells order them

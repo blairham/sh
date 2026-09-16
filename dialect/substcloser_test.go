@@ -44,12 +44,12 @@ import (
 // wrong, and `dash/` and `ash/substitution-closer.tests` are what now hold
 // them.
 //
-// What this does *not* fix is the echoed second line: bash and zsh quote the
+// What this does *not* cover is the echoed second line: bash and zsh quote the
 // offending text after the sentence, and the text they quote is the
 // **script's** line, not the body — `q=1; v=$(echo hi; for); z=2` entire,
-// measured. That text lives in the driver and never reaches this package, so
-// it is the tree-keeping change Runner.subst declines rather than a wording,
-// and it is filed with the panel.
+// measured. A Runner built here is handed no program text, so it writes the
+// one line; TestASubstitutionRefusalQuotesTheScript runs the front end that
+// hands it over (#3331).
 func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 	for _, c := range []struct {
 		body string
@@ -181,13 +181,18 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 // “ `for' unmatched “. All four are what this shell already wrote, so the
 // closer is **not** offered to a backquoted body.
 //
+// bash follows its sentence with the body quoted back — “ `echo hi; for' “ —
+// and that needs no program text, because the older spelling's quote is the
+// body's own (#3331).
+//
 // The row is not decoration: appending a backquote to the body instead would
 // have changed every one of these, and appending the parenthesis to a body
 // that ends at a backquote would have named a token the text does not hold.
 func TestABackquotedRefusalIsLeftAtItsOwnToken(t *testing.T) {
 	src := "printf 'start\\n'\nv=`echo hi; for`\n"
 	for preset, want := range map[string]string{
-		"bash":  "bash: command substitution: line 2: syntax error near unexpected token `newline'\n",
+		"bash": "bash: command substitution: line 2: syntax error near unexpected token `newline'\n" +
+			"bash: command substitution: line 2: `echo hi; for'\n",
 		"zsh":   "zsh:2: parse error near `for'\n",
 		"ksh":   "ksh: line 2: syntax error at line 2: `for' unmatched\n",
 		"dash":  "dash: 2: Syntax error: Bad for loop variable\n",
@@ -237,7 +242,11 @@ func TestABodyTheCloserWouldHealKeepsItsOwnRefusal(t *testing.T) {
 		"ksh":  "ksh: line 3: syntax error at line 3: `(' unmatched\n",
 		"dash": "dash: 3: Syntax error: end of file unexpected (expecting \")\")\n",
 		"ash":  "ash: syntax error: unexpected end of file (expecting \")\")\n",
-		"bash": "bash: line 3: syntax error: unexpected end of file from `(' command on line 3\n",
+		// Located at line 4, where the body's input ran out rather than at
+		// the line the command began on — measured 2026-09-16 on bash 5.3.20
+		// under `shopt -s expand_aliases`, which writes `command substitution:
+		// line 4: … on line 3` (#3331). The tag is not written here.
+		"bash": "bash: line 4: syntax error: unexpected end of file from `(' command on line 3\n",
 	} {
 		t.Run(preset, func(t *testing.T) {
 			p := presets[preset]

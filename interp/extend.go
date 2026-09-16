@@ -740,7 +740,11 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 	// first line whatever the shell was in the middle of when the builtin
 	// that read it ran. Only a definition the parser read out of borrowed
 	// text carries an offset — see funcOrigin.lineBase.
-	r.recordFunctionOrigin(name, r.currentFile(), 0)
+	//
+	// And no text: the seam's text is a definition this builtin built, which
+	// no diagnostic quotes, and saying so would give every such function a
+	// record — see funcOrigin.text.
+	r.recordFunctionOrigin(name, r.currentFile(), 0, runningText{})
 	return true
 }
 
@@ -755,7 +759,7 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 // It writes the file half of the origin and leaves the line half where the
 // definition put it — see funcOrigin.
 func (r *Runner) SetFunctionFile(name, file string) {
-	r.recordFunctionOrigin(name, file, r.funcOrigins[name].lineBase)
+	r.recordFunctionOrigin(name, file, r.funcOrigins[name].lineBase, r.funcOrigins[name].text)
 }
 
 // FunctionText is a function's definition written back the way this shell

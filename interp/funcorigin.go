@@ -34,6 +34,11 @@ type funcOrigin struct {
 	// is recorded, so the two readings coincide by construction rather than
 	// by a second switch that could disagree with the first.
 	lineBase int
+	// text is the source the definition was read out of, where that was not
+	// the script's own — see runningText. Unset for a function the script
+	// defined, which is quoted against the script's text wherever it is
+	// called and so needs no record.
+	text runningText
 }
 
 // recordFunctionOrigin is the one write to the table, so that a new way of
@@ -42,15 +47,15 @@ type funcOrigin struct {
 // An origin with nothing in it is deleted rather than stored, so a lookup
 // for a name nobody recorded and a lookup for a name recorded as coming
 // from nowhere answer the same.
-func (r *Runner) recordFunctionOrigin(name, file string, lineBase int) {
-	if file == "" && lineBase == 0 {
+func (r *Runner) recordFunctionOrigin(name, file string, lineBase int, text runningText) {
+	if file == "" && lineBase == 0 && !text.borrowed {
 		delete(r.funcOrigins, name)
 		return
 	}
 	if r.funcOrigins == nil {
 		r.funcOrigins = map[string]funcOrigin{}
 	}
-	r.funcOrigins[name] = funcOrigin{file: file, lineBase: lineBase}
+	r.funcOrigins[name] = funcOrigin{file: file, lineBase: lineBase, text: text}
 }
 
 // functionFile is where a function was defined, or the empty string for one

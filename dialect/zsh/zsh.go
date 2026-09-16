@@ -3645,6 +3645,9 @@ func Diagnostics() interp.Diagnostics {
 		// and marks it at exactly twenty as well — see the field. The other
 		// three print the whole word or none of it.
 		UnmatchedNearMaxBytes: 20,
+		// And the same cut on the second message a substitution body refused
+		// at expansion time is given — see the field.
+		SubstitutionParseFailureQuotesTheWord: true,
 		// The word again, the same as for `$(` — and for `$[` too, which
 		// this shell has and refuses the same way.
 		UnmatchedArithSubst: "parse error near `%[3]s'",

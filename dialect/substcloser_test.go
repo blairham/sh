@@ -253,3 +253,37 @@ func TestABodyTheCloserWouldHealKeepsItsOwnRefusal(t *testing.T) {
 		})
 	}
 }
+
+// `${ cmd;}` is closed by something else again, and is left alone.
+//
+// The current-shell spelling runs its body in the shell that read it rather
+// than in a subshell — see syntax.Span.CurrentShell — and what closes it is
+// `;}`, not a parenthesis. Offering it the closer this change appends would
+// name a character its text does not hold.
+//
+// Measured 2026-09-16 the same way, with `v=${ echo hi; for ;}`. ksh93u+
+// 2012-08-01 writes “ syntax error at line 2: `;' unexpected “ and bash
+// 5.3.20 “ syntax error near unexpected token `;' while looking for matching
+// `}' “ above its echoed line, so both name the `;` — which is what this
+// shell already writes for the two columns that have the spelling. The other
+// three have no such form and refuse the substitution itself, each in its own
+// words, and they are the control: a change that reached this construct at
+// all would have to move one of the five.
+func TestACurrentShellSubstitutionIsClosedBySomethingElse(t *testing.T) {
+	const src = "printf 'start\\n'\nv=${ echo hi; for ;}\nprintf 'after st=%s\\n' \"$?\"\n"
+	for preset, want := range map[string]string{
+		"ksh":   "ksh: line 2: syntax error at line 2: `;' unexpected\n",
+		"bash":  "bash: line 2: syntax error near unexpected token `;'\n",
+		"zsh":   "zsh:2: bad substitution\n",
+		"dash":  "dash: 2: Bad substitution\n",
+		"ash":   "ash: syntax error: bad substitution\n",
+		"posix": "sh: ${ echo hi; for ;}: bad substitution\n",
+	} {
+		t.Run(preset, func(t *testing.T) {
+			_, errs, _ := splitRun(t, presets[preset], src)
+			if errs != want {
+				t.Errorf("wrote %q, want %q", errs, want)
+			}
+		})
+	}
+}

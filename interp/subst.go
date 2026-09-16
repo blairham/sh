@@ -558,8 +558,18 @@ func (r *Runner) SetArithPrecedence(p syntax.ArithPrecedencePolicy) {
 // at its backquote rather than where its contents end — see
 // syntax.Span.Backquoted — and the columns read it with the script, which is
 // the same reason Diagnostics.BackquotedSubstitutionRestartsLines exists one
-// message over. `${ … ;}` is closed by something else again and is not
-// measured here.
+// message over.
+//
+// `${ … ;}` is named in the guard as a statement of scope rather than as a
+// live branch, and that is said here because a mutant which took it out
+// survived. Its spelling *requires* a `;` or a newline before the closing
+// brace, so such a body always ends at a token the parser meets and can never
+// run out at its end — which is the only thing this function changes.
+// Measured 2026-09-16: `v=${ echo hi; for ;}` is “ `;' unexpected “ and the
+// same body written over three lines is “ `newline' unexpected “, both
+// byte-identical to ksh93u+ before this change and after it. Taking the name
+// out would be relying on that; leaving it in says which spelling this is
+// about.
 //
 // # Diagnostic only
 //

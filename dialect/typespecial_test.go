@@ -138,8 +138,8 @@ func TestTheCoreRefusesOnlyTheNamesThePanelDisagreesAbout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "echo is a shell builtin\nst=0\n"; out != want {
-		t.Errorf("the core said %q for an ordinary builtin, want %q", out, want)
+	if want := "echo is a shell builtin\nst=0\n"; out != want || st != 0 {
+		t.Errorf("the core said %q at %d for an ordinary builtin, want %q at 0", out, st, want)
 	}
 	out, st, err = core.Combined(t, dialecttest.Base{}, `type .`)
 	if err != nil {

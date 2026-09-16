@@ -28,9 +28,19 @@ import (
 //
 // The last is the point. Turning off something this shell was never doing is
 // a request that has been granted — `set +o posix` in a shell with no posix
-// mode has left it exactly where it was asked to be. Turning *on* something
-// we do not do would be a promise we cannot keep, so it is refused out loud
-// rather than accepted quietly.
+// mode has left it exactly where it was asked to be.
+//
+// Turning *on* something we do not do is the question #3128 reopened, and the
+// answer is a fourth kind rather than a refusal: the name is **recorded**,
+// which means remembered and reported and acted on by nothing. A refusal was
+// the honest answer while the listing was short; it stopped being one when
+// #2925 made the listing carry the shell's whole roster, because a listing is
+// a capture surface and a name it writes that `set` will not take is a line
+// `eval "$(set +o)"` cannot feed back. Measured 2026-09-16 against every name
+// in every panel shell's own listing, in both directions: bash and dash refuse
+// none, and ksh93 and zsh refuse only the handful their dialects already
+// declare. See recordedOption, and Runner.AddImmovableSetOptions and
+// Runner.AddInertSetOptions for the two shapes a dialect can still say no in.
 
 // setOption is what this shell does about one name.
 type setOption struct {
@@ -86,12 +96,17 @@ var commonSetOptions = map[string]setOption{
 	// is why it is a try rather than an apply.
 	"monitor": {try: (*Runner).setMonitor, get: func(r *Runner) bool { return r.monitor }},
 
-	// The rest of the unanimous names, none of which this shell has yet.
-	// Every one of them is off here: we do not defer a job notice and do
-	// not hold the session open at end-of-file.
-	"notify":    {},
-	"ignoreeof": {},
-	"nolog":     {},
+	// The rest of the unanimous names, none of which this shell has yet:
+	// we do not defer a job notice, do not hold the session open at
+	// end-of-file, and keep no history for `nolog` to leave a function
+	// definition out of. All three are recorded rather than refused, which
+	// is measured — every shell in the panel that has the name takes it in
+	// both directions at 0, and the three were `set: notify: not
+	// implemented` here under five of our six dialects (#3128). See
+	// recordedOption.
+	"notify":    recordedOption("notify", false),
+	"ignoreeof": recordedOption("ignoreeof", false),
+	"nolog":     recordedOption("nolog", false),
 
 	// The two editing modes, and they are one state under two names — see
 	// Runner.editingMode and EditingMode. Neither starts selected, because a
@@ -209,8 +224,12 @@ var extraSetOptions = map[string]setOption{
 		get:   func(r *Runner) bool { return !r.noBraceExpand },
 	},
 	// Comments are honored wherever they are written, which is what this
-	// name asks for.
-	"interactive-comments": {on: true},
+	// name asks for — so the state is on and nothing here reads it. Recorded
+	// rather than fixed on, because bash takes `set +o interactive-comments`
+	// at 0 and we refused it: measured 2026-09-16, it is the one name in
+	// bash's own listing this shell refused in the *plus* direction, which
+	// is the half of #3128 the roster there was never asked about.
+	"interactive-comments": recordedOption("interactive-comments", true),
 
 	// pipefail is real — the pipeline code reads it — and its *existence* is
 	// an axis older than this table (see setOption), so applying it never
@@ -349,8 +368,19 @@ var extraSetOptions = map[string]setOption{
 		apply: func(r *Runner, on bool) { r.onecmd = on },
 		get:   func(r *Runner) bool { return r.onecmd },
 	},
-	"physical":   {},
-	"privileged": {},
+	// `physical` is `cd -P` as a mode, and `privileged` is `-p`. Both are
+	// recorded: the resolver behind `cd` is real (see physicalpath.go) and
+	// the option is not wired to it, and nothing here drops privilege,
+	// so remembering is the whole of what either promises.
+	//
+	// The panel splits over `privileged` and only over whether it *moves*.
+	// bash 5.3.20 and bash 3.2.57 take `set -o privileged` and then report
+	// `privileged on`; ksh93u+ takes it at 0 and reports `privileged off`
+	// afterwards, and reports it off under `ksh -p` as well — measured
+	// 2026-09-16. So the name is taken everywhere and the state is bash's
+	// alone, which is Runner.AddInertSetOptions and not a second entry here.
+	"physical":   recordedOption("physical", false),
+	"privileged": recordedOption("privileged", false),
 
 	// The three names one shell in the panel has and the rest do not, and
 	// all three describe **how the shell was started** rather than a
@@ -398,7 +428,12 @@ var extraSetOptions = map[string]setOption{
 	// and `login_shell` is on under both login routes and off otherwise. A
 	// constant written for any of the three would have been wrong on one of
 	// the two runs that produced it.
-	"bgnice": {get: func(r *Runner) bool { return r.Interactive }},
+	// `bgnice` is recorded *over* that live fact rather than fixed to it,
+	// because ksh93 moves it and `rc` it will not: measured 2026-09-16,
+	// `set -o bgnice; set -o` reports `bgnice on` in a script whose bare
+	// listing said off, while `set -o rc` there is `bad option(s)` in both
+	// directions — which is why only one of the two takes a request.
+	"bgnice": recordedOverOption("bgnice", false, func(r *Runner) bool { return r.Interactive }),
 	"rc":     {get: func(r *Runner) bool { return r.Interactive }},
 	// login_shell reads the field the front end filled in, the same one
 	// `$-`'s `l` is drawn from where a dialect shows the letter.
@@ -410,21 +445,29 @@ var extraSetOptions = map[string]setOption{
 	// redraws a line that outgrows the terminal in place rather than
 	// scrolling it sideways, which is what the two names ask for. The shell
 	// that has them reports both on in every route measured.
-	"multiline": {on: true},
-	"viraw":     {on: true},
+	//
+	// Recorded rather than fixed on, because the plus direction is a request
+	// too: `set +o multiline` and `set +o viraw` are 0 in ksh93u+ and were
+	// `not implemented` here, which is the half of #3128 that only a sweep
+	// of the listing in *both* directions finds.
+	"multiline": recordedOption("multiline", true),
+	"viraw":     recordedOption("viraw", true),
 	// The rest are off here and off there. None of them is acted on: `**`
 	// has no switch in the dialect that spells it this way (see glob.go),
 	// there is no third editing mode, `let` reads no octal, a glob marks no
 	// directory, nothing is withheld for `showme`, and this shell has no
-	// restricted mode. Listing them is what a script reading `set -o` asks
-	// for; turning one *on* is a promise this shell cannot keep, so it is
-	// refused out loud — which is the rule at the top of this file.
-	"globstar":   {},
-	"gmacs":      {},
-	"letoctal":   {},
-	"markdirs":   {},
-	"restricted": {},
-	"showme":     {},
+	// restricted mode. All six are recorded: ksh93u+ takes every one of them
+	// in both directions at 0 and reports the state back afterwards —
+	// measured 2026-09-16, `set -o globstar; set -o` is `globstar on` there
+	// — so refusing them made the listing advertise names the shell then
+	// declined (#3128). What each is recorded *for* is the follow-up work;
+	// remembering it is not a claim to do it. See recordedOption.
+	"globstar":   recordedOption("globstar", false),
+	"gmacs":      recordedOption("gmacs", false),
+	"letoctal":   recordedOption("letoctal", false),
+	"markdirs":   recordedOption("markdirs", false),
+	"restricted": recordedOption("restricted", false),
+	"showme":     recordedOption("showme", false),
 }
 
 // SetPosixMode enters or leaves POSIX mode, which is what the `posix` entry
@@ -1140,6 +1183,68 @@ func negatedOption(o setOption) setOption {
 		n.try = func(r *Runner, on bool, spelling string) bool { return o.try(r, !on, spelling) }
 	}
 	return n
+}
+
+// recordedOption is a name this shell lists, remembers, and does not act on.
+//
+// The third answer beside "we do it" and "we refuse it", and it is the one the
+// panel says most of these names want. A shell's `set -o` listing is a capture
+// surface — `eval "$(set +o)"` is the save/restore idiom — so a name in the
+// listing that `set` will not take is a line the listing writes and the shell
+// then rejects, which is worse than a short listing (#3128). Measured
+// 2026-09-16 by asking every shell in the panel for every name in its *own*
+// listing, in both directions: bash 5.3.20, bash 3.2.57 and dash 0.5.12 refuse
+// nothing at all, ksh93u+ refuses exactly the three
+// [Runner.AddImmovableSetOptions] already declares, and zsh 5.9.2 refuses the
+// five about being interactive that dialect/zsh/setopt.go already names. Every
+// other name every one of them lists, it takes.
+//
+// Recording is not implementing and does not claim to be — dialect/zsh's
+// setopt table has made the same bargain for 140 names since it was written,
+// and docs/spec/semantics.md says so in the same words. What it promises is
+// that the request is remembered and reported back faithfully: `set -o
+// markdirs` succeeds, `set -o` then says `markdirs on`, and a glob still marks
+// no directory. What it replaces is a complaint on stderr and a status 2 about
+// a name the shell had just finished advertising.
+//
+// A name moves *out* of here the moment something reads it, which is the
+// distinction being written down rather than assumed: `keyword` was in this
+// class until #3126 built `set -k`, and `history` and `histexpand` until
+// #3093. The entries below are the ones nothing reads yet.
+func recordedOption(name string, def bool) setOption {
+	return recordedOverOption(name, def, nil)
+}
+
+// recordedOverOption is recordedOption for a name whose state in a shell that
+// has not moved it is not a constant.
+//
+// `bgnice` is the one: ksh93 reports it on at a prompt and off in a script,
+// which is the same live fact `interactive` reports, so a constant written
+// here would have been wrong for one of the two runs that produced it. The
+// base is read on every request rather than captured, and the recorded answer
+// replaces it only once a script has asked.
+func recordedOverOption(name string, def bool, base func(*Runner) bool) setOption {
+	state := func(r *Runner) bool {
+		if base != nil {
+			return base(r)
+		}
+		return def
+	}
+	return setOption{
+		on: def,
+		apply: func(r *Runner, on bool) {
+			if r.recordedOptions == nil {
+				r.recordedOptions = make(map[string]bool, 1)
+			}
+			r.recordedOptions[name] = on
+		},
+		get: func(r *Runner) bool {
+			if on, ok := r.recordedOptions[name]; ok {
+				return on
+			}
+			return state(r)
+		},
+	}
 }
 
 // setOptionFailure is what a refused `set -o` reports, and resets it.

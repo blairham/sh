@@ -1987,6 +1987,17 @@ type Runner struct {
 	// take, whatever the substrate could do with them. Declared through
 	// AddImmovableSetOptions.
 	immovableOptions map[string]bool
+	// inertOptions are the names this dialect lists and takes in both
+	// directions without the state ever moving. Declared through
+	// AddInertSetOptions; `privileged` in ksh93 is the one. Not the same as
+	// immovableOptions, which refuse the request out loud.
+	inertOptions map[string]bool
+	// recordedOptions are the `set -o` names a script has moved that this
+	// shell remembers and does not act on — see recordedOption in
+	// setoptions.go. Absent means the name is still at the state the table
+	// says a shell that has moved nothing is in, which is why this holds
+	// what was asked for rather than a bit per name.
+	recordedOptions map[string]bool
 	// promptUser answers the login name the `%n` prompt escape reports,
 	// brought in by whoever is allowed to ask the system for it. Nil in a
 	// runner nobody told, where the escape is refused rather than guessed

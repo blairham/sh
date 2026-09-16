@@ -99,6 +99,13 @@ func (c *Runner) ownTables(r *Runner) {
 	// attribute must not outlive it: measured, `x=1; (readonly x); x=2`
 	// assigns 2 in bash, ksh93 and zsh, and `n=5; (typeset -i n); n=1+1`
 	// leaves the three characters everywhere.
+	// The `set -o` names this shell remembers and does not act on. A
+	// subshell's `set -o markdirs` must not reach the parent, exactly as an
+	// implemented option's would not: the states behind those are plain
+	// fields and are copied by `c := *r`, and this is the table that has to
+	// be cloned to get the same answer.
+	c.recordedOptions = maps.Clone(r.recordedOptions)
+
 	c.readonly = maps.Clone(r.readonly)
 	c.integer = maps.Clone(r.integer)
 	c.integerBase = maps.Clone(r.integerBase)
@@ -136,6 +143,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.extraOptions = maps.Clone(r.extraOptions)
 	c.negatedOptions = maps.Clone(r.negatedOptions)
 	c.immovableOptions = maps.Clone(r.immovableOptions)
+	c.inertOptions = maps.Clone(r.inertOptions)
 
 	// The descriptor tables are copied and the streams in them are shared: a
 	// subshell's `exec 7>&1` must not appear in the parent, and its writes

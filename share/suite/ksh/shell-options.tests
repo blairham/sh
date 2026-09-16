@@ -136,3 +136,62 @@ printf 'readonly under -k [%s]\n' "${R1-unset}"
 typeset -i N1=3*3 > /dev/null
 printf 'typeset under -k [%s]\n' "${N1-unset}"
 set +k
+
+# ---- every name the roster carries is a name a script can move ----
+#
+# The listing is a capture surface, so a row it writes that `set` will not take
+# is a promise the shell then declines — and `eval "$(set +o)"` is the idiom
+# that collects the bill. #2925 gave this file's listing all thirty-two of
+# ksh93's rows; these are the rows moving, which is the other half (#3128).
+#
+# Each name is asked in a subshell of its own for two reasons: a refusal ends
+# the shell here, `set` being a special builtin, and `restricted` would take
+# the rest of the file with it if it landed in this one.
+#
+# The state is read back as well as the status, because a status alone cannot
+# tell "taken and remembered" from "taken and dropped on the floor" — and one
+# name in the roster really is the second of those.
+
+for o in bgnice globstar gmacs ignoreeof letoctal markdirs notify restricted showme
+do
+	( set -o $o ) 2> /dev/null
+	printf 'set -o %s -> %s\n' "$o" "$?"
+	( set +o $o ) 2> /dev/null
+	printf 'set +o %s -> %s\n' "$o" "$?"
+done
+
+# The three whose listed state is on, so the plus direction is the request and
+# the minus one is the state they are already in.
+for o in multiline viraw log
+do
+	( set +o $o ) 2> /dev/null
+	printf 'set +o %s -> %s\n' "$o" "$?"
+	( set -o $o ) 2> /dev/null
+	printf 'set -o %s -> %s\n' "$o" "$?"
+done
+
+# And the state each one is left in, which is the half a status cannot report.
+( set -o globstar; set -o ) | grep '^globstar'
+( set -o markdirs; set -o ) | grep '^markdirs'
+( set -o notify; set -o ) | grep '^notify'
+( set -o bgnice; set -o ) | grep '^bgnice'
+( set +o multiline; set -o ) | grep '^multiline'
+( set +o log; set -o ) | grep '^log'
+
+# `privileged` is the name that is taken and does not move. It is 0 in both
+# directions with nothing on standard error, and the row still reads off
+# afterwards — the shell does not hand out privilege because a script asked.
+( set -o privileged ) 2> /dev/null; printf 'set -o privileged -> %s\n' "$?"
+( set +o privileged ) 2> /dev/null; printf 'set +o privileged -> %s\n' "$?"
+( set -o privileged; set -o ) | grep '^privileged'
+
+# The `set +o` line follows a moved row, which is what makes the save half of
+# the idiom worth having.
+( set -o globstar; set +o )
+( set -o notify; set -o bgnice; set +o )
+
+# And the same names through the `--name` spelling, which reads this very
+# namespace — so a name the roster carries and `-o` moves must move here too.
+( set --globstar; set -o ) | grep '^globstar'
+( set --noglobstar; set -o ) | grep '^globstar'
+( set --markdirs; set --nomarkdirs; set -o ) | grep '^markdirs'

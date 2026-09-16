@@ -145,6 +145,8 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 func TestASubstitutionRefusalQuotesOnlyItsOwnText(t *testing.T) {
 	for _, c := range []struct {
 		name, src, want, never string
+		// shell is the preset, bash where empty.
+		shell string
 	}{
 		{
 			// A trap body is text of its own. The script's line 3 carries
@@ -154,6 +156,27 @@ func TestASubstitutionRefusalQuotesOnlyItsOwnText(t *testing.T) {
 			src:   "echo one\ntrap 'v=$(echo hi; for)' EXIT\necho two; exit # v=$(echo hi; for)\n",
 			want:  "`v=$(echo hi; for)'\n",
 			never: "echo two",
+		},
+		{
+			// And in the dialect that reads a trap's action when the trap is
+			// set: zsh 5.9.2 refuses it there — `couldn't parse trap command`
+			// — and never fires it, so no second message of the word kind is
+			// its to write from inside a body that fired.
+			name:  "a trap body, in the dialect that quotes the word",
+			shell: "zsh",
+			src:   "echo one\ntrap 'v=$(echo hi; for)' EXIT\necho two\n",
+			never: "near `v=",
+		},
+		{
+			// Nor from inside a function body, where that dialect locates a
+			// message by the function: it reads the body at the definition
+			// and numbers its second message in the *file* — `s.sh:4` for a
+			// body on line 3 — which a body refused when it is called cannot
+			// say. `f:2` would be a place zsh never names.
+			name:  "a function body, in the dialect that quotes the word",
+			shell: "zsh",
+			src:   "echo one\nf() {\n  q=1; v=$(echo hi; for); z=2\n}\nf\n",
+			never: "near `v=",
 		},
 		{
 			// A `$( … )` inside the older spelling's body quotes that body,
@@ -182,6 +205,9 @@ func TestASubstitutionRefusalQuotesOnlyItsOwnText(t *testing.T) {
 			}
 			t.Chdir(dir)
 			sh := bashShell()
+			if c.shell != "" {
+				sh = echoShells()[c.shell]
+			}
 			var out, errs strings.Builder
 			sh.Stdout, sh.Stderr = &out, &errs
 			driver.MainArgs(sh, []string{sh.Name, "s.sh"})

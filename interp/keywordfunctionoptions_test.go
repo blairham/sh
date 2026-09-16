@@ -84,15 +84,30 @@ func TestKeywordFunctionSeesTheCallersOptions(t *testing.T) {
 // And the other direction, over an option that starts **on**, so that neither
 // reading can be an accident of which way a default points. A table emptied
 // or reset on the way in answers `on` here.
+//
+// Three readings in one row, because the option is one this shell keeps as a
+// *negative* field and reaches through a name a dialect declares rather than
+// through the common table: the body finds it off as the caller left it, can
+// still move it, and the caller has it off again afterwards. The last of
+// those is what says the walk is the whole roster and not the names the
+// substrate happens to own.
 func TestKeywordFunctionSeesACallersOptionTurnedOff(t *testing.T) {
-	const src = `set +o braceexpand; function g { echo {a,b}; }; g; echo {a,b}`
+	const src = `set +o braceexpand
+function g { echo {a,b}; set -o braceexpand; echo {a,b}; }
+g
+echo {a,b}`
 	out, _ := run(t, src, func(r *Runner) {
 		s := keywordOptionsSem()
+		// The preset has no braces at all, which is the standard's answer
+		// and would make every line of this row read `{a,b}` — a pass for
+		// the wrong reason. The option is the switch beside that axis, not
+		// a substitute for it.
+		s.BraceExpansion = Yes
 		r.Semantics = &s
 		r.AddSetOptions("braceexpand")
 	})
-	if out != "{a,b}\n{a,b}\n" {
-		t.Errorf("got %q, want the body to expand nothing either; a reset would expand", out)
+	if out != "{a,b}\na b\n{a,b}\n" {
+		t.Errorf("got %q, want the body to find it off, move it, and give it back", out)
 	}
 }
 

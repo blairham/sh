@@ -3,7 +3,11 @@
 
 package ksh_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/blairham/sh/internal/dialecttest"
+)
 
 // A *discipline* function is this shell's alone, and it was refused outright
 // here: every dotted function name met `invalid discipline function` and the
@@ -245,5 +249,102 @@ printf 'out=[%s][%s]\n' "${.sh.value}" "${.sh.name}"`
 	want := "in=[][g]\n[raw]\nout=[mine][]\n"
 	if out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+}
+
+// An assignment **prefix** is not always a store, and a discipline hears
+// about it exactly where it is one. Measured a command kind at a time
+// against AT&T ksh93u+ 2012-08-01, 2026-09-16 (#3116).
+//
+// `s=5 true` is the row the issue reports: a regular builtin's prefix is an
+// entry in the environment it is handed, so there is no store and `s.set`
+// runs nothing there. This shell assigned and took the value back, and the
+// assignment fired the hook — a `.set` that logs or counts saw a write that
+// never happened.
+func TestAPrefixFiresTheHookOnlyWhereItStores(t *testing.T) {
+	const hooks = `function s.set { print -u2 "SET[${.sh.value}]"; }
+function s.append { print -u2 "APP[${.sh.value}]"; }
+pf() { print "pf s=[$s]"; }
+`
+	for _, tc := range []struct {
+		src, want string
+	}{
+		// A regular builtin: nothing fires, and the builtin still sees the
+		// value, which is the half that must not regress.
+		{`s=5 true`, ""},
+		{`s=5 command true`, ""},
+		{`IFS=: read -r a b <<< 'x:y'; print "[$a][$b]"`, "[x][y]\n"},
+		// A special builtin's prefix persists, so there is a store.
+		{`s=5 :; print "after=[$s]"`, "SET[5]\nafter=[5]\n"},
+		{`s=5 eval true; print "after=[$s]"`, "SET[5]\nafter=[5]\n"},
+		// So does a POSIX-form function's.
+		{`s=5 pf; print "after=[$s]"`, "SET[5]\npf s=[5]\nafter=[5]\n"},
+		// And the event is the one the operator names: `+=` enters
+		// `.append` with the part being appended, not `.set` with the join
+		// this shell had already made.
+		{`s=base; s+=5 :; print "after=[$s]"`, "SET[base]\nAPP[5]\nafter=[base5]\n"},
+		{`s=base; s+=5 true; print "after=[$s]"`, "SET[base]\nafter=[base]\n"},
+	} {
+		out, st := answersRun(t, hooks+tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s:\n got %q (status %d)\nwant %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// A hook may rewrite what it is handed, and an append's rewriting joins what
+// the name already holds — the same rule the bare `s+=5` statement keeps, now
+// that the prefix reaches the same event.
+func TestAnAppendPrefixRewritesOnlyTheAppendedPart(t *testing.T) {
+	src := `s=base
+function s.append { .sh.value="<${.sh.value}>"; }
+s+=5 :
+print "after=[$s]"`
+	out, st := answersRun(t, src)
+	if want := "after=[base<5>]\n"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+}
+
+// A name the shell **inherited** and has not assigned since reaches a child
+// as the text that came in, whatever a read of it in the shell answers.
+// Measured on ksh93u+ 2012-08-01, 2026-09-16 with `G=raw` in the
+// environment: `print "$G"` is `HOOKED` and `env` says `G=raw`, and it takes
+// an assignment — which moves the name into the shell's own table — to make
+// the child see the hook's value.
+//
+// The regression this pins is not the hook, though: the environment loop
+// passed the *name* into the hook instead of the value, so a script with any
+// discipline anywhere in it handed every command it ran a `PATH=PATH`.
+func TestAnInheritedNameReachesAChildWithoutItsDiscipline(t *testing.T) {
+	inherited := func(t *testing.T, src string) (string, int) {
+		t.Helper()
+		out, st, err := preset.Combined(t, dialecttest.Base{
+			Name: "sh", Dir: t.TempDir(),
+			Env: []string{"PATH=/usr/bin:/bin", "G=raw"},
+		}, src)
+		if err != nil {
+			return out + "unsupported: " + err.Error(), -1
+		}
+		return out, st
+	}
+	const hook = "function G.get { .sh.value=HOOKED; }\n"
+	for _, tc := range []struct {
+		src, want string
+	}{
+		{hook + `print "[$G]"`, "[HOOKED]\n"},
+		{hook + `env | grep '^G='`, "G=raw\n"},
+		{hook + `export G; env | grep '^G='`, "G=raw\n"},
+		// Assigned since, so it is the shell's own name and the child is
+		// handed what a read answers.
+		{hook + `G=new; env | grep '^G='`, "G=HOOKED\n"},
+		// And no hook of PATH's own, which is the row the swapped halves
+		// broke: every inherited name came out as its own name.
+		{hook + `env | grep '^PATH='`, "PATH=/usr/bin:/bin\n"},
+	} {
+		out, st := inherited(t, tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s:\n got %q (status %d)\nwant %q at 0", tc.src, out, st, tc.want)
+		}
 	}
 }

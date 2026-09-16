@@ -225,3 +225,66 @@ printf -- '--- writing the level selects a frame ---\n'
   function after { printf 'the next call: fun=[%s]\n' "${.sh.fun}"; }
   after
 )
+
+printf -- '--- a prefix fires the hook only where it stores ---\n'
+(
+  function s.set { printf 'SET[%s]\n' "${.sh.value}"; }
+  function s.append { printf 'APP[%s]\n' "${.sh.value}"; }
+
+  # A regular builtin's prefix is the environment it is handed rather than a
+  # store in the shell, so nothing fires and nothing is left behind.
+  s=5 true
+  printf 'after a regular builtin: [%s]\n' "$s"
+  s=5 command true
+  printf 'after command: [%s]\n' "$s"
+
+  # A special builtin's persists, and a store is what the hook is about.
+  s=5 :
+  printf 'after a special builtin: [%s]\n' "$s"
+)
+
+printf -- '--- and a prefix to a function is a store too ---\n'
+(
+  # Its own section rather than another command in the one above, because
+  # `unset` between them would take the discipline with it — the hook goes on
+  # being a function `typeset -f` lists and stops being this variable's.
+  function s.set { printf 'SET[%s]\n' "${.sh.value}"; }
+  pf() { printf 'the function sees: %s\n' "$s"; }
+  s=5 pf
+  printf 'after a function: [%s]\n' "$s"
+)
+
+printf -- '--- an append prefix names the append event ---\n'
+(
+  # `+=` enters `.append` with the part being appended, and not `.set` with
+  # the whole join.
+  function s.set { printf 'SET[%s]\n' "${.sh.value}"; }
+  function s.append { printf 'APP[%s]\n' "${.sh.value}"; }
+  s=base
+  s+=5 :
+  printf 'after an append prefix: [%s]\n' "$s"
+  s+=9 true
+  printf 'after one to a regular builtin: [%s]\n' "$s"
+)
+
+printf -- '--- an append prefix rewrites only the appended part ---\n'
+(
+  # A name of its own: ksh93 does not undo a function definition made in a
+  # subshell, so an `s.set` from a section above would still be watching `s`
+  # here and this section would be measuring that instead.
+  t=base
+  function t.append { .sh.value="<${.sh.value}>"; }
+  t+=5 :
+  printf 'joined: %s\n' "$t"
+)
+
+printf -- '--- an inherited name reaches a child as it came in ---\n'
+(
+  # PATH is inherited by this shell and nothing here assigns it, so the child
+  # is handed the text that came in — which is what a shell with any hook in
+  # it stopped doing when the environment asked a discipline with the name in
+  # place of the value. Counted rather than printed: the path itself is the
+  # harness's and not an answer.
+  function q.set { :; }
+  printf 'entries naming themselves: %s\n' "$(env | grep -c '^PATH=PATH$')"
+)

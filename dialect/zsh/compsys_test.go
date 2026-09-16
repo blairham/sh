@@ -202,14 +202,22 @@ func TestTheCompletionParametersAreGoneAfterwards(t *testing.T) {
 // TestTheseBuiltinsRefuseOutsideACompletion is the refusal `zle` outside a
 // widget gives, one word to the left.
 //
-// Measured on zsh 5.9.2 with `zmodload zsh/complete` first, so the builtins
-// really are present: `compadd x`, `compadd` alone, `compadd -Z x` and
-// `compset -p 1` are all `can only be called from completion function` at
-// status 1. The bad option is among them, which says the context is checked
-// before the letters.
+// Measured on zsh 5.9.2 with `zmodload zsh/complete` and `zmodload
+// zsh/computil` first, so the builtins really are present: `compadd x`,
+// `compadd` alone, `compadd -Z x` and `compset -p 1` are all `can only be
+// called from completion function` at status 1. The bad option is among
+// them, which says the context is checked before the letters.
+//
+// **`compset` alone is not.** It was in this list and it does not belong:
+// re-measured 2026-09-16, a bare `compset` is `not enough arguments`,
+// because zsh checks the word count in the dispatcher before the builtin
+// runs and `compset` declares a minimum of one where `compadd` declares
+// none. That half is TestTheCompletionBuiltinsCountTheirWordsFirst in
+// computil_test.go; what is left here is the refusal about the *place*,
+// which is only reached by a call that satisfies the count.
 func TestTheseBuiltinsRefuseOutsideACompletion(t *testing.T) {
 	for _, src := range []string{
-		"compadd x", "compadd", "compadd -Z x", "compset -p 1", "compset",
+		"compadd x", "compadd", "compadd -Z x", "compset -p 1",
 	} {
 		out, status := answersRun(t, src+`; echo "st=$?"`)
 		if !strings.Contains(out, "can only be called from completion function") {

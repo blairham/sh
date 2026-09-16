@@ -81,12 +81,11 @@ type tagsState struct {
 }
 
 func comptagsBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	_, st, ok := computilFrom(r, ctx)
-	if !ok {
+	if !compArity(r, args, 1, -1) {
 		return 1
 	}
-	if len(args) == 0 {
-		r.Diagnosef("not enough arguments\n")
+	_, st, ok := computilFrom(r, ctx)
+	if !ok {
 		return 1
 	}
 	verb, level := tagsVerb(args[0], tagsLevel(r))

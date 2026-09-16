@@ -90,6 +90,54 @@ import (
 // answers it gives are correct rather than approximate; the cost is that
 // `_files` globs unoptimised. See compfiles.go.
 
+// compArity is the argument-count gate zsh applies to the completion
+// builtins *before* the builtin body runs, and it is not an implementation
+// detail: it is the first thing a caller outside a completion sees.
+//
+// zsh's dispatcher checks each builtin's declared minimum and maximum against
+// the words it was given and refuses there, so `comparguments` with no
+// arguments is `not enough arguments` and never reaches the code that would
+// have said `can only be called from completion function`. Every one of the
+// ten had that order the other way round here, which meant eight of them
+// worded the commonest refusal a script can provoke differently from zsh —
+// found by `make coverage`, which reported them as surface no case in the
+// tree ever asked about (#2293, under #2291).
+//
+// Measured on zsh 5.9.2, 2026-09-16, each builtin called outside a completion
+// with 0…20 arguments and the refusal classified:
+//
+//	compadd        0 and up: can only be called
+//	comparguments  0: not enough · 1 and up: can only be called
+//	compdescribe   0,1,2: not enough · 3 and up: can only be called
+//	compfiles      0: not enough · 1 and up: can only be called
+//	compgroups     0: not enough · 1 and up: can only be called
+//	compquote      0: not enough · 1 and up: can only be called
+//	compset        0: not enough · 1,2,3: can only be called · 4 and up: too many
+//	comptags       0: not enough · 1 and up: can only be called
+//	comptry        0 and up: can only be called
+//	compvalues     0: not enough · 1 and up: can only be called
+//
+// The count is of *words* and not of operands in nine of the ten:
+// `compdescribe -i a` is two and refuses, `compdescribe a b c` is three and
+// does not, and `compset -p 1 x x` is four and is too many. So an option
+// letter is nothing special, which is what a gate ahead of any option parsing
+// means. `compquote` is the exception and parses its `-p` off first — see
+// compquote.go, where that measurement is. `compadd` and `comptry` declare no
+// minimum and are the two with no call to this at all.
+//
+// max < 0 is "no maximum", which is every one of them but `compset`.
+func compArity(r *interp.Runner, args []string, minArgs, maxArgs int) bool {
+	if len(args) < minArgs {
+		r.Diagnosef("not enough arguments\n")
+		return false
+	}
+	if maxArgs >= 0 && len(args) > maxArgs {
+		r.Diagnosef("too many arguments\n")
+		return false
+	}
+	return true
+}
+
 // registerComputil puts the eight in the table.
 //
 // Named together because `zmodload zsh/computil` is answered by asking the

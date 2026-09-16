@@ -187,12 +187,11 @@ type argumentsState struct {
 const defaultArgumentsMatcher = `r:|[_-]=* r:|=*`
 
 func compargumentsBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	cs, st, ok := computilFrom(r, ctx)
-	if !ok {
+	if !compArity(r, args, 1, -1) {
 		return 1
 	}
-	if len(args) == 0 {
-		r.Diagnosef("not enough arguments\n")
+	cs, st, ok := computilFrom(r, ctx)
+	if !ok {
 		return 1
 	}
 	if args[0] == "-i" {

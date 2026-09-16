@@ -37,15 +37,24 @@ import (
 // otherwise", and a name that holds nothing is not an error.
 
 func compquoteBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	cs, _, ok := computilFrom(r, ctx)
-	if !ok {
-		return 1
-	}
+	// This is the one of the ten whose count is of *operands* rather than of
+	// words: `-p` is parsed off first and does not count toward the one it
+	// needs. Measured on zsh 5.9.2, 2026-09-16 — `compquote -p` and
+	// `compquote -p -p` are both `not enough arguments`, and `compquote -p x`
+	// and `compquote -p -p x` both reach the refusal about the place. Every
+	// other one of the ten counts the words as given, which is why they call
+	// compArity directly and this strips first.
+	//
+	// Ahead of the context check for compArity's reason: zsh answers the
+	// count in the dispatcher, before the builtin body runs.
 	for len(args) > 0 && args[0] == "-p" {
 		args = args[1:]
 	}
-	if len(args) == 0 {
-		r.Diagnosef("not enough arguments\n")
+	if !compArity(r, args, 1, -1) {
+		return 1
+	}
+	cs, _, ok := computilFrom(r, ctx)
+	if !ok {
 		return 1
 	}
 	for _, name := range args {

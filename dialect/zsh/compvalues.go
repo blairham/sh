@@ -173,17 +173,18 @@ func (v *valuesState) describe(r *interp.Runner, descr, action string) int {
 // argument.
 func (v *valuesState) offer(r *interp.Runner, names []string) int {
 	var noargs, args []string
-	if v.name == "" {
-		for _, value := range v.values {
-			if value.hidden || (v.given[value.names[0]] && !value.repeat) {
-				continue
-			}
-			offer := optionOffer(value.names[0], value.descr)
-			if len(value.optargs) > 0 {
-				args = append(args, offer)
-			} else {
-				noargs = append(noargs, offer)
-			}
+	// Answered whatever the cursor is on. Measured with `cmd bb=`, where the
+	// cursor is inside `bb`'s argument and `-D` answers for it: `-V` still
+	// lists `aa` and `bb`, so it is not a question about the cursor.
+	for _, value := range v.values {
+		if value.hidden || (v.given[value.names[0]] && !value.repeat) {
+			continue
+		}
+		offer := optionOffer(value.names[0], value.descr)
+		if len(value.optargs) > 0 {
+			args = append(args, offer)
+		} else {
+			noargs = append(noargs, offer)
 		}
 	}
 	r.SetArray(names[0], noargs)

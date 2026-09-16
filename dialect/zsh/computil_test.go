@@ -370,11 +370,16 @@ func TestCompvalues(t *testing.T) {
 		},
 		// `-D` is the value whose argument the cursor is inside, and 1 where
 		// the cursor is still on a name.
+		// Measured with `cmd bb=`: `-D` answers for the argument, and `-V`
+		// goes on listing the values all the same, so the two are not two
+		// halves of one question.
 		{
 			"an argument's description", "cmd bb=",
-			`compvalues -i -S '=' opt 'bb[second]:val:(x y)'
-			 local d a; compvalues -D d a; local one=$?; say "$one/$d/$a"`,
-			"0/val/(x y)",
+			`compvalues -i -S '=' opt 'aa[first]' 'bb[second]:val:(x y)'
+			 local d a; compvalues -D d a; local one=$?
+			 local -a na ar op; compvalues -V na ar op
+			 say "$one/$d/$a/${na[*]}/${ar[*]}"`,
+			"0/val/(x y)/aa:first/bb:second",
 		},
 		{
 			"not inside an argument", "cmd bb",
@@ -456,11 +461,24 @@ func TestTheEightRefuseOutsideACompletion(t *testing.T) {
 
 // TestCompaddEndsItsOptionsOnALoneDash is the old spelling the manual's own
 // example uses and the one `_arguments` writes to this day.
+//
+// **Asked on a word that begins with a hyphen**, which is the only place the
+// question discriminates: on `git che` a stray `-` candidate is filtered out
+// by the prefix anyway, so the test passes whether the dash was read as an
+// end-of-options marker or as a candidate. On `uname -` it is not, and a
+// shell that read it as a candidate offers an eighth match spelled `-`.
+// Measured on zsh 5.9.2, 2026-09-15: `compadd - -a -m` there offers two.
 func TestCompaddEndsItsOptionsOnALoneDash(t *testing.T) {
-	got := completionFor(t, widgetOf("compadd -o nosort - checkout cherry"), "git che")
-	want := []string{"checkout", "cherry"}
+	got := completionFor(t, widgetOf("compadd -o nosort - -a -m"), "uname -")
+	want := []string{"-a", "-m"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("compadd - offered %q, want %q", got, want)
+	}
+	// And `--` still ends them, on the same word, so the row above is not
+	// accidentally asserting that every leading dash is swallowed.
+	if got := completionFor(t, widgetOf("compadd -o nosort -- -a -m"), "uname -"); //
+	strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("compadd -- offered %q, want %q", got, want)
 	}
 }
 

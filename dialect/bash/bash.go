@@ -1835,6 +1835,15 @@ func Semantics() interp.Semantics {
 	// `bash -oerrexit -c cmd` refuses `-c` the same way. With no word behind
 	// it, `set -oe` writes the option table and then turns errexit on.
 	s.SetOLetterAttachesItsName = interp.No
+	// Measured 2026-09-16, bash 5.3.20 and 3.2: `bash --xtrace -c 'echo ran'`
+	// is `--xtrace: invalid option` followed by the table of the seventeen
+	// GNU long options it does have, and nothing runs. A `set -o` name is not
+	// among them, so a `--name` word here is a name bash looks up in a table
+	// of its own rather than in the option namespace.
+	s.LongOptionNamesASetOption = interp.No
+	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
+	// `--name` option word, and the axis above says this shell has no such
+	// word. There is no site here to put the question to.
 	// And the next word is only taken when it does not look like options
 	// itself: `set -o -e` here writes the option table and turns errexit
 	// **on**, where the name that would have been refused is `-e`. Only at

@@ -3077,6 +3077,68 @@ type Diagnostics struct {
 	// the block is a fact about the shell rather than about `set`.
 	InvocationUsage string
 
+	// InvocationLongOptionUsage is the usage block written under a refusal of
+	// an option spelled `--name` at an invocation, where that is a different
+	// block from the one a letter or an `-o` name gets.
+	//
+	// ksh93 alone, because it is the only shell on the panel with the
+	// spelling at all (Semantics.LongOptionNamesASetOption). Measured
+	// 2026-09-16 on 93u+ 2012-08-01:
+	//
+	//	ksh -o badname -c :   badname: bad option(s)
+	//	                      Usage: ksh [-cilrsDER:abefhkmno:prtuvxBCGH] …
+	//	ksh --badname -c :    badname: bad option(s)
+	//	                      Usage: ksh [ options ] [arg ...]
+	//
+	// The sentence is the same in both and only the block moves, which is
+	// why this is a second string beside InvocationUsage rather than a
+	// second refusal. Empty leaves InvocationUsage standing for both
+	// spellings, which is right for every dialect that has no long one.
+	//
+	// One verb, read the same way InvocationUsage reads its two: the name
+	// the shell was invoked by, then that name's last path element.
+	InvocationLongOptionUsage string
+
+	// SetLongOptionUsage is the same block for the `set` *builtin*: the
+	// usage written under a refused `set --name`, where the dialect answers
+	// that spelling at all.
+	//
+	// ksh93 alone, and it names the two long options `set` has that are not
+	// option names — measured 2026-09-16:
+	//
+	//	set -o zzznosuch   zzznosuch: bad option(s)
+	//	                   Usage: set [-sabefhkmnprtuvxBCGH] [-A name] …
+	//	set --zzznosuch    zzznosuch: bad option(s)
+	//	                   Usage: set [--default] [--state] [arg ...]
+	//
+	// Empty leaves BuiltinUsage["set"] standing for both spellings.
+	SetLongOptionUsage string
+
+	// InvocationOptionRefusalNamesTheBase writes the last element of the
+	// word the shell was invoked by, where every other diagnostic about the
+	// invocation writes the whole word.
+	//
+	// ksh93 alone, and it is not a style: the option refusals come from the
+	// AST option reader, which carries its own idea of the program's name,
+	// while everything else is the shell speaking. Measured 2026-09-16
+	// invoking it as `/bin/ksh`:
+	//
+	//	-o zzznosuch   ksh: zzznosuch: bad option(s)
+	//	-Z             ksh: -Z: unknown option
+	//	--zzznosuch    ksh: zzznosuch: bad option(s)
+	//	/nosuch.sh     /bin/ksh: /nosuch.sh: not found
+	//	a directory    /bin/ksh: …: cannot open [Is a directory]
+	//	`;;`           /bin/ksh: syntax error at line 1: …
+	//
+	// So the split is the refusal and not the route: all three option
+	// spellings take the base and every other invocation diagnostic takes
+	// the path. bash, zsh and dash write the whole word for both.
+	//
+	// The usage block under the refusal already writes the base in this
+	// dialect — InvocationUsage's second verb — so with this set the two
+	// lines of one refusal finally name the shell the same way.
+	InvocationOptionRefusalNamesTheBase bool
+
 	// InvocationNameRefusalNamesTheShell reports a refused `set -o` name at
 	// an invocation exactly as the builtin would, with the shell's own name
 	// standing where the builtin's would:

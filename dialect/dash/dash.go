@@ -908,6 +908,13 @@ func Semantics() interp.Semantics {
 	// As in bash: `set -oe x` is `Illegal option -o x`, and `set -ozzznosuch`
 	// with nothing behind it lists the options and then stops at `-z`.
 	s.SetOLetterAttachesItsName = interp.No
+	// Measured 2026-09-16: `dash --xtrace -c 'echo ran'` is `dash: 0: Illegal
+	// option --`. It does not reach the name at all — the word is two dashes
+	// and a tail, and the tail is never read.
+	s.LongOptionNamesASetOption = interp.No
+	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
+	// `--name` option word, and the axis above says this shell has no such
+	// word. There is no site here to put the question to.
 	// And it takes the next word whatever it looks like: `set -o -e` is
 	// `Illegal option -o -e` at 2, with the dash word refused as the name.
 	s.SetODeclinesADashWord = interp.No

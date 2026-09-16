@@ -126,6 +126,7 @@ ash   ListedBangIsOrdinary
 ash   ListedCaretIsOrdinary
 ash   ListedEqualsIsOrdinary
 ash   ListedNonAsciiIsOrdinary
+ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
 ash   NamerefArrayRefusal
 ash   NamerefCycleIsRefused
@@ -219,6 +220,7 @@ bash  ExitTrapFiresPastTheEnd
 bash  FloatFormatLetterE
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
+bash  LongOptionValueIsANumber
 bash  NumericTypeLetterPrecedence
 bash  NumericTypeLettersAreExclusive
 bash  PrintfFloatOperandIsEvaluatedTwice
@@ -341,6 +343,7 @@ dash  ListedBangIsOrdinary
 dash  ListedCaretIsOrdinary
 dash  ListedEqualsIsOrdinary
 dash  ListedNonAsciiIsOrdinary
+dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
 dash  NamerefArrayRefusal
 dash  NamerefCycleIsRefused
@@ -460,6 +463,8 @@ zsh   IndirectionYieldsName
 zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
+zsh   LongOptionNamesASetOption
+zsh   LongOptionValueIsANumber
 zsh   NamerefArrayRefusal
 zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar

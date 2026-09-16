@@ -6,6 +6,7 @@ package interp
 import (
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -1308,4 +1309,65 @@ func (r *Runner) listOptions(plus bool) int {
 		r.printf("%-*s%s%s\n", width, row.Name, sep, state)
 	}
 	return 0
+}
+
+// SetLongOption applies one invocation option written as `--name`, the
+// spelling ksh93 gives every `set -o` name on its command line. Exported for
+// the front end beside SetOptionLetters and SetNamedOption, and returning the
+// same thing they do: 0, or the status the dialect gives a name it refuses.
+//
+// The word arrives without its dashes, and what it holds is decided by
+// longSetOptionName. See Semantics.LongOptionNamesASetOption for the rule and
+// for why the fallback is tried second.
+func (r *Runner) SetLongOption(word string) int {
+	r.line = 0
+	r.atInvocation = true
+	r.longSetOptionSpelling = true
+	defer func() {
+		r.atInvocation = false
+		r.longSetOptionSpelling = false
+	}()
+	name, on := r.longSetOptionName(word)
+	return r.namedOptionAnswer(r.setNamedOption(name, on))
+}
+
+// longSetOptionName reads a `--name` word — already stripped of its dashes —
+// into the option name it asks for and the direction it asks for it in.
+//
+// Three readings, in the order that keeps them from eating each other:
+//
+//  1. an `=value` suffix, where the dialect reads one. It is a number rather
+//     than a word, so `=on` is the option **off**; see
+//     Semantics.LongOptionValueIsANumber. Read first, because the name in
+//     front of it still goes through the two readings below.
+//  2. the whole word as a name. `notify` is an option in its own right and so
+//     is `noglob`, so this has to come before the strip or `--notify` would
+//     turn notify off.
+//  3. the word with a leading `no` taken off, for the option off. Only when
+//     the whole word is not a name, and only when something is left after the
+//     `no`: `--no` is a refusal and not `+o ""`.
+//
+// A word none of the three resolves comes back unchanged and in the `on`
+// direction, so the refusal downstream names the word as it was written. That
+// is measured: ksh93 answers `--noprofile` with `noprofile: bad option(s)`
+// and not with `profile:`.
+func (r *Runner) longSetOptionName(word string) (name string, on bool) {
+	name, on = word, true
+	if before, value, ok := strings.Cut(name, "="); ok &&
+		r.sem().LongOptionValueIsANumber == Yes {
+		name = before
+		// A number, and nonzero is on. Anything that is not one — a word, an
+		// empty value — is the option off, which is what strtol leaves
+		// behind when it reads nothing.
+		n, err := strconv.Atoi(value)
+		on = err == nil && n != 0
+	}
+	if r.hasSetOptionName(name) {
+		return name, on
+	}
+	if rest, ok := strings.CutPrefix(name, "no"); ok && rest != "" &&
+		r.hasSetOptionName(rest) {
+		return rest, !on
+	}
+	return name, on
 }

@@ -4791,6 +4791,27 @@ locale refuses, so an ASCII one needs no answer from anybody — `\u007f` is
 the DEL byte in both shells under `LC_ALL=C` and `\u0080` is the first one
 outside — and neither does any escape at all in a UTF-8 locale.
 
+A locale that names a charset of its own is **not** the C locale, and
+"outside the locale" is a narrower question than it reads: a charset holds
+*some* of Unicode rather than none of it. Measured 2026-09-15 with
+`printf '%s' $'a\u00e9Z' | od -An -tx1`:
+
+    LC_ALL=fr_FR.ISO8859-1    bash  61 e9 5a      zsh  61 e9 5a
+    LC_ALL=en_US.ISO8859-15   bash  61 e9 5a      zsh  61 e9 5a
+    LC_ALL=ru_RU.CP1251       bash  61 27 65 5a   (U+00E9 is not in it)
+    LC_ALL=C                  bash  61 5c 75 …    zsh  character not in range
+
+so the two shells that consult a locale write the byte the charset stands
+the character in, and only a character the charset has no room for reaches
+the axis at all. ksh93 writes `61 c3 a9 5a` in every one of those, which is
+what `OutsideLocaleEscapeEncoded` means by never reading a locale — so the
+charset is consulted inside the policy and not before it (#3004).
+
+The tables are generated into the tree rather than imported, which is what
+`internal/eastasian` and `internal/unorm` already do and for the same
+reason: this module ships with no dependencies of its own and the standard
+library carries no legacy charset. See `internal/charsetgen`.
+
 Two limits are stated rather than hidden.
 
 **An unset locale is a question of its own**, and it decides whether this
@@ -4801,12 +4822,21 @@ while zsh refuses the escape and answers 6. That is
 below — and with it answered, a dialect reading an unset locale as C
 reaches this axis there exactly as it does under `LC_ALL=C` (#2020).
 
-**A single-byte encoding that is not ASCII is treated as ASCII.** bash
-transcodes there, writing `\u00e9` as the single byte `e9` under
-`en_US.ISO8859-1`, and this implementation has no charset tables. It is
-the limit `multibyteLocale` already records for the same reason — every
-non-UTF-8 encoding counts bytes — and the alternative is a table per
-charset.
+**Only the single-byte charsets are held.** A locale naming a multibyte
+encoding that is not UTF-8 — `ja_JP.SJIS`, `zh_TW.Big5`, `eucJP`,
+`GB18030` — reaches the axis for every code point above ASCII, so this
+shell writes `\uFF9F` where bash writes the byte `df` under
+`ja_JP.SJIS`. Each of those is a table two orders of magnitude larger and
+a decoder as well as an encoder, and `multibyteLocale` records the same
+limit from the other side: every non-UTF-8 encoding counts bytes.
+
+**Transliteration is not attempted.** A character the charset genuinely
+lacks gets the axis's answer here, where bash on macOS is measured
+substituting something near it — `\u00e9` under `ru_RU.CP1251` is
+`27 65`, an apostrophe and an `e`, and `\u0100` is a plain `A` in every
+charset that lacks it. That is the C library's `//TRANSLIT` behavior
+showing through a shell, it differs between C libraries, and reproducing
+it would mean pinning one platform's tables as the answer.
 
 ### A hexadecimal escape with no digits
 

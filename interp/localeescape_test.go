@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -283,6 +284,81 @@ func TestAPrintfEscapeOutsideTheLocaleEndsTheBuiltin(t *testing.T) {
 		out, st := run(t, `printf 'a\u00e9Z'`, printfLocale(OutsideLocaleEscapeWritten))
 		if want := `a\u00E9Z`; out != want || st != 0 {
 			t.Errorf("got %q status %d, want %q status 0", out, st, want)
+		}
+	})
+}
+
+// A locale that names a charset of its own is not the C locale, and "outside
+// the locale" turns out to be a narrower question than the name suggests: a
+// charset holds *some* of Unicode rather than none of it.
+//
+// Measured 2026-09-15 with `printf '%s' $'a\u00e9Z' | od -An -tx1` under
+// `LC_ALL=fr_FR.ISO8859-1`: bash 5.3.15 and zsh 5.9.2 both write `61 e9 5a` —
+// the single byte the charset stands U+00E9 in, with none of the
+// `character not in range` zsh gives under `LC_ALL=C` — and ksh93 writes
+// `61 c3 a9 5a` there as everywhere, which is what the axis means by a shell
+// that never reads a locale.
+func TestAnEscapeInASingleByteCharsetIsTheCharsetsByte(t *testing.T) {
+	charsetLocale := func(p OutsideLocaleEscapePolicy, locale string) func(*Runner) {
+		return func(r *Runner) {
+			sem := PosixSemantics()
+			sem.UnicodeEscapeOutsideTheLocale = p
+			r.Semantics = &sem
+			r.Vars = map[string]string{"LC_ALL": locale}
+		}
+	}
+	for _, tc := range []struct {
+		name, locale, src, want string
+		policy                  OutsideLocaleEscapePolicy
+	}{
+		{
+			name:   "the shell that writes the escape back writes the byte instead",
+			locale: "fr_FR.ISO8859-1", src: `printf '%s' $'a\u00e9Z'`,
+			want: "a\xe9Z", policy: OutsideLocaleEscapeWritten,
+		},
+		{
+			name:   "and so does the shell that would otherwise refuse",
+			locale: "fr_FR.ISO8859-1", src: `printf '%s' $'a\u00e9Z'`,
+			want: "a\xe9Z", policy: OutsideLocaleEscapeRefused,
+		},
+		{
+			name:   "the shell that reads no locale still writes UTF-8",
+			locale: "fr_FR.ISO8859-1", src: `printf '%s' $'a\u00e9Z'`,
+			want: "a\u00e9Z", policy: OutsideLocaleEscapeEncoded,
+		},
+		{
+			name:   "a character the charset lacks falls back to the axis",
+			locale: "fr_FR.ISO8859-1", src: `printf '%s' $'a\u20acZ'`,
+			want: `a\u20ACZ`, policy: OutsideLocaleEscapeWritten,
+		},
+		{
+			name:   "and the charset beside it holds that one and not the other",
+			locale: "en_US.ISO8859-15", src: `printf '%s' $'a\u20acZ|a\u00a4Z'`,
+			want: "a\xa4Z|" + `a\u00A4Z`, policy: OutsideLocaleEscapeWritten,
+		},
+		{
+			name:   "a multibyte charset has no table here, so the escape stands",
+			locale: "ja_JP.SJIS", src: `printf '%s' $'a\uff9fZ'`,
+			want: `a\uFF9FZ`, policy: OutsideLocaleEscapeWritten,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, charsetLocale(tc.policy, tc.locale))
+			if out != tc.want || st != 0 {
+				t.Errorf("%s under %s = %q status %d, want %q status 0",
+					tc.src, tc.locale, out, st, tc.want)
+			}
+		})
+	}
+	// The charset is consulted *after* the axis and never instead of it. A
+	// core with no answer has to refuse here exactly as it refuses under
+	// `LC_ALL=C`, or a script would get a byte out of a shell that has not
+	// been told which of the three answers it gives.
+	t.Run("and a core with no answer reaches no byte", func(t *testing.T) {
+		out, st := run(t, `printf '%s' $'a\u00e9Z'; echo AFTER`,
+			charsetLocale(OutsideLocaleEscapeUnspecified, "fr_FR.ISO8859-1"))
+		if strings.ContainsRune(out, 0xe9) || st == 0 {
+			t.Errorf("got %q status %d, want the charset's byte nowhere in it and a non-zero status", out, st)
 		}
 	})
 }

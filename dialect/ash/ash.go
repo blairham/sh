@@ -632,6 +632,8 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
+	s.SymbolicMaskTakesAPermissionCopy = interp.Yes
+	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	// `shift -1` is `Illegal number: -1`, so every dash word is read as the
 	// count and there is no `--` to end options with.

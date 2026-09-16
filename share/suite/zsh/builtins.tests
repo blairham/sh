@@ -152,3 +152,10 @@ printf 'status: %s\n' "$?"
 ( exec -l -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
 ( exec -a NAME -l /bin/sh -c 'printf "[%s]\n" "$0"' )
 ( export KEEP=1; exec -c /bin/sh -c 'printf "with -c: [%s]\n" "${KEEP-unset}"' )
+# `umask` here reads neither of the two things POSIX's symbolic grammar has
+# beyond the plain permission characters: a `u`, `g` or `o` after an operator
+# meaning that group's current permissions, and chmod's conditional-execute
+# `X`. bash 5.3, ksh93, dash and BusyBox ash read at least one of them.
+( umask 022; umask -S g=u ) 2> /dev/null; printf 'a copy -> %s\n' "$?"
+( umask 022; umask -S u=X ) 2> /dev/null; printf 'the X letter -> %s\n' "$?"
+( umask 022; umask -S a+X ) 2> /dev/null; printf 'X with plus -> %s\n' "$?"

@@ -87,3 +87,10 @@ printf 'status: %s\n' "$?"
 ( exec -a NAME /bin/sh -c 'printf "[%s]\n" "$0"' )
 ( exec -l /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -l -> %s\n' "$?"
 ( export KEEP=1; exec -c /bin/sh -c 'printf "with -c: [%s]\n" "${KEEP-unset}"' )
+# `umask` here takes chmod's conditional-execute `X` and refuses POSIX's
+# permission copy, which is why the two are two axes rather than one: no
+# other shell on the panel splits them this way.
+( umask 022; umask -S u=X; umask -S )
+( umask 122; umask -S u+X; umask -S )
+( umask 133; umask -S a+X; umask -S )
+( umask 022; umask -S g=u ) 2> /dev/null; printf 'a copy -> %s\n' "$?"

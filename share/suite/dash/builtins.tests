@@ -136,3 +136,13 @@ kill -l 32 2>&1 > /dev/null | sed 's/.*kill: //'
 ( exec -a NAME /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -a -> %s\n' "$?"
 ( exec -l /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -l -> %s\n' "$?"
 ( exec -c /bin/sh -c 'printf "reached\n"' ) 2> /dev/null; printf 'option -c -> %s\n' "$?"
+# `umask` here reads both of POSIX's extras — a permission copy after the
+# operator, and chmod's conditional-execute `X` — and, being this shell,
+# says nothing at all while doing it. The mask is printed afterwards because
+# that is the only evidence there is.
+( umask 022; umask -S g=u; umask -S )
+( umask 022; umask -S o=u; umask -S )
+( umask 022; umask -S u=X; umask -S )
+( umask 122; umask -S u+X; umask -S )
+( umask 133; umask -S a+X; umask -S )
+( umask 133; umask -S u+x,g+X; umask -S )

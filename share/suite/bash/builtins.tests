@@ -243,3 +243,35 @@ kill -l 32 2> /dev/null; printf '32 -> %s\n' "$?"
 # `-c` clears everything, an export on the way in included.
 ( export KEEP=1; exec -c /bin/sh -c 'printf "with -c: [%s]\n" "${KEEP-unset}"' )
 ( export KEEP=1; exec /bin/sh -c 'printf "without: [%s]\n" "${KEEP-unset}"' )
+# `umask`'s symbolic operand past the letters every shell reads. POSIX gives
+# an action a third alternative — a `u`, `g` or `o` meaning *whatever that
+# group is allowed now* — and `X` beside the permission characters. bash 5.3
+# has both; **bash 3.2 has neither**, calling each an invalid symbolic mode
+# character, so this is a 5.x row and not a bash one.
+#
+# The mask is set and printed back from a known start each time, so these are
+# facts about the operand and not about the process this began in.
+( umask 022; umask -S g=u )
+( umask 022; umask -S o=u )
+( umask 022; umask -S u=g )
+( umask 022; umask -S g+u )
+( umask 022; umask -S g-u )
+( umask 022; umask -S g=u,o=u )
+# A copy written *after* permission letters replaces what they accumulated,
+# which is bash's reading of a spelling POSIX does not define: from 222 the
+# `w` is spent and only the copied `r-x` lands. dash OR-s the two and
+# BusyBox ash refuses the mixture, so this row is bash's alone — #3074.
+( umask 222; umask -S g=wu )
+
+# `X` is not a plain `x`: it is chmod's conditional execute, and the
+# condition survives here even though a mask has no file to be a directory.
+# It is worth execute only where the mask already allows execute to somebody.
+( umask 022; umask -S u=X )
+( umask 022; umask -S a+X )
+( umask 122; umask -S u+X )
+( umask 133; umask -S a+X )
+( umask 776; umask -S u+X )
+( umask 111; umask -S u=rwX )
+# And the test is against the mask the operand started from, not the one an
+# earlier clause left: the owner gaining `x` does not give the group `X`.
+( umask 133; umask -S u+x,g+X )

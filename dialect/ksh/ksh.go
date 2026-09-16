@@ -685,6 +685,10 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.Yes
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
+	// The letter but not the copy, which is why the two are two axes:
+	// `umask g=u` is `bad format` here and `umask u=X` is taken.
+	s.SymbolicMaskTakesAPermissionCopy = interp.No
+	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	// Every dash word is an option here, digits and all: `shift -1` and
 	// `shift -0` are both refused as options this shell does not have, which

@@ -324,3 +324,79 @@ func TestAWhoWithNoOperatorCanReachForTheNumericComplaint(t *testing.T) {
 		t.Errorf("said %q, want a bad character worded symbolically", got)
 	}
 }
+
+// POSIX's third alternative after an operator — a `u`, `g` or `o` standing
+// for whatever that group is allowed now — and chmod's conditional-execute
+// letter beside it. Both were `invalid symbolic mode character` in every
+// dialect until #3054.
+func TestASymbolicMaskCopiesAndTakesTheConditionalExecute(t *testing.T) {
+	both := func(s *Semantics) {
+		s.SymbolicMaskTakesAPermissionCopy = Yes
+		s.SymbolicMaskTakesTheConditionalExecuteLetter = Yes
+	}
+	for _, c := range []struct {
+		start int
+		expr  string
+		want  int
+		why   string
+	}{
+		// From 022 the owner is allowed rwx, so the group gains all of it.
+		{0o022, "g=u", 0o002, "the group takes the owner's"},
+		{0o022, "o=u", 0o020, "and so does other"},
+		{0o022, "u=g", 0o222, "the copy runs the other way too"},
+		{0o022, "g+u", 0o002, "with + as well as ="},
+		{0o022, "g-u", 0o072, "and with -"},
+		// Clauses are applied left to right, so the second copy sees what
+		// the first one left.
+		{0o022, "g=u,o=u", 0o000, "a later clause copies the newer value"},
+		// `X` is execute when the mask already allows execute to somebody.
+		{0o022, "u=X", 0o622, "X is execute where anyone has it"},
+		{0o022, "a+X", 0o022, "and changes nothing that had it"},
+		{0o122, "u+X", 0o022, "the group and other having it is enough"},
+		// And nothing when nobody has it.
+		{0o133, "a+X", 0o133, "no execute anywhere, so X is worth nothing"},
+		{0o776, "u+X", 0o676, "other alone is enough"},
+		{0o111, "u=rwX", 0o111, "and the r and w still land"},
+		// The test is against the mask the operand started from, not the one
+		// an earlier clause left.
+		{0o133, "u+x,g+X", 0o033, "the owner gaining x does not give the group X"},
+		// A copy written *after* permission letters replaces what they
+		// accumulated, which is bash's reading of a spelling POSIX does not
+		// define. From 022 the owner is allowed rwx and the discriminator is
+		// a start where it is not: at 222 the `w` is spent and only the
+		// copied `r-x` lands, where OR-ing the two would leave `rwx`. dash
+		// does OR them and BusyBox ash refuses the mixture — see #3074.
+		{0o222, "g=wu", 0o222, "the copy replaces the letters before it"},
+	} {
+		out, _, held := umaskRun(t, c.start, both, "umask -- "+c.expr)
+		if held != c.want {
+			t.Errorf("umask %04o; umask %s: mask %04o, want %04o — %s (%s)",
+				c.start, c.expr, held, c.want, c.why, out)
+		}
+	}
+
+	// Where the dialect has neither, each is the character it could not read
+	// — and the two are separate axes, because ksh93 takes the letter and
+	// refuses the copy.
+	for _, c := range []struct {
+		expr  string
+		tweak func(*Semantics)
+	}{
+		{"g=u", func(s *Semantics) {
+			s.SymbolicMaskTakesAPermissionCopy = No
+			s.SymbolicMaskTakesTheConditionalExecuteLetter = Yes
+		}},
+		{"u=X", func(s *Semantics) {
+			s.SymbolicMaskTakesAPermissionCopy = Yes
+			s.SymbolicMaskTakesTheConditionalExecuteLetter = No
+		}},
+	} {
+		out, st, held := umaskRun(t, 0o022, c.tweak, "umask -- "+c.expr)
+		if st == 0 || out == "" {
+			t.Errorf("umask %s without the axis: %q status %d, want a refusal", c.expr, out, st)
+		}
+		if held != 0o022 {
+			t.Errorf("umask %s without the axis: mask moved to %04o", c.expr, held)
+		}
+	}
+}

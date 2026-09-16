@@ -194,7 +194,31 @@ func parseUmask(s string) (int, bool) {
 // `s` and `t` are worth nothing — a umask has no setuid or sticky bit to deny
 // — and whether they are *accepted* is a dialect's answer: bash and ksh93
 // take both, dash takes `s` and refuses `t`, and zsh refuses both.
-var umaskPermissionBits = map[byte]int{'r': 4, 'w': 2, 'x': 1, 's': 0, 't': 0}
+// `X` is worth execute or nothing depending on the mask the operand started
+// from, so its entry here is a placeholder the reader replaces; see
+// Semantics.SymbolicMaskTakesTheConditionalExecuteLetter.
+var umaskPermissionBits = map[byte]int{'r': 4, 'w': 2, 'x': 1, 'X': 1, 's': 0, 't': 0}
+
+// maskCopySource reads POSIX's `permcopy`: a `u`, `g` or `o` standing in a
+// permission list for whatever that group is allowed now.
+//
+// The bits come back spread across all three positions, which is the shape
+// the caller then narrows with the clause's `who` — the same shape a
+// permission character produces.
+func maskCopySource(c byte, allowed int) (int, bool) {
+	shift := 0
+	switch c {
+	case 'u':
+		shift = 6
+	case 'g':
+		shift = 3
+	case 'o':
+	default:
+		return 0, false
+	}
+	bits := (allowed >> shift) & 7
+	return bits<<6 | bits<<3 | bits, true
+}
 
 // maskFailure is what went wrong reading a symbolic mask, in the terms the
 // dialects word it with.
@@ -226,6 +250,14 @@ type maskFailure struct {
 // ordinary `u=rw` needs no answer from anybody.
 func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskFailure, ok bool) {
 	allowed := ^current & 0o777
+	// What `X` is worth, decided once from the mask the operand started
+	// from rather than per clause. Measured: `umask 133; umask -S u+x,g+X`
+	// leaves the group without it in every shell that has the letter, even
+	// though the owner gained it a clause earlier.
+	conditionalExecute := 0
+	if allowed&0o111 != 0 {
+		conditionalExecute = 1
+	}
 	for _, clause := range strings.Split(s, ",") {
 		i := 0
 		who := 0
@@ -286,12 +318,33 @@ func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskF
 			i++
 			perms := 0
 			for ; i < len(clause); i++ {
+				if copied, isCopy := maskCopySource(clause[i], allowed); isCopy {
+					if !r.ask(r.sem().SymbolicMaskTakesAPermissionCopy,
+						"a `u`, `g` or `o` after a `umask` operator") {
+						if r.unspecified {
+							return 0, maskFailure{}, false
+						}
+						return 0, maskFailure{bad: clause[i]}, false
+					}
+					// POSIX makes a copy an *alternative* to a list of
+					// permission characters rather than one of them, so
+					// nothing portable writes the two together. bash reads
+					// the pair anyway and the copy replaces what the letters
+					// before it accumulated — `umask 222; umask -S g=wu` is
+					// `g=rx` there and `g=rwx` in dash, which ORs it in. The
+					// reading here is bash's, and #3074 has the measurement.
+					perms = copied
+					continue
+				}
 				bit, isPerm := umaskPermissionBits[clause[i]]
 				if !isPerm {
 					if isMaskOperator(clause[i]) {
 						break
 					}
 					return 0, maskFailure{bad: clause[i]}, false
+				}
+				if clause[i] == 'X' {
+					bit = conditionalExecute
 				}
 				if refused, stop := r.maskLetterRefused(clause[i]); stop {
 					return 0, refused, false
@@ -315,9 +368,11 @@ func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskF
 // turns on.
 func isMaskOperator(c byte) bool { return c == '+' || c == '-' || c == '=' }
 
-// maskLetterRefused answers `s` and `t`, which change no bits and are not
-// taken everywhere: bash and ksh93 take both, dash takes `s` and refuses `t`,
-// zsh refuses both. Asked only when one of the two appears.
+// maskLetterRefused answers the three permission characters that are not
+// taken everywhere, and is asked only when one of them appears: `s` and `t`
+// change no bits — bash and ksh93 take both, dash takes `s` and refuses `t`,
+// zsh refuses both — and `X` is chmod's conditional execute, which bash 5.3,
+// ksh93, dash and BusyBox ash read and bash 3.2 and zsh refuse.
 func (r *Runner) maskLetterRefused(c byte) (maskFailure, bool) {
 	switch c {
 	case 's':
@@ -326,6 +381,10 @@ func (r *Runner) maskLetterRefused(c byte) (maskFailure, bool) {
 		}
 	case 't':
 		if r.ask(r.sem().SymbolicMaskTakesTheStickyLetter, "`t` in a `umask` clause") {
+			return maskFailure{}, r.unspecified
+		}
+	case 'X':
+		if r.ask(r.sem().SymbolicMaskTakesTheConditionalExecuteLetter, "`X` in a `umask` clause") {
 			return maskFailure{}, r.unspecified
 		}
 	default:

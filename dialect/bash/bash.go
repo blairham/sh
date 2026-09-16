@@ -576,6 +576,10 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
+	// Both are 5.x additions: bash 3.2 calls the `u` of `g=u` and the `X`
+	// of `u=X` invalid symbolic mode characters, and this preset is 5.3.
+	s.SymbolicMaskTakesAPermissionCopy = interp.Yes
+	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	// No dash word is an option: `shift -x` complains about a number and
 	// `shift -1` is a count out of range. The marker is honored all the same.

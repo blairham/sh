@@ -2597,6 +2597,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			return nil
 		}
 		r.status = boolInt(!v)
+		r.arithZeroLeft = !v
 		return nil
 	})
 }

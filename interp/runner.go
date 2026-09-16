@@ -2410,6 +2410,12 @@ type Runner struct {
 	// failing subshell command with its own flag still clear — which is
 	// what keeps zsh's two E lines for `(false)`.
 	errTrapFired bool
+	// arithZeroLeft says the command that just finished was an `(( ))` whose
+	// value was zero, which one dialect does not count as a failure. Cleared
+	// on the way into every command and on the way out of a simple one, so a
+	// call whose body ended in one reports a failure of its own. See
+	// Semantics.ArithCommandZeroIsAFailure.
+	arithZeroLeft bool
 	// stmtSerial counts statements begun, so a compound can tell whether its
 	// body ran one — see reportsItsBody for why that decides whether the
 	// compound is judged at all.
@@ -4258,6 +4264,10 @@ func (r *Runner) checkErrExit(ctx context.Context) {
 	if r.tested != 0 || r.status == 0 || r.ctl != controlNone {
 		return
 	}
+	if r.arithZeroLeft && (r.errexit || r.errTrapIsSet()) &&
+		!r.ask(r.sem().ArithCommandZeroIsAFailure, "an `(( ))` whose value is zero being a failure `set -e` and ERR see") {
+		return
+	}
 	pipefailOnly := r.pipefailRaised
 	// Once per failure, not once per level that reports it. `set -e` is
 	// deliberately outside this guard: it judges the statement it is given
@@ -4510,6 +4520,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	// and handed down rather than left in the field. Read and cleared at
 	// this one door so that nothing *inside* the element inherits it; those
 	// commands are commands in their own right and fire as usual.
+	r.arithZeroLeft = false
 	fired := r.elementFired
 	r.elementFired = false
 	head := !r.suppressedHead
@@ -4530,6 +4541,9 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// runs, and not afterwards when the body may have set one.
 		set := r.errTrapIsSet()
 		err := r.simple(ctx, x, fired)
+		// What a function body, an `eval` or a `.` ended on is theirs; the
+		// command reporting it is not an arithmetic command.
+		r.arithZeroLeft = false
 		r.reopenErrJudgment(set)
 		return err
 	case *syntax.Group:

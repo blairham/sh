@@ -4618,6 +4618,36 @@ type Semantics struct {
 	// reaches it.
 	ArithCommandErrorIsFatal Answer
 
+	// ArithCommandZeroIsAFailure makes an `(( expr ))` whose value is zero a
+	// failure `set -e` and the ERR trap see. Its status is 1 in every shell
+	// that has the construct; what differs is whether that 1 is judged.
+	// bash 5.3 and zsh 5.9.2 judge it; ksh93u+ 2012-08-01 does not (#3348).
+	//
+	// Measured 2026-09-16 on script files under `env -i`, as `( set -e; <row>;
+	// printf survived )` and `( trap 'printf E' ERR; <row> )`:
+	//
+	//	row                           ksh93             bash, zsh
+	//	(( 0 ))                       survived, no E    stops, E
+	//	x=1; (( x == 2 ))             survived          stops
+	//	true && (( 0 ))               survived, no E    stops, E
+	//	true | (( 0 ))                no E              E
+	//	let 0                         stops             stops
+	//	(( 1/0 ))                     stops             stops
+	//	f() { (( 0 )); }; f           stops, one E      stops, one E
+	//	eval '(( 0 ))'                stops, one E      stops
+	//	( (( 0 )) )                   stops             stops
+	//
+	// So in ksh93 the command itself is never judged, and whatever reports
+	// its status is: the call, the `eval`, the `.` and the subshell are
+	// judged as they are for any failure, and a group or a loop ending in one
+	// is not, by the rule every compound follows. `let` with the same value
+	// is a failure, and an expression that could not be evaluated is
+	// ArithCommandErrorIsFatal's question rather than this one.
+	//
+	// Asked only where it decides something: a zero result, with `set -e` on
+	// or an ERR trap set, and the status not being tested.
+	ArithCommandZeroIsAFailure Answer
+
 	// ForHeaderArithmeticErrorIsFatal abandons the input when one of the
 	// three expressions of a C-style `for (( ; ; ))` header could not be
 	// evaluated, instead of ending the loop and leaving the status for the
@@ -16576,6 +16606,9 @@ func PosixSemantics() Semantics {
 		// status is left for the next line, which runs. ksh93 is the one
 		// that ends the script.
 		ArithCommandErrorIsFatal: No,
+		// No `(( ))` in POSIX either, so the base takes what bash and zsh
+		// do: the 1 it leaves is a failure like any other. ksh93 departs.
+		ArithCommandZeroIsAFailure: Yes,
 		// POSIX has no C-style `for` either — it is the same extension, one
 		// construct over — so there is no text to read here and the base
 		// takes the answer the three columns that have it and stay give:

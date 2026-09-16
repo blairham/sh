@@ -1315,6 +1315,10 @@ func Semantics() interp.Semantics {
 	// condition axis could not carry: zsh abandons the condition and stays
 	// for `(( ))`, so the two constructs do not group.
 	s.ArithCommandErrorIsFatal = interp.Yes
+	// And a clean zero result is not a failure at all: `set -e; (( 0 ));
+	// echo survived` carries on and fires no ERR, where a call whose body
+	// ended in one is judged at the call (#3348).
+	s.ArithCommandZeroIsAFailure = interp.No
 	// And a C-style `for` header, which zsh gives up too where it stays for
 	// `(( ))` — see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
 	s.ForHeaderArithmeticErrorIsFatal = interp.Yes

@@ -152,3 +152,17 @@ func TestAnUntracedPrefixIsUnchanged(t *testing.T) {
 		t.Errorf("an untraced run wrote %q, want nothing", got)
 	}
 }
+
+// TestAnAppendingPrefixIsRenderedByItsColumn is the one cell the prefix
+// position spells differently from the statement: bash writes the value the
+// append came to and drops the operator, where ksh93 and zsh keep both.
+//
+// The bare `w+=2` beside it is the control. A shell that simply spelled every
+// append as a join would pass the first row and fail the second.
+func TestAnAppendingPrefixIsRenderedByItsColumn(t *testing.T) {
+	src := "v=14\nset -x\nv+=5 true\nw=1\nw+=2\nset +x\n"
+	kept := traceOf(t, src, permissive(), Diagnostics{})
+	wantTrace(t, kept, "+ v+=5\n+ true\n+ w=1\n+ w+=2\n+ set +x\n")
+	joined := traceOf(t, src, permissive(), Diagnostics{TracePrefixAppendIsTheJoinedValue: true})
+	wantTrace(t, joined, "+ v=145\n+ true\n+ w=1\n+ w+=2\n+ set +x\n")
+}

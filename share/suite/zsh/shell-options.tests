@@ -76,6 +76,9 @@ B=4 true
 C=5 :
 D=6 E=7 /bin/echo ext
 Q='a b' :
+v=14
+v+=5 :
 set +x
 exec 2>&3
 cat xt.err
+printf 'and the append did not outlive the command [%s]\n' "$v"

@@ -5160,6 +5160,10 @@ type Diagnostics struct {
 	// interp/xtraceprefix.go, and #3133 for the position that was written
 	// nowhere at all.
 	TracePrefixAssignment TracePrefixAssignment
+	// TracePrefixAppendIsTheJoinedValue writes `v+=5 cmd` as `v=145` rather
+	// than as `v+=5`. bash alone, and only in the prefix position — the same
+	// shell keeps the operator for a bare `w+=2`. See interp/xtraceprefix.go.
+	TracePrefixAppendIsTheJoinedValue bool
 	// TracePrefixRepeatsAtIndirection repeats the trace prefix's first
 	// character once per level of indirection — an `eval`, a sourced file, a
 	// command substitution or a trap body the traced command is inside.

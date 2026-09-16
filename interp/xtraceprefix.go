@@ -81,6 +81,25 @@ const (
 	TracePrefixOnTheCommandLineRepeatingThePrefix
 )
 
+// TracePrefixAppendIsTheJoinedValue writes an **appending** prefix as the
+// value it came to, with no operator: `v=14; v+=5 cmd` traces `+ v=145`.
+//
+// bash alone, and only in the prefix position — measured 2026-09-16 over a
+// script file with `PS4='+ '`:
+//
+//	                	`v+=5 true`	a bare `w+=2`
+//	bash 5.3.20     	`+ v=145`  	`+ w+=2`
+//	ksh93u+ 2012-08-01	`+ v+=5`   	`+ w+=2`
+//	zsh 5.9.2       	`+ v+=5`   	`+ w+=2`
+//
+// So it is not that bash spells an append differently: the same shell keeps
+// the operator for the statement and drops it for the prefix, which is the
+// contrast that makes this a fact about the position. dash and BusyBox ash
+// have no `+=` at all and answer nothing.
+//
+// A bool rather than an enum because the panel splits two ways and the
+// majority answer — the assignment as written — is the zero value.
+//
 // tracesItsPrefix reports whether this command has an assignment prefix that
 // `set -x` has anything to write for.
 //
@@ -240,6 +259,14 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d Diagnostics) []str
 	for _, a := range assigns {
 		value, ok := r.prefixTraceValue(a)
 		if !ok {
+			continue
+		}
+		if a.Append && d.TracePrefixAppendIsTheJoinedValue {
+			// One column writes an appending prefix as the assignment it
+			// came to rather than as the assignment it was — see the field.
+			plain := *a
+			plain.Append = false
+			words = append(words, r.traceAssign(&plain, r.prefixJoined(a, value), nil, d))
 			continue
 		}
 		words = append(words, r.traceAssign(a, value, nil, d))

@@ -168,6 +168,12 @@ set +k
 # The trace is collected in a file and printed afterwards rather than left on
 # stderr, so that the order of the two streams is the file's and not the
 # harness's.
+#
+# The last row is this column's alone and is the one cell the prefix position
+# spells differently from the statement: an **appending** prefix is written as
+# the value it came to, with the operator dropped — `v=14; v+=5 :` is
+# `+ v=145` — where ksh93 and zsh keep `+ v+=5` and every column writes a bare
+# `w+=2` as itself.
 
 xf() { :; }
 PS4='+ '
@@ -179,6 +185,9 @@ C=5 :
 D=6 E=7 /bin/echo ext
 V=$(printf vv) :
 Q='a b' :
+v=14
+v+=5 :
 set +x
 exec 2>&3
 cat xt.err
+printf 'and the append did not outlive the command [%s]\n' "$v"

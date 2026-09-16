@@ -2308,6 +2308,10 @@ func Diagnostics() interp.Diagnostics {
 		// same reading the `for` header gets, and from the same field the
 		// parser keeps for it.
 		TraceCaseHeader: interp.TraceCaseSource,
+		// An appending prefix is traced as the value it came to and with no
+		// operator — `v=14; v+=5 cmd` is `+ v=145` — where a bare `w+=2`
+		// keeps both. This shell alone; see interp/xtraceprefix.go.
+		TracePrefixAppendIsTheJoinedValue: true,
 		// A condition's operands are *not* quoted here, which is the one
 		// place bash's two trace renderings part: `x="a b"; echo "$x"` traces
 		// `echo 'a b'` and `[[ $x == y ]]` traces `[[ a b == y ]]`. Measured

@@ -173,12 +173,17 @@ on the `-c` route, which is the acceptance criterion #1403 states. The
 references are the oracle panel's own entries, because the shell being
 compared against has to be the shell the corpus was recorded from.
 
+**The workload is the gate. The bare case is measured and reported and
+does not gate** (#2813) — see *Why the bare case does not gate* below,
+which is the one place this bar has been narrowed and the reason it was.
+
 Two programs per dialect, and the second one is why the first is
 trustworthy:
 
 - **bare** is `-c ':'`, a builtin that does nothing in all six panel
   members. It is what a script's every subshell pays. It cannot check
-  its own work, so it is additionally required to exit 0.
+  its own work, so it is additionally required to exit 0. A slower bare
+  row prints `SLOWER (not gating)` and does not fail the run.
 - **workload** is a two-thousand-iteration `while`, a `for` over ten
   words, a `case`, and two substring expansions, written in the
   common-denominator language so that all four dialects and all four
@@ -308,8 +313,62 @@ and Go 0.16 ms, so size is not the lever either.
 
 So `ours-dash` faster than `/bin/dash` is **not reachable in Go**. The
 gate says so rather than being widened to hide it; whether v0.0.0's bar
-keeps that column is a decision for the maintainer, not for the
-instrument.
+keeps that column was a decision for the maintainer rather than for the
+instrument, and it has now been taken — see below.
+
+### Why the bare case does not gate
+
+**Decided 2026-09-15 (#2813): the workload column is the v0.0.0 gate,
+and the bare column is measured, reported, and not gating.**
+
+The bar as #1403 wrote it — *no dialect can be slower than the
+original*, both cases, every dialect — was read off macOS numbers. It
+does not survive the runner:
+
+| `-c ':'` | macOS | ubuntu runner |
+| --- | --- | --- |
+| real bash | 6.76 ms | **0.73 ms** |
+| ours | 3.56 ms | 2.91 ms |
+
+The same bash, an order of magnitude apart, because macOS process
+creation and dyld cost what Linux does not. **Ours barely moves between
+the two.** So bash's comfortable margin was never ours; it was macOS
+being slow at starting bash, and *"bash passes comfortably"* in #1403's
+closing comment is a macOS artifact. On the runner all eight comparisons
+came back SLOWER.
+
+What is underneath the bare case on a platform where spawning a process
+is cheap is the table above: the Go runtime's own start, which real dash
+beats while doing its whole job. **No work in this tree moves that.** A
+release gate nobody can pass is not a standard, it is a stop — it would
+have held v0.0.0 indefinitely for a reason with no fix, and it would
+have done it while the numbers that *are* ours went unwatched.
+
+The workload column is the opposite case and is why the bar keeps its
+teeth. It is interpreter throughput, it is entirely ours, and it is
+close: on that same runner bash was 1.53x and zsh 2.20x. Losing — but
+losing by an amount that is work rather than physics. **Every dialect
+still has to beat the shell it claims to be there, strictly, with no
+epsilon**, and `make perfgate` still fails when one does not.
+
+Three things this deliberately does *not* do:
+
+- **The bare case is still measured and still printed**, as
+  `SLOWER (not gating)`. It is what a script's every subshell pays and a
+  regression in it is worth seeing; deleting the row would throw away
+  the only number that shows the floor.
+- **A bare row that could not be measured still fails.** Not gating
+  means "losing here does not stop a release", not "this row may go
+  missing" — a machine with no bash on it must not read as green.
+- **Nothing was widened.** No tolerance, no epsilon, no rescoring
+  against a synthetic floor. The bar now counts fewer rows; the rows it
+  counts are judged exactly as before.
+
+`startupcost.Cases` carries the `Gating` flag, `startupcost.Failures`
+does the sorting, and two unit tests that measure nothing pin both
+halves — that a slower bare row does not fail and that a slower workload
+row does. A test for only the first would go on passing if gating were
+removed altogether.
 
 An earlier attempt at these figures reported "empty C 2.06 ms, empty Go
 2.05 ms, Go pays no startup penalty". That does not reproduce, and the

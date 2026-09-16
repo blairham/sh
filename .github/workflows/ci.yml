@@ -351,8 +351,16 @@ jobs:
       # have been since #1403 was closed on 2026-09-08 -- on this runner's
       # ancestors and on the maintainer's machine alike -- so a blocking job
       # would be red on arrival and stay red, which is how a check becomes one
-      # people learn to ignore. dash cannot be met at all: an empty Go binary
-      # costs more CPU to start than /bin/dash costs to do its whole job.
+      # people learn to ignore.
+      #
+      # #2813 changed which rows the bar counts: the workload gates and the
+      # bare case is reported. That is what makes report-only a stage rather
+      # than a permanent excuse -- the bare column was unwinnable on Linux (an
+      # empty Go binary costs more CPU to start than /bin/dash costs to do its
+      # whole job), so no amount of work would have turned this job green. The
+      # workload column is interpreter throughput and is ours: bash 1.53x, zsh
+      # 2.20x on this runner. Those are the numbers that have to come under
+      # 1.00x before this line loses its `|| true`.
       #
       # It is deliberately NOT wired as a blocking regression gate yet. The
       # honest form of that is an expectation of which comparisons pass, and

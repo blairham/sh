@@ -54,15 +54,7 @@ func TestNoDialectIsSlowerThanItsOriginal(t *testing.T) {
 	report := startupcost.Report(got)
 	t.Logf("\n%s", report)
 
-	var slower, unmeasured []string
-	for _, c := range got {
-		switch {
-		case c.Err != nil:
-			unmeasured = append(unmeasured, c.Pair.Name+"/"+c.Case.Name+": "+c.Err.Error())
-		case !c.Passed():
-			slower = append(slower, c.Pair.Name+"/"+c.Case.Name)
-		}
-	}
+	slower, notGating, unmeasured := startupcost.Failures(got)
 	// An unmeasured comparison is not a pass. A reference shell that is not
 	// installed is the only acceptable form of it, and it is reported rather
 	// than swallowed so that a gate run on a machine missing half the panel
@@ -70,9 +62,105 @@ func TestNoDialectIsSlowerThanItsOriginal(t *testing.T) {
 	for _, u := range unmeasured {
 		t.Errorf("not measured, so not passed: %s", u)
 	}
+	// Logged and not failed. These rows lost, and the reason they do not stop
+	// a release is in Cases: the bare case's floor on Linux is the Go
+	// runtime's process start, which is not this repository's to win. Printed
+	// every run anyway, because a regression in what every subshell pays is
+	// worth a reader's attention even when it is not a gate.
+	if len(notGating) > 0 {
+		t.Logf("slower, reported but not gating (see startupcost.Cases and #2813): %s",
+			strings.Join(notGating, ", "))
+	}
 	if len(slower) > 0 {
-		t.Errorf("these dialects are slower than the shell they claim to be, which #1403 does not allow before v0.0.0: %s\n%s",
+		t.Errorf("these dialects are slower than the shell they claim to be on the gating case, which #1403 does not allow before v0.0.0: %s\n%s",
 			strings.Join(slower, ", "), report)
+	}
+}
+
+// TestTheBareCaseIsMeasuredButDoesNotGate is #2813's decision made executable.
+//
+// The bar changed shape rather than loosening, and the difference between
+// those two is exactly one property: a slower *workload* still fails. So both
+// halves are asserted here, on hand-built comparisons that cost no
+// measurement — the same reason the rest of the guards in this file run in
+// the unit lane. A version of this test that only checked the bare half would
+// go on passing if Gating were deleted and nothing gated at all.
+func TestTheBareCaseIsMeasuredButDoesNotGate(t *testing.T) {
+	t.Parallel()
+	lost := func(c startupcost.Case) startupcost.Comparison {
+		return startupcost.Comparison{
+			Pair: startupcost.Pair{Name: "behind"},
+			Case: c,
+			Ours: startupcost.Result{Best: at(4 * time.Millisecond), Samples: 4},
+			Real: startupcost.Result{Best: at(2 * time.Millisecond), Samples: 4},
+		}
+	}
+	var bare, workload startupcost.Case
+	for _, c := range startupcost.Cases() {
+		switch c.Name {
+		case "bare":
+			bare = c
+		case "workload":
+			workload = c
+		}
+	}
+	if bare.Name == "" || workload.Name == "" {
+		t.Fatalf("Cases() no longer offers both a bare and a workload case: %+v", startupcost.Cases())
+	}
+
+	gating, reported, unmeasured := startupcost.Failures([]startupcost.Comparison{lost(bare)})
+	if len(gating) != 0 {
+		t.Errorf("a slower bare row failed the release gate: %v — #2813 settled that the bare floor on Linux is the Go runtime's process start, not this repository's to win", gating)
+	}
+	if len(reported) != 1 {
+		t.Errorf("a slower bare row was not reported at all (%v); not gating means it does not stop a release, not that it may go missing", reported)
+	}
+	if len(unmeasured) != 0 {
+		t.Errorf("a measured row was counted as unmeasured: %v", unmeasured)
+	}
+
+	gating, reported, _ = startupcost.Failures([]startupcost.Comparison{lost(workload)})
+	if len(gating) != 1 {
+		t.Errorf("a slower workload row did not fail the release gate (%v), so the bar has no teeth left: the workload is interpreter throughput and is the half #1403 still asks us to win", gating)
+	}
+	if len(reported) != 0 {
+		t.Errorf("a slower workload row was demoted to a mere report: %v", reported)
+	}
+
+	// The verdict a reader sees has to separate them too. A bare row printing
+	// a bare "SLOWER" is what let "perfgate is failing" travel for a week.
+	bareRow := startupcost.Report([]startupcost.Comparison{lost(bare)})
+	if !strings.Contains(bareRow, "SLOWER (not gating)") {
+		t.Errorf("the report does not mark a slower bare row as non-gating, so it reads as a release blocker:\n%s", bareRow)
+	}
+	workRow := startupcost.Report([]startupcost.Comparison{lost(workload)})
+	if strings.Contains(workRow, "not gating") {
+		t.Errorf("the report marked a slower workload row as non-gating, which is the one row that does gate:\n%s", workRow)
+	}
+}
+
+// TestAnUnmeasuredBareRowStillFails is the hole the change above could have
+// opened.
+//
+// "The bare case does not gate" is about a row that was measured and lost. A
+// bare row that could not be measured is a different animal — a reference
+// shell missing, a refusal, an answer that was not the panel's — and it has
+// to keep failing, or a machine with no bash on it reads as green on half the
+// table. Failures returns it in its own bucket for that reason, and this says
+// so.
+func TestAnUnmeasuredBareRowStillFails(t *testing.T) {
+	t.Parallel()
+	c := startupcost.Comparison{
+		Pair: startupcost.Pair{Name: "no-reference"},
+		Case: startupcost.Case{Name: "bare", Gating: false},
+		Err:  errors.New("the reference shell is not installed here"),
+	}
+	gating, reported, unmeasured := startupcost.Failures([]startupcost.Comparison{c})
+	if len(unmeasured) != 1 {
+		t.Errorf("an unmeasurable bare row was not reported as unmeasured (%v); not gating must not swallow a measurement that never happened", unmeasured)
+	}
+	if len(gating) != 0 || len(reported) != 0 {
+		t.Errorf("an unmeasurable row was also counted as a timing loss: gating=%v reported=%v", gating, reported)
 	}
 }
 

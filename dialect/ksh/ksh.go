@@ -1078,6 +1078,15 @@ func Semantics() interp.Semantics {
 	// where bash makes the pair and warns at the read. See
 	// Semantics.NamerefCycleIsRefused.
 	s.NamerefCycleIsRefused = interp.Yes
+	// And the array refusal comes **before** both of those, on a name that
+	// really holds an array rather than one merely carrying the attribute:
+	// measured 2026-09-16 on ksh93u+, `r=(a b); typeset -n r='not a name'`
+	// and `r=(a b); typeset -n r=r` are both `r: reference variable cannot
+	// be an array`, while a bare `typeset -a r` — which this shell's own
+	// listing writes with no `=` after it — takes `typeset -n r=v` at 0.
+	// The associative attribute does make an object, `typeset -A m=()`, and
+	// is refused (#3103).
+	s.NamerefArrayRefusal = interp.NamerefArrayCheckedFirstOnTheContents
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
@@ -3025,6 +3034,9 @@ func Diagnostics() interp.Diagnostics {
 		// substrate's fallback is bash's wording.
 		NamerefBadTarget:     "%[1]s: invalid variable name",
 		NamerefSelfReference: "%[1]s: invalid self reference",
+		// The one nameref sentence this shell and bash write identically,
+		// measured on both: `r: reference variable cannot be an array`.
+		NamerefCannotBeAnArray: "%[1]s: reference variable cannot be an array",
 		// NamerefCircularWarning is deliberately empty and is not a gap: a
 		// cycle is refused at the declaration here — see
 		// Semantics.NamerefCycleIsRefused — so there is never a read through

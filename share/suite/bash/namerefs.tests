@@ -121,3 +121,64 @@ say 'a refused declaration keeps the value it found'
 say 'and the reference is what hides all of it until then'
 ( r=OUTER; v=VEE; declare -n r=v; printf '[%s]\n' "${r-GONE}"; unset -n r
   printf '[%s]\n' "${r-GONE}" ) 2>&1
+
+# A reference over a name holding an **array** — #3103, and the third thing
+# the `n` letter means. Both shells with the letter refuse it, in the same
+# words; what they disagree about is when the check runs and what counts as an
+# array, and this file is the bash half of that. Here the array is looked at
+# *after* the two refusals about the name, so a bad target or a self reference
+# speaks for a line where both are true — ksh93 writes the array sentence for
+# both — and the *attribute* alone is enough, so a bare `declare -a r` holding
+# nothing is refused where ksh93 takes it.
+#
+# The refusal must leave the name exactly as it found it, which is why every
+# case reads the array back afterwards rather than only the status: a shell
+# that emptied the cell on a refusal would print the same diagnostic and then
+# answer GONE with `${#r[@]}` still at 3.
+
+say 'an indexed array is refused and left standing'
+( r=(a b c); v=VEE; declare -n r=v; printf 'st=%s\n' "$?"
+  printf 'after=[%s] n=%s\n' "${r-GONE}" "${#r[@]}" ) 2>&1
+
+say 'and so is the associative kind'
+( declare -A r=([k]=KV); v=VEE; declare -n r=v; printf 'st=%s\n' "$?"
+  printf '[%s]\n' "${r[k]}" ) 2>&1
+
+say 'a bare attribute holding nothing is enough'
+( declare -a r; v=VEE; declare -n r=v; printf 'st=%s\n' "$?"
+  printf '[%s]\n' "${r-GONE}" ) 2>&1
+( declare -A r; v=VEE; declare -n r=v; printf 'st=%s\n' "$?" ) 2>&1
+
+say 'the valueless form is refused on the attribute too'
+( r=(a b); declare -n r; printf 'st=%s n=%s\n' "$?" "${#r[@]}" ) 2>&1
+
+say 'a bad target and a self reference are both reported ahead of it'
+( r=(a b); declare -n r=1bad; printf 'st=%s\n' "$?" ) 2>&1
+( r=(a b); declare -n r=r; printf 'st=%s\n' "$?" ) 2>&1
+
+say 'and inside a function the refusal splits the warning in two'
+( f() { local r=(a b); local -n r=r; printf 'st=%s in=[%s]\n' "$?" "${r-GONE}"; }; f ) 2>&1
+
+say 'a fresh local binding is not the global array'
+( r=(a b c); v=VEE; f() { local -n r=v; printf 'in=[%s]\n' "$r"; }; f
+  printf 'after=[%s]\n' "${r-GONE}" ) 2>&1
+
+say 'but a global declaration reaches it'
+( r=(a b c); v=VEE; f() { declare -gn r=v; printf 'st=%s\n' "$?"; }; f
+  printf 'after=[%s]\n' "${r-GONE}" ) 2>&1
+
+say 'three deep the refusal disturbs nothing outside it'
+( r=(G0 G1); v=VEE
+  h() { local r=L1; g; printf 'h=[%s] n=%s\n' "${r-GONE}" "${#r[@]}"; }
+  g() { local r=(L2a L2b); f; printf 'g=[%s] n=%s\n' "${r-GONE}" "${#r[@]}"; }
+  f() { local r=(F0 F1); local -n r=v; printf 'f=[%s] n=%s\n' "${r-GONE}" "${#r[@]}"; }
+  h; printf 'top=[%s] n=%s\n' "${r-GONE}" "${#r[@]}" ) 2>&1
+
+say 'the refused name still lists as an array'
+( r=(a b); v=VEE; declare -n r=v; declare -p r ) 2>&1
+
+say 'and the refusal does not end the script'
+( r=(a b); declare -n r=v; printf 'after\n' ) 2>&1
+
+say 'a reference aimed at an array is the feature, not the question'
+( v=(a b c); declare -n r=v; printf 'st=%s [%s] n=%s\n' "$?" "${r[1]}" "${#r[@]}" ) 2>&1

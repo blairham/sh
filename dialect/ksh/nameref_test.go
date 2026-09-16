@@ -175,3 +175,135 @@ func TestAReferenceEmptiesTheCellHereToo(t *testing.T) {
 		})
 	}
 }
+
+// The other shape of the same refusal. This column looks at the array
+// **first** — ahead of the bad-target and self-reference refusals, which bash
+// puts in front of it — and only a name that really *holds* an array answers:
+// a bare `typeset -a r` is an attribute and nothing more here, so it takes a
+// reference that bash refuses, while `typeset -A r` is an object this shell's
+// own listing prints as `typeset -A m=()` and is refused.
+//
+// Measured 2026-09-16 on ksh93u+ 2012-08-01, `env -i` with a scratch HOME and
+// no startup files, every row run against the real shell and this one side by
+// side. The refusal ends the script because `typeset` is one of this shell's
+// special builtins, which is BadNameToDeclarationFatal and not a second
+// disagreement about this rule. See Semantics.NamerefArrayRefusal (#3103).
+func TestAReferenceOverAnArrayIsRefusedFirstAndOnTheContents(t *testing.T) {
+	dir := t.TempDir()
+	const refused = "ksh: typeset: r: reference variable cannot be an array\n"
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{
+			// The refusal, and the script ending on it: nothing after the
+			// declaration runs, which is how this column differs from bash
+			// on every row below that has an `echo` behind it.
+			name: "an indexed array is refused and ends the script",
+			src:  `r=(a b c); v=VEE; typeset -n r=v; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			name: "the associative kind too", src: `typeset -A r=([k]=KV); v=VEE; typeset -n r=v; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			// The **contents** half of the axis, and the row bash answers
+			// the other way: the attribute alone is not an array here, so
+			// the reference is made and reads through.
+			name: "a bare indexed attribute takes the reference",
+			src:  `typeset -a r; v=VEE; typeset -n r=v; echo "st=$? [$r]"; typeset -p r`,
+			want: "st=0 [VEE]\ntypeset -n r=v\n",
+		},
+		{
+			// And what that leaves behind: the attribute goes with the
+			// value, so the cell the reference took over is empty
+			// underneath it rather than still an array (#3084).
+			name: "and the attribute goes with the value",
+			src:  `typeset -a r; v=VEE; typeset -n r=v; unset -n r; echo "[${r-GONE}]"; typeset -p r 2>&1`,
+			want: "[GONE]\n",
+		},
+		{
+			// An element landing in it makes it one, which is the line
+			// between the two readings.
+			name: "one element makes it an array",
+			src:  `typeset -a r; r[0]=x; v=VEE; typeset -n r=v; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			// The bare *associative* attribute is an object here and is
+			// refused, where the indexed one is not — this shell's own
+			// listing is what says so.
+			name: "the bare associative attribute is an object",
+			src:  `typeset -A r; v=VEE; typeset -n r=v; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			// The valueless form asks no axis: it is refused on the
+			// attribute alone, in both shells, and this is the row that
+			// says so — the same `typeset -a r` that takes `=v` above.
+			name: "the valueless form refuses the bare attribute",
+			src:  `typeset -a r; typeset -n r; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			// The **ordering** half, twice: with the array there it speaks
+			// for the line, where bash reports the name instead.
+			name: "the array is reported ahead of a bad target",
+			src:  `r=(a b); typeset -n r=1bad; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			name: "and ahead of a self reference", src: `r=(a b); typeset -n r=r; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			// With no array to report, the same two lines fall through to
+			// the refusals they would have had — which is what says the
+			// ordering is the difference rather than the array check
+			// swallowing them.
+			name: "a bare attribute lets the self reference through",
+			src:  `typeset -a r; typeset -n r=r; echo after`,
+			want: "ksh: typeset: r: invalid self reference\n", status: 1,
+		},
+		{
+			// `typeset` in a POSIX-style function declares no local here, so
+			// the name a reference lands on is the global one and the array
+			// is still in it — the scope axis this dialect already carries,
+			// where bash's fresh local binding holds no array and takes the
+			// line.
+			name: "a POSIX function reaches the global array",
+			src:  `r=(a b c); v=VEE; f(){ typeset -n r=v; echo in; }; f; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			// And a keyword function, which does get a scope: the binding
+			// is fresh and holds nothing, so it is taken.
+			name: "a keyword function gets a fresh binding",
+			src: `r=(a b c); v=VEE; function f { typeset -n r=v; echo "in_st=$? in=[$r]"; }; f; ` +
+				`echo "after=[${r-GONE}] n=${#r[@]}"`,
+			want: "in_st=0 in=[VEE]\nafter=[a] n=3\n",
+		},
+		{
+			// The second spelling reaches the same rule, and the sentence
+			// still names `typeset` — measured, not assumed — which is what
+			// says the word is a front and not a builtin of its own.
+			name: "nameref is refused in typeset's name",
+			src:  `r=(a b); v=VEE; nameref r=v; echo after`,
+			want: refused, status: 1,
+		},
+		{
+			// The *target* being an array is the feature, not the question.
+			name: "a reference aimed at an array is fine",
+			src:  `v=(a b c); typeset -n r=v; echo "st=$? ${r[1]} ${#r[@]}"`,
+			want: "st=0 b 3\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runKsh(t, dir, tc.src)
+			if out != tc.want || st != tc.status {
+				t.Errorf("%s = %q at %d, want %q at %d", tc.src, out, st, tc.want, tc.status)
+			}
+		})
+	}
+}

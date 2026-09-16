@@ -1037,6 +1037,18 @@ type Semantics struct {
 	// Asked only where a cycle was really written, so a dialect that never
 	// meets one is never asked for an answer.
 	NamerefCycleIsRefused Answer
+
+	// NamerefArrayRefusal is the *shape* of a refusal both shells give: a
+	// `-n` declaration with a target, over a name that carries an array.
+	// The refusal is unanimous and in the same words; when it is asked, and
+	// what counts as an array, are not. See [NamerefArrayRefusal] for the
+	// matrix.
+	//
+	// Asked only where such a declaration really landed on a name carrying
+	// an array attribute, so a dialect that never writes one is never asked
+	// for an answer. The valueless `typeset -n r` asks nothing: both shells
+	// refuse it on the attribute alone.
+	NamerefArrayRefusal NamerefArrayRefusal
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other

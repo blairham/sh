@@ -401,6 +401,9 @@ func Semantics() interp.Semantics {
 	// a cycle of. Measured 2026-09-15, `typeset` is not a builtin here —
 	// `typeset: not found` at 127 — so the declaration that would build one
 	// cannot be written (#2553).
+	// unanswered NamerefArrayRefusal: the same wall, and no arrays either —
+	// `r=(a b)` is `Syntax error: "(" unexpected` — so neither half of the
+	// question can be put (#3103).
 	// unanswered UnsetReferenceLetterRemovesANonReference: this shell has no
 	// `-n` on `unset` to ask it with. Measured 2026-09-12, `unset -n x` is
 	// `unset: Illegal option -n` and the operand is never read, so there is no

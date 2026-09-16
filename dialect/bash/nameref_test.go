@@ -424,3 +424,143 @@ func TestANameReferenceEmptiesTheCellItLandsOn(t *testing.T) {
 		})
 	}
 }
+
+// A `-n` declaration over a name that carries an **array** is refused, and
+// this column's shape of the refusal is: the array is looked at *after* the
+// two refusals about the name, and the array **attribute** alone is enough —
+// a bare `declare -a r` holding nothing is refused just as a filled one is.
+//
+// Measured 2026-09-16 against bash 5.3.20, `env -i` with a scratch HOME and
+// no startup files; every row was run against the real shell and this one
+// side by side and the two agreed line for line. ksh93 answers both halves
+// the other way round, which is Semantics.NamerefArrayRefusal (#3103). This
+// shell made the reference on every row below, so a name that still counted
+// its elements read the target through `$r`.
+func TestAReferenceIsRefusedOverAnArray(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{
+			// The report's own line, and it answers twice: the refusal, and
+			// that the array is still standing afterwards. A fix that
+			// emptied the cell on a refused declaration would have left
+			// `${r-GONE}` reading GONE while `${#r[@]}` still answered 3.
+			name: "an indexed array is refused and left alone",
+			src:  `r=(a b c); v=VEE; declare -n r=v; echo "st=$?"; echo "after=[${r-GONE}] n=${#r[@]}"`,
+			want: "bash: line 1: declare: r: reference variable cannot be an array\n" +
+				"st=1\nafter=[a] n=3\n",
+		},
+		{
+			name: "the associative kind too",
+			src:  `declare -A r=([k]=KV); v=VEE; declare -n r=v; echo "st=$?"; echo "[${r[k]}]"`,
+			want: "bash: line 1: declare: r: reference variable cannot be an array\n" +
+				"st=1\n[KV]\n",
+		},
+		{
+			// The **attribute** half of the axis: nothing is in `r` at all,
+			// and this column refuses anyway. ksh93 takes this exact line.
+			name: "a bare attribute holding nothing is enough",
+			src:  `declare -a r; v=VEE; declare -n r=v; echo "st=$?"; echo "[${r-GONE}]"`,
+			want: "bash: line 1: declare: r: reference variable cannot be an array\n" +
+				"st=1\n[GONE]\n",
+		},
+		{
+			name: "and the bare associative attribute as well",
+			src:  `declare -A r; v=VEE; declare -n r=v; echo "st=$?"`,
+			want: "bash: line 1: declare: r: reference variable cannot be an array\nst=1\n",
+		},
+		{
+			// The valueless form, which asks no axis: both shells refuse it
+			// on the attribute alone, and there is no target here for
+			// another refusal to race.
+			name: "a valueless declaration is refused too",
+			src:  `r=(a b); declare -n r; echo "st=$?"; echo "n=${#r[@]}"`,
+			want: "bash: line 1: declare: r: reference variable cannot be an array\nst=1\nn=2\n",
+		},
+		{
+			// The **ordering** half of the axis, twice. A bad target and a
+			// self reference each win a line where the name is also an
+			// array; ksh93 writes the array sentence for both.
+			name: "a bad target is reported ahead of the array",
+			src:  `r=(a b); declare -n r=1bad; echo "st=$?"`,
+			want: "bash: line 1: declare: `1bad': invalid variable name for name reference\nst=1\n",
+		},
+		{
+			name: "and so is a self reference",
+			src:  `r=(a b); declare -n r=r; echo "st=$?"`,
+			want: "bash: line 1: declare: r: nameref variable self references not allowed\nst=1\n",
+		},
+		{
+			// Inside a function the self reference is a *warning* rather
+			// than a refusal (#3048), and the array refusal lands **between
+			// its two halves**: the builtin's copy is written, the refusal
+			// follows, and the shell's second copy never is. Measured, not
+			// arranged.
+			name: "the array refusal splits the self-reference warning",
+			src:  `f(){ local r=(a b); local -n r=r; echo "st=$? in=[${r-GONE}]"; }; f`,
+			want: "bash: line 1: local: warning: r: circular name reference\n" +
+				"bash: line 1: local: r: reference variable cannot be an array\n" +
+				"st=1 in=[a]\n",
+		},
+		{
+			// Where the scope line falls. A fresh local binding holds no
+			// array however loud the global is, so `local -n` over a global
+			// array is taken — and `-gn`, which names the global cell
+			// itself, is refused.
+			name: "a fresh local binding is not the global array",
+			src: `r=(a b c); v=VEE; f(){ local -n r=v; echo "in_st=$? in=[${r-GONE}]"; }; f; ` +
+				`echo "after=[${r-GONE}]"`,
+			want: "in_st=0 in=[VEE]\nafter=[a]\n",
+		},
+		{
+			name: "but a global declaration reaches it",
+			src:  `r=(a b c); v=VEE; f(){ declare -gn r=v; echo "st=$?"; }; f; echo "after=[${r-GONE}]"`,
+			want: "bash: line 1: declare: r: reference variable cannot be an array\nst=1\nafter=[a]\n",
+		},
+		{
+			// Three deep, which is the only shape that can tell "this
+			// binding's cell" from "some outer cell": the refusal is `f`'s
+			// and neither caller's local nor the global is disturbed by it.
+			name: "three deep the refusal disturbs nothing outside it",
+			src: `r=(G0 G1); v=VEE; h(){ local r=L1; g; echo "h=[${r-GONE}] n=${#r[@]}"; }; ` +
+				`g(){ local r=(L2a L2b); f; echo "g=[${r-GONE}] n=${#r[@]}"; }; ` +
+				`f(){ local r=(F0 F1); local -n r=v; echo "f st=$? [${r-GONE}] n=${#r[@]}"; }; ` +
+				`h; echo "top=[${r-GONE}] n=${#r[@]}"`,
+			want: "bash: line 1: local: r: reference variable cannot be an array\n" +
+				"f st=1 [F0] n=2\ng=[L2a] n=2\nh=[L1] n=1\ntop=[G0] n=2\n",
+		},
+		{
+			// The listing from the other side: the name is still an array
+			// and carries no reference at all.
+			name: "the refused name still lists as an array",
+			src:  `r=(a b); v=VEE; declare -n r=v; declare -p r`,
+			want: "bash: line 1: declare: r: reference variable cannot be an array\n" +
+				`declare -a r=([0]="a" [1]="b")` + "\n",
+		},
+		{
+			// The refusal is not fatal here, the other half of the same
+			// difference: `typeset` is a special builtin in ksh93 and ends
+			// the script there.
+			name: "a refusal does not end the script",
+			src:  `r=(a b); declare -n r=v; echo after`,
+			want: "bash: line 1: declare: r: reference variable cannot be an array\nafter\n",
+		},
+		{
+			// The *target* being an array raises no question: a reference
+			// aimed at one reads and writes its elements, which is the
+			// feature. Only the name being declared is asked about.
+			name: "a reference aimed at an array is fine",
+			src:  `v=(a b c); declare -n r=v; echo "st=$? ${r[1]} ${#r[@]}"`,
+			want: "st=0 b 3\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runBash(t, dir, tc.src)
+			if out != tc.want || st != tc.status {
+				t.Errorf("%s = %q at %d, want %q at %d", tc.src, out, st, tc.want, tc.status)
+			}
+		})
+	}
+}

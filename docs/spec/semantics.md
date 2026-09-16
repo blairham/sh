@@ -9350,9 +9350,11 @@ refusal is what a script meets.
 The letters have left every `UnimplementedOptionLetters` that held
 them; `Semantics.DeclareOptions` spells `n` for bash and ksh, and the
 two tables are one table. What is still open is *detail* rather than
-scope — #3084 is a bug against what `unset -n` exposes in the cell a
-`local -n` shadowed — and a bug against the details of a feature is the
-clearest evidence there is that the feature exists.
+scope, and a bug against the details of a feature is the clearest
+evidence there is that the feature exists: #3084 was a bug against what
+`unset -n` exposes in the cell a `local -n` shadowed, and #3103 against
+a declaration over a name that holds an array, which both shells refuse
+in the same words and disagreed only about the shape of.
 
 ## The bare declaration listing, and the sign that reaches it
 

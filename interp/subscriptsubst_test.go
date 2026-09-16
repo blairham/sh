@@ -184,3 +184,89 @@ func TestASubscriptNestedInsideASubscriptRunsItsOwnSubstitution(t *testing.T) {
 		t.Errorf("status = %d, want 0", st)
 	}
 }
+
+// The other places a word is expanded, which are the rest of the shell.
+//
+// A word loop is not only the one a command's arguments go through: an
+// assignment's value, a here-document's body, a redirection's target and a
+// pattern operand each read their spans themselves, and every one of them
+// walked the subscript once per reader. Measured 2026-09-16 with `a=(x y z)`
+// and `v=yes`, marks per line:
+//
+//	source                          bash 5.3.20  ksh93u+ 2012  before  after
+//	w=${a[S]-D}                               1             1       1      1
+//	: > "f${a[S]-D}"                          1             1       2      1
+//	case y in "${a[S]-D}")                    1             1       8      1
+//	${v#${a[S]-D}}                            1             1       8      1
+//	a here-document holding ${a[S]-D}         1             1       4      1
+//
+// The redirection, the two pattern rows and the here-document are the ones
+// this fixes; the assignment already read once, and is here because a row that
+// was right is what says the change did not make it wrong.
+func TestASubscriptRunsOnceInEveryWordAShellExpands(t *testing.T) {
+	const sub = `${a[` + subscriptMark + `]-D}`
+	for _, tc := range []struct{ name, src, want string }{
+		{"an assignment's value", `w=` + sub + `; printf '<%s>' "$w"`, "<y>"},
+		{
+			"a redirection's target",
+			`: > "$TMP/f` + sub + `"; printf '<%s>' "$(cd "$TMP" && echo f*)"`,
+			"<fy>",
+		},
+		{
+			"a case arm's pattern",
+			`case y in "` + sub + `") printf '<hit>';; *) printf '<miss>';; esac`,
+			"<hit>",
+		},
+		{"a trim's pattern", `v=yes; printf '<%s>' "${v#` + sub + `}"`, "<es>"},
+		{
+			"a here-document's body",
+			"printf '<%s>' \"$(cat <<X\n" + sub + "\nX\n)\"",
+			"<y>",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `a=(x y z); TMP=` + t.TempDir() + `; ` + tc.src
+			out, st := runSubscriptSubst(t, src)
+			if got := strings.ReplaceAll(out, ".", ""); got != tc.want {
+				t.Errorf("%s came to %q, want %q", tc.name, got, tc.want)
+			}
+			if marks := strings.Count(out, "."); marks != 1 {
+				t.Errorf("%s ran the substitution %d times, want 1 — %q", tc.name, marks, out)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0", st)
+			}
+		})
+	}
+}
+
+// The nested inner, which is one grammar's and reads the same brackets twice
+// for a reason of its own: what the inner came to, and whether its shape keeps
+// its fields, are two questions and each walked the subscript.
+//
+// Measured 2026-09-16 on zsh 5.9.2, the one shell in the panel with the
+// construct: `${${a[S]}}` writes one mark and `${${a[S]}#…}` writes one, where
+// this shell wrote four for each. The *element* the rows below name is the
+// standard preset's, which counts from zero; zsh counts from one and reads its
+// own element for the same subscript, which is a different axis and not this.
+func TestANestedInnerRunsItsSubscriptSubstitutionOnce(t *testing.T) {
+	for _, tc := range []struct{ name, spec, want string }{
+		{"the plain shape", `${${a[S]}}`, "<y>"},
+		{"an operator over it", `${${a[S]}#y}`, "<>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := strings.Replace(tc.spec, "S", subscriptMark, 1)
+			out, st := runGrammar(t, `a=(x y z); printf '<%s>' "`+spec+`"`,
+				func(d *syntax.Dialect) { d.NestedParamExpansion = true }, nil)
+			if got := strings.ReplaceAll(out, ".", ""); got != tc.want {
+				t.Errorf("%s came to %q, want %q", tc.spec, got, tc.want)
+			}
+			if marks := strings.Count(out, "."); marks != 1 {
+				t.Errorf("%s ran its substitution %d times, want 1 — %q", tc.spec, marks, out)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0", st)
+			}
+		})
+	}
+}

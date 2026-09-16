@@ -533,7 +533,14 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 
 	for _, s := range w.Spans {
 		head := b.Len() == 0
-		if parts, ok := r.expandAt(s, splitAlways, head); ok {
+		// Held around the pair, for the reason expandOneWordFields gives:
+		// the two halves are siblings and a subscript's substitutions belong
+		// to the span rather than to either of them. A redirection target is
+		// a word like any other — `: > "f${a[$(g)]-D}"` ran `g` twice where
+		// the panel runs it once. See subscriptSubstHold (#3240).
+		release := r.armSubscriptSubsts(s)
+		parts, atList := r.expandAt(s, splitAlways, head)
+		if atList {
 			// The plain view is the one that keeps no fields, so it is the
 			// one the separator rule applies to. The fields view below is
 			// untouched: whether the target is read as fields at all is the
@@ -552,9 +559,11 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// however the splitting axis is answered, which is the half of
 			// this reading that is not the text view.
 			u.add(s, parts)
+			release()
 			continue
 		}
 		text, split := r.expandSpan(s, splitAlways, head)
+		release()
 		b.WriteString(text)
 		// And never splits, whatever the span asked for. That is the whole
 		// of the difference from the fields view below.
@@ -909,13 +918,13 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// wrong pass is exactly the silent kind of wrong.
 	r.nestedHeld = nestedHold{}
 	r.sourceHeld, r.subscriptHeld = sourceHold{}, subscriptHold{}
-	// A subscript's substitutions belong to this expansion and not to a
-	// reader of it, so the hold is armed here — where the expansion begins
-	// and not where a road to the subscript does — and given back on the way
-	// out. See subscriptSubstHold: without it a subscript's `$( … )` ran
-	// once per reader, which is four runs for `${a[$(f)]}` and ten for
-	// `${a[$(f)]-D}` where the whole panel runs it once (#3240).
-	defer r.armSubscriptSubsts(s)()
+	// No arming here, and it is a measurement rather than an omission: every
+	// one of this function's four callers arms around the *pair* it makes
+	// with expandSpan, because the two are siblings and a hold opened inside
+	// one of them is gone before the other reads. An arm added here as well
+	// is an equivalent mutant — removing it killed no test and moved no count
+	// in any of the seven columns. See subscriptSubstHold (#3240).
+	//
 	// The same rewrite the scalar path makes, made first: the shapes below
 	// are read off the node, and a node still carrying a subscript nothing
 	// is going to read would be answered as `$a[@]` rather than as `$a`
@@ -5930,6 +5939,13 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList b
 	if e.Inner == nil || len(e.Inner.Spans) == 0 {
 		return []string{""}, false, false
 	}
+	// The inner's subscript is read by both of the questions below — what the
+	// inner came to, and whether its shape keeps its fields — and they are
+	// two readers of one expansion. Held here, where both are inside, rather
+	// than around either: `${${a[$(f)]}}` ran `f` four times where zsh 5.9.2,
+	// the one grammar with the construct, runs it once. See
+	// subscriptSubstHold (#3240).
+	defer r.armSubscriptSubsts(e.Inner.Spans[0])()
 	if e.Index != nil {
 		// `${${v}[2]}` subscripts what the inner came to, which is a second
 		// question on top of this one and is answered in interp/nestedsub.go

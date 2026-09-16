@@ -272,7 +272,7 @@ order and a different listing arrangement. `#3039` records which.
 **And what a shipped completion reaches is not decided here alone.**
 `_git` does not parse in this shell at all (#3040), and several
 completions that do parse stop short somewhere else — `_files` on a
-pattern this shell's globbing refuses (#3057), `_nl` and `_od` on the
+pattern this shell's globbing refuses (#3075), `_nl` and `_od` on the
 `(R)` expansion flag, `_file_modes` on the `zsh/complete` conditions. So
 `git che<TAB>` on a real `~/.zshrc` still offers what this document
 specifies rather than zsh's eight subcommands, and the reason is no

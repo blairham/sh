@@ -170,6 +170,19 @@ func (c *Runner) ownTables(r *Runner) {
 	// made a definition made in a subshell the parent's, and a removal made
 	// in one the parent's too, at status 0 with nothing said either way.
 	c.funcs = maps.Clone(r.funcs)
+	// And which variables have a discipline function watching them, which is
+	// a view of that same table and goes with it: measured on ksh93u+,
+	// `g=raw; ( function g.get { .sh.value=sub; }; echo "$g" )` answers `sub`
+	// inside and `raw` after, so a hook defined in a subshell is not the
+	// parent's. Sharing the map would have made the parent's next read of
+	// `g` build a name and ask funcs for a function the subshell took with
+	// it — harmless today and exactly the shape this file exists to prevent.
+	c.disciplined = maps.Clone(r.disciplined)
+	// The re-entry guard goes with it for a plainer reason: a subshell
+	// started from inside a hook is still inside it, so it must not fire the
+	// hook it is running, and a subshell that finishes must not leave the
+	// parent's guard set. A copy is both.
+	c.disciplineRunning = maps.Clone(r.disciplineRunning)
 	// And which of those functions stand for a trapped condition, on the same
 	// terms: a `TRAPZERR` defined inside a subshell is not the parent's
 	// handler afterwards. inheritTraps prunes what the subshell does not

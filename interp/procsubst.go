@@ -967,6 +967,22 @@ func (r *Runner) descriptorsOnto(p procSubPipe) []*os.File {
 // back. The caller empties the slot before asking, or the entry on its way
 // out would be found and every file would look shared with itself.
 func (r *Runner) closeOwnPipe(v any) {
+	// A descriptor the *shell* opened for its own plumbing, which today is a
+	// coprocess's near end: closing it is what turns the shell's end of the
+	// pipe into the end-of-file the coprocess is reading for, so `exec 3>&p;
+	// exec 3>&-` is how a script says it has finished writing. Measured on
+	// ksh93u+ 2012, 2026-09-16 — `cat |&; print -p a; read -p x; exec 3>&p;
+	// exec 3>&-; wait` returns, and without the close there is nothing for
+	// the `wait` to return from. The alias check below is what keeps a
+	// *duplicate* from ending it: in the dialect that lends the end rather
+	// than handing it over, the coprocess's own entry is still a name for
+	// the same file.
+	if own, ok := v.(shellOwnedFd); ok {
+		if !r.fdAliased(v) {
+			_ = own.Close()
+		}
+		return
+	}
 	f, ok := v.(*os.File)
 	if !ok {
 		return

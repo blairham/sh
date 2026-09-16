@@ -614,3 +614,73 @@ func (r *Runner) coprocNoticedByAWrite(rd *syntax.Redirect, fd int, fdVar string
 	// `coproc cat; echo hi >&"${COPROC[1]}"` working.
 	r.retireCoproc()
 }
+
+// coprocRedirectWord is the word `>&` and `<&` take to mean the running
+// coprocess in the two dialects that have the facility. One letter, and it is
+// the same letter the builtins spell — see
+// Semantics.CoprocessNamedByARedirection.
+const coprocRedirectWord = "p"
+
+// coprocRedirectEnd resolves that word to the number of the end the operator
+// aims at: the end this shell *writes* for `>&p` and the end it *reads* for
+// `<&p`.
+//
+// Which end goes with which operator is the facility's definition rather than
+// a measurement to be split two ways — a coprocess is a pair of pipes and a
+// redirection can only mean the one that runs the right way — and it is the
+// same pairing `print -p` and `read -p` already use.
+//
+// The second result is false where the word is not the facility's, and where
+// it is and no coprocess is running; the caller tells the two apart by asking
+// coprocNamesARedirectionTarget first. A coprocess whose end the reaping has
+// already taken back answers false as well, which is the same refusal a
+// script gets before any coprocess was started — the two ends are asked
+// separately because ksh93 lets go of them separately.
+func (r *Runner) coprocRedirectEnd(op syntax.Kind) (int, bool) {
+	switch op {
+	case syntax.TokGreatAmp:
+		return r.CoprocWrite()
+	case syntax.TokLessAmp:
+		return r.CoprocRead()
+	}
+	return 0, false
+}
+
+// coprocNamesARedirectionTarget answers whether this dialect reads `p` after
+// `>&` or `<&` as the coprocess at all. False everywhere else, which is what
+// leaves the word to the ordinary readings — a file in the dialect whose bare
+// `>&word` is the csh spelling, and a refused target in the rest.
+func (r *Runner) coprocNamesARedirectionTarget(op syntax.Kind, target string) bool {
+	if target != coprocRedirectWord ||
+		r.sem().CoprocessNamedByARedirection == CoprocessIsNotARedirectionTarget {
+		return false
+	}
+	return op == syntax.TokGreatAmp || op == syntax.TokLessAmp
+}
+
+// coprocEndHandedOver is what the dialect that *moves* the end does once the
+// duplication has happened: the end is no longer the coprocess's, so the
+// letter that reached it finds none.
+//
+// One end at a time, measured — `exec 3>&p` leaves a `read -p` answering and
+// `exec 4<&p` leaves a `print -p` writing — which is the same separation
+// ReapedCoprocessEnds already needs and the same pair of fields it edits.
+//
+// The table entry goes and the file does not get closed, exactly as
+// forgetCoprocFd has it: the number the script named is the same open file,
+// and closing it underneath would end the pipe the move was for.
+func (r *Runner) coprocEndHandedOver(op syntax.Kind) {
+	c := r.coproc
+	if c == nil || c.owner != r ||
+		r.sem().CoprocessNamedByARedirection != CoprocessRedirectionMovesTheEnd {
+		return
+	}
+	switch op {
+	case syntax.TokGreatAmp:
+		r.forgetCoprocFd(c.write)
+		c.write = -1
+	case syntax.TokLessAmp:
+		r.forgetCoprocFd(c.read)
+		c.read = -1
+	}
+}

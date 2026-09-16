@@ -1,0 +1,239 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Jobs in ksh93 — the coprocess `|&` starts, and the job specs the other
+# three columns answer some other way. Part of #2345.
+#
+# `share/suite/core/jobs.tests` says why most of job control cannot be asked
+# in a suite at all: no expected output is checked in, so a case has to
+# reproduce, and scheduling order does not. Everything below inherits that
+# cut. Nothing here prints a process id or a job number, nothing here depends
+# on which of two processes finished first, and every coprocess is either
+# waited for or ended by a close the script wrote.
+#
+# **The coprocess is the whole reason this file exists.** `cmd |&` runs a
+# command beside the shell with a pipe on each of its streams, and the shell
+# keeps the near ends — `print -p` writes to it, `read -p` reads from it, and
+# `>&p` and `<&p` hand an end over to a number of the script's own. bash has
+# a coprocess under a different word and reaches it through an array; zsh has
+# the `-p` letters and no `|&`, whose two bytes it reads as a pipe of both
+# streams; dash has none of it and refuses the operator while parsing. So one
+# construct splits the panel four ways, and the rows below are ksh93's side
+# of it.
+#
+# **A body that ends on its own, in every row but the one about closing.**
+# `cat |&` never finishes, so a row that used it would hang rather than fail
+# if this shell ever kept an end open somewhere — a timeout instead of a line
+# saying what disagreed. `{ read l; print "[$l]"; }` reads one line, writes
+# it back and ends, and the brackets make an empty read visible. The one row
+# that must use `cat` is the one asking whether closing the moved end is what
+# lets the coprocess see end-of-file, because nothing else can end that body.
+#
+# Each section is its own subshell, and the ones that refuse fatally need to
+# be: a second `|&` while one runs ends the script in ksh93, and so does a
+# refused `exec` redirection.
+#
+# Held out, and each for a reason worth writing down:
+#
+#   `jobs` on a running job — the listing holds a process id and a state that
+#     depends on whether the child has got round to exiting.
+#   `wait` on a job killed by a signal — ksh93 says so out loud and names the
+#     process id in the sentence, which no row here may print. The status is
+#     256 plus the signal where the other three answer 128 plus it, and that
+#     half this shell already gives; the sentence is #3392.
+#   `jobs -n` — accepted here and not implemented in this shell (#3390).
+#   `kill %9` with no such job — ksh93u+ 2012-08-01 dies on a signal 11 for
+#     it on this machine. A reference that crashes is not an expectation.
+#   `set -m` — three answers across four shells in a run with no terminal,
+#     which makes it a dialect answer rather than this dialect's.
+
+show() {
+	printf -- '--- %s -> [%s] status %s\n' "$1" "$2" "$3"
+}
+
+printf -- '=== what the operator starts ===\n'
+(
+	{ read l; print "[$l]"; } |&
+	print -p hello
+	read -p got
+	show 'a round trip through the coprocess' "$got" "$?"
+	wait
+)
+(
+	{ read l; print "[$l]"; } |&
+	case "$!" in
+	'') show 'the coprocess has a process' 'no' "$?" ;;
+	*) show 'the coprocess has a process' 'yes' "$?" ;;
+	esac
+	print -p x
+	read -p got
+	wait
+)
+(
+	# The operator terminates the whole and-or, the way `&` does, so what
+	# goes into the pipe is everything the list wrote.
+	echo one | cat |&
+	read -p got
+	show 'the coprocess of a pipeline' "$got" "$?"
+	wait
+)
+(
+	{ read l; print "[$l]"; } |&
+	print -p first
+	read -p got
+	show 'and a second one once the first has ended' "$got" "$?"
+	wait
+	{ read l; print "<$l>"; } |&
+	print -p second
+	read -p got
+	show 'starts where the first left off' "$got" "$?"
+	wait
+)
+(
+	# Fatal, so nothing after it in the subshell runs and the answer is the
+	# subshell's own status, read from outside. The sentence itself is held
+	# out: ksh93 words it with a `line N` this shell does not reproduce, N
+	# being the enclosing top-level statement rather than the line the second
+	# operator is on (#3391).
+	(
+		cat |&
+		cat |&
+		show 'unreached' '' "$?"
+	) 2>/dev/null
+	show 'a second coprocess while one runs ends the script' '' "$?"
+)
+
+printf -- '=== the letters with no coprocess running ===\n'
+(
+	print -p nothing 2>&1
+	show 'print -p' '' "$?"
+)
+(
+	read -p v 2>&1
+	show 'read -p' "${v-unset}" "$?"
+)
+(
+	{ read l; print "[$l]"; } |&
+	print -p one
+	read -p got
+	read -p after
+	show 'a read past the end of what the body wrote' "${after}" "$?"
+	wait
+)
+
+printf -- '=== an end handed to a number of the script own ===\n'
+(
+	{ read l; print "[$l]"; } |&
+	exec 3>&p
+	print -u3 viathree
+	exec 3>&-
+	read -p got
+	show 'the end this shell writes, through a 3' "$got" "$?"
+	wait
+)
+(
+	{ read l; print "[$l]"; } |&
+	exec 4<&p
+	print -p sent
+	read -u4 got
+	show 'the end this shell reads, through a 4' "$got" "$?"
+	exec 4<&-
+	wait
+)
+(
+	{ read l; print "[$l]"; } |&
+	exec 3>&p
+	print -p toolate 2>&1
+	show 'and the letter no longer reaches it' '' "$?"
+	exec 3>&-
+	read -p got
+	show 'while the other end still answers' "$got" "$?"
+	wait
+)
+(
+	{ read l; print "[$l]"; } |&
+	exec 4<&p
+	print -p sent
+	read -p v 2>&1
+	show 'the same the other way round' '' "$?"
+	read -u4 got
+	show 'and the write end still reaches the body' "$got" "$?"
+	exec 4<&-
+	wait
+)
+(
+	# `cat` here on purpose: nothing but the close can end it, so this is
+	# the row that says the close is what the coprocess reads as the end.
+	cat |&
+	print -p a
+	read -p got
+	exec 3>&p
+	exec 3>&-
+	wait
+	show 'closing the moved end lets the coprocess finish' "$got" "$?"
+)
+
+printf -- '=== the word p with no coprocess running ===\n'
+(
+	# A file of that name in the directory, because the word is the
+	# facility's wherever the facility exists: this is not the csh spelling
+	# that would open it.
+	: > p
+	echo hi >&p 2>&1
+	show 'a simple command carries on' '' "$?"
+	show 'and the file called p is untouched' "$(cat p)" "$?"
+)
+(
+	read v <&p 2>&1
+	show 'and so does a read' "${v-unset}" "$?"
+)
+(
+	# Fatal, so nothing may follow it in this subshell.
+	exec 3>&p
+	show 'unreached' '' "$?"
+)
+
+printf -- '=== the job specs, with no job to find ===\n'
+(
+	wait %1 2>&1
+	show 'wait on a job spec that names none' '' "$?"
+)
+(
+	fg 2>&1
+	show 'fg with no current job' '' "$?"
+	bg 2>&1
+	show 'bg with no current job' '' "$?"
+	fg %9 2>&1
+	show 'fg on a job spec that names none' '' "$?"
+)
+(
+	jobs %1 2>&1
+	show 'jobs on a job spec that names none' '' "$?"
+)
+(
+	disown 2>&1
+	show 'disown with no current job' '' "$?"
+)
+(
+	wait -n 2>&1
+	show 'a letter wait does not take' '' "$?"
+)
+
+printf -- '=== waiting for what has already been waited for ===\n'
+(
+	(exit 3) &
+	p=$!
+	wait "$p"
+	show 'the first wait has the status' '' "$?"
+	# The complaint goes, and only the status is asked: one of the other
+	# references names the process id in its sentence, which is a number no
+	# row here may let through.
+	wait "$p" 2>/dev/null
+	show 'the second has forgotten the child' '' "$?"
+)
+(
+	(exit 1) & a=$!
+	(exit 2) & b=$!
+	wait "$a" "$b"
+	show 'two operands answer with the last' '' "$?"
+)

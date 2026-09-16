@@ -348,6 +348,35 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 		}
 
+		// Whether this redirection takes the coprocess's end away from the
+		// letter that reached it, decided where the target is read and acted
+		// on where the duplication succeeded.
+		handOverCoprocEnd := false
+
+		// `p` is the running coprocess in the two dialects that reach one by
+		// a letter, and it is read here — ahead of the csh reading below,
+		// which would otherwise make a file called `p` out of a bare `>&p`
+		// in a dialect where that word is the facility's. See
+		// Semantics.CoprocessNamedByARedirection.
+		if r.coprocNamesARedirectionTarget(rd.Op, name) {
+			end, running := r.coprocRedirectEnd(rd.Op)
+			if !running {
+				// Not an open that failed: the duplication's own refusal,
+				// with the word where a number usually stands.
+				r.diagf("%v\n", r.errBadFd(-1, Wording(
+					r.diag().CoprocessDuplicationTargetName, "%[1]s", name)))
+				r.status = r.diag().redirectFailureStatus()
+				r.redirErr = true
+				return closers, nil
+			}
+			name = itoa(end)
+			// And in the dialect that hands the end over rather than
+			// lending it, the letter stops reaching a coprocess. Recorded
+			// here and acted on after the duplication, which still has to
+			// read the number — and never where the duplication failed.
+			handOverCoprocEnd = true
+		}
+
 		// `N>&M` and `N<&M` duplicate a descriptor, and `N>&-` closes one.
 		// No file is opened, so the gate has nothing to see: this rearranges
 		// streams the shell already holds.
@@ -464,6 +493,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.status = r.diag().redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
+			}
+			if handOverCoprocEnd {
+				r.coprocEndHandedOver(rd.Op)
 			}
 			// The close half of a move, once the duplication it follows has
 			// happened. Never where the two numbers are the same — `5<&5-`

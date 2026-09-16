@@ -335,13 +335,17 @@ The bar is **countable, not a judgement**: open `P1` = 0. Nothing else gates
 a release.
 
 It used to be two legs — open `P1` = 0 **and** open `daily-driver` = 0 — and
-the second one has been retired. It did its job: it was the label that said
-"this shell cannot be used to get work done", and it went to zero and stayed
-there, so what remains on the board is prioritized work rather than a
-separate class of blocker. The label itself stays — it is the record of the
-campaign that made this shell usable, on 267 issues — but it is descriptive
-now and gates nothing. `P1` is what "fix first" means, and an issue that
+the second one is gone, label and all. It did its job: it was the label that
+said "this shell cannot be used to get work done", and it went to zero and
+stayed there, so what is left on the board is prioritized work rather than a
+separate class of blocker. `P1` is what "fix first" means, and an issue that
 would once have earned both earns `P1`.
+
+The label is **deleted**, not merely demoted, so that it cannot be applied
+again — a second gate reappears the moment somebody reaches for a familiar
+name, and a one-line rule is worth more than a description nobody reads. The
+campaign it recorded is in the closed issues and in `internal/smoke`, which is
+where a claim about the interactive surface should be checked anyway.
 
 That makes the label load-bearing, so the *counting method* is part of the
 definition. Three ways the obvious query has lied here, each of which has
@@ -883,8 +887,8 @@ holds it and `internal/cmd/smoke` prints the table.
 It exists because the interactive surface has no other test. The corpus
 invokes everything with `-c`, `make wild` reads scripts and `make wild-run`
 runs them — none of which involves a terminal, an editor, a prompt or a
-keystroke, so every gap on the `daily-driver` label was found by somebody
-hand-driving a pty for ten minutes. That is a fine way to find the first ten
+keystroke, so every gap in the campaign to make this a shell somebody could
+work in was found by somebody hand-driving a pty for ten minutes. That is a fine way to find the first ten
 and a hopeless way to learn whether they are fixed.
 
 Two rules make it worth reading. **A mark is never text that is typed**: the

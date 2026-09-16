@@ -19,6 +19,7 @@ import (
 // The simple `${a[@]+x}` always worked, which is why it took a real script
 // using the nested form to notice.
 func TestASubscriptEndsAtItsOwnBracket(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	for _, c := range []struct{ name, src, index string }{
 		{"a plain subscript", "${a[@]}", "@"},

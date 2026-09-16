@@ -61,6 +61,7 @@ func pidBraceWords(t *testing.T, src string, d Dialect) []string {
 }
 
 func TestAPidBraceRunIsOneWord(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	for _, tc := range []struct {
 		name, src string
@@ -99,6 +100,7 @@ func TestAPidBraceRunIsOneWord(t *testing.T) {
 // `>` in the second row is a redirection and the `;` in the third ends the
 // command.
 func TestThePidBraceRunEndsAtTheMatch(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	f, err := Parse("echo $${a}>out", d)
 	if err != nil {
@@ -124,6 +126,7 @@ func TestThePidBraceRunEndsAtTheMatch(t *testing.T) {
 // comes from — `$!{a,b}` is `0a 0b`, `$$x{a,b}` is `<pid>xa <pid>xb` — which
 // is what says the braces stayed syntax.
 func TestOnlyTheBarePidOpensTheRun(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	for _, tc := range []struct{ name, src string }{
 		{"another special parameter", "echo $!{a,b}"},
@@ -164,6 +167,7 @@ func TestOnlyTheBarePidOpensTheRun(t *testing.T) {
 // does. Measured — `printf '[%s]' $$ {a b}` and `$$x{a b}` are both refused
 // there, along with `x{a b}`, where every other column splits them in two.
 func TestABlankBeforeTheBraceLeavesTheReservedWord(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	for _, src := range []string{
 		"echo $$ {a b}",
@@ -180,6 +184,7 @@ func TestABlankBeforeTheBraceLeavesTheReservedWord(t *testing.T) {
 // the same lines under the core grammar end the word at the blank, which is
 // what the other six columns do with them.
 func TestThePidBraceRunIsOffWithoutTheFlag(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	got := pidBraceWords(t, "echo $${a b}", d)
 	if len(got) != 3 {
@@ -201,6 +206,7 @@ func TestThePidBraceRunIsOffWithoutTheFlag(t *testing.T) {
 // every line after the `{` looking for the match and then says `closing brace
 // expected`, so an unmatched one is a refusal rather than text.
 func TestAnUnmatchedPidBraceIsRefused(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	const src = "echo $${a\necho two\n"
 	_, err := Parse(src, d)
@@ -231,6 +237,7 @@ func TestAnUnmatchedPidBraceIsRefused(t *testing.T) {
 // that `$${a,b}` is one word and the `{b,c}` inside `$${a{b,c}d}` is still a
 // list.
 func TestThePidBracesAreMarkedAndNothingElseIs(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	f, err := Parse("echo $${a{b,c}d}", d)
 	if err != nil {
@@ -262,6 +269,7 @@ func TestThePidBracesAreMarkedAndNothingElseIs(t *testing.T) {
 // as a list, where a nested run would have left it one. So the marking is on
 // one pair and the interior is untouched, which is what the counts here say.
 func TestARunDoesNotNest(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	f, err := Parse("echo $${a$${b,c}d}", d)
 	if err != nil {
@@ -295,6 +303,7 @@ func TestARunDoesNotNest(t *testing.T) {
 // characters, so escaping them would leave the tree identical and make the
 // word a different program — the failure #1221 names for a pattern group.
 func TestAPidBraceRunPrintsBackAsItCame(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	for _, src := range []string{
 		"echo $${a b}",
@@ -322,6 +331,7 @@ func TestAPidBraceRunPrintsBackAsItCame(t *testing.T) {
 // expansion does — it is written `\$` under the ordinary rules — so this is
 // where leaving the mode on becomes visible.
 func TestThePrinterLeavesTheRunsRawModeAtTheMatch(t *testing.T) {
+	t.Parallel()
 	d := pidBraceDialect()
 	const src = "echo $${a b}$%"
 	f, err := Parse(src, d)

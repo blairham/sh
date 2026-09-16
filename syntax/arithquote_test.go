@@ -14,6 +14,7 @@ import "testing"
 // ten, and two step over the byte where a token may begin, so the same text is
 // two operands running together.
 func TestADoubleQuoteInArithmeticByPolicy(t *testing.T) {
+	t.Parallel()
 	quoted := func(p ArithDoubleQuotePolicy) Dialect {
 		d := Core()
 		d.ArithDoubleQuote = p
@@ -48,6 +49,7 @@ func TestADoubleQuoteInArithmeticByPolicy(t *testing.T) {
 // bytes are gone before the expression is read, so `1"0"` is one literal and
 // `n"a"me` is one name.
 func TestARemovedDoubleQuoteJoinsTheToken(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ArithDoubleQuote = ArithDoubleQuoteRemoved
 	if n, ok := parseArithOf(t, `1"0"`, d).(*ArithNum); !ok || n.Text != "10" {
@@ -61,6 +63,7 @@ func TestARemovedDoubleQuoteJoinsTheToken(t *testing.T) {
 // Skipped reads through a quote standing where a token may begin, and the
 // operand behind it is read as itself: a name is still a name.
 func TestASkippedDoubleQuoteLeavesTheOperand(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ArithDoubleQuote = ArithDoubleQuoteSkipped
 	if v, ok := parseArithOf(t, `"n"`, d).(*ArithVar); !ok || v.Name != "n" {
@@ -76,6 +79,7 @@ func TestASkippedDoubleQuoteLeavesTheOperand(t *testing.T) {
 // question — the code of one character, escapes and all — and two nodes would
 // be two places for the escape rules to drift.
 func TestACharacterConstantNeedsTheFlag(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ArithCharacterConstant = true
 	for _, tc := range []struct{ src, char string }{

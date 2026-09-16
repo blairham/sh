@@ -21,6 +21,7 @@ import "testing"
 // word that had already been read in full. So the invariant is asserted here,
 // where it can be, rather than through a symptom that does not exist yet.
 func TestWordStartIsTheWordBeingRead(t *testing.T) {
+	t.Parallel()
 	l := NewLexer(`echo "a b"$(echo`, Core())
 	l.Tokens()
 	if l.wordStart.IsValid() {
@@ -33,6 +34,7 @@ func TestWordStartIsTheWordBeingRead(t *testing.T) {
 // see above — so it is reached directly, which is the only way to say what it
 // does.
 func TestAnUnmatchedConstructOutsideAWordQuotesItself(t *testing.T) {
+	t.Parallel()
 	const src = "echo one\n$(echo two"
 	l := NewLexer(src, Core())
 	l.line = 2
@@ -51,6 +53,7 @@ func TestAnUnmatchedConstructOutsideAWordQuotesItself(t *testing.T) {
 // three of the four dialects word this without the text and would agree
 // whatever it held.
 func TestAnUnmatchedConstructTakesItsWholeWord(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ProcessSubstitution = true
 	for _, c := range []struct{ src, near string }{

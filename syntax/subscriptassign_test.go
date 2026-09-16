@@ -16,6 +16,7 @@ import (
 // which ends at the bracket the moment anything expands inside it, so `a[$i]=v`
 // — the ordinary way a loop writes an element — became a command name.
 func TestASubscriptMayHoldAnExpansion(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		src    string
@@ -85,6 +86,7 @@ func TestASubscriptMayHoldAnExpansion(t *testing.T) {
 //
 // Accepting the shape everywhere made that shell assign silently instead.
 func TestASubscriptedAssignmentNeedsTheFlag(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ArraySubscript = false
 	for _, src := range []string{"a[1]=v", "a[$i]=v", "a[i]+=v"} {
@@ -112,6 +114,7 @@ func TestASubscriptedAssignmentNeedsTheFlag(t *testing.T) {
 // an equivalent mutant, and the flag combination is legitimate for a dialect
 // written outside this repository.
 func TestASubscriptedAppendNeedsTheAppendFlagToo(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.AppendAssign = false
 	for _, c := range []struct {
@@ -144,6 +147,7 @@ func TestASubscriptedAppendNeedsTheAppendFlagToo(t *testing.T) {
 // `aX=c` — so a scan that followed the `=` across spans wherever it found one
 // would turn that into an assignment.
 func TestWhatIsNotASubscriptedAssignment(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -188,6 +192,7 @@ func TestWhatIsNotASubscriptedAssignment(t *testing.T) {
 // A subscript that expands keeps its position, so a diagnostic about it points
 // at the subscript rather than at the start of the word.
 func TestASubscriptKeepsItsPosition(t *testing.T) {
+	t.Parallel()
 	const src = "a[$i]=v"
 	p := syntax.NewParser(src, syntax.Core())
 	f := p.Parse()

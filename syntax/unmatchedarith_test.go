@@ -22,6 +22,7 @@ import (
 // spellings are one kind with two delimiter pairs, which is why the closer
 // comes from the construct rather than from each dialect's sentence.
 func TestAnUnterminatedArithmeticSubstitutionCarriesItsState(t *testing.T) {
+	t.Parallel()
 	// `$[` is a dialect construct, so the rows that use it say so. Core has
 	// the parenthesised spelling and not the bracketed one, which is exactly
 	// the split the two shells that have `$[` make.
@@ -77,6 +78,7 @@ func TestAnUnterminatedArithmeticSubstitutionCarriesItsState(t *testing.T) {
 // A construct on line 1 of a one-line file makes the two numbers 1 and 2, so
 // a mutant that returned either where the other was wanted would show.
 func TestAnUnterminatedArithmeticSubstitutionCarriesBothLines(t *testing.T) {
+	t.Parallel()
 	bracket := Core()
 	bracket.DollarBracketArith = true
 	for _, c := range []struct {

@@ -16,6 +16,7 @@ import "testing"
 // `$widget` holding `.accept-line`. The refusal fired 69 times in one
 // interactive session (#1875).
 func TestAKeySubscriptThatIsNoExpressionParses(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	for _, tc := range []struct {
 		name, src, sub string
@@ -51,6 +52,7 @@ func TestAKeySubscriptThatIsNoExpressionParses(t *testing.T) {
 // is read — `(( m[.k] = 3 ))` writes the element in both shells with the
 // attribute, so the target has to carry the key too.
 func TestAKeySubscriptThatIsNoExpressionIsAnAssignmentTarget(t *testing.T) {
+	t.Parallel()
 	got := parseArithOf(t, `m[.k] = 3`, Core())
 	x, ok := got.(*ArithAssign)
 	if !ok {
@@ -66,6 +68,7 @@ func TestAKeySubscriptThatIsNoExpressionIsAnAssignmentTarget(t *testing.T) {
 // brackets is refused exactly as before, and so is the whole expression when
 // the brackets are only part of what cannot be read.
 func TestCarryingAKeySubscriptDoesNotLoosenTheExpression(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`.accept-line`,
 		`1 + .accept-line`,
@@ -83,6 +86,7 @@ func TestCarryingAKeySubscriptDoesNotLoosenTheExpression(t *testing.T) {
 // being returned. A second operand after the subscript is what shows it: the
 // expression is whole, and a leaked error would refuse it anyway.
 func TestAKeySubscriptLeavesNoRefusalBehind(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`m[.k] + 1`,
 		`1 + m[.k]`,

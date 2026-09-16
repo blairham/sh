@@ -17,6 +17,7 @@ import (
 // by deferring, so by the time Parse returns the stack has been unwound and a
 // caller asking is told nothing was open. A prompt asks afterwards.
 func TestWhatIsStillOpen(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want string
@@ -93,6 +94,7 @@ func TestWhatIsStillOpen(t *testing.T) {
 // The line each was opened on travels with it, which is what a diagnostic
 // naming a construct from three lines up needs.
 func TestWhereAConstructWasOpened(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("for i in 1\ndo\nif true\nthen\n", syntax.Core())
 	p.Parse()
 	open := p.Open()
@@ -108,6 +110,7 @@ func TestWhereAConstructWasOpened(t *testing.T) {
 
 // Complete input has nothing open, and asking twice gives the same answer.
 func TestNothingOpenAfterAWholeCommand(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("if true\nthen\n:\nfi\n", syntax.Core())
 	p.Parse()
 	if got := p.Open(); len(got) != 0 {
@@ -124,6 +127,7 @@ func TestNothingOpenAfterAWholeCommand(t *testing.T) {
 // is the state that describes it. Anything later is a parser carrying on
 // past the end.
 func TestTheSnapshotIsOfWhenTheInputRanOut(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("if true\nthen\n", syntax.Core())
 	p.Parse()
 	first := p.Open()
@@ -143,6 +147,7 @@ func TestTheSnapshotIsOfWhenTheInputRanOut(t *testing.T) {
 // taken when the parser first sees that the lexer has run out, while the
 // constructs around it are still standing.
 func TestWhatTheLexerIsStillInside(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"echo 'x\n", "'"},
 		{"echo \"x\n", `"`},
@@ -190,6 +195,7 @@ func TestWhatTheLexerIsStillInside(t *testing.T) {
 // different from it, and the first word is the one it agrees on. Carrying the
 // inner parser's answer out through the fallback path is its own change.
 func TestOneLexerInsideAnotherReportsTheOuter(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("echo $( echo 'x\n", syntax.Core())
 	p.Parse()
 	open := p.Open()

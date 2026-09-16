@@ -18,6 +18,7 @@ import (
 // This is the earliest conformance signal available: it is the corpus checking
 // the implementation rather than the panel.
 func TestCorpusLexes(t *testing.T) {
+	t.Parallel()
 	for _, c := range oracle.Corpus {
 		t.Run(c.ID, func(t *testing.T) {
 			l := syntax.NewLexer(c.Snippet, oracle.Dialect())
@@ -68,6 +69,7 @@ func TestCorpusLexes(t *testing.T) {
 // must parse. This is the parser's version of TestCorpusLexes and the same
 // argument: the corpus checking the implementation rather than the panel.
 func TestCorpusParses(t *testing.T) {
+	t.Parallel()
 	for _, c := range oracle.Corpus {
 		t.Run(c.ID, func(t *testing.T) {
 			p := syntax.NewParser(c.Snippet, oracle.Dialect())

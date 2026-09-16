@@ -36,6 +36,7 @@ var emptyBodies = []string{
 // shape. So the flag is off in the core and the grammar grows by a dialect
 // setting it, which is the additive direction.
 func TestAnEmptyCompoundBodyNeedsTheFlag(t *testing.T) {
+	t.Parallel()
 	allowed := Core()
 	allowed.EmptyCompoundBody = true
 	allowed.CStyleFor = true
@@ -78,6 +79,7 @@ func TestAnEmptyCompoundBodyNeedsTheFlag(t *testing.T) {
 // panel splits the other way on it. A command substitution's body is a whole
 // program, and every shell in the panel takes an empty one.
 func TestAnEmptyBodyIsNotEveryEmptyThing(t *testing.T) {
+	t.Parallel()
 	strict := Core()
 	for _, src := range []string{
 		`case x in esac`,
@@ -99,6 +101,7 @@ func TestAnEmptyBodyIsNotEveryEmptyThing(t *testing.T) {
 // nothing as expected alongside it, because an empty body has nothing to be
 // in the middle of.
 func TestAnEmptyBodyNamesTheTokenItStoppedOn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, token string }{
 		{`{ }`, "}"},
 		{`( )`, ")"},
@@ -126,6 +129,7 @@ func TestAnEmptyBodyNamesTheTokenItStoppedOn(t *testing.T) {
 // for more, which is what a prompt needs and what a script reports as an
 // unterminated construct.
 func TestAnUnfinishedBodyIsStillUnfinished(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`{`, `(`, `if true; then`, `while false; do`} {
 		p := NewParser(src, Core())
 		p.Parse()

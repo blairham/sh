@@ -19,6 +19,7 @@ import "testing"
 // never begin a name — `=`, `+`, a `:` operator, and a `%`, `/` or `#` with
 // an operand — leaves the `#` as the parameter.
 func TestAHashIsTheParameterOrTheLengthPrefix(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	for _, tc := range []struct {
 		src    string
@@ -86,6 +87,7 @@ func TestAHashIsTheParameterOrTheLengthPrefix(t *testing.T) {
 // with an operator on it where it is off, which is what six of the seven
 // columns answer and so what the core takes (#1242).
 func TestAHashWithNoReadingStaysABadSubstitution(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	for _, src := range []string{
 		`echo ${#%}`,
@@ -120,6 +122,7 @@ func TestAHashWithNoReadingStaysABadSubstitution(t *testing.T) {
 // rule about the colon rather than about `:-` would break exactly here and
 // would still pass the other test.
 func TestANamelessExpansionIsALengthsOperand(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.NamelessParamExpansion = true
 	// The length and its operator are one node here — Length with Op set —

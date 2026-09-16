@@ -24,6 +24,7 @@ import (
 // because every reading parses. A test that asked only for a nil error would
 // pass all three and kill nothing.
 func TestABackslashTheInputEndsAfterIsAWord(t *testing.T) {
+	t.Parallel()
 	literal := Core()
 	dropped := Core()
 	dropped.BackslashAtEndOfInput = EndOfInputBackslashIsDropped
@@ -107,6 +108,7 @@ func TestABackslashTheInputEndsAfterIsAWord(t *testing.T) {
 // given a value — but an implementation that returned *no* span would be bash
 // 3.2's, silently, and this is what says so.
 func TestTheDroppedBackslashStillLeavesAWord(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.BackslashAtEndOfInput = EndOfInputBackslashIsDropped
 	toks := NewLexer(`printf a \`, d).Tokens()
@@ -142,6 +144,7 @@ func TestTheDroppedBackslashStillLeavesAWord(t *testing.T) {
 // unescaping must not reach it — `"$(echo \`+"`"+`echo n\`+"`"+`)"` keeps
 // both backslashes in all eight columns.
 func TestTheOlderSubstitutionNestsThroughItsOwnEscaping(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a body that ends in an escaped backslash",
@@ -186,6 +189,7 @@ func TestTheOlderSubstitutionNestsThroughItsOwnEscaping(t *testing.T) {
 // pattern: @(a` and ksh93u+ runs the word. The two scans now read one rule
 // from one place, which is what keeps this from drifting back.
 func TestAnUnterminatedGroupIsNotBlamedOnItsBackslash(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ExtendedPattern = true
 	l := NewLexer(`echo @(a\`, d)

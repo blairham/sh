@@ -77,6 +77,7 @@ func condRightOperand(t *testing.T, src string, d Dialect) string {
 }
 
 func TestAConditionsThirdWordMayOpenWithAGroup(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	condOperandGroupGrammar(&d)
 	for _, tc := range []struct{ name, src, want string }{
@@ -105,6 +106,7 @@ func TestAConditionsThirdWordMayOpenWithAGroup(t *testing.T) {
 // second word of a condition and at the fourth, and reads one at the first as
 // the condition's own grouping paren.
 func TestAConditionGroupOperandIsTheThirdWordOnly(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	condOperandGroupGrammar(&d)
 	for _, src := range []string{
@@ -144,6 +146,7 @@ func TestAConditionGroupOperandIsTheThirdWordOnly(t *testing.T) {
 // TestAConditionGroupOperandIsOneDialectsAndNotEveryShells is the panel's
 // other side: six columns refuse the line, so the core grammar must too.
 func TestAConditionGroupOperandIsOneDialectsAndNotEveryShells(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	// The group grammar without the positional flag, so the row that fails
 	// is the flag's and not the absence of bare groups.

@@ -16,6 +16,7 @@ import (
 // same. That is what makes a token-level splice honest — every position still
 // points into the real input, so nothing downstream needs a mapping.
 func TestAnExpandedWordIsPositionedWhereItWasUsed(t *testing.T) {
+	t.Parallel()
 	const src = "echo one\nbad\n"
 	p := syntax.NewParser(src, syntax.Core())
 	p.Aliases = table("bad", "nosuchcmd --flag")

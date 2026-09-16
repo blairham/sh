@@ -16,6 +16,7 @@ func splitFlagged(t *testing.T, src string) *ParamExpr {
 
 // The count is what is read, not a bool, because parity is the meaning.
 func TestParamSplitFlagCounts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		count int
@@ -45,6 +46,7 @@ func TestParamSplitFlagCounts(t *testing.T) {
 // The operator and the subscript are still read after the run: the flag is a
 // prefix on the expansion and not a different expansion.
 func TestParamSplitFlagKeepsTheRestOfTheGrammar(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamSplitFlag = true
 	d.ArraySubscript = true
@@ -82,6 +84,7 @@ func TestParamSplitFlagKeepsTheRestOfTheGrammar(t *testing.T) {
 // which is measured — and each is counted on its own, because parity is per
 // flag and not per character.
 func TestParamSplitFlagSharesTheSlotWithTheTilde(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamSplitFlag = true
 	d.ParamTildeFlag = true
@@ -108,6 +111,7 @@ func TestParamSplitFlagSharesTheSlotWithTheTilde(t *testing.T) {
 // still the length. That order is measured, and the reverse is a different
 // expansion rather than a different order.
 func TestParamSplitFlagFollowsTheFlagGroup(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamSplitFlag = true
 	d.ParamExpansionFlags = true
@@ -138,6 +142,7 @@ func TestParamSplitFlagFollowsTheFlagGroup(t *testing.T) {
 // unreadable — and *which* way it is unreadable is the split
 // BadSubstitutionAtParseTime already records.
 func TestParamSplitFlagOffIsUnreadable(t *testing.T) {
+	t.Parallel()
 	if e := firstParam(t, `echo ${=x}`, Core()); !e.Bad || e.Src != "=x" {
 		t.Errorf(`${=x} in the core: %+v, want Bad with Src "=x"`, e)
 	}
@@ -155,6 +160,7 @@ func TestParamSplitFlagOffIsUnreadable(t *testing.T) {
 
 // The span round-trips as written, because the printer writes it back raw.
 func TestParamSplitFlagRoundTrips(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamSplitFlag = true
 	d.ParamTildeFlag = true

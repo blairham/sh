@@ -15,6 +15,7 @@ import "testing"
 // quotes when the command finally runs — and the tree is nil, which is the
 // state an expression holding an expansion has always been left in.
 func TestAnUnreadableExpressionDoesNotRefuseTheFile(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -92,6 +93,7 @@ func TestAnUnreadableExpressionDoesNotRefuseTheFile(t *testing.T) {
 // And an expression that *does* read keeps the tree the read built, so the
 // deferral costs a well-formed program nothing.
 func TestAReadableExpressionKeepsItsTree(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"an arithmetic command", "((1 + 2))", "(1 + 2)"},
 		{"an arithmetic substitution", "echo $((1 + 2))", "(1 + 2)"},

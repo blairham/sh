@@ -52,6 +52,7 @@ func parseArithOf(t *testing.T, src string, d Dialect) ArithExpr {
 }
 
 func TestArithPrecedenceFollowsC(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`1+2*3`, `(1 + (2 * 3))`},
 		{`(1+2)*3`, `((1 + 2) * 3)`},
@@ -73,6 +74,7 @@ func TestArithPrecedenceFollowsC(t *testing.T) {
 }
 
 func TestArithShorterOperatorIsNotTakenOutOfALonger(t *testing.T) {
+	t.Parallel()
 	// `<` must not be taken out of `<<` or `<=`, and `&` not out of `&&`.
 	tests := []struct{ src, want string }{
 		{`1<<2`, `(1 << 2)`},
@@ -90,6 +92,7 @@ func TestArithShorterOperatorIsNotTakenOutOfALonger(t *testing.T) {
 }
 
 func TestArithVariablesAndLiterals(t *testing.T) {
+	t.Parallel()
 	// A bare name is a variable reference; both spellings mean the same.
 	if got, want := arith(parseArithOf(t, `x+1`, Core())), `(x + 1)`; got != want {
 		t.Errorf("got %s, want %s", got, want)
@@ -114,6 +117,7 @@ func TestArithVariablesAndLiterals(t *testing.T) {
 }
 
 func TestArithAssignmentIsRightAssociativeAndIsItsOwnNode(t *testing.T) {
+	t.Parallel()
 	// Its effect outlives the expression, so it is not merely a binary
 	// operator.
 	if got, want := arith(parseArithOf(t, `x=y=1`, Core())), `(x = (y = 1))`; got != want {
@@ -134,6 +138,7 @@ func TestArithAssignmentIsRightAssociativeAndIsItsOwnNode(t *testing.T) {
 }
 
 func TestArithTernaryAndUnary(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`1?2:3`, `(1 ? 2 : 3)`},
 		{`1?2:3?4:5`, `(1 ? 2 : (3 ? 4 : 5))`},
@@ -156,6 +161,7 @@ func TestArithTernaryAndUnary(t *testing.T) {
 // prefix sign belongs to the base; and `2**3**2` is 512, so it associates to
 // the right.
 func TestArithExponentPrecedenceAndAssociativity(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`2**10`, `(2 ** 10)`},
 		{`2 ** 3`, `(2 ** 3)`},
@@ -176,6 +182,7 @@ func TestArithExponentPrecedenceAndAssociativity(t *testing.T) {
 }
 
 func TestArithDialectGates(t *testing.T) {
+	t.Parallel()
 	// None of these is in the standard's arithmetic, so POSIX() must refuse
 	// them rather than accept something it cannot mean.
 	// Asked of the expression rather than of the file: a file is not refused
@@ -191,6 +198,7 @@ func TestArithDialectGates(t *testing.T) {
 }
 
 func TestArithCommandIsParsedToo(t *testing.T) {
+	t.Parallel()
 	f, err := Parse(`(( x = 2 > 1 ))`, Core())
 	if err != nil {
 		t.Fatal(err)
@@ -205,6 +213,7 @@ func TestArithCommandIsParsedToo(t *testing.T) {
 }
 
 func TestArithRejectsGarbageWithoutPanicking(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`1+`, `+`, `)`, `(`, `1?2`, `x=`, `1..2`, `,`, `**`, `1 2`,
 		strings.Repeat("(", 100), strings.Repeat("1+", 200) + "1",

@@ -30,6 +30,7 @@ func operandText(w *Word) string {
 // The group is read off the front of the subscript and the operand is what is
 // left, both exactly.
 func TestASubscriptFlagGroupIsReadAndTheOperandIsWhatIsLeft(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src     string
 		flags   string
@@ -85,6 +86,7 @@ func TestASubscriptFlagGroupIsReadAndTheOperandIsWhatIsLeft(t *testing.T) {
 // stands as written — which is the whole of the error handling and the whole
 // of why the flag is additive.
 func TestASubscriptFlagGroupThatCannotBeReadIsNotAGroup(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		// A letter outside the set.
 		`echo ${a[(z)2]}`,
@@ -124,6 +126,7 @@ func TestASubscriptFlagGroupThatCannotBeReadIsNotAGroup(t *testing.T) {
 
 // Off, the same text is a subscript with no group in it, whatever it holds.
 func TestASubscriptFlagGroupOffLeavesTheSubscriptWhole(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ArraySubscript = true
 	for _, src := range []string{`echo ${a[(r)beta]}`, `echo ${a[(re)x]}`, `echo ${a[()2]}`} {
@@ -136,6 +139,7 @@ func TestASubscriptFlagGroupOffLeavesTheSubscriptWhole(t *testing.T) {
 
 // Subscript is the accessor every reading uses, so it answers for both shapes.
 func TestSubscriptIsTheOperandBehindAGroupAndTheWholeSubscriptWithout(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${a[(re)beta]}`, subFlagged())
 	if got := operandText(e.Subscript()); got != "beta" {
 		t.Errorf("Subscript() with a group = %q, want %q", got, "beta")
@@ -149,6 +153,7 @@ func TestSubscriptIsTheOperandBehindAGroupAndTheWholeSubscriptWithout(t *testing
 // The brace-less spelling carries a group too, which is a lexer question:
 // without it the `(` ends the word and the file does not parse at all.
 func TestABareSubscriptCarriesAFlagGroup(t *testing.T) {
+	t.Parallel()
 	d := subFlagged()
 	d.BareSubscript = true
 	for _, tc := range []struct{ src, flags, operand string }{

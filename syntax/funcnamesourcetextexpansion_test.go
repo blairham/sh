@@ -25,6 +25,7 @@ func nameIsSourceText() Dialect {
 // carries on, where refusing to parse gives up **every line of the file after
 // it** — 74 lines of one file of bash's own suite.
 func TestAParenthesisedNameHoldingAnExpansionIsRead(t *testing.T) {
+	t.Parallel()
 	d := nameIsSourceText()
 	for _, tc := range []struct{ src, refused string }{
 		{`_p_${w}() { :; }`, `_p_${w}`},
@@ -55,6 +56,7 @@ func TestAParenthesisedNameHoldingAnExpansionIsRead(t *testing.T) {
 // assignment is a parenthesis after a word too, and its subscript is where an
 // expansion ordinarily goes.
 func TestAnArrayAssignmentWithAnExpandedSubscriptIsNotADefinition(t *testing.T) {
+	t.Parallel()
 	d := nameIsSourceText()
 	d.ArrayLiteral = true
 	d.ArraySubscript = true
@@ -72,6 +74,7 @@ func TestAnArrayAssignmentWithAnExpandedSubscriptIsNotADefinition(t *testing.T) 
 // And the dialects that do not read a name as source text are untouched: a
 // word carrying an expansion before `()` is still not a definition there.
 func TestWithoutTheFlagAnExpandedNameIsStillRefused(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.FunctionKeyword = true
 	if _, err := Parse(`_p_${w}() { :; }`, d); err == nil {

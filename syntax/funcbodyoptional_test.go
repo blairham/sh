@@ -22,6 +22,7 @@ func optionalFuncBody() Dialect {
 // A declaration that ends without a body is a declaration and not a failure,
 // and the body it gets is an empty one.
 func TestTheKeywordFormMayEndWithoutABody(t *testing.T) {
+	t.Parallel()
 	d := optionalFuncBody()
 	for _, tc := range []struct {
 		src   string
@@ -69,6 +70,7 @@ func TestTheKeywordFormMayEndWithoutABody(t *testing.T) {
 // The body is absent exactly when no command follows, which is every way a
 // list of words can end rather than only the end of the input.
 func TestABodylessDeclarationEndsWhereACommandWouldHaveBegun(t *testing.T) {
+	t.Parallel()
 	d := optionalFuncBody()
 	for _, src := range []string{
 		`function a b`,
@@ -89,6 +91,7 @@ func TestABodylessDeclarationEndsWhereACommandWouldHaveBegun(t *testing.T) {
 // a; echo B` would define an empty `a` and print `B` where it stands, which
 // is a different program at status 0.
 func TestASeparatorMayStandBetweenTheNamesAndTheBody(t *testing.T) {
+	t.Parallel()
 	d := optionalFuncBody()
 	for _, tc := range []struct {
 		src  string
@@ -131,6 +134,7 @@ func TestASeparatorMayStandBetweenTheNamesAndTheBody(t *testing.T) {
 // the only spelling that reads back to the same program: written bare, the
 // statement after it would be swallowed as the body the source did not have.
 func TestABodylessDeclarationPrintsBackWithAnEmptyBody(t *testing.T) {
+	t.Parallel()
 	d := optionalFuncBody()
 	for _, tc := range []struct{ src, want string }{
 		{`function a b`, "function a b { }"},

@@ -21,6 +21,7 @@ func nestingDialect() Dialect {
 // An expansion may stand where a parameter name would, and the operator that
 // follows the inner brace belongs to the outer expansion.
 func TestNestedParamExpansionParses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src       string
 		innerName string
@@ -81,6 +82,7 @@ func innerParamName(e *ParamExpr) string {
 // The inner need not be a parameter expansion: a command substitution and an
 // arithmetic one stand in the same position, measured.
 func TestANestedInnerMayBeAnySubstitution(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		kind SpanKind
@@ -107,6 +109,7 @@ func TestANestedInnerMayBeAnySubstitution(t *testing.T) {
 // grammar, so the two spellings part company here even though everything else
 // treats them alike.
 func TestABackquotedInnerIsNotANestedExpansion(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, "echo ${`echo x`#a}", nestingDialect())
 	if e.Inner != nil {
 		t.Error("Inner is set, want the shape refused")
@@ -125,6 +128,7 @@ func TestABackquotedInnerIsNotANestedExpansion(t *testing.T) {
 // the quoting carries the dollar and the span is literal text — and `${$}` is
 // the parameter named `$`, which is not this construct at all.
 func TestANestedInnerNeedsItsBracesOrParentheses(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo ${$v}`,
 		`echo ${$v#a}`,
@@ -151,6 +155,7 @@ func TestANestedInnerNeedsItsBracesOrParentheses(t *testing.T) {
 // Depth: the inner may itself be nested, and each level keeps its own
 // operator.
 func TestNestedParamExpansionsNest(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${${${v}#a}%c}`, nestingDialect())
 	if e.Op != ParamTrimSuffix {
 		t.Fatalf("outer Op = %v, want the suffix trim", e.Op)
@@ -168,6 +173,7 @@ func TestNestedParamExpansionsNest(t *testing.T) {
 // that has the construct refuses both spellings, so this is the grammar's
 // boundary rather than an implementation limit.
 func TestTextBesideANestedInnerIsNotReadAsAName(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo ${x${v}}`, `echo ${${v}x}`} {
 		e := firstParam(t, src, nestingDialect())
 		if !e.Bad {
@@ -179,6 +185,7 @@ func TestTextBesideANestedInnerIsNotReadAsAName(t *testing.T) {
 // Without the flag the same characters are not this shape, and the dialect
 // that refuses while reading says so with the character it stopped at.
 func TestNestingNeedsTheGrammarFlag(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	e := firstParam(t, `echo ${${v}#a}`, d)
 	if e.Inner != nil {
@@ -202,6 +209,7 @@ func TestNestingNeedsTheGrammarFlag(t *testing.T) {
 // which is a claim about the grammar and not about this implementation; the
 // run says which construct is missing instead.
 func TestASubscriptAfterANestedInnerIsRead(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${${v}[2]}`, nestingDialect())
 	if e.Inner == nil {
 		t.Fatal("Inner is nil")
@@ -232,6 +240,7 @@ func TestASubscriptAfterANestedInnerIsRead(t *testing.T) {
 // its quoting, so an operand read as unquoted is split on IFS, globbed, and has
 // its own braces balanced the other way.
 func TestANestedExpansionTakesTheOuterQuoting(t *testing.T) {
+	t.Parallel()
 	d := nestingDialect()
 	d.BareBraceNestsInExpansion = true
 

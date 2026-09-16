@@ -20,6 +20,7 @@ func markerDialect() Dialect {
 // parsed": the bug this was written for parsed cleanly and meant something
 // else (#1247).
 func TestClobberOverrideMarkerReadsEverySpelling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src string
 		op  Kind
@@ -59,6 +60,7 @@ func TestClobberOverrideMarkerReadsEverySpelling(t *testing.T) {
 // Asserting the AST rather than "it parsed" is the point. A test that only
 // checked for a syntax error here would have passed against the bug.
 func TestWithoutTheMarkerABangSpellingIsAWordAndNotAnError(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo hi >! f", "echo hi >>! f", "echo hi &>! f"} {
 		rs, args := redirsOf(t, src, Core())
 		if len(rs) != 1 {
@@ -77,6 +79,7 @@ func TestWithoutTheMarkerABangSpellingIsAWordAndNotAnError(t *testing.T) {
 // TestWithoutTheMarkerAPipeSpellingIsRefused is the other fallback, and it is
 // not silent: a `|` marker falls back to a pipe with nothing on its left.
 func TestWithoutTheMarkerAPipeSpellingIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo hi >>| f", "echo hi &>| f", "echo hi &>>| f"} {
 		d := Core()
 		d.AmpersandRedirect = true
@@ -90,6 +93,7 @@ func TestWithoutTheMarkerAPipeSpellingIsRefused(t *testing.T) {
 // `>|`, which is a background command and a redirection, exactly as it is in
 // the columns that have no `&>`.
 func TestTheMarkerOnBothStreamsNeedsBothStreams(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ClobberOverrideMarker = true
 	d.AmpersandRedirect = false
@@ -119,6 +123,7 @@ func TestTheMarkerOnBothStreamsNeedsBothStreams(t *testing.T) {
 // operator is easiest to lose: an explicit descriptor in front of it. The
 // number belongs to the operator, and the marker is part of the operator.
 func TestTheMarkerBindsToADescriptorNumber(t *testing.T) {
+	t.Parallel()
 	rs, args := redirsOf(t, "echo hi 2>! f", markerDialect())
 	if len(rs) != 1 || rs[0].Op != TokClobberBang {
 		t.Fatalf("got %v, want one >! redirection", opsOf(rs))
@@ -136,6 +141,7 @@ func TestTheMarkerBindsToADescriptorNumber(t *testing.T) {
 // author wrote it; a shared kind would rewrite `>!` as `>|`, which means the
 // same thing to one dialect and something else entirely to the rest.
 func TestEveryMarkerSpellingPrintsBackAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{">|", ">!", ">>|", ">>!", "&>|", "&>!", "&>>|", "&>>!"} {
 		src := "echo hi " + op + " f"
 		f, err := Parse(src, markerDialect())
@@ -154,6 +160,7 @@ func TestEveryMarkerSpellingPrintsBackAsWritten(t *testing.T) {
 // and then is not treated as a redirection at all, which is the silent
 // failure again one layer down.
 func TestTheMarkerIsARedirectKind(t *testing.T) {
+	t.Parallel()
 	for _, k := range []Kind{
 		TokClobberBang, TokDGreatClobber, TokDGreatBang,
 		TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang,

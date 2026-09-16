@@ -36,6 +36,7 @@ func bareWordName() Dialect {
 // the three a pattern is made of, which is the whole of what separates this
 // flag from [Dialect.FunctionNameIsAnyWord].
 func TestABareWordIsANameWhateverIsInIt(t *testing.T) {
+	t.Parallel()
 	d := bareWordName()
 	for _, tc := range []struct{ src, name string }{
 		{`f() { :; }`, "f"},
@@ -66,6 +67,7 @@ func TestABareWordIsANameWhateverIsInIt(t *testing.T) {
 // text, declaring nothing. The name `f` is the control: no set of names could
 // exclude it, so what is refused is the spelling.
 func TestAWordNotWrittenBareDeclaresNothing(t *testing.T) {
+	t.Parallel()
 	d := bareWordName()
 	for _, tc := range []struct{ src, refused string }{
 		{`'f'() { :; }`, `'f'`},
@@ -103,6 +105,7 @@ func TestAWordNotWrittenBareDeclaresNothing(t *testing.T) {
 // takes rather than a line it skips: a broken body is still a syntax error,
 // and it is the reason the answer belongs at the definition's run.
 func TestABodyUnderARefusedNameIsStillParsed(t *testing.T) {
+	t.Parallel()
 	d := bareWordName()
 	if _, err := Parse(`'h'() { if; }`, d); err == nil {
 		t.Error("a broken body parsed; the declaration is read whole here")
@@ -116,6 +119,7 @@ func TestABodyUnderARefusedNameIsStillParsed(t *testing.T) {
 // An assignment is still an assignment, and the reading is lexical: only a
 // **bare** `=` makes one, so a quoted one is a name that declares nothing.
 func TestABareEqualsIsAnAssignmentAndAQuotedOneIsNot(t *testing.T) {
+	t.Parallel()
 	d := bareWordName()
 	if _, err := Parse(`a=() { :; }`, d); err == nil {
 		t.Error("`a=()` parsed as a definition; a bare `=` is an assignment")
@@ -131,6 +135,7 @@ func TestABareEqualsIsAnAssignmentAndAQuotedOneIsNot(t *testing.T) {
 // that dropped the quotes would hand back a program that *defines* `f` where
 // the input defined nothing.
 func TestARefusedBareWordNamePrintsBackAsItWasWritten(t *testing.T) {
+	t.Parallel()
 	d := bareWordName()
 	for _, src := range []string{`'f'() { :; }`, `''() { :; }`, `function 'f' { :; }`} {
 		t.Run(src, func(t *testing.T) {
@@ -157,6 +162,7 @@ func TestARefusedBareWordNamePrintsBackAsItWasWritten(t *testing.T) {
 // Without the flag the readings either side of it stand unchanged, which is
 // what says this is a third answer and not a widening of the other two.
 func TestWithoutTheBareWordFlagTheOlderReadingsStand(t *testing.T) {
+	t.Parallel()
 	d := bareWordName()
 	d.FunctionNameIsAnyBareWord = false
 	// The quotes come off and an ordinary name is declared, which is the

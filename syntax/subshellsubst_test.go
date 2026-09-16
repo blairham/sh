@@ -14,6 +14,7 @@ import (
 // parenthesis and everything in it — so what runs it needs no rule of its
 // own: it parses the value and finds a subshell there (#2615).
 func TestAParenthesizedBodyIsOneCommandSubstitution(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.SubshellSubstitution = true
 	for _, c := range []struct{ src, value string }{
@@ -62,6 +63,7 @@ func TestAParenthesizedBodyIsOneCommandSubstitution(t *testing.T) {
 // a rule that had stripped the parens here would print the blank spelling and
 // change the construct.
 func TestAParenthesizedBodyPrintsBackUnchanged(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.SubshellSubstitution = true
 	for _, src := range []string{
@@ -87,6 +89,7 @@ func TestAParenthesizedBodyPrintsBackUnchanged(t *testing.T) {
 // the flag groups written for another shell keep their diagnostic: `ksh -n`
 // refuses `${(echo a);}` while reading and passes `${(U)a}` to the run.
 func TestAParenBodyThatDoesNotCloseOnItsBraceIsNotTaken(t *testing.T) {
+	t.Parallel()
 	on, off := syntax.Core(), syntax.Core()
 	on.SubshellSubstitution = true
 	for _, src := range []string{
@@ -116,6 +119,7 @@ func TestAParenBodyThatDoesNotCloseOnItsBraceIsNotTaken(t *testing.T) {
 // five columns' answer: none of them refuses it while reading, they all defer
 // to the run and call it a bad substitution there.
 func TestWithoutTheFlagAParenthesizedBodyIsAParameter(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("echo ${(echo hi)}\n", syntax.Core())
 	if err != nil {
 		t.Fatalf("parse: %v", err)

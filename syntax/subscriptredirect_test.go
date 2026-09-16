@@ -51,6 +51,7 @@ func firstRedirect(t *testing.T, src string, d syntax.Dialect) string {
 }
 
 func TestARedirectionTargetHoldsASubscriptsSeparators(t *testing.T) {
+	t.Parallel()
 	d := redirectSubscriptGrammar()
 	for _, c := range []struct {
 		name, src, target string
@@ -106,6 +107,7 @@ func TestARedirectionTargetHoldsASubscriptsSeparators(t *testing.T) {
 // row the flag would read as "a redirection target spans", which is a larger
 // claim than the shell makes.
 func TestARedirectionAfterAWordStillEndsAtTheBlank(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("echo hi > m[foo bar]", redirectSubscriptGrammar())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -130,6 +132,7 @@ func TestARedirectionAfterAWordStillEndsAtTheBlank(t *testing.T) {
 // target stands where a command may begin" rather than "the redirection came
 // first".
 func TestACompoundCommandsRedirectionTargetSpans(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"{ :; } > m[foo bar]",
 		"for i in x; do :; done > m[foo bar]",
@@ -170,6 +173,7 @@ func TestACompoundCommandsRedirectionTargetSpans(t *testing.T) {
 // redirection prefix does — and ksh93 **splits** there:
 // `case m[foo bar] in *) ;; esac` is the message `bar]' unexpected.
 func TestACaseSubjectStillEndsAtTheBlank(t *testing.T) {
+	t.Parallel()
 	if _, err := syntax.Parse("case m[foo bar] in *) echo arm;; esac",
 		redirectSubscriptGrammar()); err == nil {
 		t.Fatal("parsed, want the blank to have cut the subject and the `]` to be unexpected")
@@ -180,6 +184,7 @@ func TestACaseSubjectStillEndsAtTheBlank(t *testing.T) {
 // here: measured, `> 1m[foo bar]`, `> m-n[foo bar]` and `> [foo bar]` all
 // still end at the blank in ksh93.
 func TestOnlyANameOpensASpanningRedirectionSubscript(t *testing.T) {
+	t.Parallel()
 	d := redirectSubscriptGrammar()
 	for _, c := range []struct{ src, target string }{
 		{"> 1m[foo bar] echo hi", "1m[foo"},
@@ -197,6 +202,7 @@ func TestOnlyANameOpensASpanningRedirectionSubscript(t *testing.T) {
 // common answer — and nothing that parses today parses differently with the
 // flag on.
 func TestARedirectionSubscriptWithNoCloseIsLeftAlone(t *testing.T) {
+	t.Parallel()
 	if got := firstRedirect(t, "> m[foo bar echo hi", redirectSubscriptGrammar()); got != "m[foo" {
 		t.Errorf("target = %q, want %q", got, "m[foo")
 	}
@@ -206,6 +212,7 @@ func TestARedirectionSubscriptWithNoCloseIsLeftAlone(t *testing.T) {
 // command-position flag is on, which is the reading every bash has. The row
 // is here so the new flag cannot be deleted and leave the tests green.
 func TestWithoutTheRedirectionFlagTheTargetEndsAtTheBlank(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.SubscriptSpansSeparators = true
 	if got := firstRedirect(t, "> m[foo bar] echo hi", d); got != "m[foo" {

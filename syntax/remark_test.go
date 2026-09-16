@@ -31,6 +31,7 @@ func remarksOf(t *testing.T, src string) []syntax.Remark {
 // TestAHereDocumentWithNoDelimiterIsRemarkedOn, and the two lines it carries
 // are different: where the input ran out, and where the here-document began.
 func TestAHereDocumentWithNoDelimiterIsRemarkedOn(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "echo one\ncat <<EOF\nbody\n")
 	if len(rs) != 1 {
 		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
@@ -53,6 +54,7 @@ func TestAHereDocumentWithNoDelimiterIsRemarkedOn(t *testing.T) {
 // operator and the end, both lines are the same one. Measured — the location
 // is the last line that had something on it and not one past the end.
 func TestABodyWithNoLinesNamesTheHereDocumentsOwnLine(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"cat <<X\n", "cat <<X"} {
 		rs := remarksOf(t, src)
 		if len(rs) != 1 {
@@ -67,6 +69,7 @@ func TestABodyWithNoLinesNamesTheHereDocumentsOwnLine(t *testing.T) {
 // TestADelimiterThatArrivesIsNotRemarkedOn, which is the control: the remark
 // is about the delimiter never coming and not about here-documents.
 func TestADelimiterThatArrivesIsNotRemarkedOn(t *testing.T) {
+	t.Parallel()
 	if rs := remarksOf(t, "cat <<EOF\nbody\nEOF\n"); len(rs) != 0 {
 		t.Errorf("got %+v, want nothing said", rs)
 	}
@@ -76,6 +79,7 @@ func TestADelimiterThatArrivesIsNotRemarkedOn(t *testing.T) {
 // simplest design. A front end that reads remarks only when the parse
 // succeeded would drop this one, and the shell that remarks prints both.
 func TestARemarkSurvivesAFatalError(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("f() { cat <<X\ny\n", syntax.Core())
 	p.Parse()
 	if p.Err() == nil {
@@ -90,6 +94,7 @@ func TestARemarkSurvivesAFatalError(t *testing.T) {
 // more than one and a counter that tracks what it has shown has something to
 // count.
 func TestEachHereDocumentGetsItsOwn(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "cat <<A <<B\nbody\n")
 	if len(rs) != 2 {
 		t.Fatalf("got %d remarks, want one for each delimiter: %+v", len(rs), rs)
@@ -110,6 +115,7 @@ func TestEachHereDocumentGetsItsOwn(t *testing.T) {
 // runs out at the substitution's last line, and both are lines of the
 // *program* rather than of the fragment.
 func TestARemarkFromInsideACommandSubstitutionSurvives(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "v=$(cat <<EOF\na\nEOF)\necho \"v=[$v]\"\n")
 	if len(rs) != 1 {
 		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
@@ -129,6 +135,7 @@ func TestARemarkFromInsideACommandSubstitutionSurvives(t *testing.T) {
 // numbered from where it starts, so a substitution further down the file
 // reports the file's lines and not the fragment's.
 func TestTheLinesAreTheProgramsWhereverTheSubstitutionBegins(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "echo before\nv=$(cat <<EOF\na\nEOF)\necho after\n")
 	if len(rs) != 1 {
 		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
@@ -143,6 +150,7 @@ func TestTheLinesAreTheProgramsWhereverTheSubstitutionBegins(t *testing.T) {
 // remarked on": with the delimiter on a line of its own the substitution reads
 // cleanly the first time and there is nothing to say.
 func TestASubstitutionWhoseDelimiterArrivesSaysNothing(t *testing.T) {
+	t.Parallel()
 	if rs := remarksOf(t, "v=$(cat <<EOF\na\nEOF\n)\necho ok\n"); len(rs) != 0 {
 		t.Errorf("got %+v, want nothing said", rs)
 	}
@@ -151,6 +159,7 @@ func TestASubstitutionWhoseDelimiterArrivesSaysNothing(t *testing.T) {
 // TestEachSubstitutionIsRemarkedOnOnce, so a script with two of them says two
 // things rather than one or four.
 func TestEachSubstitutionIsRemarkedOnOnce(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "v=$(cat <<EOF\na\nEOF)\nw=$(cat <<XX\nb\nXX)\necho ok\n")
 	if len(rs) != 2 {
 		t.Fatalf("got %d remarks, want 2: %+v", len(rs), rs)
@@ -168,6 +177,7 @@ func TestEachSubstitutionIsRemarkedOnOnce(t *testing.T) {
 // the `$( )` form. Measured; without it the fix would have been about one
 // spelling rather than about what is inside.
 func TestAProcessSubstitutionIsReadTheSameWay(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ProcessSubstitution = true
 	// And whether these parentheses end the body is the same dialect question
@@ -196,6 +206,7 @@ func TestAProcessSubstitutionIsReadTheSameWay(t *testing.T) {
 // whichever answer the code gives — which is exactly what it did while this
 // was written on one line, and what a mutation of the rule showed.
 func TestAnArithmeticSubstitutionIsNotAProgram(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"echo $(( 4 << 2 ))\necho $((a<<b))\n",
 		"echo $((\n4 << 2\n))\n",
@@ -219,6 +230,7 @@ func TestAnArithmeticSubstitutionIsNotAProgram(t *testing.T) {
 // carried nothing at all. The warning went missing for exactly one shape, and
 // only the shell that says anything here could have shown it.
 func TestARemarkFromANestedSubstitutionSurvives(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "v=$(echo $(cat <<E\nz\nE))\necho \"v=[$v]\"\n")
 	if len(rs) != 1 {
 		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
@@ -234,6 +246,7 @@ func TestARemarkFromANestedSubstitutionSurvives(t *testing.T) {
 // names the file's lines; a read that started counting at 1 gets both of them
 // wrong together and only a program with something in front of it can tell.
 func TestANestedRemarksLinesAreTheProgramsWhereverItBegins(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "echo pad\necho pad\nv=$(echo $(cat <<E\nz\nE))\necho after\n")
 	if len(rs) != 1 {
 		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
@@ -247,6 +260,7 @@ func TestANestedRemarksLinesAreTheProgramsWhereverItBegins(t *testing.T) {
 // innermost one failed, so a carry that goes exactly one level would pass the
 // two-level case and lose this one.
 func TestTheCarryIsAsDeepAsTheNesting(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "v=$(: $(: $(cat <<E\nz\nE)))\necho after\n")
 	if len(rs) != 1 {
 		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
@@ -260,6 +274,7 @@ func TestTheCarryIsAsDeepAsTheNesting(t *testing.T) {
 // or the last would pass every case above. Two documents inside one nest, and
 // bash names both — line 1 for `A` and line 3 for `B`.
 func TestEveryRemarkInANestIsCarriedInOrder(t *testing.T) {
+	t.Parallel()
 	rs := remarksOf(t, "v=$(echo $(cat <<A\na\nA) $(cat <<B\nb\nB))\necho after\n")
 	if len(rs) != 2 {
 		t.Fatalf("got %d remarks, want 2: %+v", len(rs), rs)
@@ -277,6 +292,7 @@ func TestEveryRemarkInANestIsCarriedInOrder(t *testing.T) {
 // delimiter is. Without it a carry that appended something unconditionally
 // would pass.
 func TestANestedSubstitutionThatClosesCleanlySaysNothing(t *testing.T) {
+	t.Parallel()
 	if rs := remarksOf(t, "v=$(echo $(cat <<E\nz\nE\n))\necho ok\n"); len(rs) != 0 {
 		t.Errorf("got %+v, want nothing said", rs)
 	}
@@ -300,6 +316,7 @@ func TestANestedSubstitutionThatClosesCleanlySaysNothing(t *testing.T) {
 // refused, the read that would have carried anything fails with it, and the
 // counting route answers instead.
 func TestANestedSubstitutionIsRefusedWhereABodyDoesNotStopAtTheParen(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"v=$(cat <<E\nz\nE)\n",
 		"v=$(echo $(cat <<E\nz\nE))\n",

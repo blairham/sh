@@ -37,6 +37,7 @@ func subscriptSeparatorGrammar() syntax.Dialect {
 }
 
 func TestASubscriptAtCommandPositionHoldsItsSeparators(t *testing.T) {
+	t.Parallel()
 	d := subscriptSeparatorGrammar()
 	for _, c := range []struct {
 		name, src    string
@@ -155,6 +156,7 @@ func TestASubscriptAtCommandPositionHoldsItsSeparators(t *testing.T) {
 // found` in all four that span separators, so the word is one word before
 // anything has looked for an assignment.
 func TestASubscriptedWordWithNoAssignmentIsStillOneWord(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("m[foo bar]", subscriptSeparatorGrammar())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -173,6 +175,7 @@ func TestASubscriptedWordWithNoAssignmentIsStillOneWord(t *testing.T) {
 // answers by default. The row is here so the flag cannot be deleted and
 // leave the tests green.
 func TestWithoutTheFlagTheSeparatorEndsTheWord(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"m[foo bar]=qux",
 		"m[foo bar]+=qux",
@@ -199,6 +202,7 @@ func TestWithoutTheFlagTheSeparatorEndsTheWord(t *testing.T) {
 // read as "a subscript holds its blanks", which is a larger claim than the
 // shells make.
 func TestAnArgumentsSubscriptStillEndsAtTheBlank(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("printf x m[foo bar]=v", subscriptSeparatorGrammar())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -213,6 +217,7 @@ func TestAnArgumentsSubscriptStillEndsAtTheBlank(t *testing.T) {
 // name. Measured: `1m[foo bar]=v`, `m-n[foo bar]=v` and `[foo bar]=v` all
 // still end at the blank in the four shells that take the construct.
 func TestOnlyANameOpensASpanningSubscript(t *testing.T) {
+	t.Parallel()
 	d := subscriptSeparatorGrammar()
 	// A bare `[` opening the word is a word of its own in this grammar, so
 	// it is asked for two words rather than for an assignment.
@@ -244,6 +249,7 @@ func TestOnlyANameOpensASpanningSubscript(t *testing.T) {
 // falling back is what keeps the flag additive: no input that parsed before
 // parses differently now.
 func TestAnUnmatchedBracketFallsBackToTheOrdinaryReading(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("m[a b; echo done", subscriptSeparatorGrammar())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -268,6 +274,7 @@ func TestAnUnmatchedBracketFallsBackToTheOrdinaryReading(t *testing.T) {
 // line spans separators as well: measured, `a=1 m[foo bar]=v` writes the
 // element in bash 5.3.15 and ksh93u+.
 func TestAnAssignmentPrefixIsCommandPositionToo(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("a=1 m[foo bar]=v", subscriptSeparatorGrammar())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -285,6 +292,7 @@ func TestAnAssignmentPrefixIsCommandPositionToo(t *testing.T) {
 // The word after the subscript gets its separators back. Without clearing the
 // counter at the matching `]` the rest of the line would arrive as one word.
 func TestTheRestOfTheLineGetsItsSeparatorsBack(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("m[foo bar]=v printf one two", subscriptSeparatorGrammar())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -338,6 +346,7 @@ func arrayLiteralElems(t *testing.T, src string, d syntax.Dialect) []string {
 }
 
 func TestAnArrayLiteralElementHoldsItsSubscriptsSeparators(t *testing.T) {
+	t.Parallel()
 	d := subscriptSeparatorGrammar()
 	d.ArrayLiteral = true
 	for _, c := range []struct {
@@ -417,6 +426,7 @@ func TestAnArrayLiteralElementHoldsItsSubscriptsSeparators(t *testing.T) {
 // `a=( "[1 2]"=x )`. Without these rows the flag would read as "a bracket
 // inside a literal spans", which is a larger claim than the shell makes.
 func TestOnlyAnElementsOwnFrontOpensASpanningSubscript(t *testing.T) {
+	t.Parallel()
 	d := subscriptSeparatorGrammar()
 	d.ArrayLiteral = true
 	for _, c := range []struct {
@@ -446,6 +456,7 @@ func TestOnlyAnElementsOwnFrontOpensASpanningSubscript(t *testing.T) {
 // of the same text and what this grammar answers by default. The row is here
 // so the flag cannot be deleted and leave the tests green.
 func TestWithoutTheFlagAnElementEndsAtTheBlank(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ArrayLiteral = true
 	got := arrayLiteralElems(t, "m=( [two words]=2 )", d)
@@ -460,6 +471,7 @@ func TestWithoutTheFlagAnElementEndsAtTheBlank(t *testing.T) {
 // ksh93 does something else again, so there is nothing common to implement
 // and falling back keeps the flag additive.
 func TestAnUnmatchedBracketInALiteralFallsBackToo(t *testing.T) {
+	t.Parallel()
 	d := subscriptSeparatorGrammar()
 	d.ArrayLiteral = true
 	got := arrayLiteralElems(t, "a=( [1 2 )", d)
@@ -473,6 +485,7 @@ func TestAnUnmatchedBracketInALiteralFallsBackToo(t *testing.T) {
 // cleared at the start of every word, so a subscript in an element cannot
 // reach the command that follows.
 func TestTheLineAfterTheLiteralGetsItsSeparatorsBack(t *testing.T) {
+	t.Parallel()
 	d := subscriptSeparatorGrammar()
 	d.ArrayLiteral = true
 	f, err := syntax.Parse("m=( [two words]=2 ) printf one two", d)
@@ -495,6 +508,7 @@ func TestTheLineAfterTheLiteralGetsItsSeparatorsBack(t *testing.T) {
 // literal broke nothing anything else here looks at, because every other row
 // after a literal begins with an ordinary word.
 func TestTheStatementAfterTheLiteralIsNotElementPosition(t *testing.T) {
+	t.Parallel()
 	d := subscriptSeparatorGrammar()
 	d.ArrayLiteral = true
 	f, err := syntax.Parse("m=( [a]=1 )\n[x y]=2", d)

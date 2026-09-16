@@ -29,6 +29,7 @@ func zshLike() Dialect {
 // weakest thing they differ in: `a b  c` is three fields under both a correct
 // split and a split that dropped the quotes off `'b c'`.
 func TestShellWordsSplitsAValueTheWayTheShellWouldSplitALine(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -169,6 +170,7 @@ func TestShellWordsSplitsAValueTheWayTheShellWouldSplitALine(t *testing.T) {
 // opens: an arbitrary *value* reaches it, where the lexer's other callers
 // only ever hand it program text.
 func TestShellWordsTerminatesOnAnythingAtAll(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"", " ", "\n", "\\", "'", `"`, "$(", "${", "`", "<<", "((", "$((",
 		"$(((", "a$(b`c'd\"e", strings.Repeat("(", 200), strings.Repeat("'", 51),

@@ -34,6 +34,7 @@ func bareFlagsAndSubscript() syntax.Dialect {
 // the entire difference — once the spans are cut, nothing downstream can tell
 // the two readings apart.
 func TestAnUnbracedFlagSigilIsPartOfTheExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -83,6 +84,7 @@ func TestAnUnbracedFlagSigilIsPartOfTheExpansion(t *testing.T) {
 // Off, every one of them is text — which is what the flag is for, and what
 // makes it a grammar question rather than a value on the semantics vector.
 func TestWithoutTheFlagAnUnbracedSigilIsText(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo $+v", "echo $=v", "echo $~v", "echo $^v"} {
 		spans := spansOf(t, src, syntax.Core())
 		for _, s := range spans {
@@ -97,6 +99,7 @@ func TestWithoutTheFlagAnUnbracedSigilIsText(t *testing.T) {
 // sigil trimmed before the name is looked at — without it the brackets fell
 // out of the expansion and `$+a[1]` came apart into `$+a` and `[1]`.
 func TestAFlaggedParameterStillTakesASubscript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, value string }{
 		{"echo $+a[1]", "+a[1]"},
 		{"echo $=a[1]", "=a[1]"},

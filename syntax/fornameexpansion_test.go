@@ -44,6 +44,7 @@ func forNameError(t *testing.T, src string, d syntax.Dialect) *syntax.Error {
 // quoting axis below does not reach it: the shell that removes quoting still
 // refuses `"$n"`.
 func TestANameMayNotComeOutOfAnExpansion(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"$n", "${n}", `"$n"`, "$(echo n)", "`echo n`", "$((1))"} {
 		for _, loop := range []struct{ head, tail string }{
 			{"for " + name + " in a b; do :; done", "for"},
@@ -76,6 +77,7 @@ func TestANameMayNotComeOutOfAnExpansion(t *testing.T) {
 // [isName] was satisfied by a word that names nothing yet. A plain name still
 // parses, which is the control.
 func TestAPlainNameStillParses(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"for i in a b; do :; done",
 		"select i in a b; do :; done",
@@ -92,6 +94,7 @@ func TestAPlainNameStillParses(t *testing.T) {
 // The escape travels with the quotes rather than being its own question —
 // measured, all five spellings run in that one shell and none in the rest.
 func TestWhetherAQuotedNameIsOneIsAnAxis(t *testing.T) {
+	t.Parallel()
 	quoted := loops()
 	quoted.ForNameMayBeQuoted = true
 	for _, tc := range []struct{ name, binds string }{
@@ -121,6 +124,7 @@ func TestWhetherAQuotedNameIsOneIsAnAxis(t *testing.T) {
 // A word that is not a name in any reading is still refused under the axis, so
 // the flag is about the *quoting* and not about what counts as a name.
 func TestTheQuotingAxisDoesNotWidenWhatCountsAsAName(t *testing.T) {
+	t.Parallel()
 	quoted := loops()
 	quoted.ForNameMayBeQuoted = true
 	for _, name := range []string{"1x", `"1x"`, `"a b"`, `""`, `"a-b"`} {
@@ -134,6 +138,7 @@ func TestTheQuotingAxisDoesNotWidenWhatCountsAsAName(t *testing.T) {
 // The refusal is located at the word rather than at the keyword, so a
 // diagnostic that names a line names the loop's.
 func TestTheRefusalIsLocatedAtTheWord(t *testing.T) {
+	t.Parallel()
 	const src = "echo one\nfor $n in a b; do :; done\n"
 	se := forNameError(t, src, loops())
 	if se.Pos.Line != 2 {

@@ -37,6 +37,7 @@ func kinds(t *testing.T, src string, global, suffix syntax.Aliases, plain syntax
 // measured one at a time; the ones that do *not* expand are what make it a
 // rule rather than a replacement of every occurrence.
 func TestAGlobalAliasExpandsWhereverAWordStands(t *testing.T) {
+	t.Parallel()
 	g := table("G", "one two", "UP", "| tr a-z A-Z", "SEP", ";", "RO", ">", "TH", "then", "F", "outfile")
 	for _, c := range []struct{ name, src, want string }{
 		{"an argument", "echo a G b", "echo a one two b"},
@@ -66,6 +67,7 @@ func TestAGlobalAliasExpandsWhereverAWordStands(t *testing.T) {
 // where a regular alias in one command is spent after the first. A cycle
 // still stops, at the name it started on.
 func TestAGlobalAliasSpendsItsNamesPerWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		g               syntax.Aliases
@@ -89,6 +91,7 @@ func TestAGlobalAliasSpendsItsNamesPerWord(t *testing.T) {
 // plain and the global one, which is what the runner does — a global alias
 // answers in command position as well.
 func TestAGlobalAliasInCommandPositionIsSpentOnce(t *testing.T) {
+	t.Parallel()
 	g := table("f", "echo f")
 	if got, want := kinds(t, "f", g, nil, g), "echo f"; got != want {
 		t.Errorf("f = %q, want %q", got, want)
@@ -97,6 +100,7 @@ func TestAGlobalAliasInCommandPositionIsSpentOnce(t *testing.T) {
 
 // **A suffix alias replaces the command word with `value word`.**
 func TestASuffixAliasReplacesTheCommandWord(t *testing.T) {
+	t.Parallel()
 	s := table("txt", "cat", "sh", "echo SUFFIX", "ps", "gv --")
 	for _, c := range []struct{ name, src, want string }{
 		{"a bare name", "x.txt", "cat x.txt"},
@@ -126,6 +130,7 @@ func TestASuffixAliasReplacesTheCommandWord(t *testing.T) {
 // another. Measured: `alias -s txt='cat | tr a-z A-Z'` hands `./x.txt` to
 // `tr`, not to `cat`.
 func TestASuffixAliasValueIsText(t *testing.T) {
+	t.Parallel()
 	s := table("txt", "cat | tr a-z A-Z")
 	if got, want := kinds(t, "./x.txt", nil, s, nil), "cat | tr a-z A-Z ./x.txt"; got != want {
 		t.Errorf("./x.txt = %q, want %q", got, want)
@@ -135,6 +140,7 @@ func TestASuffixAliasValueIsText(t *testing.T) {
 // **A regular alias of the whole word wins**, and an assignment prefix does
 // not move the command word.
 func TestASuffixAliasIsTriedAfterTheTable(t *testing.T) {
+	t.Parallel()
 	s := table("sh", "echo SUFFIX")
 	if got, want := kinds(t, "p.sh", nil, s, table("p.sh", "echo ALIAS")), "echo ALIAS"; got != want {
 		t.Errorf("with a regular alias = %q, want %q", got, want)
@@ -149,6 +155,7 @@ func TestASuffixAliasIsTriedAfterTheTable(t *testing.T) {
 // standing where a command word stands, and matching it again would never
 // end.
 func TestASuffixAliasWithAnEmptyValueTerminates(t *testing.T) {
+	t.Parallel()
 	if got, want := kinds(t, "./x.txt", nil, table("txt", ""), nil), "./x.txt"; got != want {
 		t.Errorf("./x.txt = %q, want %q", got, want)
 	}
@@ -158,6 +165,7 @@ func TestASuffixAliasWithAnEmptyValueTerminates(t *testing.T) {
 // dialect but one. Written as a test because the hooks are read on the
 // keystroke path and a nil check that stopped working would be invisible.
 func TestNoTableMeansNoExpansion(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo G", "./x.txt", "G"} {
 		if got := kinds(t, src, nil, nil, nil); got != src {
 			t.Errorf("%q with no tables = %q, want it untouched", src, got)

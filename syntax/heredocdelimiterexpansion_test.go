@@ -24,6 +24,7 @@ import (
 // it was swallowed as the body (#2745). That is the expensive half: one
 // mis-read delimiter costs the rest of the file.
 func TestADelimiterIsSubjectToQuoteRemovalAndNothingElse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, written, delim string }{
 		{"a bare parameter stays as written", "$d", "$d"},
 		{"a braced one too", "${d}", "${d}"},
@@ -61,6 +62,7 @@ func TestADelimiterIsSubjectToQuoteRemovalAndNothingElse(t *testing.T) {
 // a quoted delimiter is literal throughout. So `<<$d` leaves the body
 // expandable where `<<"$d"` does not, even though both delimiters are `$d`.
 func TestWhetherTheBodyIsLiteralFollowsTheQuotingAndNotTheDollar(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, written, delim string
 		literal              bool
@@ -94,6 +96,7 @@ func TestWhetherTheBodyIsLiteralFollowsTheQuotingAndNotTheDollar(t *testing.T) {
 // removal's business and still apply inside a delimiter: `<<$'a'` is
 // delimited by `a`. Measured on bash 5.3.15 and zsh 5.9.2, 2026-09-14.
 func TestADollarQuotedRunInADelimiterIsStillQuoting(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.DollarSingleQuote = true
 	d.DollarDoubleQuote = true

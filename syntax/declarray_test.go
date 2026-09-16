@@ -24,6 +24,7 @@ func declaring() syntax.Dialect {
 // not a prefix to it — and it used to be a syntax error, which is how
 // `local -a x=()` in three installed bats-core files failed to parse.
 func TestAnArrayAssignmentMayBeAnOperand(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		src     string
@@ -62,6 +63,7 @@ func TestAnArrayAssignmentMayBeAnOperand(t *testing.T) {
 // The name is what tells an operand from a syntax error: `echo a=(x)` is not a
 // declaration and does not parse, in bash and ksh93 alike.
 func TestOnlyADeclarationUtilityTakesOne(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo a=(x)", "true a=(x)", "nosuchcmd a=(x)"} {
 		p := syntax.NewParser(src, declaring())
 		p.Parse()
@@ -83,6 +85,7 @@ func TestOnlyADeclarationUtilityTakesOne(t *testing.T) {
 // A prefix assignment and an operand are different things wearing one syntax,
 // and the tree says which is which.
 func TestAnOperandIsMarkedApartFromAPrefix(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("a=1 local b=(x)", declaring())
 	f := p.Parse()
 	if err := p.Err(); err != nil {

@@ -48,6 +48,7 @@ func casePatternAssignGrammar(d *Dialect) {
 }
 
 func TestACasePatternMayCarryAnEqualsBeforeAGroup(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	casePatternAssignGrammar(&d)
 	for _, tc := range []struct {
@@ -86,6 +87,7 @@ func TestACasePatternMayCarryAnEqualsBeforeAGroup(t *testing.T) {
 // cost, and it is the case the guard was written for: where an assignment may
 // be written, `a=(x y)` is two elements and not a word with a group in it.
 func TestAnArrayLiteralIsStillAnArrayLiteral(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	casePatternAssignGrammar(&d)
 	for _, tc := range []struct {
@@ -123,6 +125,7 @@ func TestAnArrayLiteralIsStillAnArrayLiteral(t *testing.T) {
 // and an alternation is not an element. Measured on the shell this is read
 // from, where the same characters in a `case` pattern are a group.
 func TestAnArrayLiteralWinsOverTheGroupReading(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	casePatternAssignGrammar(&d)
 	if _, err := Parse("a=(x|y)", d); err == nil {

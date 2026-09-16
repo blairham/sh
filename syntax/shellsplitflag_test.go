@@ -8,6 +8,7 @@ import "testing"
 // The `Z` flag's argument is option letters rather than a separator, and the
 // three that exist are the whole of it. Every row is measured on zsh 5.9.2.
 func TestTheShellSplitFlagReadsItsOptionLetters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		flags string
@@ -79,6 +80,7 @@ func TestTheShellSplitFlagReadsItsOptionLetters(t *testing.T) {
 // two failures are different shapes on purpose and the shell agrees: the
 // positions below are its own, counted from the `$`.
 func TestTheShellSplitFlagRefusesAnOptionLetterByPosition(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src string
 		pos int

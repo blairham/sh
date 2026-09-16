@@ -24,6 +24,7 @@ func caseBraces() syntax.Dialect {
 // A `case` may be written with braces in place of `in` … `esac`, and the two
 // halves are independent: either opener composes with either closer.
 func TestACaseMayBeWrittenWithBraces(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"case x { x) echo hit;; }\n",
 		"case x { x) echo hit;; *) echo no;; }\n",
@@ -55,6 +56,7 @@ func TestACaseMayBeWrittenWithBraces(t *testing.T) {
 // The tree is a `case`'s either way. Nothing in it records which spelling was
 // written, which is what a formatter's Style answers instead.
 func TestABraceSpelledCaseIsACaseClause(t *testing.T) {
+	t.Parallel()
 	brace := onlyCommand(t, "case x { x) echo hit;; }\n", caseBraces())
 	keyword := onlyCommand(t, "case x in x) echo hit;; esac\n", caseBraces())
 	b, ok := brace.(*syntax.CaseClause)
@@ -74,6 +76,7 @@ func TestABraceSpelledCaseIsACaseClause(t *testing.T) {
 // what carries it: one value takes all four combinations and the other only
 // the two matched pairs.
 func TestWhetherTheCaseBracesPairWithTheirOpener(t *testing.T) {
+	t.Parallel()
 	paired := syntax.Core()
 	paired.CaseBraceBody = syntax.CaseBraceBodyPairsWithItsOpener
 	for _, tc := range []struct {
@@ -108,6 +111,7 @@ func TestWhetherTheCaseBracesPairWithTheirOpener(t *testing.T) {
 // with the word `in`, so a dialect that has both flags reads `esac` after the
 // `{` as a pattern too — and still closes on a `}`.
 func TestTheTerminatorReadingFollowsEitherOpener(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CaseBraceBody = syntax.CaseBraceBodyPairsWithItsOpener
 	d.CaseTerminatorIsAPatternAfterTheHeader = true
@@ -125,6 +129,7 @@ func TestTheTerminatorReadingFollowsEitherOpener(t *testing.T) {
 // Without that flag, the opener does not carry the reading with it: `esac`
 // stays reserved after the `{`.
 func TestEsacIsStillReservedAfterTheBrace(t *testing.T) {
+	t.Parallel()
 	if _, err := syntax.Parse("case esac { esac) echo hit;; }\n", caseBraces()); err == nil {
 		t.Error("`case esac { esac) … }` parsed; the `esac` closes the case here")
 	}

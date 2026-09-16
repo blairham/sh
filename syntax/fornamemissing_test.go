@@ -41,6 +41,7 @@ func missingNameError(t *testing.T, src string, d syntax.Dialect) *syntax.Error 
 // word is refused as a token, and the end of the input is an unfinished
 // construct naming the `for` that opened it.
 func TestALoopVariableThatIsNoWordIsAGrammarFailure(t *testing.T) {
+	t.Parallel()
 	d := loops()
 	for _, tc := range []struct {
 		src   string
@@ -68,6 +69,7 @@ func TestALoopVariableThatIsNoWordIsAGrammarFailure(t *testing.T) {
 // two dialects reaching it name — one the innermost keyword, one the last
 // token consumed. Both are the `for` itself, because no clause of it began.
 func TestAnUnfinishedLoopHeaderNamesTheLoop(t *testing.T) {
+	t.Parallel()
 	e := missingNameError(t, "for", loops())
 	if e.Construct != "for" || e.Innermost != "for" {
 		t.Errorf("Construct %q, Innermost %q — want the loop named by both", e.Construct, e.Innermost)
@@ -81,6 +83,7 @@ func TestAnUnfinishedLoopHeaderNamesTheLoop(t *testing.T) {
 // dialect that words every bad loop variable the same way whatever stands
 // there.
 func TestTheNameErrorFlagKeepsEveryTokenOnTheNameCheck(t *testing.T) {
+	t.Parallel()
 	d := loops()
 	d.ForNonWordIsANameError = true
 	for _, src := range []string{"for", "for\ndo :; done\n", "for ;", "for ; in a b\n"} {
@@ -95,6 +98,7 @@ func TestTheNameErrorFlagKeepsEveryTokenOnTheNameCheck(t *testing.T) {
 // only the end-of-input row: a newline is what that shell has left over,
 // because it is what it terminates its input with.
 func TestTheEndOfInputIsANewlineUnderThatFlag(t *testing.T) {
+	t.Parallel()
 	d := loops()
 	d.ForNameEndOfInputIsANewline = true
 	e := missingNameError(t, "for", d)
@@ -116,6 +120,7 @@ func TestTheEndOfInputIsANewlineUnderThatFlag(t *testing.T) {
 // set: it decides *whether the grammar is asked at all*, and the other only
 // spells the token once it has been.
 func TestTheNameErrorFlagIsAskedFirst(t *testing.T) {
+	t.Parallel()
 	d := loops()
 	d.ForNonWordIsANameError = true
 	d.ForNameEndOfInputIsANewline = true
@@ -128,6 +133,7 @@ func TestTheNameErrorFlagIsAskedFirst(t *testing.T) {
 // present and is not a name is the name check's, in every combination of the
 // flags. Nothing above may reach it.
 func TestAPresentWordThatIsNoNameStaysOnTheNameCheck(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"plain", "name error", "end of input newline", "both"} {
 		d := loops()
 		switch name {
@@ -151,6 +157,7 @@ func TestAPresentWordThatIsNoNameStaysOnTheNameCheck(t *testing.T) {
 // And the other control: an ordinary unfinished construct is untouched, so
 // the change is the loop header's and not the end of input's in general.
 func TestAnUnfinishedConstructWithNoNameInItIsUnchanged(t *testing.T) {
+	t.Parallel()
 	d := loops()
 	d.ForNameEndOfInputIsANewline = true
 	for _, src := range []string{"while", "if", "until"} {

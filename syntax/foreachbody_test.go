@@ -59,6 +59,7 @@ func foreachBody(t *testing.T, src string, d Dialect) (int, string) {
 }
 
 func TestAForeachBodyIsNotOnlyTheOneEndCloses(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	foreachBodyGrammar(&d)
 	for _, tc := range []struct{ name, src, want string }{
@@ -88,6 +89,7 @@ func TestAForeachBodyIsNotOnlyTheOneEndCloses(t *testing.T) {
 // shell this is measured from refuses a `do` closed by `end`, and refuses a
 // `for` closed by `end` for the same reason.
 func TestAForeachClosersPair(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	foreachBodyGrammar(&d)
 	for _, src := range []string{

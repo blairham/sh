@@ -23,6 +23,7 @@ import (
 // See the corpus rows core/backslash-before-a-brace-in-a-quoted-operand and
 // core/backslash-before-a-brace-in-a-replacement-operand.
 func TestABackslashEscapesTheBraceThatWouldCloseAQuotedOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the closing brace is escaped and the backslash goes", `printf "%s" "${u-A\}B}"`, "A}B"},
 		{"an opening brace keeps its backslash", `printf "%s" "${u-A\{B}"`, `A\{B`},
@@ -63,6 +64,7 @@ func TestABackslashEscapesTheBraceThatWouldCloseAQuotedOperand(t *testing.T) {
 // operand called the plain double-quote scanner and that scanner's escape set
 // has never had the brace in it (#2001).
 func TestANestedQuotedRunMayOrMayNotResetTheOperandEscapes(t *testing.T) {
+	t.Parallel()
 	const src = `printf "%s" "${u-"A\}B"}"`
 	for _, tc := range []struct {
 		name  string
@@ -88,6 +90,7 @@ func TestANestedQuotedRunMayOrMayNotResetTheOperandEscapes(t *testing.T) {
 // the backtick spelling of it are `A\}B` in bash 5.3.15 and zsh 5.9.2 alike,
 // so the two columns that disagree about the plain nested run agree here.
 func TestASubstitutionInsideAnOperandStartsItsQuotingOver(t *testing.T) {
+	t.Parallel()
 	for _, reset := range []bool{false, true} {
 		d := Core()
 		d.NestedQuoteResetsOperandEscapes = reset
@@ -142,6 +145,7 @@ func operandLiteralIn(t *testing.T, src string, d Dialect) string {
 // powerlevel10k takes: it builds `${NAME-<sep>\}` text and re-reads it under
 // `${(e)}`, and a kept backslash makes the built text unparseable.
 func TestTheBraceIsEscapedInBothHalvesOfASubstitution(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		pattern         bool

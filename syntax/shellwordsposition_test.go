@@ -35,6 +35,7 @@ func argumentGrammar() Dialect {
 // assignment, `then` to be a keyword, and a redirection's target word not to
 // be a command name. None of the three is visible in a token stream (#1514).
 func TestALeadingParenBelongsToTheWordWhereAnArgumentMayStand(t *testing.T) {
+	t.Parallel()
 	d := argumentGrammar()
 	d.PipeBothStreams = true
 	d.Select = true
@@ -113,6 +114,7 @@ func TestALeadingParenBelongsToTheWordWhereAnArgumentMayStand(t *testing.T) {
 // parser: `repeat 2` and `foreach x` are two *words* deep and still not an
 // argument, which no rule about the previous token can express.
 func TestTheWordsThatHoldCommandPositionAreTheParsersOwn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		enable func(*Dialect)
@@ -160,6 +162,7 @@ func TestTheWordsThatHoldCommandPositionAreTheParsersOwn(t *testing.T) {
 // beside the one in the main table, because they are what the two switches in
 // ShellWords exist for.
 func TestTheSplitterReadsAValueRatherThanAProgram(t *testing.T) {
+	t.Parallel()
 	d := argumentGrammar()
 	for _, tc := range []struct {
 		name string

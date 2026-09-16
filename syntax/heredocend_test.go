@@ -18,6 +18,7 @@ import (
 // ended, so there is another line to ask for. The parser reports both and
 // each front end reads the one it needs.
 func TestAHereDocumentCanRunToTheEndOfInput(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, wantBody string }{
 		{
 			// The terminator has a leading space, so it is not the
@@ -55,6 +56,7 @@ func TestAHereDocumentCanRunToTheEndOfInput(t *testing.T) {
 // here-document still open when the line ends asks for another line rather
 // than running with what it has.
 func TestAnOpenHereDocumentIsIncomplete(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		want      bool

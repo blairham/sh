@@ -39,6 +39,7 @@ func parsed(t *testing.T, a syntax.Aliases, src string) string {
 // The whole expansion algorithm is unanimous across every shell that has it,
 // so it is the core's behavior and not a dialect's.
 func TestAliasExpansion(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		alias syntax.Aliases

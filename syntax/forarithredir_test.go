@@ -15,6 +15,7 @@ import "testing"
 // assertion is the statement count as much as the node's list; either one alone
 // would still pass with the redirection in the wrong place.
 func TestACStyleForTakesItsRedirection(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`for ((i=0;i<2;i++)); do echo "$i"; done >f`,
 		`for ((i=0;i<2;i++)) { echo "$i"; } >f`,
@@ -44,6 +45,7 @@ func TestACStyleForTakesItsRedirection(t *testing.T) {
 // gets lost: a printer that does not write the suffix produces source that
 // means something else and still parses.
 func TestAPrintedCStyleForKeepsItsRedirection(t *testing.T) {
+	t.Parallel()
 	const src = `for ((i=0;i<2;i++)); do echo "$i"; done >f`
 	f, err := Parse(src, Core())
 	if err != nil {

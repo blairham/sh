@@ -37,6 +37,7 @@ func parseCond(t *testing.T, src string) CondExpr {
 }
 
 func TestCondOperators(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`[[ a == b ]]`, `(a == b)`},
 		{`[[ a = b ]]`, `(a = b)`},
@@ -58,6 +59,7 @@ func TestCondOperators(t *testing.T) {
 }
 
 func TestCondReinterpretsLessAndGreater(t *testing.T) {
+	t.Parallel()
 	// The lexer produced these as redirection operators, deliberately: `[[`
 	// is only special where a command may begin and the lexer does not know
 	// where that is. The parser does, so it reinterprets them.
@@ -79,6 +81,7 @@ func TestCondReinterpretsLessAndGreater(t *testing.T) {
 }
 
 func TestCondLogicAndGrouping(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`[[ -n a && -n b ]]`, `((-n a) && (-n b))`},
 		{`[[ -n a || -n b ]]`, `((-n a) || (-n b))`},
@@ -99,6 +102,7 @@ func TestCondLogicAndGrouping(t *testing.T) {
 }
 
 func TestCondRightOperandKeepsItsQuoting(t *testing.T) {
+	t.Parallel()
 	// Unquoted the right operand is a pattern; quoted it is a literal. Only
 	// the spans still know which, so the tree keeps a word rather than a
 	// string.
@@ -113,6 +117,7 @@ func TestCondRightOperandKeepsItsQuoting(t *testing.T) {
 }
 
 func TestDoubleBracketIsOnlySpecialInCommandPosition(t *testing.T) {
+	t.Parallel()
 	// `echo [[ a ]]` prints `[[ a ]]`, so this must stay a simple command.
 	// It is the case a lexer mode would have broken, now checked from the
 	// parser's side as well.
@@ -129,6 +134,7 @@ func TestDoubleBracketIsOnlySpecialInCommandPosition(t *testing.T) {
 }
 
 func TestDoubleBracketAbsentFromPosix(t *testing.T) {
+	t.Parallel()
 	// Where the dialect lacks it the text still parses and means something
 	// else — a command named `[[` with a redirection, which is what dash
 	// does and why `[[ a < b ]]` opens the file b there.
@@ -150,6 +156,7 @@ func TestDoubleBracketAbsentFromPosix(t *testing.T) {
 }
 
 func TestCondNeverPanics(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[`, `[[ ]]`, `[[ a ]]`, `[[ a ==`, `[[ ( ]]`, `[[ ! ]]`,
 		`[[ && ]]`, `[[ a == ]]`, `[[ ( a || ) ]]`, `[[ -n ]]`,
@@ -169,6 +176,7 @@ func TestCondNeverPanics(t *testing.T) {
 // expression, so its parentheses are the regex's and do not end the word.
 // Where a word ends is settled by the lexer, so the lexer has to be told.
 func TestARegexOperandOwnsItsParentheses(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[ abc =~ ^(a|x)bc$ ]]`,
 		`[[ abc =~ (b) ]]`,
@@ -186,6 +194,7 @@ func TestARegexOperandOwnsItsParentheses(t *testing.T) {
 // TestABareAlternationInARegexIsADialectAnswer: two of the three shells with
 // `[[ ]]` take a bare `|` as the regex's, and the third ends the word there.
 func TestABareAlternationInARegexIsADialectAnswer(t *testing.T) {
+	t.Parallel()
 	takes := Core()
 	takes.RegexTakesAlternation = true
 	mustParse(t, `[[ ab =~ a|b ]]`, takes, "a bare alternation where the dialect takes it")
@@ -199,6 +208,7 @@ func TestABareAlternationInARegexIsADialectAnswer(t *testing.T) {
 // they parse is not enough to show the rule is scoped — a group swallowed
 // into a word parses too — so what they *answer* is checked in interp.
 func TestRegexModeEndsWithTheOperandParses(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[ abc =~ b && (a = a) ]]`,
 		`[[ abc =~ b ]] && ( echo sub )`,

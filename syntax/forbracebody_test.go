@@ -13,6 +13,7 @@ import (
 // A `for` loop may take a brace group where `do … done` stands, in either
 // spelling of the header.
 func TestAForTakesABraceBody(t *testing.T) {
+	t.Parallel()
 	takes, refuses := syntax.POSIX(), syntax.POSIX()
 	takes.CStyleFor, takes.ArithCommand, takes.ForBraceBody = true, true, true
 	takes.Select = true
@@ -65,6 +66,7 @@ func TestAForTakesABraceBody(t *testing.T) {
 // else, which is what makes it a production rather than a general rule about
 // bodies — and what makes it easy to miss.
 func TestABraceBodyIsOnlyTheForLoops(t *testing.T) {
+	t.Parallel()
 	d := syntax.POSIX()
 	d.CStyleFor, d.ArithCommand, d.Select, d.ForBraceBody = true, true, true, true
 
@@ -88,6 +90,7 @@ func TestABraceBodyIsOnlyTheForLoops(t *testing.T) {
 // The body is an ordinary brace group and its list is the loop's, so what
 // runs is what would have run between `do` and `done`.
 func TestABraceBodyIsTheLoopsList(t *testing.T) {
+	t.Parallel()
 	d := syntax.POSIX()
 	d.CStyleFor, d.ArithCommand, d.ForBraceBody = true, true, true
 
@@ -115,6 +118,7 @@ func TestABraceBodyIsTheLoopsList(t *testing.T) {
 // An unterminated brace body is unterminated input rather than a token in the
 // wrong place — the same report the group already makes for itself.
 func TestAnUnterminatedBraceBody(t *testing.T) {
+	t.Parallel()
 	d := syntax.POSIX()
 	d.CStyleFor, d.ArithCommand, d.ForBraceBody = true, true, true
 

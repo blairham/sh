@@ -24,6 +24,7 @@ func completionConds() syntax.Dialect {
 // is on, and the operand is read the way a pattern operand is rather than the
 // way an option name is.
 func TestTheCompletionConditionsAreOneOperandTests(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"[[ -prefix : ]]\n",
 		"[[ -prefix 'ab' ]]\n",
@@ -45,6 +46,7 @@ func TestTheCompletionConditionsAreOneOperandTests(t *testing.T) {
 // the table refuses instead. That difference is measured, and without it the
 // flag would make one dialect refuse a line three other columns run.
 func TestACompletionConditionWithNoOperandIsAWord(t *testing.T) {
+	t.Parallel()
 	d := completionConds()
 	for _, src := range []string{
 		"[[ -prefix ]]\n",

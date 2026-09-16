@@ -15,6 +15,7 @@ import "testing"
 // that parsed in `cmd/bash` would accept what real bash calls a bad
 // substitution at the run.
 func TestADottedNameIsOneDialectsGrammar(t *testing.T) {
+	t.Parallel()
 	dotted := Dialect{DottedName: true, BadSubstitutionAtParseTime: true}
 	plain := Dialect{BadSubstitutionAtParseTime: true}
 	for _, src := range []string{
@@ -35,6 +36,7 @@ func TestADottedNameIsOneDialectsGrammar(t *testing.T) {
 // left side is the one that changes what the word *is*: `.foo=1` is a command
 // name without the flag and an assignment with it.
 func TestADottedNameIsAnAssignment(t *testing.T) {
+	t.Parallel()
 	dotted := Dialect{DottedName: true}
 	plain := Dialect{}
 	for _, c := range []struct{ src, name string }{
@@ -64,6 +66,7 @@ func TestADottedNameIsAnAssignment(t *testing.T) {
 // the name is checked while reading in four of the five dialects, so a dotted
 // one has to survive that check to reach a loop at all.
 func TestADottedForNameReads(t *testing.T) {
+	t.Parallel()
 	mustParse(t, "for .x in 1 2; do :; done", Dialect{DottedName: true}, "a dotted `for` variable")
 	mustFail(t, "for .x in 1 2; do :; done", Dialect{}, "a dotted `for` variable")
 }

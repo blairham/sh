@@ -20,6 +20,7 @@ import (
 // not: `{ ; ` has no and-or in it and answers the same way, so what does it is
 // the step-over (#1207).
 func TestASteppedOverSeparatorIsTheInnermostThingNamed(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.SeparatorWhereACommandBelongs = OneSeparatorExceptAfterABarOrBeforeACondition
 	d.AbsentAndOrOperandIsAnEmptyCommand = true
@@ -71,6 +72,7 @@ func TestASteppedOverSeparatorIsTheInnermostThingNamed(t *testing.T) {
 // be measured, and guessing that half is how a wrong rule gets into the
 // tables. So the separator never appears in what a prompt is drawn from.
 func TestASteppedOverSeparatorNeverReachesTheOpenState(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.SeparatorWhereACommandBelongs = OneSeparatorExceptAfterABarOrBeforeACondition
 	p := NewParser("{ ; ", d)

@@ -28,6 +28,7 @@ func condErr(t *testing.T, src string) *Error {
 // the *offending* token instead. The parser records the token rather than a
 // message, so each dialect words it.
 func TestARefusedConditionNamesItsToken(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, token string }{
 		{`[[ -n x -z "" ]]`, "-z"},
 		{`[[ -n x y ]]`, "y"},
@@ -53,6 +54,7 @@ func TestARefusedConditionNamesItsToken(t *testing.T) {
 // error. A condition opened and refused on the same line is the case that
 // would pass if the line were simply copied.
 func TestARefusedConditionCarriesWhereItOpened(t *testing.T) {
+	t.Parallel()
 	se := condErr(t, "[[ -n x\n -z \"\" ]]")
 	if se.Construct != "[[" {
 		t.Errorf("construct = %q, want `[[`", se.Construct)
@@ -83,6 +85,7 @@ func TestARefusedConditionCarriesWhereItOpened(t *testing.T) {
 // rather than the `]]` in front of it. Every shell in the panel names the
 // `]]`.
 func TestAClosingBracketIsNotAnOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, token, arity string
 	}{
@@ -113,6 +116,7 @@ func TestAClosingBracketIsNotAnOperand(t *testing.T) {
 // and both were empty — which showed as a diagnostic with a hole in it,
 // “ `' unmatched “.
 func TestAnUnterminatedConditionNamesTheConstruct(t *testing.T) {
+	t.Parallel()
 	se := condErr(t, `[[ -n x`)
 	if se.Kind != ErrUnterminated {
 		t.Fatalf("kind %v, want an unterminated construct", se.Kind)

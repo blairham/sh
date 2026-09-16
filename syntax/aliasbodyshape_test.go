@@ -30,6 +30,7 @@ func aliasBody(t *testing.T, name, body, src string) (*syntax.File, error) {
 // tokens carry the same position, so an offset comparison says they do not
 // touch and the assignment was refused outright.
 func TestAnAliasBodyMayBeACompoundAssignment(t *testing.T) {
+	t.Parallel()
 	f, err := aliasBody(t, "f", "a=(x y)", "f")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -55,6 +56,7 @@ func TestAnAliasBodyMayBeACompoundAssignment(t *testing.T) {
 // spliced token passes the case above and fails this one, which is what makes
 // the two together a test of the body's layout rather than of the splice.
 func TestABlankInAnAliasBodyStillPartsTheAssignmentFromTheParen(t *testing.T) {
+	t.Parallel()
 	if _, err := aliasBody(t, "f", "a= (x y)", "f"); err == nil {
 		t.Fatal("`a= (x y)` in an alias body was accepted: the body's blank was lost")
 	}
@@ -70,6 +72,7 @@ func TestABlankInAnAliasBodyStillPartsTheAssignmentFromTheParen(t *testing.T) {
 // So every loop in an alias body was refused for having a name it did not
 // have.
 func TestAnAliasBodyMayBeALoop(t *testing.T) {
+	t.Parallel()
 	f, err := aliasBody(t, "f", "for i in 1 2; do echo hi; done", "f")
 	if err != nil {
 		t.Fatalf("parse: %v", err)

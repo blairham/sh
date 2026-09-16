@@ -37,6 +37,7 @@ func withSemiPipe() Dialect {
 // arm's Term records *which* spelling was written. Folding the two into one
 // Kind would print a zsh script back as bash.
 func TestSemiPipeTerminatesACaseArm(t *testing.T) {
+	t.Parallel()
 	const src = "case b in\n  b) echo B ;|\n  *) echo star ;;\nesac"
 	f, err := Parse(src, withSemiPipe())
 	if err != nil {
@@ -72,6 +73,7 @@ func TestSemiPipeTerminatesACaseArm(t *testing.T) {
 // TestSemiPipeOnTheLastArm — measured, zsh accepts it with no arm after it
 // to test, and carries on past the `esac`.
 func TestSemiPipeOnTheLastArm(t *testing.T) {
+	t.Parallel()
 	const src = "case b in\n  b) echo B ;|\nesac\necho after"
 	f, err := Parse(src, withSemiPipe())
 	if err != nil {
@@ -98,6 +100,7 @@ func TestSemiPipeOnTheLastArm(t *testing.T) {
 // reads it a moment later: the list ends at the `;|` for the same reason it
 // ends at `;;`, and only a body that has *stopped early* can tell.
 func TestSemiPipeEndsAListLikeTheOtherTerminators(t *testing.T) {
+	t.Parallel()
 	// OpenEndedAndOr is the flag that allows the empty right-hand side; it
 	// is zsh's, and named here beside the terminator because the shape needs
 	// both. A test with only one of them measures nothing about the other.
@@ -123,6 +126,7 @@ func TestSemiPipeEndsAListLikeTheOtherTerminators(t *testing.T) {
 // is exactly what dash, bash and ksh93 lex, so the refusal lands where
 // theirs does rather than being worded twice.
 func TestSemiPipeIsRefusedWhereTheFlagIsOff(t *testing.T) {
+	t.Parallel()
 	const src = "case b in\n  b) echo B ;|\n  *) echo star ;;\nesac"
 	if _, err := Parse(src, Core()); err == nil {
 		t.Fatal("core parsed `;|`, want a refusal")
@@ -146,6 +150,7 @@ func TestSemiPipeIsRefusedWhereTheFlagIsOff(t *testing.T) {
 // `|`. So the refusal outside a case has to name the operator too, and it
 // does because the lexer decides this and not the parser.
 func TestSemiPipeIsOneOperatorEverywhere(t *testing.T) {
+	t.Parallel()
 	_, err := Parse("echo a ;| echo b", withSemiPipe())
 	if err == nil {
 		t.Fatal("`;|` outside a case parsed, want a refusal")

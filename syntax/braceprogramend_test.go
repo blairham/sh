@@ -55,6 +55,7 @@ func braceProgramBody(t *testing.T, src string, d syntax.Dialect) (string, bool)
 // never matched — and reading it as closed runs a command the author never
 // wrote, which is the direction that turns a refusal into a program (#2711).
 func TestABodyWithNoTerminatorBeforeTheBraceNeverCloses(t *testing.T) {
+	t.Parallel()
 	for _, end := range []struct {
 		name string
 		end  syntax.BraceProgramBodyEnd
@@ -80,6 +81,7 @@ func TestABodyWithNoTerminatorBeforeTheBraceNeverCloses(t *testing.T) {
 // two readings (#2724). A body is reported by its text so that a row which
 // stops in the wrong place is visible as text rather than only as an output.
 func TestWhereABraceProgramBodyEndsFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -173,6 +175,7 @@ func TestWhereABraceProgramBodyEndsFollowsTheAxis(t *testing.T) {
 // `${ echo $(echo x)}` would close at the brace behind the parenthesis,
 // where the shell with this reading refuses the line.
 func TestTheTokenReadingLetsOnlyTheOlderSubstitutionShieldABrace(t *testing.T) {
+	t.Parallel()
 	d := braceProgramDialect(syntax.BraceProgramBodyEndsAtATokenStart)
 	got, ok := braceProgramBody(t, "echo ${ echo `echo }x`;}", d)
 	if !ok {
@@ -190,6 +193,7 @@ func TestTheTokenReadingLetsOnlyTheOlderSubstitutionShieldABrace(t *testing.T) {
 // takes the same rule: `${|REPLY=hi}` has no terminator either and is the
 // same refusal as the blank form's.
 func TestTheReplyBodyEndsWhereTheBlankOnesDoes(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
 	d.ReplySubstitution = true

@@ -40,6 +40,7 @@ func decl(t *testing.T, src string, d Dialect) *FuncDecl {
 
 // The names are read, all of them, and the flag is what reads them.
 func TestTheKeywordTakesANameList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		names []string
@@ -102,6 +103,7 @@ func TestTheKeywordTakesANameList(t *testing.T) {
 // `function a while { … }` defines `while` and calling it afterwards runs the
 // body rather than opening a loop.
 func TestTheNameListIsGreedyAndStopsAtTheBody(t *testing.T) {
+	t.Parallel()
 	d := manyFuncNames()
 	for _, tc := range []struct {
 		src   string
@@ -130,6 +132,7 @@ func TestTheNameListIsGreedyAndStopsAtTheBody(t *testing.T) {
 // Every name is read by the rule the first one is read by, so the flags that
 // say what a name may be apply to all of them rather than to the first.
 func TestEveryNameInTheListIsReadTheSameWay(t *testing.T) {
+	t.Parallel()
 	any := manyFuncNames()
 	any.FunctionKeywordNameIsAnyWord = true
 	fn := decl(t, `function a "b c" d { :; }`, any)
@@ -168,6 +171,7 @@ func TestEveryNameInTheListIsReadTheSameWay(t *testing.T) {
 // source defined three, at status 0, with the rest of the script calling
 // names nobody defined.
 func TestANameListPrintsBackWhole(t *testing.T) {
+	t.Parallel()
 	d := manyFuncNames()
 	d.FunctionKeywordNameIsAnyWord = true
 	d.FunctionNameExpands = true
@@ -201,6 +205,7 @@ func TestANameListPrintsBackWhole(t *testing.T) {
 // *argument* loop rather than from a name test on one word — so any word list
 // followed by `()` is a definition there, `echo hi () { … }` included.
 func TestTheParenthesisSpellingTakesANameList(t *testing.T) {
+	t.Parallel()
 	d := manyFuncNames()
 	d.FunctionNameIsAnyWord = true
 	for _, tc := range []struct {
@@ -247,6 +252,7 @@ func TestTheParenthesisSpellingTakesANameList(t *testing.T) {
 // assignment in front of the names ends it, and the body is not optional in
 // this spelling the way it is after the keyword.
 func TestTheParenthesisNameListStopsAtAnAssignmentAndWantsABody(t *testing.T) {
+	t.Parallel()
 	d := manyFuncNames()
 	d.FunctionNameIsAnyWord = true
 	for _, src := range []string{
@@ -261,6 +267,7 @@ func TestTheParenthesisNameListStopsAtAnAssignmentAndWantsABody(t *testing.T) {
 // parentheses is read by, which is what stops the list from being a wider
 // reading of what a name may be.
 func TestEveryNameBeforeTheParensIsReadTheSameWay(t *testing.T) {
+	t.Parallel()
 	d := manyFuncNames()
 	d.FunctionNameIsAnyWord = true
 	// A quoted name is a name here because the dialect says any word is.
@@ -290,6 +297,7 @@ func TestEveryNameBeforeTheParensIsReadTheSameWay(t *testing.T) {
 // spelling it was written in: the keyword is not in this tree, so nothing may
 // put one there.
 func TestTheParenthesisNameListPrintsBackWhole(t *testing.T) {
+	t.Parallel()
 	d := manyFuncNames()
 	d.FunctionNameIsAnyWord = true
 	for _, tc := range []struct{ src, want string }{

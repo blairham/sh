@@ -36,6 +36,7 @@ func parsedWith(t *testing.T, d syntax.Dialect, a syntax.Aliases, src string) st
 // and escapes it. Six of the seven columns answer one word, and this is not
 // an axis: it is the seam not being reached at all.
 func TestABackslashAnAliasBodyEndsWithReachesTheInput(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{
@@ -61,6 +62,7 @@ func TestABackslashAnAliasBodyEndsWithReachesTheInput(t *testing.T) {
 // keeps the widened test honest: reaching for the carry on every body that
 // ends at a token boundary must not join a word to the one after it.
 func TestAFinishedBodyStillTakesNoneOfTheInput(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, body, src, want string
 	}{
@@ -82,6 +84,7 @@ func TestAFinishedBodyStillTakesNoneOfTheInput(t *testing.T) {
 // is an ordinary line continuation — in five columns. The other two leave the
 // line after it a line of its own. See Dialect.AliasBodyBackslashJoinsTheNextLine.
 func TestWhetherThatBackslashJoinsTheNextLineFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = "q\necho two"
 	joins := syntax.Core()
 	joins.AliasBodyBackslashJoinsTheNextLine = true
@@ -100,6 +103,7 @@ func TestWhetherThatBackslashJoinsTheNextLineFollowsTheAxis(t *testing.T) {
 }
 
 func TestTheAxisReachesOnlyTheNewline(t *testing.T) {
+	t.Parallel()
 	joins := syntax.Core()
 	joins.AliasBodyBackslashJoinsTheNextLine = true
 	for _, d := range []syntax.Dialect{syntax.Core(), joins} {

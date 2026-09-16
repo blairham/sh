@@ -25,6 +25,7 @@ import (
 // both parentheses in the body, only the `(`, or neither because the body ends
 // at the name.
 func TestAnAliasBodyMayCarryTheParensOfAFunctionDefinition(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		alias syntax.Aliases
@@ -70,6 +71,7 @@ func TestAnAliasBodyMayCarryTheParensOfAFunctionDefinition(t *testing.T) {
 // body whose next token is not `(` is an ordinary command however it got
 // there, and a `(` with no `)` after it is not a parameter list.
 func TestPendingTokensAreNotAFunctionDefinitionOnTheirOwn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		alias syntax.Aliases
@@ -110,6 +112,7 @@ func TestPendingTokensAreNotAFunctionDefinitionOnTheirOwn(t *testing.T) {
 // that folded only the outside half would leave a second helper asking the
 // lexer the same wrong question.
 func TestTheParenAlreadyReadMayBeClosedByAPendingToken(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.AnonymousFunction = true
 	d.FunctionMultipleNames = true

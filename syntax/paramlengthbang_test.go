@@ -15,6 +15,7 @@ import "testing"
 // by it. Without them a mutant that refused every special behind a `${#`, or
 // one that refused `$!` anywhere, would pass (#2415).
 func TestALengthOverTheBangName(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	e := firstParam(t, `echo ${#!}`, d)
 	if e.Bad || !e.Length || e.Name != "!" {

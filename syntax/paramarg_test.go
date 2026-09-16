@@ -16,6 +16,7 @@ import (
 // made `${GREP:-grep -E}` come out as `grep-E`, which is a command nobody has,
 // and the shell said nothing.
 func TestAnOperandKeepsWhatIsBetweenItsWords(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		want      []string

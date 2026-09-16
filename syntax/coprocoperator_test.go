@@ -37,6 +37,7 @@ func withCoprocPipeOperator() Dialect {
 // does not, in the same dialect, which is the whole of what tells the two
 // readings apart.
 func TestTheCoprocessOperatorTerminatesRatherThanJoins(t *testing.T) {
+	t.Parallel()
 	d := withCoprocPipeOperator()
 	mustParse(t, `cat |&`, d, "an operator that needs no command after it")
 	f := mustFile(t, `cat |&`, d)
@@ -91,6 +92,7 @@ func TestTheCoprocessOperatorTerminatesRatherThanJoins(t *testing.T) {
 // the background is both commands and not only the one before the operator.
 // The same for `echo A | cat |&`.
 func TestTheCoprocessOperatorTakesTheWholeAndOr(t *testing.T) {
+	t.Parallel()
 	d := withCoprocPipeOperator()
 	for _, src := range []string{`echo A && cat |&`, `echo A | cat |&`} {
 		f := mustFile(t, src, d)
@@ -115,6 +117,7 @@ func TestTheCoprocessOperatorTakesTheWholeAndOr(t *testing.T) {
 // then an ampersand, which is what bash 3.2 and dash lex — so the refusal
 // lands where theirs does.
 func TestTheTwoReadingsOfTheOperatorAreSeparate(t *testing.T) {
+	t.Parallel()
 	if got, want := lex(t, `a |& b`, withCoprocPipeOperator()), `word(a) |& word(b)`; got != want {
 		t.Errorf("with the coprocess reading: got %s, want %s", got, want)
 	}
@@ -137,6 +140,7 @@ func TestTheTwoReadingsOfTheOperatorAreSeparate(t *testing.T) {
 // same one — which is the promise a background terminator has to keep like
 // any other.
 func TestTheCoprocessOperatorSurvivesPrinting(t *testing.T) {
+	t.Parallel()
 	d := withCoprocPipeOperator()
 	for _, src := range []string{`cat |&`, `echo A && cat |&`, `echo one |& echo two`} {
 		f := mustFile(t, src, d)

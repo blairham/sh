@@ -19,6 +19,7 @@ func selecting() Dialect {
 // The three operators parse, and each is its own node rather than a substring
 // whose offset happens to start with a punctuation mark.
 func TestTheElementSelectionOperatorsParse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		op   ParamOp
@@ -55,6 +56,7 @@ func TestTheElementSelectionOperatorsParse(t *testing.T) {
 // that widened it by one would break shapes every shell in the panel shares
 // rather than the ones only one of them has.
 func TestAColonBeforeAnythingElseIsUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src string
 		op  ParamOp
@@ -86,6 +88,7 @@ func TestAColonBeforeAnythingElseIsUnchanged(t *testing.T) {
 // asserts that the flag does *something* rather than that it is the flag doing
 // it.
 func TestWithoutTheFlagTheColonStartsAnOffset(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo ${a:#two}`, `echo ${a:|b}`, `echo ${a:*b}`} {
 		on := firstParam(t, src, selecting())
 		off := firstParam(t, src, Core())
@@ -105,6 +108,7 @@ func TestWithoutTheFlagTheColonStartsAnOffset(t *testing.T) {
 // parameter is a metacharacter is a semantics question, and it can only be
 // asked if the parse kept the difference.
 func TestTheExclusionOperandIsAWord(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${a:#$p}`, selecting())
 	if e.Op != ParamExclude {
 		t.Fatalf("op = %v, want the exclusion", e.Op)

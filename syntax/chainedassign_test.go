@@ -54,6 +54,7 @@ func firstAssignIn(t *testing.T, src string, d Dialect) *Assign {
 // the same way round a chained expansion keeps them, and for the same reason:
 // the final subscript is the one the value lands under.
 func TestAChainOfAssignmentSubscriptsIsRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want []string
@@ -85,6 +86,7 @@ func TestAChainOfAssignmentSubscriptsIsRead(t *testing.T) {
 // And the value is what stands after the last `]=`, which is the half a
 // reader that stopped at the first `]` would get wrong.
 func TestAChainedAssignmentKeepsItsValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a[1][2]=v`, "v"},
 		{`a[1][2]=x=y`, "x=y"},
@@ -108,6 +110,7 @@ func TestAChainedAssignmentKeepsItsValue(t *testing.T) {
 // bracket and the last one is a single subscript — which is the reading every
 // other dialect keeps, and is what makes `a[1][2]=v` an operand they refuse.
 func TestWithoutTheFlagAChainIsOneSubscript(t *testing.T) {
+	t.Parallel()
 	d := assignChained()
 	d.ChainedAssignSubscript = false
 	a := firstAssignIn(t, `a[1][2]=v`, d)
@@ -124,6 +127,7 @@ func TestWithoutTheFlagAChainIsOneSubscript(t *testing.T) {
 // the bracket that *closes* the run and is followed by another `[` opens a
 // link — the same count subscriptBracketsBalance makes.
 func TestANestedBracketIsNotALink(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want []string

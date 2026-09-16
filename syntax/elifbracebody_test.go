@@ -13,6 +13,7 @@ import (
 // may carry an `elif` whose condition ended itself and whose body is written
 // with braces, and from there the chain is a short one with no `fi`.
 func TestALongIfMayCarryABraceBodiedElif(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"if (( 0 )); then echo A; elif (( 1 )) { echo B }\n",
 		"if (( 0 )); then echo A; elif [[ -n y ]] { echo B }\n",
@@ -40,6 +41,7 @@ func TestALongIfMayCarryABraceBodiedElif(t *testing.T) {
 // end itself takes no brace body — the `{` is another of the condition's
 // words and the `}` is what the refusal names.
 func TestAnElifConditionMustEndItselfForABraceBody(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"if :; then echo A; elif : { echo B }\n",
 		"if :; then echo A; elif echo x { echo B }\n",

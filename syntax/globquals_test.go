@@ -24,6 +24,7 @@ func globQuals() Dialect {
 // the parser has to say which position it is — and every row below is a row
 // about that rather than about parentheses.
 func TestAParenWhereAnArgumentStandsBelongsToTheWord(t *testing.T) {
+	t.Parallel()
 	on, off := globQuals(), Core()
 	for _, src := range []string{
 		`echo MY ( x )`,
@@ -59,6 +60,7 @@ func TestAParenWhereAnArgumentStandsBelongsToTheWord(t *testing.T) {
 // `setopt no_glob; print -l MY ( x )`, which prints `MY` and `( x )` on
 // separate lines, and through a function counting `$#`, which says 2.
 func TestTheGroupIsOneWordAndDoesNotJoinThePrecedingOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want []string
@@ -107,6 +109,7 @@ func TestTheGroupIsOneWordAndDoesNotJoinThePrecedingOne(t *testing.T) {
 // only what the second statement turned out to be says whether the flag was
 // still set when the `(` was read.
 func TestArgumentPositionEndsWithTheCommand(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo a; ( echo b )`,
 		`x=1; ( echo b )`,
@@ -139,6 +142,7 @@ func TestArgumentPositionEndsWithTheCommand(t *testing.T) {
 // — because the `<` ended the word and left the `)` with nowhere to go. A `|`
 // is the exception, a pattern group being allowed to hold an alternation.
 func TestAnOperatorInTheGroupEndsTheWord(t *testing.T) {
+	t.Parallel()
 	d := globQuals()
 	for _, src := range []string{
 		`echo ( a <b )`,
@@ -190,6 +194,7 @@ func arrayGlobQuals() Dialect {
 // because mid-word the lexer folds a group without being told. Measured on
 // zsh 5.9.2, `-n` over a script file under `env -i` (#1149).
 func TestAParenWhereAnArrayElementBeginsBelongsToTheElement(t *testing.T) {
+	t.Parallel()
 	on := arrayGlobQuals()
 	off := Core()
 	off.ArrayLiteral = true
@@ -235,6 +240,7 @@ func TestAParenWhereAnArrayElementBeginsBelongsToTheElement(t *testing.T) {
 // The elements it makes, which is the half a parse test cannot see: a group
 // swallowed into the previous element, or into the assignment, still parses.
 func TestAnArrayElementsGroupIsItsOwnElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want []string
@@ -291,6 +297,7 @@ func TestAnArrayElementsGroupIsItsOwnElement(t *testing.T) {
 // parseSimple's own defer clears the flag when the *command* ends, which is
 // why `a=( x ); ( echo b )` cannot see this and the pair below can.
 func TestTheArraysArgumentPositionIsRestoredAndNotCleared(t *testing.T) {
+	t.Parallel()
 	d := arrayGlobQuals()
 	d.DeclarationUtilities = map[string]bool{"local": true}
 	for _, src := range []string{
@@ -312,6 +319,7 @@ func TestTheArraysArgumentPositionIsRestoredAndNotCleared(t *testing.T) {
 // see: `a=( x ); ( echo b )` parses either way, and only what the second
 // statement turned out to be says which.
 func TestTheArraysArgumentPositionEndsWithIt(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=( x ); ( echo b )`,
 		`a=( (#i)x ); ( echo b )`,
@@ -339,6 +347,7 @@ func TestTheArraysArgumentPositionEndsWithIt(t *testing.T) {
 // which is only reachable if the group took one parenthesis and the array
 // took the next.
 func TestTheElementsGroupDoesNotSwallowTheAssignmentsParen(t *testing.T) {
+	t.Parallel()
 	if _, err := Parse(`files=( (#i)a) )`, arrayGlobQuals()); err == nil {
 		t.Error("parsed, want the stray `)` refused")
 	}
@@ -372,6 +381,7 @@ func condGlobQuals() Dialect {
 // has to land on the operator and not on the `(` in front of it or the `)`
 // behind it.
 func TestAPatternOperandsLeadingGroupEndsAtAnOperator(t *testing.T) {
+	t.Parallel()
 	d := condGlobQuals()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ $k == (a<b) ]]`, `1:12: "<" unexpected`},
@@ -416,6 +426,7 @@ func TestAPatternOperandsLeadingGroupEndsAtAnOperator(t *testing.T) {
 // a guard whose only live branch is untested reads as though it decided
 // something.
 func TestARegexOperandsLeadingGroupKeepsItsOperators(t *testing.T) {
+	t.Parallel()
 	d := condGlobQuals()
 	for _, src := range []string{
 		`[[ $k =~ (a<b) ]]`,

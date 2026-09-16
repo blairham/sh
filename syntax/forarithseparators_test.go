@@ -27,6 +27,7 @@ func forArithDialects() (folds, refuses syntax.Dialect) {
 // A header with no separators has no condition, an absent condition is true,
 // and so the loop is endless and its body is unbounded output (#2225).
 func TestAForHeaderNeedsTwoSeparators(t *testing.T) {
+	t.Parallel()
 	folds, refuses := forArithDialects()
 	for _, header := range []string{"(())", "(( ))", "((;))", "((1;2))", "((i=0))", "((\ni=0\n))"} {
 		src := "for " + header + "; do echo x; break; done\n"
@@ -56,6 +57,7 @@ func TestAForHeaderNeedsTwoSeparators(t *testing.T) {
 // the header wrote it rather than as the three-part split pads it: a header of
 // one section has that section as its last.
 func TestARefusedForHeaderCarriesItsLastSection(t *testing.T) {
+	t.Parallel()
 	_, refuses := forArithDialects()
 	for header, last := range map[string]string{
 		"((i=0))":   "i=0",
@@ -81,6 +83,7 @@ func TestARefusedForHeaderCarriesItsLastSection(t *testing.T) {
 // More than two separators is the flag's question, and it is a separate kind
 // because the dialect that refuses it says something else about it.
 func TestExtraSeparatorsAreFoldedOrRefused(t *testing.T) {
+	t.Parallel()
 	folds, refuses := forArithDialects()
 	for _, header := range []string{"((;;;))", "((;;;;))", "((1;2;3;4))", "(( ; ; ; ))"} {
 		src := "for " + header + "; do echo x; break; done\n"
@@ -103,6 +106,7 @@ func TestExtraSeparatorsAreFoldedOrRefused(t *testing.T) {
 // which is the boundary the count has to keep, since `for ((;;))` is how the
 // endless loop is spelled and holds no expression at all.
 func TestTwoSeparatorsParseWhateverTheSectionsHold(t *testing.T) {
+	t.Parallel()
 	folds, refuses := forArithDialects()
 	for _, src := range []string{
 		"for ((;;)); do echo x; break; done\n",
@@ -127,6 +131,7 @@ func TestTwoSeparatorsParseWhateverTheSectionsHold(t *testing.T) {
 // ever evaluates it, which is what makes the acceptance bounded rather than a
 // second way to lose the count.
 func TestTheFoldedHeaderKeepsTheSurplusInItsLastSection(t *testing.T) {
+	t.Parallel()
 	folds, _ := forArithDialects()
 	f, err := syntax.Parse("for ((i=0;i<2;i=i+1;i=9)); do echo x; done\n", folds)
 	if err != nil {

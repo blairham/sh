@@ -23,6 +23,7 @@ func keywordRefList() Dialect {
 }
 
 func TestExtraWordsAfterTheNameAreDiscarded(t *testing.T) {
+	t.Parallel()
 	d := keywordRefList()
 	for _, tc := range []struct{ name, src string }{
 		{"one word", "function a b { echo hi; }"},
@@ -46,6 +47,7 @@ func TestExtraWordsAfterTheNameAreDiscarded(t *testing.T) {
 }
 
 func TestTheListStopsAtTheEndOfTheLine(t *testing.T) {
+	t.Parallel()
 	d := keywordRefList()
 	// The rule seen from outside: the words are eaten to the end of the line
 	// and the body is looked for after it, so a body that is not a brace
@@ -63,6 +65,7 @@ func TestTheListStopsAtTheEndOfTheLine(t *testing.T) {
 }
 
 func TestOnlyANameMayStandInTheList(t *testing.T) {
+	t.Parallel()
 	d := keywordRefList()
 	// One refusal between them, and it is the list's own rather than the
 	// grammar's complaint about the token: a word that is not an identifier,
@@ -86,6 +89,7 @@ func TestOnlyANameMayStandInTheList(t *testing.T) {
 }
 
 func TestAReservedWordEndsTheListRatherThanJoiningIt(t *testing.T) {
+	t.Parallel()
 	d := keywordRefList()
 	// A reserved word is not a name here, and it is refused as the token it
 	// is rather than as a bad reference: `function a if { … }` is `` `if'
@@ -102,6 +106,7 @@ func TestAReservedWordEndsTheListRatherThanJoiningIt(t *testing.T) {
 }
 
 func TestWithoutTheListTheSecondWordIsRefused(t *testing.T) {
+	t.Parallel()
 	d := keywordRefList()
 	d.FunctionKeywordReferenceList = false
 	// The other five shells' reading, and the one this had: the word after

@@ -27,6 +27,7 @@ func keywordBodyDialect(set func(*syntax.Dialect)) syntax.Dialect {
 // definition one grammar calls a syntax error was read and defined at status
 // 0 (#1833).
 func TestTheKeywordBodyFollowsTheCompoundFlag(t *testing.T) {
+	t.Parallel()
 	strict := keywordBodyDialect(func(d *syntax.Dialect) { d.FuncBodyMustBeCompound = true })
 	for _, src := range []string{"function f\necho hi", "function f echo hi", "function f\nx=1"} {
 		if _, err := syntax.Parse(src, strict); err == nil {
@@ -55,6 +56,7 @@ func TestTheKeywordBodyFollowsTheCompoundFlag(t *testing.T) {
 // wants braces after the keyword takes a bare simple command after the
 // parentheses, so one flag could not say both.
 func TestTheKeywordBodyCanBeHeldToABraceGroup(t *testing.T) {
+	t.Parallel()
 	braces := keywordBodyDialect(func(d *syntax.Dialect) {
 		d.FunctionKeywordBodyMustBeBraceGroup = true
 	})
@@ -83,6 +85,7 @@ func TestTheKeywordBodyCanBeHeldToABraceGroup(t *testing.T) {
 // parenthesized form follows: the shape is only known once the body has been
 // read, so the token named has to be the one saved before reading it.
 func TestARefusedKeywordBodyNamesTheTokenItBeganWith(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		set   func(*syntax.Dialect)

@@ -25,6 +25,7 @@ func flagged(t *testing.T, src string) *ParamExpr {
 }
 
 func TestParamExpansionFlagsParse(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		src      string
 		flags    string
@@ -67,6 +68,7 @@ func TestParamExpansionFlagsParse(t *testing.T) {
 // The flags apply before the parameter's own grammar, which stays whole: an
 // operator, a subscript and the length prefix all still parse behind a group.
 func TestParamExpansionFlagsLeaveTheRestOfTheGrammarAlone(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, rest string }{
 		{`echo ${(U)x:-def}`, "x :- def"},
 		{`echo ${(U)x#h}`, "x # h"},
@@ -86,6 +88,7 @@ func TestParamExpansionFlagsLeaveTheRestOfTheGrammarAlone(t *testing.T) {
 // A character the group cannot carry is recorded with its position — counted
 // from the `$`, measured — and diagnosed at run time, not here.
 func TestParamExpansionFlagsErrorPosition(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		src string
 		pos int
@@ -111,6 +114,7 @@ func TestParamExpansionFlagsErrorPosition(t *testing.T) {
 // deferred to the run for the majority, refused while reading where the
 // dialect diagnoses bad substitutions at parse time.
 func TestParamExpansionFlagsOffDefersToTheRun(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${(U)x}`, Core())
 	if e == nil || !e.Bad {
 		t.Fatalf("Core: ${(U)x} = %+v, want a deferred Bad node", e)
@@ -127,6 +131,7 @@ func TestParamExpansionFlagsOffDefersToTheRun(t *testing.T) {
 }
 
 func TestParamExpansionFlagsRoundTrip(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamExpansionFlags = true
 	srcs := []string{
@@ -159,6 +164,7 @@ func TestParamExpansionFlagsRoundTrip(t *testing.T) {
 // optional and an empty one is not the same as one left out, so the test
 // asserts on the Set fields rather than only on the text — see ParamPad.
 func TestPaddingFlagArgumentsParse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		flags string
@@ -229,6 +235,7 @@ func TestPaddingFlagArgumentsParse(t *testing.T) {
 // instead — the same shape every other unreadable group has, reported when
 // the expansion is reached rather than while it is read.
 func TestPaddingFlagWithoutItsArgument(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src string
 		pos int

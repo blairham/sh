@@ -16,6 +16,7 @@ func disowning() Dialect {
 // way `&` does and additionally let go of the job. Both spellings are one
 // operator: every assertion here holds for each.
 func TestABackgroundedStatementMayBeDisowned(t *testing.T) {
+	t.Parallel()
 	on := disowning()
 	for _, op := range []string{"&!", "&|"} {
 		f, err := Parse("echo hi "+op+"\necho done", on)
@@ -64,6 +65,7 @@ func TestABackgroundedStatementMayBeDisowned(t *testing.T) {
 // every other operator flag has: a dialect that has not got `&!` does not get
 // a syntax error for the `&`, it gets `&` and then a `!`.
 func TestWithoutTheFlagTheOperatorsAreNotThere(t *testing.T) {
+	t.Parallel()
 	off := Core()
 	if _, err := Parse("echo hi &!\necho done", off); err == nil {
 		t.Error("`echo hi &!` parsed without the flag")
@@ -93,6 +95,7 @@ func TestWithoutTheFlagTheOperatorsAreNotThere(t *testing.T) {
 // One spelling of the two goes back. `&!` and `&|` parse to the same tree, so
 // there is nothing in it to choose between them.
 func TestADisownedStatementPrintsBack(t *testing.T) {
+	t.Parallel()
 	on := disowning()
 	for _, tc := range []struct{ src, want string }{
 		{"echo hi &!", "echo hi &!"},

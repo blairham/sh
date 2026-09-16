@@ -21,6 +21,7 @@ import (
 // else — which is why these assert the printed bytes rather than that the
 // result re-parses. A re-parse check passes against both defects.
 func TestAHereDocumentBodyKeepsItsOwnLines(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -130,6 +131,7 @@ func TestAHereDocumentBodyKeepsItsOwnLines(t *testing.T) {
 // it is a syntax error. This is the route `type f` and `export -f` take, so a
 // function with a here-document in it came back as text no shell would read.
 func TestALayoutWritesNoSeparatorAfterAHereDocumentBody(t *testing.T) {
+	t.Parallel()
 	// Four spaces, statements on lines of their own, `;` between them and
 	// after the last of a body a keyword closes. Written out rather than
 	// taken from a dialect: what is under test is the arrangement, and which

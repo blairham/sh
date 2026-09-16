@@ -31,6 +31,7 @@ func blamingTheKeywordAfter() Dialect {
 // it is named where it stands by default, and two styles name what is behind
 // it instead. See [Dialect.EmptyBodyBlame] for the measured table (#2235).
 func TestWhichTokenAnEmptyBodyIsBlamedOn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		dialect Dialect
@@ -100,6 +101,7 @@ func TestWhichTokenAnEmptyBodyIsBlamedOn(t *testing.T) {
 // body, a command substitution's program and a `;;` in either position are
 // none of them.
 func TestAnEmptyListTheGrammarAllowsIsStillAllowed(t *testing.T) {
+	t.Parallel()
 	for _, d := range []Dialect{blamingTheTokenAfter(), blamingTheKeywordAfter()} {
 		for _, src := range []string{
 			"case x in x) ;; esac\n",

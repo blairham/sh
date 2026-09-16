@@ -26,6 +26,7 @@ func doubleParen(on bool) syntax.Dialect {
 // failure is an arithmetic one; read as a command substitution, the text is a
 // program and the leading `(` is a subshell.
 func TestADoubleParenMayOpenACommandSubstitution(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -80,6 +81,7 @@ func TestADoubleParenMayOpenACommandSubstitution(t *testing.T) {
 // read until it is expanded: off, this parses, and what it parsed to is an
 // arithmetic span holding text no expression parser will take.
 func TestWithoutTheFallbackADoubleParenIsAlwaysArithmetic(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo $((echo hi) )", "echo $(( 1 ) + (2 ))", "echo $((1+2))"} {
 		spans := spansOf(t, src, doubleParen(false))
 		if len(spans) != 1 || spans[0].Kind != syntax.ArithSubst {
@@ -94,6 +96,7 @@ func TestWithoutTheFallbackADoubleParenIsAlwaysArithmetic(t *testing.T) {
 // substitution for text that closed neither construct would move the
 // complaint to a construct nobody wrote.
 func TestAnUnfinishedDoubleParenStaysArithmetic(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo $((1+2", "echo $((echo hi"} {
 		_, err := syntax.Parse(src, doubleParen(true))
 		if err == nil {
@@ -119,6 +122,7 @@ func TestAnUnfinishedDoubleParenStaysArithmetic(t *testing.T) {
 // time — the body is one literal until it is expanded — so that route is
 // graded by running it, in the corpus rather than here.
 func TestTheFallbackAppliesInsideDoubleQuotes(t *testing.T) {
+	t.Parallel()
 	spans := spansOf(t, `echo "$((echo hi) )"`, doubleParen(true))
 	if len(spans) != 1 || spans[0].Kind != syntax.CommandSubst {
 		t.Fatalf("got %v, want one command substitution", kindsOf(spans))

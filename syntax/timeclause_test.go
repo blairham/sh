@@ -27,6 +27,7 @@ func parseTimeClause(t *testing.T, src string, d Dialect) *TimeClause {
 // `time` prefixes the whole pipeline; without it, `time` is an ordinary word
 // and the same text is a simple command whose name is `time`.
 func TestTimeIsAKeywordWhereTheFlagSaysSo(t *testing.T) {
+	t.Parallel()
 	tc := parseTimeClause(t, `time true | wc -l`, Core())
 	pl, ok := tc.Pipeline.(*Pipeline)
 	if !ok {
@@ -54,6 +55,7 @@ func TestTimeIsAKeywordWhereTheFlagSaysSo(t *testing.T) {
 // the middle of a pipeline and after an assignment prefix, `time` stays a
 // word — measured against bash, which runs the external in both places.
 func TestTimeIsOrdinaryOffTheFront(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo hi | time wc -c`, `FOO=1 time true`} {
 		f, err := Parse(src, Core())
 		if err != nil {
@@ -69,6 +71,7 @@ func TestTimeIsOrdinaryOffTheFront(t *testing.T) {
 // without it, `-p` is the first word of the timed pipeline — which is what
 // zsh does, a command that is not found, with the pipeline still timed.
 func TestTimePosixFlagIsItsOwnQuestion(t *testing.T) {
+	t.Parallel()
 	with := Core()
 	with.TimePosixFlag = true
 	tc := parseTimeClause(t, `time -p true`, with)
@@ -93,6 +96,7 @@ func TestTimePosixFlagIsItsOwnQuestion(t *testing.T) {
 // `! time x` outside it, and both parse — measured, both report and both
 // carry status 1.
 func TestTimeSitsOnEitherSideOfTheBang(t *testing.T) {
+	t.Parallel()
 	tc := parseTimeClause(t, `time ! true`, Core())
 	if tc.Negated {
 		t.Error("`time ! x`: the bang is the pipeline's, not the clause's")
@@ -114,6 +118,7 @@ func TestTimeSitsOnEitherSideOfTheBang(t *testing.T) {
 // and `time | cat` is a pipe with no first element — bash calls it a syntax
 // error and so do we.
 func TestBareTimeParsesAndAPipeAfterItDoesNot(t *testing.T) {
+	t.Parallel()
 	tc := parseTimeClause(t, `time`, Core())
 	if tc.Pipeline != nil {
 		t.Errorf("bare `time` should have no pipeline, got %T", tc.Pipeline)
@@ -136,6 +141,7 @@ func TestBareTimeParsesAndAPipeAfterItDoesNot(t *testing.T) {
 // again — the corpus round-trip promise, made here for the forms the corpus
 // does not carry.
 func TestTimePrintingRoundTrips(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.TimePosixFlag = true
 	for _, src := range []string{

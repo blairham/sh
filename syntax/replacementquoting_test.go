@@ -27,6 +27,7 @@ func replacementOf(t *testing.T, src string) *ParamExpr {
 }
 
 func TestASecondReadingIsKeptOnlyWhereItCouldDiffer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -68,6 +69,7 @@ func TestASecondReadingIsKeptOnlyWhereItCouldDiffer(t *testing.T) {
 // the quotes quote and what stands between them is one literal, and under the
 // enclosing one they are characters with a live expansion between them.
 func TestTheTwoReadingsAreDifferentTrees(t *testing.T) {
+	t.Parallel()
 	e := replacementOf(t, `printf "%s" "${s/a/'$v'}"`)
 	if n := len(e.Arg2.Spans); n != 1 || e.Arg2.Spans[0].Kind != Literal {
 		t.Errorf("the word reading is %d spans, want one literal", n)

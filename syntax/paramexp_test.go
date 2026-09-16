@@ -67,6 +67,7 @@ func firstParam(t *testing.T, src string, d Dialect) *ParamExpr {
 }
 
 func TestParamForms(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`echo ${x}`, `x`},
 		{`echo ${#x}`, `#x`},
@@ -122,6 +123,7 @@ func TestParamForms(t *testing.T) {
 }
 
 func TestParamOperandIsAWordNotAString(t *testing.T) {
+	t.Parallel()
 	// docs/spec/grammar/parameter-expansion.md: the word is itself expanded,
 	// so it keeps its structure. `${u:-$(echo sub)}` yields sub, which is only
 	// possible if the operand was parsed rather than stored as text.
@@ -138,6 +140,7 @@ func TestParamOperandIsAWordNotAString(t *testing.T) {
 }
 
 func TestParamOperandKeepsNestedExpansions(t *testing.T) {
+	t.Parallel()
 	e := firstParam(t, `echo ${u:-${v:-inner}}`, Core())
 	if e.Arg == nil || len(e.Arg.Spans) != 1 {
 		t.Fatalf("nested operand not parsed: %+v", e.Arg)
@@ -152,6 +155,7 @@ func TestParamOperandKeepsNestedExpansions(t *testing.T) {
 }
 
 func TestParamSeparatorMustBeUnquoted(t *testing.T) {
+	t.Parallel()
 	// A slash inside quotes belongs to the pattern, not to the operator.
 	e := firstParam(t, `echo ${x/"a/b"/c}`, Core())
 	if got, want := e.Arg.Literal(), "a/b"; got != want {
@@ -163,6 +167,7 @@ func TestParamSeparatorMustBeUnquoted(t *testing.T) {
 }
 
 func TestParamDialectRefusesRatherThanGuesses(t *testing.T) {
+	t.Parallel()
 	// ${x^^} is bash alone and ${!x} means something else in ksh93, so a
 	// dialect without them has to refuse: picking either meaning would be
 	// wrong for half the panel. The refusal is *deferred* for an operator —
@@ -185,6 +190,7 @@ func TestParamDialectRefusesRatherThanGuesses(t *testing.T) {
 }
 
 func TestParamCaseChangeParsesWhereTheFlagIsOn(t *testing.T) {
+	t.Parallel()
 	if got, want := param(firstParam(t, `echo ${x^^}`, everyFlag())), `x ^^`; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -194,6 +200,7 @@ func TestParamCaseChangeParsesWhereTheFlagIsOn(t *testing.T) {
 }
 
 func TestParamNestingIsBounded(t *testing.T) {
+	t.Parallel()
 	// Pathological input is the normal case on the keystroke path, so depth
 	// is bounded rather than trusted.
 	src := "echo " + strings.Repeat("${x:-", 200) + "y" + strings.Repeat("}", 200)
@@ -220,6 +227,7 @@ func everyFlag() Dialect {
 // `${!name}` and from `${name@op}`, and all three ride on the flag that says
 // this dialect has the `!` form at all.
 func TestPrefixNamesNeedIndirection(t *testing.T) {
+	t.Parallel()
 	ind := Core()
 	ind.ParamIndirection = true
 
@@ -254,6 +262,7 @@ func TestPrefixNamesNeedIndirection(t *testing.T) {
 // TestBangWithAnOperatorIsTheParameter — `${!:+set}` is `$!` with `:+`
 // applied; only a `!` that could begin a name is indirection.
 func TestBangWithAnOperatorIsTheParameter(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo "${!:+set}"`, `echo "${!-none}"`, `echo "${!}"`} {
 		e := firstParam(t, src, everyFlag())
 		if e.Indirect || e.Name != "!" {

@@ -43,6 +43,7 @@ func semicolonDialect(v SeparatorSkip) Dialect {
 }
 
 func TestASeparatorMayNotBeginAConditionInTheNarrowerDialect(t *testing.T) {
+	t.Parallel()
 	refused := []string{
 		"if; then :; fi",
 		"while; do :; done",
@@ -95,6 +96,7 @@ func TestASeparatorMayNotBeginAConditionInTheNarrowerDialect(t *testing.T) {
 // before — and that took it. `if :; ; then :; fi` parsed in every dialect
 // where dash, bash 5.3 and ksh93 all name the second `;`.
 func TestASeparatorLeftOverByAListIsRefusedRatherThanAbsorbed(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"if :; ; then :; fi",
 		"while :; ; do :; done",

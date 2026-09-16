@@ -31,6 +31,7 @@ import (
 // than of quoting, so the whole family is here: the two quotes, both
 // spellings of a command substitution, and `$'`.
 func TestAConstructAnAliasBodyOpensReachesTheRestOfTheLine(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		alias syntax.Aliases
@@ -98,6 +99,7 @@ func TestAConstructAnAliasBodyOpensReachesTheRestOfTheLine(t *testing.T) {
 // that is still *open*: a body whose quoting closes inside it takes nothing
 // from the input, and the word after the alias word is a word of its own.
 func TestABodyThatClosesItsOwnQuotesTakesNothingFromTheInput(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		alias syntax.Aliases
@@ -123,6 +125,7 @@ func TestABodyThatClosesItsOwnQuotesTakesNothingFromTheInput(t *testing.T) {
 // write — `alias a='echo "x'` then `a` printed `x` here and is a refusal in
 // every column of the panel.
 func TestAConstructNothingClosesIsUnterminated(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		alias syntax.Aliases
@@ -167,6 +170,7 @@ func TestAConstructNothingClosesIsUnterminated(t *testing.T) {
 // binary as `sh`, bash 3.2 and ksh93 all blame line 4, and zsh and dash both
 // blame line 6 — the line after the last. Both numbers come from here.
 func TestTheUnterminatedBodyIsBlamedAtTheAliasWordAndAtTheEnd(t *testing.T) {
+	t.Parallel()
 	const src = "echo zero\necho one\nalias a='echo \"x'\na\necho two\n"
 	p := syntax.NewParser(src, syntax.Core())
 	p.Aliases = table("a", `echo "x`)
@@ -192,6 +196,7 @@ func TestTheUnterminatedBodyIsBlamedAtTheAliasWordAndAtTheEnd(t *testing.T) {
 // of *bytes* and lost the newlines inside them passes every test above and
 // fails this one.
 func TestAfterTheSeamTheInputIsReadAtItsRealPosition(t *testing.T) {
+	t.Parallel()
 	const src = "alias q='echo \"'\nq one\ntwo\"\nthree\n)\n"
 	p := syntax.NewParser(src, syntax.Core())
 	p.Aliases = table("q", `echo "`)
@@ -219,6 +224,7 @@ func TestAfterTheSeamTheInputIsReadAtItsRealPosition(t *testing.T) {
 // zsh — which blames the outermost — reports the quote at the end of the
 // input; both readings come from this one error.
 func TestAnOpenerTheInputHoldsIsNamedWhereItStands(t *testing.T) {
+	t.Parallel()
 	const src = "echo zero\necho one\nalias q='echo \"'\nq $(echo hi\n"
 	p := syntax.NewParser(src, syntax.Core())
 	p.Aliases = table("q", `echo "`)
@@ -241,6 +247,7 @@ func TestAnOpenerTheInputHoldsIsNamedWhereItStands(t *testing.T) {
 // in turn. `alias q='echo "x '` used as `q b"` is `x  b` in all seven
 // columns and never the expansion of `b`.
 func TestABlankInsideAnOpenConstructMakesNoNextWordEligible(t *testing.T) {
+	t.Parallel()
 	got := parsed(t, table("q", `echo "x `, "b", "BEE"), `q b"`)
 	if want := `echo "x  b"`; got != want {
 		t.Errorf("came to %q, want %q", got, want)
@@ -263,6 +270,7 @@ func TestABlankInsideAnOpenConstructMakesNoNextWordEligible(t *testing.T) {
 // field is off there; dialect/aliasquote_test.go says which preset holds
 // which value.
 func TestTheAxisDecidesWhetherTheBlankReachesPastTheConstruct(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		on   bool
 		want string
@@ -292,6 +300,7 @@ func TestTheAxisDecidesWhetherTheBlankReachesPastTheConstruct(t *testing.T) {
 // unterminated quote in all seven columns — and the carry being declined one
 // level in made it a closed one, so `echo after` ran where no shell runs it.
 func TestAQuoteAnInnerBodyOpensAndNothingClosesIsUnterminated(t *testing.T) {
+	t.Parallel()
 	got := parsed(t, table("a", "b x", "b", `echo "`), "a\necho after")
 	if !strings.Contains(got, "unterminated") {
 		t.Errorf("came to %q, want the quote reported unterminated", got)
@@ -310,6 +319,7 @@ func TestAQuoteAnInnerBodyOpensAndNothingClosesIsUnterminated(t *testing.T) {
 //	alias a='b x'   then  a y"    one, ` x y`, two
 //	alias a='b x"'  then  a       one, ` x`, two
 func TestAConstructAnInnerBodyOpensReachesTheEnclosingBody(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		alias syntax.Aliases
@@ -353,6 +363,7 @@ func TestAConstructAnInnerBodyOpensReachesTheEnclosingBody(t *testing.T) {
 // guard is the word *after* them: with `x` inside the quote, what follows is
 // read from the input at the position the input is really at.
 func TestTokensASwallowedConstructTookAreNoLongerWords(t *testing.T) {
+	t.Parallel()
 	got := parsed(t, table("b", `echo "`, "a", "b x"), "a y\" z\necho two")
 	want := "echo \" x y\" z\necho two"
 	if got != want {

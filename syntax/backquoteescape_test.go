@@ -20,6 +20,7 @@ import "testing"
 // hands the inner shell `echo \"a b\"`, which runs and prints two words with
 // quote marks in them, and a test that asked for a nil error would pass it.
 func TestABackquotedBodyUnescapesAQuoteOnlyInsideDoubleQuotes(t *testing.T) {
+	t.Parallel()
 	const body = "echo " + `\"a b\"`
 	for _, c := range []struct {
 		src  string
@@ -58,6 +59,7 @@ func TestABackquotedBodyUnescapesAQuoteOnlyInsideDoubleQuotes(t *testing.T) {
 // of them either — which is why the row above carries the discrimination and
 // this one carries the floor.
 func TestTheOlderSpellingAlwaysUnescapesTheSameThree(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		body string
 		want string

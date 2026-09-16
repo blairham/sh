@@ -24,6 +24,7 @@ import (
 // the expression `echo a); echo b`, and the diagnostic quoted the script's own
 // text back as one. What is wrong is which construct was built.
 func TestTheArithmeticReadingOfTwoParensIsGivenUpWhereItDoesNotClose(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -84,6 +85,7 @@ func TestTheArithmeticReadingOfTwoParensIsGivenUpWhereItDoesNotClose(t *testing.
 // is resolved from the text alone, so the same characters go the same way in
 // every position a command may begin.
 func TestTheGivenUpReadingHoldsWhereverACommandMayBegin(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"((echo a); echo b) | cat",
 		"{ ((echo a); echo b); }",
@@ -106,6 +108,7 @@ func TestTheGivenUpReadingHoldsWhereverACommandMayBegin(t *testing.T) {
 // looked again. Four of five references take the reading here, so this
 // follows them.
 func TestAGivenUpReadingIsReReadFromTheSecondParen(t *testing.T) {
+	t.Parallel()
 	cmd := onlyCommand(t, "(((a=5)); echo $a)", syntax.Core())
 	sub, ok := cmd.(*syntax.Subshell)
 	if !ok {
@@ -132,6 +135,7 @@ func TestAGivenUpReadingIsReReadFromTheSecondParen(t *testing.T) {
 // ends with the file stays a refusal — and at a prompt, still a request for
 // the rest of it rather than a subshell nobody opened.
 func TestAnExpressionThatRunsOutIsStillRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"((1+1",
 		"((echo a",
@@ -145,6 +149,7 @@ func TestAnExpressionThatRunsOutIsStillRefused(t *testing.T) {
 // that already suspended the arithmetic reading still do: a `case` arm's
 // paren, a condition's grouping parens and an expansion's operand.
 func TestThePositionsThatSuspendTheReadingStillDo(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.PatternAlternation = true
 	d.GlobQualifiers = true

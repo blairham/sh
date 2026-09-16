@@ -10,6 +10,7 @@ import "testing"
 // the number, and without it they are an ordinary word and the operator is a
 // redirection with no number of its own.
 func TestATwoDigitDescriptorNumberIsADialectQuestion(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.MultiDigitFdNumber = true
 
@@ -41,6 +42,7 @@ func TestATwoDigitDescriptorNumberIsADialectQuestion(t *testing.T) {
 // The single digit is not the flag's to take away, in either dialect, and
 // neither is the adjacency rule that decides whether it is a number at all.
 func TestOneDigitIsADescriptorNumberWhicheverWayTheFlagIsSet(t *testing.T) {
+	t.Parallel()
 	for _, multi := range []bool{false, true} {
 		d := Core()
 		d.MultiDigitFdNumber = multi

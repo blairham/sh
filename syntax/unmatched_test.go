@@ -19,6 +19,7 @@ import (
 // assignment prefix and a preceding quoted span both belong to the word
 // (#1022).
 func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, opener, closer, near string
 		openLine, eofLine         int
@@ -75,6 +76,7 @@ func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
 // CloseQuotesAtEOF ends an unterminated quote at the end of input as if the
 // closing mark were there; the substitutions still refuse.
 func TestTheEndOfInputMayCloseAQuote(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.CloseQuotesAtEOF = RouteFromCommandString
 	d = d.On(RouteFromCommandString)
@@ -103,6 +105,7 @@ func TestTheEndOfInputMayCloseAQuote(t *testing.T) {
 // defect was a flag applied where it had not been measured and a test that
 // asks about one route reintroduces exactly that.
 func TestAQuoteIsClosedOnlyOnTheRouteTheDialectNames(t *testing.T) {
+	t.Parallel()
 	quotes := []string{`echo "abc`, `echo 'abc`, "echo `echo", `echo $'abc`}
 	for _, route := range []ProgramRoutes{RouteOnNoRoute, RouteFromScriptFile, RouteOnStandardInput} {
 		d := Core()
@@ -139,6 +142,7 @@ func TestAQuoteIsClosedOnlyOnTheRouteTheDialectNames(t *testing.T) {
 // `ksh -c "echo \$(echo 'abc)"` are both “syntax error at line 1: `('
 // unmatched“.
 func TestOnTheLenientRouteTheEnclosingConstructIsWhatRanOut(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.CloseQuotesAtEOF = RouteFromCommandString
 	d = d.On(RouteFromCommandString)
@@ -169,6 +173,7 @@ func TestOnTheLenientRouteTheEnclosingConstructIsWhatRanOut(t *testing.T) {
 // On leaves the language alone and answers only about this program, which is
 // what lets one shell's dialect be shared by every route it is read on.
 func TestOnChangesTheRouteAndNothingElse(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.CloseQuotesAtEOF = RouteFromCommandString
 	got := d.On(RouteFromScriptFile)

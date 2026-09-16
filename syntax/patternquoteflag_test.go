@@ -11,6 +11,7 @@ import "testing"
 // *second* member's, wherever in the group it stands and whatever else is
 // written between the two.
 func TestThePatternQuoteFlagIsRefusedBesideAnotherQuotingFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src string
 		pos int
@@ -45,6 +46,7 @@ func TestThePatternQuoteFlagIsRefusedBesideAnotherQuotingFlag(t *testing.T) {
 
 // And the groups next door that the rule must not catch.
 func TestThePatternQuoteFlagIsCarriedBesideEverythingElse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, flags string }{
 		{`echo ${(b)v}`, "b"},
 		{`echo ${(@b)a}`, "@b"},

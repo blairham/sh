@@ -20,6 +20,7 @@ func outputFormat(on bool) syntax.Dialect {
 
 // What each spelling of the specifier says.
 func TestTheOutputFormatSpecifierIsRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		src      string
@@ -67,6 +68,7 @@ func TestTheOutputFormatSpecifierIsRead(t *testing.T) {
 // stood could not answer the third at all, because the branch holding it is
 // never evaluated.
 func TestTheOutputFormatSpecifierStandsAnywhere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -98,6 +100,7 @@ func TestTheOutputFormatSpecifierStandsAnywhere(t *testing.T) {
 // A specifier with nothing after it still has an expression slot, and it is
 // empty rather than a failure.
 func TestTheOutputFormatSpecifierMayStandAlone(t *testing.T) {
+	t.Parallel()
 	x, ok := arithOf(t, "echo $(( [#16] ))", outputFormat(true)).(*syntax.ArithOutput)
 	if !ok {
 		t.Fatalf("not an output-format node")
@@ -111,6 +114,7 @@ func TestTheOutputFormatSpecifierMayStandAlone(t *testing.T) {
 // because they are worded apart: digits alone are a base syntax that is not
 // this one, and anything else is a specifier that would not read.
 func TestAnUnreadableOutputFormatIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		kind syntax.ErrorKind
@@ -147,6 +151,7 @@ func TestAnUnreadableOutputFormatIsRefused(t *testing.T) {
 // ordinary missing-operand one — which is what the rest of the panel says
 // about the same text.
 func TestWithoutTheFlagTheBracketIsNoSpecifier(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"[#16] 255", "[##16] 255", "[#_] 1234567", "[16] 255"} {
 		err := arithErr(src, outputFormat(false))
 		var se *syntax.Error
@@ -163,6 +168,7 @@ func TestWithoutTheFlagTheBracketIsNoSpecifier(t *testing.T) {
 // front of it and is read by the name, where this one stands where a token
 // begins.
 func TestASubscriptIsNotAnOutputFormat(t *testing.T) {
+	t.Parallel()
 	for _, on := range []bool{true, false} {
 		x, ok := arithOf(t, "echo $(( a[#8] ))", outputFormat(on)).(*syntax.ArithIndex)
 		if !ok {

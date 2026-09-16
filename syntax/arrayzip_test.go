@@ -21,6 +21,7 @@ func zipping() Dialect {
 // a `^` in its operand — which is the whole of the disambiguation, since the
 // longer spelling has to be tried first.
 func TestTheArrayZipOperatorsParse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		op   ParamOp
@@ -52,6 +53,7 @@ func TestTheArrayZipOperatorsParse(t *testing.T) {
 // widened the core would take `${v:^…}` away from every dialect that does not
 // have the operator, which is a change to shapes the whole panel shares.
 func TestWithoutTheFlagAZipIsStillASubstring(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo ${a:^b}`, `echo ${a:^^b}`} {
 		t.Run(src, func(t *testing.T) {
 			if e := firstParam(t, src, Core()); e.Op != ParamSubstring {
@@ -65,6 +67,7 @@ func TestWithoutTheFlagAZipIsStillASubstring(t *testing.T) {
 // what it was, including the element selection that shares the position when
 // a dialect has both.
 func TestAColonBeforeAnythingElseIsUnchangedByTheZip(t *testing.T) {
+	t.Parallel()
 	both := zipping()
 	both.ParamElementSelection = true
 	for _, tc := range []struct {
@@ -95,6 +98,7 @@ func TestAColonBeforeAnythingElseIsUnchangedByTheZip(t *testing.T) {
 // renders `:^^` as `:^` changes the program, and the operator's String is the
 // only thing standing between the two.
 func TestTheZipOperatorsPrintBack(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo ${a:^b}`, `echo ${a:^^b}`, `echo ${a:^b} ${c:^^d}`} {
 		t.Run(src, func(t *testing.T) {
 			f, err := Parse(src, zipping())

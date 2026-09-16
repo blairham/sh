@@ -33,6 +33,7 @@ func spacingRemarks(t *testing.T, src string, d syntax.Dialect) []syntax.Remark 
 // TestTwoOperatorsRunTogetherAreRemarkedOn, with both spellings carried:
 // neither can be derived from the other, and the sentence names both.
 func TestTwoOperatorsRunTogetherAreRemarkedOn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, first, second string }{
 		{"(:);(:)\n", ";", "("},
 		// Whether the grammar then *takes* this text is a separate
@@ -68,6 +69,7 @@ func TestTwoOperatorsRunTogetherAreRemarkedOn(t *testing.T) {
 // A remark that carried the following *token* would name `>>` and read as a
 // different sentence.
 func TestASecondOperatorIsNamedByItsFirstByte(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, second string }{
 		{":;>>f\n", ">"},
 		{":;<<E\n", "<"},
@@ -87,6 +89,7 @@ func TestASecondOperatorIsNamedByItsFirstByte(t *testing.T) {
 // layout: the same two operators, spaced, and the parse is otherwise
 // identical — `a |; b` is refused exactly as `a|;b` is.
 func TestABlankBetweenThemSaysNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"(:) ; (:)\n", "(:);\t(:)\n", "(:);\n(:)\n", "echo a & ; b\n", "a | ; b\n",
 	} {
@@ -101,6 +104,7 @@ func TestABlankBetweenThemSaysNothing(t *testing.T) {
 // all silent, and so is `$(` — which is the row that says the trigger is the
 // literal byte rather than "a parenthesis comes next".
 func TestOnlyAnOperatorFollowsAnOperator(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		":;$(:)\n", ":;x\n", ":;{ :; }\n", ":;!:\n", ":;[[ x ]]\n",
 		"(:;)\n", ":;'a'\n", ":;\"a\"\n", ":;\\;\n",
@@ -115,6 +119,7 @@ func TestOnlyAnOperatorFollowsAnOperator(t *testing.T) {
 // silent where `|(` is remarked on, and a pair that spells one operator has
 // no blank to be missing.
 func TestAnOperatorOfTwoBytesNeverStartsOne(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		":&&(:)\n", ":||(:)\n", ":;;:\n", ":;&:\n", "case x in x) :;; esac\n",
 	} {
@@ -132,6 +137,7 @@ func TestAnOperatorOfTwoBytesNeverStartsOne(t *testing.T) {
 // operator byte after it — so the remark appears. A hardcoded exclusion list
 // would be silent in both dialects and could not tell them apart.
 func TestTheOperatorTableDecidesAndNotAListOfPairs(t *testing.T) {
+	t.Parallel()
 	with := syntax.Core()
 	with.CaseFallthrough = true
 	if rs := spacingRemarks(t, ":;&:\n", with); len(rs) != 0 {
@@ -152,6 +158,7 @@ func TestTheOperatorTableDecidesAndNotAListOfPairs(t *testing.T) {
 // TestQuotingAndCommentsHideIt, because the trigger is lexical: text inside
 // quotes or after a `#` is not operators at all.
 func TestQuotingAndCommentsHideIt(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"#(:);(:)\n", "echo \"(:);(:)\"\n", "echo '(:);(:)'\n", "echo a\\&\\;b\n",
 	} {
@@ -164,6 +171,7 @@ func TestQuotingAndCommentsHideIt(t *testing.T) {
 // TestOneRemarkPerOccurrenceInOrder, so a front end that renders them renders
 // each and a counter has something to count.
 func TestOneRemarkPerOccurrenceInOrder(t *testing.T) {
+	t.Parallel()
 	rs := spacingRemarks(t, "(:);(:);(:)\n", syntax.Core())
 	if len(rs) != 2 {
 		t.Fatalf("got %d remarks, want one per occurrence: %+v", len(rs), rs)
@@ -179,6 +187,7 @@ func TestOneRemarkPerOccurrenceInOrder(t *testing.T) {
 // reported the parser's current line rather than the operator's would pass
 // every case above and name the wrong line for a real script.
 func TestItNamesTheLineItIsOn(t *testing.T) {
+	t.Parallel()
 	rs := spacingRemarks(t, "echo one\necho two\n(:);(:)\necho four\n", syntax.Core())
 	if len(rs) != 1 {
 		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
@@ -192,6 +201,7 @@ func TestItNamesTheLineItIsOn(t *testing.T) {
 // too, and the shapes that draw both are exactly the ones #2409 was filed
 // from: the remark comes first and the refusal follows.
 func TestItSurvivesAFatalError(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("if |; then :; fi\n", syntax.Core())
 	p.Parse()
 	if p.Err() == nil {
@@ -213,6 +223,7 @@ func TestItSurvivesAFatalError(t *testing.T) {
 // that parse cleanly, so a remark reached only from the error-reporting path
 // would never be printed for them.
 func TestTheProgramItRemarksOnStillRuns(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"(:);(:)\n", ":;(:)\n", ":;>f\n"} {
 		p := syntax.NewParser(src, syntax.Core())
 		p.Parse()

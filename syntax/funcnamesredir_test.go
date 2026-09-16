@@ -38,6 +38,7 @@ func bodyRedirs(t *testing.T, fn *FuncDecl) []string {
 }
 
 func TestARedirectionBetweenTheNamesAndTheParens(t *testing.T) {
+	t.Parallel()
 	d := namesWithRedirs()
 	for _, tc := range []struct {
 		name, src string
@@ -107,6 +108,7 @@ func TestARedirectionBetweenTheNamesAndTheParens(t *testing.T) {
 }
 
 func TestAnAssignmentStillEndsTheNameListReading(t *testing.T) {
+	t.Parallel()
 	d := namesWithRedirs()
 	// The bound that was already measured and still holds: an assignment in
 	// front of the names is not a definition, redirection or no redirection.
@@ -115,6 +117,7 @@ func TestAnAssignmentStillEndsTheNameListReading(t *testing.T) {
 }
 
 func TestWithoutTheNameListTheRedirectedParenIsRefused(t *testing.T) {
+	t.Parallel()
 	d := namesWithRedirs()
 	d.FunctionMultipleNames = false
 	// The other five shells' reading, which is also this parser's before the
@@ -123,6 +126,7 @@ func TestWithoutTheNameListTheRedirectedParenIsRefused(t *testing.T) {
 }
 
 func TestTheEmptyParensAreNamedFromOutsideTheDefinition(t *testing.T) {
+	t.Parallel()
 	d := namesWithRedirs()
 	for _, src := range []string{
 		`x=1 f () { echo X; }`,
@@ -141,6 +145,7 @@ func TestTheEmptyParensAreNamedFromOutsideTheDefinition(t *testing.T) {
 }
 
 func TestABlankInsideTheParensLeavesThemTwoTokens(t *testing.T) {
+	t.Parallel()
 	d := namesWithRedirs()
 	// Adjacency is the rule: with a blank between them the two characters are
 	// a subshell, so the refusal falls further along and names something
@@ -155,6 +160,7 @@ func TestABlankInsideTheParensLeavesThemTwoTokens(t *testing.T) {
 }
 
 func TestWithoutTheJoinedPairTheOpenParenIsNamedAlone(t *testing.T) {
+	t.Parallel()
 	d := namesWithRedirs()
 	d.EmptyParensAreOneToken = false
 	_, err := Parse(`x=1 f () { echo X; }`, d)

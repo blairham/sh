@@ -27,6 +27,7 @@ func patGroup() Dialect {
 // three lexer paths — a backslash, single quotes and double quotes — and the
 // bug was in the one place they all had to pass.
 func TestAQuotedOperatorInsideAPatternGroupIsText(t *testing.T) {
+	t.Parallel()
 	on := patGroup()
 	for _, src := range []string{
 		// The filed shape, at the front of a word so the group opens it.
@@ -125,6 +126,7 @@ func TestAQuotedOperatorInsideAPatternGroupIsText(t *testing.T) {
 // unquoted literal parses perfectly and hands the matcher a `"` to match, so
 // `[[ b == ("b") ]]` asked whether `b` is three characters and said no.
 func TestAPatternGroupKeepsTheQuotingInsideIt(t *testing.T) {
+	t.Parallel()
 	on := patGroup()
 	for _, tc := range []struct {
 		src   string
@@ -163,6 +165,7 @@ func TestAPatternGroupKeepsTheQuotingInsideIt(t *testing.T) {
 // quoting comes back: printing `(<)` where `(\<)` was written is a parse
 // error, and printing `(b)` where `("b")` was written is a different pattern.
 func TestAQuotedPatternGroupPrintsBackAsItWasWritten(t *testing.T) {
+	t.Parallel()
 	on := patGroup()
 	for _, src := range []string{
 		`echo (\<)*`,

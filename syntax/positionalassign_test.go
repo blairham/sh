@@ -19,6 +19,7 @@ import (
 // not a pattern and a command name is, so the two shells subject the same
 // characters to different expansions.
 func TestANumberIsAnAssignmentNameOnlyWithTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		src    string
@@ -102,6 +103,7 @@ func TestANumberIsAnAssignmentNameOnlyWithTheFlag(t *testing.T) {
 // run-of-digits test that answered yes for the empty string would make it an
 // assignment to a parameter with no name.
 func TestTheFlagAdmitsDigitsAndNothingElse(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.AppendAssign = true
 	d.ArraySubscript = true

@@ -29,6 +29,7 @@ func refusingNames(atRun bool) syntax.Dialect {
 // that matters: a reading refusal reaches a definition in a branch nothing
 // takes, and a running one cannot.
 func TestARefusedNameIsASyntaxErrorWhileReading(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"export() { :; }\n",
 		"set() { :; }\n",
@@ -44,6 +45,7 @@ func TestARefusedNameIsASyntaxErrorWhileReading(t *testing.T) {
 // And where the dialect defers, the same definition parses whole and carries
 // the word for the interpreter to complain about.
 func TestARefusedNameParsesAndIsCarried(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"export() { :; }\n",
 		"function export { :; }\n",
@@ -66,6 +68,7 @@ func TestARefusedNameParsesAndIsCarried(t *testing.T) {
 // control: without it a test that refuses everything would pass both rows
 // above.
 func TestANameOutsideTheSetIsUntouched(t *testing.T) {
+	t.Parallel()
 	for _, atRun := range []bool{false, true} {
 		for _, src := range []string{
 			"exports() { :; }\n",
@@ -90,6 +93,7 @@ func TestANameOutsideTheSetIsUntouched(t *testing.T) {
 // An empty set refuses nothing, which is what the four presets without one
 // hold and what a hand-built dialect has.
 func TestNoSetRefusesNothing(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	if _, err := syntax.Parse("export() { :; }\n", d); err != nil {
 		t.Errorf("a dialect with no set refused a definition: %v", err)

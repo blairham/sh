@@ -17,6 +17,7 @@ import (
 // Each row names the flag it turns on, never a shell — what a shell holds is
 // that shell's package's to say.
 func TestReservesFollowsTheFlagThatAddsTheConstruct(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		word string
@@ -47,6 +48,7 @@ func TestReservesFollowsTheFlagThatAddsTheConstruct(t *testing.T) {
 // what makes the rows above about the constructs a flag adds rather than
 // about the vocabulary as a whole.
 func TestReservesTakesTheWordsEveryGrammarHas(t *testing.T) {
+	t.Parallel()
 	bare := POSIX()
 	for _, word := range []string{
 		"if", "then", "elif", "else", "fi", "for", "while", "until", "do",
@@ -72,6 +74,7 @@ func TestReservesTakesTheWordsEveryGrammarHas(t *testing.T) {
 // because a Reserves that had quietly become the lexer's own set would still
 // pass every row above.
 func TestTheClosingBracketIsReservedWithoutBeingAWord(t *testing.T) {
+	t.Parallel()
 	d := POSIX()
 	d.DoubleBracket = true
 	if !d.Reserves("]]") {

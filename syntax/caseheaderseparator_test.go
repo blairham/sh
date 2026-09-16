@@ -38,6 +38,7 @@ func caseHeaderSeparatorGrammar(d *Dialect) {
 }
 
 func TestASemicolonMayStandInACaseHeader(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseHeaderSeparatorGrammar(&d)
 	for _, tc := range []struct {
@@ -80,6 +81,7 @@ func TestASemicolonMayStandInACaseHeader(t *testing.T) {
 // here refuses `;;` and `&` in the same two positions, so the dialect with
 // the flag on must refuse them too.
 func TestACaseHeaderSeparatorIsASemicolonAndNothingElse(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	caseHeaderSeparatorGrammar(&d)
 	for _, tc := range []struct{ name, src string }{
@@ -98,6 +100,7 @@ func TestACaseHeaderSeparatorIsASemicolonAndNothingElse(t *testing.T) {
 // TestACaseHeaderSeparatorIsOneDialectsAndNotEveryShells is the other half of
 // the panel: six columns refuse the line, so the core grammar must too.
 func TestACaseHeaderSeparatorIsOneDialectsAndNotEveryShells(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	for _, src := range []string{"case x; in\nx) :;;\nesac", "case x in;\nx) :;;\nesac"} {
 		if _, err := Parse(src, d); err == nil {

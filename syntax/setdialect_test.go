@@ -14,6 +14,7 @@ import (
 // group is a group. The front end calls it between NextLine calls; this pins
 // the seam itself.
 func TestSetDialectAppliesFromTheNextLine(t *testing.T) {
+	t.Parallel()
 	src := "echo one\ncase ab in @(ab|cd)) echo hit;; esac\n"
 
 	// Without the change the second line does not parse under the core.

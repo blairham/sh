@@ -24,6 +24,7 @@ import (
 // HeredocSpans is what removes a continuation there — the same treatment the
 // escapes beside it get. What this test pins is where the body *stops*.
 func TestABodyLineJoinsAcrossABackslashNewline(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, body string
 		why             string
@@ -77,6 +78,7 @@ func TestABodyLineJoinsAcrossABackslashNewline(t *testing.T) {
 // backslash before a newline. It is the control for everything above: the two
 // spellings agreed with the panel while the unquoted one did not.
 func TestAQuotedDelimiterJoinsNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"cat <<'EOF'\nA\\\nEOF\nB\n",
 		"cat <<\"EOF\"\nA\\\nEOF\nB\n",
@@ -94,6 +96,7 @@ func TestAQuotedDelimiterJoinsNothing(t *testing.T) {
 // first physical line — so a tab a continuation brings in survives. `→A\` over
 // `→B` is `A→B` in every column of the panel.
 func TestTabStrippingReachesTheLineAndNotTheJoin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, body string }{
 		{
 			name: "the joined line keeps the tab it joined to",
@@ -120,6 +123,7 @@ func TestTabStrippingReachesTheLineAndNotTheJoin(t *testing.T) {
 // The rows are the two shapes that tell them apart: a continuation standing
 // after text of the line, and one standing before any.
 func TestHowFarADelimiterIsLookedForAcrossAContinuation(t *testing.T) {
+	t.Parallel()
 	const afterText = "cat <<ABC\nA\\\nBC\nABC\nrest\nABC\n"
 	const beforeAny = "cat <<ABC\n\\\nABC\nrest\nABC\n"
 	for _, tc := range []struct {
@@ -163,6 +167,7 @@ func TestHowFarADelimiterIsLookedForAcrossAContinuation(t *testing.T) {
 // command, and that is the half of #2430 with teeth: the text under the
 // mistaken delimiter used to arrive as statements of the program.
 func TestTheBodyDoesNotBecomeStatementsOfTheProgram(t *testing.T) {
+	t.Parallel()
 	const src = "cat <<EOF\nA\\\nEOF\nB\nEOF\necho after\n"
 	p := syntax.NewParser(src, syntax.Core())
 	f := p.Parse()

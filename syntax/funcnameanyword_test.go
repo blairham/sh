@@ -30,6 +30,7 @@ func anyWordPosixName() Dialect {
 }
 
 func TestAnyWordIsAPosixFunctionName(t *testing.T) {
+	t.Parallel()
 	on, off := anyWordPosixName(), Core()
 	for _, tc := range []struct{ src, name string }{
 		{`'a b'() { echo b; }`, "a b"},
@@ -84,6 +85,7 @@ func TestAnyWordIsAPosixFunctionName(t *testing.T) {
 // [Dialect.FunctionKeywordNameIsAnyWord] keeps, and quoting takes it away:
 // the quoted rows above include `'a*b'`.
 func TestABarePatternIsNotAPosixFunctionName(t *testing.T) {
+	t.Parallel()
 	d := anyWordPosixName()
 	for _, src := range []string{
 		`a*b() { echo b; }`,
@@ -104,6 +106,7 @@ func TestABarePatternIsNotAPosixFunctionName(t *testing.T) {
 // follows a word either way — and the flag has taken away the name test that
 // used to part them.
 func TestAnAssignmentIsNotAPosixFunctionDefinition(t *testing.T) {
+	t.Parallel()
 	d := anyWordPosixName()
 	d.ArrayLiteral = true
 	for _, src := range []string{
@@ -127,6 +130,7 @@ func TestAnAssignmentIsNotAPosixFunctionDefinition(t *testing.T) {
 // row "any word is a name" could be satisfied by a reading that took every
 // quoted first word for a definition.
 func TestTheParensStillAnnounceThePosixDefinition(t *testing.T) {
+	t.Parallel()
 	d := anyWordPosixName()
 	for _, src := range []string{
 		`'a b'`,
@@ -147,6 +151,7 @@ func TestTheParensStillAnnounceThePosixDefinition(t *testing.T) {
 // made this an issue: `function a\ b { … }` defined a function here while
 // `a\ b() { … }` was a parse error.
 func TestBothSpellingsTakeTheSameName(t *testing.T) {
+	t.Parallel()
 	d := anyWordPosixName()
 	d.FunctionKeyword = true
 	d.FunctionKeywordNameIsAnyWord = true

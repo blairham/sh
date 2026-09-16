@@ -9,6 +9,7 @@ import "testing"
 // where the braces reach the Redirect; without the flag they are an ordinary
 // word, which is how dash reads them.
 func TestFdVariableRedirectionIsADialectQuestion(t *testing.T) {
+	t.Parallel()
 	f, err := Parse(`exec {fd}>out`, Core())
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +48,7 @@ func TestFdVariableRedirectionIsADialectQuestion(t *testing.T) {
 // `coproc` opens a clause only in the dialect that has the flag; elsewhere
 // it is a word like any other.
 func TestCoprocIsADialectQuestion(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.Coproc = true
 	d.CoprocName = true
@@ -116,6 +118,7 @@ func TestCoprocIsADialectQuestion(t *testing.T) {
 
 // The printer writes both forms back.
 func TestCoprocPrintsBack(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.Coproc = true
 	d.CoprocName = true
@@ -135,6 +138,7 @@ func TestCoprocPrintsBack(t *testing.T) {
 // the reason: without a flag of its own, having both features would have
 // decided this one.
 func TestASubscriptedFdVariableIsItsOwnDialectQuestion(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.FdVariableSubscript = true
 

@@ -14,6 +14,7 @@ import "testing"
 // change from making the answer wrong quietly, and a test that only parses
 // cannot tell the two apart.
 func TestTheSnapshotIsACopy(t *testing.T) {
+	t.Parallel()
 	p := NewParser("if true\nthen\n", Core())
 	p.Parse()
 	before := p.Open()

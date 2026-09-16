@@ -16,6 +16,7 @@ func tildeFlagged(t *testing.T, src string) *ParamExpr {
 
 // The count is what is read, not a bool, because parity is the meaning.
 func TestParamTildeFlagCounts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		count int
@@ -45,6 +46,7 @@ func TestParamTildeFlagCounts(t *testing.T) {
 // The operator and the subscript are still read after the tildes: the flag is
 // a prefix on the expansion and not a different expansion.
 func TestParamTildeFlagKeepsTheRestOfTheGrammar(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamTildeFlag = true
 	d.ArraySubscript = true
@@ -77,6 +79,7 @@ func TestParamTildeFlagKeepsTheRestOfTheGrammar(t *testing.T) {
 // The flag group comes first and the tildes second. That order is measured,
 // and the reverse is not a shape at all.
 func TestParamTildeFlagFollowsTheFlagGroup(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamTildeFlag = true
 	d.ParamExpansionFlags = true
@@ -101,6 +104,7 @@ func TestParamTildeFlagFollowsTheFlagGroup(t *testing.T) {
 // unreadable — and *which* way it is unreadable is the split
 // BadSubstitutionAtParseTime already records.
 func TestParamTildeFlagOffIsUnreadable(t *testing.T) {
+	t.Parallel()
 	if e := firstParam(t, `echo ${~x}`, Core()); !e.Bad || e.Src != "~x" {
 		t.Errorf(`${~x} in the core: %+v, want Bad with Src "~x"`, e)
 	}
@@ -126,6 +130,7 @@ func tokenOf(err error) string {
 
 // The span round-trips as written, because the printer writes it back raw.
 func TestParamTildeFlagRoundTrips(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ParamTildeFlag = true
 	for _, src := range []string{

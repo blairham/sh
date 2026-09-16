@@ -40,6 +40,7 @@ func stagedLoops() syntax.Dialect {
 // The parse succeeds and the word is carried on the clause, in all three
 // spellings of the header.
 func TestAnUnusableLoopNameParsesUnderTheFlag(t *testing.T) {
+	t.Parallel()
 	d := stagedLoops()
 	for _, tc := range []struct{ src, want string }{
 		{"for $n in a b; do :; done", "$n"},
@@ -82,6 +83,7 @@ func TestAnUnusableLoopNameParsesUnderTheFlag(t *testing.T) {
 // Without the flag the refusal stays where it was, which is the other half of
 // the same claim: the predicate did not move, only the stage did.
 func TestAnUnusableLoopNameIsStillRefusedWithoutTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"for $n in a b; do :; done",
 		"for 1x in a b; do :; done",
@@ -96,6 +98,7 @@ func TestAnUnusableLoopNameIsStillRefusedWithoutTheFlag(t *testing.T) {
 // A usable name is unaffected by the flag, in either direction — the point
 // being that nothing about an ordinary loop reads it.
 func TestTheFlagDoesNotTouchAUsableName(t *testing.T) {
+	t.Parallel()
 	for _, d := range []syntax.Dialect{loops(), stagedLoops()} {
 		f, err := syntax.Parse("for i in a b; do :; done\n", d)
 		if err != nil {
@@ -117,6 +120,7 @@ func TestTheFlagDoesNotTouchAUsableName(t *testing.T) {
 // grammar's, and whether the word is a name is the loop's. Without this the
 // flag would have carried a `;` to the interpreter as a refused name.
 func TestANonWordInTheNamePositionIsStillASyntaxError(t *testing.T) {
+	t.Parallel()
 	d := stagedLoops()
 	for _, src := range []string{
 		"for ; in a b; do :; done",
@@ -133,6 +137,7 @@ func TestANonWordInTheNamePositionIsStillASyntaxError(t *testing.T) {
 // The printer writes a refused name back as it stood, so a clause that parses
 // and will fail when it runs fails the same way after a round trip.
 func TestARefusedNamePrintsBack(t *testing.T) {
+	t.Parallel()
 	d := stagedLoops()
 	for _, src := range []string{
 		"for $n in a b; do :; done",
@@ -177,6 +182,7 @@ func forClauseOf(t *testing.T, f *syntax.File, src string) *syntax.ForClause {
 // name is the one the complaint will quote, and the names before it are still
 // read. A later bad word does not displace it.
 func TestTheFirstRefusedNameIsTheOneKept(t *testing.T) {
+	t.Parallel()
 	d := stagedLoops()
 	d.ForMultipleNames = true
 	for _, tc := range []struct {

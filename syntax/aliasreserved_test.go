@@ -59,6 +59,7 @@ func wholeGrammar(expand bool) syntax.Dialect {
 // comes to varies by word: a bare `for` is a syntax error, a bare `in` is a
 // command nobody has, and neither of those is the fact under test.
 func TestAnAliasStandsInForAReservedWordOnlyWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, w := range reservedWordsInEveryDialect {
 		t.Run(w, func(t *testing.T) {
 			a, src := table(w, "echo took"), w
@@ -112,6 +113,7 @@ func TestAnAliasStandsInForAReservedWordOnlyWhereTheDialectSaysSo(t *testing.T) 
 // keyword and takes an alias for all three; BusyBox ash has `function` alone
 // and protects exactly that one; ksh93 has all three and protects all three.
 func TestTheProtectedSetIsTheWordsThisGrammarReserves(t *testing.T) {
+	t.Parallel()
 	shape := func(sel, fn, tm bool) syntax.Dialect {
 		d := syntax.Core()
 		d.Select, d.FunctionKeyword, d.TimeKeyword = sel, fn, tm
@@ -192,6 +194,7 @@ var pipelineHeads = []struct {
 }
 
 func TestThePipelineWordsAreAskedOfTheTableFirst(t *testing.T) {
+	t.Parallel()
 	t.Run("!", func(t *testing.T) {
 		for _, c := range pipelineHeads {
 			t.Run(c.name, func(t *testing.T) {
@@ -237,6 +240,7 @@ func TestThePipelineWordsAreAskedOfTheTableFirst(t *testing.T) {
 // the flag about every word a pipeline begins with, and so letting a dialect
 // that protects reserved words swallow `e hi` too.
 func TestAnOrdinaryHeadAsksTheReservedWordFieldNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a line of its own", "e hi", "echo hi"},
 		{"behind a negation", "! e hi", "! echo hi"},
@@ -258,6 +262,7 @@ func TestAnOrdinaryHeadAsksTheReservedWordFieldNothing(t *testing.T) {
 // never sees, and a table holding `!` must leave both alone — with the flag
 // **on**, which is the only setting that could have reached them.
 func TestTheHeadExpansionReachesNoOtherBang(t *testing.T) {
+	t.Parallel()
 	d := wholeGrammar(true)
 	d.DoubleBracket = true
 	d.ParamIndirection = true
@@ -291,6 +296,7 @@ func TestTheHeadExpansionReachesNoOtherBang(t *testing.T) {
 //     of nothing. That is Parser.pendingChains, and this asserts the head
 //     door reaches it.
 func TestTheHeadExpansionKeepsTheRestOfTheAlgorithm(t *testing.T) {
+	t.Parallel()
 	d := wholeGrammar(true)
 	if got := parsedIn(t, d, table("!", "echo ", "hi", "echo HI"), "! hi"); got != "echo echo HI" {
 		t.Errorf("`! hi` came to %q, want the blank to have carried the expansion on", got)

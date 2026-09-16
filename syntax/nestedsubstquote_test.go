@@ -24,6 +24,7 @@ import (
 // TestASwallowedQuoteDoesNotEndTheWordEarly — and a check for a nil error
 // passes it.
 func TestASubstitutionInsideAnExpansionBringsItsOwnQuoting(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src string
 		// body is the whole text between `${` and its `}`.
@@ -94,6 +95,7 @@ func TestASubstitutionInsideAnExpansionBringsItsOwnQuoting(t *testing.T) {
 // changes: the `}` of the first expansion became text, the two expansions
 // became one word, and `[a"b} c'd]` is what the shell printed.
 func TestASwallowedQuoteDoesNotEndTheWordEarly(t *testing.T) {
+	t.Parallel()
 	const src = `printf '[%s]' "${x:-"$( echo 'a"b' )"}" "${y:-"$( echo "c'd" )"}"`
 	f, err := Parse(src, Core())
 	if err != nil {
@@ -136,6 +138,7 @@ func TestASwallowedQuoteDoesNotEndTheWordEarly(t *testing.T) {
 // refused, and refused as unmatched rather than accepted or reported as
 // something else.
 func TestANestedSubstitutionThatNeverClosesStillRunsOut(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo "${x:-"$( echo 'a"b'`,
 		"echo \"${x:-\"$( echo 'a\"b'\necho ok",
@@ -159,6 +162,7 @@ func TestANestedSubstitutionThatNeverClosesStillRunsOut(t *testing.T) {
 // them: an expansion with nothing nested inside it still carries the opener,
 // the closer that never came, and the word it was written in (#1022, #1023).
 func TestAnExpansionWithNothingNestedIsUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, opener, closer, near string }{
 		{`echo "${x`, `"`, `"`, `"${x`},
 		{`echo ${x`, `${`, `}`, `${x`},
@@ -190,6 +194,7 @@ func TestAnExpansionWithNothingNestedIsUnchanged(t *testing.T) {
 // substitution still owns: with the skip one short, the `"` in `'a"b'` is
 // reached by the run rather than by the program, and the word ends there.
 func TestTheSkipCountsTheNestingRatherThanTakingTheFirstCloser(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, body, inner string }{
 		// `$(( ))` closes with two parentheses, and the single-quoted `"`
 		// after it is inside the substitution, not after it.
@@ -271,6 +276,7 @@ func TestTheSkipCountsTheNestingRatherThanTakingTheFirstCloser(t *testing.T) {
 // a quoted run closes the expansion is a separate question, the panel divides
 // on it, and nothing here answers it.
 func TestASingleQuoteInAQuotedBodyIsAnOrdinaryCharacter(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo "${x:-'a$(b'}"`,
 		"echo \"${x:-'a`b'}\"",
@@ -334,6 +340,7 @@ func TestASingleQuoteInAQuotedBodyIsAnOrdinaryCharacter(t *testing.T) {
 // double-quoted string, behind a backslash, and in the single quotes this
 // file's subject is about. All four rows are unanimous across the panel.
 func TestTheSkipTracksQuotingInsideTheSubstitutionToo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, inner string }{
 		// A `)` and a `}` inside a double-quoted string of the program.
 		{`echo "${x:-"$( echo "a)b" )"}"`, ` echo "a)b" `},
@@ -393,6 +400,7 @@ func TestTheSkipTracksQuotingInsideTheSubstitutionToo(t *testing.T) {
 // their text, because the text alone would not part the readings — a run
 // misread as ending early puts the same characters back as one raw literal.
 func TestABracedExpansionInsideAQuotedRunBringsItsOwnQuoting(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src string
 		// body is the whole text between `${` and its `}`.
@@ -469,6 +477,7 @@ func TestABracedExpansionInsideAQuotedRunBringsItsOwnQuoting(t *testing.T) {
 // shell in the panel writes `[X{039}z]`. That is the row a fix graded on exit
 // status would pass in both directions.
 func TestABracedExpansionInsideAQuotedRunInARawBody(t *testing.T) {
+	t.Parallel()
 	// The flag is on for both rows, because it is what the second one is
 	// about: a bare `{` opens a level in the dialects that have it, and only
 	// there can a step-over that forgets the quoting be told from one that
@@ -537,6 +546,7 @@ func TestABracedExpansionInsideAQuotedRunInARawBody(t *testing.T) {
 // accepted. Which delimiter is blamed is deliberately not asserted, for the
 // reason recorded on the `$( )` rows above.
 func TestANestedBracedExpansionThatNeverClosesStillRunsOut(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo "${x:-"${y`,
 		`echo "${x:-"${y:-"X{039}"`,

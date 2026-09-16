@@ -12,6 +12,7 @@ import "testing"
 // refuses. Every row is written twice for that reason: the point is not what
 // the sentence says, it is whether there is a sentence here at all.
 func TestAConditionsArityMayBeLeftForTheInterpreter(t *testing.T) {
+	t.Parallel()
 	arity := Core()
 	arity.ConditionArityIsCheckedWhenItRuns = true
 	for _, tc := range []struct {
@@ -58,6 +59,7 @@ func TestAConditionsArityMayBeLeftForTheInterpreter(t *testing.T) {
 // The rows the flag does **not** reach, which are what keep it from being
 // "any word after the operand".
 func TestAConditionsArityStopsWhereItWasMeasuredTo(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.ConditionArityIsCheckedWhenItRuns = true
 	for _, tc := range []struct {

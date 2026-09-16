@@ -26,6 +26,7 @@ import (
 // Both halves of each decision are here, because a guard is two answers and a
 // test of one of them cannot tell a working guard from an inverted one.
 func TestAnExtentTakenFromAChild(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.AnonymousFunction = true
 	d.TimeKeyword = true

@@ -20,6 +20,7 @@ import (
 // comes to is interp's, and the corpus rows under `arith/` grade the pair.
 // #2223.
 func TestAnUnderscoreInsideANumeralIsADigitSeparator(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, want string }{
 		{`1_0`, "1_0"},
 		{`1_0_0`, "1_0_0"},
@@ -57,6 +58,7 @@ func TestAnUnderscoreInsideANumeralIsADigitSeparator(t *testing.T) {
 // rather than "an underscore widens the alphabet": `1_abc` reaches past the
 // underscore and stops at the `a`, which real zsh reports by blaming `abc`.
 func TestASeparatorDoesNotHideTheByteAfterIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, blamed string }{
 		{`1_abc`, "abc"},
 		{`0x1_g`, "g"},
@@ -82,6 +84,7 @@ func TestASeparatorDoesNotHideTheByteAfterIt(t *testing.T) {
 // operator belongs. Without this the table above would pass for a parser that
 // had always accepted the byte.
 func TestWithoutTheFlagAnUnderscoreEndsTheNumeral(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, blamed string }{
 		{`1_0`, "_0"},
 		{`0x1_f`, "_f"},

@@ -24,6 +24,7 @@ func withOpenEndedAndOr() Dialect {
 //	$ zsh s.sh          # { : || \n }\n echo after
 //	after
 func TestAnAndOrMayEndWithItsOperatorWhereTheListCloses(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"{ : ||\n}\n",
 		"{ : &&\n}\n",
@@ -50,6 +51,7 @@ func TestAnAndOrMayEndWithItsOperatorWhereTheListCloses(t *testing.T) {
 // And the same lines without the flag, so the flag is what admits them rather
 // than something else having changed. Core refuses every one.
 func TestAnAndOrEndingWithItsOperatorIsRefusedWithoutTheFlag(t *testing.T) {
+	t.Parallel()
 	d := Core()
 	d.CloseBraceAlwaysReserved = true
 	for _, src := range []string{
@@ -72,6 +74,7 @@ func TestAnAndOrEndingWithItsOperatorIsRefusedWithoutTheFlag(t *testing.T) {
 // for this flag: what comes back is the left-hand side and there is no
 // operator left in the tree.
 func TestAnAbsentRightSideLeavesTheLeftSideAlone(t *testing.T) {
+	t.Parallel()
 	f, err := Parse("{ echo one ||\n}\n", withOpenEndedAndOr())
 	if err != nil {
 		t.Fatal(err)
@@ -102,6 +105,7 @@ func TestAnAbsentRightSideLeavesTheLeftSideAlone(t *testing.T) {
 //	$ zsh -n s.sh       # ( true | )
 //	s.sh:1: parse error near `)'
 func TestAnOpenEndedPipelineIsStillRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, token string }{
 		{"( : | )\n", ")"},
 		{"{ : |\n}\n", "}"},
@@ -129,6 +133,7 @@ func TestAnOpenEndedPipelineIsStillRefused(t *testing.T) {
 //	$ zsh -n s.sh       # true &&\n&\necho mark
 //	s.sh:2: parse error near `&'
 func TestATerminatorDoesNotEndAnOpenEndedAndOr(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, token string }{
 		{": &&\n&\n", "&"},
 		{": || & :\n", "&"},
@@ -155,6 +160,7 @@ func TestATerminatorDoesNotEndAnOpenEndedAndOr(t *testing.T) {
 // || fi`, which is the pair that says the flag is about the list closing and
 // not about the word.
 func TestAStopWordWithNothingOpenIsStillRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, token string }{
 		{"echo a && fi\n", "fi"},
 		{"echo a || done\n", "done"},
@@ -180,6 +186,7 @@ func TestAStopWordWithNothingOpenIsStillRefused(t *testing.T) {
 // terminal is the same in every column and the route is what the script case
 // turns on (see [Dialect.OpenEndedAndOr]).
 func TestInputEndingOnAnAndOrOperatorIsUnfinished(t *testing.T) {
+	t.Parallel()
 	for _, d := range []Dialect{Core(), withOpenEndedAndOr()} {
 		for _, src := range []string{": &&\n", ": ||\n", ": &&", "{ : ||\n"} {
 			_, err := Parse(src, d)
@@ -202,6 +209,7 @@ func TestInputEndingOnAnAndOrOperatorIsUnfinished(t *testing.T) {
 // was never the problem. #1115 fixed exactly this for the bar and left the
 // and-or saying it.
 func TestAnAndOrWithNoCommandNamesTheToken(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, token string
 		class      TokenClass
@@ -251,6 +259,7 @@ func TestAnAndOrWithNoCommandNamesTheToken(t *testing.T) {
 // `[case]` — the operator is gone. With a second arm dangling as well it says
 // `case cmdor` once and not twice.
 func TestTheOperatorIsGivenBackWhenItsListCloses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want []string

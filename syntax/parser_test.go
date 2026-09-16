@@ -144,6 +144,7 @@ func parse(t *testing.T, src string, d Dialect) string {
 }
 
 func TestAndOrIsOneLeftAssociativeLevel(t *testing.T) {
+	t.Parallel()
 	// The discriminating case. C's precedence would give
 	// (true || (echo A && echo B)) and print nothing; every shell prints B.
 	if got, want := parse(t, `true || echo A && echo B`, Core()),
@@ -157,6 +158,7 @@ func TestAndOrIsOneLeftAssociativeLevel(t *testing.T) {
 }
 
 func TestPipelineAndNegation(t *testing.T) {
+	t.Parallel()
 	// `!` applies to the whole pipeline, not to its first command.
 	if got, want := parse(t, `! true | false`, Core()), `!pipe(cmd[true] | cmd[false])`; got != want {
 		t.Errorf("got %s, want %s", got, want)
@@ -167,6 +169,7 @@ func TestPipelineAndNegation(t *testing.T) {
 }
 
 func TestRedirectionsAreNotPositional(t *testing.T) {
+	t.Parallel()
 	// They may precede the command name or sit between arguments, so they are
 	// lifted out of the word list rather than expected as a suffix.
 	tests := []struct{ src, want string }{
@@ -184,6 +187,7 @@ func TestRedirectionsAreNotPositional(t *testing.T) {
 }
 
 func TestAssignmentsAreSeparatedFromArguments(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`x=1`, `cmd[x=1]`},
 		{`x=1 y=2 cmd a`, `cmd[x=1 y=2 cmd a]`},
@@ -207,6 +211,7 @@ func TestAssignmentsAreSeparatedFromArguments(t *testing.T) {
 }
 
 func TestGroupingAndCompoundRedirections(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`(a; b)`, `sub{cmd[a]; cmd[b]}`},
 		{`{ a; b; }`, `grp{cmd[a]; cmd[b]}`},
@@ -224,6 +229,7 @@ func TestGroupingAndCompoundRedirections(t *testing.T) {
 }
 
 func TestIfChain(t *testing.T) {
+	t.Parallel()
 	src := `if false; then a; elif true; then b; else c; fi`
 	want := `if[cmd[false]]then[cmd[a]]elif[cmd[true]]then[cmd[b]]else[cmd[c]]`
 	if got := parse(t, src, Core()); got != want {
@@ -238,6 +244,7 @@ func TestIfChain(t *testing.T) {
 }
 
 func TestLoops(t *testing.T) {
+	t.Parallel()
 	if got, want := parse(t, `while a; do b; done`, Core()), `while[cmd[a]]do[cmd[b]]`; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
@@ -247,6 +254,7 @@ func TestLoops(t *testing.T) {
 }
 
 func TestForDistinguishesAbsentFromEmptyList(t *testing.T) {
+	t.Parallel()
 	// The measured difference: with `in` omitted the loop iterates the
 	// positional parameters; with `in` and nothing after it, nothing. A nil
 	// slice cannot say which, so the AST carries HasItems.
@@ -266,6 +274,7 @@ func TestForDistinguishesAbsentFromEmptyList(t *testing.T) {
 }
 
 func TestCase(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`case x in a) b;; esac`, `case x{a)cmd[b];;}`},
 		{`case x in (a) b;; esac`, `case x{a)cmd[b];;}`},
@@ -281,6 +290,7 @@ func TestCase(t *testing.T) {
 }
 
 func TestFunctionForms(t *testing.T) {
+	t.Parallel()
 	if got, want := parse(t, `f() { a; }`, Core()), `func f grp{cmd[a]}`; got != want {
 		t.Errorf("posix: got %s, want %s", got, want)
 	}
@@ -294,12 +304,14 @@ func TestFunctionForms(t *testing.T) {
 }
 
 func TestArithmeticCommandParses(t *testing.T) {
+	t.Parallel()
 	if got, want := parse(t, `(( 1+1 ))`, Core()), `arith{1+1}`; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
 }
 
 func TestBackgroundBelongsToTheStatement(t *testing.T) {
+	t.Parallel()
 	// `a && b &` backgrounds the whole and-or, not just b.
 	if got, want := parse(t, `a && b &`, Core()), `bg((cmd[a] && cmd[b]))`; got != want {
 		t.Errorf("got %s, want %s", got, want)
@@ -307,6 +319,7 @@ func TestBackgroundBelongsToTheStatement(t *testing.T) {
 }
 
 func TestReservedWordsAreOnlyReservedInCommandPosition(t *testing.T) {
+	t.Parallel()
 	// `echo if then done` passes them through as arguments.
 	if got, want := parse(t, `echo if then done`, Core()), `cmd[echo if then done]`; got != want {
 		t.Errorf("got %s, want %s", got, want)
@@ -318,6 +331,7 @@ func TestReservedWordsAreOnlyReservedInCommandPosition(t *testing.T) {
 }
 
 func TestParserIncompleteIsNotInvalid(t *testing.T) {
+	t.Parallel()
 	// A half-typed line is the normal case at a prompt.
 	for _, src := range []string{
 		`if true; then`, `while a; do`, `for i in a; do`, `case x in`,
@@ -341,6 +355,7 @@ func TestParserIncompleteIsNotInvalid(t *testing.T) {
 }
 
 func TestInvalidIsNotIncomplete(t *testing.T) {
+	t.Parallel()
 	// Something genuinely wrong, with input still to come, is an error to
 	// report now rather than a prompt for more.
 	for _, src := range []string{
@@ -360,6 +375,7 @@ func TestInvalidIsNotIncomplete(t *testing.T) {
 }
 
 func TestParserNeverPanics(t *testing.T) {
+	t.Parallel()
 	inputs := []string{
 		"", " ", "\n", ";", "&", "|", "||", "&&", "(", ")", "()", "{", "}",
 		"if", "then", "fi", "do", "done", "esac", "case", "for", "while",
@@ -413,6 +429,7 @@ func heredocs(t *testing.T, src string) []*Redirect {
 }
 
 func TestHeredocBodyStartsAfterTheNextNewline(t *testing.T) {
+	t.Parallel()
 	// Not after the operator: the rest of the line is ordinary input and is
 	// read first. This is why collecting the body needs the lexer and the
 	// parser to cooperate — the parser has the delimiter, the lexer reaches
@@ -427,6 +444,7 @@ func TestHeredocBodyStartsAfterTheNextNewline(t *testing.T) {
 }
 
 func TestHeredocEndsOnAnExactDelimiterLine(t *testing.T) {
+	t.Parallel()
 	rs := heredocs(t, "cat <<EOF\nEOFX\nEOF\n")
 	if got := rs[0].Heredoc.Literal(); got != "EOFX\n" {
 		t.Errorf("body = %q: EOFX must not end an EOF heredoc", got)
@@ -434,6 +452,7 @@ func TestHeredocEndsOnAnExactDelimiterLine(t *testing.T) {
 }
 
 func TestHeredocDashStripsTabsOnly(t *testing.T) {
+	t.Parallel()
 	rs := heredocs(t, "cat <<-EOF\n\ttabbed\n\tEOF\n")
 	if got := rs[0].Heredoc.Literal(); got != "tabbed\n" {
 		t.Errorf("body = %q, want tabs stripped", got)
@@ -455,6 +474,7 @@ func TestHeredocDashStripsTabsOnly(t *testing.T) {
 }
 
 func TestSeveralHeredocsAreCollectedInOperatorOrder(t *testing.T) {
+	t.Parallel()
 	rs := heredocs(t, "cat <<A <<B\nfirst\nA\nsecond\nB\n")
 	if len(rs) != 2 {
 		t.Fatalf("want 2 redirects, got %d", len(rs))
@@ -468,6 +488,7 @@ func TestSeveralHeredocsAreCollectedInOperatorOrder(t *testing.T) {
 }
 
 func TestHeredocDelimiterQuotingReachesTheBody(t *testing.T) {
+	t.Parallel()
 	// Any quoting anywhere in the delimiter makes the whole body literal. The
 	// body is kept raw either way; the flag is what tells expansion whether to
 	// re-read it.
@@ -488,6 +509,7 @@ func TestHeredocDelimiterQuotingReachesTheBody(t *testing.T) {
 }
 
 func TestHeredocUnterminatedIsIncomplete(t *testing.T) {
+	t.Parallel()
 	p := NewParser("cat <<EOF\nbody\n", Core())
 	p.Parse()
 	if !p.Incomplete() {
@@ -500,6 +522,7 @@ func TestHeredocUnterminatedIsIncomplete(t *testing.T) {
 // runs neither half — and it stretches past a newline while a construct is
 // still open, or the loop could never be read at all.
 func TestNextLineReadsOneLogicalLine(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		lines []int // statements in each logical line
@@ -542,6 +565,7 @@ func TestNextLineReadsOneLogicalLine(t *testing.T) {
 // TestParseIsEveryLine: reading the whole input is the same as reading it a
 // line at a time, so nothing depends on which a caller chose.
 func TestParseIsEveryLine(t *testing.T) {
+	t.Parallel()
 	const src = "echo one; echo two\nfor i in 1 2\ndo\n echo $i\ndone\nif true; then :; fi\n"
 	whole := parse(t, src, Core())
 

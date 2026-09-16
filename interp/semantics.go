@@ -3055,9 +3055,11 @@ type Semantics struct {
 	//
 	// ksh93 also has a `%T`, and it is not this one: its operand is a date
 	// *string* — `now`, `tomorrow` — and a number earns a warning and the
-	// current time instead. Answered No there and recorded in
-	// docs/spec/semantics.md rather than modeled, because reading a date the
-	// way ksh93 reads one is its own feature.
+	// current time instead. That is answered **Yes** there as well, with the
+	// operand's grammar carried separately by
+	// [PrintfTimeOperandIsADateString] below; this comment said No and
+	// "recorded rather than modeled" for several releases after the feature
+	// landed, which #3088 corrected.
 	//
 	// Asked only where a format actually carries a `%(`, so a dialect
 	// without the conversion is never questioned about `%s`.

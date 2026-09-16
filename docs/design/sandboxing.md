@@ -21,6 +21,17 @@ its own system calls, and nothing in this repository has any say over
 them. `allow exec /bin/cat` is `allow read /**`, spelled less
 obviously, and `allow exec /bin/sh` is `allow` everything.
 
+Re-measured 2026-09-15 (#3088), and the two halves have to be run
+together or the probe proves nothing — a policy that refused both would
+look identical to one that contained the tree:
+
+    echo SECRET > /tmp/s
+    sh -deny /tmp/s -c 'cat < /tmp/s'        open: refused: /tmp/s
+    sh -deny /tmp/s -c '/bin/cat /tmp/s'     SECRET
+
+The first line is the shell's own redirection, gated. The second is a
+child reading the same denied path, because the deny never reached it.
+
 That is not a defect to be fixed later by trying harder inside this
 package. Containing a running child needs the operating system —
 `seccomp`, Landlock, a sandbox profile, a container — and the substrate

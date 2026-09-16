@@ -68,8 +68,24 @@ after it reading the `!` that was left.
 
 zsh reverses the first two when `PROMPT_SUBST` is set: with the option on
 and `x='%n'`, `PS1='$x'` drew the user name, so its table is read *after*
-substitution. That option is not implemented here yet; when it is, the
-order is a second question and not a consequence of the first.
+substitution.
+
+**The option is implemented** — this paragraph said it was not, until
+#3088 re-measured it. `PromptStyle.Expand` is asked at **every draw**
+rather than read once, which is the whole reason it is a function: three
+of the panel expand always and zsh lets a running script move the answer
+with `setopt PROMPT_SUBST` and `unsetopt`. Leaving it a constant cost a
+whole prompt theme, whose `PROMPT` is `${…}` that means nothing
+unexpanded. The same option gates `${(%)}`, which is where it can be
+measured without a terminal, and the pair discriminates:
+
+    zsh -c "V=WORLD; s='a\${V}b'
+            setopt promptsubst;   printf '%s\n' \"\${(%%)s}\"   aWORLDb
+            unsetopt promptsubst; printf '%s\n' \"\${(%%)s}\"   a\${V}b"
+
+What is still open is the *order* above — whether the percent table is
+read before or after the substitution — which is a second question and
+not a consequence of the first.
 
 Both parameters take all of it. Measured with `PS2` set to a prompt of
 codes: bash drew the user name, the directory, the privilege character and

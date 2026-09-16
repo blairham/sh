@@ -420,6 +420,16 @@ func Semantics() interp.Semantics {
 	// See Semantics.KeywordAssignments and keywordassign.go.
 	s.KeywordAssignments = interp.Yes
 	s.KeywordPromotesADeclarationsOperand = interp.Yes
+	// A declaration utility is recognized from the command word as written,
+	// and only from an unquoted literal one: `cmd=export; $cmd v=$b`,
+	// `\export v=$b`, `'export' v=$b`, `"export" v=$b`, `expor't' v=$b` and
+	// `e=; $e export v=$b` all split the value where `export v=$b` keeps it.
+	// Measured 2026-09-16 on bash 5.3.20 with `b='x y'`, for export, readonly,
+	// local, typeset and declare alike. See #3339.
+	s.DeclarationCommandWord = interp.DeclarationByUnquotedLiteralWord
+	// And `command` in front of one does not keep the rule: `command export
+	// v=$b` splits, in every spelling of the prefix. Measured the same day.
+	s.CommandPrefixKeepsADeclaration = interp.No
 	s.HistoryExpansionAtAPrompt = interp.Yes
 	// And bash is the one column that uses the expander where nobody is
 	// typing. Measured 2026-09-16 from a script file, from `-c` and from

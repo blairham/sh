@@ -23,19 +23,19 @@ import (
 // here: a name the table records without acting on keeps the refusal it had,
 // because granting it would trade the shell's own `bad option(s)` for a
 // wording no column ever writes.
-func invocationRunner(t *testing.T, atInvocation Answer) *Runner {
+func invocationRunner(t *testing.T, atInvocation Answer) (*Runner, *strings.Builder) {
 	t.Helper()
 	s := PosixSemantics()
 	s.ImmovableOptionsSetAtInvocation = atInvocation
 	s.BadSetOptionNameFatal = No
-	var buf strings.Builder
-	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &s, Name: "sh"})
+	buf := new(strings.Builder)
+	r := newTestRunner(t, &Runner{Stdout: buf, Stderr: buf, Semantics: &s, Name: "sh"})
 	// `interactive` is the substrate's own row and has an apply; `recorded`
 	// is declared and acted on by nothing, which is the shape `rc` and
 	// `login_shell` have in the shell this is for.
 	r.AddSetOptions("interactive", "recorded")
 	r.AddImmovableSetOptions("interactive", "recorded")
-	return r
+	return r, buf
 }
 
 func TestAnImmovableNameIsTakenAtAnInvocation(t *testing.T) {
@@ -46,23 +46,37 @@ func TestAnImmovableNameIsTakenAtAnInvocation(t *testing.T) {
 		on           bool
 		want         int
 		wantMoved    bool
+		wording      string
 	}{
-		{"the name on", Yes, "interactive", true, 0, true},
-		{"the name off", Yes, "interactive", false, 0, false},
+		{"the name on", Yes, "interactive", true, 0, true, ""},
+		{"the name off", Yes, "interactive", false, 0, false, ""},
 		// The same request from a shell that does not split by route.
-		{"no split declared", Unspecified, "interactive", true, 2, false},
-		{"the split declined", No, "interactive", true, 2, false},
-		// And a name with nothing to apply, which is refused either way.
-		{"nothing to move", Yes, "recorded", true, 2, false},
+		{"no split declared", Unspecified, "interactive", true, 2, false, "invalid option name"},
+		{"the split declined", No, "interactive", true, 2, false, "invalid option name"},
+		// And a name with nothing to apply, which is refused either way and
+		// in the *same words* — this is the row that says the grant is not
+		// a blanket one. Without the wording the two refusals are one
+		// status apiece and a shell that promoted every immovable name
+		// would pass by writing `not implemented` instead.
+		{"nothing to move", Yes, "recorded", true, 2, false, "invalid option name"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := invocationRunner(t, tc.atInvocation)
+			r, buf := invocationRunner(t, tc.atInvocation)
 			r.Interactive = false
 			if got := r.SetNamedOption(tc.option, tc.on); got != tc.want {
 				t.Errorf("status %d, want %d", got, tc.want)
 			}
 			if r.Interactive != tc.wantMoved {
 				t.Errorf("Interactive = %v, want %v", r.Interactive, tc.wantMoved)
+			}
+			if tc.wording == "" {
+				if buf.String() != "" {
+					t.Errorf("said %q, want nothing", buf.String())
+				}
+				return
+			}
+			if !strings.Contains(buf.String(), tc.wording) {
+				t.Errorf("said %q, want %q in it", buf.String(), tc.wording)
 			}
 		})
 	}
@@ -72,7 +86,7 @@ func TestAnImmovableNameIsTakenAtAnInvocation(t *testing.T) {
 // could quietly take away. ApplyNamedOption is the seam a running shell uses.
 func TestAnImmovableNameIsStillRefusedToAScript(t *testing.T) {
 	for _, on := range []bool{true, false} {
-		r := invocationRunner(t, Yes)
+		r, _ := invocationRunner(t, Yes)
 		r.Interactive = false
 		if got := r.ApplyNamedOption("interactive", on); got == 0 {
 			t.Errorf("on=%v: status 0, want a refusal", on)
@@ -98,7 +112,7 @@ func TestTheNegativeInteractiveNameIsTheNameUpsideDown(t *testing.T) {
 		{"under a plus", false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := invocationRunner(t, Yes)
+			r, _ := invocationRunner(t, Yes)
 			r.Semantics.InteractiveOptionName = "interactive"
 			r.Semantics.NonInteractiveOptionName = "nointeractive"
 			r.Interactive = !tc.wantMoved
@@ -116,7 +130,7 @@ func TestTheNegativeInteractiveNameIsTheNameUpsideDown(t *testing.T) {
 // fact with two spellings rather than a gap in the refusal.
 func TestTheNegativeInteractiveNameIsRefusedToAScript(t *testing.T) {
 	for _, on := range []bool{true, false} {
-		r := invocationRunner(t, Yes)
+		r, _ := invocationRunner(t, Yes)
 		r.Semantics.InteractiveOptionName = "interactive"
 		r.Semantics.NonInteractiveOptionName = "nointeractive"
 		r.Interactive = false
@@ -130,7 +144,7 @@ func TestTheNegativeInteractiveNameIsRefusedToAScript(t *testing.T) {
 // without this the resolution above would be a rule about the characters `no`
 // rather than a dialect's declaration.
 func TestTheNegativeNameNeedsDeclaring(t *testing.T) {
-	r := invocationRunner(t, Yes)
+	r, _ := invocationRunner(t, Yes)
 	r.Semantics.InteractiveOptionName = "interactive"
 	if got := r.SetNamedOption("nointeractive", true); got == 0 {
 		t.Errorf("status 0, want the undeclared spelling refused")

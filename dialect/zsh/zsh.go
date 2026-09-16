@@ -3659,6 +3659,10 @@ func Apply(r *interp.Runner) {
 	// refuse outside of, and #2776 for the rest of the module they belong to.
 	registerCompadd(r)
 	registerCompset(r)
+	// And `zsh/computil`'s eight, which is what the completion system zsh
+	// *ships* is written in: `_arguments`, `_describe`, `_tags` and `_values`
+	// are shell functions whose working parts are these. See computil.go.
+	registerComputil(r)
 	registerLocalOptions(r)
 	// `**/` crosses directory levels here with no option asked for, and
 	// there is no `setopt` name that turns it off — which is why this is a

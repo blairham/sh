@@ -632,15 +632,19 @@ reports `scalar-local-special`, and each of the four assignments answers
 `read-only variable:` and stops the function. A completion widget looks at the
 line and offers candidates; it does not rewrite it. That much is built here.
 
-What is not built is the completion *context* the completer names. zsh gives
-such a widget `compstate`, `words`, `CURRENT`, `PREFIX` and the `compadd`
-builtin, which is the whole of how candidates are produced and displayed, and
-this shell has no completion system for any of it to describe — `zsh/complete`
-and `zsh/computil` are both in the roster of modules it declines to load. So a
-completion widget defined here registers, lists, aliases, deletes and runs its
-function, and the function can read the line; it cannot yet offer a completion.
-The editor's own completion is unaffected, because a key left on its default
-binding never reaches the widget table.
+The completion *context* the completer names is built too. zsh gives such a
+widget `compstate`, `words`, `CURRENT`, `PREFIX` and the `compadd` builtin,
+which is the whole of how candidates are produced, and a widget's function has
+all of them here: what it collects with `compadd` is what the key offers, and
+a function with nothing to say leaves the editor's own completion standing.
+`zsh/computil`'s eight builtins are in the table as well, so the completion
+system zsh *ships* runs — `compinit`, `_main_complete`, `_arguments` — as far
+as the rest of the shell lets it. See `completion.md` for what that reaches
+and what it does not.
+
+A key left on its default binding still reaches the widget table when the
+widget *that key is bound to* has been redefined, which is how `compinit`
+installs itself: it rebinds nothing and redefines `expand-or-complete`.
 
 **A callback on a descriptor** — zsh's `zle -F`, and how a plugin in that shell
 does asynchrony — needed this read loop to wait on more than the terminal, and

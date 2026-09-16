@@ -102,14 +102,15 @@ var compaddOrders = map[string]bool{
 
 // compaddOptions is one call's letters, gathered.
 type compaddOptions struct {
-	prefix, suffix       string // -P, -S: inserted, not matched
-	hiddenPre, hiddenSuf string // -p, -s: inserted *and* matched
-	arrays               bool   // -a: the words name arrays
-	keys                 bool   // -k: the words name associations
-	unfiltered           bool   // -U: do not match against PREFIX
-	raw                  bool   // -Q: insert the candidate unquoted
-	into                 string // -O or -A: store rather than offer
-	withhold             bool   // -O, -A or -D: add nothing
+	prefix, suffix       string   // -P, -S: inserted, not matched
+	hiddenPre, hiddenSuf string   // -p, -s: inserted *and* matched
+	arrays               bool     // -a: the words name arrays
+	keys                 bool     // -k: the words name associations
+	unfiltered           bool     // -U: do not match against PREFIX
+	raw                  bool     // -Q: insert the candidate unquoted
+	into                 []string // -O or -A: store rather than offer
+	filter               []string // -D: strike the non-matching out, in place
+	withhold             bool     // -O, -A or -D: add nothing
 }
 
 func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -123,11 +124,7 @@ func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return 1
 	}
 	candidates := compaddCandidates(r, opts, rest)
-	added := cs.add(r, opts, candidates)
-	if added == 0 {
-		return 1
-	}
-	return 0
+	return boolStatus(cs.add(r, opts, candidates) > 0)
 }
 
 // compaddParse reads the letters off the front, stopping at `--`, at a word
@@ -137,7 +134,14 @@ func compaddParse(r *interp.Runner, args []string) (compaddOptions, []string, bo
 	i := 0
 	for ; i < len(args); i++ {
 		word := args[i]
-		if word == "--" {
+		if word == "--" || word == "-" {
+			// A lone `-` ends the options exactly as `--` does, which is the
+			// old spelling the manual's own example uses — `complete-files ()
+			// { compadd - * }` — and which `_arguments` writes to this day:
+			// `compadd … -D _a_11 - -a -m -n …` offers the seven option names
+			// and not an eighth candidate spelled `-`. Measured on zsh 5.9.2,
+			// 2026-09-15: with `PREFIX` empty, `compadd - alpha` offers
+			// `alpha` alone.
 			i++
 			break
 		}
@@ -203,9 +207,11 @@ func compaddArgument(o *compaddOptions, letter byte, value string) {
 	case 's':
 		o.hiddenSuf = value
 	case 'O', 'A':
-		o.into, o.withhold = value, true
+		o.into, o.withhold = append(o.into, value), true
 	case 'D':
-		o.withhold = true
+		// More than once is allowed and is what `_arguments` writes: each
+		// named array is struck through in parallel with the candidates.
+		o.filter, o.withhold = append(o.filter, value), true
 	}
 }
 
@@ -240,14 +246,35 @@ func compaddCandidates(r *interp.Runner, o compaddOptions, words []string) []str
 	return out
 }
 
-// add takes the candidates that match, and answers how many did.
+// add takes the candidates that match, and answers how many were **offered**.
 //
-// The count is of candidates that *matched* and not of ones offered, which is
-// the measured rule and is also what `-O` needs: a call that stores rather
-// than offers still reports whether anything matched.
+// Offered and not matched, which is the measured rule and the discriminating
+// one. On zsh 5.9.2, 2026-09-15, from inside a widget with `PREFIX` of `al`
+// and candidates `alpha zzz alright`:
+//
+//	compadd -D arr -- alpha zzz alright   1, arr goes (A1 A2 A3) → (A1 A3)
+//	compadd -O out -- alpha zzz alright   1, out=(alpha alright)
+//	compadd -A a2 -- alpha zzz alright    1, a2=(alpha alright)
+//	compadd -- alpha                      0
+//	compadd -- zzz                        1
+//
+// So a call that stores rather than offers is **1 even though two candidates
+// matched**, which is the manual's sentence read strictly: "the return status
+// is zero if at least one match was added". This file used to answer 0 there,
+// on the argument that `-O` needs to report whether anything matched; the
+// argument is wrong and the three rows above are why — and it matters,
+// because `_arguments` writes four `compadd -D` calls in a row and a 0 from
+// any of them is a claim that something reached the line.
+//
+// `-D` strikes the non-matching out of each named array **by position**: the
+// nth element goes when the nth candidate does not match, and an element past
+// the end of the candidate list is left alone. Measured with a two-element
+// array against three candidates, above.
 func (cs *completionState) add(r *interp.Runner, o compaddOptions, candidates []string) int {
 	var matched []string
-	for _, candidate := range candidates {
+	kept := make([]bool, len(candidates))
+	offered := 0
+	for i, candidate := range candidates {
 		// What is matched is the hidden prefix and suffix around the
 		// candidate; what `-P` and `-S` add is not part of it. Measured —
 		// see the file comment.
@@ -255,16 +282,35 @@ func (cs *completionState) add(r *interp.Runner, o compaddOptions, candidates []
 		if !o.unfiltered && !strings.HasPrefix(subject, cs.prefix) {
 			continue
 		}
+		kept[i] = true
 		matched = append(matched, subject)
 		if !o.withhold {
 			cs.offer(subject, o.prefix, o.suffix, o.raw)
+			offered++
 		}
 	}
-	if o.into != "" {
-		r.SetArray(o.into, matched)
+	for _, into := range o.into {
+		r.SetArray(into, matched)
+	}
+	for _, from := range o.filter {
+		if values, ok := r.GetArray(from); ok {
+			r.SetArray(from, strikeUnmatched(values, kept))
+		}
 	}
 	cs.state["nmatches"] = strconv.Itoa(len(cs.matches))
-	return len(matched)
+	return offered
+}
+
+// strikeUnmatched is `-D`'s array, with the elements whose candidate did not
+// match taken out and everything past the candidates left where it was.
+func strikeUnmatched(values []string, kept []bool) []string {
+	out := make([]string, 0, len(values))
+	for i, value := range values {
+		if i >= len(kept) || kept[i] {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 // offer writes one whole replacement word, quoted for the line unless the

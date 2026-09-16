@@ -105,6 +105,12 @@ type completionState struct {
 	// with.
 	matches []string
 
+	// computil is what the eight `zsh/computil` builtins keep for the length
+	// of this one completion — the parsed `_arguments` specs, the tag loop,
+	// and the rest. Made on first use, because most completions never reach
+	// any of them. See computil.go.
+	computil *computilState
+
 	// c is the question the editor asked, kept for the quoting rule — how a
 	// name is escaped depends on the quotation the word is already inside,
 	// and that is a fact about this Completion.
@@ -168,7 +174,14 @@ func RunCompletion(
 	// discipline and is right for the same reason: a Tab must not be what the
 	// next `&&` reads.
 	status := r.ExitStatus()
-	_, err := r.CallFunction(withCompletion(ctx, cs), def.function, name)
+	// **With no arguments.** Measured on zsh 5.9.2, 2026-09-15, through a
+	// pseudo-terminal: a `zle -C wtest .complete-word _f` whose `_f` prints
+	// `$#` reports 0. This used to pass the widget's name, which no caller
+	// could see until a *shipped* completion function ran — `_main_complete`
+	// takes the completers to try as its arguments, so a widget name arrived
+	// as one and came back as `command not found: expand-or-complete`. The
+	// name is still reachable, as `$WIDGET`.
+	_, err := r.CallFunction(withCompletion(ctx, cs), def.function)
 	r.SetExitStatus(status)
 	if err != nil {
 		return nil

@@ -248,15 +248,35 @@ completes to `git checkout `, and a second Tab on `git che<TAB>` lists
 all three — the same three, in the same order, that zsh lists for the
 same widget.
 
-**The shipped completion system still does not.** `_main_complete`
-reaches `_git` through `_arguments`, and `_arguments` is
-`comparguments`, one of the eight builtins of `zsh/computil` — none of
-which are implemented. So `git che<TAB>` on a real `~/.zshrc` offers
-what this document specifies rather than the eight subcommands with a
-description against each that zsh offers: `check-attr`, `check-ignore`,
-`check-mailmap`, `check-ref-format`, `checkout`, `checkout-index`,
-`cherry` and `cherry-pick`. Measured 2026-09-15 through a
-pseudo-terminal against `compinit` on this machine's own zsh functions.
+**The shipped completion system runs too, as far as the rest of the
+shell lets it.** `_main_complete` reaches `_complete` → `_normal` →
+`_dispatch` → `_arguments`, and `_arguments` is `comparguments` — one of
+the eight builtins of `zsh/computil`, all eight of which are now in the
+table. Measured 2026-09-15 through a pseudo-terminal against `compinit`
+on this machine's own zsh functions, with Tab left where `compinit` put
+it:
+
+    uname -<TAB>   here: -a  -m  -n  -p  -r  -s  -v
+                   zsh:  the same seven, each with its description
+
+So the names and their order are zsh's. What zsh draws beside them is
+not: see the paragraph below.
+
+**Three of the eight are smaller than zsh's.** `compfiles` builds no
+glob pattern and prunes nothing, which is an optimisation `_path_files`
+can do without; `compgroups` creates groups this editor has nowhere to
+draw; and `compdescribe` hands back one group per definition rather than
+one per distinct description, which is the same matches in the same
+order and a different listing arrangement. `#3039` records which.
+
+**And what a shipped completion reaches is not decided here alone.**
+`_git` does not parse in this shell at all (#3040), and several
+completions that do parse stop short somewhere else — `_files` on a
+pattern this shell's globbing refuses (#3075), `_nl` and `_od` on the
+`(R)` expansion flag, `_file_modes` on the `zsh/complete` conditions. So
+`git che<TAB>` on a real `~/.zshrc` still offers what this document
+specifies rather than zsh's eight subcommands, and the reason is no
+longer `zsh/computil`.
 
 **Descriptions are not carried either.** `compadd -d`, `-X` and `-x`
 are read and their argument consumed, and the listing this editor draws

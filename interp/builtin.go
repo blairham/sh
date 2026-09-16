@@ -1147,6 +1147,8 @@ func (r *Runner) hasSetLetter(opt rune) bool {
 		return true
 	case 'B':
 		return r.sem().SetBTurnsOffBraceExpansion != No
+	case 'H':
+		return r.sem().HistoryExpansion != No
 	}
 	return false
 }

@@ -17,9 +17,12 @@ import "testing"
 // two joined the list in #2515, where the reason they had been left behind —
 // that `emulate` reset every name outside the recorded set — stopped being
 // true. `interactivecomments` is the fifth and is read earlier still: the
-// editor asks for it before it *parses* the line (#2537).
+// editor asks for it before it *parses* the line (#2537). `banghist` is the
+// sixth and the most recent: it is the switch the history expander reads, so
+// `unsetopt banghist` at a prompt really does stop `!!` being rewritten
+// (#3093).
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
-	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr", "interactivecomments"} {
+	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr", "interactivecomments", "banghist"} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
 			t.Fatalf("%s is not in the table at all", base)
@@ -40,7 +43,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 141; recordedCount != want {
+	if want := 140; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

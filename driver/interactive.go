@@ -90,6 +90,19 @@ func (sh Shell) session(argv []string, in source) int {
 	// nothing to read, which is why the question is still asked rather than
 	// assumed. One member of the panel does not need one at all.
 	r.SetInteractiveMonitor()
+	// And a prompt has a history to index, which is what history expansion
+	// needs and what a script has not got. Measured 2026-09-15 through a
+	// pseudo-terminal with a two-row prompt: bash 5.3, bash 3.2, bash-as-sh
+	// and zsh all expand `!!` at a fresh prompt with nothing configured and
+	// none of them does so in a script, and ksh93 records but does not
+	// expand. Which of those this shell is, is the dialect's — see
+	// interp.Semantics.HistoryExpansionAtAPrompt.
+	//
+	// Before the startup files on purpose: `set +H` in an rc file is how the
+	// feature is turned off, and a default applied after the file ran would
+	// undo it. The Runner remembers that a script moved the state and this
+	// leaves it alone when one has.
+	r.StartInteractiveHistory()
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

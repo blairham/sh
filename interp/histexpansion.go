@@ -23,13 +23,25 @@ func (r *Runner) SetHistoryExpansion(on bool) {
 	r.histExpandMoved = true
 }
 
-// StartHistoryExpansion is the dialect's default, applied by the front end
-// only where nothing has moved the state itself.
-func (r *Runner) StartHistoryExpansion(on bool) {
+// StartInteractiveHistory applies the dialect's defaults for a session that
+// has a prompt: recording on, and the expander on where this shell's is.
+//
+// Read rather than `ask`ed, as DefaultOptionLetters is: a session starting up
+// has nothing to refuse to and nobody to refuse to yet, and a shell that could
+// not decide whether `!!` expands would have to refuse every line a person
+// typed rather than one construct.
+//
+// Called before the startup files and never after them, which is the whole
+// reason SetHistoryExpansion remembers that it was called: `set +H` in an rc
+// file is how a person who does not want the feature turns it off, and a
+// default applied afterwards would put back the thing the file removed.
+func (r *Runner) StartInteractiveHistory() {
+	r.histRecord = true
 	if r.histExpandMoved {
 		return
 	}
-	r.histExpand = on
+	s := r.sem()
+	r.histExpand = s.HistoryExpansion == Yes && s.HistoryExpansionAtAPrompt == Yes
 }
 
 // HistoryExpansion reports whether `!!` and its family are rewritten before a

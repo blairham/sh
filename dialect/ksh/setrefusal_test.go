@@ -83,16 +83,17 @@ func TestKshRefusesAnInvocationOptionWithItsOwnUsageLine(t *testing.T) {
 // and refused is dead data that says the opposite of what the shell does, and
 // dialect.TestNoLetterIsBothImplementedAndNot is the invariant for the
 // builtins whose letters are an optstring; `set`'s are a switch, so this is
-// the row that has to be kept honest by hand.
+// the row that has to be kept honest by hand. `-H` left in #3093: ksh93's
+// `-H` is `set -o histexpand`, and this shell has the expander behind it.
 func TestKshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
 	// `-p` left in #2412: it is the short spelling of `privileged`, which
 	// this shell answers through the `set -o` table, so `set +p` is granted
 	// and `set -p` is refused by the name. A letter routed to a name must
 	// not also be listed here.
-	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "bkrsGH"; got != want {
+	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "bkrsG"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "bkrsGH" {
+	for _, l := range "bkrsG" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than unknown", src, got)

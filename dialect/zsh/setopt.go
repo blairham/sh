@@ -242,23 +242,26 @@ var zshOptions = []zshOption{
 	// and `banghist` *off* to show that an unset is a move rather than a
 	// reset, which an option already off could not have demonstrated (#2542).
 	{
-		// BANG_HIST, and since #3093 it is the live state rather than a
-		// recorded one: it is the switch the expander reads. On by default,
+		// BANG_HIST, and since #3093 moving it moves something: it is the
+		// switch the expander reads. On by default,
 		// measured 2026-09-13 across all four surfaces it shows on — `[[ -o
 		// banghist ]]`, `[[ -o histexpand ]]`, the `unsetopt` listing and
 		// `${options[banghist]}` — and measured again 2026-09-15 through a
 		// pseudo-terminal, where `echo !!` at a fresh zsh prompt expands with
 		// nothing configured.
 		//
-		// The default *state* is the front end's, not this entry's: a script
-		// starts with the expander off in zsh exactly as in bash, while the
-		// option still reads on. So `def` here stays what the listings were
-		// measured against and `get` reads the live switch — the two are the
-		// same question only at a prompt, which is where the listing was
-		// measured.
+		// The option and the expander are two states here, which is measured
+		// rather than a convenience: `[[ -o banghist ]]` in `zsh -c` reports
+		// **on** while that same shell expands nothing, because zsh gates the
+		// expander on being interactive and leaves the option where it is. So
+		// the reading stays the recorded one — on unless something moved it —
+		// and moving it also moves the switch the front end reads, so that
+		// `unsetopt banghist` at a prompt stops the expansion rather than
+		// only being remembered.
 		base: "banghist", def: true,
-		get: func(r *interp.Runner) bool { return r.HistoryExpansion() },
+		get: func(r *interp.Runner) bool { return true != recordedDeviates(r, "banghist") },
 		set: func(r *interp.Runner, on bool) int {
+			setRecordedDeviation(r, "banghist", !on)
 			r.SetHistoryExpansion(on)
 			return 0
 		},

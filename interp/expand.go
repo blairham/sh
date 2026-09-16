@@ -151,11 +151,22 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// stays open for whatever follows — which is why `x$@y` attaches its
 		// literal text to the first and last fields rather than becoming
 		// words of its own.
-		if parts, ok := r.expandAt(s, splitByDialect, head); ok {
+		// The list half and the scalar half are two readers of one
+		// expansion, and they are siblings rather than one inside the other
+		// — so a subscript's substitutions are held around the pair, here,
+		// and not inside either. See subscriptSubstHold (#3240).
+		release := r.armSubscriptSubsts(s)
+		parts, atList := r.expandAt(s, splitByDialect, head)
+		var text string
+		var split bool
+		if !atList {
+			text, split = r.expandSpan(s, splitByDialect, head)
+		}
+		release()
+		if atList {
 			b.add(s, parts)
 			continue
 		}
-		text, split := r.expandSpan(s, splitByDialect, head)
 		if !split {
 			b.text(text)
 			b.any = b.any || text != "" || s.Quoting != syntax.Unquoted
@@ -457,11 +468,15 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quotin
 			head = true
 		}
 		var text string
+		// Held around the pair rather than inside either half, for the
+		// reason expandOneWordFields gives. See subscriptSubstHold (#3240).
+		release := r.armSubscriptSubsts(s)
 		if parts, ok := r.expandAt(s, splitNever, head); ok {
 			text = r.joinUnsplit(s.Param, parts)
 		} else {
 			text, _ = r.expandSpan(s, splitNever, head)
 		}
+		release()
 		if !keepMarks {
 			text = globUnescape(text)
 		}
@@ -518,7 +533,14 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 
 	for _, s := range w.Spans {
 		head := b.Len() == 0
-		if parts, ok := r.expandAt(s, splitAlways, head); ok {
+		// Held around the pair, for the reason expandOneWordFields gives:
+		// the two halves are siblings and a subscript's substitutions belong
+		// to the span rather than to either of them. A redirection target is
+		// a word like any other — `: > "f${a[$(g)]-D}"` ran `g` twice where
+		// the panel runs it once. See subscriptSubstHold (#3240).
+		release := r.armSubscriptSubsts(s)
+		parts, atList := r.expandAt(s, splitAlways, head)
+		if atList {
 			// The plain view is the one that keeps no fields, so it is the
 			// one the separator rule applies to. The fields view below is
 			// untouched: whether the target is read as fields at all is the
@@ -537,9 +559,11 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// however the splitting axis is answered, which is the half of
 			// this reading that is not the text view.
 			u.add(s, parts)
+			release()
 			continue
 		}
 		text, split := r.expandSpan(s, splitAlways, head)
+		release()
 		b.WriteString(text)
 		// And never splits, whatever the span asked for. That is the whole
 		// of the difference from the fields view below.
@@ -894,6 +918,13 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// wrong pass is exactly the silent kind of wrong.
 	r.nestedHeld = nestedHold{}
 	r.sourceHeld, r.subscriptHeld = sourceHold{}, subscriptHold{}
+	// No arming here, and it is a measurement rather than an omission: every
+	// one of this function's four callers arms around the *pair* it makes
+	// with expandSpan, because the two are siblings and a hold opened inside
+	// one of them is gone before the other reads. An arm added here as well
+	// is an equivalent mutant — removing it killed no test and moved no count
+	// in any of the seven columns. See subscriptSubstHold (#3240).
+	//
 	// The same rewrite the scalar path makes, made first: the shapes below
 	// are read off the node, and a node still carrying a subscript nothing
 	// is going to read would be answered as `$a[@]` rather than as `$a`
@@ -1598,6 +1629,13 @@ func (sp splitPolicy) answer(a Answer) Answer {
 // substituted tilde expands where a written one would, and a written one
 // expands only at the head of a word.
 func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text string, split bool) {
+	// The same arming expandAt makes, for the words that reach the scalar
+	// path without going through it: `${a[$(f)]-D}` asks whether its test
+	// fires, what the array came to and what the value behind both is, and
+	// those are readers of one expansion's brackets. See subscriptSubstHold
+	// (#3240) — arming twice for one word is a no-op, so the list half
+	// falling through to this one keeps the hold it opened.
+	defer r.armSubscriptSubsts(s)()
 	unquoted := s.Quoting == syntax.Unquoted
 	switch s.Kind {
 	case syntax.Literal:
@@ -1649,7 +1687,10 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		}
 		return globEscape(path), false
 	case syntax.ArithSubst:
-		v, ok := r.arithSpanValue(s)
+		// Through the subscript hold, which is what keeps `${a[$((i++))]}` to
+		// one move of `i` however many readers the expansion has. See
+		// subscriptSubstHold (#3240).
+		v, ok := r.subscriptArith(r.expandingWord, s)
 		if !ok {
 			return "", false
 		}
@@ -5898,6 +5939,13 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList b
 	if e.Inner == nil || len(e.Inner.Spans) == 0 {
 		return []string{""}, false, false
 	}
+	// The inner's subscript is read by both of the questions below — what the
+	// inner came to, and whether its shape keeps its fields — and they are
+	// two readers of one expansion. Held here, where both are inside, rather
+	// than around either: `${${a[$(f)]}}` ran `f` four times where zsh 5.9.2,
+	// the one grammar with the construct, runs it once. See
+	// subscriptSubstHold (#3240).
+	defer r.armSubscriptSubsts(e.Inner.Spans[0])()
 	if e.Index != nil {
 		// `${${v}[2]}` subscripts what the inner came to, which is a second
 		// question on top of this one and is answered in interp/nestedsub.go

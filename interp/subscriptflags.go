@@ -415,9 +415,14 @@ func (r *Runner) searchOperand(w *syntax.Word) string {
 		case syntax.ParamExp:
 			b.WriteString(r.expandParam(s.Param))
 		case syntax.CommandSubst:
-			b.WriteString(r.commandSubst(r.ctx, s))
+			// Named rather than left to r.expandingWord: this road builds
+			// the operand itself rather than going through the word loop, so
+			// nothing has said which word these spans belong to. The hold is
+			// what keeps one substitution in a subscript to one run across
+			// both roads — see subscriptSubstHold (#3240).
+			b.WriteString(r.subscriptSubst(w, s))
 		case syntax.ArithSubst:
-			v, ok := r.arithSpanValue(s)
+			v, ok := r.subscriptArith(w, s)
 			if !ok {
 				return ""
 			}
@@ -1080,4 +1085,31 @@ func (r *Runner) refuseTableSliceWrite(name string, endsTheLine bool) {
 		return
 	}
 	r.diagf("%s\n", msg)
+}
+
+// subscriptSubst runs one of a subscript operand's command substitutions,
+// through the hold that keeps it to one run for the whole expansion. See
+// subscriptSubstHold.
+func (r *Runner) subscriptSubst(w *syntax.Word, s syntax.Span) string {
+	if v, ok := r.heldSubscriptSubst(w, s.Pos); ok {
+		return v
+	}
+	v := r.commandSubst(r.ctx, s)
+	r.holdSubscriptSubst(w, s.Pos, v)
+	return v
+}
+
+// subscriptArith evaluates one of a subscript's arithmetic substitutions,
+// through the hold that keeps it to one evaluation for the whole expansion.
+// See subscriptSubstHold: a subscript's `$(( … ))` may move a variable, and
+// evaluating it once per reader moved it once per reader.
+func (r *Runner) subscriptArith(w *syntax.Word, s syntax.Span) (string, bool) {
+	if v, ok := r.heldSubscriptSubst(w, s.Pos); ok {
+		return v, true
+	}
+	v, ok := r.arithSpanValue(s)
+	if ok {
+		r.holdSubscriptSubst(w, s.Pos, v)
+	}
+	return v, ok
 }

@@ -21,6 +21,23 @@ import (
 // Trailing newlines are removed, which is the rule that makes `x=$(pwd)`
 // usable at all.
 func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
+	// A substitution written into a subscript runs once for the whole
+	// expansion, however many of the readers of those brackets ask for their
+	// text. The two roads to a subscript — the rendered text and the text
+	// with its quotes still on — both arrive here, which is why the hold is
+	// on the substitution rather than on either of them. See
+	// subscriptSubstHold (#3240).
+	if v, ok := r.heldSubscriptSubst(r.expandingWord, span.Pos); ok {
+		return v
+	}
+	v := r.runCommandSubst(ctx, span)
+	r.holdSubscriptSubst(r.expandingWord, span.Pos, v)
+	return v
+}
+
+// runCommandSubst is commandSubst with the hold taken off: one run of the
+// body, every time it is called.
+func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	src := span.Value
 	// An assignment with no command name reports what the substitutions in
 	// it reported, and reports success when there are none. Those are two

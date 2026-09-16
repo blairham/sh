@@ -138,7 +138,14 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	spans := r.patternTilde(w, &b)
 	for i, s := range spans {
 		r.expandingSpan = i
+		// A pattern operand reads its spans the way a word does, and the
+		// readers of a subscript in one are the same readers. Held here so a
+		// `case` arm or a trim's pattern costs one run of a substitution
+		// written into brackets in it rather than one per reader — eight,
+		// measured, against the panel's one. See subscriptSubstHold (#3240).
+		release := r.armSubscriptSubsts(s)
 		text, live := r.patternSpan(s)
+		release()
 		if live {
 			if s.Kind != syntax.Literal {
 				fromValue = append(fromValue, [2]int{b.Len(), b.Len() + len(text)})

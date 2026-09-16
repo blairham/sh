@@ -53,7 +53,18 @@ import "github.com/blairham/sh/syntax"
 // a `${!v}` act on what the target came to and not on how it was reached, so
 // the node carries the reference's own subscript and nothing else.
 func (r *Runner) indirectTargetNode(e *syntax.ParamExpr, text string) *syntax.ParamExpr {
-	return r.referenceNode(text, nil, e.Src)
+	// Parsed once for the span. The brackets of a resolved target are built
+	// here rather than written in the script, so a second parse hands the
+	// next reader a *different* subscript word — and a substitution in it
+	// runs again, which is the count the written spelling no longer pays.
+	// See subscriptSubstHold (#3240); interp/indirectreference_test.go pins
+	// the two spellings against each other for exactly this.
+	if held, ok := r.heldReferenceNode(text); ok {
+		return held
+	}
+	node := r.referenceNode(text, nil, e.Src)
+	r.holdReferenceNode(text, node)
+	return node
 }
 
 // indirectTargetValue is the value behind a resolved indirection, and whether

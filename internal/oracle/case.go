@@ -997,6 +997,23 @@ var Corpus = []Case{
 		Why:     "the one site of the five in the **core**: every shell but dash has `$'...'`, and the three that read the escape in it give the three different answers. That is why the axis has a third constant rather than a bool — and why a core script with `$'\\u00e9'` in it under a non-UTF-8 locale is an unanswered axis rather than a value. dash has no `$'...'` at all and writes the dollar sign as a character (#2021)",
 	},
 	{
+		ID: "dollarsingle/a-unicode-escape-in-a-single-byte-charset", Category: "quoting",
+		Env:     []string{"LC_ALL=fr_FR.ISO8859-1"},
+		Snippet: `printf '%s' $'a\u00e9Z' | od -An -tx1 | tr -s " "`,
+		Why: "the same site with a locale that names a charset of its own, and the " +
+			"row that says `outside the locale` is a *narrower* question than it " +
+			"reads: a charset holds some of Unicode rather than none of it. U+00E9 " +
+			"is the single byte `e9` in ISO 8859-1, and the two shells that consult " +
+			"a locale here write that byte — bash without complaint and zsh without " +
+			"the `character not in range` it gives under `LC_ALL=C` — while ksh93 " +
+			"writes the same UTF-8 it writes everywhere, which is what " +
+			"OutsideLocaleEscapeEncoded means by never reading a locale at all. " +
+			"The row above is the other half and has to stay beside this one: both " +
+			"are the same code point at the same site, and only the locale moved. " +
+			"Read as bytes for the reason every row in this family is — a byte, a " +
+			"character and an escape left standing are all printable (#3004)",
+	},
+	{
 		ID: "print/a-unicode-escape-outside-the-locale", Category: "builtins",
 		Snippet: `print -- 'a\u00e9Z' | od -An -tx1 | tr -s " "`,
 		Why:     "the builtin two of the seven have, and the row that says a shell answers the *same* at every site it reads the escape at: this one refuses here exactly as it refuses in `echo`, and ksh93 — which writes the character in a `printf` format — reads no `\\u` here at all and leaves the ten characters standing. The two facts are separate axes and this is the row that keeps them apart (#2021)",

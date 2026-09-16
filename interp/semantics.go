@@ -17102,6 +17102,21 @@ const (
 	OutsideLocaleEscapeEncoded
 )
 
+// consultsTheLocale reports whether a shell with this policy reads the
+// locale's charset at all, which is the half of the axis that matters before
+// the character turns out to be unrepresentable.
+//
+// Two of the three do. bash writes the escape back and zsh refuses, but both
+// of them first ask the locale what byte it stands the character in —
+// measured, `$'\u00e9'` is the single byte `e9` in each of them under
+// `fr_FR.ISO8859-1`. ksh93 is the one that never asks, which is what
+// OutsideLocaleEscapeEncoded already says in words; this is the same fact
+// where the code can use it. Unspecified answers false because a shell with
+// no answer must not reach a byte.
+func (p OutsideLocaleEscapePolicy) consultsTheLocale() bool {
+	return p == OutsideLocaleEscapeWritten || p == OutsideLocaleEscapeRefused
+}
+
 func (p OutsideLocaleEscapePolicy) String() string {
 	switch p {
 	case OutsideLocaleEscapeWritten:

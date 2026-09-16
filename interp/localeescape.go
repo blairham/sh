@@ -3,7 +3,11 @@
 
 package interp
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/blairham/sh/internal/charset"
+)
 
 // A `\uHHHH` or `\UHHHHHHHH` naming a code point the locale's encoding cannot
 // represent.
@@ -61,12 +65,13 @@ import "fmt"
 // rather than a rule this file could state — Semantics.UnsetLocaleIsUnicodeAware,
 // asked through [Runner.unsetLocaleIsUnicodeAware] (#2020).
 //
-// ASCII and no more, for a locale naming a single-byte encoding that is not
-// ASCII: bash transcodes there, writing U+00E9 as the single byte `e9` under
-// `en_US.ISO8859-1`, and this shell has no charset tables. It is the limit
-// [Runner.localeEncoding] already records for the same reason — every
-// non-UTF-8 encoding counts bytes — and it is stated rather than hidden, since
-// the alternative is a table per charset.
+// A locale naming a single-byte encoding that is not ASCII refuses the code
+// point *here* and is asked again afterwards, which is the split
+// [Runner.CodePointEscapeText] makes: this reports that the locale is not
+// UTF-8, and [Runner.localeCharsetByte] is what knows whether the charset it
+// does name has room for the character. The two are separate because the
+// shells divide there — ksh93 never consults a locale at all — and because a
+// charset holds *some* of Unicode rather than all or none of it.
 func (r *Runner) localeRefusesCodePoint(n int) bool {
 	if n <= 0x7f {
 		// ASCII is representable in every encoding a shell is asked for, and
@@ -127,7 +132,26 @@ func (r *Runner) CodePointEscapeText(n int) (string, bool) {
 	if !r.localeRefusesCodePoint(n) {
 		return EncodeCodePoint(n), false
 	}
-	switch r.outsideLocaleEscape() {
+	policy := r.outsideLocaleEscape()
+	if policy.consultsTheLocale() {
+		// The locale is not UTF-8 but it still names a charset, and a charset
+		// holds some of Unicode rather than none of it. Measured 2026-09-15
+		// under `LC_ALL=fr_FR.ISO8859-1`, `printf '%s' $'\u00e9'`:
+		//
+		//	bash 5.3.15   e9
+		//	zsh 5.9.2     e9
+		//	ksh93 93u+    c3 a9
+		//
+		// so the two shells that consult a locale write the byte the charset
+		// stands the character in, and ksh93 — which the axis records as
+		// never reading one — writes UTF-8 there as it does everywhere. That
+		// is why this sits inside the policy rather than in
+		// [Runner.localeRefusesCodePoint] beside the UTF-8 answer.
+		if b, ok := r.localeCharsetByte(n); ok {
+			return string([]byte{b}), false
+		}
+	}
+	switch policy {
 	case OutsideLocaleEscapeWritten:
 		return unicodeEscapeSpelling(n), false
 	case OutsideLocaleEscapeRefused:
@@ -142,6 +166,36 @@ func (r *Runner) CodePointEscapeText(n int) (string, bool) {
 	// script. Nothing more is written.
 	return "", true
 }
+
+// localeCharsetByte is the byte the locale's own charset stands a code point
+// in, and false when it has no room for it or when this shell holds no table
+// for the charset the locale names.
+//
+// The table is generated rather than imported — internal/charset, and
+// internal/charsetgen beside it, for the same reason internal/eastasian and
+// internal/unorm are generated: this module ships with no dependencies of its
+// own and the standard library carries no legacy charset. What is there is
+// every single-byte charset Unicode publishes a mapping for. What is not is
+// the multibyte ones a locale may also name — SJIS, Big5, eucJP, GB18030 —
+// each of which is a table two orders of magnitude larger, and each of which
+// takes this path's false branch and has the escape written back. That is a
+// measured gap rather than a hidden one: bash writes U+FF9F as the byte `df`
+// under `ja_JP.SJIS` and this shell writes `\uFF9F`.
+//
+// The guard on the value is not defensive. `\U` reads up to eight digits and
+// the escape sites hand on whatever they read, including values past the last
+// code point, so a conversion to rune without it would wrap a large value
+// into a small one and could find it in a table.
+func (r *Runner) localeCharsetByte(n int) (byte, bool) {
+	if n < 0 || n > unicodeMax {
+		return 0, false
+	}
+	return charset.Encode(LocaleCodeset(r.LocaleFor("LC_CTYPE")), rune(n))
+}
+
+// unicodeMax is the last code point Unicode has, past which no charset table
+// can hold a value whatever it says.
+const unicodeMax = 0x10ffff
 
 // RefuseCodePoint reports the refusal and abandons the script.
 //

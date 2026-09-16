@@ -1,0 +1,211 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+// Command charsetgen turns Unicode's character-mapping tables into the
+// single-byte charsets a locale can name.
+//
+// It exists for the reason internal/widthgen does: this module has no
+// dependencies of its own, and the standard library ships no legacy charset
+// at all — only UTF-8 and the Unicode tables. A shell that has to write
+// `$'é'` as the byte `e9` under `fr_FR.ISO8859-1` needs the mapping from
+// somewhere, and the choice this repository has already made twice is to
+// generate the table into the tree rather than to import one (see
+// internal/depsurface for what an added dependency costs).
+//
+// Usage:
+//
+//	go run ./internal/charsetgen -in <dir> -out internal/charset/tables.go
+//
+// The inputs are Unicode's own mapping files, in the "Format A" three-column
+// shape every one of them uses, and they are not checked in — they are read
+// once and what the build uses is the Go file this writes:
+//
+//	https://www.unicode.org/Public/MAPPINGS/ISO8859/8859-N.TXT
+//	https://www.unicode.org/Public/MAPPINGS/VENDORS/MISC/KOI8-R.TXT
+//	https://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/PC/CP866.TXT
+//	https://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/WINDOWS/CP125N.TXT
+//
+// Only the *high* half of each charset is emitted. Every charset here agrees
+// with ASCII below 0x80 and the generator refuses one that does not, so the
+// table is 128 code points rather than 256 and the ASCII branch in the
+// encoder is a fact about the data rather than an assumption about it.
+package main
+
+import (
+	"bufio"
+	"flag"
+	"fmt"
+	"go/format"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// charsetName is the name a locale spells this charset with, derived from the
+// mapping file's own name. `8859-1.TXT` is the file Unicode publishes and
+// `ISO8859-1` is what a locale calls it, which is the only rewriting here.
+func charsetName(file string) string {
+	base := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+	if strings.HasPrefix(base, "8859-") {
+		return "ISO" + base
+	}
+	return base
+}
+
+type charset struct {
+	name string
+	high [128]rune
+}
+
+func main() {
+	in := flag.String("in", ".", "directory holding the Unicode mapping files")
+	out := flag.String("out", "internal/charset/tables.go", "Go file to write")
+	flag.Parse()
+
+	names, err := filepath.Glob(filepath.Join(*in, "*.TXT"))
+	if err != nil || len(names) == 0 {
+		fmt.Fprintf(os.Stderr, "charsetgen: no mapping files under %s\n", *in)
+		os.Exit(1)
+	}
+	sort.Strings(names)
+
+	sets := make([]charset, 0, len(names))
+	for _, name := range names {
+		set, err := read(name)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "charsetgen:", err)
+			os.Exit(1)
+		}
+		sets = append(sets, set)
+	}
+	sort.Slice(sets, func(i, j int) bool { return sets[i].name < sets[j].name })
+
+	if err := write(*out, sets); err != nil {
+		fmt.Fprintln(os.Stderr, "charsetgen:", err)
+		os.Exit(1)
+	}
+}
+
+// read parses one Format A mapping file.
+//
+// A byte with no mapping is left at -1 rather than at 0, because 0 is a code
+// point: U+0000 is what 0x00 maps to in every one of these, and a hole that
+// spelled itself NUL would make the encoder write a byte the charset has no
+// character for.
+func read(file string) (charset, error) {
+	set := charset{name: charsetName(file), high: [128]rune{}}
+	for i := range set.high {
+		set.high[i] = -1
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		return set, err
+	}
+	defer func() { _ = f.Close() }()
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := sc.Text()
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = line[:i]
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			// One column is a byte the charset leaves undefined, which is a
+			// hole and not a parse failure.
+			continue
+		}
+		b, err := strconv.ParseUint(strings.TrimPrefix(fields[0], "0x"), 16, 8)
+		if err != nil {
+			return set, fmt.Errorf("%s: byte %q: %w", file, fields[0], err)
+		}
+		cp, err := strconv.ParseUint(strings.TrimPrefix(fields[1], "0x"), 16, 32)
+		if err != nil {
+			return set, fmt.Errorf("%s: code point %q: %w", file, fields[1], err)
+		}
+		if b < 0x80 {
+			// The encoder answers ASCII from the code point itself and never
+			// consults a table for it. A charset that disagreed here would
+			// make that shortcut wrong, so it is refused rather than
+			// silently half-honored.
+			if rune(cp) != rune(b) {
+				return set, fmt.Errorf("%s: byte %#02x is not ASCII (%#04x)", file, b, cp)
+			}
+			continue
+		}
+		set.high[b-0x80] = rune(cp)
+	}
+	if err := sc.Err(); err != nil {
+		return set, err
+	}
+	return set, nil
+}
+
+func write(path string, sets []charset) error {
+	var b strings.Builder
+	b.WriteString("// SPDX-FileCopyrightText: 2026 Blair Hamilton\n")
+	b.WriteString("// SPDX-License-Identifier: Apache-2.0\n\n")
+	b.WriteString("// Code generated by internal/charsetgen. DO NOT EDIT.\n\n")
+	b.WriteString("package charset\n\n")
+	b.WriteString("// tables is every single-byte charset this shell can write a code point\n")
+	b.WriteString("// in, keyed by the normalized spelling of its name. Each entry is the\n")
+	b.WriteString("// charset's high half — the 128 code points 0x80 through 0xff stand for —\n")
+	b.WriteString("// with -1 where the charset leaves the byte undefined.\n")
+	b.WriteString("var tables = map[string]*[128]rune{\n")
+	for i := range sets {
+		b.WriteString("\t" + strconv.Quote(Normalize(sets[i].name)) + ": &" + ident(sets[i].name) + ",\n")
+	}
+	b.WriteString("}\n")
+	for i := range sets {
+		b.WriteString("\n// " + ident(sets[i].name) + " is the high half of " + sets[i].name + ".\n")
+		b.WriteString("var " + ident(sets[i].name) + " = [128]rune{")
+		for j, r := range sets[i].high {
+			if j%8 == 0 {
+				b.WriteString("\n\t")
+			} else {
+				b.WriteString(" ")
+			}
+			if r < 0 {
+				b.WriteString("-1,")
+				continue
+			}
+			b.WriteString(fmt.Sprintf("%#04x,", r))
+		}
+		b.WriteString("\n}\n")
+	}
+	// Formatted here rather than by whoever runs this. A generated file that
+	// the repository's formatter then rewrites shows up as a dirty tree after
+	// every regeneration, which reads as a table that changed when nothing
+	// did.
+	src, err := format.Source([]byte(b.String()))
+	if err != nil {
+		return fmt.Errorf("the generated file does not parse: %w", err)
+	}
+	return os.WriteFile(path, src, 0o644)
+}
+
+// ident is the Go name for a charset's table.
+func ident(name string) string {
+	return "table" + strings.NewReplacer("-", "", "_", "").Replace(name)
+}
+
+// Normalize is the key a charset is looked up by, and it is deliberately the
+// same rewriting the encoder applies to a locale's codeset: lower case with
+// the separators dropped, so `ISO8859-1`, `ISO-8859-1` and `iso88591` are one
+// charset rather than three.
+func Normalize(name string) string {
+	var b strings.Builder
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c == '-' || c == '_' {
+			continue
+		}
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}

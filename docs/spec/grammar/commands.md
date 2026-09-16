@@ -3598,6 +3598,55 @@ distinction is textual — measured, `((echo nested))` is arithmetic in
 bash, ksh93 and zsh even with no space, while `( (echo sub) )` is nested
 subshells.
 
+### `((` is ambiguous, and the reading is given up where it does not close
+
+The textual distinction above is not the whole of it. `((` at the start
+of a command opens an arithmetic command **or** a subshell whose first
+command is itself a subshell, and nothing at the two characters says
+which — `((cmd); cmd)` is ordinary script text, and it is what a script
+gets the moment somebody groups a pipeline inside a group.
+
+Every shell that has the construct resolves it the same way: the
+arithmetic reading is tried, and it holds only if the expression's own
+nesting is closed by **two adjacent `)`**. A `)` that arrives anywhere
+else is a grouping paren, the reading is abandoned, and the text is read
+again from the first `(` as an ordinary subshell.
+
+Measured 2026-09-15 from a script file, and unanimous in bash 5.3.20,
+bash 3.2.57, bash-as-`sh`, zsh 5.9.2 and ksh93u+ 2012-08-01:
+
+| probe | read as | why |
+| --- | --- | --- |
+| `((echo a); echo b)` | two subshells — `a` `b` | the `)` is followed by `;` |
+| `((echo a) )` | two subshells — `a` | the two closers are not adjacent |
+| `((echo a)&&(echo b))` | two subshells — `a` `b` | the first `)` closes nothing the expression opened |
+| `(( (echo a) ))` | arithmetic | the closers are adjacent at depth zero |
+| `((echo a))` | arithmetic | so a bad expression here is a **run-time** error |
+| `((1+1))` | arithmetic | the ordinary case, unchanged |
+
+`echo B; ((echo a)); echo A` is what says the fifth row is run-time
+rather than a parse failure: all five print `B`, then the complaint, then
+`A`.
+
+**Giving up is not the same as running out.** `((1+1` and `((echo a`
+are refused by every shell on the panel whichever reading is taken, so
+input that ends inside the expression stays a diagnostic — and at a
+prompt, still a request for the rest of it.
+
+**The re-reading starts one character in, not two.** After the reading is
+abandoned the `(` is an ordinary grouping paren and the *next* token is
+read from the second `(` — which may open an arithmetic command of its
+own. `a=0; (((a=5)); echo in=$a); echo out=$a` prints `in=5 out=0` in
+bash 5.3, bash 3.2 and zsh: the inner `((a=5))` is arithmetic in the
+subshell. ksh93 alone prints `in=0`, splitting the `((` into two subshell
+opens and never looking again; ours follows the four (#3052).
+
+Which way a given `((` goes is decided by the text behind it and not by
+how many parentheses are in front, so the same characters go both ways in
+one line. `(((1+1)))` is arithmetic over the expression `(1+1)` — the
+last two `)` are adjacent at depth zero — while `(((echo a); echo b); echo c)`
+gives the reading up three times over and prints `a` `b` `c`.
+
 `[[ … ]]` is the **parser's**, despite `<` and `>` meaning something
 different inside it. `[[` is only special where a command may begin —
 `echo [[ a ]]` prints `[[ a ]]` — and the lexer does not know where

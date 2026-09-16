@@ -6486,11 +6486,20 @@ func (d Diagnostics) echoLine(name, input string, line int, err error, src strin
 // only context a caller gets when the text was generated somewhere it cannot
 // see (#1728).
 //
-// line is the failure's line *within src*, so a caller that could not work
-// that out must not call this: indexing the borrowed text by the caller's own
-// line would quote a line from somewhere else.
-func (d Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line int, err error, src string) string {
-	text := d.offendingLine(line, err, src)
+// at is the failure's line *within src*, so a caller that could not work that
+// out must not call this: indexing the borrowed text by the caller's own line
+// would quote a line from somewhere else. line is the number written in front
+// of the quote, and the two are the same only where the text numbers itself
+// from one.
+//
+// They part company in the dialects where `eval`'s text continues the caller's
+// lines: the sentence above the quote names the caller's line and the quote
+// has to name the same one, where passing a single number made the second
+// message contradict the first. bash 5.3 writes `eval: line 6:` twice for a
+// two-line `eval` on line 5 whose second line will not parse; this said `line
+// 6` and then `line 2`.
+func (d Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line, at int, err error, src string) string {
+	text := d.offendingLine(at, err, src)
 	if text == "" {
 		return ""
 	}

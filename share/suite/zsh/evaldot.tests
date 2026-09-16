@@ -81,3 +81,28 @@ printf 'reached the end\n'
 # BusyBox ash each call it an option they have not got.
 ( . -p /tmp f.sh ) 2>&1 | sed 's/.*: //'
 printf 'a dash-word -> %s\n' "$?"
+
+# An empty function body is zsh's grammar rather than an error — #3194, and
+# the other end of bash/evaldot.tests.
+#
+# `f() {` with nothing but a `}` under it is a syntax error in bash, ksh93,
+# dash and BusyBox ash, and is a function here: it binds, it answers 0 and it
+# prints nothing. So a shell that refused it to match bash would be wrong in
+# this dialect, and a shell that bound it everywhere would be wrong in the
+# other four — the parse decides it, and the reader runs a line only once the
+# whole of it has read.
+f() { printf 'orig\n'; }
+eval 'f() {
+}'
+printf 'an empty body -> %s\n' "$?"
+f
+printf 'and calling it -> %s\n' "$?"
+functions f
+
+# Text that genuinely will not parse still binds nothing, which is the half
+# this dialect shares with the other four.
+g() { printf 'g orig\n'; }
+( eval 'g() {
+fi
+}' ) 2>/dev/null; printf 'a refused body -> %s\n' "$?"
+g

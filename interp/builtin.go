@@ -2251,7 +2251,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				}
 				continue
 			}
-			idx, err := r.subscriptValue(sub)
+			idx, err := r.subscriptValueOfReference(sub)
 			if err != nil {
 				// Reported by every shell in the panel, and silent here: the
 				// error came back and nothing read it, so `unset a[b c]` was

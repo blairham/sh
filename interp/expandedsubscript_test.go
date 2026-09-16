@@ -24,7 +24,7 @@ import (
 func TestAnExpandedSubscriptRunsNothing(t *testing.T) {
 	dir := t.TempDir()
 	ran := filepath.Join(dir, "ran")
-	src := `k='$(touch ran; echo 1)'; a=(9 8 7); a[$k]=V; printf "%s" "${a[*]}"`
+	src := `k='$(echo x > ran; echo 1)'; a=(9 8 7); a[$k]=V; printf "%s" "${a[*]}"`
 	out := runIn(t, dir, src)
 	if _, err := os.Stat(ran); err == nil {
 		t.Errorf("the command substitution in the subscript ran; %q", out)
@@ -40,7 +40,7 @@ func TestAnExpandedSubscriptRunsNothing(t *testing.T) {
 func TestAnExpandedRangeRunsNothing(t *testing.T) {
 	dir := t.TempDir()
 	ran := filepath.Join(dir, "ran")
-	out := runIn(t, dir, `x=abcdef; w='$(touch ran; echo 1)'; printf "[%s]" "${x:$w:2}"`)
+	out := runIn(t, dir, `x=abcdef; w='$(echo x > ran; echo 1)'; printf "[%s]" "${x:$w:2}"`)
 	if _, err := os.Stat(ran); err == nil {
 		t.Errorf("the command substitution in the range ran; %q", out)
 	}
@@ -88,6 +88,39 @@ func TestAnExpandedSubscriptIsStillAnExpression(t *testing.T) {
 		{"a substitution the source wrote", `a=(9 8 7 6); a[$(echo 2)]=V; printf "%s" "${a[*]}"`, "9 8 V 6"},
 		// The range reads the same way.
 		{"an expanded range", `x=abcdef; w='1+1'; printf "[%s]" "${x:$w:2}"`, "[cd]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, _ := run(t, tc.src, nil); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The boundary this draws, and the half that is *not* "a subscript is never
+// expanded": a subscript that arrived as text rather than as a word — a
+// builtin's operand, a reference resolved at run time — still has its
+// expansions performed, because they have not been performed yet. The quotes
+// are what kept the `$` from the word expansion that would otherwise have
+// reached it.
+//
+// Measured on zsh 5.9.2 and recorded at #1852: `i=2; v='x[$i]'` reads the
+// second element. Reading these as results instead would have been the same
+// fault pointing the other way.
+func TestAReferenceSubscriptIsStillExpandedOnce(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"unset through a quoted operand",
+			`b=(x y z); j=1; unset 'b[$j]'; printf "%s" "${b[*]}"`, "x z",
+		},
+		{
+			"an expression in a quoted operand",
+			`b=(x y z w); j=1; unset 'b[$j+1]'; printf "%s" "${b[*]}"`, "x y w",
+		},
+		{
+			"read through a subscripted operand",
+			"a=(9 8 7 6); read 'a[1+1]' <<IN\nQ\nIN\nprintf \"%s\" \"${a[*]}\"", "9 8 Q 6",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got, _ := run(t, tc.src, nil); got != tc.want {

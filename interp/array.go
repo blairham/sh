@@ -1356,7 +1356,7 @@ func (r *Runner) storeThroughOperand(name, value string) {
 		r.spliceCharacterSpan(base, from, to, value, false)
 		return
 	}
-	idx, err := r.subscriptValue(sub)
+	idx, err := r.subscriptValueOfReference(sub)
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(sub, err))
 		return
@@ -2555,6 +2555,26 @@ func trimSubscript(text string) string {
 // shell on the panel that has arrays.
 func (r *Runner) subscriptValue(text string) (int, error) {
 	return r.subscriptValueAsWritten(text, text)
+}
+
+// subscriptValueOfReference is subscriptValue for a subscript that arrived as
+// **text** rather than as a word the parser read: a builtin's operand, and a
+// reference resolved at run time. `unset 'a[$i]'`, `read 'v[${#v}+1]'` and
+// `v='x[$(echo 2)]'` all reach the interpreter with their brackets still in a
+// string, and the `$` inside them is the script's own — written there and
+// never expanded, because the quotes are what kept it.
+//
+// So it is expanded here, once. That is the same substitution the reader used
+// to perform for everyone, and these are the callers it was right for:
+// measured on zsh 5.9.2, `i=2; v='x[$i]'` and `v='x[$(echo 2)]'` both read the
+// second element, so a substitution written into a resolved reference is
+// performed when the reference is read (#1852).
+//
+// A subscript that came out of a *word* is the opposite case and is read as it
+// stands — it is already a result, and expanding it again ran what the first
+// round had only produced (#3047).
+func (r *Runner) subscriptValueOfReference(text string) (int, error) {
+	return r.subscriptValueAsWritten(text, r.expandArithText(text))
 }
 
 // subscriptValueAsWritten is subscriptValue told what the *source* spelled,

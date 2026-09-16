@@ -241,7 +241,7 @@ func (r *Runner) assignIndirect(written string, t *indirectTarget, v string) boo
 			r.setAssocElem(base, sub, v)
 			return true
 		}
-		idx, err := r.subscriptValue(sub)
+		idx, err := r.subscriptValueOfReference(sub)
 		if err != nil {
 			r.fatal("%s\n", r.subscriptFailure(sub, err))
 			return false
@@ -321,7 +321,7 @@ func (r *Runner) assignThroughReference(e *syntax.ParamExpr, v string) bool {
 		r.setAssocElem(e.Name, r.assocKey(e.Index), v)
 		return true
 	}
-	idx, err := r.subscriptValue(sub)
+	idx, err := r.subscriptValueOfReference(sub)
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(sub, err))
 		return false

@@ -20,6 +20,12 @@ on:
     # merges that landed after this branch was last rebased and were never
     # tested together. That is the only run that can catch it.
     branches: [main]
+  # The report-only jobs below do not run on a pull request any more, so this
+  # is what keeps them running on a tree nobody has merged to in a while.
+  # 07:00 UTC, which is before the working day here and well clear of the
+  # merge traffic that would otherwise be competing for runners.
+  schedule:
+  - cron: '0 7 * * *'
 
 permissions:
   contents: read
@@ -116,11 +122,21 @@ jobs:
   # rather than as passed, which makes a docs-only pull request unmergeable.
   # Anything unrecognized counts as code, so when this is wrong it is wrong in
   # the direction of running the tests.
-  # Only after the cheap universal checks have passed is it worth asking the
-  # expensive question, so this waits on pre-commit.
+  # This used to wait on pre-commit, on the reasoning that the expensive
+  # question is not worth asking until the cheap universal checks have passed.
+  # That reasoning is about runner minutes, and it was paid for in wall clock
+  # on every run: `changes` is 23s of `git diff --name-only` and pre-commit is
+  # 47s, and chaining them put 70s in front of the 516s job that is the whole
+  # critical path. Measured on main, the three stages summed to 586s against a
+  # 585s average — the chain *was* the overhead, all of it.
+  #
+  # Unchained, the two run together and `test` starts when the diff is known,
+  # at 23s rather than 70s. What that gives up is that a branch failing
+  # pre-commit now also spends a runner on change detection, which is 23s of
+  # ubuntu against 47s saved on every run that passes — and nearly all of them
+  # pass.
   changes:
     name: Detect changed files
-    needs: pre-commit
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
@@ -191,8 +207,23 @@ jobs:
         cache: true
     - run: go build ./...
       if: needs.changes.outputs.code == 'true'
-    - run: go test -race ./...
+    # The race detector on one leg, not both.
+    #
+    # macOS was the long pole and `-race` was why: 326s of its 516s against
+    # 252s of Ubuntu's 434s, for an answer that is a property of the Go memory
+    # model rather than of the platform. Running it twice bought a second
+    # opinion on the same question while the required check everybody waits on
+    # was pinned to the slower of the two runners.
+    #
+    # macOS still runs every test in the module, uninstrumented. That is the
+    # half that matters for this leg: the failures we have actually had here
+    # were platform behavior — a timing-sensitive pty read, a signal
+    # delivered differently — and every one of them is still exercised. What
+    # moves to Ubuntu alone is the detector, which had no platform-specific
+    # finding to its name.
+    - name: Run the tests, with the race detector on the Linux leg
       if: needs.changes.outputs.code == 'true'
+      run: go test ${{ matrix.os == 'ubuntu-latest' && '-race' || '' }} ./...
     # And the one test that does not want the race detector, run without it.
     #
     # TestNoDialectCombinationPanics was 525s of the 649s the step above spent
@@ -279,6 +310,15 @@ jobs:
   oracle:
     name: Oracle (report only)
     needs: changes
+    # Report-only, so it cannot fail, so a pull request gains nothing by
+    # waiting for it -- and it is not a required check, which is what makes
+    # skipping it here safe rather than a check that hangs pending forever.
+    # The four report-only jobs were 635s of runner time per run that could
+    # not turn a build red; at ~170 runs a day that is ~30 runner-hours daily
+    # of output nothing is obliged to read. They run on every merge, where
+    # the drift is attributable to one squash, and nightly, which is where
+    # anybody actually reads them.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
@@ -318,6 +358,15 @@ jobs:
   perfgate:
     name: Performance gate (report only)
     needs: changes
+    # Report-only, so it cannot fail, so a pull request gains nothing by
+    # waiting for it -- and it is not a required check, which is what makes
+    # skipping it here safe rather than a check that hangs pending forever.
+    # The four report-only jobs were 635s of runner time per run that could
+    # not turn a build red; at ~170 runs a day that is ~30 runner-hours daily
+    # of output nothing is obliged to read. They run on every merge, where
+    # the drift is attributable to one squash, and nightly, which is where
+    # anybody actually reads them.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # Bounded, because the step below cannot fail: `|| true` turns a red gate
     # into a report, and it would turn a wedged one into a job that sits at
@@ -382,6 +431,15 @@ jobs:
   suite:
     name: Our own suite (report only)
     needs: changes
+    # Report-only, so it cannot fail, so a pull request gains nothing by
+    # waiting for it -- and it is not a required check, which is what makes
+    # skipping it here safe rather than a check that hangs pending forever.
+    # The four report-only jobs were 635s of runner time per run that could
+    # not turn a build red; at ~170 runs a day that is ~30 runner-hours daily
+    # of output nothing is obliged to read. They run on every merge, where
+    # the drift is attributable to one squash, and nightly, which is where
+    # anybody actually reads them.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # Bounded for the same reason as the gate above: `|| true` turns a red
     # report into a green job, and it would turn a wedged one into a job that
@@ -445,6 +503,15 @@ jobs:
   bash-suite:
     name: bash's own suite (report only)
     needs: changes
+    # Report-only, so it cannot fail, so a pull request gains nothing by
+    # waiting for it -- and it is not a required check, which is what makes
+    # skipping it here safe rather than a check that hangs pending forever.
+    # The four report-only jobs were 635s of runner time per run that could
+    # not turn a build red; at ~170 runs a day that is ~30 runner-hours daily
+    # of output nothing is obliged to read. They run on every merge, where
+    # the drift is attributable to one squash, and nightly, which is where
+    # anybody actually reads them.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

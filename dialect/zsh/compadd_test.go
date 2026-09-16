@@ -75,7 +75,7 @@ func TestCompaddOffersWhatItMatched(t *testing.T) {
 		// `-O` stores the matches in an array and offers none of them: it is
 		// how a completion function asks "would any of these have matched"
 		// without committing to them.
-		{"-O withholds", "local -a got; compadd -O got -- checkout commit", nil, "st=0 nm=0"},
+		{"-O withholds", "local -a got; compadd -O got -- checkout commit", nil, "st=1 nm=0"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got := completionFor(t, widgetOf(c.call), "git che")
@@ -90,16 +90,32 @@ func TestCompaddOffersWhatItMatched(t *testing.T) {
 // says, and a completion function acts on both — `compadd … || _describe …`
 // is how a fallback is written.
 //
-// Asked separately from the candidates above because they can disagree: `-O`
-// stores rather than offers, so it is status 0 with nothing offered, and that
-// row is the reason this is not folded into one assertion.
+// Asked separately from the candidates above because they can disagree: `-U`
+// offers a candidate that does not match what was typed, so it is status 0
+// on a word it has nothing to do with, and that row is the reason this is not
+// folded into one assertion.
+//
+// **The `-O` row is corrected here, and it was wrong in the direction that
+// matters.** This file used to assert status 0 for a call that stores rather
+// than offers, on the argument that `-O`'s caller wants to know whether
+// anything matched. Measured again on zsh 5.9.2, 2026-09-15, from inside a
+// widget with `PREFIX` of `al` and candidates `alpha zzz alright`, `-D`, `-O`
+// and `-A` are **all 1** while filling their arrays with the two that match:
+// the manual's sentence is about matches *added*, and nothing is added. It
+// matters because the shipped `_arguments` writes three `compadd -D` calls in
+// a row — see computil.go — and reads the status of none of them, so a 0
+// there is a claim that something reached the line.
 func TestCompaddReportsWhetherAnythingMatched(t *testing.T) {
 	for _, c := range []struct{ call, want string }{
 		{"compadd checkout cherry commit", "st=0 nm=2"},
 		{"compadd zzz yyy", "st=1 nm=0"},
 		{"compadd -p HID -- checkout", "st=1 nm=0"},
 		{"compadd -U -- zzz", "st=0 nm=1"},
-		{"local -a got; compadd -O got -- checkout commit", "st=0 nm=0"},
+		{"local -a got; compadd -O got -- checkout commit", "st=1 nm=0"},
+		// And `-D`, which strikes through rather than fills, and is 1 for
+		// the same reason. What it does to the array is asserted in
+		// computil_test.go, where the array can be read back.
+		{"local -a d=(A B); compadd -D d -- checkout commit", "st=1 nm=0"},
 	} {
 		t.Run(c.call, func(t *testing.T) {
 			got := completionFor(t, widgetOf(

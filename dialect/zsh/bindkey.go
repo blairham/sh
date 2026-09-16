@@ -250,16 +250,27 @@ func registerBindkey(r *interp.Runner) {
 func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
 	for seq, widget := range keymapBindings(r, km) {
-		if km == repl.KeymapMain {
+		def, defined := widgetDefinitionOf(r, widget)
+		if km == repl.KeymapMain && !defined {
 			// A key left at the editor's own default is left out, so that the
 			// table stays the override layer repl/bindings.go describes.
 			// There is nothing to compare against in the command map — see
 			// keymapBindings.
-			if def, standard := defaultBindings[seq]; standard && def == widget {
+			//
+			// **Only while the name still means what it did.** `compinit`
+			// redefines `expand-or-complete` itself — `zle -C
+			// expand-or-complete .expand-or-complete _main_complete` — and
+			// leaves Tab bound to that same name, so the sequence and the
+			// widget name both match the default and the binding is the whole
+			// of the completion system. Dropping it here is what made the
+			// shipped completions silent on an rc that redefines a standard
+			// widget without rebinding a key, which is the ordinary shape
+			// rather than an exotic one (#3039).
+			if standard, isDefault := defaultBindings[seq]; isDefault && standard == widget {
 				continue
 			}
 		}
-		if def, defined := widgetDefinitionOf(r, widget); defined {
+		if defined {
 			// **A completion widget is answered by its completer, not by its
 			// function.** See completionBinding, which carries the whole of
 			// why — and note that the question is asked of the definition

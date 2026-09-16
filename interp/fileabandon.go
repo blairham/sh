@@ -56,6 +56,31 @@ const (
 	// other, which is what makes this a kind of its own rather than a test
 	// on Runner.inBuiltin.
 	abandonUsage
+
+	// abandonSubstParse is a command substitution whose body would not
+	// parse — `v=$(echo hi; for)`.
+	//
+	// It is abandonError at every boundary this file and source.go draw,
+	// and it is a kind of its own for exactly one of them. Measured
+	// 2026-09-16 across the panel: at an interactive prompt all seven
+	// columns report it and draw the next prompt, at a `.` and an `eval`
+	// zsh and ksh93 catch it and carry on where bash and dash end the
+	// script, and in a startup file zsh and dash give up the file and run
+	// the session — which is abandonError's answer at all three, arrived at
+	// without asking anything new.
+	//
+	// The boundary it is not abandonError at is giveUpTheCommand, where a
+	// redirection's own expansion is given up. The columns split there in a
+	// way they do not anywhere else: measured, `cat <<END` with such a
+	// substitution in the body costs the *command* in bash 5.3.20 and
+	// ksh93 — which carry on at 1 and at 3 — and costs the *script* in zsh
+	// 5.9.2 and dash, while the target of a redirection, `cat < "$(echo
+	// hi; for)"`, costs the script in bash as well and only ksh93 carries
+	// on. Two shapes, three answers and an axis nobody has written; taking
+	// the catch here would have moved four rows right and four rows wrong
+	// on one throw. So the redirection boundary keeps the answer it has,
+	// and the question is filed rather than guessed.
+	abandonSubstParse
 )
 
 // pendingFileError reports whether what is unwinding is an error a boundary
@@ -143,6 +168,23 @@ func (r *Runner) GiveUpTheFile() bool {
 // prompt in all four: `exit`, `exit 7`, `eval 'exit 7'` and errexit firing
 // (`set -e` then `false`) each end the session.
 func (r *Runner) GiveUpTheLine() bool {
+	// The shared box first, because a typed line can *end* at the subshell
+	// that filled it. `( v=$(echo hi; for) )` is one statement, so the
+	// sequence point in Runner.stmt that takes the box is not reached again
+	// until the first command of the **next** line — a line the person typed
+	// after the prompt came back, which then silently did not run. Measured
+	// at a prompt on bash 5.3.20, zsh 5.9.2 and dash: each reports the
+	// failure and runs the line after it. Draining it here makes the box
+	// what the rest of this file already is, a thing a boundary owns.
+	//
+	// The status is the box's and not whatever the subshell reported, for
+	// the reason scriptStop.status exists: a failure inside a pipeline
+	// element is not the pipeline's own status.
+	if status, stopped := r.takeScriptStop(); stopped {
+		r.status = status
+		r.takeFileError()
+		return true
+	}
 	if !r.pendingFileError() {
 		return false
 	}

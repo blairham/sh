@@ -235,6 +235,16 @@ func (r *Runner) giveUpTheCommand() {
 		// with it, which is the same divergence the fatal shape had before
 		// this function existed, one control value along.
 		r.ctl, r.abandonLine = controlNone, 0
+	case r.abandon == abandonSubstParse && r.ctl == controlExit:
+		// The one fatal error this boundary does not catch, and the reason
+		// is measured rather than structural: a substitution body that will
+		// not parse costs the *command* here in bash 5.3.20 and ksh93 and
+		// costs the *script* in zsh 5.9.2 and dash, and the two shapes a
+		// redirection has do not even agree with each other inside one
+		// column. See abandonSubstParse for the panel. Catching it would
+		// have answered an axis nobody has measured, so the stop stands and
+		// the question is filed.
+		return
 	case r.pendingFileError():
 		r.takeFileError()
 	default:

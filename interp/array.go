@@ -1771,6 +1771,23 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if e.Index == nil {
 		return nil, false
 	}
+	// A subscript is **arithmetic**, and arithmetic moves: `a[i++]` is a
+	// different element every time it is read. One expansion asks for its
+	// elements from more than one place — the source, the list path and the
+	// length — so the answer is kept for the span and the subscript is
+	// evaluated once, which is what both reference shells do. See sourceHold
+	// in interp/expand.go, where the same rule is written down for the value
+	// (#3104).
+	if elems, ok, held := r.heldSubscript(e); held {
+		return elems, ok
+	}
+	elems, ok := r.readArraySubscript(e)
+	r.holdSubscript(e, elems, ok)
+	return elems, ok
+}
+
+// readArraySubscript is arraySubscript with the hold off: the read itself.
+func (r *Runner) readArraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if target := r.throughNamerefName(e.Name); target != e.Name {
 		// A subscript written on a **name reference** indexes what the
 		// reference points at: `v=(a b c); typeset -n r=v` reads `${r[1]}`

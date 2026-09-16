@@ -1314,6 +1314,14 @@ type Runner struct {
 	// of a span's expansion to the scalar half so the inner runs once. See
 	// nestedHold.
 	nestedHeld nestedHold
+	// sourceHeld is one parameter's source, kept for the other readers of
+	// the same node in the same span so that an expansion reads its
+	// parameter once — see sourceHold, where the three things a second read
+	// costs are written down.
+	sourceHeld sourceHold
+	// subscriptHeld is the same for one node's subscript, which is
+	// arithmetic and may move — see subscriptHold.
+	subscriptHeld subscriptHold
 	// unspecified records that a script depended on an axis no dialect had
 	// answered, so a caller can tell that from an ordinary failure.
 	unspecified bool

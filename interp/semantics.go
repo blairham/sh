@@ -716,25 +716,39 @@ type Semantics struct {
 	// Reached only when -e came first — the other order agrees everywhere —
 	// and only in a dialect whose EchoOptions has both letters.
 	EchoLastEscapeFlagWins Answer
-	// EchoExpandsHexEscapes admits `\xHH` alongside the XSI set: bash and
-	// zsh do, dash and ksh93 print it as written.
+	// EchoExpandsHexEscapes admits `\xHH` alongside the XSI set: bash, zsh
+	// and BusyBox ash do, ksh93 prints it as written, and dash has no `-e`
+	// to reach the question with at all.
+	//
+	// The probe has to carry the `-e`. In the two dialects that interpret
+	// nothing without the letter, `echo 'A\x41B'` writes `A\x41B` — which is
+	// also what a shell with no `\x` in its set writes, so the bare form
+	// cannot tell the two readings apart. ash was recorded as No from
+	// exactly that probe while the corpus row beside it, which does carry
+	// the `-e`, already held `AAB` (#3226).
+	//
+	// At most two digits are read, here and at both `printf` sites.
 	EchoExpandsHexEscapes Answer
 	// EchoExpandsEscEscape admits `\e` for the escape character in an `echo`
-	// argument: bash 5.3 and zsh do, dash bash 3.2 and ksh93 write the two
-	// characters.
+	// argument: bash 5.3 — as `bash` and as `sh` — zsh and BusyBox ash do;
+	// bash 3.2 and ksh93 write the two characters, and dash has no `-e` to
+	// reach the question with.
 	//
 	// It is a separate axis from EchoExpandsCapitalEscEscape below because
-	// the two shells that split the letters split them in *opposite*
+	// the shells that split the letters split them in *opposite*
 	// directions, so no single answer describes either one — ksh93 has `\E`
-	// and not `\e`, zsh has `\e` and not `\E` (#908). It is the same
-	// asymmetry the `%b` site has, and it is asked separately there: see
-	// PrintfBEscEscape.
+	// and not `\e`, zsh and ash have `\e` and not `\E` (#908). It is the
+	// same asymmetry the `%b` site has, and it is asked separately there:
+	// see PrintfBEscEscape, and note that the site decides which side a
+	// column lands on — bash 3.2 has neither letter here and both there.
 	//
 	// Asked only where an `echo` argument actually carries a `\e`.
 	EchoExpandsEscEscape Answer
 	// EchoExpandsCapitalEscEscape admits `\E` in an `echo` argument: bash 5.3
-	// and ksh93 do, dash bash 3.2 and zsh write the two characters. See
-	// EchoExpandsEscEscape for why the two letters are two questions.
+	// — as `bash` and as `sh` — and ksh93 do; bash 3.2, zsh and BusyBox ash
+	// write the two characters, and dash has no `-e` to reach the question
+	// with. See EchoExpandsEscEscape for why the two letters are two
+	// questions.
 	//
 	// Asked only where an `echo` argument actually carries a `\E`.
 	EchoExpandsCapitalEscEscape Answer
@@ -2739,18 +2753,22 @@ type Semantics struct {
 	// bash 5.3.15 and zsh 5.9.2. Nothing truncates here (#2060).
 	PrintfBUnicodeEscape PrintfUnicodeEscapePolicy
 	// PrintfBEscEscape admits `\e` in a `%b` argument for the escape
-	// character: bash and zsh do, dash and ksh93 write the two characters.
+	// character: bash — 5.3, that binary as `sh`, and 3.2 alike — zsh and
+	// BusyBox ash do; dash and ksh93 write the two characters.
 	//
 	// It is a separate axis from PrintfBCapitalEscEscape below because the
-	// two shells that split them split them in opposite directions, so no
+	// shells that split them split them in opposite directions, so no
 	// single answer describes either one: ksh93 has `\E` and not `\e`, and
-	// zsh has `\e` and not `\E`.
+	// zsh and ash have `\e` and not `\E`. It is also a separate axis from
+	// the `echo` one because a column can answer the two sites differently:
+	// bash 3.2 has neither letter under `echo -e` and both here.
 	//
 	// Asked only where a `%b` argument actually carries a `\e`.
 	PrintfBEscEscape Answer
-	// PrintfBCapitalEscEscape admits `\E` in a `%b` argument: bash and ksh93
-	// do, dash and zsh write the two characters. See PrintfBEscEscape for
-	// why the two letters are two questions.
+	// PrintfBCapitalEscEscape admits `\E` in a `%b` argument: bash — 5.3,
+	// that binary as `sh`, and 3.2 alike — and ksh93 do; dash, zsh and
+	// BusyBox ash write the two characters. See PrintfBEscEscape for why the
+	// two letters are two questions.
 	//
 	// Asked only where a `%b` argument actually carries a `\E`.
 	PrintfBCapitalEscEscape Answer

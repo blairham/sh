@@ -20,9 +20,32 @@ echo ''
 echo -e -n 'both: a\tb'
 echo ''
 
+# The set behind that -e is bash's rather than the XSI one, and this is the
+# half of the question the rows above cannot ask: \t is in every shell's set,
+# so `echo -e 'a\tb'` says only that the letter turned something on. \x and
+# \e are the extensions, and without -e this shell interprets neither — which
+# is the same output a shell that has neither would give, so the bare form
+# cannot tell the two apart. #3226 set three dialect values off exactly that
+# blind probe. These carry the -e.
+echo -e 'hex: A\x41B'
+echo -e 'hex digits stop at two: a\x4142b'
+echo -e 'hex with no digit: a\xZb'
+
+# Read as bytes, because an ESC is invisible rendered and this row is entirely
+# about which of the two letters produces one. This shell has \e and not \E —
+# zsh's split, and the opposite of ksh93's.
+echo -e 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "
+
 # printf is the portable spelling and behaves the same way it does
 # everywhere, including %b for the processing echo will not do unasked.
 printf '%b\n' 'via %%b: a\tb'
+
+# And %b takes the same two extensions, with the same split between the
+# spellings of the escape character. Measured at this site rather than
+# borrowed from echo's: ksh93 is the shell whose two sites disagree, so an
+# answer carried across from one to the other is a guess.
+printf '%b' 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "
+printf '%b\n' 'via %%b, hex: A\x41B'
 printf '%s|%d|%c\n' str 42 xyz
 printf '%5.2f\n' 3.14159
 

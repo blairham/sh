@@ -525,17 +525,44 @@ func Semantics() interp.Semantics {
 	// interprets without asking, so this is the second bash-ward answer.
 	s.EchoInterpretsEscapes = interp.No
 	s.EchoOptions = "neE"
-	s.EchoExpandsUnicodeEscapes = interp.No
-	s.EchoExpandsEscEscape = interp.No
+	// And the set behind that `-e` is bash's rather than the XSI one, which
+	// is the half that was read off the wrong probe (#3226). `echo -e
+	// 'A\x41B'` is `AAB` here, and `echo -e 'a\eZ:a\EZ'` is `61 1b 5a 3a 61
+	// 5c 45 5a` — the escape character under `\e` and the two characters
+	// under `\E`, which is zsh's split and not ksh93's opposite one.
+	//
+	// The probe that has to be used is the one with the `-e` on it. Without
+	// the letter this shell interprets nothing, so `echo 'A\x41B'` writes
+	// `A\x41B` — which is *also* what a shell with no `\x` in its set
+	// writes. The two readings coincide on every probe that leaves the
+	// letter off, so a bare `echo` cannot tell them apart and three of these
+	// values were set from one that could not.
+	s.EchoExpandsHexEscapes = interp.Yes
+	s.EchoExpandsEscEscape = interp.Yes
 	s.EchoExpandsCapitalEscEscape = interp.No
+	// `\u` and `\U` are in neither set: `echo -e 'a\u0041Z'` writes the
+	// eight characters as they stand.
+	s.EchoExpandsUnicodeEscapes = interp.No
+	// And a `\x` that runs out of digits stands rather than reading as a
+	// zero: `echo -e 'a\xZb'` is `61 5c 78 5a 62`, the same answer bash
+	// gives and not zsh's NUL. Set here rather than left to the POSIX base
+	// because the axis is only reachable at all once the hex escape above is
+	// live, and a default that happens to be right is not a measurement.
+	s.EchoEmptyHexDigitRunIsNul = interp.No
 	// `printf 'a\x41Z'` is `aAZ`, so the hex escape is here where dash has
-	// none at all, and `%b` takes it too. `\u` is not: `printf 'aAZ'` is
-	// the text as written.
+	// none at all, and `%b` takes it too. `\u` is not: `printf 'a\u0041Z'` is
+	// the text as written. The digit rule is the same at both sites and the
+	// same as `echo -e`'s: two digits at most, so `printf 'a\x4142b'` is
+	// `aA42b`.
 	s.PrintfHexEscape = interp.PrintfHexEscapeByte
 	s.PrintfBHexEscape = interp.PrintfHexEscapeByte
 	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
 	s.PrintfBUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
-	s.PrintfBEscEscape = interp.No
+	// And `%b` splits the two spellings of the escape character exactly as
+	// `echo -e` does: `printf '%b' 'a\eZ:a\EZ'` is ` 61 1b 5a 3a 61 5c 45
+	// 5a`. Measured at this site rather than borrowed from the one above,
+	// because ksh93 is the shell whose two sites disagree.
+	s.PrintfBEscEscape = interp.Yes
 	s.PrintfBCapitalEscEscape = interp.No
 	// `printf '%b\n' 'a\101b'` is `aAb`, so the octal needs no `\0`.
 	s.PrintfBOctalWithoutZero = interp.Yes

@@ -144,6 +144,34 @@ func TestEmptyQuotesBehindASeparatorAreAnAxis(t *testing.T) {
 	}
 }
 
+// The axis is a question about a separator *written* in the substituted word.
+// One that arrived in an expansion's result opens the field for a quoted empty
+// word whatever the axis says, because there the panel is unanimous: `v=" ";
+// … a${v}""` is two fields in every column, including the one that answers No
+// above (#3395).
+func TestEmptyQuotesBehindAnExpandedSeparatorAreAFieldWhateverTheAxis(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, src, want string }{
+		{"a blank value", `v=" "; pr a${v}""`, "[a][]"},
+		{"a non-whitespace separator", `IFS=:; u=":"; pr a${u}""`, "[a][]"},
+		{"with a word after it", `v=" "; pr a${v}"" b`, "[a][][b]"},
+		{"a value that is only the separator", `IFS=:; u=":"; pr ${u}""`, "[][]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, a := range []Answer{Yes, No} {
+				out, _ := axisRun(t, substPrinter+c.src, func(s *Semantics) {
+					s.SplitParamExpansion = Yes
+					s.TrailingSeparatorEndsAField = No
+					s.EmptyQuotesAfterASeparatorAreAField = a
+				})
+				if got := trimLine(out); got != c.want {
+					t.Errorf("field=%v: %q, want %q", a, got, c.want)
+				}
+			}
+		})
+	}
+}
+
 // A separator at either end of what an unquoted expansion came to closes the
 // field beside it, even where the separators were the whole of the value and
 // no field came out of the split at all. Unanimous — this is a correction

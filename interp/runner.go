@@ -1321,6 +1321,12 @@ type Runner struct {
 	// was not.
 	expandingOuterWord *syntax.Word
 
+	// scriptText is the source of the program the front end is running, and
+	// runText the text some other route is running in its place. Read by one
+	// diagnostic and written by the routes that run text; see runningText.
+	scriptText string
+	runText    runningText
+
 	// expandingNestedInner marks the expansion of the *inner* of a nested
 	// `${${…}}`, whose fields are read by the operator around them rather
 	// than by the command line.
@@ -3975,6 +3981,12 @@ func (r *Runner) fireExitHook(ctx context.Context) {
 // when the trap is set and refuses one that will not parse.
 func (r *Runner) runTrapBody(ctx context.Context, cond, body string) {
 	defer r.enterTrapBody(cond)()
+	// And the body is the text that runs, at the offset just settled, so a
+	// refusal inside it quotes the body and never the lines of the script it
+	// interrupted — measured on bash 5.3.20, `exit trap: line 1:
+	// `v=$(echo hi; for)'`. Put back by enterTrapBody's restore. See
+	// runningText.
+	r.runText = runningText{text: body, base: r.lineBase, borrowed: true}
 	p := r.ParseWithAliases(body, r.dialect())
 	if r.ask(r.sem().TrapBodyRunsWhatParsed, "a trap body running the part of it that parsed") {
 		r.runTrapBodyByLine(ctx, p, body)

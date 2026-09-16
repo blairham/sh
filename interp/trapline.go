@@ -83,6 +83,7 @@ func (r *Runner) bodyLineStyle() TrapBodyLineStyle {
 // reads: EXIT is the one trap whose body is not a level of indirection.
 func (r *Runner) enterTrapBody(cond string) func() {
 	base, pin, command, inTrap := r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody
+	text := r.runText
 	indirection := r.indirection
 	// A trap body is text read again, and the one dialect that counts levels
 	// of that counts this one — with EXIT the single exception. Measured on
@@ -120,6 +121,7 @@ func (r *Runner) enterTrapBody(cond string) func() {
 	line := r.line
 	restore := func() {
 		r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody = base, pin, command, inTrap
+		r.runText = text
 		r.line, r.indirection = line, indirection
 	}
 	switch r.bodyLineStyle() {

@@ -150,8 +150,19 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		if span.Backquoted && r.diag().SubstitutionParseFailureNamesTheConstruct {
 			construct = "command substitution"
 		}
-		r.errf("%s", r.diagLineNamed(construct, "%s\n",
-			r.diag().ParseFailure(shiftParseError(r.substParseErrorAtItsCloser(span, src, err), base))))
+		raw := r.substParseErrorAtItsCloser(span, src, err)
+		failure := shiftParseError(raw, base)
+		// Placed at the failure's line and followed by the text it was
+		// found in, for the dialects that write one. See substecho.go.
+		putBack := r.substFailureAtItsLine(span, failure)
+		r.errf("%s", r.diagLineNamed(construct, "%s\n", r.diag().ParseFailure(failure)))
+		if echo, at := r.substFailureEcho(span, src, raw, failure); echo != "" {
+			if at > 0 {
+				r.line = at
+			}
+			r.errf("%s", r.diagLineNamed(construct, "%s", echo))
+		}
+		putBack()
 		if span.Backquoted && !r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {
 			// The word expands to nothing and the statement goes on, which
 			// is a failed *expansion* rather than a failed script. The
@@ -252,6 +263,13 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// dialect that counts them. See Runner.tracePrefixDepth.
 	sub.indirection = r.indirection + 1
 	sub.lineBase = base
+	if span.Backquoted {
+		// The older spelling's body is the text its own refusals quote, in
+		// the dialect that quotes one: “ v=`echo $(for)` “ echoes `echo
+		// $(for)` rather than the script's line, measured on bash 5.3.20.
+		// See runningText.
+		sub.runText = runningText{text: src, base: base, borrowed: true}
+	}
 	sub.Stdout = &out
 	// The same group a subshell gets, and the same lifetime: the expansion
 	// does not finish until the body has. See Runner.anchorForkedBody.

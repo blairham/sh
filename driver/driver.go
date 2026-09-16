@@ -2365,6 +2365,9 @@ func (sh Shell) executeLines(
 		// where the program has no gate, which is every script that never
 		// wrote `set -o history`.
 		pr.recordHistory()
+		// And the text it came from, which a diagnostic raised while the line
+		// runs may have to quote — see interp.Runner.SetProgramText.
+		r.SetProgramText(pr.text())
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.

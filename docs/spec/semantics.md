@@ -6288,20 +6288,33 @@ for it to be a view of.
   `hash -p name` both read back. This shell reads every `-p` path back.
 - **zsh's `$commands`.** It is that shell's `BASH_CMDS`, and it removes an
   entry where bash's does not: `unset "commands[ls]"` really takes `ls` out.
-  The read side here is still a PATH search rather than a view of the table.
+  The read side is the command hash first and a PATH search only for a name
+  the hash has not got, which is why a write is visible through it.
 
-  This bullet said the writes "stay refused by name"; re-measured
-  2026-09-15 for #3088, they are **not refused — they are silently
-  dropped**, which is the one answer this document says everywhere else
-  is worse than a refusal. Both halves of the probe are needed, because
-  a status of 0 is what a working write gives too:
+  This bullet has now been wrong twice about the same sentence, in opposite
+  directions, and both times the shell was right. It first said the writes
+  "stay refused by name". #3088's sweep corrected that to "silently
+  dropped" — status 0, and the value read back is still the PATH search —
+  and filed #3092 against it. Re-measured for #3092 against a binary built
+  at `ec0255d51`, the very commit that reading was taken at:
 
-      ours  zmodload zsh/parameter; commands[ls]=/tmp/x   0, no output
-            then `$commands[ls]` is /bin/ls — the PATH search
-      zsh   the same two lines: 0, then /tmp/x
+      $ cmd/zsh -c 'zmodload zsh/parameter; commands[ls]=/tmp/x
+                    echo "st=$?"; echo "[$commands[ls]]"'
+      st=0
+      [/tmp/x]
 
-  Filed as #3092. #2631, whose title still says the writes are refused,
-  is closed, so the sentence outlived whatever made it true.
+  So the write took, and had taken since #2808. The `/bin/ls` in the
+  sweep's own transcript came from a **stale binary**, which is the trap
+  this tree keeps re-finding: rebuild before measuring, and prove the
+  binary under test is the one the claim is about.
+
+  What *was* broken, and is the reason #3092 was worth opening anyway, is
+  the whole-table spelling one shape up: `commands=(foo /bin/echo)` was
+  refused as not implemented yet and left status 0 behind it. It is now
+  written through the same producer, and whether the table is emptied
+  first is per-name — `$commands`, `$functions`, `$options` and `$mapfile`
+  merge, `$aliases`, `$galiases`, `$saliases` and `$nameddirs` empty
+  first, and an empty literal empties nothing. All measured on zsh 5.9.2.
 
 ## A bundle of option letters is one word and several options
 

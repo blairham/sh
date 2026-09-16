@@ -399,17 +399,23 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 // that needs to know which part of the finished text was quoted.
 //
 // mark, where it is not nil, is handed each span's text together with the
-// quoting that span was written in, and what it answers is what goes into the
-// word. That is the only channel quoting has left by this point: a word is a
-// sequence of spans precisely so the expander can tell the quoted parts from
-// the live ones, and joining them into a string is where that is spent.
+// span it came out of, and what it answers is what goes into the word. That
+// is the only channel quoting has left by this point: a word is a sequence of
+// spans precisely so the expander can tell the quoted parts from the live
+// ones, and joining them into a string is where that is spent.
+//
+// The whole span rather than its quoting alone, because the two callers ask
+// different questions of it. A replacement's `&` is live when the span was
+// written unquoted, whatever kind of span it was; a condition operand's
+// bracket is content unless the span is an unquoted *literal*, since a
+// bracket a value carries is no more syntax there than one behind a quote.
 //
 // The glob marks are removed a span at a time rather than once at the end,
 // which is the same string: a mark is always written immediately in front of
 // the byte it marks and both come out of one span, so no mark straddles a
 // boundary. Doing it here is what lets mark see the text a script would, and
 // lets the marks it adds of its own survive to the caller.
-func (r *Runner) wordTextNoSplit(w *syntax.Word, mark func(string, syntax.Quoting) string) string {
+func (r *Runner) wordTextNoSplit(w *syntax.Word, mark func(syntax.Span, string) string) string {
 	return r.wordTextUnsplit(w, mark, false, false)
 }
 
@@ -437,7 +443,7 @@ func (r *Runner) wordTextGlobMarked(w *syntax.Word) string {
 // wordTextUnsplit is the loop all three share. keepMarks says the glob
 // marks survive it; colonTildes says the word is an assignment's value, where
 // a colon begins a tilde segment of its own.
-func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quoting) string, keepMarks, colonTildes bool) string {
+func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) string, keepMarks, colonTildes bool) string {
 	w = r.wordForRun(w)
 	r.expandTilde(w)
 	failed := r.expandErr
@@ -488,7 +494,7 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(string, syntax.Quotin
 			text = r.substitutedColonTildes(text)
 		}
 		if mark != nil {
-			text = mark(text, s.Quoting)
+			text = mark(s, text)
 		}
 		b.WriteString(text)
 	}
@@ -4564,8 +4570,8 @@ func (r *Runner) replacementTemplate(w *syntax.Word) string {
 	if w == nil {
 		return ""
 	}
-	return r.wordTextNoSplit(w, func(text string, q syntax.Quoting) string {
-		if q == syntax.Unquoted {
+	return r.wordTextNoSplit(w, func(s syntax.Span, text string) string {
+		if s.Quoting == syntax.Unquoted {
 			return text
 		}
 		return escapeAmpersand(text)

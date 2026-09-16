@@ -376,7 +376,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// answer `$(( m[k] ))` with 7. Evaluating it instead read the wrong
 	// element and said nothing, which is the silent half of a wrong answer.
 	if a, ok := r.assocFor(x.Name); ok {
-		return r.arithElemValue(a[r.arithAssocKey(x.Sub)].scalar())
+		return r.arithElemValue(a[r.arithAssocKey(x.SubMarked)].scalar())
 	}
 	if r.reportArithWholeArraySubscript(x) {
 		// Named and answered: the operand is zero and the expression keeps
@@ -461,8 +461,11 @@ func (r *Runner) arithFlaggedElement(x *syntax.ArithIndex) (arithNum, bool) {
 // behind: the same name with the operand behind the group as its subscript,
 // and no group.
 func arithIndexOfTheOperand(x *syntax.ArithIndex, sub string) *syntax.ArithIndex {
+	// The operand behind a group is a *word* the caller has already joined,
+	// so it carries no marks and the two readings of the subscript are the
+	// one text.
 	return &syntax.ArithIndex{
-		Name: x.Name, Sub: sub, Start: x.Start, Stop: x.Stop,
+		Name: x.Name, Sub: sub, SubMarked: sub, Start: x.Start, Stop: x.Stop,
 	}
 }
 
@@ -803,6 +806,10 @@ type arithPlace struct {
 	// sub is the subscript as written, which is the key on an associative
 	// name and the text a refusal quotes on an indexed one.
 	sub string
+	// subMarked is sub with the value marks still on it, for the reason
+	// syntax.ArithIndex.SubMarked carries them: the key a write stores
+	// under has to leave a value's own quote characters alone.
+	subMarked string
 	// empty says the brackets held nothing — `(( a[]++ ))` — which index
 	// alone cannot say, since a plain name has no index either. Carried so
 	// the read the operator makes reaches the same answer `$(( a[] ))` does.
@@ -919,8 +926,8 @@ func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
 		return arithPlace{name: x.Name}, true
 	case *syntax.ArithIndex:
 		return arithPlace{
-			name: x.Name, index: x.Index, sub: x.Sub, empty: x.Empty,
-			flags: x.Flags, subscripted: true,
+			name: x.Name, index: x.Index, sub: x.Sub, subMarked: x.SubMarked,
+			empty: x.Empty, flags: x.Flags, subscripted: true,
 		}, true
 	}
 	return arithPlace{}, false
@@ -932,7 +939,8 @@ func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
 		return r.arithValueOf(p.name)
 	}
 	return r.arithElement(&syntax.ArithIndex{
-		Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty, Flags: p.flags,
+		Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked,
+		Empty: p.empty, Flags: p.flags,
 	})
 }
 
@@ -1024,10 +1032,13 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// The group selects nothing, so the operand behind it is the key —
 		// the same rewrite arithElement makes on the way in, and through the
 		// same accessor, so the two spellings cannot name different keys.
-		p.sub, p.flags = r.joinWord(p.flags.Arg), nil
+		// The operand behind the group is a joined *word* and carries no
+		// marks, so both readings of the subscript are the one text.
+		operand := r.joinWord(p.flags.Arg)
+		p.sub, p.subMarked, p.flags = operand, operand, nil
 	}
 	if r.assocDeclared(p.name) {
-		r.setAssocElem(p.name, r.arithAssocKey(p.sub), text)
+		r.setAssocElem(p.name, r.arithAssocKey(p.subMarked), text)
 		return nil
 	}
 	// Through the same reader the element is read by, so a text that is no
@@ -1195,7 +1206,8 @@ func (r *Runner) addNum(n arithNum, step float64) arithNum {
 
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 	place := arithPlace{
-		name: x.Name, index: x.Index, sub: x.Sub, flags: x.Flags, empty: x.Empty,
+		name: x.Name, index: x.Index, sub: x.Sub, subMarked: x.SubMarked,
+		flags: x.Flags, empty: x.Empty,
 		// Brackets were written at all, which none of the three fields above
 		// can say on its own: an empty pair has no index and no text, and so
 		// has a plain name. The empty pair used to be refused while parsing
@@ -2727,7 +2739,7 @@ func (r *Runner) expandArithText(text string) string {
 	// and `v=a[1]; $(( $v ))` has none, and the two are measured to part —
 	// bash reads the second back as a subscript and answers the element,
 	// and does not read the first back. See syntax.ArithValueMark.
-	depth, balanced := 0, true
+	scan, balanced := syntax.ArithBracketScan{}, true
 	// The axis is asked at most once and only where a subscript's expansion
 	// really produced a bracket: under either answer `$(( a[$i] ))` is the
 	// same expression, so a dialect that has not chosen has nothing to be
@@ -2735,13 +2747,26 @@ func (r *Runner) expandArithText(text string) string {
 	asked, protect := false, false
 	out, _, _ := r.expandRawSpansWith(text, func(literal bool, part string) string {
 		if literal {
-			depth += bracketDepth(part)
-			if depth < 0 {
-				balanced = false
+			// Quoting and all: a `]` the source wrote inside a quotation
+			// closes no subscript, so it must not close one for the depth
+			// either — and the state carries across the spans, because the
+			// quotation a span opens can hold the next expansion. The
+			// parser draws the same boundary with the same type.
+			for i := 0; i < len(part); i++ {
+				switch b := part[i]; {
+				case scan.Content(b):
+				case b == '[':
+					scan.Depth++
+				case b == ']':
+					scan.Depth--
+					if scan.Depth < 0 {
+						balanced = false
+					}
+				}
 			}
 			return part
 		}
-		if depth <= 0 || !strings.ContainsAny(part, arithValueMarked) {
+		if scan.Depth <= 0 || !strings.ContainsAny(part, arithValueMarked) {
 			return part
 		}
 		if !asked {
@@ -2754,7 +2779,7 @@ func (r *Runner) expandArithText(text string) string {
 		}
 		return markArithValue(part)
 	})
-	if depth != 0 || !balanced {
+	if scan.Depth != 0 || !balanced || scan.Unclosed() {
 		// The source never closed the bracket it opened, so there is no
 		// bracket of the script's for a value's to be distinguished from —
 		// and the shell that draws the distinction stops drawing it here
@@ -2767,33 +2792,16 @@ func (r *Runner) expandArithText(text string) string {
 	return out
 }
 
-// bracketDepth is what a literal run of the expression's text does to the
-// bracket nesting: one for each `[` and minus one for each `]`.
-//
-// A quote is an ordinary character inside an arithmetic expression in every
-// shell in the panel, so there is no quoting for this to see through.
-func bracketDepth(part string) int {
-	d := 0
-	for i := 0; i < len(part); i++ {
-		switch part[i] {
-		case '[':
-			d++
-		case ']':
-			d--
-		}
-	}
-	return d
-}
-
 // markArithValue puts a mark in front of each byte of an expansion's result
 // that the bracket scanner would otherwise read as syntax.
 //
-// The brackets, and the mark itself so that a NUL a value really carried is
-// still one byte of data when the marks come off.
+// The brackets and the quotation marks a scan would open on, and the mark
+// itself so that a NUL a value really carried is still one byte of data when
+// the marks come off.
 func markArithValue(part string) string {
 	var b strings.Builder
 	for i := 0; i < len(part); i++ {
-		if c := part[i]; c == '[' || c == ']' || c == syntax.ArithValueMark {
+		if strings.IndexByte(arithValueMarked, part[i]) >= 0 {
 			b.WriteByte(syntax.ArithValueMark)
 		}
 		b.WriteByte(part[i])
@@ -2801,10 +2809,19 @@ func markArithValue(part string) string {
 	return b.String()
 }
 
-// arithValueMarked is the alphabet the marking covers: the brackets a scanner
+// arithValueMarked is the alphabet the marking covers: the bytes a scanner
 // would read as syntax, and the mark itself so that a NUL a value really
 // carried is still one byte of data when the marks come off.
-const arithValueMarked = "[]\x00"
+//
+// The brackets, because a `]` a value carries closes no subscript the source
+// opened. The three quoting characters for the same reason one stage on: a
+// subscript's brackets are scanned through quotations, and quote removal is
+// then performed over what they held, so a value that carries a `'` would
+// otherwise open a quotation nobody wrote and lose its own two characters
+// out of the key. Measured 2026-09-16, `declare -A a; a["'q'"]=21; a[q]=22;
+// k="'q'"` makes `$(( a[$k] ))` 21 in bash 5.3.20 and ksh93u+ 2012-08-01,
+// where the same two characters written in the source name `q`.
+const arithValueMarked = "[]'\"\\\x00"
 
 // stripArithValueMarks takes the marks off text that is about to be *shown*.
 //
@@ -2862,13 +2879,13 @@ func stripArithValueMarks(text string) string {
 func (r *Runner) arithAssocKey(sub string) string {
 	bare, quoted := subscriptQuoteRemoval(sub)
 	if !quoted {
-		return sub
+		return syntax.UnmarkArithValue(sub)
 	}
 	if r.ask(r.sem().SubscriptIsAQuotingContext,
 		"an array subscript written inside arithmetic being a quoting context") {
 		return bare
 	}
-	return sub
+	return syntax.UnmarkArithValue(sub)
 }
 
 // subscriptQuoteRemoval performs quote removal on an arithmetic subscript and
@@ -2885,29 +2902,67 @@ func (r *Runner) arithAssocKey(sub string) string {
 // past it in any case, and text that ran off the end is not a key anybody
 // wrote on purpose.
 func subscriptQuoteRemoval(sub string) (string, bool) {
-	if !strings.ContainsAny(sub, `'"\`) {
+	if !strings.ContainsAny(sub, arithValueMarked) {
 		return sub, false
 	}
 	var b strings.Builder
 	b.Grow(len(sub))
+	// Whether a quotation of the *script's* was taken off, which is the
+	// question the caller asks the axis about. Marks come off whatever
+	// happens — they are this implementation's bookkeeping and never part of
+	// a key — so "the text changed" would answer the wrong question here for
+	// a second reason.
+	removed := false
 	for i := 0; i < len(sub); i++ {
 		switch c := sub[i]; c {
-		case '\\':
+		case syntax.ArithValueMark:
+			// A byte a value carried: a character of the key, whatever it
+			// spells, and the mark itself is not.
 			if i+1 == len(sub) {
 				return sub, false
 			}
 			i++
 			b.WriteByte(sub[i])
+		case '\\':
+			if i+1 == len(sub) {
+				return sub, false
+			}
+			i++
+			if sub[i] == syntax.ArithValueMark {
+				if i+1 == len(sub) {
+					return sub, false
+				}
+				i++
+			}
+			b.WriteByte(sub[i])
+			removed = true
 		case '\'', '"':
-			end := strings.IndexByte(sub[i+1:], c)
+			end := indexUnmarked(sub[i+1:], c)
 			if end < 0 {
 				return sub, false
 			}
-			b.WriteString(sub[i+1 : i+1+end])
+			b.WriteString(syntax.UnmarkArithValue(sub[i+1 : i+1+end]))
 			i += end + 1
+			removed = true
 		default:
 			b.WriteByte(c)
 		}
 	}
-	return b.String(), true
+	return b.String(), removed
+}
+
+// indexUnmarked is strings.IndexByte over the bytes a *script* wrote: the one
+// behind a mark came out of a value and closes no quotation. -1 when there is
+// none, which is the unterminated quotation subscriptQuoteRemoval leaves
+// alone.
+func indexUnmarked(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case syntax.ArithValueMark:
+			i++
+		case c:
+			return i
+		}
+	}
+	return -1
 }

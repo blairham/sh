@@ -229,6 +229,22 @@ type ArithIndex struct {
 	// with the attribute, whitespace included: `m[ k ]` is a different key
 	// from `m[k]`, in an expression exactly as in `${m[ k ]}`.
 	Sub string
+	// SubMarked is Sub with the value marks still on it, so a reader that
+	// has to tell a quote the *script* wrote from one a value carried can.
+	//
+	// Sub is what a diagnostic quotes back and what an expression is read
+	// out of, and neither of those wants a mark in it. An associative
+	// array's key is the one reading that does: quote removal is performed
+	// over a subscript there, and it has to leave a value's own quote
+	// characters alone. Measured 2026-09-16 from a script file with
+	// `declare -A a; a["'q'"]=21; a[q]=22; k="'q'"`, `$(( a[$k] ))` is 21 in
+	// bash 5.3.20 and in ksh93u+ 2012-08-01 — the value's quotes are two
+	// characters of the key and not a quotation — where the same two
+	// characters written in the source name the element under `q`.
+	//
+	// Empty when the brackets held nothing, exactly as Sub is. See
+	// syntax.ArithValueMark for what the marks are and who puts them on.
+	SubMarked string
 	// Empty says the brackets were written with nothing at all between
 	// them — `a[]` — which is what `a[$w]` becomes when `$w` holds the empty
 	// string, because an arithmetic expansion substitutes its parameters
@@ -344,6 +360,11 @@ type ArithAssign struct {
 	Index ArithExpr
 	// Sub is the subscript as written, for the reason ArithIndex.Sub is.
 	Sub string
+	// SubMarked is Sub with the value marks still on it, for the reason
+	// ArithIndex.SubMarked is: `(( a[$k] = 5 ))` stores under the key a
+	// value's quote characters are part of, not under the one quote removal
+	// would leave behind.
+	SubMarked string
 	// Flags is the group the subscript opened with, for the reason
 	// ArithIndex.Flags is: `(( a[(r)20] = 9 ))` writes the element the same
 	// search reads.
@@ -545,7 +566,12 @@ func (p *Parser) parseArithIn(src string, at Pos, expanded bool) ArithExpr {
 		// Removed before anything reads the text, which is the whole of that
 		// reading: it is what makes `1"0"` the number 10, and what makes the
 		// text a failure quotes back the one without the quotes in it.
-		src = strings.ReplaceAll(src, `"`, "")
+		//
+		// A quote a value carried is not one of these. Measured 2026-09-16,
+		// `declare -A a; a['"q"']=33; k='"q"'` makes `$(( a[$k] ))` 33 in
+		// bash 5.3.20: the two characters are part of the key, so removing
+		// them here reached the wrong element. See ArithValueMark.
+		src = removeUnmarkedDoubleQuotes(src)
 	}
 	a := &arithParser{src: src, at: at, p: p, dial: p.dialect, stopped: -1, expanded: expanded}
 	e := a.expr()
@@ -850,8 +876,8 @@ func (a *arithParser) assign() ArithExpr {
 					return nil
 				}
 				return &ArithAssign{
-					Name: name, Index: sub.Index, Sub: sub.Text, Flags: sub.Flags,
-					Empty: sub.Empty, Op: op, Value: v, Start: start,
+					Name: name, Index: sub.Index, Sub: sub.Text, SubMarked: sub.Marked,
+					Flags: sub.Flags, Empty: sub.Empty, Op: op, Value: v, Start: start,
 				}
 			}
 		}
@@ -1115,8 +1141,8 @@ func (a *arithParser) primary() ArithExpr {
 		}
 		if sub := a.subscript(true); sub.Present {
 			return &ArithIndex{
-				Name: name, Index: sub.Index, Sub: sub.Text, Empty: sub.Empty,
-				Flags: sub.Flags, Start: start, Stop: start,
+				Name: name, Index: sub.Index, Sub: sub.Text, SubMarked: sub.Marked,
+				Empty: sub.Empty, Flags: sub.Flags, Start: start, Stop: start,
 			}
 		}
 		return &ArithVar{Name: name, Start: start, Stop: start}
@@ -1526,6 +1552,9 @@ type arithSubscript struct {
 	Index ArithExpr
 	// Text is the subscript exactly as written, brackets excluded.
 	Text string
+	// Marked is Text with the value marks still on it. See ArithIndex.Sub
+	// and ArithIndex.SubMarked.
+	Marked string
 	// Empty says the brackets held nothing at all. See ArithIndex.Empty.
 	Empty bool
 	// Flags is the parenthesized flag group the subscript opened with, where
@@ -1579,6 +1608,31 @@ type arithSubscript struct {
 // this.
 const ArithValueMark = '\x00'
 
+// removeUnmarkedDoubleQuotes takes out the double quotes a *script* wrote,
+// leaving the ones a value carried — which are characters of a key and not
+// quotation at all. See ArithValueMark.
+func removeUnmarkedDoubleQuotes(s string) string {
+	if !strings.ContainsAny(s, `"`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case ArithValueMark:
+			b.WriteByte(s[i])
+			if i+1 < len(s) {
+				i++
+				b.WriteByte(s[i])
+			}
+		case '"':
+		default:
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
+}
+
 // UnmarkArithValue takes the marks back off, leaving the text a value
 // actually held. Exported for whoever put them on: text that never became a
 // subscript still has to be shown without them.
@@ -1612,19 +1666,35 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 		return arithSubscript{}
 	}
 	open := a.off
-	depth := 0
+	// The scan is quoted-aware, which is the whole of what a subscript's
+	// brackets are: a `]` inside a quotation is a character of the key and
+	// does not end anything. Measured 2026-09-16 from a script file with
+	// `declare -A a; a[']']=5`, `$(( a[']'] ))` is 5 in bash 5.3.20, under
+	// bash as `sh` and in ksh93u+ 2012-08-01, and this shell alone stopped
+	// at the first bracket and was left holding a `'] ` it could not read as
+	// an operator (#3302).
+	//
+	// A quote a *value* carried is not a quotation, and the marks are how
+	// that is known — the same distinction the bracket above already draws,
+	// drawn over the same alphabet. See ArithValueMark.
+	var scan ArithBracketScan
 	for a.off < len(a.src) {
-		switch a.src[a.off] {
-		case ArithValueMark:
+		switch b := a.src[a.off]; {
+		case b == ArithValueMark:
 			// The byte behind the mark came from a value, so it is text and
-			// not a bracket however it is spelled. See ArithValueMark.
+			// not a bracket or a quotation however it is spelled. See
+			// ArithValueMark.
 			a.off++
-		case '[':
-			depth++
-		case ']':
-			depth--
-			if depth == 0 {
-				inner := unmarkArithValue(a.src[open+1 : a.off])
+		case scan.Content(b):
+			// Inside a quotation, or the byte a backslash stands in front
+			// of: content either way, and neither bracket nor quote.
+		case b == '[':
+			scan.Depth++
+		case b == ']':
+			scan.Depth--
+			if scan.Depth == 0 {
+				marked := a.src[open+1 : a.off]
+				inner := unmarkArithValue(marked)
 				a.off++
 				if inner == "" && emptyOK {
 					return arithSubscript{Present: true, Empty: true}
@@ -1642,7 +1712,7 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 					// second pass would perform a substitution twice.
 					if g, rest, ok := scanSubscriptFlags(inner); ok {
 						g.Arg = literalWord(rest, a.at)
-						return arithSubscript{Present: true, Text: inner, Flags: g}
+						return arithSubscript{Present: true, Text: inner, Marked: marked, Flags: g}
 					}
 				}
 				// The inner parser shares the outer one's error slot, so a
@@ -1657,18 +1727,76 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 				sub.space()
 				if e == nil || sub.off < len(sub.src) {
 					a.p.err = held
-					return arithSubscript{Present: true, Text: inner}
+					return arithSubscript{Present: true, Text: inner, Marked: marked}
 				}
-				return arithSubscript{Present: true, Index: e, Text: inner}
+				return arithSubscript{Present: true, Index: e, Text: inner, Marked: marked}
 			}
 		}
 		a.off++
 	}
 	// No closing bracket: not a subscript at all, so the name stands alone
-	// and whatever follows is the caller's problem to report.
+	// and whatever follows is the caller's problem to report. A quotation
+	// the text never closed lands here too, and lands here rather than
+	// falling back to a quote-blind scan: measured, `e="a[']"; $(( $e ))` is
+	// `bad array subscript` in bash 5.3.20 and not a key of one character.
 	a.off = open
 	return arithSubscript{}
 }
+
+// ArithBracketScan is the quoting state a subscript's bracket scan carries:
+// which quotation it is inside, whether a backslash is holding the next byte,
+// and how deep the brackets are.
+//
+// A type rather than two locals because the same state has to be carried
+// across the *literal spans* of a text that is still being expanded — an
+// expansion can sit inside a quotation the source opened before it, and a `]`
+// the source wrote inside one closes no subscript there either. Exported for
+// that second reader: the interpreter decides which bytes to mark while it is
+// walking the spans, and has to draw the boundary the parser will draw. One
+// type rather than two, so the two readings cannot part.
+//
+// Marks are the caller's to skip. Only the bytes a scan is shown reach here,
+// and a byte behind a mark is content whatever it spells, so a caller passes
+// it nothing it has already decided about. See ArithValueMark.
+type ArithBracketScan struct {
+	// Depth is the bracket nesting, counting only brackets that are not
+	// content.
+	Depth int
+	// quote is the quotation being scanned through and 0 outside one.
+	//
+	// A backslash is not one of these, and that is measured rather than
+	// overlooked: a backslash a *script* writes in an arithmetic expression
+	// is taken off before the brackets are scanned, so it protects nothing
+	// — `$(( a[\]] ))` is `] : arithmetic syntax error` in bash 5.3.20,
+	// whose own diagnostic quotes the expression back as `a[]] ` with the
+	// backslash already gone — and a backslash a *value* carries is content
+	// by its mark, which is a byte this never sees. What is left for a
+	// backslash to do here is nothing.
+	quote byte
+}
+
+// Content reports whether b is a character of the text rather than syntax,
+// advancing the state over it.
+//
+// It returns false for the two brackets and for nothing else, so a caller can
+// switch on it and then on the bracket: a quote opens or closes a quotation
+// and is content in either case, and so is every byte inside one.
+func (s *ArithBracketScan) Content(b byte) bool {
+	switch {
+	case s.quote != 0:
+		if b == s.quote {
+			s.quote = 0
+		}
+		return true
+	case b == '\'' || b == '"':
+		s.quote = b
+		return true
+	}
+	return b != '[' && b != ']'
+}
+
+// Unclosed reports whether the text ran out inside a quotation.
+func (s *ArithBracketScan) Unclosed() bool { return s.quote != 0 }
 
 // charCode reads `#name`, `#\c` and `##c`, where the dialect has them.
 //

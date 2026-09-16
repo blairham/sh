@@ -165,7 +165,7 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 	// Nothing inside `[[ ]]` is split or globbed, so a word yields exactly
 	// one operand however it was written — which is why `[[ -z $u ]]` needs
 	// no quoting where the `[` builtin does.
-	s := r.condOperand(x.X)
+	s := r.condOperandText(x.X)
 	r.traceConditionPrimary(x.Op, r.traceCondOperand(s))
 	switch x.Op {
 	case "-n":
@@ -241,7 +241,8 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 }
 
 func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
-	left := r.condOperand(x.X)
+	leftMarked := r.condOperand(x.X)
+	left := syntax.UnmarkArithValue(leftMarked)
 
 	if x.Op == "==" || x.Op == "=" || x.Op == "!=" {
 		// A process substitution in this position is one shell's alone, and
@@ -276,7 +277,8 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	// both operands and is written before the test is answered, which is
 	// where every shell that has the construct puts it — and because the
 	// expansion must happen exactly once however many readers it has.
-	right := r.condOperand(x.Y)
+	rightMarked := r.condOperand(x.Y)
+	right := syntax.UnmarkArithValue(rightMarked)
 	r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(right))
 
 	switch x.Op {
@@ -289,11 +291,11 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		//
 		// `<` and `>` compare strings, which is why `[[ 10 > 9 ]]` is false
 		// and `[[ 10 -gt 9 ]]` is true — the sharpest trap in the construct.
-		l, err := r.condArith(left)
+		l, err := r.condArith(leftMarked)
 		if err != nil {
 			return false, err
 		}
-		rv, err := r.condArith(right)
+		rv, err := r.condArith(rightMarked)
 		if err != nil {
 			return false, err
 		}
@@ -392,7 +394,29 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 	if r.condWordQualifies(w) {
 		return r.condGlobbedOperand(w)
 	}
-	return strings.Join(r.expandWordNoSplit(w), "")
+	// Marked, and every caller but the arithmetic one takes the marks
+	// straight back off. A condition still holds the *word*, so it still
+	// knows which of the brackets in the finished text a script wrote
+	// unquoted — and that is the only stage at which anything can know it.
+	// The two readings are one expansion, which is what the operand must
+	// have however many readers it has.
+	return r.wordTextNoSplit(w, func(sp syntax.Span, text string) string {
+		if sp.Kind == syntax.Literal && sp.Quoting == syntax.Unquoted {
+			return text
+		}
+		// A bracket behind a quote, and one out of an expansion, are
+		// content: measured 2026-09-16 from a script file with `declare -A
+		// a; a[']']=5`, `[[ a[']'] -eq 5 ]]` holds in bash 5.3.20 and in
+		// ksh93u+ 2012-08-01 (#3302). The same rule `[[ -v a[k] ]]` already
+		// reads its brackets by, one operator over.
+		return markArithValue(text)
+	})
+}
+
+// condOperandText is condOperand with the marks off: the text every reader
+// but the arithmetic one wants. See syntax.ArithValueMark.
+func (r *Runner) condOperandText(w *syntax.Word) string {
+	return syntax.UnmarkArithValue(r.condOperand(w))
 }
 
 // condArith reads a condition operand as an arithmetic expression, which is
@@ -446,14 +470,34 @@ func (r *Runner) conditionOperand(text string) (value int, failure string) {
 	text = r.conditionLeadingNumeral(text)
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithFor(text, syntax.Pos{})
+	// The text a complaint quotes back is the one a script would recognise,
+	// which is this one without the marks: they are this implementation's
+	// bookkeeping, and a refusal carrying one prints a stray NUL into the
+	// log. The *reading* is done from the marked text, which is the whole
+	// point of having it. See syntax.ArithValueMark.
+	shown := stripArithValueMarks(text)
 	if perr := p.Err(); perr != nil {
-		return 0, r.diag().ParseFailure(perr)
+		return 0, r.diag().ParseFailure(unmarkArithFailure(perr))
 	}
 	v, err := r.evalArith(tree)
 	if err != nil {
-		return 0, r.arithFailure(text, err)
+		return 0, r.arithFailure(shown, err)
 	}
 	return v, ""
+}
+
+// unmarkArithFailure is a parse failure worded about the text a script wrote
+// rather than the marked one it was read from. See stripArithValueMarks.
+func unmarkArithFailure(err error) error {
+	se, ok := err.(*syntax.Error)
+	if !ok {
+		return err
+	}
+	out := *se
+	out.Expr = stripArithValueMarks(out.Expr)
+	out.Token = stripArithValueMarks(out.Token)
+	out.Msg = stripArithValueMarks(out.Msg)
+	return &out
 }
 
 // condArithFailed reports an unreadable condition operand and says how the

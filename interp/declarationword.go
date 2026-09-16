@@ -37,17 +37,21 @@ const (
 
 // declarationWordWritten reports whether a command whose argv begins with a
 // declaration utility was written in a way the dialect recognizes as one.
-// head is the word whose expansion produced argv[0].
+//
+// The first word as written is enough to say which word produced argv[0]: an
+// unquoted literal with no expansion in it produces exactly itself, so where
+// it equals the utility's name it is the word that named it, and where argv[0]
+// came from anywhere else — an expansion, a word behind an empty one, a word
+// behind a precommand modifier — the first word is not that name.
 //
 // Asked only for a command that already declares, so the common path — any
 // other command, and a declaration utility in the dialects that key the rule
 // on its name — never reaches the word.
-func (r *Runner) declarationWordWritten(c *syntax.SimpleCmd, head int, name string) bool {
-	switch r.sem().DeclarationCommandWord {
-	case DeclarationByUnquotedLiteralWord:
-		return head == 0 && len(c.Args) > 0 && unquotedLiteral(c.Args[0]) == name
+func (r *Runner) declarationWordWritten(c *syntax.SimpleCmd, name string) bool {
+	if r.sem().DeclarationCommandWord != DeclarationByUnquotedLiteralWord {
+		return true
 	}
-	return true
+	return len(c.Args) > 0 && unquotedLiteral(c.Args[0]) == name
 }
 
 // unquotedLiteral is a word's text where every span of it is unquoted literal

@@ -803,6 +803,13 @@ func Semantics() interp.Semantics {
 	// function g { trap 'echo I' USR1; }; g; kill -USR1 $$` is `O` and the
 	// same body written `g() { … }` is `I` (#2345).
 	s.FunctionLocalTraps = interp.TrapsGoBackAtTheReturnOfAKeywordFunction
+	// The option table is the same word's third scope, and it is a *restore*
+	// where the trap table is a reset: the body is handed the caller's
+	// options exactly as they stand and the whole table goes back at the
+	// return. Measured 2026-09-16 on AT&T 93u+ 2012-08-01 — `set -o noglob;
+	// function g { set +o noglob; }; g` leaves noglob **on**, and the same
+	// body written `g() { … }` leaves it off (#3308).
+	s.FunctionLocalOptions = interp.OptionsGoBackAtTheReturnOfAKeywordFunction
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No
 	s.SelectTakesUnterminatedReply = interp.No

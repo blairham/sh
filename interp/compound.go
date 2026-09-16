@@ -1108,6 +1108,14 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	if sc.trapTableWasTaken {
 		r.exitTrap, r.trapDepth = nil, 0
 	}
+	// And, in that same shell, the option table — which the same word
+	// scopes and the same word does *not* empty. The body is handed the
+	// caller's options live and gives them back at the return, where the
+	// trap table above is taken away from it. Beside that one rather than
+	// inside the walk over the dialects' hooks for the reason localtraps.go
+	// gives about its own store: `set -o` writes the substrate's state, so
+	// what puts it back is the substrate's too. See localsetoptions.go.
+	r.saveTheOptionTable(sc)
 
 	// One dialect fires the DEBUG trap again here: once for the call where
 	// it was written, and once more with the frame entered — see
@@ -1314,6 +1322,13 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// tell whether the call had installed one of its own, and a function's
 	// EXIT trap would stop firing.
 	r.restoreLocalTraps(sc)
+	// And the option table the call was handed, in the shell that gives a
+	// `function`-word body one of its own. After the dialects' hooks above
+	// for the same reason the traps are: the one dialect that scopes options
+	// through those hooks is a different shell from this one, so the two
+	// restores never run over the same call — but were they ever to, the
+	// inner registration would have to unwind first.
+	r.restoreTheOptionTable(sc)
 	// And the enclosing calls' declarations, which come back holding
 	// whatever this body wrote to the shell's own names underneath them.
 	// After this scope's own restore above, so the name it declared is the

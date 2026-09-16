@@ -6314,6 +6314,18 @@ type scope struct {
 	// See localtraps.go.
 	trapTableWasTaken bool
 
+	// savedOptions is the shell's whole `set -o` table as this call found
+	// it, where the dialect scopes options to a `function`-word call. Nil
+	// for every other call, which is every call in five of the six columns.
+	//
+	// A snapshot taken on the way in rather than a save per modification,
+	// because the shell that has this hands the body the caller's table
+	// *live* and puts the whole of it back: the body can read an option the
+	// caller moved, which a per-modification save would also get right, and
+	// it can be left holding a name the caller never touched, which that
+	// save would not. See localsetoptions.go.
+	savedOptions map[string]bool
+
 	// onReturn is what runs when this call unwinds, in reverse order of
 	// registration.
 	//

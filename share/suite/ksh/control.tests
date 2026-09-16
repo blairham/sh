@@ -152,3 +152,158 @@ printf -- '=== EXIT, which goes with the table as well ===\n'
 	o
 	printf -- '--- o has returned\n'
 )
+
+# The option table is the third thing a `function` call carries, and it is
+# carried differently from the trap table above: the body is handed the
+# caller's options **live** and gives the whole table back at the return,
+# where it is handed an *empty* trap table. So the sections below are written
+# in two halves — what the body **reads** on the way in, which is what tells a
+# restore from a reset, and what the caller holds afterwards (#3308).
+#
+# `$-` is the instrument for the letter and it is not a portable one: in zsh
+# the letter for this option is `F` and `-f` is something else entirely. That
+# does not reach this file — it is graded against this column alone — but it
+# is why a probe run across the panel has to ask `[[ -o noglob ]]` instead.
+
+reportglob() {
+	case $- in
+	(*f*) printf -- '--- %s -> [noglob on]\n' "$1" ;;
+	(*) printf -- '--- %s -> [noglob off]\n' "$1" ;;
+	esac
+}
+
+printf -- '=== an option the body turns on ===\n'
+(
+	function g { set -o noglob; }
+	g
+	reportglob 'after the keyword form'
+)
+(
+	g() { set -o noglob; }
+	g
+	reportglob 'after the POSIX form'
+)
+
+printf -- '=== an option the caller had on and the body turns off ===\n'
+(
+	set -o noglob
+	function g { set +o noglob; }
+	g
+	reportglob 'after the keyword form'
+)
+(
+	set -o noglob
+	g() { set +o noglob; }
+	g
+	reportglob 'after the POSIX form'
+)
+
+printf -- '=== the letter spelling is the same state ===\n'
+(
+	function g { set -f; }
+	g
+	reportglob 'after the keyword form'
+)
+(
+	g() { set -f; }
+	g
+	reportglob 'after the POSIX form'
+)
+
+printf -- '=== what the body reads on the way in ===\n'
+(
+	set -o noglob
+	function g { reportglob 'inside the keyword form'; }
+	g
+	reportglob 'after it'
+)
+(
+	set -o noglob
+	g() { reportglob 'inside the POSIX form'; }
+	g
+	reportglob 'after it'
+)
+
+printf -- '=== and in the other direction, over an option that starts on ===\n'
+(
+	set +o braceexpand
+	function g { printf -- '--- inside the keyword form -> [%s]\n' "$(echo {a,b})"; }
+	g
+	printf -- '--- after it -> [%s]\n' "$(echo {a,b})"
+)
+(
+	set +o braceexpand
+	function g { set -o braceexpand; printf -- '--- inside the keyword form -> [%s]\n' "$(echo {a,b})"; }
+	g
+	printf -- '--- after it -> [%s]\n' "$(echo {a,b})"
+)
+(
+	set +o braceexpand
+	g() { set -o braceexpand; printf -- '--- inside the POSIX form -> [%s]\n' "$(echo {a,b})"; }
+	g
+	printf -- '--- after it -> [%s]\n' "$(echo {a,b})"
+)
+
+printf -- '=== errexit, where the caller feels it ===\n'
+(
+	function g { set -o errexit; }
+	g
+	false
+	printf -- '--- the keyword call left errexit behind: no\n'
+)
+(
+	g() { set -o errexit; }
+	g
+	false
+	printf -- '--- the POSIX call left errexit behind: no\n'
+)
+
+printf -- '=== nounset, which a reader feels rather than a status ===\n'
+(
+	function g { set -u; }
+	g
+	printf -- '--- after the keyword form -> [%s]\n' "$nosuchname"
+	printf -- '--- .\n'
+)
+(
+	g() { set -u; }
+	g
+	printf -- '--- after the POSIX form -> [%s]\n' "$nosuchname"
+	printf -- '--- .\n'
+)
+
+printf -- '=== the boundary is the word, not the call ===\n'
+(
+	function o {
+		function i { set +o noglob; }
+		set -o noglob
+		i
+		reportglob 'inside o, after the inner keyword call'
+	}
+	o
+	reportglob 'after o'
+)
+(
+	function o {
+		p() { set +o noglob; }
+		set -o noglob
+		p
+		reportglob 'inside o, after the inner POSIX call'
+	}
+	o
+	reportglob 'after o'
+)
+
+printf -- '=== an early return is still a return ===\n'
+(
+	function g { set -o noglob; return 3; }
+	g
+	printf -- '--- the status -> [%s]\n' "$?"
+	reportglob 'after the keyword form'
+)
+(
+	g() { set -o noglob; return 3; }
+	g
+	printf -- '--- the status -> [%s]\n' "$?"
+	reportglob 'after the POSIX form'
+)

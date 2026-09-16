@@ -85,3 +85,22 @@ printf 'the prefix overflows [%#05x] [%#06x] and then does not [%#07x]\n' 65535 
 # column that writes it past the width. Carried here so that a change to the
 # fill cannot move it unnoticed.
 printf 'a nought [%#05x]\n' 0
+
+# The escape character in a format, at both of its spellings. `printf '\e[1m'`
+# is how a script says it is about to colour its output, and every build of
+# this shell takes both letters: 5.3.20, 3.2.57 and argv[0] `sh` alike write
+# an ESC for `\e` and for `\E`. Neither line can be in core/, which is the
+# tier all five references have to agree on — dash has neither letter and zsh
+# and BusyBox ash have the small one only — so the pair is asked in each
+# dialect's own file instead.
+#
+# Read as bytes, because an ESC written to a terminal is invisible and a case
+# that compared rendered text would pass whatever the shell did.
+printf 'a\eZ:a\EZ' | od -An -c | tr -s ' '
+printf '\e[1mbold\e[0m' | od -An -c | tr -s ' '
+
+# The same two letters in a `%b` argument, which this shell answers the same
+# way and ksh93 does not. Carried here as the control that says the format's
+# pair and the `%b` pair are two pairs: the column where they agree is not
+# evidence either way until the column where they part is asked too.
+printf '%b' 'a\eZ:a\EZ' | od -An -c | tr -s ' '

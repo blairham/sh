@@ -115,6 +115,15 @@ printf 'backslash:\\\n'
 printf 'octal:\101\102\n'
 printf 'controls:\a\b\f\v\n' | od -An -c | tr -s ' '
 
+# Neither spelling of the escape character is here, and cannot be: `\e` is an
+# ESC in six of the seven reference columns and two characters in dash, and
+# `\E` is an ESC in four and two characters in three, so this tier — which
+# needs all five references to agree — has no line to write. Each dialect's
+# own file asks its own column, and the whole panel's answer is asserted in
+# Go, where a 6-1 split can be stated (#3225). The escapes above are what
+# says the split is those two letters and not the reader: `\t \v \f \r \a`
+# and `\0101` are byte for byte the same in all seven.
+
 # %b processes the escapes of its operand, which plain %s does not.
 printf '[%b]\n' 'x\ty'
 printf '[%b]\n' 'a\nb'

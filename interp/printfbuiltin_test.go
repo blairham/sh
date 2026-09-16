@@ -25,6 +25,8 @@ func printfSem() Semantics {
 	s.PrintfBHexEscape = PrintfHexEscapeAbsent
 	s.PrintfUnicodeEscape = PrintfUnicodeEscapeAbsent
 	s.PrintfBUnicodeEscape = PrintfUnicodeEscapeAbsent
+	s.PrintfEscEscape = No
+	s.PrintfCapitalEscEscape = No
 	s.PrintfBEscEscape = No
 	s.PrintfBCapitalEscEscape = No
 	s.PrintfBOctalWithoutZero = No

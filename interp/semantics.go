@@ -8432,6 +8432,40 @@ type Semantics struct {
 	// Two fields because the two letters are not answered together.
 	SymbolicMaskTakesTheStickyLetter Answer
 
+	// SymbolicMaskTakesAPermissionCopy accepts POSIX's third alternative
+	// after an operator: a `u`, `g` or `o` standing for *whatever that group
+	// is allowed now*, so `umask g=u` gives the group the owner's
+	// permissions and `umask o=u` gives them to everyone.
+	//
+	// True in bash 5.3, dash and BusyBox ash. False in zsh and ksh93 — and in
+	// **bash 3.2**, which calls the `u` an invalid symbolic mode character,
+	// so it is a 5.x addition and the bash preset takes the newer answer.
+	//
+	// The copied bits are the group's *allowed* ones rather than the mask's,
+	// which is what makes `umask 022; umask -S g=u` give `g=rwx`.
+	SymbolicMaskTakesAPermissionCopy Answer
+
+	// SymbolicMaskTakesTheConditionalExecuteLetter accepts `X` in a clause.
+	//
+	// True in bash 5.3, ksh93, dash and BusyBox ash; false in zsh and in
+	// **bash 3.2**, so this one is a 5.x addition too and splits the panel
+	// differently from the copy above — ksh93 takes the letter and refuses
+	// the copy.
+	//
+	// It is not a plain `x`. The letter is chmod's conditional execute, and
+	// the condition it carries survives here even though a umask has no file
+	// to be a directory: it is worth execute only when the mask *already*
+	// allows execute to somebody. Measured 2026-09-15 —
+	//
+	//	umask 122; umask -S u+X   u=rwx,g=rx,o=rx   the group and other have it
+	//	umask 133; umask -S a+X   u=rw,g=r,o=r      nobody has it, so nothing
+	//	umask 776; umask -S u+X   u=x,g=,o=x        other alone is enough
+	//
+	// and the test is against the mask the whole operand started from, not
+	// against the one a previous clause left: `umask 133; umask -S u+x,g+X`
+	// leaves the group without it in every shell that has the letter.
+	SymbolicMaskTakesTheConditionalExecuteLetter Answer
+
 	// ShiftOptionWords is which leading-`-` words `shift` reads as options
 	// rather than as its count, and it is three answers rather than a
 	// presence — see ShiftOptionWordPolicy.
@@ -14600,6 +14634,11 @@ func PosixSemantics() Semantics {
 		SymbolicMaskWhoAloneSetsIt:           No,
 		SymbolicMaskTakesTheSetuidLetter:     Yes,
 		SymbolicMaskTakesTheStickyLetter:     Yes,
+		// POSIX's grammar for this operand has `permcopy` as one of the
+		// three things an action may take, and `X` among the permission
+		// characters, so the standard answers both with a yes.
+		SymbolicMaskTakesAPermissionCopy:             Yes,
+		SymbolicMaskTakesTheConditionalExecuteLetter: Yes,
 		// POSIX gives all three a *name*, and neither a special parameter
 		// nor a positional one is a name — a positional has `shift` to
 		// remove it.

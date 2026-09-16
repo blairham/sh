@@ -1038,6 +1038,9 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.No
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.No
+	// Neither: `bad symbolic mode permission: u`, and the same for X.
+	s.SymbolicMaskTakesAPermissionCopy = interp.No
+	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.No
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	// A dash word is an option unless it is all digits, which is what
 	// separates this from ksh93: `shift -x` is a bad option and `shift -1` is

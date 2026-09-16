@@ -698,6 +698,9 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
+	// Both, in silence — this shell sets and prints nothing.
+	s.SymbolicMaskTakesAPermissionCopy = interp.Yes
+	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	// No options and no marker: `shift -x`, `shift -1` and `shift --` are all
 	// numbers this shell calls illegal, which is the one wording it has here.

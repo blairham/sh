@@ -365,6 +365,18 @@ type Lexer struct {
 	// by an expansion closes nothing, which is measured.
 	subscriptDepth int
 
+	// pidBraces counts the braces still open in a `{ … }` run the word being
+	// read opened immediately after `$$`, and is zero everywhere else. While
+	// it is positive a blank, a newline and every operator alike are
+	// characters of the run rather than the end of the word — the same job
+	// subscriptDepth does one construct along. See
+	// [Dialect.PidBraceGroupIsText] and endsWord.
+	pidBraces int
+
+	// pidBraceOpen is where that run's `{` stands, kept for the refusal an
+	// unmatched one raises at the end of the input.
+	pidBraceOpen Pos
+
 	// subscriptCloses caches whether the subscript now open has a matching
 	// `]` ahead of it, asked at most once per word: 0 not asked, 1 yes,
 	// -1 no. Reset with subscriptDepth at the start of every word.
@@ -1420,6 +1432,14 @@ func (l *Lexer) endsWord(c byte) bool {
 			return !l.dialect.RegexTakesAlternation
 		}
 	}
+	if l.pidBraces > 0 {
+		// Inside a `{ … }` run opened immediately after `$$` nothing
+		// separates either, until the brace that matches. One test rather
+		// than one per character, for the reason the subscript below gives
+		// and from the same kind of measurement — see
+		// [Dialect.PidBraceGroupIsText], where the rows are.
+		return false
+	}
 	if l.insideOpenSubscript() {
 		// Inside a command word's subscript nothing separates: a blank, a
 		// newline and every operator alike are characters of the subscript
@@ -2225,6 +2245,51 @@ func (l *Lexer) endOfInputBackslashSpan(escPos Pos, alone bool) Span {
 	return Span{Kind: Literal, Value: value, Quoting: BackslashQuoted, Pos: escPos}
 }
 
+// spansAreThePid reports whether what was just read is the bare `$$` and
+// nothing else.
+//
+// The two characters rather than the parameter: `$!{a,b}`, `$?{a,b}`,
+// `$-{a,b}` and `$#{a,b}` are all brace expansions in the dialect that has
+// this, and so is `${$$}{a,b}`, so it is this spelling of this name. Measured
+// with the rows on [Dialect.PidBraceGroupIsText].
+func spansAreThePid(ss []Span) bool {
+	return len(ss) == 1 && ss[0].Kind == ParamExp && ss[0].Bare &&
+		ss[0].Quoting == Unquoted && ss[0].Value == "$"
+}
+
+// pidBraceSpan takes the `{` or the `}` of a run written immediately after
+// `$$`, where the dialect makes that pair characters rather than syntax.
+//
+// It answers for the outer pair alone. A brace *inside* the run is counted
+// and handed back, so it stays ordinary literal text and the brace expansion
+// it may open still runs: `$${a{b,c}d}` is two words in the shell this is
+// measured from, and `$${a,b}` is one.
+func (l *Lexer) pidBraceSpan(armed bool, c byte) (Span, bool) {
+	switch {
+	case armed && c == '{':
+		l.pidBraceOpen = l.pos()
+		l.pidBraces = 1
+	case l.pidBraces == 0:
+		return Span{}, false
+	case c == '{':
+		l.pidBraces++
+		return Span{}, false
+	case c == '}':
+		l.pidBraces--
+		if l.pidBraces > 0 {
+			return Span{}, false
+		}
+	default:
+		return Span{}, false
+	}
+	pos := l.pos()
+	l.advance()
+	return Span{
+		Kind: Literal, Value: string(c), Quoting: Unquoted,
+		Pos: pos, PidBrace: true,
+	}, true
+}
+
 // scanWord reads a word as a sequence of spans, one per run of uniform
 // quoting. The spans are the point: a"b c"d is one word of three spans, and
 // only the unquoted ones are subject to splitting and globbing later.
@@ -2259,6 +2324,12 @@ func (l *Lexer) scanWord(start Pos) Token {
 	// *not* cleared on the way out, since the probe in
 	// subscriptHasMatchingClose reads it off a finished scan.
 	l.subscriptDepth, l.subscriptCloses = 0, 0
+	l.pidBraces, l.pidBraceOpen = 0, Pos{}
+
+	// pidArmed says the `$$` just read is touching a `{`, so that brace opens
+	// a run of text. A local rather than a field: the arming and the brace it
+	// arms for are one turn of this loop apart, and nothing outside sees it.
+	pidArmed := false
 
 	if l.openBraceIsAWordOfItsOwn() {
 		lit.WriteByte(l.advance())
@@ -2274,7 +2345,8 @@ func (l *Lexer) scanWord(start Pos) Token {
 		if l.endsWord(c) {
 			break
 		}
-		if c == '}' && braces == 0 && (lit.Len() > 0 || len(spans) > 0) &&
+		if c == '}' && braces == 0 && l.pidBraces == 0 &&
+			(lit.Len() > 0 || len(spans) > 0) &&
 			l.closeBraceIsAWordOfItsOwn() {
 			// The reserved `}` reaching into the word: it ends this one and
 			// is read as the token it always is. Only where something has
@@ -2409,6 +2481,21 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// the `<(` whose first byte a group reads as an operator.
 			if ss, ok := l.substitutionSpans(flush); ok {
 				spans = append(spans, ss...)
+				// Not inside a run already: a second `$$` in there opens
+				// nothing, which is measured. `$${a$${b,c}d}` is two words
+				// on the shell this comes from — the inner `{b,c}` expanded
+				// as an ordinary list — where a nested run would have made
+				// it one. The inner braces are counted below as the text
+				// they are.
+				pidArmed = l.dialect.PidBraceGroupIsText && l.pidBraces == 0 &&
+					l.peek() == '{' && spansAreThePid(ss)
+				break
+			}
+			armed := pidArmed
+			pidArmed = false
+			if sp, ok := l.pidBraceSpan(armed, c); ok {
+				flush()
+				spans = append(spans, sp)
 				break
 			}
 			if lit.Len() == 0 {
@@ -2442,6 +2529,12 @@ func (l *Lexer) scanWord(start Pos) Token {
 		if l.err != nil {
 			break
 		}
+	}
+	if l.pidBraces > 0 {
+		// The run swallowed the rest of the input looking for its match, so
+		// the refusal lands at the end of it — which is where the dialect
+		// that has the construct puts it too.
+		l.failUnmatched(l.pidBraceOpen, "{", "}", "unterminated brace run after `$$`")
 	}
 	flush()
 

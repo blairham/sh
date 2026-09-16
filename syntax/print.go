@@ -1518,7 +1518,28 @@ func (p *printer) word(w *Word) {
 		p.str(`''`)
 		return
 	}
+	// A `{ … }` run written immediately after `$$` goes back as it came.
+	// Its blanks and operators were characters — see [Span.PidBrace] — and
+	// escaping them would leave the tree identical and split the word.
+	savedRaw := p.raw
+	defer func() { p.raw = savedRaw }()
+
 	for i := 0; i < len(w.Spans); {
+		// Only the outer pair of a run is ever marked and a run never nests,
+		// so this is a switch and not a depth: `{` turns the raw mode on and
+		// the matching `}` — written raw itself — puts back whatever the
+		// caller had, which is what lets a word hold two runs and ordinary
+		// text between them.
+		if w.Spans[i].PidBrace {
+			if w.Spans[i].Value == "{" {
+				p.raw = true
+			} else {
+				p.span(w.Spans[i])
+				p.raw = savedRaw
+				i++
+				continue
+			}
+		}
 		q := w.Spans[i].Quoting
 		j := i
 		for j < len(w.Spans) && w.Spans[j].Quoting == q && q != Unquoted && q != BackslashQuoted {

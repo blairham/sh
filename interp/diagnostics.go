@@ -5999,6 +5999,16 @@ func (d Diagnostics) ParseFailure(err error) string {
 			if form == "" {
 				form = d.UnmatchedCmdSubst
 			}
+		case "{":
+			// A `{ … }` run written immediately after `$$` that never
+			// closed — see [syntax.Dialect.PidBraceGroupIsText]. One dialect
+			// has the construct and no other can reach this, and that one
+			// answers it with the sentence it answers an unclosed `${` with:
+			// measured 2026-09-15, `echo ${a` and `echo $${a` over the same
+			// two-line script both give `closing brace expected` at line 3,
+			// the end of the input. So the fallback is that wording rather
+			// than a field of its own with one shell's value in it.
+			form = d.UnmatchedBraceSubst
 		case "${":
 			form = d.UnmatchedBraceSubst
 			if se.BraceNameStop != "" && d.UnmatchedBraceSubstAtStop != "" {

@@ -11,3 +11,63 @@ printf '[%s]' $'ab\cXcd' | od -An -c | sed 's/  */ /g'
 printf '\n'
 v=$'\cA'
 printf 'length: %s\n' "${#v}"
+
+# A `{ … }` run written immediately after `$$` — #3091, the last construct of
+# #3040. zsh makes the run to the matching `}` a run of characters: a blank, a
+# `;` and a `>` inside it are text, and the braces are a brace list nowhere.
+# Every other column on the panel splits the word at the blank, refuses the
+# `;`, and reads the `>` as a redirection.
+#
+# The pid is stripped from each word rather than printed, because it is not
+# the same number twice. What is left is the braces and the word count, which
+# is the whole of the question.
+show() {
+  printf 'n=%s' "$#"
+  for a in "$@"; do printf ' [%s]' "${a#$$}"; done
+  printf '\n'
+}
+
+# A blank inside the run does not end the word.
+show $${a b}
+
+# Nor does a `;` — which every other column refuses outright, so this one is
+# written through eval to keep the rest of the file running there.
+( eval 'show $${a;b}' ) 2>/dev/null
+printf 'semicolon -> %s\n' "$?"
+
+# Nor a `>`, which elsewhere writes the word into a file called `b}`.
+( eval 'show $${a>b}' ) 2>/dev/null
+printf 'redirection operator -> %s\n' "$?"
+
+# The braces are not a list.
+show $${a,b}
+
+# A pair nested inside the run still is one.
+show $${a{b,c}d}
+
+# But a *range* written straight into the outer pair fires, which is the half
+# a reading that made the whole pair inert would lose.
+show $${1..3}
+
+# A comma is still no range.
+show $${a,1..3}
+
+# The run ends at its match, and what follows is read the ordinary way again.
+show $${a} b
+
+# `$$` and nothing else, touching the brace: text between, or a blank, and
+# the group is an ordinary brace list.
+show $$x{a,b}
+
+# An unmatched run swallows the rest of the input and is then refused.
+( eval 'show $${a' ) 2>/dev/null
+printf 'unmatched -> %s\n' "$?"
+
+# A run does not nest: the second `$$` opens nothing, so the inner pair is the
+# ordinary list it looks like — and a blank in it is still text, because the
+# outer run already made it so. Only the word count is printed for these two:
+# the inner `$$` leaves a pid in the middle of the word, where stripping the
+# leading one cannot reach it.
+count() { printf 'n=%s\n' "$#"; }
+count $${a$${b,c}d}
+count $${a$${b c}d}

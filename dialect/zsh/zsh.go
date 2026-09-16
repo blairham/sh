@@ -2044,6 +2044,8 @@ func Semantics() interp.Semantics {
 	// the value names the reading rather than saying yes (#2345).
 	s.DollarSingleCaretMeta = interp.DollarSingleCaretMetaMaskedWithAnOptionalDash
 	s.GetoptsAssignmentRestartsWord = interp.No
+	// OPTIND names the word until its last letter has been read.
+	s.GetoptsCountsTheWordAtItsFirstLetter = interp.No
 	// OPTIND is local to a shell function here: the call starts at 1 and the
 	// caller's position — words and the place inside a clustered word alike —
 	// comes back on return. It is what lets this shell's own function

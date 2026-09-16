@@ -656,6 +656,11 @@ func Semantics() interp.Semantics {
 	// dollar included — so the grammar refuses the form before any of them
 	// can be asked. An answer here would be an invention.
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// OPTIND names the word *after* a cluster from its first letter on, so
+	// `-abc` reads `a` with OPTIND already 2. The place inside the word is
+	// kept somewhere a script cannot see. bash, ksh93 and zsh all leave
+	// OPTIND naming the word until its last letter has been read.
+	s.GetoptsCountsTheWordAtItsFirstLetter = interp.Yes
 	// A shell function call gets a `getopts` scan of its own here, while
 	// OPTIND itself stays the shell's: a helper called twice reads its
 	// arguments twice, and `$OPTIND` inside the call is still the caller's

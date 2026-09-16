@@ -1622,6 +1622,8 @@ func Semantics() interp.Semantics {
 	s.DollarSingleHexReadsEveryDigit = interp.Yes
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// bash's answer here: OPTIND names the word until its last letter.
+	s.GetoptsCountsTheWordAtItsFirstLetter = interp.No
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
 	// OPTARG and OPTIND are the builtin's own here: `readonly OPTARG;

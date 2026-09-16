@@ -2367,6 +2367,39 @@ type Semantics struct {
 	// a second time where zsh carries on to `b`.
 	GetoptsAssignmentRestartsWord Answer
 
+	// GetoptsCountsTheWordAtItsFirstLetter moves OPTIND past a clustered
+	// word as soon as its *first* letter has been read, keeping the place
+	// inside the word somewhere a script cannot see.
+	//
+	// `-abc` is three options in one word, and the question is what a script
+	// reading OPTIND between two calls is told. The two answers differ on
+	// every letter but the last:
+	//
+	//	trace() { OPTIND=1
+	//	  while getopts 'ab:c' o "$@" >/dev/null 2>&1; do
+	//	    printf 'saw %s ind=%s\n' "$o" "$OPTIND"
+	//	  done; }
+	//	trace -abc rest
+	//
+	//	bash 5.3.20, bash 3.2.57, ksh93u+, zsh 5.9.2   a ind=1   b ind=2
+	//	dash 0.5.12, BusyBox ash 1.37.0                a ind=2   b ind=2
+	//
+	// Measured 2026-09-16 over a script file, `env -i PATH=/usr/bin:/bin`,
+	// and the same two answers come back for `-ac`, where neither letter
+	// takes an argument. Apple's dash-16 and Alpine's and Debian's 0.5.12
+	// builds all answer 2, so this is the shell rather than the build.
+	//
+	// It matters because OPTIND is the number a script `shift`s by. A
+	// wrapper that reads `-abc`, stops at the first letter it does not know
+	// and shifts by `OPTIND-1` drops the rest of the cluster here and keeps
+	// it in bash.
+	//
+	// The position inside the word is this shell's [Runner.optChar] either
+	// way; what the axis decides is only the number written out. See
+	// [Runner.optIndex], which takes the word back off again so the scan
+	// carries on where it was.
+	GetoptsCountsTheWordAtItsFirstLetter Answer
+
 	// GetoptsFunctionPosition is what a shell function call does to the
 	// `getopts` scan position. See GetoptsFunctionPositionPolicy for the
 	// three answers and the measurements that separate them.
@@ -15586,7 +15619,13 @@ func PosixSemantics() Semantics {
 		// loses it too. The standard has nothing to say — `local` is not
 		// in it — so the measured member decides.
 		GetoptsLocalOptindRestoresTheCursor: No,
-		SignalHandlerSeesEarlierStatus:      No,
+		// OPTIND names the word until its last letter has been read. The
+		// standard's own wording is "the index of the next argument to be
+		// processed", which is the word the scan is still inside, and it is
+		// what four of the six columns do. dash and BusyBox ash count the
+		// word at its first letter and say so themselves.
+		GetoptsCountsTheWordAtItsFirstLetter: No,
+		SignalHandlerSeesEarlierStatus:       No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
 		// entered — which is what six of the seven columns do. Measured
@@ -16387,6 +16426,14 @@ func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,
 		LengthOfSpecialIsCount:   Yes,
+		// A clustered `-abc` leaves OPTIND naming the word until its last
+		// letter has been read, which is what four of the six columns do and
+		// what a script shifting by `OPTIND-1` between calls needs. dash and
+		// BusyBox ash count the word at its first letter and say so
+		// themselves. Answered here rather than left to refuse because the
+		// substrate is a shell somebody runs: an unanswered axis would make
+		// every clustered `getopts` read a refusal.
+		GetoptsCountsTheWordAtItsFirstLetter: No,
 		// Whether `$_` exists at all is left unanswered here, which is the
 		// substrate refusing it. *How* it moves is answered anyway, at the
 		// reading two of the three shells that have the parameter share:

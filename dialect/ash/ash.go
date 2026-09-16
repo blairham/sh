@@ -742,6 +742,9 @@ func Semantics() interp.Semantics {
 	s.FatalErrorEndsAtTheCommandWord = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// And it counts a clustered word at its first letter, which is dash's
+	// answer and not bash's: `-abc` reads `a` with OPTIND already 2.
+	s.GetoptsCountsTheWordAtItsFirstLetter = interp.Yes
 	// A shell function call gets a `getopts` scan of its own here, while
 	// OPTIND itself stays the shell's: a helper called twice reads its
 	// arguments twice, and `$OPTIND` inside the call is still the caller's

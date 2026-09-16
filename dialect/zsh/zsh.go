@@ -2181,6 +2181,10 @@ func Semantics() interp.Semantics {
 	// says which happened. A subshell still fires on both sides, which is
 	// the axis above and not this one.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapFiresOnceForTheFailure
+	// A pipeline whose last element ran here is judged once, by its status,
+	// unless that element is a compound whose body judged itself: `true | {
+	// false && true; }` carries on under `set -e`.
+	s.FailingPipelineWhoseLastElementRanHere = interp.PipelineJudgedUnlessItsLastElementJudgedItself
 	s.DebugTrapRunsInsideCalls = interp.Yes
 	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	// Every compound head, once each — `if`, `while`, a group, a subshell,

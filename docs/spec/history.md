@@ -223,11 +223,35 @@ it.
 That is not implemented here — the match is found and the cursor is put
 on it, and nothing is drawn around it.
 
+Re-measured 2026-09-16 and still true, and the *instrument* is the whole
+difficulty: a rendered screen cannot answer this question, because replaying a
+terminal consumes the escape sequences the question is about. Asked of the
+rendered text, every column answers "no highlight", including bash. Asked of the
+raw bytes, with a control run that types the same line without searching so the
+shell's ordinary drawing is subtracted: bash adds four `\e[7m`/`\e[27m` pairs
+that its control run does not, zsh adds none, and neither of ours adds any.
+`internal/cmd/viprobe -raw` is the half that can see it.
+
 **`ESC` differs and is not implemented either.** In bash a bare `ESC`
 ends the search; in zsh it does nothing, being the start of a prefix.
-Telling a bare `ESC` from the first byte of an arrow needs a timeout,
-which this editor does not have anywhere, so an `ESC` here is read as
-the start of a sequence in both dialects.
+Neither dialect ends the search here.
+
+Re-measured 2026-09-16 with a probe that reads the *effect* rather than the
+redraw — `echo ALPHAMARK` in the history, then `^R ALPH`, then `ESC`, then `X`,
+then Return. bash runs `echo XALPHAMARK`: the `ESC` ended the search and the `X`
+landed in the line. zsh, and both of ours, run `echo ALPHAMARK`: the `ESC` was
+nothing and the `X` went on extending a query that then matched nothing.
+
+**The reason this file used to give was wrong, and it undersold the editor.** It
+said telling a bare `ESC` from the first byte of an arrow needs a timeout "which
+this editor does not have anywhere". No timeout is needed and the editor already
+does the harder half: it asks whether a byte is *there*, waiting no time at all,
+which works because a terminal writes an escape sequence in one write. Measured
+— in vi mode a lone `ESC` enters command mode, while `\e[A` delivered as a
+single write is an arrow key in the same session. `docs/spec/editing.md` has the
+mechanism. The search simply does not consult it: `ESC` reaches the search as a
+prefix and the search has nothing bound behind it. That is a key to bind, not a
+clock to build.
 
 **ksh93's `C-r` is not this.** Measured: it echoes `^R` and takes a
 whole string afterwards, non-incrementally. dash has no line editor at
@@ -294,6 +318,15 @@ meaning of its own: measured,
 `ignoredups` does. That is not implemented — a pattern of `&` is matched
 literally here — because it is a second spelling of a rule the same
 variable's neighbor already has.
+
+Re-measured 2026-09-16 and still true, with a control, because the first probe
+written for it had no control and lied. `HISTIGNORE=&` typed at a prompt is not
+an assignment at all: the `&` ends the command, so the variable is set to the
+empty string and the shell reports no duplicate dropped — which reads exactly
+like a bash that has not got the feature. Quoted, and with `echo TWOBACK`,
+`echo dupline`, `echo dupline` behind it, two presses of Up reach `echo TWOBACK`
+in bash with `HISTIGNORE='&'` and `echo dupline` in bash without it. Ours
+reaches `echo dupline` either way.
 
 ## `$histchars`: three characters, and what an empty one costs
 

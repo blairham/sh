@@ -150,10 +150,19 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 		// Here rather than on a copy, which is the whole of why this
 		// spelling exists: `${ x=1;}` leaves x set where `$(x=1)` does not.
 		//
-		// The `<file` form below is not reached from here, and that is
-		// measured rather than left out: `${ <f ;}` prints the file in ksh93
-		// alone, is empty in bash 5.3 and is `bad substitution` in zsh 5.9.2
-		// and bash 3.2. Four answers for one spelling is not this form.
+		// The `<file` form below is reached from here only where a dialect
+		// says so, because the columns split: `${ <f ;}` is the file's text
+		// in ksh93, the empty string in bash 5.3, and `bad substitution` in
+		// zsh 5.9.2 and bash 3.2, which have no such spelling to read. The
+		// split is what makes it an axis rather than a property of the form
+		// — see Semantics.CurrentShellSubstitutionReadsAFile.
+		if r.dialect().ReadFileSubstitution && !span.ReplyValue {
+			if rd, ok := readFileSubstitution(f); ok &&
+				r.ask(r.sem().CurrentShellSubstitutionReadsAFile,
+					"`${ <file ;}` being the file's contents rather than the empty string") {
+				return r.readFileSubst(ctx, rd, span)
+			}
+		}
 		return r.currentShellSubst(ctx, f, span)
 	}
 

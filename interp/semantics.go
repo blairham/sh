@@ -9080,6 +9080,30 @@ type Semantics struct {
 	// dash. See Runner.currentShellSubst, and `ksh/cmdsub.tests`.
 	CurrentShellSubstitutionBoundsAnUnwind Answer
 
+	// CurrentShellSubstitutionReadsAFile makes a `${ <file ;}` whose body is
+	// nothing but that one redirection the file's contents, the way `$(<file)`
+	// already is.
+	//
+	// ksh93 93u+ reads it; bash 5.3.20 applies the redirection to a body with
+	// no command in it and hands back the empty string. Measured 2026-09-16
+	// against a file holding `l1`, `l2` and two blank lines:
+	//
+	//	${ <f ;}          ksh93 [l1\nl2]   bash []
+	//	$(<f)             both  [l1\nl2]
+	//	${ <f ; echo t; } both  [t]        a body with a command is not this form
+	//	${ echo h; <f ; } both  [h]        nor is the redirection at the end
+	//
+	// So the reading is the *whole body being one `<` redirection* and not a
+	// redirection anywhere in it, which is the same shape readFileSubstitution
+	// already tests for the parenthesised spelling. The two spellings share
+	// that function and a file that will not open is reported alike by both.
+	//
+	// Asked only once the form has been recognised, so the dialects that do
+	// not read a file this way are not asked at every `${ ` they expand, and
+	// only for the blank spelling: `${| <f ;}` hands back `$REPLY`, which a
+	// redirection does not write.
+	CurrentShellSubstitutionReadsAFile Answer
+
 	// TrapListingOrder is the order a bare `trap` listing prints its
 	// conditions in. See TrapListingSequence.
 	TrapListingOrder TrapListingSequence
@@ -15011,7 +15035,11 @@ func PosixSemantics() Semantics {
 		// only other column that has the construct; ksh93 says otherwise
 		// and says so itself.
 		CurrentShellSubstitutionBoundsAnUnwind: No,
-		GreatAmpTarget:                         GreatAmpTargetIsADescriptor,
+		// And no reading of a file either, for the same reason: the standard
+		// has no `${ … ;}`, so the preset follows the column that has one and
+		// leaves the body to the redirection.
+		CurrentShellSubstitutionReadsAFile: No,
+		GreatAmpTarget:                     GreatAmpTargetIsADescriptor,
 		// XCU's `[n]<&word` and `[n]>&word` take a number or `-`, and the
 		// standard has no third reading: there is no move operator in it, so
 		// `5-` is a word naming no descriptor and is refused as one. The core

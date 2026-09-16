@@ -767,6 +767,12 @@ func Semantics() interp.Semantics {
 	// more. Only `break` and `continue` still leave, which they do in bash
 	// as well.
 	s.CurrentShellSubstitutionBoundsAnUnwind = interp.Yes
+	// And a body that is nothing but `<file` is that file, exactly as
+	// `$(<file)` is. Measured 2026-09-16: `${ <f ;}` is the file's text here
+	// and the empty string in bash 5.3.20, with `${ <f ; echo t; }` and
+	// `${ echo h; <f ; }` answering alike in both — so what this shell reads
+	// is the whole body being the one redirection.
+	s.CurrentShellSubstitutionReadsAFile = interp.Yes
 	// The listing runs the other way here: descending by signal number,
 	// which puts EXIT last where the other six put it first.
 	s.TrapListingOrder = interp.TrapListingHighestFirst

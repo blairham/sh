@@ -170,13 +170,25 @@ func (a *argumentsState) takeOption(word string, after []string) int {
 	// `cmd -a` answers with that option mapped to an empty string, and
 	// `cmd -fval` and `cmd -o=val` map theirs to `val`. This recorded nothing
 	// at all for the four that declare an argument and had not been given one.
+	//
+	// **An option that takes more than one word joins them with a colon.**
+	// Measured with `-C+[copy]:from:(f1 f2):to:(t1 t2)` declared and
+	// `cmd -C a b foo<TAB>`: zsh reports `-C` mapped to `a:b` and `$line` as
+	// `foo` alone. This kept only the last word, so the two-argument options
+	// the shipped completions declare lost their first. The colon is the
+	// default separator — the third argument `-W` takes is
+	// `_arguments`' own `$opt_args_use_NUL_separators`, and it is empty on
+	// every call measured.
 	a.optArgs[name] = ""
 	eaten := 0
 	for _, arg := range spec.optargs {
 		if arg.optional || eaten >= len(after) {
 			break
 		}
-		a.optArgs[name] = after[eaten]
+		if eaten > 0 {
+			a.optArgs[name] += ":"
+		}
+		a.optArgs[name] += after[eaten]
 		eaten++
 	}
 	return eaten
@@ -663,10 +675,16 @@ func (a *argumentsState) reportMatcher(r *interp.Runner, names []string) int {
 	return 0
 }
 
-// reportLine is `-W`: the normal arguments as `$line`, and the options
-// already written as `$opt_args`.
+// reportLine is `-W`: the normal arguments as `$line`, the options already
+// written as `$opt_args`, and a third argument the shipped `_arguments`
+// always passes — its own `$opt_args_use_NUL_separators`, which is empty.
+//
+// **Three arguments, not two.** Measured on zsh 5.9.2, 2026-09-16 from inside
+// a `zle -C` widget: `comparguments -W line opt_args` is
+// `comparguments:9: not enough arguments` at status 1, and the same call with
+// a third argument is 0. This took two and answered.
 func (a *argumentsState) reportLine(r *interp.Runner, names []string) int {
-	if len(names) < 2 {
+	if len(names) < 3 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}

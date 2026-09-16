@@ -548,6 +548,28 @@ func TestComparguments(t *testing.T) {
 			 say "${l[*]}/${(ko)oa}/[${oa[-o]}]"`,
 			"foo/-o/[val]",
 		},
+		// **An option that takes more than one word joins them with a
+		// colon.** Measured on zsh 5.9.2, 2026-09-16 with
+		// `-C+[copy]:from:(f1 f2):to:(t1 t2)` declared and `cmd -C a b foo`:
+		// `-C` is mapped to `a:b` and `$line` is `foo` alone. This kept only
+		// the last word, so a two-argument option lost its first.
+		{
+			"two words joined by a colon", "cmd -C a b foo",
+			`comparguments -i '' : '-C+[copy]:from:(f1 f2):to:(t1 t2)' '-p[proc]' '*:rest:'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${l[*]}/${(ko)oa}/[${oa[-C]}]"`,
+			"foo/-C/[a:b]",
+		},
+		// And `-W` takes **three** arguments: the shipped `_arguments` always
+		// writes its own `$opt_args_use_NUL_separators` as the third.
+		// Measured: two is `comparguments:9: not enough arguments` at 1.
+		{
+			"the line wants three names", "uname -a",
+			`comparguments ` + unameSpecs + `
+			 local -a l; local -A oa
+			 comparguments -W l oa 2>/dev/null; say $?`,
+			"1",
+		},
 		// **A stack spends every letter in it.** Measured with `-s` and
 		// `-a -m -p`: `cmd -am <TAB>` leaves `-p` and nothing else, and
 		// `$line` has neither `-am` nor its letters on it.

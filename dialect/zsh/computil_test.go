@@ -311,6 +311,39 @@ func TestComparguments(t *testing.T) {
 			 local -a l; local -A oa; comparguments -W l oa 0; say "${l[*]}"`,
 			"-",
 		},
+		// **An option is in `$opt_args` whether or not its argument is there
+		// yet.** Measured on zsh 5.9.2, 2026-09-16 over the five argument
+		// forms: every one of them maps the option to an empty string when
+		// the word under the cursor is the option itself, and to the value
+		// when one is attached. This recorded nothing at all for the four
+		// forms that declare an argument and had not been given one.
+		{
+			"an option with no argument yet", "cmd -n",
+			`comparguments -i '' : '-n[next]:nx:' '-a[plain]'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${(ko)oa}/[${oa[-n]}]"`,
+			"-n/[]",
+		},
+		{
+			"and one with its argument attached", "cmd -fval",
+			`comparguments -i '' : '-f+[file]:file:' '-a[plain]'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${(ko)oa}/[${oa[-f]}]"`,
+			"-f/[val]",
+		},
+		// And the option under the cursor is not offered back where the word
+		// is the option *plus* the start of its argument. Measured: `-o=val`
+		// with `-o=[out]:out:` and `-f+[file]:file:` declared answers with
+		// `-f` in `odirect` and an empty `equal` — the option being written
+		// is past the point where its own name would help.
+		{
+			"an attached argument is not the option again", "cmd -o=val",
+			`comparguments -i '' : '-o=[out]:out:' '-f+[file]:file:' '-p[proc]'
+			 local -a n d od e; comparguments -O n d od e
+			 local -a names=( ${n%%:*} ${d%%:*} ${od%%:*} ${e%%:*} )
+			 say "${names[*]}"`,
+			"-p -f",
+		},
 		// `-a` is whether any normal argument is described at all.
 		{"no argument described", "uname -", `comparguments ` + unameSpecs + `
 			 comparguments -a; say $?`, "1"},
@@ -419,6 +452,45 @@ func TestComparguments(t *testing.T) {
 			"no stacking, nothing to say about one", "cmd -n",
 			`comparguments -i '' : '-n[next]:nx:' '-a[plain]' '-p[proc]'
 			 local one; comparguments -s one; say "$?/$one"`, "1/",
+		},
+		// **A word is a stack only where every letter after the dash is a
+		// single-letter option**, and a word that reaches one the specs do
+		// not know is not a stack at all — the letters before it are not
+		// spent either. Measured on zsh 5.9.2, 2026-09-16 with `-s` and
+		// `-n[next]:nx:`, `-a[plain]`, `-p[proc]` and `1:first:(x y)`:
+		//
+		//	typed     -s   $opt_args     $line   -O next
+		//	cmd -z    1    (empty)       -z      -n -a -p
+		//	cmd -az   1    (empty)       -az     -n -a -p
+		//	cmd -na   0    -a '' -n ''   (empty) -p
+		//
+		// so `-az` spends nothing and is the first argument being written,
+		// and `-na` spends both. All three rows, because a shell that spent
+		// as it walked and gave up part-way — which is what this did —
+		// passes the first and the third.
+		{
+			"an undeclared letter is not a stack", "cmd -az",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]' '1:first:(x y)'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${l[*]}/${(ko)oa}"`,
+			"1/-az/",
+		},
+		{
+			"nor is a longer option spelled out", "cmd -ab",
+			`comparguments -i '' -s : '-ab[two]:x:' '-a[plain]' '-p[proc]'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${l[*]}/${(ko)oa}"`,
+			"1//-ab",
+		},
+		{
+			"and every letter known is", "cmd -na",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]' '1:first:(x y)'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 local one; comparguments -s one
+			 say "$?/${l[*]}/${(ko)oa}"`,
+			"0//-a -n",
 		},
 		// **A stack spends every letter in it.** Measured with `-s` and
 		// `-a -m -p`: `cmd -am <TAB>` leaves `-p` and nothing else, and

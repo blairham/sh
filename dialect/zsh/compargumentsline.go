@@ -162,6 +162,15 @@ func (a *argumentsState) takeOption(word string, after []string) int {
 		a.optArgs[name] = value
 		return 0
 	}
+	// **An option is in `$opt_args` whether or not its argument is there
+	// yet.** Measured on zsh 5.9.2, 2026-09-16 from inside a `zle -C` widget
+	// with `-n[next]:nx:`, `-e=-[eqd]:ed:`, `-d-[dir]:dir:`, `-f+[file]:file:`
+	// and `-a[plain]` declared, asking `comparguments -W` about the word under
+	// the cursor: every one of `cmd -n`, `cmd -e`, `cmd -d`, `cmd -f` and
+	// `cmd -a` answers with that option mapped to an empty string, and
+	// `cmd -fval` and `cmd -o=val` map theirs to `val`. This recorded nothing
+	// at all for the four that declare an argument and had not been given one.
+	a.optArgs[name] = ""
 	eaten := 0
 	for _, arg := range spec.optargs {
 		if arg.optional || eaten >= len(after) {
@@ -170,21 +179,33 @@ func (a *argumentsState) takeOption(word string, after []string) int {
 		a.optArgs[name] = after[eaten]
 		eaten++
 	}
-	if len(spec.optargs) == 0 {
-		a.optArgs[name] = ""
-	}
 	return eaten
 }
 
 // takeStack is `-s`: a word of single letters, each of which is an option.
-// The letters are read so that `-xy` spends both `-x` and `-y`; what is not
-// done is offering the rest of such a word — see comparguments.go.
+// The letters are read so that `-xy` spends both `-x` and `-y`.
+//
+// **All of them or none of them.** A word that reaches a letter the specs do
+// not know is not a stack at all, and the letters before it are not spent
+// either — this used to spend as it walked and then give up part-way, which
+// left `-a` on the line for a word zsh reads as an ordinary argument.
+// Measured on zsh 5.9.2, 2026-09-16 with `-s` and `-n[next]:nx: -a[plain]
+// -p[proc] 1:first:(x y)` in force:
+//
+//	typed       zsh $opt_args   zsh $line   zsh -O next
+//	cmd -az     (empty)         -az         -n -a -p
+//	cmd -na     -a '' -n ''     (empty)     -p
+//
+// so `-az` spends nothing and is described as the first argument, while
+// `-na` — every letter an option — spends both.
 func (a *argumentsState) takeStack(word string) int {
 	for i := 1; i < len(word); i++ {
-		letter := word[:1] + word[i:i+1]
-		if a.optionNamed(letter) == nil {
+		if a.optionNamed(word[:1]+word[i:i+1]) == nil {
 			return -1
 		}
+	}
+	for i := 1; i < len(word); i++ {
+		letter := word[:1] + word[i:i+1]
 		a.spend(letter)
 		a.optArgs[letter] = ""
 	}
@@ -679,11 +700,36 @@ func (a *argumentsState) reportStack(r *interp.Runner, cs *completionState, name
 }
 
 // continuingAStack is that question asked of the word under the cursor: a
-// `-x…` under `-s`, where a long option and a lone `-` are not.
+// `-x…` under `-s`, where a long option and a lone `-` are not, and neither
+// is a word that is already an option of its own.
+//
+// **Every letter after the dash has to be a single-letter option** for the
+// word to be a stack. Measured on zsh 5.9.2, 2026-09-16 from inside a
+// `zle -C` widget with `-s` in force:
+//
+//	specs                        typed        -s
+//	-ab[two]:x: -a[plain] -p     cmd -ab      1  — `-b` is not an option
+//	-ab[two]:x: -a[plain] -p     cmd -a       0
+//	-o=[out]: -f+[file]: -p      cmd -o=val   1  — nor `=`, `v`, `a`, `l`
+//	-o=[out]: -f+[file]: -p      cmd -fval    1
+//	-n: -a -p                    cmd -na      0  — both are
+//
+// So a word that reaches a letter the specs do not know stops being a stack
+// rather than becoming one with a typo in it, and `-ab` — a *declared*
+// option three characters long — is that same rule arriving at the right
+// answer for a second reason.
 func (a *argumentsState) continuingAStack(cs *completionState) bool {
 	word := cs.prefix
-	return a.stacking && len(word) > 1 &&
-		(word[0] == '-' || word[0] == '+') && word[1] != '-'
+	if !a.stacking || len(word) < 2 ||
+		(word[0] != '-' && word[0] != '+') || word[1] == '-' {
+		return false
+	}
+	for i := 1; i < len(word); i++ {
+		if a.optionNamed(word[:1]+word[i:i+1]) == nil {
+			return false
+		}
+	}
+	return true
 }
 
 // singleOption is the value `-s` writes into the parameter it names: `next`

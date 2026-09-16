@@ -407,6 +407,7 @@ func cloneScopes(scopes []*scope) []*scope {
 		c.exportedSpoken = maps.Clone(sc.exportedSpoken)
 		c.exportedShadow = maps.Clone(sc.exportedShadow)
 		c.savedTraps = maps.Clone(sc.savedTraps)
+		c.savedOptions = maps.Clone(sc.savedOptions)
 		c.sealed = cloneSealed(sc.sealed, at, out)
 		// The two that hold a container per name, on the same terms as Arrays
 		// and AssocArrays above: cloning the outer map alone would give the

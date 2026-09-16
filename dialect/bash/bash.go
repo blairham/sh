@@ -2010,6 +2010,11 @@ func Semantics() interp.Semantics {
 	s.RedirectTargetTakesPathnameExpansion = interp.Yes
 
 	// Whether `type --` ends the options.
+	// `type .` is `. is a shell builtin` in bash 5.3.20 and in bash 3.2.57
+	// alike — one answer across twelve years of this shell. The same binary
+	// invoked as `sh` says `a special shell builtin`, which is the POSIX
+	// preset's row and not this one.
+	s.TypeDistinguishesSpecialBuiltins = interp.No
 	s.TypePrintsFunctionBody = interp.Yes
 	s.TypeEndsOptionsWithDashDash = interp.Yes
 	// type's letters, all implemented here: -a for every resolution, -p

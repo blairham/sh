@@ -4483,6 +4483,49 @@ type Semantics struct {
 	// calls the redirection ambiguous.
 	RedirectTargetTakesPathnameExpansion Answer
 
+	// TypeDistinguishesSpecialBuiltins makes `type` — and `command -V`, which
+	// is the same sentence — call a POSIX special builtin *special*, where a
+	// shell that does not draw the distinction has one wording for every
+	// builtin it has.
+	//
+	// Four of the seven columns draw it and three do not, which is what makes
+	// this an axis rather than a wording: a longer phrase would be a wording,
+	// and a shell that used it for `echo` as well would not be recording a
+	// distinction at all. So `echo` is the control on every row below, and it
+	// is unanimous.
+	//
+	// Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell>
+	// case.sh`. BusyBox v1.37.0 in the digest-pinned Alpine image
+	// internal/oracle reaches, under `--init`:
+	//
+	//	                     type .            type export     type echo
+	//	bash 5.3.20          shell builtin     shell builtin   shell builtin
+	//	that binary as `sh`  SPECIAL           SPECIAL         shell builtin
+	//	bash 3.2.57          shell builtin     shell builtin   shell builtin
+	//	zsh 5.9.2            shell builtin     reserved word   shell builtin
+	//	ksh93u+ 2012-08-01   SPECIAL           SPECIAL         shell builtin
+	//	dash 0.5.12          SPECIAL           SPECIAL         shell builtin
+	//	BusyBox ash 1.37.0   SPECIAL           SPECIAL         shell builtin
+	//
+	// where SPECIAL is the whole sentence `. is a special shell builtin` and
+	// the others are `. is a shell builtin`, word for word in every column
+	// that writes them.
+	//
+	// bash moving with the mode is the part that settles it: one binary, two
+	// answers, so this is a decision the shell makes and not a property of
+	// the builtin. zsh's `export` is a third answer and belongs to a
+	// different question — that shell's grammar makes the declaration
+	// commands reserved words, so the line never reaches a builtin at all.
+	//
+	// *Which* names are special is a separate question this axis does not
+	// ask, and the panel does not agree about it either: dash and BusyBox
+	// also call `local` special, and ksh93 also calls `alias` special, in
+	// both cases with the behavior to match — `local` outside a function ends
+	// a dash script, and `V=1 alias` leaves `V` set in ksh93. The membership
+	// here is interp's own specialBuiltins, so a dialect that later carries
+	// its own list moves this sentence with it rather than beside it.
+	TypeDistinguishesSpecialBuiltins Answer
+
 	// TypePrintsFunctionBody makes `type name` follow "name is a function"
 	// with the function itself, reformatted. True in bash alone — all three
 	// builds — where the other four stop at the sentence. What that sentence
@@ -16120,6 +16163,14 @@ func PosixSemantics() Semantics {
 		// is the standard's reading — the builtin stops where it failed —
 		// and dash's and bash-as-`sh`'s measured answer.
 		BadNameDeclaresTheOperandsAfterIt: No,
+		// The standard names fourteen builtins special and says the shell
+		// may treat them differently, so a `type` that draws the
+		// distinction is the reading of this text — and it is what all
+		// three shells written to it print: bash invoked as `sh`, dash and
+		// BusyBox ash each say `. is a special shell builtin` where they
+		// say `echo is a shell builtin`. bash under its own name and zsh
+		// are the departures.
+		TypeDistinguishesSpecialBuiltins: Yes,
 		// `local` reads the declaration question rather than the export one,
 		// and the standard gives it to nobody, so the core answers it the
 		// same way it answers the neighboring one: a declaration names a

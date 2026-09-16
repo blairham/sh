@@ -2201,6 +2201,9 @@ func Semantics() interp.Semantics {
 	s.RedirectTargetTakesPathnameExpansion = interp.No
 
 	// Whether `type --` ends the options.
+	// `whence -v .` and `type .` alike are `. is a special shell builtin` in
+	// ksh93u+ 2012-08-01, where `echo` is a plain one.
+	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
 	// whence -v's letters, and no `-t` among them: that letter is refused

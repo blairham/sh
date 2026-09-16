@@ -912,6 +912,9 @@ func Semantics() interp.Semantics {
 	// option --`. It does not reach the name at all — the word is two dashes
 	// and a tail, and the tail is never read.
 	s.LongOptionNamesASetOption = interp.No
+	// unanswered LongOptionNameIgnoresHyphens: the fold is a rule of the
+	// `--name` spelling, and the axis above says this shell has no such
+	// spelling. There is no site here to put the question to.
 	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
 	// `--name` option word, and the axis above says this shell has no such
 	// word. There is no site here to put the question to.

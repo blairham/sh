@@ -7771,8 +7771,66 @@ type Semantics struct {
 	// was left holding after a strip that did not help.
 	//
 	// Unanswered is a refusal, which is the front end's behavior before
-	// this axis existed and is still what every dialect but ksh93 gets.
+	// this axis existed and is still what the four columns above get.
+	//
+	// **This is the invocation's spelling and not the `set` builtin's**, and
+	// the two are a different question in one of the two columns that has
+	// the spelling at all. Measured 2026-09-16, `set --xtrace q` in a script:
+	// ksh93 traces and leaves `q` as `$1`, and zsh sets nothing, says nothing
+	// and *still* leaves `q` as `$1` — the word is swallowed whole. What the
+	// builtin does with such a word is Semantics.SetLongOptionWord, and the
+	// axes were one until zsh was asked (#3129).
 	LongOptionNamesASetOption Answer
+
+	// SetLongOptionWord is what the `set` builtin does with a word that
+	// begins with `--` and is not a bare `--`.
+	//
+	// Three readings, all measured 2026-09-16 with `set --xtrace q` and
+	// `set --zzz q` in a `-c` script under `env -i`:
+	//
+	//	bash 5.3.20, bash 3.2.57   set: --: invalid option, and the usage line
+	//	dash 0.5.12, BusyBox ash   Illegal option --, status 2
+	//	ksh93u+                    --xtrace traces; --zzz is bad option(s)
+	//	zsh 5.9.2                  nothing happens and nothing is said
+	//
+	// The first two are one reading and not two: the word goes to the letter
+	// reader, which refuses the `-` that follows the first dash in each
+	// column's own words. That is the zero value, and it is what every
+	// dialect had before this axis existed.
+	//
+	// zsh is the reading that forced an enum. `set --zzz q` there is status
+	// 0 with an empty standard error and `q` as `$1`, so the word is neither
+	// applied nor refused nor left as a positional parameter — it is
+	// discarded, and a shell that read zsh's invocation spelling here would
+	// turn xtrace on where zsh turns nothing on. Separate from
+	// LongOptionNamesASetOption for exactly that reason: zsh answers yes
+	// there and discards here.
+	SetLongOptionWord LongOptionWordAtSet
+
+	// LongOptionNameIgnoresHyphens takes the hyphens out of a `--name` word
+	// before the option name inside it is looked up, so `--no-glob` is
+	// `noglob` and `--e-x-t-endedglob` is `extendedglob`.
+	//
+	// Yes in zsh and nowhere else, and it is the `--name` **spelling's** rule
+	// rather than that shell's option namespace: measured 2026-09-16,
+	// `zsh --no-glob -c setopt` reports `noglob` while `zsh -o no-glob`,
+	// `setopt no-glob` and `set -o no-glob` are all `no such option:
+	// no-glob`. One shell, one run, and the hyphen means two things depending
+	// on which spelling asked.
+	//
+	// Underscores and case are *not* this axis, and that is measured too:
+	// `--NO_GLOB` works here because zsh's own option table folds both on
+	// every route, `-o` included. Taking underscores out here as well would
+	// have said the same thing twice, in a place where only one of the two
+	// shells with the spelling could hear it.
+	//
+	// **ksh93 folds hyphens and underscores alike and does it everywhere**,
+	// which is why it does not answer this. `--err-exit`, `-o err-exit`,
+	// `set -o err_exit` and `--glob-star` are all the option they name there,
+	// and `--ERREXIT` is not — so its fold belongs to the namespace and is a
+	// separate question from this one, filed as its own issue rather than
+	// half-answered here.
+	LongOptionNameIgnoresHyphens Answer
 
 	// LongOptionValueIsANumber reads the `=value` an AST long option may
 	// carry — `--noglob=1` — as a number, with the option on when it is
@@ -18036,6 +18094,32 @@ func (r *Runner) ask(a Answer, axis string) bool {
 	r.unspecified = true
 	return false
 }
+
+// LongOptionWordAtSet is what the `set` builtin does with a word beginning
+// with `--` that is not a bare `--` — see [Semantics.SetLongOptionWord].
+type LongOptionWordAtSet uint8
+
+const (
+	// LongOptionWordIsOptionLetters hands the word to the letter reader, so
+	// `--xtrace` is a `-` followed by letters and is refused in the dialect's
+	// own words.
+	//
+	// The zero value, because it is what every dialect did before the long
+	// spelling existed and it is what four of the six columns still do.
+	LongOptionWordIsOptionLetters LongOptionWordAtSet = iota
+
+	// LongOptionWordIsAnOptionName reads the word as a `set -o` name, by the
+	// same function the invocation reads one with — so the `no` fallback and
+	// the `=value` cannot drift between the two routes. ksh93 alone.
+	LongOptionWordIsAnOptionName
+
+	// LongOptionWordIsDiscarded consumes the word and does nothing at all:
+	// no option moves, nothing is said, and the word does not become a
+	// positional parameter either. zsh alone, and it is the reading that
+	// makes this an enum rather than a second Answer beside
+	// [Semantics.LongOptionNamesASetOption].
+	LongOptionWordIsDiscarded
+)
 
 // BareOptionWordReading is what `set` does with a word that is exactly `-` or
 // exactly `+` — see [Semantics.BareOptionWord].

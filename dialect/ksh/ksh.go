@@ -1992,7 +1992,18 @@ func Semantics() interp.Semantics {
 	// line spells the form, `[-o[option]]`.
 	s.SetOLetterAttachesItsName = interp.Yes
 	s.LongOptionNamesASetOption = interp.Yes
+	// And the `set` builtin reads such a word the same way, which is this
+	// column and not zsh's: `set --xtrace q` here traces and leaves `q` as
+	// `$1`, where zsh swallows the word whole. Two axes since #3129, because
+	// the two shells with the invocation spelling disagree about the builtin.
+	s.SetLongOptionWord = interp.LongOptionWordIsAnOptionName
 	s.LongOptionValueIsANumber = interp.Yes
+	// unanswered LongOptionNameIgnoresHyphens: this shell folds hyphens
+	// **and** underscores, and does it on every route to an option name
+	// rather than in the `--name` spelling alone — `-o err-exit`,
+	// `set -o err_exit` and `--glob-star` all name the option, measured
+	// 2026-09-16. So its fold is the namespace's and the axis, which asks
+	// about the spelling, is not the question to answer here.
 	// Where the `-o` does stand alone, the word behind it is taken only if
 	// it does not look like options: `set -o -e` lists and turns errexit
 	// on, which is bash's reading and not zsh's. What this column still

@@ -1841,6 +1841,9 @@ func Semantics() interp.Semantics {
 	// among them, so a `--name` word here is a name bash looks up in a table
 	// of its own rather than in the option namespace.
 	s.LongOptionNamesASetOption = interp.No
+	// unanswered LongOptionNameIgnoresHyphens: the fold is a rule of the
+	// `--name` spelling, and the axis above says this shell has no such
+	// spelling. There is no site here to put the question to.
 	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
 	// `--name` option word, and the axis above says this shell has no such
 	// word. There is no site here to put the question to.

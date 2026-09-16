@@ -126,6 +126,7 @@ ash   ListedBangIsOrdinary
 ash   ListedCaretIsOrdinary
 ash   ListedEqualsIsOrdinary
 ash   ListedNonAsciiIsOrdinary
+ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
 ash   NamerefArrayRefusal
@@ -220,6 +221,7 @@ bash  ExitTrapFiresPastTheEnd
 bash  FloatFormatLetterE
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
+bash  LongOptionNameIgnoresHyphens
 bash  LongOptionValueIsANumber
 bash  NumericTypeLetterPrecedence
 bash  NumericTypeLettersAreExclusive
@@ -343,6 +345,7 @@ dash  ListedBangIsOrdinary
 dash  ListedCaretIsOrdinary
 dash  ListedEqualsIsOrdinary
 dash  ListedNonAsciiIsOrdinary
+dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
 dash  NamerefArrayRefusal
@@ -440,6 +443,7 @@ ksh   InteractiveStartupFileWhenLogin
 ksh   JobsStateFiltersAccumulate
 ksh   LocalDashSavesTheShellOptions
 ksh   LocalOutsideAFunctionIsFatal
+ksh   LongOptionNameIgnoresHyphens
 ksh   NegatedTestRecordsThePostNegationStatus
 ksh   QuitResetRestoresTheDefault
 ksh   ReadonlyRecordsTheCompoundAttribute
@@ -463,7 +467,6 @@ zsh   IndirectionYieldsName
 zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
-zsh   LongOptionNamesASetOption
 zsh   LongOptionValueIsANumber
 zsh   NamerefArrayRefusal
 zsh   NamerefCycleIsRefused

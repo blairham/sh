@@ -2447,14 +2447,38 @@ func Semantics() interp.Semantics {
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
 	// and `set -oe` is `no such option: e`.
 	s.SetOLetterAttachesItsName = interp.Yes
-	// unanswered LongOptionNamesASetOption: zsh does read a `--name` word as
-	// one of its options — measured 2026-09-16, `zsh --xtrace -c 'echo ran'`
-	// traces — but not by ksh93's rule. Its own namespace holds the `no`
-	// forms, it folds case and underscores (`--NO_GLOB` is `noglob`), and a
-	// refused word is `no such option: …` at 1 with no usage block. Answering
-	// yes here would hand it ksh93's resolver and its refusal. #3129.
-	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
-	// `--name` option word, and the axis above is unanswered here. There is no site here to put the question to.
+	// Every `setopt` name is an invocation word here too, and reaching it
+	// costs nothing beyond saying so: the resolver, the folding and the
+	// refusal are this dialect's option table, which `-o NAME` already goes
+	// through. Measured 2026-09-16 against zsh 5.9.2 — `--xtrace` traces,
+	// `--noxtrace` does not, `--NO_GLOB` and `--no-glob` and `--no_glob` are
+	// all `noglob`, `--shwordsplit` really splits, and `--zzznosuch` is
+	// `no such option: zzznosuch` at 1 with the word as it was written.
+	//
+	// ksh93's `no` fallback cannot reach this column and that is what makes
+	// one axis enough for both: Runner.hasSetOptionName takes a dialect with
+	// an option table of its own at its word, so the substrate never strips a
+	// second `no` off a name this table has already folded. It is the
+	// difference between `--nonomatch`, which zsh takes (`nomatch` is a
+	// canonical name), and `--nonoglob` and `--no_no_glob`, which it refuses
+	// — the canonical name is `glob`, so `noglob` is already the negation and
+	// there is no second one. All three answer the same here and there.
+	s.LongOptionNamesASetOption = interp.Yes
+	// The `set` builtin is a different question in this column, which is why
+	// it is a different axis. Measured the same day: `set --zzz q` is status
+	// 0 with an empty standard error and `q` as `$1`, and `set --xtrace q`
+	// traces nothing — the word is swallowed whole rather than applied,
+	// refused, or left to be a positional parameter. #3129.
+	s.SetLongOptionWord = interp.LongOptionWordIsDiscarded
+	// And the `--name` spelling takes hyphens out of the name, which is that
+	// spelling's rule here and not this shell's namespace: `--no-glob` is
+	// `noglob` and `-o no-glob`, `setopt no-glob` and `set -o no-glob` are
+	// all `no such option: no-glob`, in one shell in one run.
+	s.LongOptionNameIgnoresHyphens = interp.Yes
+	// unanswered LongOptionValueIsANumber: measured 2026-09-16, `--xtrace=1`
+	// here is `no such option: xtrace=1` at 1 — the whole word including the
+	// `=1` is looked up and refused, so this column reads no value at all and
+	// the axis has nothing to answer. ksh93's reading is the only one.
 	// Where the `-o` does stand alone it takes the next word regardless of
 	// how it is spelled, which is the half of the panel ksh93 leaves it on
 	// here: `set -o -e` is `no such option: -e` at 1.
@@ -2868,7 +2892,15 @@ func Diagnostics() interp.Diagnostics {
 		// as `exec -a weirdname /bin/zsh` — measured all three ways, because
 		// the first alone looks like a base name rather than a fixed one.
 		// The other three shells print argv[0] whole.
-		SelfName:    "zsh",
+		SelfName: "zsh",
+		// With one exception, and it goes the other way from ksh93's: an
+		// option refused at an invocation names the **whole word** the shell
+		// was started by, where SelfName above would have written `zsh`.
+		// Measured 2026-09-16 invoking it as `/opt/homebrew/bin/zsh` —
+		// `-o zzznosuch` and `--zzznosuch` both write the path, and an
+		// unset parameter under `-c` writes `zsh:1:`. The route is the
+		// split, not the sentence.
+		InvocationOptionRefusalNamesTheInvocation: true,
 		TypeKeyword: "%[1]s is a reserved word",
 		// The only one that names where the function came from. The second
 		// verb is the file it was defined in, or the shell's own name where

@@ -466,4 +466,15 @@ jobs:
       # pull request on one runner. It needs the network to fetch, so a fetch
       # failure must not fail the build either; suitecheck already reports
       # that as a skip rather than a crash, and `|| true` covers the rest.
-      run: make bash-suite || true
+      # `-timeout 30s` matches what the `suite` target already passes, and it
+      # is the difference between a job that reports and a job that is killed.
+      # suitecheck defaults to 4 files at once and 90s each; bash ships 83
+      # files, so the worst case is 83 x 90 / 4 = ~31 minutes -- past the
+      # timeout below, which is how this job came back Terminated on main
+      # instead of printing a count. At 30s the same arithmetic is ~10
+      # minutes, inside the budget with room for a slow runner.
+      #
+      # A file that needs more than 30s is a file that hung, and the harness
+      # already reports that as `dialect hung` and declines to score it rather
+      # than waiting on it -- so the cap costs no measurement.
+      run: make bash-suite ARGS="-timeout 30s" || true

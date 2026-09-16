@@ -12038,7 +12038,7 @@ type Semantics struct {
 	// Read rather than asked, and deliberately: the registration happens
 	// before a script has run, so [Runner.ask] here would report an
 	// unanswered axis for every script that never mentions the name. What
-	// keeps an unanswered dialect from taking the majority's behaviour in
+	// keeps an unanswered dialect from taking the majority's behavior in
 	// silence is internal/axissweep's ledger, which fails a build for an
 	// axis no dialect answers — the check that exists because of #2272.
 	UnderscoreIsAParameterAtAll Answer

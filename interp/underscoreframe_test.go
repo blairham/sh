@@ -20,8 +20,14 @@ import (
 // they are three readings and not one.
 
 // tracks is the vector a shell that has `$_` at all starts from.
+//
+// Both halves, and they are two axes rather than one: the parameter exists,
+// which is what the preset denies because POSIX names none and dash and
+// BusyBox ash have not got it, and the last argument moves it. A vector that
+// said only the second would be a shell tracking a name it does not have.
 func tracks() Semantics {
 	s := permissive()
+	s.UnderscoreIsAParameterAtAll = Yes
 	s.UnderscoreTracksTheLastArgument = Yes
 	return s
 }

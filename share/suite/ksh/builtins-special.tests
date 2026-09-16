@@ -35,3 +35,28 @@ printf 'an assignment in front of it -> %s\n' "$?"
 # that it answered at all.
 times > /dev/null 2>&1
 printf 'times itself -> %s\n' "$?"
+
+# `type` on a special builtin says so, where `type echo` does not (#3273).
+#
+# The distinction is drawn in four of the seven columns and not in the other
+# three, so `echo` is the control on every line: a shell that had merely
+# adopted a longer phrase would move it too, and a shell that never says
+# `special` fails the first line while passing the control. Ours said the
+# short sentence in every dialect until #3273, because there was one wording
+# and it took only the name.
+
+type .
+type eval
+type echo
+
+# `command -V` is the same sentence written by another builtin, and it had
+# its own road to it.
+command -V .
+command -V echo
+
+# And the two letters of this shell's own spelling, which had drifted apart:
+# `-v` took the shared sentence and `-a` wrote its own, so one builtin was
+# special under one letter and ordinary under the other, one line apart.
+whence -v .
+whence -a .
+whence -a echo

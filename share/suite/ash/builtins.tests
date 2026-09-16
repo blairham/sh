@@ -193,3 +193,15 @@ printf 'a signal this shell has -> nothing said above\n'
 ( a=A; readonly a; printf 'x\n' | read a ) 2>&1 | sed 's/.*read: //'
 # The control: an unfrozen name reports the read's own status and says nothing.
 ( a=A; printf 'x\n' | { read a; printf 'plain st=%s [%s]\n' "$?" "$a"; } ) 2>&1
+
+# `type` on a special builtin says so, where `type echo` does not (#3273).
+#
+# BusyBox draws the distinction, as dash and ksh93 do and as the three bash
+# builds under their own name do not. `echo` is the control on every line: a
+# shell that had merely adopted a longer phrase would move it too. This
+# dialect said the short sentence for both until #3273.
+type .
+type eval
+type echo
+command -V .
+command -V echo

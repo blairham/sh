@@ -85,6 +85,33 @@ func (r *Runner) sayKind(k typeKind, name, bare, named string) bool {
 	return true
 }
 
+// BuiltinSentence is the line `type` and `command -V` write for a name that
+// resolved to a builtin — and the line zsh's `whence -v` writes for it, which
+// is why this is exported rather than private to this file.
+//
+// Two wordings, one axis and one membership. Four of the seven columns call a
+// POSIX special builtin *special* and three call every builtin the same
+// thing; see [Semantics.TypeDistinguishesSpecialBuiltins] for the panel. The
+// axis is asked only for a name that *is* special, so `type echo` — the
+// control that says the four columns are drawing a distinction rather than
+// using a longer phrase — stays a question no dialect has to answer, and a
+// runner with no dialect can still answer it.
+//
+// One function for all three spellings, because this is a sentence written in
+// three places and a second copy of it is how `type` and `command -V` come to
+// disagree about one builtin.
+func (r *Runner) BuiltinSentence(name string) string {
+	dg := r.diag()
+	plain := Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name)
+	if !specialBuiltins[name] {
+		return plain
+	}
+	if !r.ask(r.sem().TypeDistinguishesSpecialBuiltins, "`type` calling a special builtin special") {
+		return plain
+	}
+	return Wording(dg.TypeSpecialBuiltin, "%[1]s is a special shell builtin", name)
+}
+
 type typeMode struct {
 	// kind is `-t`: the bare kind word instead of the sentence.
 	kind bool
@@ -378,7 +405,11 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 	case ok:
 		found = true
 		if !r.sayKind(m.asked(), name, "builtin", NamedKindWord(NameBuiltin)) {
-			r.printf("%s\n", Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name))
+			line := r.BuiltinSentence(name)
+			if r.unspecified {
+				return 2
+			}
+			r.printf("%s\n", line)
 		}
 	case r.reservedWord(name):
 		found = true
@@ -558,7 +589,11 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 		if r.sayKind(kind, name, "builtin", NamedKindWord(NameBuiltin)) {
 			return 0
 		}
-		r.printf("%s\n", Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name))
+		line := r.BuiltinSentence(name)
+		if r.unspecified {
+			return 2
+		}
+		r.printf("%s\n", line)
 		return 0
 	}
 	if r.reservedWord(name) {

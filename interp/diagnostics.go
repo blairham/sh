@@ -1515,9 +1515,18 @@ type Diagnostics struct {
 	//
 	// A function is the same story again: "a function" in two of them, "a
 	// shell function" in a third, and a fourth that names itself in the line.
-	TypeKeyword  string
-	TypeBuiltin  string
-	TypeFunction string
+	TypeKeyword string
+	TypeBuiltin string
+	// TypeSpecialBuiltin is that line for a builtin POSIX marks special, in
+	// the four columns that tell the two apart —
+	// Semantics.TypeDistinguishesSpecialBuiltins is whether this dialect is
+	// one of them, and this is what it says when it is. All four word it
+	// identically, `. is a special shell builtin`, which is why the default
+	// serves every dialect that draws the distinction; it is a field rather
+	// than a constant so an embedder that rewords TypeBuiltin can reword its
+	// pair, and so the two cannot be worded in two different voices.
+	TypeSpecialBuiltin string
+	TypeFunction       string
 	// TypeFunctionFrom is that sentence for a dialect that names *where* the
 	// function was defined. Two verbs: the name and the origin — the path of
 	// the file it was read from, or the shell's own name where the shell

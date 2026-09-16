@@ -356,7 +356,14 @@ func verboseSentence(r *interp.Runner, name string, kind interp.NameKind, path s
 		// about the origin (#1706).
 		return r.FunctionSentence(name)
 	case interp.NameBuiltin:
-		return interp.Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name)
+		// From the core, for the reason the function line is: `type` writes
+		// the identical sentence, and a special builtin is worded differently
+		// from an ordinary one in four of the seven columns. This shell is
+		// not one of them — `whence -v .` is `. is a shell builtin` in zsh
+		// 5.9.2, measured 2026-09-16 — and that answer is the dialect's
+		// TypeDistinguishesSpecialBuiltins rather than a second wording
+		// written here, so the two builtins cannot come to disagree.
+		return r.BuiltinSentence(name)
 	case interp.NameReserved:
 		return interp.Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name)
 	case interp.NameFile:

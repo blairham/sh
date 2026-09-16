@@ -1053,6 +1053,9 @@ func Semantics() interp.Semantics {
 	s.RedirectTargetTakesPathnameExpansion = interp.No
 
 	// Whether `type --` ends the options.
+	// `type .` is `. is a special shell builtin` in dash 0.5.12, and `type
+	// echo` is a plain one.
+	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
 

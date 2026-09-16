@@ -2625,6 +2625,10 @@ func Semantics() interp.Semantics {
 	s.RedirectTargetTakesPathnameExpansion = interp.Yes
 
 	// Whether `type --` ends the options.
+	// zsh 5.9.2 has one wording for every builtin it has: `whence -v .` is
+	// `. is a shell builtin`. Its `export` is a third answer — a reserved
+	// word — and belongs to the grammar rather than to this axis.
+	s.TypeDistinguishesSpecialBuiltins = interp.No
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
 	// whence -v under another name, so the letters answer in sentences:

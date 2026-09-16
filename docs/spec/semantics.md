@@ -17719,6 +17719,36 @@ option they do not have, and dash reads it as a name like the rest of its
 operands. That is a table of letters and not a disagreement about
 identical syntax, which is why the axis went.
 
+**`TypeDistinguishesSpecialBuiltins`** — bash no · dash yes · ksh93 yes ·
+zsh no · ash yes · POSIX preset yes
+
+Makes `type` — and `command -V`, and ksh93's `whence`, which write the same
+sentence — call a builtin POSIX marks special *special*, where a shell that
+does not draw the distinction has one wording for every builtin it has.
+
+Four of the seven columns draw it and three do not. `type echo` is the
+control and is unanimous, which is what says the four are recording a
+distinction rather than using a longer phrase. Measured 2026-09-16 under
+`env -i PATH=/usr/bin:/bin LC_ALL=C`:
+
+    bash 5.3.20          . is a shell builtin
+    that binary as sh    . is a special shell builtin
+    bash 3.2.57          . is a shell builtin
+    zsh 5.9.2            . is a shell builtin
+    ksh93u+ 2012-08-01   . is a special shell builtin
+    dash 0.5.12          . is a special shell builtin
+    BusyBox ash 1.37.0   . is a special shell builtin
+
+bash moving with its mode rather than with its build is what settles this as
+an axis: one binary, two answers. zsh's `export` is a third answer — `export
+is a reserved word` — and belongs to that shell's grammar rather than here.
+
+*Which* names are special is a separate question this axis does not ask, and
+the panel does not agree about that either: dash and BusyBox also call
+`local` special and ksh93 also calls `alias` special, in both cases with the
+behavior to match. The membership used here is the substrate's own, so a
+dialect that later carries its own list moves the sentence with it.
+
 **`TypePrintsFunctionBody`** — bash yes · dash no · ksh93 no · zsh no
 
 Makes `type name` follow "name is a function" with the function itself,

@@ -361,3 +361,38 @@ func TestBuiltinComplaintCanNameAnotherBuiltin(t *testing.T) {
 		t.Errorf("out = %q, want the complaint not to use the invoked name", out)
 	}
 }
+
+// The listing letter reaches the builtin sentence by its own road, and an
+// unanswered axis has to arrive there the way it arrives at the plain answer:
+// as a refusal, with no sentence printed after it (#3273).
+//
+// A synthetic Semantics on purpose, because the state under test is one no
+// shipped dialect holds — all five answer this axis — and it is exactly the
+// state an embedder reaches by building a vector of its own. Two runs, so the
+// refusal is read against the answer rather than on its own: with the axis set
+// the same line prints the sentence, so a route that had simply stopped
+// working would fail the second half instead of passing the first.
+func TestTypeListingRefusesAnUnansweredSpecialBuiltin(t *testing.T) {
+	letters := func(a Answer) func(*Runner) {
+		return func(r *Runner) {
+			sem := CoreSemantics()
+			// The option axes answered, so the only unanswered one left is
+			// the axis under test and the refusal can name nothing else.
+			sem.TypeEndsOptionsWithDashDash = Yes
+			sem.TypeOptions = "afpP"
+			sem.TypeDistinguishesSpecialBuiltins = a
+			r.Semantics = &sem
+		}
+	}
+	out, st := run(t, `type -a .`, letters(Unspecified))
+	if !strings.Contains(out, "no dialect was chosen") || st != 2 {
+		t.Errorf("the listing said %q at %d, want a refusal at 2", out, st)
+	}
+	if strings.Contains(out, "shell builtin") {
+		t.Errorf("the listing answered as well as refusing: %q", out)
+	}
+	out, st = run(t, `type -a .`, letters(Yes))
+	if want := ". is a special shell builtin\n"; out != want || st != 0 {
+		t.Errorf("the listing said %q at %d, want %q at 0", out, st, want)
+	}
+}

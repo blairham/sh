@@ -42,8 +42,8 @@ import (
 //     alias, if any            N is an alias for V
 //     keyword, if any          N is a keyword
 //     function, if any         N is a function
-//     builtin, if any and no   N is a shell builtin
-//     function shadows it
+//     builtin, if any and no   N is a shell builtin — or `N is a special
+//     function shadows it      shell builtin`, for one POSIX marks special
 //     every PATH hit           N is <path>, or `N is a tracked alias for
 //     <path>` when the PATH hit is the only line
 //     the FPATH candidate      N is an undefined function
@@ -187,7 +187,13 @@ func whenceAll(r *interp.Runner, name string, quiet bool) int {
 		lines = append(lines, name+" is a function")
 		shadowed = true
 	case interp.NameBuiltin:
-		lines = append(lines, name+" is a shell builtin")
+		// The core's sentence and not a literal, which is the whole of #3273
+		// in this file: `whence -v .` goes through the shared wording and had
+		// the special/ordinary split, and this letter wrote its own line and
+		// did not — so one builtin was `a special shell builtin` under `-v`
+		// and `a shell builtin` under `-a`, from the same shell, one line
+		// apart. ksh93u+ 2012-08-01 says `special` under both.
+		lines = append(lines, r.BuiltinSentence(name))
 		shadowed = true
 	case interp.NameNotFound, interp.NameFile:
 		// A file is listed by the PATH loop below, which shows every hit

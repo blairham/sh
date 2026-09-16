@@ -822,6 +822,9 @@ func Semantics() interp.Semantics {
 	s.UnaliasAllRefusesOperands = interp.No
 	// `type -- cd` reads the `--` as a name rather than as the end of
 	// options, so no letter of its own is reachable — `-t` included.
+	// BusyBox ash 1.37.0 draws the distinction exactly as dash does, so this
+	// is the preset's value measured rather than inherited (#3248's shape).
+	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
 	// `ulimit -a` is laid out with bash's labels and letters rather than

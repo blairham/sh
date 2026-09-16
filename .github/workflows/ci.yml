@@ -224,41 +224,6 @@ jobs:
     - name: Run the tests, with the race detector on the Linux leg
       if: needs.changes.outputs.code == 'true'
       run: go test ${{ matrix.os == 'ubuntu-latest' && '-race' || '' }} ./...
-    # And the one test that does not want the race detector, run without it.
-    #
-    # TestNoDialectCombinationPanics was 525s of the 649s the step above spent
-    # testing the whole module, and 99.8% of the CPU its own package used. It
-    # is a recover()-based panic sweep over pure parsing, so instrumentation
-    # cannot make it catch a panic it was not already catching; measured on
-    # this runner it just costs 4.7x — 89s against 19s for the same 32
-    # vectors. The step above still runs it as a concurrency probe — every
-    # vector, a window of the corpus — and this step is the sweep itself, over
-    # the whole corpus, which is what proves no dialect combination can crash
-    # the parser.
-    #
-    # Sharded across the two operating systems this job already runs on, half
-    # the vectors each. The answer is a property of the parser rather than of
-    # the platform, so running the whole sweep twice bought nothing while one
-    # leg waited for the other.
-    #
-    # Half each, rather than all of it on whichever leg looks idle, because
-    # which leg that is does not hold still. Measured across runs: the Linux
-    # leg is steady, 90s of interp and 206s of instrumented tests twice within
-    # a second of each other, while macOS moved 1.5x in an hour, 110s of interp
-    # against 167s. Handing macOS the whole sweep was tried on this branch and
-    # timed: it took 59s off the Linux leg and landed on a macOS runner having
-    # a slow day, which cost more than the split had saved.
-    #
-    # An expression and not a second matrix dimension on purpose: the required
-    # checks are named `Build and test (ubuntu-latest)` and `(macos-latest)`,
-    # and another matrix key renames both — a required check reporting under a
-    # name protection is not waiting for is pending forever, which is the trap
-    # `changes` exists to avoid.
-    - name: The dialect-combination sweep, without the race detector
-      if: needs.changes.outputs.code == 'true'
-      env:
-        SH_DIALECTCOMBO_SHARD: ${{ matrix.os == 'ubuntu-latest' && '0/2' || '1/2' }}
-      run: go test ./syntax -run TestNoDialectCombinationPanics
     # Deliberately a step of an already-required job rather than a job of its
     # own. A new job would have to be added to branch protection to gate
     # anything, and until every open branch carried this workflow the new
@@ -306,6 +271,65 @@ jobs:
     - name: Does anything get out of the sandbox?
       if: needs.changes.outputs.code == 'true'
       run: make sandbox
+
+  # The dialect-combination sweep: a job of its own, so it runs beside the
+  # tests rather than after them.
+  #
+  # TestNoDialectCombinationPanics is a recover()-based panic sweep over pure
+  # parsing, so the race detector cannot make it catch a panic it was not
+  # already catching; it costs 4.7x under instrumentation and buys nothing.
+  # `go test -race ./...` above still runs it as a concurrency probe — every
+  # vector, a window of the corpus — and this is the sweep itself, over the
+  # whole corpus, which is what proves no combination can crash the parser.
+  #
+  # It used to be the last step of `Build and test`, and that is where its
+  # cost was: a step runs after the steps before it, so the sweep's 117s sat
+  # on the critical path behind the 260s `go test` step, in the job every
+  # merge waits for. Measured on Ubuntu the job was 443s, of which 377s were
+  # those two in a row. As a job it runs alongside instead, and the critical
+  # path becomes the longer of the two rather than their sum.
+  #
+  # The step was a step on purpose, and half of that reason still holds. A
+  # new job gates nothing until it is added to branch protection, and a
+  # required check that never runs reports as pending forever rather than as
+  # passed. What this file can do about that it does: the job always runs and
+  # always reports — only its steps are gated on `changes`, exactly as `test`
+  # is — so a docs-only pull request gets a green check rather than a missing
+  # one.
+  #
+  # What this file cannot do is the other half. A pull request whose last run
+  # predates this job has no `Dialect sweep` check at all, and nothing here
+  # will produce one until that branch runs again; making the check required
+  # strands every such branch until it does. That is a property of the order
+  # in which protection and open branches change, not of this workflow, so
+  # adding a required check here means re-running the open pull requests.
+  #
+  # Both halves on Linux. The answer is a property of the parser rather than
+  # of the platform, and the macOS runner's speed does not hold still — it
+  # moved 1.5x in an hour when this was measured — so a shard on it would make
+  # this job's duration the least predictable thing in the workflow.
+  sweep:
+    name: Dialect sweep
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['0/2', '1/2']
+    steps:
+    - uses: actions/checkout@v6
+      if: needs.changes.outputs.code == 'true'
+    - uses: actions/setup-go@v6
+      if: needs.changes.outputs.code == 'true'
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Can any dialect combination crash the parser?
+      if: needs.changes.outputs.code == 'true'
+      env:
+        SH_DIALECTCOMBO_SHARD: ${{ matrix.shard }}
+      run: go test ./syntax -run TestNoDialectCombinationPanics
 
   oracle:
     name: Oracle (report only)

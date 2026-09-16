@@ -2245,6 +2245,11 @@ func (sh Shell) executeLines(
 				r:      r,
 				report: func(line int, msg string) string { return in.dg.Report(in.diagName(), line, msg) },
 			}, echoed.off)
+			// And the list now holds the line a builtin is written on, which
+			// is the state `history -s` and `history -p` each drop one entry
+			// for. Told rather than derived: a prompt records into the
+			// editor's history and not into this list.
+			r.SetHistoryListFilledByTheReader(true)
 		}
 		if r.Exited() {
 			break

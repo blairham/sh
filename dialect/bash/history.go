@@ -129,6 +129,18 @@ func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	// `-p` and `-s` take every remaining operand and answer on their own,
 	// which is why bash's usage line prints them as a third form rather than
 	// alongside the others.
+	// Both of these drop the builtin's **own** line from the list first.
+	// `-s` is documented to — "the last command in the history list is
+	// removed before the args are added" — and `-p` is measured to: after
+	// `history -p "!!"`, a later `history` does not list the `-p` line.
+	//
+	// Only where the front end put that line there. Measured, `history -s a`
+	// followed by `history -s b` in a shell with no list leaves both, because
+	// neither line was ever recorded and there is nothing of the builtin's
+	// own to drop.
+	if flags.print || flags.store {
+		historyDropOwnLine(r)
+	}
 	if flags.print {
 		return historyPrint(r, rest)
 	}
@@ -370,6 +382,19 @@ func historyEntries(r *interp.Runner) []string {
 		return nil
 	}
 	return append([]string(nil), entries...)
+}
+
+// historyDropOwnLine removes the line the builtin was written on, which the
+// front end reading the program has already recorded.
+func historyDropOwnLine(r *interp.Runner) {
+	if !r.HistoryListFilledByTheReader() {
+		return
+	}
+	entries := historyEntries(r)
+	if len(entries) == 0 {
+		return
+	}
+	r.SetArray(historyStore, entries[:len(entries)-1])
 }
 
 func historyAdd(r *interp.Runner, line string) {

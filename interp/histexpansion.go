@@ -155,6 +155,28 @@ func (r *Runner) SetHistoryStore(entries func(*Runner) []string, add func(*Runne
 	r.histEntries, r.histAdd = entries, add
 }
 
+// SetHistoryListFilledByTheReader records that the front end reading this
+// program is putting its commands into the list, which is the state bash's
+// `remember_on_history` names.
+//
+// Two builtins turn on it. `history -s` is documented to remove the last
+// entry before adding its own — the last entry being the `history -s` line
+// itself — and measured, `history -p` drops its own line too. Both are
+// conditional on the line being there in the first place: measured, `history
+// -s a` followed by `history -s b` in a shell with no list leaves *both*,
+// because neither line was ever recorded.
+//
+// Asked of the front end rather than derived from HistoryRecording, because
+// the two are not the same thing here: an interactive session records into
+// the editor's own history and not into this list, so a prompt would drop a
+// planted entry that nothing had pushed the line in front of. Joining those
+// two lists is a real question and not this one — see dialect/bash's
+// history.go, which has said so since the builtin landed.
+func (r *Runner) SetHistoryListFilledByTheReader(on bool) { r.histFromReader = on }
+
+// HistoryListFilledByTheReader reports it.
+func (r *Runner) HistoryListFilledByTheReader() bool { return r.histFromReader }
+
 // HistoryEntries is the list, oldest first.
 func (r *Runner) HistoryEntries() []string {
 	if r.histEntries == nil {

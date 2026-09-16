@@ -1473,6 +1473,10 @@ type Runner struct {
 	// one.
 	histEntries func(*Runner) []string
 	histAdd     func(*Runner, string)
+	// histFromReader says the front end is putting the program's own
+	// commands into that list, which is what makes a builtin's own line the
+	// last entry. See SetHistoryListFilledByTheReader.
+	histFromReader bool
 	// tracksWindowSize is permission to keep $LINES and $COLUMNS abreast of
 	// the terminal. bash spells it `checkwinsize` and zsh has no name for it
 	// at all because it never stops doing it; the *capability* is neither

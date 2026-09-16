@@ -344,6 +344,20 @@ type containerConn struct {
 // shares $HOME and not /tmp, and Docker Desktop shares both. A copy needs
 // nothing shared, so the column does not depend on a virtual machine's mount
 // list.
+//
+// **The runner being the container's PID 1 is load-bearing, and not only for
+// tidiness.** The kernel does not deliver a signal to PID 1 unless that
+// process installed a handler for it, so a shell started *as* PID 1 survives
+// every signal whose disposition is still the default. Measured 2026-09-16 in
+// this image: `docker run <image> /bin/ash case.sh` over `kill -TERM $$` runs
+// on to the end of the script and reports 0, where every other column of the
+// panel dies at 143 — and with `trap 'echo bye' EXIT` set, the trap then fires
+// from the *ordinary* exit and the column reads exactly like bash's answer to
+// ExitTrapRunsOnSignalDeath, which is the opposite of BusyBox's real one.
+// Every shell this route starts is a child of the runner, so none of that
+// reaches the record. A hand probe that shortens this to `docker run` and
+// nothing else does not have that property, and its signal rows are wrong
+// without saying so.
 func (c *containerConn) dial(ctx context.Context) error {
 	create, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()

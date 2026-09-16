@@ -875,7 +875,7 @@ func Semantics() interp.Semantics {
 	// And the name is still *recorded*: `typeset xyz; typeset -p xyz` writes
 	// `declare -- xyz` at 0 while `${xyz-unset}` fires its default, so the
 	// name is declared and unset at once. Measured 2026-09-15 under `env -i
-	// PATH=/usr/bin:/bin` on bash 5.3.15 and on the same binary as `sh`,
+	// PATH=/usr/bin:/bin` on bash 5.3.20 and on the same binary as `sh`,
 	// through `-c` and from a file. ksh93 is the column that parts here,
 	// which is what makes it a question of its own (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.Yes

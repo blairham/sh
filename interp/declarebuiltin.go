@@ -3377,10 +3377,9 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 			return
 		}
 	}
-	// Whether the *outer* value still shows through is a third
-	// disagreement, and it only arises where a shadow
-	// was actually taken: `declare u` at the top level leaves the global
-	// alone in every shell measured.
+	// Whether the *outer* value still shows through is a third disagreement,
+	// and it only arises where a shadow was actually taken: `declare u` at
+	// the top level leaves the global alone in every shell measured.
 	//
 	// Taken *by this declaration*, which is what `fresh` says and what the
 	// question turns on. A second declaration of a name its own scope already

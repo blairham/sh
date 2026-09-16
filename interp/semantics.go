@@ -5388,7 +5388,7 @@ type Semantics struct {
 	//
 	//	typeset xyz; typeset -p xyz; echo "st=$?"; echo "[${xyz-unset}]"
 	//
-	//	bash 5.3.15   declare -- xyz       st=0   [unset]
+	//	bash 5.3.20   declare -- xyz       st=0   [unset]
 	//	bash-as-sh    declare -- xyz       st=0   [unset]
 	//	bash 3.2.57   declare -- xyz=""    st=0   []
 	//	zsh 5.9.2     typeset xyz=''       st=0   []

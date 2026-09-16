@@ -301,7 +301,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		// or a bare declaration made *after* the removal, which is a name
 		// brought back into being rather than one that survived it:
 		// measured 2026-09-15, `declare xyz; unset xyz; declare xyz;
-		// declare -p xyz` writes `declare -- xyz` in bash 5.3.15 where
+		// declare -p xyz` writes `declare -- xyz` in bash 5.3.20 where
 		// `declare xyz; xyz=v; unset xyz` is `xyz: not found`. `unset`
 		// clears the record with the attributes, so what is read here can
 		// only be a later declaration's.

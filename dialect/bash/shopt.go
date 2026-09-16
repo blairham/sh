@@ -515,6 +515,31 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 // Every name #1429 and #1445 collected is now wired; nothing in the table
 // below is a behavior somebody asked for and did not get. The last two,
 // `dirspell` and `direxpand`, are in shoptSwitches above.
+// `array_expand_once` and `assoc_expand_once` are the two names in this
+// table recorded on the side this shell is *not* on, and they are left there
+// on purpose. They are one switch under two names — measured 2026-09-16 on
+// bash 5.3.20, `shopt -s array_expand_once` turns `assoc_expand_once` on too
+// and the reverse — and what they name is the suppression of a *second*
+// expansion of an associative array subscript. The observable that separates
+// the two states is a subscript the shell never expanded to begin with:
+//
+//	declare -A a; k='x y'; a[$k]=hello
+//	unset -v 'a[$k]'          # quoted, so unset receives the dollar sign
+//	echo "${a[$k]-UNSET}"
+//
+// bash with the names off — its default — prints UNSET, because `unset`
+// expands the subscript itself and finds the key. With them on it prints
+// hello. This shell prints hello, so the state the names describe is the
+// state it is already in, and `shopt -s assoc_expand_once` is refused for a
+// request that has in fact been granted.
+//
+// Recording them on would make that refusal go away, and it was measured
+// rather than assumed: bash's own quotearray file drops four lines and its
+// shopt file gains exactly four, because a listing that reads `on` where
+// bash's default reads `off` is a difference of its own and the file that
+// lists every name finds it twice. A wash, so the honest half of the answer
+// is not worth buying with the dishonest half. What closes it is the second
+// expansion itself, so that the names can genuinely be off — #3298.
 var shoptStates = map[string]bool{
 	"array_expand_once":    false,
 	"assoc_expand_once":    false,

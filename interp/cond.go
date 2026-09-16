@@ -188,7 +188,11 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// parameter and not about its value: a name holding the empty
 		// string is set. Shared with `test -v` — see parameterIsSet, where
 		// the whole of the answer and its two axes are.
-		return r.parameterIsSet(s)
+		//
+		// The word rather than s, because the one thing this route has that
+		// the builtin's does not is which brackets were written: see
+		// condParameterIsSet.
+		return r.condParameterIsSet(x.X, s)
 	case "-o":
 		// The shell's own option state, read through the dialect's namespace
 		// — which for one of the panel is far wider than its `set -o` names.

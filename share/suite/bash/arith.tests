@@ -33,3 +33,24 @@ printf 'the same digits stored:  %s\n' "$(( big ))"
 
 # The control: a numeral the word holds is untouched by any of this.
 printf 'the largest that fits:   %s\n' "$(( 9223372036854775807 ))"
+
+# An associative subscript written inside an arithmetic expression is a
+# quoting context here, exactly as `${m['k']}` is — so `(( a['q'] ))` is the
+# element under the one character `q`, and the store takes the same key the
+# read does. ksh93u+ agrees; zsh 5.9.2 does not, and looks up the three
+# characters the quotation is, which is the same split
+# `${a['q']}` already falls on.
+declare -A quo
+quo[q]=7
+quo['a b']=9
+(( r = quo[q] )); printf 'bare %s\n' "$r"
+(( r = quo['q'] )); printf 'single-quoted %s\n' "$r"
+(( r = quo["q"] )); printf 'double-quoted %s\n' "$r"
+(( r = quo[\q] )); printf 'backslashed %s\n' "$r"
+(( r = quo['a b'] )); printf 'a quoted blank %s\n' "$r"
+printf 'through a dollar-arithmetic %s\n' "$(( quo['q'] ))"
+(( quo['k'] = 5 ))
+printf 'the store takes the same key [%s]\n' "${quo[k]-U}"
+(( r = quo[zz] )); printf 'an absent key is still %s\n' "$r"
+idx=(9 8 7)
+(( r = idx[1+1] )); printf 'an indexed subscript is still an expression %s\n' "$r"

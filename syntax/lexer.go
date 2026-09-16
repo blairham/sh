@@ -99,6 +99,27 @@ type Lexer struct {
 	// opensArrayElementSubscript for what the flag decides.
 	inArrayLiteral bool
 
+	// inCaseSubject is set while the token being read is the word a `case`
+	// matches its arms against. It exists for one question the flags beside
+	// it cannot answer: whether a `(` at the front of that word opens
+	// something of the shell's or is text.
+	//
+	// It is text in one dialect, because the subject stands where an
+	// argument does there. Measured 2026-09-15 on zsh 5.9.2 and on zsh 5.9,
+	// each probe in a script file of its own: `case (x) in "(x)") …` runs
+	// that arm and `case (x) in x) …` runs none, so the parentheses reach
+	// the matcher as two characters of the subject rather than grouping
+	// anything. The other six columns — bash 5.3, bash as `sh`, bash 3.2,
+	// ksh93u+, dash and BusyBox ash — all refuse `case (x) in` outright,
+	// which is why the reading is the dialect's and the flag is read only
+	// where [Dialect.GlobQualifiers] already says a leading `(` may be a
+	// word's.
+	//
+	// Separate from noAssignment, which is true here too: that flag answers
+	// what an `=` means and this one answers what a `(` does, and a shell
+	// could have either without the other.
+	inCaseSubject bool
+
 	// noAssignment is set while the token being read stands where no
 	// *assignment* may be written, in the two positions the flags above do
 	// not already cover: a `case` subject and a redirection's target. Both
@@ -1538,7 +1559,9 @@ func (l *Lexer) blankIsText() bool {
 // leadingParenBelongsToTheWord reports whether a `(` at the *front* of a
 // token is part of the word rather than an operator.
 //
-// Where an argument may stand it always is, which is what `inArgument` says.
+// Where an argument may stand it always is, which is what `inArgument` says,
+// and a `case` subject is such a position in the dialect that reads this at
+// all — see inCaseSubject, where that measurement is.
 // At the start of a `case` arm both readings are available at the same
 // character — the arm carries an optional paren of its own, and a pattern
 // may be a group — and what separates them is not the character but whether
@@ -1569,7 +1592,7 @@ func (l *Lexer) blankIsText() bool {
 // the token is known to be a word, `inArgument` alone decides how a leading
 // group is scanned; see the note at that call.
 func (l *Lexer) leadingParenBelongsToTheWord() bool {
-	if l.inArgument {
+	if l.inArgument || l.inCaseSubject {
 		return true
 	}
 	if !l.inCaseArm || l.peek() != '(' {

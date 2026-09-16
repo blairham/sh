@@ -5434,9 +5434,14 @@ func (p *Parser) parseCase() Command {
 	// `a==(echo hi)` assigns a path. Told to the
 	// lexer before the `p.next()` that reads it, for the reason inCaseArm is
 	// below. See Lexer.noAssignment.
-	p.lex.noAssignment = true
+	// A `(` at the front of the subject is text in one dialect and an
+	// operator in the rest, and the lexer cannot tell on its own: `(` is in
+	// the operator table, so a token beginning with one never reaches the
+	// word scanner. Told here for the same reason noAssignment is, and taken
+	// back on the same line. See Lexer.inCaseSubject.
+	p.lex.noAssignment, p.lex.inCaseSubject = true, true
 	p.next()
-	p.lex.noAssignment = false
+	p.lex.noAssignment, p.lex.inCaseSubject = false, false
 	if c.Word = p.word(); c.Word == nil {
 		p.fail("expected a word after `case`")
 		return c

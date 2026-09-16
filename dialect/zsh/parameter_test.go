@@ -1164,3 +1164,134 @@ func TestTheNamedDirectoryParameterIsAViewOfTheTable(t *testing.T) {
 		})
 	}
 }
+
+// A *whole-table* assignment to a produced association is the write #3092 was
+// filed about. It used to be refused by name and the status stayed 0, so a
+// script that rewired a command read back the PATH search and was told
+// nothing had gone wrong.
+//
+// Measured on zsh 5.9.2, 2026-09-16, and every row uses **two different
+// keys**: one written the ordinary way, then a literal naming another, then
+// the first asked for again. A literal naming the key the table already holds
+// would give the same output whether the table was emptied first or merged
+// into, so that probe cannot tell the two answers apart — and which of them
+// each name gives is the only thing this test is about.
+func TestAWholeTableAssignmentReachesTheProducer(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The four that merge. The first key survives.
+		{
+			"commands keeps what was there",
+			`commands[cA]=/bin/echo
+commands=(cB /bin/echo)
+print -r -- "st=$? A=[$commands[cA]] B=[$commands[cB]]"`,
+			"st=0 A=[/bin/echo] B=[/bin/echo]\n",
+		},
+		{
+			// And the write is a real binding rather than a table entry: the
+			// name is not on PATH, so a shell that stored the pair and looked
+			// the word up afresh would answer `command not found`.
+			"and the command it bound runs",
+			`commands=(cB /bin/echo)
+cB ran`,
+			"ran\n",
+		},
+		{
+			"functions keeps what was there",
+			`fA() { print A }
+functions=(fB "print B")
+print -r -- "st=$?"
+fA
+fB`,
+			"st=0\nA\nB\n",
+		},
+		{
+			"and the keyed spelling of the literal reaches it too",
+			`functions=([fC]="print C")
+fC`,
+			"C\n",
+		},
+		{
+			"options keeps what was there",
+			`setopt extendedglob
+options=(nomatch on)
+print -r -- "st=$? eg=[$options[extendedglob]] nm=[$options[nomatch]]"`,
+			"st=0 eg=[on] nm=[on]\n",
+		},
+		// The four that empty the table first. The first key is gone.
+		{
+			"aliases empties first",
+			`alias aA=x
+aliases=(aB y)
+print -r -- "st=$? A=[$aliases[aA]] B=[$aliases[aB]]"`,
+			"st=0 A=[] B=[y]\n",
+		},
+		{
+			"galiases empties first",
+			`alias -g gA=x
+galiases=(gB y)
+print -r -- "st=$? A=[$galiases[gA]] B=[$galiases[gB]]"`,
+			"st=0 A=[] B=[y]\n",
+		},
+		{
+			"saliases empties first",
+			`alias -s sA=x
+saliases=(sB y)
+print -r -- "st=$? A=[$saliases[sA]] B=[$saliases[sB]]"`,
+			"st=0 A=[] B=[y]\n",
+		},
+		{
+			"nameddirs empties first",
+			`hash -d dA=/tmp
+nameddirs=(dB /usr)
+print -r -- "st=$? A=[$nameddirs[dA]] B=[$nameddirs[dB]]"`,
+			"st=0 A=[] B=[/usr]\n",
+		},
+		// Emptying one kind of alias is not emptying the others: the three
+		// parameters are three namespaces, and a clear that reached the
+		// shared table would take the regular alias with it.
+		{
+			"and only its own namespace",
+			`alias rA=x
+alias -g gA=y
+galiases=(gB z)
+print -r -- "r=[$aliases[rA]] g=[$galiases[gA]] new=[$galiases[gB]]"`,
+			"r=[x] g=[] new=[z]\n",
+		},
+		// The shape that reads most like "clear this" clears nothing. zsh's
+		// parameter is handed no table at all by an empty literal and its set
+		// function returns before touching anything — so this row is measured
+		// rather than reasoned, and it is the one row that would have been
+		// wrong had the emptying been written as an obvious rule.
+		{
+			"an empty literal empties nothing",
+			`alias aA=x
+aliases=()
+print -r -- "st=$? A=[$aliases[aA]]"`,
+			"st=0 A=[x]\n",
+		},
+		{
+			"nor one that is empty only after expansion",
+			`alias aA=x
+e=()
+aliases=($e)
+print -r -- "st=$? A=[$aliases[aA]]"`,
+			"st=0 A=[x]\n",
+		},
+		// A readonly produced table still refuses, which is the other of
+		// zsh's two answers and the one that must not be lost to this: the
+		// write is stopped with a sentence and a status, not accepted.
+		{
+			"a readonly produced table still refuses",
+			`builtins=(b c) 2>&1
+print -r -- "st=$?"`,
+			"zsh:2: read-only variable: builtins\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), "zmodload zsh/parameter\n"+tc.src)
+			if out != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+			}
+		})
+	}
+}

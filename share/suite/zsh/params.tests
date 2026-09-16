@@ -107,3 +107,45 @@ localmodule
 set -- 1 2 3 4 5 6 7 8 9 ten eleven
 printf 'unbraced: [%s] [%s]\n' "$10" "$11"
 printf 'braced:   [%s] [%s]\n' "${10}" "${11}"
+
+# A whole-table assignment to one of the parameters this shell *produces* —
+# `$commands`, `$functions`, `$aliases` and the rest of zsh/parameter. This
+# is the shape #3092 was filed about: the write used to be dropped and the
+# status stayed 0, so a caller that rewired a command was told it had worked.
+#
+# Two different keys throughout, never one. A literal that names the key the
+# table already holds cannot tell "the table was emptied first" from "the
+# literal merged into it", and that is the whole question below.
+zmodload zsh/parameter
+
+# $commands merges: the key written the ordinary way is still there after a
+# literal naming another, and the command the literal bound really runs.
+commands[suitecmdA]=/bin/echo
+commands=(suitecmdB /bin/echo)
+printf 'commands merged: [%s] [%s]\n' "$commands[suitecmdA]" "$commands[suitecmdB]"
+suitecmdB 'commands write took'
+
+# $functions the same, through the keyed spelling of the literal rather than
+# the pair spelling, because a produced table has to take both.
+suitefnA() { printf 'A\n'; }
+functions=([suitefnB]=$'\tprintf "B\\n"')
+suitefnA
+suitefnB
+
+# $aliases is the other answer: its table is emptied before the literal's own
+# keys go in, so the alias defined the ordinary way is gone.
+alias suitealA=x
+aliases=(suitealB y)
+printf 'aliases emptied: [%s] [%s]\n' "$aliases[suitealA]" "$aliases[suitealB]"
+
+# And the shape that reads most like "clear this" clears nothing: an empty
+# literal hands the parameter no table at all, so every alias stands.
+alias suitealC=z
+aliases=()
+printf 'empty literal kept: [%s]\n' "$aliases[suitealC]"
+
+# Unsetting one element of a produced table removes the entry rather than
+# being accepted and ignored — the same silent-write failure one name over.
+hash -d suitedirA=/tmp
+unset "nameddirs[suitedirA]"
+printf 'nameddirs unset: [%s] %s\n' "$nameddirs[suitedirA]" "${#nameddirs}"

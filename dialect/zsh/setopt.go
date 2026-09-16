@@ -444,6 +444,18 @@ var zshOptions = []zshOption{
 	{
 		base: "interactive", def: false,
 		get: func(r *interp.Runner) bool { return r.Interactive },
+		// And a fact the command line may state, which is the other side of
+		// "read and not set": real zsh refuses `setopt interactive` to a
+		// running script and **takes** `zsh -o interactive`. Measured
+		// 2026-09-16 on zsh 5.9.2: `zsh -f -o interactive -c 'echo $-'` is
+		// `569XZfi` against `569Xf` with nothing asked, so `i` arrives and
+		// `Z` arrives with it — `zle` is read over this same state, so
+		// turning the shell interactive turns the editor on without this
+		// saying so (#3154).
+		atInvocation: func(r *interp.Runner, on bool) int {
+			r.Interactive = on
+			return 0
+		},
 	},
 	// Off in a default zsh, and recorded on here until #2516. Measured
 	// 2026-09-12 on zsh 5.9.2 with an empty HOME: `zsh -f -c '[[ -o
@@ -528,7 +540,7 @@ var zshOptions = []zshOption{
 	// not a question about being interactive. See setoptions.go for the
 	// panel, and TestSetoptMonitorNeedsATerminalAndNotAPrompt for the
 	// measurement.
-	setOptBacked("monitor", false, "monitor", false),
+	monitorOption(),
 	recorded("multibyte", true),
 	recorded("multifuncdef", true),
 	{
@@ -676,7 +688,7 @@ var zshOptions = []zshOption{
 	// of what real zsh refuses in a `-c` run on a pipe. Every one is off here
 	// and off in such a zsh, so turning it off is granted and turning it on
 	// is the measured `can't change option`, 1.
-	fixedConstant("shinstdin", false, false),
+	shinStdinOption(),
 	nullCommandOption("shnullcmd"),
 	recorded("shoptionletters", false),
 	recorded("shortloops", true),
@@ -763,7 +775,91 @@ func zleOption() zshOption {
 	o := recordedOver("zle", false, func(r *interp.Runner) bool { return r.Interactive })
 	o.recorded = false
 	o.immovable = func(r *interp.Runner) bool { return !r.Interactive }
+	move := o.set
+	// Turning it **on** needs a terminal as well as a prompt, and turning it
+	// off does not. That pair is only reachable in a shell that is
+	// interactive with nothing to edit — which is exactly what
+	// `zsh -o interactive` on a pipe makes, so the state arrived with #3154
+	// and the answer is measured rather than inherited. zsh 5.9.2,
+	// 2026-09-16: `zsh -f -o interactive -c 'setopt zle'` is
+	// `can't change option: zle` at 1 while `unsetopt zle` in the same shell
+	// is a silent 0 that really takes the `Z` out of `$-`.
+	//
+	// Written on the entry's own set rather than through `immovable`,
+	// because that answers one way for both directions and this splits on
+	// the direction. The invocation route never reaches here: its hook is
+	// consulted first, and `zsh -o zle` is granted with no terminal in
+	// sight.
+	o.set = func(r *interp.Runner, on bool) int {
+		if on && !r.Terminal {
+			r.Diagnosef("can't change option: zle\n")
+			return 1
+		}
+		return move(r, on)
+	}
+	// And the command line takes the name whatever the shell is, which is
+	// not the same as moving it. Measured 2026-09-16 on zsh 5.9.2:
+	// `zsh -f -o zle -c '[[ -o zle ]]'` is status 0 for the request and **1**
+	// for the read — the option is granted and stays off — while
+	// `zsh -f -o interactive +o zle -c 'echo $-'` is `569Xfi`, the `Z` that
+	// interactive brought taken away again. So the request is refused
+	// nowhere on this route and honored only where the editor could run: the
+	// state is "interactive, unless a request has said otherwise", and a
+	// shell with no prompt has no editor for `-o zle` to turn on (#3154).
+	o.atInvocation = func(r *interp.Runner, on bool) int {
+		if r.Interactive {
+			return move(r, on)
+		}
+		return 0
+	}
 	return o
+}
+
+// monitorOption is zsh's `monitor`, which is job control and is the same
+// switch `set -m` moves — so the two spellings are one state read and written
+// through one seam. Granted in both directions where the shell has a terminal
+// and refused with zsh's own wording where it has none, which is
+// Semantics.MonitorNeedsATerminal and not a question about being interactive.
+// See interp/setoptions.go for the panel and
+// TestSetoptMonitorNeedsATerminalAndNotAPrompt for the measurement.
+//
+// The command line is the third answer and the one #3154 was about: real zsh
+// **takes** `zsh -o monitor` at 0 with nothing on standard error, and
+// `[[ -o monitor ]]` in that shell is still 1. Measured 2026-09-16 on zsh
+// 5.9.2, with and without `-o interactive` beside it, in both directions.
+// Granted and inert, which is neither the refusal a script gets nor a move —
+// the shape interp.Runner.AddInertSetOptions gives a whole name, here for one
+// route of one name.
+func monitorOption() zshOption {
+	o := setOptBacked("monitor", false, "monitor", false)
+	o.atInvocation = func(*interp.Runner, bool) int { return 0 }
+	return o
+}
+
+// shinStdinOption is zsh's `shinstdin`: the shell is reading its program from
+// standard input.
+//
+// A fact about the invocation rather than a switch, and the substrate already
+// holds it — it is the state behind the `s` in `$-`, which this shell was
+// already writing on the route that has it. It was a constant `off` here, so
+// one shell answered `[[ -o shinstdin ]]` false while its own `$-` said `s`
+// in the same run.
+//
+// Measured 2026-09-16 on zsh 5.9.2. `echo 'cmd' | zsh -f` and
+// `echo 'cmd' | zsh -f -s` both read the option **on**; `zsh -f -c cmd` reads
+// it off; and `zsh -f -o shinstdin -c cmd` is granted at 0 and reads it on,
+// with `s` in `$-` — while `setopt shinstdin` in a running script is
+// `can't change option: shinstdin` at 1. So the command line may state it and
+// a script may not, which is the same split `interactive` keeps one row up
+// (#3154).
+func shinStdinOption() zshOption {
+	return zshOption{
+		base: "shinstdin", def: false,
+		get: func(r *interp.Runner) bool { on, _ := r.NamedOption("stdin"); return on },
+		atInvocation: func(r *interp.Runner, on bool) int {
+			return r.ApplyNamedOption("stdin", on)
+		},
+	}
 }
 
 // zshOptionAlias is one of the compat spellings: a second name for an option
@@ -1284,14 +1380,20 @@ func moveOption(r *interp.Runner, name string, on bool) (moved, known bool) {
 		return false, false
 	}
 	want := on != inverted
+	if mover := invocationMover(r, o); mover != nil {
+		// Asked first, ahead of both the fixed bargain and the entry's own
+		// set. A name with one of these has been measured on the command
+		// line that started the shell and answers there for itself — which
+		// is the whole point of the hook, since four of the five names that
+		// carry one are **refused** to a running script and granted at an
+		// invocation. See Semantics.ImmovableOptionsSetAtInvocation.
+		return mover(r, want) == 0, true
+	}
 	if o.immovable != nil && o.immovable(r) {
 		return o.get(r) == want, true
 	}
 	if o.set != nil {
 		return o.set(r, want) == 0, true
-	}
-	if mover := invocationMover(r, o); mover != nil {
-		return mover(r, want) == 0, true
 	}
 	// Fixed: granted where it is already where it is being asked to be, and
 	// refused otherwise — the same bargain setOption strikes, with the
@@ -1309,6 +1411,11 @@ func setOption(r *interp.Runner, name string, on bool) int {
 		return 1
 	}
 	want := on != inverted
+	if mover := invocationMover(r, o); mover != nil {
+		// The command line that started the shell, which is a route of its
+		// own and is asked before either answer below. See moveOption.
+		return mover(r, want)
+	}
 	if o.immovable != nil && o.immovable(r) {
 		// Held still in this shell, so the fixed bargain below applies even
 		// though the entry has a set — asked for where it already is, it is
@@ -1321,9 +1428,6 @@ func setOption(r *interp.Runner, name string, on bool) int {
 	}
 	if o.set != nil {
 		return o.set(r, want)
-	}
-	if mover := invocationMover(r, o); mover != nil {
-		return mover(r, want)
 	}
 	if o.get(r) == want {
 		// Already where it was asked to be: granted, the same bargain the

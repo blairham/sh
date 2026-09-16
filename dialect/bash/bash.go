@@ -1323,6 +1323,10 @@ func Semantics() interp.Semantics {
 	// stat rather than the one `cd` makes. bash 3.2 drops an inherited OLDPWD
 	// whatever it names, which is a fourth answer and not this dialect's.
 	s.InheritedOldpwd = interp.InheritedOldpwdTakenIfADirectory
+	// The depth, counted and told to every child — and the one column of the
+	// panel with a ceiling on it: a level of 1000 or more is refused with a
+	// warning and the count starts again. See interp.ShellLevelPolicy.
+	s.ShellLevel = interp.ShellLevelCountedToACeiling
 	// `PWD` is a different answer from OLDPWD's here: the starting directory
 	// is named by what the kernel reports, in 5.3 and 3.2 alike.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel

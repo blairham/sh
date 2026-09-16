@@ -12174,6 +12174,73 @@ resolved against the startup directory and kept if that names one. bash
 3.2's fourth answer — no inherited OLDPWD at all, usable or not — is a
 column in the record rather than a dialect, so it has no constant.
 
+**`ShellLevel`** — bash counted to a ceiling · dash not counted · ksh93
+counted · zsh counted · ash counted
+
+Whether this shell counts how deep it is in `$SHLVL`, tells every child,
+and what it does with a count that has run away.
+
+`$SHLVL` is the number of shells a process is standing in, and it is the
+one parameter here whose value is only half about this shell: it is read
+out of the environment, incremented, and **exported**, so the number
+every later child reads is the one this shell wrote. A shell that does
+not keep it does not merely lack a name — every shell started underneath
+it counts from one again. Measured 2026-09-16 with
+`env -i PATH=… LC_ALL=C <shell> -c 'echo "[${SHLVL-NONE}]"'` and
+`env | grep '^SHLVL'` in the same shell:
+
+| shell | `${SHLVL-NONE}` | in a child's environment |
+| --- | --- | --- |
+| bash 5.3.20, bash-as-`sh`, bash 3.2.57 | `1` | yes |
+| zsh 5.9.2 | `1` | yes |
+| ksh93u+ 2012-08-01 | `1` | yes |
+| BusyBox ash 1.37.0 | `1` | yes |
+| dash 0.5.12 | `NONE` | no |
+
+Six of seven columns, and dash is the one with no such parameter at all.
+BusyBox ash is the column #3097's own table did not have, and it is on
+the side that counts — so `cmd/ash` owes the parameter and only
+`cmd/dash` does not.
+
+The increment is per shell *process*: a `( )` subshell, a command
+substitution, a brace group and a pipeline element all read the level the
+shell itself has, in all four columns. Only starting another shell adds
+one, which is what makes the number a depth of shells rather than a
+nesting count of anything else — and is why the count is settled once per
+session rather than per chunk a front end hands over.
+
+What the panel does with a value it cannot use, and where it parts:
+
+| inherited | bash 5.3 | bash 3.2 | zsh | ksh93 | ash |
+| --- | --- | --- | --- | --- | --- |
+| *(unset)*, `""`, `abc`, `0` | `1` | `1` | `1` | `1` | `1` |
+| `3` | `4` | `4` | `4` | `4` | `4` |
+| `-1` | `0` | `0` | `0` | `0` | `0` |
+| `-5` | `0` | `0` | `-4` | `-4` | `4294967292` |
+| `998` | `999` | `999` | `999` | `999` | `999` |
+| `999` | warning, `1` | *(empty)* | `1000` | `1000` | `1000` |
+| `1000` | warning, `1` | warning, `1` | `1001` | `1001` | `1001` |
+
+bash alone has a ceiling: a new level of 1000 or more is refused with
+`warning: shell level (N) too high, resetting to 1` on standard error and
+the count starts again at 1, and a level that would go negative is
+floored at 0 first. The refusal is at **status 0**, before the first line
+of the script is read, so it is invisible to `set -e` and to `||` alike.
+bash 3.2 warns one step later and writes an *empty* `SHLVL` at exactly
+1000, which is a defect of its own rather than a rule; this shell's bash
+dialect answers as bash 5.3, the version it claims to be.
+
+Deliberately not modeled, because each column reads rubbish through a
+different C library call rather than through a rule: `2x` is 3 in zsh and
+BusyBox ash and 1 in bash and ksh93; `0x10` is 17 in zsh and ksh93 and 1
+in bash and BusyBox ash; a leading blank is skipped by bash, zsh and ash
+and refuses the whole value in ksh93; and an enormous value wraps at 64
+bits in zsh, at 32 in BusyBox ash, and is refused by bash and ksh93.
+bash's reading is the one taken for every dialect that counts — the
+entire value, blanks allowed on either end, sign and decimal digits and
+nothing else — because it is the only one of the four that is a rule, and
+no shell's own startup writes a value the four disagree about. #3097.
+
 **`UnsetReferenceLetterRemovesANonReference`** — bash no · dash
 unanswered · ksh93 yes · zsh unanswered · ash unanswered
 

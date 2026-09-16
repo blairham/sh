@@ -629,6 +629,11 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-12: `OLDPWD=/nonexistent dash -c 'echo $OLDPWD'` answers
 	// the path it was given, and `cd -` then answers `can't cd to` it at 2.
 	s.InheritedOldpwd = interp.InheritedOldpwdTaken
+	// The one column of the panel with no depth at all: dash 0.5.12 under
+	// `env -i` leaves `SHLVL` unset and exports nothing, and a shell it
+	// starts counts from one. Not an omission here — see
+	// interp.ShellLevelPolicy.
+	s.ShellLevel = interp.ShellLevelNotCounted
 	// dash names its starting directory by asking the kernel, whatever it was
 	// handed, which is where it parts company with the other ash-derived
 	// shell in the panel.

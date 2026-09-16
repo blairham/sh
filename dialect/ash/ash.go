@@ -612,6 +612,11 @@ func Semantics() interp.Semantics {
 	// $OLDPWD'` answers the path it was given, and `cd -` then answers `can't cd
 	// to /nonexistent: No such file or directory` at 2.
 	s.InheritedOldpwd = interp.InheritedOldpwdTaken
+	// The depth, counted and told to every child. This is the column the
+	// issue's own table did not have: BusyBox ash 1.37.0 sets `SHLVL=1`
+	// under `env -i` and exports it, which puts ash on bash's side of this
+	// and leaves dash alone on the other. See interp.ShellLevelPolicy.
+	s.ShellLevel = interp.ShellLevelCounted
 	// A handed-in `PWD` names the starting directory here too, but only where
 	// it really is that directory: measured 2026-09-13 in the pinned image,
 	// `PWD=/link/d` under a symbolic link survives and `PWD=/usr` in a

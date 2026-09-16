@@ -1738,6 +1738,11 @@ type Runner struct {
 	// the environment where it arrived, and re-deciding per chunk would stat
 	// it again on every line a person types. See settleInheritedOldpwd.
 	oldpwdSettled bool
+	// shellLevelSettled says the inherited `$SHLVL` has already been read,
+	// incremented and exported, which happens once however many chunks a
+	// session runs. See settleShellLevel, and ShellLevelPolicy for why the
+	// count belongs to the process rather than to the chunk.
+	shellLevelSettled bool
 	// bg is set on the runner *inside* a background job, so the process it
 	// starts can be recorded against the job.
 	bg *Job

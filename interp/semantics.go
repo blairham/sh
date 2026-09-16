@@ -2399,6 +2399,12 @@ type Semantics struct {
 	// the measurements and the reason this is not a question about `cd`.
 	InheritedOldpwd InheritedOldpwdPolicy
 
+	// ShellLevel is whether this shell counts how deep it is in `$SHLVL`,
+	// tells its children, and what it does with a count that has run away.
+	// See ShellLevelPolicy, which carries the panel and the reason the
+	// exporting half is the one that matters.
+	ShellLevel ShellLevelPolicy
+
 	// StartupPwdName is the name a shell gives the directory it starts in —
 	// one it was handed in its environment, or the one the kernel reports.
 	// See StartupPwdNamePolicy.

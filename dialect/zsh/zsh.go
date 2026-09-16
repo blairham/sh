@@ -1976,6 +1976,10 @@ func Semantics() interp.Semantics {
 	// is why `OLDPWD=/nonexistent zsh -c 'cd -'` says nothing and reports 0:
 	// there is no unusable value to refuse.
 	s.InheritedOldpwd = interp.InheritedOldpwdIgnored
+	// The depth, counted and told to every child, with no ceiling: measured
+	// 2026-09-16, zsh 5.9.2 takes an inherited 9999 to 10000 and says
+	// nothing. See interp.ShellLevelPolicy.
+	s.ShellLevel = interp.ShellLevelCounted
 	// And the starting directory is named by what the kernel reports, however
 	// the parent spelled it.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel

@@ -1,0 +1,79 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `$SHLVL` — how deep a shell is, and what it tells its children (#3097).
+#
+# The depth is the one parameter in this suite whose value is only half about
+# the shell reading it: it is read out of the environment, incremented, and
+# exported, so the number every later child reads is the one this shell wrote.
+# A shell that keeps it and does not export it has a number it can print and
+# no child ever hears, which is why nearly every line below is about a shell
+# started from this one rather than about this one.
+#
+# Nothing here prints an absolute level. The suite's own harness starts each
+# shell from a shell, so the depth at the top of this file is whatever the run
+# is standing in — every assertion is a difference from `$top`, or the answer
+# of a child that was handed a depth of its own.
+#
+# **Why this is ext/ and not core/.** dash is the one column of the panel with
+# no such parameter at all: measured 2026-09-16 under `env -i`, dash 0.5.12
+# leaves `SHLVL` unset and exports nothing, and a shell it starts counts from
+# one. That is dash's answer and not a gap. BusyBox ash, unusually for this
+# tier, *does* have the parameter — it sets 1, exports it and increments it —
+# so ash's column is carried by dialect/shelllevel_test.go rather than by this
+# file, and the tier boundary here is dash's alone.
+#
+# **Held out, and named.** A shell started from inside a construct that this
+# shell would `exec` into rather than fork for splits the panel: `( "$SHELL"
+# -c … )` and `$( "$SHELL" -c … )` read *one less* in bash 5.3.20 and the
+# inherited depth in zsh and ksh93, and `exec "$SHELL" …` reads one less in
+# bash and zsh and one more in ksh93 and BusyBox ash. That is a shell
+# replacing itself rather than nesting under itself, it is a second axis, and
+# nothing below uses either form — a child's level is captured through a file
+# so that the capture is not itself the question.
+
+top=$SHLVL
+
+# A depth is a plain number, and it counts this shell in.
+case "$SHLVL" in
+'') printf 'the depth is not set\n' ;;
+*[!0-9]*) printf 'the depth is not a plain number [%s]\n' "$SHLVL" ;;
+*) printf 'the depth is a plain number\n' ;;
+esac
+printf 'and it is at least one [%s]\n' "$(( SHLVL >= 1 ))"
+
+# A subshell is the same shell. Only starting another one adds a level, which
+# is what makes the number a depth of shell processes rather than a nesting
+# count of anything else.
+( printf 'a ( ) subshell is the same shell [%s]\n' "$(( SHLVL - top ))" )
+printf 'a command substitution too [%s]\n' "$(( $(printf %s "$SHLVL") - top ))"
+{ printf 'a brace group too [%s]\n' "$(( SHLVL - top ))"; }
+echo x | { printf 'and a pipeline element [%s]\n' "$(( SHLVL - top ))"; }
+
+# A child shell is one deeper, which is only possible because the parameter
+# was exported: with the count kept and not told, the child would start again
+# at one.
+"$SUITE_SHELL" -c 'printf %s "$SHLVL"' > child.level
+read child < child.level
+printf 'a child shell is one deeper [%s]\n' "$(( child - top ))"
+
+# And it is a depth rather than a flag: two shells down is two.
+printf '%s\n' 'printf %s "$SHLVL"' > deeper.sh
+printf '%s\n' '"$1" deeper.sh' > deeper2.sh
+"$SUITE_SHELL" deeper2.sh "$SUITE_SHELL" > two.level
+read two < two.level
+printf 'two shells down is two deeper [%s]\n' "$(( two - top ))"
+
+# What a shell handed a value of its own makes of it. The assignment is
+# written in front of the command rather than exported here, so each line is
+# one shell with one inherited value and nothing carries to the next.
+SHLVL=nodepth "$SUITE_SHELL" -c 'printf "%s\n" "$SHLVL"' > r.level; read r < r.level
+printf 'a value that names no depth starts again [%s]\n' "$r"
+SHLVL= "$SUITE_SHELL" -c 'printf "%s\n" "$SHLVL"' > r.level; read r < r.level
+printf 'the empty value does too [%s]\n' "$r"
+SHLVL=0 "$SUITE_SHELL" -c 'printf "%s\n" "$SHLVL"' > r.level; read r < r.level
+printf 'and zero [%s]\n' "$r"
+SHLVL=7 "$SUITE_SHELL" -c 'printf "%s\n" "$SHLVL"' > r.level; read r < r.level
+printf 'a number is added to [%s]\n' "$r"
+SHLVL=-1 "$SUITE_SHELL" -c 'printf "%s\n" "$SHLVL"' > r.level; read r < r.level
+printf 'and minus one comes back to nought [%s]\n' "$r"

@@ -82,6 +82,20 @@ type Frame struct {
 	serial int
 }
 
+// IsFunction reports whether this frame is a function call, as against a
+// sourced file, a startup file the shell read of its own accord, or the
+// script itself.
+//
+// Structural rather than a naming: which frames are calls of a *function* is
+// the stack's own shape, and one dialect counts exactly those — `${.sh.level}`
+// is 2 two functions deep and 0 at the top, where `${BASH_SOURCE[@]}` next to
+// it counts every frame there is. A function really named `source` is the one
+// thing this cannot tell apart, which is the same seam innermostCall works
+// on.
+func (f Frame) IsFunction() bool {
+	return !f.Startup && f.Name != "" && f.Name != sourceFrameName
+}
+
 // CallStack is the frames a shell is currently inside, innermost first, with
 // the script itself last.
 //

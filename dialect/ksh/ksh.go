@@ -771,6 +771,15 @@ func Semantics() interp.Semantics {
 	s.TildePlusMinusExpands = interp.Yes
 	// A defined f-g stops the script; a.b is an invalid discipline function.
 	s.PunctuatedFunctionNameIsRefused = interp.Yes
+	// And `a.get` is not: a dotted name whose suffix is one of this shell's
+	// four variable events defines a *hook* on the variable in front of the
+	// dot. Measured 2026-09-15 against AT&T ksh93u+ 2012-08-01 — `function
+	// g.get`, `g.set`, `g.append` and `g.unset` all define, whether or not
+	// `g` exists yet, where `function ns.thing` is refused exactly as it is
+	// here. The refusal and its fatality were already right; the set of
+	// names they fired on was four suffixes too wide (#3033). See
+	// interp/discipline.go for what each event carries.
+	s.DisciplineFunctionIsAVariableHook = interp.Yes
 	// max+1 stays at the maximum, and a value that names another variable
 	// is chased until it is a number.
 	s.ArithOverflowSaturates = interp.Yes
@@ -3456,16 +3465,57 @@ func Apply(r *interp.Runner) {
 	// listed (`.foo=1; set` shows `.foo=1`). A producer is how this shell
 	// already keeps `LINENO` and `RANDOM` out of that listing.
 	//
-	// The rest of the `.sh` namespace is deliberately absent. Measured on
-	// the same build with `-c`, every one of `.sh.name`, `.sh.subscript`,
-	// `.sh.value`, `.sh.match`, `.sh.pid`, `.sh.file`, `.sh.fun`,
-	// `.sh.command`, `.sh.edchar`, `.sh.level` and `.sh.sig` expands to the
-	// empty string at status 0 — which is what an unset dotted name already
-	// does here, so naming them would add a claim without adding an answer.
-	// `.sh.lineno` and `.sh.subshell` answer `0` there and are genuinely
-	// dynamic; they are left unset rather than pinned to a number that
-	// would be wrong as soon as a script had two lines.
+	// The rest of the `.sh` namespace is mostly absent still. Measured on
+	// the same build with `-c`, `.sh.match`, `.sh.pid`, `.sh.file`,
+	// `.sh.command`, `.sh.edchar` and `.sh.sig` expand to the empty string
+	// at status 0 — which is what an unset dotted name already does here, so
+	// naming them would add a claim without adding an answer. `.sh.lineno`
+	// and `.sh.subshell` answer `0` there and are genuinely dynamic; they
+	// are left unset rather than pinned to a number that would be wrong as
+	// soon as a script had two lines.
+	//
+	// `.sh.name`, `.sh.subscript` and `.sh.value` are not absent either. They
+	// are the parameters a *discipline* is entered with, they exist only
+	// while one is running, and they are ordinary dotted variables the rest
+	// of the time — which is exactly what the empty answer above measured,
+	// because the probe asked outside a discipline. See
+	// interp/discipline.go (#3033).
+	//
+	// `.sh.fun` and `.sh.level` were measured the same way and were the same
+	// mistake: asked at the top level they really are empty and `0`, and the
+	// probe could not tell "this shell has no such name" from "the answer
+	// here is nothing". Inside a function they are the function's name and
+	// its depth — `function outer { … }` reads `outer`/`1`, and an `inner`
+	// it calls reads `inner`/`2`. Produced rather than stored for the reason
+	// `.sh.version` is: real ksh93 lists nothing from this namespace, and no
+	// stored value could follow a call stack anyway.
 	r.SetDynamic(".sh.version", func(*interp.Runner) string { return kshVersion })
+	r.SetDynamic(".sh.fun", func(rr *interp.Runner) string {
+		for _, f := range rr.CallStack() {
+			if f.IsFunction() {
+				return f.Name
+			}
+		}
+		// Empty at the top level, and empty rather than absent: measured,
+		// `${.sh.fun}` there writes nothing at status 0. A sourced file is
+		// transparent — `function f { . ./inc; }` reads `f` from inside the
+		// file — which is what walking past a frame that is not a function
+		// gives.
+		return ""
+	})
+	r.SetDynamic(".sh.level", func(rr *interp.Runner) string {
+		depth := 0
+		for _, f := range rr.CallStack() {
+			if f.IsFunction() {
+				depth++
+			}
+		}
+		// `0` at the top level rather than nothing, which is the half that
+		// makes the name distinguishable from a shell that does not have it
+		// — both were empty here before (#3033). A `name()` function counts
+		// the same as a `function` one, measured.
+		return strconv.Itoa(depth)
+	})
 	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
 	// And an assignment seeds it, which is what makes a script that uses
 	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one

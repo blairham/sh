@@ -2262,6 +2262,34 @@ func (r *Runner) arithTree(tree syntax.ArithExpr, text string) (syntax.ArithExpr
 	return out, err
 }
 
+// arithTreeRead reads an expression out of text that has **already** been
+// expanded, which is not the job arithTree does.
+//
+// A subscript and a substring's range are words, and the caller expands them
+// before anything arithmetic happens — so by the time the text arrives here
+// the substitutions written in it have been performed once already. Handing
+// it to arithTree expanded it a second time, and the second pass ran what the
+// first had only produced: `k='$(cmd)'; a[$k]=V` executed cmd and assigned
+// the element its output named, in every dialect, where no shell on the panel
+// runs anything (#3047).
+//
+// So the text is read as the expression it already is. That costs nothing any
+// shell offers. Measured 2026-09-15 from a script file, and unanimous in bash
+// 5.3.20, bash 3.2.57, zsh 5.9.2 and ksh93u+ 2012-08-01: a `$( )`, a
+// backquoted run, a `$(( ))` and a bare `$i` left in an expanded subscript are
+// all refused as an operand, while a bare *name* still resolves — `k='i'` and
+// `k='1+1'` each name an element in all four. Resolving a name is the
+// evaluator's job; it is not a second round of expansion, and that is the
+// whole of the distinction this function draws.
+func (r *Runner) arithTreeRead(text string) (syntax.ArithExpr, error) {
+	p := syntax.NewParser("", r.dialect())
+	out := p.ParseArithExpanded(text, syntax.Pos{})
+	if err := p.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // arithTreeOver is arithTree with the text the parser was actually handed, for
 // the one caller that has to look at where in it the failure was.
 //

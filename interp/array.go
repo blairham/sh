@@ -1356,7 +1356,7 @@ func (r *Runner) storeThroughOperand(name, value string) {
 		r.spliceCharacterSpan(base, from, to, value, false)
 		return
 	}
-	idx, err := r.subscriptValue(sub)
+	idx, err := r.subscriptValueOfReference(sub)
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(sub, err))
 		return
@@ -2557,6 +2557,26 @@ func (r *Runner) subscriptValue(text string) (int, error) {
 	return r.subscriptValueAsWritten(text, text)
 }
 
+// subscriptValueOfReference is subscriptValue for a subscript that arrived as
+// **text** rather than as a word the parser read: a builtin's operand, and a
+// reference resolved at run time. `unset 'a[$i]'`, `read 'v[${#v}+1]'` and
+// `v='x[$(echo 2)]'` all reach the interpreter with their brackets still in a
+// string, and the `$` inside them is the script's own — written there and
+// never expanded, because the quotes are what kept it.
+//
+// So it is expanded here, once. That is the same substitution the reader used
+// to perform for everyone, and these are the callers it was right for:
+// measured on zsh 5.9.2, `i=2; v='x[$i]'` and `v='x[$(echo 2)]'` both read the
+// second element, so a substitution written into a resolved reference is
+// performed when the reference is read (#1852).
+//
+// A subscript that came out of a *word* is the opposite case and is read as it
+// stands — it is already a result, and expanding it again ran what the first
+// round had only produced (#3047).
+func (r *Runner) subscriptValueOfReference(text string) (int, error) {
+	return r.subscriptValueAsWritten(text, r.expandArithText(text))
+}
+
 // subscriptValueAsWritten is subscriptValue told what the *source* spelled,
 // which decides whether a separator still in the expanded text ends the
 // expression or is the arithmetic operator — see subscriptExpression.
@@ -2660,7 +2680,11 @@ func (r *Runner) expressionValue(text string) (int, error) {
 	// zero` and the trimmed text could not say the spaces had been there
 	// (#2010). It also kept the offsets the parser records from lining up
 	// with the text a diagnostic slices.
-	tree, err := r.arithTree(nil, text)
+	// Read, not expanded again. Both callers hand over text their own word
+	// expansion already produced, so a `$` still standing in it is a
+	// character of the *result* rather than an expansion waiting to happen —
+	// see arithTreeRead, where the panel rows are (#3047).
+	tree, err := r.arithTreeRead(text)
 	if err != nil {
 		return 0, err
 	}

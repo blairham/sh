@@ -811,6 +811,49 @@ last row wrongly and the fifth row wrongly in the other direction — a
 plausible `1` where the real shell stops the script. A probe that only ever
 tries `x=abc` cannot tell the two apart.
 
+### And neither is a subscript's expanded text
+
+The same rule reaches the other text that arrives already expanded. A
+subscript and a substring's range are **words**, expanded by their caller
+before anything arithmetic happens, so a `$` still standing in the result
+is an ordinary character there too. Measured 2026-09-15 from a script file,
+with `k` holding the six characters `$(echo 1)`:
+
+| | bash 5.3.20 | bash 3.2.57 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- | --- |
+| `k='$(echo 1)'; a[$k]=V` | `$(echo 1): ... operand expected` | same, `syntax error` | `arithmetic syntax error` | invents an index |
+| `k='$i'; i=2; a[$k]=V` | `$i: ... operand expected` | same | `arithmetic syntax error` | ``operator expected at `i' `` |
+| ``k='`echo 1`'`` | operand expected | same | `arithmetic syntax error` | operand expected |
+| `k='$((1))'` | operand expected | same | `arithmetic syntax error` | ``operator expected at `((1))' `` |
+| `k='1+1'; a[$k]=V` | element 2 | element 2 | element 2 | element 2 |
+| `k='i'; i=2; a[$k]=V` | element 2 | element 2 | element 2 | element 2 |
+| `w='$(echo 1)'; ${x:$w:2}` | operand expected | same | `arithmetic syntax error` | operand expected |
+
+The last two rows are what makes this a *reading* rather than a refusal:
+the text is still an expression and a **name** in it is still resolved,
+because resolving a name is the evaluator's job and not a second round of
+expansion. Only the expansion is spent.
+
+**None of the four runs the command.** That is the half that mattered: a
+subscript is a place data flows into — `a[$key]=…` with `key` read from a
+file, an argument or the environment is ordinary script text — and this
+implementation performed the substitution a second time and executed it,
+in every dialect, assigning the element the output named (#3047).
+
+zsh is the one column not reproduced. It neither refuses the text nor
+evaluates it but invents an index from it: `k='${i}'` assigns element
+**17366** of a four-element array, and `w='$'` as a range offset expands to
+nothing at status 0. Ours gives the operand sentence its own bash and ksh
+give, which is the answer the other three shells agree on; matching zsh's
+number would be reproducing garbage.
+
+**The boundary.** A subscript that arrives as *text* rather than as a word
+— a builtin's operand, a reference resolved at run time — has **not** been
+expanded yet, and is: `unset 'a[$i]'`, `read 'v[${#v}+1]'` and
+`v='x[$(echo 2)]'` all keep their `$` through word expansion because the
+quotes protect it, so the expansion happens when the subscript is read. It
+is once either way, which is the whole of the rule (#1852).
+
 ## A subscript inside an expression
 
 `a[i]` written inside `$(( ))` is the element `${a[i]}` is, and the

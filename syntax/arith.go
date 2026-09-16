@@ -441,6 +441,13 @@ type arithParser struct {
 	// Kept on the parser rather than built into the tree where it was read,
 	// because the construct is lexical — see ArithOutput.
 	format *ArithOutput
+	// expanded says the text arrived already expanded, so the substitutions
+	// written in it have happened once and a `$` still standing is a
+	// character of the result. A subscript and a substring's range are the
+	// two texts that reach the reader that way — see
+	// [Parser.ParseArithExpanded] — and there a `$` begins no operand, which
+	// is what the panel is measured to say (#3047).
+	expanded bool
 	// stopped is where the last skip ended, which makes space idempotent:
 	// several frames ask for it at the same cursor on the way down, and only
 	// the first of them may move blame. Without it the second call would
@@ -502,7 +509,18 @@ func (p *Parser) parseArithLater(src string, at Pos) ArithExpr {
 // [Parser.ParseArithFor], at the moment the command runs. Everything reading
 // an expression while reading a file goes through parseArithLater instead.
 func (p *Parser) parseArith(src string, at Pos) ArithExpr {
-	if hasExpansion(src) {
+	return p.parseArithIn(src, at, false)
+}
+
+// parseArithIn is parseArith told whether the text has already been expanded.
+//
+// The two readings differ in one thing and it is the first line: text that is
+// still a *program's* waits for its expansions, and text that is already a
+// *result* does not get a second round of them. See
+// [Parser.ParseArithExpanded] for which callers are which and for the rows
+// (#3047).
+func (p *Parser) parseArithIn(src string, at Pos, expanded bool) ArithExpr {
+	if !expanded && hasExpansion(src) {
 		return nil
 	}
 	if p.dialect.ArithDoubleQuote == ArithDoubleQuoteRemoved {
@@ -511,7 +529,7 @@ func (p *Parser) parseArith(src string, at Pos) ArithExpr {
 		// text a failure quotes back the one without the quotes in it.
 		src = strings.ReplaceAll(src, `"`, "")
 	}
-	a := &arithParser{src: src, at: at, p: p, dial: p.dialect, stopped: -1}
+	a := &arithParser{src: src, at: at, p: p, dial: p.dialect, stopped: -1, expanded: expanded}
 	e := a.expr()
 	a.space()
 	if e != nil && a.off < len(a.src) {
@@ -1087,7 +1105,16 @@ func (a *arithParser) primary() ArithExpr {
 	}
 	// A `$` here is a parameter expansion the lexer left in place; both
 	// spellings work, so it is read as the same variable reference.
-	if a.take("$") {
+	//
+	// Except in text that is already expanded, where the `$` is a character
+	// of the result rather than an expansion waiting to happen and begins no
+	// operand at all. Measured 2026-09-15 from a script file: `k='$i'; i=2;
+	// a[$k]=V` is `$i: arithmetic syntax error: operand expected` in bash
+	// 5.3.20 and bash 3.2.57, `$i: arithmetic syntax error` in ksh93u+, and
+	// the operand sentence in zsh 5.9.2 — none of the four reads the `i`
+	// behind it. A bare `k='i'` still names the element in all four, because
+	// that is the evaluator resolving a name and not an expansion (#3047).
+	if !a.expanded && a.take("$") {
 		if name, ok := a.name(); ok {
 			return &ArithVar{Name: name, Start: start, Stop: start}
 		}

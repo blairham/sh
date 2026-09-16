@@ -11905,8 +11905,13 @@ type Semantics struct {
 	// is the same shell's answer.
 	//
 	// Whether a *prompt* starts with it on is the separate question below;
-	// this one is whether the feature exists to be turned on. Recorded as
-	// `history/bang-bang-is-the-previous-command`.
+	// this one is whether the feature exists to be turned on.
+	//
+	// Not in the golden record, and it cannot be: the harness runs each case
+	// as a command string, where every shell in the panel has the expander
+	// off, so a row there would measure the same "no" in all six columns. The
+	// measurement behind this is a pty transcript — see
+	// internal/cmd/histprobe, which is what produced it.
 	HistoryExpansion Answer
 
 	// HistoryExpansionAtAPrompt starts an interactive session with it on.
@@ -11920,8 +11925,9 @@ type Semantics struct {
 	//
 	// It says nothing about whether the shell *has* the feature: a dialect
 	// answering No here still expands after `set -H`, and a dialect answering
-	// No to HistoryExpansion above never reaches this. Recorded as
-	// `history/bang-bang-at-a-fresh-prompt`.
+	// No to HistoryExpansion above never reaches this. Measured through a pty
+	// for the reason the axis above gives — a command string cannot ask this
+	// question of any shell in the panel.
 	HistoryExpansionAtAPrompt Answer
 
 	// ImmovableOptionsSetAtInvocation lets the command line that started the

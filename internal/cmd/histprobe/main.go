@@ -1,9 +1,32 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-// Command histprobe drives a shell through a pty with a TWO-ROW prompt and
-// types history-expansion lines at it, one at a time, waiting on a distinct
-// done-marker after each. Scratch instrument for #3093.
+// Command histprobe drives a shell through a pseudo-terminal with a TWO-ROW
+// prompt and types lines at it one at a time, waiting on a distinct
+// done-marker after each.
+//
+// It exists because history expansion cannot be measured any other way. It is
+// **interactive by default and off in a script**, so a `-c` probe answers
+// "absent" for a feature that is merely switched off, and the corpus harness
+// runs every case as a command string — a row there would have recorded the
+// same "nothing happened" in all six columns and looked like agreement. The
+// panel table in docs/spec/history.md was produced by this program.
+//
+// A two-row prompt rather than a one-line PS1, for the reason tworowprobe
+// gives: components can each match the shell they imitate while the
+// composition of them does not.
+//
+// The marker after every line is what makes the run readable. Raw-mode input
+// is lost silently and a pty read blocks, so the loop waits on text that
+// could only have come from the line before it rather than on a timer, and it
+// never clears the screen between waits. `-rc 'HISTCONTROL=ignorespace'` with
+// a marker that begins with a space keeps the markers out of the history the
+// designators index — without it, `!$` names the marker and the transcript
+// measures the instrument.
+//
+//	histprobe -bin /opt/homebrew/bin/bash -name bash //	  -rc HISTCONTROL=ignorespace -lines 'echo one two three|echo !!'
+//
+// Written for #3093.
 package main
 
 import (

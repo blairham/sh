@@ -11,11 +11,12 @@ import (
 
 // promptRunner is a Runner whose dialect has an expander and starts a prompt
 // with it on, which is what bash and zsh were measured doing.
-func promptRunner() *Runner {
+func promptRunner(t *testing.T) *Runner {
+	t.Helper()
 	sem := PosixSemantics()
 	sem.HistoryExpansion = Yes
 	sem.HistoryExpansionAtAPrompt = Yes
-	return &Runner{Semantics: &sem}
+	return newTestRunner(t, &Runner{Semantics: &sem})
 }
 
 // The order the front end has to keep: the dialect's default goes on before
@@ -23,7 +24,7 @@ func promptRunner() *Runner {
 // afterwards. `set +H` in a .bashrc is how a person who does not want `!!` says
 // so, and a default applied later would put it straight back.
 func TestAnRcFileCanTurnHistoryExpansionOff(t *testing.T) {
-	r := promptRunner()
+	r := promptRunner(t)
 	r.StartInteractiveHistory()
 	if !r.HistoryExpansion() {
 		t.Fatal("the dialect's default did not reach the session")
@@ -44,7 +45,7 @@ func TestADialectThatStartsOffStillTakesTheRequest(t *testing.T) {
 	sem := PosixSemantics()
 	sem.HistoryExpansion = Yes
 	sem.HistoryExpansionAtAPrompt = No
-	r := &Runner{Semantics: &sem}
+	r := newTestRunner(t, &Runner{Semantics: &sem})
 	r.StartInteractiveHistory()
 	if r.HistoryExpansion() {
 		t.Fatal("a dialect that starts off started on")
@@ -64,7 +65,7 @@ func TestADialectThatStartsOffStillTakesTheRequest(t *testing.T) {
 // value turns the expander off without moving the option. Both were measured
 // before anything read the parameter — see docs/spec/history.md.
 func TestHistcharsIsReadFromTheParameter(t *testing.T) {
-	r := promptRunner()
+	r := promptRunner(t)
 	r.StartInteractiveHistory()
 	if got := r.HistoryChars().String(); got != "!^#" {
 		t.Errorf("default histchars = %q, want !^#", got)
@@ -87,7 +88,7 @@ func TestHistcharsIsReadFromTheParameter(t *testing.T) {
 // place that decides is the Runner and a front end may call unconditionally.
 func TestExpandHistoryIsInertWithTheStateOff(t *testing.T) {
 	sem := PosixSemantics()
-	r := &Runner{Semantics: &sem}
+	r := newTestRunner(t, &Runner{Semantics: &sem})
 	res, err := r.ExpandHistory("echo !!", []string{"echo one"}, 1)
 	if err != nil {
 		t.Fatal(err)

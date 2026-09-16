@@ -167,6 +167,10 @@ func (r *Runner) NamedDirectoryTable() map[string]string {
 // and what an assignment to the parameter that views this table does.
 func (r *Runner) SetNamedDirectory(name, dir string) { r.putNamedDir(name, dir) }
 
+// RemoveNamedDirectory takes one entry away, which is what unsetting one
+// element of the parameter that views this table does.
+func (r *Runner) RemoveNamedDirectory(name string) { delete(r.namedDirs, name) }
+
 // SuffixAliasTable is the second namespace, keyed on the extension.
 func (r *Runner) SuffixAliasTable() map[string]string {
 	out := make(map[string]string, len(r.suffixAliases))

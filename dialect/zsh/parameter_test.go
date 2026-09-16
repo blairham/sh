@@ -350,18 +350,26 @@ echo "n=${#commands} v=[${(o)commands}]"`)
 }
 
 // A produced association is never replaced by a stored one, whichever route
-// the write comes by. Both of these would otherwise put an empty table in
+// the write comes by. Either of these would otherwise put an empty table in
 // front of the producer, and every read afterwards would be a plausible answer
 // about a shell that had stopped being watched.
+//
+// The whole-table assignment used to be refused here for exactly that fear,
+// and the refusal was the wrong half to keep: measured on zsh 5.9.2, the same
+// five lines answer `whole=0 [\t:] n=2` and `other` then runs. So the write
+// goes through the producer's own writer, one key at a time, and `f` survives
+// it — which is the no-shadowing property this test is about, now shown by a
+// table that grew rather than by one that refused to.
 func TestAProducedAssociationCannotBeShadowed(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `f(){ :; }
 typeset -A functions
 echo "declared=[${functions[f]:-ABSENT}] n=${#functions}"
 functions=(other "echo x") 2>&1
-echo "whole=$? [${functions[f]:-ABSENT}] n=${#functions}"`)
+echo "whole=$? [${functions[f]:-ABSENT}] n=${#functions}"
+other`)
 	want := "declared=[\t:] n=1\n" +
-		"zsh:4: functions: assigning to the whole of a produced association is not implemented yet\n" +
-		"whole=0 [\t:] n=1\n"
+		"whole=0 [\t:] n=2\n" +
+		"x\n"
 	if out != want || st != 0 {
 		t.Errorf("shadowing attempts = %q (status %d), want %q", out, st, want)
 	}
@@ -1129,12 +1137,23 @@ func TestTheNamedDirectoryParameterIsAViewOfTheTable(t *testing.T) {
 		{"and the parameter writes it", `nameddirs[x]=/tmp; print -r -- ~x`, "/tmp\n"},
 		{"which the builtin then lists", `nameddirs[x]=/tmp; hash -d`, "x=/tmp\n"},
 		{"the keys are the names", `hash -d b=/b a=/a; print -r -- ${(k)nameddirs}`, "a b\n"},
-		// An element unset leaves the entry, which is zsh's effect: it
-		// refuses the subscript and changes nothing.
+		// An element unset *removes* the entry, measured on zsh 5.9.2 and on
+		// zsh 5.9 alike. This row used to want `n=1` on the reading that zsh
+		// refuses the subscript and changes nothing — and the `2>/dev/null`
+		// it kept is the tell, because a probe that throws the diagnostic
+		// away cannot see that there was never one to throw. zsh is silent
+		// here at status 0 and the entry is gone; the shell was accepting the
+		// unset and leaving `~a` pointing at `/tmp`, which is #3092's silent
+		// wrong answer one name over.
 		{
-			"an element unset leaves it alone",
-			`hash -d a=/tmp; unset "nameddirs[a]" 2>/dev/null; print -r -- "n=${#nameddirs}"`,
-			"n=1\n",
+			"an element unset removes it",
+			`hash -d a=/tmp; unset "nameddirs[a]"; print -r -- "n=${#nameddirs}"`,
+			"n=0\n",
+		},
+		{
+			"and the builtin no longer lists it",
+			`hash -d a=/tmp b=/b; unset "nameddirs[a]"; hash -d`,
+			"b=/b\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

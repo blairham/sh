@@ -754,6 +754,12 @@ type Runner struct {
 	// script can write to must have one.
 	dynamicAssocWriters map[string]func(*Runner, string, string, bool)
 
+	// dynamicAssocEmptied names the produced associations whose table a
+	// *replacing* whole-table assignment empties before the literal's keys go
+	// in. The names not in it merge, which is what most of them measure as.
+	// See SetDynamicAssocEmptiedByReplacement.
+	dynamicAssocEmptied map[string]bool
+
 	// dynamicWriters is the same for a produced *scalar*, and it exists for
 	// the same reason: a parameter a script both reads and writes cannot have
 	// its writes land in the stored table, because the producer answers ahead

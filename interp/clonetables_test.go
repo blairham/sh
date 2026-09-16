@@ -246,6 +246,7 @@ func seedTables(r *Runner) {
 	r.dynamicAssocWriters = map[string]func(*Runner, string, string, bool){
 		"seed": func(*Runner, string, string, bool) {},
 	}
+	r.dynamicAssocEmptied = map[string]bool{"seed": true}
 	r.dynamicWriters = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.dynamicDeclarations = map[string]ProducedDeclaration{"seed": {Integer: true}}
 	r.producedReading = map[string]string{"seed": "1"}

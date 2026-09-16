@@ -128,12 +128,20 @@ func registerParameterModule(r *interp.Runner) {
 	hideModuleParameter(r, "builtins")
 	r.SetDynamicAssoc("aliases", zshAliasesView)
 	r.SetDynamicAssocWriter("aliases", writeZshAlias)
+	// The four names below are the ones a *replacing* whole-table assignment
+	// empties first — `aliases=(b y)` leaves a previously defined `a`
+	// undefined, where `commands=(b /bin/echo)` keeps one. Measured on zsh
+	// 5.9.2 with two different keys, because a probe that replaced a table
+	// with a literal naming the same key cannot tell emptying from merging.
+	// See interp.Runner.SetDynamicAssocEmptiedByReplacement for the table.
+	r.SetDynamicAssocEmptiedByReplacement("aliases")
 	// And the named directories, which is the same shape over a table this
 	// shell owns rather than over the aliases: `hash -d a=/tmp` takes
 	// `${#nameddirs}` from 0 to 1 and `nameddirs[x]=/tmp` defines one, both
 	// measured on zsh 5.9.2 (#2191).
 	r.SetDynamicAssoc("nameddirs", zshNamedDirsView)
 	r.SetDynamicAssocWriter("nameddirs", writeZshNamedDir)
+	r.SetDynamicAssocEmptiedByReplacement("nameddirs")
 	// The other two kinds, each with its own parameter, which is how this
 	// shell says they are three namespaces rather than one table with flags:
 	// `alias -g G=x; alias r=y; alias -s t=z` leaves `${(k)aliases}` naming
@@ -141,8 +149,10 @@ func registerParameterModule(r *interp.Runner) {
 	// Measured (#2081).
 	r.SetDynamicAssoc("galiases", zshGlobalAliasesView)
 	r.SetDynamicAssocWriter("galiases", writeZshGlobalAlias)
+	r.SetDynamicAssocEmptiedByReplacement("galiases")
 	r.SetDynamicAssoc("saliases", zshSuffixAliasesView)
 	r.SetDynamicAssocWriter("saliases", writeZshSuffixAlias)
+	r.SetDynamicAssocEmptiedByReplacement("saliases")
 	// `$ERRNO`, which is this shell's own parameter rather than one the
 	// `zsh/system` module brings: measured, `ERRNO=13; cat /no/such; echo
 	// $ERRNO` answers with the number the *call* left and not the 13, in a
@@ -773,6 +783,15 @@ func zshNamedDirsView(r *interp.Runner) interp.AssocArray {
 // The complaint is not reproduced here; the entry staying is.
 func writeZshNamedDir(r *interp.Runner, name, dir string, set bool) {
 	if !set {
+		// An unset *removes* the entry, which is the measurement and not the
+		// shape of the surrounding code: zsh 5.9.2 answers
+		// `hash -d x=/tmp; unset "nameddirs[x]"; print -r -- "[$nameddirs[x]]"`
+		// with `[]`, and `hash -d` no longer lists it. This used to be a
+		// no-op, so the unset was accepted at status 0 and the read back
+		// still said `/tmp` — the silent wrong answer of #3092 one name
+		// over. The empty-table probe the older test used could not see it,
+		// because removing nothing from nothing is a no-op either way.
+		r.RemoveNamedDirectory(name)
 		return
 	}
 	r.SetNamedDirectory(name, dir)

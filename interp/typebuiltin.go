@@ -412,7 +412,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 
 // typeAllPaths is `-a` with `-p` or `-P`: the same walk, printed as paths.
 //
-// The letters compose rather than one cancelling the other — `-a` decides how
+// The letters compose rather than one canceling the other — `-a` decides how
 // many rows there are and `-p` decides what a row says — which is why this
 // shares the found/not-found tail with [Runner.typePath] instead of restating
 // it. Measured 2026-09-16 over a function, a builtin-and-file, a name twice on

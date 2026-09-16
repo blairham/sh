@@ -23,13 +23,17 @@ import (
 //	set -a                            ahBc
 //	set -e -C, program on stdin       ehBCs
 //	-i -c, at a pseudo-terminal       himBHc
+//	set -aefhkmuvxBC (2026-09-16)     aefhkmuvxBCc
+//
+// The last of those is where `k` sits, measured when `set -k` was built
+// (#3095): behind `h` and in front of `m`, which is the lowercase sort.
 //
 // The last two are what say the trailing letter belongs to the *route* and
 // not to `c` in particular: `i` and `m` sort in with the lowercase letters
 // where `s` does not. Which of `c` and `s` leads is not measurable here,
 // because this shell never shows both — see CommandStringShowsSInDollarDash.
 func TestDollarDashLetterOrder(t *testing.T) {
-	if got, want := bash.Semantics().DollarDashLetterOrder, "aefhilmntuvxBCEHTcs"; got != want {
+	if got, want := bash.Semantics().DollarDashLetterOrder, "aefhkilmntuvxBCEHTcs"; got != want {
 		t.Errorf("DollarDashLetterOrder = %q, want %q", got, want)
 	}
 }

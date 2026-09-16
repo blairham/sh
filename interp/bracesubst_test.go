@@ -177,3 +177,61 @@ func TestBraceRanges(t *testing.T) {
 		}
 	}
 }
+
+// The body is a frame a `return` leaves, which is what `return` in one means
+// rather than a `return` with nothing to return from.
+//
+// Measured 2026-09-16 from script files under `env -i`: `v=${ echo hi;
+// return 42; }` at the top level of a script is `[hi]` with `$?` 42 in bash
+// 5.3.20 and ksh93u+ alike — the two columns that have the spelling — and the
+// script carries on. The forked spelling is the control and is not this: the
+// same `return` inside `$( … )` is refused in bash, because there the body is
+// a shell of its own with no frame in it.
+func TestABracedSubstitutionIsSomethingToReturnFrom(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"the status is the operand and the script carries on",
+			"v=${ echo hi; return 42;}\necho \"[$v] st=$?\"\necho alive\n",
+			"[hi] st=42\nalive\n",
+		},
+		{
+			"the body stops where the return is",
+			"v=${ echo one; return 3; echo two;}\necho \"[$v]\"\n",
+			"[one]\n",
+		},
+		{
+			"with no operand it is the body's own status",
+			"false\nv=${ echo hi; return;}\necho \"[$v] st=$?\"\n",
+			"[hi] st=0\n",
+		},
+		{
+			"and it leaves the body rather than the function around it",
+			"f() { v=${ echo in; return 5;}; echo \"[$v] st=$?\"; echo after; }\nf\necho \"back st=$?\"\n",
+			"[in] st=5\nafter\nback st=0\n",
+		},
+		{
+			"the pipe spelling has a frame too",
+			"v=${| REPLY=x; return 7;}\necho \"[$v] st=$?\"\n",
+			"[x] st=7\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := braceRun(t, c.src); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// The control: the forked spelling is not a frame, so a `return` in one has
+// nothing to return from and is refused — which is the reading this shell
+// was giving the braced spelling as well.
+func TestAForkedSubstitutionIsNotSomethingToReturnFrom(t *testing.T) {
+	got := braceRun(t, "v=$(echo hi; return 42)\necho \"[$v] st=$?\"\n")
+	// The place is judged — the axis behind the refusal is asked, which this
+	// bare core leaves unanswered and reports — and the status is 2 rather
+	// than the operand. Both halves say the frame was not there.
+	if !strings.Contains(got, "st=2") || !strings.Contains(got, "return") {
+		t.Errorf("got %q, want the place judged and status 2", got)
+	}
+}

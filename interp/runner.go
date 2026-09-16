@@ -1266,6 +1266,12 @@ type Runner struct {
 	// place a `return` has something to return from. A count rather than a
 	// flag because a sourced file may source another.
 	sourceDepth int
+
+	// currentShellSubstDepth is how many `${ …; }` bodies are running. Their
+	// body is a frame a `return` leaves, which is what keeps `v=${ echo hi;
+	// return 42; }` from being a `return` with nothing to return from. See
+	// Runner.hasSomethingToReturnFrom and Runner.currentShellSubst.
+	currentShellSubstDepth int
 	// expandErr records that an expansion failed — a division by zero, a
 	// number that is not one. The command does not run, which is what every
 	// shell in the panel does and what the exit status has to say.

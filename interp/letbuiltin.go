@@ -60,7 +60,10 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 		defer func(was *Semantics) { r.Semantics = was }(r.Semantics)
 		r.swapSemantics(func(s *Semantics) { s.ArithLeadingZeroIsOctal = No })
 	}
-	last := 0
+	// The truth of the last expression rather than its integer value: a
+	// value between zero and one truncates to zero and is still true, which
+	// is what `let 0.5` measures at 0 in ksh93 and zsh. See evalArithTruth.
+	last := false
 	for _, expr := range args {
 		r.unspecified = false
 		tree, text, perr := r.arithTreeOver(nil, expr)
@@ -76,7 +79,7 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 			}
 			return r.diag().StatusForParseError(perr)
 		}
-		v, err := r.evalArith(tree)
+		v, err := r.evalArithTruth(tree)
 		if r.unspecified {
 			return 2
 		}
@@ -92,7 +95,7 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 		// `let x++ y=2` is two of them — but only the last decides.
 		last = v
 	}
-	return boolInt(last == 0)
+	return boolInt(!last)
 }
 
 // mathDiagf writes a complaint about the expression, named the way this

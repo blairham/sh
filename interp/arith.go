@@ -204,6 +204,27 @@ func (r *Runner) evalArith(e syntax.ArithExpr) (int, error) {
 	return v.asInt(), err
 }
 
+// evalArithTruth is the truth of an expression, for the two commands whose
+// exit status is that truth: `(( ))` and `let`.
+//
+// It is not evalArith != 0. An integer context *truncates*, and a value
+// between zero and one truncates to zero — so `(( 0.5 ))` came out false here
+// where the two panel columns that have floats at all both call it true.
+// Measured 2026-09-16: `(( 0.5 ))`, `(( -0.5 ))` and `let 0.5` are status 0 in
+// ksh93u+ 2012-08-01 and in zsh 5.9.2, `(( 0.0 ))` is 1 in both, and bash
+// 5.3.20, bash-as-sh, bash 3.2, dash 0.5.12 and BusyBox ash 1.37.0 have no
+// float to ask. `(( 1.5 ))` was already true here, which is why nothing had
+// noticed: truncation and the truth agree for every value of one or more, and
+// part company only under it.
+//
+// The operators inside an expression were already right — `$(( !0.5 ))` is 0
+// and `$(( 0.5 ? 7 : 9 ))` is 7 — because those ask isZero. Only the two
+// commands' status went through the integer.
+func (r *Runner) evalArithTruth(e syntax.ArithExpr) (bool, error) {
+	v, err := r.evalNum(e)
+	return !v.isZero(), err
+}
+
 // evalNum is the value of an expression, and the point where the shell's
 // record of the *last* arithmetic value is kept up to date.
 //
@@ -1358,9 +1379,9 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 		}
 		return intNum(l.i % r.i), nil
 	case "<<":
-		return intNum(l.i << uint(r.i)), nil
+		return intNum(l.i << shiftCount(r.i)), nil
 	case ">>":
-		return intNum(l.i >> uint(r.i)), nil
+		return intNum(l.i >> shiftCount(r.i)), nil
 	case "&":
 		return intNum(l.i & r.i), nil
 	case "^":
@@ -1377,6 +1398,21 @@ const (
 	maxInt = int(^uint(0) >> 1)
 	minInt = -maxInt - 1
 )
+
+// shiftCount is the count a shift actually uses, which is the low six bits of
+// the one written.
+//
+// Every reference shell on the panel hands the count to a C shift operator on
+// a 64-bit word, and the machine those all run on takes the count modulo the
+// width rather than answering zero for a count that is too large. Measured
+// 2026-09-16 across bash 5.3.20, bash-as-sh, bash 3.2, zsh 5.9.2, ksh93u+
+// 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0: `1<<64` is 1 in all seven,
+// `1<<65` is 2, `8>>64` is 8, and `1<<-1` is the most negative value — the
+// count -1 arriving as 63. Go's shift is the defined one instead and answers
+// zero past the width, which is why this is written down: unanimous, so no
+// axis, and the one place a shell's C heritage shows through the language
+// this is written in.
+func shiftCount(n int) uint { return uint(n) & 63 }
 
 // saturating answers an integer operation, clamping at the edge where the
 // dialect does: ksh93 holds 9223372036854775807 + 1 at the maximum where the
@@ -2178,7 +2214,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			r.status = r.arithCmdFailed(r.diag().StatusForParseError(perr))
 			return nil
 		}
-		v, err := r.evalArith(tree)
+		v, err := r.evalArithTruth(tree)
 		if r.unspecified {
 			r.status = 2
 			return nil
@@ -2193,7 +2229,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			r.status = r.arithCmdFailed(1)
 			return nil
 		}
-		r.status = boolInt(v == 0)
+		r.status = boolInt(!v)
 		return nil
 	})
 }

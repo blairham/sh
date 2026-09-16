@@ -31,6 +31,12 @@ import (
 func pidBraceDialect() Dialect {
 	d := Core()
 	d.PidBraceGroupIsText = true
+	// The shell the construct comes from also reads a bare `}` as the
+	// reserved word wherever one stands, which is what makes the `}` inside
+	// a run a real question rather than a hypothetical: without it the rows
+	// below pass whether the run is told from an ordinary word or not. See
+	// [Dialect.CloseBraceAlwaysReserved].
+	d.CloseBraceAlwaysReserved = true
 	return d
 }
 
@@ -110,27 +116,61 @@ func TestThePidBraceRunEndsAtTheMatch(t *testing.T) {
 }
 
 // TestOnlyTheBarePidOpensTheRun keeps the reading to the one spelling it was
-// measured on. Every line here brace-expands or splits in the shell this
-// comes from, so a flag that fired on any of them would be the wrong rule
-// with the right test passing.
+// measured on, and asserts the *marking* rather than "it parsed": every line
+// here is one word whether the run opened or not, so a row that only counted
+// words would pass either way. Each of them brace-expands in the shell this
+// comes from — `$!{a,b}` is `0a 0b`, `$$x{a,b}` is `<pid>xa <pid>xb` — which
+// is what says the braces stayed syntax.
 func TestOnlyTheBarePidOpensTheRun(t *testing.T) {
 	d := pidBraceDialect()
 	for _, tc := range []struct{ name, src string }{
-		{"another special parameter", "echo $!{a b}"},
-		{"the length sigil", "echo $#{a b}"},
-		{"the option string", "echo $-{a b}"},
-		{"a name", "echo $x{a b}"},
-		{"the braced spelling of the same name", "echo ${$}{a b}"},
-		{"a blank between", "echo $$ {a b}"},
-		{"text between", "echo $$x{a b}"},
-		{"no dollar at all", "echo x{a b}"},
+		{"another special parameter", "echo $!{a,b}"},
+		{"the length sigil", "echo $#{a,b}"},
+		{"the option string", "echo $-{a,b}"},
+		{"a name", "echo $x{a,b}"},
+		{"the braced spelling of the same name", "echo ${$}{a,b}"},
+		{"text between", "echo $$x{a,b}"},
+		{"no dollar at all", "echo x{a,b}"},
+		{"the run's own spelling, as the control", "echo $${a,b}"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := pidBraceWords(t, tc.src, d)
-			if len(got) < 3 {
-				t.Errorf("%q: %d words %q, want the blank to end the word", tc.src, len(got), got)
+			f, err := Parse(tc.src, d)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.src, err)
+			}
+			c := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+			marked := 0
+			for _, sp := range c.Args[1].Spans {
+				if sp.PidBrace {
+					marked++
+				}
+			}
+			want := 0
+			if tc.name == "the run's own spelling, as the control" {
+				want = 2
+			}
+			if marked != want {
+				t.Errorf("%s: %d marked braces, want %d", tc.src, marked, want)
 			}
 		})
+	}
+}
+
+// TestABlankBeforeTheBraceLeavesTheReservedWord is the other half of the
+// adjacency, and it is a refusal in the shell this is measured from: with no
+// run to be part of, the `}` is the reserved word standing where a command
+// does. Measured — `printf '[%s]' $$ {a b}` and `$$x{a b}` are both refused
+// there, along with `x{a b}`, where every other column splits them in two.
+func TestABlankBeforeTheBraceLeavesTheReservedWord(t *testing.T) {
+	d := pidBraceDialect()
+	for _, src := range []string{
+		"echo $$ {a b}",
+		"echo $$x{a b}",
+		"echo x{a b}",
+	} {
+		if _, err := Parse(src, d); err == nil {
+			t.Errorf("%s parsed, and the shell this is measured from refuses it", src)
+		}
 	}
 }
 

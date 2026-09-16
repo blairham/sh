@@ -186,6 +186,15 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 				"this. Measured against BusyBox 1.37.0, which writes nothing " +
 				"and exits 0 where zsh exits 1",
 		},
+		{
+			"a plain `unset` over a name that is a function and not a variable",
+			"f() { echo ran; }\nunset f\nf\n",
+			"UnsetReachesTheFunctionTable — asked only where the name has a " +
+				"function and holds no parameter, so `unset x` over an " +
+				"ordinary variable reaches no question and cannot stand in " +
+				"for this. Measured against BusyBox 1.37.0, which goes on " +
+				"running the function where bash answers 127",
+		},
 	} {
 		if strings.Contains(tc.src, "sleep") && testing.Short() {
 			continue

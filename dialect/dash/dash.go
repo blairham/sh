@@ -989,6 +989,7 @@ func Semantics() interp.Semantics {
 	s.SignAloneIsAnOptionWordToExport = interp.No
 	s.UnsetFunctionChecksTheName = interp.No
 	s.UnsetFunctionReportsMissing = interp.No
+	s.UnsetReachesTheFunctionTable = interp.No
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No

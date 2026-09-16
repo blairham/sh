@@ -1001,6 +1001,7 @@ func Semantics() interp.Semantics {
 	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.UnsetFunctionChecksTheName = interp.No
 	s.UnsetFunctionReportsMissing = interp.No
+	s.UnsetReachesTheFunctionTable = interp.No
 	s.StdinProgramReadInBlocks = false
 	s.StdinOptionNamesTheOperands = interp.No
 	s.LoneDashIsAnOption = interp.No

@@ -184,6 +184,7 @@ func TestSemantics(t *testing.T) {
 		{"ReadonlyReassignmentByDeclarationFatal", s.ReadonlyReassignmentByDeclarationFatal, interp.Yes},
 		{"UnsetFunctionChecksTheName", s.UnsetFunctionChecksTheName, interp.Yes},
 		{"UnsetFunctionReportsMissing", s.UnsetFunctionReportsMissing, interp.No},
+		{"UnsetReachesTheFunctionTable", s.UnsetReachesTheFunctionTable, interp.No},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},

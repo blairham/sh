@@ -4505,6 +4505,30 @@ type Semantics struct {
 	// Unsetting a function that *is* there is quiet in all four.
 	UnsetFunctionReportsMissing Answer
 
+	// UnsetReachesTheFunctionTable lets a plain `unset NAME` — no `-f`, no
+	// `-v` — remove a *function* when the name holds no variable. True in
+	// bash alone.
+	//
+	// One table per call, and the variable table first: a name that is both
+	// takes two `unset`s, the first removing the variable and the second the
+	// function. "Holds a variable" is the declaration and not the value —
+	// measured 2026-09-16 on bash 5.3.20, `f() { :; }; declare f; unset f`
+	// takes the valueless declaration and leaves `f` callable, and so does
+	// the same line with `f=` or `f=(a b)`.
+	//
+	// Asked only where the name has a function and no variable, which is the
+	// only shape the columns disagree about. Everywhere else a plain `unset`
+	// is a parameter's removal in all seven, so consulting the vector on
+	// that route would make `unset x` unanswerable over a question nobody
+	// posed.
+	//
+	// The freeze is still the freeze: this route passes through
+	// readonlyFunctionUnset rather than around it, so a `readonly -f` name
+	// refuses a plain `unset` in the same words it refuses `unset -f`. See
+	// Semantics.FunctionAttributeLetters, which is what makes that reachable
+	// at all.
+	UnsetReachesTheFunctionTable Answer
+
 	// LoneDashIsAnOption eats a `-` given to a builtin on its own instead of
 	// passing it on as an operand. True in zsh alone.
 	//

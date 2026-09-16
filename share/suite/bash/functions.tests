@@ -106,3 +106,56 @@ declare -f b
 printf -- '--- across a subshell\n'
 ( b() { printf 'new\n'; } ) 2>&1 > /dev/null
 ( readonly -f a ) ; a() { printf 'a is still writable out here\n'; }; a
+
+# And the removal rather than the freeze — #3205, and bash's alone as well.
+# A plain `unset NAME` reads the parameter table first and the *function*
+# table behind it, one table per call: zsh 5.9.2, ksh93u+ 2012-08-01, dash
+# 0.5.12 and BusyBox ash 1.37.0 all go on running the function here, so these
+# rows belong to this tier for the same reason the ones above it do.
+printf -- '--- a plain unset reaches the function\n'
+u1() { printf 'u1 fn\n'; }
+unset u1; printf 'unset -> %s\n' "$?"
+u1 2>/dev/null; printf 'calling it -> %s\n' "$?"
+
+# One table per call. The first takes the variable and the function is still
+# there; the second takes the function.
+printf -- '--- one table per call\n'
+u2() { printf 'u2 fn\n'; }; u2=val
+unset u2; printf 'first -> %s, u2=[%s]\n' "$?" "${u2-UNSET}"
+u2 2>/dev/null; printf 'calling it -> %s\n' "$?"
+unset u2; printf 'second -> %s\n' "$?"
+u2 2>/dev/null; printf 'calling it again -> %s\n' "$?"
+
+# A declaration is a parameter even with no value in it, so it takes the turn
+# the value would have taken.
+printf -- '--- a valueless declaration takes the turn\n'
+u3() { printf 'u3 fn\n'; }; declare u3
+unset u3; u3 2>/dev/null; printf 'after one unset -> %s\n' "$?"
+unset u3; u3 2>/dev/null; printf 'after two -> %s\n' "$?"
+
+# `-v` names the parameter namespace and reaches no function at all.
+printf -- '--- -v reaches no function\n'
+u4() { printf 'u4 fn\n'; }
+unset -v u4; printf 'unset -v -> %s\n' "$?"
+u4 2>/dev/null; printf 'calling it -> %s\n' "$?"
+
+# A frozen function refuses the plain spelling in the same words as `unset -f`,
+# at 1, with the body still there and the script carrying on. Both streams
+# separately and each in a subshell, for the reason the freeze rows above give.
+printf -- '--- a frozen function refuses the plain spelling\n'
+u5() { printf 'u5 fn\n'; }; readonly -f u5
+( unset u5 ) 2>&1 > /dev/null
+( unset u5 ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+( unset u5; printf 'carried on\n' ) 2>/dev/null
+u5; printf 'still callable -> %s\n' "$?"
+
+# A frozen *parameter* answers first, and the function behind it is untouched.
+printf -- '--- a frozen parameter answers first\n'
+u6() { printf 'u6 fn\n'; }; readonly u6=rv
+( unset u6 ) 2>&1 > /dev/null
+( unset u6 ) > /dev/null 2>&1; printf 'status -> %s\n' "$?"
+u6; printf 'still callable -> %s\n' "$?"
+
+# And a name with neither is the quiet 0 it has always been.
+printf -- '--- neither\n'
+unset u7_nothing_at_all; printf 'status -> %s\n' "$?"

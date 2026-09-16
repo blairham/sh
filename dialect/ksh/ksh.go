@@ -2135,6 +2135,7 @@ func Semantics() interp.Semantics {
 	s.LoneDashIsAnOption = interp.No
 	s.UnsetFunctionChecksTheName = interp.Yes
 	s.UnsetFunctionReportsMissing = interp.No
+	s.UnsetReachesTheFunctionTable = interp.No
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No

@@ -2228,6 +2228,16 @@ func Diagnostics() interp.Diagnostics {
 			"Shell options:\n" +
 			"\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)\n" +
 			"\t-abefhkmnptuvxBCEHPT or -o option",
+		// A `--word` this front end could not place: the same sentence a
+		// refused letter gets, with the whole word in it, and the same
+		// twenty-two-line block under it. Measured 2026-09-16 on bash 5.3.20
+		// with standard input on /dev/null — `bash --badopt` and `bash -q`
+		// each write one sentence and then the identical block, both at 2 —
+		// where this shell wrote a single `unknown option "--badopt"` and no
+		// block at all (#2298). The word is echoed whole: `--initfile` is
+		// refused as `--initfile` and never as the `--init-file` it is one
+		// character from.
+		InvocationBadLongOption:            "%[1]s: invalid option",
 		InvocationNameRefusalNamesTheShell: true,
 		JobLine:                            "[%[1]d]%[2]s  %-27[3]s%[4]s",
 		// `jobs -l`: the same 27-wide state column, with the process id

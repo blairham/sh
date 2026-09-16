@@ -98,9 +98,17 @@ func TestAVersionOptionAndTheVersionParameterMakeOneClaim(t *testing.T) {
 }
 
 // dash is the panel's holdout and the reason the zero value has to mean
-// something: measured 2026-09-11, `dash --version` is `Illegal option --` at
-// status 2. A dialect that names no spelling refuses the word, which is what
-// the front end did for every dialect before #1713.
+// something: measured 2026-09-11 and again 2026-09-16, `dash --version` is
+// `<shell>: 0: Illegal option --` at status 2. A dialect that names no
+// spelling refuses the word, which is what the front end did for every
+// dialect before #1713.
+//
+// The refusal is **dash's**, and this row used to assert the opposite: it
+// wanted the word `--version` in the sentence, which real dash does not write
+// and which its own comment above had recorded all along. What it was reading
+// was the front end's own `unknown option "--version"`, one wording for every
+// shell in the panel, and the row passed because nothing else wrote a
+// sentence here. See Diagnostics.InvocationBadLongOption (#2298).
 func TestADialectThatNamesNoVersionOptionRefusesTheWord(t *testing.T) {
 	if got := dash.Semantics().VersionOption.Spellings; got != "" {
 		t.Fatalf("names %q, want no version option: this shell refuses the word", got)
@@ -117,8 +125,8 @@ func TestADialectThatNamesNoVersionOptionRefusesTheWord(t *testing.T) {
 	if out.String() != "" {
 		t.Errorf("wrote %q, want nothing on standard output", out.String())
 	}
-	if !strings.Contains(errs.String(), "--version") {
-		t.Errorf("said %q, want the refused word named", errs.String())
+	if want := "dash: 0: Illegal option --\n"; errs.String() != want {
+		t.Errorf("said %q, want %q", errs.String(), want)
 	}
 }
 

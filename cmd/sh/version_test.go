@@ -44,7 +44,12 @@ func TestADialectsVersionIsTheDialectsAnswer(t *testing.T) {
 		{dialect: "bash", want: "GNU bash, version 5.3.15"},
 		{dialect: "zsh", want: "zsh 5.9.2"},
 		{dialect: "ksh", want: "93u+", stderr: true, code: 2},
-		{dialect: "dash", want: "unknown option", stderr: true, code: 2},
+		// dash names no spelling, so the word is refused — in **dash's**
+		// words, which is the whole of #2298's smallest row: measured, real
+		// dash writes `Illegal option --` and names no word at all, where
+		// this row used to read the front end's one-wording-for-every-shell
+		// `unknown option "--version"`.
+		{dialect: "dash", want: "Illegal option --", stderr: true, code: 2},
 	} {
 		t.Run(c.dialect, func(t *testing.T) {
 			t.Parallel()

@@ -496,6 +496,23 @@ func MainArgs(sh Shell, argv []string) int {
 			sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, se.path, se.err))
 			return sh.Diagnostics.ScriptStatus(se.err)
 		}
+		var oe *optionError
+		if errors.As(err, &oe) {
+			// An option word this front end could not place. The dialect's
+			// own sentence where it has one, and its usage block under that
+			// where it writes one — measured, `bash --badopt` writes the
+			// same twenty-two lines `bash -q` does, and dash and BusyBox ash
+			// write one line each.
+			//
+			// The status is not asked for: the three columns that reach here
+			// all answer 2, which is this front end's usage status already.
+			// The two whose namespace takes a `--name` never arrive — their
+			// word travels to the runner, which carries their status with it.
+			if text := sh.Diagnostics.InvocationOptionDiagnostic(sh.Name, oe.word); text != "" {
+				sh.errf("%s", text)
+				return usageStatus
+			}
+		}
 		sh.errf("%s: %v\n", sh.Name, err)
 		return usageStatus
 	}
@@ -1189,7 +1206,12 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			sh.noteInteractivity(inv, a[2:], on)
 			return args, nil
 		}
-		return nil, fmt.Errorf("unknown option %q", a)
+		// A word this front end could not place, and the last thing that can
+		// happen to one. Carried as its own type so that the one place which
+		// knows the invocation went wrong can still say the dialect's own
+		// sentence about it, the way a script operand that would not open
+		// already does. See optionError and Diagnostics.InvocationBadLongOption.
+		return nil, &optionError{word: a}
 	}
 	letters := ""
 	flush := func() {
@@ -1327,6 +1349,19 @@ type scriptError struct {
 
 func (e *scriptError) Error() string { return e.err.Error() }
 func (e *scriptError) Unwrap() error { return e.err }
+
+// optionError is an option word this front end could not place, carried as
+// its own type for the reason scriptError is: what a shell *says* about it is
+// the dialect's, and the sentence differs per shell in every part — the verb,
+// whether the word appears at all, and whether the shell's usage block
+// follows.
+//
+// Its own Error is what a dialect naming no sentence still writes, which is
+// the core: `unknown option "--badopt"`, the wording this front end had for
+// every shell before the dialects were asked (#2298).
+type optionError struct{ word string }
+
+func (e *optionError) Error() string { return fmt.Sprintf("unknown option %q", e.word) }
 
 // operands handles what is left once the options are gone: the command string
 // for `-c`, a script path, or nothing at all, which means standard input.

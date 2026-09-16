@@ -1118,6 +1118,14 @@ func Diagnostics() interp.Diagnostics {
 		// this shell writes `-q` for `set +q` as well as for `set -q`, so
 		// the wording takes the bare letter and spells the dash itself.
 		SetInvalidOptionLetter: "set: Illegal option -%[2]s",
+		// A `--word` this front end could not place, and the one sentence in
+		// the panel that names no word: measured 2026-09-16, `dash --badopt`,
+		// `dash --xyz`, `dash --a` and `dash --login=x` each write exactly
+		// `<shell>: 0: Illegal option --` at status 2 — the two dashes and
+		// nothing after them. So the format has no verb in it and Wording
+		// passes it through, and the `0:` is this shell's own unread-line
+		// prefix rather than part of the sentence.
+		InvocationBadLongOption: "Illegal option --",
 		// Both 2, and both written down: see bash's pair for why a shell
 		// that answers the two spellings alike still says so (#2629).
 		SetInvalidOptionNameStatus:   2,

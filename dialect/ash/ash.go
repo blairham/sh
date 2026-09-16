@@ -1512,6 +1512,13 @@ func Diagnostics() interp.Diagnostics {
 		// The option refusals: lower case, and the letter alone.
 		SetInvalidOptionName:   "illegal option -o %[1]s",
 		SetInvalidOptionLetter: "illegal option -%[2]s",
+		// A `--word` this front end could not place, and it is **not** the
+		// letter's sentence one word over: measured 2026-09-16 on BusyBox ash
+		// 1.37.0 in the pinned Alpine image, `ash -q` is `illegal option -q`
+		// and `ash --badopt` is `bad option '--badopt'` — a different verb and
+		// quotes around the word, both at status 2. `--xyz`, `--a` and
+		// `--login=x` each echo whole, so the word is never trimmed.
+		InvocationBadLongOption: "bad option '%[1]s'",
 		// The split this pair of fields exists for. Measured 2026-09-13,
 		// BusyBox v1.37.0: `set -o zzznosuch; echo "st=$?"` writes the
 		// complaint, then `st=1`, and the script carries on; `set -Z` writes

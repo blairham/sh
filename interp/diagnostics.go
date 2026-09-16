@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -3148,6 +3149,40 @@ type Diagnostics struct {
 	// One verb, read the same way InvocationUsage reads its two: the name
 	// the shell was invoked by, then that name's last path element.
 	InvocationLongOptionUsage string
+
+	// InvocationBadLongOption is what a shell says about a `--word` its front
+	// end could not place at all: not a startup file, not a version request,
+	// not an option name its namespace carries.
+	//
+	// Three columns arrive here and each has its own sentence. Measured
+	// 2026-09-16 with `SH --badopt` and standard input on /dev/null, every one
+	// of them at status 2:
+	//
+	//	bash 5.3.20   <shell>: --badopt: invalid option   + the usage block
+	//	bash 3.2.57   the same sentence                   + its own longer block
+	//	dash 0.5.12   <shell>: 0: Illegal option --       and nothing else
+	//	BusyBox ash   ash: bad option '--badopt'          and nothing else
+	//
+	// dash names no word at all — `--xyz`, `--a` and `--login=x` each draw the
+	// same bare `Illegal option --`, so this is a sentence with no verb in it
+	// and Wording passes it through untouched.
+	//
+	// Two verbs where a dialect wants them: the word as it was written, dashes
+	// and all, then the same word with its two leading dashes taken off. bash
+	// and BusyBox both echo the whole word, which is why the first is first.
+	//
+	// zsh 5.9.2 and ksh93u+ 2012-08-01 never reach this: their option
+	// namespaces take a `--name` (Semantics.LongOptionNamesASetOption), so the
+	// word travels to the runner and is refused there in the same words a
+	// `set -o` name gets. Measured on the same run, and both were already
+	// right — `zsh: no such option: badopt` at 1 and `ksh: badopt: bad
+	// option(s)` at 2.
+	//
+	// Empty leaves the front end's own `unknown option "--badopt"`, which is
+	// the core with no dialect chosen: the panel agrees on neither the
+	// sentence, nor the block, nor the status, so there is nothing for a
+	// dialect-free shell to copy (#2298).
+	InvocationBadLongOption string
 
 	// SetLongOptionUsage is the same block for the `set` *builtin*: the
 	// usage written under a refused `set --name`, where the dialect answers
@@ -6304,6 +6339,58 @@ func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
 	}
 	msg := Wording(format, "%[1]s: %[2]s", path, d.openReason(err, false))
 	return d.invocationPrefix(shell) + msg + "\n"
+}
+
+// InvocationOptionDiagnostic is the whole of what a shell writes about an
+// option word its front end could not place — the sentence and, where the
+// dialect writes one, its usage block under it — with the trailing newline
+// on it, and empty where the dialect names no wording.
+//
+// Rendered here for the reason ScriptDiagnostic is: which words a shell uses,
+// whether it writes a line it has not reached, and whether a usage block
+// follows are all the dialect's answers. The front end owns only the fact
+// that it met a word it could not place — and it meets it before a Runner
+// exists, which is why this is a method on the vector rather than on the
+// runner that speaks for every other refused option.
+//
+// The block is the same one a refused option letter gets, drawn through the
+// same helper, because it is the same block: measured, `bash -q` and `bash
+// --badopt` print sentences of their own and the identical twenty-two lines
+// under both.
+//
+// shell is what the shell calls itself, never the word it was invoked by:
+// nothing has been read, so there is no `$0` yet. See ScriptDiagnostic.
+func (d Diagnostics) InvocationOptionDiagnostic(shell, word string) string {
+	if d.InvocationBadLongOption == "" {
+		return ""
+	}
+	msg := Wording(d.InvocationBadLongOption, "%[1]s: invalid option",
+		word, strings.TrimPrefix(word, "--"))
+	line := d.invocationPrefix(shell) + msg + "\n"
+	if u := d.invocationUsageBlock(shell, true); u != "" {
+		line += u + "\n"
+	}
+	return line
+}
+
+// invocationUsageBlock is the shell's own usage block under a refused option
+// at an invocation, rendered with the two verbs it reads: the name the shell
+// was invoked by, then that name's last path element.
+//
+// long picks the second block where a dialect writes one for the `--name`
+// spelling — see InvocationLongOptionUsage. One helper rather than two
+// renderings, because the two callers are the same refusal reached by two
+// routes: the runner's, for a word that got as far as the option table, and
+// InvocationOptionDiagnostic's, for one the front end stopped.
+func (d Diagnostics) invocationUsageBlock(shell string, long bool) string {
+	u := d.InvocationUsage
+	if long && d.InvocationLongOptionUsage != "" {
+		u = d.InvocationLongOptionUsage
+	}
+	if u == "" {
+		return ""
+	}
+	return Wording(u, u, shell, filepath.Base(shell))
 }
 
 // JobControlDiagnostic is the whole line an interactive shell writes because

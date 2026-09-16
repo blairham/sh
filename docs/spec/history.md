@@ -555,7 +555,10 @@ answers, and the lexer already has all four.
 ### The list a script builds
 
 `set -o history` starts it, and it is the same list the `history` builtin
-keeps — so a `history -s` entry is reachable from a later `!!`, and `history`
+keeps. The two options are an **AND held continuously** rather than a
+sequence: measured, `set +o history` part way through stops the expander as
+well as the list — `echo !!` prints the two characters again — and a later
+`set -o history` starts both again over the entries the list still holds — so a `history -s` entry is reachable from a later `!!`, and `history`
 in a script reads back what the script has run.
 
 A command joins the list **before** it runs, which is measured twice over:

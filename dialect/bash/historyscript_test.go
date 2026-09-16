@@ -84,11 +84,30 @@ func TestTheLineThatTurnsTheExpanderOnDoesNotExpand(t *testing.T) {
 	}
 }
 
-// And `set +H` stops it again, from the next line.
-func TestSetPlusHStopsExpandingInAScript(t *testing.T) {
-	out, _, _ := historyRun(t, "set -o history; set -H\necho one two three\necho !!\nset +H\necho !!\n")
-	if out != "one two three\necho one two three\n!!\n" {
-		t.Errorf("ran %q, want the second reference left alone", out)
+// And either option turning off stops it again, from the next line. `set +o
+// history` is the one worth measuring rather than reasoning about: it stops
+// the *expander* as well as the list, so the two options are an AND held
+// continuously and not a sequence — and a later `set -o history` starts both
+// again over the entries the list still holds.
+func TestEitherOptionTurningOffStopsExpandingInAScript(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"set +H", "echo one two three\necho !!\nset +H\necho !!\n", "one two three\necho one two three\n!!\n"},
+		{"set +o history", "echo one two three\nset +o history\necho !!\n", "one two three\n!!\n"},
+		{
+			"and the list survives being turned off and on",
+			"echo one\nset +o history\necho two\nset -o history\necho three\necho !!\nhistory\n",
+			// `set +o history` is in the list because the line was recorded
+			// before it ran; `echo two`, the line after it, is not.
+			"one\ntwo\nthree\necho three\n    1  echo one\n    2  set +o history\n" +
+				"    3  echo three\n    4  echo echo three\n    5  history\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _, _ := historyRun(t, "set -o history; set -H\n"+c.src)
+			if out != c.want {
+				t.Errorf("ran %q, want %q", out, c.want)
+			}
+		})
 	}
 }
 

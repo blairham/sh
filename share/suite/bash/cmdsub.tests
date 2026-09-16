@@ -39,3 +39,69 @@ printf 'the pipe spelling: [%s] st=%s\n' "$v" "$?"
 # spelling is a shell of its own, so a `return` in one has nothing to leave.
 v=$(echo hi; return 42) 2>/dev/null
 printf 'forked: [%s] st=%s\n' "$v" "$?"
+
+# And the body is a variable scope as well as a frame: a declaration written
+# inside one is local to the body and the shell's own name comes back after
+# it. That is bash's answer and not ksh93's, which is why it is here — see
+# ksh/cmdsub.tests for the other column.
+
+x=outer
+v=${ local x=in; printf %s "$x"; }
+printf 'local in a body: [%s][%s]\n' "$v" "$x"
+
+x=outer
+v=${ declare x=in; printf %s "$x"; }
+printf 'declare in a body: [%s][%s]\n' "$v" "$x"
+
+x=outer
+v=${ typeset x=in; printf %s "$x"; }
+printf 'typeset in a body: [%s][%s]\n' "$v" "$x"
+
+# A name the shell does not hold is not left behind by one either.
+v=${ local fresh=in; printf %s "$fresh"; }
+printf 'a fresh name: [%s][%s]\n' "$v" "${fresh-none}"
+
+# The scopes nest, and the call around the body is the one the name comes
+# back into.
+x=outer
+g() {
+	local x=fn
+	v=${ local x=in; printf %s "$x"; }
+	printf 'nested in a call: [%s][%s]\n' "$v" "$x"
+}
+g
+printf 'and the shell has its own back: [%s]\n' "$x"
+
+# A plain assignment is not a declaration and still writes the shell's own
+# name, which is the whole difference between this spelling and the forked
+# one and is unchanged by the scope.
+x=outer
+v=${ x=in; printf %s "$x"; }
+printf 'a plain assignment: [%s][%s]\n' "$v" "$x"
+
+# The letters go with the declaration: one made read-only in a body leaves
+# the shell's name writable afterwards.
+w=outer
+v=${ local -r w=in; printf %s "$w"; }
+printf 'a read-only local: [%s][%s]\n' "$v" "$w"
+w=still
+printf 'and the name is writable after: [%s]\n' "$w"
+
+# The pipe spelling has a scope of the same kind, and the hidden REPLY is not
+# it: a body that declares REPLY unwinds into the hidden name, and the outer
+# one comes back over that.
+x=outer
+v=${| local x=in; REPLY=$x; }
+printf 'a declaration in the pipe spelling: [%s][%s]\n' "$v" "$x"
+REPLY=outer
+v=${| local REPLY=in; }
+printf 'a declared REPLY: [%s][%s]\n' "$v" "$REPLY"
+REPLY=outer
+v=${| unset REPLY; }
+printf 'an unset REPLY: [%s][%s]\n' "$v" "$REPLY"
+
+# The control: the forked spelling is a shell of its own, so `local` there has
+# no function to be local to and is refused exactly as it is at the top level.
+x=outer
+v=$(local x=in; printf %s "$x") 2>/dev/null
+printf 'forked: [%s][%s]\n' "$v" "$x"

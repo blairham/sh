@@ -160,6 +160,27 @@ type Suite struct {
 	// record the wrong shell and look entirely healthy.
 	MustReport string
 
+	// Against is the reference build this column's cases were written and
+	// last measured against, named the way a person would name it. It is
+	// printed, and it is what a mismatch is reported against.
+	//
+	// MustReport asks whether this is the right *shell*; Against asks
+	// whether it is the right *build of it*, and the second question is the
+	// one nobody was asking. The two are separate because their failures
+	// are: the wrong shell makes a column meaningless and the run refuses to
+	// start, while a different build of the right shell still measures
+	// something real — a delta on one machine — and only stops being
+	// quotable. See [Suite.Lineage].
+	Against string
+	// AgainstReport is the lowercase fragment the reference's own build
+	// string carries when it is the build named in Against.
+	//
+	// It has to be long enough to discriminate, which is not automatic: for
+	// the ksh column `93u+` matches ksh93u+m's `93u+m/1.0.8` as happily as
+	// AT&T's, and a fragment that cannot tell the two lineages apart is the
+	// check reporting all-clear on the exact case it was written for.
+	AgainstReport string
+
 	// SelfDoc is a command that makes this shell print its own
 	// documentation, and it is how [SelfDocumentation] builds the dictionary
 	// that separates differing lines nobody here may produce from differing
@@ -206,6 +227,11 @@ var Panel = []Suite{
 		Helpers:  []string{"support/recho.c", "support/zecho.c", "support/printenv.c"},
 		ShellVar: "THIS_SH",
 		Lookup:   []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
+		// bash 5.3's own suite, so the reference has to be a 5.3. Ubuntu
+		// 24.04's is 5.2.21 and the `bash's own suite` job runs there, which
+		// is a column measuring a version difference and calling it ours.
+		Against:       "GNU bash 5.3",
+		AgainstReport: "version 5.3",
 		// Every builtin's help, three ways, plus the topic list. The suite
 		// calls the help builtin throughout one of its files and the answer
 		// is pages of manual text, which is the largest single thing in

@@ -205,6 +205,12 @@ func printOwnColumn(rep suite.Report) {
 	s := rep.Suite
 	fmt.Printf("%s — %d files (%s)\n", s.Name, rep.Files, strings.Join(s.Dirs, "/, ")+"/")
 	fmt.Printf("  reference  %s — %s\n", rep.Reference, rep.ReferenceVersion)
+	// Immediately under the reference line, because it is a statement about
+	// that line and because a caveat printed after the numbers is one a
+	// reader has already formed an opinion without. See [suite.Suite.Lineage].
+	if label, why := s.Lineage(rep.ReferenceVersion); why != "" {
+		fmt.Printf("  %s\n", wrap(label+" — "+why, "    "))
+	}
 	fmt.Printf("  ours       %s\n", rep.Ours)
 	if rep.Route != "" {
 		// Said on every run of this column, because the claim is narrower

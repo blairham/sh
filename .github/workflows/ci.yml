@@ -424,6 +424,19 @@ jobs:
       # is a **delta across one pull request on one runner**, which is exactly
       # what a burndown needs and exactly what nobody could get before.
       #
+      # **The ksh column is the one to read carefully, and the report now says
+      # so on its own.** `apt-get install ksh` here is ksh93u+m 1.0.8, a
+      # community fork twelve years on from the AT&T 93u+ 2012-08-01 build
+      # dialect/ksh is written against; the other two are version skew, this
+      # is a different lineage. Measured on one file: every accepting row
+      # agrees on both builds and the whole gap is 93u+m's rewritten refusals.
+      # Nobody saw it for as long as the job has existed because the report's
+      # version probe printed `Usage: ksh [ options ] [arg ...]` -- the probe
+      # *failing*, dressed as a build string. #3135 fixed the probe and made
+      # every column print the build it is graded against beside the build
+      # that is here, so a discounted column now says WRONG BUILD in its own
+      # header rather than quietly scoring lower.
+      #
       # It blocks nothing today. It earns the right to block when a column is
       # at strict 100% here and a regression would be a real one rather than
       # a platform difference; #2291 names that bar.

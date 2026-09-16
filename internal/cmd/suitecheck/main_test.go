@@ -197,3 +197,53 @@ func TestOurOwnDiagnosticsAreRankedWithoutQuotingTheFile(t *testing.T) {
 		}
 	}
 }
+
+// TestAColumnGradedAgainstADifferentBuildSaysSoBesideItsReference.
+//
+// The header names the shell every number below it was compared against, and
+// until #3135 it could name a refusal instead: this package's version probe
+// printed `Usage: ksh [ options ] [arg ...]` for ksh, which reads like a
+// build string, so nobody noticed that CI's ksh is the ksh93u+m fork rather
+// than the AT&T 93u+ the dialect is written against. The notice has to stand
+// next to the reference line, because a caveat printed after the numbers is
+// one the reader has already formed an opinion without.
+func TestAColumnGradedAgainstADifferentBuildSaysSoBesideItsReference(t *testing.T) {
+	rep := refusedReport()
+	rep.Suite.Against = "AT&T ksh93 93u+ 2012-08-01"
+	rep.Suite.AgainstReport = "93u+ 2012-08-01"
+	rep.Reference = "/bin/ksh"
+	rep.ReferenceVersion = suite.Build{Version: "Version AJM 93u+m/1.0.8 2024-01-01", Known: true}
+
+	out := render(rep)
+	if !strings.Contains(out, "WRONG BUILD") {
+		t.Fatalf("a column graded against another lineage printed no notice:\n%s", out)
+	}
+	for _, want := range []string{"AT&T ksh93 93u+ 2012-08-01", "93u+m/1.0.8"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the notice does not name %q, so a reader cannot tell which build "+
+				"produced the numbers:\n%s", want, out)
+		}
+	}
+	head := out[:strings.Index(out, "static read")]
+	if !strings.Contains(head, "WRONG BUILD") {
+		t.Fatalf("the notice is printed after the numbers it is about:\n%s", out)
+	}
+
+	// The build it is written against is silent. A notice printed on every
+	// run is one nobody reads on the run that matters.
+	rep.ReferenceVersion = suite.Build{Version: "Version AJM 93u+ 2012-08-01", Known: true}
+	if out := render(rep); strings.Contains(out, "WRONG BUILD") {
+		t.Fatalf("the right build was reported as the wrong one:\n%s", out)
+	}
+
+	// A shell that would not say what it is is not the same finding and is
+	// not a clean one either.
+	rep.ReferenceVersion = suite.Build{}
+	out = render(rep)
+	if !strings.Contains(out, "UNIDENTIFIED") {
+		t.Fatalf("an unidentified reference passed silently:\n%s", out)
+	}
+	if !strings.Contains(out, "could not determine") {
+		t.Fatalf("the reference line does not say the probe failed:\n%s", out)
+	}
+}

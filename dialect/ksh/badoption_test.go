@@ -188,8 +188,14 @@ func TestAPlusWordAfterAMinusWordTakesNothingOff(t *testing.T) {
 	for _, c := range []struct{ name, src, want string }{
 		{"the integer letter", `typeset -li n=5; typeset -li +i n; n=3+4; echo "[$n]"`, "[7]\n"},
 		{"a plus word alone still removes", `typeset -i n=5; typeset +i n; n=3+4; echo "[$n]"`, "[3+4]\n"},
-		{"the export letter", `typeset -li -x e=1; typeset -li +x e; export -p`, "export e=1\n"},
-		{"and alone it unexports", `typeset -x e=1; typeset +x e; export -p`, ""},
+		// `export SHLVL=1` leads both listings because this shell counts
+		// its own depth and exports it, which ksh93 does too: measured
+		// 2026-09-16, `env -i ksh -c 'export -p'` writes the same line
+		// between `PWD` and `_` (#3097). It is the shell's own row rather
+		// than anything these two declarations did, and the name under
+		// test is still the one after it.
+		{"the export letter", `typeset -li -x e=1; typeset -li +x e; export -p`, "export SHLVL=1\nexport e=1\n"},
+		{"and alone it unexports", `typeset -x e=1; typeset +x e; export -p`, "export SHLVL=1\n"},
 	} {
 		out, _ := runKshWithPrelude(t, c.src)
 		if out != c.want {

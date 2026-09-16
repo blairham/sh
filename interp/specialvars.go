@@ -81,6 +81,10 @@ func (r *Runner) ensureSpecials() {
 	// OLDPWD is the one parameter here the panel disagrees about *inheriting*
 	// rather than providing, so it is a policy rather than a starting value.
 	r.settleInheritedOldpwd()
+	// And the other parameter whose value is decided by what the shell was
+	// handed rather than by what it is: the depth. Beside OLDPWD because it
+	// is settled once per session for the same reason — see settleShellLevel.
+	r.settleShellLevel()
 	if _, ok := r.Dynamic["LINENO"]; !ok && !r.endedProducers["LINENO"] {
 		r.Dynamic["LINENO"] = func(r *Runner) string {
 			// One dialect numbers lines inside a function from the line the

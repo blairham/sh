@@ -1563,6 +1563,11 @@ func Semantics() interp.Semantics {
 	// the path it was given, and `cd -` then names it — this shell judges the
 	// value when something tries to use it and not before.
 	s.InheritedOldpwd = interp.InheritedOldpwdTaken
+	// The depth, counted and told to every child, with no ceiling —
+	// ksh93u+ 2012-08-01 answers as zsh does. It additionally gives the
+	// name the integer attribute, which is #3099's row and not this one.
+	// See interp.ShellLevelPolicy.
+	s.ShellLevel = interp.ShellLevelCounted
 	// And the name this shell gives the directory it starts in: a `PWD` it
 	// was handed is kept whatever it says, and with none handed over the
 	// directory is named under `$HOME` where it sits there — where three of

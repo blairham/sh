@@ -916,15 +916,6 @@ func setOptBacked(base string, def bool, opt string, inv bool) zshOption {
 	}
 }
 
-// fixedConstant is a name whose state here never moves and is not the
-// substrate's to hold.
-func fixedConstant(base string, def, state bool) zshOption {
-	return zshOption{
-		base: base, def: def,
-		get: func(*interp.Runner) bool { return state },
-	}
-}
-
 // matchBacked binds a zsh name to one of the pattern matcher's run-time
 // options, inverted where zsh names the state the matcher's flag turns off:
 // `caseglob` on is `GlobFoldsCase` off. These are implemented, not recorded —

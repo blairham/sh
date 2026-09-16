@@ -2101,6 +2101,48 @@ type Semantics struct {
 	// dash is missing, which is why it is an axis and not a gap.
 	KillListAcceptsName Answer
 
+	// KillListReducesRepeatedly decides how far `kill -l N` walks a number
+	// back before it looks for a name.
+	//
+	// Every shell on the panel answers `kill -l 129` with `HUP`, because 129
+	// is what a shell reports for a child killed by signal 1 and turning that
+	// number back into a name is the whole reason the form exists. They part
+	// on how many times the 128 comes off.
+	//
+	// True in ksh93 and BusyBox ash, which subtract while the number is still
+	// 128 or more: `kill -l 256` is `EXIT` there, `257` is `HUP`, `300` is
+	// `44`.
+	//
+	// False in bash, zsh and dash, which take it off once and keep the result
+	// only when it names a signal — so 129 is `HUP` in all three and 257 is
+	// not. That pair is the discriminator; no number below 256 can tell the
+	// two readings apart.
+	KillListReducesRepeatedly Answer
+
+	// KillListPrintsANumberItCannotName answers what happens when the
+	// reduction has run and nothing on the table matches.
+	//
+	// True in zsh, ksh93 and BusyBox ash, which print a number back at status
+	// 0 — zsh the number as written, the other two what the reduction left,
+	// which is why `kill -l 160` is `160` in one and `32` in the others.
+	//
+	// False in bash and dash, which refuse it: `160: invalid signal
+	// specification` at 1, and `invalid signal number or exit status: 160`
+	// at 2.
+	KillListPrintsANumberItCannotName Answer
+
+	// KillListNamesZeroAsExit gives `kill -l 0` the name `EXIT`, which is the
+	// pseudo-signal a shell's own trap table has at that number rather than
+	// one the kernel knows.
+	//
+	// True in bash, ksh93 and BusyBox ash. False in zsh, which prints the 0
+	// back, and in dash, which refuses it — and both of those follow from
+	// KillListPrintsANumberItCannotName rather than needing a rule here.
+	//
+	// It reaches `kill -l` alone: `EXIT` is in no shell's bare listing, which
+	// starts at 1 in all five.
+	KillListNamesZeroAsExit Answer
+
 	// ExitTrapRunsOnSignalDeath fires the EXIT trap when the shell is ending
 	// because a signal it had no handler for killed it, rather than because
 	// it reached the end or ran `exit`.
@@ -14221,6 +14263,13 @@ func PosixSemantics() Semantics {
 		// there is a leading zero however few digits the precision left. So
 		// the text answers this one and ksh93 is the departure.
 		PrintfAlternateFormAsksTheValue: Yes,
+		// POSIX has `kill -l` turn the status of a signal-killed process
+		// back into a name, which one subtraction does; it says nothing
+		// about a second, gives no output for a number that names nothing,
+		// and lists signal names, of which 0 is not one.
+		KillListReducesRepeatedly:         No,
+		KillListPrintsANumberItCannotName: No,
+		KillListNamesZeroAsExit:           No,
 		// POSIX shows the mask in a form that can be read back; three of the
 		// four write four octal digits.
 		UmaskPrintsFourDigits: Yes,

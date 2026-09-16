@@ -215,3 +215,14 @@ ulimit -c +1 2> /dev/null; printf 'signed -> %s\n' "$?"
 ulimit -c 1+1 2> /dev/null; printf 'expression -> %s\n' "$?"
 ulimit -c 0x10 2> /dev/null; printf 'hex -> %s\n' "$?"
 ulimit -c 1x 2> /dev/null; printf 'trailing -> %s\n' "$?"
+
+# `kill -l` past the one subtraction every shell makes. bash takes the 128
+# off once and refuses what is left when it names nothing, so `kill -l 257`
+# — which is 129 after one go — is not HUP here, and `kill -l 160` is not the
+# 32 that ksh93 and BusyBox ash answer. Zero is the trap table's own
+# pseudo-signal.
+kill -l 0
+kill -l 160 2> /dev/null; printf '160 -> %s\n' "$?"
+kill -l 257 2> /dev/null; printf '257 -> %s\n' "$?"
+kill -l 128 2> /dev/null; printf '128 -> %s\n' "$?"
+kill -l 32 2> /dev/null; printf '32 -> %s\n' "$?"

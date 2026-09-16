@@ -1163,6 +1163,11 @@ func Semantics() interp.Semantics {
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
+	// `kill -l 129` is HUP and `kill -l 0` is EXIT; one subtraction, and a
+	// number that still names nothing is refused.
+	s.KillListReducesRepeatedly = interp.No
+	s.KillListPrintsANumberItCannotName = interp.No
+	s.KillListNamesZeroAsExit = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnySuccess

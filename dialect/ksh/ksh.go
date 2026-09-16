@@ -1355,6 +1355,11 @@ func Semantics() interp.Semantics {
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
+	// Subtracts while the number is still 128 or more, so `kill -l 257` is
+	// HUP and `kill -l 300` is 44, and prints back what it cannot name.
+	s.KillListReducesRepeatedly = interp.Yes
+	s.KillListPrintsANumberItCannotName = interp.Yes
+	s.KillListNamesZeroAsExit = interp.Yes
 	// And a signal written onto the option with no space: `kill -n9` and
 	// `kill -sKILL` both send. Measured 2026-09-12. This shell is looser
 	// still — it takes `kill -s9` too, which the axis records and does not

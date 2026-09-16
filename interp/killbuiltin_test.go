@@ -594,3 +594,101 @@ func TestAJoinedSignalIsRefusedWhenUnanswered(t *testing.T) {
 		}
 	}
 }
+
+// `kill -l N` is handed an *exit status*, not a signal number: `$?` is 128
+// plus the signal for a child the kernel ended, so turning 129 back into HUP
+// is the whole reason the form exists. Every shell on the panel does it, and
+// this engine refused all four columns until #3053.
+func TestKillListReadsAnExitStatus(t *testing.T) {
+	// The shape bash, zsh and dash share: one subtraction, kept only when
+	// what is left names a signal.
+	once := killSem()
+	once.KillListReducesRepeatedly = No
+	once.KillListPrintsANumberItCannotName = No
+	once.KillListNamesZeroAsExit = Yes
+	// ksh93's and BusyBox ash's: subtract while the number is still 128 or
+	// more, and print back what still names nothing.
+	repeated := killSem()
+	repeated.KillListReducesRepeatedly = Yes
+	repeated.KillListPrintsANumberItCannotName = Yes
+	repeated.KillListNamesZeroAsExit = Yes
+	// zsh's, which is the third column and the one that separates the two
+	// halves: one subtraction like bash, and a number printed back like
+	// ksh93 — so `kill -l 160` is `160` here and `32` there.
+	printed := killSem()
+	printed.KillListReducesRepeatedly = No
+	printed.KillListPrintsANumberItCannotName = Yes
+	printed.KillListNamesZeroAsExit = No
+
+	for _, tt := range []struct {
+		name string
+		sem  Semantics
+		src  string
+		out  string
+	}{
+		// The row every reference agrees on, which is what #3053 is about.
+		{"129 is HUP once", once, `kill -l 129`, "HUP\n"},
+		{"129 is HUP repeatedly", repeated, `kill -l 129`, "HUP\n"},
+		{"129 is HUP in zsh's shape", printed, `kill -l 129`, "HUP\n"},
+		// A signal number below the reduction is still itself.
+		{"9 is KILL", once, `kill -l 9`, "KILL\n"},
+		// The discriminating pair: no number under 256 tells the two
+		// reductions apart.
+		{"257 needs a second subtraction", repeated, `kill -l 257`, "HUP\n"},
+		{"300 lands on a number", repeated, `kill -l 300`, "44\n"},
+		{"160 is reduced and printed", repeated, `kill -l 160`, "32\n"},
+		{"160 is printed as written", printed, `kill -l 160`, "160\n"},
+		{"257 is printed as written", printed, `kill -l 257`, "257\n"},
+		// Zero is the trap table's pseudo-signal, not the kernel's.
+		{"0 is EXIT", once, `kill -l 0`, "EXIT\n"},
+		{"0 without EXIT is the number", printed, `kill -l 0`, "0\n"},
+		// And a number below 128 that names nothing.
+		{"32 printed back", printed, `kill -l 32`, "32\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			out, errs, st := killRun(t, tt.src, tt.sem, Diagnostics{})
+			if out != tt.out {
+				t.Errorf("output: got %q, want %q (stderr %q)", out, tt.out, errs)
+			}
+			if st != 0 {
+				t.Errorf("status: got %d, want 0", st)
+			}
+		})
+	}
+
+	// Where the number is refused, nothing is written to standard output and
+	// the complaint is the listing form's own — which one dialect words
+	// differently because the operand is an exit status there.
+	for _, tt := range []struct {
+		name string
+		sem  Semantics
+		src  string
+	}{
+		{"160 refused after one subtraction", once, `kill -l 160`},
+		{"257 refused after one subtraction", once, `kill -l 257`},
+		{"32 refused", once, `kill -l 32`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			out, errs, st := killRun(t, tt.src, tt.sem, Diagnostics{})
+			if out != "" {
+				t.Errorf("output: got %q, want nothing", out)
+			}
+			if st == 0 || errs == "" {
+				t.Errorf("status %d saying %q, want a refusal", st, errs)
+			}
+		})
+	}
+	// The one dialect that words it as an exit status rather than a name.
+	dg := Diagnostics{
+		KillInvalidSignal: "kill: invalid signal number or name: %[1]s",
+		KillListBadNumber: "kill: invalid signal number or exit status: %[1]s",
+	}
+	_, errs, _ := killRun(t, `kill -l 32`, once, dg)
+	if !strings.Contains(errs, "exit status: 32") {
+		t.Errorf("stderr = %q, want the listing form's own wording", errs)
+	}
+	_, errs, _ = killRun(t, `kill -s NOPE 1`, once, dg)
+	if !strings.Contains(errs, "number or name: NOPE") {
+		t.Errorf("stderr = %q, want the signal wording for a -s argument", errs)
+	}
+}

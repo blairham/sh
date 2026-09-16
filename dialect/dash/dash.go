@@ -510,6 +510,11 @@ func Semantics() interp.Semantics {
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.No
+	// One subtraction, and everything else is refused — including 0, which
+	// is the one column with no EXIT and no number printed back.
+	s.KillListReducesRepeatedly = interp.No
+	s.KillListPrintsANumberItCannotName = interp.No
+	s.KillListNamesZeroAsExit = interp.No
 	s.SIGPrefixAccepted = interp.No
 	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
@@ -1309,6 +1314,9 @@ func Diagnostics() interp.Diagnostics {
 		KillNoSuchProcess:       "kill: No such process\n",
 		KillNotPermitted:        "kill: Operation not permitted\n",
 		KillInvalidSignal:       "kill: invalid signal number or name: %[1]s",
+		// `kill -l` is handed an exit status rather than a signal, and this
+		// shell is the one that says so in the refusal.
+		KillListBadNumber: "kill: invalid signal number or exit status: %[1]s",
 		// The first character alone: dash stopped reading there.
 		KillIllegalOption:         "kill: Illegal option -%[2]s",
 		KillNotAPid:               "kill: Illegal number: %[1]s",

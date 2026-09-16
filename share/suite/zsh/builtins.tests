@@ -131,3 +131,15 @@ ulimit -c soft 2> /dev/null; printf 'ulimit -c soft -> %s\n' "$?"
 ulimit -c +1 2> /dev/null; printf 'signed -> %s\n' "$?"
 ulimit -c 1+1 2> /dev/null; printf 'expression -> %s\n' "$?"
 ulimit -c 0x10 2> /dev/null; printf 'hex -> %s\n' "$?"
+
+# `kill -l` past the one subtraction every shell makes. zsh is the column
+# that separates the two halves of the question: one subtraction, like bash
+# and dash, and yet a number it cannot name is printed back rather than
+# refused, like ksh93 and BusyBox ash. So `kill -l 160` is 160 here and 32
+# there, and `kill -l 0` is the number rather than `EXIT`.
+kill -l 0
+kill -l 32
+kill -l 128
+kill -l 160
+kill -l 257
+printf 'status: %s\n' "$?"

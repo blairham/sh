@@ -2779,6 +2779,17 @@ type Diagnostics struct {
 	// same string, which is the same shape as the two `test` operator
 	// wordings and for the same reason.
 	KillIllegalOption string
+	// KillListBadNumber is a number `kill -l` could not turn into a name,
+	// once the reduction by 128 has had its go. One verb: the operand.
+	//
+	// dash alone: it calls the operand an *exit status* here — `invalid
+	// signal number or exit status: 32` — where the same shell's refusal of a
+	// bad `-s` argument says `name`. That is the listing form's whole
+	// subject, since the number it is handed is a `$?`. Empty means
+	// KillInvalidSignal, which is what the other four say in both places
+	// (#3053).
+	KillListBadNumber string
+
 	// KillNotAPid is an operand that is not a number. One verb: the operand.
 	KillNotAPid string
 

@@ -62,6 +62,66 @@ func TestTheShippedArgumentsProtocolOffersTheOptions(t *testing.T) {
 	}
 }
 
+// TestTheShippedArgumentsProtocolOffersTheRestOfAStack is the one of #3039's
+// four recorded gaps that turned out not to be one, asked end to end.
+//
+// **The offering is built by `_arguments` and not by the builtin.** When
+// `comparguments -s` answers 0 the shipped function takes the option names out
+// of `-O`'s own four arrays, strips the leading `-` from each single-letter
+// one and writes `$PREFIX` back in front of it — so everything a stacked
+// offering needs is `-s`'s status and `-O`'s arrays, and both were already
+// here. What is written below is that, with the name-building spelled as a
+// loop rather than as the nested expansion the shipped function writes.
+//
+// Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal with `compinit`
+// over this machine's own functions, Tab left where `compinit` put it:
+// `uname -a<TAB>` completes to `uname -ap ` on `/bin/zsh` and on this shell
+// alike — `-p` is all that `-a`'s exclusion list leaves — and `gzip -c<TAB>`
+// twice lists the same twenty-three stacked words from both. The array the
+// shipped `_arguments` builds was read out of a shadowing function on the
+// same line and is identical in both shells:
+//
+//	_a_12=(-cd -cf -ch -ck -cl -cL -cn -cN -cq -cr -ct -cv -cV -c1 … -cS)
+//
+// Three specs with no exclusions between them, so that the answer is a list
+// and not the single name `uname` happens to leave.
+func TestTheShippedArgumentsProtocolOffersTheRestOfAStack(t *testing.T) {
+	got := completionFor(t, widgetOf(`
+		comparguments -i '' -s : '-a[all]' '-m[machine]' '-p[processor]' || return
+		local -a next direct odirect equal
+		comparguments -O next direct odirect equal || return
+		local single
+		comparguments -s single || return
+		local -a stacked; local o
+		for o in ${next%%:*}; do stacked+=( "$PREFIX${o#-}" ); done
+		compadd -a stacked
+	`), "uname -a")
+	want := []string{"-am", "-ap"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("uname -a offered %q, want %q", got, want)
+	}
+}
+
+// TestAStackIsOnlyOfferedWhereOneIsBeingWritten is the other side of it: the
+// status `_arguments` reads before it builds any of that. Measured on zsh
+// 5.9.2 from both directions — `uname -` is 1, because a lone `-` is not yet a
+// stack, and `uname -a` is 0.
+func TestAStackIsOnlyOfferedWhereOneIsBeingWritten(t *testing.T) {
+	for _, c := range []struct{ name, line, want string }{
+		{"a lone dash is not a stack", "uname -", "1"},
+		{"a letter after it is", "uname -a", "0"},
+		{"and a long option is not", "uname --a", "1"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := reported(t, `comparguments -i '' -s : '-a[all]' '-m[machine]'
+				local one; comparguments -s one; say $?`, c.line)
+			if got != c.want {
+				t.Errorf("%s answered %q, want %q", c.line, got, c.want)
+			}
+		})
+	}
+}
+
 // TestComparguments is the six read-back verbs, each asked in the position
 // its measurement was taken in.
 func TestComparguments(t *testing.T) {
@@ -196,6 +256,67 @@ func TestComparguments(t *testing.T) {
 			 local one; comparguments -s one; say $?`, "1"},
 		{"a stack", "uname -a", `comparguments ` + unameSpecs + `
 			 local one; comparguments -s one; say $?`, "0"},
+		// **`-O` is not asked about the word under the cursor, and `-i`
+		// is.** Measured on zsh 5.9.2, 2026-09-16 from inside a `zle -C`
+		// widget with `-v[verbose]` and `-o[opt]:val:` the only specs: `cmd
+		// f` answers 1 from `-i` — nothing can be completed there, the word
+		// has begun as something no option can be — and 0 from `-O` with
+		// both options in `next`, because the *position* still takes them.
+		// `_arguments` does that filtering itself and reads `-O`'s status to
+		// decide whether to ask `_tags` for the `options` tag at all, so a 1
+		// here is a shipped completion told this position takes no options.
+		//
+		// Both halves, because a shell that read the word in neither place
+		// would pass the second row and a shell that read it in both — which
+		// is what this was — passes the first.
+		{
+			"a word no option can be is nothing to complete", "cmd f",
+			`comparguments -i '' : '-v[verbose]' '-o[opt]:val:'; say $?`, "1",
+		},
+		{
+			"but the position still takes them", "cmd f",
+			`comparguments -i '' : '-v[verbose]' '-o[opt]:val:'
+			 local -a n d od e; comparguments -O n d od e
+			 say "$?/${n[*]}"`,
+			"0/-v:verbose -o:opt",
+		},
+		// And what does stop `-O` is the position, from both directions.
+		// Measured on the same day: an argument whose `(-)` spent the
+		// options, and a `*::` rest specification the sub-command's words
+		// have begun under, are each 1 with four empty arrays on zsh.
+		{
+			"an argument that spent the options", "cmd a foo",
+			`comparguments -i '' : '-v[verbose]' '(-)1:first:(a b)' '*:rest:(x y)'
+			 local -a n d od e; comparguments -O n d od e
+			 say "$?/${n[*]}"`,
+			"1/",
+		},
+		{
+			"a rest specification that took over", "cmd sub foo",
+			`comparguments -i '' : '-v[verbose]' '*:: :->rest'
+			 local -a n d od e; comparguments -O n d od e
+			 say "$?/${n[*]}"`,
+			"1/",
+		},
+		// **A `*::` rest specification does not take its arguments out of
+		// `$line`.** #3039 recorded the opposite — that zsh moves them out of
+		// `$line` and into `$words`, leaving `$#line` 0 where this reports 2 —
+		// and it is not so. Measured on zsh 5.9.2, 2026-09-16 through a
+		// pseudo-terminal, both by asking the builtin from inside a widget and
+		// by letting the shipped `_arguments` run and printing its own `$line`,
+		// with `cmd sub arg <TAB>` under `-v[verbose] -o[opt]:val: *:: :->rest`:
+		// `$line` is `(sub arg '')` and `$words` is `(sub arg '')` as well.
+		// `*:`, `*::`, `*:::`, `(-)*::` and a numbered spec in front of one all
+		// answer the same, each asked on the same line so that a shell reading
+		// the colons differently would separate.
+		{
+			"a rest specification leaves the line alone", "cmd sub arg ",
+			`comparguments -i '' : '-v[verbose]' '-o[opt]:val:' '*:: :->rest'
+			 local -a ds as ss; comparguments -D ds as ss
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${#l}/${l[1]}/${l[2]}/[${l[3]}]"`,
+			"3/sub/arg/[]",
+		},
 		// An option whose exclusion list names another takes it off the
 		// offering once it is on the line.
 		{

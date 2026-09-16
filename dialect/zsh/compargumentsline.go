@@ -96,6 +96,7 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 		}
 		position++
 	}
+	a.optionsPossible = options
 	a.optionsHere = options && a.optionsCompletable(cs)
 	if !a.cursorIsOption {
 		a.here = a.applicable(position)
@@ -106,6 +107,30 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 // optionsCompletable is whether the word under the cursor could be an option
 // at all: an empty word could become one, and a word already opening with `-`
 // or `+` is one being written. A word that has begun as anything else cannot.
+//
+// **It gates `-i` and not `-O`**, which is the pair of answers that separates
+// them and the divergence #3039 recorded. `-i` is asked whether there is
+// anything to complete at the cursor and reads the word; `-O` is asked what
+// options this *position* could still take and does not. Measured on zsh
+// 5.9.2, 2026-09-16 through a pseudo-terminal from inside a `zle -C` widget,
+// with `-v[verbose]` and `-o[opt]:val:` the only specs:
+//
+//	line        zsh -i  zsh -O
+//	cmd <TAB>   0       0, next=(-v:verbose -o:opt)
+//	cmd -<TAB>  0       0, next=(-v:verbose -o:opt)
+//	cmd f<TAB>  1       0, next=(-v:verbose -o:opt)
+//
+// so the third row is the one that tells them apart, and `-O` answering 1
+// with four empty arrays there was this builtin's own reading rather than
+// zsh's. `_arguments` does the filtering itself — `[[ "$PREFIX" = [-+]* ]] &&
+// tmp1=( "${(@M)tmp1:#${PREFIX[1]}*}" )` — and reads `-O`'s status to decide
+// whether to ask `_tags` for the `options` tag at all, so a 1 here is a
+// shipped completion told this position takes no options.
+//
+// What does still stop `-O` is the position: measured on the same day, `cmd a
+// foo<TAB>` under `(-)1:first:(a b)` and `cmd sub foo<TAB>` under `*:: :->rest`
+// are both 1 with four empty arrays on zsh, because the argument and the
+// sub-command's takeover really did shut the options off.
 func (a *argumentsState) optionsCompletable(cs *completionState) bool {
 	word := cs.prefix
 	return word == "" || word[0] == '-' || word[0] == '+'
@@ -262,6 +287,25 @@ func (a *argumentsState) applicable(position int) []int {
 
 // normalArguments is `$line`: the words that are not options and not an
 // option's argument.
+//
+// **A `*::` rest specification does not take its arguments out of it.** #3039
+// recorded the opposite — that zsh moves the rest-covered words out of `$line`
+// and into `$words`, leaving `$#line` 0 where this reports 2 — and it is not
+// so. Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal two ways:
+// asking the builtin from inside a `zle -C` widget, and letting the shipped
+// `_arguments` run a completion of its own and printing the `$line` it was
+// left holding. With `cmd sub arg <TAB>` under `-v[verbose] -o[opt]:val:
+// *:: :->rest`, `$line` is `(sub arg ”)` and `$words` is `(sub arg ”)` as
+// well — the rest specification *copies* into `$words`, it does not move.
+//
+//	specification              $line             $words
+//	*:: :->rest                sub arg ''        sub arg ''
+//	*::: :->rest               sub arg ''        sub arg ''
+//	(-)*:: :->rest             sub arg ''        sub arg ''
+//	1:first:(a b) *:: :->rest  a sub ''          a sub ''
+//
+// each asked on the same line, so that a shell reading the colon count
+// differently would come apart on one of the rows.
 //
 // **The word under the cursor is one of them**, unless it is itself an
 // option. Measured on zsh 5.9.2, 2026-09-15: `uname -a -` reports
@@ -433,7 +477,7 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 		return 1
 	}
 	lists := make([][]string, 4)
-	if a.optionsHere {
+	if a.optionsPossible {
 		for _, opt := range a.opts {
 			if opt.hidden || a.excluded(opt) {
 				continue

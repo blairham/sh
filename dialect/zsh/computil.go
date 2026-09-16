@@ -61,18 +61,34 @@ import (
 // that answered a verb it does not implement would be the silent success
 // `zmodload` exists to avoid — see zmodload.go.
 //
-// # What is not here
+// # What is not here, and why each one is not
 //
-// **Descriptions are not shown.** `compdescribe` builds them and hands them
-// back, `compadd -d` takes them, and this editor's listing is names only —
-// repl's completion seam is answered with replacement words and has nowhere
-// to put a description. That is #3041 and it is the visible difference
-// between a listing here and zsh's.
+// The eight all answer, and the shipped system runs on them: `git che<TAB>`
+// offers the same eight sub-commands `/bin/zsh` offers on the same rc, and
+// `uname -a<TAB>` completes the rest of the stack the same way. Three things
+// are still smaller than zsh's, and they are three different kinds of smaller
+// — worth keeping apart, because only one of them is work anybody could do
+// inside these files.
 //
-// **Match groups are not a thing here.** `compgroups`, and `compadd`'s `-J`
-// and `-V`, name an ordering and a listing arrangement this editor has not
-// got; they are read and ignored rather than refused, which is compctl.go's
-// rule and for its reason.
+// **Descriptions are not shown — a seam this editor has not got.**
+// `compdescribe` builds them and hands them back, `compadd -d` takes them,
+// and this editor's listing is names only: repl's completion seam is answered
+// with replacement words and has nowhere to put a description. That is #3041
+// and it is the visible difference between a listing here and zsh's.
+//
+// **Match groups are not a thing here — the same seam, from the other side.**
+// `compgroups`, `compdescribe`'s per-arrangement splitting, and `compadd`'s
+// `-J` and `-V` all name an ordering and a listing arrangement this editor
+// has not got. They are read and ignored rather than refused, which is
+// compctl.go's rule and for its reason: refusing would stop every completion
+// whose context sets `group-order`, and those completions are otherwise
+// entirely servable. The matches and their order are zsh's either way — see
+// compdescribe.go for the measurement that says so.
+//
+// **`compfiles` does no globbing optimisation — work, not a boundary.** It is
+// the one of the eight that is entirely an optimisation, and the conservative
+// answers it gives are correct rather than approximate; the cost is that
+// `_files` globs unoptimised. See compfiles.go.
 
 // registerComputil puts the eight in the table.
 //

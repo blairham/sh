@@ -176,3 +176,26 @@ func TestKeywordFunctionLeavesASubshellsTrapsAlone(t *testing.T) {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }
+
+// The pseudo-conditions go with the table too, which the signal rows cannot
+// show: a body under the keyword form does not see the caller's ERR trap, and
+// the same body written the other way does. Measured on AT&T 93u+ — the
+// POSIX-form call writes the handler's line between its own two and the
+// keyword form writes neither.
+func TestKeywordFunctionTakesThePseudoConditionsToo(t *testing.T) {
+	for _, tc := range []struct{ name, def, want string }{
+		{"the keyword form", `function g { echo in; false; echo still; }`, "in\nstill\nafter\n"},
+		{"the POSIX form", `g() { echo in; false; echo still; }`, "in\nerr\nstill\nafter\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := keywordTrapsSem()
+			sem.TrapHasErrCondition = Yes
+			sem.ErrTrapRunsInsideFunctions = Yes
+			sem.ErrTrapRunsInSubshells = No
+			out, _ := run(t, `trap 'echo err' ERR; `+tc.def+`; g; echo after`, withSem(sem))
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}

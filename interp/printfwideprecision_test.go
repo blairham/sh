@@ -5,6 +5,7 @@ package interp
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 )
@@ -63,7 +64,10 @@ func TestTheWidePrecisionRenderersAgreeWithFmt(t *testing.T) {
 				for _, width := range widths {
 					for _, prec := range precs {
 						spec := "%" + flags + width + "." + prec
-						for _, f := range []float64{0, 1, -1, 1.5, -1.5, 0.1, 1e20, -0.0} {
+						// A negative zero, which keeps its sign through the
+						// conversion. Built rather than written: Go reads the
+						// literal -0.0 as a constant zero.
+						for _, f := range []float64{0, 1, -1, 1.5, -1.5, 0.1, 1e20, math.Copysign(0, -1)} {
 							got := printfWideFloat(spec, verb, f)
 							want := fmt.Sprintf(spec+string(verb), f)
 							if got != want {

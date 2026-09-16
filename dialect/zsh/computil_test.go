@@ -122,6 +122,72 @@ func TestAStackIsOnlyOfferedWhereOneIsBeingWritten(t *testing.T) {
 	}
 }
 
+// TestTheOptionUnderTheCursorIsOfferedBack is the one spent option that is
+// offered all the same, and it is the whole twelve-cell table rather than the
+// rows that happen to differ — a shell that withheld every spent option passes
+// six of them and a shell that offered every one passes the other six.
+//
+// Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal from inside a
+// `zle -C` widget, the word under the cursor being exactly the option named.
+// Visible as well as recorded: `git checkout --force<TAB>` closes the word and
+// adds a space on `/bin/zsh` against this machine's own functions, and offered
+// nothing here.
+func TestTheOptionUnderTheCursorIsOfferedBack(t *testing.T) {
+	// One spec set holding all six argument forms, so that every row is asked
+	// of the same parse and a difference can only be the form.
+	const forms = `'-a[plain]' '-n[next]:nx:' '-o=[out]:out:' ` +
+		`'-e=-[eqd]:ed:' '-d-[dir]:dir:' '-f+[file]:file:' ` +
+		`'--long[long]' '1:first:(x y)'`
+	for _, c := range []struct {
+		name, line, switches string
+		want                 bool
+	}{
+		{"plain, no -s", "cmd -a", "", true},
+		{"a separate argument, no -s", "cmd -n", "", true},
+		{"an = argument, no -s", "cmd -o", "", true},
+		{"an =-only argument, no -s", "cmd -e", "", true},
+		{"an attached argument, no -s", "cmd -d", "", false},
+		{"an optionally attached one, no -s", "cmd -f", "", false},
+		{"plain, with -s", "cmd -a", "-s", false},
+		{"a separate argument, with -s", "cmd -n", "-s", true},
+		{"an = argument, with -s", "cmd -o", "-s", false},
+		{"an =-only argument, with -s", "cmd -e", "-s", false},
+		{"an attached argument, with -s", "cmd -d", "-s", false},
+		{"an optionally attached one, with -s", "cmd -f", "-s", false},
+		// And it is the stack and not the switch: a long option under `-s` is
+		// not one, so it is offered back like any other. Measured beside the
+		// short `-a` in one spec set, because the two rows together are what
+		// say the predicate is `comparguments -s`' own.
+		{"a long option under -s is not a stack", "cmd --long", "-s", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := reported(t, `comparguments -i '' `+c.switches+` : `+forms+`
+				local -a n d od e; comparguments -O n d od e
+				local -a all=( ${n%%:*} ${d%%:*} ${od%%:*} ${e%%:*} )
+				say "${all[*]}"`, c.line)
+			name := c.line[strings.LastIndex(c.line, " ")+1:]
+			if back := strings.Contains(" "+got+" ", " "+name+" "); back != c.want {
+				t.Errorf("%s %s offered %q, want %s back: %v",
+					c.line, c.switches, got, name, c.want)
+			}
+		})
+	}
+}
+
+// TestTheOptionUnderTheCursorIsTheOnlyOneOfferedBack is the other half of it,
+// because "offered back" would pass just as well if every spent option were.
+// Measured with `--all` and `--almost` declared: `cmd --all --almost<TAB>`
+// offers `--almost` and not `--all`.
+func TestTheOptionUnderTheCursorIsTheOnlyOneOfferedBack(t *testing.T) {
+	got := reported(t, `comparguments -i '' : '--all[all]' '--almost[almost]' '-p[proc]'
+		local -a n d od e; comparguments -O n d od e
+		local -a names=( ${n%%:*} ); say "${names[*]}"`,
+		"cmd --all --almost")
+	if want := "--almost -p"; got != want {
+		t.Errorf("cmd --all --almost offered %q, want %q", got, want)
+	}
+}
+
 // TestComparguments is the six read-back verbs, each asked in the position
 // its measurement was taken in.
 func TestComparguments(t *testing.T) {
@@ -316,6 +382,60 @@ func TestComparguments(t *testing.T) {
 			 local -a l; local -A oa; comparguments -W l oa 0
 			 say "${#l}/${l[1]}/${l[2]}/[${l[3]}]"`,
 			"3/sub/arg/[]",
+		},
+		// **`-s` answers 1 where `_arguments` was never given `-s`**, whatever
+		// the word looks like. Measured: the same `uname -a` that is 0 with
+		// the switch is 1 without it, because there is no stack to continue.
+		{
+			"no stacking, no stack", "uname -a",
+			`comparguments -i '' : '-a[all]' '-m[machine]'
+			 local one; comparguments -s one; say $?`, "1",
+		},
+		// And the parameter it names is `next` for one shape only: a stack of
+		// exactly one letter whose option takes a separate word. Measured on
+		// zsh 5.9.2, 2026-09-16 over five lines of one spec set, because a
+		// shell that filled it from the last letter of any stack passes the
+		// first row and fails the third.
+		{
+			"a single option with an argument of its own", "cmd -n",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]'
+			 local one; comparguments -s one; say "$?/$one"`, "0/next",
+		},
+		{
+			"a single option with no argument", "cmd -a",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]'
+			 local one; comparguments -s one; say "$?/$one"`, "0/",
+		},
+		{
+			"a stack of two", "cmd -an",
+			`comparguments -i '' -s : '-n[next]:nx:' '-a[plain]' '-p[proc]'
+			 local one; comparguments -s one; say "$?/$one"`, "0/",
+		},
+		// **A stack spends every letter in it.** Measured with `-s` and
+		// `-a -m -p`: `cmd -am <TAB>` leaves `-p` and nothing else, and
+		// `$line` has neither `-am` nor its letters on it.
+		{
+			"a stack spends its letters", "cmd -am ",
+			`comparguments -i '' -s : '-a[all]' '-m[machine]' '-p[proc]' '*:rest:'
+			 local -a n d od e; comparguments -O n d od e
+			 local -a names=( ${n%%:*} ); say "${names[*]}"`,
+			"-p",
+		},
+		{
+			"a stack is not an argument", "cmd -am foo",
+			`comparguments -i '' -s : '-a[all]' '-m[machine]' '-p[proc]' '*:rest:'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${l[*]}/${(ko)oa}"`,
+			"foo/-a -m",
+		},
+		// And with no `-s` the same word is not a stack at all: it is an
+		// option nobody declared, so it lands on `$line` whole. Measured.
+		{
+			"without -s a stack is an argument", "cmd -am foo",
+			`comparguments -i '' : '-a[all]' '-m[machine]' '-p[proc]' '*:rest:'
+			 local -a l; local -A oa; comparguments -W l oa 0
+			 say "${l[*]}/${(ko)oa}"`,
+			"-am foo/",
 		},
 		// An option whose exclusion list names another takes it off the
 		// offering once it is on the line.

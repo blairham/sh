@@ -56,7 +56,12 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 				// specification is what moves `$words` — so without it
 				// `cmd -v<TAB>` would hand the completer a word list holding
 				// only the option the person is still typing.
-				a.cursorIsOption = a.cursorIsOption || cursor
+				if cursor {
+					a.cursorIsOption = true
+					if name, _, _ := a.lookupOption(word); name == word {
+						a.cursorOption = name
+					}
+				}
 				i += skip
 				continue
 			}
@@ -96,6 +101,7 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 		}
 		position++
 	}
+	a.stackInProgress = a.continuingAStack(cs)
 	a.optionsPossible = options
 	a.optionsHere = options && a.optionsCompletable(cs)
 	if !a.cursorIsOption {
@@ -483,7 +489,7 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 				continue
 			}
 			for _, name := range opt.names {
-				if a.spent[name] && !opt.repeat {
+				if a.spent[name] && !opt.repeat && !a.offeredBack(name) {
 					continue
 				}
 				at := optionListIndex(opt.style)
@@ -511,6 +517,66 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 	// same reason from the other direction — the argument shut the options
 	// off.
 	return boolStatus(offered)
+}
+
+// offeredBack is the one spent option that is offered all the same: the one
+// the word under the cursor spells out, where writing it again is what the
+// person is doing.
+//
+// **A spent option is withheld and this one is not**, which is the shape a
+// guess gets wrong in both directions. Measured on zsh 5.9.2, 2026-09-16
+// through a pseudo-terminal from inside a `zle -C` widget, asking
+// `comparguments -O` with the word under the cursor being exactly the option
+// named — all twelve cells, because the rule turns on the argument form *and*
+// on whether `_arguments` was given `-s`:
+//
+//	spec form         cursor word   without -s   with -s
+//	-a[plain]         -a            offered      withheld
+//	-n[next]:nx:      -n            offered      offered
+//	-o=[out]:out:     -o            offered      withheld
+//	-e=-[eqd]:ed:     -e            offered      withheld
+//	-d-[dir]:dir:     -d            withheld     withheld
+//	-f+[file]:file:   -f            withheld     withheld
+//
+// and it is the word under the cursor and no other: with `--all` and
+// `--almost` declared, `cmd --all --almost<TAB>` offers `--almost` back and
+// not `--all`.
+//
+// The two rules that table is:
+//
+//   - **an argument that attaches with nothing between it and the option is
+//     already being written**, so `-d-` and `-f+` are never offered back —
+//     the word under the cursor is the option plus the start of its argument,
+//     and `comparguments -D` is what describes that argument.
+//   - **where a stack is being continued, everything else is its next
+//     letter**, which `_arguments` builds by writing `$PREFIX` in front of
+//     each name `-O` hands it; offering `-a` back there would produce `-aa`.
+//     The one exception is an argument written as its own word, because a
+//     stack cannot continue past one.
+//
+// It is the stack and not the switch: `-s` given and `--all` under the cursor
+// offers `--all` back, because a long option is not a stack — measured beside
+// the short `-a` in the same spec set, where it is withheld. That is the same
+// predicate `-s` answers with, so the two are asked of one field.
+//
+// Visible, and not only in the status: `git checkout --force<TAB>` closes the
+// word and adds a space on `/bin/zsh` against this machine's own functions,
+// and offered nothing here.
+func (a *argumentsState) offeredBack(name string) bool {
+	if name == "" || name != a.cursorOption {
+		return false
+	}
+	spec := a.optionNamed(name)
+	if spec == nil {
+		return false
+	}
+	switch spec.style {
+	case optArgDirect, optArgOptDirect:
+		return false
+	case optArgSeparate:
+		return true
+	}
+	return !a.stackInProgress
 }
 
 // excluded is whether something already on the line shut this option off. The
@@ -580,19 +646,56 @@ func (a *argumentsState) reportLine(r *interp.Runner, names []string) int {
 }
 
 // reportStack is `-s`: whether a stack of single-letter options is being
-// continued at the cursor.
+// continued at the cursor, and — in the parameter it names — the one shape
+// where `_arguments` should close the word rather than go on stacking.
 //
-// Measured: `uname -` with `-s` in force answers 1, and `uname -a` answers 0
-// with the named parameter left empty. Nothing is offered on the strength of
-// it here — see comparguments.go, where the gap is written down.
+// Measured on zsh 5.9.2: `uname -` with `-s` in force answers 1, `uname -a`
+// answers 0, and `uname --a` answers 1 — a long option is not a stack. The
+// parameter is empty in all three, and in every one of the eighteen shipped
+// traces; the one line that fills it is a stack of **exactly one letter**
+// whose option takes its argument as a separate word:
+//
+//	specs `-n[next]:nx:` `-a[plain]` `-p[proc]`, with -s
+//
+//	cmd -<TAB>    1, single=          not a stack yet
+//	cmd -n<TAB>   0, single=next      one letter, and its argument is a word
+//	cmd -a<TAB>   0, single=          one letter, and no argument
+//	cmd -an<TAB>  0, single=          two letters, so the stack goes on
+//	cmd -na<TAB>  0, single=
+//
+// `_arguments` reads `next` there and writes `compadd -Q - "$PREFIX$SUFFIX"`,
+// which is why the same row is the one where `-O` offers the option back; see
+// offeredBack. The `direct` and `equal` values `_arguments` also tests for
+// were not produced by any spec form asked here — `-d-`, `-f+`, `-o=` and
+// `-e=-` each answer with an empty parameter — so they are left unwritten
+// rather than guessed at.
 func (a *argumentsState) reportStack(r *interp.Runner, cs *completionState, names []string) int {
 	if len(names) < 1 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
-	r.SetVar(names[0], "")
+	r.SetVar(names[0], a.singleOption())
+	return boolStatus(a.stackInProgress)
+}
+
+// continuingAStack is that question asked of the word under the cursor: a
+// `-x…` under `-s`, where a long option and a lone `-` are not.
+func (a *argumentsState) continuingAStack(cs *completionState) bool {
 	word := cs.prefix
-	stacked := a.stacking && len(word) > 1 &&
+	return a.stacking && len(word) > 1 &&
 		(word[0] == '-' || word[0] == '+') && word[1] != '-'
-	return boolStatus(stacked)
+}
+
+// singleOption is the value `-s` writes into the parameter it names: `next`
+// where the stack is one letter whose argument is its own word, and nothing
+// otherwise.
+func (a *argumentsState) singleOption() string {
+	if !a.stackInProgress || len(a.cursorOption) != 2 {
+		return ""
+	}
+	if spec := a.optionNamed(a.cursorOption); spec != nil &&
+		spec.style == optArgSeparate {
+		return "next"
+	}
+	return ""
 }

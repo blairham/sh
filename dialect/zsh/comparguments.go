@@ -167,11 +167,18 @@ type argumentsState struct {
 	// cursorIsOption records that the word being typed is already a whole
 	// option the specs know — see analyze, where the measurement is.
 	cursorIsOption bool
-	here           []int    // indices into args of the specs applying at the cursor
-	line           []string // the normal arguments, `$line`
-	optArgs        map[string]string
-	spent          map[string]bool // option names already on the line
-	shutOff        map[string]bool // what an option on the line excluded
+	// cursorOption is that option's name, where the word is exactly it. It
+	// is the one spent option that may still be offered — see offeredBack.
+	cursorOption string
+	// stackInProgress is whether the word under the cursor is a stack of
+	// single-letter options being continued: what `-s` answers, and half of
+	// what decides offeredBack.
+	stackInProgress bool
+	here            []int    // indices into args of the specs applying at the cursor
+	line            []string // the normal arguments, `$line`
+	optArgs         map[string]string
+	spent           map[string]bool // option names already on the line
+	shutOff         map[string]bool // what an option on the line excluded
 }
 
 // defaultArgumentsMatcher is what `-M` answers when `_arguments` was given no

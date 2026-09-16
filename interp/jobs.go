@@ -1866,6 +1866,17 @@ func (r *Runner) waitableByIdent(pid int) []*Job {
 	if len(jobs) > 0 {
 		return jobs
 	}
+	// A process substitution's body, where `$!` named one. Only by number,
+	// which is the only way a script can reach it. See
+	// Semantics.ProcessSubstitutionIsTheLastBackgroundJob.
+	for _, j := range r.procSubJobs {
+		if j.Ident() == pid {
+			jobs = append(jobs, j)
+		}
+	}
+	if len(jobs) > 0 {
+		return jobs
+	}
 	// The memory, and the axis asked *at the disagreement and nowhere else*:
 	// only a number this shell has actually reaped a job under is a number
 	// the columns answer differently, so a `wait` for a process that was

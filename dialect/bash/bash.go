@@ -1994,6 +1994,7 @@ func Semantics() interp.Semantics {
 	// gives the same behavior, but only a written answer says it was
 	// measured.
 	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
+	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No

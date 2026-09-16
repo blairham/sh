@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -381,6 +382,15 @@ type Runner struct {
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
 	procSubs []procSubPipe
+	// enclosingProcSubs are the substitutions of the commands this one runs
+	// inside — a function call's `f <(cmd)`, or the command a subshell,
+	// pipeline element or command substitution was cloned from. Handed to a
+	// child by number and never closed here: they belong to the command that
+	// made them, and a command inside a function finishing is not that
+	// command finishing. `f() { local p=$1; cat "$p"; }; f <(echo x)` is `x`
+	// in bash 5.3.20 and was a bad file descriptor here, because the `local`
+	// took the call's pipes with it on its way out.
+	enclosingProcSubs []procSubPipe
 	// heldProcSubs are the ones removeProcSubs could not finish with, because
 	// one of this shell's *own* descriptors was still open on the pipe —
 	// `exec > >(cmd)` is the shape. They keep until the shell itself ends,
@@ -1819,6 +1829,12 @@ type Runner struct {
 	// a second time can still answer, which six of the seven measured columns
 	// do. See Runner.reap and Semantics.WaitRemembersAReapedJob.
 	reaped []*Job
+	// procSubJobs is the process substitution bodies `$!` has named, where
+	// the dialect says a substitution does. Beside the table and never in it:
+	// `jobs` does not list them and a bare `wait` does not wait for them, and
+	// only a `wait` naming the number reaches one. Bounded as reaped is. See
+	// Semantics.ProcessSubstitutionIsTheLastBackgroundJob.
+	procSubJobs []*Job
 	// lastJobPID is `$!`, which is a *value* and not a reference to a job.
 	//
 	// Separate from jobOrder because the two stop being the same thing the
@@ -2995,6 +3011,10 @@ func (r *Runner) clone() *Runner {
 	// `cat <(echo one) <(echo two)` reported a bad file descriptor for the
 	// half it had already opened.
 	c.procSubs = nil
+	// But the descriptors are still the subshell's to hand on, as a fork's
+	// copy of them would be: `f() { cat "$1" | cat; }; f <(echo x)` is `x` in
+	// bash 5.3.20. Handed on, never closed — see enclosingProcSubs.
+	c.enclosingProcSubs = append(slices.Clone(r.enclosingProcSubs), r.procSubs...)
 	// And the same for the ones the shell is still holding a descriptor onto.
 	// They belong to whichever shell opened them: a subshell must not close
 	// its parent's pipe on the way out, nor wait for a body the parent is
@@ -4690,7 +4710,22 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// wrong: `echo hi > >(tr a-z A-Z)` never reaches an exec at all, so the
 	// pipe stayed open, `tr` waited for an end-of-file that was never coming,
 	// and the substitution simply produced nothing.
-	defer func() { r.removeProcSubs(r.takeProcSubs()) }()
+	//
+	// Only this command's own. Whatever was pending when it started is the
+	// enclosing command's — the call a function body is running inside — and
+	// is set aside for the length of this one and put back after it, so that
+	// the call still holds its pipes for the next command in the body.
+	enclosing, enclosingBefore := r.procSubs, r.enclosingProcSubs
+	if len(enclosing) > 0 {
+		r.enclosingProcSubs = append(slices.Clone(enclosingBefore), enclosing...)
+		r.procSubs = nil
+	}
+	defer func() {
+		r.removeProcSubs(r.takeProcSubs())
+		if len(enclosing) > 0 {
+			r.procSubs, r.enclosingProcSubs = enclosing, enclosingBefore
+		}
+	}()
 	// `=cmd` is resolved across the whole command before any of it is
 	// expanded, which is measured rather than assumed: `echo [[a == a]]`
 	// reports the `==` and never reaches the `[[a`, so zsh has finished this

@@ -2249,6 +2249,27 @@ type Semantics struct {
 	// script that runs under a preset which has not chosen — including
 	// before its first job, where the read is exactly the ordinary one.
 	LastBackgroundPidIsZeroBeforeAnyJob Answer
+	// ProcessSubstitutionIsTheLastBackgroundJob makes a process substitution
+	// set `$!` to its own body, which `wait "$!"` then waits for and reports
+	// the status of. bash alone.
+	//
+	// Measured 2026-09-16, script files under `env -i`:
+	//
+	//	                     cat <(exit 3) >/dev/null; wait $!; echo $?
+	//	                     : >(exit 5); wait $!; echo $?
+	//	                     sleep 0 & p=$!; cat <(:); [ "$p" = "$!" ]
+	//	bash 5.3.20          3   5   $! changed
+	//	zsh 5.9.2            127 127 $! unchanged (it is still 0)
+	//	ksh93u+ 2012         0   5   $! unchanged
+	//
+	// The body is not a job in any other sense, in bash either: `jobs` does
+	// not list it and a bare `wait` does not wait for it. So it is recorded
+	// beside the table and never in it — see Runner.procSubJobs.
+	//
+	// Read without asking, for LastBackgroundPidIsZeroBeforeAnyJob's reason:
+	// an unanswered field here would have to refuse every process
+	// substitution, and No is the reading of every column but one.
+	ProcessSubstitutionIsTheLastBackgroundJob Answer
 	// LastBackgroundPidIsUnsetBeforeAnyJob makes `$!` an *unset* parameter
 	// before a background command has been started, so `set -u` is fatal
 	// about it.

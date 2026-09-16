@@ -985,6 +985,7 @@ func Semantics() interp.Semantics {
 	// not set` at 2, so the parameter is unset rather than zero.
 	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
 	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
+	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	// A `jobs` listing keeps a job that has already ended, and shows the
 	// `&`-started command's own text.
 	s.JobsListNewestFirst = interp.Yes

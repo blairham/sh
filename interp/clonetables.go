@@ -334,6 +334,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// and not about the field: `reap` appends, and an append into an array
 	// the parent still holds is the shape this whole file exists to prevent.
 	c.reaped = slices.Clone(r.reaped)
+	c.procSubJobs = slices.Clone(r.procSubJobs)
 	c.aroundFunctionCalls = slices.Clone(r.aroundFunctionCalls)
 	c.freezeAfter = slices.Clone(r.freezeAfter)
 

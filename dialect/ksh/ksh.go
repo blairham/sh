@@ -2166,6 +2166,7 @@ func Semantics() interp.Semantics {
 	// which is what makes ksh93's empty a *set* parameter with no value where
 	// zsh's is a value.
 	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
+	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.Yes

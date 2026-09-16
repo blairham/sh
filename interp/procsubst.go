@@ -93,6 +93,12 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	if kind == syntax.ProcSubstOut {
 		sub.Stdout = r.Stdout
 	}
+	// The body is parsed on its own and counts from one, and the script it
+	// was written in did not start there: `cat <(echo $LINENO)` on line 3 is
+	// 3 in bash 5.3.20, zsh 5.9.2 and ksh93u+, and was 1 here in every
+	// dialect. The same offset a command substitution's body carries — see
+	// Runner.lineBase.
+	sub.lineBase = r.lineBase + int(span.Pos.Line) - 1
 
 	// The end this shell keeps is counted rather than closed on the body's
 	// return, and the count starts at one for the body itself. What else can
@@ -130,14 +136,20 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	}
 	keep.opened(ends.shell)
 
+	job := r.procSubJob()
+	status := internalErrorStatus
 	r.spawn(func() {
 		// Through the clone, which this goroutine owns: the record of
 		// the open that the gate already allowed.
 		sub.emit(ctx, Event{Kind: EventAccess, Action: action})
-		if _, err := sub.Run(ctx, f); err != nil {
+		var err error
+		if status, err = sub.Run(ctx, f); err != nil {
 			sub.diagf("%v\n", err)
 		}
 	}, func() {
+		if job != nil {
+			job.finish(status)
+		}
 		// However the goroutine ended: this end closing is the end-of-file
 		// the far side is waiting for — the command's, for `<(cmd)`, and the
 		// body's own reader for `>(cmd)` — and skipping it would leave
@@ -229,6 +241,11 @@ func (r *Runner) substBody(span syntax.Span) (*syntax.File, bool) {
 // with nothing to say so.
 func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	sub := r.clone()
+	// A substitution's body is not handed the enclosing commands' ends,
+	// which clone gave it: the body of a second `>(cmd)` holding the first
+	// one's writing end in every command it runs is the `tee >(cat)` hang
+	// newProcSubPipe exists to rule out.
+	sub.enclosingProcSubs = nil
 	sub.inheritJobs(jobBoundarySubstitution)
 	// **Which input the body reads is one question, asked once.** `<(cmd)`
 	// and `=(cmd)` keep what this chooses; `>(cmd)` replaces it in procSub
@@ -1317,4 +1334,39 @@ func (r *Runner) joinBodies() {
 			pipe.waitAndFlush()
 		}
 	}
+}
+
+// procSubJob records a process substitution's body as `$!`, where the dialect
+// says a substitution sets it, and returns the job its status is reported
+// through. nil everywhere else, which leaves `$!` alone.
+//
+// Not in the table: bash's `jobs` does not list the body and its bare `wait`
+// does not wait for it, so it lives in procSubJobs and a `wait` naming the
+// number is the one thing that reaches it. See
+// Semantics.ProcessSubstitutionIsTheLastBackgroundJob.
+func (r *Runner) procSubJob() *Job {
+	if r.sem().ProcessSubstitutionIsTheLastBackgroundJob != Yes {
+		return nil
+	}
+	job := &Job{
+		done:     make(chan struct{}),
+		ready:    make(chan struct{}),
+		started:  make(chan struct{}),
+		stopNote: make(chan struct{}),
+		ident:    r.inventJobIdent(),
+	}
+	// Settled here, on the shell's goroutine, because the body will never
+	// have a process to settle it with and `wait` reads it the moment `$!`
+	// names the job — the same reason `&` waits for its job to be ready
+	// before it returns.
+	job.settleNoPID()
+	r.setLastJob(job)
+	r.procSubJobs = append(r.procSubJobs, job)
+	if extra := len(r.procSubJobs) - reapedJobsKept; extra > 0 {
+		for i := range r.procSubJobs[:extra] {
+			r.procSubJobs[i] = nil
+		}
+		r.procSubJobs = append(r.procSubJobs[:0], r.procSubJobs[extra:]...)
+	}
+	return job
 }

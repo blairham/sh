@@ -63,3 +63,27 @@ printf 'local LV=[%s]\n' "${LV-UNSET}"
 g() { CV=1 command true; }
 g
 printf 'command CV=[%s]\n' "${CV-UNSET}"
+
+# A function may not be named after a special builtin here, and the refusal
+# is the parser's: `Syntax error: Bad function name` at 2, before anything on
+# the line runs. #2662 recorded this as a two-against-two split with no tier
+# to hold it — bash and zsh define the function, ksh93 and dash refuse — and
+# measured more closely it is not one. ksh93 refuses **when the definition
+# runs**, with `invalid function name` at 1, so `echo before` on the same line
+# prints there and not here; bash, zsh and BusyBox ash define it. Three
+# answers, and dash is alone in its own, which is what this tier asks
+# (measured 2026-09-16).
+#
+# Through `eval` in a subshell, because a parse refusal in the file itself
+# would end the file.
+try() { ( eval "$1" ) 2>&1; printf '  -> %s\n' "$?"; }
+try 'set() { echo fn; }; echo defined'
+try 'export() { echo fn; }; echo defined'
+try ':() { echo fn; }; echo defined'
+try 'eval() { echo fn; }; echo defined'
+try 'return() { echo fn; }; echo defined'
+try 'echo before; shift() { echo fn; }'
+
+# The control: `cd` is a regular builtin, so the same line defines a function
+# in every column and the function is what runs.
+try 'cd() { echo fn; }; cd /; echo defined'

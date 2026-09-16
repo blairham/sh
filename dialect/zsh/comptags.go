@@ -146,7 +146,7 @@ func (t *tagsState) nextLabel(r *interp.Runner, names []string) int {
 	}
 	tag := names[0]
 	key := itoa(t.at) + ":" + tag
-	if !t.requested(tag) {
+	if !t.requested(tag) || t.labeled[key] {
 		r.SetVar(names[2], "")
 		return 1
 	}

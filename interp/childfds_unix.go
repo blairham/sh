@@ -5,7 +5,10 @@
 
 package interp
 
-import "os"
+import (
+	"os"
+	"slices"
+)
 
 // The layout constants firstExtraFd and maxInheritedFd live in
 // inheritedfds.go, because they describe both directions of the same table.
@@ -143,7 +146,7 @@ func (r *Runner) fileTable(asACommand bool) []*os.File {
 	// hand the writing end to the `cat` reading the other side of it and the
 	// body would never see end-of-file, which is the failure /dev/fd process
 	// substitution was rejected for the first time round. See newProcSubPipe.
-	for _, p := range r.procSubs {
+	for _, p := range r.handedProcSubs() {
 		if p.hold == nil {
 			continue
 		}
@@ -163,7 +166,7 @@ func (r *Runner) fileTable(asACommand bool) []*os.File {
 			files[fd-firstExtraFd] = f
 		}
 	}
-	for _, p := range r.procSubs {
+	for _, p := range r.handedProcSubs() {
 		if p.hold == nil {
 			continue
 		}
@@ -303,4 +306,14 @@ func (r *Runner) dropExecOpened(files []*os.File) {
 			files[i] = nil
 		}
 	}
+}
+
+// handedProcSubs is every substitution whose end a command this shell runs is
+// given: this command's own, and those of the commands it is running inside.
+// See Runner.enclosingProcSubs.
+func (r *Runner) handedProcSubs() []procSubPipe {
+	if len(r.enclosingProcSubs) == 0 {
+		return r.procSubs
+	}
+	return append(slices.Clone(r.enclosingProcSubs), r.procSubs...)
 }

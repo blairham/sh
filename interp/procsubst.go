@@ -93,6 +93,12 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	if kind == syntax.ProcSubstOut {
 		sub.Stdout = r.Stdout
 	}
+	// The body is parsed on its own and counts from one, and the script it
+	// was written in did not start there: `cat <(echo $LINENO)` on line 3 is
+	// 3 in bash 5.3.20, zsh 5.9.2 and ksh93u+, and was 1 here in every
+	// dialect. The same offset a command substitution's body carries — see
+	// Runner.lineBase.
+	sub.lineBase = r.lineBase + int(span.Pos.Line) - 1
 
 	// The end this shell keeps is counted rather than closed on the body's
 	// return, and the count starts at one for the body itself. What else can
@@ -235,6 +241,11 @@ func (r *Runner) substBody(span syntax.Span) (*syntax.File, bool) {
 // with nothing to say so.
 func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	sub := r.clone()
+	// A substitution's body is not handed the enclosing commands' ends,
+	// which clone gave it: the body of a second `>(cmd)` holding the first
+	// one's writing end in every command it runs is the `tee >(cat)` hang
+	// newProcSubPipe exists to rule out.
+	sub.enclosingProcSubs = nil
 	sub.inheritJobs(jobBoundarySubstitution)
 	// **Which input the body reads is one question, asked once.** `<(cmd)`
 	// and `=(cmd)` keep what this chooses; `>(cmd)` replaces it in procSub

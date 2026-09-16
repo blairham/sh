@@ -19051,6 +19051,37 @@ or not.
 
 Unsetting a function that *is* there is quiet in all four.
 
+**`UnsetReachesTheFunctionTable`** — bash yes · dash no · ksh93 no · zsh no
+
+Lets a plain `unset NAME` — no `-f`, no `-v` — remove a *function* when
+the name holds no parameter. True in bash alone, and the one column on
+one side of a seven-column panel: bash 5.3.20, the same binary under
+argv[0] `sh` and bash 3.2.57 all answer 127 to the call after `unset b`,
+while zsh 5.9.2, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0
+all go on running the function at 0. Every column continued, so the
+status is the whole of the answer.
+
+One table per call, the parameter table first: a name that is both takes
+two `unset`s. "Holds a parameter" is the **declaration** rather than the
+value — `declare a`, `declare -i b`, `declare -a c`, `declare -A d`,
+`declare -l`, `declare -x`, `export e` and a bare `local` each take the
+first turn and leave the function standing. A name reference is resolved
+and does not itself count.
+
+Asked only where the name has a function and holds no parameter, which is
+the only shape the panel disagrees about — everywhere else a plain
+`unset` is a parameter's removal in all seven columns.
+
+The route passes through the readonly-function refusal rather than around
+it, so `readonly -f b; unset b` is `unset: b: cannot unset: readonly
+function` at 1 with the body still there. See
+`FunctionAttributeLetters`, which is what makes that freeze exist at all.
+
+One column outside the five presets disagrees, and it is recorded rather
+than followed: bash 3.2.57 consults the freeze from `unset -f` but not
+from the plain spelling, so `readonly -f b; unset b` removes a frozen
+function there at status 0. 5.3.20 is what the bash preset is.
+
 **`UnsetNameOperands`** — bash AnythingIsAName · dash PlainNamesOnly · ksh93 PlainNamesOnly · zsh NamesAndPositionals
 
 Is that question for `unset`, and is a separate field because two

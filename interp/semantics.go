@@ -9098,7 +9098,7 @@ type Semantics struct {
 	// already tests for the parenthesised spelling. The two spellings share
 	// that function and a file that will not open is reported alike by both.
 	//
-	// Asked only once the form has been recognised, so the dialects that do
+	// Asked only once the form has been recognized, so the dialects that do
 	// not read a file this way are not asked at every `${ ` they expand, and
 	// only for the blank spelling: `${| <f ;}` hands back `$REPLY`, which a
 	// redirection does not write.

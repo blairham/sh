@@ -12120,6 +12120,26 @@ type Semantics struct {
 	// define and run it, and dash never parses the definition at all.
 	PunctuatedFunctionNameIsRefused Answer
 
+	// DisciplineFunctionIsAVariableHook reads `function g.get { … }` as a
+	// hook on the variable `g` rather than as a function anybody calls by
+	// that name — and the same for `.set`, `.append` and `.unset`, the four
+	// events a variable has.
+	//
+	// It stands in front of PunctuatedFunctionNameIsRefused rather than
+	// beside it, because in the one column that answers yes the refusal is
+	// still right for every *other* dotted name: `function ns.thing` there
+	// is `ns.thing: invalid discipline function` and fatal, exactly as it is
+	// here. What the yes changes is the set of names the refusal fires on,
+	// which is four suffixes wide (#3033).
+	//
+	// bash 5.3.20 and zsh 5.9.2 define an ordinary function whose name has a
+	// dot in it and never fire it for a variable; dash will not parse the
+	// definition at all. So no is both the preset and three of the four
+	// columns, and the hooks cost nothing at all where nobody has defined
+	// one — see interp/discipline.go, where the read path's first question
+	// is a nil map.
+	DisciplineFunctionIsAVariableHook Answer
+
 	// DirectoryOnPathIsACandidate keeps a directory the PATH search found as
 	// the failed candidate when no later entry runs, so the report names the
 	// directory rather than saying the command was never found.
@@ -14836,7 +14856,11 @@ func PosixSemantics() Semantics {
 		APrefixedPathEmptiesTheCommandHash: Yes,
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
-		SetHasTraceLetters:              No,
+		// And POSIX has no discipline functions either. Three of the four
+		// columns define an ordinary function and never fire it for a
+		// variable, so the preset is the one that claims nothing.
+		DisciplineFunctionIsAVariableHook: No,
+		SetHasTraceLetters:                No,
 		// The standard's `set` has no -t and neither does its `sh`, so the
 		// preset follows the text; the two shells that grew the letter
 		// override. dash — the closest reading of the standard here — is the

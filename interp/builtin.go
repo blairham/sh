@@ -1746,7 +1746,8 @@ func (r *Runner) setOption(name string, on bool) bool {
 // either, and unsetting a function that is there is quiet in all four.
 func (r *Runner) unsetFunction(name string) int {
 	d := r.diag()
-	if !isPlainName(name) && r.ask(r.sem().UnsetFunctionChecksTheName, "`unset -f` judging the name it was given") {
+	if !isPlainName(name) && !r.dottedFunctionNameIsWellFormed(name) &&
+		r.ask(r.sem().UnsetFunctionChecksTheName, "`unset -f` judging the name it was given") {
 		r.diagf("%s\n", Wording(d.UnsetBadFunctionName, "unset: %[1]s: invalid function name", name))
 		return 1
 	}
@@ -2285,6 +2286,22 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 // copies of this, which is how one of them ends up forgetting a table.
 func (r *Runner) unsetName(name string) {
 	name = r.throughNameref(name)
+	// The `.unset` discipline runs *before* the name goes, which is measured
+	// rather than convenient: `u=here; function u.unset { echo "$u"; };
+	// unset u` prints `here` there, so the hook reads the value it is about
+	// to lose. A name nothing has set fires nothing at all — the event is
+	// about a variable going away, and one that was never there does not go.
+	// See interp/discipline.go.
+	//
+	// Behind the map check, because the existence test is a *read*: it runs
+	// a produced parameter's producer, and `unset RANDOM` asking the
+	// generator for a number it then throws away is a side effect nobody
+	// asked for. Nothing here has a discipline until something defines one.
+	if r.disciplined != nil {
+		if _, set := r.storedValue(name, false); set {
+			r.disciplineUnsetName(name)
+		}
+	}
 	if name == "PATH" {
 		// The same rule as an assignment to it, and for the same reason: a
 		// search nobody can repeat is not an answer worth keeping. Measured,

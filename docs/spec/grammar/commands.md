@@ -3011,6 +3011,11 @@ and run the function, dash refuses the name while parsing
 definition** — `invalid function name` for the dash, and its own
 sentence, `invalid discipline function`, for the dot (measured:
 `cmd/function-name-with-a-dash`, `cmd/function-name-with-a-dot`).
+The dot's sentence is about the *suffix* rather than about the dot:
+`g.get`, `g.set`, `g.append` and `g.unset` all define there, because each
+names one of the four events a variable has — see
+`interp.Semantics.DisciplineFunctionIsAVariableHook`. `a.b` is refused
+because `b` is not one of them.
 Parsing the name is therefore common ground for every shell but dash,
 and that is all the grammar claims. Grammar flag:
 `FunctionNamePunctuation` (on in the core, off for `posix` and `dash`);

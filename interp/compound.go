@@ -914,7 +914,15 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// define: ksh93 parses `f-g()` and stops the script at the definition,
 	// with a different sentence for a dot — a discipline function is its own
 	// concept there and `a.b` does not name one.
-	if !isPlainFuncName(c.Name) &&
+	//
+	// A dotted name is asked one question first, because in the column that
+	// refuses these the refusal is about the *suffix*: `function g.get` is a
+	// discipline for the variable `g` and defines, where `function ns.thing`
+	// is the invalid one. Refusing both is what made this the issue it was —
+	// the diagnostic and its fatality were already right and the set of
+	// names they fired on was four suffixes too wide (#3033). See
+	// interp/discipline.go.
+	if !isPlainFuncName(c.Name) && !r.definesADiscipline(c.Name) &&
 		r.ask(r.sem().PunctuatedFunctionNameIsRefused, "a function name carrying punctuation being refused") {
 		wording, fallback := r.diag().FunctionNameInvalid, "%[1]s: invalid function name"
 		if strings.ContainsRune(c.Name, '.') && r.diag().FunctionNameDiscipline != "" {

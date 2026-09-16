@@ -2589,6 +2589,20 @@ type Runner struct {
 	lastSubst lastSubstitution
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
+	// disciplined names every variable a discipline function has ever been
+	// defined for, so that the read path can find out there is nothing to
+	// run with one map lookup instead of building `name.get` and asking the
+	// function table for it. A hint rather than the truth: `unset -f g.get`
+	// takes the hook away by taking the function away, and the name left
+	// behind here only costs the lookup that then finds nothing. See
+	// interp/discipline.go.
+	disciplined map[string]bool
+	// disciplineRunning is the hooks on the stack right now, by their full
+	// `name.event` spelling — the guard that keeps a `.get` which reads its
+	// own variable from being a loop. Per event and not per variable,
+	// measured: a `.get` that *assigns* its variable does fire that
+	// variable's `.set`.
+	disciplineRunning map[string]bool
 	// mathFuncs holds the `functions -M` registrations: names arithmetic may
 	// call, each naming a shell function to run. mathOrder is the order they
 	// arrived in, because the listing walks it backwards. See mathfunc.go.
@@ -6763,6 +6777,18 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.refuseReadonly(name, form) {
 		return
 	}
+	// A `.set` discipline sees the value on its way in and may replace it —
+	// `function s.set { .sh.value="<${.sh.value}>"; }; s=first` stores
+	// `<first>`. Here rather than at the assignment statement because every
+	// way of writing a scalar has to agree: measured, `typeset v=x`, `read
+	// v` and `for v in a b` all fire it, and each of those reaches this
+	// store without going through Runner.assign at all.
+	//
+	// After the readonly refusal, so a write the shell will not take does
+	// not run a hook about it. See interp/discipline.go.
+	if v, ran := r.disciplineWrite(name, disciplineSet, "", value); ran {
+		value = v
+	}
 	// A name holding an array or a table is not a name a scalar simply lands
 	// on — see scalarOverCompound, which either takes the write or takes the
 	// compound away so that the store below is the whole of the name.
@@ -6957,6 +6983,32 @@ func (r *Runner) getVar(name string) (string, bool) { return r.varValue(name, tr
 func (r *Runner) storedVar(name string) (string, bool) { return r.varValue(name, false) }
 
 func (r *Runner) varValue(name string, folded bool) (string, bool) {
+	if r.disciplined == nil {
+		// Nothing has ever defined a discipline function in this shell,
+		// which is every shell but the handful that have, and every read in
+		// the ones that do until the definition runs. One nil check rather
+		// than a name built and a table asked on the hottest path there is.
+		return r.storedValue(name, folded)
+	}
+	// A `.get` runs before the store is read and may replace what the read
+	// answers — but only if it assigned `${.sh.value}`, which is not the
+	// same question as what the parameter ends up holding. See
+	// interp/discipline.go, where the order is measured: a hook that assigns
+	// its *own variable* is answered by the read that ran it.
+	//
+	// Set-ness stays the store's either way — measured, a `.get` on a name
+	// nothing has assigned fires and `${g-word}` still takes the word.
+	got, replaced := r.disciplineRead(r.throughNamerefName(name))
+	v, ok := r.storedValue(name, folded)
+	if replaced {
+		return got, ok
+	}
+	return v, ok
+}
+
+// storedValue is varValue with the discipline hooks left off: what the
+// tables, the producers and the environment say the name holds.
+func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 	// A read through a name reference lands on what it points at. Only a
 	// plain-name target here: a reference aimed at an *element* has its
 	// subscript read as arithmetic, and arithmetic reaches command
@@ -7581,7 +7633,20 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			r.appendScalarToArray(a.Name, old, value)
 			return
 		}
+		lift := func() {}
 		if a.Append {
+			// `+=` is its own event. The hook is given **only the part being
+			// appended** — `p=base; p+=more` enters `p.append` with
+			// `${.sh.value}` as `more` — and rewriting it there is what makes
+			// `p` `base<more>`. Measured on ksh93u+ 2012-08-01.
+			if v, ran := r.disciplineWrite(a.Name, disciplineAppend, "", value); ran {
+				value = v
+			}
+			// And an append fires *only* that event: with a `.set` discipline
+			// and no `.append` one, `p+=more` runs nothing. The store below
+			// is the same one a plain assignment ends at, so the mark is what
+			// keeps the two events apart.
+			lift = r.suppressDiscipline(a.Name, disciplineSet)
 			// The *stored* text, which is what an append joins — see
 			// storedVar, and Semantics.CaseAttributeFoldsWhenRead for the
 			// shell where that is not what a read answers.
@@ -7601,6 +7666,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// join is what is left when the name carries no attribute.
 			v, ok := r.appendedValue(a.Name, old, value)
 			if !ok {
+				lift()
 				return
 			}
 			value = v
@@ -7610,6 +7676,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// `delete(r.Arrays, a.Name)` written here, which made the assignment
 		// *statement* the only spelling that got it right (#1645).
 		r.setVarAs(a.Name, value, assignedAlone)
+		lift()
 		if r.allexport {
 			// `set -a`: an assignment marks the name for the environment as
 			// well as setting it.

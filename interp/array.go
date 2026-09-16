@@ -414,6 +414,17 @@ func (r *Runner) markIndexed(name string) {
 // has both, and that is why one rule needs two spellings to show it.
 func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 	name = r.throughNameref(name)
+	// An element write is a `.set` event with a subscript on it — measured,
+	// `a=(x y); a[1]=z` enters `a.set` with `${.sh.name}` as `a` and
+	// `${.sh.subscript}` as `1`, and a hook that rewrites `${.sh.value}` is
+	// what the element ends up holding. The mark stays on for the store
+	// because that store keeps the whole name's scalar view in step through
+	// setVarAs, where the same event would otherwise fire a second time with
+	// no subscript at all. See interp/discipline.go.
+	if v, ran := r.disciplineWrite(name, disciplineSet, sub, value); ran {
+		value = v
+		defer r.suppressDiscipline(name, disciplineSet)()
+	}
 	if r.subscriptSplicesCharacters(name) {
 		// The name is holding a string and this dialect's subscript names one
 		// of its characters, so the value is spliced in rather than an

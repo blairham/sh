@@ -14782,6 +14782,39 @@ Stops the script when a function whose name carries `-` or `.` is
 defined. ksh93 alone: bash and zsh define and run it, and dash never
 parses the definition at all.
 
+**`DisciplineFunctionIsAVariableHook`** — bash no · dash no · ksh93 yes · zsh no
+
+Reads `function g.get { … }` as a hook on the variable `g` rather than as
+a function anybody calls by that name, and the same for `.set`, `.append`
+and `.unset` — the four events a variable has. It stands in front of
+`PunctuatedFunctionNameIsRefused` rather than beside it: in the one column
+that says yes, the refusal is still right for every *other* dotted name.
+`function ns.thing` there is `ns.thing: invalid discipline function` and
+fatal, so what the yes changes is the set of names the refusal fires on,
+which is four suffixes wide.
+
+Measured against AT&T ksh93u+ 2012-08-01, 2026-09-15, and four of the
+answers are worth naming because they look like mistakes and are not:
+
+- `.get` is entered with `${.sh.value}` **empty**, not with the value the
+  read is about; a hook that leaves it alone lets the stored value
+  through, and one that assigns it — even to the empty string — replaces
+  the read. So what decides is whether the hook *assigned*, which is not
+  a question comparing values can answer.
+- The store is read **after** the hook: `function g.get { g=written; }`
+  makes the very read that ran it answer `written`.
+- `.append` is given only the part being appended — `p=base; p+=more`
+  enters `p.append` with `more` — and an append fires *only* that event.
+  A `.set` hook with no `.append` beside it never runs for `p+=more`.
+- A hook does not re-enter itself, and the guard is per *event*: a `.get`
+  that assigns its own variable does fire that variable's `.set`.
+
+`${.sh.name}`, `${.sh.subscript}` and `${.sh.value}` are the parameters a
+hook is entered with and exist only while one is running; `${.sh.fun}` and
+`${.sh.level}` are the function running now and its depth, and are not
+disciplines at all. They are dialect names rather than an axis — see
+dialect/ksh.
+
 **`ReadRequiresAVariableName`** — bash no · dash yes · ksh93 no · zsh no
 
 Refuses a bare `read`: dash's "arg count" at 2, where the other three

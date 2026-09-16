@@ -71,10 +71,23 @@ func (r *Runner) recordScriptStop(status int) {
 // bash 5.3.20 prints `bye st=2`, zsh 5.9.2 `bye st=1` and dash `bye st=2`, so
 // the handler runs and sees the syntax status the script died of.
 func (r *Runner) takeScriptStop() (status int, ok bool) {
-	if r.scriptStop == nil || !r.scriptStop.stopped.Swap(false) {
+	// A load before the swap, and it is not a micro-optimization: this runs
+	// at every command of every script, and an unconditional swap would be a
+	// write to a line a pipeline's elements share on each of them. The load
+	// is the common case — nothing has failed — and the swap happens once in
+	// the life of a shell that stops this way.
+	if r.scriptStop == nil || !r.scriptStop.stopped.Load() {
 		return 0, false
 	}
-	return int(r.scriptStop.status.Load()), true
+	status = int(r.scriptStop.status.Load())
+	// And the swap is still what takes it, because two shells may reach this
+	// at once and only one of them may stop on it. Read before the swap for
+	// the same reason: the shell that loses the race must not be the one that
+	// cleared the status out from under the winner.
+	if !r.scriptStop.stopped.Swap(false) {
+		return 0, false
+	}
+	return status, true
 }
 
 // holdScriptStop hides a pending stop for the length of a trap body and hands

@@ -278,6 +278,33 @@ wherever it stands, which agrees with neither on `${ echo a}b;}` — `a}b`
 in both shells and a syntax error here — or on `${ echo hi}`, which both
 shells refuse and this shell runs.
 
+### The body is a frame a `return` leaves
+
+Measured 2026-09-16 from script files under `env -i`, standard input the
+null device:
+
+    v=${ echo hi; return 42; }; printf '[%s] st=%s\n' "$v" "$?"; echo alive
+
+    bash 5.3.20   [hi] st=42  alive
+    ksh93u+       [hi] st=42  alive
+
+So the body is something to return from: the value is what it printed up
+to the `return`, the status is the operand, and the script carries on.
+The forked spelling is the control and answers the other way — `v=$(echo
+hi; return 42)` is `return: can only 'return' from a function or sourced
+script` at status 2 in bash, because there the body really is a shell of
+its own with no frame in it. Inside a function the body's `return` leaves
+the *body*: the function runs on.
+
+**A frame is not yet a scope here, and in bash it is both.** `local`,
+`declare` and `typeset` inside such a body declare a variable local to it
+in bash 5.3.20 — `x=outer; v=${ local x=in; printf %s "$x"; }` leaves `x`
+as `outer` there — where ksh93 lets the same `typeset` through to the
+shell's own name. This shell has the frame and not the scope, so a
+declaration in a body still writes the outer name; see the issue filed
+from this measurement, and `Runner.localizeReply`, whose `${| … ;}`
+corner is the same gap seen from the other side.
+
 ## `${(list)}` — the parenthesized body
 
 A `(` adjacent to the brace is a spelling of its own, and it belongs to

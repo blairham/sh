@@ -651,6 +651,27 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// the identical bug because the rule had not reached the resolution
 			// they shared (#1189).
 			path := r.atDir(name)
+			// `< /dev/stdin` and `< /dev/fd/0` are the command's own standard
+			// input, which is not the process's here: a here-string or a pipe
+			// into a function is a stream this shell holds and never put on
+			// descriptor 0, so opening the path read what the process was
+			// started with. `f() { read l < /dev/stdin; }; f <<<x` reads `x`
+			// in bash 5.3.20, zsh 5.9.2 and ksh93u+, and read nothing here
+			// (#3404). So it is the duplication `<&0` already is, and nothing
+			// is opened — the same reading `.` takes (#3402).
+			if flags == os.O_RDONLY && fdVar == "" && (path == "/dev/stdin" || path == "/dev/fd/0") {
+				if fd > 2 {
+					saveFds()
+				}
+				if err := r.dupFd(fd, "0", "", opened); err != nil {
+					r.diagf("%v\n", err)
+					r.status = r.diag().redirectFailureStatus()
+					r.redirErr = true
+					return closers, nil
+				}
+				r.redirWrote(fd)
+				continue
+			}
 			action := r.act(Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY})
 			// Unless the path is a pipe this shell made for a substitution in
 			// this very command: `cmd > >(inner)` redirects to a name the

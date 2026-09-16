@@ -298,7 +298,7 @@ func TestAPrintfEscapeOutsideTheLocaleEndsTheBuiltin(t *testing.T) {
 // `character not in range` zsh gives under `LC_ALL=C` — and ksh93 writes
 // `61 c3 a9 5a` there as everywhere, which is what the axis means by a shell
 // that never reads a locale.
-func TestAnEscapeInASingleByteCharsetIsTheCharsetsByte(t *testing.T) {
+func TestAnEscapeInALocalesCharsetIsTheCharsetsBytes(t *testing.T) {
 	charsetLocale := func(p OutsideLocaleEscapePolicy, locale string) func(*Runner) {
 		return func(r *Runner) {
 			sem := PosixSemantics()
@@ -336,10 +336,33 @@ func TestAnEscapeInASingleByteCharsetIsTheCharsetsByte(t *testing.T) {
 			locale: "en_US.ISO8859-15", src: `printf '%s' $'a\u20acZ|a\u00a4Z'`,
 			want: "a\xa4Z|" + `a\u00A4Z`, policy: OutsideLocaleEscapeWritten,
 		},
+		// A multibyte charset, which is #3029 and the reason the byte became
+		// bytes. Measured 2026-09-15 under `env -i` with `LC_ALL` and `LANG`
+		// both set, bash 5.3.20 and zsh 5.9.2 agreeing on every row.
 		{
-			name:   "a multibyte charset has no table here, so the escape stands",
+			name:   "a multibyte charset writes the halfwidth katakana in one byte",
 			locale: "ja_JP.SJIS", src: `printf '%s' $'a\uff9fZ'`,
-			want: `a\uFF9FZ`, policy: OutsideLocaleEscapeWritten,
+			want: "a\xdfZ", policy: OutsideLocaleEscapeWritten,
+		},
+		{
+			name:   "and the kanji in two",
+			locale: "ja_JP.SJIS", src: `printf '%s' $'a\u4e00Z'`,
+			want: "a\x88\xeaZ", policy: OutsideLocaleEscapeWritten,
+		},
+		{
+			name:   "the charset beside it stands the same kanji in a different pair",
+			locale: "zh_TW.Big5", src: `printf '%s' $'a\u4e00Z'`,
+			want: "a\xa4\x40Z", policy: OutsideLocaleEscapeWritten,
+		},
+		{
+			name:   "a character neither of them predates the euro for",
+			locale: "ja_JP.SJIS", src: `printf '%s' $'a\u20acZ'`,
+			want: `a\u20ACZ`, policy: OutsideLocaleEscapeWritten,
+		},
+		{
+			name:   "and the shell that reads no locale writes UTF-8 there too",
+			locale: "ja_JP.SJIS", src: `printf '%s' $'a\u4e00Z'`,
+			want: "a\u4e00Z", policy: OutsideLocaleEscapeEncoded,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

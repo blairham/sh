@@ -335,8 +335,9 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	// Opened *inside* the hiding above and closed before it, which is the
 	// order rather than a preference: a body that declares REPLY unwinds
 	// into the hidden name, and the outer one is put back over that. The
-	// hiding stays a thing of its own, because the column that has the
-	// spelling and no scope has the pipe form too.
+	// hiding stays a mechanism of its own because it says something a scope
+	// cannot — the body starts with **no** REPLY, set or unset, which is
+	// measured — and localizeReply has the rows.
 	closeScope := func() {}
 	if r.ask(r.sem().CurrentShellSubstitutionBodyIsAScope,
 		"a `${ … ;}` body being a variable scope of its own") {

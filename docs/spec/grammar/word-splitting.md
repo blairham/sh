@@ -357,6 +357,64 @@ decides nothing is a refusal a script cannot act on.
 An unquoted expansion of an empty value vanishes. Quoting it produces one
 empty field. All four shells agree.
 
+## A separator closes the field beside it, with nothing to show for it
+
+Measured 2026-09-16, script files under `env -i`, one bracketed field per
+argument:
+
+    v=" "; printf "[%s]" a${v}b        → [a][b]
+    v=" b"; printf "[%s]" a$v          → [a][b]
+    v="b "; printf "[%s]" ${v}c        → [b][c]
+    printf "[%s]" a$(printf " ")b      → [a][b]
+    v=""; printf "[%s]" a${v}b         → [ab]
+    v=" "; printf "[%s]" $v            → []
+
+bash 5.3.20, ksh93u+ 2012, dash 0.5.12 and BusyBox ash 1.37.0 answer every
+row alike, and zsh answers the command-substitution row with them — it does
+not split a parameter expansion at all, which is the row above it. So the
+separator is a **boundary in its own right**: splitting a value that is
+nothing but separators produces no field, and the text on either side of it
+still stops sharing one. The empty value is the control that says it is the
+separator doing it rather than the expansion having produced nothing.
+
+A *non-whitespace* separator at the edge is the same question answered by the
+splitter itself, since it writes the empty field: with `IFS=:` and `v=":"`,
+`a${v}b` is `[a][b]` in bash, ksh93 and dash. This implementation still
+writes one field there (`[ab]`) and the rows around it are also short — see
+the issue filed from this measurement.
+
+## The word a `-` or `+` substitutes is split like the result it is
+
+    set -- a b; v=x
+    printf "[%s]" ${v:+p q}            → [p][q]      one field in zsh
+    printf "[%s]" ${nope:-p q}         → [p][q]
+    printf "[%s]" ${v:+"$@" "$@"}      → [a][b][a][b]
+    IFS=: printf "[%s]" ${v:+"$@" "$@"} → [a][b a][b] in every column
+    printf "[%s]" ${v:+"p q"}          → [p q]
+    printf "[%s]" ${v:+p }             → [p]
+
+The word substitutes into an unquoted expansion's result, so what is written
+in it separates fields exactly as the same text in a value would. The lists
+inside it keep their own boundaries and that part is unanimous — the `IFS=:`
+row is what separates the two, since there the blank between the two `"$@"`
+groups is not a separator and every column writes three fields. Quoted text
+in the word is not split, and a separator at either end of the word opens no
+field of its own.
+
+zsh does not split an unquoted expansion, so it does not split this either:
+the axis is `SplitParamExpansion` and not one of its own.
+
+### A quoted empty word behind that separator is an axis
+
+    set -- a b; v=x
+    printf "[%s]" ${v:+p ""}      bash [p][]     dash [p][]     ash [p][]     ksh93 [p]
+    printf "[%s]" ${v:+"$@" ""}   bash [a][b][]  dash [a][b][]  ash [a][b][]  ksh93 [a][b]
+
+It is the one span carrying no text that still has to open the field the
+separator asked for, and ksh93 declines. `EmptyQuotesAfterASeparatorAreAField`
+carries it; zsh cannot reach the question, since nothing there splits the
+word in the first place.
+
 ## A value's backslash does not quote the separator behind it
 
     IFS=:
@@ -522,6 +580,7 @@ error in the other three:
 | --- | --- | --- | --- | --- | --- |
 | `SplitParamExpansion` | yes | yes | yes | **no** | unanswered |
 | `SplitCommandSubstitution` | yes | yes | yes | yes | **yes** |
+| `EmptyQuotesAfterASeparatorAreAField` | yes | yes | **no** | unreachable | yes |
 
 Two axes rather than one, because the panel shows the two moving
 independently. Naming them for the behavior rather than for zsh is what

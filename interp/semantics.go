@@ -57,6 +57,28 @@ type Semantics struct {
 	// splits an unquoted *command* substitution, so this is two fields and
 	// not one.
 	SplitParamExpansion Answer
+	// EmptyQuotesAfterASeparatorAreAField is whether a quoted empty word
+	// written behind a separator in the word a `-` or `+` substitutes opens a
+	// field of its own.
+	//
+	// Measured 2026-09-16, script files under `env -i`, with `set -- a b`,
+	// `v=x` and a function printing one bracketed field per argument:
+	//
+	//	                     ${v:+p ""}   ${v:+"$@" ""}
+	//	bash 5.3.20          [p][]        [a][b][]
+	//	dash 0.5.12          [p][]        [a][b][]
+	//	BusyBox ash 1.37.0   [p][]        [a][b][]
+	//	ksh93u+ 2012         [p]          [a][b]
+	//
+	// It is the one span with no text in it that still has to open the field
+	// the separator asked for, which is why it is a question of its own and
+	// not part of SplitParamExpansion.
+	//
+	// unpinned zsh: the question is only reachable where the word splits at
+	// all, and zsh does not split an unquoted expansion — `${v:+p ""}` is the
+	// single field `p ` there, separator and all. TestTheSubstitutedWordSplits
+	// in interp covers the axis over the values a dialect can hold.
+	EmptyQuotesAfterASeparatorAreAField Answer
 	// SplitCommandSubstitution field-splits an unquoted command
 	// substitution. True everywhere measured, including zsh.
 	//
@@ -16343,6 +16365,10 @@ const (
 func PosixSemantics() Semantics {
 	return Semantics{
 		SplitParamExpansion: Yes,
+		// 2.6.5's field splitting reads the expansion's result, and a quoted
+		// null is a field there: bash, dash and BusyBox ash all keep it, and
+		// ksh93 is the departure.
+		EmptyQuotesAfterASeparatorAreAField: Yes,
 		// 2.11 has the shell read its input and execute commands as it goes,
 		// and 2.14's `eval` "shall be read and executed by the shell" in the
 		// same way. So text that will not parse further stops the reading

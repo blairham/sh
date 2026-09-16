@@ -1345,6 +1345,13 @@ type Runner struct {
 	// still a valid pattern, so nothing failed and it matched the wrong
 	// things (#1596).
 	expandingNestedInner bool
+
+	// splitWordLiterals arms the literal text of one word for field
+	// splitting: the word a `-` or `+` substitutes is part of an unquoted
+	// expansion's result, so the blanks written in it separate fields. It is
+	// consumed by the loop that walks that word and cleared for everything
+	// inside it. See splittingTheSubstitutedWord.
+	splitWordLiterals splitLiterals
 	// nestedHeld is one nested expansion's fields, handed from the list half
 	// of a span's expansion to the scalar half so the inner runs once. See
 	// nestedHold.

@@ -135,6 +135,15 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	failed := r.expandErr
 	defer r.inWord(w)()
 
+	// The arming is for *this* word's own literal text and nothing inside
+	// it: a command substitution in the word runs a program whose words are
+	// expanded the ordinary way. See splittingTheSubstitutedWord.
+	splitting := r.splitWordLiterals
+	if splitting.on {
+		r.splitWordLiterals = splitLiterals{}
+		defer func() { r.splitWordLiterals = splitting }()
+	}
+
 	for i, s := range w.Spans {
 		if (r.expandErr && !failed) || r.ctl == controlExit {
 			break
@@ -167,7 +176,22 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 			b.add(s, parts)
 			continue
 		}
+		if !split && splitting.splits(r, s, text) {
+			// Text of the word a `-` or `+` substituted is part of an
+			// unquoted expansion's result and splits with it. See
+			// splittingTheSubstitutedWord.
+			split = true
+		}
 		if !split {
+			if text == "" && s.Quoting != syntax.Unquoted && b.separated() &&
+				r.ask(r.sem().EmptyQuotesAfterASeparatorAreAField,
+					"an empty quoted word behind a separator being a field of its own") {
+				// `${v:+p ""}` — the quoted nothing behind the blank is a
+				// field in bash, dash and BusyBox ash and is not one in
+				// ksh93. It is the one span that carries no text and still
+				// has to open the field the separator asked for.
+				b.flush()
+			}
 			b.text(text)
 			b.any = b.any || text != "" || s.Quoting != syntax.Unquoted
 			continue
@@ -184,7 +208,26 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// so ordinarily nothing is appended and nothing is started — which
 		// add answers, along with the one reading that is not "nothing":
 		// a distributive span with no elements takes the word with it.
+		// A separator at either end of what was split is a boundary in its
+		// own right, and the field it closes is closed even where nothing
+		// stands on the other side of it. `v=" "; printf "[%s]" a${v}b` is
+		// two fields in bash 5.3.20, ksh93u+, dash and BusyBox ash and was
+		// one here, because splitting a value that is nothing but separators
+		// produces no field and the text on either side went on sharing one.
+		// The same shape reaches an ordinary value with a separator at one
+		// end — `v=" b"; … a$v` and `v="b "; … ${v}c` — and, in every column
+		// including zsh, a command substitution whose output is blanks.
+		//
+		// A value that is *empty* is not this: `v=""; … a${v}b` is `ab` in
+		// all five, so it is the separator that closes the field rather than
+		// the expansion having produced no field.
+		if separatorEdge(text, ifs, set, true) {
+			b.separate()
+		}
 		b.add(s, r.tildeFlagElements(s, head, r.splitFieldsAsk(text, ifs, set)))
+		if separatorEdge(text, ifs, set, false) {
+			b.separate()
+		}
 	}
 
 	return b.result()
@@ -208,6 +251,11 @@ type wordFields struct {
 	all []string
 	// open is where the run of open fields begins. all[:open] is finished.
 	open int
+	// sep is a separator written in the word a `-` or `+` substituted, with
+	// nothing yet behind it: the fields it closed are finished, and the next
+	// thing to arrive opens a field of its own. Deferred so that a separator
+	// ending the word opens nothing. See wordFields.separate.
+	sep bool
 	// any is whether anything at all reached the word — a substitution that
 	// produced a field, or literal text, or a quoted empty span. Without it
 	// a word that expanded to nothing cannot be told from a word that was
@@ -223,9 +271,74 @@ func (b *wordFields) head() bool { return len(b.all) == 1 && b.all[0] == "" }
 
 // text joins literal or unsplit text onto every field still open.
 func (b *wordFields) text(t string) {
+	if t != "" {
+		b.flush()
+	}
 	for i := b.open; i < len(b.all); i++ {
 		b.all[i] += t
 	}
+}
+
+// separate ends the fields now open, so what comes next begins a new one.
+//
+// For a separator a script wrote inside the word a `-` or `+` substitutes.
+// Deferred rather than opened at once, because a separator that ends the word
+// opens nothing: `${v:+p }` is one field in bash, ksh93 and dash. And a
+// separator with nothing in front of it opens nothing either, which is the
+// leading half of the same rule.
+func (b *wordFields) separate() {
+	if b.any {
+		b.sep = true
+	}
+}
+
+// separated reports whether a separator is waiting for something to put in
+// the field behind it.
+func (b *wordFields) separated() bool { return b.sep }
+
+// flush opens the field a separator asked for, once something arrives to go
+// in it.
+func (b *wordFields) flush() {
+	if !b.sep {
+		return
+	}
+	b.sep = false
+	b.all = append(b.all, "")
+	b.open = len(b.all) - 1
+}
+
+// separatorEdge reports whether text begins (or ends) with IFS *whitespace*,
+// which is what says the field in front of it — or behind it — is finished
+// with nothing to show for the separator itself.
+//
+// Whitespace only, because that is the run the splitter absorbs: a
+// non-whitespace separator writes the empty field itself, and asking for one
+// here as well is the field twice. `IFS=:` over `a${v}b` with `v=":"` is two
+// fields in bash 5.3.20, ksh93u+ and dash, and the splitter's own empty is
+// the one that makes it two.
+func separatorEdge(text, ifs string, ifsSet, leading bool) bool {
+	if text == "" || ifsSet && ifs == "" {
+		return false
+	}
+	// The whole run of separators at that end, because one delimiter is a run
+	// of whitespace, at most one non-whitespace separator, and another run of
+	// whitespace — and a run holding the non-whitespace one has already
+	// written its own empty field.
+	whitespace := false
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if !leading {
+			c = text[len(text)-1-i]
+		}
+		if strings.IndexByte(ifs, c) < 0 {
+			break
+		}
+		if c != ' ' && c != '\t' && c != '\n' {
+			return false
+		}
+		whitespace = true
+	}
+	return whitespace
 }
 
 // add puts the fields one span produced into the word, by whichever of the
@@ -246,6 +359,7 @@ func (b *wordFields) lay(parts []string) {
 	if len(parts) == 0 {
 		return
 	}
+	b.flush()
 	b.any = true
 	b.text(parts[0])
 	if len(parts) == 1 {
@@ -270,6 +384,9 @@ func (b *wordFields) lay(parts []string) {
 // at all where `x${a}y` is the single word `xy` — and a field finished before
 // it still stands, `a=(1 2); b=(); x${a}z${^b}q` being the single word `x1`.
 func (b *wordFields) spread(parts []string) {
+	if len(parts) > 0 {
+		b.flush()
+	}
 	open := b.all[b.open:]
 	all := make([]string, 0, b.open+len(open)*len(parts))
 	all = append(all, b.all[:b.open]...)
@@ -603,7 +720,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 // is not what it came to — both of which leave the caller to carry on as
 // before. The test for which it came to is testFires, the same one
 // expandParam applies, so the two cannot drift apart.
-func (r *Runner) substitutedWordFields(s syntax.Span, head bool) ([]string, bool) {
+func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool) ([]string, bool) {
 	e := s.Param
 	if e.Arg == nil || e.Length || e.Indirect {
 		return nil, false
@@ -648,7 +765,61 @@ func (r *Runner) substitutedWordFields(s syntax.Span, head bool) ([]string, bool
 	//
 	// So the fields go back marked and the enclosing word matches them, in
 	// the one place it matches every other field.
+	defer r.splittingTheSubstitutedWord(s, sp)()
 	return r.tildeFlagFields(s, head, r.expandWordEscaped(e.Arg)), true
+}
+
+// splittingTheSubstitutedWord arms the literal text of the word a `-` or `+`
+// is about to substitute for field splitting, and returns the disarm.
+//
+// The fields the word produces are its own — a nested `"$@"` keeps its
+// boundaries, and that part is unanimous. What the panel splits on is the
+// text the *word itself* was written with: `set -- a b; v=x; printf "[%s]"
+// ${v:+"$@" "$@"}` is four fields in bash 5.3.20, ksh93u+ and dash and was
+// three here, and `${v:+p q}` is two there and was one here. Under `IFS=:`
+// each is three and one in every column, which is what says it is the split
+// and not the boundaries: the word is expanded and the result is split
+// exactly as `$w` holding the same text would be.
+//
+// Quoted text inside the word is not split — `${v:+"p q"}` is one field
+// everywhere — so this is armed per span in the loop that walks the word
+// rather than over the fields it came to, where the two are no longer
+// distinguishable.
+//
+// The answer is the axis an ordinary unquoted expansion is split by, read
+// through the same flag: zsh, which does not split one, does not split this,
+// and an assignment's right-hand side does not reach the question at all.
+func (r *Runner) splittingTheSubstitutedWord(s syntax.Span, sp splitPolicy) func() {
+	if s.Quoting != syntax.Unquoted || sp == splitNever {
+		return func() {}
+	}
+	saved := r.splitWordLiterals
+	r.splitWordLiterals = splitLiterals{on: true, answer: splitFlagAnswer(s, sp, r.sem().SplitParamExpansion)}
+	return func() { r.splitWordLiterals = saved }
+}
+
+// splitLiterals is what splittingTheSubstitutedWord arms: whether the literal
+// text of the word being expanded splits, and by which answer.
+type splitLiterals struct {
+	on     bool
+	answer Answer
+}
+
+// splits reports whether this span's text is literal text of an armed word
+// holding a separator, and the dialect splits it.
+//
+// The axis is asked only where the two readings differ — text with no
+// separator in it is one field either way — which is the guard
+// expansionResult puts in front of the same question.
+func (sl splitLiterals) splits(r *Runner, s syntax.Span, text string) bool {
+	if !sl.on || s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+		return false
+	}
+	ifs, _ := r.ifs()
+	if !containsAnyOf(text, ifs) {
+		return false
+	}
+	return r.ask(sl.answer, "splitting the word a `-` or `+` substituted")
 }
 
 // withoutGlobbing suspends pathname expansion for one nested expansion, and
@@ -1103,7 +1274,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// Only when the word is what the expansion came to. When the *parameter*
 	// is what it came to, the array path below is the one that gives its
 	// fields.
-	if fields, ok := r.substitutedWordFields(s, head); ok {
+	if fields, ok := r.substitutedWordFields(s, sp, head); ok {
 		return fields, true
 	}
 	// `${a[@]}` is one field per element for the same reason `"$@"` is one

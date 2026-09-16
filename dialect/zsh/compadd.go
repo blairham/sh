@@ -75,6 +75,31 @@ const compaddArgumentOptions = "PSpsiIWdJVXxrRDOAFMEy"
 // compaddFlagOptions are the letters that stand alone and may cluster.
 const compaddFlagOptions = "akqQfenUl12CTuzo"
 
+// compaddOrders are the words `-o` takes as its argument, and the whole of
+// how that letter is told from a candidate.
+//
+// `-o` is the one letter here whose argument is optional, and the rule is not
+// "is there a next word" — it is **whether the next word is an order name**.
+// Measured on zsh 5.9.2 from inside a widget with an empty `$PREFIX`, so that
+// everything offered is counted:
+//
+//	compadd -o nosort -- alpha        1 match
+//	compadd -o match -- alpha         1 match
+//	compadd -o numeric -- alpha       1 match
+//	compadd -o reverse -- alpha       1 match
+//	compadd -o -- alpha               1 match — `--` is not eaten
+//	compadd -o alpha                  1 match — `alpha` is not eaten
+//	compadd -o zzz -- alpha           3 matches: `zzz`, `--` and `alpha`
+//
+// The last row is the one that pins the rule from the other side, and it is
+// also what a parser that got this wrong would look like: a word that is not
+// an order ends the options, so the `--` after it is an ordinary candidate.
+// `compadd -o nosort` is written by real completions; offering `nosort` as a
+// completion is what this table stops.
+var compaddOrders = map[string]bool{
+	"match": true, "nosort": true, "numeric": true, "reverse": true,
+}
+
 // compaddOptions is one call's letters, gathered.
 type compaddOptions struct {
 	prefix, suffix       string // -P, -S: inserted, not matched
@@ -123,6 +148,12 @@ func compaddParse(r *interp.Runner, args []string) (compaddOptions, []string, bo
 		for j := 0; j < len(letters); j++ {
 			letter := letters[j]
 			switch {
+			case letter == 'o' && j == len(letters)-1 &&
+				i+1 < len(args) && compaddOrders[args[i+1]]:
+				// The one optional argument — see compaddOrders. Only where
+				// the letter ends its word, since `-o` joined to its order
+				// would have been read as a cluster.
+				i++
 			case strings.IndexByte(compaddFlagOptions, letter) >= 0:
 				compaddFlag(&o, letter)
 			case strings.IndexByte(compaddArgumentOptions, letter) >= 0:

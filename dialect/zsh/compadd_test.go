@@ -125,3 +125,33 @@ func TestCompaddStoresWhatItWithheld(t *testing.T) {
 		t.Errorf("stored %q, want %q", got, want)
 	}
 }
+
+// `-o` is the one letter whose argument is optional, and what decides is the
+// word rather than its presence — see compaddOrders for the measurement.
+//
+// Asked with an empty word so that everything offered is counted: a case
+// against `git che` could not tell an order eaten from an order offered and
+// filtered, which is the shape of non-discriminating probe this repository
+// keeps finding.
+func TestCompaddReadsAnOrderOnlyWhenTheWordIsOne(t *testing.T) {
+	for _, c := range []struct {
+		name, call string
+		want       []string
+	}{
+		{"an order is eaten", "compadd -o nosort -- alpha", []string{"alpha"}},
+		{"every order is eaten", "compadd -o match -- alpha", []string{"alpha"}},
+		{"`--` is not an order", "compadd -o -- alpha", []string{"alpha"}},
+		{"a candidate is not an order", "compadd -o alpha", []string{"alpha"}},
+		// And the row that pins it from the other side: a word that is not an
+		// order ends the options, so the `--` after it is an ordinary
+		// candidate and all three are offered.
+		{"a word that is not an order", "compadd -o zzz -- alpha", []string{"zzz", "--", "alpha"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := completionFor(t, widgetOf(c.call), "git ")
+			if strings.Join(got, " ") != strings.Join(c.want, " ") {
+				t.Errorf("%s offered %q, want %q", c.call, got, c.want)
+			}
+		})
+	}
+}

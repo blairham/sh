@@ -129,3 +129,31 @@
   f
   getopts ab o; st=$?
   printf 'reassigned:   2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# And the other way round: an assignment the script makes *after* the call
+# outranks what the call left behind, because writing OPTIND is how a scan is
+# restarted. A cursor saved across the call and still read over the top of the
+# restart would resume at the word after the one asked for — an option skipped
+# rather than an option repeated, which is the quieter of the two failures.
+( set -- -ab -c
+  getopts abc o; printf 'outranked:    1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { :; }
+  f
+  OPTIND=1
+  getopts abc o; st=$?
+  printf 'outranked:    2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND"
+  getopts abc o; st=$?
+  printf 'outranked:    3=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )
+
+# The same with a declaration in the call, where the two rules meet: the
+# declaration took the place inside the word away and the assignment then
+# restarted the scan, so there is nothing left for either to disagree about.
+( set -- -ab -c
+  getopts abc o; printf 'both rules:   1=[%s] ind=%s\n' "$o" "$OPTIND"
+  f() { local OPTIND=1; :; }
+  f
+  OPTIND=1
+  getopts abc o; st=$?
+  printf 'both rules:   2=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND"
+  getopts abc o; st=$?
+  printf 'both rules:   3=[%s] st=%s ind=%s\n' "$o" "$st" "$OPTIND" )

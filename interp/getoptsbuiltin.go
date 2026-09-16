@@ -711,17 +711,26 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 			// record drops the position inside a word on the strength of it.
 			r.setVarQuietly("OPTIND", "1")
 			r.optChar, r.optindAssigned = 1, false
-			sc.optindCallCursor = true
 		case GetoptsFunctionPositionIsTheCallsOwn:
 			// The scan starts over and the parameter is left exactly as the
 			// caller had it: a script reading `$OPTIND` on the way in sees
 			// the caller's number, which is what separates this answer from
 			// the one above.
 			r.optWord, r.optChar, r.optindAssigned = 1, 1, false
-			sc.optindCallCursor = true
 		default:
 			return
 		}
+		// Both answers that reach here reset the cursor on the way in, so
+		// the caller's place inside a word is now held by this call's own
+		// restore rather than by any declaration the body goes on to make —
+		// which is the one thing a declaration's restore needs to know about
+		// this one. Set once for both rather than in each arm, because it is
+		// a fact about having reset the cursor and not about which answer
+		// did: dash and BusyBox ash are the only columns that reach it with
+		// a `no` behind them, and zsh — the other arm — hands the place back
+		// either way, so nothing on this panel could tell a per-arm version
+		// of this apart.
+		sc.optindCallCursor = true
 	}
 
 	sc.onReturn = append(sc.onReturn, func() {

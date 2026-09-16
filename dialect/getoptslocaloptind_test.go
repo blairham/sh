@@ -176,6 +176,32 @@ func TestWhatAFunctionCallDoesToTheGetoptsCursor(t *testing.T) {
 			},
 		},
 		{
+			// The override a call leaves behind is not the last word: an
+			// assignment the *script* makes outranks it, because writing
+			// OPTIND is how a scan is restarted. Without this row a cursor
+			// saved across a call would go on being read over the top of the
+			// restart, and the caller would resume at the word *after* the
+			// one it asked for — which is a scan that skips an option rather
+			// than one that repeats it, and is the quieter of the two
+			// failures.
+			name: "an assignment after the call outranks what the call left",
+			src: "f() { :; }\n" +
+				"set -- -ab -c\n" +
+				"getopts abc o; printf '1=[%s] ind=%s\\n' \"$o\" \"$OPTIND\"\n" +
+				"f\n" +
+				"OPTIND=1\n" +
+				"getopts abc o; printf '2=[%s] st=%s ind=%s\\n' \"$o\" \"$?\" \"$OPTIND\"\n" +
+				"getopts abc o; printf '3=[%s] st=%s ind=%s\\n' \"$o\" \"$?\" \"$OPTIND\"\n",
+			want: map[string]string{
+				"bash":  "1=[a] ind=1\n2=[a] st=0 ind=1\n3=[b] st=0 ind=2\n",
+				"zsh":   "1=[a] ind=1\n2=[b] st=0 ind=1\n3=[c] st=0 ind=2\n",
+				"ksh":   "1=[a] ind=1\n2=[a] st=0 ind=1\n3=[b] st=0 ind=2\n",
+				"dash":  "1=[a] ind=2\n2=[a] st=0 ind=2\n3=[b] st=0 ind=2\n",
+				"ash":   "1=[a] ind=2\n2=[a] st=0 ind=2\n3=[b] st=0 ind=2\n",
+				"posix": "1=[a] ind=1\n2=[b] st=2 ind=2\n3=[c] st=2 ind=3\n",
+			},
+		},
+		{
 			// The regression this must not buy: a helper that parses its own
 			// options, called twice, reads them both times in the three
 			// columns whose calls have a cursor of their own (#2944). It is

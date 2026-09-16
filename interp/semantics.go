@@ -3039,6 +3039,42 @@ type Semantics struct {
 	// rather than a switch — see PrintfQuoteStyle.
 	PrintfQuote PrintfQuoteStyle
 
+	// PrintfAlternateFormAsksTheValue reads C's `#` off the **value** rather
+	// than off the digits it produced, which is the whole of what a value of
+	// nought does to the alternate form.
+	//
+	// C gives `#` two readings that only a nought can tell apart. A `%#x`
+	// writes its `0x` for a *nonzero* value, so `printf '%#x' 0` is `0` and
+	// not `0x0`; and a `%#o` raises the precision until there is a leading
+	// zero, which a precision of nought has erased every digit of, so
+	// `printf '%#.0o' 0` is `0` and not nothing. Six columns read it that
+	// way and one does not — ksh93u+ writes `0x0`, and writes nothing where
+	// C forces the zero — which is the prefix following the digits instead:
+	// written wherever there are digits, and absent where there are none.
+	//
+	// Measured 2026-09-15 under `LC_ALL=C` with `printf '[%s]' 0`, and this
+	// is the axis's own evidence rather than a restatement of the code:
+	//
+	//	         bash 5.3.20  bash 3.2.57  zsh 5.9.2  dash  ash  ksh93u+
+	//	%#x      0            0            0          0     0    0x0
+	//	%#X      0            0            0          0     0    0X0
+	//	%#.2x    00           00           00         00    00   0x00
+	//	%#5x     `    0`      `    0`      `    0`    …     …    `  0x0`
+	//	%#.0o    0            0            0          0     0    (empty)
+	//	%#.0x    (empty)      (empty)      (empty)    …     …    (empty)
+	//	%#o      0            0            0          0     0    0
+	//
+	// The last two rows are the controls, and a table without them would
+	// have been read too widely. `%#.0x` is where the two readings *agree* —
+	// there are no digits and there is no nonzero value, so neither writes a
+	// prefix — and `%#o` is the row where the nought is written as a digit
+	// the octal's own leading zero already covers.
+	//
+	// Asked only where a `#` meets one of the three conversions that has an
+	// alternate form *and* a value of nought, so no dialect is questioned
+	// about `printf '%#x' 255`, which is `0xff` in all seven.
+	PrintfAlternateFormAsksTheValue Answer
+
 	// PrintfNumberOperand is how a numeric conversion reads an operand that
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading

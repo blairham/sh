@@ -1899,6 +1899,8 @@ func Semantics() interp.Semantics {
 	s.PrintfTimeConversion = interp.No
 	s.PrintfTimeOperandIsADateString = interp.No
 	s.PrintfQuote = interp.PrintfQuoteAnsiCCharacter
+	// C's `#` at a value of nought, as in bash: `printf '%#x' 0` is `0`.
+	s.PrintfAlternateFormAsksTheValue = interp.Yes
 	// zsh is the one shell with `$'…'` and no `\c` in it, so `$'\cA'` is the
 	// two characters `cA`; and its strings are counted rather than
 	// terminated, so a decoded NUL is a byte like any other.

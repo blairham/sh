@@ -821,6 +821,16 @@ func Semantics() interp.Semantics {
 	// `interactivecomments` and `set -o keyword` is `no such option`, both
 	// measured 2026-09-16, so the question cannot be put to it.
 
+	// The seven declaration commands are reserved words here, and the
+	// assignment rule for their operands belongs to the word as written:
+	// under `setopt shwordsplit`, `$cmd a=$b`, `\typeset a=$b`, `'typeset'
+	// a=$b`, `"typeset" a=$b`, `type'set' a=$b`, `noglob typeset a=$b` and
+	// `builtin typeset a=$b` all split the value, where `typeset a=$b`, an
+	// alias for it and `nocorrect typeset a=$b` keep it whole. Measured
+	// 2026-09-16 on zsh 5.9.2, for typeset, declare, export, local, readonly,
+	// float and integer. See #3315.
+	s.DeclarationCommandWord = interp.DeclarationByUnquotedLiteralWord
+
 	s.HistoryExpansionAtAPrompt = interp.Yes
 	// The startup files, and zsh has more of them than the rest of the panel
 	// put together. Measured 2026-09-05 through a pseudo-terminal with a

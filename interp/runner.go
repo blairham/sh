@@ -4594,6 +4594,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// whether it outlives a call, what `set -x` writes for it. See
 	// keywordassign.go.
 	var promoted []*syntax.Assign
+	// Which word of the command produced argv[0], or -1 while none has. See
+	// Semantics.DeclarationCommandWord.
+	head := -1
 	for i, w := range c.Args {
 		if r.expandErr || r.ctl == controlExit {
 			// The command is abandoned at its first failed expansion rather
@@ -4607,8 +4610,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// expand as ones, which is what keeps `typeset -i n=3*3` from being
 		// read as a pattern. Only after the first word is expanded is it
 		// known which utility this is, so the test is inside the loop.
+		if head < 0 && len(argv) > 0 {
+			// The word before this one is the one that produced the command
+			// name, which the dialect may need to see as it was written.
+			head = i - 1
+		}
 		if i > 0 && len(argv) > 0 && assignShaped(w) {
-			declaring := r.declares(argv[0])
+			declaring := r.declares(argv[0]) && r.declarationWordWritten(c, head, argv[0])
 			// `set -k` takes the word before the declaration route can,
 			// where the dialect says it reaches that far. bash's does and
 			// ksh93's does not, which is measured and is why this is asked

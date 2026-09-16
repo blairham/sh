@@ -35,6 +35,24 @@ input is read by a path that never sees the keystroke in between, so the
 first reading measures the harness rather than the shell. Anything measured
 in a burst has to be confirmed slowly before it is written down.
 
+**And the reverse, for anything with an Escape in it.** A terminal delivers
+`\e[A` in a *single* write, which is what makes the question below — is a byte
+there? — answerable without a timer. Typed one byte at a time, the same three
+bytes are a bare Escape followed by two ordinary keys, and measuring that way
+reports "arrow keys do not work in command mode" about a shell in which they
+do. Re-measured 2026-09-16: one write gives the arrow in every column, byte at
+a time gives `A` appending in ours. **A burst is wrong for a kill and right for
+an escape sequence, so the harness has to be able to do both.**
+
+**The probe.** `internal/cmd/viprobe` is one case per run: it starts a shell
+under a pseudo-terminal with the two-row prompt above, turns vi mode on, types
+a seed, types the keys with a gap between them (`-burst` for a single write),
+and prints both the screen before the line was accepted and the raw bytes.
+Reaching for the rendered screen instead is a trap worth naming — `smoke.Readable`
+replays a terminal and a replay *eats* every escape sequence it understands, so
+a question about what the shell drew gets a confident "no" from an instrument
+that could not have said yes. `-raw` is the half that can answer it.
+
 ## What the two shells agree about
 
 Same key, same line, same result in bash 5.3 and zsh 5.9:
@@ -516,6 +534,35 @@ they were.
 | `_` | the last argument of the line before | nothing | not built |
 | `^K`, `^U`, `^W` in command mode | kill, as in emacs mode | nothing | not built |
 
+**All seven re-measured 2026-09-16 and all seven still hold**, each through
+`viprobe` against a binary built from the tree, against bash 5.3.15 and zsh
+5.9.2 side by side. They are recorded here rather than left to be rediscovered,
+because the same sweep found the rest of this repository's "not built" prose to
+be wrong far more often than right. The cases, so the next pass is a re-run
+rather than a redesign:
+
+| row | seed and keys | bash | zsh | ours, both dialects |
+| --- | --- | --- | --- | --- |
+| `yy`, `Y` | `echo ab`, `\e yy p` | `abecho ab` | two lines, `ab` then `ab` | `ab` |
+| `o`, `O` | `echo ab`, `\e o Z` | `ab` | `ab`, then `Z: command not found` | `ab` |
+| `U` | `echo abcd`, `\e x x x U` | `abcd` | `a` | `a` |
+| `^R` | `echo abcd`, `\e x u ^R` | `(reverse-i-search)` | the `x` is re-applied | neither happens |
+| `G` | `echo ab`, `\e G` | a history entry replaces the line | `ab` | `ab` |
+| `_` | `echo ab`, `\e _`, after `: LASTARGMARK` | `ab LASTARGMARK` | `ab` | `ab` |
+| `^K`, `^U`, `^W` | `echo ab cd`, `\e ^K` / `^U` / `^W` | `ab c` / `d: command not found` / `ab d` | `ab cd` each | `ab cd` each |
+
+So ours answers zsh in five of the seven and bash in the other two, which is
+the shape of a mode that has the shared vi grammar and none of the keys the two
+shells disagree about.
+
+**The first row is narrower than it reads, and the narrow reading is the
+useful one.** `y` with a *motion* is built and byte-identical: `echo alpha beta`,
+`\e 0 w yw $ p` gives `alpha betaalpha` in bash, in zsh and in both of ours,
+the same redraw in the same order. What is missing is the doubled form and its
+upper-case spelling — the whole-line yank — and with the buffer left empty by
+it, the `p` that follows has nothing to put back. Fixing `yy` is filling a
+buffer, not writing a yank.
+
 ### The Escape that is also the first byte of an arrow key
 
 This is the one question a command mode asks that an emacs one does not, and
@@ -786,6 +833,11 @@ moment or near enough; for an idle terminal it is later, and for one never
 touched again it is never. Firing on time needs the same change to how a key is
 read that `zle -F` needs, which is why both are named instead of approximated.
 
+Re-measured 2026-09-16 and still true, with `viprobe -idle 5s`: real zsh writes
+`SCHEDFIRED` onto an untouched screen about two seconds after `sched +2 echo
+SCHEDFIRED`, and ours writes nothing in five, then writes it the moment the next
+line is accepted.
+
 ## Where it lives
 
 `repl/editor.go` — the read loop, the redraw and `place`, which is the row and
@@ -927,7 +979,10 @@ was on this list and is not any more — `^R` is `repl/search.go` and
 
   bash counts words from the start of the line and zsh counts them from the end,
   with zsh's negative arguments counting from the start instead — coherently,
-  where bash's are not (`M--` gives `w3` and `M--1` gives nothing). So it needs
+  where bash's are not (`M--` gives `w3` and `M--1` gives nothing). Re-measured
+  2026-09-16: `M-3 M-.` against `: w1 w2 w3 w4` is `w3` in bash and `w2` in zsh,
+  exactly as the table says, and `w4` in both of ours — the count is not read at
+  all and the plain last argument is what arrives. So it needs
   its own field as well as its own mechanism.
 - **`region_highlight` offsets moving with the line.** Measured: an element
   written as `0 2` reads back as `1 3` once a character is inserted before it,

@@ -22,9 +22,10 @@ panel of the real shells they model. Measured on macOS with
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
 lets a diagnostic be worded differently so long as the status and the output
-agree, and the difference between the two columns is almost entirely message
-wording — which is why `ash` reads as the weakest column on the left and is
-mid-pack on the right. Behavior lands spec-first, per `CLEANROOM.md`.
+agree. The distance between the two columns is a mix of wording and behavior
+rather than mostly wording: the one column anybody has actually counted is
+`ksh`, re-counted on 2026-09-15, where the non-exact cases split **93 wording
+to 126 behavioral**. Behavior lands spec-first, per `CLEANROOM.md`.
 
 ## What makes this different
 
@@ -88,9 +89,26 @@ own file in front of each. `docs/install.md` has the measured grid.
 The tags are `0.x` because this list is real, not because the list is
 short.
 
-- **Diagnostic wording is the biggest remaining gap**, and it is most of
-  the distance between the two columns above — `ksh` and `ash` agree on
-  what happens and still phrase the complaint differently.
+- **Diagnostic wording is a long tail, not the headline gap.** This list
+  used to open by saying wording was most of the distance above, and two
+  measurements disagree. One is the `ksh` re-count beside the table. The
+  other is a bounded sample, run 2026-09-16: twenty error situations a
+  person actually hits — a missing command, `cd` onto a file, `set -u` on
+  an unset name, a redirect that cannot open, division by zero, an unknown
+  option to six different builtins, running a directory, `exit foo` — each
+  run once through the real shell and through ours under a matching
+  `argv[0]`, compared on stderr and exit status together. Byte-identical
+  20/20 for `bash` and `dash`, 19/20 for `ksh` and `zsh`, 16/20 for `ash`:
+  **94 of 100**. And of the six misses exactly one is a wording — `ash`
+  says `%` where we say `%z` for a bad `printf` directive. The other five
+  each carry a different exit status, a different line number, or a
+  different answer, which is behavior rather than phrasing. Twenty common
+  situations is a sample and not a census, and the corpus behind the
+  percentages above is two hundred times larger and much stranger. The
+  probe is `internal/cmd/diagsample`, a few seconds a column, so this
+  bullet can be re-checked rather than inherited — which is how it came
+  to be wrong: its only previous instrument was an hour-long conformance
+  run, so nobody ever ran it to find out.
 - **The sandbox contains the shell, not the process tree.** A policy
   decides what the *shell* opens, runs and signals; a command it was
   allowed to start makes its own accesses and nothing here sees them.

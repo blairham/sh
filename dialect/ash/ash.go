@@ -335,12 +335,8 @@ func Semantics() interp.Semantics {
 	// A bare `read` fills REPLY, where dash wants a name.
 	s.ReadRequiresAVariableName = interp.No
 	// `read` takes rather more than dash's pair: `-r`, `-p`, `-t` and `-n`
-	// were each run and each accepted, and so were `-d`, `-s` and `-u`,
-	// which this list did not have until 2026-09-16 — `read -d ';' x` was
-	// `illegal option -d` at 2 here and 0 with the text before the `;` in
-	// BusyBox v1.37.0, the answer bash, zsh and ksh93 give too. `-a`, `-e`,
-	// `-i` and `-N` are refused there, and are refused here.
-	s.ReadOptions = "rsd:p:t:n:u:"
+	// were each run and each accepted.
+	s.ReadOptions = "rp:t:n:"
 	// `unset` has the two POSIX letters and calls anything else illegal:
 	// `unset -q x` is `illegal option -q`.
 	// unanswered EmptyAssociativeKeyRefusesTheLength: there is no keyed table
@@ -1263,14 +1259,6 @@ func Semantics() interp.Semantics {
 	// (#3248's class). Measured 2026-09-16 in the pinned alpine image,
 	// BusyBox v1.37.0, both depths.
 	s.ArithNameValueRecurses = interp.Yes
-	// And a name reached that way which is unset is a zero, as it is in bash
-	// and zsh; ksh93 refuses it with the `set -u` sentence. Left unanswered
-	// when the recursion above was answered, so every such expansion was
-	// refused as a question no dialect had chosen — `x=abc; $((x+1))` with
-	// `abc` unset stopped the script where BusyBox prints 1. Measured
-	// 2026-09-16 in the pinned alpine image, BusyBox v1.37.0: `$((x))` 0,
-	// `$((x + 1))` 1, `$(((x) * 2))` 0, and two names deep 0.
-	s.ArithRecursedNameMustBeSet = interp.No
 	s.ArithNegativeExponentIsError = interp.Yes
 
 	// unanswered TraceArrayLiteralShowsTheExpandedElements: no array literal

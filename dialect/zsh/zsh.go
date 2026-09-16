@@ -774,6 +774,7 @@ func Semantics() interp.Semantics {
 	// five columns — a number nothing ever had. Measured,
 	// `sh -c 'echo "[$!]"'` writes `[0]`.
 	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.Yes
+	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	// And that zero is *set*, so `set -u` carries on: measured,
 	// `set -u; echo "[$!]"; echo "st=$?"` writes `[0]` then `st=0`. It is the
 	// same side of that split as ksh93 and for a different reason — ksh93 has

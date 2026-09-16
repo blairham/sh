@@ -204,6 +204,7 @@ func Semantics() interp.Semantics {
 	s.BackgroundJobInput = interp.BackgroundJobInputEmpty
 	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`.
 	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
+	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the `s` of the
 	// standard-input route, which is unanimous and comes from Runner.Route.

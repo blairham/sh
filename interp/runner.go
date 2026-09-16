@@ -1819,6 +1819,12 @@ type Runner struct {
 	// a second time can still answer, which six of the seven measured columns
 	// do. See Runner.reap and Semantics.WaitRemembersAReapedJob.
 	reaped []*Job
+	// procSubJobs is the process substitution bodies `$!` has named, where
+	// the dialect says a substitution does. Beside the table and never in it:
+	// `jobs` does not list them and a bare `wait` does not wait for them, and
+	// only a `wait` naming the number reaches one. Bounded as reaped is. See
+	// Semantics.ProcessSubstitutionIsTheLastBackgroundJob.
+	procSubJobs []*Job
 	// lastJobPID is `$!`, which is a *value* and not a reference to a job.
 	//
 	// Separate from jobOrder because the two stop being the same thing the

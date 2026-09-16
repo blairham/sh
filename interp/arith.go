@@ -60,6 +60,13 @@ type arithError struct {
 	// was zero, which one column goes on evaluating past. See
 	// Semantics.ArithDivisionByZeroYieldsAValue.
 	dividedByZero bool
+	// digits is the numeral's digit run with any radix prefix taken off, and
+	// numBase the base they were read in. Kept only for a numeral past the
+	// word, where the reading that answers it has to run over the digits
+	// again: two of the three re-read them, and one of those counts how far
+	// it got. See Semantics.ArithNumeralPastTheWord.
+	digits  string
+	numBase int
 	// pastTheWord says the numeral is well formed and larger than the machine
 	// word holds. Every reference shell answers *something* for one and the
 	// six answers are six different readings; the only one this shell has is
@@ -272,7 +279,7 @@ func (r *Runner) evalNumNode(e syntax.ArithExpr) (arithNum, error) {
 		return intNum(0), nil
 
 	case *syntax.ArithNum:
-		return r.parseArithNum(x.Text)
+		return r.parseArithNum(x.Text, x.Tail)
 
 	case *syntax.ArithVar:
 		return r.arithValueOf(x.Name)
@@ -1896,8 +1903,8 @@ func leadingZeroRun(value string, hexPrefixSurvives bool) int {
 //
 // See readArithNum: the two readers part over a numeral too large for a
 // double, and only there.
-func (r *Runner) parseArithNum(s string) (arithNum, error) {
-	return r.readArithNum(s, true)
+func (r *Runner) parseArithNum(s, tail string) (arithNum, error) {
+	return r.readArithNum(s, tail, true)
 }
 
 // parseArithStored reads a numeral that came out of a variable.
@@ -1906,7 +1913,11 @@ func (r *Runner) parseArithNum(s string) (arithNum, error) {
 // site at all: ksh93's two readers give an overflowed numeral zeros of
 // opposite sign. See Semantics.ArithFloatOverflowIsZero.
 func (r *Runner) parseArithStored(s string) (arithNum, error) {
-	return r.readArithNum(s, false)
+	// No tail: a numeral that stood in a variable was written nowhere, so the
+	// one diagnostic that quotes an expression's tail has nothing but the
+	// digits — which is what the shell that writes it does. Measured
+	// 2026-09-16: `n=9223372036854775808; $(( n ))` quotes the digits alone.
+	return r.readArithNum(s, "", false)
 }
 
 // readArithNum reads a literal, which may be a float where the dialect has
@@ -1919,7 +1930,7 @@ func (r *Runner) parseArithStored(s string) (arithNum, error) {
 // written says the text stood in the expression rather than in a variable the
 // expression named, which decides the sign of the zero an overflow comes to
 // where an overflow comes to zero at all.
-func (r *Runner) readArithNum(s string, written bool) (arithNum, error) {
+func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 	s = strings.TrimSpace(s)
 	if r.dialect().ArithDigitSeparator {
 		// The separator is removed and then the ordinary rules apply to what
@@ -1943,13 +1954,36 @@ func (r *Runner) readArithNum(s string, written bool) (arithNum, error) {
 		n, err := r.parseNum(s)
 		if err != nil {
 			var ae arithError
-			if errors.As(err, &ae) && ae.pastTheWord && r.dialect().ArithFloat &&
-				r.ask(r.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
-				// The numeral is past the word and this shell keeps its
-				// arithmetic in a double, so it is simply that double:
-				// `$(( 10000000000000000000 ))` is 1e+19 and
-				// `$(( 0xffffffffffffffffff ))` is 4.72236648286965e+21.
-				return floatNum(floatNumeral(s)), nil
+			if errors.As(err, &ae) && ae.pastTheWord {
+				if r.dialect().ArithFloat &&
+					r.ask(r.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+					// The numeral is past the word and this shell keeps its
+					// arithmetic in a double, so it is simply that double:
+					// `$(( 10000000000000000000 ))` is 1e+19 and
+					// `$(( 0xffffffffffffffffff ))` is 4.72236648286965e+21.
+					return floatNum(floatNumeral(s)), nil
+				}
+				if !written && r.ask(r.sem().ArithStoredNumeralPastTheWordIsRefused,
+					"a stored numeral past the machine word") {
+					// dash parts its two number readers here and nothing
+					// else does: the same digits saturate where they stand
+					// in the expression and are refused where a variable
+					// held them. Asked before the reading below, so the one
+					// column that says something about a truncation does not
+					// say it for a numeral that is about to be refused.
+					return intNum(0), ae
+				}
+				// The other three readings, none of which is a refusal: the
+				// word goes round, or part of the numeral is read and said
+				// so, or the largest value stands. Refusing outright was this
+				// shell's own fourth answer and no column has it (#3202).
+				if v, ok := r.numeralPastTheWord(ae.digits, ae.numBase, tail); ok {
+					return intNum(int(v)), nil
+				}
+				return intNum(0), arithError{
+					msg:   r.unanswered("an integer numeral past the machine word"),
+					token: s, badNumeral: true, complete: true,
+				}
 			}
 			return intNum(n), err
 		}
@@ -2288,6 +2322,7 @@ func (r *Runner) parseNum(s string) (int, error) {
 			// failure the caller may still answer — see evalNumeral.
 			return 0, arithError{
 				msg: r.wordInvalidNumber(s), token: s,
+				digits: digits, numBase: base,
 				badNumeral: true, complete: true, pastTheWord: true,
 			}
 		}

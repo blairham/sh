@@ -27,6 +27,7 @@ import (
 var (
 	posType         = reflect.TypeOf(Pos{})
 	arithBinaryType = reflect.TypeOf(ArithBinary{})
+	arithNumType    = reflect.TypeOf(ArithNum{})
 	wordType        = reflect.TypeOf(Word{})
 	stmtType        = reflect.TypeOf(Stmt{})
 	redirType       = reflect.TypeOf(Redirect{})
@@ -81,6 +82,15 @@ func spellingOnly(t reflect.Type, name string) bool {
 	}
 	if name == "Bare" {
 		return t == spanType
+	}
+	if name == "Tail" {
+		// The expression's text from a numeral to the end of it, kept so one
+		// diagnostic can quote the input back — see [ArithNum].Tail. It is
+		// the input's spelling by definition and it carries the blanks
+		// around what follows the numeral, so `for ((i=0 ; ; ))` printed
+		// back without the space before the `;` is the same program with a
+		// shorter tail.
+		return t == arithNumType
 	}
 	if name == "YStart" {
 		// A position, spelled as an offset rather than as a Pos because it

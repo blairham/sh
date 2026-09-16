@@ -29,7 +29,25 @@ type ArithExpr interface {
 // hundred rather than sixty-four. Converting at parse time would bake one
 // answer into the tree.
 type ArithNum struct {
-	Text  string
+	Text string
+	// Tail is the expression's text from this numeral's first byte to the
+	// end of it, so it is Text plus whatever was written after — the spaces
+	// before a closing `))` included.
+	//
+	// Kept for one diagnostic, the way [ArithCall].Within is: the shell that
+	// reads only part of a numeral too large for the machine word quotes the
+	// *tail* back rather than the digits it read. Measured 2026-09-16 on zsh
+	// 5.9.2, which is the only column that says anything at all:
+	//
+	//	$(( 9223372036854775808 + 1 ))   … digits: 9223372036854775808 + 1
+	//	$(( 9223372036854775808 ))       … digits: 9223372036854775808
+	//	$((9223372036854775808))         … digits: 9223372036854775808
+	//
+	// Recorded by the parser rather than found by the evaluator, which
+	// cannot: a search for the digits blames the first of two identical
+	// numerals twice, and the trailing blank in the middle row is exactly
+	// the kind of difference a search cannot see.
+	Tail  string
 	Start Pos
 	Stop  Pos
 }
@@ -1196,7 +1214,7 @@ func (a *arithParser) number(start Pos) ArithExpr {
 	begin := a.off
 	if a.dial.ArithNumeralEndsAtABadDigit {
 		a.numberInItsOwnBase()
-		return &ArithNum{Text: a.src[begin:a.off], Start: start, Stop: start}
+		return &ArithNum{Text: a.src[begin:a.off], Tail: a.src[begin:], Start: start, Stop: start}
 	}
 	// Every character the base-64 alphabet knows, whatever base the literal
 	// turns out to be in: `1abc`, `0y`, `1@2` and `1_` are one numeral each
@@ -1226,7 +1244,7 @@ func (a *arithParser) number(start Pos) ArithExpr {
 			a.off++
 		}
 	}
-	return &ArithNum{Text: a.src[begin:a.off], Start: start, Stop: start}
+	return &ArithNum{Text: a.src[begin:a.off], Tail: a.src[begin:], Start: start, Stop: start}
 }
 
 // numberInItsOwnBase reads a numeral the way the dialect that stops at a

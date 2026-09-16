@@ -16297,6 +16297,77 @@ Asked only where the two readings disagree. It is on the path of every
 integer operation, and an axis asked unconditionally would report itself
 unanswered on `$(( 1 + 1 ))` in a run with no dialect.
 
+**`ArithNumeralPastTheWord`** — bash wraps · dash saturates · ksh93 not
+asked · zsh keeps the digits that fit
+
+What a well-formed integer numeral larger than the machine word comes
+to. Every column on the panel answers one and every column reports
+status 0; this shell refused it, at status 1, which is a fourth answer
+nobody has (#3202).
+
+Measured 2026-09-16, each probe a script file under `env -i`:
+
+    $(( 10000000000000000000 ))   $(( 0xffffffffffffffff ))
+    bash 5.3.20          -8446744073709551616   -1
+    bash as `sh`         -8446744073709551616   -1
+    bash 3.2.57          -8446744073709551616   -1
+    BusyBox ash 1.37.0   -8446744073709551616   -1
+    zsh 5.9.2             1000000000000000000    1152921504606846975
+    dash 0.5.12           9223372036854775807    9223372036854775807
+    ksh93u+ 2012-08-01    1e+19                 -1
+
+Four readings, and each is a rule rather than an accident. bash and
+BusyBox ash read the digits in an *unsigned* word and let it go round,
+which is C's `strtoull` with the range error thrown away — and it is
+modular rather than a stop at the top of that word, since
+`18446744073709551615` is -1 and `18446744073709551616` is 0. dash
+clamps at the largest signed value, whatever the numeral and whatever
+its base. ksh93 has no word to overflow: the numeral becomes the double
+its arithmetic is carried in, which is `ArithValuesAreCarriedInADouble`
+above, asked first, so this axis is not asked of that column at all.
+
+zsh is the fourth and the only one that says anything. Its rule is worth
+writing down because the obvious model of it — take digits while they
+still fit the signed word — is wrong in a way a probe near the edge of
+the word cannot see. The accumulator is unsigned and it wraps, and
+reading stops only when a digit fails to make the running value
+*larger*:
+
+    22222222222222222222      3775478148512670606   read whole, silently
+    99999999999999999999      -8446744073709551617  stopped at 19 digits
+    50000000000000000000      1310651185258089676   19 digits, divided
+    12345678901234567890123   -1363962815083169260  22 digits, twice round
+
+The third row is the other half of it: where the digits run out with the
+value merely past the *signed* word, the last one comes off by dividing
+the wrapped number rather than by going back to the numeral's true
+prefix — 5·10^19 modulo 2^64 divided by ten, which is not a prefix of
+anything. Twenty-five rows were measured and `truncatedNumeral`
+reproduces every one; a fit-while-it-fits reader gets four of them wrong
+in the value and three more wrong only in the count.
+
+The count is the diagnostic's, and the diagnostic is
+`Diagnostics.ArithNumberTruncated`, empty in every column but zsh. What
+it quotes back is the expression from the numeral to the end of it
+rather than the digits it read, so `$(( big ))` quotes the blank before
+the `))` too — which is why `syntax.ArithNum` records the tail and the
+evaluator does not go looking for it.
+
+**`ArithStoredNumeralPastTheWordIsRefused`** — bash no · dash yes ·
+ksh93 not asked · zsh no
+
+Keeps the reading above for a numeral written in the expression and
+refuses one that arrived in a variable. dash alone, and the only place
+its two number readers part:
+
+    n=9223372036854775808; $(( n ))   Illegal number: 9223372036854775808, status 2
+    $(( 9223372036854775808 ))        9223372036854775807, status 0
+
+The other six columns answer a stored numeral exactly as they answer a
+written one — zsh's diagnostic included, with the one difference that a
+stored numeral has no expression tail and the message quotes the digits
+alone.
+
 **`EmptyArithExpressionIsAnError`** — bash no · dash yes · ksh93 no · zsh no
 
 Refuses `$(( ))`: dash wants a primary and stops the script; the other

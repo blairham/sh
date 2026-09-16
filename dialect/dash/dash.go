@@ -288,6 +288,15 @@ func Semantics() interp.Semantics {
 	s.ValuelessDeclarationRecordsTheName = interp.No
 	// $(( )) with nothing in it wants a primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.Yes
+	// The one column that clamps a numeral past the word instead of letting
+	// it go round: every over-large numeral is 9223372036854775807, decimal,
+	// hexadecimal or octal alike, and nothing is said about it. The other two
+	// POSIX columns wrap, which is what the preset follows (#3202).
+	s.ArithNumeralPastTheWord = interp.NumeralPastTheWordSaturates
+	// And the saturation is the *written* numeral's alone: the same digits
+	// out of a variable are `Illegal number` at status 2, which is the one
+	// place this shell's two number readers part (#3202).
+	s.ArithStoredNumeralPastTheWordIsRefused = interp.Yes
 	// A bare read wants a name here, where the other three fill REPLY.
 	s.ReadRequiresAVariableName = interp.Yes
 	// The odd one out on `echo … | sh`: dash takes the program off standard

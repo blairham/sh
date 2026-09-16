@@ -4053,6 +4053,16 @@ type Diagnostics struct {
 	// number. No verbs: it is a reason, not a message — ArithError wraps it
 	// with the expression and the offending token.
 	InvalidNumber string
+	// ArithNumberTruncated is what a shell says when it read only part of an
+	// integer numeral too large for the machine word and went on with what it
+	// had — `number truncated after 19 digits: 10000000000000000000`. Two
+	// verbs: the count of digits it got through, then the digit run.
+	//
+	// Empty in every column but zsh, and empty means silence rather than a
+	// fallback: three of the other columns answer such a numeral without a
+	// word about it and the fourth has no word to overflow. The reading is
+	// Semantics.ArithNumeralPastTheWord; this is only what it says.
+	ArithNumberTruncated string
 	// ArithErrorNamesThePrefix puts what the evaluator had consumed when
 	// the token failed in the report's leading position — `08+1` is blamed
 	// as `08`, `1+08` as `1+08` — rather than the whole expression.

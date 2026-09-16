@@ -1073,6 +1073,39 @@ type Dialect struct {
 	// before anything else is read (#2725).
 	BracedArithmeticExpansion bool
 
+	// ConditionOperandMayOpenWithAGroup lets a `(` at the front of a
+	// condition's **third word** belong to that word rather than being an
+	// operator. `[[ 9 -gt ( 1 + 2 ) ]]` and `[[ -prefix 1 (f|ht)tp:// ]]`
+	// are the two shapes, and four of the completion functions one shell
+	// ships are written with them.
+	//
+	// Measured 2026-09-15, each probe in a script file of its own:
+	//
+	//	| probe                 | zsh 5.9.2 | bash 5.3 | bash-as-sh | bash 3.2 | ksh93u+ | dash | ash |
+	//	| `[[ 9 -gt ( 1 ) ]]`   | true      | refused  | refused    | refused  | refused | refused | refused |
+	//	| `[[ 2 -gt ( 1 + 2 ) ]]` | false   | refused  | refused    | refused  | refused | refused | refused |
+	//	| `[[ -pfx 1 (a\|b)c ]]` | parsed   | refused  | refused    | refused  | refused | refused | refused |
+	//
+	// The three bash columns say `` unexpected argument `(' to conditional
+	// binary operator ``, ksh93 `` `(' unexpected ``, and dash and BusyBox
+	// ash — which have no `[[ ]]` at all — name the `(` where they wanted a
+	// `then`. One column against six, so this is a dialect's grammar.
+	//
+	// **The position is the whole of the rule**, measured in the same run:
+	// `[[ ( 1 -gt 0 ) ]]` is the condition's own grouping paren at the first
+	// word, `[[ -n ( a ) ]]` and `[[ -pfx ( a ) ]]` are `` parse error near
+	// `(' `` at the second, `[[ -pfx 1 ( a ) ]]` parses at the third, and
+	// `[[ -pfx 1 2 ( a ) ]]` is refused again at the fourth. A `!` or a
+	// connective starts the count over.
+	//
+	// The group is not a *pattern* — that is [Lexer.inPattern], which is set
+	// for `==`, `=` and `!=` and was already right for them. What this adds
+	// is the same lexing for every other operator, and what becomes of the
+	// word afterwards is the operator's business: `[[ 9 -gt ( 1 -gt 0 ) ]]`
+	// hands `( 1 -gt 0 )` to the arithmetic evaluator, which complains about
+	// it.
+	ConditionOperandMayOpenWithAGroup bool
+
 	// CaseHeaderSpansSeparators lets a `;` stand in a `case` header wherever
 	// a newline may: between the subject and the `in`, and after the `in`.
 	//

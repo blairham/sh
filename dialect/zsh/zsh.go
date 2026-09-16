@@ -337,6 +337,11 @@ func Dialect() syntax.Dialect {
 	// completion functions this shell ships are written that way. See
 	// syntax.Dialect.ForNameMayBeAPositionalParameter.
 	d.ForNameMayBeAPositionalParameter = true
+	// A `(` at the front of a condition's *third* word belongs to that word:
+	// `[[ 9 -gt ( 1 + 2 ) ]]` is true here and refused in the other six, and
+	// `[[ -prefix 1 (f|ht)tp:// ]]` is the completion system's own spelling.
+	// See syntax.Dialect.ConditionOperandMayOpenWithAGroup.
+	d.ConditionOperandMayOpenWithAGroup = true
 	// `<->` is a number and `<1-9>` a bounded one, where every other panel
 	// shell reads the `<` as a redirection. Measured 2026-09-05 on zsh
 	// 5.9.2: `[[ 1 = <-> ]]` is 0 here and a syntax error in bash 5.3, bash

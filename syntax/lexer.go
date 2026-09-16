@@ -74,6 +74,34 @@ type Lexer struct {
 	// exactly the same reason.
 	inPattern bool
 
+	// inCondOperandGroup is set while the token being read is the **third
+	// word of a condition** — the right operand of a binary operator, or the
+	// second argument of a named one — in a dialect where a `(` there opens
+	// a group belonging to the word.
+	//
+	// Separate from inPattern, which says the operand is a *pattern* and is
+	// set for `==`, `=` and `!=` alone. This one is set whatever the
+	// operator is, because the reading is positional rather than the
+	// operator's: `[[ 9 -gt ( 1 + 2 ) ]]` is true on zsh 5.9.2 and the group
+	// is handed to the arithmetic evaluator, not to the matcher.
+	//
+	// The position is the whole of the rule and is measured, 2026-09-15,
+	// each probe in a script file of its own:
+	//
+	//	[[ 9 -gt ( 1 ) ]]        the group — 0, and `( 1 + 2 )` is 3
+	//	[[ -pfx 1 ( a ) ]]       the group — `unknown condition: -pfx`, so it parsed
+	//	[[ -n ( a ) ]]           parse error near `(` — the *second* word
+	//	[[ -pfx ( a ) ]]         parse error near `(` — the second word again
+	//	[[ -pfx 1 2 ( a ) ]]     parse error near `(` — the *fourth*
+	//	[[ ( 1 -gt 0 ) ]]        the condition grouping, which is the first word
+	//
+	// So a `(` is a condition's grouping paren at the first word, is refused
+	// at the second and beyond the third, and belongs to the word at the
+	// third. The `!` and the two connectives start a condition over — `[[ !
+	// -pfx 1 ( a ) ]]` and `[[ x == y || -pfx 1 ( a ) ]]` both parse — so the
+	// count is per primary rather than per `[[ ]]`.
+	inCondOperandGroup bool
+
 	// inArgument is set while the token being read stands where an
 	// *argument* may, rather than where a command may begin. One dialect
 	// reads a `(` there as part of the word — a pattern with a list of glob
@@ -683,7 +711,7 @@ func (l *Lexer) next() Token {
 	// Before the arithmetic command below, not after it: a nested group
 	// starts `((`, and `[[ $k == ((a|b)|x) ]]` is a pattern rather than the
 	// one place in the grammar where two parentheses are one token.
-	if l.inPattern && l.peek() == '(' && l.opensPatternGroup() {
+	if (l.inPattern || l.inCondOperandGroup) && l.peek() == '(' && l.opensPatternGroup() {
 		return l.scanWord(start)
 	}
 

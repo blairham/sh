@@ -474,7 +474,14 @@ func (p *Parser) condPrimary() CondExpr {
 		p.condOperatorHasItsOperand(p.tok.Literal()):
 		op, start, stop := p.tok.Literal(), p.tok.Pos, p.tok.End
 		p.next()
+		// The word after the operand is the condition's *third*, which is
+		// the one position a `(` belongs to the word in. `p.condWord()`
+		// hands back the operand already read and lexes the token behind
+		// it, so the lexer is told here and taken back on the line after.
+		// See [Dialect.ConditionOperandMayOpenWithAGroup].
+		p.lex.inCondOperandGroup = p.dialect.ConditionOperandMayOpenWithAGroup
 		x := p.condWord()
+		p.lex.inCondOperandGroup = false
 		if x == nil {
 			if p.dialect.ConditionArityIsCheckedWhenItRuns && p.err == nil {
 				// No operand at all, which this dialect accepts and refuses
@@ -660,12 +667,21 @@ var condPatternOps = map[string]bool{"=": true, "==": true, "!=": true}
 // is. Here the parser does, so it reinterprets them — which is the contract
 // recorded in dialect.go and pinned by a test in lexer_test.go.
 func (p *Parser) condOperator() string {
+	// Whatever the operator, the token it is followed by is the condition's
+	// third word, where one dialect reads a leading `(` as the word's. Told
+	// to the lexer before each `p.next()` below, which is what fetches that
+	// token, and taken back after.
+	group := p.dialect.ConditionOperandMayOpenWithAGroup
 	switch p.tok.Kind {
 	case TokLess:
+		p.lex.inCondOperandGroup = group
 		p.next()
+		p.lex.inCondOperandGroup = false
 		return "<"
 	case TokGreat:
+		p.lex.inCondOperandGroup = group
 		p.next()
+		p.lex.inCondOperandGroup = false
 		return ">"
 	}
 	if p.tok.Kind == TokWord && !p.tok.IsQuoted() && condBinaryWordOps[p.tok.Literal()] {
@@ -681,9 +697,13 @@ func (p *Parser) condOperator() string {
 		// operand, which is the position the operator table reaches first.
 		// Set here for the same reason and in the same place.
 		p.lex.inPattern = condPatternOps[op]
+		// And every other operator's operand takes a leading group too,
+		// which is the third word's position rather than the operator's.
+		p.lex.inCondOperandGroup = group
 		p.next()
 		p.lex.inRegex = false
 		p.lex.inPattern = false
+		p.lex.inCondOperandGroup = false
 		return op
 	}
 	return ""

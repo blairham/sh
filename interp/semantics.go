@@ -1813,9 +1813,9 @@ type Semantics struct {
 	BraceRangeThatCannotBeCounted BraceRangeFailurePolicy
 	// EqualsExpansion replaces an unquoted word beginning with `=` by the
 	// path of the command named after it: `echo =ls` prints /bin/ls. zsh
-	// alone, and silent in the `&>` sense — the other three take the word
-	// literally and report nothing, so the same script prints two different
-	// things and neither shell complains.
+	// alone, and silent in the `&>` sense — the other four, BusyBox ash
+	// included, take the word literally and report nothing, so the same
+	// script prints two different things and neither shell complains.
 	//
 	// Its failure is not silent: a name that resolves to nothing is fatal to
 	// the script, like any other failed expansion.
@@ -2827,10 +2827,14 @@ type Semantics struct {
 	// so `No` and silence reach the same code (#2060).
 	PrintfOutputPrecedesComplaint Answer
 	// PrintfEmptyIsNotANumber complains about a numeric conversion given an
-	// operand that is present and empty. bash alone: `printf '%d' ""` is an
-	// error there and a zero in the other three, all of which print the zero
-	// anyway. Four of the five say the same of an argument that is *missing*;
-	// the fifth is ash, and PrintfAbsentNumberIsAnEmptyOne below is that.
+	// operand that is present and empty. bash and BusyBox ash: `printf '%d'
+	// ""` is an error in those two and a zero in ksh93, zsh and dash, all of
+	// which print the zero anyway. Four of the five say the same of an
+	// argument that is *missing*; the fifth is ash, and
+	// PrintfAbsentNumberIsAnEmptyOne below is that.
+	//
+	// bash 3.2 is a version line rather than a sixth answer: it prints the
+	// bare zero for an empty operand where bash 5.3 complains first.
 	//
 	// unpinned zsh: reached, and both answers print the same thing there.
 	// Measured 2026-09-12: moving it to `Unspecified` in the zsh dialect
@@ -3889,6 +3893,11 @@ type Semantics struct {
 	// script file was named" where the other three's is "the program came
 	// from standard input"; the two agree everywhere except here.
 	//
+	// Four other columns rather than three: measured 2026-09-16, `echo $-`
+	// under `-c` is `hBc` in bash 5.3 and bash 3.2, `569X` in zsh, empty in
+	// dash and `c` in BusyBox ash — no `s` in any of them — against ksh93's
+	// `chsB`.
+	//
 	// Read without asking, for the reason above.
 	CommandStringShowsSInDollarDash Answer
 
@@ -4383,8 +4392,9 @@ type Semantics struct {
 
 	// ExportTakesTheAttributeOff gives `export` its `-n`, which takes the
 	// export attribute off a name and leaves the name itself alone. True in
-	// bash alone; the other three refuse the letter as an option, two of
-	// them fatally.
+	// bash — all three builds — and in BusyBox ash, which takes the letter
+	// at status 0 where it has no `-f` at all; the other three refuse the
+	// letter as an option, two of them fatally.
 	//
 	// The same shape as ExportCarriesFunctions and for the same reason: what
 	// the letter *means* is not in question anywhere it exists — the name
@@ -8823,7 +8833,7 @@ type Semantics struct {
 
 	// AliasNotFoundStatusCounts makes `alias` report how many names it could
 	// not find rather than a plain 1: `alias n1 n2 n3` is 3 in ksh93 and 1 in
-	// the other three.
+	// the other four, BusyBox ash included.
 	//
 	// About `alias` alone — ksh93's own `unalias` answers 1 however many were
 	// missing — so it is asked where the count is known and not where the
@@ -8931,8 +8941,13 @@ type Semantics struct {
 	TrapParseFailureNamesWhereItFired Answer
 
 	// SymbolicMaskTakesMoreThanOneOperator lets one `umask` clause turn on
-	// several: `umask u+rw-x` is 0122 from 022 in three of the four. zsh
-	// takes a single operator per clause and names the second one.
+	// several: `umask u+rw-x` is 0122 from 022 in four of the five — bash,
+	// ksh93, dash and BusyBox ash. zsh alone takes a single operator per
+	// clause and names the second one.
+	//
+	// bash 3.2 refuses it too, with `invalid symbolic mode character`, which
+	// is the version line rather than a second answer: the dialect models
+	// bash 5.3.
 	SymbolicMaskTakesMoreThanOneOperator Answer
 
 	// SymbolicMaskWhoAloneSetsIt reads `umask g` as `umask g=`, denying that
@@ -8942,7 +8957,15 @@ type Semantics struct {
 
 	// SymbolicMaskTakesTheSetuidLetter accepts `s` in a clause, which
 	// changes no bits — a umask has no setuid bit to deny — and is accepted
-	// by three of the four all the same. zsh refuses it.
+	// by bash, ksh93 and dash all the same. zsh refuses it at 1, and so does
+	// BusyBox ash, at 2 and with a wording of its own — `umask: illegal
+	// mode: u+s`, naming the whole clause rather than the letter. bash 3.2
+	// refuses it as well, which is the version line.
+	//
+	// The dialect value for ash still says yes and is wrong. #3237 holds the
+	// measurement and the fix, which needs a wording as well as an answer.
+	// Measured with `umask u+r` beside it as the control, so what is refused
+	// is the letter and not the shape of the clause.
 	SymbolicMaskTakesTheSetuidLetter Answer
 
 	// SymbolicMaskTakesTheStickyLetter is the same question about `t`, and a
@@ -10655,13 +10678,13 @@ type Semantics struct {
 	// EmptyPathIsTheCurrentDirectory searches the current directory when PATH
 	// is set and empty.
 	//
-	// True in dash, bash and zsh; false in ksh93. `PATH=` reads like "nowhere"
-	// and is not: an empty PATH is one *empty element*, and an empty element
-	// means the current directory, so three of the four will still run a
-	// command sitting next to the script. Measured with the command in the
-	// current directory, which is the only arrangement that tells the two
-	// answers apart — with it anywhere else all four report not-found and the
-	// axis is invisible.
+	// True in dash, bash, zsh and BusyBox ash; false in ksh93. `PATH=` reads
+	// like "nowhere" and is not: an empty PATH is one *empty element*, and an
+	// empty element means the current directory, so four of the five will
+	// still run a command sitting next to the script. Measured with the
+	// command in the current directory, which is the only arrangement that
+	// tells the two answers apart — with it anywhere else every column
+	// reports not-found and the axis is invisible.
 	//
 	// `PATH=:` is not this question. Two empty elements is unanimous: every
 	// shell searches the current directory for it.
@@ -10673,8 +10696,8 @@ type Semantics struct {
 	HashReportsAMissingName Answer
 
 	// HashSearchesPathAlone counts only what PATH holds: zsh answers
-	// `hash shift` with "no such command" where the other three accept a
-	// builtin or a function as hashable. Measured with `shift`, which no
+	// `hash shift` with "no such command" where the other four — BusyBox ash
+	// among them, at status 0 — accept a builtin or a function as hashable. Measured with `shift`, which no
 	// PATH carries — `cd` was the contaminated probe, macOS ships
 	// /usr/bin/cd. Recorded as `hash/a-builtin-counts-except-in-zsh`.
 	HashSearchesPathAlone Answer
@@ -11608,7 +11631,8 @@ type Semantics struct {
 	TerminalTestMinusOneIsATerminal Answer
 
 	// ReadRequiresAVariableName refuses a bare `read`: dash's "arg count"
-	// at 2, where the other three read into REPLY.
+	// at 2, where the other four read into REPLY — BusyBox ash included,
+	// which sides with bash here rather than with the shell it is nearest.
 	ReadRequiresAVariableName Answer
 
 	// ReadRefusesABadNameBeforeReading judges `read`'s first operand as a
@@ -12412,8 +12436,9 @@ type Semantics struct {
 	CaseSubjectKeepsThePreviousLine Answer
 
 	// LinenoCountsFromTheFunction numbers `$LINENO` inside a function from
-	// the line the function was written on: zsh; the other three count from
-	// the file.
+	// the line the function was written on: zsh; the other four count from
+	// the file. Measured with the body's `echo $LINENO` on the file's second
+	// line, which is 1 in zsh and 2 everywhere else, BusyBox ash included.
 	//
 	// Inside means the line is one the body holds. A file the function
 	// sourced counts from its own top, because the line is the file's — the
@@ -12570,7 +12595,7 @@ type Semantics struct {
 	// unanswered on `$(( 1 + 1 ))` in a run with no dialect.
 	ArithValuesAreCarriedInADouble Answer
 	// EmptyArithExpressionIsAnError refuses `$(( ))`: dash wants a primary
-	// and stops the script; the other three answer zero.
+	// and stops the script; the other four answer zero, BusyBox ash included.
 	EmptyArithExpressionIsAnError Answer
 	// TildePlusMinusExpands turns `~+` into $PWD and `~-` into $OLDPWD,
 	// only while the variable is set — a fresh shell's `~-` stays literal.
@@ -13140,8 +13165,8 @@ type Semantics struct {
 
 	// SignalDeathStatusIsTwoFiftySix encodes a command killed by a signal as
 	// 256 + the signal rather than 128 + the signal. True only in ksh93,
-	// which reports 265 for KILL and 271 for TERM where the other three
-	// report 137 and 143.
+	// which reports 265 for KILL and 271 for TERM where the other four —
+	// BusyBox ash included — report 137 and 143.
 	//
 	// Measured across eight signals; it is not a special case for any one of
 	// them. POSIX requires only "greater than 128", which decides nothing,
@@ -13211,13 +13236,13 @@ type Semantics struct {
 	PrintfAssignsWithV Answer
 
 	// PrintfRejectsUnknownOption treats any leading word starting with `-` as
-	// an option and refuses one it does not know. True in bash, dash and
-	// ksh93, where even `printf "-%s\n" x` is an error because the format
-	// itself begins with a dash.
+	// an option and refuses one it does not know. True in bash — all three
+	// builds — dash and ksh93, where even `printf "-%s\n" x` is an error
+	// because the format itself begins with a dash.
 	//
-	// False in zsh, which recognizes the options it has and takes anything
-	// else as the format — so `printf -q x` prints `-q` there and is an error
-	// in the other three.
+	// False in zsh and in BusyBox ash, which recognize the options they have
+	// and take anything else as the format — so `printf -q x` prints `-q` in
+	// those two, at status 0, and is an error in the other three.
 	PrintfRejectsUnknownOption Answer
 
 	// TrapParsesOptions reads a leading `-` word as an option rather than as
@@ -13329,8 +13354,9 @@ type Semantics struct {
 
 	// TrapHasReturnCondition makes `trap … RETURN` a condition that fires
 	// when a sourced file finishes, and when a function whose own body set
-	// the trap returns. bash alone; the other three refuse the name the way
-	// they refuse any word that names no signal.
+	// the trap returns. bash alone; the other four refuse the name the way
+	// they refuse any word that names no signal — BusyBox ash calls it an
+	// `invalid signal specification` and carries on at 1.
 	TrapHasReturnCondition Answer
 
 	// ErrTrapRunsInsideFunctions fires the ERR trap for a failure inside a
@@ -13474,10 +13500,11 @@ type Semantics struct {
 
 	// UmaskSetWithSPrints echoes the new mask when `umask -S mask` both sets
 	// and is asked for the symbolic form. True only in bash, which prints
-	// `u=rwx,g=,o=` after setting; the other three set and say nothing.
+	// the new mask in symbolic form after setting; the other four set and
+	// say nothing, BusyBox ash included.
 	//
-	// Only for that combination: `umask mask` is silent in all four, and
-	// `umask -S` with no mask prints in all four.
+	// Only for that combination: `umask mask` is silent in all five, and
+	// `umask -S` with no mask prints in all five.
 	UmaskSetWithSPrints Answer
 
 	// UlimitBlockIsKilobyte counts `ulimit -c` and `-f` in 1024-byte blocks
@@ -13720,10 +13747,12 @@ type Semantics struct {
 	// script carries on.
 	//
 	// The companion question, how many digits may stand *before* the
-	// operator, is the grammar's and has the opposite dissenter: bash alone
-	// reads `exec 10>f` as a redirection where the other three run a command
-	// called `10` (Dialect.MultiDigitFdNumber). Two questions that split the
-	// panel the other way round cannot be one flag read from both ends.
+	// operator, is the grammar's and has the opposite dissenter: bash and
+	// BusyBox ash read `exec 10>f` as a redirection where the other three
+	// run a command called `10` (Dialect.MultiDigitFdNumber). Two questions
+	// that split the panel the other way round cannot be one flag read from
+	// both ends — and they do not even split it into the same *sizes*: ash
+	// is with bash there and with everyone else here.
 	//
 	// It is not a parse refusal, though the shell that has it words it as a
 	// syntax error: `sh -n -c 'echo hi >&10'` accepts the input and exits 0,

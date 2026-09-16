@@ -192,3 +192,26 @@ stop=4 code=1; n=0; for ((i=0;i<3;i++)); do echo s$i; done
 shopt -u extdebug
 stop=2 code=5; n=0; echo one; echo two; echo three
 trap - DEBUG
+
+# `ulimit`'s two keyword operands. `hard` names the ceiling this process is
+# already allowed and `soft` the floor in force, so `ulimit -n hard` is how a
+# script asks for every descriptor it may have without knowing the number.
+# bash has both; zsh has only the first, and ksh93, dash and BusyBox ash have
+# neither — see the same section in the other three directories.
+#
+# The limits are read back and compared rather than printed, so these rows
+# are a fact about the words and not about this machine's ceiling. `-c` is
+# the resource, because nothing else in this suite depends on it.
+ulimit -c hard; printf 'ulimit -c hard -> %s\n' "$?"
+[ "$(ulimit -Sc)" = "$(ulimit -Hc)" ] && printf 'the floor is now the ceiling\n'
+ulimit -Hc soft; printf 'ulimit -Hc soft -> %s\n' "$?"
+[ "$(ulimit -Hc)" = "$(ulimit -Sc)" ] && printf 'the ceiling is now the floor\n'
+
+# A limit is a plain number here, and a sign is not part of one: `+1` is a
+# number to C's strtol and to Go's strconv, and to no shell but ksh93, where
+# the operand is an expression instead. It was accepted in silence, at status
+# 0, until #3060.
+ulimit -c +1 2> /dev/null; printf 'signed -> %s\n' "$?"
+ulimit -c 1+1 2> /dev/null; printf 'expression -> %s\n' "$?"
+ulimit -c 0x10 2> /dev/null; printf 'hex -> %s\n' "$?"
+ulimit -c 1x 2> /dev/null; printf 'trailing -> %s\n' "$?"

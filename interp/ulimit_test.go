@@ -210,7 +210,11 @@ func TestUlimitKeywordOperands(t *testing.T) {
 // Four dialects set a limit from `+1999` at status 0 and in silence until
 // #3060, which is the shape #2298 is about.
 func TestUlimitRefusesWhatIsNotAPlainNumber(t *testing.T) {
-	for _, word := range []string{"+1999", "-1999", " 99", "0x10", "1000+999", "99abc", ""} {
+	// The empty operand is deliberately not here: bash 5.3 refuses it and
+	// bash 3.2, zsh, ksh93, dash and BusyBox ash take it as a line that
+	// changes nothing, so it is an axis of its own rather than part of this
+	// one. This shell has always refused it, which is what #3064 is for.
+	for _, word := range []string{"+1999", "-1999", " 99", "0x10", "1000+999", "99abc"} {
 		held := limits(map[Resource]limitPair{ResourceOpenFiles: {256, 4096}})
 		out, st, held := ulimitRun(t, held, nil, `ulimit -n `+quoteOperand(word))
 		if st == 0 {

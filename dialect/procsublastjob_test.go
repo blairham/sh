@@ -25,7 +25,9 @@ func TestAProcessSubstitutionIsTheLastBackgroundJob(t *testing.T) {
 		},
 		{
 			name: "and waiting really waits for a body that is still running",
-			src:  "cat <(sleep 0.1; exit 4) >/dev/null; wait $!; echo \"s=$?\"\n",
+			// A loop of builtins rather than `sleep`, so the body writes
+			// nothing while the harness reads the streams.
+			src:  "cat <(i=0; while [ $i -lt 20000 ]; do i=$((i+1)); done; exit 4) >/dev/null; wait $!; echo \"s=$?\"\n",
 			want: map[string]string{"bash": "s=4\n", "zsh": "s=127\n", "ksh": "s=0\n"},
 		},
 		{

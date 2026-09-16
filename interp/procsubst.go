@@ -1355,6 +1355,11 @@ func (r *Runner) procSubJob() *Job {
 		stopNote: make(chan struct{}),
 		ident:    r.inventJobIdent(),
 	}
+	// Settled here, on the shell's goroutine, because the body will never
+	// have a process to settle it with and `wait` reads it the moment `$!`
+	// names the job — the same reason `&` waits for its job to be ready
+	// before it returns.
+	job.settleNoPID()
 	r.setLastJob(job)
 	r.procSubJobs = append(r.procSubJobs, job)
 	if extra := len(r.procSubJobs) - reapedJobsKept; extra > 0 {

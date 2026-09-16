@@ -68,6 +68,8 @@ func seedStacks(r *Runner) {
 	r.jobs = append(make([]*Job, 0, 4), nil)
 	r.jobOrder = append(make([]*Job, 0, 4), nil)
 	r.reaped = append(make([]*Job, 0, 4), nil)
+	r.procSubJobs = append(make([]*Job, 0, 4), nil)
+	r.enclosingProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.scopes = append(make([]*scope, 0, 4), &scope{
 		saved:              map[string]string{"seed": "v"},
 		existed:            map[string]bool{"seed": true},

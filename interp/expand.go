@@ -176,20 +176,28 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 			b.add(s, parts)
 			continue
 		}
+		substituted := false
 		if !split && splitting.splits(r, s, text) {
 			// Text of the word a `-` or `+` substituted is part of an
 			// unquoted expansion's result and splits with it. See
 			// splittingTheSubstitutedWord.
 			split = true
+			substituted = true
 		}
 		if !split {
 			if text == "" && s.Quoting != syntax.Unquoted && b.separated() &&
-				r.ask(r.sem().EmptyQuotesAfterASeparatorAreAField,
-					"an empty quoted word behind a separator being a field of its own") {
+				(!b.sepWritten || r.ask(r.sem().EmptyQuotesAfterASeparatorAreAField,
+					"an empty quoted word behind a separator being a field of its own")) {
 				// `${v:+p ""}` — the quoted nothing behind the blank is a
 				// field in bash, dash and BusyBox ash and is not one in
 				// ksh93. It is the one span that carries no text and still
 				// has to open the field the separator asked for.
+				//
+				// Only a separator *written* in the substituted word asks.
+				// One that arrived in an expansion's result opens the field
+				// in every column, ksh93 included: `v=" "; … a${v}""` is
+				// `[a][]` in bash 5.3.20, ksh93u+, dash and BusyBox ash
+				// alike (#3395).
 				b.flush()
 			}
 			b.text(text)
@@ -235,12 +243,12 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// so rather than this line having to know it: see
 		// TrailingSeparatorEndsAField and splitFieldsAskEdge.
 		if leadingSeparatorEdge(text, ifs, set) {
-			b.separate()
+			b.separate(substituted)
 		}
 		fields, openEnd := r.splitFieldsAskEdge(text, ifs, set)
 		b.add(s, r.tildeFlagElements(s, head, fields))
 		if openEnd {
-			b.separate()
+			b.separate(substituted)
 		}
 	}
 
@@ -270,6 +278,10 @@ type wordFields struct {
 	// thing to arrive opens a field of its own. Deferred so that a separator
 	// ending the word opens nothing. See wordFields.separate.
 	sep bool
+	// sepWritten is whether the waiting separator was written in the word a
+	// `-` or `+` substituted, rather than arriving in an expansion's result.
+	// Only the written kind asks EmptyQuotesAfterASeparatorAreAField (#3395).
+	sepWritten bool
 	// any is whether anything at all reached the word — a substitution that
 	// produced a field, or literal text, or a quoted empty span. Without it
 	// a word that expanded to nothing cannot be told from a word that was
@@ -300,9 +312,10 @@ func (b *wordFields) text(t string) {
 // opens nothing: `${v:+p }` is one field in bash, ksh93 and dash. And a
 // separator with nothing in front of it opens nothing either, which is the
 // leading half of the same rule.
-func (b *wordFields) separate() {
+func (b *wordFields) separate(written bool) {
 	if b.any {
 		b.sep = true
+		b.sepWritten = written
 	}
 }
 

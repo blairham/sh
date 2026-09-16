@@ -74,6 +74,10 @@ type Semantics struct {
 	// the separator asked for, which is why it is a question of its own and
 	// not part of SplitParamExpansion.
 	//
+	// Only a separator written in the substituted word asks. One that arrived
+	// in an expansion's result — `v=" "; … a${v}""` — opens the field in every
+	// column, ksh93u+ included, so there it is not asked (#3395).
+	//
 	// unpinned zsh: the question is only reachable where the word splits at
 	// all, and zsh does not split an unquoted expansion — `${v:+p ""}` is the
 	// single field `p ` there, separator and all. TestTheSubstitutedWordSplits

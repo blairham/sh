@@ -2026,7 +2026,7 @@ func Semantics() interp.Semantics {
 	// refused.
 	s.MultiDigitDuplicationTargetIsAnError = interp.No
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.No
-	// A substitution's body does hold `-e`, which is the neighbouring axis
+	// A substitution's body does hold `-e`, which is the neighboring axis
 	// answering the other way: measured 2026-09-15,
 	// `set -e; echo "end[$(false; echo no)]"` is `end[]` in zsh 5.9.2 under
 	// every `emulate`, and under the name `sh` too. So nothing moves it and

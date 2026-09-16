@@ -3187,10 +3187,13 @@ argument's `\e` and `61 5c 65 5a` for an `echo` argument's — that is
 `/bin/bash` 3.2.57, the corpus's `bash32` column, and not `bash-as-sh`,
 which is the 5.3 build under another name — so one shell answers the two
 sites differently; and the bare octal below splits the two
-sites for every bash. The four dialects modeled here happen to give the
-same answer at both sites for `\e`, `\E` and `\x` — bash 3.2 is a version
-and not a dialect — but they are separate questions and are asked
-separately.
+sites for every bash. ksh93 answers the two sites
+differently for `\e` as well, which #3225 measured once the format's own
+site had an axis to be asked at: `printf 'a\eZ'` is `61 1b 5a` there and
+`printf '%b' 'a\eZ'` is `61 5c 65 5a`. `\x` is the same shape again. So
+the two sites are separate questions in fact and not only in principle —
+this passage said the four dialects happened to agree at both until the
+format's letters were measured.
 
 The rest of the table splits, and each split falls in a different place:
 
@@ -3273,6 +3276,48 @@ dialect.
 `echo -e 'a\EZ'` is `61 1b 5a` in ksh93 and `61 5c 45 5a` in zsh, where
 `echo -e 'a\eZ'` is the other way round — and it was one axis for both
 letters until #908 split it. See `EchoExpandsCapitalEscEscape`.
+
+### The escape character in a format
+
+`printf '\e[1m'` is how a script says it is about to write an escape
+sequence, and it is the format-string escape the panel divides over most
+finely. Measured 2026-09-16 under `LC_ALL=C`, bytes read with `od`, over
+all seven corpus columns:
+
+    printf 'a\eZ'   61 1b 5a      bash 5.3, bash-as-sh, bash 3.2,
+                                  ksh93, zsh, BusyBox ash
+                    61 5c 65 5a   dash
+    printf 'a\EZ'   61 1b 5a      bash 5.3, bash-as-sh, bash 3.2, ksh93
+                    61 5c 45 5a   zsh, BusyBox ash, dash
+
+Two axes, `PrintfEscEscape` and `PrintfCapitalEscEscape`, for the reason
+the `%b` site's pair is two: zsh and BusyBox ash take the small letter and
+not the capital, so one answer for both is wrong for two columns of seven.
+
+They are **not** `PrintfBEscEscape` and `PrintfBCapitalEscEscape` read at a
+second place, and ksh93 is what settles that: it takes `\e` in a format and
+writes the two characters in a `%b`. A format that borrowed the `%b`
+answer would be wrong for that column at that letter, which is measured
+rather than argued — the reader was mutated to read the `%b` axes and ksh
+was the only column that broke.
+
+`PosixSemantics` answers **No** to both. XCU gives a format the XSI escape
+set and `\ddd` and nothing else, so a backslash in front of an `e` is a
+backslash in front of an `e`; dash is the column that reads the text as
+written, at both letters. `CoreSemantics` answers neither, because there is
+nothing all five references agree on to fix — which means a shell with no
+dialect refuses a format carrying one of the letters at status 2, and only
+such a format.
+
+A 6-1 split has no suite tier: a dialect file guards one column against its
+own reference and `core/` needs all five to agree, so `core/printf.tests`
+carries a paragraph here rather than a line and the panel's whole answer is
+asserted in Go, in `dialect/printfesc_test.go`.
+
+`$'…'` is a third site and had both letters already, in every dialect:
+`printf '%s' $'a\eZ'` and `$'a\EZ'` are `61 1b 5a` in every reference that
+has the construct and in all of ours. `echo`'s pair is a fourth, and was
+split in #908.
 
 ### A format is a byte string, in every direction
 

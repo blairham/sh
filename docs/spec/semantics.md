@@ -16314,6 +16314,49 @@ past the word is still an integer as far as an operator is concerned, so
 `$(( 2**64 / 3 ))` is `3074457345618258432` — an integer division of the
 saturated cast — and not `6.14891469123652e+18`.
 
+The integer test is about the **value** and not about where it came
+from, which is the half that was missing until #3257. A float literal,
+a division of two floats and a numeral past the signed word all go
+through the same cast, so `$(( 1e19/3 ))` is `3333333333333333504`
+while `$(( 1e19 ))` is `1e+19`, and `$(( 9223372036854775808 ))` — 2^63
+written out — is `9223372036854775807`. The rule was applied to an
+integer *result* only and every one of those was written in floating
+notation instead.
+
+And the **numeral reader** is not the double either, which is the rest
+of #3257. A numeral with an explicit radix is read in the *unsigned*
+word and wraps in it, becoming the double only when that word
+overflows — C's `strtoull` first and `strtod` as the fallback — where a
+plain decimal never takes that route at all. Measured 2026-09-16:
+
+    $(( 0x7fffffffffffffff ))         9223372036854775807
+    $(( 0x8000000000000000 ))        -9223372036854775808
+    $(( 0x8000000000000001 ))        -9223372036854775808
+    $(( 0xffffffffffffffff ))        -1
+    $(( 0x10000000000000000 ))        1.84467440737096e+19
+    $(( 01777777777777777777777 ))   -1
+    $(( 02000000000000000000000 ))    2e+21
+    $(( 18446744073709551615 ))       1.84467440737096e+19
+    $(( 0xffffffffffffffff / 3 ))     0
+
+The octal pair is what makes it a rule rather than a width.
+`01777777777777777777777` is 2^64-1 and the unsigned word holds it
+exactly; `02000000000000000000000` is 2^64 and overflows it, and the
+reader it falls back to has never heard of octal — so the answer is the
+*decimal* reading of those digits, leading zero and all. The
+hexadecimal fallback is the hexadecimal float the same function reads,
+which is why one past the unsigned word is 2^64 and not 2·10^16.
+
+`0x8000000000000001` is the row that says the wrapped value still goes
+back through the double: the unsigned word holds 2^63+1 exactly and the
+double does not, so the answer is one *below* the exact reading. And
+the division row says the value's kind is integer, not float.
+
+`base#digits` takes an integer route of its own and is a third answer
+again — `10#18446744073709551615` and `16#ffffffffffffffffff` are
+`arithmetic syntax error` in ksh93 where this shell wraps them — which
+is recorded in #3257 and not implemented.
+
 The same carriage is recorded for this shell's `printf` from the other
 side, in the corpus row `printf/integer-operand-rounds-through-a-double`
 (#2907), whose note already said the arithmetic does it too.
@@ -16347,9 +16390,13 @@ which is C's `strtoull` with the range error thrown away — and it is
 modular rather than a stop at the top of that word, since
 `18446744073709551615` is -1 and `18446744073709551616` is 0. dash
 clamps at the largest signed value, whatever the numeral and whatever
-its base. ksh93 has no word to overflow: the numeral becomes the double
-its arithmetic is carried in, which is `ArithValuesAreCarriedInADouble`
-above, asked first, so this axis is not asked of that column at all.
+its base. ksh93 is the column this axis is not asked of at all:
+`ArithValuesAreCarriedInADouble` above is asked first and answers the
+question there instead — and it does **not** answer it by going
+straight to the double, which the `-1` in this very table has always
+said. A numeral with a radix is read in the unsigned word there too;
+the double is what happens when that word overflows. See the axis above
+for the rows, and #3257 for the pass that built it.
 
 zsh is the fourth and the only one that says anything. Its rule is worth
 writing down because the obvious model of it — take digits while they

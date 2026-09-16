@@ -1957,8 +1957,28 @@ func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 			if errors.As(err, &ae) && ae.pastTheWord {
 				if r.dialect().ArithFloat &&
 					r.ask(r.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
-					// The numeral is past the word and this shell keeps its
-					// arithmetic in a double, so it is simply that double:
+					// A numeral with an explicit radix is read in the
+					// **unsigned** word first, and only becomes the double
+					// when that overflows. `$(( 0xffffffffffffffff ))` is -1
+					// and `$(( 01777777777777777777777 ))` is -1, where a
+					// plain decimal of the same magnitude is
+					// 1.84467440737096e+19 — so the radix is the whole of
+					// what parts them (#3257).
+					//
+					// The value goes back through carriedInADouble like every
+					// other integer, which is what makes `0x8000000000000001`
+					// -9223372036854775808 rather than -9223372036854775807:
+					// the unsigned word holds it exactly and the double this
+					// shell stores it in does not.
+					if v, ok := unsignedWordNumeral(ae.digits, ae.numBase); ok && ae.numBase != 10 {
+						if negativeNumeral(s) {
+							v = -v
+						}
+						return r.carriedInADouble(float64(v), int(v)), nil
+					}
+					// Past the unsigned word too, or a plain decimal, which
+					// never takes that route at all. What is left is C's
+					// `strtod` over the whole numeral as it was written —
 					// `$(( 10000000000000000000 ))` is 1e+19 and
 					// `$(( 0xffffffffffffffffff ))` is 4.72236648286965e+21.
 					return floatNum(floatNumeral(s)), nil
@@ -2039,61 +2059,92 @@ func overflowZero(written bool) float64 {
 	return 0
 }
 
-// floatNumeral is an integer numeral too large for the machine word, read as
-// the double it comes to.
+// unsignedWordNumeral reads a digit run in the **unsigned** machine word,
+// reporting false where it does not fit rather than letting it go round.
 //
-// The decimal and hexadecimal spellings go through the reader that rounds
-// correctly — Go will read a hexadecimal one once it is given the binary
-// exponent C already lets it leave off. A numeral in any other base is
-// accumulated a digit at a time, which is a rounding of its own past 2^53 and
-// the reason the two exact readers are preferred where they apply.
-func floatNumeral(s string) float64 {
-	neg := false
-	if s != "" && (s[0] == '-' || s[0] == '+') {
-		neg = s[0] == '-'
-		s = s[1:]
+// The refusal is the point, and it is what parts this from wrappedNumeral one
+// file along. Two shells read a numeral past the signed word in the unsigned
+// one; only one of them stops there. `$(( 01777777777777777777777 ))` is 2^64-1
+// and is -1 in bash and in ksh93 alike, and `$(( 02000000000000000000000 ))` is
+// 2^64 and goes round to 0 in bash while ksh93 abandons the word and reads the
+// numeral as a double instead — 2e+21, because the reader it falls back to has
+// never heard of octal. Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01.
+func unsignedWordNumeral(digits string, base int) (int64, bool) {
+	if digits == "" {
+		return 0, false
 	}
-	f, ok := unsignedFloatNumeral(s)
-	if !ok {
+	var v uint64
+	for i := 0; i < len(digits); i++ {
+		d, known := baseDigitValue(digits[i], base)
+		if !known || d >= base {
+			return 0, false
+		}
+		nv := v*uint64(base) + uint64(d)
+		if nv/uint64(base) != v || nv < uint64(d) {
+			// The multiply or the add carried past the word. Checked rather
+			// than inferred from the result shrinking: a base that is not a
+			// power of two can wrap to a value larger than the one before it.
+			return 0, false
+		}
+		v = nv
+	}
+	return int64(v), true
+}
+
+// negativeNumeral reports a numeral written with a leading minus, which
+// parseNum strips before the conversion and never gets to apply when the
+// conversion fails.
+func negativeNumeral(s string) bool {
+	s = strings.TrimSpace(s)
+	return s != "" && s[0] == '-'
+}
+
+// floatNumeral is an integer numeral the shell has given up reading as an
+// integer, read as the double it comes to.
+//
+// It is C's `strtod` and deliberately nothing more, because the one shell that
+// reaches it falls back to exactly that function. So a hexadecimal numeral is
+// the hexadecimal float — Go reads one once it is given the binary exponent C
+// lets it leave off — and everything else is **decimal**, whatever a leading
+// zero or a `base#` prefix would have meant to the integer reader that just
+// failed.
+//
+// The octal row is the one that says so out loud, and it is measured:
+// `$(( 02000000000000000000000 ))` in ksh93u+ is `2e+21` and not
+// 1.84467440737096e+19, so the fallback read the whole string in base ten with
+// its leading zero along for the ride. Reading it as octal here is what this
+// shell used to do (#3257).
+func floatNumeral(s string) float64 {
+	s = strings.TrimSpace(s)
+	if f, ok := hexFloatNumeral(s); ok {
+		return f
+	}
+	body, neg := s, false
+	if body != "" && (body[0] == '-' || body[0] == '+') {
+		neg = body[0] == '-'
+		body = body[1:]
+	}
+	if strings.HasPrefix(body, "0x") || strings.HasPrefix(body, "0X") {
+		// A hexadecimal integer, which hexFloatNumeral above declines
+		// because it has neither a point nor an exponent. `strtod` reads it
+		// as the hexadecimal float with an exponent of zero.
+		f, err := strconv.ParseFloat(body+"p0", 64)
+		if err != nil {
+			return 0
+		}
+		if neg {
+			return -f
+		}
+		return f
+	}
+	f, err := strconv.ParseFloat(body, 64)
+	if err != nil {
 		return 0
 	}
 	if neg {
 		return -f
 	}
 	return f
-}
-
-func unsignedFloatNumeral(s string) (float64, bool) {
-	digits, base := s, 10
-	switch {
-	case strings.Contains(s, "#"):
-		text, rest, _ := strings.Cut(s, "#")
-		b, err := strconv.Atoi(text)
-		if err != nil || b < 2 || b > 64 {
-			return 0, false
-		}
-		digits, base = rest, b
-	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
-		f, err := strconv.ParseFloat(s+"p0", 64)
-		return f, err == nil
-	case strings.HasPrefix(s, "0b"), strings.HasPrefix(s, "0B"):
-		digits, base = s[2:], 2
-	case len(s) > 1 && s[0] == '0':
-		digits, base = s[1:], 8
-	}
-	if base == 10 {
-		f, err := strconv.ParseFloat(digits, 64)
-		return f, err == nil
-	}
-	f := 0.0
-	for i := 0; i < len(digits); i++ {
-		d, ok := baseDigitValue(digits[i], base)
-		if !ok {
-			return 0, false
-		}
-		f = f*float64(base) + float64(d)
-	}
-	return f, true
 }
 
 // hexFloatNumeral reads the hexadecimal float spelling C has, and reports
@@ -2204,6 +2255,26 @@ func (r *Runner) formatNum(n arithNum) string {
 		digits = 17
 	}
 	out := strconv.FormatFloat(n.f, 'g', digits, 64)
+	if i, fits := intFromDouble(n.f); fits && itoa(i) != out &&
+		r.ask(r.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+		// The shell whose every arithmetic value is a C double writes one as
+		// an **integer** whenever a saturating `(intmax_t)` cast of it
+		// converts back to the same double, and in floating notation when it
+		// does not. That is the rule carriedInADouble already applies to an
+		// integer result, and it is the same rule here because it was never
+		// about where the value came from: `$(( 1e19/3 ))` in ksh93u+ is
+		// 3333333333333333504 and `$(( 1e19 ))` is 1e+19, from a division of
+		// two floats and a float literal — neither of them an integer
+		// operation at all (#3257).
+		//
+		// Asked only where the two readings disagree, which is why the `%g`
+		// text is produced first and compared: a float that is already
+		// written as its own integer — `$(( 1.5 + 1.5 ))` is `3` in every
+		// column that has floats — is not a question, and an axis asked
+		// there would report itself unanswered for a shell that never
+		// carries anything in a double.
+		return itoa(i)
+	}
 	if r.diag().ArithFloatKeepsPoint && !strings.ContainsAny(out, ".eEnif") {
 		// A whole float still reads as one: 4 becomes `4.`. Skipped when the
 		// text already carries a point, an exponent, or is an infinity or a
@@ -2305,10 +2376,18 @@ func (r *Runner) parseNum(s string) (int, error) {
 	case len(s) > 1 && s[0] == '0' && !strings.ContainsAny(s, "xX") && r.octalLeadingZero():
 		digits, base = s[1:], 8
 		n, err = strconv.ParseInt(digits, 8, 64)
-		if err != nil && !r.ask(r.sem().ArithInvalidOctalDigitIsError, "an invalid octal digit being an error") {
+		if errors.Is(err, strconv.ErrSyntax) &&
+			!r.ask(r.sem().ArithInvalidOctalDigitIsError, "an invalid octal digit being an error") {
 			// ksh93 is octal *and* tolerant: `08` is 8 there, not a
 			// failure. Asked only once the octal read has actually failed,
 			// so a dialect that never sees a bad digit is never questioned.
+			//
+			// A *digit* the base cannot use, and not a numeral too large for
+			// the word. The two used to be one condition, and the second
+			// reading threw the octal away: `01777777777777777777777` is
+			// 2^64-1 written in octal and was re-read in base ten, so the
+			// numeral this shell then had was 1.77777777777778e+21 where
+			// ksh93 answers -1 (#3257).
 			digits, base = s, 10
 			n, err = strconv.ParseInt(digits, 10, 64)
 		}

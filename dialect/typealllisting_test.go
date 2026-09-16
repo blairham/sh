@@ -119,13 +119,26 @@ func TestTypeAllWithAPathLetterPrintsPaths(t *testing.T) {
 func TestTypePathIsSilentForAnAlias(t *testing.T) {
 	p := presets["bash"]
 	dir := writeEchoOnPath(t)
-	base := dialecttest.Base{Dir: dir, Env: []string{"PATH=" + dir}}
-	out, _, err := p.Combined(t, base,
-		"shopt -s expand_aliases; alias echo='echo -n'\ntype -p echo; echo st=$?")
-	if err != nil {
+	if err := testenv.WriteExecutable(filepath.Join(dir, "tool"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if out != "st=0\n" {
-		t.Errorf("type -p of an alias said %q, want silence and 0", out)
+	base := dialecttest.Base{Dir: dir, Env: []string{"PATH=" + dir}}
+	// Three rows, because no two of them alone say it. The control names the
+	// file, so the two below are the alias table being consulted rather than
+	// `-p` having gone quiet; the shadowed name separates the *output*, and
+	// the name that is only an alias separates the *status* — 1 without the
+	// table, where bash answers 0.
+	for _, tc := range []struct{ src, want string }{
+		{"type -p tool; echo st=$?", "/tool\nst=0\n"},
+		{"alias tool='true'\ntype -p tool; echo st=$?", "st=0\n"},
+		{"alias only='true'\ntype -p only; echo st=$?", "st=0\n"},
+	} {
+		out, _, err := p.Combined(t, base, "shopt -s expand_aliases\n"+tc.src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasSuffix(out, tc.want) {
+			t.Errorf("%q said %q, want it to end %q", tc.src, out, tc.want)
+		}
 	}
 }

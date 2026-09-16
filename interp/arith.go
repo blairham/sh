@@ -2844,7 +2844,7 @@ func markArithValue(part string) string {
 // subscript's brackets are scanned through quotations, and quote removal is
 // then performed over what they held, so a value that carries a `'` would
 // otherwise open a quotation nobody wrote and lose its own two characters
-// out of the key. Measured 2026-09-16, `declare -A a; a["'q'"]=21; a[q]=22;
+// out of the key. Measured 2026-09-16, `typeset -A a; a["'q'"]=21; a[q]=22;
 // k="'q'"` makes `$(( a[$k] ))` 21 in bash 5.3.20 and ksh93u+ 2012-08-01,
 // where the same two characters written in the source name `q`.
 const arithValueMarked = "[]'\"\\\x00"

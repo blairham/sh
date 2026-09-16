@@ -752,6 +752,23 @@ func (p *Parser) Open() []Open {
 	return out
 }
 
+// OpenQuote is the **lexer's** own unfinished thing, spelled as it is
+// written: `'`, `"`, `$'`, `${`, `$((`, “ ` “ or `<<`. Empty when the input
+// was whole, or when what ran out was the parser's rather than the lexer's.
+//
+// Open above answers a continuation prompt, which wants the whole stack and
+// the construct that opened it. This answers a different question and wants
+// only the innermost: a shell reading a script one physical line at a time has
+// to know what the *next* line begins inside, because a quote opened on one
+// line is still open on the next and a here-document's body is not shell text
+// at all. See driver's history gate, which is the caller.
+//
+// A method rather than reading Open()[len-1], because that slice is allocated
+// per call and its last entry is a construct keyword whenever the lexer had
+// nothing open — `then` is not a quote, and a caller reading it as one would
+// silence expansion inside every `if`.
+func (p *Parser) OpenQuote() string { return p.lex.Open() }
+
 // Open is one thing the parser is inside.
 type Open struct {
 	// Word is the keyword that opened it: `if`, `for`, `case`, `{`, or a

@@ -126,24 +126,59 @@ type state struct {
 	new     string
 }
 
-// Expand rewrites one line.
+// Quote is what the text handed to ExpandIn begins inside.
+//
+// A shell at a prompt hands over a whole logical line and the answer is always
+// Unquoted. A shell reading a **script** hands over one physical line at a
+// time, and a quote opened on an earlier line is still open when the next one
+// arrives: measured on bash 5.3.20, `echo 'a` / `!!` / `b'` leaves the two
+// characters alone and `echo "a` / `!!` / `b"` expands them, so the state has
+// to cross the line boundary or half the rule is lost.
+//
+// It seeds the scanner and nothing more — the scanner still closes the quote
+// when it reaches the character that closes it, which is what makes `echo 'a`
+// / `b' !!` expand the reference *after* the quote ends. Measured.
+type Quote uint8
+
+const (
+	// Unquoted is a line that begins outside any quote.
+	Unquoted Quote = iota
+	// InSingleQuotes is a line continuing a single-quoted string, where
+	// nothing expands until the quote closes.
+	InSingleQuotes
+	// InDoubleQuotes is a line continuing a double-quoted string, where
+	// references expand exactly as they do outside one.
+	InDoubleQuotes
+)
+
+// Expand rewrites one whole line, which is what a prompt hands over.
+func Expand(line string, hist List, c Chars) (Result, error) {
+	return ExpandIn(line, Unquoted, hist, c)
+}
+
+// ExpandIn rewrites one line that begins in a known quoting state.
 //
 // The line is scanned left to right rather than split into words, because the
 // quoting rules are the scanner's: text inside single quotes is never
 // expanded, text inside double quotes is, and a `'` inside double quotes opens
 // nothing — measured, `echo "it's !!"` expands where `echo '!!'` does not.
-func Expand(line string, hist List, c Chars) (Result, error) {
+//
+// A `^old^new^` quick substitution is only one when the line begins outside a
+// quote. Inside one the character is ordinary text, and a line of a here
+// document or of a continued string that happened to start with it would
+// otherwise be rewritten into something nobody wrote.
+func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 	if c.Event == 0 {
 		return Result{Line: line}, nil
 	}
 	var st state
-	if c.Quick != 0 && strings.HasPrefix(line, string(c.Quick)) {
+	if in == Unquoted && c.Quick != 0 && strings.HasPrefix(line, string(c.Quick)) {
 		return quick(line, hist, c, &st)
 	}
 	src := []rune(line)
 	var out strings.Builder
 	res := Result{}
-	single, double := false, false
+	single, double := in == InSingleQuotes, in == InDoubleQuotes
 	for i := 0; i < len(src); {
 		r := src[i]
 		switch {

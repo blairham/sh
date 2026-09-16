@@ -64,6 +64,55 @@ type program struct {
 	// carried are the remarks of parsers already retired, so that a count of
 	// what has been reported stays monotonic across the rebuilds.
 	carried []syntax.Remark
+
+	// gate is the history expander, once a script has asked for one. Nil for
+	// every program that never writes `set -o history`, which is the point:
+	// see driver/historygate.go, where the design and what it replaced are
+	// written down.
+	gate *histGate
+}
+
+// handOver puts the text the program has not run yet behind a history gate,
+// and feeds the parser through it from here on.
+//
+// at is the byte offset, in everything read so far, of the first line the
+// program has not run — which the front end has in hand as the `set -v`
+// position, because the echo has already walked past every line that ran.
+//
+// The whole-text parse is retired exactly as fill does it, and for the same
+// reason: what has run is spent, and only its line count has to survive so
+// that a diagnostic names the line of the *file*.
+//
+// The source text is rewound to the same point and re-accumulates from the
+// gate, so what `set -v` writes back is the **expanded** line. That is
+// measured rather than chosen: bash under `set -v; set -H` echoes `echo echo
+// one two three` where the file holds `echo !!`.
+func (pr *program) handOver(g *histGate, at int) {
+	text := pr.text()
+	at = min(max(at, 0), len(text))
+	k := min(max(at-(len(text)-len(pr.pending)), 0), len(pr.pending))
+	pr.base += strings.Count(pr.pending[:k], "\n")
+	if pr.p != nil {
+		pr.carried = append(pr.carried, pr.p.Remarks()...)
+		pr.base += pr.p.LineShift()
+	}
+	g.at = pr.base
+	g.rest, g.more = pr.pending[k:], pr.more
+	pr.gate, pr.more = g, g.next
+	pr.pending, pr.ran, pr.p = "", 0, nil
+	head := text[:at]
+	pr.src.Reset()
+	pr.src.WriteString(head)
+}
+
+// openQuote is what the parser is still inside, which is what the next
+// physical line begins inside. Empty where there is no parser yet or where it
+// finished what it was given.
+func (pr *program) openQuote() string {
+	if pr.p == nil {
+		return ""
+	}
+	return pr.p.OpenQuote()
 }
 
 // wholeProgram is a program whose text is already in hand.
@@ -161,6 +210,13 @@ func (pr *program) remarks() []syntax.Remark {
 func (pr *program) fill(retire bool) bool {
 	if pr.more == nil {
 		return false
+	}
+	if pr.gate != nil {
+		// What the next physical line begins inside, and whether the line
+		// before it finished a command. The gate is the program's `more` at
+		// this point, so both reach it before it reads anything.
+		pr.gate.open = pr.openQuote()
+		pr.gate.flush = retire
 	}
 	// Read first and retire second. Retiring hands the parser's remarks to
 	// carried, and a retire that then finds no more input leaves the same

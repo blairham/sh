@@ -1468,6 +1468,11 @@ type Runner struct {
 	// to the list at all. On for an interactive session and off for a script,
 	// measured the same way.
 	histRecord bool
+	// histEntries and histAdd reach the list itself, which a dialect owns.
+	// See SetHistoryStore for why they take a runner rather than close over
+	// one.
+	histEntries func(*Runner) []string
+	histAdd     func(*Runner, string)
 	// tracksWindowSize is permission to keep $LINES and $COLUMNS abreast of
 	// the terminal. bash spells it `checkwinsize` and zsh has no name for it
 	// at all because it never stops doing it; the *capability* is neither

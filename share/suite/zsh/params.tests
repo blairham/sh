@@ -178,3 +178,41 @@ printf 'after-nested [%s]\n' "$_"
 suiteset() { _=SET_IN_BODY; }
 suiteset qq
 printf 'after-explicit [%s]\n' "$_"
+
+# A `#` or a `%` after the **global** `//` of a span replacement is an anchor
+# here and is the pattern's own first byte in bash, bash 3.2, bash-as-`sh` and
+# ksh93 — so the two spellings are one construct in this shell and two in the
+# rest (#3307). dash has no replacement at all.
+#
+# Each row has the *single* spelling beside it, which is the control: every
+# column that has anchors reads that one, so what differs is the global
+# spelling and not the anchor.
+#
+# `abcabc` on its own cannot say which reading happened — it is the answer
+# both when the anchor is honored and `a` does not start the value, and when
+# the pattern is `#a` and is not in the value — so the rows that matter are
+# over a value that *holds* the anchor character. This shell leaves that value
+# alone **because** it anchored; the others replace **because** they did not.
+
+anchorv=abcabc
+anchorw='x#ay%bz'
+printf 'global-start   [%s]\n' "${anchorv//#a/X}"
+printf 'single-start   [%s]\n' "${anchorv/#a/X}"
+printf 'global-end     [%s]\n' "${anchorv//%c/Y}"
+printf 'single-end     [%s]\n' "${anchorv/%c/Y}"
+printf 'held-start     [%s]\n' "${anchorw//#a/Q}"
+printf 'held-end       [%s]\n' "${anchorw//%b/Q}"
+printf 'held-single    [%s]\n' "${anchorw/#a/Q}"
+# Exactly one character is taken, so a doubled one is the anchor and then a
+# pattern byte.
+printf 'doubled        [%s]\n' "${anchorv//##a/X}"
+# An anchor with nothing behind it is the empty pattern at that end rather
+# than a one-character pattern, which is the same row the single spelling
+# gives here.
+printf 'empty-start    [%s]\n' "${anchorv//#/X}"
+printf 'empty-end      [%s]\n' "${anchorv//%/Y}"
+# And a real pattern behind the anchor, so none of this is about
+# one-character patterns.
+printf 'pattern-behind [%s]\n' "${anchorv//#a*/X}"
+# The control that says the replacement itself works in every column.
+printf 'plain-global   [%s]\n' "${anchorv//b/X}"

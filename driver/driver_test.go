@@ -1176,6 +1176,13 @@ func TestTheStartupUnderscoreIsTheInvocationAndNotThePrelude(t *testing.T) {
 		sh := shell()
 		sh.Semantics.UnderscoreStartsAtTheInvocation = interp.Yes
 		sh.Semantics.UnderscoreTracksTheLastArgument = interp.Yes
+		// And *how* it moves, which is a third question with a third answer:
+		// one column moves it only between the commands the shell reads, and
+		// this test is about a script's own last argument reaching the
+		// parameter through a `;`-list. Answered here for the same reason
+		// the two above are — so the value under test is the one this test
+		// put there.
+		sh.Semantics.UnderscoreMovesOnlyBetweenInputCommands = interp.No
 		sh.Semantics.UnderscoreInheritsFromTheEnvironment = inherits
 		return sh
 	}
@@ -1221,6 +1228,31 @@ func TestTheStartupUnderscoreIsTheInvocationAndNotThePrelude(t *testing.T) {
 	sh = base(interp.No)
 	sh.Prelude = "PRELUDE_RAN=1\n"
 	out, _, _ = runArgs(t, sh, "/some/where/testsh", "-c", `true a b; echo "[$_]"`)
+	if out != "[b]\n" {
+		t.Errorf("got %q, want the script's own last argument", out)
+	}
+
+	// And forgotten in the *narrowed* reading too, which is its own record
+	// and the one a real prelude reaches: a dialect that moves `$_` only
+	// between the commands the shell reads is reading its own prelude
+	// exactly that way, so a prelude ending in a command left that command's
+	// last word where the script's first `$_` looks. Measured against
+	// ksh93's own prelude, which ends on `type=whence -v` — that string was
+	// what the parameter answered with.
+	sh = base(interp.No)
+	sh.Semantics.UnderscoreMovesOnlyBetweenInputCommands = interp.Yes
+	sh.Prelude = "true prelude word\n"
+	out, _, _ = runArgs(t, sh, "/some/where/testsh", "-c", `echo "[$_]"`)
+	if out != "[/some/where/testsh]\n" {
+		t.Errorf("got %q, want the invocation and not the prelude's last word", out)
+	}
+
+	// The other half, so the row above cannot pass for a parameter that
+	// simply stopped moving: a lone command in the script still reaches it.
+	sh = base(interp.No)
+	sh.Semantics.UnderscoreMovesOnlyBetweenInputCommands = interp.Yes
+	sh.Prelude = "true prelude word\n"
+	out, _, _ = runArgs(t, sh, "/some/where/testsh", "-c", "true a b\necho \"[$_]\"")
 	if out != "[b]\n" {
 		t.Errorf("got %q, want the script's own last argument", out)
 	}

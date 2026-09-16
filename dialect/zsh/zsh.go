@@ -1472,6 +1472,11 @@ func Semantics() interp.Semantics {
 	s.APrefixedPathEmptiesTheCommandHash = interp.No
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
+	s.UnderscoreMovesOnlyBetweenInputCommands = interp.No
+	// Alone in the panel, this shell writes the call's own last argument
+	// into `$_` before the body runs: `: outer` then `f one two` reads `two`
+	// on the first line of the body, where bash and ksh93 read `outer`.
+	s.UnderscoreMovesBeforeAFunctionBody = interp.Yes
 	// And starts it empty regardless, alone in the panel: an exported `_`
 	// is discarded rather than carried in, so the parameter says nothing
 	// about the invocation until the first command has run.

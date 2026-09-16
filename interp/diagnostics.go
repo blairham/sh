@@ -1967,6 +1967,28 @@ type Diagnostics struct {
 	// verb: the name.
 	ExportNotAFunction string
 
+	// ReadonlyNotAFunction is `readonly -f` given a name that is not one —
+	// the same refusal ExportNotAFunction is, under the other word, and a
+	// field of its own because the sentence names the builtin. One verb: the
+	// name. Measured 2026-09-16 on bash 5.3.20: `readonly: nosuchfn: not a
+	// function`, at 1.
+	ReadonlyNotAFunction string
+
+	// ReadonlyFunctionRedefined is a definition refused because the name is a
+	// frozen function. One verb: the name. Measured 2026-09-16 on bash 5.3.20
+	// and bash 3.2.57 — `b: readonly function`, at 1, under the shell's
+	// ordinary location prefix, and not fatal: the definition after it runs.
+	//
+	// Empty in a shell with no frozen functions, where nothing reaches this.
+	ReadonlyFunctionRedefined string
+
+	// UnsetReadonlyFunction is `unset -f` refusing to remove a frozen
+	// function — UnsetReadonly's sentence for the other table, and a separate
+	// field because the last word differs: bash 5.3.20 says `unset: b: cannot
+	// unset: readonly function` where the variable is `readonly variable`.
+	// One verb: the name.
+	UnsetReadonlyFunction string
+
 	// ExportFunctionOptionRefused is `export -f` in a dialect that knows the
 	// letter and will not carry a function. No verbs.
 	//

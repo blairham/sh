@@ -206,6 +206,11 @@ func (c *Runner) ownTables(r *Runner) {
 	c.mathOrder = append([]string(nil), r.mathOrder...)
 	c.funcOrigins = maps.Clone(r.funcOrigins)
 	c.exportedFuncs = maps.Clone(r.exportedFuncs)
+	// And the freeze, for the same reason: a subshell that froze a function
+	// has not frozen the parent's, and one the parent froze is frozen in
+	// there — measured, `readonly -f f; ( f() { :; } )` is refused inside the
+	// subshell in bash 5.3.20.
+	c.readonlyFuncs = maps.Clone(r.readonlyFuncs)
 	c.aliases = maps.Clone(r.aliases)
 	c.suffixAliases = maps.Clone(r.suffixAliases)
 	// And the command hash, which is the same kind of table under a third

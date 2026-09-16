@@ -1949,6 +1949,13 @@ func (r *Runner) unsetFunction(name string) int {
 		}
 		return 0
 	}
+	// A frozen function is not removed either — the refusal `readonly -f`
+	// exists to raise, in the words this shell uses for the other table. The
+	// name is still there afterwards and still holds its body, which is what
+	// separates this from the quiet 0 above (#3192).
+	if code, refused := r.readonlyFunctionUnset(name); refused {
+		return code
+	}
 	r.removeFunction(name)
 	return 0
 }
@@ -2728,6 +2735,13 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		r.exported = map[string]bool{}
 	}
 	if strings.ContainsRune(opts, 'f') {
+		if len(args) == 0 {
+			// No name is the listing rather than nothing to do: measured
+			// 2026-09-16 on bash 5.3.20, `export -f` and `export -pf` each
+			// write the exported functions out, bodies and attribute line,
+			// byte for byte what `declare -fx` writes (#3192).
+			return r.attributedFunctionListing(functionAttributeExported)
+		}
 		return r.exportFuncs(args)
 	}
 	if strings.ContainsRune(opts, 'p') || (opts == "" && len(args) == 0) {
@@ -5430,6 +5444,26 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		readonly: true,
 		array:    strings.ContainsRune(opts, 'a'),
 		assoc:    strings.ContainsRune(opts, 'A'),
+	}
+	if strings.ContainsRune(opts, 'f') && r.sem().FunctionAttributeLetters != "" {
+		// The `f` letter names the *function* table, which is a different
+		// freeze under the same word — `readonly f` makes a variable
+		// immutable and `readonly -f f` makes a function undefinable. The
+		// letter was in ReadonlyOptions and reached nothing, so the option
+		// was accepted, no record was kept, and the function could be
+		// redefined and unset afterwards at status 0 (#3192).
+		//
+		// With no name it is the listing `declare -fr` writes, `-p` or not:
+		// measured on bash 5.3.20, `readonly -f` and `readonly -pf` are the
+		// same bytes.
+		if len(args) == 0 {
+			return r.attributedFunctionListing(functionAttributeReadonly)
+		}
+		names, status, ended := r.builtinNames("readonly", args, false)
+		if r.unspecified || ended {
+			return status
+		}
+		return r.freezeFunctions(names)
 	}
 	if (strings.ContainsRune(opts, 'p') || opts == "") && len(args) == 0 {
 		// The listing: readonly names alone, in the dialect's shape. `-p` and

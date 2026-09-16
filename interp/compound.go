@@ -948,6 +948,15 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 		r.status = 2
 		return nil
 	}
+	// A frozen function is not redefined, which is the other half of
+	// `readonly -f` having any effect at all: without it the letter was
+	// accepted, nothing was recorded, and the definition landed at status 0
+	// where bash reports and refuses (#3192). Behind the name checks above,
+	// because a name this dialect will not define is refused for being that
+	// name whatever the table holds.
+	if r.readonlyFunctionRedefined(c.Name) {
+		return nil
+	}
 	if r.funcs == nil {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}

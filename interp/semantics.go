@@ -7640,6 +7640,33 @@ type Semantics struct {
 	// says which lines are not listings.
 	FunctionLettersThatMarkUndefined string
 
+	// FunctionAttributeLetters names the letters that are attributes **of a
+	// function** rather than of a variable, in the order a listing writes
+	// them. Two letters are known to the substrate: `r` freezes the function
+	// and `x` carries it to a child through the environment.
+	//
+	// One shell in the panel has the notion at all. Measured 2026-09-16 on
+	// bash 5.3.20 and bash 3.2.57, which agree line for line:
+	//
+	//   - `readonly -f b`, `declare -fr b` and `declare -Fr b` all freeze
+	//     `b`. `export -f c` and `declare -fx c` export it.
+	//   - `declare -F` writes `declare -f<letters> NAME`, the letters in this
+	//     field's order: `declare -frx d` for a function that is both.
+	//   - With **no operands** the letters *filter* rather than set, and they
+	//     are a union — `declare -Frx` over one frozen, one exported and one
+	//     of each lists all three. With operands they set.
+	//   - A whole-table `declare -f` writes that same line after the body of
+	//     a function that has letters; `declare -f NAME` writes the body
+	//     alone.
+	//
+	// The other six columns are silent here rather than different. zsh 5.9.2
+	// reads `-F` as a float's precision and refuses `export -f` outright;
+	// ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 each answer
+	// `readonly -f` with `unknown option` / `Illegal option` and end the
+	// script. Empty is a shell with no notion, where a `-f` line's other
+	// letters reach nothing and no listing carries one.
+	FunctionAttributeLetters string
+
 	// IntegerOptions is the set of letters the `integer` builtin takes,
 	// spelled the way DeclareOptions is. It is a separate field rather than
 	// DeclareOptions over again because the two shells that have the word

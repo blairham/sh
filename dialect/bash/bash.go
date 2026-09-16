@@ -1758,6 +1758,14 @@ func Semantics() interp.Semantics {
 	// axis (#1209).
 	s.ReplacementOperandTakesTheEnclosingQuoting = interp.No
 	s.ExportCarriesFunctions = interp.Yes
+	// The two letters that are attributes of a *function* here, in the order
+	// a listing writes them — `declare -frx d` for one that is both. bash is
+	// the only shell in the panel with the notion at all: zsh reads `-F` as a
+	// float's precision and refuses `export -f`, and ksh93, dash and BusyBox
+	// ash each end the script over `readonly -f`. Measured 2026-09-16 on
+	// 5.3.20 and 3.2.57, which agree line for line (#3192). See
+	// Semantics.FunctionAttributeLetters for what the letters do.
+	s.FunctionAttributeLetters = "rx"
 	// `export -n V` takes the attribute off and leaves V set: measured, the
 	// name keeps its value in the shell and stops reaching a child. bash is
 	// the only shell in the panel with the letter.
@@ -2618,6 +2626,19 @@ func Diagnostics() interp.Diagnostics {
 		ReadonlyRefusalNamesBuiltin: map[string]bool{
 			"declare": true, "typeset": true, "local": true,
 		},
+		// The three sentences a frozen function has. Measured 2026-09-16 on
+		// 5.3.20 and 3.2.57 alike, each at status 1 and none of them fatal:
+		//
+		//	readonly -f nosuchfn    readonly: nosuchfn: not a function
+		//	b() { :; }              b: readonly function
+		//	unset -f b              unset: b: cannot unset: readonly function
+		//
+		// The second carries the shell's ordinary location prefix and names
+		// no builtin, because no builtin was written — it is a definition
+		// that was refused.
+		ReadonlyNotAFunction:      "readonly: %[1]s: not a function",
+		ReadonlyFunctionRedefined: "%[1]s: readonly function",
+		UnsetReadonlyFunction:     "unset: %[1]s: cannot unset: readonly function",
 		// `declare -p nosuch` — the name it was invoked by is in front,
 		// which declarePrint writes, so the wording carries only the rest.
 		DeclareNoSuchVariable: "%[1]s: not found",

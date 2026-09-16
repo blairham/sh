@@ -376,7 +376,7 @@ func (f Frame) readsAFile() bool { return f.Name == sourceFrameName || f.Startup
 // in the first was still there in the second. A scalar rather than a stack,
 // so a subshell gets its own copy of it the way every other scalar here does.
 //
-// One measured behaviour is deliberately not modelled: selecting a frame in
+// One measured behavior is deliberately not modeled: selecting a frame in
 // ksh93 moves the *variable scope* with it, so a function that selects its
 // caller reads the caller's locals. That is a second mechanism rather than a
 // second answer from this one, and it is #3115.

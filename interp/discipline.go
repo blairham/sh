@@ -176,7 +176,7 @@ func (r *Runner) runDiscipline(variable, event, subscript, value string, valueGi
 		// What the hook returned, for the assignment command to report. Kept
 		// here rather than left in `r.status` because the store has more to
 		// do afterwards and every step of it would overwrite the answer. See
-		// Runner.disciplineStatus, and disciplineRead for the other half:
+		// Runner.disciplineStatus, and disciplineElementRead for the other half:
 		// a `.get` puts the status back and a write does not.
 		r.disciplineStatus, r.disciplineStatusSet = r.status, true
 	}
@@ -227,8 +227,8 @@ func (r *Runner) enterDisciplineParams(variable, subscript, value string, valueG
 	}
 }
 
-// disciplineRead runs a variable's `.get` and reports the value the read
-// should answer with, and whether the hook said anything at all.
+// disciplineElementRead runs a variable's `.get` and reports the value the
+// read should answer with, and whether the hook said anything at all.
 //
 // It answers only for a hook that *assigned* `${.sh.value}`; a hook that did
 // not leaves the read to the store, and the store is read afterwards rather
@@ -239,19 +239,14 @@ func (r *Runner) enterDisciplineParams(variable, subscript, value string, valueG
 // `$?` is put back afterwards, which `.set` does not get: measured,
 // `function g.get { return 5; }` reads at status 0, where `function s.set {
 // return 5; }; s=1` is status 5.
-func (r *Runner) disciplineRead(variable string) (string, bool) {
-	return r.disciplineElementRead(variable, "")
-}
-
-// disciplineElementRead is disciplineRead with the element the read is about
-// carried in, which is what `${.sh.subscript}` answers inside the hook.
 //
-// A read of one element is a read, and the same hook runs for it: measured on
-// ksh93u+ 2012-08-01, 2026-09-16, `a=(p q); function a.get { … }; ${a[1]}`
-// enters the hook with `${.sh.name}` as `a` and `${.sh.subscript}` as `1`,
-// and a hook that assigns `${.sh.value}` replaces that element alone. The
-// same rules as the whole-name read decide it — the store is read afterwards,
-// and only an *assignment* to the parameter replaces anything.
+// The element the read is about is carried in, and is what `${.sh.subscript}`
+// answers inside the hook. A read of one element is a read and the same hook
+// runs for it: measured on ksh93u+ 2012-08-01, 2026-09-16, `a=(p q); function
+// a.get { … }; ${a[1]}` enters with `${.sh.name}` as `a` and
+// `${.sh.subscript}` as `1`, and a hook that assigns `${.sh.value}` replaces
+// that element alone. An unsubscripted read passes the empty subscript, which
+// is what a scalar carries.
 //
 // Which subscript a read carries is measured rather than derived:
 //

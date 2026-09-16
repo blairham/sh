@@ -18524,6 +18524,52 @@ standing.
 
 Pinned by `declare/a-container-letter-a-subscripted-operand-may-refuse`.
 
+**`SubstitutionParseErrorEscapesASubshell`** — bash yes · dash yes ·
+ksh93 no · zsh yes · ash yes · POSIX preset yes
+
+Lets a command substitution's parse failure out of the `( … )`, the
+pipeline element or the enclosing `$( … )` it was written in, so the
+*script* ends rather than the body holding it.
+
+Measured 2026-09-16 from a script file with `env -i PATH=/usr/bin:/bin
+LC_ALL=C` and stdin from /dev/null, the file being
+
+    printf 'start\n'
+    ( v=$(echo hi; for); printf 'inner carried on\n' )
+    printf 'after the subshell st=%s\n' "$?"
+
+| column | output | status | continued |
+| --- | --- | --- | --- |
+| bash 5.3.20 | `start` | 2 | no |
+| that binary as `sh` | `start` | 2 | no |
+| bash 3.2.57 | `start`, `inner carried on`, `after=0` | 0 | yes |
+| zsh 5.9.2 | `start` | 1 | no |
+| ksh93u+ 2012-08-01 | `start`, `after st=3` | 0 | yes |
+| dash 0.5.12 | `start` | 2 | no |
+| BusyBox ash 1.37.0 | `start` | 2 | no |
+
+Two controls say what this is not. The same substitution at the **top
+level** is fatal in every column and already was here, so
+`SubstitutionParseErrorIsFatal` is answered correctly and the fatality
+simply did not reach past the subshell. And a **plain** parse error inside
+a subshell is not a runtime question at all — the file does not parse, so
+nothing in it runs. It is the pair: a substitution's failure, inside a
+subshell.
+
+bash 3.2 is a third answer rather than the other side of this one: it does
+not end the subshell either. ksh93 is the column on the other side, and it
+is there however the body is reached — a pipeline element, a subshell
+inside a subshell and an enclosing `$( … )` all contain it there.
+
+The five columns that end the script read the body while they are reading
+the script's line, so when the failure happens there is no subshell yet to
+contain it. This engine reads the body at expansion time deliberately, so
+the outcome is produced without moving when the body is read.
+
+Asked only from inside a subshell, which is the only place the columns
+differ.
+
+
 **`TableLetterReachesItsOwnOperandsSubscript`** — bash yes · dash absent · ksh93 no · zsh refuses the shape
 
 Reads a subscripted operand's subscript as a **key** when the table

@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# A command substitution whose body will not parse, written inside a subshell
+# (#3274).
+#
+# A file of its own, and the discriminating case is last, because in five of
+# the seven columns it ends the script: anything written after it would be
+# graded in the columns that carry on and never reached in the columns that do
+# not, which is a file that asks two different questions of two halves of the
+# panel.
+#
+# ksh93u+ 2012-08-01 is the one column that contains it. The subshell dies —
+# `inner carried on` is absent here too — and the script runs on, so the last
+# line prints with the syntax status 3 in it and the shell exits 0.
+#
+# The controls come first for the same reason they are here at all. The same
+# substitution at the top level is fatal in every column and was already right;
+# a plain parse error inside a subshell is a *file* that does not parse, so it
+# cannot be written here at all. What is left is the pair — a substitution's
+# failure, inside a subshell — and that is the last block.
+
+printf 'the controls first\n'
+
+# The word expands to nothing and the command that held it runs, which says
+# the body was read at all.
+v=$(echo hi); printf 'an ordinary body -> [%s]\n' "$v"
+
+# A subshell that ends on its own is not this: the script carries on past it
+# in every column.
+( exit 7 ); printf 'a subshell that exits -> %s\n' "$?"
+
+# And a failing command inside a substitution inside a subshell is not this
+# either: the body ran, it just did not succeed.
+( w=$(false; echo out); printf 'a failing body -> [%s]\n' "$w" )
+printf 'after a failing body -> %s\n' "$?"
+
+# The discriminating case, and the last thing in this file.
+#
+# Standard error goes to /dev/null here and nowhere else in this file, and the
+# reason is worth writing down rather than tidying away. This column and this
+# engine both read a substitution's body when the word is expanded, so the
+# redirection on the parentheses is already in force when the failure is
+# reported and *both* sides fall silent — which is itself the measurement, and
+# it is why the fatality can be graded here at all. The columns that read the
+# body with the script's line report before any redirection exists, so the same
+# two characters would silence one side and not the other; those columns name
+# a different token and are graded by the Go row instead — see
+# dialect/substfatal_test.go, and #3296 for the wording itself.
+printf 'start\n'
+( v=$(echo hi; for); printf 'inner carried on\n' ) 2>/dev/null
+printf 'after the subshell st=%s\n' "$?"

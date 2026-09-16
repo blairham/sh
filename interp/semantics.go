@@ -17197,6 +17197,51 @@ const (
 	// return — a body that stops asking for the scoping after it has moved a
 	// trap still has that trap put back.
 	TrapsGoBackAtTheReturn
+
+	// TrapsGoBackAtTheReturnOfAKeywordFunction gives the call a trap table
+	// of its own — an empty one — and gives the caller's back at the return,
+	// keyed on the **definition form** rather than on an option: ksh93,
+	// where `function g { … }` is a scope for traps and `g() { … }`, the
+	// same body written the other way, is not.
+	//
+	// It is the third answer this type's own doc anticipated, and it is not
+	// the answer above with a different trigger. That one saves one
+	// condition as the body moves it and leaves the caller's handler
+	// *installed* meanwhile; this one takes the whole table on the way in.
+	// Measured 2026-09-16 against AT&T 93u+ 2012-08-01, a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin from /dev/null:
+	//
+	//	trap 'echo O' USR1; trap 'echo B' EXIT
+	//	function o { trap -p USR1; trap -p EXIT; trap; echo .; }
+	//	o; trap
+	//
+	// writes nothing but the `.` inside the call and lists both traps after
+	// it. The half that says *installed* rather than *listed* is the next
+	// one: `trap 'echo O' USR1; function q { echo mark1; kill -USR1 $$; echo
+	// mark2; }; q; echo mark3` writes `mark1` and `mark3` in four runs out of
+	// four — the signal found no handler, the rest of the body did not run,
+	// and the caller's handler was not reached either.
+	//
+	// Three consequences, each measured and each a row a per-modification
+	// save gets wrong:
+	//
+	//   - **EXIT goes with the table**, where under the option answer it is
+	//     a rule of its own. An EXIT trap set inside a `function` body fires
+	//     at that call's return and the caller's comes back — `trap 'echo O'
+	//     EXIT; function g { trap 'echo I' EXIT; }; g; echo after` writes
+	//     `I`, `after`, `O` — and the POSIX-form call beside it replaces the
+	//     shell's outright, as bash does. ExitTrapIsFunctionLocal is not
+	//     what asks it.
+	//   - **The boundary is the `function` word, not the call.** A POSIX-form
+	//     function called inside one is not a scope of its own: `trap 'echo
+	//     O' USR1; function o { p() { trap 'echo P' USR1; }; p; kill -USR1
+	//     $$; }; o; kill -USR1 $$` writes `P` and then `O`, so what `p` set
+	//     stood until `o` returned.
+	//   - **What comes back is the disposition.** With no outer handler,
+	//     `function g { trap 'echo I' USR1; }; g; kill -USR1 $$` kills the
+	//     shell, so the return clears what the body raised as well as
+	//     putting back what it displaced.
+	TrapsGoBackAtTheReturnOfAKeywordFunction
 )
 
 func (t TrapLocality) String() string {
@@ -17205,6 +17250,8 @@ func (t TrapLocality) String() string {
 		return "traps survive the function"
 	case TrapsGoBackAtTheReturn:
 		return "traps go back at the return"
+	case TrapsGoBackAtTheReturnOfAKeywordFunction:
+		return "traps go back at the return of a `function` call"
 	}
 	return "unspecified"
 }

@@ -97,9 +97,14 @@ func registerComputil(r *interp.Runner) {
 // `comparguments` reached anywhere else finds no state and refuses.
 type computilState struct {
 	arguments *argumentsState
-	tags      *tagsState
-	describe  *describeState
-	values    *valuesState
+	// tags is one `comptags -i` loop per function nesting level — see
+	// comptags.go, where the measurement that says it has to be is.
+	tags map[int]*tagsState
+	// tagsLatest is the loop `comptry` adds a set to: the one most recently
+	// installed, whatever level it went to.
+	tagsLatest *tagsState
+	describe   *describeState
+	values     *valuesState
 }
 
 // computilFrom is the state of the completion being performed now, made on

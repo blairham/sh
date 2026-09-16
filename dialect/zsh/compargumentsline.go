@@ -34,6 +34,29 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 		}
 		if options && (strings.HasPrefix(word, "-") || strings.HasPrefix(word, "+")) && word != "-" {
 			if skip := a.takeOption(word, cs.words[i+1:]); skip >= 0 {
+				// **A word under the cursor that is already a whole option
+				// describes no argument.** Measured on zsh 5.9.2, 2026-09-16,
+				// with `-v[verbose]`, `-o[opt]:val:` and `*:: :->rest` in
+				// force, asking `comparguments -D` from inside a widget:
+				//
+				//	cmd -v<TAB>    1, nothing described
+				//	cmd -o<TAB>    1, nothing described
+				//	cmd -vv<TAB>   1, nothing described — a stack is one too
+				//	cmd -x<TAB>    0, the rest specification
+				//	cmd -<TAB>     0, the rest specification
+				//	cmd --<TAB>    0, the rest specification
+				//
+				// which is the same predicate as "is this word an option",
+				// asked of the word being typed: a name the specs know, or a
+				// stack of letters they all know. A lone `-`, a `--` and an
+				// option nobody declared are not, and each of those three is
+				// an argument being written.
+				//
+				// It matters beyond the status, because the rest
+				// specification is what moves `$words` — so without it
+				// `cmd -v<TAB>` would hand the completer a word list holding
+				// only the option the person is still typing.
+				a.cursorIsOption = a.cursorIsOption || cursor
 				i += skip
 				continue
 			}
@@ -46,10 +69,37 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 		if options && a.ignorePat != "" && !r.MatchPattern(a.ignorePat, word) {
 			options = false
 		}
+		// **An argument specification has an exclusion list too, and writing
+		// the argument is what spends it.** `(-)1:first:…` means "once a
+		// first argument is here, no options are"; the shipped `_git` writes
+		// two of them, `(-): :->command` and `(-)*:: :->option-or-argument`,
+		// and they are why `git checkout -<TAB>` offers *checkout's* options
+		// rather than git's own. Measured on zsh 5.9.2, 2026-09-16 with
+		// `-v[verbose]` beside each and `comparguments -O` asked from inside
+		// a widget:
+		//
+		//	(-)1:first:(a b)  cmd -<TAB>    -v      nothing written yet
+		//	(-)1:first:(a b)  cmd a -<TAB>  nothing the argument spent it
+		//	1:first:(a b)     cmd a -<TAB>  -v      no list, no exclusion
+		//	(-v)1:first:(a b) cmd a -<TAB>  nothing a named option, not `-`
+		//
+		// so it is the same mechanism an option's own `(…)` uses — including
+		// `-` standing for every option — asked at the position the argument
+		// landed on rather than of a name.
+		for _, i := range a.applicable(position) {
+			for _, off := range a.args[i].excl {
+				a.shutOff[off] = true
+			}
+		}
+		if options && a.restTakesOver(position) {
+			options = false
+		}
 		position++
 	}
 	a.optionsHere = options && a.optionsCompletable(cs)
-	a.here = a.applicable(position)
+	if !a.cursorIsOption {
+		a.here = a.applicable(position)
+	}
 	a.line = a.normalArguments(r, cs)
 }
 
@@ -162,6 +212,36 @@ func (a *argumentsState) optionNamed(name string) *optionSpec {
 
 // applicable is which argument specs describe the position the cursor is at:
 // the numbered one if there is one, and the rest specification otherwise.
+// restTakesOver is whether the argument at this position is the first one an
+// *optional* rest specification covers — a `*::…` or `*:::…` rather than a
+// `*:…`.
+//
+// It is the question "have the sub-command's own words begun", and the answer
+// stops this specification reading options at all. Measured on zsh 5.9.2,
+// 2026-09-16 with `-v[verbose]`, `-o[opt]:val:` and a rest specification in
+// force, reading `$words` back after `comparguments -D`:
+//
+//	specification    line                 $words             options read?
+//	*:: :->rest      cmd -v<TAB>          cmd -v             yes — `-v` is an option
+//	*:: :->rest      cmd sub -v<TAB>      sub -v             no  — a word came first
+//	*:: :->rest      cmd sub -o val <TAB> sub -o val ''      no  — nor its argument
+//	*: :->rest       cmd sub -v<TAB>      cmd sub -v         yes — one colon, never
+//	1:first: *::     cmd a -v<TAB>        cmd a -v           yes — the rest has not begun
+//	1:first: *::     cmd a b -v<TAB>      a b -v             no  — `b` began it
+//
+// So it is not the position being *covered* that stops them; it is a word
+// having been taken by the rest specification. `cmd -v` is covered by `*::`
+// at position 1 and `-v` is still read as an option, because no argument has
+// been written yet for the sub-command to own.
+func (a *argumentsState) restTakesOver(position int) bool {
+	for _, i := range a.applicable(position) {
+		if a.args[i].rest && a.args[i].optional {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *argumentsState) applicable(position int) []int {
 	var out []int
 	for i, arg := range a.args {
@@ -238,21 +318,111 @@ func (a *argumentsState) takeOptionQuietly(word string, after []string) int {
 
 // describeArguments is `-D`: the message, the action and the tag of every
 // argument spec applying at the cursor.
-func (a *argumentsState) describeArguments(r *interp.Runner, names []string) int {
+func (a *argumentsState) describeArguments(r *interp.Runner, cs *completionState, names []string) int {
 	if len(names) < 3 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
 	descrs, actions, subcs := []string{}, []string{}, []string{}
+	shift := false
 	for _, i := range a.here {
 		descrs = append(descrs, a.args[i].message)
 		actions = append(actions, a.args[i].action)
 		subcs = append(subcs, a.args[i].tag())
+		shift = shift || (a.args[i].rest && a.args[i].optional)
 	}
 	r.SetArray(names[0], descrs)
 	r.SetArray(names[1], actions)
 	r.SetArray(names[2], subcs)
+	if shift {
+		a.shiftWords(r, cs)
+	}
 	return boolStatus(len(a.here) > 0)
+}
+
+// shiftWords is what a `*::` rest specification does to `$words` and
+// `$CURRENT`, and it is the whole of why `git checkout <TAB>` reached the
+// wrong completer.
+//
+// `_arguments` never touches either name — it is this builtin that replaces
+// them, and the replacement outlives the call, because the completer whose
+// action the rest specification names reads `$words[1]` to decide what to do
+// next. The shipped `_git` is exactly that shape: its top-level specification
+// ends in `(-)*:: :->option-or-argument` and its `option-or-argument` arm
+// calls `_git-$words[1]`. With the words left as the line has them that is
+// `_git-git`, which does not exist, so the fallback offered *files* where a
+// person expected branches.
+//
+// **What it is replaced with is the normal arguments** — the same list `-W`
+// reports as `$line`, options and their arguments removed, the word under the
+// cursor included as the last element — and `$CURRENT` is that word's
+// position in it. Measured through a pseudo-terminal on zsh 5.9.2,
+// 2026-09-16, from inside a `zle -C` widget whose function calls the builtin
+// itself, with `-v[verbose]`, `-o[opt]:val:` and `*:: :->rest` in force:
+//
+//	line                  $words before      $words after   $CURRENT
+//	cmd <TAB>             cmd ''             ''             1
+//	cmd sub <TAB>         cmd sub ''         sub ''         2
+//	cmd sub x<TAB>        cmd sub x          sub x          2
+//	cmd -o val sub arg    cmd -o val sub arg sub arg ''     3
+//	cmd a b c <TAB>       cmd a b c ''       a b c ''       4
+//
+// and it is the *number of colons* that decides, not the star: `*:` leaves
+// both alone, `*::` and `*:::` both replace them, and a numbered `2::` — an
+// optional argument that is not the rest — leaves them alone as well. Each of
+// those three was asked on the same line so that the answers separate.
+//
+//	specification            cmd sub <TAB> leaves $words
+//	(-)*: :->rest            cmd sub ''
+//	(-)*:: :->rest           sub ''
+//	(-)*::: :->rest          sub ''
+//	1:first:(a b) 2::second: cmd sub ''
+//
+// It is done here, on `-D`, rather than on `-i` or `-W`, because that is
+// where zsh does it: a logging function shadowing the builtin over the same
+// line recorded `$words` unchanged across `-i`, replaced across `-D`, and
+// unchanged across `-O`, `-M` and `-W`.
+func (a *argumentsState) shiftWords(r *interp.Runner, cs *completionState) {
+	words := a.argumentsBefore(r, cs)
+	if cs.current-1 < len(cs.words) {
+		// The word under the cursor, **verbatim**. It is the one place this
+		// differs from `$line`, which drops it when it is an option:
+		// measured, `cmd sub -v<TAB>` leaves `$words` as `sub -v` while
+		// `$line` has only what precedes it. The completer being handed the
+		// words is going to complete that word, so it has to be there.
+		words = append(words, cs.words[cs.current-1])
+	}
+	cs.words, cs.current = words, len(words)
+}
+
+// argumentsBefore is the normal arguments written *before* the word under the
+// cursor: options and the words they take are dropped, everything else is
+// kept, in order.
+func (a *argumentsState) argumentsBefore(r *interp.Runner, cs *completionState) []string {
+	out := []string{}
+	options, position := true, 1
+	for i := 1; i < cs.current-1 && i < len(cs.words); i++ {
+		word := cs.words[i]
+		if options && a.skipDash && word == "--" {
+			options = false
+			continue
+		}
+		if options && (strings.HasPrefix(word, "-") || strings.HasPrefix(word, "+")) && word != "-" {
+			if skip := a.takeOptionQuietly(word, cs.words[i+1:]); skip >= 0 {
+				i += skip
+				continue
+			}
+		}
+		if options && a.ignorePat != "" && !r.MatchPattern(a.ignorePat, word) {
+			options = false
+		}
+		out = append(out, word)
+		if options && a.restTakesOver(position) {
+			options = false
+		}
+		position++
+	}
+	return out
 }
 
 // offerOptions is `-O`: the options still available here, sorted into the
@@ -277,10 +447,26 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 			}
 		}
 	}
+	offered := false
 	for i, name := range names[:4] {
 		r.SetArray(name, lists[i])
+		offered = offered || len(lists[i]) > 0
 	}
-	return boolStatus(a.optionsHere)
+	// **The status is whether anything was offered**, not whether an option
+	// could stand here. The two come apart as soon as everything is spent or
+	// excluded, and `_arguments` reads the status rather than the arrays: a 0
+	// with four empty arrays is a shipped completion told the options were
+	// handled, which is how `git checkout -<TAB>` stopped before reaching
+	// `_git-checkout`. Measured on zsh 5.9.2, 2026-09-16, with `-v[verbose]`
+	// and `*:rest:`:
+	//
+	//	cmd -<TAB>     0, next=(-v:verbose)
+	//	cmd -v -<TAB>  1, next=()             `-v` is spent
+	//
+	// and with `(-)1:first:(a b)` beside them, `cmd a -<TAB>` is 1 for the
+	// same reason from the other direction — the argument shut the options
+	// off.
+	return boolStatus(offered)
 }
 
 // excluded is whether something already on the line shut this option off. The

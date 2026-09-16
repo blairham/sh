@@ -6748,6 +6748,15 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 }
 
 func (r *Runner) setVarAs(name, value string, form assignForm) {
+	if r.selfNameref(name) {
+		// The write half of the read above: a reference aimed at its own
+		// name lands on the global cell. Ahead of namerefAssignmentTarget,
+		// which would read the walk's `not aimed` as an invitation to
+		// re-point the reference at the text being assigned — the rule for a
+		// reference that points nowhere, and the wrong one for this shape.
+		r.selfNamerefAssignment(name, value, form)
+		return
+	}
 	if target, write := r.namerefAssignmentTarget(name, value); !write {
 		// The value **aimed** the reference rather than being written
 		// through it, which is what a reference with nothing to point at
@@ -6965,6 +6974,14 @@ func (r *Runner) varValue(name string, folded bool) (string, bool) {
 	// paramSource — see namerefReadsAnElement, which says what a caller that
 	// is not an expansion therefore does not get.
 	name = r.throughNamerefName(name)
+	if r.selfNameref(name) {
+		// A reference aimed at its own name reads the **global** cell rather
+		// than the binding it is standing in front of, which is what makes
+		// `local -n r=r` a handle on the outer variable. The warning the
+		// read carries was already written by throughNamerefName, whose walk
+		// came back to where it started. See interp/nameref.go.
+		return r.selfNamerefValue(name)
+	}
 	// A produced array answers a plain `$name` too, and what it answers with
 	// is an axis: the whole array in one shell and its first element in the
 	// others.

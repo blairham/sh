@@ -2551,6 +2551,11 @@ func Diagnostics() interp.Diagnostics {
 		// is `bash: line 1: warning: a: circular name reference` with no
 		// `declare:` in it, where the two refusals above carry the name.
 		NamerefCircularWarning: "warning: %[1]s: circular name reference",
+		// And the write through one, which bash reports as a depth rather
+		// than as a circle: `f() { local -n r=r; r=SET; }` writes `warning:
+		// r: maximum nameref depth (8) exceeded` and the value reaches the
+		// global cell. Measured 2026-09-15 on 5.3.20 (#3048).
+		NamerefDepthWarning:    "warning: %[1]s: maximum nameref depth (8) exceeded",
 		TrapPrintsSignalPrefix: "SIG",
 		// One wording for all three, and the operand quoted back exactly as
 		// given: `export 1x=v` says `1x=v', not `1x'.

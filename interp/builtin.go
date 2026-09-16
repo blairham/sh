@@ -2284,6 +2284,18 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 // entered the builtin by different doors and would otherwise have been two
 // copies of this, which is how one of them ends up forgetting a table.
 func (r *Runner) unsetName(name string) {
+	if r.selfNameref(name) {
+		// A plain `unset` of a reference aimed at its own name says the same
+		// sentence the read says, **twice**, and then removes the binding it
+		// was standing in front of rather than the outer cell it reads.
+		// Measured 2026-09-15 on bash 5.3.20 and stable across every shape
+		// it was asked in: with an outer value and without one, under `-g`
+		// and without it, and on a second `unset` of the same name — the
+		// plain spelling leaves the reference aimed, so it warns again.
+		// `unset -n` is the other door and is silent there.
+		r.warnAboutACycle(name)
+		r.warnAboutACycle(name)
+	}
 	name = r.throughNameref(name)
 	if name == "PATH" {
 		// The same rule as an assignment to it, and for the same reason: a

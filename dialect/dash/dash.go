@@ -725,6 +725,10 @@ func Semantics() interp.Semantics {
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
+	// The standard's reading, and dash takes it: a substitution's body is a
+	// subshell environment with the shell's options in it. Measured
+	// 2026-09-15, `set -e; echo "end[$(false; echo no)]"` is `end[]`.
+	s.ErrExitEntersACommandSubstitution = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No
 	s.UlimitHasResidentSet = interp.Yes

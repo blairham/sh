@@ -8565,6 +8565,58 @@ type Semantics struct {
 	// the wider question the same way everywhere are not asked twice.
 	ReportsAKilledCommandInACommandSubstitution Answer
 
+	// ErrExitEntersACommandSubstitution says whether the shell a `$(…)` body
+	// runs in holds `set -e`.
+	//
+	// Measured 2026-09-15, `env -i PATH=/usr/bin:/bin`, over
+	// `set -e; echo "end[$(false; echo no)]"; echo after` — a substitution in
+	// a *command word* rather than in an assignment, so that nothing here is
+	// the assignment reporting the body's status, which is what
+	// `errexit/assignment-takes-the-substitution` already records and every
+	// column agrees about. Every column reaches `after` at 0; the word is the
+	// whole of the difference:
+	//
+	//	bash 5.3.15, bash 3.2.57   end[no]   the `false` did not end the body
+	//	BusyBox ash 1.37.0         end[no]   the same
+	//	bash under the name `sh`   end[]     the body stopped at `false`
+	//	dash, ksh93, zsh 5.9.2     end[]     the same
+	//
+	// **The option is off inside the body, not merely unenforced**, which is
+	// what makes this a state the body can read rather than a rule about when
+	// the shell stops. `set -e; echo "[$(case $- in *e*) echo E;; *) echo
+	// none;; esac)]"` is `[none]` in bash and BusyBox ash and `[E]` in the
+	// other five, and `set -o` run inside the same body reports `errexit off`
+	// in bash where it reports `errexit on` under the name `sh`.
+	//
+	// It is the substitution's own shell and not the parentheses. A plain
+	// subshell inherits the option in every column — `set -e; (false; echo
+	// no); echo after` prints nothing at 1 in bash and in ash too — and so
+	// does a process substitution's body, which `shopt -s inherit_errexit`
+	// does not move either. So the three shapes `$(false; echo no)`,
+	// `$( (false; echo no) )` and `$( (false); echo no )` answer alike, and
+	// the backquoted spelling answers with them.
+	//
+	// **This axis is POSIX mode, not a shell**, the shape
+	// RedirectErrorOnSpecialBuiltinFatal describes: the bash column and the
+	// bash-as-`sh` column are the same binary, and `set -o posix` moves bash
+	// 5.3 and bash 3.2 to the `sh` answer. So a dialect's field is where the
+	// shell *starts* and its own posix knob moves it — see SetPosixMode.
+	//
+	// What is different here, and is measured rather than assumed, is that
+	// the move is **one-way in bash 5**: `set -o posix; set +o posix` leaves
+	// the body stopping at `false`, because what the mode turns on is the
+	// `inherit_errexit` shell option and leaving the mode does not turn it
+	// off again. `shopt -u inherit_errexit` is the way back, and it is the
+	// only way back — measured, it restores `end[no]` in a bash invoked as
+	// `sh`. bash 3.2 has no such option name and no latch with it: there
+	// `set -o posix; set +o posix` is `end[no]`. The preset carries bash 5's
+	// reading, as UnsetReadonlyFatal's does, and dialect/bash's
+	// `inherit_errexit` switch is the name a script moves it by.
+	//
+	// BusyBox ash is why this is not "bash against the rest": it has no posix
+	// mode, no option name, and answers with bash anyway.
+	ErrExitEntersACommandSubstitution Answer
+
 	// TrapListingOrder is the order a bare `trap` listing prints its
 	// conditions in. See TrapListingSequence.
 	TrapListingOrder TrapListingSequence
@@ -14214,7 +14266,15 @@ func PosixSemantics() Semantics {
 		// five follow it, and the two that do not both reach this answer as
 		// soon as their own posix mode is on.
 		RedirectErrorOnSpecialBuiltinFatal: Yes,
-		GreatAmpTarget:                     GreatAmpTargetIsADescriptor,
+		// A command substitution runs in a subshell environment, and XCU
+		// makes a subshell environment a copy of the shell's — options
+		// included — so `-e` is in it. Three of the five dialects read it
+		// that way, and the two that do not both reach this answer as soon
+		// as their own posix mode is on. It is also the answer the mode
+		// exists to assert here: bash calls the standard's reading
+		// `inherit_errexit` and turns it on with `set -o posix`.
+		ErrExitEntersACommandSubstitution: Yes,
+		GreatAmpTarget:                    GreatAmpTargetIsADescriptor,
 		// XCU's `[n]<&word` and `[n]>&word` take a number or `-`, and the
 		// standard has no third reading: there is no move operator in it, so
 		// `5-` is a word naming no descriptor and is refused as one. The core

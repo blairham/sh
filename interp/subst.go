@@ -175,6 +175,24 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	defer sub.collectBodies()()
 	sub.inheritJobs(jobBoundarySubstitution)
 	sub.inCommandSubst = true
+	// **Whether the body's shell holds `set -e`** — the one option a
+	// substitution does not simply inherit, and a disagreement rather than a
+	// gap. See Semantics.ErrExitEntersACommandSubstitution for the panel.
+	//
+	// Asked only when the option is on, which is the only place the columns
+	// differ: an axis consulted on the common path is one every `$(…)` pays
+	// for and that no Runner built without a preset could leave unanswered.
+	//
+	// The field is cleared rather than the failure being let through,
+	// because the body can see which it is: measured, `set -e; echo "[$(case
+	// $- in *e*) echo E;; *) echo none;; esac)]"` is `[none]` in bash and
+	// BusyBox ash, and `set -o` inside the same body reports `errexit off`
+	// there. A body that still carried the letter and merely declined to
+	// stop would answer `[E]` and be wrong about itself.
+	if sub.errexit && !r.ask(r.sem().ErrExitEntersACommandSubstitution,
+		"`set -e` reaching into a command substitution's own shell") {
+		sub.errexit = false
+	}
 	// And the third level of indirection, beside `eval` and a sourced file:
 	// measured, `set -x; echo $(:)` traces the body at `++ ` in the one
 	// dialect that counts them. See Runner.tracePrefixDepth.

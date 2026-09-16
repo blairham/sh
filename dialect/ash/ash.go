@@ -811,6 +811,13 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
+	// And the one place BusyBox ash leaves the standard's reading to stand
+	// with bash rather than with dash, which is what keeps this axis from
+	// being "bash against the rest". Measured 2026-09-15 on BusyBox v1.37.0,
+	// `set -e; echo "end[$(false; echo no)]"` is `end[no]`, and `$-` inside
+	// the body carries no `e`. There is no posix mode and no option name
+	// here, so this is where the shell stays.
+	s.ErrExitEntersACommandSubstitution = interp.No
 	s.ChildInterruptEndsTheScript = interp.No
 	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
 	// Only numbers and the `%%`, `%+`, `%-` forms resolve; `%name` is a job

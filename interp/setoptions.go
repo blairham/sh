@@ -405,6 +405,19 @@ var extraSetOptions = map[string]setOption{
 // two questions; this is the mode, and it is the core's for the same reason
 // PosixSemantics is.
 //
+// **One axis it moves is one-way**, and it is the exception to everything the
+// paragraph on the saved fields below says. `set -o posix` turns bash's
+// `inherit_errexit` on, and `set +o posix` does *not* turn it off: measured
+// 2026-09-15 on bash 5.3.15, `set -o posix; set +o posix; set -e; echo
+// "end[$(false; echo no)]"` is `end[]`, where the same line without the mode
+// is `end[no]`. What the mode entered was a shell option with a name of its
+// own, and leaving the mode leaves the option where it put it — `shopt -u
+// inherit_errexit` is the only way back. So
+// ErrExitEntersACommandSubstitution is written on the way in and has no saved
+// value, because there is nothing to put back. bash 3.2 does move back, and
+// this preset carries bash 5's reading for the reason
+// Semantics.UnsetReadonlyFatal gives.
+//
 // **Nine of the twelve axes it moves take the standard's own answer**, because
 // that is what the name asks for and every shell with a POSIX mode was measured
 // to take them. The other three it takes from the dialect, through a field of
@@ -488,6 +501,12 @@ func (r *Runner) SetPosixMode(on bool) {
 		quoteProtects = r.dialect().QuoteProtectsTheClosingBraceInPosixMode.
 			Policy(r.posixSavedQuoteProtects)
 		redir, unsetRO = Yes, Yes
+		// The one-way axis, written here rather than through the swap
+		// below's restore half: see the paragraph on it above. Set on the
+		// way in and never read back out, which is the whole of the latch.
+		r.swapSemantics(func(s *Semantics) {
+			s.ErrExitEntersACommandSubstitution = Yes
+		})
 		forName = ForNameEndsTheScriptAsASyntaxError
 		funcName = FuncNameEndsTheScriptAsASyntaxError
 		if r.posixSavedFuncName == FuncNameRunUnspecified {

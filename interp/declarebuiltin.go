@@ -1330,6 +1330,19 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if !df.global {
 			fresh = r.shadowTypeset(name)
 		}
+		// And a name that is already a **reference** is not what the rest of
+		// this operand is about: the attributes, the value and the freeze all
+		// belong to what it points at. With the shadow's answer in hand,
+		// because a declaration that has just made a fresh binding is a
+		// declaration of that binding and not of the reference behind it.
+		// See interp/namerefattribute.go.
+		if target, follows := r.attributeFollowsTheReference(name, df, fresh); follows {
+			name = target
+			// Re-read for the redirected name, since the question it answers
+			// — what the *shadowed* name carried before this line — is about
+			// the cell the attributes are going to land on.
+			wasExported = r.isExported(name)
+		}
 		// Attributes after the shadow, and ahead of the value: `-i` changes
 		// what the assignment on the same line *means*, so it cannot wait
 		// until the end the way readonly does — `declare -r c=1` sets c and

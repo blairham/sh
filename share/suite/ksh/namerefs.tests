@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# An **attribute letter over an existing name reference** — #3136, found
+# attributing the name-reference row of #2298's `0 / 0` block.
+#
+# `typeset -n s=u` makes `s` a reference to `u`. A later declaration that does
+# not write `-n` again operates on what the reference points at, attribute
+# letters included — the same rule bash keeps, which is what makes it the
+# core's answer rather than a dialect's. This shell applied the letter to the
+# reference, so the target never got it and the reference carried a letter no
+# reference can carry.
+#
+# The file is in the ksh tier rather than in ext/ because the *answers* are
+# ksh93's even where the rule is shared: `nameref` is a word only this shell
+# has, a case letter folds the value that is already stored, `-i` over an
+# array reads every element as a number, and `typeset -p` writes each of them
+# in this shell's own spelling. zsh, dash and ash have no `-n` letter at all.
+#
+# Each section runs in a subshell. Two of them end in a refused assignment,
+# which gives up the command list it stood in, and a file that ran them inline
+# would stop at the first.
+
+say() { printf -- '--- %s\n' "$1"; }
+
+say 'a letter over a reference lands on the target'
+( u=1; typeset -n s=u; typeset -i s; typeset -p s u ) 2>&1
+( u=1; typeset -n s=u; typeset -r s; typeset -p s u ) 2>&1
+( u=1; typeset -n s=u; typeset -x s; typeset -p s u ) 2>&1
+( u=AB; typeset -n s=u; typeset -l s; typeset -p s u ) 2>&1
+( u=1; typeset -n s=u; typeset -ix s=7; typeset -p s u ) 2>&1
+
+say 'and the letter works where it landed'
+( u=1; typeset -n s=u; typeset -i s; s=3+4; printf 'u=[%s]\n' "$u" ) 2>&1
+
+say 'the attribute words follow it too'
+( u=1; typeset -n s=u; readonly s; typeset -p u; u=9; printf 'NOPE\n' ) 2>&1
+printf 'st=%s\n' "$?"
+( u=1; typeset -n s=u; readonly s; s=9; printf 'NOPE\n' ) 2>&1
+( u=1; typeset -n s=u; export s; typeset -p u; env | grep '^u=' ) 2>&1
+
+say 'the chain is walked to the end, and an element lands on its array'
+( u=1; typeset -n s=u; typeset -n s2=s; typeset -i s2; typeset -p u ) 2>&1
+( typeset -a a=(x y); typeset -n s=a[1]; typeset -i s; typeset -p s a ) 2>&1
+
+say 'a target nobody set is brought into being with it'
+( typeset -n s=nope; typeset -i s; typeset -p s nope ) 2>&1
+
+say 'the nameref word makes the same reference'
+( u=1; nameref s=u; typeset -i s; typeset -p s u ) 2>&1
+
+say 'a POSIX-form function has no scope, so the letter reaches the reference'
+( u=1; typeset -n s=u; f() { typeset -i s; }; f; typeset -p u ) 2>&1

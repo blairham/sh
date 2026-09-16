@@ -27,11 +27,15 @@
 # this file is behind on. Matching Debian here would make cmd/dash wrong
 # against upstream and wrong on the machine these cases were written on.
 #
-# It cannot be read off the column header either, and that is the other half
-# of it: dash answers no version probe in any spelling, so the report prints
-# `could not determine` and has nothing to raise a WRONG BUILD banner from —
-# the banner the bash, zsh and ksh93 columns carry for exactly this. See
-# #2291.
+# It can now be read off the column header, which it could not when this note
+# was written. dash answers no version probe in any spelling, so the report
+# printed `could not determine` and had nothing to raise a WRONG BUILD banner
+# from — the banner the bash, zsh and ksh93 columns carry for exactly this.
+# The column is identified by measurement instead: `Suite.AgainstProbe` asks
+# this shell for the length of what `printf 'a\eZ'` wrote and for whether the
+# `set -o` table lists `pipefail`, and `esc=4 pipefail-listed=n` is the
+# answer this file is written against. A runner whose dash answers otherwise
+# carries the banner and its number is read as a delta. See #2291.
 
 ( printf '[%q]\n' 'a b' ) 2> /dev/null
 printf 'percent q -> %s\n' "$( [ $? -ne 0 ] && printf nonzero || printf zero )"

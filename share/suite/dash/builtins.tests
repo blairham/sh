@@ -30,10 +30,16 @@
 # signals both platforms name, so on Linux it refuses a number the reference
 # accepts. That is ours and is filed, platform-scoped.
 #
-# Neither can be read off the column header, and that is the sharper half:
-# dash answers no version probe in any spelling, so the report prints
-# `could not determine` and has nothing to raise the WRONG BUILD banner from
-# that the bash, zsh and ksh93 columns carry for exactly this. See #2291.
+# The first can now be read off the column header, which it could not when
+# this note was written. dash answers no version probe in any spelling, so the
+# report printed `could not determine` and had nothing to raise the WRONG
+# BUILD banner from that the bash, zsh and ksh93 columns carry for exactly
+# this. The column is identified by measurement instead — `Suite.AgainstProbe`
+# asks for the length of what `printf 'a\eZ'` wrote and for whether the
+# `set -o` table lists `pipefail`, and this file is written against
+# `esc=4 pipefail-listed=n`. The second cannot and should not: the signal
+# table is the platform's, not the build's, so it is #3287's to close rather
+# than a banner's to excuse. See #2291.
 
 # echo interprets the escape sequences with no -e and no option set. bash
 # does not, which is the whole reason `printf` is the portable spelling.

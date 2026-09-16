@@ -122,7 +122,7 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 			code = 1
 			continue
 		}
-		rep.ReferenceVersion = suite.Version(ctx, reference)
+		rep.ReferenceVersion = s.Identify(ctx, reference)
 		reports = append(reports, rep)
 	}
 

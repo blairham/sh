@@ -84,9 +84,11 @@ func TestADifferentLineageIsReportedAsOne(t *testing.T) {
 }
 
 // A column that names no expected build cannot report a mismatch, so the
-// three whose references do report a build have to name one. The two that are
-// absent are absent for reasons written at their entries: dash answers no
-// probe in any spelling, and ash's image is pinned by digest.
+// three whose references do report a build have to name one. dash is not in
+// this loop because its reference reports no build at all — it is identified
+// by measurement instead, and [TestAProbeColumnNamesTheAnswerItExpects] is
+// the same rule for that route. ash is absent because its image is pinned by
+// digest, so the build is pinned with it.
 func TestTheColumnsWhoseReferenceReportsABuildNameIt(t *testing.T) {
 	for _, dialect := range []string{"bash", "zsh", "ksh"} {
 		s, ok := FindOurs(dialect)
@@ -123,5 +125,146 @@ func TestTheKshOnThisMachineReportsABuild(t *testing.T) {
 	}
 	if !strings.Contains(got.Version, "93u+") {
 		t.Fatalf("%s reported %q, which is not a ksh93 build string", path, got.Version)
+	}
+}
+
+// fingerprintShell answers no version probe at all — the ksh `-c` spelling
+// included, which is the one a naive fake would answer by accident — and
+// answers any other `-c` with the line given. That is the shape of a shell
+// [Suite.AgainstProbe] exists for.
+func fingerprintShell(t *testing.T, line string) string {
+	t.Helper()
+	return fakeShell(t, t.TempDir(), "fake",
+		"case \"$1\" in\n"+
+			"-c) case \"$2\" in *sh.version*) exit 2 ;; *) echo '"+line+"' ;; esac ;;\n"+
+			"*) echo 'fake: 0: Illegal option --' >&2 ; exit 2 ;;\n"+
+			"esac")
+}
+
+// A shell that will not say what it is can still be identified, and the dash
+// column is the one that had to be. Before this, [Version] was the only route
+// and dash reached none of it, so `Against` was left empty at its entry and
+// the column carried no notice on any runner — which is how #2291 came to
+// read its CI gap as unexcused when both files in it are the distribution's
+// patch.
+func TestAReferenceThatNamesNoVersionIsIdentifiedByMeasurement(t *testing.T) {
+	s, ok := FindOurs("dash")
+	if !ok {
+		t.Fatal("there is no native dash column")
+	}
+	unpatched := fingerprintShell(t, s.AgainstReport)
+	got := s.Identify(context.Background(), unpatched)
+	if !got.Known {
+		t.Fatalf("the probe answered and the column still could not tell: %+v", got)
+	}
+	if !got.ByProbe {
+		t.Fatal("a fingerprint was reported as though the shell had named itself")
+	}
+	if !strings.Contains(got.String(), "answers no version probe") {
+		t.Fatalf("the header does not say this is a measurement: %q", got.String())
+	}
+	if label, why := s.Lineage(got); why != "" {
+		t.Fatalf("the build this column is written against was reported as wrong: %q %q", label, why)
+	}
+}
+
+// The half that has to fire, and the reason the probe asks two questions
+// rather than one. Debian and Ubuntu patch dash's printf escape and its
+// option table; either answer alone identifies the patched build.
+func TestAPatchedReferenceIsReportedAsADifferentBuild(t *testing.T) {
+	s, ok := FindOurs("dash")
+	if !ok {
+		t.Fatal("there is no native dash column")
+	}
+	for _, line := range []string{
+		"esc=3 pipefail-listed=y",
+		"esc=3 pipefail-listed=n",
+		"esc=4 pipefail-listed=y",
+	} {
+		got := s.Identify(context.Background(), fingerprintShell(t, line))
+		label, why := s.Lineage(got)
+		if label != "WRONG BUILD" {
+			t.Fatalf("%q was accepted as the build this column is graded against: %q %q", line, label, why)
+		}
+		if !strings.Contains(why, line) || !strings.Contains(why, s.Against) {
+			t.Fatalf("the notice does not name both builds, so a reader cannot act on it: %q", why)
+		}
+	}
+}
+
+// [looksLikeABuild]'s rule carried into the probe: an answer has to look like
+// an answer. A shell that refuses the fingerprint, or writes it to standard
+// error, or exits non-zero having printed it, has identified nothing — and
+// the column must say so rather than print the refusal where a build belongs,
+// which is #3135 in the new mechanism.
+func TestARefusedFingerprintIsNotAnIdentification(t *testing.T) {
+	s, ok := FindOurs("dash")
+	if !ok {
+		t.Fatal("there is no native dash column")
+	}
+	for name, body := range map[string]string{
+		"refuses every spelling":    "echo 'fake: 0: Illegal option --' >&2 ; exit 2",
+		"answers on standard error": "echo 'esc=4 pipefail-listed=n' >&2 ; exit 0",
+		"answers and then fails":    "echo 'esc=4 pipefail-listed=n' ; exit 1",
+		"answers with nothing":      "exit 0",
+	} {
+		shell := fakeShell(t, t.TempDir(), "fake", body)
+		if got := s.Identify(context.Background(), shell); got.Known {
+			t.Fatalf("%s: was taken as an identification: %q", name, got.Version)
+		}
+		if label, _ := s.Lineage(s.Identify(context.Background(), shell)); label != "UNIDENTIFIED" {
+			t.Fatalf("%s: an unidentified reference passed silently: %q", name, label)
+		}
+	}
+}
+
+// A column that names a probe has to name what the probe should answer, or
+// the comparison can never match and the notice fires on every machine
+// including the right one.
+func TestAProbeColumnNamesTheAnswerItExpects(t *testing.T) {
+	for _, s := range Ours {
+		if s.AgainstProbe == "" {
+			continue
+		}
+		if s.Against == "" || s.AgainstReport == "" {
+			t.Fatalf("the %s column probes for a build it does not name", s.Name)
+		}
+		if s.AgainstReport != strings.ToLower(s.AgainstReport) {
+			t.Fatalf("the %s column's fragment %q is not lowercase, and the comparison "+
+				"lowercases the answer — so it can never match", s.Name, s.AgainstReport)
+		}
+	}
+}
+
+// The live guard, and the one that would catch the probe going stale: the
+// dash on this machine has to answer the fingerprint this column is written
+// against. Measured 2026-09-16 on Apple's dash-16 and on upstream 0.5.12
+// built from source here — both `esc=4 pipefail-listed=n`, and every one of
+// the column's 52 files byte-identical between them.
+func TestTheDashOnThisMachineAnswersTheFingerprint(t *testing.T) {
+	s, ok := FindOurs("dash")
+	if !ok {
+		t.Fatal("there is no native dash column")
+	}
+	path, found := Locate(s.Lookup)
+	if !found {
+		t.Skip("no dash on this machine")
+	}
+	got := s.Identify(context.Background(), path)
+	if !got.Known {
+		t.Fatalf("%s answered neither a version probe nor the fingerprint", path)
+	}
+	if !got.ByProbe {
+		t.Fatalf("%s named a build after all, so the probe is no longer the route: %q", path, got.Version)
+	}
+	t.Logf("%s answers %q", path, got.Version)
+	// Not asserted equal to AgainstReport: a Debian-family runner answers
+	// the other fingerprint and that is the notice working, not a failing
+	// test. What is asserted is that the two spellings are the only ones the
+	// probe can produce, so a probe that has stopped discriminating — a
+	// changed builtin, a reworded listing — is caught here rather than by a
+	// column that silently agrees with everything.
+	if !strings.HasPrefix(got.Version, "esc=") || !strings.Contains(got.Version, " pipefail-listed=") {
+		t.Fatalf("%s answered %q, which is not this probe's shape at all", path, got.Version)
 	}
 }

@@ -180,6 +180,21 @@ type Suite struct {
 	// AT&T's, and a fragment that cannot tell the two lineages apart is the
 	// check reporting all-clear on the exact case it was written for.
 	AgainstReport string
+	// AgainstProbe identifies the reference by measurement, for a shell that
+	// answers no version probe in any spelling and so can never reach
+	// AgainstReport through [Version].
+	//
+	// It is shell text, run through the reference with -c, and its first
+	// line of standard output is used exactly as a build string is: printed
+	// in the column header and matched against AgainstReport. There is no
+	// second field for the expected answer on purpose — one place says what
+	// this column is written against, so the two can never drift apart.
+	//
+	// A probe here is about the *build* rather than the release, because the
+	// column that needs one diverges by distribution patch: see
+	// [Suite.Identify] for the measurement and for why a fingerprint is the
+	// better instrument than a version for that shape of difference.
+	AgainstProbe string
 
 	// SelfDoc is a command that makes this shell print its own
 	// documentation, and it is how [SelfDocumentation] builds the dictionary

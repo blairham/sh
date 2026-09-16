@@ -169,7 +169,7 @@ func run(ctx context.Context, dialect, bin, buildDir string, timeout time.Durati
 		fmt.Fprintf(os.Stderr, "suitecheck: %v\n", err)
 		return 1
 	}
-	rep.ReferenceVersion = suite.Version(ctx, reference)
+	rep.ReferenceVersion = s.Identify(ctx, reference)
 	rep.Helpers = helpers
 	printReport(os.Stdout, rep)
 	printPanel()

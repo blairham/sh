@@ -192,11 +192,33 @@ var Ours = []Suite{
 		// gap: dash is the holdout on arrays, [[ ]], $'…', += and the rest,
 		// and running those files here would grade dash on constructs it
 		// has never claimed to have.
-		// No Against, and that is a measurement rather than an omission:
-		// dash answers no version probe in any spelling, so the build behind
-		// this column cannot be named from the outside. The reference line
-		// says `could not determine` on every run, which is the truth and
-		// was `/bin/dash: 0: Illegal option --` until #3135.
+		// This column could not name the build it is graded against until
+		// now, and it is the one column where that mattered most. dash
+		// answers no version probe in any spelling, so [Version] is
+		// Known == false for it on every machine and [Suite.Lineage] had
+		// nothing to raise the notice from that the other three carry — the
+		// reference line said `could not determine` and stopped there, which
+		// was true and was also the whole of the problem.
+		//
+		// What it cost is on the board. The dash column is the one CI number
+		// with no banner on it, so #2291 read it as "the only unexcused
+		// per-column strict gap" — while both of the files in that gap are
+		// the *distribution's* patch. Debian and Ubuntu make `\e` an escape
+		// in a printf format and add `privileged` and `pipefail` to the
+		// `set -o` listing; upstream 0.5.12 and Apple's dash-16 do neither.
+		// Two builds of one upstream version disagreeing is what says patch
+		// rather than a version these cases are behind on, and measured
+		// 2026-09-16 every one of this column's 52 files is byte-identical
+		// under Apple's dash-16 and under upstream 0.5.12 built from source
+		// here.
+		//
+		// So the build is identified by measurement instead. AgainstProbe
+		// asks the two questions the patch answers differently, in one line
+		// and with no utility the shell does not have itself, and the answer
+		// goes where a version string would. `esc` is the length of what
+		// `printf 'a\eZ'` wrote — four characters upstream, three where the
+		// escape is taken — and `pipefail-listed` is whether the option
+		// table has a name upstream's has not.
 		Name:     "dash",
 		Dialect:  "dash",
 		Ours:     true,
@@ -204,6 +226,11 @@ var Ours = []Suite{
 		Ext:      OurExt,
 		ShellVar: OurShellVar,
 		Lookup:   []string{"/bin/dash", "/usr/bin/dash", "/opt/homebrew/bin/dash"},
+		Against: "an unpatched dash: upstream 0.5.12 and Apple's dash-16 both answer " +
+			"esc=4 pipefail-listed=n",
+		AgainstReport: "esc=4 pipefail-listed=n",
+		AgainstProbe: `e=$(printf 'a\eZ'); case $(set -o) in *pipefail*) p=y ;; *) p=n ;; esac; ` +
+			`printf 'esc=%s pipefail-listed=%s\n' "${#e}" "$p"`,
 	},
 	{
 		// The column that was a row until now. There is no BusyBox on a

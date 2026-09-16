@@ -461,9 +461,14 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // `OLDPWD` is on both listings because this shell exports it from the first
 // command, which is InheritedOldpwdIgnored's other half: measured 2026-09-12,
 // `env -i zsh -c "export V='a b'; export -p"` writes `export OLDPWD=$PWD`
-// beside `export PWD=$PWD` and `export -i10 SHLVL=1`. Only the first of the
-// three is answered here, so this row is one name closer to the real shell's
-// listing rather than equal to it (#1490).
+// beside `export PWD=$PWD` and `export -i10 SHLVL=1` (#1490).
+//
+// `SHLVL` is the second of those three, and it is here now: this shell counts
+// its own depth and exports it (#3097). The row is `export SHLVL=1` where the
+// real shell writes `export -i10 SHLVL=1` — zsh gives the name the integer
+// attribute and a base, which is #3099's row and not this one — so the
+// listing is two names closer to the reference rather than equal to it. `PWD`
+// is the third and is still absent.
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	dir := t.TempDir()
 	out, st := runZsh(t, dir,
@@ -471,11 +476,11 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	// `LINENO=1` sits between them because this shell's LINENO is read-only,
 	// which is measured: zsh 5.9.2's own bare `readonly` writes `ARGC=0` and
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
-	want := "OLDPWD=" + dir + "\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nR=2\n" +
+	want := "OLDPWD=" + dir + "\nSHLVL=1\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
 		"errnos\nkeymaps\nlanginfo\nparameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
-		"export OLDPWD=" + dir + "\nexport V='a b'\n" +
+		"export OLDPWD=" + dir + "\nexport SHLVL=1\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's
 		// `readonly -p` writes `typeset -Fr EPOCHREALTIME` and
 		// `typeset -ir EPOCHSECONDS` (#2451).

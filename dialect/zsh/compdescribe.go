@@ -100,12 +100,13 @@ type describeGroup struct {
 }
 
 func compdescribeBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	_, st, ok := computilFrom(r, ctx)
-	if !ok {
+	// Three, where the other seven declare one: `compdescribe -i a` is two
+	// words and zsh refuses it for the count before it looks at the verb.
+	if !compArity(r, args, 3, -1) {
 		return 1
 	}
-	if len(args) == 0 {
-		r.Diagnosef("not enough arguments\n")
+	_, st, ok := computilFrom(r, ctx)
+	if !ok {
 		return 1
 	}
 	switch args[0] {

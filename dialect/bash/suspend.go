@@ -93,20 +93,30 @@ func suspendBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 			_, _ = fmt.Fprintf(r.Err(), "%s\n", suspendUsage)
 			return 2
 		default:
-			// An operand, and this builtin has none. Measured: `suspend x`,
-			// `suspend a b` and `suspend -- x` are each `suspend: too many
-			// arguments` at 1.
+			// An operand, and this builtin has none. Re-measured on bash
+			// 5.3.15, 2026-09-16, each in a process group of its own with
+			// stdin from /dev/null: `suspend x`, `suspend a b` and `suspend
+			// -- x` are each `suspend: too many arguments` at **2**, the
+			// status bash gives a usage error and the same one the bad
+			// option above returns. The 1 recorded here before was wrong,
+			// and it is the reason this line is asked in a test rather than
+			// left to a comment — see TestSuspendOperandStatus.
 			//
-			// bash also **abandons the input** there — `suspend x || echo
-			// caught; echo after` writes neither word and the shell leaves
-			// with 1, while the same line inside `( )` ends only the
-			// subshell. That half is recorded and not modeled: a dialect
-			// builtin has no way to end a script from here, and inventing
-			// one for a corner no script writes would be a wider seam than
-			// the fact deserves. The wording and the status are this
-			// shell's; what follows the line is not.
+			// **The order is 5.x's and not bash's.** bash 3.2 asks about job
+			// control first and answers `suspend x` with `cannot suspend: no
+			// job control` at 1, never reaching the count. This column is
+			// graded against 5.3, so the count comes first here.
+			//
+			// bash also **abandons the rest of the command list** there —
+			// `suspend x || echo caught` writes nothing, though a following
+			// *line* still runs and the shell leaves with 0. That half is
+			// recorded and not modeled: a dialect builtin has no way to
+			// abandon a list from here, and inventing one for a corner no
+			// script writes would be a wider seam than the fact deserves.
+			// The wording and the status are this shell's; what follows the
+			// line is not.
 			r.Diagnosef("suspend: too many arguments\n")
-			return 1
+			return 2
 		}
 	}
 	if !force && (!r.MonitorOn() || r.LoginShell) {

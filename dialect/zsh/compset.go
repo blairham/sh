@@ -68,13 +68,14 @@ import (
 func registerCompset(r *interp.Runner) { r.Register("compset", compsetBuiltin) }
 
 func compsetBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
+	// The one of the ten with a maximum as well as a minimum: a fourth word
+	// is `too many arguments` before anything looks at the option.
+	if !compArity(r, args, 1, 3) {
+		return 1
+	}
 	cs, completing := completionFrom(ctx)
 	if !completing {
 		r.Diagnosef("can only be called from completion function\n")
-		return 1
-	}
-	if len(args) == 0 {
-		r.Diagnosef("missing option\n")
 		return 1
 	}
 	letter, rest, ok := compsetOption(r, args)

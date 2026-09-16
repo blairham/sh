@@ -159,3 +159,75 @@ printf 'status: %s\n' "$?"
 ( umask 022; umask -S g=u ) 2> /dev/null; printf 'a copy -> %s\n' "$?"
 ( umask 022; umask -S u=X ) 2> /dev/null; printf 'the X letter -> %s\n' "$?"
 ( umask 022; umask -S a+X ) 2> /dev/null; printf 'X with plus -> %s\n' "$?"
+
+# The ten builtins of the completion system, asked the one way a script can
+# ask them — from outside a completion — and the answer is about the *count*
+# before it is about the place.
+#
+# zsh declares a minimum and a maximum for each builtin and refuses on the
+# count in the dispatcher, before the builtin's own body runs. So a bare
+# `comparguments` is `not enough arguments` and never reaches the sentence
+# about completion functions, while a bare `compadd` — which declares no
+# minimum — goes straight to it. Eight of the ten are in the first group and
+# two in the second, and this shell had the two checks the other way round
+# until it was measured: every one of the ten said `can only be called from
+# completion function` whatever it was given.
+#
+# The count is of words and not of operands in nine of the ten, which is what
+# a gate ahead of any option parsing means: `compdescribe -i a` is two words
+# and refuses for the count, and `compset -p 1 x x` is four and is too many.
+# `compquote` is the exception and parses its `-p` off first.
+#
+# All ten were found by `make coverage` (#2293), which had them as surface no
+# case anywhere in this tree mentioned. They are zsh's alone: the other four
+# references answer every line below `command not found`.
+# Written out one name at a time rather than looped over a variable: a
+# command word that is `$c` names no builtin, and the coverage instrument
+# reads the text.
+compadd 2>&1;       printf 'compadd -> %s\n' "$?"
+comparguments 2>&1; printf 'comparguments -> %s\n' "$?"
+compdescribe 2>&1;  printf 'compdescribe -> %s\n' "$?"
+compfiles 2>&1;     printf 'compfiles -> %s\n' "$?"
+compgroups 2>&1;    printf 'compgroups -> %s\n' "$?"
+compquote 2>&1;     printf 'compquote -> %s\n' "$?"
+compset 2>&1;       printf 'compset -> %s\n' "$?"
+comptags 2>&1;      printf 'comptags -> %s\n' "$?"
+comptry 2>&1;       printf 'comptry -> %s\n' "$?"
+compvalues 2>&1;    printf 'compvalues -> %s\n' "$?"
+
+# The two that declare no minimum, given words, are still about the place.
+compadd x 2>&1;  printf 'compadd x -> %s\n' "$?"
+comptry x 2>&1;  printf 'comptry x -> %s\n' "$?"
+
+# And the eight that do, once the count is satisfied.
+comparguments x 2>&1; printf 'comparguments x -> %s\n' "$?"
+compfiles x 2>&1;     printf 'compfiles x -> %s\n' "$?"
+compgroups x 2>&1;    printf 'compgroups x -> %s\n' "$?"
+comptags x 2>&1;      printf 'comptags x -> %s\n' "$?"
+compvalues x 2>&1;    printf 'compvalues x -> %s\n' "$?"
+
+# `compdescribe` declares three where the other seven declare one.
+compdescribe -i a 2>&1
+printf 'compdescribe two words -> %s\n' "$?"
+compdescribe -i a b 2>&1
+printf 'compdescribe three words -> %s\n' "$?"
+
+# `compset` is the only one of the ten with a maximum as well as a minimum.
+compset -p 1 x 2>&1
+printf 'compset three words -> %s\n' "$?"
+compset -p 1 x x 2>&1
+printf 'compset four words -> %s\n' "$?"
+
+# `compquote` is the exception to "the count is of words": it parses `-p` off
+# first, so a lone `-p` is still nothing and a second one changes nothing.
+compquote -p 2>&1
+printf 'compquote -p alone -> %s\n' "$?"
+compquote -p -p 2>&1
+printf 'compquote -p twice -> %s\n' "$?"
+compquote -p x 2>&1
+printf 'compquote -p and a name -> %s\n' "$?"
+
+# And the other nine do count the words: three of them satisfy compdescribe
+# whether one is an option or not.
+compdescribe a b c 2>&1
+printf 'compdescribe three operands -> %s\n' "$?"

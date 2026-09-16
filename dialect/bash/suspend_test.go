@@ -48,14 +48,22 @@ func TestSuspendRefusesTheWayBashDoes(t *testing.T) {
 			name: "a bad option after -f", src: `suspend -f -q; echo "st=$?"`,
 			want: "bash: line 1: suspend: -q: invalid option\nsuspend: usage: suspend [-f]\nst=2\n",
 		},
-		// This builtin takes no operands.
+		// This builtin takes no operands, and the refusal is a usage error
+		// rather than an ordinary one: 2, the same status the bad option
+		// above gives. Re-measured on bash 5.3.15, 2026-09-16 — these two
+		// rows said 1 until then, which is what the implementation's comment
+		// had recorded and neither was right.
 		{
 			name: "an operand", src: `suspend x; echo "st=$?"`,
-			want: "bash: line 1: suspend: too many arguments\nst=1\n",
+			want: "bash: line 1: suspend: too many arguments\nst=2\n",
 		},
 		{
 			name: "an operand after --", src: `suspend -- x; echo "st=$?"`,
-			want: "bash: line 1: suspend: too many arguments\nst=1\n",
+			want: "bash: line 1: suspend: too many arguments\nst=2\n",
+		},
+		{
+			name: "two operands", src: `suspend a b; echo "st=$?"`,
+			want: "bash: line 1: suspend: too many arguments\nst=2\n",
 		},
 		// `--` on its own ends the options and leaves the ordinary refusal.
 		{

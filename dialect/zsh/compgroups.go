@@ -30,11 +30,10 @@ import (
 // more than is here.
 
 func compgroupsBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	if _, _, ok := computilFrom(r, ctx); !ok {
+	if !compArity(r, args, 1, -1) {
 		return 1
 	}
-	if len(args) == 0 {
-		r.Diagnosef("not enough arguments\n")
+	if _, _, ok := computilFrom(r, ctx); !ok {
 		return 1
 	}
 	return 0

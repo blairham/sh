@@ -862,19 +862,76 @@ func TestCompfilesAndCompgroupsAnswerWithoutClaiming(t *testing.T) {
 // TestTheEightRefuseOutsideACompletion is the same refusal `compadd` gives,
 // and the reason the state lives on the context: a `comparguments` reached in
 // a script, a hook or at a prompt finds nothing and says so.
+//
+// Each call here carries enough words to pass the dispatcher's count, which
+// is what has to happen before the refusal about the place is reached at all
+// — `compdescribe -i x` is two words and answers the count instead. See
+// TestTheCompletionBuiltinsCountTheirWordsFirst.
 func TestTheEightRefuseOutsideACompletion(t *testing.T) {
 	for _, name := range []string{
 		"comparguments", "compdescribe", "compfiles", "compgroups",
 		"compquote", "comptags", "comptry", "compvalues",
 	} {
 		t.Run(name, func(t *testing.T) {
-			out, status := runZsh(t, t.TempDir(), name+" -i x")
+			out, status := runZsh(t, t.TempDir(), name+" -i x y")
 			if status == 0 {
 				t.Errorf("%s outside a completion was 0", name)
 			}
 			if !strings.Contains(out, "completion function") {
 				t.Errorf("%s said %q, want a refusal naming a completion function",
 					name, out)
+			}
+		})
+	}
+}
+
+// TestTheCompletionBuiltinsCountTheirWordsFirst is the gate zsh applies
+// before any of the ten runs, and the order this shell had backwards.
+//
+// zsh's dispatcher checks each builtin's declared minimum and maximum against
+// the words it was given and refuses there, so the commonest call a script
+// can make — a bare one — is answered about the *count* and never reaches the
+// sentence about completion functions. Eight of the ten declare a minimum;
+// `compadd` and `comptry` declare none and go straight to the place.
+//
+// Measured on zsh 5.9.2, 2026-09-16, every builtin called outside a
+// completion with 0 to 20 words, with `zmodload zsh/complete` and `zmodload
+// zsh/computil` first. The count is of words rather than operands: an option
+// letter is a word, so `compdescribe -i a` is two and refuses.
+//
+// Found by `make coverage` (#2293, under #2291), which reported all ten as
+// surface no case in the tree ever asked about. Eight of the ten were wrong.
+func TestTheCompletionBuiltinsCountTheirWordsFirst(t *testing.T) {
+	const few, many, place = "not enough arguments", "too many arguments",
+		"can only be called from completion function"
+	for _, c := range []struct{ name, src, want string }{
+		{"compadd declares no minimum", "compadd", place},
+		{"comptry declares no minimum", "comptry", place},
+		{"comparguments", "comparguments", few},
+		{"comparguments with one word", "comparguments x", place},
+		{"compfiles", "compfiles", few},
+		{"compgroups", "compgroups", few},
+		{"compquote", "compquote", few},
+		{"compquote parses its option off first", "compquote -p", few},
+		{"compquote with two options and nothing else", "compquote -p -p", few},
+		{"compquote with an operand behind them", "compquote -p -p x", place},
+		{"compdescribe with three operands", "compdescribe a b c", place},
+		{"comptags", "comptags", few},
+		{"compvalues", "compvalues", few},
+		{"compset", "compset", few},
+		{"compset takes at most three", "compset -p 1 x", place},
+		{"compset refuses a fourth", "compset -p 1 x x", many},
+		{"compdescribe declares three", "compdescribe", few},
+		{"compdescribe with two words", "compdescribe -i a", few},
+		{"compdescribe with three words", "compdescribe -i a b", place},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, status := runZsh(t, t.TempDir(), c.src)
+			if status != 1 {
+				t.Errorf("%s left status %d, want 1", c.src, status)
+			}
+			if !strings.Contains(out, c.want) {
+				t.Errorf("%s said %q, want %q", c.src, out, c.want)
 			}
 		})
 	}

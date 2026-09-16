@@ -42,6 +42,23 @@ import (
 // cannot be applied until there is a runner to apply it to. The rows below
 // that reach it say so where they sit.
 
+// invalidOptionZ is what this shell says about a letter nobody has, which is
+// bash's own usage block byte-for-byte — measured on 5.3.20, where the only
+// difference is the name the shell was invoked under. It is here because one
+// row below is about *which* of two refusals is reported, so the other
+// refusal has to be written out in full.
+var invalidOptionZ = "bash: -Z: invalid option\n" +
+	"Usage:\tbash [GNU long option] [option] ...\n" +
+	"\tbash [GNU long option] [option] script-file ...\n" +
+	"GNU long options:\n" +
+	"\t--debug\n\t--debugger\n\t--dump-po-strings\n\t--dump-strings\n" +
+	"\t--help\n\t--init-file\n\t--login\n\t--noediting\n\t--noprofile\n" +
+	"\t--norc\n\t--posix\n\t--pretty-print\n\t--rcfile\n\t--restricted\n" +
+	"\t--verbose\n\t--version\n" +
+	"Shell options:\n" +
+	"\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)\n" +
+	"\t-abefhkmnptuvxBCEHPT or -o option\n"
+
 // captureArgs runs a whole argument vector through this binary's own shell,
 // with the given text on standard input — empty for the rows that name a `-c`
 // string, and a script for the rows where the letter is the last word there
@@ -129,6 +146,21 @@ func TestTheShoptOptionLetterIsReadAtInvocation(t *testing.T) {
 			name: "the word may itself look like an option",
 			argv: []string{"-O", "-c", "echo RAN"},
 			errs: "bash: echo RAN: No such file or directory\n", code: 127,
+		},
+		{
+			// A letter written *ahead* of this one in the same word is
+			// judged first, which is what keeps the bundle a left-to-right
+			// sequence rather than two passes. Measured: `bash -ZO
+			// nosuchopt_zz -c cmd` names `-Z` and not the option name.
+			//
+			// Only in that order here. bash validates every letter while it
+			// is still reading the line, so `bash -O nosuchopt_zz -Z -c cmd`
+			// names `-Z` too; this front end has no option table of its own
+			// and answers with the option name — the held-out ordering at
+			// the top of this file, reached by a second road.
+			name: "a letter ahead of it in the same word is judged first",
+			argv: []string{"-ZO", "nosuchopt_zz", "-c", "echo RAN"},
+			errs: invalidOptionZ, code: 2,
 		},
 		{
 			// And a welded name is not a name: the next word is. Measured on

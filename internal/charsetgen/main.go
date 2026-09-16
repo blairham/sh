@@ -171,7 +171,7 @@ func write(path string, sets []charset) error {
 				b.WriteString("-1,")
 				continue
 			}
-			b.WriteString(fmt.Sprintf("%#04x,", r))
+			fmt.Fprintf(&b, "%#04x,", r)
 		}
 		b.WriteString("\n}\n")
 	}

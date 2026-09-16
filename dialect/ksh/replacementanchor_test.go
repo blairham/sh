@@ -21,6 +21,11 @@ func TestTheReplacementAnchorAnswers(t *testing.T) {
 	if got, want := s.ReplacementAnchors, interp.Yes; got != want {
 		t.Errorf("ReplacementAnchors = %v, want %v", got, want)
 	}
+	// And after a single `/` only, as bash reads it. zsh is the one column
+	// that reads an anchor after the global `//` as well (#3307).
+	if got, want := s.GlobalReplacementAnchors, interp.No; got != want {
+		t.Errorf("GlobalReplacementAnchors = %v, want %v", got, want)
+	}
 	if got, want := s.AnchoredEmptyReplacementPattern, interp.No; got != want {
 		t.Errorf("AnchoredEmptyReplacementPattern = %v, want %v", got, want)
 	}

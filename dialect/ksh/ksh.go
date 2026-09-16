@@ -1375,6 +1375,12 @@ func Semantics() interp.Semantics {
 	// `abcabc` here where bash and zsh write the `X`. The axis above has
 	// recorded that in prose since #1857 and nothing read it until #3272.
 	s.ReplacementAnchors = interp.Yes
+	// And only after a single `/`: `${v//#a/X}` on `abcabc` is `abcabc`
+	// here, and `${w//#a/Q}` on `x#ay%bz` is `xQy%bz` — the `#a` found
+	// inside the value, which is what says the character was the pattern's
+	// and not an anchor. Measured 2026-09-16; bash and bash 3.2 agree and
+	// zsh does not (#3307).
+	s.GlobalReplacementAnchors = interp.No
 	s.AnchoredEmptyReplacementPattern = interp.No
 	// And the empty match it refuses is the one where the match before it
 	// ended, which is the classic global-replace rule: `${v//@(b|)/<>}` is

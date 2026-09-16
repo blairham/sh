@@ -1249,6 +1249,13 @@ func Semantics() interp.Semantics {
 	// (#3272).
 	s.ReplacementAnchors = interp.Yes
 	s.AnchoredEmptyReplacementPattern = interp.Yes
+	// And the anchor is read after a single `/` only: after the global `//`
+	// the character is the pattern's own first byte. Measured 2026-09-16 —
+	// `${v//#a/X}` on `abcabc` is `abcabc` and, over a value holding the
+	// character, `${w//#a/Q}` on `x#ay%bz` is `xQy%bz`, the `#a` found
+	// inside. bash 3.2.57 and ksh93 agree; zsh is the one column that reads
+	// an anchor there (#3307).
+	s.GlobalReplacementAnchors = interp.No
 	// And the empty match a global replacement refuses is the one at the end
 	// of the value: `${v//@(b|)/<>}` is `<>a<><>c`, which takes the empty
 	// match sitting where `b` ended and leaves the end alone.

@@ -3721,12 +3721,31 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 // Asked only where an anchor was written, so an ordinary `${v/a/X}` puts no
 // question to the dialect.
 func (r *Runner) readAnchor(pattern string, e *syntax.ParamExpr) (string, *syntax.ParamExpr) {
-	if e.Anchor == 0 || r.ask(r.sem().ReplacementAnchors, "`${v/#pat/rep}`: the anchored span replacement") {
+	if e.Anchor == 0 {
 		return pattern, e
 	}
-	unanchored := *e
-	unanchored.Anchor = 0
-	return escapePatternMetaIn(string(e.Anchor), r.markedMeta()) + pattern, &unanchored
+	if !r.ask(r.sem().ReplacementAnchors, "`${v/#pat/rep}`: the anchored span replacement") {
+		return r.unanchored(pattern, e)
+	}
+	if e.All && !r.ask(r.sem().GlobalReplacementAnchors,
+		"`${v//#pat/rep}`: an anchor after the global spelling") {
+		return r.unanchored(pattern, e)
+	}
+	return pattern, e
+}
+
+// unanchored is the character going back on the front of the pattern, which
+// is what a column that does not read it there has in hand: the pattern is
+// `#a` and not `a` anchored at the start.
+//
+// One function for the two refusals above rather than a copy each, because
+// the two are the same act — a second copy is how the escaping would come to
+// differ between a column with no anchors at all and a column with no anchor
+// in the global spelling.
+func (r *Runner) unanchored(pattern string, e *syntax.ParamExpr) (string, *syntax.ParamExpr) {
+	plain := *e
+	plain.Anchor = 0
+	return escapePatternMetaIn(string(e.Anchor), r.markedMeta()) + pattern, &plain
 }
 
 // anchoredEmptyPatternFires is whether an *anchored* span replacement whose

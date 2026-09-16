@@ -103,6 +103,7 @@ ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   FloatFormatLetterE
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNamesUnderPlus
+ash   GlobalReplacementAnchors
 ash   HeldExitListsTheJobs
 ash   IgnoredNamesFollowTheParameter
 ash   IgnoredNamesMatchTheLastComponent
@@ -325,6 +326,7 @@ dash  FloatFormatLetterE
 dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns
 dash  FunctionNamesUnderPlus
+dash  GlobalReplacementAnchors
 dash  HeldExitListsTheJobs
 dash  IgnoredNamesFollowTheParameter
 dash  IgnoredNamesMatchTheLastComponent

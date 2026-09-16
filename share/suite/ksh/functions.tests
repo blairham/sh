@@ -1,0 +1,111 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Function definition, scope and return in ksh93 — #2302.
+#
+# The whole of this file is the facility no other shell on the panel has: a
+# *discipline* function. A `function name.get` is not a function called
+# `name.get` — it is a hook the shell runs when the variable `name` is read,
+# and `.set`, `.append` and `.unset` are the same for the other three events.
+# bash and zsh read every line here as an ordinary function whose name has a
+# dot in it, so the hook never fires and the variable answers plainly; dash
+# will not parse the `function` keyword at all.
+#
+# The reserved names around them are the same story. `${.sh.fun}` is the
+# function running now, `${.sh.level}` its depth, `${.sh.name}` and
+# `${.sh.subscript}` the variable and element a discipline was entered for,
+# and `${.sh.value}` the value the event carries. Every one of them is a
+# name in ksh93's own `.sh` namespace, which the other three shells cannot
+# even expand — they report a bad substitution.
+#
+# Two of the answers below are worth naming before they are read, because
+# they look like mistakes and are not.
+#
+# `.get` is entered with `${.sh.value}` **empty** in 93u+, not with the
+# variable's current value, so a discipline written to decorate what is
+# already there decorates nothing. That is what this build does, it does it
+# every time, and a later ksh93 that fills it in would change this file —
+# which is the reason to have the file rather than a reason to leave the
+# case out.
+#
+# A `function` whose name contains a dot is not a namespace here. ksh93 reads
+# it as a discipline for the variable named by the part before the dot, so
+# `function ns.thing` with no `ns` in scope is refused as an *invalid
+# discipline function* rather than defined. It is the one spelling in this
+# file the other shells accept and run.
+
+printf -- '--- .get is entered with an empty value ---\n'
+
+g=raw
+function g.get { .sh.value="[${.sh.value}]"; }
+printf 'read once: %s\n' "$g"
+printf 'read twice: %s\n' "$g"
+printf 'expanded in a word: <%s>\n' "${g}"
+
+printf -- '--- .set sees the value on its way in ---\n'
+
+function s.set { .sh.value="<${.sh.value}>"; }
+s=first
+printf 's after the assignment: %s\n' "$s"
+s=second
+printf 's after a second: %s\n' "$s"
+
+# The discipline decorates once per assignment rather than once per read, so
+# the wrapping does not accumulate. That is the half that tells .set from
+# .get, and it is why both are here.
+
+printf -- '--- the name and the subscript a discipline was entered for ---\n'
+
+function n.set { printf 'set name=[%s] value=[%s] subscript=[%s]\n' "${.sh.name}" "${.sh.value}" "${.sh.subscript}"; }
+n=plain
+n[3]=indexed
+
+printf -- '--- .append is given only what was appended ---\n'
+
+function p.append { printf 'append was given [%s]\n' "${.sh.value}"; }
+p=base
+p+=more
+printf 'p=[%s]\n' "$p"
+
+printf -- '--- .unset runs before the name goes ---\n'
+
+u=here
+function u.unset { printf 'the unset discipline ran, and u is still [%s]\n' "$u"; }
+unset u
+printf 'after the unset: [%s]\n' "${u-gone}"
+
+printf -- '--- the function running now, and how deep ---\n'
+
+function outer { printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; inner; }
+function inner { printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; }
+outer
+posixform() { printf 'the POSIX form answers too: fun=[%s]\n' "${.sh.fun}"; }
+posixform
+printf 'at the top: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"
+
+printf -- '--- a dotted name is a discipline, not a namespace ---\n'
+
+( eval 'function ns.thing { printf "ran\n"; }' ) 2>&1 | sed 's/^.*: ns\./ns./'
+
+printf -- '--- typeset -f writes the definition back out ---\n'
+
+function shown { printf 'in shown\n'; }
+plain() { printf 'in plain\n'; }
+typeset -f shown
+typeset -f plain
+printf 'names alone: [%s]\n' "$(typeset +f | sort | tr '\n' ' ')"
+
+printf -- '--- autoload finds a definition on FPATH ---\n'
+
+mkdir -p fns
+printf 'function auto { printf "autoloaded\\n"; }\n' > fns/auto
+FPATH=$PWD/fns
+autoload auto
+auto
+printf 'the autoloaded call -> %s\n' "$?"
+
+printf -- '--- return takes the low byte ---\n'
+
+function big { return 300; }
+big
+printf 'return 300 -> %s\n' "$?"

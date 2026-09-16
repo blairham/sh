@@ -141,34 +141,51 @@ func TestTheShellLevelCountsThisShellIn(t *testing.T) {
 // Asked through `export -p`, which is the shell's own record of what a child
 // would be told, rather than by starting one: a test that started a shell
 // under `go test` would be starting the test binary.
+//
+// **Both rows are load-bearing and the first is the one that discriminates.**
+// A name the shell was handed is already exported, because arriving in the
+// environment is what carrying the attribute means — so a shell handed
+// `SHLVL=4` lists the incremented value whether or not anything recorded the
+// attribute, and a test with only that row passes with the export dropped.
+// The shell nobody started from a shell is the one that has to record it.
 func TestTheShellLevelIsInEveryChildsEnvironment(t *testing.T) {
-	for _, p := range shellLevelPresets() {
-		t.Run(p.Name, func(t *testing.T) {
-			// The four spellings the panel's `export -p` uses for one
-			// entry, written out rather than matched loosely: `*SHLVL=*5*`
-			// would be satisfied by any later line of the listing that
-			// happened to hold a 5.
-			out, st, err := p.Combined(t, dialecttest.Base{Env: []string{"SHLVL=4"}},
-				"case \"$(export -p)\" in\n"+
-					"*SHLVL=5*) echo told ;;\n"+
-					"*\"SHLVL='5'\"*) echo told ;;\n"+
-					"*'SHLVL=\"5\"'*) echo told ;;\n"+
-					"*) echo silent ;;\n"+
-					"esac")
-			if err != nil || st != 0 {
-				t.Fatalf("status %d, err %v: %s", st, err, out)
-			}
-			want := "told"
-			if p.policy == interp.ShellLevelNotCounted {
-				// dash exports nothing of its own. The inherited entry is
-				// still carried on, untouched, which is why this asks about
-				// 5 and not about the name.
-				want = "silent"
-			}
-			if got := strings.TrimSpace(out); got != want {
-				t.Errorf("a child would be %s about the depth, want %s", got, want)
-			}
-		})
+	for _, c := range []struct {
+		name, inherited, level string
+	}{
+		{"a shell nobody started from a shell", "", "1"},
+		{"and one that was handed a depth", "4", "5"},
+	} {
+		for _, p := range shellLevelPresets() {
+			t.Run(c.name+"/"+p.Name, func(t *testing.T) {
+				var env []string
+				if c.inherited != "" {
+					env = []string{"SHLVL=" + c.inherited}
+				}
+				// The spellings the panel's `export -p` uses for one entry,
+				// written out rather than matched loosely: `*SHLVL=*5*` would
+				// be satisfied by any later line of the listing holding a 5.
+				out, st, err := p.Combined(t, dialecttest.Base{Env: env},
+					"case \"$(export -p)\" in\n"+
+						"*SHLVL="+c.level+"*) echo told ;;\n"+
+						"*\"SHLVL='"+c.level+"'\"*) echo told ;;\n"+
+						"*'SHLVL=\""+c.level+"\"'*) echo told ;;\n"+
+						"*) echo silent ;;\n"+
+						"esac")
+				if err != nil || st != 0 {
+					t.Fatalf("status %d, err %v: %s", st, err, out)
+				}
+				want := "told"
+				if p.policy == interp.ShellLevelNotCounted {
+					// dash exports nothing of its own. An inherited entry is
+					// still carried on untouched, which is why this asks
+					// about the incremented value and not about the name.
+					want = "silent"
+				}
+				if got := strings.TrimSpace(out); got != want {
+					t.Errorf("a child would be %s about the depth, want %s", got, want)
+				}
+			})
+		}
 	}
 }
 

@@ -2740,6 +2740,9 @@ func (r *Runner) expandArithText(text string) string {
 	// bash reads the second back as a subscript and answers the element,
 	// and does not read the first back. See syntax.ArithValueMark.
 	scan, balanced := syntax.ArithBracketScan{}, true
+	// The depth is counted through quotations wherever the parser's own scan
+	// reads them, so the two readings of the same brackets cannot part.
+	quoted := r.dialect().ArithSubscriptQuoting
 	// The axis is asked at most once and only where a subscript's expansion
 	// really produced a bracket: under either answer `$(( a[$i] ))` is the
 	// same expression, so a dialect that has not chosen has nothing to be
@@ -2754,7 +2757,7 @@ func (r *Runner) expandArithText(text string) string {
 			// parser draws the same boundary with the same type.
 			for i := 0; i < len(part); i++ {
 				switch b := part[i]; {
-				case scan.Content(b):
+				case quoted && scan.Content(b):
 				case b == '[':
 					scan.Depth++
 				case b == ']':

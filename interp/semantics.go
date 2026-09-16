@@ -10891,6 +10891,45 @@ type Semantics struct {
 	// subscript that survives expansion unchanged never reaches the question.
 	ConditionIsSetReadsTheWrittenSubscript Answer
 
+	// ConditionArithmeticReadsTheWrittenSubscript is the same question at
+	// the word-spelled comparisons — `[[ a[k] -eq 5 ]]` — where the operand
+	// is read as an arithmetic *expression* rather than asked about.
+	//
+	// A separate field because it is a separate measurement and they do not
+	// agree. The `-v` question above is bash alone against zsh and ksh93;
+	// this one is bash alone too, but ksh93 lands on the other side here for
+	// a reason of its own — it reads a quotation inside a subscript
+	// perfectly well in `(( ))`, and still does not here, because the
+	// condition's operand reaches its arithmetic already expanded.
+	//
+	// Measured 2026-09-16 from a script file with standard input on
+	// /dev/null, on an associative array holding `]`, `q` and `x]`:
+	//
+	//	                        bash 5.3.20  zsh 5.9.2      ksh93u+
+	//	[[ a[']'] -eq 5 ]]      true         invalid        a[]]: arithmetic
+	//	                                     subscript      syntax error
+	//	[[ a[$k] -eq 9 ]]       true         "              "
+	//	[[ a['q'] -eq 8 ]]      true         "              "
+	//
+	// zsh will not store such a key from an ordinary assignment, so its rows
+	// were measured with the element put there by `a=( "]" 5 )` instead;
+	// both of the shells that refuse abandon the condition at the first row.
+	// bash 3.2.57 has no associative array to ask, and dash and BusyBox ash
+	// have no `[[` at all.
+	//
+	// The same mechanism as the `-v` row, and it is worth saying why the two
+	// can differ at all: a condition still holds the *word*, so both
+	// readings are available to it — what parts the two operators is whether
+	// a shell takes the one the word offers. `(( ))` is not this question,
+	// because there the expression is text from the start and there is no
+	// word left to ask; that is the dialect's
+	// syntax.Dialect.ArithSubscriptQuoting, and bash and ksh93 agree on it.
+	//
+	// Asked only where a quoted or expanded span really put one of the bytes
+	// a subscript scan reads into the operand, so `[[ n -eq 5 ]]` and
+	// `[[ a[$i] -eq 5 ]]` with a plain `$i` never reach it (#3302).
+	ConditionArithmeticReadsTheWrittenSubscript Answer
+
 	// ScalarSubscriptIsACharacter reads `${s[2]}` on a plain string as its
 	// second character, rather than as an element of the one-element array a
 	// scalar reads as.
@@ -16475,6 +16514,10 @@ func PosixSemantics() Semantics {
 		// preset follows that and the two panel members that can be asked
 		// and say no.
 		ConditionIsSetReadsTheWrittenSubscript: No,
+		// And the same for the comparisons, where the two columns that can
+		// be asked both read the operand as it stands after expansion. bash
+		// is the column that overrides it.
+		ConditionArithmeticReadsTheWrittenSubscript: No,
 		// XCU defines ${#parameter} as the length of the value "in
 		// characters", and defines a character as what the locale's
 		// LC_CTYPE category says one is. So the standard's answer is yes,

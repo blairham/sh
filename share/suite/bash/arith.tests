@@ -54,3 +54,29 @@ printf 'the store takes the same key [%s]\n' "${quo[k]-U}"
 (( r = quo[zz] )); printf 'an absent key is still %s\n' "$r"
 idx=(9 8 7)
 (( r = idx[1+1] )); printf 'an indexed subscript is still an expression %s\n' "$r"
+
+# A quotation inside an arithmetic subscript holds its brackets: what ends the
+# subscript is the `]` the script wrote outside the quotes, so a key spelled
+# with a bracket in it is reachable from arithmetic exactly as it is from
+# `${m[']']}`. ksh93u+ 2012-08-01 answers every row of this the same way; zsh
+# 5.9.2 will not store such a key at all (#3302).
+declare -A brk
+brk[']']=5
+brk['x]']=6
+(( r = brk[']'] )); printf 'a key that is one bracket %s\n' "$r"
+(( r = brk['x]'] )); printf 'a key with a bracket in it %s\n' "$r"
+printf 'through a dollar-arithmetic %s\n' "$(( brk[']'] ))"
+[[ brk[']'] -eq 5 ]] && printf 'and a condition reads the same element\n'
+
+# The other half of the same rule: a quote a *value* carried is a character of
+# the key and opens nothing, so the two spellings reach two different
+# elements.
+declare -A val
+val["'q'"]=21
+val[q]=22
+val['"q"']=23
+sq="'q'"
+dq='"q"'
+(( r = val[$sq] )); printf 'a value brings its own single quotes %s\n' "$r"
+(( r = val[$dq] )); printf 'and its own double quotes %s\n' "$r"
+(( r = val['q'] )); printf 'where the script writing them means the bare key %s\n' "$r"

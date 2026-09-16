@@ -291,11 +291,11 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		//
 		// `<` and `>` compare strings, which is why `[[ 10 > 9 ]]` is false
 		// and `[[ 10 -gt 9 ]]` is true — the sharpest trap in the construct.
-		l, err := r.condArith(leftMarked)
+		l, err := r.condArith(r.conditionSubscriptText(leftMarked, left))
 		if err != nil {
 			return false, err
 		}
-		rv, err := r.condArith(rightMarked)
+		rv, err := r.condArith(r.conditionSubscriptText(rightMarked, right))
 		if err != nil {
 			return false, err
 		}
@@ -417,6 +417,25 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 // but the arithmetic one wants. See syntax.ArithValueMark.
 func (r *Runner) condOperandText(w *syntax.Word) string {
 	return syntax.UnmarkArithValue(r.condOperand(w))
+}
+
+// conditionSubscriptText is which of the two readings of a comparison's
+// operand the dialect takes: the one that still knows which brackets the
+// script wrote, or the text as it stands once the word has been expanded.
+//
+// The two are the same string wherever no quoted or expanded span put one of
+// the bytes a subscript scan reads into the operand, and that equality is
+// what keeps the axis from being asked of `[[ n -eq 5 ]]`. See
+// Semantics.ConditionArithmeticReadsTheWrittenSubscript.
+func (r *Runner) conditionSubscriptText(marked, plain string) string {
+	if marked == plain {
+		return plain
+	}
+	if r.ask(r.sem().ConditionArithmeticReadsTheWrittenSubscript,
+		"a comparison operand being read as the subscript the script wrote") {
+		return marked
+	}
+	return plain
 }
 
 // condArith reads a condition operand as an arithmetic expression, which is

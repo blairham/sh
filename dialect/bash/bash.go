@@ -781,6 +781,17 @@ func Semantics() interp.Semantics {
 	// every declaration: `x=2 declare x`, `i=2 declare -i i` and `t=2
 	// declare +x t` all leave the shell's own value standing (#3437).
 	s.DeclarationPromotesThePrefixEntry = interp.Yes
+	// A subscripted name in a prefix is refused by name and the command runs
+	// anyway: `a[1]=v f` writes `` `a[1]': not a valid identifier ``, calls
+	// `f` with the element untouched, and reports what `f` reported. The
+	// other entries of the same prefix are applied — `w=5 a[1]=1 f` shows
+	// the body `w` — so the refusal is of the word and not of the prefix.
+	// Measured 2026-09-16 on bash 5.3.20 (#3433).
+	//
+	// unanswered SubscriptedPrefixIsTakenBack: nothing is stored to take
+	// back. The axis is asked only where SubscriptedAssignmentPrefix writes
+	// the element, and this dialect refuses it instead.
+	s.SubscriptedAssignmentPrefix = interp.SubscriptedPrefixIsRefused
 	// echo reads -n, -e and -E, the last of -e/-E deciding, with the hex
 	// and ESC escapes on top of the XSI set.
 	s.EchoOptions = "neE"
@@ -2552,6 +2563,7 @@ func Diagnostics() interp.Diagnostics {
 		EmptyAssociativeKeyLength:                "[%[1]s]: bad array subscript",
 		ArithEmptySubscript:                      "%[1]s[]: bad array subscript",
 		ArithEmptySubscriptTarget:                "`%[1]s[]': not a valid identifier",
+		SubscriptedPrefixIsNotAName:              "`%[1]s': not a valid identifier",
 		ArithWholeArraySubscript:                 "%[1]s[%[2]s]: bad array subscript",
 		ArrayLiteralThroughASubscript:            "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the

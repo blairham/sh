@@ -1498,6 +1498,15 @@ func Semantics() interp.Semantics {
 	// The temporary the prefix made is what the attribute went on, and it
 	// leaves with the command (#3437).
 	s.DeclarationPromotesThePrefixEntry = interp.No
+	// A subscripted name in a prefix writes the element, and **this shell
+	// never gives it back** — which is the opposite of what it does with the
+	// scalar beside it, since a scalar prefix here outlives nothing at all,
+	// not a function and not `:`. `arr=(x y z); arr[1]=P read -r j
+	// </dev/null` leaves `P`, and so do a function, `:` and `eval`; only a
+	// command a child runs leaves `x`, and that row is no dialect's answer.
+	// Measured 2026-09-16 on zsh 5.9.2 (#3433).
+	s.SubscriptedAssignmentPrefix = interp.SubscriptedPrefixStoresTheElement
+	s.SubscriptedPrefixIsTakenBack = interp.No
 	// An assignment prefix to a frozen name is answered by the kind of
 	// command too, and on a different line from ksh93's: everything this
 	// shell runs itself ends the script, and an external one does not.

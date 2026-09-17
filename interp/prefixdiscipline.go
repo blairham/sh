@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"context"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // An assignment *prefix* — the `s=5` in `s=5 cmd` — reaches this shell's
 // variable table on its way to the command it stands in front of, and the
@@ -46,8 +50,27 @@ import "github.com/blairham/sh/syntax"
 // x`, and this shell shows it the value by assigning it and taking it back —
 // so what a prefix that does not store suppresses is the event and not the
 // write.
-func (r *Runner) prefixStore(a *syntax.Assign, stores bool) {
+func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, stores bool) {
 	value := r.prefixExpansion(a)
+	if prefixIsSubscripted(a) {
+		// The subscript names where the value goes, so the store is the
+		// element write the same word performs as a statement — the
+		// subscript evaluated, a key read as a key, `a[1]+=v` appending to
+		// the element — and not a scalar the name never had. Reached only in
+		// the dialects that store it at all; see interp/prefixsubscript.go.
+		//
+		// Through Runner.assign and not a store of its own, because every
+		// branch of that switch is a shape a subscript can be written in and
+		// a second copy of the dispatch is how the two come to disagree. The
+		// value is handed over already expanded, the way the trace hands one
+		// over, so `a[1]=$(date) cmd` runs its substitution once.
+		if !stores {
+			defer r.suppressDiscipline(a.Name, disciplineSet)()
+			defer r.suppressDiscipline(a.Name, disciplineAppend)()
+		}
+		r.withPreparedValue(ctx, &expandedAssign{assign: a, value: value})
+		return
+	}
 	if !stores {
 		defer r.suppressDiscipline(a.Name, disciplineSet)()
 		defer r.suppressDiscipline(a.Name, disciplineAppend)()

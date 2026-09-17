@@ -5117,6 +5117,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// name and then the file where the others report the file alone. Cleared
 	// when the command is over so the flag never outlives it.
 	defer func() { r.prefixCheckedFirst = false }()
+	// And a subscripted name in the prefix, in the dialect that refuses one.
+	// Here for the reason the frozen-name check is here: bash reports it
+	// before it expands a value, before it writes a trace line and before it
+	// opens a redirection, so `a[1]=$(echo side) f >/nope/x` writes this
+	// complaint, then the file's, and never runs the substitution. See
+	// interp/prefixsubscript.go.
+	r.refuseSubscriptedPrefixes(c.Assigns)
 	if r.refusePrefixesEarly(c.Assigns, argv) {
 		return nil
 	}
@@ -5290,12 +5297,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// a command substitution in it from running twice.
 				continue
 			}
-			undo = append(undo, r.saveVar(a.Name))
+			if r.subscriptedPrefixDropped(a) {
+				// Refused already, and refused ahead of its own value: the
+				// body runs with the element the shell holds and nothing
+				// here evaluates the subscript or the right-hand side.
+				continue
+			}
+			if r.subscriptedPrefixTakenBack(a) {
+				undo = append(undo, r.saveVar(a.Name))
+			}
 			// A prefix to a function persists here, so it is a store and
 			// fires the discipline a store fires — with `.append` for `+=`,
 			// which is the event the operator names. See
 			// interp/prefixdiscipline.go.
-			r.prefixStore(a, true)
+			r.prefixStore(ctx, a, true)
 			callHeld = append(callHeld, a.Name)
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
@@ -5396,7 +5411,23 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// x=2 env`.
 				continue
 			}
-			if !r.IsSpecialBuiltinHere(argv[0]) || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
+			if r.subscriptedPrefixDropped(a) {
+				// Refused already, ahead of its own value — see the function
+				// route above and interp/prefixsubscript.go.
+				continue
+			}
+			if prefixIsSubscripted(a) && r.subscriptedPrefixReachesAChild(kind) {
+				// `command` in front of an external: a child runs it, an
+				// array reaches no child's environment, and the element is
+				// not this shell's to keep. The value is still expanded,
+				// which is measured — `arr[1]=$(echo side >&2; echo v)
+				// command /usr/bin/true` writes `side` — so it is expanded
+				// here and nothing is done with it.
+				_ = r.prefixExpansion(a)
+				continue
+			}
+			if (!r.IsSpecialBuiltinHere(argv[0]) || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting")) &&
+				r.subscriptedPrefixTakenBack(a) {
 				undo = append(undo, r.saveVar(a.Name))
 			}
 			// Whether a discipline hears about it is whether there is a
@@ -5406,7 +5437,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// the name's owner is told of; a special builtin's persists, and
 			// a prefix that reached here through `command` before an
 			// external is the child's store. See interp/prefixdiscipline.go.
-			r.prefixStore(a, kind.kind != prefixBeforeRegularBuiltin)
+			r.prefixStore(ctx, a, kind.kind != prefixBeforeRegularBuiltin)
 			held = append(held, a.Name)
 			if kind.throughCommand {
 				// `command` is a precommand word rather than a command, so
@@ -5598,7 +5629,22 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// same as below.
 			continue
 		}
+		if r.subscriptedPrefixDropped(a) {
+			// Refused, and refused ahead of its own value: the child is
+			// handed nothing for the name and no substitution in the
+			// right-hand side runs. See interp/prefixsubscript.go.
+			continue
+		}
 		value := r.prefixValue(a)
+		if prefixIsSubscripted(a) {
+			// A child runs this command, so an element store would be the
+			// child's — and an array reaches no child's environment, so
+			// there is nothing to hand over either. The value has expanded
+			// above because that much is measured: `arr[1]=$(echo side >&2;
+			// echo v) /usr/bin/true` writes `side` in ksh93 and zsh and
+			// leaves the element where it was.
+			continue
+		}
 		// The report waits for the value to have expanded, because the order
 		// of the two is a dialect question and not this change's: bash checks
 		// the prefix before it expands anything and before it opens a

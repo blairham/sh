@@ -1059,6 +1059,13 @@ func Semantics() interp.Semantics {
 	// `[q1 q2]` here, where bash 5.3 answers `[]`. Measured 2026-09-16 on
 	// ksh93u+ under `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a file.
 	s.PrefixListingNamesADeclaredOnlyCompound = interp.Yes
+	// And an array with no elements is unset to the `-`/`+` test, as it is
+	// in bash: `set -A e; echo "[${e[@]+S}]"` is `[]` and `${e[@]-D}` is
+	// `[D]`. Measured with `set -A` rather than `e=()`, which this shell
+	// reads as a compound variable — the confound
+	// Semantics.UnsetNameAtIsOneEmptyField records. 2026-09-16 on ksh93u+
+	// (#2298).
+	s.EmptyArrayIsSet = interp.No
 	// A keyword-defined function's `typeset -x` is local like any other
 	// declaration; the POSIX-style function that leaks it has no scope to
 	// leak out of, which TypesetLocalNeedsKeywordFunction already answers.

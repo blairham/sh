@@ -123,6 +123,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EmptyAssociativeKeyIsReportedWhenRead", s.EmptyAssociativeKeyIsReportedWhenRead, interp.No},
 		{"EmptyAssociativeKeyRefusesTheLength", s.EmptyAssociativeKeyRefusesTheLength, interp.No},
 		{"PrefixListingNamesADeclaredOnlyCompound", s.PrefixListingNamesADeclaredOnlyCompound, interp.Yes},
+		{"EmptyArrayIsSet", s.EmptyArrayIsSet, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},

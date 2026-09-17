@@ -117,10 +117,19 @@ echo "n=${#c[@]} [${c[@]}]"`, nil, Diagnostics{})
 // and the other unsets the name. Both count 0, so the difference shows only
 // to a script that asks whether the name is set at all — which is why the
 // test asks `${e[@]+yes}` and not the count.
+//
+// And that question is itself an axis, so the pair below states it: under
+// Semantics.EmptyArrayIsSet = No an existing empty array answers `+` exactly
+// as a name that is gone does, and this discriminator sees one state. Yes is
+// the answer that keeps the two apart, and it is not a claim about the
+// dialect these rows are otherwise describing — it is the only reading under
+// which the *other* axis is observable at all through this expansion.
+func emptyArrayTellsTheStatesApart(s *Semantics) { s.EmptyArrayIsSet = Yes }
+
 func TestSetArrayWithNoValuesLeavesAnEmptyArray(t *testing.T) {
 	out, errs, st := setArrayRun(t, `set -A e 1 2
 set -A e
-echo "n=${#e[@]} set=[${e[@]+yes}]"`, nil, Diagnostics{})
+echo "n=${#e[@]} set=[${e[@]+yes}]"`, emptyArrayTellsTheStatesApart, Diagnostics{})
 	want := "n=0 set=[yes]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("set -A with no values = %q (stderr %q, status %d), want %q",
@@ -133,6 +142,7 @@ func TestSetArrayWithNoValuesUnsetsUnderTheOtherAnswer(t *testing.T) {
 set -A e
 echo "n=${#e[@]} set=[${e[@]+yes}]"`, func(s *Semantics) {
 		s.SetArrayWithNoValuesUnsetsTheName = Yes
+		emptyArrayTellsTheStatesApart(s)
 	}, Diagnostics{})
 	want := "n=0 set=[]\n"
 	if out != want || st != 0 || errs != "" {

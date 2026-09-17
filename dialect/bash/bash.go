@@ -1027,6 +1027,13 @@ func Semantics() interp.Semantics {
 	// bash 3.2.57 is the column that parts here — it lists a valueless
 	// `declare -a` — so the answer is this build's rather than the family's.
 	s.PrefixListingNamesADeclaredOnlyCompound = interp.No
+	// An array that exists and holds no elements is unset to the `-`/`+`
+	// test: `e=(); echo "[${e[@]+S}]"` is `[]` and `${e[@]-D}` is `[D]`.
+	// Stated rather than inherited from the standard's value, because the
+	// standard has no arrays and this is a measurement: bash 5.3.20 and
+	// bash 3.2.57 both, 2026-09-16, from a file. zsh is the column that
+	// parts (#2298).
+	s.EmptyArrayIsSet = interp.No
 	// The export letter says nothing about scope here: `declare -x v=1`
 	// inside a function is an ordinary local.
 	s.ExportLetterDeclaresAGlobal = interp.No

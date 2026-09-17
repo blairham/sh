@@ -1324,6 +1324,12 @@ func Semantics() interp.Semantics {
 	// asymmetry runs the other way from the one an empty-array axis would
 	// predict: the *declared* empty array is the one with no field here.
 	s.UnsetNameAtIsOneEmptyField = interp.Yes
+	// And the other half of that asymmetry: an array with no elements *is*
+	// a set parameter here, so `e=(); echo "[${e[@]+S}]"` writes `[S]` and
+	// `${e[@]-D}` substitutes nothing. bash 5.3.20, bash 3.2.57 and ksh93u+
+	// all read it as unset. Measured 2026-09-16 on zsh 5.9.2 under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a file (#2298).
+	s.EmptyArrayIsSet = interp.Yes
 	// And an attribute added to a name that already holds a value re-reads
 	// it at once, as ksh93 does: `FOO=bar; typeset -i FOO` stores 0 and
 	// `d=MiXeD; typeset -u d` stores MIXED. A separate question from the

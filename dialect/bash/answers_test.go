@@ -125,6 +125,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// The one column that leaves a declared-only compound out of a
 		// prefix listing; ksh93 names it (#2298).
 		{"PrefixListingNamesADeclaredOnlyCompound", s.PrefixListingNamesADeclaredOnlyCompound, interp.No},
+		{"EmptyArrayIsSet", s.EmptyArrayIsSet, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},

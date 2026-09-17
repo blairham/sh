@@ -660,10 +660,25 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 // because a read of the name goes through it; `unset -n` is what takes the
 // reference away and asks the cell underneath what it holds.
 //
-// The value is the only thing that goes. Attributes stay, because the same
-// declaration applied them a few lines earlier and `unset`'s clearing would
-// take them straight back off; and the reference itself is recorded after
-// this, in the nameref table rather than in a parameter one.
+// The value is the only thing that goes of what the *name* holds. Most
+// attributes stay, because the same declaration applied them a few lines
+// earlier and `unset`'s clearing would take them straight back off; and the
+// reference itself is recorded after this, in the nameref table rather than in
+// a parameter one.
+//
+// **The three attributes that fold a value go with the value**, and that is
+// measured rather than derived from the sentence above. With `tgt=T`,
+// `typeset -i k; typeset -n k=tgt` lists as `declare -n k="tgt"` in bash
+// 5.3.20 with no `i` left in it, and so do the `-l` and `-u` spellings, while
+// `typeset -x k` keeps its `x` — `declare -nx k="tgt"`. The behavior agrees
+// with the listing in both shells: `typeset -i k; typeset -n k=tgt; k=3+4`
+// leaves `tgt` holding the text `3+4` in bash 5.3.20 and ksh93u+ alike, so
+// the attribute is gone rather than merely unlisted. A reference holds no
+// value, and an attribute that exists to fold one has nothing to fold.
+//
+// Only what the *declaration* discards. An attribute that arrives afterwards
+// is the reference's own and is kept: `typeset -n y; typeset -i y` lists as
+// `declare -in y` there.
 //
 // The **array attribute goes with it**, and that is measured rather than
 // assumed. Almost no array reaches here at all — a `-n` declaration over one
@@ -684,6 +699,9 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 func (r *Runner) namerefEmptiesTheCell(name string) {
 	delete(r.Arrays, name)
 	delete(r.AssocArrays, name)
+	delete(r.integer, name)
+	delete(r.lowered, name)
+	delete(r.uppered, name)
 	// hideVar rather than a bare delete: a name that came from the
 	// environment is not in Vars to begin with, so deleting nothing would
 	// leave the inherited value answering every read of the cell the

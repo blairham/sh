@@ -368,7 +368,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// association below: the key `*` is what the other answer makes of it,
 	// and the two would collapse into one if the table were consulted first.
 	if v, whole := r.arithWholeArraySlice(x); whole {
-		return r.arithElemValue(v)
+		return r.arithElemValue(arithIndexWritten(x), v)
 	}
 	// An associative name's subscript is a key and not an expression, which
 	// is the same reading `${m[k]}` takes and for the same reason: with
@@ -376,7 +376,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// answer `$(( m[k] ))` with 7. Evaluating it instead read the wrong
 	// element and said nothing, which is the silent half of a wrong answer.
 	if a, ok := r.assocFor(x.Name); ok {
-		return r.arithElemValue(a[r.arithAssocKey(r.arithSubscriptRead(x.SubMarked))].scalar())
+		return r.arithElemValue(arithIndexWritten(x), a[r.arithAssocKey(r.arithSubscriptRead(x.SubMarked))].scalar())
 	}
 	if r.reportArithWholeArraySubscript(x) {
 		// Named and answered: the operand is zero and the expression keeps
@@ -400,7 +400,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	if !ok {
 		return intNum(0), nil
 	}
-	return r.arithElemValue(v)
+	return r.arithElemValue(arithIndexWritten(x), v)
 }
 
 // arithFlaggedElement is a subscript that opened with a flag group, read
@@ -446,7 +446,7 @@ func (r *Runner) arithFlaggedElement(x *syntax.ArithIndex) (arithNum, bool) {
 		return intNum(0), false
 	}
 	v, _ := r.flaggedSubscript(e)
-	n, err := r.arithElemValue(strings.Join(v, ifsFirst(r.ifs())))
+	n, err := r.arithElemValue(arithIndexWritten(x), strings.Join(v, ifsFirst(r.ifs())))
 	if err != nil {
 		// Worded where every other subscript failure is worded, so the join
 		// of several matches complains as the text it is.
@@ -668,8 +668,17 @@ func (r *Runner) blamedOnTheSubscript(x *syntax.ArithIndex, n arithNum, err erro
 // shell in the panel gives a subscript past the end and a name that was never
 // an array — and a value that is no literal is re-read as a name where the
 // dialect does that.
-func (r *Runner) arithElemValue(v string) (arithNum, error) {
+func (r *Runner) arithElemValue(written, v string) (arithNum, error) {
+	if n, err, stop := r.arithRecursionExceeded(written); stop {
+		return n, err
+	}
 	return r.arithNumOfStored(v)
+}
+
+// arithIndexWritten is the element as the script wrote it, which is what both
+// shells quote back when a read of it will not terminate.
+func arithIndexWritten(x *syntax.ArithIndex) string {
+	return x.Name + "[" + x.Sub + "]"
 }
 
 // arithNameIsSet reports whether the name a subscript follows exists at all,
@@ -1708,20 +1717,8 @@ func boolInt(b bool) int {
 //
 // The depth bound is not decoration: `x=x` would otherwise recur forever.
 func (r *Runner) arithValueOf(name string) (arithNum, error) {
-	if r.arithValueDepth > 32 {
-		// Which name the bound is reported against is itself a divergence:
-		// bash and ksh93 name the one it stopped on and zsh the one the
-		// expression was written with, which are the same name only when
-		// the value points at itself. See
-		// Diagnostics.ArithRecursionBlamesTheWrittenName.
-		blamed := name
-		if r.diag().ArithRecursionBlamesTheWrittenName && r.arithValueTopName != "" {
-			blamed = r.arithValueTopName
-		}
-		return intNum(0), arithError{
-			msg:   Wording(r.diag().ArithRecursionLimit, "expression nested too deeply: %[1]s", blamed),
-			token: blamed,
-		}
+	if n, err, stop := r.arithRecursionExceeded(name); stop {
+		return n, err
 	}
 	if r.arithValueDepth == 0 {
 		// The name the expression itself holds, kept for the sentence above.
@@ -1731,6 +1728,27 @@ func (r *Runner) arithValueOf(name string) (arithNum, error) {
 		r.arithValueTopName = name
 	}
 	value, ok := r.getVar(name)
+	if v, iset, element := r.namerefReadsAnElement(name); element {
+		// A reference aimed at an **element** — `typeset -n b="a[0]"` — is
+		// resolved here rather than at the store, for the reason
+		// namerefReadsAnElement gives: the subscript is arithmetic, and the
+		// store is initialized before the table arithmetic needs. So every
+		// caller that is not an expansion has to ask, and this one did not:
+		// `a=(5 7); typeset -n b=a[0]; echo $(( b ))` was **0** here and is
+		// 5 in bash 5.3.20 and ksh93u+ 2012-08-01 alike, measured
+		// 2026-09-17 from script files under `env -i`.
+		//
+		// The damage is not the read. A write through the same reference
+		// already lands — `(( b = 9 ))` puts 9 in `a[0]` — so every
+		// arithmetic that reads *and* writes silently used 0 as the old
+		// value: `(( b += 5 ))` left 5 where both shells leave 14, and
+		// `(( b++ ))` never counted. Status 0 throughout.
+		//
+		// Replacing the read above rather than standing in front of it, so
+		// the unset questions below are asked of the element exactly as they
+		// are asked of a plain name.
+		value, ok = v, iset
+	}
 	if !ok {
 		if r.arithSubscriptDepth > 0 &&
 			r.ask(r.sem().ArithSubscriptNameMustBeSet, "an unset name inside an array subscript") {
@@ -1757,6 +1775,35 @@ func (r *Runner) arithValueOf(name string) (arithNum, error) {
 		return intNum(0), nil
 	}
 	return r.arithNumOfStored(value)
+}
+
+// arithRecursionExceeded is the bound on reading a stored value as an
+// expression, and reports whether the read must stop here.
+//
+// Its own function because **two readers recurse and only one of them asked**.
+// A name's value is read again through arithValueOf, which has always checked
+// this; an *element's* went straight to arithNumOfStored, so a value that
+// names its own element recursed with nothing counting the frames: measured on
+// origin/main 5083d624d, `a=('a[0]'); echo $(( a[0] ))` is a **Go stack
+// overflow that kills the shell**, where bash 5.3.20 answers `a[0]:
+// expression recursion level exceeded` and ksh93u+ `a[0]: recursion too deep`,
+// both reporting and carrying on.
+//
+// Which name the bound is reported against is itself a divergence: bash and
+// ksh93 name the one it stopped on and zsh the one the expression was written
+// with, which are the same name only when the value points at itself. See
+// Diagnostics.ArithRecursionBlamesTheWrittenName.
+func (r *Runner) arithRecursionExceeded(blamed string) (arithNum, error, bool) {
+	if r.arithValueDepth <= 32 {
+		return intNum(0), nil, false
+	}
+	if r.diag().ArithRecursionBlamesTheWrittenName && r.arithValueTopName != "" {
+		blamed = r.arithValueTopName
+	}
+	return intNum(0), arithError{
+		msg:   Wording(r.diag().ArithRecursionLimit, "expression nested too deeply: %[1]s", blamed),
+		token: blamed,
+	}, true
 }
 
 // arithNumOfStored reads a value a variable was holding as a number.

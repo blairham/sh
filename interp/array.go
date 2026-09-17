@@ -455,8 +455,55 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 			"%[1]s[%[2]s]: bad array subscript", name, sub))
 		return
 	}
-	a[pos] = stringWritten(a[pos], value)
+	// What the name's attributes make of the value, **before** it reaches the
+	// array — the same fold a keyed write already does in setAssocElem and
+	// the same axis it asks.
+	//
+	// The order is the whole of it. storeArray folds the elements it is
+	// handed, so a value folded *there* is read back out of the cell it has
+	// already replaced: with `typeset -i a`, `a[0]=2` then `a[0]=a[0]+4`
+	// evaluated `a[0]+4` after `a[0]` held the text `a[0]+4`, which is an
+	// expression that reads itself. The element read has no depth bound
+	// (arithElemValue), so what came back was not a wrong answer but a **Go
+	// stack overflow that killed the shell** — measured on origin/main
+	// 5083d624d in `cmd/bash` and `cmd/ksh` alike, where bash 5.3.20 and
+	// ksh93u+ both answer 6.
+	//
+	// The keyed spelling of the same three lines was right throughout, which
+	// is what says this is the order and not the fold: `typeset -Ai m;
+	// m[k]=2; m[k]=m[k]+4` is 6 here and there. One helper carried the fix
+	// and the other did not.
+	folded, ok := r.elementValueFolded(name, value)
+	if !ok {
+		// The integer evaluation failed and has already said so, or the
+		// dialect answered nothing. Either way the array is left as it
+		// stands rather than taking a value nobody computed.
+		return
+	}
+	a[pos] = stringWritten(a[pos], folded)
 	r.storeArray(name, a)
+}
+
+// elementValueFolded is compoundElemsFolded for the one value an element write
+// is carrying, asked before the value is placed rather than after.
+//
+// The same three questions in the same order — does the name carry a folding
+// attribute, would the fold change this value, and does the dialect send an
+// element through it — so the two callers cannot answer differently. What the
+// bool says is "the value below may be stored": false where the evaluation
+// failed and has already reported, and where the axis went unanswered.
+func (r *Runner) elementValueFolded(name, value string) (string, bool) {
+	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] {
+		return value, true
+	}
+	if !r.attributeWouldChange(name, value) {
+		return value, true
+	}
+	if !r.ask(r.sem().CompoundElementsGoThroughTheAttribute,
+		"an element written to an attributed name going through the attribute") {
+		return value, !r.unspecified
+	}
+	return r.attributeFolded(name, value)
 }
 
 // stringWritten is what a *string* write leaves in an element, which is not

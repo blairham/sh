@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -718,6 +719,10 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 	if st, done := r.refuseBeforeApplyingSetOptions(args); done {
 		return st
 	}
+	// The sort letter is a request about this one call's operands, so it
+	// cannot outlive the call that made it.
+	r.setSortsOperands = false
+	defer func() { r.setSortsOperands = false }()
 	// Options come before `--`, and each is a letter that may be turned on
 	// with `-` or off with `+`. Only the ones with implemented behavior are
 	// accepted; the rest are refused rather than silently ignored, which
@@ -968,12 +973,29 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 		// The positional parameters are left alone: measured, `set -- one two
 		// three; set -A a x y` keeps all three of them in both shells. So
 		// this returns rather than falling into the replacement below.
-		return r.setArrayOperands(arrayName, arrayFront, args[i:])
+		values := args[i:]
+		if r.setSortsOperands {
+			// The values are sorted before they are placed, so the plus
+			// form overlays the front with the sorted list: measured,
+			// `a=(z 2); set -s +A a b a` leaves `a b`. The positional
+			// parameters are not touched, sort letter or no.
+			values = slices.Clone(values)
+			slices.SortFunc(values, shellOrder)
+		}
+		return r.setArrayOperands(arrayName, arrayFront, values)
 	}
 	// `set -C` alone sets an option and leaves the parameters alone; only an
 	// explicit `--`, or operands after the options, replaces them.
 	if i == 0 || (i <= len(args) && args[min(i-1, len(args)-1)] == "--") || i < len(args) {
 		r.Params = append([]string(nil), args[i:]...)
+	}
+	if r.setSortsOperands {
+		// With operands they are sorted as they arrive, and with none the
+		// parameters already there are: `set -- c b a; set -s` is `a b c`.
+		// The order is byte order, which is ksh93's under LC_ALL=C — see
+		// shellOrder for why a locale's is not attempted.
+		r.Params = slices.Clone(r.Params)
+		slices.SortFunc(r.Params, shellOrder)
 	}
 	return 0
 }
@@ -1294,6 +1316,8 @@ func (r *Runner) hasSetLetter(opt rune) bool {
 		return r.sem().HistoryExpansion != No
 	case 'k':
 		return r.sem().KeywordAssignments != No
+	case 's':
+		return r.sem().SetSLetterSortsTheOperands != No
 	}
 	return false
 }
@@ -1565,6 +1589,25 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			// bell.
 			if r.ask(r.sem().SetBTurnsOffBraceExpansion, "`set -B` turning brace expansion off") {
 				r.noBraceExpand = !on
+				continue
+			}
+			if r.unspecified {
+				return false
+			}
+			if !r.badSetOptionLetter(opt, on) {
+				return false
+			}
+		case 's':
+			// ksh93's sort letter: the operands `set` is given — or, with
+			// none, the positional parameters already there — come back in
+			// order. It is not an option: nothing is turned on, `$-` does not
+			// change, and `+s` sorts exactly as `-s` does. zsh has the letter
+			// and means an invocation option by it, so its own table above
+			// answers first; bash refuses it and dash takes it as the
+			// invocation's standard-input letter. See
+			// Semantics.SetSLetterSortsTheOperands.
+			if r.ask(r.sem().SetSLetterSortsTheOperands, "`set -s` sorting the operands") {
+				r.setSortsOperands = true
 				continue
 			}
 			if r.unspecified {

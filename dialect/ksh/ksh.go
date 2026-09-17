@@ -1519,6 +1519,9 @@ func Semantics() interp.Semantics {
 	// `set -p` is the short spelling of `set -o privileged`, which this
 	// shell lists; `umask -p` it has not got.
 	s.SetHasThePrivilegedLetter = interp.Yes
+	// `set -s` sorts the operands, or the positional parameters when there
+	// are none; see Semantics.SetSLetterSortsTheOperands.
+	s.SetSLetterSortsTheOperands = interp.Yes
 	s.TestHasTheFileExistsLetter = interp.Yes
 	s.TestHasTheShellOptionOperator = interp.Yes
 	s.TestHasTheModifiedSinceReadOperator = interp.Yes
@@ -3086,7 +3089,9 @@ func Diagnostics() interp.Diagnostics {
 			// walk, so the letter goes through the dialect's own letter table
 			// above. A letter left here while its name moves is the paired
 			// tables drifting apart, which is the drift #3088 swept for.
-			"set": "brs",
+			// `s` left it when the sort was built: Semantics.
+			// SetSLetterSortsTheOperands.
+			"set": "br",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",

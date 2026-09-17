@@ -15056,6 +15056,21 @@ them out of. bash alone: dash and ksh93 refuse the letters, and zsh
 spells different options with them, so only a refusal is honest
 elsewhere. Recorded as `opt/set-e-carries-the-err-trap`.
 
+**`SetSLetterSortsTheOperands`** — ksh93 yes · bash no · zsh no · dash no ·
+ash no
+
+`set -s` sorts: the operands the call is given, the positional parameters
+already there when it is given none, and the values of a `set -A` or
+`set +A` in the same call. ksh93 alone. It is not an option — `$-` gains no
+`s` and `+s` sorts exactly as `-s` does — and a call that assigns an array
+leaves the positional parameters where they were. Measured 2026-09-16 on
+93u+ 2012-08-01 under `LC_ALL=C`: `set -- B a 10 9 ''; set +s` is
+`'' 10 9 B a`, and `a=(z 2); set -s +A a b a` leaves `a b`. bash refuses
+the letter; zsh's own letter table reads it as the invocation's
+standard-input option before this is asked. The order is byte order, which
+is ksh93's in the C locale — a locale's collation is not attempted, for the
+reasons `interp/order.go` gives.
+
 **`SetHasThePrivilegedLetter`** — bash yes · ksh93 yes · zsh yes · dash no ·
 ash no
 

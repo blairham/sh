@@ -1,0 +1,142 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Indexed and associative arrays in ksh93 — #2317's area, for the ksh
+# column. Part of #2345.
+#
+# `share/suite/ext/arrays.tests` holds what the three shells with arrays
+# share. This file is the answers only ksh93 gives, and there are more of
+# them than the shared syntax suggests: the same `a=(…)` and `${a[@]}` are
+# written everywhere, and what they build, how a table orders its keys, and
+# what a listing says about an empty one are not.
+#
+# Measured 2026-09-16 against ksh93 93u+ 2012-08-01: 55 probes across
+# reading, writing, listing, `set -A`, `set -s`, `read -A`, namerefs and
+# subscripts, each a script file under `env -i` beside bash 5.3, zsh 5.9 and
+# dash. Six of the 55 disagreed with this shell, and each is filed rather than
+# asked here, so that a row below is a claim and not a known failure:
+#
+#   `${a[-4]}` past the first element — fatal in ksh93 (#3406).
+#   `typeset -p` of an empty indexed array — no value part (#3407).
+#   `${a[1..3]}` — a subscript range on the read side (#3408).
+#   `a=( (1 2) (3 4) )` — a nested list is a parse error here (#3410).
+#   `set -As name` — the array letter welding its name (#3412).
+#   `set -s` — implemented in the change that added this file.
+#
+# Every section is its own subshell: a refused subscript ends a ksh93 script,
+# and one refusal at the top level would take every later row down with it.
+
+show() {
+	printf '%s:' "$1"
+	shift
+	printf ' [%s]' "$@"
+	printf '\n'
+}
+
+printf -- '=== set -A and set +A ===\n'
+(
+	set -A a x y z
+	show 'set -A assigns' "${a[@]}"
+	set +A a p
+	show 'set +A overlays the front' "${a[@]}"
+	set -A a -- -x -y
+	show 'values after -- may look like options' "${a[@]}"
+	set -A a
+	show 'set -A with no values empties it' "${#a[@]}"
+	set -- keep these
+	set -A b one two
+	show 'the positional parameters stay' "$@"
+)
+
+printf -- '=== set -s sorts ===\n'
+(
+	set -- c b a
+	set -s
+	show 'with no operands, the parameters' "$@"
+	set -s z y x
+	show 'with operands, as they arrive' "$@"
+	set -- B a 10 9 ''
+	set +s
+	show 'plus sorts as well, bytewise' "$@"
+	case $- in *s*) show 'dollar-minus shows it' yes ;; *) show 'dollar-minus shows it' no ;; esac
+	set -- q p
+	set -sA arr z y
+	show 'an array sorts' "${arr[@]}"
+	show 'and the parameters do not' "$@"
+	arr=(z 2)
+	set -s +A arr b a
+	show 'an overlay is sorted first' "${arr[@]}"
+)
+
+printf -- '=== a literal with subscripts and nothing declared ===\n'
+(
+	a=([1]=x)
+	typeset -p a
+	show 'it became a table' "${!a[@]}"
+)
+
+printf -- '=== what a table lists ===\n'
+(
+	typeset -A m
+	m[z]=1 m[10]=2 m[9]=3 m[A]=4
+	show 'keys come back sorted' "${!m[@]}"
+	show 'values in key order' "${m[@]}"
+	show 'the bare name is key 0, which is unset' "${m}"
+	typeset -A t=([k]=v [j]=w)
+	typeset -p t
+	typeset -A e
+	typeset -p e
+)
+
+printf -- '=== the bare name after its element 0 is gone ===\n'
+(
+	a=(x y z)
+	unset 'a[0]'
+	show 'the elements left' "${a[@]}"
+	show 'the bare name' "$a"
+)
+
+printf -- '=== listings ===\n'
+(
+	a=(x y z)
+	typeset -p a
+	c=()
+	typeset -p c
+)
+
+printf -- '=== two subscripts ===\n'
+(
+	a[1][2]=q
+	show 'an element of an element' "${a[1][2]}"
+	typeset -p a
+)
+
+printf -- '=== attributes on the elements ===\n'
+(
+	typeset -i n=(1 2 3)
+	n[1]=n[0]+n[2]
+	show 'an integer array evaluates each element' "${n[@]}"
+	typeset -a v=(1 2)
+	typeset -i v
+	v[0]+=5
+	show 'an attribute added later reaches the elements' "${v[@]}"
+)
+
+printf -- '=== writing past the start ===\n'
+(
+	a=(x y z)
+	a[-4]=w
+	show 'unreached' "${a[@]}"
+) 2>&1
+printf 'the section ended at %s\n' "$?"
+
+printf -- '=== read -A and a nameref ===\n'
+(
+	read -A r <<-'EOF'
+	p q r
+	EOF
+	show 'read -A splits into an array' "${r[@]}"
+	x=(one two)
+	nameref ref=x
+	show 'a nameref subscripts the array it names' "${ref[1]}"
+)

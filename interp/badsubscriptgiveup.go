@@ -6,12 +6,14 @@ package interp
 // badSubscriptGivesUp writes a complaint about a subscript a builtin could not
 // evaluate and then gives up exactly as much as the dialect gives up.
 //
-// One door for the two sites that ask, because they are the same failure seen
-// from two builtins and the three outcomes have to mean the same thing at
-// both: see BadSubscriptPolicy for what each one is and where it was measured.
-// Before this, `unset` asked a bool that read "fatal" and the store asked
-// nothing at all and was fatal unconditionally — so bash ended a script it
-// carries on with, and ksh93 ended one it does not stop at all (#3485).
+// One door for the three sites that ask, because they are the same failure
+// seen from three builtins and the three outcomes have to mean the same thing
+// at all of them: see BadSubscriptPolicy for what each one is and where it was
+// measured. Before this, `unset` asked a bool that read "fatal" and the store
+// asked nothing at all and was fatal unconditionally — so bash ended a script
+// it carries on with, and ksh93 ended one it does not stop at all (#3485) —
+// and a *declaration* reached Runner.fatal directly, so bash ended a script it
+// runs to the end there too (#3495).
 //
 // The status is 1 wherever the shell is still running to see it, which is
 // unanimous: the complaint leaves a failed builtin behind, and the next
@@ -53,4 +55,32 @@ func (r *Runner) badSubscriptGivesUp(p BadSubscriptPolicy, what, sentence string
 		return r.status
 	}
 	return 1
+}
+
+// badSubscriptToADeclaration is the third site: a declaration whose operand
+// names an element and whose subscript will not evaluate.
+//
+// `declare 'a[b c]'=v`, and `typeset`, `local`, `readonly` and `export` in
+// whichever dialects let those take a subscript at all. It reached
+// Runner.fatal until now, which is zsh's and ksh93's answer written on the
+// common path: bash gives up the command it is running and carries on at the
+// next top-level one, so a script bash runs to the end stopped here. See
+// Semantics.BadSubscriptToADeclaration for the rows and for why this is a
+// field of its own rather than either neighbour read a third time.
+//
+// The sentence is the language's and names no builtin, which is bash's and
+// zsh's wording and is what the two sites next door already write. ksh93 puts
+// the builtin in front of it and reports from the builtin's own location; that
+// is #3496, which owns all three sites at once and is wording rather than
+// unwinding.
+//
+// Nothing comes back, as nothing comes back from declareElement: the status is
+// written here, and assignFailed is what keeps the builtin's own return value
+// from zeroing it — the same pair changeCompoundKind's abandoning branch sets,
+// one refusal over.
+func (r *Runner) badSubscriptToADeclaration(sub string, err error) {
+	r.status = r.badSubscriptGivesUp(r.sem().BadSubscriptToADeclaration,
+		"how much a declaration gives up for an operand's unevaluable subscript",
+		r.subscriptFailure(sub, err))
+	r.assignFailed = true
 }

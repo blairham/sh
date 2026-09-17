@@ -11668,8 +11668,12 @@ expression is not a word that could not be read.
 `a[1+]=v` ends the script in all four; `unset a[1+]` ends it in none of
 them — bash gives up the command it is running, and ksh93 and zsh leave a
 failed builtin behind. A `read 'r[1+]'` splits differently again, zsh
-ending the script where it did not for `unset`. See `BadSubscriptToUnset`
-and `BadSubscriptToAnOutputOperand` in the catalog below.
+ending the script where it did not for `unset`, and a *declaration* —
+`typeset 'a[1+]'=v` — splits a third way, with zsh **and** ksh93 both
+ending it where bash still gives up the command alone. Three sites, three
+splits, three fields: `BadSubscriptToUnset`,
+`BadSubscriptToAnOutputOperand` and `BadSubscriptToADeclaration` in the
+catalog below.
 
 ### What a substring's range is blamed on
 
@@ -19338,13 +19342,15 @@ prefix takes no scope here (#3440).
 
 **`BadSubscriptToAnOutputOperand`** — bash the command · dash unspecified · ksh93 reported · zsh the script
 
+**`BadSubscriptToADeclaration`** — bash the command · dash unspecified · ksh93 the script · zsh the script
+
 How much is given up when a subscript handed to a builtin will not
-evaluate: the `unset` operand, and the *store* a `read 'r[…]'` or a
-`printf -v 'r[…]'` operand walks into. Everywhere else — reading an
-element, its length, an operator that reaches one, an assignment through
-one, a substring's offset — the word is abandoned and the script with it,
-unanimously. These two are where that stops being true, and they do not
-stop being true together.
+evaluate: the `unset` operand, the *store* a `read 'r[…]'` or a `printf
+-v 'r[…]'` operand walks into, and the element a **declaration** names.
+Everywhere else — reading an element, its length, an operator that
+reaches one, an assignment through one, a substring's offset — the word
+is abandoned and the script with it, unanimously. These three are where
+that stops being true, and they do not stop being true together.
 
     a=(x y z)
     unset "a[1+]"; echo "same=$? n=${#a[@]}"
@@ -19362,11 +19368,33 @@ stop being true together.
     ksh93       read: 1/0: divide by zero        same=1, next=0
     zsh         division by zero                 the script stops
 
-So there are three answers, not two. ksh93 leaves a *failed builtin*
-behind at both sites and zsh does so at `unset` alone; bash gives up the
-**command** at both — the rest of its line with it, and the enclosing
-function, list, `if`, loop or subshell whole — and carries on at the next
-top-level command with 1 behind it.
+    a=(1 2 3)
+    typeset 'a[b c]'=v; echo "same=$?"
+    echo "next=$?"
+
+    bash 5.3    b c: arithmetic syntax error …   no same=, next=1
+    ksh93       typeset: b c: arithmetic …       the script stops
+    zsh         bad math expression: …           the script stops
+
+So there are three answers, not two, and no two of the three sites take
+the same pair of them. ksh93 leaves a *failed builtin* behind at `unset`
+and at a store and ends the script at a declaration; zsh does so at
+`unset` alone and ends the script at the other two; bash gives up the
+**command** at all three — the rest of its line with it, and the
+enclosing function, list, `if`, loop or subshell whole — and carries on
+at the next top-level command with 1 behind it.
+
+The declaration site was measured 2026-09-17 at seven places each — the
+top level, a function body, an `&&` list, an `if` condition, a loop body,
+`( … )` and `$( … )` — for `declare`, `typeset` and `local`, with and
+without a value (#3495). Two things narrow it. bash reads **no**
+subscript when the operand carries no value, so `declare 'a[b c]'` is
+silent at 0 there while zsh and ksh93 evaluate it and stop; that is a
+question of its own (#3501). And bash's `readonly` and `export` refuse
+the bracketed operand one complaint earlier — ``export: `a[b c]': not a
+valid identifier`` at 1, with the rest of the line still running — so
+only the `typeset` family reaches the arithmetic in that column, where
+ksh93 and zsh reach it through all five spellings.
 
 **bash was recorded as ending the script here and it does not** (#3485).
 The measurement that says so has to be taken from a script file with a
@@ -19399,7 +19427,10 @@ not a third axis.
 
 Asked only for an operand whose subscript actually failed. dash has no
 subscript to evaluate — `UnsetTakesASubscript` is no there — so the axes
-are absent rather than false.
+are absent rather than false, and it has no declaration utility taking
+one either: `declare` and `typeset` are `not found` at 127, and its
+`readonly` refuses the bracketed name as `bad variable name` at 2.
+BusyBox ash answers all three the same way, in the pinned image.
 
 **`UnsetSubscriptOnAScalarIsAnError`** — bash yes · dash absent · ksh93 no · zsh unreachable
 

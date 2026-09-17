@@ -539,6 +539,13 @@ func Semantics() interp.Semantics {
 	// unanswered BadSubscriptToAnOutputOperand: the same wall one builtin
 	// over. `echo Y | read 'q[b c]'` is `read: 'q[b c]': bad variable name`
 	// at 1, so the store that walks the brackets is never reached either.
+	//
+	// unanswered BadSubscriptToADeclaration: and the third site does not
+	// exist at all. Measured 2026-09-17 in the pinned image, BusyBox
+	// v1.37.0: there is no `declare` or `typeset` (`declare: not found`,
+	// 127), and `readonly 'q[b c]'=v` ends the script at 2 with `q[b c]: bad
+	// variable name` — a name refused, with no subscript read. `export` is
+	// the same complaint at the same status.
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.ReadNameOperands = interp.PlainNamesOnly

@@ -1027,6 +1027,12 @@ func Semantics() interp.Semantics {
 	// unanswered BadSubscriptToAnOutputOperand: the same wall one builtin
 	// over. `echo Y | read 'q[b c]'` is `read: q[b c]: bad variable name` at
 	// 2, so the store that walks the brackets is never reached either.
+	//
+	// unanswered BadSubscriptToADeclaration: and the third site does not
+	// exist at all. Measured 2026-09-17: dash has no `declare` or `typeset`
+	// (`declare: not found`, 127), and its `readonly` and `export` take a
+	// name rather than a subscript — `readonly 'q[b c]'=v` is `readonly:
+	// q[b c]: bad variable name` at 2, the same complaint as `unset`.
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes

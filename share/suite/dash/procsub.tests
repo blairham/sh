@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Process substitution in dash, which has none.
+#
+# `<(…)` and `>(…)` are refused while the line is read, so the command
+# before them on the same line never runs and neither does anything after an
+# `if` that holds one.
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what is
+# being graded. The rows that print `ran` or `after` ask whether the refusal
+# is made while reading or while running.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- process substitution does not parse ---\n'
+try 'cat <(printf "hi\n")'
+try 'printf "hi\n" > >(cat)'
+try 'printf "ran\n"; cat <(:)'
+try 'if false; then cat <(:); fi; printf "after\n"'
+printf -- '--- and with a space it is not a redirection from a subshell either ---\n'
+try 'cat < (printf "hi\n")'

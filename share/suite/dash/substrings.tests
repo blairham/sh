@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `${v:offset:length}` in dash, which has none.
+#
+# Refused as a bad substitution when it is expanded, like the replacement.
+# The rows beside it are the colon forms dash does have — `:-`, `:+`, `:=` —
+# because an offset and a default share the colon, and a shell that took one
+# for the other would answer those rows wrong rather than the refusals.
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what is
+# being graded. The rows that print `ran` or `after` ask whether the refusal
+# is made while reading or while running.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- an offset is a bad substitution ---\n'
+try 'v=abcdef; printf "%s\n" "${v:1}"'
+try 'v=abcdef; printf "%s\n" "${v:1:2}"'
+try 'v=abcdef; printf "%s\n" "${v: -2}"'
+try 'set -- a b c; printf "%s\n" "${@:2}"'
+printf -- '--- which is not the default operators with a colon ---\n'
+unset u
+printf '[%s] [%s] [%s]\n' "${u:-dflt}" "${u:+alt}" "${u:=set}"
+e=
+printf '[%s]\n' "${e:-empty counts as unset}"
+printf -- '--- refused when it is expanded, not when it is read ---\n'
+try 'if false; then printf "%s\n" "${v:1}"; fi; printf "not expanded\n"'
+printf -- '--- the length it does have ---\n'
+v=abcdef
+printf '%s\n' "${#v}"

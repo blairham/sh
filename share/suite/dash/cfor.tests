@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The arithmetic `for` in dash, which has none.
+#
+# `for ((…))` is refused with dash's own sentence while the line is read.
+# The arithmetic command `((…))` is not refused at all: it is two nested
+# subshells around a command word, so `((1 + 1))` looks up a command named
+# `1`.
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what is
+# being graded. The rows that print `ran` or `after` ask whether the refusal
+# is made while reading or while running.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- the arithmetic for does not parse ---\n'
+try 'for ((i = 0; i < 2; i++)); do printf "%s\n" "$i"; done'
+try 'for ((;;)); do break; done'
+try 'printf "ran\n"; for ((i = 0; i < 1; i++)); do :; done'
+printf -- '--- and the arithmetic command neither ---\n'
+try '((1 + 1)); printf "%s\n" "$?"'
+try '(( x = 3 ))'
+printf -- '--- the loop a script writes instead ---\n'
+i=0
+while [ "$i" -lt 3 ]; do printf '%s ' "$i"; i=$((i + 1)); done
+printf '\n'

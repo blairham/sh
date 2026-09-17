@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `SHLVL` in dash, which does not keep it.
+#
+# A shell started with no `SHLVL` leaves it unset, and one started with a
+# value passes it through unchanged — neither incremented nor checked as a
+# number. `$SUITE_SHELL` is the shell of this run; see suite.OurShellVar.
+#
+# Each row runs in a subshell through `eval`, the house spelling of the other
+# dash/ files in this area.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- SHLVL is neither set nor counted ---\n'
+try 'printf "[%s]\n" "${SHLVL-unset}"'
+try '"$SUITE_SHELL" -c '\''printf "[%s]\n" "${SHLVL-unset}"'\'''
+try 'SHLVL=5 "$SUITE_SHELL" -c '\''printf "[%s]\n" "$SHLVL"'\'''
+try 'export SHLVL=5; "$SUITE_SHELL" -c '\''printf "[%s]\n" "$SHLVL"'\'''
+try 'SHLVL=x "$SUITE_SHELL" -c '\''printf "[%s]\n" "$SHLVL"'\'''

@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `$'…'` in dash — the ext/ area dash is the holdout on, asked of dash.
+#
+# ext/dollarquote.tests is run by bash, zsh and ksh93 only. Here there is no
+# such quoting: a `$` in front of a single-quoted word is a literal dollar
+# followed by an ordinary quoted string, so no escape is decoded and nothing
+# is refused. `$"…"` is the same, with double quotes.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+printf -- '--- a dollar before single quotes is a dollar and a quoted word ---\n'
+printf '[%s]\n' $'a\tb'
+printf '[%s]\n' $'it''s'
+printf '[%s]\n' "$'in double quotes'"
+printf '[%s]\n' $'\n'
+x=$'\x41'
+printf '[%s] %s\n' "$x" "${#x}"
+printf -- '--- and before double quotes ---\n'
+printf '[%s]\n' $"a b"
+printf -- '--- a dollar with a name after the quote is still a parameter ---\n'
+v=val
+printf '[%s]\n' $'v'$v

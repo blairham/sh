@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Arrays in dash, which has none.
+#
+# Three different refusals for three spellings, and only one of them is a
+# syntax error: `a=(…)` does not parse, `a[1]=x` is not an assignment at all
+# but a command word nobody has (127), and `${a[0]}` is a bad substitution
+# when expanded. `${#@}` is the length of the joined parameters.
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what is
+# being graded. The rows that print `ran` or `after` ask whether the refusal
+# is made while reading or while running.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- an array assignment does not parse ---\n'
+try 'a=(1 2 3); printf "%s\n" "$a"'
+try 'a=(); printf "empty\n"'
+try 'printf "ran\n"; a=(x)'
+printf -- '--- a subscripted name is a command word ---\n'
+try 'a[1]=x; printf "[%s]\n" "$a"'
+try 'a[1]=x'
+printf -- '--- and a subscript in an expansion is a bad substitution ---\n'
+try 'a=x; printf "%s\n" "${a[0]}"'
+try 'set -- p q; printf "%s\n" "${#@}"'
+try 'printf "%s\n" "${a[@]}"'
+printf -- '--- positional parameters are the one list ---\n'
+set -- one "two three" four
+printf '%s:' "$#"; printf '<%s>' "$@"; printf '\n'

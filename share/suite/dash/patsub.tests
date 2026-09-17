@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `${v/pattern/replacement}` in dash, which has none.
+#
+# Unlike the grammar refusals in the other ext/-area files here, this one is
+# made while *expanding*: the line reads, a command before the operator on the
+# same line runs, and an operator in a branch not taken is never complained
+# about. The four pattern-removal operators are the part of the family dash
+# does have, asked beside it.
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what is
+# being graded. The rows that print `ran` or `after` ask whether the refusal
+# is made while reading or while running.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- a replacement is a bad substitution ---\n'
+try 'v=abc; printf "%s\n" "${v/b/x}"'
+try 'v=abc; printf "%s\n" "${v//b/x}"'
+try 'v=abc; printf "%s\n" "${v/#a/x}"'
+try 'v=abc; printf "%s\n" "${v/%c/x}"'
+try 'set -- ab cb; printf "%s\n" "${@/b/x}"'
+printf -- '--- refused when it is expanded, not when it is read ---\n'
+try 'printf "ran\n"; v=abc; printf "%s\n" "${v/b/x}"; printf "after\n"'
+try 'if false; then printf "%s\n" "${v/b/x}"; fi; printf "not expanded\n"'
+try 'v=abc; : "${v/b/x}"; printf "after\n"'
+printf -- '--- the pattern operators it has ---\n'
+v=a.b.c
+printf '%s %s %s %s\n' "${v#*.}" "${v##*.}" "${v%.*}" "${v%%.*}"

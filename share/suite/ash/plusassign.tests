@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `v+=word` in BusyBox ash, which does not have it — an ext/ area this column
+# does not run.
+#
+# BusyBox takes a good part of the ext/ list (`$'…'`, `[[`, substrings, the
+# replacement, `function`), so which constructs it lacks is a question per
+# construct rather than a foregone one. This one it lacks, and it answers
+# every row with the same shape dash does: the same refusal at the same
+# place, in BusyBox's own wording (`syntax error: unexpected "("`, a
+# `line N` after `eval:`).
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what
+# is being graded.
+#
+# Measured 2026-09-16 in the pinned alpine image, BusyBox v1.37.0.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- an append is a command word ---\n'
+try 'v=a; v+=b; printf "[%s]\n" "$v"'
+try 'v+=b'
+try 'export v+=b; printf "[%s]\n" "$v"'
+try 'v=a; v+=b printf "[%s]\n" "$v"'
+printf -- '--- the append a script writes instead ---\n'
+v=a
+v=${v}b
+printf '[%s]\n' "$v"

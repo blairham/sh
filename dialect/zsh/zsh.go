@@ -1045,6 +1045,8 @@ func Semantics() interp.Semantics {
 	s.SelectPromptNeedsTerminal = interp.No
 	s.AliasParsesOptions = interp.Yes
 	s.AliasHasPrintOption = interp.No
+	// And no `-x` either: `alias: bad option: -x`, at 1.
+	s.AliasHasExportOption = interp.No
 	// The two kinds nothing else in the panel has: a global alias expands
 	// wherever a word stands, and a suffix alias is a second namespace
 	// keyed on a command word's extension (#2081).
@@ -1060,6 +1062,9 @@ func Semantics() interp.Semantics {
 	s.AliasReportsNotFound = interp.No
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
+	// A removed alias leaves nothing behind: `unalias h` twice is 0 then
+	// 1 here.
+	s.AliasRemembersTheNamesItNames = interp.No
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
 	s.AliasListingQuotesTheName = interp.Yes

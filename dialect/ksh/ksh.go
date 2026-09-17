@@ -664,6 +664,11 @@ func Semantics() interp.Semantics {
 	s.SelectPromptNeedsTerminal = interp.Yes
 	s.AliasParsesOptions = interp.Yes
 	s.AliasHasPrintOption = interp.Yes
+	// And the other letter of its own usage line, `Usage: alias [-ptx]
+	// [name[=value]...]`: `-x` marks an entry and narrows a listing to
+	// the marked ones. It was refused here while that line advertised it,
+	// which is the paired tables apart (#2927).
+	s.AliasHasExportOption = interp.Yes
 	// Its extra letters are `-t` and `-x`, not these two: `alias -g` is
 	// `unknown option` on ksh93u+.
 	s.GlobalAliases = interp.No
@@ -678,6 +683,12 @@ func Semantics() interp.Semantics {
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.No
 	s.AliasNotFoundStatusCounts = interp.Yes
+	// Alone in the panel, a name this shell's `alias` has *named* stays
+	// in the table with no value, so `unalias h` succeeds a second and a
+	// third time where the other four report there was nothing to
+	// remove. Naming is enough — a failed `alias z` leaves the name
+	// behind — and `unalias -a` clears them (#2926).
+	s.AliasRemembersTheNamesItNames = interp.Yes
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteWhenNeededDollar
 	s.AliasListingQuotesTheName = interp.No

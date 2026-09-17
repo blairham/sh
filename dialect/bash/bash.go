@@ -533,6 +533,8 @@ func Semantics() interp.Semantics {
 	s.SelectPromptNeedsTerminal = interp.No
 	s.AliasParsesOptions = interp.Yes
 	s.AliasHasPrintOption = interp.Yes
+	// `alias -x` is `alias: -x: invalid option` here, at 2.
+	s.AliasHasExportOption = interp.No
 	// Neither of the other two kinds: `alias -g` and `alias -s` are both
 	// `invalid option` here, measured on 5.3 and 3.2 alike.
 	s.GlobalAliases = interp.No
@@ -572,6 +574,9 @@ func Semantics() interp.Semantics {
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
+	// A removed alias leaves nothing behind: `alias h=1; unalias h;
+	// unalias h` is 0 then 1 here, as it is in zsh, dash and BusyBox ash.
+	s.AliasRemembersTheNamesItNames = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysEscaped
 	s.AliasListingQuotesTheName = interp.No

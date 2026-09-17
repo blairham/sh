@@ -213,6 +213,16 @@ func (c *Runner) ownTables(r *Runner) {
 	c.readonlyFuncs = maps.Clone(r.readonlyFuncs)
 	c.aliases = maps.Clone(r.aliases)
 	c.suffixAliases = maps.Clone(r.suffixAliases)
+	// And the names one dialect remembers having named, which is owned
+	// rather than shared *and that is a known gap rather than the answer*:
+	// real ksh93 lets a name a `( … )` looked up satisfy the parent's later
+	// `unalias`, which needs one set the two write. Sharing a map across a
+	// clone is what the paragraph above this file's first function is about
+	// — a process substitution is a clone on a goroutine — so the sharing
+	// half waits for a set that can be shared safely (#3429). What is
+	// reproduced is that no remembered name counts inside a subshell, which
+	// is asked at the `unalias` rather than here.
+	c.namedAliases = maps.Clone(r.namedAliases)
 	// And the command hash, which is the same kind of table under a third
 	// name: what PATH last resolved a name to. A subshell owns its entries —
 	// measured, `(ls >/dev/null); hash` leaves the parent's table empty in

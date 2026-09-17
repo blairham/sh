@@ -846,6 +846,10 @@ func Semantics() interp.Semantics {
 	// dash parses no options for `alias`, so `-p` is a name there.
 	s.AliasParsesOptions = interp.No
 	s.AliasHasPrintOption = interp.No
+	// Nor an `-x`, and for the same reason the line above gives: this
+	// shell reads no options for `alias` at all, so `alias -x` is a
+	// *name* here and the answer is `-x not found`.
+	s.AliasHasExportOption = interp.No
 	// It reads no options at all, so `-g` and `-s` are names it cannot
 	// find rather than kinds it has.
 	s.GlobalAliases = interp.No
@@ -858,6 +862,9 @@ func Semantics() interp.Semantics {
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
+	// A removed alias leaves nothing behind: `unalias h` twice is 0 then
+	// 1 here.
+	s.AliasRemembersTheNamesItNames = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysDoubled
 	s.AliasListingQuotesTheName = interp.No

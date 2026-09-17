@@ -40,6 +40,11 @@ func aliasRunArgs(t *testing.T, tweak func(*Semantics), dg Diagnostics, src stri
 	sem.UnaliasReportsNotFound = Yes
 	sem.AliasNotFoundStatusCounts = No
 	sem.UnaliasAllRefusesOperands = No
+	// The two letters and the one memory only ksh93 has, off for the same
+	// reason the kind letters above are: the suites that are about them turn
+	// them on through tweak.
+	sem.AliasHasExportOption = No
+	sem.AliasRemembersTheNamesItNames = No
 	sem.AliasQuoting = ListingQuoteAlwaysEscaped
 	sem.BadOptionToSpecialBuiltinFatal = No
 	if tweak != nil {

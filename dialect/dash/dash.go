@@ -1019,6 +1019,14 @@ func Semantics() interp.Semantics {
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.TypesetTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.No
+	// unanswered BadSubscriptToUnset: there is no subscript to evaluate here,
+	// so the arithmetic the axis is about is never reached. Measured
+	// 2026-09-17: `q=1; unset 'q[b c]'` is `unset: q[b c]: bad variable name`
+	// and the script ends at 2 — the name is refused one complaint earlier.
+	//
+	// unanswered BadSubscriptToAnOutputOperand: the same wall one builtin
+	// over. `echo Y | read 'q[b c]'` is `read: q[b c]: bad variable name` at
+	// 2, so the store that walks the brackets is never reached either.
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes

@@ -50,7 +50,8 @@ ash   AssignmentUpdatesPipelineStatus
 ash   AttributeOverAFrozenNameIsRefused
 ash   AttributeRereadsTheValueItFinds
 ash   AutoCdAnnouncesTheSubstitution
-ash   BadSubscriptToUnsetFatal
+ash   BadSubscriptToAnOutputOperand
+ash   BadSubscriptToUnset
 ash   BareFloatLetterResetsThePrecision
 ash   BareSubscriptIsASubscript
 ash   BareTypesetListing
@@ -265,7 +266,8 @@ dash  AssignmentUpdatesPipelineStatus
 dash  AttributeOverAFrozenNameIsRefused
 dash  AttributeRereadsTheValueItFinds
 dash  AutoCdAnnouncesTheSubstitution
-dash  BadSubscriptToUnsetFatal
+dash  BadSubscriptToAnOutputOperand
+dash  BadSubscriptToUnset
 dash  BareFloatLetterResetsThePrecision
 dash  BareSubscriptIsASubscript
 dash  BareTypesetListing

@@ -709,6 +709,76 @@ func (r *Runner) namerefEmptiesTheCell(name string) {
 	r.hideVar(name)
 }
 
+// namerefAttributeRemoved is `typeset +n r`: the reference goes and **the name
+// it pointed at stays behind as the value**.
+//
+// Measured 2026-09-17 from script files under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C` with a scratch HOME, with `v=bar; typeset -n foo=v`:
+//
+//	                          bash 5.3.20            ksh93u+ 2012-08-01
+//	typeset +n foo            declare -- foo="v"     foo=v
+//	then `echo "$foo"`        v                      v
+//	typeset -n g; typeset +n g   declare -- g        the name, with no value
+//	h=1; typeset +n h         declare -- h="1"       h=1
+//
+// Unanimous across the two shells that spell a reference, so no axis is
+// asked. The value is the **target's name** and not what the target holds,
+// which is the row that says the reference was not followed: `$foo` reads `v`
+// afterwards and not `bar`.
+//
+// Here the letter did nothing at all: `f.nameref = !f.remove` recorded a plus
+// as "no `n` letter on this line", so `typeset +n foo` left the reference
+// standing and every later read still went through it. That is a silent
+// no-op on a declaration a script wrote on purpose — and worse than nothing,
+// because the redirect this is asked in front of would then have carried the
+// rest of the operand off to the target.
+//
+// It reports whether this operand is **finished**, which is not the same as
+// whether it did anything. A `+n` on a name that is not a reference falls
+// through to the ordinary declaration, which is what leaves `h=1; typeset +n
+// h` the plain `h=1` both shells list — and so does a reference with nothing
+// to point at, because there is no value to leave behind and the name is then
+// an ordinary valueless declaration: `typeset -n g; typeset +n g` lists as
+// `declare -- g` there and as a bare `g` in ksh93, which is what
+// declareEmpty already writes.
+func (r *Runner) namerefAttributeRemoved(name string) bool {
+	if !r.isNameref(name) {
+		return false
+	}
+	if r.refuseReadonly(name, removedAttribute) {
+		// A **frozen reference** may not be taken apart: measured the same
+		// day, `w=2; declare -rn k=w; declare +n k` is `declare: k: readonly
+		// variable` at 1 in bash 5.3.20 and `typeset: k: is read only` in
+		// ksh93u+, and `k` is still the frozen reference afterwards. It is
+		// the freeze the *reference* carries, which is the half `unset -n`
+		// already asks and the opposite of what a write through one asks.
+		//
+		// removedAttribute is the form this is: a declaration asking a name
+		// to give an attribute up, whose sentence is the declaration's and
+		// which gives up nothing of the enclosing line.
+		return true
+	}
+	target, aimed := r.namerefTarget(name)
+	r.unsetNameref(name)
+	if !aimed {
+		// Nothing to leave behind, so the operand falls through to the
+		// ordinary declaration it now is. The attribute is the claim here;
+		// **what a listing then says about a name holding nothing is not**,
+		// and is not yet right: `typeset -n g; typeset +n g; typeset -p g`
+		// is `declare -- g` in bash 5.3.20 and a bare `g` in ksh93u+ and is
+		// `g: not found` here, because the cell the reference took over is
+		// still hidden and neither this fall-through nor declareEmpty brings
+		// it back. The name reads unset in all three — `${g-UNSET}` is
+		// UNSET everywhere — so what differs is the listing alone.
+		return false
+	}
+	// The target's *name*, which is what the reference was holding — not
+	// what the target holds, which is the row that says the reference was
+	// not followed: `$foo` reads `v` afterwards and not `bar`.
+	r.setVar(name, target)
+	return true
+}
+
 // unsetNameref takes the reference attribute off a name, which is what
 // `unset -n` does and what an ordinary `unset` does not: the plain spelling
 // removes what the reference points at and leaves the reference aimed at a

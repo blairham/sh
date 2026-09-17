@@ -96,7 +96,14 @@ type declareFlags struct {
 	// the letter declares is not a kind of store but where every later read
 	// and write lands. See interp/nameref.go.
 	nameref bool
-	tie     bool
+	// namerefOff records the sign of the *last* `n` letter the command
+	// carried, which `nameref` alone cannot say: under a plus the letter
+	// takes the reference **off**, which is a declaration of its own and not
+	// the absence of one. Same split readonlyOff already draws for `r`.
+	//
+	// What it does is measured and unanimous — see namerefAttributeRemoved.
+	namerefOff bool
+	tie        bool
 	// typeName is the name that rode on the `T` letter in the dialect that
 	// reads it as a *type* — `typeset -TPt v` — and typeNamed says one was
 	// written at all. The two cannot be one field for the reason
@@ -478,7 +485,11 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// `unset` through it lands there. Recorded rather than acted
 				// on here, because what the letter does depends on the
 				// operand — see declareNameref.
-				f.nameref = !f.remove
+				//
+				// Under a plus it is the reference being taken away, which
+				// is its own declaration rather than the absence of one —
+				// see namerefAttributeRemoved.
+				f.nameref, f.namerefOff = !f.remove, f.remove
 			case 'U':
 				// Keep only the first occurrence of each element. Like
 				// `-i` and the case attributes it is a property of the
@@ -1408,6 +1419,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// attribute — so a fresh binding is no longer one to follow, which is
 		// what leaves `local -i s` over a caller's reference a declaration of
 		// the function's own `s`. See interp/namerefattribute.go.
+		// The `n` letter under a plus, which is about the **reference** and
+		// not about what it points at — so it is answered ahead of the
+		// redirect below, which would otherwise carry the rest of the
+		// declaration off to the target of a reference this line is removing.
+		if df.namerefOff && r.namerefAttributeRemoved(name) {
+			continue
+		}
 		if target, follows := r.attributeFollowsTheReference(name, df); follows {
 			name = target
 			// Re-read for the redirected name, since the question it answers

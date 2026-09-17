@@ -461,7 +461,15 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			break
 		}
 		k = j
-		for k < len(src) && !strings.ContainsRune(eventEnd, src[k]) && src[k] != c.Event {
+		if k < len(src) && src[k] == '-' {
+			// A leading `-` that no number followed is still the start of
+			// the string; only a later one ends it.
+			k++
+		}
+		for k < len(src) && !strings.ContainsRune(eventEnd, src[k]) && src[k] != '-' && src[k] != c.Event {
+			// A `-` ends the string because it begins a word range with
+			// no colon: measured 2026-09-16, `!ech-2` after `echo a b c d`
+			// is `echo a b` in bash 5.3.20, zsh 5.9.2 and ksh93u+ alike.
 			k++
 		}
 		if k == j {

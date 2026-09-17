@@ -2320,16 +2320,13 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		}
 	}
 	if f.export {
-		if r.exported == nil {
-			r.exported = map[string]bool{}
-		}
 		// A plus word takes the attribute off — unless the *name the command
 		// was called by* is what asked for it, which no plus on some other
 		// letter may cancel. The same reading `integer` takes for its own
 		// type letter: measured 2026-09-12, `export +i q=4` still exports in
 		// the shell whose `export` reads the declaration letters, and lists
 		// as `export q=4`. See exportForced.
-		r.exported[name] = !f.remove || f.exportForced
+		r.declarationExports(name, !f.remove || f.exportForced)
 	}
 	// The case attributes fold at assignment here, which is what bash and
 	// ksh93 do. zsh stores the raw text and folds on *expansion* — every
@@ -3041,6 +3038,12 @@ func functionNameNeedsQuotes(c rune) bool {
 // applyDeferredFreeze. `declare -ar A=(x y)` is one command, and the value it
 // carries cannot be refused by the attribute it carries beside it.
 func (r *Runner) markReadonly(name string) {
+	// The declaration is freezing a name its own command's prefix is holding,
+	// in the column where that keeps the prefix's value for the shell. Ahead
+	// of the deferred freeze below, because the keeping is about this command
+	// either way and the deferral only moves *when* the attribute lands. See
+	// Runner.keepThePrefixEntry.
+	r.keepThePrefixEntry(name)
 	if r.freezing[name] {
 		r.freezeAfter = append(r.freezeAfter, name)
 		return
@@ -3496,6 +3499,19 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 		return
 	}
 	if r.unspecified {
+		return
+	}
+	if fresh && r.prefixEntryIsInThisCell(name) {
+		// The cell this declaration made is the one an assignment prefix put
+		// a value in, so there is nothing here to empty: `f(){ local c;
+		// declare -p c; }` called as `c=2 f` reads `declare -x c="2"`, and so
+		// does the builtin's own prefix in `f(){ b=4 declare -r b; }`.
+		// Measured 2026-09-16 in bash 5.3.20, ksh93u+ (`function f { typeset
+		// c; … }`, the only form that scopes there) and BusyBox ash 1.37 —
+		// the three columns that hide an outer value at all, so it is
+		// unanimous and asked of nobody. zsh gives a declared name the empty
+		// string and returns above; dash hides nothing, so neither reaches
+		// this line. See Runner.prefixEntryShadowed (#3437).
 		return
 	}
 	// The name is unset here, and whether it is *recorded* is the second
@@ -4119,6 +4135,12 @@ func (r *Runner) shadow(name string) (fresh bool) {
 	sc := r.scopes[len(r.scopes)-1]
 	if _, seen := sc.saved[name]; !seen {
 		fresh = true
+		// A live assignment prefix is holding this name, so the value the
+		// cell below displaces is the prefix's and the declaration is taking
+		// it into a scope of its own. Recorded before anything is saved, so
+		// the declaration's own attributes reach the new cell rather than the
+		// outer one. See Runner.prefixEntryShadowed.
+		fromPrefix, tookThePrefixEntry := r.prefixEntryShadowed(name)
 		old, existed := r.Vars[name]
 		sc.saved[name] = old
 		sc.existed[name] = existed
@@ -4227,6 +4249,15 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		}
 		sc.savedAssigned[name], sc.assignedSpoken[name] = r.assigned[name]
 		delete(r.assigned, name)
+		if tookThePrefixEntry {
+			// The cell is the prefix's now, so what this scope gives back on
+			// return is what the *prefix* would have given back and not the
+			// prefix's own value — which is the state saved before the
+			// command applied it. Written over the entries above rather than
+			// instead of them, so every other attribute is still the outer
+			// name's. See Runner.prefixEntryShadowed.
+			r.scopeTakesOverThePrefixEntry(sc, name, fromPrefix)
+		}
 		if name == "OPTIND" {
 			// And the half of the `getopts` position that is not a
 			// parameter. Here rather than beside the builtin because this is

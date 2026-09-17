@@ -1056,6 +1056,19 @@ func Semantics() interp.Semantics {
 	// during the call and none after it either (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = interp.Yes
 	s.PrefixToAFunctionIsExported = interp.No
+	// The same direction at a builtin, and the same reading: a prefix is an
+	// ordinary assignment to this shell, so a name that had the export
+	// attribute *loses* it for the length of the command. `export z=1; z=2
+	// typeset -p z` reads a bare `z=2` here against bash's `declare -x z="2"`,
+	// and the child of `z=2 eval env` is told nothing. Measured 2026-09-16 in
+	// 93u+ 2012-08-01 (#3437).
+	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOff
+	// Nothing to keep: a prefix persists on a special builtin here by the
+	// axis above, and `typeset` keeps it too — `x=1; x=2 typeset x` reads `2`
+	// and so does `i=2 typeset -i i`, whatever letters are written. So every
+	// row the promoting shell is measured on already reads the prefix's value
+	// here, for a reason that is not this one (#3437).
+	s.DeclarationPromotesThePrefixEntry = interp.No
 	s.PrefixRefusalFatality = interp.PrefixRefusalFatalOnASpecialBuiltinOrFunction
 	s.PrefixRefusalCostsTheCommand = interp.Yes
 	// The attribute cannot come off, though, which is where this shell parts

@@ -50,6 +50,15 @@ func testSemantics() Semantics {
 	// on the way to something else need an answer rather than a refusal.
 	s.RedirectsUseEveryTarget = No
 
+	// What an assignment prefix does to the export attribute of the name it
+	// stands in front of at a *builtin*, and whether a declaration keeps the
+	// value its own prefix set. The leave-alone reading and No: four of the
+	// six columns and five of the six, and the pair that changes nothing
+	// about a suite writing `x=1 true` on the way to something else. The
+	// suite that is about them sets them itself (#3437).
+	s.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
+	s.DeclarationPromotesThePrefixEntry = No
+
 	// What a traced assignment shows of its own elements and of its
 	// subscript. The words as written, which is the reading a suite tracing
 	// an array on its way to something else was written against; the suite

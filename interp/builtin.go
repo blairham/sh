@@ -2235,12 +2235,19 @@ func (r *Runner) removeFunctionQuietly(name string) {
 // badSubscriptToUnset reports an `unset` operand whose subscript would not
 // evaluate, and answers with the status the builtin carries.
 //
-// Two answers, and they are not a wording difference. bash ends the script
-// where a bad expression always ends it, so nothing after the `unset` runs;
-// ksh93 and zsh leave a failed builtin behind and go on to the next command,
-// which is the shape a script can test. ksh93 also names the builtin in front
-// of the sentence, where it words the identical failure in an expansion
-// without one.
+// Two answers, and they are not a wording difference. bash gives up the
+// command it is running — the rest of that line with it, and the enclosing
+// function, list or subshell whole — and carries on at the next top-level
+// command; ksh93 and zsh leave a failed builtin behind and go on to the very
+// next command, which is the shape a script can test. ksh93 also names the
+// builtin in front of the sentence, where it words the identical failure in
+// an expansion without one.
+//
+// **Nothing here ends the script**, which is what this used to claim about
+// bash: the axis was a bool spelled "fatal" and bash answered Yes, so an
+// `unset` with an unevaluable subscript stopped a script that bash runs to
+// the end. See Semantics.BadSubscriptToUnset for the rows and for why an
+// obvious probe cannot tell the two apart (#3485).
 func (r *Runner) badSubscriptToUnset(sub string, err error) int {
 	sentence := r.subscriptFailure(sub, err)
 	// The complaint is the shell's rather than the builtin's — it is the same
@@ -2250,15 +2257,9 @@ func (r *Runner) badSubscriptToUnset(sub string, err error) int {
 	outer := r.inBuiltin
 	r.inBuiltin = ""
 	defer func() { r.inBuiltin = outer }()
-	if r.ask(r.sem().BadSubscriptToUnsetFatal, "a bad subscript ending the script") {
-		r.fatal("%s\n", sentence)
-		return r.status
-	}
-	if r.unspecified {
-		return 2
-	}
-	r.diagf("%s\n", Wording(r.diag().UnsetBadSubscript, "%[1]s", sentence))
-	return 1
+	return r.badSubscriptGivesUp(r.sem().BadSubscriptToUnset,
+		"how much an `unset` operand's unevaluable subscript gives up",
+		Wording(r.diag().UnsetBadSubscript, "%[1]s", sentence))
 }
 
 // unsetReadonly refuses to remove a readonly name, reporting 0 when there was
@@ -5220,7 +5221,14 @@ func (r *Runner) readRefusedOrStatus(refused bool, status int, badName string, b
 // the name is one the script wrote rather than the shell's own REPLY.
 func (r *Runner) readFill(name, value string, left int, defaulted bool, refused *bool) (int, bool) {
 	if r.readMayWrite(name) {
-		r.storeThroughOperand(name, value)
+		if st, refused := r.storeThroughOperand(name, value); refused {
+			// The subscript would not evaluate, so nothing was written and
+			// the builtin gives up at that name: the ones behind it keep
+			// what they held. Measured 2026-09-17, `r=(1 2 3); b=preset;
+			// read 'r[1/0]' b <<< "x y"` is status 1 with `b` still `preset`
+			// in bash 5.3.20 and ksh93u+ alike.
+			return st, true
+		}
 		return 0, false
 	}
 	if r.ctl == controlExit {

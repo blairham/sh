@@ -1947,9 +1947,17 @@ func Semantics() interp.Semantics {
 	// and it does not evaluate the subscript, which is quoted back as
 	// written (#1330).
 	s.SubscriptedArrayLiteral = interp.SubscriptedArrayLiteralRefused
-	// A subscript that will not evaluate ends the script here, as a bad
-	// expression does wherever one is written.
-	s.BadSubscriptToUnsetFatal = interp.Yes
+	// A subscript that will not evaluate gives up the *command* here — the
+	// rest of its line, and the enclosing function, list, `if`, loop or
+	// subshell whole — and the script carries on at the next top-level
+	// command with 1 behind it. Measured 2026-09-17 at all five sites; it
+	// used to say "ends the script", which is what a probe written inside
+	// `( … )` or under `-c` sees and is not what a script sees (#3485).
+	s.BadSubscriptToUnset = interp.BadSubscriptAbandonsTheCommand
+	// And the store a `read 'r[…]'` or a `printf -v 'r[…]'` operand walks
+	// into gives up exactly as much, which is the half zsh answers
+	// differently.
+	s.BadSubscriptToAnOutputOperand = interp.BadSubscriptAbandonsTheCommand
 	// But a name it has never heard of takes its brackets with it: `unset a
 	// "a[x+]"` is silent at 0 here as in zsh, and `i=0; unset "nodecl[i++]"`
 	// leaves i at 0. bash 3.2 agrees, so this is not a version split.

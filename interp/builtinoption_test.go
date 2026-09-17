@@ -15,6 +15,13 @@ import (
 
 func optRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string) (string, int) {
 	t.Helper()
+	return optRunAs(t, tweak, dg, src, RouteUnspecified)
+}
+
+// optRunAs is optRun with the route the program came from named, for the
+// handful of answers that differ between a script and a `-c` string.
+func optRunAs(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string, route Route) (string, int) {
+	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -25,7 +32,10 @@ func optRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string) (s
 	if tweak != nil {
 		tweak(&sem)
 	}
-	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
+		Name: "testsh", Route: route,
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

@@ -1375,14 +1375,17 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 // bash 5.3, bash 3.2 and ksh93 alike, so this is not the string dialect's
 // question — it is one every shell answers and this one did not.
 //
-// A subscript that will not evaluate ends the script, which is the same
-// complaint the identical text makes on the left of an assignment: measured,
-// `read 'v[1/0]'` is `division by zero` at status 1.
-func (r *Runner) storeThroughOperand(name, value string) {
+// A subscript that will not evaluate is an axis of its own, and it ended the
+// script for everybody until #3485: only zsh does that. bash gives up the
+// command it is running and carries on at the next one, and ksh93 leaves a
+// failed builtin behind and runs the very next thing — so `read 'r[1/0]'`
+// stopped a script that two of the three columns finish. See
+// Semantics.BadSubscriptToAnOutputOperand for the rows.
+func (r *Runner) storeThroughOperand(name, value string) (status int, refused bool) {
 	base, sub, ok := r.subscriptOperand(name)
 	if !ok || !isPlainName(base) {
 		r.setVar(name, value)
-		return
+		return 0, false
 	}
 	// The *store* is speaking from here on, not the builtin that reached it,
 	// and the location says so: measured, `read 'a[1/0]'` is `zsh:1: division
@@ -1390,36 +1393,45 @@ func (r *Runner) storeThroughOperand(name, value string) {
 	// range` — the same two sentences, in the same place, as the bare
 	// assignments `a[1/0]=x` and `v[0]=x`. Naming `read` in front of them
 	// would report a builtin for a complaint the language makes.
-	outer := r.inBuiltin
+	//
+	// One column does name it — see Diagnostics.StoreOperandBadSubscript,
+	// which is why the name is kept here rather than simply dropped.
+	builtin := r.inBuiltin
 	r.inBuiltin = ""
-	defer func() { r.inBuiltin = outer }()
+	defer func() { r.inBuiltin = builtin }()
 	if r.assocDeclared(base) {
 		r.setAssocElem(base, sub, value)
-		return
+		return 0, false
 	}
 	from, to, outcome := r.subscriptSpan(sub, false)
 	switch {
 	case outcome == spanReported:
-		return
+		return 0, false
 	case outcome == spanResolved && r.spanReplacesElements(base):
 		elems, _ := r.arrayElemsOfTheName(base)
 		r.spliceElementSpan(base, sub, elems, from, to, []string{value})
-		return
+		return 0, false
 	case outcome == spanResolved && r.subscriptSplicesCharacters(base):
 		if r.spanIsBelowTheFirstElement(from, to) {
 			r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
 				"%[1]s[%[2]s]: bad array subscript", base, sub))
-			return
+			return 0, false
 		}
 		r.spliceCharacterSpan(base, from, to, value, false)
-		return
+		return 0, false
 	}
 	idx, err := r.subscriptValueOfReference(sub)
 	if err != nil {
-		r.fatal("%s\n", r.subscriptFailure(sub, err))
-		return
+		// The one refusal in here a builtin has to fold into its own status:
+		// the others end the script, so nothing reads what they left. See
+		// Semantics.BadSubscriptToAnOutputOperand.
+		return r.badSubscriptGivesUp(r.sem().BadSubscriptToAnOutputOperand,
+			"how much a store through a builtin's operand gives up for an unevaluable subscript",
+			Wording(r.diag().StoreOperandBadSubscript, "%[2]s",
+				builtin, r.subscriptFailure(sub, err))), true
 	}
 	r.setArrayElem(base, idx, sub, value)
+	return 0, false
 }
 
 // spanReplacesElements reports whether a range on the left of a *scalar*

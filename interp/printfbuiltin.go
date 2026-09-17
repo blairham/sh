@@ -58,7 +58,7 @@ func init() {
 	builtins["printf"] = biPrintf
 }
 
-func biPrintf(r *Runner, _ context.Context, args []string) int {
+func biPrintf(r *Runner, _ context.Context, args []string) (status int) {
 	args, assign, code := r.printfOptions(args)
 	if code != 0 {
 		return code
@@ -67,7 +67,6 @@ func biPrintf(r *Runner, _ context.Context, args []string) int {
 		return r.printfReport(printfUsage, "")
 	}
 	format, operands := args[0], args[1:]
-	status := 0
 
 	// A frozen output parameter is refused before anything is formatted, and
 	// the freeze is asked of the *name a subscript belongs to* — the same
@@ -97,7 +96,15 @@ func biPrintf(r *Runner, _ context.Context, args []string) int {
 			// against bash 5.3.20, which fills the element in both
 			// containers. It is the same route `read 'a[2]'` takes, for the
 			// same reason (#2298).
-			r.storeThroughOperand(assign, into.String())
+			//
+			// A subscript that will not evaluate is the builtin's status as
+			// well as the store's complaint, which is why the return is named
+			// — measured 2026-09-17, `r=(1 2 3); printf -v 'r[1/0]' %s Q` is
+			// status 1 with the array untouched in bash 5.3.20, where this
+			// reported the formatting's 0 over a store that never happened.
+			if st, refused := r.storeThroughOperand(assign, into.String()); refused {
+				status = st
+			}
 		}()
 	}
 

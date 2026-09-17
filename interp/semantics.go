@@ -16190,14 +16190,61 @@ type Semantics struct {
 	// 2.
 	ReadonlyElement ReadonlyElementPolicy
 
-	// BadSubscriptToUnsetFatal ends the script when an `unset` operand's
-	// subscript will not evaluate. True in bash, where a bad expression ends
-	// it wherever one is written; false in ksh93 and zsh, which leave a failed
-	// builtin behind and go on. dash has no subscript to evaluate.
+	// BadSubscriptToUnset is how much an `unset` operand whose subscript will
+	// not evaluate gives up.
+	//
+	// It used to be an Answer reading "bash ends the script where a bad
+	// expression always ends it", and bash does not. Measured 2026-09-17,
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, a script file holding
+	// `q=(1 2 3)` and then `unset 'q[b c]'` at each site:
+	//
+	//	                            bash 5.3  bash 3.2  zsh 5.9  ksh93
+	//	unset …; echo same-line     no        no        yes      yes
+	//	the next line               runs      runs      runs     runs
+	//	f(){ unset …; echo x; }; f  no x      no x      x        x
+	//	unset … && a || b           neither   neither   b        b
+	//	( unset …; echo x )         no x      no x      x        x
+	//	$? at the next command      1         1         1        1
+	//
+	// So nothing here ends the script: bash gives up the command it is
+	// running and the rest of that line, and the two others report a failed
+	// builtin and run the very next thing. dash and BusyBox ash have no
+	// subscript to evaluate — `unset 'q[b c]'` is `bad variable name` there,
+	// one complaint earlier — so neither answers.
 	//
 	// Asked only for an operand whose subscript actually failed, so `unset
 	// a[1]` needs no answer from anyone.
-	BadSubscriptToUnsetFatal Answer
+	BadSubscriptToUnset BadSubscriptPolicy
+
+	// BadSubscriptToAnOutputOperand is the same question one builtin over:
+	// how much a *store* through an operand gives up when the subscript in it
+	// will not evaluate. `read 'a[1/0]'` and `printf -v 'a[1/0]'` are the two
+	// spellings a script writes; a registered builtin storing through
+	// [Runner.StoreThroughOperand] and the name a `{fd}>` redirection writes
+	// reach the same walk.
+	//
+	// A second field rather than BadSubscriptToUnset read twice, because the
+	// panel splits somewhere else here. Measured 2026-09-17 the same way,
+	// `r=(1 2 3)` and then `read 'r[1/0]' <<< Y`:
+	//
+	//	                            bash 5.3  bash 3.2  zsh 5.9  ksh93
+	//	read …; echo same-line      no        no        —        yes
+	//	the next line               runs      runs      —        runs
+	//	f(){ read …; echo x; }; f   no x      no x      —         x
+	//	( read …; echo x )          no x      no x      —         x
+	//	the script's exit status    0         0         1        0
+	//
+	// An em dash is the column that never reaches a second command: zsh ends
+	// the script here, where the identical expression handed to `unset` only
+	// leaves a failed builtin behind. bash gives up the command as it does
+	// for `unset`, and ksh93 carries on as it does for `unset`, so zsh alone
+	// is why there are two fields.
+	//
+	// `mapfile 'a[1/0]'` is **not** this route in bash: the subscript is
+	// never evaluated at all, because the name is refused a step earlier as
+	// `mapfile: 'a[1/0]': not a valid identifier` at 1, with the next command
+	// on the same line still running. No other column has the builtin.
+	BadSubscriptToAnOutputOperand BadSubscriptPolicy
 
 	// UnsetSubscriptSkippedWhenNameUnset looks the operand's *name* up before
 	// it reads the brackets, and leaves the whole operand alone — quietly, at
@@ -21432,6 +21479,62 @@ func (p ReadonlyElementPolicy) String() string {
 		return "the array is frozen first and the element write lost to it"
 	case ReadonlyElementRefused:
 		return "the operand is refused"
+	}
+	return "unspecified"
+}
+
+// BadSubscriptPolicy is how much a builtin handed a subscript that will not
+// evaluate gives up: nothing beyond the builtin, the command it is running, or
+// the script.
+//
+// Three answers and not a bool because the panel needs all three, and it needs
+// them across two fields rather than one — see Semantics.BadSubscriptToUnset
+// and Semantics.BadSubscriptToAnOutputOperand for the rows. A bool spelled
+// "fatal" is what this replaces, and it recorded bash as ending the script
+// when bash ends the *command*: the two look identical from a one-line probe,
+// from inside `( … )`, and from a `-c` string, which is how the wrong answer
+// survived (#3485).
+type BadSubscriptPolicy uint8
+
+const (
+	// BadSubscriptUnspecified is no answer, and is refused like any other.
+	BadSubscriptUnspecified BadSubscriptPolicy = iota
+	// BadSubscriptReported leaves a failed builtin behind and runs the very
+	// next command, which is the shape a script can test: ksh93 and zsh for
+	// `unset`, ksh93 for a store.
+	BadSubscriptReported
+	// BadSubscriptAbandonsTheCommand gives up the command being run — the
+	// rest of its line with it, and the enclosing function, list, `if`, loop
+	// or subshell whole — and carries on at the next top-level command with 1
+	// behind it: bash, at both sites.
+	//
+	// **A `-c` string is given up whole instead.** Measured 2026-09-17 on
+	// bash 5.3.20 and 3.2.57 alike: `bash -c 'q=(1 2 3)
+	// echo one
+	// unset "q[b c]"
+	// echo two'` writes `one`, the complaint, and exits 1 with no `two`,
+	// where the same four lines in a script file — or on bash's standard
+	// input, or under `-s` — run the `echo two`. Sourcing the file from a
+	// `-c` string gives up the string too. Written here rather than asked as
+	// an axis of its own for the reason Runner.unsetSubscriptRange gives: only the
+	// column that abandons can reach the question, so there is no
+	// disagreement between columns to record. It is not a property of
+	// abandoning in general — bash's refusal of `r=2` on a readonly `r` under
+	// `-c` runs the next command.
+	BadSubscriptAbandonsTheCommand
+	// BadSubscriptEndsTheScript stops the shell where a fatal error stops it:
+	// zsh, for a store through an operand and there alone.
+	BadSubscriptEndsTheScript
+)
+
+func (p BadSubscriptPolicy) String() string {
+	switch p {
+	case BadSubscriptReported:
+		return "a failed builtin is left behind and the next command runs"
+	case BadSubscriptAbandonsTheCommand:
+		return "the command being run is given up"
+	case BadSubscriptEndsTheScript:
+		return "the script ends"
 	}
 	return "unspecified"
 }

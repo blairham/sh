@@ -188,7 +188,7 @@ func TestAnEndThatWillNotEvaluateCutsAStringAtZero(t *testing.T) {
 			// Answered because the *reporting* is not what this row is about
 			// and an unanswered axis stops the script before the value can
 			// be read.
-			s.BadSubscriptToUnsetFatal = No
+			s.BadSubscriptToUnset = BadSubscriptReported
 		})
 	want := "sh: x+: operand expected\nst=1 [hhello]\n"
 	if st != 0 || out != want {
@@ -304,7 +304,7 @@ func TestARangeEndpointThatWillNotEvaluateIsReported(t *testing.T) {
 	// alone.
 	for _, sub := range []string{"x+,2", "1,x+"} {
 		out, _ := rangeUnsetRun(t, `a=(x y z); unset "a[`+sub+`]"`+showArray,
-			func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
+			func(s *Semantics) { s.BadSubscriptToUnset = BadSubscriptReported })
 		if !strings.HasPrefix(out, "sh: x+: operand expected\nst=1 ") {
 			t.Errorf("a[%s]: got %q, want the expression reported at 1", sub, out)
 		}
@@ -333,7 +333,7 @@ func TestARangeEndThatWillNotEvaluateCarriesZero(t *testing.T) {
 		{"4,x+", bad + "st=1 [x][y][z] n=3\n"},
 	} {
 		out, st := rangeUnsetRun(t, `a=(x y z); unset "a[`+tc.sub+`]"`+showArray,
-			func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
+			func(s *Semantics) { s.BadSubscriptToUnset = BadSubscriptReported })
 		if st != 0 || out != tc.want {
 			t.Errorf("a[%s]: got %q status %d, want %q", tc.sub, out, st, tc.want)
 		}
@@ -348,7 +348,7 @@ func TestARangeStartThatWillNotEvaluateDoesNothing(t *testing.T) {
 	const bad = "sh: x+: operand expected\n"
 	for _, sub := range []string{"x+,2", "x+,y+"} {
 		out, st := rangeUnsetRun(t, `a=(x y z); unset "a[`+sub+`]"`+showArray,
-			func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
+			func(s *Semantics) { s.BadSubscriptToUnset = BadSubscriptReported })
 		if st != 0 || out != bad+"st=1 [x][y][z] n=3\n" {
 			t.Errorf("a[%s]: got %q status %d, want the array whole", sub, out, st)
 		}
@@ -364,7 +364,7 @@ func TestARangeStartThatWillNotEvaluateDoesNothing(t *testing.T) {
 // writes two diagnostics for one mistake.
 func TestASecondComplaintIsSwallowedOnceTheEndpointIsReported(t *testing.T) {
 	out, st := rangeUnsetRun(t, `a=(x y z); unset "a[0,x+]"`+showArray,
-		func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
+		func(s *Semantics) { s.BadSubscriptToUnset = BadSubscriptReported })
 	if st != 0 || out != "sh: x+: operand expected\nst=1 [x][y][z] n=3\n" {
 		t.Errorf("a[0,x+]: got %q status %d, want one sentence and the array whole", out, st)
 	}
@@ -380,7 +380,7 @@ func TestASubscriptThatIsNotAPairAsksTheRangeAxisNothing(t *testing.T) {
 		sem.SubscriptCommaIsARange = Unspecified
 		sem.ArrayBaseIsZero = No
 		sem.UnsetArraySpan = UnsetArraySpanLeavesOneEmptyElement
-		sem.BadSubscriptToUnsetFatal = No
+		sem.BadSubscriptToUnset = BadSubscriptReported
 		r.Semantics = &sem
 	})
 	if st != 0 || out != "sh: x+: operand expected\nst=1 [x][y][z] n=3\n" {

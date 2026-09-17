@@ -2531,7 +2531,13 @@ func Semantics() interp.Semantics {
 	s.SubscriptedArrayLiteral = interp.SubscriptedArrayLiteralSplices
 	// The complaint is the builtin's rather than the script's: `unset` reports
 	// 1 and the next command still runs.
-	s.BadSubscriptToUnsetFatal = interp.No
+	s.BadSubscriptToUnset = interp.BadSubscriptReported
+	// A *store* through an operand is the opposite, and this is the column
+	// the two fields exist for: measured 2026-09-17, `read 'r[1/0]' <<< Y`
+	// in a script file writes `division by zero` and the script ends at 1,
+	// where the identical expression handed to `unset` one line earlier only
+	// left a failed builtin behind.
+	s.BadSubscriptToAnOutputOperand = interp.BadSubscriptEndsTheScript
 	// And a name it has never heard of is left alone with its brackets
 	// unread: `unset a "a[x+]"` is silent at 0, and `i=0; unset
 	// "nodecl[i++]"` leaves i at 0. What counts as heard of is set-ness and

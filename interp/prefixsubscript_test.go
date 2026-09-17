@@ -349,3 +349,29 @@ func TestTheSubscriptedPrefixRefusalTakesTheDialectsWording(t *testing.T) {
 		t.Errorf("stderr = %q, want %q", errs.String(), want)
 	}
 }
+
+// Nor is a child handed the name with the subscript dropped from it, which is
+// what this shell did: `a[1]=v /usr/bin/env` showed the child `a=v`, where
+// bash 5.3, ksh93 and zsh show it nothing at all. Under the refusing reading
+// as well, since the word is refused before the environment is built.
+func TestASubscriptedPrefixPutsNothingInAChildsEnvironment(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sem  Semantics
+	}{
+		{"where the element is stored", storesTheElement(No)},
+		{"where the word is refused", func() Semantics {
+			s := permissive()
+			s.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
+			return s
+		}()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _, _ := subscriptPrefixRun(t,
+				`a[1]=v /usr/bin/env | grep '^a' || echo "(none)"`, tc.sem)
+			if want := "(none)\n"; out != want {
+				t.Errorf("stdout = %q, want %q", out, want)
+			}
+		})
+	}
+}

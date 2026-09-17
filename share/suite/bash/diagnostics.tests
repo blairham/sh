@@ -110,10 +110,18 @@ say 'text that will not parse, through eval'
 # for `-n` and for `-s`, at 1. This is the column ksh93 and zsh do *not* agree
 # with (they hand the number to `kill(2)`), so it is a row here rather than in
 # core/, and it is what a fix for #3139 had to leave alone.
+#
+# The process id is taken out of what is compared, because two of the
+# references write it into the sentence (`kill 386 failed`, `kill: 694: no such
+# process`) and it differs on every run — which made this whole file an answer
+# the tier check could not repeat. bash does not name it, so bash's rows are
+# unchanged. Bounded by non-digits on both sides so that a short process id
+# cannot rewrite part of a line number.
 say 'a signal number out of range, three ways'
-( kill -99 $$ ) 2>&1 > /dev/null
-( kill -n 99 $$ ) 2>&1 > /dev/null
-( kill -s 99 $$ ) 2>&1 > /dev/null
+nopid() { sed "s/\([^0-9]\)$$\([^0-9]\)/\1<pid>\2/g"; }
+( kill -99 $$ ) 2>&1 > /dev/null | nopid
+( kill -n 99 $$ ) 2>&1 > /dev/null | nopid
+( kill -s 99 $$ ) 2>&1 > /dev/null | nopid
 ( kill -99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
 
 printf -- '--- and the ordering, with the sentences replaced\n'

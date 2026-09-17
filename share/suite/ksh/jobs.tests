@@ -51,6 +51,35 @@ show() {
 	printf -- '--- %s -> [%s] status %s\n' "$1" "$2" "$3"
 }
 
+# **This section comes first, ahead of every coprocess, and that is not
+# tidiness.** Placed after them, ksh93u+m 1.0.8 answered `wait "$a" "$b"` 2
+# on some runs and 127 on others: 21 of 40 runs of this file said 127 on a
+# loaded Ubuntu 24.04 machine, and so did a file holding any one coprocess
+# section and then this one. With no coprocess run before it, the same file
+# answered 2 in 40 of 40 under the same load, as did the rows on their own.
+# Holding the two jobs on fifos until both had started did not help (12 of
+# 40), so it is not a child ending before the shell records it. Measured
+# 2026-09-16. The CI run that caught it named this row, and a case the
+# reference will not repeat carries no expectation.
+printf -- '=== waiting for what has already been waited for ===\n'
+(
+	(exit 3) &
+	p=$!
+	wait "$p"
+	show 'the first wait has the status' '' "$?"
+	# The complaint goes, and only the status is asked: one of the other
+	# references names the process id in its sentence, which is a number no
+	# row here may let through.
+	wait "$p" 2>/dev/null
+	show 'the second has forgotten the child' '' "$?"
+)
+(
+	(exit 1) & a=$!
+	(exit 2) & b=$!
+	wait "$a" "$b"
+	show 'two operands answer with the last' '' "$?"
+)
+
 printf -- '=== what the operator starts ===\n'
 (
 	{ read l; print "[$l]"; } |&
@@ -217,23 +246,4 @@ printf -- '=== the job specs, with no job to find ===\n'
 (
 	wait -n 2>&1
 	show 'a letter wait does not take' '' "$?"
-)
-
-printf -- '=== waiting for what has already been waited for ===\n'
-(
-	(exit 3) &
-	p=$!
-	wait "$p"
-	show 'the first wait has the status' '' "$?"
-	# The complaint goes, and only the status is asked: one of the other
-	# references names the process id in its sentence, which is a number no
-	# row here may let through.
-	wait "$p" 2>/dev/null
-	show 'the second has forgotten the child' '' "$?"
-)
-(
-	(exit 1) & a=$!
-	(exit 2) & b=$!
-	wait "$a" "$b"
-	show 'two operands answer with the last' '' "$?"
 )

@@ -349,6 +349,7 @@ func printCross(cross suite.Cross) {
 	for _, name := range cross.Unstable {
 		fmt.Printf("    %-28s not deterministic: a reference answered it two ways, so it can\n", name)
 		fmt.Println("                                 make no claim about this tier at all. It is ours — fix it.")
+		printMoved(cross.Moved[name])
 	}
 	fmt.Println()
 }
@@ -368,8 +369,18 @@ func printOwn(own suite.Own) {
 	for _, name := range own.Unstable {
 		fmt.Printf("    %-28s not deterministic: a reference answered it two ways, so it can\n", name)
 		fmt.Println("                                 make no claim about this tier at all. It is ours — fix it.")
+		printMoved(own.Moved[name])
 	}
 	fmt.Println()
+}
+
+// printMoved is which reference moved and what it wrote the second time.
+func printMoved(why string) {
+	if why == "" {
+		return
+	}
+	const indent = "                                 "
+	fmt.Printf("%s%s\n", indent, wrap(why, indent))
 }
 
 // printOwnOmission says why a contained column's own tier is not checked this

@@ -232,3 +232,50 @@ func TestCaseDefectReportsIsOursAlone(t *testing.T) {
 		t.Errorf("a fetched column reported a case defect: %v", got)
 	}
 }
+
+// TestATierCheckNamesTheReferenceThatMovedAndTheLine is #2291's reading turned
+// into a guard: CI said four files were "not deterministic" in the tier
+// checks and could not say which reference had moved or on what line, so the
+// only route to the row was to reproduce a flake that shows under load on a
+// machine nobody can log into.
+//
+// The reference that counts its own runs is the drifting one; the two others
+// repeat themselves. The report must name the counter, and carry both of its
+// answers.
+func TestATierCheckNamesTheReferenceThatMovedAndTheLine(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "d"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "d", "f.tests"), []byte("exec_the_shell\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	counter := filepath.Join(t.TempDir(), "n")
+	zero(t, counter)
+	refs := []Reference{
+		{Name: "mine", Path: fakeShell(t, bin, "mine", "printf 'mine\\n'")},
+		{Name: "steady", Path: fakeShell(t, bin, "steady", "printf 'steady\\n'")},
+		{Name: "counts", Path: fakeShell(t, bin, "counts", `n=$(cat '`+counter+`')
+n=$((n + 1))
+printf '%s\n' "$n" > '`+counter+`'
+printf 'run %s\n' "$n"`)},
+	}
+	col := Suite{Name: "mine", Dialect: "d", Dirs: []string{"d"}, Ours: true}
+	own, err := OnlyHere(context.Background(), root, col, refs, Options{Timeout: 2 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(own.Unstable) != 1 || own.Unstable[0] != "f.tests" {
+		t.Fatalf("the drifting file was not reported unstable: %+v", own)
+	}
+	why := own.Moved["f.tests"]
+	for _, want := range []string{"counts:", "run 1", "run 2"} {
+		if !strings.Contains(why, want) {
+			t.Errorf("the report %q does not say %q", why, want)
+		}
+	}
+	if strings.Contains(why, "steady") || strings.Contains(why, "mine:") {
+		t.Errorf("the report %q names a reference that repeated itself", why)
+	}
+}

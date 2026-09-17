@@ -40,3 +40,27 @@ func TestAListedTildeIsQuotedWhereverItStands(t *testing.T) {
 		})
 	}
 }
+
+// The leading unquoted `~` of an associative subscript *is* expanded here, as
+// it is in bash: `typeset -A m; m[~/k]=v` stores under `$HOME/k` and
+// `${m[~/k]}` reads it back. Measured 2026-09-17 on ksh93u+ 2012-08-01 under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/orig`, from a script file —
+// Semantics.SubscriptKeyExpandsALeadingTilde, where zsh is the column that
+// takes the characters (#2298).
+func TestASubscriptsLeadingTildeNamesTheHomeDirectory(t *testing.T) {
+	// HOME is set by the script: the preset harness gives a run no home of
+	// its own, and a `~` with nothing to expand to is left alone in every
+	// column, which would make the row pass for the wrong reason.
+	const src = `HOME=/h; typeset -A m; m[~/k]=v; ` +
+		`case "${!m[@]}" in "$HOME"/k) echo "key is the path";; *) echo "key is ${!m[@]}";; esac; ` +
+		`typeset -A n; n[$HOME/k]=stored; echo "read: [${n[~/k]}]"; ` +
+		`typeset -A o; o["~/k"]=q; case "${!o[@]}" in '~/k') echo "quoted stays";; *) echo "quoted moved";; esac`
+	out, st, err := preset.CombinedWithPrelude(t, dialecttest.Base{Dir: t.TempDir()}, src)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	want := "key is the path\nread: [stored]\nquoted stays\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}

@@ -93,9 +93,10 @@ const (
 	historyReadAt = ".bash.history.readat"
 	// historyOwnLine says the line the reader handed over last joined the
 	// list, which is the entry `-p` and `-s` drop as their own. Measured
-	// 2026-09-16 on bash 5.3.20: with `HISTIGNORE=history`, `history -p x`
-	// is not recorded and the entry before it survives the call, so a builtin
-	// whose line was left out has nothing of its own to drop.
+	// 2026-09-16 on bash 5.3.20: with `HISTIGNORE='history*'`, `history -p
+	// x` and `history -s z` are not recorded and the entries before them
+	// survive both calls, so a builtin whose line was left out has nothing of
+	// its own to drop.
 	historyOwnLine = ".bash.history.ownline"
 	// historyDropped is how many entries HISTSIZE has taken off the front of
 	// the list, which is what the numbers go on from: measured, `HISTSIZE=2`

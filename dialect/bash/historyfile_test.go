@@ -116,8 +116,8 @@ func TestTheEndingAppendsWhatThisSessionAdded(t *testing.T) {
 		src:  "HISTFILE=$F\nset -o history\nunset HISTFILE\necho x\n",
 		want: "alpha one\nbeta two\ngamma three\n",
 	}, {
-		name: "a subshell's ending writes nothing",
-		src:  "HISTFILE=$F\nset -o history\n(echo sub)\nhistory -c\n",
+		name: "a command substitution's ending writes nothing",
+		src:  "HISTFILE=$F\nset -o history\nx=$(echo sub; exit 3)\nhistory -c\n",
 		want: "alpha one\nbeta two\ngamma three\n",
 	}} {
 		t.Run(c.name, func(t *testing.T) {
@@ -159,8 +159,8 @@ func TestTheHistoryKnobsReachAScriptsList(t *testing.T) {
 		want: "    1  ab 2>/dev/null\n    2  history\n",
 	}, {
 		name: "an ignored builtin has no line of its own to drop",
-		src:  "set -o history\nHISTIGNORE=history\nhistory -p x\necho y\nhistory\n",
-		want: "x\ny\n    1  HISTIGNORE=history\n    2  echo y\n",
+		src:  "set -o history\nHISTIGNORE='history*'\nhistory -p x\necho y\nhistory -s z\nhistory\n",
+		want: "x\ny\n    1  HISTIGNORE='history*'\n    2  echo y\n    3  z\n",
 	}} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _, _ := historyRun(t, c.src)

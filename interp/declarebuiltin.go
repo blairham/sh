@@ -1516,7 +1516,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// its order against the other two refusals is measured and the
 			// bad target goes first. See there.
 			frozen := r.readonly[name] && !df.readonlyOff
-			if code := r.declareNameref(complaintName, name, value, hasValue, frozen); code != 0 {
+			if code := r.declareNameref(complaintName, name, value, hasValue, frozen, !fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status

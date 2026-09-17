@@ -433,7 +433,13 @@ func (p *printer) command(c syntax.Command) {
 		p.suffixRedirs(x.Redirs)
 	case *syntax.CoprocClause:
 		p.b.WriteString("coproc ")
-		if x.Name != "" {
+		switch {
+		case x.NameWord != nil:
+			// Written where the name was not a bare one. See
+			// syntax.CoprocClause.NameWord.
+			p.node(x.NameWord)
+			p.b.WriteByte(' ')
+		case x.Name != "":
 			p.b.WriteString(x.Name)
 			p.b.WriteByte(' ')
 		}

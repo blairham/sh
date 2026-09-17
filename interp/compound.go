@@ -365,6 +365,22 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 					// reference that is already aimed. So it is stated here
 					// rather than derived, because deriving it would make
 					// every other assignment re-point too.
+					//
+					// And a word that is no possible name **ends the loop**,
+					// which is the same rule read once more: measured
+					// 2026-09-17 on bash 5.3.20, `declare -n w; for w in /
+					// a; do echo body; done` writes `` `/': not a valid
+					// identifier ``, never runs the body, reports 1 and
+					// leaves `w` unaimed — and with the words the other way
+					// round the body runs once, for `a`, and the loop stops
+					// at `/`. An aimed reference is no different, because
+					// the loop re-points rather than writing through: `g=1;
+					// declare -n u=g; for u in /` reports the same and
+					// leaves `u` pointing at `g`.
+					if !r.namerefTargetIsAName(it) {
+						r.refuseNamerefAim(it, assignedAnyhow)
+						return nil
+					}
 					r.setNameref(name, it)
 					continue
 				}

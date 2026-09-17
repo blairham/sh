@@ -5683,7 +5683,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// the same spelling gets itself back on return. See
 			// interp/nameref.go.
 			if code := r.declareNameref("local", name, value, hasValue,
-				r.readonly[name] && !f.readonlyOff); code != 0 {
+				r.readonly[name] && !f.readonlyOff, !fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status

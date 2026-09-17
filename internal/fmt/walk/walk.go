@@ -85,6 +85,7 @@ func Nodes(n syntax.Node, fn func(syntax.Node) bool) {
 		stmts(x.Body, fn)
 		redirects(x.Redirs, fn)
 	case *syntax.CoprocClause:
+		word(x.NameWord, fn)
 		if x.Cmd != nil {
 			Nodes(x.Cmd, fn)
 		}

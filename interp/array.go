@@ -1807,6 +1807,11 @@ func (r *Runner) readArraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// the plain name.
 		return nil, true
 	}
+	if dotRanged(e) {
+		// `${a[lo..hi]}`, which the grammar separated because the `..` was
+		// written. See interp/dotrange.go.
+		return r.dotRangeSubscript(e), true
+	}
 	if len(e.Leading) > 0 {
 		if r.sem().ChainedSubscriptReadsANestedValue == Yes {
 			// The other reading of the same text: the chain reaches *into*
@@ -2871,7 +2876,7 @@ func (r *Runner) subscriptYieldsAList(e *syntax.ParamExpr) bool {
 	if e.Index == nil {
 		return false
 	}
-	if r.wholeArrayIndex(e) {
+	if r.wholeArrayIndex(e) || dotRanged(e) {
 		return true
 	}
 	if r.assocSearchSubscript(e) {

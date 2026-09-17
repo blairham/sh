@@ -1225,7 +1225,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// dialect means by it, and the refusal is the written spelling's alone —
 	// measured, ksh93 answers `${!b#o}` on an array with `b` and refuses
 	// `${!b[@]#o}`.
-	if e.Indirect && e.Index != nil && (!r.wholeArrayIndex(e) || e.Op != syntax.ParamNone) {
+	if e.Indirect && e.Index != nil && ((!r.wholeArrayIndex(e) && !dotRanged(e)) || e.Op != syntax.ParamNone) {
 		if r.wholeArrayIndex(e) {
 			// The listing's own spelling with an operator after it, which is
 			// the shape the two shells disagree about.
@@ -1325,7 +1325,9 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// the path a plain `${a[9]}` takes — the scalar path's own check
 		// never sees one. See checkNounsetElement (#2911).
 		r.checkNounsetElement(e, elems)
-		if e.Indirect {
+		if e.Indirect && !dotRanged(e) {
+			// A range has already answered with the subscripts it named.
+			//
 			// `${!a[@]}` is the array's *subscripts*, not its elements —
 			// and the indirection was being ignored, so it answered with
 			// the elements and a script iterating `for i in "${!a[@]}"`
@@ -1338,7 +1340,9 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// subscripts of `v`. See interp/nameref.go.
 			elems = r.subscriptsOf(r.throughNamerefName(e.Name), len(elems))
 		}
-		if e.Op == syntax.ParamSubstring {
+		if e.Op == syntax.ParamSubstring && !dotRanged(e) {
+			// A range has sliced itself: its offset is not counted from the
+			// range's first element. See dotRangeSubscript.
 			if (e.Name == "@" || e.Name == "*") &&
 				!r.ask(r.sem().SubstringOfPositionalsSlicesTheList, "`${@:offset}` being a slice of the positional list") {
 				if r.unspecified {
@@ -1500,7 +1504,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		}
 		if s.Quoting != syntax.Unquoted {
 			if len(elems) == 0 && e.Op == syntax.ParamNone {
-				if !r.wholeArrayIndex(e) {
+				if !r.wholeArrayIndex(e) && !dotRanged(e) {
 					// A subscript naming *one* element is one field
 					// whatever the element turned out to be, exactly as
 					// `"$unset"` is one empty field. Quoting is the whole

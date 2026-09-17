@@ -544,6 +544,18 @@ type ParamExpr struct {
 	// Index still keeps the whole subscript as written. See SubscriptRange.
 	IndexRange *SubscriptRange
 
+	// IndexDots is the subscript read as the two ends of a `lo..hi` range,
+	// split at the first `..` the source wrote, and nil for every other
+	// subscript. Only a grammar with [Dialect.SubscriptDotRange] fills it.
+	//
+	// Split while reading rather than at the run because the separator has to
+	// have been *written*: measured on ksh93u+ 2012-08-01, `x=1..3;
+	// ${a[$x]}` is the arithmetic refusal `invalid character in expression`,
+	// where `${a[1..3]}` and `${a["1..3"]}` are both the range. Index still
+	// keeps the whole subscript, so any reading that does not know the range
+	// sees the text it always saw. See interp/dotrange.go.
+	IndexDots *SubscriptRange
+
 	// IndexText is the subscript as it was written, before any expansion —
 	// the text between the brackets, and empty where there were none.
 	//
@@ -963,6 +975,10 @@ scan:
 				})
 			}
 			e.Index, e.IndexFlags, e.IndexRange, e.IndexText = idx, g, rng, inner
+			e.IndexDots = nil
+			if p.dialect.SubscriptDotRange && rng == nil && g == nil {
+				e.IndexDots = dotRangeOf(idx)
+			}
 			if bare {
 				// The same brackets read the other way: as the text they
 				// would be if nothing here had taken them for a subscript.

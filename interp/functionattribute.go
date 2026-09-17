@@ -73,6 +73,16 @@ func (r *Runner) markFunctionAttribute(name string, letter rune) {
 	}
 }
 
+// unmarkFunctionAttribute takes one letter off one function.
+func (r *Runner) unmarkFunctionAttribute(name string, letter rune) {
+	switch letter {
+	case functionAttributeReadonly:
+		delete(r.readonlyFuncs, name)
+	case functionAttributeExported:
+		delete(r.exportedFuncs, name)
+	}
+}
+
 // functionAttributeLettersWritten is the subset of a declaration's letters
 // this dialect calls function attributes, in the dialect's order.
 //
@@ -94,6 +104,43 @@ func (r *Runner) functionAttributeLettersWritten(f declareFlags) string {
 		}
 	}
 	return out.String()
+}
+
+// functionAttributeLettersRemoved is functionAttributeLettersWritten's other
+// sign: the function attributes whose last sign on the line was a plus.
+func (r *Runner) functionAttributeLettersRemoved(f declareFlags) string {
+	var out strings.Builder
+	for _, c := range r.sem().FunctionAttributeLetters {
+		if plus, written := f.lastSign(c); written && plus {
+			out.WriteRune(c)
+		}
+	}
+	return out.String()
+}
+
+// functionLineNamesNoFunction reports whether a function line wrote a letter
+// that no function can hold — see Diagnostics.VariableOnlyLettersOnAFunctionLine
+// — and under which signs: minus is whether any of them was written under a
+// minus anywhere on the line, and written whether any was written at all.
+//
+// Anywhere rather than last, which is measured: with no operands `declare -F
+// -a +a` is as silent as `declare -F -a` in bash 5.3.20, where `declare -F +a`
+// alone is the whole listing.
+func (r *Runner) functionLineNamesNoFunction(builtin string, f declareFlags) (minus, written bool) {
+	refused := r.diag().VariableOnlyLettersOnAFunctionLine[builtin]
+	if refused == "" {
+		return false, false
+	}
+	for i, c := range f.letters {
+		if !strings.ContainsRune(refused, c) {
+			continue
+		}
+		written = true
+		if i < len(f.letterSigns) && f.letterSigns[i] != '+' {
+			minus = true
+		}
+	}
+	return minus, written
 }
 
 // functionsHoldingAttributes is the population a listing narrowed by those
@@ -173,15 +220,35 @@ func (r *Runner) readonlyFunctionUnset(name string) (int, bool) {
 // still done, which is the answer a `-f` listing already gives for a name it
 // does not hold — measured, `declare -fr a nosuchfn` freezes `a` and answers
 // 1 with nothing said.
-func (r *Runner) setFunctionAttributes(names []string, letters string) int {
+//
+// removed is the letters written under a plus, which take the attribute off —
+// `declare -f +x f` unexports `f`. Every one of them may come off a frozen
+// function but the freeze itself: measured 2026-09-16 on bash 5.3.20,
+// `declare -f +x g` over a readonly, exported `g` is a silent 0 that
+// unexports it, and `declare -f +r g` is `g: readonly function` at 1 — and
+// `+r +x` together refuse and take neither, so the refusal is the name's and
+// not the letter's. The names after it are still done.
+func (r *Runner) setFunctionAttributes(builtin string, names []string, letters, removed string) int {
 	status := 0
 	for _, name := range names {
 		if _, ok := r.reportedFunc(name); !ok {
 			status = 1
 			continue
 		}
+		if r.readonlyFuncs[name] && strings.ContainsRune(removed, functionAttributeReadonly) {
+			// The declaration's own complaint, so it is named after the
+			// builtin — `declare: g: readonly function` — where the refused
+			// *definition* shares the words and names nothing.
+			r.complainAboutOption(builtin, "%s: %s\n", r.builtinComplaintName(builtin),
+				Wording(r.diag().ReadonlyFunctionRedefined, "%[1]s: readonly function", name))
+			status = 1
+			continue
+		}
 		for _, c := range letters {
 			r.markFunctionAttribute(name, c)
+		}
+		for _, c := range removed {
+			r.unmarkFunctionAttribute(name, c)
 		}
 	}
 	return status

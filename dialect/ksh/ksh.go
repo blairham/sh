@@ -1604,6 +1604,10 @@ func Semantics() interp.Semantics {
 	s.EmptyPathIsTheCurrentDirectory = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
 	s.QuitIgnoredWhenNotInteractive = interp.No
+	// unanswered BuiltinReadsOptions: ksh93's `builtin` is another command,
+	// one that registers builtins from a library, and is not the one this
+	// axis is asked in (#3217).
+	//
 	// unanswered QuitResetRestoresTheDefault: that axis is what a reset does
 	// to the *ignore* above, and this shell has no ignore to take away — an
 	// untrapped QUIT kills it whether or not `trap - QUIT` has been run, so

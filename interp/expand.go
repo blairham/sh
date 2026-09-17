@@ -2525,6 +2525,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			}
 			return e.Name
 		}
+		if refused := r.refuseIndirection(e, value, set); refused {
+			return ""
+		}
 		if !set || value == "" {
 			// Nothing to resolve, so there is no target and the operators see
 			// an **unset** parameter — which is what they saw before the
@@ -2538,7 +2541,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			//
 			// bash 5.3.20 refuses the unresolvable text outright — `u:
 			// invalid indirect expansion` and `: invalid variable name` — and
-			// that sentence is its own and is still #2891's.
+			// that is Runner.refuseIndirection, asked above; what arrives here
+			// is a name that was declared and holds nothing, which 5.3 answers
+			// the same way 3.2 does.
 			value, set = "", false
 		} else {
 			name = value

@@ -65,6 +65,7 @@ ash   BraceRangeStepSignHonored
 ash   BraceRangeThatCannotBeCounted
 ash   BraceRangeZeroStepCountsAsOne
 ash   BraceRescanEntersFailedGroup
+ash   BuiltinReadsOptions
 ash   CaseAttributeFoldsWhenRead
 ash   CaseAttributeReplacesTheNumericAttribute
 ash   ChainedSubscriptReadsANestedValue
@@ -279,6 +280,7 @@ dash  BraceRangeStepSignHonored
 dash  BraceRangeThatCannotBeCounted
 dash  BraceRangeZeroStepCountsAsOne
 dash  BraceRescanEntersFailedGroup
+dash  BuiltinReadsOptions
 dash  CaseAttributeFoldsWhenRead
 dash  CaseAttributeReplacesTheNumericAttribute
 dash  ChainedSubscriptReadsANestedValue
@@ -447,6 +449,7 @@ ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
 ksh   BareSubscriptIsASubscript
+ksh   BuiltinReadsOptions
 ksh   CompoundPipelineStatusRecord
 ksh   CoprocEndsInAnArray
 ksh   DeclareGlobalReachesPastALocal

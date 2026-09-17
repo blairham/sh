@@ -104,6 +104,12 @@ func registerCallStack(r *interp.Runner) {
 		return r.CallArgumentsFlat()
 	})
 
+	// Four of the five refuse `unset`, and FUNCNAME is the one that does not
+	// — see Runner.RefuseUnset for the measurement.
+	for _, name := range []string{"BASH_SOURCE", "BASH_LINENO", "BASH_ARGV", "BASH_ARGC"} {
+		r.RefuseUnset(name)
+	}
+
 	r.SetDynamicArray("BASH_LINENO", func(r *interp.Runner) []string {
 		frames := r.CallStack()
 		out := make([]string, 0, len(frames))

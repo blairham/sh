@@ -1428,6 +1428,9 @@ func Semantics() interp.Semantics {
 	// value quietly appearing for one of them, copied from a neighbor to
 	// quiet the refusal, fails that check instead of passing quietly.
 	//
+	// unanswered BuiltinReadsOptions: BusyBox ash has no `builtin` for a
+	// dash-word to reach (#3217).
+	//
 	// unanswered BraceRescanEntersFailedGroup: this shell has no brace
 	// expansion either, so nothing ever resumes a scan — `@{x}{a,b}@` is
 	// one word, and the nine `BraceRange…` and `BraceCharRange…` axes are

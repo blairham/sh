@@ -1274,6 +1274,8 @@ func Semantics() interp.Semantics {
 	// invalid option` with the usage line, at 2. There are no letters to
 	// know, so the refusal is the whole of what the reading does.
 	s.EvalOptions = interp.EvalReadsOptions
+	// See interp.Semantics.BuiltinReadsOptions.
+	s.BuiltinReadsOptions = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
 	// Both letters, and `-l` reaches the name `-a` chose: `exec -l -a NAME`
@@ -2412,6 +2414,10 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitution:      "%[1]s: bad substitution",
 		BadSubstitutionNames: interp.NamesTheQuotingRun,
 		ParamNullOrNotSet:    "parameter null or not set",
+		// `${!v}` refusing its source, which 5.3 has and 3.2 does not; see
+		// interp.Runner.refuseIndirection.
+		IndirectionUndeclared: "%[1]s: invalid indirect expansion",
+		IndirectionNotAName:   "%[1]s: invalid variable name",
 		// The letter as the script spelled it, sign and all: `set +q` is
 		// refused as `+q` here where dash and zsh write `-q` either way.
 		// The refusal is this shell's ordinary bad-option complaint, so
@@ -2828,6 +2834,14 @@ func Diagnostics() interp.Diagnostics {
 		// that named a job speaks from inside its own wait (#2227).
 		WaitJobStopped:    "wait: warning: job %[1]d[%[2]d] stopped",
 		WaitForJobStopped: "warning: wait_for_job: job %[1]d is stopped",
+		// The kinds of variable a function cannot be. See
+		// interp.Diagnostics.VariableOnlyLettersOnAFunctionLine.
+		UnsetFunctionAndVariable: "unset: cannot simultaneously unset a function and a variable",
+		DeclareMakesNoFunction:   "%[1]s: cannot use `-f' to make functions",
+		VariableOnlyLettersOnAFunctionLine: map[string]string{
+			"declare": "aAin",
+			"typeset": "aAin",
+		},
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters bash has and this shell does not: -b job
 			// notices, -k assignment-anywhere, -r restricted, -H history
@@ -2891,6 +2905,8 @@ func Diagnostics() interp.Diagnostics {
 		// non-number wordings per letter are not modeled yet, so those fall
 		// back to the substrate's.
 		ReadBadFileDescriptor: "read: %[1]s: invalid file descriptor: Bad file descriptor",
+		ReadBadTimeout:        "read: %[1]s: invalid timeout specification",
+		ReadBadDescriptorSpec: "read: %[1]s: invalid file descriptor specification",
 		// 128 plus SIGALRM, the signal a timeout is.
 		ReadTimeoutStatus: 142,
 		HereDocumentAtEOF: "warning: here-document at line %[1]d " +
@@ -3038,8 +3054,8 @@ func Diagnostics() interp.Diagnostics {
 		// Two lines, which is bash rather than a mistake: it prints the
 		// complaint and then a usage line, and only the first carries the
 		// shell's own prefix.
-		DotNoOperand: ".: filename argument required\n" +
-			".: usage: . [-p path] filename [arguments]",
+		DotNoOperand: "%[1]s: filename argument required\n" +
+			"%[1]s: usage: %[1]s [-p path] filename [arguments]",
 		DotNoOperandStatus: 2,
 	}
 }
@@ -3223,6 +3239,7 @@ func Apply(r *interp.Runner) {
 	// The builtin this shell alone answers to; the other three say "command
 	// not found", so it is registered here rather than taken away there.
 	r.Register("shopt", biShopt)
+	registerLogout(r)
 	// And the same table reached from the command line that started the
 	// shell, where there is no builtin to run: `bash -O checkhash` moves one
 	// of these names before the first line of the script. See shopt.go, and

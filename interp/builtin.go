@@ -274,9 +274,27 @@ func (r *Runner) loopControlCount(name string, args []string) ([]string, int, in
 	}
 	if err == nil && d.LoopControlCountOutOfRange != "" {
 		// A number, and not positive, in the one column that parts the two:
-		// it complains, takes the count as 1 and lets the script carry on.
+		// it complains and the script carries on — but not from the loop.
+		// **Every loop the word can reach ends, at status 1, and that is so
+		// for `continue` as much as for `break`.** Measured 2026-09-16 in
+		// bash 5.3.20 and 3.2.57 alike: `for i in 1 2; do for j in a b; do
+		// continue -1; echo tail; done; echo mid; done; echo "st=$?"` prints
+		// one complaint, then `st=1` — no `tail`, no `mid`, no second pass
+		// of either loop — and `break 0 && echo and` inside a loop prints
+		// nothing after the complaint. What "reach" means is the floor's,
+		// so a function call is a wall in 5.3 and is not one in 3.2, exactly
+		// as it is for a count that is in range. Ours took the count as 1,
+		// so `continue 0` complained once per pass and a loop went on
+		// running at status 0.
 		r.diagf("%s\n", Wording(d.LoopControlCountOutOfRange, "", name, operand))
-		return args, 1, 0, false
+		floor := r.loopControlFloor(r.loopDepth)
+		if r.unspecified {
+			return args, 0, r.status, true
+		}
+		if reach := r.loopDepth - floor; reach > 0 {
+			r.ctl, r.ctlDepth = controlBreak, reach
+		}
+		return args, 0, 1, true
 	}
 	// The fallback chain is a chain of *formats*, not of rendered text: the
 	// operand can hold a `%` and rendering twice would read it as a verb.
@@ -2257,7 +2275,8 @@ func (r *Runner) badSubscriptToUnset(sub string, err error) int {
 // the shell that stops carries FatalErrorStatusIsOne's, as every fatal error
 // does, so there is no status of this error's own.
 func (r *Runner) unsetReadonly(name string) int {
-	if !r.readonly[name] {
+	refused := r.unsetRefused[name] && !r.readonly[name]
+	if !r.readonly[name] && !refused {
 		return 0
 	}
 	if r.AbsentParameter(name) {
@@ -2298,6 +2317,10 @@ func (r *Runner) unsetReadonly(name string) int {
 		defer func() { r.inBuiltin = outer }()
 	}
 	msg := Wording(r.diag().UnsetReadonly, "unset: %s: cannot unset: readonly variable", name)
+	if refused {
+		// See Runner.RefuseUnset: the same refusal with no reason given.
+		msg = Wording(r.diag().UnsetRefused, "unset: %s: cannot unset", name)
+	}
 	if r.ask(r.sem().UnsetReadonlyFatal, "unsetting a readonly name ending the script") {
 		// fatal carries FatalErrorStatusIsOne's number, which is the whole of
 		// the status question here — dash exits 2 and zsh 1, and neither is
@@ -2498,6 +2521,14 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 	args, opts, code := r.builtinOptions("unset", args, letters)
 	if code != 0 {
 		return code
+	}
+	if w := r.diag().UnsetFunctionAndVariable; w != "" &&
+		strings.ContainsRune(opts, 'f') && strings.ContainsRune(opts, 'v') {
+		// Both tables named at once, which the dialect with a sentence for
+		// it refuses ahead of everything else on the line — with no operand
+		// at all as well. See Diagnostics.UnsetFunctionAndVariable.
+		r.diagf("%s\n", w)
+		return 1
 	}
 	if len(args) == 0 {
 		// Nothing to unset, however it was spelled. Ahead of every branch
@@ -4587,7 +4618,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if word, ok := optArg['u']; ok {
 		fd, numeric := atoi(word)
 		if !numeric || fd < 0 {
-			return r.readBadNumber(word)
+			return r.readBadNumberFor(r.diag().ReadBadDescriptorSpec, word)
 		}
 		rd, open := r.readerForFd(fd)
 		if !open {
@@ -4701,12 +4732,17 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// any operands after it; ksh93 and zsh spell it -A and take the name as
 	// the first operand, clearing the names that follow. The letters
 	// differ, so the behaviors can ride them without an axis.
-	array := ""
+	//
+	// named says an array was asked for at all, which the name cannot say:
+	// `read -a ""` names an empty one, and bash 5.3.20 and 3.2.57 refuse it
+	// as `` `': not a valid identifier `` at 1 where reading it as no array
+	// filled REPLY at 0.
+	array, named := "", false
 	if name, ok := optArg['a']; ok {
-		array = name
+		array, named = name, true
 	}
 	if strings.Contains(opts, "A") {
-		array = "REPLY"
+		array, named = "REPLY", true
 		if len(args) > 0 {
 			array, args = args[0], args[1:]
 		}
@@ -4719,7 +4755,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if word, ok := optArg['t']; ok {
 		secs, err := strconv.ParseFloat(word, 64)
 		if err != nil || secs < 0 {
-			return r.readBadNumber(word)
+			return r.readBadNumberFor(r.diag().ReadBadTimeout, word)
 		}
 		timeout, timed = time.Duration(secs*float64(time.Second)), true
 	}
@@ -4863,7 +4899,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// because it is filled first: `read -a 1bad` in bash refuses and leaves
 	// the array untouched, while ksh93's `read -A a 1bad` fills a and *then*
 	// refuses the operand after it.
-	if array != "" && !r.isReadName(array) {
+	if named && !r.isReadName(array) {
 		if r.unspecified {
 			return 2
 		}
@@ -5234,7 +5270,17 @@ func (r *Runner) readLastFieldValue(field, ifs string) string {
 // number. The panel words this per shell per letter; one substrate wording
 // carries the fact until a dialect measures its own.
 func (r *Runner) readBadNumber(word string) int {
-	r.diagf("%s\n", Wording(r.diag().ReadBadNumber, "read: %[1]s: invalid number", word))
+	return r.readBadNumberFor("", word)
+}
+
+// readBadNumberFor is readBadNumber for a letter whose dialect words the
+// refusal after what the number was *for* — see Diagnostics.ReadBadTimeout.
+// An empty wording is the shared sentence.
+func (r *Runner) readBadNumberFor(wording, word string) int {
+	if wording == "" {
+		wording = r.diag().ReadBadNumber
+	}
+	r.diagf("%s\n", Wording(wording, "read: %[1]s: invalid number", word))
 	return 1
 }
 

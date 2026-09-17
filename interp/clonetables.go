@@ -248,6 +248,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// looking up a variable is enough to make it.
 	c.Dynamic = maps.Clone(r.Dynamic)
 	c.DynamicArrays = maps.Clone(r.DynamicArrays)
+	// And the names among them `unset` may not take away, which a dialect
+	// registers beside the producer.
+	c.unsetRefused = maps.Clone(r.unsetRefused)
 	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
 	c.dynamicAssocElements = maps.Clone(r.dynamicAssocElements)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)

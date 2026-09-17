@@ -984,7 +984,12 @@ func (r *Runner) dotNoOperand() int {
 	if !r.ask(r.sem().DotWithNoOperandIsAnError, "`.` with no operand being an error") {
 		return 0
 	}
-	usage := Wording(r.diag().DotNoOperand, ".: filename argument required")
+	// The word the script invoked the builtin by is the verb, for the reason
+	// DotCannotOpen takes it: `source` and `.` are one builtin, and bash
+	// 5.3.20 writes `source: filename argument required` and `source: usage:
+	// source …` for the first (#3217). A wording with no verb ignores it.
+	invoked := orElse(r.inBuiltin, ".")
+	usage := Wording(r.diag().DotNoOperand, ".: filename argument required", invoked)
 	if r.diag().DotNoOperandUnprefixed {
 		r.errf("%s\n", usage)
 	} else {

@@ -977,9 +977,21 @@ func shoptSetO(r *interp.Runner, ctx context.Context, names []string, set, unset
 }
 
 // shoptMoveO is the writing half, handed to `set` a name at a time.
+//
+// A name `set -o` does not know is refused here, in this builtin's words, and
+// the refusal **leaves the status alone**. Measured 2026-09-16 on bash 5.3.20:
+// `shopt -o -s nosuch` and `shopt -o -u nosuch` are `shopt: nosuch: invalid
+// option name` at 0, and `shopt -o -s errexit nosuch` sets errexit and is 0 —
+// where handing the name on made the complaint `set`'s, at 2, and ended a
+// script under errexit. bash 3.2.57 answers the same sentence at 1, which is
+// an age this dialect, being 5.3's, does not hold.
 func shoptMoveO(r *interp.Runner, ctx context.Context, names []string, unset bool) int {
 	status := 0
 	for _, name := range names {
+		if _, known := r.NamedOption(name); !known {
+			r.Diagnosef("shopt: %s: invalid option name\n", name)
+			continue
+		}
 		if code := runSet(r, ctx, unset, name); code != 0 {
 			status = code
 		}

@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // The **target** of a `${!v}` indirection: what the text `v` came to names.
 //
@@ -185,4 +189,82 @@ func (r *Runner) indirectSubject(e *syntax.ParamExpr) string {
 		return written
 	}
 	return "!" + written
+}
+
+// refuseIndirection is the refusal a `${!v}` makes of what `v` came to before
+// any operator is considered, and whether it made one.
+//
+// Two sentences, and which one is about the **source**. Measured 2026-09-16
+// from a script file, one expansion per line:
+//
+//	                               bash 5.3.20                         bash 3.2.57
+//	v never declared               v: invalid indirect expansion       [], 0
+//	v=""                           : invalid variable name             [], 0
+//	v=-3, v='x y', v='a[1]b'       -3: invalid variable name (etc.)    [], 0
+//	declare v, local v, a=()       [], 0                               [], 0
+//	v=1, v=@, v='a[1]', v=_        the target read                     the same
+//
+// So a name that exists and holds nothing is not refused — `declare x` and an
+// empty array are the control rows — and a name nothing ever declared is,
+// written with the subscript the script gave it (`${!nosuch[3]}` is
+// `nosuch[3]: invalid indirect expansion`, where a declared `a` answers
+// `${!a[9]}` in silence). The operators do not save either: `${!u-D}`,
+// `${!u?msg}` and `${!v:-D}` over `v=-3` are the same refusals, and under
+// `set -u` the refusal is made instead of `unbound variable`.
+//
+// What it costs is the same as a bad substitution in that dialect — the line
+// is given up, which is Semantics.FailedExpansionAbandonsTheLine, and bash as
+// `sh` writes the same two sentences. An empty wording is the reading with no
+// refusal, which is bash 3.2's and the core's (#2891, #3215).
+func (r *Runner) refuseIndirection(e *syntax.ParamExpr, value string, set bool) bool {
+	d := r.diag()
+	switch {
+	case !set && d.IndirectionUndeclared != "":
+		if _, declared := r.declarationOf(e.Name); declared || r.nameIsSet(e.Name) {
+			return false
+		}
+		written := e.Name
+		if e.Index != nil {
+			written += "[" + r.unboundSubscript(e) + "]"
+		}
+		r.diagf("%s\n", Wording(d.IndirectionUndeclared, "", written))
+	case set && d.IndirectionNotAName != "" && !indirectTextIsAReference(value):
+		r.diagf("%s\n", Wording(d.IndirectionNotAName, "", value))
+	default:
+		return false
+	}
+	r.expandErr = true
+	return true
+}
+
+// indirectTextIsAReference is whether the text a `${!v}` came to is one of the
+// parameter references the table at the top of this file reads: a name, a
+// positional parameter, a special parameter, or a name with one balanced
+// subscript closing the text. Nothing is trimmed — ` a` and `a ` are refused.
+func indirectTextIsAReference(text string) bool {
+	if len(text) == 1 && strings.ContainsRune("@*#?-$!0", rune(text[0])) {
+		return true
+	}
+	if text == "" {
+		return false
+	}
+	if allDigits(text) {
+		return true
+	}
+	name := text
+	if open := strings.IndexByte(text, '['); open > 0 {
+		if !strings.HasSuffix(text, "]") || !subscriptBracketsBalance(text[open:]) {
+			return false
+		}
+		name = text[:open]
+	}
+	if name == "" || isDigit(name[0]) {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		if c := name[i]; c != '_' && !isLetter(c) && !isDigit(c) {
+			return false
+		}
+	}
+	return true
 }

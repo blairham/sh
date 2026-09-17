@@ -666,6 +666,9 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 // bare word would have replaced a right answer with a complaint. The form
 // that is missing is the one with names, which is the declaration.
 func (r *Runner) refuseAFunctionLineLetter(name string, f declareFlags, rest []string) int {
+	if code := r.refuseAVariableOnlyLetter(name, f, rest); code != 0 {
+		return code
+	}
 	if !f.function || f.functionOff || len(rest) == 0 {
 		return 0
 	}
@@ -680,6 +683,38 @@ func (r *Runner) refuseAFunctionLineLetter(name string, f declareFlags, rest []s
 	r.complainAboutOption(name, "%s: -%c is not implemented yet\n",
 		r.builtinComplaintName(name), c)
 	return orDefault(r.diag().BuiltinBadOptionStatus, 2)
+}
+
+// refuseAVariableOnlyLetter refuses a letter that makes a *kind of variable*
+// on a line that names functions — see
+// Diagnostics.VariableOnlyLettersOnAFunctionLine for the measurement.
+//
+// The first such letter the line wrote under a minus, in the order it was
+// written: `declare -f -i -a f` names `-i`. Operands are required, and a `-p`
+// makes the line a listing again, which is measured — `declare -f -a` alone
+// and `declare -f -p -a f` are both 0.
+func (r *Runner) refuseAVariableOnlyLetter(name string, f declareFlags, rest []string) int {
+	if w := r.diag().DeclareMakesNoFunction; w != "" && (f.function || f.funcNames) &&
+		!f.functionOff && !f.funcNamesOff && !f.print {
+		for _, operand := range rest {
+			if strings.Contains(operand, "=") {
+				r.complainAboutOption(name, "%s\n", Wording(w, "", r.builtinComplaintName(name)))
+				return 1
+			}
+		}
+	}
+	refused := r.diag().VariableOnlyLettersOnAFunctionLine[name]
+	if refused == "" || (!f.function && !f.funcNames) || f.functionOff || f.funcNamesOff ||
+		f.print || len(rest) == 0 {
+		return 0
+	}
+	for i, c := range f.letters {
+		if strings.ContainsRune(refused, c) && i < len(f.letterSigns) && f.letterSigns[i] != '+' {
+			r.complainAboutOption(name, "%s: -%c: invalid option\n", r.builtinComplaintName(name), c)
+			return 1
+		}
+	}
+	return 0
 }
 
 // rankTheNumericLetters settles a declaration that wrote more than one of the
@@ -1020,6 +1055,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// below, which sets instead.
 			if attrs := r.functionAttributeLettersWritten(f); attrs != "" {
 				args, narrowed = r.functionsHoldingAttributes(attrs), true
+			} else if minus, _ := r.functionLineNamesNoFunction(name, f); minus {
+				// A letter no function can hold: the population is empty
+				// and nothing is
+				// written. Measured 2026-09-16 on bash 5.3.20, `declare -f
+				// -a` and `declare -F -i` are each silent at 0 with functions
+				// defined, where `declare -F +i` is the whole listing.
+				args, narrowed = nil, true
 			}
 			if marked, narrow, plus := r.markedFunctionListing(f); narrow {
 				args, narrowed = marked, true
@@ -1041,8 +1083,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// same line is a listing. Behind the narrowing above, which only
 		// happens with no operands, so the two readings cannot both fire.
 		if !narrowed && len(args) > 0 {
-			if attrs := r.functionAttributeLettersWritten(f); attrs != "" {
-				return r.setFunctionAttributes(args, attrs)
+			attrs, removed := r.functionAttributeLettersWritten(f), r.functionAttributeLettersRemoved(f)
+			if attrs != "" || removed != "" {
+				return r.setFunctionAttributes(name, args, attrs, removed)
+			}
+			if _, written := r.functionLineNamesNoFunction(name, f); written && !f.print {
+				// Only a plus of a letter no function holds is left here —
+				// the minus was refused as the options were read — and it
+				// takes away what was never there: `declare -f +a f` is a
+				// silent 0 in bash 5.3.20, not the listing it would be
+				// without the letter.
+				return 0
 			}
 		}
 		// `-p` alongside asks for the reissuable shape, so it is also where

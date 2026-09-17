@@ -14939,6 +14939,18 @@ type Semantics struct {
 	// it is a path in every reading and is not searched for at all.
 	DotTakesTheSearchPathOption Answer
 
+	// BuiltinReadsOptions lets `builtin` read a leading dash-word as an
+	// option rather than as the name of the builtin to run.
+	//
+	// Measured 2026-09-16, one line each from a script file: in bash 5.3.20
+	// and 3.2.57 `builtin -q` is `builtin: -q: invalid option` and the usage
+	// line at 2, and `builtin -- echo hi` prints `hi` at 0. In zsh 5.9.2
+	// both are `no such builtin` at 1 — `-q` and `--` are looked up as names.
+	// A lone `-` is a name in both (`builtin: -: not a shell builtin`), so it
+	// is not asked. ksh93's `builtin` is another command that registers
+	// builtins, and dash and BusyBox ash have none (#3217).
+	BuiltinReadsOptions Answer
+
 	// EvalOptions is how much of a leading dash-word `eval` reads as options
 	// before the rest becomes the text it runs — see EvalOptionReading for
 	// the three answers and the panel behind them.

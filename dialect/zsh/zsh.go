@@ -1874,6 +1874,9 @@ func Semantics() interp.Semantics {
 	// which `unset -q` here does refuse, so it is this builtin's answer
 	// and not the shell's.
 	s.EvalOptions = interp.EvalTakesTheEndMarkerOnly
+	// `builtin -q` and `builtin --` are both `no such builtin`: the word is
+	// a name. See interp.Semantics.BuiltinReadsOptions.
+	s.BuiltinReadsOptions = interp.No
 	s.DotTakesTheSearchPathOption = interp.No
 	// zsh opens a directory operand, reads no commands out of it and calls
 	// that a script that did nothing: measured, `. ./` is silent at status
@@ -3765,7 +3768,7 @@ func Diagnostics() interp.Diagnostics {
 		// `source` failure read `zsh:source:1: .: no such file …`.
 		DotCannotOpen:       "%[3]s: no such file or directory: %[1]s",
 		DotCannotOpenStatus: 127,
-		DotNoOperand:        ".: not enough arguments",
+		DotNoOperand:        "%[1]s: not enough arguments",
 		DotNoOperandStatus:  1,
 		// zsh leads with the reason, lowercased, and names the command after
 		// it — the reverse of the other three.

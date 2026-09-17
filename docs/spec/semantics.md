@@ -19238,7 +19238,9 @@ it returns.
     echo "global [${v-UNSET}]"
 
     bash 5.3, bash 3.2   [GLOBAL]  [GLOBAL]  [GLOBAL]
-    zsh, dash, ash       [UNSET]   [UNSET]   [GLOBAL]
+    zsh 5.9.2            [UNSET]   [UNSET]   [GLOBAL]
+    dash 0.5.12          [UNSET]   [UNSET]   [GLOBAL]
+    BusyBox ash 1.37     [UNSET]   [UNSET]   [GLOBAL]
     ksh93 (`function`)   [UNSET]   [L]       [UNSET]
 
 bash takes the local away and the next scope out answers — for the rest

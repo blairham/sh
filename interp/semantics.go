@@ -7773,12 +7773,13 @@ type Semantics struct {
 	//	bash 3.2.57      [GLOBAL]   [GLOBAL]    [GLOBAL]
 	//	zsh 5.9.2        [UNSET]    [UNSET]     [GLOBAL]
 	//	dash 0.5.12      [UNSET]    [UNSET]     [GLOBAL]
+	//	BusyBox ash 1.37 [UNSET]    [UNSET]     [GLOBAL]
 	//	ksh93u+ (`function`, `typeset`)
 	//	                 [UNSET]    [L]         [UNSET]
 	//
 	// So bash takes the local away and the next scope out answers — for the
 	// rest of `g` **and** for the rest of `f` after it returns — and the
-	// other three leave the name unset until `f` ends. The ksh93 row is the
+	// rest leave the name unset until `f` ends. The ksh93 row is the
 	// same `No` as zsh's and dash's read through its own scoping: a
 	// keyword-defined function's locals are static there, so `g` never sees
 	// `f`'s `v` at all and unsets the global instead.
@@ -7811,7 +7812,6 @@ type Semantics struct {
 	// what makes the option and the default one axis rather than two
 	// features. See Runner.UnsetRemovesAnEnclosingLocal, which is the switch
 	// over it.
-	//
 	UnsetRemovesAnEnclosingLocal Answer
 
 	// ReadonlyDeclaresALocal gives `readonly` inside a function a scope of

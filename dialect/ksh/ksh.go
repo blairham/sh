@@ -727,6 +727,10 @@ func Semantics() interp.Semantics {
 	// And not the weaker position rule bash has: `a#b` is quoted here,
 	// which is what says the leading text is judged and not the offset.
 	s.ListedHashIsBareUnlessItOpensTheValue = interp.No
+	// And neither of bash's position rules applies to a `~`: `a~b`, `b~`,
+	// `~b` and the keys `['a~b']` and `['b~']` are all quoted here.
+	// Measured 2026-09-17 over `set` and a keyed `typeset -p` (#2298).
+	s.ListedTildeIsBareUnlessItOpens = interp.No
 	s.ListingControlEscape = interp.ControlEscapeHex
 	// The column that leaves `^` bare, and the only one: `v=^` and `v=a^b`
 	// list unquoted here where bash and zsh write `'^'` and `'a^b'`.

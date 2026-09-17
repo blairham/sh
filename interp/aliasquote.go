@@ -298,8 +298,8 @@ func (r *Runner) listedNeedsDollar(v string) bool {
 	return false
 }
 
-// valueListsBare is listedValueIsBare for the value of a *declaration*, where
-// one dialect leaves a `#` unquoted as well — see
+// valueListsBare is listedValueIsBare for the value of a *declaration* and
+// for a listed key, where one dialect leaves a `#` unquoted as well — see
 // Semantics.ListedHashIsBareAfterANonName.
 //
 // Asked only where the two answers differ: a value with no `#` in it, and one
@@ -308,8 +308,7 @@ func (r *Runner) valueListsBare(v string) bool {
 	if r.listedValueIsBare(v) {
 		return true
 	}
-	if r.hashDoesNotOpenTheValue(v) && r.ask(r.sem().ListedHashIsBareUnlessItOpensTheValue,
-		"a `#` in a listed value that does not open it") {
+	if r.positionallyBareValue(v) {
 		return true
 	}
 	if !r.hashIsAllThatNeedsQuoting(v) {
@@ -319,24 +318,47 @@ func (r *Runner) valueListsBare(v string) bool {
 		"a `#` in a listed value with no name in front of it")
 }
 
-// hashDoesNotOpenTheValue reports whether the only reason this value is not
-// bare is a `#`, and no `#` in it is the first byte.
+// positionallyBareValue is the position rule: the only bytes in this value a
+// listing would otherwise quote are a `#` or a `~`, neither of them the first
+// byte, and the dialect leaves each of them alone there.
 //
-// The weaker of the two `#` predicates and the reason they are two: the one
-// below asks what stands in front of the first `#`, and this one asks only
-// whether anything does. `a#b` is quoted under that rule and bare under this
-// one, which is exactly where the two shells part.
-func (r *Runner) hashDoesNotOpenTheValue(v string) bool {
-	hash := strings.IndexByte(v, '#')
-	if hash <= 0 {
-		return false
-	}
+// One predicate for the two characters because it is one rule — a byte is
+// quoted at the position where it would *start* something, a comment for `#`
+// and a tilde expansion for `~`, and nowhere else — and because the two
+// compose. Measured on bash 5.3.20, 2026-09-17: `a#~b` and `a~b#c` are bare
+// and `~a#b` is quoted, so a value carrying both is bare exactly when neither
+// opens it. Two separate passes would have quoted the mixed value, which no
+// column does.
+//
+// False is "this rule does not settle it" rather than "quote it": the ksh93
+// reading, which judges the text in front of the first `#` instead of the
+// offset, is asked after this returns false. So the `#` question is asked here
+// only where the position rule could carry the whole value, which is what
+// hashIsAllThatNeedsQuoting then narrows the other way.
+func (r *Runner) positionallyBareValue(v string) bool {
+	hash, tilde := false, false
 	for i := 0; i < len(v); i++ {
-		if v[i] != '#' && !r.listedByteIsOrdinary(v[i]) {
+		switch {
+		case r.listedByteIsOrdinary(v[i]):
+		case i > 0 && v[i] == '#':
+			hash = true
+		case i > 0 && v[i] == '~':
+			tilde = true
+		default:
 			return false
 		}
 	}
-	return true
+	if hash && !r.ask(r.sem().ListedHashIsBareUnlessItOpensTheValue,
+		"a `#` in a listed value that does not open it") {
+		return false
+	}
+	if tilde && !r.ask(r.sem().ListedTildeIsBareUnlessItOpens,
+		"a `~` in a listed value that does not open it") {
+		return false
+	}
+	// Both false is a value listedValueIsBare has already answered, and this
+	// is only ever reached from there.
+	return hash || tilde
 }
 
 // hashIsAllThatNeedsQuoting reports whether the only reason this value is not

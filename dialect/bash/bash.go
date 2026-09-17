@@ -629,6 +629,13 @@ func Semantics() interp.Semantics {
 	// `#abcd` does not. It shows in `set` and not in `declare -p`, whose
 	// values are double-quoted whatever is in them (#2299).
 	s.ListedHashIsBareUnlessItOpensTheValue = interp.Yes
+	// And a `~` by the same rule and in the same listings: `a~b` and `b~`
+	// are bare, `~b` and `~` are quoted, and a key follows its value —
+	// `[a~b]="1"` against `["~b"]="1"`. Measured 2026-09-17 on 5.3.20 and on
+	// the 3.2.57 macOS ships, which agree; zsh and ksh93 quote every one.
+	// The two position rules compose: `a#~b` and `a~b#c` are bare here and
+	// `~a#b` is quoted (#2298).
+	s.ListedTildeIsBareUnlessItOpens = interp.Yes
 	// The three bytes the panel does not agree about in a listed word.
 	// Measured 2026-09-14 over `set` and over a keyed `typeset -p`, which
 	// agree: `=` is ordinary here — `v=a=b` and the keys `[a=b]`, `[=x]`,

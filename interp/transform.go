@@ -257,6 +257,24 @@ func (r *Runner) assignmentStatement(name, value string, set bool) string {
 	return b.String()
 }
 
+// listedTransformKey spells a key inside the `@A` and `@K` listings, which is
+// the same spelling the clustered declaration listing uses.
+//
+// The same helper rather than a second one beside it: `@A` is documented as
+// the assignment that would reproduce the name, so a key it writes bare where
+// `declare -p` quotes it is not that assignment — `${a[@]@A}` with a key of
+// `"` produced `(["]="v" )`, which cannot be read back at all. Both routes
+// printed the key raw before this (#2298).
+//
+// An indexed array's keys are its subscripts, which are digits and bare under
+// any rule; the flag keeps the two cases visible rather than resting on that.
+func (r *Runner) listedTransformKey(k string, assoc bool) string {
+	if !assoc {
+		return k
+	}
+	return r.clusteredKey(k)
+}
+
 // assignmentWords is @A over a whole array: the *words* of the statement that
 // would reproduce it — `declare` `-a` `a=([0]="1" [1]="x y")`, measured as
 // three fields. The positional parameters have no name and come back as a
@@ -294,7 +312,7 @@ func (r *Runner) assignmentWords(name string, elems []string) []string {
 			b.WriteByte(' ')
 		}
 		b.WriteString("[")
-		b.WriteString(k)
+		b.WriteString(r.listedTransformKey(k, assoc))
 		b.WriteString("]=")
 		b.WriteString(doubleQuotedForInput(vals[i]))
 		if assoc {
@@ -333,7 +351,7 @@ func (r *Runner) keysAndValues(e *syntax.ParamExpr, elems []string) []string {
 		if i > 0 && !assoc {
 			b.WriteByte(' ')
 		}
-		b.WriteString(k)
+		b.WriteString(r.listedTransformKey(k, assoc))
 		b.WriteByte(' ')
 		b.WriteString(doubleQuotedForInput(vals[i]))
 		if assoc {

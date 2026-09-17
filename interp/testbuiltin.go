@@ -202,6 +202,13 @@ const (
 	errOperandExpected
 	// errTooManyArguments is a well-formed expression with words left over.
 	errTooManyArguments
+	// errIncorrectSyntax is a list the grammar could not finish: a word it
+	// cannot place, in a reading that had already committed to consuming the
+	// whole list. Reached only where
+	// Semantics.TestReadsOneExpressionOffTheOperands says yes — the reader
+	// that drops what follows an expression is the one that has to say when
+	// it will not, and no other column has the sentence.
+	errIncorrectSyntax
 	// errIntegerExpected is a non-numeric operand to a numeric comparison.
 	errIntegerExpected
 	// errArithmeticOperand is an operand of a numeric comparison that would
@@ -220,6 +227,8 @@ func (e *testError) fallback() string {
 		return "%[2]s: argument expected"
 	case errTooManyArguments:
 		return "%[2]s: too many arguments"
+	case errIncorrectSyntax:
+		return "%[2]s: incorrect syntax"
 	case errIntegerExpected:
 		return "%[2]s: %[1]s: integer expected"
 	case errArithmeticOperand:
@@ -238,6 +247,8 @@ func (e *testError) format(d Diagnostics) string {
 		return d.TestOperandExpected
 	case errTooManyArguments:
 		return d.TestTooManyArguments
+	case errIncorrectSyntax:
+		return d.TestIncorrectSyntax
 	case errIntegerExpected:
 		return d.TestIntegerExpected
 	case errArithmeticOperand:
@@ -274,15 +285,22 @@ func (r *Runner) bareTerminalTest() bool {
 // Only past four arguments does a grammar take over, with `-a` binding tighter
 // than `-o`. All of this is unanimous across the panel.
 func (r *Runner) testExpr(form testForm, args []string) (bool, error) {
+	if r.sem().TestReadsOneExpressionOffTheOperands == Yes {
+		// One column reads a single expression off the front of the list and
+		// drops the rest, which is a different reader rather than a leniency
+		// laid over this one — see interp/testfrontexpression.go. Read here
+		// rather than asked, for the reason isTestUnary reads its letter
+		// rather than asking it: this is the route, taken by every `test` in
+		// every dialect, and the question it answers is settled for the core
+		// in the preset.
+		return r.frontExpr(form, args)
+	}
 	switch len(args) {
 	case 0:
 		// No expression is false rather than an error.
 		return false, nil
 	case 1:
-		if args[0] == "-t" && r.bareTerminalTest() {
-			return r.unaryTest("-t", "1")
-		}
-		return args[0] != "", nil
+		return r.testOneOperand(args[0])
 	case 2:
 		if args[0] == "!" {
 			if args[1] == "-t" && r.bareTerminalTest() {
@@ -372,6 +390,21 @@ func (r *Runner) testExpr(form testForm, args []string) (bool, error) {
 		return false, &testError{kind: errTooManyArguments, operand: p.lastTaken()}
 	}
 	return v, nil
+}
+
+// testOneOperand is the one-word reading: a word, true when it is not empty.
+//
+// `-f` is *true* here rather than an operator with a missing operand, which
+// is the whole of why the count comes before the grammar. The one exception
+// is `-t`, which two shells read as `-t 1` — see bareTerminalTest.
+//
+// Its own function because both readers have this case and it is the one
+// place an axis answers something inside it.
+func (r *Runner) testOneOperand(word string) (bool, error) {
+	if word == "-t" && r.bareTerminalTest() {
+		return r.unaryTest("-t", "1")
+	}
+	return word != "", nil
 }
 
 // lastTaken is the final word the parse consumed, for the complaint about

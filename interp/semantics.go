@@ -10026,6 +10026,39 @@ type Semantics struct {
 	// does not know is false rather than an error, measured in both.
 	TestHasTheShellOptionOperator Answer
 
+	// TestReadsOneExpressionOffTheOperands makes `test` read a single
+	// expression from the *front* of its operand list and never look at the
+	// words behind it, rather than reading the whole list and refusing what
+	// is left over.
+	//
+	// One column does this and the other six do not, which is why it is an
+	// axis and not a fix. `test x = x y` is 0 there and a refusal in every
+	// other column, and the shell that answers 0 has no `too many arguments`
+	// sentence at all: its only complaints are about a *word* standing in an
+	// operator's place, a form that ran out of operands, and a list the
+	// grammar could not finish. None of the three can be reached by adding
+	// operands to an expression that already reads.
+	//
+	// The reading is not "trailing operands are ignored", and one pair of
+	// rows is enough to say so. These hold the same words and differ only in
+	// where the connective sits:
+	//
+	//	test x = x junk -a junk        0, silent
+	//	test x = x -a x = x junk       incorrect syntax, 2
+	//
+	// In the first the connective is not the word after the reading, so
+	// nothing past `x = x` is looked at. In the second it is, and the whole
+	// list becomes load-bearing. A model of "it ignores what follows"
+	// predicts 0 for both and a model of "a connective anywhere forces a
+	// full parse" predicts a refusal for both; neither survives the pair.
+	//
+	// Nine more rows say the same rule reaches further than the count does.
+	// `test -n x y` is 0 — the two-word file test with its third word
+	// dropped — and `test x junk` is `argument expected` where this shell
+	// used to name the `x`. See interp/testfrontexpression.go, which carries
+	// the reading and the rows each of its steps is pinned by, and #2959.
+	TestReadsOneExpressionOffTheOperands Answer
+
 	// TestHasTheModifiedSinceReadOperator gives `test` a unary `-N`: the
 	// file has been written since it was last read.
 	//
@@ -17264,7 +17297,11 @@ func PosixSemantics() Semantics {
 		TestHasTheFileExistsLetter:          No,
 		TestHasTheShellOptionOperator:       No,
 		TestHasTheModifiedSinceReadOperator: No,
-		TestStringOrder:                     TestStringOrderNeither,
+		// And POSIX reads the whole operand list: an expression with words
+		// behind it is not an expression, which is what six of the seven
+		// columns answer and what the count above is for.
+		TestReadsOneExpressionOffTheOperands: No,
+		TestStringOrder:                      TestStringOrderNeither,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several
 		// operators in a clause are allowed, an omitted who means all three,

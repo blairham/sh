@@ -37,6 +37,16 @@ package interp
 //	                            `g` declaring its own local after the unset
 //	                            shadows the global and puts the global back
 //
+// One piece of a shadow is left standing, and it is named rather than
+// implied: a `local OPTIND` also displaces the `getopts` scan position, and
+// that half is put back by restoreGetoptsCursor, which is keyed on the scope
+// rather than on the name and asks an axis of its own —
+// Semantics.GetoptsLocalOptindRestoresTheCursor — at the scope's exit. What
+// `unset OPTIND` inside a callee should do to the caller's *position inside a
+// word* has not been measured, so nothing here decides it: the parameter is
+// handed back as any other is, and the cursor still returns when the owning
+// call does.
+//
 // A local of the scope that is *running* is the other half of the question
 // and is not this: `f(){ local v=L; unset v; }` leaves the name unset and
 // still local in every column, bash included, so the shadow stays and the

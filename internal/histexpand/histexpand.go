@@ -61,6 +61,13 @@ type Chars struct {
 
 	// Words is how an event is cut into words. See Words.
 	Words Words
+
+	// QuoteInPlace applies a `:q` or `:x` where it is written in a chain of
+	// modifiers, rather than once the chain has run. Measured 2026-09-16
+	// over the word `two.three`: `:q:r` is `'two'` in bash 5.3.20 and
+	// ksh93u+, which quote last, and `'two` in zsh 5.9.2, which quotes in
+	// place and so takes the root of the quoted word.
+	QuoteInPlace bool
 }
 
 // Default is what a shell starts with: `!^#`.
@@ -472,7 +479,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	if ok {
 		text = strings.Join(chosen, " ")
 	}
-	text, j, print, err := modifiers(src, j, text, ref(j), st)
+	text, j, print, err := modifiers(src, j, text, ref(j), st, c)
 	if err != nil {
 		return "", 0, false, err
 	}
@@ -799,8 +806,11 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 		ranged = false
 		j++
 	case r == '%':
-		for i, w := range words {
-			if st.matched != "" && strings.Contains(w, st.matched) {
+		// The word the search matched in, reading from the end of the event:
+		// measured on bash 5.3.20, `!?e?%` against `echo two.three` is
+		// `two.three`, not the `echo` in front of it.
+		for i := len(words) - 1; i >= 0; i-- {
+			if st.matched != "" && strings.Contains(words[i], st.matched) {
 				start, end = i, i
 				break
 			}
@@ -871,8 +881,12 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 
 // modifiers applies the `:h`, `:t`, `:r`, `:e`, `:p`, `:q`, `:x`, `:s` and
 // `:&` chain, and reports whether `:p` was among them.
-func modifiers(src []rune, j int, text, ref string, st *state) (string, int, bool, error) {
+func modifiers(src []rune, j int, text, ref string, st *state, c Chars) (string, int, bool, error) {
 	print := false
+	// quote is the `q` or `x` the chain asked for, applied once the rest of
+	// it has run where the shell quotes last. See Chars.QuoteInPlace. A
+	// second quoting modifier replaces the first.
+	var quote rune
 	for j < len(src) && src[j] == ':' {
 		j++
 		if j >= len(src) {
@@ -902,16 +916,12 @@ func modifiers(src []rune, j int, text, ref string, st *state) (string, int, boo
 		case 'p':
 			print = true
 			j++
-		case 'q':
-			text = "'" + strings.ReplaceAll(text, "'", `'\''`) + "'"
+		case 'q', 'x':
+			quote = src[j]
 			j++
-		case 'x':
-			parts := strings.Fields(text)
-			for i, p := range parts {
-				parts[i] = "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
+			if c.QuoteInPlace {
+				text, quote = quoteText(text, quote), 0
 			}
-			text = strings.Join(parts, " ")
-			j++
 		case 's', '&':
 			var err error
 			text, j, err = substitute(src, j, text, ref, global, st)
@@ -922,7 +932,23 @@ func modifiers(src []rune, j int, text, ref string, st *state) (string, int, boo
 			return "", 0, false, &BadModifier{Mod: string(src[j])}
 		}
 	}
-	return text, j, print, nil
+	return quoteText(text, quote), j, print, nil
+}
+
+// quoteText applies `:q` (the whole text as one quoted word) or `:x` (each
+// blank-separated word quoted), or nothing for any other letter.
+func quoteText(text string, quote rune) string {
+	switch quote {
+	case 'q':
+		return "'" + strings.ReplaceAll(text, "'", `'\''`) + "'"
+	case 'x':
+		parts := strings.Fields(text)
+		for i, p := range parts {
+			parts[i] = "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
+		}
+		return strings.Join(parts, " ")
+	}
+	return text
 }
 
 // substitute applies `s/old/new/` or the `&` that repeats the last one.
@@ -1060,7 +1086,7 @@ func quick(line string, hist List, c Chars, st *state) (Result, error) {
 	if i < len(src) {
 		var err error
 		var print bool
-		out, _, print, err = modifiers(src, i, out, line, st)
+		out, _, print, err = modifiers(src, i, out, line, st, c)
 		if err != nil {
 			return Result{}, err
 		}

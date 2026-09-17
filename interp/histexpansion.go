@@ -76,6 +76,7 @@ func (r *Runner) HistoryRecording() bool { return r.histRecord }
 func (r *Runner) HistoryChars() histexpand.Chars {
 	c := histexpand.Default
 	c.DoubleQuotesProtect = r.posixMode && r.sem().HistoryExpansionSparesDoubleQuotesInPosixMode == Yes
+	c.QuoteInPlace = r.sem().HistoryQuoteModifierInPlace == Yes
 	switch r.sem().HistoryWords {
 	case HistoryWordsShell:
 		c.Words = histexpand.WordsShell

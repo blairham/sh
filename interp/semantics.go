@@ -14065,6 +14065,15 @@ type Semantics struct {
 	// is a word of its own, is three readings. See HistoryWordReading.
 	HistoryWords HistoryWordReading
 
+	// HistoryQuoteModifierInPlace applies a history reference's `:q` or `:x`
+	// where it stands in the chain of modifiers. Measured 2026-09-16 over
+	// the word `two.three`: `:q:r` is `'two'` in bash 5.3.20 from a script
+	// and in ksh93u+ at a prompt, which quote once the chain has run, and
+	// `'two` — an unclosed quote, and a continuation prompt — in zsh 5.9.2,
+	// which quotes where the letter is written. Read, not asked, for the
+	// reason HistoryWords is.
+	HistoryQuoteModifierInPlace Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -17467,6 +17476,8 @@ func PosixSemantics() Semantics {
 		// The part every shell with an expander agrees on: a quoted string
 		// is one word.
 		HistoryWords: HistoryWordsQuoted,
+		// Two of the three shells with an expander quote last.
+		HistoryQuoteModifierInPlace: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
 		// dash is the one shell that refuses the letter, and overrides.

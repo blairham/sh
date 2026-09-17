@@ -19,8 +19,8 @@ import "strings"
 // were written and not how: a quoted `"1..3"` is the range in the shell with
 // the construct, while a `..` a substitution brings in is not, and neither is
 // one whose first dot was escaped — `1\..3` is lexed as a literal `1`, a
-// backslash-quoted `.` and a literal `.3`, so no single literal span holds the
-// pair. A span that is a substitution is never looked inside: `$((1))..3`
+// backslash-quoted `.` span of its own and a literal `.3`, so no single
+// literal span holds the pair. A span that is a substitution is never looked inside: `$((1))..3`
 // splits between the two, and `${x:-1..2}` is a default and not a range.
 func dotRangeOf(w *Word) *SubscriptRange {
 	rng := splitAtDots(w)
@@ -42,7 +42,7 @@ func splitAtDots(w *Word) *SubscriptRange {
 		return nil
 	}
 	for i, s := range w.Spans {
-		if s.Kind != Literal || s.Quoting == BackslashQuoted {
+		if s.Kind != Literal {
 			continue
 		}
 		at := strings.Index(s.Value, "..")

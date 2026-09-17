@@ -5,7 +5,6 @@ package interp
 
 import (
 	"sort"
-	"strings"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -194,13 +193,11 @@ func (r *Runner) dotRangeElements(name string, elems []string) ([]int, []string)
 	return subs, elems
 }
 
-// dotRangeEnd evaluates one end of a range, where an end with nothing in it
-// is 0 rather than the empty-subscript refusal: `${a[..2]}` is `a b c`.
+// dotRangeEnd evaluates one end of a range as the subscript it is. An end with
+// nothing in it is whatever an empty subscript is in the dialect — 0 in the
+// one with ranges, so `${a[..2]}` is `a b c`.
 func (r *Runner) dotRangeEnd(w *syntax.Word) (int, bool) {
-	text := strings.TrimSpace(r.subscriptTextAsWritten(w))
-	if text == "" {
-		return 0, true
-	}
+	text := trimSubscript(r.subscriptTextAsWritten(w))
 	return r.subscriptIndexAsWritten(text, text)
 }
 

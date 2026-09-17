@@ -3895,6 +3895,19 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	}
 	brace := reply ||
 		(l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start]))
+	// The line continuations of a parameter expansion are removed from its
+	// text before it is read, as an arithmetic expression's are and by the
+	// same recording, because a backslash-newline is removed before tokens
+	// are formed and can stand anywhere in `${ }` — inside the name, in
+	// front of the brace, between an operator's characters. Measured
+	// 2026-09-16 from script files: `xy=5; echo "[${x\⏎y}]"` is `[5]`, and so
+	// are `${x\⏎}`, `${x:\⏎-d}`, `${x%\⏎%p}` and `${#\⏎x}` in the shapes
+	// each shell has, in bash 5.3, bash 3.2, zsh 5.9.2, ksh93u+ and dash —
+	// all of which were a bad substitution in every dialect here (#3452).
+	//
+	// A command form's body is a program and its parser removes its own, so
+	// only the parameter form takes the joined text.
+	joined := l.collectContinuations()
 	depth := 1
 	// Where the body of each open nesting level began. Only the innermost
 	// level's operand decides what a quote written there does — measured, and
@@ -4009,6 +4022,9 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			// flag is consulted here.
 			l.skipQuoted('"', true)
 		case '\\':
+			if !l.continuationWaitsForAName(bodies[len(bodies)-1]) {
+				l.noteContinuation()
+			}
 			l.advance()
 			if !l.eof() {
 				l.advance()
@@ -4173,6 +4189,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	if end > start && l.src[end-1] == '}' {
 		end--
 	}
+	value := joined(start, end)
 	if brace {
 		// `${ cmd;}` is a command and `${x}` is a parameter, and the space
 		// is the whole of the difference — which is why it is decided here,
@@ -4186,7 +4203,32 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		// opening blank is body text and this one's pipe is its marker.
 		return Span{Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 	}
-	return Span{Kind: ParamExp, Value: l.src[start:end], Quoting: q, Pos: open}
+	return Span{Kind: ParamExp, Value: value, Quoting: q, Pos: open}
+}
+
+// continuationWaitsForAName reports whether a line continuation at the cursor,
+// inside a `${ }` level whose text began at from, is kept rather than removed,
+// under [Dialect.ParamContinuationNeedsAName]: whether no name has begun yet.
+func (l *Lexer) continuationWaitsForAName(from int) bool {
+	if !l.dialect.ParamContinuationNeedsAName || l.inRawBody {
+		return false
+	}
+	// What stands in front of it, as written: a continuation already removed
+	// in front of this one was behind a name or an operator, and nothing
+	// after either of those can be the start of the expansion again.
+	s := l.src[from:l.off]
+	if s != "" && (s[0] == '#' || s[0] == '!') {
+		s = s[1:]
+	}
+	switch {
+	case s == "" || s == ".":
+		// A `.` alone has not begun one either: it opens a compound name,
+		// and `${.sh\⏎.version}` reads where `${.\⏎sh.version}` is refused.
+		return true
+	case len(s) == 1 && strings.IndexByte("@*#?$!-", s[0]) >= 0:
+		return true
+	}
+	return strings.Trim(s, "0123456789") == ""
 }
 
 // isBraceCommandStart reports whether what follows `${` makes it a command
@@ -4460,6 +4502,12 @@ func unterminatedQuoteMsg(quote byte) string {
 // `${` on its own loop, with its own `brace` and its own dialect flags, and a
 // step-over here would take that decision away from it.
 func (l *Lexer) skipSubstitution() bool {
+	// A continuation inside the program is that program's, read by its own
+	// rules when it runs — and a quoted here-document in it keeps one — so
+	// whatever construct is collecting its own does not see these.
+	cuts := l.continuations
+	l.continuations = nil
+	defer func() { l.continuations = cuts }()
 	if l.peek() == '`' {
 		l.skipBackticks()
 		return true

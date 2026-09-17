@@ -16,6 +16,16 @@
 
 st() { printf '%-44s %s\n' "$1" "$2"; }
 
+# The unquoted patterns glob, so what they match is the directory's to say,
+# and the directory a run starts in is a copy of this whole tier. When
+# ash/arrays.tests landed beside ash/arith.tests, `a*` became two words, the
+# row became test's `unknown operand`, and the file failed on a sentence
+# (#3278) about a file name nothing here meant to ask. So the rows run in a
+# directory of their own holding one file of known name: `a*` is `axe`,
+# which is the one-word glob this row was written against.
+mkdir globbed && cd globbed || exit 1
+: > axe
+
 printf -- '--- a pattern, however it was quoted ---\n'
 
 ( [[ abc == a* ]] ); st 'unquoted pattern' $?

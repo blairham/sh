@@ -381,20 +381,20 @@ It must be `0`, or the bar is measuring a subset of the board.
 
 **`epic` is the fourth answer, and it is not an exemption.** A `P` label ranks
 a **defect** — "fix first", "common construct", "edge". A campaign that closes
-when its own count reaches zero is a programme of work, and every defect it
-finds gets its own P-labelled issue as it is found. #2291 and #2298 are the two
+when its own count reaches zero is a program of work, and every defect it
+finds gets its own P-labeled issue as it is found. #2291 and #2298 are the two
 that exist; #2345 was a third and closed on its own bar. Giving them a P label
 made the P2 queue permanently non-empty for a reason no single change could
 fix, which is the "bar nobody can meet" failure the paragraph above this one
 warns about — and it hid the queue's real content, which is live defects.
 
-So the counting query above accepts `epic` as a prioritisation, and the
+So the counting query above accepts `epic` as a prioritization, and the
 release gate is unchanged: it counts open `P1` only. Two rules keep this from
 becoming a hiding place: an `epic` **states its close condition in the issue,
 countably** — every one of #2291's four legs is a number — and it **may not be
 the only home of a defect**, so a finding inside one is filed separately and
-labelled. An issue that is neither a defect nor a campaign with a countable
-bar is neither, and wants deciding rather than labelling.
+labeled. An issue that is neither a defect nor a campaign with a countable
+bar is neither, and wants deciding rather than labeling.
 
 **And a label count is not a working shell.** "Bar met" was once reported
 from two green counts while `go run ./cmd/zsh` still wrote 48 lines to

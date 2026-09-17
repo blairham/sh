@@ -178,10 +178,12 @@ ash   StoreRefusalOfADeclaredElementLeavesZeroFromCommandString
 ash   SubscriptExpressionStopsAtASeparator
 ash   SubscriptIsAQuotingContext
 ash   SubscriptedArrayLiteral
+ash   SubscriptedAssignmentPrefix
 ash   SubscriptedOperandCarriesTheAttributes
 ash   SubscriptedOperandTakesALocalDeclaration
 ash   SubscriptedOperandTakesTheContainerAttribute
 ash   SubscriptedOperandTakesTheIntegerAttribute
+ash   SubscriptedPrefixIsTakenBack
 ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
 ash   TableUnderAnArrayLiteralDeclaration
@@ -234,6 +236,7 @@ bash  SetArrayBadNameLeavesZeroFromCommandString
 bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
+bash  SubscriptedPrefixIsTakenBack
 
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
@@ -408,10 +411,12 @@ dash  StoreRefusalOfADeclaredElementLeavesZeroFromCommandString
 dash  SubscriptExpressionStopsAtASeparator
 dash  SubscriptIsAQuotingContext
 dash  SubscriptedArrayLiteral
+dash  SubscriptedAssignmentPrefix
 dash  SubscriptedOperandCarriesTheAttributes
 dash  SubscriptedOperandTakesALocalDeclaration
 dash  SubscriptedOperandTakesTheContainerAttribute
 dash  SubscriptedOperandTakesTheIntegerAttribute
+dash  SubscriptedPrefixIsTakenBack
 dash  SubstringRangeThirdColonIsABadSubstitution
 dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration

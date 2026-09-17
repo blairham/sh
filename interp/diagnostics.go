@@ -4970,6 +4970,22 @@ type Diagnostics struct {
 	// gives the read. This is only the wording (#1764).
 	ArithEmptySubscriptTarget string
 
+	// SubscriptedPrefixIsNotAName is the complaint about a subscripted
+	// assignment written as a command *prefix* — `a[1]=v cmd` — in the
+	// dialect that refuses one. Two verbs: the name, and the subscript as
+	// the source spelled it.
+	//
+	// The subscript is quoted back **unexpanded**, which is the whole reason
+	// the sentence takes it separately rather than being handed a finished
+	// word: `i=1; a[$i]=v cmd` is `` `a[$i]' `` and never `` `a[1]' ``, and
+	// `a[$((1/0))]=v cmd` complains in these words rather than about the
+	// division. Measured 2026-09-16 on bash 5.3.20.
+	//
+	// Only bash writes it. Which dialect does, and that the command runs
+	// anyway, is Semantics.SubscriptedAssignmentPrefix; this is the wording
+	// (#3433).
+	SubscriptedPrefixIsNotAName string
+
 	// ArithWholeArraySubscript is the complaint about a `*` or `@` subscript
 	// on an indexed name where an expression reads it — `$(( a[*] ))`. Two
 	// verbs: the name and the subscript.

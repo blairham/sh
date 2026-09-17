@@ -779,6 +779,71 @@ type Semantics struct {
 	// not (#3437).
 	DeclarationPromotesThePrefixEntry Answer
 
+	// SubscriptedAssignmentPrefix is what a prefix makes of a word whose
+	// name carries a **subscript** — `a[1]=v cmd`, written in front of a
+	// command rather than as a statement of its own.
+	//
+	// Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a
+	// script file with stdin closed, over
+	//
+	//	f() { echo "  in f [${a[1]}]"; }
+	//	a[1]=v f; echo "after [${a[1]}]"
+	//
+	//	bash 5.3.20   `` `a[1]': not a valid identifier ``, then `[]` `[]`
+	//	bash 3.2.57   silent; nothing is assigned, and a child is handed the
+	//	              two words `a[1]=v` verbatim in its environment
+	//	ksh93u+       `[v]` `[v]`
+	//	zsh 5.9.2     `[v]` `[v]`
+	//	dash 0.5.12   `a[1]=v: not found` — the word is a *command*, since
+	//	              nothing in that grammar makes a subscripted word an
+	//	              assignment, and so is BusyBox ash's
+	//
+	// Four readings, and this shell gave a fifth: it dropped the subscript
+	// and made a temporary *scalar* `a`, a name none of the five would have
+	// (#3433).
+	//
+	// dash and BusyBox ash are the reading no value here spells, because it
+	// is the grammar's and not this axis's: the word never becomes an
+	// [syntax.Assign] in those dialects, so nothing reaches the question.
+	// bash 3.2's is recorded above rather than modeled, for the reason
+	// docs/spec/measurements.md keeps that column — it has no dialect of its
+	// own.
+	//
+	// Asked only of a prefix entry that actually carries a subscript, which
+	// is a minority of the minority of commands that have a prefix at all.
+	SubscriptedAssignmentPrefix SubscriptedPrefixReading
+
+	// SubscriptedPrefixIsTakenBack gives the element back what it held once
+	// the command is over, the way the *scalar* prefix standing beside it is
+	// given back — asked only where SubscriptedAssignmentPrefix stores the
+	// element at all.
+	//
+	// The two shells that store it disagree, and the disagreement is not a
+	// second reading of the take-back rules they already have: ksh93 applies
+	// exactly the rules it applies to a scalar, and zsh does not apply its
+	// own. Measured 2026-09-16 over `arr=(x y z)` reset before each line,
+	// with the scalar answer beside it for the same command kind:
+	//
+	//	command kind          zsh `arr[1]=P`  zsh `s=P`  ksh `arr[1]=P`  ksh `s=P`
+	//	a function            kept            given back kept            kept
+	//	a special builtin     kept            given back kept            kept
+	//	a regular builtin     **kept**        given back given back      given back
+	//	`eval`                kept            given back kept            kept
+	//	an external command   given back      given back given back      given back
+	//
+	// zsh keeps a scalar prefix past nothing at all — not a function, not
+	// `:` — and keeps a subscripted one past everything this shell runs
+	// itself. So its element write is a plain assignment that the command
+	// merely stands behind, and the two columns part on one row of the five:
+	// `arr=(x y z); arr[1]=P read -r j </dev/null` leaves `P` in zsh and `x`
+	// in ksh93.
+	//
+	// The external row is no column's answer to this: an array reaches no
+	// child's environment, so a prefix before a command a *child* runs is
+	// unseen either way — unanimous, and done in the routes rather than
+	// asked here.
+	SubscriptedPrefixIsTakenBack Answer
+
 	// PrefixToARegularBuiltinIsRefused applies the readonly refusal to an
 	// assignment written in front of a *regular builtin* — `readonly x=1;
 	// x=2 true`.
@@ -16990,6 +17055,42 @@ func (e EvalOptionReading) String() string {
 		return "EvalReadsOptions"
 	}
 	return "EvalOptionReadingUnspecified"
+}
+
+// SubscriptedPrefixReading is what a command's assignment prefix makes of a
+// word whose name carries a subscript — see
+// [Semantics.SubscriptedAssignmentPrefix] for the measurement.
+type SubscriptedPrefixReading int
+
+const (
+	// SubscriptedPrefixReadingUnspecified is no answer, and is refused like
+	// any other.
+	SubscriptedPrefixReadingUnspecified SubscriptedPrefixReading = iota
+	// SubscriptedPrefixIsRefused writes a diagnostic naming the word as it
+	// was spelled and assigns nothing. bash 5.3.
+	//
+	// It costs the command nothing: the command runs, the status is the
+	// command's own, every other entry of the same prefix is applied, and a
+	// prefix of several bad words gets a line each. And it is refused
+	// *before* anything is evaluated — `a[$((1/0))]=$(echo side) cmd` runs
+	// no substitution, says nothing about the division, quotes the subscript
+	// back as `$((1/0))`, and still complains ahead of a redirection that
+	// will not open.
+	SubscriptedPrefixIsRefused
+	// SubscriptedPrefixStoresTheElement performs the element write the same
+	// word performs as a statement: the subscript is evaluated, the value
+	// lands under it, and `a[1]+=v` appends to the element. ksh93 and zsh.
+	SubscriptedPrefixStoresTheElement
+)
+
+func (s SubscriptedPrefixReading) String() string {
+	switch s {
+	case SubscriptedPrefixIsRefused:
+		return "SubscriptedPrefixIsRefused"
+	case SubscriptedPrefixStoresTheElement:
+		return "SubscriptedPrefixStoresTheElement"
+	}
+	return "SubscriptedPrefixReadingUnspecified"
 }
 
 // ReadPromptOperand is what `read` makes of a `?` in its first operand.

@@ -232,6 +232,14 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 			// See Runner.refusePrefixesEarly.
 			continue
 		}
+		if r.subscriptedPrefixDropped(a) {
+			// A subscripted name the dialect refuses, which is refused
+			// before this runs and gets no trace line: bash writes the
+			// identifier complaint and then `+ f`, with the word it refused
+			// nowhere in the line. Measured 2026-09-16 on `set -x; a[1]=w f`
+			// and on `set -x; w=1 a[2]=z f`, where `w=1` is still written.
+			continue
+		}
 		// The value first and the two slices afterwards, in that order: the
 		// lookup reads them as a pair, and an assignment recorded before its
 		// value would be found with nothing beside it.

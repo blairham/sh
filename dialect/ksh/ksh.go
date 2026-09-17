@@ -1069,6 +1069,13 @@ func Semantics() interp.Semantics {
 	// row the promoting shell is measured on already reads the prefix's value
 	// here, for a reason that is not this one (#3437).
 	s.DeclarationPromotesThePrefixEntry = interp.No
+	// A subscripted name in a prefix writes the element, and the write is
+	// given back exactly where a scalar prefix's is: `arr=(x y z); arr[1]=P
+	// read -r j </dev/null` leaves `x` here and `P` in zsh, while a function,
+	// `:` and `eval` keep it in both. Measured 2026-09-16 on ksh93u+
+	// 2012-08-01 (#3433).
+	s.SubscriptedAssignmentPrefix = interp.SubscriptedPrefixStoresTheElement
+	s.SubscriptedPrefixIsTakenBack = interp.Yes
 	s.PrefixRefusalFatality = interp.PrefixRefusalFatalOnASpecialBuiltinOrFunction
 	s.PrefixRefusalCostsTheCommand = interp.Yes
 	// The attribute cannot come off, though, which is where this shell parts

@@ -94,6 +94,11 @@ func Semantics() interp.Semantics {
 	// value a promoting shell keeps is one this shell keeps for another
 	// reason, and there is nothing left for this axis to move (#3437).
 	s.DeclarationPromotesThePrefixEntry = interp.No
+	// unanswered SubscriptedAssignmentPrefix, SubscriptedPrefixIsTakenBack:
+	// a subscripted word is no assignment in this grammar, so `a[1]=v f` is
+	// the *command* `a[1]=v` and the complaint is `a[1]=v: not found`. The
+	// word never becomes an assignment prefix and neither axis is reached.
+	// Measured 2026-09-16 on dash 0.5.12 (#3433).
 	// An unquoted list is its elements taken one at a time, never their
 	// join — the reading POSIX describes, and the one an empty element
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three

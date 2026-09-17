@@ -11319,6 +11319,40 @@ type Semantics struct {
 	// `${a[2,2]}` — one element under either — from needing an answer.
 	SubscriptCommaIsARange Answer
 
+	// SubscriptKeyExpandsALeadingTilde runs an associative array's subscript
+	// through tilde expansion before it becomes a key, so `m[~/k]` names the
+	// element the home directory spells. bash and ksh93; zsh takes the
+	// characters.
+	//
+	// A word rule reached at a subscript rather than a rule about subscripts:
+	// the tilde is expanded only unquoted and only at the front, exactly as
+	// it is in a command word, which is why only that position needs an
+	// answer. Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C
+	// HOME=/orig`, from a script file, `typeset -A m` and then one store:
+	//
+	//	subscript   bash 5.3.20     ksh93u+        zsh 5.9.2
+	//	m[~/k]      [/orig/k]       [/orig/k]      ['~/k']
+	//	m[~]        [/orig]         [/orig]        ['~']
+	//	m[~root]    [/var/root]     [/var/root]    ['~root']
+	//	m[x~/k]     [x~/k]          ['x~/k']       ['x~/k']
+	//	m["~/k"]    ["~/k"]         ['~/k']        ['"~/k"']
+	//	m[\~/k]     ["~/k"]         ['~/k']        ['\~/k']
+	//	m[a:~/k]    ["a:~/k"]       [a:~/k]        ['a:~/k']
+	//
+	// **A read takes it too**, which is what makes the two shells that expand
+	// self-consistent rather than only surprising: with the element stored
+	// under `$HOME/k`, `${m[~/k]}` finds it in bash and ksh93 and is empty in
+	// zsh. So this is asked in Runner.assocKey, where both routes meet, and
+	// not at the store.
+	//
+	// The last two rows are the subscript *not* being an assignment's value:
+	// a `~` after a `:` does not expand here, where it does in `PATH=a:~/b`.
+	// They agree across the panel and need no answer.
+	//
+	// dash and BusyBox ash have no associative array to subscript, so they
+	// take the standard's value, which expands nothing (#2298).
+	SubscriptKeyExpandsALeadingTilde Answer
+
 	// SubscriptIsAQuotingContext runs an associative array's subscript
 	// through quote removal, so the key is the text *inside* its quotes and
 	// escapes. True in bash and ksh93; false in zsh, where the subscript is
@@ -18150,6 +18184,10 @@ func PosixSemantics() Semantics {
 		// And a `~` with it: four of the five columns quote one wherever it
 		// stands, so the standard's value is the majority's as well.
 		ListedTildeIsBareWhereItCannotExpand: No,
+		// POSIX has no associative array, so there is no subscript for a
+		// tilde to stand at the front of; the standard's shell expands
+		// nothing there and the two columns that have the container override.
+		SubscriptKeyExpandsALeadingTilde: No,
 		// And a descriptor the shell has nothing open at is not a terminal,
 		// however the number was spelled: no narrowing, and no value that
 		// answers true on its own.

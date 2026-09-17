@@ -4,6 +4,7 @@
 package bash_test
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -109,4 +110,91 @@ func shellQuoted(v string) string {
 		out += string(c)
 	}
 	return out + "'"
+}
+
+// The leading unquoted `~` of an associative subscript is expanded before the
+// text becomes a key, on a store and on a read alike, and through every route
+// that reaches an element by its *operand*. Measured 2026-09-17 on bash
+// 5.3.20 under `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/orig`, from a script
+// file with stdin closed; ksh93 agrees and zsh takes the characters —
+// Semantics.SubscriptKeyExpandsALeadingTilde.
+//
+// `HOME` here is the one the shell started with, which is deliberate: bash
+// 5.3.20 caches it and a `HOME=` in the script does not move `~` (#3480), so
+// a row that set HOME itself would be measuring that instead.
+func TestASubscriptsLeadingTildeNamesTheHomeDirectory(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a store", `declare -A m; m[~/k]=v; declare -p m`, "declare -A m=([%H/k]=\"v\" )\n"},
+		{"a tilde alone", `declare -A m; m[~]=v; declare -p m`, "declare -A m=([%H]=\"v\" )\n"},
+		{
+			"a read finds what the store made",
+			`declare -A m; m[~/k]=v; echo "[${m[$HOME/k]}]"`,
+			"[v]\n",
+		},
+		{
+			"a read by the tilde finds what a path stored",
+			`declare -A m; m[$HOME/k]=v; echo "[${m[~/k]}]"`,
+			"[v]\n",
+		},
+		{"an array literal", `declare -A m=([~/k]=v); declare -p m`, "declare -A m=([%H/k]=\"v\" )\n"},
+		{
+			"unset by the tilde",
+			`declare -A m; m[$HOME/k]=v; unset 'm[~/k]'; declare -p m`,
+			"declare -A m=()\n",
+		},
+		{
+			"test -v by the tilde",
+			`declare -A m; m[$HOME/k]=v; test -v 'm[~/k]' && echo yes || echo no`,
+			"yes\n",
+		},
+		{
+			"printf -v by the tilde",
+			`declare -A m; printf -v 'm[~/k]' '%s' P; declare -p m`,
+			"declare -A m=([%H/k]=\"P\" )\n",
+		},
+		{
+			"an indirect read by the tilde",
+			`declare -A m; m[$HOME/k]=v; r='m[~/k]'; echo "[${!r}]"`,
+			"[v]\n",
+		},
+		{
+			"read by the tilde",
+			`declare -A m; read 'm[~/k]' <<< "RD"; declare -p m`,
+			"declare -A m=([%H/k]=\"RD\" )\n",
+		},
+		// The guard, and the one route that must not take it: an indexed
+		// name's subscript is an expression, and bash names the tilde in the
+		// complaint rather than the path it would have expanded to.
+		{
+			"an indexed subscript is left as written",
+			`q=(1 2 3); unset 'q[~/k]'`,
+			"",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, st := runEmptyArray(t, tc.src)
+			if tc.want == "" {
+				if !strings.Contains(errs, "~/k") {
+					t.Errorf("%s: the complaint should name the subscript as written, got %q", tc.src, errs)
+				}
+				return
+			}
+			want := strings.ReplaceAll(tc.want, "%H", homeOfTheRun(t))
+			if out != want || errs != "" || st != 0 {
+				t.Errorf("%s = %q (stderr %q, status %d), want %q", tc.src, out, errs, st, want)
+			}
+		})
+	}
+}
+
+// homeOfTheRun is the `$HOME` the rows above expand a tilde to, asked of the
+// shell rather than of the test's environment: the harness decides what the
+// run's home is and a constant here would only agree with it by luck.
+func homeOfTheRun(t *testing.T) string {
+	t.Helper()
+	out, errs, st := runEmptyArray(t, `printf '%s' "$HOME"`)
+	if errs != "" || st != 0 || out == "" {
+		t.Fatalf(`$HOME came back %q (stderr %q, status %d)`, out, errs, st)
+	}
+	return out
 }

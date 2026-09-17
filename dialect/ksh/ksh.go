@@ -731,6 +731,10 @@ func Semantics() interp.Semantics {
 	// `~b` and the keys `['a~b']` and `['b~']` are all quoted here.
 	// Measured 2026-09-17 over `set` and a keyed `typeset -p` (#2298).
 	s.ListedTildeIsBareWhereItCannotExpand = interp.No
+	// The subscript's leading tilde *is* expanded here, as it is in bash:
+	// `typeset -A m; m[~/k]=v` stores under `$HOME/k` and `${m[~/k]}` reads
+	// it back. Measured 2026-09-17 on ksh93u+ 2012-08-01 (#2298).
+	s.SubscriptKeyExpandsALeadingTilde = interp.Yes
 	s.ListingControlEscape = interp.ControlEscapeHex
 	// The column that leaves `^` bare, and the only one: `v=^` and `v=a^b`
 	// list unquoted here where bash and zsh write `'^'` and `'a^b'`.

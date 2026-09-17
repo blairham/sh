@@ -476,6 +476,12 @@ type Diagnostics struct {
 	GetoptsBadOption string
 	// GetoptsMissingArgument is an option whose argument is not there. Same.
 	GetoptsMissingArgument string
+	// GetoptsNumericArgument is the argument of a `letter#` option that is
+	// not a numeral — or that is not there at all, which the one dialect
+	// with the type words the same way rather than as a missing argument.
+	// One verb: the letter. Only the dialect that answers
+	// Semantics.GetoptsOptionStringHasANumericType yes ever reaches it.
+	GetoptsNumericArgument string
 	// GetoptsNamesNoLine prints those with the shell's name and no line,
 	// where this dialect gives a line to everything else. bash alone.
 	GetoptsNamesNoLine bool

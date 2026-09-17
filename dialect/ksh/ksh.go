@@ -1766,6 +1766,10 @@ func Semantics() interp.Semantics {
 	// scan runs out (#3275).
 	s.GetoptsCountsTheWordOnTheNextCall = interp.No
 	s.GetoptsEndOfOptionsNamesIt = interp.Yes
+	// The `letter#` numeric type, which is this shell's alone: `getopts 'n#' o`
+	// reads `-n 5` and `-n5` as the number 5 where the other three read `#` as a
+	// second option letter. Measured 2026-09-16 on ksh93u+ 2012-08-01 (#2947).
+	s.GetoptsOptionStringHasANumericType = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
 	// OPTARG and OPTIND are the builtin's own here: `readonly OPTARG;
@@ -3026,6 +3030,7 @@ func Diagnostics() interp.Diagnostics {
 		ExecNotFound:           "exec: %[1]s: not found",
 		GetoptsBadOption:       "-%[1]s: unknown option",
 		GetoptsMissingArgument: "-%[1]s: argument expected",
+		GetoptsNumericArgument: "-%[1]s: numeric argument expected",
 		CdCannotChange:         "cd: %[1]s: [%[2]s]",
 		// One message for both, where bash names which variable was missing.
 		CdHomeNotSet: "cd: bad directory",

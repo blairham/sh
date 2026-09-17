@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `[[ … ]]` in dash, which has none.
+#
+# `[[` is not a reserved word here, so it is looked up as a command and is
+# not found (127). What follows it is ordinary words, so `<` is a redirection
+# that fails to open its file and `( a )` is a subshell that does not parse.
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what is
+# being graded. The rows that print `ran` or `after` ask whether the refusal
+# is made while reading or while running.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- [[ is a command nobody has ---\n'
+try '[[ a = a ]]'
+try '[[ a = a ]] && printf "yes\n" || printf "no\n"'
+try 'if [[ -n x ]]; then printf "then\n"; else printf "else\n"; fi'
+printf -- '--- so what follows it is words, not a grammar ---\n'
+try '[[ a < b ]]; printf "%s\n" "$?"'
+try '[[ a && b ]]'
+try '[[ ( a ) ]]'
+printf -- '--- and a closing ]] is an ordinary word too ---\n'
+try 'printf "[%s]\n" ]]'

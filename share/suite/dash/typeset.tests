@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The declaration commands in dash — `typeset`, `declare`, `integer`.
+#
+# None exists, so each is a command not found and the assignment it carries
+# never happens. `local`, `readonly` and `export` are what dash has, asked
+# beside them so the file says which of the family is present.
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what is
+# being graded. The rows that print `ran` or `after` ask whether the refusal
+# is made while reading or while running.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- none of the declaration commands are here ---\n'
+try 'typeset x=1; printf "[%s]\n" "$x"'
+try 'declare x=1; printf "[%s]\n" "$x"'
+try 'integer x=1'
+try 'typeset -i x'
+printf -- '--- except local, readonly and export ---\n'
+f() { local x=inner; printf '[%s]\n' "$x"; }
+x=outer
+f
+printf '[%s]\n' "$x"
+try 'local x=1'
+readonly r=1
+export e=2
+printf '[%s] [%s]\n' "$r" "$e"

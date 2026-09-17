@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `;&` and `;;&` in BusyBox ash, which does not have it — an ext/ area this column
+# does not run.
+#
+# BusyBox takes a good part of the ext/ list (`$'…'`, `[[`, substrings, the
+# replacement, `function`), so which constructs it lacks is a question per
+# construct rather than a foregone one. This one it lacks, and it answers
+# every row with the same shape dash does: the same refusal at the same
+# place, in BusyBox's own wording (`syntax error: unexpected "("`, a
+# `line N` after `eval:`).
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what
+# is being graded.
+#
+# Measured 2026-09-16 in the pinned alpine image, BusyBox v1.37.0.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- a fall-through terminator does not parse ---\n'
+try 'case a in a) printf "1\n" ;& b) printf "2\n" ;; esac'
+try 'case a in a) printf "1\n" ;;& *) printf "2\n" ;; esac'
+try 'printf "ran\n"; case a in a) :;& esac'
+printf -- '--- and a bare ;; is the only one ---\n'
+case a in a) printf 'one\n' ;; b) printf 'two\n' ;; esac
+case b in (a) printf 'one\n' ;; (b) printf 'parenthesized\n' ;; esac
+case c in a) ;; esac
+printf 'no match -> %s\n' "$?"

@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The `function` keyword in dash, which has none.
+#
+# `function` is not reserved, so `function f { … }` is a syntax error at the
+# closing brace and a bare `function f` is a command not found. What dash does
+# accept is any compound command as a body — and, measured, a simple command
+# too: `f() printf …` defines a function.
+#
+# Every refusal is asked through `eval` in a subshell, so a script that
+# reaches one goes on to the next row and the file's own parse is not what is
+# being graded. The rows that print `ran` or `after` ask whether the refusal
+# is made while reading or while running.
+#
+# Measured 2026-09-16: Apple's dash-16 on macOS and Ubuntu 24.04's dash answer
+# every row alike, and bash, zsh and ksh93 each answer the file differently.
+
+try() {
+	( eval "$1" ) 2>&1
+	printf '  -> %s\n' "$?"
+}
+
+printf -- '--- the function keyword is not reserved ---\n'
+try 'function f { printf "in\n"; }; f'
+try 'function f() { printf "in\n"; }; f'
+try 'function f'
+try 'printf "ran\n"; function f { :; }'
+printf -- '--- a body is any compound command ---\n'
+try 'f() ( printf "subshell\n" ); f'
+try 'f() if true; then printf "if\n"; fi; f'
+try 'f() for x in a; do printf "%s\n" "$x"; done; f'
+try 'f() printf "simple\n"; f'

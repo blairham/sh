@@ -1011,122 +1011,17 @@ func (r *Runner) pushScope(keyword bool) *scope {
 
 // popScope closes the scope pushScope opened. See pushScope.
 func (r *Runner) popScope(sc *scope) {
-	// Put back what `local` displaced, in whatever order it was declared:
-	// the values are keyed by name, so order does not matter.
-	for name, old := range sc.saved {
-		if sc.existed[name] {
-			r.Vars[name] = old
-		} else {
-			delete(r.Vars, name)
-		}
-		// And the name stops being one a *declaration* gave its value to,
-		// which is measured rather than tidiness: the shell that reads a
-		// declaration as setting the name leaves the caller's an empty
-		// export once a function has declared a local of it, where before
-		// the declaration it was told to no child at all. Putting the
-		// record back instead kept it silent, which no shell does.
-		delete(r.declaredEmpty, name)
-		// And the parameter that takes names out of a pathname expansion
-		// follows the value the restore put back, which is what makes a
-		// `local` of it last exactly as long as the call. See
-		// interp/ignorednames.go.
-		r.ignoredNamesRestored(name)
-	}
-	for name, old := range sc.savedArrays {
-		if sc.arrayExisted[name] {
-			r.Arrays[name] = old
-		} else {
-			delete(r.Arrays, name)
-		}
-	}
-	for name, old := range sc.savedAssoc {
-		if sc.assocExisted[name] {
-			r.AssocArrays[name] = old
-		} else {
-			delete(r.AssocArrays, name)
-		}
-	}
-	// And how the caller's compound value had come to be, which is restored
-	// with the tables rather than left as the local declaration set it. See
-	// compounddeclaredonly.go.
-	for name, was := range sc.declaredOnlyBefore {
-		if was {
-			r.compoundDeclaredOnly(name)
-		} else {
-			r.compoundWasAssigned(name)
-		}
-	}
-	// And the frozen attribute, which goes both ways: a name the declaration
-	// shadowed is frozen again, so a function cannot thaw one for good, and
-	// a name the declaration *froze* is writable again, because the
-	// attribute a `local -r` adds is the call's and lasts as long as it.
-	for name, was := range sc.savedReadonly {
-		if was {
-			if r.readonly == nil {
-				r.readonly = map[string]bool{}
-			}
-			r.readonly[name] = true
-		} else {
-			delete(r.readonly, name)
-		}
-	}
-	// And the hide-in-scope attribute, which goes both ways for the reason
-	// the frozen one does: a name the declaration shadowed carries again
-	// whatever it carried, and one this call hid — or un-hid with `+h` — is
-	// back to the outer answer. See hideinscope.go.
-	for name, was := range sc.savedHideInScope {
-		if was {
-			if r.hideInScope == nil {
-				r.hideInScope = map[string]bool{}
-			}
-			r.hideInScope[name] = true
-		} else {
-			delete(r.hideInScope, name)
-		}
-	}
-	// And the producer a hidden shadow suspended, which is the half of the
-	// letter that makes the local an ordinary parameter: the name is the
-	// shell's own again the moment the call returns. See hideinscope.go.
-	for name := range sc.suspendedProducers {
-		r.resumeProducer(sc, name)
-	}
-	// And every other attribute the declaration displaced, which goes both
-	// ways for the reason the frozen one does — see localattributes.go.
-	for name, was := range sc.savedAttrs {
-		r.restoreAttributes(name, was)
-	}
-	// And what a produced parameter was last assigned, which goes both ways
-	// for the reason the frozen attribute does: the outer name answers from
-	// whatever message it had left for its producer, and one this call left
-	// goes away with the call. See scope.savedAssigned.
-	for name, spoken := range sc.assignedSpoken {
-		if spoken {
-			if r.assigned == nil {
-				r.assigned = map[string]string{}
-			}
-			r.assigned[name] = sc.savedAssigned[name]
-		} else {
-			delete(r.assigned, name)
-		}
-	}
-	// And the export attribute, where the dialect took it off for the local:
-	// the outer name goes back to whatever the shell had recorded about it,
-	// including having recorded nothing.
-	for name, spoken := range sc.exportedSpoken {
-		if spoken {
-			r.exported[name] = sc.savedExported[name]
-		} else {
-			delete(r.exported, name)
-		}
-	}
-	// And whether `unset` had hidden the name, which a hiding `local` set
-	// for the function's duration: put back what was true at the shadow.
-	for name, was := range sc.removedBefore {
-		if was {
-			r.removed[name] = true
-		} else {
-			delete(r.removed, name)
-		}
+	// Put back what the declarations in this scope displaced, one name at a
+	// time and in whatever order they were made: the records are keyed by
+	// name, so order does not matter.
+	//
+	// Through the same helper `unset` reaches when it takes a *caller's*
+	// local away — see unsetenclosinglocal.go. The two undo the identical
+	// shadow, and this unwind is exactly the shape a second copy goes stale
+	// in: it grew from two tables to thirteen an assignment at a time, and
+	// every one of those additions would have had to be made twice.
+	for _, name := range sc.shadowedNames() {
+		r.restoreShadowedName(sc, name)
 	}
 	// And the half of the `getopts` position a declaration of OPTIND
 	// displaced, which lives here for the reason the traps below do: it is
@@ -1170,6 +1065,216 @@ func (r *Runner) popScope(sc *scope) {
 	// caller's again before the caller's is put back over it.
 	r.unsealCallerLocals(sc)
 	r.scopes = r.scopes[:len(r.scopes)-1]
+}
+
+// shadowedNames is every name this scope has a record of, taken before any of
+// them is put back: restoreShadowedName deletes the records as it goes, so the
+// list has to be settled first.
+func (sc *scope) shadowedNames() []string {
+	names := map[string]bool{}
+	for name := range sc.saved {
+		names[name] = true
+	}
+	for name := range sc.savedArrays {
+		names[name] = true
+	}
+	for name := range sc.savedAssoc {
+		names[name] = true
+	}
+	for name := range sc.declaredOnlyBefore {
+		names[name] = true
+	}
+	for name := range sc.savedReadonly {
+		names[name] = true
+	}
+	for name := range sc.savedHideInScope {
+		names[name] = true
+	}
+	for name := range sc.hiddenShadow {
+		names[name] = true
+	}
+	for name := range sc.suspendedProducers {
+		names[name] = true
+	}
+	for name := range sc.savedAttrs {
+		names[name] = true
+	}
+	for name := range sc.assignedSpoken {
+		names[name] = true
+	}
+	for name := range sc.exportedSpoken {
+		names[name] = true
+	}
+	for name := range sc.removedBefore {
+		names[name] = true
+	}
+	list := make([]string, 0, len(names))
+	for name := range names {
+		list = append(list, name)
+	}
+	return list
+}
+
+// shadows reports whether a declaration in this scope has taken a copy of the
+// name — the question "is this name local *here*", asked of one scope.
+//
+// The three value tables and not the attribute records, because a shadow is
+// what those three hold: an attribute is saved beside a value and never on its
+// own. See Runner.shadow, which writes all of them together.
+func (sc *scope) shadows(name string) bool {
+	if _, ok := sc.saved[name]; ok {
+		return true
+	}
+	if _, ok := sc.savedArrays[name]; ok {
+		return true
+	}
+	_, ok := sc.savedAssoc[name]
+	return ok
+}
+
+// restoreShadowedName puts one name back the way the scope found it and
+// forgets the records, which is the whole of what a scope's exit does for a
+// name — and the whole of what `unset` does to a caller's local, which is the
+// other caller. See popScope and unsetenclosinglocal.go.
+//
+// The order within the name is the order the phases ran in when this was
+// thirteen loops over thirteen maps, because that order was measured into
+// place: the value first, then the tables, then the attributes the shadow
+// displaced, then the records about how the value came to be.
+func (r *Runner) restoreShadowedName(sc *scope, name string) {
+	if old, ok := sc.saved[name]; ok {
+		if sc.existed[name] {
+			r.Vars[name] = old
+		} else {
+			delete(r.Vars, name)
+		}
+		// And the name stops being one a *declaration* gave its value to,
+		// which is measured rather than tidiness: the shell that reads a
+		// declaration as setting the name leaves the caller's an empty
+		// export once a function has declared a local of it, where before
+		// the declaration it was told to no child at all. Putting the
+		// record back instead kept it silent, which no shell does.
+		delete(r.declaredEmpty, name)
+		// And the parameter that takes names out of a pathname expansion
+		// follows the value the restore put back, which is what makes a
+		// `local` of it last exactly as long as the call. See
+		// interp/ignorednames.go.
+		r.ignoredNamesRestored(name)
+		delete(sc.saved, name)
+		delete(sc.existed, name)
+	}
+	if old, ok := sc.savedArrays[name]; ok {
+		if sc.arrayExisted[name] {
+			r.Arrays[name] = old
+		} else {
+			delete(r.Arrays, name)
+		}
+		delete(sc.savedArrays, name)
+		delete(sc.arrayExisted, name)
+	}
+	if old, ok := sc.savedAssoc[name]; ok {
+		if sc.assocExisted[name] {
+			r.AssocArrays[name] = old
+		} else {
+			delete(r.AssocArrays, name)
+		}
+		delete(sc.savedAssoc, name)
+		delete(sc.assocExisted, name)
+	}
+	// And how the caller's compound value had come to be, which is restored
+	// with the tables rather than left as the local declaration set it. See
+	// compounddeclaredonly.go.
+	if was, ok := sc.declaredOnlyBefore[name]; ok {
+		if was {
+			r.compoundDeclaredOnly(name)
+		} else {
+			r.compoundWasAssigned(name)
+		}
+		delete(sc.declaredOnlyBefore, name)
+	}
+	// And the frozen attribute, which goes both ways: a name the declaration
+	// shadowed is frozen again, so a function cannot thaw one for good, and
+	// a name the declaration *froze* is writable again, because the
+	// attribute a `local -r` adds is the call's and lasts as long as it.
+	if was, ok := sc.savedReadonly[name]; ok {
+		if was {
+			if r.readonly == nil {
+				r.readonly = map[string]bool{}
+			}
+			r.readonly[name] = true
+		} else {
+			delete(r.readonly, name)
+		}
+		delete(sc.savedReadonly, name)
+	}
+	// And the hide-in-scope attribute, which goes both ways for the reason
+	// the frozen one does: a name the declaration shadowed carries again
+	// whatever it carried, and one this call hid — or un-hid with `+h` — is
+	// back to the outer answer. See hideinscope.go.
+	if was, ok := sc.savedHideInScope[name]; ok {
+		if was {
+			if r.hideInScope == nil {
+				r.hideInScope = map[string]bool{}
+			}
+			r.hideInScope[name] = true
+		} else {
+			delete(r.hideInScope, name)
+		}
+		delete(sc.savedHideInScope, name)
+	}
+	// And the record of whether the shadow itself was a hidden one, which
+	// nothing puts back — it describes a binding that is going away — but
+	// which has to stop answering for the name the moment it does. See
+	// Runner.shadowIsHidden, which reads the innermost scope that shadowed.
+	delete(sc.hiddenShadow, name)
+	// And the producer a hidden shadow suspended, which is the half of the
+	// letter that makes the local an ordinary parameter: the name is the
+	// shell's own again the moment the call returns. See hideinscope.go.
+	r.resumeProducer(sc, name)
+	// And every other attribute the declaration displaced, which goes both
+	// ways for the reason the frozen one does — see localattributes.go.
+	if was, ok := sc.savedAttrs[name]; ok {
+		r.restoreAttributes(name, was)
+		delete(sc.savedAttrs, name)
+	}
+	// And what a produced parameter was last assigned, which goes both ways
+	// for the reason the frozen attribute does: the outer name answers from
+	// whatever message it had left for its producer, and one this call left
+	// goes away with the call. See scope.savedAssigned.
+	if spoken, ok := sc.assignedSpoken[name]; ok {
+		if spoken {
+			if r.assigned == nil {
+				r.assigned = map[string]string{}
+			}
+			r.assigned[name] = sc.savedAssigned[name]
+		} else {
+			delete(r.assigned, name)
+		}
+		delete(sc.assignedSpoken, name)
+		delete(sc.savedAssigned, name)
+	}
+	// And the export attribute, where the dialect took it off for the local:
+	// the outer name goes back to whatever the shell had recorded about it,
+	// including having recorded nothing.
+	if spoken, ok := sc.exportedSpoken[name]; ok {
+		if spoken {
+			r.exported[name] = sc.savedExported[name]
+		} else {
+			delete(r.exported, name)
+		}
+		delete(sc.exportedSpoken, name)
+		delete(sc.savedExported, name)
+	}
+	// And whether `unset` had hidden the name, which a hiding `local` set
+	// for the function's duration: put back what was true at the shadow.
+	if was, ok := sc.removedBefore[name]; ok {
+		if was {
+			r.removed[name] = true
+		} else {
+			delete(r.removed, name)
+		}
+		delete(sc.removedBefore, name)
+	}
 }
 
 // callFunc runs a function body with the arguments as its positional

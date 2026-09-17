@@ -7755,6 +7755,65 @@ type Semantics struct {
 	// half against the shell itself.
 	CallerLocalsReachTheCallee Answer
 
+	// UnsetRemovesAnEnclosingLocal decides what `unset` does to a name a
+	// *calling* function made local: take the binding away, so that whatever
+	// lies beyond it shows through for the rest of the script, or leave the
+	// name unset where it stands until the call that owns it returns.
+	//
+	// Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a
+	// script file with stdin closed:
+	//
+	//	v=GLOBAL
+	//	g() { unset v; echo "  in g: [${v-UNSET}]"; }
+	//	f() { local v=L; g; echo "  back in f: [${v-UNSET}]"; }
+	//	f; echo "global [${v-UNSET}]"
+	//
+	//	                 in g       back in f   global
+	//	bash 5.3.20      [GLOBAL]   [GLOBAL]    [GLOBAL]
+	//	bash 3.2.57      [GLOBAL]   [GLOBAL]    [GLOBAL]
+	//	zsh 5.9.2        [UNSET]    [UNSET]     [GLOBAL]
+	//	dash 0.5.12      [UNSET]    [UNSET]     [GLOBAL]
+	//	BusyBox ash 1.37 [UNSET]    [UNSET]     [GLOBAL]
+	//	ksh93u+ (`function`, `typeset`)
+	//	                 [UNSET]    [L]         [UNSET]
+	//
+	// So bash takes the local away and the next scope out answers — for the
+	// rest of `g` **and** for the rest of `f` after it returns — and the
+	// rest leave the name unset until `f` ends. The ksh93 row is the
+	// same `No` as zsh's and dash's read through its own scoping: a
+	// keyword-defined function's locals are static there, so `g` never sees
+	// `f`'s `v` at all and unsets the global instead.
+	//
+	// **It is a local of a previous scope specifically.** At the *same*
+	// scope every column agrees, so this is not "what `unset` does to a
+	// local":
+	//
+	//	f() { local v=L; unset v; echo "[${v-UNSET}]"; }   [UNSET] everywhere
+	//	g() { local v=G; unset v; v=NEW; }                 the local, not the
+	//	                                                   caller's
+	//
+	// Four more rows say what `Yes` has to mean, and each of them fails a
+	// weaker reading that merely made the outer value *visible*:
+	//
+	//	v=GLOBAL; g(){ unset v; v=NEW; }; f(){ local v=L; g; }
+	//	                                   bash leaves `v` at NEW after `f`,
+	//	                                   so the caller's binding is gone
+	//	                                   rather than hidden
+	//	h(){ unset v; }; g(){ local v=G; h; }; f(){ local v=F; g; }
+	//	                                   `[F]` — one binding goes, not
+	//	                                   every one of them
+	//	g(){ unset v; unset v; }           the second one reaches the global
+	//	declare -i v=5; f(){ local -i v=9; g; }; g(){ unset v; v=3+4; }
+	//	                                   `7` — the outer binding's
+	//	                                   attributes come back with it
+	//
+	// One shell in the panel can be asked for the other answer: `shopt -s
+	// localvar_unset` makes bash answer as this axis's `No` does, which is
+	// what makes the option and the default one axis rather than two
+	// features. See Runner.UnsetRemovesAnEnclosingLocal, which is the switch
+	// over it.
+	UnsetRemovesAnEnclosingLocal Answer
+
 	// ReadonlyDeclaresALocal gives `readonly` inside a function a scope of
 	// its own, the way every other declaration word has one.
 	//
@@ -17240,7 +17299,14 @@ func PosixSemantics() Semantics {
 		// follows the reading a shell without scopes already behaves as: a
 		// name a function set is the name the function it calls reads.
 		CallerLocalsReachTheCallee: Yes,
-		ArrayBaseIsZero:            Yes,
+		// XCU has no `local` either, so it has nothing to say about what
+		// `unset` does to one. The preset follows the three panel members
+		// that have the word and answer alike — zsh, dash and ash leave the
+		// name unset until the call that declared it returns — and bash is
+		// the column that parts, by taking the binding away. See
+		// UnsetRemovesAnEnclosingLocal for the rows.
+		UnsetRemovesAnEnclosingLocal: No,
+		ArrayBaseIsZero:              Yes,
 		// The standard has no subscript, and the nearest reading it does
 		// have is its arithmetic: a comma there is the operator whose value
 		// is its right operand, and a string is not a sequence a subscript

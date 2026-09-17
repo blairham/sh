@@ -270,6 +270,14 @@ func Semantics() interp.Semantics {
 	// `${m["k"]}` reads it back. zsh takes the subscript as written and
 	// stores under the three characters.
 	s.SubscriptIsAQuotingContext = interp.Yes
+	// `unset` of a name a *calling* function made local takes the binding
+	// away here, so the next scope out answers for the rest of the script:
+	// the panel's other three leave the name unset until the call that
+	// declared it returns. Measured on bash 5.3.20 and bash 3.2.57 alike —
+	// see interp.Semantics.UnsetRemovesAnEnclosingLocal for the rows and for
+	// the four that say the binding is gone rather than hidden. This is the
+	// one column a script can move, with `shopt -s localvar_unset`.
+	s.UnsetRemovesAnEnclosingLocal = interp.Yes
 	// The other join, and the opposite answer: where an unquoted `@` list
 	// reaches a context that keeps no fields, this shell rejoins it on a
 	// hard space rather than on IFS. `IFS=-; a=(x y z); v=${a[@]}` is

@@ -640,25 +640,168 @@ func printfWidePrecision(spec string) bool {
 	return prec > printfFmtFieldCeiling
 }
 
-// printfStringField lays a conversion whose field is a string out through
-// `fmt`, honoring a precision past what `fmt` renders here instead.
+// printfByteField lays a conversion whose field is a string out through
+// `fmt`, counting the width and the precision in **bytes**, and honoring a
+// precision past what `fmt` renders here instead.
+//
+// Bytes, because that is C's `printf` and every column but one: `printf
+// '[%.2s]' αβγ` is `[α]` — two bytes, one character — and `printf '[%7s]'
+// αβγ` pads the six bytes with one space, in bash 5.3.20, bash 3.2.57,
+// ksh93u+, dash 0.5.12 and BusyBox ash 1.37.0, under `LC_ALL=C` and under a
+// UTF-8 locale alike (measured 2026-09-16). Go's `fmt` counts runes, which is
+// the other column's answer — see Semantics.PrintfFieldCountsCharacters —
+// and it was the answer this shell gave everywhere, so a UTF-8 operand came
+// out longer and padded shorter than any of the five.
 //
 // A string conversion's precision only truncates, so one past the operand's
-// length is a no-op — which is why this half is exact and costs nothing:
+// length is a no-op — which is why the wide band is exact and costs nothing:
 // the text is cut at the precision and the precision then leaves the spec,
 // so `fmt` is left with a width it can render. `printf '[%.10000010s]' xyz`
 // is `[xyz]` in bash 5.3 and is `[xyz]` here.
 //
 // The width stays with `fmt`, because printfWideField has already taken out
-// any width `fmt` would refuse.
-func printfStringField(spec, text string) string {
-	if _, _, prec := printfSpecParts(spec); prec > printfFmtFieldCeiling {
-		if prec < len(text) {
-			text = text[:prec]
-		}
-		spec = printfWithoutPrecision(spec)
+// any width `fmt` would refuse. It is handed an ASCII stand-in of the text's
+// length in bytes, so `fmt`'s own flags — `-`, and `0`, which it honors for a
+// string — lay the field out exactly as they always have.
+func printfByteField(spec, text string) string {
+	_, _, prec := printfSpecParts(spec)
+	if isASCII(text) && prec <= printfFmtFieldCeiling {
+		return fmt.Sprintf(spec+"s", text)
 	}
-	return fmt.Sprintf(spec+"s", text)
+	if prec >= 0 && prec < len(text) {
+		text = text[:prec]
+	}
+	return printfFieldAround(printfWithoutPrecision(spec), text, len(text))
+}
+
+// printfCharacterField is printfByteField counting **characters**: the
+// precision cuts after that many characters and the width pads to that many.
+//
+// Only reached where a dialect says so and the locale decodes characters at
+// all — see printfFieldUnit. A byte that does not begin a valid sequence is a
+// character of its own here, which is what `fmt` does with one; what the
+// column that reaches this through the `l` modifier does with such a byte is
+// something else again and is not modeled.
+func printfCharacterField(spec, text string) string {
+	_, _, prec := printfSpecParts(spec)
+	if prec >= 0 && prec < utf8.RuneCountInString(text) {
+		cut, n := 0, 0
+		for n < prec {
+			_, size := utf8.DecodeRuneInString(text[cut:])
+			cut += size
+			n++
+		}
+		text = text[:cut]
+	}
+	return printfFieldAround(printfWithoutPrecision(spec), text, utf8.RuneCountInString(text))
+}
+
+// printfFieldAround lays text out in the field spec describes as though it
+// were units long, by letting `fmt` lay out a stand-in of that length and
+// putting the text where the stand-in landed. spec carries no precision.
+func printfFieldAround(spec, text string, units int) string {
+	stand := strings.Repeat("x", units)
+	field := fmt.Sprintf(spec+"s", stand)
+	at := strings.Index(field, stand)
+	return field[:at] + text + field[at+len(stand):]
+}
+
+// printfStringField lays out the field of a conversion whose operand is text
+// — `%s`, `%b` and a date — in the unit the dialect and the locale name.
+//
+// long says the conversion carried the `l` length modifier, which is a
+// question of its own in one column: see printfFieldUnit. unanswered reports
+// an axis nothing answered, and the conversion then stops.
+func (r *Runner) printfStringField(spec, text string, long bool) (field string, unanswered bool) {
+	chars, unanswered := r.printfFieldUnit(spec, text, long)
+	if unanswered {
+		return "", true
+	}
+	if chars {
+		return printfCharacterField(spec, text), false
+	}
+	return printfByteField(spec, text), false
+}
+
+// printfFieldUnit reports whether a string conversion's width and precision
+// count characters rather than bytes.
+//
+// Two axes, and the `l` modifier's is asked first because it is the more
+// specific: where it answers No the conversion falls back to the plain one's
+// reading, which is exactly what a column that ignores the letter does.
+//
+// Asked only where the answer changes what is written: an operand that is all
+// ASCII is the same length either way, and a conversion with neither a width
+// nor a precision writes the operand whole. Then the locale, last, so a
+// dialect that counts bytes is never asked what the locale decodes.
+func (r *Runner) printfFieldUnit(spec, text string, long bool) (chars, unanswered bool) {
+	if isASCII(text) {
+		return false, false
+	}
+	if _, width, prec := printfSpecParts(spec); width == 0 && prec < 0 {
+		return false, false
+	}
+	if long {
+		chars = r.ask(r.sem().PrintfLongModifierCountsCharacters,
+			"`printf '%ls'` counting its field in characters")
+		if r.unspecified {
+			return false, true
+		}
+	}
+	if !chars {
+		chars = r.ask(r.sem().PrintfFieldCountsCharacters,
+			"`printf '%s'` counting its field in characters")
+		if r.unspecified {
+			return false, true
+		}
+	}
+	if !chars {
+		return false, false
+	}
+	chars = r.countsTheLocalesCharacters()
+	return chars, r.unspecified
+}
+
+// printfWideCharacter is `%lc` in the column where the `l` modifier makes it
+// a wide character: the operand's first **character** rather than its first
+// byte, laid out as a one-character string — precision and all.
+//
+// The precision is the tell that it is a string and not C's `%c`. Measured
+// 2026-09-16 on bash 5.3.20 under a UTF-8 locale:
+//
+//	printf '[%lc]'    αβγ   [α]         `%c` writes the byte 0xce
+//	printf '[%3lc]'   αβγ   [  α]       two spaces: the width is characters
+//	printf '[%.0lc]'  abc   []          `%.0c` writes [a] in every column
+//	printf '[%5.0lc]' ''    [     ]     five spaces and no NUL
+//	printf '[%-3lc]'  ''    [\0  ]      the NUL `%c` writes, then the pad
+//
+// and all five are the byte reading under `LC_ALL=C`, where the locale has no
+// characters to take. handled is false wherever this reading and `%c`'s
+// cannot differ — an ASCII first byte with no precision — and wherever the
+// axis or the locale says bytes, so the caller writes `%c` as it always has.
+//
+// A first byte that does not begin a valid sequence is not modeled: bash
+// writes nothing at all for it, and this falls back to the byte.
+func (r *Runner) printfWideCharacter(spec, arg string) (field string, handled, unanswered bool) {
+	_, _, prec := printfSpecParts(spec)
+	if prec < 0 && (arg == "" || arg[0] < utf8.RuneSelf) {
+		return "", false, false
+	}
+	if !r.ask(r.sem().PrintfLongModifierCountsCharacters, "`printf '%lc'` taking a character") {
+		return "", false, r.unspecified
+	}
+	if !r.countsTheLocalesCharacters() {
+		return "", false, r.unspecified
+	}
+	char := "\x00"
+	if arg != "" {
+		c, size := utf8.DecodeRuneInString(arg)
+		if c == utf8.RuneError && size <= 1 {
+			return "", false, false
+		}
+		char = arg[:size]
+	}
+	return printfCharacterField(spec, char), true, false
 }
 
 // printfWideInteger lays an integer conversion out here because its precision
@@ -1153,7 +1296,11 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 	case 'T':
 		return r.printfTime(spec, timeFmt, arg, present)
 	case 's':
-		return printfStringField(spec, arg), 0, false
+		field, unanswered := r.printfStringField(spec, arg, r.printfLongModifier)
+		if unanswered {
+			return "", r.status, true
+		}
+		return field, 0, false
 	case 'b':
 		// The one verb whose *argument* is escaped, where `%s` leaves it
 		// alone. Unanimous, and the difference people reach for `%b` to get.
@@ -1162,7 +1309,12 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		// conversion — `printf '[%b][%s]' 'a\cb' x` is `[a` in all six — so
 		// the flag is returned rather than dropped.
 		text, stop := r.expandBEscapes(arg)
-		field := printfStringField(spec, text)
+		// Never the `l` modifier's reading: `printf '[%.1lb]' αβ` cuts at a
+		// byte in bash 5.3, where `%.1ls` keeps the character.
+		field, unanswered := r.printfStringField(spec, text, false)
+		if unanswered {
+			return "", r.status, true
+		}
 		if stop && field != text &&
 			!r.ask(r.sem().PrintfBStopIsPadded, "a `%b` a `\\c` cut short still going through its field") {
 			// ksh93 alone: what the stop left is written as it stands, width
@@ -1172,6 +1324,15 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		}
 		return field, 0, stop
 	case 'c':
+		if r.printfLongModifier {
+			field, handled, unanswered := r.printfWideCharacter(spec, arg)
+			if unanswered {
+				return "", r.status, true
+			}
+			if handled {
+				return field, 0, false
+			}
+		}
 		if arg == "" {
 			// No character to write — an empty operand, or none left at all
 			// — and the answer is one NUL byte rather than nothing (#2647).
@@ -1686,16 +1847,20 @@ func cNotANumber(s string) (float64, bool) {
 // a backslash before a newline is not one of the answers (#1707).
 func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 	switch r.quoteStyle() {
+	// A quoted operand's field is counted in bytes in every column that has
+	// the conversion, zsh included — which counts characters for `%s` —
+	// so no dialect is asked: `printf '[%.2q]' αβγ` is `[α]` in bash 5.3,
+	// zsh 5.9.2 and ksh93u+ under a UTF-8 locale.
 	case PrintfQuoteAnsiCWord:
-		return printfStringField(spec, ansiCWordQuote(arg)), 0, false
+		return printfByteField(spec, ansiCWordQuote(arg)), 0, false
 	case PrintfQuoteAnsiCCharacter:
 		// The same function `${(q)…}` uses, which is the same job: this
 		// shell's `%q` and its `q` flag were measured against each other over
 		// every printable byte at three positions and every control byte, and
 		// they agree everywhere.
-		return printfStringField(spec, quoteWithBackslashes(arg, false)), 0, false
+		return printfByteField(spec, quoteWithBackslashes(arg, false)), 0, false
 	case PrintfQuoteSingle:
-		return printfStringField(spec, kshSingleQuote(arg)), 0, false
+		return printfByteField(spec, kshSingleQuote(arg)), 0, false
 	case PrintfQuoteAbsent:
 		// A conversion the shell does not have stops the output where it is,
 		// as any other unknown one does.
@@ -1712,6 +1877,7 @@ func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 // is an axis nothing answered, which stops the format rather than printing
 // half of it.
 func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
+	r.printfLongModifier = false
 	i, spec, code := r.printfSpecPrefix(s)
 	if code != 0 {
 		return "", 0, "", i, code
@@ -1756,7 +1922,9 @@ func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
 			return "", 0, "", i, r.status
 		}
 	}
-	i += r.lengthModifierRun(s, i)
+	n := r.lengthModifierRun(s, i)
+	r.printfLongModifier = strings.IndexByte(s[i:i+n], 'l') >= 0
+	i += n
 	if r.unspecified {
 		return "", 0, "", i, r.status
 	}
@@ -2280,7 +2448,11 @@ func (r *Runner) printfTime(spec, format, arg string, present bool) (string, int
 	}
 	// The width and the flags belong to the *result*, not to the date: a
 	// `%10(%Y)T` pads the four digits out to ten.
-	return printfStringField(spec, strftime(format, t)), code, false
+	field, unanswered := r.printfStringField(spec, strftime(format, t), false)
+	if unanswered {
+		return "", r.status, true
+	}
+	return field, code, false
 }
 
 // printfDate is the other reading of `%T`: the operand is a date string, and
@@ -2302,7 +2474,11 @@ func (r *Runner) printfDate(spec, format, arg string) (string, int, bool) {
 	if format == "" {
 		format = "%a %b %e %H:%M:%S %Z %Y"
 	}
-	return printfStringField(spec, strftime(format, t)), code, false
+	field, unanswered := r.printfStringField(spec, strftime(format, t), false)
+	if unanswered {
+		return "", r.status, true
+	}
+	return field, code, false
 }
 
 // badVerbName is the conversion character a diagnostic names, given where the

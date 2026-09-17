@@ -123,6 +123,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EmptyAssociativeKeyIsReportedWhenRead", s.EmptyAssociativeKeyIsReportedWhenRead, interp.No},
 		{"EmptyAssociativeKeyRefusesTheLength", s.EmptyAssociativeKeyRefusesTheLength, interp.No},
 		{"PrefixListingNamesADeclaredOnlyCompound", s.PrefixListingNamesADeclaredOnlyCompound, interp.Yes},
+		// The unit a string conversion's field is counted in (#2298).
+		{"PrintfFieldCountsCharacters", s.PrintfFieldCountsCharacters, interp.No},
+		{"PrintfLongModifierCountsCharacters", s.PrintfLongModifierCountsCharacters, interp.No},
 		{"EmptyArrayIsSet", s.EmptyArrayIsSet, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},

@@ -1504,6 +1504,13 @@ func Semantics() interp.Semantics {
 	// `%zX`, `%ld`, `%jd` and any run of the letters, all of them read and
 	// thrown away: `%hhd` with 300 is 300.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99
+	// A `%s` field is bytes, and an `l` on `%s` or `%c` makes it characters
+	// where the locale has them: `printf '[%.2s|%.2ls|%lc]' αβγ αβγ αβγ` is
+	// `[α|αβ|α]` under a UTF-8 locale, bash 5.3.20, 2026-09-16. bash 3.2.57
+	// has no wide reading and writes `[α|α|` and the byte 0xce, so the `l`
+	// answer is this build's rather than the family's (#2298).
+	s.PrintfFieldCountsCharacters = interp.No
+	s.PrintfLongModifierCountsCharacters = interp.Yes
 	// `%(fmt)T`: an epoch through a date format, with -1 for now and -2 for
 	// when the shell started. This shell alone in the panel — 3.2 has it not
 	// either, which is why the two bash columns of the corpus differ here.

@@ -2104,6 +2104,12 @@ func Semantics() interp.Semantics {
 	// One of `h`, `l` and `L`, which is C89's set: `%ld` is a decimal and
 	// `%lld`, `%zX` and `%jd` are invalid directives.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
+	// Characters, where the locale has them: `printf '[%.2s|%7s]' αβγ αβγ`
+	// is `[αβ|    αβγ]` under a UTF-8 locale and `[α| αβγ]` under C, zsh
+	// 5.9.2, 2026-09-16 — the one column counting characters. The `l` is
+	// ignored, so `%ls` is `%s` and `%lc` is `%c`'s byte.
+	s.PrintfFieldCountsCharacters = interp.Yes
+	s.PrintfLongModifierCountsCharacters = interp.No
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
 	s.PidListingFinishesWithAJob = interp.No
 	s.PrintfTimeConversion = interp.No

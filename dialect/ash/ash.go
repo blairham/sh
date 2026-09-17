@@ -685,6 +685,11 @@ func Semantics() interp.Semantics {
 	// `printf '%ld\n' 5` is 5, so the length modifiers are read rather than
 	// refused as conversions.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
+	// Bytes, with or without an `l`, under `LC_ALL=C.UTF-8` as under C:
+	// `printf '[%.2s|%.2ls|%lc]' αβγ αβγ αβγ` is `[α|α|` and the byte 0xce,
+	// BusyBox ash 1.37.0 in the pinned Alpine image, 2026-09-16.
+	s.PrintfFieldCountsCharacters = interp.No
+	s.PrintfLongModifierCountsCharacters = interp.No
 	// No `%q` and no `%(fmt)T`: both are `invalid format`.
 	s.PrintfQuote = interp.PrintfQuoteAbsent
 	// C's `#` at a value of nought. Measured inside the pinned Alpine

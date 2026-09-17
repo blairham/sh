@@ -2971,7 +2971,8 @@ func Diagnostics() interp.Diagnostics {
 		// Spoken as the shell rather than as the builtin, measured: the line
 		// is `bash: line 1: warning: a: circular name reference` with no
 		// `declare:` in it, where the two refusals above carry the name.
-		NamerefCircularWarning: "warning: %[1]s: circular name reference",
+		NamerefCircularWarning:               "warning: %[1]s: circular name reference",
+		NamerefArrayLiteralDropsTheAttribute: "warning: %[1]s: removing nameref attribute",
 		// And the write through one, which bash reports as a depth rather
 		// than as a circle: `f() { local -n r=r; r=SET; }` writes `warning:
 		// r: maximum nameref depth (8) exceeded` and the value reaches the

@@ -8478,6 +8478,16 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// this line, dropping the subscript — which is what made
 		// `fpath[$i]=()` empty `fpath` (#1330).
 		r.assignElemLiteral(a)
+	case a.IsArray && r.isNameref(a.Name):
+		// A literal assigned through a reference goes where the reference
+		// points; the branches below read the name as itself, which wrote
+		// into no container at all. See namerefArrayLiteralTarget for the
+		// three answers and what was measured.
+		if target, write := r.namerefArrayLiteralTarget(a.Name); write {
+			through := *a
+			through.Name = target
+			r.assign(ctx, &through)
+		}
 	case a.IsArray && r.assocDeclared(a.Name):
 		// The attribute was declared, so the literal's elements are keyed
 		// rather than counted.

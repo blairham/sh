@@ -297,6 +297,55 @@ func (r *Runner) namerefAssignmentTarget(name, value string) (target string, wri
 	return name, false
 }
 
+// namerefArrayLiteralTarget answers where an array literal assigned through a
+// reference goes, and reports whether it goes anywhere at all.
+//
+// Measured 2026-09-17 on bash 5.3.20, script files under `env -i`, with
+// `a=(Z Y)`:
+//
+//	declare -n v=a; v=(n1 n2)          a becomes (n1 n2)
+//	declare -n w=a; w+=(app)           a becomes (Z Y app)
+//	f(){ declare -n p=$1; p+=(x); }    the caller's array grows
+//	declare -A M=([x]=1)
+//	  declare -n n=M; n=([y]=2)        M becomes ([y]=2) — the target's
+//	                                   own replace rule, not the reference's
+//	declare -n u; u=(a b)              `warning: u: removing nameref
+//	                                   attribute`, and u itself is the array
+//	declare -n e=q[0]; e=(a b)         `` `q[0]': not a valid identifier ``
+//	                                   and nothing is written
+//
+// Every one of those wrote nowhere here: the literal branches of
+// [Runner.assign] read the name as itself, so an assignment through a
+// reference silently reached no container at all. The scalar path already
+// went through [Runner.namerefAssignmentTarget]; this is its literal half,
+// and the three answers above are its three returns.
+func (r *Runner) namerefArrayLiteralTarget(name string) (target string, write bool) {
+	if !r.isNameref(name) {
+		return name, true
+	}
+	aimed, is := r.namerefTarget(name)
+	if !is {
+		// Nothing to point at: the reference gives the attribute up and the
+		// name takes the array itself.
+		if w := r.diag().NamerefArrayLiteralDropsTheAttribute; w != "" {
+			r.DiagnoseAsTheShellf("%s\n", Wording(w, "warning: %[1]s: removing nameref attribute", name))
+		}
+		r.unsetNameref(name)
+		return name, true
+	}
+	if !isNameLike(aimed) {
+		// Aimed at an element. A whole array cannot go into one, and the
+		// shell says so rather than writing the first word into it.
+		r.diagf("`%s': not a valid identifier\n", aimed)
+		// Reported and carried on, at 1: measured, the next line runs and
+		// `echo "after $?"` is `after 1` in bash 5.3.20.
+		r.assignFailed = true
+		r.status = 1
+		return "", false
+	}
+	return aimed, true
+}
+
 // isNameref reports whether a name is a reference, which is what a listing
 // and `${!r}` ask.
 func (r *Runner) isNameref(name string) bool {

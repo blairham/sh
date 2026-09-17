@@ -1489,7 +1489,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if r.unspecified {
 			return r.status
 		}
-		if df.nameref {
+		if df.nameref && !r.namerefLetterIsDropped(df) {
 			// The `n` letter makes the name a **reference**, and what the
 			// operand carries is the name it points at rather than a value
 			// to store. Ahead of every store below because none of them
@@ -4606,4 +4606,36 @@ func (r *Runner) functionDefinitionFile(name string) string {
 // so the exponent letter wins over the other two wherever it stands.
 func numericTypeLetterCompany(f declareFlags) bool {
 	return strings.ContainsRune(f.letters, 'i') && strings.ContainsRune(f.letters, 'E')
+}
+
+// namerefLetterIsDropped reports whether an `n` letter beside `a` or `A` is
+// ignored rather than refused.
+//
+// Measured 2026-09-17 on bash 5.3.20, `env -i` with a scratch HOME, from a
+// file — the split is the binding and not the builtin's name:
+//
+//	declare -an t         at the top level      the array, silently, at 0
+//	typeset -an t         at the top level      the same
+//	declare -na t=v       at the top level      declare -a t=([0]="v")
+//	f(){ declare -g -an d; }    global by -g    the array, silently, at 0
+//	f(){ declare -an d; }       local           `d: reference variable cannot
+//	f(){ local -an l; }         local            be an array` at 1
+//	f(){ typeset -an t; }       local            the same
+//
+// So a declaration that makes a **local** binding refuses the pair, which is
+// what this shell did everywhere, and one that makes a global binding keeps
+// the array and drops the reference. The name still ends up carrying the
+// array attribute in both columns; what differs is the complaint and the
+// status, and — where a value was given — whether it is stored.
+//
+// Core rather than an axis: bash is the only shell on the panel that spells
+// both letters. ksh93 has `nameref` and no `-n`, and its `typeset -an` is its
+// usage block at 2.
+func (r *Runner) namerefLetterIsDropped(df declareFlags) bool {
+	if !df.array && !df.assoc {
+		return false
+	}
+	// A local binding is what refuses: inside a function, and not sent to the
+	// global table by `-g`.
+	return df.global || len(r.scopes) == 0
 }

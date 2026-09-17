@@ -304,6 +304,10 @@ func Semantics() interp.Semantics {
 	// is still answered rather than left out, because `local x` reaches it
 	// and an unanswered axis refuses at run time (#2272, #2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is neither a
+	// `${!prefix@}` nor a compound to declare — `${!q@}` is `Bad
+	// substitution` — so nothing here can reach the axis. Measured
+	// 2026-09-16 on dash 0.5.12.
 	// $(( )) with nothing in it wants a primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.Yes
 	// The one column that clamps a numeral past the word instead of letting

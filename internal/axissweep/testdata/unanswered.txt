@@ -144,6 +144,7 @@ ash   NumericTypeLettersAreExclusive
 ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
 ash   OperatorAfterTheSubscriptListingIsBad
+ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
 ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfHexFloatDefaultIsTwelveDigits
@@ -369,6 +370,7 @@ dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
 dash  OperatorAfterTheSubscriptListingIsBad
 dash  PipefailSubstitutesTheBareSignal
+dash  PrefixListingNamesADeclaredOnlyCompound
 dash  PrefixRefusalCostsTheCommand
 dash  PrintfFloatOperandIsEvaluatedTwice
 dash  PrintfOutputPrecedesComplaint
@@ -478,6 +480,7 @@ zsh   NamerefArrayRefusal
 zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   OperatorAfterTheSubscriptListingIsBad
+zsh   PrefixListingNamesADeclaredOnlyCompound
 zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfOutputPrecedesComplaint
 zsh   ReadCountJudgesTheNamesAfterTheFirst

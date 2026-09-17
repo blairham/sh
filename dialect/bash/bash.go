@@ -1020,6 +1020,13 @@ func Semantics() interp.Semantics {
 	// through `-c` and from a file. ksh93 is the column that parts here,
 	// which is what makes it a question of its own (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.Yes
+	// A table the letters merely declared is not among the names a prefix
+	// listing comes to: `declare -A q1; echo "[${!q@}]"` is `[]`, and the
+	// same declaration with `=()` behind it is `[q1]`. Measured 2026-09-16 on
+	// bash 5.3.20 under `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a file.
+	// bash 3.2.57 is the column that parts here — it lists a valueless
+	// `declare -a` — so the answer is this build's rather than the family's.
+	s.PrefixListingNamesADeclaredOnlyCompound = interp.No
 	// The export letter says nothing about scope here: `declare -x v=1`
 	// inside a function is an ordinary local.
 	s.ExportLetterDeclaresAGlobal = interp.No

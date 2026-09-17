@@ -6314,7 +6314,53 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 	for name := range r.Vars {
 		add(name)
 	}
+	// The compound tables, which are not a second view of Vars: an array has
+	// a scalar cell beside it and a keyed table has none at all — see
+	// exportedTables, whose whole reason for existing is that the walk over
+	// Vars cannot see one. So a shell holding `declare -A m=([k]=v)` and
+	// nothing else knew the name everywhere a lookup, a listing or an export
+	// asks and did not know it here, and `${!m@}` came to nothing. What a
+	// caller then does with nothing is the damage: `declare -p ${!m@}` is
+	// `declare -p` with no operands, which prints the whole shell.
+	//
+	// Both tables and not only the keyed one, because a name is meant to be
+	// listed for being a name rather than for which table happens to hold
+	// it, and a route that stores an array without a scalar cell would
+	// otherwise reopen this exactly as quietly.
+	//
+	// compound is add with the declared-only question in front of it: a
+	// table a declaration brought into being and nothing has written to is
+	// a name one column lists and another does not. The question is put
+	// only where such a name is actually a candidate — it carries the
+	// prefix, no other table has already offered it, and the record says
+	// declared-only — so a shell that has written to what it declared never
+	// reaches the axis at all.
+	compound := func(name string) {
+		if r.declaredOnlyCompound[name] && !seen[name] && !r.removed[name] &&
+			strings.HasPrefix(name, prefix) &&
+			!r.ask(r.sem().PrefixListingNamesADeclaredOnlyCompound,
+				"a prefix listing naming a compound a declaration brought into being and nothing has written to") {
+			return
+		}
+		add(name)
+	}
+	for name := range r.Arrays {
+		compound(name)
+	}
+	for name := range r.AssocArrays {
+		compound(name)
+	}
 	for name := range r.Dynamic {
+		add(name)
+	}
+	// And the produced compounds, for the reason r.Dynamic is here: a name
+	// whose value is made up on each read is still a name this shell answers
+	// for, so a listing that skipped it would disagree with the lookup
+	// standing next to it.
+	for name := range r.DynamicArrays {
+		add(name)
+	}
+	for name := range r.DynamicAssocs {
 		add(name)
 	}
 	for k := range r.inheritedEnv {

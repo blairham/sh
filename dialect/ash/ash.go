@@ -504,6 +504,9 @@ func Semantics() interp.Semantics {
 	// record back with. Answered rather than left unanswered because `local
 	// x` reaches the axis (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// unanswered PrefixListingNamesADeclaredOnlyCompound: dash's reason
+	// exactly — no `${!prefix@}` and no compound for a declaration to bring
+	// into being, so the axis is never asked.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	// `local` outside a function is refused and the refusal is fatal:
 	// `local x=1` at the top level is `local: not in a function` and the

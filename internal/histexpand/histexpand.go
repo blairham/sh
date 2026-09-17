@@ -293,7 +293,7 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 			out.WriteString(string(src[i:]))
 			i = len(src)
 			continue
-		case r == c.Event && !single && !(double && c.DoubleQuotesProtect):
+		case r == c.Event && !single && (!double || !c.DoubleQuotesProtect):
 			if literal(src, i, c, double) {
 				out.WriteRune(r)
 				i++
@@ -681,14 +681,14 @@ func shellFields(s string, braces bool) []string {
 			break
 		}
 		start := i
-		if isOperatorByte(s[i]) && !(i+1 < len(s) && (s[i] == '<' || s[i] == '>') && s[i+1] == '(') {
+		if isOperatorByte(s[i]) && !startsProcessSubstitution(s, i) {
 			i = operatorEnd(s, i)
 			out = append(out, s[start:i])
 			continue
 		}
 		for i < len(s) && !isBlank(s[i]) {
 			c := s[i]
-			if (c == '<' || c == '>') && i+1 < len(s) && s[i+1] == '(' {
+			if startsProcessSubstitution(s, i) {
 				i = closeParen(s, i+1) + 1
 				continue
 			}
@@ -724,6 +724,11 @@ func shellFields(s string, braces bool) []string {
 		out = append(out, s[start:i])
 	}
 	return out
+}
+
+// startsProcessSubstitution reports whether s holds `<(` or `>(` at i.
+func startsProcessSubstitution(s string, i int) bool {
+	return i+1 < len(s) && (s[i] == '<' || s[i] == '>') && s[i+1] == '('
 }
 
 func allDigits(s string) bool {

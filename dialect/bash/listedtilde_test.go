@@ -13,14 +13,20 @@ import (
 // under `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/orig`, over a bare `set`
 // and a `declare -p` of a keyed table:
 //
-//	value/key   bash            zsh 5.9.2      ksh93u+
-//	a~b         a~b   [a~b]     'a~b'          'a~b'
-//	b~          b~    [b~]      'b~'           'b~'
-//	~b          '~b'  ["~b"]    '~b'           '~b'
+//	value/key   bash              zsh 5.9.2   ksh93u+
+//	a~b         a~b     [a~b]     'a~b'       'a~b'
+//	b~          b~      [b~]      'b~'        'b~'
+//	a:x~b       a:x~b   [a:x~b]   'a:x~b'     'a:x~b'
+//	~b          '~b'    ["~b"]    '~b'        '~b'
+//	a:~b        'a:~b'  ["a:~b"]  'a:~b'      'a:~b'
+//	a=~b        'a=~b'  ["a=~b"]  'a=~b'      'a=~b'
 //
 // The other three panel shells quote every one, so this is bash's alone —
-// Semantics.ListedTildeIsBareUnlessItOpens. The two position rules compose
-// here as well: `a#~b` and `a~b#c` are bare and `~a#b` is quoted (#2298).
+// Semantics.ListedTildeIsBareWhereItCannotExpand. The quoted rows are the
+// three offsets a tilde expansion could start at: the front, and — because
+// an assignment's value is a tilde context after each — straight after a `:`
+// or an `=`. The `#` rule composes with it: `a#~b` and `a~b#c` are bare and
+// `~a#b` is quoted (#2298).
 
 func TestAListedTildeIsQuotedOnlyAtTheFront(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
@@ -28,6 +34,15 @@ func TestAListedTildeIsQuotedOnlyAtTheFront(t *testing.T) {
 		{"a value ending in a tilde", `v='b~'; set | grep '^v='`, "v=b~\n"},
 		{"a value a tilde opens", `v='~b'; set | grep '^v='`, "v='~b'\n"},
 		{"a tilde alone", `v='~'; set | grep '^v='`, "v='~'\n"},
+		{"a tilde after a colon", `v='a:~b'; set | grep '^v='`, "v='a:~b'\n"},
+		{"a tilde after an equals", `v='a=~b'; set | grep '^v='`, "v='a=~b'\n"},
+		{"a tilde one past a colon", `v='a:x~b'; set | grep '^v='`, "v=a:x~b\n"},
+		{"a tilde after a comma", `v='a,~b'; set | grep '^v='`, "v=a,~b\n"},
+		{
+			"a key with a tilde after a colon",
+			`k='a:~b'; declare -A m; m[$k]=1; declare -p m`,
+			"declare -A m=([\"a:~b\"]=\"1\" )\n",
+		},
 		{
 			"a key with a tilde inside it",
 			`k='a~b'; declare -A m; m[$k]=1; declare -p m`,

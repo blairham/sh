@@ -635,7 +635,7 @@ func Semantics() interp.Semantics {
 	// the 3.2.57 macOS ships, which agree; zsh and ksh93 quote every one.
 	// The two position rules compose: `a#~b` and `a~b#c` are bare here and
 	// `~a#b` is quoted (#2298).
-	s.ListedTildeIsBareUnlessItOpens = interp.Yes
+	s.ListedTildeIsBareWhereItCannotExpand = interp.Yes
 	// The three bytes the panel does not agree about in a listed word.
 	// Measured 2026-09-14 over `set` and over a keyed `typeset -p`, which
 	// agree: `=` is ordinary here — `v=a=b` and the keys `[a=b]`, `[=x]`,

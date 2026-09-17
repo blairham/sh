@@ -16,7 +16,7 @@ import (
 // `case` rather than by `grep`, since a preset test has no PATH — and the key
 // `['a~b']` from a `typeset -p` of a keyed table.
 //
-// The column bash's Semantics.ListedTildeIsBareUnlessItOpens parts from, and
+// The column bash's Semantics.ListedTildeIsBareWhereItCannotExpand parts from, and
 // the guard that the answer did not leak out of that dialect (#2298).
 func TestAListedTildeIsQuotedWhereverItStands(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{

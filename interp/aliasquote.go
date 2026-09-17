@@ -319,16 +319,16 @@ func (r *Runner) valueListsBare(v string) bool {
 }
 
 // positionallyBareValue is the position rule: the only bytes in this value a
-// listing would otherwise quote are a `#` or a `~`, neither of them the first
-// byte, and the dialect leaves each of them alone there.
+// listing would otherwise quote are a `#` or a `~`, neither of them where it
+// would start something, and the dialect leaves each of them alone there.
 //
 // One predicate for the two characters because it is one rule — a byte is
-// quoted at the position where it would *start* something, a comment for `#`
-// and a tilde expansion for `~`, and nowhere else — and because the two
-// compose. Measured on bash 5.3.20, 2026-09-17: `a#~b` and `a~b#c` are bare
-// and `~a#b` is quoted, so a value carrying both is bare exactly when neither
-// opens it. Two separate passes would have quoted the mixed value, which no
-// column does.
+// quoted at the position where re-reading the value would *act* on it, a
+// comment for `#` and a tilde expansion for `~`, and nowhere else — and
+// because the two compose. Measured on bash 5.3.20, 2026-09-17: `a#~b` and
+// `a~b#c` are bare and `~a#b` is quoted, so a value carrying both is bare
+// exactly when neither is at such a position. Two separate passes would have
+// quoted the mixed value, which no column does.
 //
 // False is "this rule does not settle it" rather than "quote it": the ksh93
 // reading, which judges the text in front of the first `#` instead of the
@@ -340,9 +340,9 @@ func (r *Runner) positionallyBareValue(v string) bool {
 	for i := 0; i < len(v); i++ {
 		switch {
 		case r.listedByteIsOrdinary(v[i]):
-		case i > 0 && v[i] == '#':
+		case v[i] == '#' && i > 0:
 			hash = true
-		case i > 0 && v[i] == '~':
+		case v[i] == '~' && !tildeWouldExpandAt(v, i):
 			tilde = true
 		default:
 			return false
@@ -352,13 +352,33 @@ func (r *Runner) positionallyBareValue(v string) bool {
 		"a `#` in a listed value that does not open it") {
 		return false
 	}
-	if tilde && !r.ask(r.sem().ListedTildeIsBareUnlessItOpens,
-		"a `~` in a listed value that does not open it") {
+	if tilde && !r.ask(r.sem().ListedTildeIsBareWhereItCannotExpand,
+		"a `~` in a listed value where no tilde expansion could start") {
 		return false
 	}
 	// Both false is a value listedValueIsBare has already answered, and this
 	// is only ever reached from there.
 	return hash || tilde
+}
+
+// tildeWouldExpandAt reports whether a `~` at this offset is one the shell
+// would expand if it read the value back unquoted.
+//
+// Three positions and not one, which is what the `#` rule beside it does not
+// need: a tilde expands at the front of a word, and in an *assignment's* value
+// it expands again after every `:` and after every `=` — the rule that makes
+// `PATH=$PATH:~/bin` work. So those are the offsets a listing has to quote
+// for, and nothing else is. Measured 2026-09-17 on bash 5.3.20 over a bare
+// `set` and a keyed `declare -p`, which agree:
+//
+//	bare      a~b   b~   a:b~c   a,~b   a:x~b   a~~b   a/~b   a-~b   a.~b
+//	quoted    ~b    ~    a:~b    a:~    :~b     a=~b   a::~b  a:~:b  ~~
+//
+// The character in front decides on its own: `a,~b` and `a@~b` are bare, so it
+// is not "any punctuation", and `a:x~b` is bare, so it is not "anywhere after
+// a colon" either.
+func tildeWouldExpandAt(v string, i int) bool {
+	return i == 0 || v[i-1] == ':' || v[i-1] == '='
 }
 
 // hashIsAllThatNeedsQuoting reports whether the only reason this value is not

@@ -8341,15 +8341,15 @@ type Semantics struct {
 	// with something else in it needing quotes are all settled without it.
 	ListedHashIsBareUnlessItOpensTheValue Answer
 
-	// ListedTildeIsBareUnlessItOpens leaves a `~` in a listed value or a
-	// listed **key** unquoted wherever it stands except as the first byte.
-	// bash alone, and the same shape as the `#` rule above rather than a
-	// different one: what either character is quoted for is the position
-	// where it would start something — a comment for `#`, a tilde expansion
-	// for `~` — and nowhere else.
+	// ListedTildeIsBareWhereItCannotExpand leaves a `~` in a listed value or a
+	// listed **key** unquoted at every offset where reading the value back
+	// would not expand it. bash alone, and the same shape as the `#` rule
+	// above rather than a different one: what either character is quoted for
+	// is the position where re-reading would act on it — a comment for `#`, a
+	// tilde expansion for `~` — and nowhere else.
 	//
-	// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/o`,
-	// from `-c`, with a bare `set` over a scalar and a `typeset -p` over a
+	// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/orig`,
+	// from `-c`, with a bare `set` over a scalar and a `declare -p` over a
 	// keyed table — the two listings agree within each column:
 	//
 	//	value   bash 5.3.20   bash 3.2.57   zsh 5.9.2   ksh93u+   dash
@@ -8357,12 +8357,23 @@ type Semantics struct {
 	//	b~      b~            b~            'b~'        'b~'      'b~'
 	//	~b      '~b'          '~b'          '~b'        '~b'      '~b'
 	//	~       '~'           '~'           '~'         '~'       '~'
+	//	a:~b    'a:~b'        'a:~b'        'a:~b'      'a:~b'    'a:~b'
+	//	a=~b    'a=~b'        'a=~b'        'a=~b'      'a=~b'    'a=~b'
+	//	a:x~b   a:x~b         a:x~b         'a:x~b'     'a:x~b'   'a:x~b'
 	//
 	//	key     bash 5.3.20
 	//	a~b     [a~b]="1"
 	//	b~      [b~]="1"
 	//	~b      ["~b"]="1"
-	//	~       ["~"]="1"
+	//	a:~b    ["a:~b"]="1"
+	//
+	// **Three offsets and not one**, which is where this parts from the `#`
+	// rule it otherwise copies: a tilde expands at the front of a word and,
+	// in an assignment's value, after every `:` and every `=` — the rule that
+	// makes `PATH=$PATH:~/bin` work — so a listing has to quote for all
+	// three. Runner.tildeWouldExpandAt carries the rows, including the ones
+	// that say it is the single character in front that decides and not "any
+	// punctuation".
 	//
 	// **It composes with the `#` rule rather than excluding it.** Measured on
 	// the same binary: `a#~b` and `a~b#c` are both bare and `~a#b` is quoted,
@@ -8379,7 +8390,7 @@ type Semantics struct {
 	// which is the same split the declaration listings already have from the
 	// alias one, and the reason this is asked in valueListsBare rather than
 	// in listedValueIsBare (#2298).
-	ListedTildeIsBareUnlessItOpens Answer
+	ListedTildeIsBareWhereItCannotExpand Answer
 
 	// ExportListing is the shape `export -p` writes: bash spells each name
 	// as a clustered declaration (`declare -x V="1"`), and the other four —
@@ -18138,7 +18149,7 @@ func PosixSemantics() Semantics {
 		ListedHashIsBareUnlessItOpensTheValue: No,
 		// And a `~` with it: four of the five columns quote one wherever it
 		// stands, so the standard's value is the majority's as well.
-		ListedTildeIsBareUnlessItOpens: No,
+		ListedTildeIsBareWhereItCannotExpand: No,
 		// And a descriptor the shell has nothing open at is not a terminal,
 		// however the number was spelled: no narrowing, and no value that
 		// answers true on its own.

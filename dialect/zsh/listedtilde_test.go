@@ -15,7 +15,7 @@ import (
 // `v='a~b'` and `w='b~'` from a bare `set`, and the key `['a~b']` from a
 // `typeset -p`.
 //
-// The guard that bash's Semantics.ListedTildeIsBareUnlessItOpens did not
+// The guard that bash's Semantics.ListedTildeIsBareWhereItCannotExpand did not
 // leak into this column (#2298).
 func TestAListedTildeIsQuotedWhereverItStands(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{

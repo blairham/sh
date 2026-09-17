@@ -18,25 +18,35 @@ func listingTildeSem(tilde Answer) Semantics {
 	s.DeclareValueQuoting = ListingQuoteWhenNeededEscaped
 	s.ListedHashIsBareAfterANonName = No
 	s.ListedHashIsBareUnlessItOpensTheValue = No
-	s.ListedTildeIsBareUnlessItOpens = tilde
+	s.ListedTildeIsBareWhereItCannotExpand = tilde
 	return s
 }
 
 // The axis is asked only where the two answers differ: a value with no `~`,
 // one whose `~` opens it, and one with something else in it needing quotes
 // are quoted under both.
-func TestAListedTildeIsBareUnlessItOpensTheValue(t *testing.T) {
+func TestAListedTildeIsBareWhereItCannotExpandTheValue(t *testing.T) {
 	for _, tc := range []struct{ value, bare, quoted string }{
 		// A `~` that does not open the value.
 		{"a~b", "a~b", "'a~b'"},
 		{"b~", "b~", "'b~'"},
 		{"a~b~c", "a~b~c", "'a~b~c'"},
 		{"a~", "a~", "'a~'"},
-		// The one position a tilde expansion would start at, quoted either
-		// way.
+		{"a,~b", "a,~b", "'a,~b'"},
+		// The offsets a tilde expansion would start at, quoted either way:
+		// the front of the value, and — because an assignment's value is a
+		// tilde context after each of them — straight after a `:` or an `=`.
 		{"~b", "'~b'", "'~b'"},
 		{"~", "'~'", "'~'"},
 		{"~/x", "'~/x'", "'~/x'"},
+		{"a:~b", "'a:~b'", "'a:~b'"},
+		{"a:~", "'a:~'", "'a:~'"},
+		{":~b", "':~b'", "':~b'"},
+		{"a=~b", "'a=~b'", "'a=~b'"},
+		{"a:~b:~c", "'a:~b:~c'", "'a:~b:~c'"},
+		// And the character in front is the whole of it: one further along
+		// from the colon is bare again.
+		{"a:x~b", "a:x~b", "'a:x~b'"},
 		// Something else needing quotes is not this question.
 		{"a~b x", "'a~b x'", "'a~b x'"},
 		{"a~b*", "'a~b*'", "'a~b*'"},
@@ -65,7 +75,7 @@ func listingBothPositionsSem(answer Answer) Semantics {
 	s.DeclareValueQuoting = ListingQuoteWhenNeededEscaped
 	s.ListedHashIsBareAfterANonName = No
 	s.ListedHashIsBareUnlessItOpensTheValue = answer
-	s.ListedTildeIsBareUnlessItOpens = answer
+	s.ListedTildeIsBareWhereItCannotExpand = answer
 	return s
 }
 
@@ -76,6 +86,7 @@ func TestTheTwoListedPositionRulesCompose(t *testing.T) {
 	for _, tc := range []struct{ value, bare, quoted string }{
 		{"a#~b", "a#~b", "'a#~b'"},
 		{"a~b#c", "a~b#c", "'a~b#c'"},
+		{"a#:~b", "'a#:~b'", "'a#:~b'"},
 		// And the openings still decide, whichever character takes the
 		// position.
 		{"~a#b", "'~a#b'", "'~a#b'"},
@@ -104,7 +115,7 @@ func keyListingSem(answer Answer) Semantics {
 	s.DeclareValueQuoting = ListingQuoteAlwaysDouble
 	s.ListedHashIsBareAfterANonName = No
 	s.ListedHashIsBareUnlessItOpensTheValue = answer
-	s.ListedTildeIsBareUnlessItOpens = answer
+	s.ListedTildeIsBareWhereItCannotExpand = answer
 	return s
 }
 
@@ -118,9 +129,11 @@ func TestAListedKeyTakesThePositionRules(t *testing.T) {
 		{"a#b", `[a#b]="v"`, `["a#b"]="v"`},
 		{"a#", `[a#]="v"`, `["a#"]="v"`},
 		{"a#~b", `[a#~b]="v"`, `["a#~b"]="v"`},
+		{"a:x~b", `[a:x~b]="v"`, `["a:x~b"]="v"`},
 		// Quoted under both: the two opening positions, and a key with
 		// something else in it that needs quotes anyway.
 		{"~b", `["~b"]="v"`, `["~b"]="v"`},
+		{"a:~b", `["a:~b"]="v"`, `["a:~b"]="v"`},
 		{"#b", `["#b"]="v"`, `["#b"]="v"`},
 		{"a b", `["a b"]="v"`, `["a b"]="v"`},
 		// And a plain key asks nothing.

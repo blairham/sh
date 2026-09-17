@@ -830,7 +830,7 @@ func (r *Runner) listedInDecimal(d declaration) string {
 // a bare `set`: `[a#b]` and `[a~b]` are bare there where `["#a"]` and
 // `["~b"]` are quoted, and the position rules behind that are
 // Semantics.ListedHashIsBareUnlessItOpensTheValue and
-// Semantics.ListedTildeIsBareUnlessItOpens. Reading listedValueIsBare here
+// Semantics.ListedTildeIsBareWhereItCannotExpand. Reading listedValueIsBare here
 // quoted both of the bare ones (#2298).
 func (r *Runner) clusteredKey(k string) string {
 	switch {

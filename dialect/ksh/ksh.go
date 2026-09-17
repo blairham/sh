@@ -730,7 +730,7 @@ func Semantics() interp.Semantics {
 	// And neither of bash's position rules applies to a `~`: `a~b`, `b~`,
 	// `~b` and the keys `['a~b']` and `['b~']` are all quoted here.
 	// Measured 2026-09-17 over `set` and a keyed `typeset -p` (#2298).
-	s.ListedTildeIsBareUnlessItOpens = interp.No
+	s.ListedTildeIsBareWhereItCannotExpand = interp.No
 	s.ListingControlEscape = interp.ControlEscapeHex
 	// The column that leaves `^` bare, and the only one: `v=^` and `v=a^b`
 	// list unquoted here where bash and zsh write `'^'` and `'a^b'`.

@@ -1101,7 +1101,7 @@ func Semantics() interp.Semantics {
 	s.ListedEqualsIsOrdinary = interp.No
 	// And a `~` is quoted wherever it stands, which is bash's rule refused:
 	// `v='a~b'` and `v='b~'` from a bare `set`, measured 2026-09-17 (#2298).
-	s.ListedTildeIsBareUnlessItOpens = interp.No
+	s.ListedTildeIsBareWhereItCannotExpand = interp.No
 	s.ListedNonAsciiIsOrdinary = interp.Yes
 	s.ListedAssignmentPrefixIsBare = interp.No
 	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a

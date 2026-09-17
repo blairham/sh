@@ -86,7 +86,7 @@ func TestTheWidePrecisionRenderersAgreeWithFmt(t *testing.T) {
 				for _, prec := range precs {
 					spec := "%" + flags + width + "." + prec
 					for _, s := range []string{"", "a", "abcdef"} {
-						got := printfStringField(spec, s)
+						got := printfByteField(spec, s)
 						want := fmt.Sprintf(spec+"s", s)
 						if got != want {
 							t.Errorf("%ss of %q: got %q, want %q", spec, s, got, want)

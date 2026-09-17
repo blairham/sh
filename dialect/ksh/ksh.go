@@ -1739,6 +1739,11 @@ func Semantics() interp.Semantics {
 	// that is its free-order conversion prefix rather than this axis: `%5-d`
 	// works there too, with no modifier in it at all.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99
+	// Bytes, with or without an `l`: `printf '[%.2s|%.2ls]' αβγ αβγ` is
+	// `[α|α]` under a UTF-8 locale, ksh93u+, 2026-09-16. Its `%c` taking a
+	// character there is a different question and is not modeled.
+	s.PrintfFieldCountsCharacters = interp.No
+	s.PrintfLongModifierCountsCharacters = interp.No
 	// ksh93's `%T` is a different conversion under the same letter: its
 	// operand is a date *string* and a number earns a warning and the current
 	// time. Not the one bash has, and not modeled — see

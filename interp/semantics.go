@@ -3519,6 +3519,58 @@ type Semantics struct {
 	// Asked only where a conversion actually carries one of the letters, so
 	// a dialect is never questioned about `%s`.
 	PrintfLengthModifiers PrintfLengthModifierSet
+	// PrintfFieldCountsCharacters counts the width and the precision of a
+	// `%s` or `%b` field in characters rather than in bytes, where the
+	// locale decodes characters at all.
+	//
+	// Measured 2026-09-16 with `x=αβγ` (three characters, six bytes), from a
+	// file under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	                          LC_ALL=en_US.UTF-8     LC_ALL=C, or unset
+	//	printf '[%.2s]'  "$x"     zsh [αβ]  others [α]   every column [α]
+	//	printf '[%7s]'   "$x"     zsh [    αβγ]          every column [ αβγ]
+	//	                          others [ αβγ]
+	//
+	// "Others" is bash 5.3.20, bash 3.2.57, ksh93u+, dash 0.5.12 and BusyBox
+	// ash 1.37.0 (with `LC_ALL=C.UTF-8` in Alpine). zsh 5.9.2 is the one
+	// column counting characters, and it counts them only where
+	// Semantics.MultibyteEncodingIsHonored and the locale say a character is
+	// more than a byte — which is why the C column is unanimous.
+	//
+	// `%q` is not asked: its field is bytes in all three columns that have
+	// it, zsh included (`printf '[%.2q]' αβγ` is `[α]` there).
+	//
+	// Asked only for an operand with a byte above ASCII and a field that
+	// has a width or a precision, so `printf '%s' café` needs no dialect.
+	PrintfFieldCountsCharacters Answer
+	// PrintfLongModifierCountsCharacters reads the `l` length modifier on
+	// `%s` and `%c` as C's wide conversions do: the field is counted in
+	// characters, and `%lc` takes the operand's first *character* and keeps
+	// a precision, as a one-character string would. bash 5.3 alone.
+	//
+	// Measured 2026-09-16 with `x=αβγ` under `LC_ALL=en_US.UTF-8`:
+	//
+	//	                    bash 5.3.20   bash 3.2.57, ksh93u+, ash   zsh 5.9.2
+	//	printf '[%.2ls]'    [αβ]          [α]                         [αβ]
+	//	printf '[%7ls]'     [    αβγ]     [ αβγ]                      [    αβγ]
+	//	printf '[%lc]'      [α]           the byte 0xce (ksh93: [α])  0xce
+	//	printf '[%.0lc]' a  []            [a]                         [a]
+	//
+	// dash has no length modifiers and refuses the conversion. zsh ignores
+	// the letter, so its `%ls` is its `%s` — PrintfFieldCountsCharacters
+	// answers it — and its `%lc` is `%c`'s byte. ksh93's `[α]` for `%lc` is
+	// not this reading: it is that shell taking a character for a plain
+	// `%c` too, with the width still in bytes, which nothing here models.
+	//
+	// It is any `l` in the run: `%lls`, `%hls`, `%zls` and `%Lls` count
+	// characters in bash 5.3.20, `%hs`, `%zs` and `%Ls` count bytes, and
+	// `%lb` and `%lq` count bytes. Under `LC_ALL=C` every row is the byte
+	// reading, so the locale is asked after the dialect.
+	//
+	// Asked only where the readings can differ: a `%ls` operand with a byte
+	// above ASCII and a field, and a `%lc` whose operand starts with one or
+	// whose conversion writes a precision.
+	PrintfLongModifierCountsCharacters Answer
 	// PrintfOutputPrecedesComplaint writes what `printf` produced before it
 	// complains about the rest, rather than after.
 	//

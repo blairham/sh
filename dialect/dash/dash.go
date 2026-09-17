@@ -715,6 +715,10 @@ func Semantics() interp.Semantics {
 	s.PrintfBStopIsPadded = interp.Yes
 	// None: `%ld` is the conversion `l`, which dash does not have.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
+	// Bytes in every locale — dash decodes none — and no `l` to ask about:
+	// `printf '[%.2s]' αβγ` is `[α]`, dash 0.5.12, 2026-09-16.
+	s.PrintfFieldCountsCharacters = interp.No
+	s.PrintfLongModifierCountsCharacters = interp.No
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
 	s.PidListingFinishesWithAJob = interp.No
 	s.PrintfTimeConversion = interp.No

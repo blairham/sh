@@ -2007,6 +2007,11 @@ type Runner struct {
 	// see printfLostStars, and printfSpecPrefix for why the count travels
 	// here rather than out of the scan.
 	printfLostStars printfLostStars
+	// printfLongModifier says the conversion just scanned carried an `l`
+	// among its length modifiers, which one column reads as "count this
+	// field in characters" — see Semantics.PrintfLongModifierCountsCharacters.
+	// Carried here for the reason printfLostStars is.
+	printfLongModifier bool
 	// line is where execution currently is, for diagnostics that name it.
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.

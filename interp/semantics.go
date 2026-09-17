@@ -6252,6 +6252,21 @@ type Semantics struct {
 	// argument and never stops for this one.
 	ReadonlyReassignmentByDeclarationFatal Answer
 
+	// ReadonlyReassignmentBySpecialBuiltinFatal is the same question where
+	// the declaration utility is a *special* builtin — `export x=2` and
+	// `readonly x=2` — which ReadonlyReassignmentByDeclarationFatal answers
+	// for the rest.
+	//
+	// A question of its own because one mode parts the two. Measured
+	// 2026-09-16 on bash 5.3.20: over a frozen `x`, `export x=2`, `readonly
+	// x=2` and `declare x=2` all carry on by default, and under `set -o
+	// posix` the first two end the script while `declare x=2` still carries
+	// on — the standard's rule that an error in a special builtin ends a
+	// non-interactive shell, which the mode moves and nothing else does.
+	// dash, ksh93, zsh and BusyBox ash end the script on both spellings
+	// under every name, so the standard's Yes is theirs.
+	ReadonlyReassignmentBySpecialBuiltinFatal Answer
+
 	// ArrayLiteralOperandRetypesAFrozenScalar lets a declaration utility's own
 	// `name=(…)` operand replace a **frozen scalar** with an array, without a
 	// refusal and with the freeze still on.
@@ -17504,6 +17519,9 @@ func PosixSemantics() Semantics {
 		// the standard's preset does not survive one.
 		FailedExpansionAbandonsTheLine:         No,
 		ReadonlyReassignmentByDeclarationFatal: Yes,
+		// An error in a special builtin ends a non-interactive shell (XCU
+		// 2.8.1).
+		ReadonlyReassignmentBySpecialBuiltinFatal: Yes,
 		// XCU's `readonly` sets an attribute on a name and says nothing
 		// about a scope, and there is no scope in the standard for it to
 		// take: `local` is not in XCU either. So the preset is no, which is

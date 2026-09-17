@@ -313,6 +313,7 @@ func TestADeclaredElementOfAFrozenArrayIsRefusedByItsBase(t *testing.T) {
 		`readonly a=z; typeset a[1]=v; echo "st=$? [$a][${a[1]}]"`, func(s *Semantics) {
 			s.ReadonlyReassignmentFatal = No
 			s.ReadonlyReassignmentByDeclarationFatal = No
+			s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 		})
 	// The refusal names `a`, the value it was holding is still there, and the
 	// element was not written — the last of the three is what says the guard

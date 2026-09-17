@@ -29,6 +29,7 @@ func readonlyElementSemantics() Semantics {
 		s := permissive()
 		s.ReadonlyReassignmentFatal = No
 		s.ReadonlyReassignmentByDeclarationFatal = No
+		s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 		// Two axes the setup lines below would otherwise leave unanswered:
 		// `typeset -A m` declares without a value, and a function body wants
 		// `typeset` to declare a local without asking which functions have a
@@ -380,6 +381,7 @@ echo after`
 	out, st := runReadonlyElementSemantics(t, src, func(s *Semantics) {
 		s.ReadonlyReassignmentFatal = Yes
 		s.ReadonlyReassignmentByDeclarationFatal = No
+		s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 	})
 	if want := "sh: m: readonly variable\n"; out != want {
 		t.Errorf("wrote %q, want %q — `after` printing means the declaration answer was read", out, want)

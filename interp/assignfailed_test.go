@@ -27,6 +27,7 @@ func refusedRun(t *testing.T, src string) (string, int) {
 	sem := permissive()
 	sem.ReadonlyReassignmentFatal = No
 	sem.ReadonlyReassignmentByDeclarationFatal = No
+	sem.ReadonlyReassignmentBySpecialBuiltinFatal = No
 	var out, errs bytes.Buffer
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
@@ -108,6 +109,7 @@ func TestOnlySomeDeclarationsNameThemselves(t *testing.T) {
 		}
 		sem := permissive()
 		sem.ReadonlyReassignmentByDeclarationFatal = No
+		sem.ReadonlyReassignmentBySpecialBuiltinFatal = No
 		var errs bytes.Buffer
 		dir := t.TempDir()
 		r := newTestRunner(t, &Runner{

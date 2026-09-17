@@ -129,6 +129,34 @@ func TestRefusalsBashMakes(t *testing.T) {
 				"sh: line 4: declare: cannot use `-f' to make functions\nc=1\n",
 		},
 		{
+			"a readonly refusal inside a command gives up nothing of the line",
+			"readonly x=1\n" +
+				"printf -v x hi; echo \"a=$?\"\n" +
+				"let x=2 y=3; echo \"b=$? y=${y-unset}\"\n" +
+				"(( x = 2, z = 5 )); echo \"c=$? z=${z-unset}\"\n" +
+				"x=2; echo same\n" +
+				"echo next\n",
+			"sh: line 2: x: readonly variable\na=1\n" +
+				"sh: line 3: x: readonly variable\nb=1 y=unset\n" +
+				"sh: line 4: x: readonly variable\nc=1 z=unset\n" +
+				"sh: line 5: x: readonly variable\nnext\n",
+		},
+		{
+			"POSIX mode ends the script on a readonly assignment and a special builtin's",
+			"set -o posix\nreadonly x=1\n" +
+				"declare x=2; echo a=$?\n" +
+				"printf -v x hi; echo b=$?\n" +
+				"export x=2\necho gone\n",
+			"sh: line 3: declare: x: readonly variable\na=1\n" +
+				"sh: line 4: x: readonly variable\nb=1\n" +
+				"sh: line 5: x: readonly variable\n",
+		},
+		{
+			"leaving POSIX mode puts the carrying-on back",
+			"set -o posix; set +o posix\nreadonly x=1\nx=2\nreadonly x=3\necho after\n",
+			"sh: line 3: x: readonly variable\nsh: line 4: x: readonly variable\nafter\n",
+		},
+		{
 			"a loop count out of range ends every loop",
 			"for i in 1 2; do for j in a b; do echo $i$j; continue 0; echo tail; done; echo mid; done; echo \"st=$?\"\n",
 			"1a\nsh: line 1: continue: 0: loop count out of range\nst=1\n",

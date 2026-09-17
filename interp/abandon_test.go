@@ -27,6 +27,7 @@ func abandonRun(t *testing.T, src string) (string, string, int) {
 	sem := permissive()
 	sem.ReadonlyReassignmentFatal = No
 	sem.ReadonlyReassignmentByDeclarationFatal = No
+	sem.ReadonlyReassignmentBySpecialBuiltinFatal = No
 	var out, errs bytes.Buffer
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{

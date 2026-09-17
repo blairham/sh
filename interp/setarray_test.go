@@ -280,6 +280,7 @@ set -A ro gone
 echo "st=$? [${ro[@]}]"`, func(s *Semantics) {
 		s.ReadonlyReassignmentFatal = No
 		s.ReadonlyReassignmentByDeclarationFatal = No
+		s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 	}, Diagnostics{})
 	want := "st=1 [keep]\n"
 	if out != want || st != 0 {

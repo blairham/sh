@@ -47,6 +47,7 @@ func refusingRemoval(s *Semantics) {
 	s.LocalOptions = "aAilprux"
 	s.ReadonlyReassignmentFatal = No
 	s.ReadonlyReassignmentByDeclarationFatal = No
+	s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 	s.TypesetLocalNeedsKeywordFunction = No
 }
 

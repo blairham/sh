@@ -34,6 +34,7 @@ func frozenAttrRun(t *testing.T, src string, a Answer) (string, string, int) {
 		// half this axis is about. The suite that asks whether a refused
 		// declaration is fatal is readonlyfatal's, not this one.
 		s.ReadonlyReassignmentByDeclarationFatal = No
+		s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 		s.AttributeOverAFrozenNameIsRefused = a
 	}, Diagnostics{ReadonlyVariable: "%s: readonly variable"})
 }
@@ -122,6 +123,7 @@ func TestARetypeExemptionOutranksTheAttributeRefusal(t *testing.T) {
 			s.TypesetLocalNeedsKeywordFunction = No
 			s.AttributeRereadsTheValueItFinds = Yes
 			s.ReadonlyReassignmentByDeclarationFatal = No
+			s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 			s.NumericTypeLetterRetypesAFrozenName = Yes
 			s.AttributeOverAFrozenNameIsRefused = Yes
 		}, Diagnostics{ReadonlyVariable: "%s: readonly variable"})

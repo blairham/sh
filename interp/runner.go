@@ -1745,6 +1745,15 @@ type Runner struct {
 	posixMode               bool
 	posixSaved              Answer
 	posixSavedUnsetReadonly Answer
+	// posixSavedReassignReadonly is ReadonlyReassignmentFatal's, for the
+	// same reason.
+	posixSavedReassignReadonly Answer
+	posixSavedSpecialReadonly  Answer
+	// arithCommand counts the `(( ))` commands being evaluated, and
+	// refusedInACommand says a readonly refusal was made inside one or inside
+	// a builtin — see Runner.refuseReadonlyInACommand.
+	arithCommand      int
+	refusedInACommand bool
 	// Whether a pattern written into a redirection's target is matched.
 	// Saved like the rest: POSIX forbids it and both columns that do it were
 	// measured to stop in the mode, so the mode asserts the standard's answer
@@ -7611,6 +7620,9 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// against a file with newlines — which varied two things at once and is
 	// confirmatory for either reading (#1182).
 	//
+	if (form == assignedAnyhow || form == assignedAsTheCompoundView) && (r.inBuiltin != "" || r.arithCommand > 0) {
+		return r.refuseReadonlyInACommand(name)
+	}
 	fatal := r.sem().ReadonlyReassignmentFatal
 	switch {
 	case form.declaresRatherThanAssigns():
@@ -7618,6 +7630,11 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		// dash, ksh93 and zsh, and bash reports it and carries on — by both
 		// invocation routes.
 		fatal = r.sem().ReadonlyReassignmentByDeclarationFatal
+		if r.IsSpecialBuiltinHere(r.inBuiltin) {
+			// Except where the declaration utility is a *special* builtin —
+			// see Semantics.ReadonlyReassignmentBySpecialBuiltinFatal.
+			fatal = r.sem().ReadonlyReassignmentBySpecialBuiltinFatal
+		}
 	}
 	if r.ask(fatal, "a readonly reassignment being fatal") {
 		r.reportReadonlyRefusal(name, form, true)
@@ -7636,6 +7653,47 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// assignment failing rather than about the refusal.
 	if !form.declaresRatherThanAssigns() {
 		r.ctl, r.abandonLine = controlAbandon, r.line
+	}
+	return true
+}
+
+// refuseReadonlyInACommand is the refusal of a write a **command** made to a
+// name it was handed — `printf -v x`, `mapfile x`, `let x=2`, `cd` updating
+// OLDPWD, and `(( x = 2 ))` — rather than one the script wrote as an
+// assignment.
+//
+// Two differences from an assignment's, and both measured 2026-09-16 from
+// script files, one construct per line with an `echo` behind it on the same
+// line:
+//
+//	                       bash 5.3.20       bash -o posix   zsh 5.9.2        ksh93u+
+//	x=2                    line given up     script ends     script ends      script ends
+//	printf -v x hi         same line runs    same line runs  script ends      no -v
+//	let x=2                same line runs    same line runs  status 1, runs   status 1, runs
+//	(( x = 2 ))            same line runs    same line runs  status 2, runs   script ends
+//
+// So nothing about the *line* is given up, and the status is the command's
+// failure — 1 from a builtin in all three, and the arithmetic command's own
+// failure status from `(( ))`, which is 2 in zsh exactly as a division by zero
+// is. What ends the script is a question per kind of command: a builtin's is
+// Semantics.ReadonlyRefusalInABuiltinIsFatal, which `read` and `getopts`
+// already ask, and the arithmetic command's is ArithCommandErrorIsFatal,
+// which a failed evaluation already asks. This path used to take the
+// assignment's answers, so bash gave up the line after `printf -v` and bash
+// in POSIX mode ended the script there.
+func (r *Runner) refuseReadonlyInACommand(name string) bool {
+	r.refusedInACommand = true
+	if r.arithCommand > 0 && r.inBuiltin == "" {
+		// The command reports and decides in arithCmd, through the same
+		// door an evaluation error goes through.
+		r.reportReadonlyRefusal(name, assignedAnyhow, false)
+		return true
+	}
+	fatal := r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,
+		"a builtin's refused write to its own output parameter ending the script")
+	r.reportReadonlyRefusal(name, assignedAnyhow, fatal)
+	if !fatal {
+		r.status = 1
 	}
 	return true
 }

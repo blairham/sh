@@ -6610,6 +6610,47 @@ type Semantics struct {
 	// which is no column's answer, since the two that record say 0 with a
 	// row and the one that does not says 0 with silence.
 	ValuelessDeclarationRecordsTheName Answer
+	// PrefixListingNamesADeclaredOnlyCompound lists, among the names
+	// `${!prefix@}` and `${!prefix*}` come to, a compound that a declaration
+	// brought into being and that nothing has written to.
+	//
+	// The compound sibling of the sentence above — where a *scalar* record
+	// bash 5.3 keeps is deliberately narrow and `${!x@}` does not match it,
+	// a *table* it keeps the same way is matched by one column of the panel
+	// and not by another, so the two states compounddeclaredonly.go keeps
+	// are read here as well as by the listing.
+	//
+	// Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C`, as a script
+	// file with stdin closed:
+	//
+	//	typeset -A q1; typeset -a q2
+	//	typeset -A q3=(); typeset -a q4=()
+	//	typeset -A q5=([k]=v); typeset -a q6=(x)
+	//	echo "[${!q@}]"
+	//
+	//	bash 5.3.20   [q3 q4 q5 q6]
+	//	ksh93u+       [q1 q2 q3 q4 q5 q6]
+	//	zsh 5.9.2     `bad substitution` — there is no ${!prefix@} here
+	//	dash, ash     `Bad substitution` — the same
+	//
+	// bash 3.2.57 answers with ksh93 on the half it can be asked: it has no
+	// keyed table, and `declare -a q2; declare -a q4=(); declare -a q6=(x)`
+	// there is `[q2 q4 q6]`. So this is not one shell against the rest and
+	// not a version's drift in one direction — it is the same split the
+	// listing has, arriving at a second reader.
+	//
+	// **It is the assignment that moves the name and not the emptiness.**
+	// `typeset -A q1` is unlisted in bash and `typeset -A q1; q1[k]=v;
+	// unset "q1[k]"` is listed, with nothing in it either way — the same
+	// rule `declare -p` writes `declare -A m` against `declare -A m=()` by,
+	// which is why this reads the record rather than counting elements.
+	//
+	// **Asked only where such a name is a candidate**, so an ordinary
+	// listing never reaches it: the name has to be in one of the compound
+	// tables, carry the prefix, be absent from every other table, and be
+	// declared-only. A shell that has written to everything it declared is
+	// never asked this at all.
+	PrefixListingNamesADeclaredOnlyCompound Answer
 	// ExportLetterDeclaresAGlobal makes the `x` letter on a declaration ask
 	// for `-g` as well, so `typeset -x v=1` written inside a function
 	// declares no local and the name outlives the call.

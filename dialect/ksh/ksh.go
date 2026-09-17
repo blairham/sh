@@ -1054,6 +1054,11 @@ func Semantics() interp.Semantics {
 	// so this is the unattributed one alone. Measured 2026-09-15 on ksh93u+
 	// under `env -i PATH=/usr/bin:/bin` (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// A table the letters merely declared *is* among the names a prefix
+	// listing comes to: `typeset -A q1; typeset -a q2; echo "[${!q@}]"` is
+	// `[q1 q2]` here, where bash 5.3 answers `[]`. Measured 2026-09-16 on
+	// ksh93u+ under `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a file.
+	s.PrefixListingNamesADeclaredOnlyCompound = interp.Yes
 	// A keyword-defined function's `typeset -x` is local like any other
 	// declaration; the POSIX-style function that leaks it has no scope to
 	// leak out of, which TypesetLocalNeedsKeywordFunction already answers.

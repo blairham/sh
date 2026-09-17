@@ -1239,6 +1239,10 @@ func Semantics() interp.Semantics {
 	// (#2561).
 	s.AttributeOverAFrozenNameIsRefused = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
+	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is no
+	// `${!prefix@}` in this shell at all — `typeset -A q1; echo "${!q@}"` is
+	// `bad substitution` — so no listing of that shape ever reaches the axis
+	// to be asked. Measured 2026-09-16 on zsh 5.9.2.
 	// unanswered ValuelessDeclarationRecordsTheName: that answer is yes, so
 	// a declaration without a value leaves the name holding the empty string
 	// and `typeset xyz; typeset -p xyz` writes `typeset xyz=''`. The axis

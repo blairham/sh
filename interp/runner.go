@@ -2727,6 +2727,9 @@ type Runner struct {
 	optionLists []optionList
 	// readonly names refuse assignment.
 	readonly map[string]bool
+	// unsetRefused names refuse `unset` and nothing else — see
+	// Runner.RefuseUnset.
+	unsetRefused map[string]bool
 	// freezing is the names the declaration now running is assigning to as
 	// operands, and freezeAfter is the ones whose `-r` is waiting for those
 	// assignments to land. `declare -ar A=(x y)` carries the value and the

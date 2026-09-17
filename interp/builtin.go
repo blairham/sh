@@ -2275,7 +2275,8 @@ func (r *Runner) badSubscriptToUnset(sub string, err error) int {
 // the shell that stops carries FatalErrorStatusIsOne's, as every fatal error
 // does, so there is no status of this error's own.
 func (r *Runner) unsetReadonly(name string) int {
-	if !r.readonly[name] {
+	refused := r.unsetRefused[name] && !r.readonly[name]
+	if !r.readonly[name] && !refused {
 		return 0
 	}
 	if r.AbsentParameter(name) {
@@ -2316,6 +2317,10 @@ func (r *Runner) unsetReadonly(name string) int {
 		defer func() { r.inBuiltin = outer }()
 	}
 	msg := Wording(r.diag().UnsetReadonly, "unset: %s: cannot unset: readonly variable", name)
+	if refused {
+		// See Runner.RefuseUnset: the same refusal with no reason given.
+		msg = Wording(r.diag().UnsetRefused, "unset: %s: cannot unset", name)
+	}
 	if r.ask(r.sem().UnsetReadonlyFatal, "unsetting a readonly name ending the script") {
 		// fatal carries FatalErrorStatusIsOne's number, which is the whole of
 		// the status question here — dash exits 2 and zsh 1, and neither is

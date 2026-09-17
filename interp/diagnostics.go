@@ -4160,6 +4160,18 @@ type Diagnostics struct {
 	// it writes for an assignment. Empty falls back to the default below,
 	// which is what the dialect the default was measured from wants.
 	UnsetReadonly string
+	// UnsetRefused is `unset` refusing a name that is not readonly and may
+	// not be removed all the same — see Runner.RefuseUnset. One verb: the
+	// name. Empty falls back to the sentence the one dialect with such names
+	// writes.
+	UnsetRefused string
+	// IndirectionUndeclared is `${!v}` refusing a `v` nothing ever declared,
+	// and IndirectionNotAName is the same expansion refusing what `v` holds
+	// because it names no parameter. One verb each: the name as written, with
+	// its subscript, and the text it held. Empty is the reading with no
+	// refusal. See Runner.refuseIndirection.
+	IndirectionUndeclared string
+	IndirectionNotAName   string
 	// InvalidNumber is the reason given when arithmetic text is not a
 	// number. No verbs: it is a reason, not a message — ArithError wraps it
 	// with the expression and the offending token.

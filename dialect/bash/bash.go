@@ -2401,6 +2401,10 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitution:      "%[1]s: bad substitution",
 		BadSubstitutionNames: interp.NamesTheQuotingRun,
 		ParamNullOrNotSet:    "parameter null or not set",
+		// `${!v}` refusing its source, which 5.3 has and 3.2 does not; see
+		// interp.Runner.refuseIndirection.
+		IndirectionUndeclared: "%[1]s: invalid indirect expansion",
+		IndirectionNotAName:   "%[1]s: invalid variable name",
 		// The letter as the script spelled it, sign and all: `set +q` is
 		// refused as `+q` here where dash and zsh write `-q` either way.
 		// The refusal is this shell's ordinary bad-option complaint, so

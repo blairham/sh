@@ -598,6 +598,23 @@ func (r *Runner) SetDynamicWriter(name string, write func(r *Runner, value strin
 	r.dynamicWriters[name] = write
 }
 
+// RefuseUnset marks a name `unset` refuses without its being readonly.
+//
+// A third state beside readonly and writable, and measured as one rather
+// than folded into either: bash 5.3.20 and 3.2.57 answer `unset BASH_SOURCE`
+// with `unset: BASH_SOURCE: cannot unset` at 1 — the readonly sentence
+// without its reason — for BASH_SOURCE, BASH_LINENO, BASH_ARGV and BASH_ARGC,
+// while `declare -p` shows none of the four frozen and FUNCNAME, produced by
+// the same stack, is unset in silence. Under `set -o posix` bash 5.3 ends the
+// script there exactly as it does for a readonly name, so the refusal takes
+// the readonly one's route and asks the same axis.
+func (r *Runner) RefuseUnset(name string) {
+	if r.unsetRefused == nil {
+		r.unsetRefused = map[string]bool{}
+	}
+	r.unsetRefused[name] = true
+}
+
 // SetDynamicArrayWriter says what happens when a script assigns to a produced
 // array — the whole of it, one element of it, an append to it, or an `unset`
 // of it, all four arriving here as the elements the name is to hold.

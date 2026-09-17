@@ -438,6 +438,9 @@ type Cross struct {
 	// Unstable is a core file a reference would not reproduce, which says
 	// nothing about whether the construct is core.
 	Unstable []string
+	// Moved says, per unstable file, which reference moved and what it wrote
+	// differently the second time. See [Own.Moved].
+	Moved map[string]string
 }
 
 // Reference is a reference shell for the cross-check: a name to print and a
@@ -471,10 +474,11 @@ func CrossCheck(ctx context.Context, root, name string, refs []Reference, opts O
 	cross.Files = len(names)
 	suite := tier(name)
 	for _, name := range names {
-		split, unstable := crossOne(ctx, suite, dir, name, refs, opts.timeout())
+		split, moved := crossOne(ctx, suite, dir, name, refs, opts.timeout())
 		switch {
-		case unstable:
+		case moved != "":
 			cross.Unstable = append(cross.Unstable, name)
+			cross.Moved = setMoved(cross.Moved, name, moved)
 		case len(split.Groups) <= 1:
 			cross.Agree++
 		default:
@@ -485,16 +489,28 @@ func CrossCheck(ctx context.Context, root, name string, refs []Reference, opts O
 }
 
 // crossOne groups the references by what they wrote.
-func crossOne(ctx context.Context, s Suite, dir, name string, refs []Reference, timeout time.Duration) (CrossSplit, bool) {
+//
+// The string is empty for a file every reference repeated, and otherwise says
+// which reference did not and what moved — the tier checks run every
+// reference twice, so "a reference answered it two ways" without the name
+// and the line sent #2291's reading to four files with nothing to go on.
+func crossOne(ctx context.Context, s Suite, dir, name string, refs []Reference, timeout time.Duration) (CrossSplit, string) {
 	split := CrossSplit{Name: name}
 	groups := map[string][]string{}
+	type answer struct {
+		out    string
+		status int
+	}
+	first := map[string]answer{}
 	var order []string
 	for _, r := range refs {
 		out := runIn(ctx, s, dir, name, r.Path, Options{Timeout: timeout})
 		if out.TimedOut {
-			return split, true
+			return split, r.Name + ": killed on the timeout"
 		}
-		key := keyOf(normalize(out.Output, r.Path, out.Dir), out.Status)
+		norm := normalize(out.Output, r.Path, out.Dir)
+		first[r.Name] = answer{norm, out.Status}
+		key := keyOf(norm, out.Status)
 		if _, seen := groups[key]; !seen {
 			order = append(order, key)
 		}
@@ -507,18 +523,27 @@ func crossOne(ctx context.Context, s Suite, dir, name string, refs []Reference, 
 		for _, r := range refs {
 			again := runIn(ctx, s, dir, name, r.Path, Options{Timeout: timeout})
 			if again.TimedOut {
-				return split, true
+				return split, r.Name + ": the second run was killed on the timeout"
 			}
-			key := keyOf(normalize(again.Output, r.Path, again.Dir), again.Status)
-			if !contains(groups[key], r.Name) {
-				return split, true
+			norm := normalize(again.Output, r.Path, again.Dir)
+			if key := keyOf(norm, again.Status); !contains(groups[key], r.Name) {
+				was := first[r.Name]
+				return split, r.Name + ": " + difference(s, was.out, was.status, norm, again.Status)
 			}
 		}
 	}
 	for _, key := range order {
 		split.Groups = append(split.Groups, groups[key])
 	}
-	return split, false
+	return split, ""
+}
+
+func setMoved(m map[string]string, name, why string) map[string]string {
+	if m == nil {
+		m = map[string]string{}
+	}
+	m[name] = why
+	return m
 }
 
 func keyOf(out string, status int) string {
@@ -608,6 +633,11 @@ type Own struct {
 	// Unstable is a file a reference would not reproduce, which says nothing
 	// either way.
 	Unstable []string
+	// Moved says, per unstable file, which reference moved and what it wrote
+	// differently the second time — the only thing that makes "it is ours,
+	// fix it" a work list, since the run that catches a flake on a runner is
+	// the only one that ever sees it.
+	Moved map[string]string
 }
 
 // OnlyHere runs a column's own tier under every reference and reports the
@@ -642,10 +672,11 @@ func OnlyHere(ctx context.Context, root string, s Suite, refs []Reference, opts 
 	own.Files = len(names)
 	suite := tier(own.Tier)
 	for _, name := range names {
-		split, unstable := crossOne(ctx, suite, dir, name, refs, opts.timeout())
+		split, moved := crossOne(ctx, suite, dir, name, refs, opts.timeout())
 		switch {
-		case unstable:
+		case moved != "":
 			own.Unstable = append(own.Unstable, name)
+			own.Moved = setMoved(own.Moved, name, moved)
 		default:
 			with := others(split, s.Name)
 			if len(with) == 0 {

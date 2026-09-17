@@ -67,13 +67,18 @@ f' givenname
 # difference from ksh93, which shortens its name for exactly this diagnostic
 # and spells it in full everywhere else.
 
+# A number in parentheses is a process group and is taken out: bash, asked for
+# `-o monitor` with no terminal, says `cannot set terminal process group (N)`,
+# and N is the group the run was started in — a new one every run, which made
+# the whole file an answer the tier check could not repeat. No zsh row writes
+# a parenthesized number.
 zrow() {
 	label=$1
 	shift
 	printf -- '--- %s\n' "$label"
 	out=$( "$SUITE_SHELL" "$@" 2>&1 )
 	st=$?
-	printf '%s\n' "$out"
+	printf '%s\n' "$out" | sed 's/([0-9-][0-9]*)/(<group>)/g'
 	printf 'status %s\n' "$st"
 }
 

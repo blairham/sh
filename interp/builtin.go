@@ -274,9 +274,27 @@ func (r *Runner) loopControlCount(name string, args []string) ([]string, int, in
 	}
 	if err == nil && d.LoopControlCountOutOfRange != "" {
 		// A number, and not positive, in the one column that parts the two:
-		// it complains, takes the count as 1 and lets the script carry on.
+		// it complains and the script carries on — but not from the loop.
+		// **Every loop the word can reach ends, at status 1, and that is so
+		// for `continue` as much as for `break`.** Measured 2026-09-16 in
+		// bash 5.3.20 and 3.2.57 alike: `for i in 1 2; do for j in a b; do
+		// continue -1; echo tail; done; echo mid; done; echo "st=$?"` prints
+		// one complaint, then `st=1` — no `tail`, no `mid`, no second pass
+		// of either loop — and `break 0 && echo and` inside a loop prints
+		// nothing after the complaint. What "reach" means is the floor's,
+		// so a function call is a wall in 5.3 and is not one in 3.2, exactly
+		// as it is for a count that is in range. Ours took the count as 1,
+		// so `continue 0` complained once per pass and a loop went on
+		// running at status 0.
 		r.diagf("%s\n", Wording(d.LoopControlCountOutOfRange, "", name, operand))
-		return args, 1, 0, false
+		floor := r.loopControlFloor(r.loopDepth)
+		if r.unspecified {
+			return args, 0, r.status, true
+		}
+		if reach := r.loopDepth - floor; reach > 0 {
+			r.ctl, r.ctlDepth = controlBreak, reach
+		}
+		return args, 0, 1, true
 	}
 	// The fallback chain is a chain of *formats*, not of rendered text: the
 	// operand can hold a `%` and rendering twice would read it as a verb.

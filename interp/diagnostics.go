@@ -2134,7 +2134,8 @@ type Diagnostics struct {
 	//	bash        break: 0: loop count out of range     st 0, `after` runs
 	//
 	// bash's loop still ends — neither `tail` nor a second pass is printed —
-	// so the count is taken as 1 after the complaint. An empty field means
+	// and not only that loop: every loop the word can reach ends, at status
+	// 1, whether the builtin was `break` or `continue`. An empty field means
 	// the dialect words the two the same way and ends the script for both,
 	// which is what the other four do (#2800).
 	LoopControlCountOutOfRange string

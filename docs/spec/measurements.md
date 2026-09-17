@@ -16688,7 +16688,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   for i in 1 2; do continue abc; done; echo after
   ```
-- `loop/a-count-that-is-a-number-and-not-positive` — the same position with a word that *is* a number, and the one row where the panel parts over more than a sentence: bash gives it a complaint of its own — `loop count out of range` — takes the count as 1 and lets the script carry on, so `after` runs at status 0 with no `tail`. The other four write the sentence they wrote for `abc` above and end the script. So the second sentence and the surviving script are the same column, which is why one field carries both
+- `loop/a-count-that-is-a-number-and-not-positive` — the same position with a word that *is* a number, and the one row where the panel parts over more than a sentence: bash gives it a complaint of its own — `loop count out of range` — ends every loop it can reach and lets the script carry on, so `after` runs at status 0 with no `tail`. The other four write the sentence they wrote for `abc` above and end the script. So the second sentence and the surviving script are the same column, which is why one field carries both
   ```sh
   for i in 1 2; do break 0; echo tail; done; echo after
   ```

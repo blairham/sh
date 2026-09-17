@@ -18639,7 +18639,7 @@ echo "st=$? alive"`,
 	{
 		ID: "loop/a-count-that-is-a-number-and-not-positive", Category: "commands",
 		Snippet: `for i in 1 2; do break 0; echo tail; done; echo after`,
-		Why:     "the same position with a word that *is* a number, and the one row where the panel parts over more than a sentence: bash gives it a complaint of its own — `loop count out of range` — takes the count as 1 and lets the script carry on, so `after` runs at status 0 with no `tail`. The other four write the sentence they wrote for `abc` above and end the script. So the second sentence and the surviving script are the same column, which is why one field carries both",
+		Why:     "the same position with a word that *is* a number, and the one row where the panel parts over more than a sentence: bash gives it a complaint of its own — `loop count out of range` — ends every loop it can reach and lets the script carry on, so `after` runs at status 0 with no `tail`. The other four write the sentence they wrote for `abc` above and end the script. So the second sentence and the surviving script are the same column, which is why one field carries both",
 	},
 	{
 		ID: "loop-control/a-refused-count-with-no-loop-around-it", Category: "commands",

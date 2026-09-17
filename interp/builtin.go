@@ -4796,9 +4796,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// `read -a ""` names an empty one, and bash 5.3.20 and 3.2.57 refuse it
 	// as `` `': not a valid identifier `` at 1 where reading it as no array
 	// filled REPLY at 0.
-	array, named := "", false
+	array, named, letterA := "", false, false
 	if name, ok := optArg['a']; ok {
-		array, named = name, true
+		array, named, letterA = name, true, true
 	}
 	if strings.Contains(opts, "A") {
 		array, named = "REPLY", true
@@ -4958,6 +4958,40 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// because it is filled first: `read -a 1bad` in bash refuses and leaves
 	// the array untouched, while ksh93's `read -A a 1bad` fills a and *then*
 	// refuses the operand after it.
+	// The `-a` array's name is a **plain** name, where an ordinary operand may
+	// carry a subscript — `read B[1]` writes one element and is right. Judged
+	// on the letter rather than through an axis, for the reason above: the
+	// two spellings are two shells' and they answer this differently.
+	//
+	// Measured 2026-09-17 from script files under `env -i`:
+	//
+	//	read -a 'A[0]' <<< "x y"     bash 5.3.20  `A[0]': not a valid
+	//	                             identifier, 1, no A afterwards
+	//	read -A 'A[0]' <<< "x y"     ksh93u+      0, and A is (x y) — the
+	//	                             subscript dropped
+	//
+	// Here the bash spelling answered 0 and made a parameter *called* `A[0]`
+	// holding the words, so `declare -p A` said the array the script meant
+	// was not found. `-A` is untouched and keeps ksh93's answer.
+	//
+	// Through a reference first, if the name is one, so the judgement is on
+	// what the fill would reach: `declare -n e=XXX[0]; read -a e` is the same
+	// refusal in bash, and here it made `XXX[0]` the same way. That is the
+	// route mapfile already takes — see mapfileTarget and #3478, where this
+	// shape was closed for `mapfile`, `readarray` and `unset` and `read` was
+	// the writer left out. A reference aimed at a plain name fills the target
+	// and always did.
+	if letterA {
+		if aimed, is := r.namerefTarget(array); is {
+			array = aimed
+		}
+		if !isPlainName(array) {
+			if r.unspecified {
+				return 2
+			}
+			return r.badReadName(array)
+		}
+	}
 	if named && !r.isReadName(array) {
 		if r.unspecified {
 			return 2

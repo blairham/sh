@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Blair Hamilton
 # SPDX-License-Identifier: Apache-2.0
 #
-# `test` and `[` in ksh93 — #2312.
+# `test` and `[` in ksh93 — #2312, #2959.
 #
 # **ksh93 has no operand count.** Every other shell on this panel, and this
 # substrate with them, reads the whole operand list and complains `too many
@@ -10,29 +10,45 @@
 # and silently discards whatever follows. `test x = x y` is 0 there and a
 # refusal everywhere else.
 #
-# That is one rule rather than a pile of wordings, and the rule has a seam in
-# it. Measured on 93u+ 2012-08-01 across the rows below, what it does is:
+# That is one rule rather than a pile of wordings, and the rule has a seam
+# in it. Measured on 93u+ 2012-08-01 over 152 operand lists on 2026-09-16,
+# each run as a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with
+# stdin on /dev/null and in a fresh directory — this shell's preset aliases
+# make an interactive probe answer a different question.
 #
-#	1. read the leading fixed-arity form — the one-, two-, three- and
-#	   four-word readings POSIX XCU specifies for `test`;
-#	2. look at the word straight after it. If that word is `-a` or `-o`,
-#	   commit to the full expression grammar, which then has to consume
-#	   *everything* and says `incorrect syntax` if it cannot;
-#	3. otherwise take the reading from (1) and drop the rest without a
-#	   word.
+#	1. Up to *four* operands the reading is fixed arity, and the words
+#	   past the reading are never looked at: `test -n x y` is 0, the
+#	   two-word file test with its third word dropped.
+#	2. Past four a grammar takes over — `-a` tighter than `-o`, `!`
+#	   tighter still, `( )` grouping.
+#	3. Either way, when the reading finishes with words behind it they are
+#	   dropped without a word *unless* a connective was taken between two
+#	   top-level primaries, and then the whole list is load-bearing and a
+#	   word the grammar cannot place is `incorrect syntax`.
 #
-# The seam is what makes it a rule rather than a leniency. `test x = x junk
-# -a junk` is 0 — the connective is there, but it is not the word after the
-# reading, so nothing past `x = x` is ever looked at. Move the same
-# connective up against the reading and the whole list becomes load-bearing:
-# `test x = x -a x = x junk` is `incorrect syntax`. Both spellings hold the
-# same words.
+# Rule 3 is the seam, and it is what makes this a rule rather than a
+# leniency. `test x = x junk -a junk` is 0 — the connective is there, but it
+# is not the word after the reading, so nothing past `x = x` is ever looked
+# at. Move the same connective up against the reading and the whole list
+# becomes load-bearing: `test x = x -a x = x junk` is `incorrect syntax`.
+# Both spellings hold the same words. A model of "it ignores what follows"
+# predicts 0 for both, and a model of "a connective anywhere forces a full
+# parse" predicts a refusal for both; neither survives the pair. A
+# connective *inside a group* does not arm it either, which the last row of
+# that block asks.
 #
-# So ksh93's only two complaints here are about a *word* — `b: unknown
-# operator` for a word standing where an operator was required, `argument
-# expected` for a form that ran out — plus `incorrect syntax` for an
-# expression the grammar could not finish. None of the three is a count, and
-# none of them can be reached by adding operands to a well-formed expression.
+# The reading is not only a rule about leftovers, and the block below it is
+# where that shows. Three operands take the comparison before the file test
+# but a connective in the same place does not — `test -n = x y` is 1 and
+# `test -z -a y z` is 1 — and a two-word form with no operator to name says
+# it ran out rather than naming a word: `test x junk` is `argument
+# expected`, and only a word spelled like a one-letter operator is named.
+#
+# So ksh93's complaints here are `b: unknown operator` for a word standing
+# where an operator was required, `argument expected` for a form that ran
+# out, and `incorrect syntax` for a list the grammar could not finish. None
+# of the three is a count, and none of them can be reached by adding
+# operands to a well-formed expression.
 #
 # Each row keeps its status beside its diagnostic, because half of these
 # rows *have* no diagnostic and the status is the whole of the answer. A row
@@ -59,10 +75,13 @@ printf -- '=== an expression with words left after it ===\n'
 row 'one word after a comparison'        test x = x y
 row 'three words after a comparison'     test x = x junk1 junk2 junk3
 row 'a word after a file test'           test -n x y
+row 'four words after a file test'       test -n x y z w v
 row 'a word after a numeric comparison'  test 1 -eq 1 2
 row 'a word after a negation'            test ! x = x junk
+row 'a word after two negations'         test ! ! x = x junk
 row 'a word after a group'               test \( x = x \) junk
 row 'a second comparison after the first' test a = b = c
+row 'a closing paren nothing opened'     test x = x \)
 
 printf -- '=== the seam: where the connective sits ===\n'
 
@@ -70,6 +89,30 @@ row 'a connective past the reading'      test x = x junk -a junk
 row 'a connective against the reading'   test x = x -a x = x junk
 row 'the same, with a file test'         test -n x -a -n y junk
 row 'a connective that consumes the word' test x = x -o junk
+row 'words before the connective'        test -n x y -o z
+row 'a connective inside a group'        test \( x = x -a y = z \) junk
+row 'a group after a connective'         test -n x -a \( y = y \) junk
+
+printf -- '=== three operands are their own reading ===\n'
+
+row 'a trailing connective at three'     test -n x -a
+row 'the same with an empty operand'     test -z "" -a
+row 'a trailing connective at four'      test x = x -a
+row 'a negated file test'                test ! -a /
+row 'a comparison beats the file test'   test -n = x
+row 'a connective does not'              test -z -a y
+row 'and the other way round'            test -n -a y
+row 'two strings joined'                 test x -a y
+row 'a parenthesised word'               test \( x \)
+row 'a comparison of the parentheses'    test \( = \)
+
+printf -- '=== and the same order inside the grammar ===\n'
+
+row 'a comparison past four'             test -n = x y
+row 'a connective past four'             test -n -a y z
+row 'and the file test that takes it'    test -z -a y z
+row 'a word, then a connective'          test x -a y z
+row 'a word where an operator belongs'   test x y -a z
 
 printf -- '=== the complaints it does have ===\n'
 
@@ -77,6 +120,17 @@ row 'a word where an operator belongs'   test a b c
 row 'the same with a word after it'      test a b c d
 row 'a connective after a bad reading'   test a b c -a x = x
 row 'a two-word form that ran out'       test x junk
+row 'a one-letter operator nobody has'   test -Q x
+row 'the same with a word after it'      test -Q x y
+row 'and one word further out'           test -Q x y z
+row 'a longer word is not an operator'   test -QQ x y
+row 'a bare dash is'                     test - x y
+row 'a group that never closed'          test \( x
+row 'a word where a group should close'  test \( x = x z \)
+row 'a word after a group'               test \( x \) y
+row 'an operator with nothing behind it' test -n x -a -n
+row 'a word merely spelled like one'     test -n x -a -Q
+row 'a two-word form after a connective' test -n x -a junk junk2
 
 printf -- '=== and the same through `[` ===
 '
@@ -89,4 +143,9 @@ printf 'status %s\n' "$?"
 printf -- '--- words left after a comparison, in brackets
 '
 ( [ x = x junk ] ) 2>&1 > /dev/null
+printf 'status %s\n' "$?"
+
+printf -- '--- a list the grammar could not finish, in brackets
+'
+( [ x = x -a x = x junk ] ) 2>&1 > /dev/null
 printf 'status %s\n' "$?"

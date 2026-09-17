@@ -2626,6 +2626,15 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// element standing. Only the element shape is redirected here; a
 		// reference aimed at a plain name is already followed below, and the
 		// two answers must not be written twice.
+		//
+		// **Only the delete is followed here, never the name.** Rewriting the
+		// name for a plain-name aim as well reads plausibly and is wrong: the
+		// unset falls through to the *function* table when the parameter it
+		// names is not there, and that fallthrough is under the name the
+		// script wrote — `n(){ :; }; declare -n n=nowhere; unset n` removes
+		// the function in bash and left it standing with the name rewritten.
+		// What the reference does decide is the **freeze**, which is
+		// frozenNameOfAnUnset a few lines below.
 		if aimed, is := r.namerefTarget(name); is && !isNameLike(aimed) {
 			name = aimed
 		}
@@ -2639,7 +2648,10 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// rather than `a[0]`. The element is never reached, so the subscript
 		// is not evaluated either — which is why this stands ahead of the
 		// whole subscripted branch rather than inside it.
-		if code := r.unsetReadonly(base); code != 0 {
+		//
+		// And asked of the name the unset **lands on**, which through a
+		// reference is the target. See frozenNameOfAnUnset.
+		if code := r.unsetReadonly(r.frozenNameOfAnUnset(base, subscripted)); code != 0 {
 			status = code
 			if r.ctl == controlExit {
 				return status

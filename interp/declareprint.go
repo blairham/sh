@@ -1256,11 +1256,17 @@ func bareAssignmentHead(flags []string, name string) string {
 // they had before the case attributes arrived, and part ways over where
 // those go — measured, `-irxl` against `-ilr` for the same state — which is
 // why the order is the caller's to spell.
-// `n` stands first among them, which is measured rather than chosen: a name
-// reference lists as `declare -n r="v"` and it is the one attribute that can
-// stand with none of the others, since the letter says what the name *is*
-// rather than what it holds.
-func (d declaration) flagLetters() string { return d.letters("naAirxlu") }
+//
+// `n` sits **after the container letters and after `i`**, and before
+// everything measured after it. It stood first, on the reasoning that the
+// letter says what the name *is* rather than what it holds; the one pair that
+// can tell says otherwise. Measured 2026-09-17 on bash 5.3.20: `declare -n y;
+// declare -i y` lists as `declare -in y`, and a reference that reaches an
+// element of an integer array the same way is `declare -inx`. `a` and `A`
+// cannot stand with `n` at all — a `-n` declaration over an array is refused,
+// see NamerefArrayRefusal — so their side of it is unexercised and they keep
+// the place the rest of the order gives them.
+func (d declaration) flagLetters() string { return d.letters("aAinrxlu") }
 
 // letters spells the attributes present in the given order.
 func (d declaration) letters(order string) string {

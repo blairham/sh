@@ -617,6 +617,93 @@ file's line 4 reads 3, and a syntax error on the file's line 5 is reported at
 line 4. The status is left where the command before it put it, and the script
 carries on.
 
+### The file, the sizes and the knobs, in a script
+
+Measured 2026-09-16 on bash 5.3.20 from script files with no terminal and no
+startup files.
+
+**The first `set -o history` reads `$HISTFILE`.** Its lines join the list —
+`HISTFILE=f; set -o history; history` lists them — and they count as read for
+`history -n`. Once per shell: a second `set -o history`, or one after `set +o
+history`, reads nothing, and a first one with no HISTFILE set still counts as
+the first. A missing file, or one in a missing directory, is silent. The same
+moment sets `HISTSIZE` to 500 where the script has not set it and
+`HISTFILESIZE` to HISTSIZE's value where it has not set that; a HISTFILESIZE
+that is a count keeps only the newest that many lines of the file.
+
+**The shell's ending appends to `$HISTFILE`** — the one it names then — what
+`history -a` would: the entries this session added that no `-a` has written,
+counted from the end of the list. A line the reader recorded and an entry `-s`
+stored each count one; an entry `-r` or `-n` read counts nothing; `-d` and the
+builtin's own line that `-p` and `-s` drop each take one off; `-c` puts the
+count back to nothing; `-w` does not touch it. Nothing is written by a shell
+that turned the list off again, unset HISTFILE, was replaced by `exec`, was
+killed by a signal, or is a subshell or command substitution ending. The file
+is **not** then truncated to HISTFILESIZE here, which bash does in some shapes
+and not others; that is left open.
+
+**HISTCONTROL and HISTIGNORE reach a script's list** exactly as they reach a
+prompt's (see the knobs above), with three more readings of bash's measured
+here: `erasedups` takes the earlier copies out and keeps the new one at the
+end; a HISTIGNORE pattern that is `&` alone is the newest entry already in the
+list; and a backslash quotes a colon inside a pattern. A builtin whose own line
+was left out — `HISTIGNORE='history*'` and then `history -p x` — has nothing
+of its own to drop, and the entry before it survives.
+
+**HISTSIZE bounds the list and the numbers go on.** `HISTSIZE=2` after three
+commands lists `3 HISTSIZE=2` and `4 history`; `0` keeps nothing, a negative
+value keeps everything. Every entry pushed off a full list moves the numbering
+on by one; a list already longer than a newly assigned size loses the excess at
+once and moves on by one fewer than it lost; an entry read from a file moves
+nothing. `!n` and `history -d n` both take the number as it is listed.
+
+### Words, ranges and substitutions
+
+Measured 2026-09-16: bash 5.3.20 from a script, zsh 5.9.2 and ksh93u+ at a
+prompt through `internal/cmd/histprobe`.
+
+**Unanimous.** `x-$` runs to the last word; a range with no start begins at
+word zero, with or without a colon (`!!:-3`, `!!-3`, `!-2-3`), and a `-`
+therefore ends a `!string` event (`!ech-2`); `*` is not a range start
+(`!!:*-` is the words and a `-`); a word the event does not have is refused
+and stops the line — bash and ksh93 say `:2-9: bad word specifier`, zsh `no
+such word in event`. On the right of a substitution `&` is the text replaced
+and `\&` an `&`. The last substitution outlives its line — `!!:&`, `:g&`,
+`:s//new/` and `^^new^` on a later line all use it — and with none yet, an
+empty left side is the last `?string?` searched for (bash); none of either is
+`:g&: no previous substitution` (bash, ksh93) or `no previous substitution`
+(zsh). `%` is the word the search matched, read from the end of the event
+(bash).
+
+**Three readings of an event's words**, Semantics.HistoryWords:
+
+| event | word | bash | zsh | ksh93 |
+| --- | --- | --- | --- | --- |
+| `echo "a b"c d` | 1 | `"a b"c` | `"a b"c` | `"a b"c` |
+| `echo a\ b c` | 1 | `a\ b` | `a\ b` | `a\` |
+| `echo $(echo x y) z` | 1 | `$(echo x y)` | `$(echo x y)` | `$(echo` |
+| `echo ${v:-a b} z` | 1 | `${v:-a` | `${v:-a b}` | `${v:-a` |
+| `echo x;echo b` | 2 | `;` | `;` | `b` |
+| `echo a 2>/dev/null` | 2 | `2>` | `2>` | `2>/dev/null` |
+
+bash also holds a process substitution and an extended glob's group whole
+(`x<(echo y z)`, `/+(one|two)/x`), and reads `2>&1`, `&>`, `>|` and `>>` as one
+word each and `|&` as two.
+
+**`:q` and `:x` apply last** in bash and ksh93 — `!$:q:r` over `two.three` is
+`'two'` — and where written in zsh, which gives `'two` and a continuation
+prompt. Semantics.HistoryQuoteModifierInPlace.
+
+**bash alone:** a word beginning with the comment character (`#`, or the third
+of histchars), after a blank or an operator, ends expansion for the rest of the
+line (Semantics.HistoryCommentStopsExpansion); and in POSIX mode a
+double-quoted `!` is not expanded
+(Semantics.HistoryExpansionSparesDoubleQuotesInPosixMode).
+
+**A here-document inside a substitution** is not expanded, as one outside is:
+`echo $(cat <<EOF` / `echo !!` / `EOF` / `)` writes `echo !!`. The entry ends
+with the `)` line and no blank line after it.
+
 ### What is implemented, and what is not
 
 Implemented: every event designator (`!!`, `!n`, `!-n`, `!string`,

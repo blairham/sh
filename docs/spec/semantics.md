@@ -59,6 +59,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | last pipeline element runs in | subshell | subshell *(current shell under `shopt -s lastpipe`, monitor off)* | **current shell** | **current shell** |
 | `$0` inside a function | shell name | shell name | shell name | **function name** |
 | `local` builtin | yes | yes | **absent** | yes |
+| `unset` of a name a *calling* function made local | unset until that call returns | **the binding goes, and the next scope out shows through** *(unset until that call returns, under `shopt -s localvar_unset`)* | *static scope* | unset until that call returns |
 | `select` menu layout | *n/a* | vertical, then tabs | vertical | **columns** |
 | `select` prompt | *n/a* | `#? ` | `#? ` *(terminal only)* | **`?# `** |
 | input ending a `select` | *n/a* | 1, newline on stdout | 1 | **0**, newline on stderr |
@@ -19222,6 +19223,59 @@ own.
 
 
 ### `unset`
+
+**`UnsetRemovesAnEnclosingLocal`** — bash yes · dash no · ksh93 no · zsh no
+
+What `unset` does to a name a **calling** function made local: take the
+binding away, so that whatever it displaced answers for the rest of the
+script, or leave the name unset where it stands until the call that owns
+it returns.
+
+    v=GLOBAL
+    g() { unset v; echo "  in g: [${v-UNSET}]"; }
+    f() { local v=L; g; echo "  back in f: [${v-UNSET}]"; }
+    f
+    echo "global [${v-UNSET}]"
+
+    bash 5.3, bash 3.2   [GLOBAL]  [GLOBAL]  [GLOBAL]
+    zsh, dash, ash       [UNSET]   [UNSET]   [GLOBAL]
+    ksh93 (`function`)   [UNSET]   [L]       [UNSET]
+
+bash takes the local away and the next scope out answers — for the rest
+of `g` **and** for the rest of `f` after it returns. The ksh93 row is the
+same `no` read through its own scoping: a keyword-defined function's
+locals are static there, so `g` never sees `f`'s `v` and unsets the
+global instead.
+
+**It is a local of a *previous* scope specifically.** At the same scope
+every column agrees, so this is not "what `unset` does to a local":
+
+    f() { local v=L; unset v; ... }                  UNSET everywhere
+    g() { local v=G; unset v; v=NEW; }               the local, not the
+                                                     caller's
+
+And where bash's answer applies, the binding is **gone** rather than
+hidden. Three rows say so, and each fails a reading that merely made the
+outer value visible:
+
+    g(){ unset v; v=NEW; } under f(){ local v=L; g; }   v is NEW
+                                                        afterwards
+    h(){ unset v; } under two nested locals F and G      [F] — one
+                                                        binding, not all
+    declare -i v=5; local -i v=9; unset v; v=3+4         7 — the outer
+                                                        binding's
+                                                        attributes came
+                                                        back with it
+
+`shopt -s localvar_unset` is bash asking for the other answer, which is
+what makes the option and the default one axis rather than two features:
+with it set, bash answers exactly as the `no` column does. No other shell
+in the panel has a name for the question.
+
+Still recorded rather than modeled: the same reading through an
+**assignment prefix** — `v=PRE f`, then `unset v` inside a function `f`
+calls — which bash treats the same way and this shell does not, because a
+prefix takes no scope here (#3440).
 
 **`BadSubscriptToUnsetFatal`** — bash yes · dash unspecified · ksh93 no · zsh no
 

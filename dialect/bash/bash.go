@@ -2820,6 +2820,12 @@ func Diagnostics() interp.Diagnostics {
 		// that named a job speaks from inside its own wait (#2227).
 		WaitJobStopped:    "wait: warning: job %[1]d[%[2]d] stopped",
 		WaitForJobStopped: "warning: wait_for_job: job %[1]d is stopped",
+		// The kinds of variable a function cannot be. See
+		// interp.Diagnostics.VariableOnlyLettersOnAFunctionLine.
+		VariableOnlyLettersOnAFunctionLine: map[string]string{
+			"declare": "aAin",
+			"typeset": "aAin",
+		},
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters bash has and this shell does not: -b job
 			// notices, -k assignment-anywhere, -r restricted, -H history

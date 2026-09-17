@@ -59,6 +59,28 @@ func TestRefusalsBashMakes(t *testing.T) {
 			"sh: line 2: u: invalid indirect expansion\ngone\n",
 		},
 		{
+			"a function line refuses the letters that make a kind of variable",
+			"f() { :; }\n" +
+				"declare -f -a -x f; echo a=$?; declare -F -p\n" +
+				"typeset -F -i f; echo b=$?\n" +
+				"declare -f -p -n f >/dev/null; echo c=$?\n" +
+				"declare -f +a f; echo d=$?\n" +
+				"declare -F -i; echo e=$?\n",
+			"sh: line 2: declare: -a: invalid option\na=1\ndeclare -f f\n" +
+				"sh: line 3: typeset: -i: invalid option\nb=1\n" +
+				"c=0\nd=0\ne=0\n",
+		},
+		{
+			"a function attribute comes off under a plus, and the freeze does not",
+			"g() { :; }; declare -fx g; readonly -f g\n" +
+				"declare -f +r +x g; echo a=$?; declare -F -p\n" +
+				"declare -f +x g; echo b=$?; declare -F -p\n" +
+				"declare -F +x\n",
+			"sh: line 2: declare: g: readonly function\na=1\ndeclare -frx g\n" +
+				"b=0\ndeclare -fr g\n" +
+				"declare -fr g\n",
+		},
+		{
 			"a loop count out of range ends every loop",
 			"for i in 1 2; do for j in a b; do echo $i$j; continue 0; echo tail; done; echo mid; done; echo \"st=$?\"\n",
 			"1a\nsh: line 1: continue: 0: loop count out of range\nst=1\n",

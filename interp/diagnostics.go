@@ -1135,6 +1135,20 @@ type Diagnostics struct {
 	// has nothing missing to refuse.
 	UnimplementedOptionLettersOnAFunctionLine map[string]string
 
+	// VariableOnlyLettersOnAFunctionLine are letters a declaration builtin
+	// refuses when the same line also names **functions** — `-f`, or `-F`
+	// where that is the function listing — with operands: `NAME: -X: invalid
+	// option` at 1, the usage line not written and nothing on the line done.
+	// Keyed by the builtin's name.
+	//
+	// Measured 2026-09-16 on bash 5.3.20: `declare -f -a f`, `declare -F -i
+	// f`, `typeset -f -A f` and `declare -fn f` all refuse, where the same
+	// letters under a plus, or with no operand, or beside `-p`, are a silent
+	// 0 — and `-l`, `-u`, `-c` and `-t` are taken as attributes of the
+	// function rather than refused. So these are the letters that make a
+	// kind of variable a function cannot be, and not an arbitrary subset.
+	VariableOnlyLettersOnAFunctionLine map[string]string
+
 	// MarkingLettersUnderPlus and MarkingUnderPlusRefusal are a pair, and
 	// both or neither: letters with no wording say nothing, and a wording
 	// with no letters reaches nothing.

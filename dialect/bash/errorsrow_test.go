@@ -81,6 +81,54 @@ func TestRefusalsBashMakes(t *testing.T) {
 				"declare -fr g\n",
 		},
 		{
+			"read names what a bad number was for, and refuses an empty array name",
+			"read -t abc x </dev/null; echo a=$?\n" +
+				"read -u ab x </dev/null; echo b=$?\n" +
+				"read -n abc x </dev/null; echo c=$?\n" +
+				"read -a '' </dev/null; echo d=$?\n" +
+				"mapfile '' </dev/null; echo e=$?\n",
+			"sh: line 1: read: abc: invalid timeout specification\na=1\n" +
+				"sh: line 2: read: ab: invalid file descriptor specification\nb=1\n" +
+				"sh: line 3: read: abc: invalid number\nc=1\n" +
+				"sh: line 4: read: `': not a valid identifier\nd=1\n" +
+				"sh: line 5: mapfile: empty array variable name\ne=2\n",
+		},
+		{
+			"builtin reads options, and source is named as it was invoked",
+			"builtin -q; echo a=$?\n" +
+				"builtin -- echo hi; echo b=$?\n" +
+				"source; echo c=$?\n",
+			"sh: line 1: builtin: -q: invalid option\nbuiltin: usage: builtin [shell-builtin [arg ...]]\na=2\n" +
+				"hi\nb=0\n" +
+				"sh: line 3: source: filename argument required\nsource: usage: source [-p path] filename [arguments]\nc=2\n",
+		},
+		{
+			"trap reads every option word",
+			"trap 'echo e' EXIT\n" +
+				"trap -p -x name; echo a=$?\n" +
+				"trap -p -- EXIT; echo b=$?\n" +
+				"trap -pP EXIT; echo c=$?\n",
+			"sh: line 2: trap: -x: invalid option\ntrap: usage: trap [-Plp] [[action] signal_spec ...]\na=2\n" +
+				"trap -- 'echo e' EXIT\nb=0\n" +
+				"sh: line 4: trap: cannot specify both -p and -P\nc=2\n" +
+				"e\n",
+		},
+		{
+			"shopt -o refuses a name set does not know, in its own words and at 0",
+			"set -e\nshopt -o -s errexit nosuch; echo a=$?\n",
+			"sh: line 2: shopt: nosuch: invalid option name\na=0\n",
+		},
+		{
+			"logout, unset -fv and a function line with an assignment are refused",
+			"f() { :; }\n" +
+				"logout 3; echo a=$?\n" +
+				"unset -f -v f; echo b=$?; type -t f\n" +
+				"declare -f g='echo hi'; echo c=$?\n",
+			"sh: line 2: logout: not login shell: use `exit'\na=1\n" +
+				"sh: line 3: unset: cannot simultaneously unset a function and a variable\nb=1\nfunction\n" +
+				"sh: line 4: declare: cannot use `-f' to make functions\nc=1\n",
+		},
+		{
 			"a loop count out of range ends every loop",
 			"for i in 1 2; do for j in a b; do echo $i$j; continue 0; echo tail; done; echo mid; done; echo \"st=$?\"\n",
 			"1a\nsh: line 1: continue: 0: loop count out of range\nst=1\n",

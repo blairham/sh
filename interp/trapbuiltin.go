@@ -29,62 +29,93 @@ const trapKeepGoing trapOutcome = -1
 // dialect knows: bash has `-p`, `-P` and `-l`, ksh93 only `-p`, dash none at
 // all, and zsh does not read options here in the first place.
 func (r *Runner) trapOptions(args []string) ([]string, trapOutcome) {
-	// One step rather than a loop: every option here is the whole command.
-	// `-p`, `-P` and `-l` print and stop, `--` hands back what follows it,
-	// and an unknown one is refused — so nothing is ever read twice.
-	if len(args) > 0 {
-		a := args[0]
+	// A loop over words and over the letters in each, as every other
+	// builtin reads its options. It was one step — on the reasoning that
+	// each option is the whole command — and that read `trap -p -x name` as
+	// a listing of the conditions `-x` and `name`, where bash 5.3.20 refuses
+	// `-x` as an option, and `trap -p -l` as a listing where bash lists the
+	// signals. Measured 2026-09-16, bash 5.3.20:
+	//
+	//	trap -p -x name     trap: -x: invalid option, and the usage line, 2
+	//	trap -px EXIT       the same
+	//	trap -p -- EXIT     the EXIT listing, 0
+	//	trap -p -l          the signal list, 0 — `-l` wins, in either order
+	//	trap -pP EXIT       trap: cannot specify both -p and -P, 2
+	//	trap -l -p -P       the same refusal, ahead of the list
+	var p, bigP, l bool
+	i := 0
+	for ; i < len(args); i++ {
+		a := args[i]
 		if len(a) < 2 || a[0] != '-' {
-			return args, trapKeepGoing
+			break
 		}
 		if a == "--" {
-			return args[1:], trapKeepGoing
+			i++
+			break
 		}
 		// Whether options are read at all comes first, because it is asked
 		// of the letters this shell knows as much as of the ones it does
 		// not: zsh takes `-p` as the action just as it takes `-Q`.
 		if !r.ask(r.sem().TrapParsesOptions, "trap reading a leading `-` word as an option") {
-			return args, trapKeepGoing
-		}
-		if r.unspecified {
-			return nil, 2
-		}
-		switch a {
-		case "-p":
-			if r.ask(r.sem().TrapPrintsWithP, "`trap -p`") {
-				if r.unspecified {
-					return nil, trapOutcome(r.status)
-				}
-				return nil, trapOutcome(r.printTraps(args[1:], r.printsBareWithConditions(args[1:])))
+			if r.unspecified {
+				return nil, 2
 			}
-		case "-P":
-			if r.ask(r.sem().TrapPrintsBareWithP, "`trap -P condition`") {
-				if r.unspecified {
-					return nil, trapOutcome(r.status)
-				}
-				if len(args) == 1 {
-					// The one option that insists on an operand: printing
-					// every trap without saying which is `-p`'s job.
-					r.diagf("%s\n", Wording(r.diag().TrapBarePrintNeedsCondition,
-						"trap: -P requires at least one signal name"))
-					return nil, 2
-				}
-				return nil, trapOutcome(r.printTraps(args[1:], true))
+			return args[i:], trapKeepGoing
+		}
+		known := ""
+		for _, c := range a[1:] {
+			var has bool
+			switch c {
+			case 'p':
+				has = r.ask(r.sem().TrapPrintsWithP, "`trap -p`")
+			case 'P':
+				has = r.ask(r.sem().TrapPrintsBareWithP, "`trap -P condition`")
+			case 'l':
+				has = r.ask(r.sem().TrapListsSignalsWithL, "`trap -l`")
+			default:
+				continue
 			}
-		case "-l":
-			if r.ask(r.sem().TrapListsSignalsWithL, "`trap -l`") {
-				if r.unspecified {
-					return nil, trapOutcome(r.status)
-				}
-				return nil, trapOutcome(r.listSignals())
+			if r.unspecified {
+				return nil, trapOutcome(r.status)
+			}
+			if has && !strings.ContainsRune(known, c) {
+				known += string(c)
 			}
 		}
-		if r.unspecified {
-			return nil, 2
+		for _, c := range a[1:] {
+			if !strings.ContainsRune(known, c) {
+				return nil, trapOutcome(r.refuseOption("trap", a, known))
+			}
+			switch c {
+			case 'p':
+				p = true
+			case 'P':
+				bigP = true
+			case 'l':
+				l = true
+			}
 		}
-		return nil, trapOutcome(r.badBuiltinOption("trap", a))
 	}
-	return args, trapKeepGoing
+	rest := args[i:]
+	switch {
+	case p && bigP:
+		r.diagf("%s\n", Wording(r.diag().TrapBothPrintLetters, "trap: cannot specify both -p and -P"))
+		return nil, 2
+	case l:
+		return nil, trapOutcome(r.listSignals())
+	case bigP:
+		if len(rest) == 0 {
+			// The one option that insists on an operand: printing every
+			// trap without saying which is `-p`'s job.
+			r.diagf("%s\n", Wording(r.diag().TrapBarePrintNeedsCondition,
+				"trap: -P requires at least one signal name"))
+			return nil, 2
+		}
+		return nil, trapOutcome(r.printTraps(rest, true))
+	case p:
+		return nil, trapOutcome(r.printTraps(rest, r.printsBareWithConditions(rest)))
+	}
+	return rest, trapKeepGoing
 }
 
 // printsBareWithConditions answers whether naming conditions to `-p` changes

@@ -138,6 +138,13 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 	if len(args) > 0 {
 		target = args[0]
 	}
+	if target == "" {
+		// A sentence of its own and a usage-error status, measured
+		// 2026-09-16 on bash 5.3.20: `mapfile ""` is `empty array variable
+		// name` at 2 where `mapfile 1x` is the identifier refusal at 1.
+		r.diagf("%s: empty array variable name\n", name)
+		return 2
+	}
 	if !isPlainName(target) {
 		r.diagf("%s: `%s': not a valid identifier\n", name, target)
 		return 1

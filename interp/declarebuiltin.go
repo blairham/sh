@@ -694,6 +694,15 @@ func (r *Runner) refuseAFunctionLineLetter(name string, f declareFlags, rest []s
 // makes the line a listing again, which is measured — `declare -f -a` alone
 // and `declare -f -p -a f` are both 0.
 func (r *Runner) refuseAVariableOnlyLetter(name string, f declareFlags, rest []string) int {
+	if w := r.diag().DeclareMakesNoFunction; w != "" && (f.function || f.funcNames) &&
+		!f.functionOff && !f.funcNamesOff && !f.print {
+		for _, operand := range rest {
+			if strings.Contains(operand, "=") {
+				r.complainAboutOption(name, "%s\n", Wording(w, "", r.builtinComplaintName(name)))
+				return 1
+			}
+		}
+	}
 	refused := r.diag().VariableOnlyLettersOnAFunctionLine[name]
 	if refused == "" || !(f.function || f.funcNames) || f.functionOff || f.funcNamesOff ||
 		f.print || len(rest) == 0 {

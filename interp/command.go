@@ -124,6 +124,19 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 // same name that does something else entirely — it *registers* builtins — so
 // this is registered per dialect rather than being part of the substrate.
 func biBuiltin(r *Runner, ctx context.Context, args []string) int {
+	if len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' {
+		// A dash-word where a builtin's name goes, which only the dialect
+		// can say is an option. See Semantics.BuiltinReadsOptions.
+		if r.ask(r.sem().BuiltinReadsOptions, "`builtin` reading options") {
+			rest, _, code := r.builtinOptions("builtin", args, "")
+			if code != 0 {
+				return code
+			}
+			args = rest
+		} else if r.unspecified {
+			return r.status
+		}
+	}
 	if len(args) == 0 {
 		return 0
 	}

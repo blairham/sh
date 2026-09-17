@@ -171,7 +171,8 @@ type Diagnostics struct {
 	// the other four never reach this.
 	DotOptionNeedsAnArgument string
 
-	// DotNoOperand is what `.` says when given no filename at all. No verbs.
+	// DotNoOperand is what `.` says when given no filename at all. One verb:
+	// the word the builtin was invoked by, `.` or `source`.
 	DotNoOperand string
 	// DotNoOperandStatus is the status that carries. bash and ksh93 say 2,
 	// zsh says 1; dash does not treat it as an error at all, which is a
@@ -1186,6 +1187,14 @@ type Diagnostics struct {
 	// wants the measured ones letter by letter is a refinement this field
 	// does not block.
 	ReadBadNumber string
+	// ReadBadTimeout and ReadBadDescriptorSpec are the same refusal for `-t`
+	// and `-u`, in a dialect that names what the number was for. Measured
+	// 2026-09-16 on bash 5.3.20 and 3.2.57 alike: `read -t abc x` is `abc:
+	// invalid timeout specification` and `read -u abc x` is `abc: invalid
+	// file descriptor specification`, both at 1, where `read -n abc x` keeps
+	// `invalid number`. Empty is ReadBadNumber (#3218).
+	ReadBadTimeout        string
+	ReadBadDescriptorSpec string
 	// ReadBadFileDescriptor is `read -u` on a descriptor this shell holds
 	// nothing open at, taking the number as given. Empty means nothing is
 	// said — one shell in the panel reports 1 in silence — so this path has
@@ -2878,6 +2887,10 @@ type Diagnostics struct {
 	// TrapBarePrintNeedsCondition is `trap -P` with nothing to print, taking
 	// nothing. bash only, since bash is the only dialect with `-P`.
 	TrapBarePrintNeedsCondition string
+	// TrapBothPrintLetters is `trap` given both `-p` and `-P`, which the one
+	// dialect with both letters refuses at 2 ahead of any other reading of
+	// the line. No verbs.
+	TrapBothPrintLetters string
 	// TrapPrintsSignalPrefix goes in front of a signal's name when printing
 	// what is trapped: bash writes `trap -- : SIGINT` where the other three
 	// write `INT`. Empty in three of the four, and never used for EXIT,
@@ -4179,6 +4192,20 @@ type Diagnostics struct {
 	// name. Empty falls back to the sentence the one dialect with such names
 	// writes.
 	UnsetRefused string
+	// UnsetFunctionAndVariable is `unset -f -v`, refused. No verbs. Measured
+	// 2026-09-16 on bash 5.3.20 and 3.2.57: `unset -f -v f`, `unset -fv v`
+	// and `unset -vf` with no operand are each `unset: cannot simultaneously
+	// unset a function and a variable` at 1, removing nothing. zsh takes the
+	// function table and ksh93 takes both, so empty is the reading with no
+	// refusal.
+	UnsetFunctionAndVariable string
+	// DeclareMakesNoFunction is a function line — `-f`, or `-F` where that
+	// names functions — given an operand with an `=` in it. One verb: the
+	// builtin's name. bash 5.3.20 answers `declare -f g="echo hi"`,
+	// `declare -F g=1` and `declare -f x=1 f` alike with `declare: cannot
+	// use `-f' to make functions` at 1, doing nothing on the line. Empty is
+	// the reading with no refusal.
+	DeclareMakesNoFunction string
 	// IndirectionUndeclared is `${!v}` refusing a `v` nothing ever declared,
 	// and IndirectionNotAName is the same expansion refusing what `v` holds
 	// because it names no parameter. One verb each: the name as written, with

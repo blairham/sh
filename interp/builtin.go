@@ -2522,6 +2522,14 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	if w := r.diag().UnsetFunctionAndVariable; w != "" &&
+		strings.ContainsRune(opts, 'f') && strings.ContainsRune(opts, 'v') {
+		// Both tables named at once, which the dialect with a sentence for
+		// it refuses ahead of everything else on the line — with no operand
+		// at all as well. See Diagnostics.UnsetFunctionAndVariable.
+		r.diagf("%s\n", w)
+		return 1
+	}
 	if len(args) == 0 {
 		// Nothing to unset, however it was spelled. Ahead of every branch
 		// below because the one shell that complains gives the same sentence
@@ -4610,7 +4618,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if word, ok := optArg['u']; ok {
 		fd, numeric := atoi(word)
 		if !numeric || fd < 0 {
-			return r.readBadNumber(word)
+			return r.readBadNumberFor(r.diag().ReadBadDescriptorSpec, word)
 		}
 		rd, open := r.readerForFd(fd)
 		if !open {
@@ -4724,12 +4732,17 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// any operands after it; ksh93 and zsh spell it -A and take the name as
 	// the first operand, clearing the names that follow. The letters
 	// differ, so the behaviors can ride them without an axis.
-	array := ""
+	//
+	// named says an array was asked for at all, which the name cannot say:
+	// `read -a ""` names an empty one, and bash 5.3.20 and 3.2.57 refuse it
+	// as `` `': not a valid identifier `` at 1 where reading it as no array
+	// filled REPLY at 0.
+	array, named := "", false
 	if name, ok := optArg['a']; ok {
-		array = name
+		array, named = name, true
 	}
 	if strings.Contains(opts, "A") {
-		array = "REPLY"
+		array, named = "REPLY", true
 		if len(args) > 0 {
 			array, args = args[0], args[1:]
 		}
@@ -4742,7 +4755,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if word, ok := optArg['t']; ok {
 		secs, err := strconv.ParseFloat(word, 64)
 		if err != nil || secs < 0 {
-			return r.readBadNumber(word)
+			return r.readBadNumberFor(r.diag().ReadBadTimeout, word)
 		}
 		timeout, timed = time.Duration(secs*float64(time.Second)), true
 	}
@@ -4886,7 +4899,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// because it is filled first: `read -a 1bad` in bash refuses and leaves
 	// the array untouched, while ksh93's `read -A a 1bad` fills a and *then*
 	// refuses the operand after it.
-	if array != "" && !r.isReadName(array) {
+	if named && !r.isReadName(array) {
 		if r.unspecified {
 			return 2
 		}
@@ -5257,7 +5270,17 @@ func (r *Runner) readLastFieldValue(field, ifs string) string {
 // number. The panel words this per shell per letter; one substrate wording
 // carries the fact until a dialect measures its own.
 func (r *Runner) readBadNumber(word string) int {
-	r.diagf("%s\n", Wording(r.diag().ReadBadNumber, "read: %[1]s: invalid number", word))
+	return r.readBadNumberFor("", word)
+}
+
+// readBadNumberFor is readBadNumber for a letter whose dialect words the
+// refusal after what the number was *for* — see Diagnostics.ReadBadTimeout.
+// An empty wording is the shared sentence.
+func (r *Runner) readBadNumberFor(wording, word string) int {
+	if wording == "" {
+		wording = r.diag().ReadBadNumber
+	}
+	r.diagf("%s\n", Wording(wording, "read: %[1]s: invalid number", word))
 	return 1
 }
 

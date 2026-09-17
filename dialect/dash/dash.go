@@ -70,6 +70,9 @@ func Dialect() syntax.Dialect {
 // Semantics is what dash means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// unanswered BuiltinReadsOptions: there is no `builtin` here to read one —
+	// `builtin -q` is `builtin: not found` at 127 (#3217).
+	//
 	// unanswered WritingSubstitutionIsWaitedForAtTheCommand: this shell has
 	// no process substitution, so there is no `>(cmd)` body for a command to
 	// wait for or not. `echo >(:)` is the two characters as written (#2197).

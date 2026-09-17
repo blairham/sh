@@ -41,6 +41,12 @@ import (
 type aliasDef struct {
 	value  string
 	global bool
+	// exported is ksh93's `alias -x` mark. A field rather than a fourth
+	// AliasKind, because it is not a kind: an exported alias is in the plain
+	// listing beside the rest and is looked up by the same name, and the
+	// letter only narrows a *listing* down to the marked entries. See
+	// Semantics.AliasHasExportOption.
+	exported bool
 }
 
 // AliasKind is which aliases a definition, a lookup or a listing is about.
@@ -234,6 +240,7 @@ type aliasForm struct {
 	prefixed  bool // `-p`: the listing with `alias ` in front of it.
 	defining  bool // `-L`: a line that would define the alias back.
 	namesOnly bool // `+g` and its siblings: the name and nothing else.
+	exported  bool // `-x`: mark an entry, and list only the marked ones.
 }
 
 func biAlias(r *Runner, _ context.Context, args []string) int {
@@ -279,6 +286,7 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 		form.prefixed = strings.ContainsRune(opts, 'p')
 		form.defining = strings.ContainsRune(opts, 'L')
 		form.namesOnly = namesOnly
+		form.exported = strings.ContainsRune(opts, 'x')
 		patterns = strings.ContainsRune(opts, 'm')
 	} else if r.unspecified {
 		return 2
@@ -288,6 +296,13 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 		// refusal, measured — unlike `unalias -m`, where a removal with no
 		// pattern would be a removal of everything.
 		for _, name := range r.aliasNames(form.kind) {
+			// `-x` narrows the listing to the entries it marks, which is
+			// the half of the letter a mark alone could not show: a stock
+			// ksh93 answers `alias -x` with nothing while `alias` lists its
+			// nineteen presets.
+			if form.exported && !r.aliases[name].exported {
+				continue
+			}
 			r.printf("%s\n", r.aliasLine(name, form))
 		}
 		return 0
@@ -312,8 +327,26 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 				continue
 			}
 		}
+		// From here the name has been *named*, which is all it takes in the
+		// dialect that remembers one — the definition below and the lookup
+		// under it leave the same trace. After the refusal, because a name
+		// this shell will not take is not looked up either, measured.
+		r.rememberAliasName(name)
 		if isDefinition {
 			r.defineAlias(name, value, form.kind)
+			if form.exported {
+				r.markAliasExported(name)
+			}
+			continue
+		}
+		if form.exported {
+			// `alias -x name` *marks* rather than looks up: nothing is
+			// printed, the status is 0, and a name that is no alias is
+			// neither a complaint nor a count — measured, where the same
+			// call without the letter is `not found` at 1. The name is
+			// remembered above all the same, so `alias -x zz; unalias zz`
+			// is 0.
+			r.markAliasExported(name)
 			continue
 		}
 		found, listed := r.lookupForListing(name, form.kind)
@@ -442,6 +475,9 @@ func (r *Runner) aliasOptionLetters() string {
 	if r.ask(r.sem().AliasHasPrintOption, "`alias -p`") {
 		known += "p"
 	}
+	if r.ask(r.sem().AliasHasExportOption, "`alias -x`") {
+		known += "x"
+	}
 	if r.ask(r.sem().GlobalAliases, "global aliases, `alias -g`") {
 		known += "g"
 	}
@@ -472,7 +508,59 @@ func (r *Runner) defineAlias(name, value string, kind AliasKind) {
 	if r.aliases == nil {
 		r.aliases = map[string]aliasDef{}
 	}
-	r.aliases[name] = aliasDef{value: value, global: kind == AliasGlobalKind}
+	// The `-x` mark survives a redefinition, measured: `alias -x ee=3; alias
+	// ee=4` still lists under `alias -x`, as `ee=4`. It is a mark on the name
+	// rather than a part of what the name stands for, and only a removal
+	// takes it off.
+	r.aliases[name] = aliasDef{
+		value:    value,
+		global:   kind == AliasGlobalKind,
+		exported: r.aliases[name].exported,
+	}
+}
+
+// markAliasExported puts ksh93's `-x` mark on an entry the table holds.
+//
+// A name the table does not hold is not created here: `alias -x zz` for a
+// name that is no alias defines nothing — the plain listing and `alias -x`
+// alike are empty afterwards — and the only trace it leaves is the
+// remembered name rememberAliasName wrote.
+func (r *Runner) markAliasExported(name string) {
+	a, ok := r.aliases[name]
+	if !ok {
+		return
+	}
+	a.exported = true
+	r.aliases[name] = a
+}
+
+// rememberAliasName records that `alias` has named this name.
+//
+// Written in every dialect and read in one, which is deliberate: the axis is
+// asked where the answers differ — at the `unalias` that finds a name the
+// table no longer holds — rather than here, on the path every column takes.
+// See Semantics.AliasRemembersTheNamesItNames.
+func (r *Runner) rememberAliasName(name string) {
+	if r.namedAliases == nil {
+		r.namedAliases = map[string]bool{}
+	}
+	r.namedAliases[name] = true
+}
+
+// rememberedAliasName reports whether a name the tables do not hold is one
+// this dialect remembers `alias` having named, which is what makes a second
+// `unalias` of it succeed.
+//
+// Not inside a subshell, measured: `( alias z; unalias z )` is 1 in ksh93
+// and so is `alias z; ( unalias z )`, while the same two lines at the top
+// level are 0. See Semantics.AliasRemembersTheNamesItNames for the half that
+// is left undone (#3429).
+func (r *Runner) rememberedAliasName(name string) bool {
+	if r.inSubshell || !r.namedAliases[name] {
+		return false
+	}
+	return r.ask(r.sem().AliasRemembersTheNamesItNames,
+		"`unalias` of a name `alias` has already named")
 }
 
 // lookupForListing answers the two questions a named operand asks: whether
@@ -578,6 +666,10 @@ func biUnalias(r *Runner, _ context.Context, args []string) int {
 			r.suffixAliases = nil
 		} else {
 			r.aliases = nil
+			// And the remembered names with them: after `unalias -a` a name
+			// ksh93 had named fails like any other, measured — `alias z=1;
+			// unalias -a; unalias z` is 1 there, and so is a preset's name.
+			r.namedAliases = nil
 		}
 		return 0
 	}
@@ -635,10 +727,32 @@ func (r *Runner) removeAlias(name string, kind AliasKind) bool {
 		return true
 	}
 	if _, ok := r.aliases[name]; !ok {
-		return false
+		// Nothing to take out, which is the answer in four of the five
+		// columns. In the fifth the name may still be one `alias` has
+		// named, and a removal of *that* succeeds.
+		return r.rememberedAliasName(name)
 	}
 	delete(r.aliases, name)
+	// The name stays remembered where names are remembered, which is what
+	// makes the second and the third `unalias` of it succeed too — measured,
+	// `alias h=1; unalias h; unalias h; unalias h` is 0 three times in
+	// ksh93. `unalias` of a name nobody named remembers nothing, so
+	// `unalias z; unalias z` is 1 twice there.
+	if r.rememberedAliasesKept() {
+		r.rememberAliasName(name)
+	}
 	return true
+}
+
+// rememberedAliasesKept is that question asked where there is no name to ask
+// it about yet: a removal has just taken the last entry out, and whether the
+// name stays behind is the same axis.
+func (r *Runner) rememberedAliasesKept() bool {
+	if r.inSubshell {
+		return false
+	}
+	return r.ask(r.sem().AliasRemembersTheNamesItNames,
+		"`unalias` of a name `alias` has already named")
 }
 
 // aliasNotFound reports a name the table does not hold, for whichever of the

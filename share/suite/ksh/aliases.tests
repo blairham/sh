@@ -18,6 +18,15 @@
 # removed can be removed *again* successfully, where the other three report
 # failure the second time as they do for a name nobody ever defined.
 #
+# That second one is wider than the rows below reach, and it is written here
+# rather than asked because the file is a per-dialect claim and not a place
+# to grow a second subject. Naming a name is enough: a *failed* `alias z` —
+# `z: alias not found`, status 1 — leaves the name behind, and so does a
+# lookup inside `eval`, inside a function or behind `command`. `unalias -a`
+# clears the remembered names along with the table. The name is not an alias
+# afterwards: no listing has it and `alias z` still fails. See #2926, and
+# #3429 for what a subshell does with one.
+#
 # The option cases are written inside a subshell. An option `alias` does not
 # have is a fatal usage error in ksh93 and would leave the rest of the file
 # unrun in the columns that lack these flags.

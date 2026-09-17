@@ -864,6 +864,8 @@ func Semantics() interp.Semantics {
 	// `-g` and `-s` are neither kinds nor letters.
 	s.AliasParsesOptions = interp.No
 	s.AliasHasPrintOption = interp.No
+	// Nor an `-x`: `alias` reads no options here either.
+	s.AliasHasExportOption = interp.No
 	s.GlobalAliases = interp.No
 	s.SuffixAliases = interp.No
 	s.AliasListsAsDefinitions = interp.No
@@ -874,6 +876,10 @@ func Semantics() interp.Semantics {
 	s.AliasReportsNotFound = interp.Yes
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
+	// A removed alias leaves nothing behind. Measured 2026-09-16 in the
+	// pinned Alpine image, BusyBox 1.37: `alias h=1; unalias h; unalias
+	// h` is 0 then 1, and a name only looked up is not remembered either.
+	s.AliasRemembersTheNamesItNames = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	// `type -- cd` reads the `--` as a name rather than as the end of
 	// options, so no letter of its own is reachable — `-t` included.

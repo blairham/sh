@@ -988,6 +988,21 @@ type Runner struct {
 	// leaves the other, and a name may be in both at once.
 	suffixAliases map[string]string
 
+	// namedAliases is every name `alias` has named, defined or not, in a
+	// dialect that remembers them — see
+	// [Semantics.AliasRemembersTheNamesItNames], which is the only thing
+	// that reads this.
+	//
+	// Not a third state inside [aliasDef], because a remembered name is not
+	// a degenerate alias: `alias e1=` defines one with an *empty value*,
+	// which lists as `e1=''` and is found by a lookup, and a remembered name
+	// is in no listing and is found by nothing. A flag on the entry would
+	// have every reader of the table — the two listings, the lookup, the
+	// parser's expansion hook, `whence`, `type`, `command -v` — remember to
+	// skip it, and the one that forgot would list an alias that stands for
+	// nothing. A set beside the table is read by `unalias` alone.
+	namedAliases map[string]bool
+
 	// cmdHash is the command hash: a bare name PATH resolved, and where it
 	// resolved to. cmdHashOrder is the same names in the order they were
 	// first put there, which is the order a listing walks unless the dialect

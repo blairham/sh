@@ -9554,6 +9554,32 @@ type Semantics struct {
 	// there and the answer is "not found"; zsh has options and refuses it.
 	AliasHasPrintOption Answer
 
+	// AliasHasExportOption gives `alias` an `-x`, which marks an entry
+	// *exported* and filters a listing down to the entries so marked.
+	//
+	// ksh93 alone, measured 2026-09-16 on 93u+ 2012-08-01 as script files
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`:
+	// `alias -x xx=1` is 0 and defines an ordinary alias — the plain listing
+	// shows `xx=1` — while `alias -x` alone writes only the marked entries,
+	// so a stock shell answers it with nothing at all even though nineteen
+	// preset aliases are listed by the plain form. `alias -x name` for a
+	// name already defined marks it and prints nothing, at 0; `alias -px`
+	// is the marked set with `alias ` in front of each line. The mark is
+	// sticky over a redefinition — `alias -x ee=3; alias ee=4` still lists
+	// under `-x` — and goes with the value when the name is removed.
+	//
+	// What the mark does *not* do is export anything: measured on the same
+	// build, an `-x` alias is not in a child's `env` and a child ksh93 script
+	// answers `ff: alias not found`. So this is a flag and a listing filter
+	// here, and the letter is refused by the rest of the panel — bash
+	// `invalid option` at 2, zsh `bad option` at 1, dash reading no options
+	// at all and looking for an alias called `-x`.
+	//
+	// It is the accepted-set half of a paired table: this shell's own usage
+	// line says `Usage: alias [-ptx] [name[=value]...]`, so a letter refused
+	// while the message advertises it is the two halves apart (#2927).
+	AliasHasExportOption Answer
+
 	// GlobalAliases gives this dialect the second kind of alias: `alias -g
 	// name=value` defines one, and a word naming one is expanded *wherever
 	// it stands* rather than only where a command word does — in an
@@ -9687,6 +9713,43 @@ type Semantics struct {
 	// missing — so it is asked where the count is known and not where the
 	// complaint is printed.
 	AliasNotFoundStatusCounts Answer
+
+	// AliasRemembersTheNamesItNames keeps a name in the table after `alias`
+	// has *named* it, so that a later `unalias` of that name succeeds where
+	// the other four report there was nothing to remove.
+	//
+	// ksh93 alone, measured 2026-09-16 on 93u+ 2012-08-01 as script files
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`.
+	// `alias h=1; unalias h; unalias h` is 0 both times there and 0 then 1
+	// in bash 5.3, zsh 5.9.2, dash 0.5.12 and BusyBox ash 1.37; a third
+	// removal is 0 again. The control is a name nobody ever wrote, which
+	// fails in all five — so this is a name the shell has seen rather than
+	// `unalias` being lenient.
+	//
+	// *Naming* is enough and defining is not required, which is what the
+	// field is called after: a failed `alias z` — `z: alias not found`, 1 —
+	// leaves the name behind, and so do `alias -p z`, a lookup inside
+	// `eval`, inside a function or behind `command`, and the second name of
+	// `alias y z`. A name reached any other way does not: running `z` as a
+	// command, `whence z`, `alias -t z` — the tracked table is the command
+	// cache and not this one — and `unalias z` itself, which is what makes
+	// `unalias z; unalias z` 1 twice. A name the shell refuses outright
+	// (`alias 'a$b'`) is not remembered either, because nothing looks it up.
+	//
+	// The remembered name is not an alias: it is in no listing, `alias z`
+	// still answers `alias not found` at 1, and it expands nothing. Only
+	// `unalias` can see it, and `unalias -a` clears it along with the table
+	// — after that, a preset's name fails like any other.
+	//
+	// Narrower than the whole of ksh93's behavior in one place, measured and
+	// left undone: a remembered name never counts *inside* a subshell — `(
+	// alias z; unalias z )` is 1 there, and so is `alias z; ( unalias z )` —
+	// while a name a `( … )` or `$( … )` looks up or defines is remembered in
+	// the **parent** afterwards, where a pipeline element's is not. That is
+	// its non-forking subshell sharing the table it adds entries to, and it
+	// needs a set the two share; here the set is cloned like every other
+	// table and the inside half is what this answer reproduces (#3429).
+	AliasRemembersTheNamesItNames Answer
 
 	// UnaliasAllRefusesOperands makes `unalias -a name` an error that clears
 	// nothing. zsh alone: "-a: too many arguments", status 1, table intact.

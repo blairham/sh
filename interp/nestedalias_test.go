@@ -47,6 +47,8 @@ func nestedRunSwitch(t *testing.T, dir, src string, byLine Answer, on bool) (str
 	// majority's so that the row under test is the only thing being read.
 	sem.AliasParsesOptions = Yes
 	sem.AliasHasPrintOption = No
+	sem.AliasHasExportOption = No
+	sem.AliasRemembersTheNamesItNames = No
 	sem.GlobalAliases = No
 	sem.SuffixAliases = No
 	sem.AliasReportsNotFound = Yes

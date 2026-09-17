@@ -515,6 +515,34 @@ Because it happens before tokenization, a continuation can split an
 operator or a word anywhere. It does **not** apply inside single quotes,
 where backslash has no special meaning at all.
 
+That includes the text of an arithmetic expression, which is not tokenized
+as words but is still read with this rule in force. Measured 2026-09-16 from
+script files, unanimous in bash 5.3, bash 3.2, zsh 5.9.2, ksh93u+ and dash
+for every construct each of them has:
+
+    $(( 1\
+    2 + 1 ))                 →  13     inside a number
+    $(( 1 <\
+    < 3 ))                   →  8      between an operator's two characters
+    $(( ab\
+    c + 1 ))                 →  abc + 1
+    (( 2\
+    +2 )), for ((i=0; i<1\
+    ; i++)), $[ 1\
+    +2 ], ${((\
+    2+3))}                   →  the same, on each route into an expression
+
+It is removed inside a double-quoted part of the expression too, as in any
+double-quoted string, and kept inside a single-quoted part and inside a
+command substitution's program, which reads it by its own rules. A body of
+an unquoted here-document reads its `$(( ))` through the same scanner.
+
+Two shapes at the construct's **delimiters** split the panel and are not
+this rule: a continuation between the `$(` and the second `(` of the opener,
+or between the two `)` of the closer, decides whether the construct is
+arithmetic at all; and ksh93 alone refuses one directly behind the `((` of an
+arithmetic *command*.
+
 ## Aliases are expanded while the line is read
 
 Alias expansion belongs to this document rather than to the interpreter,

@@ -1215,6 +1215,9 @@ func Semantics() interp.Semantics {
 	// printf AFTER` is `AFTER[PIPE]` here and `[PIPE]AFTER` in zsh (#2197).
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
 	s.ReadonlyReassignmentByDeclarationFatal = interp.No
+	// And `export x=2` and `readonly x=2` carry on too, until `set -o posix`
+	// moves this one — see interp.Semantics.ReadonlyReassignmentBySpecialBuiltinFatal.
+	s.ReadonlyReassignmentBySpecialBuiltinFatal = interp.No
 	// A frozen name refuses a declaration's array literal here as much as it
 	// refuses anything else: measured in 5.3 and in 3.2, `readonly q=1;
 	// declare -g q=(b)` is `q: readonly variable` and the name is untouched,

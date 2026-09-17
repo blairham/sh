@@ -31,6 +31,7 @@ func refusingReadonly(s *Semantics) {
 	s.DeclareOptions = "aAilprux"
 	s.ReadonlyReassignmentFatal = No
 	s.ReadonlyReassignmentByDeclarationFatal = No
+	s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 	s.TypesetLocalNeedsKeywordFunction = No
 }
 
@@ -195,6 +196,7 @@ typeset x=2`, func(s *Semantics) {
 		s.DeclareOptions = "aAilprux"
 		s.ReadonlyReassignmentFatal = No
 		s.ReadonlyReassignmentByDeclarationFatal = No
+		s.ReadonlyReassignmentBySpecialBuiltinFatal = No
 	}, Diagnostics{})
 	if strings.Contains(errs, "no dialect was chosen") {
 		t.Errorf("a top-level declaration asked the shadow axis: %q", errs)

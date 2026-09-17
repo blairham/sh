@@ -83,6 +83,9 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 		if r.unspecified {
 			return 2
 		}
+		if errors.Is(err, errReadonlyRefusedInACommand) {
+			return 1
+		}
 		if err != nil {
 			// Named with its expression, the way the expansion route names
 			// one: `let: 1/0: division by 0` and not `let: division by 0`

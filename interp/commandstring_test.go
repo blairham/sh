@@ -173,6 +173,10 @@ func TestOnlyAnAssignmentStandingAloneAsksTheOrdinaryQuestion(t *testing.T) {
 			sem := PosixSemantics()
 			sem.ReadonlyReassignmentFatal = c.base
 			sem.ReadonlyReassignmentByDeclarationFatal = c.byDeclaration
+			// `export` is a special builtin, which asks the special
+			// builtins' half of the question; it is given the same answer so
+			// the row still asks what it was written to.
+			sem.ReadonlyReassignmentBySpecialBuiltinFatal = c.byDeclaration
 			sem.FatalErrorStatusIsOne = Yes
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
@@ -219,6 +223,9 @@ func TestAReadonlyReassignmentByADeclaration(t *testing.T) {
 				// set the other way round to prove it.
 				sem.ReadonlyReassignmentFatal = No
 				sem.ReadonlyReassignmentByDeclarationFatal = c.byDeclaration
+				// Two of the three lines are special builtins; see the row
+				// below for the question that parts them.
+				sem.ReadonlyReassignmentBySpecialBuiltinFatal = c.byDeclaration
 				sem.FatalErrorStatusIsOne = Yes
 				r := newTestRunner(t, &Runner{
 					Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
@@ -235,6 +242,40 @@ func TestAReadonlyReassignmentByADeclaration(t *testing.T) {
 					t.Errorf("%q said %q; carried on = %v, want %v", src, buf.String(), carried, c.carried)
 				}
 			})
+		}
+	}
+}
+
+// The special builtins' half of the declaration question is its own: with it
+// fatal and the other half not, `export x=2` stops and `typeset x=2` does not.
+func TestAReadonlyReassignmentByASpecialBuiltin(t *testing.T) {
+	for _, c := range []struct {
+		src     string
+		carried bool
+	}{
+		{"readonly x=1\nexport x=2\necho after\n", false},
+		{"readonly x=1\nreadonly x=2\necho after\n", false},
+		{"readonly x=1\ntypeset x=2\necho after\n", true},
+	} {
+		var buf strings.Builder
+		sem := PosixSemantics()
+		sem.ReadonlyReassignmentFatal = No
+		sem.ReadonlyReassignmentByDeclarationFatal = No
+		sem.ReadonlyReassignmentBySpecialBuiltinFatal = Yes
+		sem.FatalErrorStatusIsOne = Yes
+		r := newTestRunner(t, &Runner{
+			Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+			Stdout: &buf, Stderr: &buf,
+		})
+		f, err := syntax.Parse(c.src, syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if carried := strings.Contains(buf.String(), "after"); carried != c.carried {
+			t.Errorf("%q said %q; carried on = %v, want %v", c.src, buf.String(), carried, c.carried)
 		}
 	}
 }
@@ -308,6 +349,7 @@ func TestWhatADeclarationSaysAboutAReadonlyName(t *testing.T) {
 			var buf strings.Builder
 			sem := PosixSemantics()
 			sem.ReadonlyReassignmentByDeclarationFatal = No
+			sem.ReadonlyReassignmentBySpecialBuiltinFatal = No
 			dg := c.dg
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &dg, Name: "sh",

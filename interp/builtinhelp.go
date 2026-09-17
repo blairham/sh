@@ -60,5 +60,14 @@ func (r *Runner) callBuiltin(ctx context.Context, name string, fn Builtin, args 
 		}
 	}
 	r.writeFailed = nil
-	return r.builtinWriteStatus(name, fn(r, ctx, args))
+	refused := r.refusedInACommand
+	r.refusedInACommand = false
+	status := r.builtinWriteStatus(name, fn(r, ctx, args))
+	if r.refusedInACommand && status == 0 {
+		// A write this builtin made was refused, which fails the builtin
+		// whatever it went on to do — see Runner.refuseReadonlyInACommand.
+		status = 1
+	}
+	r.refusedInACommand = refused
+	return status
 }

@@ -952,6 +952,24 @@ func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
 // writePlace stores a value back through a target, written the way the
 // dialect writes a number — so `i+=1.5` leaves 1.5 behind and not 1.
 func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) error {
+	was := r.refusedInACommand
+	r.refusedInACommand = false
+	err := r.storePlace(p, v, from)
+	if err == nil && r.refusedInACommand {
+		// Refused and already reported, and the evaluation stops here: `let
+		// x=2 y=3` and `(( x = 2, y = 3 ))` leave y unset over a frozen x in
+		// every column. See Runner.refuseReadonlyInACommand.
+		err = errReadonlyRefusedInACommand
+	}
+	r.refusedInACommand = r.refusedInACommand || was
+	return err
+}
+
+// errReadonlyRefusedInACommand is an evaluation stopped by a refusal that
+// was already written, so the caller says nothing more about it.
+var errReadonlyRefusedInACommand = errors.New("readonly refusal already reported")
+
+func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) error {
 	// The expression's output format reaches the value an assignment stores,
 	// not only the answer an expansion produces: measured, `x=5; (( x = [#16]
 	// 255 ))` leaves x holding the six characters `16#FF`.
@@ -2581,9 +2599,16 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			r.status = r.arithCmdFailed(r.diag().StatusForParseError(perr))
 			return nil
 		}
+		r.arithCommand++
 		v, err := r.evalArithTruth(tree)
+		r.arithCommand--
 		if r.unspecified {
 			r.status = 2
+			return nil
+		}
+		if errors.Is(err, errReadonlyRefusedInACommand) {
+			r.refusedInACommand = false
+			r.status = r.arithCmdFailed(1)
 			return nil
 		}
 		if err != nil {

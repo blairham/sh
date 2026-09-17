@@ -556,6 +556,8 @@ func (r *Runner) SetPosixMode(on bool) {
 		return
 	}
 	redir, unsetRO := r.posixSaved, r.posixSavedUnsetReadonly
+	reassignRO := r.posixSavedReassignReadonly
+	specialRO := r.posixSavedSpecialReadonly
 	targetPattern := r.posixSavedTargetPattern
 	forName := r.posixSavedForName
 	funcName := r.posixSavedFuncName
@@ -570,6 +572,10 @@ func (r *Runner) SetPosixMode(on bool) {
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
+		r.posixSavedReassignReadonly = r.sem().ReadonlyReassignmentFatal
+		reassignRO = Yes
+		r.posixSavedSpecialReadonly = r.sem().ReadonlyReassignmentBySpecialBuiltinFatal
+		specialRO = Yes
 		r.posixSavedForName = r.sem().ForNameWhenTheLoopRuns
 		r.posixSavedFuncName = r.sem().FunctionNameWhenTheDefinitionRuns
 		r.posixSavedExportListing = r.sem().ExportListing
@@ -641,6 +647,19 @@ func (r *Runner) SetPosixMode(on bool) {
 		// carries on past a failed redirection and stops here — so one
 		// remembered value could not put both back.
 		s.UnsetReadonlyFatal = unsetRO
+		// And its twin for an assignment, which the mode had left behind:
+		// measured 2026-09-16, `readonly v; v=2; echo after` carries on at
+		// status 0 in bash 5.3.20 and ends the script at 1 under `set -o
+		// posix`, under `bash -o posix` and under the `sh` name alike, and
+		// `set +o posix` puts the carrying-on back. It takes the standard's
+		// answer and not the dialect's, because every other column already
+		// holds it under every name — ReadonlyReassignmentFatal is No in
+		// bash alone — so a written-in Yes moves nothing but bash.
+		s.ReadonlyReassignmentFatal = reassignRO
+		// And the special builtins' half of the declaration question, which
+		// the mode moves for the same reason and `declare` does not: see
+		// ReadonlyReassignmentBySpecialBuiltinFatal for the measurement.
+		s.ReadonlyReassignmentBySpecialBuiltinFatal = specialRO
 		// The third axis the mode moves, and the one that needs a saved
 		// value most: the dialect answers with a *form* rather than a bool,
 		// and only one of that form's three values belongs to the mode. A

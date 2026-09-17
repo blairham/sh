@@ -77,6 +77,12 @@ func TestAnOperandMissingIsTwoKinds(t *testing.T) {
 		{`~`, syntax.ErrArithOperandEnd, "~"},
 		{`!`, syntax.ErrArithOperandEnd, "!"},
 		{`1**`, syntax.ErrArithOperandEnd, "**"},
+		// An increment with nothing to increment, which was an empty
+		// expression and came to 0. The token is the second sign on:
+		// see arithParser.unary.
+		{`--`, syntax.ErrArithOperandEnd, "-"},
+		{`++`, syntax.ErrArithOperandEnd, "+"},
+		{`1+-- `, syntax.ErrArithOperandEnd, "- "},
 		{`a=`, syntax.ErrArithOperandEnd, "="},
 		{`%`, syntax.ErrArithOperand, "%"},
 		{`@`, syntax.ErrArithOperand, "@"},

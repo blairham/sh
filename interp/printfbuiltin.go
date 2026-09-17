@@ -69,6 +69,17 @@ func biPrintf(r *Runner, _ context.Context, args []string) int {
 	format, operands := args[0], args[1:]
 	status := 0
 
+	// A frozen output parameter is refused before anything is formatted, and
+	// the freeze is asked of the *name a subscript belongs to* — the same
+	// question `read` asks through the same function, because it is the same
+	// question: a builtin writing to its own output parameter. Measured on
+	// bash 5.3.20, which refuses `printf -v s`, `printf -v 'a[0]'` and
+	// `printf -v 'm[k]'` alike with the base name in the sentence, at status
+	// 1, and writes nothing (#3469).
+	if assign != "" && !r.readMayWrite(assign) {
+		return 1
+	}
+
 	// `-v name` collects the text instead of printing it. Swapped rather than
 	// threaded through, because everything below writes to r.stdout() and the
 	// format is reused in a loop.
@@ -78,7 +89,15 @@ func biPrintf(r *Runner, _ context.Context, args []string) int {
 		r.Stdout = &into
 		defer func() {
 			r.Stdout = saved
-			r.setVar(assign, into.String())
+			// Through the operand store and not setVar, because the name may
+			// carry a subscript: `printf -v 'q[1]'` fills an element and
+			// `printf -v 'm[k]'` a keyed one. setVar made a *scalar* whose
+			// name was the six characters `q[1]`, so the array a script then
+			// read was untouched and the builtin reported 0 — measured
+			// against bash 5.3.20, which fills the element in both
+			// containers. It is the same route `read 'a[2]'` takes, for the
+			// same reason (#2298).
+			r.storeThroughOperand(assign, into.String())
 		}()
 	}
 

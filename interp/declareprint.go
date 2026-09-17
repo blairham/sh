@@ -824,13 +824,21 @@ func (r *Runner) listedInDecimal(d declaration) string {
 // clusteredKey spells a subscript in the clustered form: bare when it is
 // plain, `$'...'` when it holds a control character, double-quoted otherwise —
 // the same reach the form's values make, without the always.
+//
+// Bare by the *declaration* rule and not the plainest one, because the shell
+// that writes this form judges a key exactly as it judges a scalar's value in
+// a bare `set`: `[a#b]` and `[a~b]` are bare there where `["#a"]` and
+// `["~b"]` are quoted, and the position rules behind that are
+// Semantics.ListedHashIsBareUnlessItOpensTheValue and
+// Semantics.ListedTildeIsBareWhereItCannotExpand. Reading listedValueIsBare here
+// quoted both of the bare ones (#2298).
 func (r *Runner) clusteredKey(k string) string {
 	switch {
 	case hasControl(k):
 		return r.dollarQuoted(k)
 	case wholeArraySubscriptAsAKey(k):
 		return doubleQuoted(k)
-	case r.listedValueIsBare(k):
+	case r.valueListsBare(k):
 		return k
 	}
 	return doubleQuoted(k)

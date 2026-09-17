@@ -3214,7 +3214,45 @@ func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 	}
 	base := operand[:open]
 	sub := strings.TrimSpace(operand[open+1 : len(operand)-1])
-	return base, sub, true
+	return base, r.operandSubscriptTilde(base, sub), true
+}
+
+// operandSubscriptTilde is Semantics.SubscriptKeyExpandsALeadingTilde reached
+// from the other side: the subscript a *builtin's operand* carries as text.
+//
+// Here rather than at each keyed branch, because there are six of them —
+// `unset`, `read` and the other stores, `test -v`, `printf -v`, `${!ref}` and
+// a descriptor assignment — and a shell that expanded the tilde for some of
+// them would answer a script differently depending on which route reached the
+// element. Measured 2026-09-17 on bash 5.3.20, with the element stored under
+// `$HOME/k` or read back afterwards, every route taking the tilde:
+//
+//	unset 'm[~/k]'         removes it
+//	test -v 'm[~/k]'       true
+//	printf -v 'm[~/z]' …   stores under $HOME/z
+//	read 'm[~/k]'          stores under $HOME/k
+//	r='m[~/k]'; ${!r}      reads it
+//
+// **Only for a table already keyed**, which is the same guard the word route
+// has and is what keeps the arithmetic subscript out of it: `declare -a q;
+// unset 'q[~/k]'` in bash complains about `~/k` and not about the path, so
+// the indexed operand is left exactly as written.
+//
+// The text arrives with its quotes still in it, so the tilde is taken only
+// where the operand opens with one — `unset "m[\"~/k\"]"` is a key that
+// starts with a quote and no tilde expansion reaches it, in bash as here.
+func (r *Runner) operandSubscriptTilde(base, sub string) string {
+	if !strings.HasPrefix(sub, "~") || !isPlainName(base) {
+		return sub
+	}
+	if !r.assocDeclared(r.throughNameref(base)) {
+		return sub
+	}
+	if !r.ask(r.sem().SubscriptKeyExpandsALeadingTilde,
+		"a subscript's leading tilde expanding to the home directory") {
+		return sub
+	}
+	return r.tildeValue(sub)
 }
 
 // operandSubscripts is subscriptOperand for the callers that can take a

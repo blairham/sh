@@ -385,6 +385,7 @@ func (r *Runner) absentAssocElement(e *syntax.ParamExpr, key string) []string {
 // backslash in it — which is nearly every key a script writes — never demands
 // a dialect for the question.
 func (r *Runner) assocKey(w *syntax.Word) string {
+	r.expandSubscriptTilde(w)
 	quoted := r.expandKeyQuoted(w)
 	asWritten := r.searchOperand(w)
 	if quoted == asWritten {
@@ -394,6 +395,42 @@ func (r *Runner) assocKey(w *syntax.Word) string {
 		return quoted
 	}
 	return asWritten
+}
+
+// expandSubscriptTilde is Semantics.SubscriptKeyExpandsALeadingTilde: the
+// leading unquoted `~` of a subscript becomes the home directory before the
+// text becomes a key.
+//
+// Asked here rather than at the store, because a *read* takes it too — with
+// the element stored under `$HOME/k`, `${m[~/k]}` finds it in the two columns
+// that expand — and this is where the two routes meet. Asked only where the
+// two readings differ: a subscript with no leading unquoted `~` is the same
+// key either way, which is every subscript a script normally writes.
+//
+// The word is rewritten in place, as expandTilde does everywhere else. That
+// is safe to repeat: the value it leaves no longer starts with a `~`, so a
+// subscript inside a loop expands once and reads the same on every pass.
+func (r *Runner) expandSubscriptTilde(w *syntax.Word) {
+	if !startsWithAnUnquotedTilde(w) {
+		return
+	}
+	if !r.ask(r.sem().SubscriptKeyExpandsALeadingTilde,
+		"a subscript's leading tilde expanding to the home directory") {
+		return
+	}
+	r.expandTilde(w)
+}
+
+// startsWithAnUnquotedTilde is the guard that keeps the axis from being asked
+// about a subscript it cannot change — which is the condition expandTilde
+// itself applies, read without performing anything.
+func startsWithAnUnquotedTilde(w *syntax.Word) bool {
+	if w == nil || len(w.Spans) == 0 {
+		return false
+	}
+	s := w.Spans[0]
+	return s.Kind == syntax.Literal && s.Quoting == syntax.Unquoted &&
+		strings.HasPrefix(s.Value, "~")
 }
 
 // assocAssignKey is assocKey for a caller that is about to *store* under the

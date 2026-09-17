@@ -1099,6 +1099,13 @@ func Semantics() interp.Semantics {
 	s.ListedBangIsOrdinary = interp.Yes
 	s.ListedCaretIsOrdinary = interp.No
 	s.ListedEqualsIsOrdinary = interp.No
+	// And a `~` is quoted wherever it stands, which is bash's rule refused:
+	// `v='a~b'` and `v='b~'` from a bare `set`, measured 2026-09-17 (#2298).
+	s.ListedTildeIsBareWhereItCannotExpand = interp.No
+	// And the subscript takes the characters: `m[~/k]` is the three-character
+	// key here, where bash and ksh93 expand it. Measured 2026-09-17 on
+	// 5.9.2, with `typeset -p` beside the store (#2298).
+	s.SubscriptKeyExpandsALeadingTilde = interp.No
 	s.ListedNonAsciiIsOrdinary = interp.Yes
 	s.ListedAssignmentPrefixIsBare = interp.No
 	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a

@@ -727,6 +727,14 @@ func Semantics() interp.Semantics {
 	// And not the weaker position rule bash has: `a#b` is quoted here,
 	// which is what says the leading text is judged and not the offset.
 	s.ListedHashIsBareUnlessItOpensTheValue = interp.No
+	// And neither of bash's position rules applies to a `~`: `a~b`, `b~`,
+	// `~b` and the keys `['a~b']` and `['b~']` are all quoted here.
+	// Measured 2026-09-17 over `set` and a keyed `typeset -p` (#2298).
+	s.ListedTildeIsBareWhereItCannotExpand = interp.No
+	// The subscript's leading tilde *is* expanded here, as it is in bash:
+	// `typeset -A m; m[~/k]=v` stores under `$HOME/k` and `${m[~/k]}` reads
+	// it back. Measured 2026-09-17 on ksh93u+ 2012-08-01 (#2298).
+	s.SubscriptKeyExpandsALeadingTilde = interp.Yes
 	s.ListingControlEscape = interp.ControlEscapeHex
 	// The column that leaves `^` bare, and the only one: `v=^` and `v=a^b`
 	// list unquoted here where bash and zsh write `'^'` and `'a^b'`.

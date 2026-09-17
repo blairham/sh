@@ -704,7 +704,7 @@ func (r *Runner) refuseAVariableOnlyLetter(name string, f declareFlags, rest []s
 		}
 	}
 	refused := r.diag().VariableOnlyLettersOnAFunctionLine[name]
-	if refused == "" || !(f.function || f.funcNames) || f.functionOff || f.funcNamesOff ||
+	if refused == "" || (!f.function && !f.funcNames) || f.functionOff || f.funcNamesOff ||
 		f.print || len(rest) == 0 {
 		return 0
 	}

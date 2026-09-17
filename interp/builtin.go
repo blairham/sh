@@ -2766,9 +2766,14 @@ func (r *Runner) unsetName(name string) {
 	// A name a *calling* function made local is where the panel splits, and
 	// in one column the name does not go away at all: the binding does, and
 	// what it displaced answers from here on. See
-	// interp/unsetenclosinglocal.go, which puts the outer binding back —
-	// including the parameter above, which is why this stands after the hash
-	// and ahead of everything that takes the name out of a table.
+	// interp/unsetenclosinglocal.go.
+	//
+	// After the hashed-command line above, because the search path really
+	// does move when a local `PATH` is taken away, and ahead of everything
+	// below, because none of it is what happens here: the name is not
+	// removed from a table, its attributes are not cleared, and the
+	// hidden-name parameter is *restored* rather than unset — the undo does
+	// that itself, through the same restore a call's exit runs.
 	if r.unsetTakesAnEnclosingLocal(name) {
 		return
 	}

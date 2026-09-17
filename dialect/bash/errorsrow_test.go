@@ -152,6 +152,11 @@ func TestRefusalsBashMakes(t *testing.T) {
 				"sh: line 5: x: readonly variable\n",
 		},
 		{
+			"POSIX mode ends the script on a plain assignment to a readonly name",
+			"set -o posix\nreadonly x=1\nx=2\necho gone\n",
+			"sh: line 3: x: readonly variable\n",
+		},
+		{
 			"leaving POSIX mode puts the carrying-on back",
 			"set -o posix; set +o posix\nreadonly x=1\nx=2\nreadonly x=3\necho after\n",
 			"sh: line 3: x: readonly variable\nsh: line 4: x: readonly variable\nafter\n",

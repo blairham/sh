@@ -162,6 +162,15 @@ func TestRefusalsBashMakes(t *testing.T) {
 			"sh: line 3: x: readonly variable\nsh: line 4: x: readonly variable\nafter\n",
 		},
 		{
+			"an increment with nothing to increment is refused",
+			"echo $((--)); echo same\n" +
+				"(( ++ )); echo \"a=$?\"\n" +
+				"x=3; echo $((--x))\n",
+			"sh: line 1: --: arithmetic syntax error: operand expected (error token is \"-\")\n" +
+				"sh: line 2: ((: ++ : arithmetic syntax error: operand expected (error token is \"+ \")\na=1\n" +
+				"2\n",
+		},
+		{
 			"a loop count out of range ends every loop",
 			"for i in 1 2; do for j in a b; do echo $i$j; continue 0; echo tail; done; echo mid; done; echo \"st=$?\"\n",
 			"1a\nsh: line 1: continue: 0: loop count out of range\nst=1\n",

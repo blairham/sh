@@ -1108,9 +1108,20 @@ func (a *arithParser) unary() ArithExpr {
 			a.p.fail("%s is not available in this dialect", op)
 			return nil
 		}
+		at := a.off
 		a.off += 2
 		x := a.unary()
 		if x == nil {
+			// Nothing to increment is the same refusal a sign with nothing
+			// behind it gets, one branch down: `$((--))` and `(( ++ ))` are
+			// refused in bash 5.3.20, zsh 5.9.2 and ksh93u+ alike, and were
+			// an empty expression here that came to 0 at status 0.
+			//
+			// The blamed text starts one character in, which is measured
+			// rather than tidy: bash names `-` for `$((--))` and `- ` for
+			// `(( -- ))` — the first sign read as an operator of its own,
+			// with nothing behind the second.
+			a.failArith(ErrArithOperandEnd, a.src[at+1:])
 			return nil
 		}
 		return &ArithUnary{Op: op, X: x, Start: start}

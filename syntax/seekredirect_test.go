@@ -83,7 +83,7 @@ func TestTheSeekOperandIsAnArithmeticCommand(t *testing.T) {
 // ksh93 reads a *pattern* after the operator as well, and this grammar does
 // not claim that half: the word is refused rather than read as an offset it
 // is not. `exec 3<#0` segfaults ksh93u+ 2012-08-01 outright, so there is no
-// behaviour there to match either.
+// behavior there to match either.
 func TestASeekOperandThatIsNotArithmeticIsRefused(t *testing.T) {
 	t.Parallel()
 	for _, src := range []string{"exec 3<#0", "echo hi >#x", `exec 3<#"0"`, "exec 3<#$((0))"} {

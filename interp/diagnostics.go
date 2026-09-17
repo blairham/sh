@@ -447,9 +447,11 @@ type Diagnostics struct {
 	// TestTooManyArguments is a well-formed expression with words left over.
 	// No verbs.
 	TestTooManyArguments string
-	// TestMissingBracket is `[` without its closing `]`. No verbs — and every
-	// shell in the panel words it differently, which is the whole reason these
-	// four are fields rather than strings in the builtin.
+	// TestMissingBracket is `[` without its closing `]`. One verb, the closing
+	// word that was wanted — `]`, or `]]` for the `[[` that is a command (see
+	// syntax.Dialect.DoubleBracketIsACommand) — and every shell in the panel
+	// words it differently, which is the whole reason these four are fields
+	// rather than strings in the builtin.
 	TestMissingBracket string
 
 	// PrintfBadDateOperand is what the date-string `%T` says about an operand

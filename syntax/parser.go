@@ -2796,6 +2796,9 @@ func isNameIn(s string, dot bool) bool {
 func (p *Parser) parseSimple() Command {
 	c := &SimpleCmd{Start: p.tok.Pos}
 	seenArg := false
+	// Whether an unquoted `[[` word has been read and its `]]` has not, in a
+	// dialect whose `[[` is a command. See Dialect.DoubleBracketIsACommand.
+	inDoubleBracket := false
 	// Argument position lasts as long as this command does. The token that
 	// ends it has already been read by the time this returns, so restoring
 	// the flag here is soon enough and is the only place that catches every
@@ -2808,6 +2811,18 @@ func (p *Parser) parseSimple() Command {
 			if r := p.parseRedirect(); r != nil {
 				c.Redirs = append(c.Redirs, r)
 			}
+		case inDoubleBracket && (p.at(TokAndAnd) || p.at(TokOrOr)):
+			// The connective of a `[[` that is a command, which ends nothing:
+			// it is an operand the builtin reads. A literal word of the
+			// operator's own spelling, so the tree prints back as written
+			// and the reprint reads the same way.
+			text := "&&"
+			if p.at(TokOrOr) {
+				text = "||"
+			}
+			p.lex.inArgument = true
+			c.Args = append(c.Args, p.newWord([]Span{{Value: text, Pos: p.tok.Pos}}, p.tok.Pos, p.tok.End))
+			p.next()
 		case p.at(TokWord):
 			// A function definition announces itself only at the paren —
 			// which is why the words before it are read as arguments first
@@ -2940,6 +2955,14 @@ func (p *Parser) parseSimple() Command {
 				return p.parseFuncPosixNames(c)
 			}
 			seenArg = true
+			if p.dialect.DoubleBracketIsACommand {
+				switch {
+				case p.atWord("[["):
+					inDoubleBracket = true
+				case p.atWord("]]"):
+					inDoubleBracket = false
+				}
+			}
 			// The token *after* this word stands where an argument may, and
 			// p.word() is what reads it — so the lexer is told before the
 			// call rather than after it. One dialect reads a `(` there as

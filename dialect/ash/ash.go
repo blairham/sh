@@ -52,7 +52,13 @@ func Dialect() syntax.Dialect {
 	// …; }` and `function f() { …; }` both define; `${v:1:3}` of `abcdef` is
 	// `bcd`; `${v/b/X}` of `abc` is `aXc`.
 	d.DollarSingleQuote = true
-	d.DoubleBracket = true
+	// `[[` is here, but as `test` with a closing word rather than as the
+	// conditional every other shell with the spelling has: `type '[['` is
+	// `[[ is a shell builtin`, `[[ abc == "a*" ]]` is 0 because the quotes
+	// are gone before the builtin sees the pattern, and `s="two words"; [[
+	// $s == "two words" ]]` is `words: unknown operand` at 2. The keyword
+	// reading was what this preset held until #3409.
+	d.DoubleBracketIsACommand = true
 	d.ProcessSubstitution = true
 	d.FunctionKeyword = true
 	d.FunctionKeywordParens = true
@@ -1855,7 +1861,7 @@ func Diagnostics() interp.Diagnostics {
 		TestIntegerExpected:     "%[1]s: out of range",
 		TestTooManyArguments:    "unknown operand",
 		TestOperandExpected:     "argument expected",
-		TestMissingBracket:      "missing ]",
+		TestMissingBracket:      "missing %[1]s",
 
 		// The remarks a shell with no terminal makes about job control, both
 		// spellings of the same sentence.

@@ -114,6 +114,12 @@ func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
 		// A nil entry is an explicit removal rather than a missing one.
 		return fn, fn != nil
 	}
+	if name == "[[" && r.dialect().DoubleBracketIsACommand {
+		// Not in the table, because in every other dialect the word is a
+		// keyword and names no command at all: `v='[['; $v a ]]` is `[[:
+		// command not found` there. See biDoubleBracket.
+		return biDoubleBracket, true
+	}
 	if name == diagnoseCommand && r.speaker != "" {
 		// The prelude's diagnostics seam, and only there: a script running
 		// the word gets whatever the dialect it is written for would give
@@ -338,6 +344,9 @@ func (r *Runner) BuiltinNames() []string {
 	seen := make(map[string]bool, len(builtins)+len(r.custom))
 	for name := range builtins {
 		seen[name] = true
+	}
+	if r.dialect().DoubleBracketIsACommand {
+		seen["[["] = true
 	}
 	// A registration wins, and a nil one is a removal rather than an entry.
 	for name, fn := range r.custom {

@@ -324,52 +324,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		if x.Y.IsQuoted() && r.ask(r.sem().RegexQuotingMakesLiteral, "quoting a =~ regex making it literal") {
 			pat = regexp.QuoteMeta(pat)
 		}
-		// An empty right operand is where the engine underneath shows
-		// through. POSIX ERE, which the shells that refuse this are built
-		// on, has no empty expression; Go's regexp compiles `` happily and
-		// then matches the empty string at every position, so a global
-		// replace over `abc` writes between every pair of characters
-		// instead of doing nothing. The compile cannot report it, so the
-		// emptiness is asked about before the compile rather than by it.
-		if pat == "" && r.ask(r.sem().EmptyRegexOperandIsAnError,
-			"an empty =~ right operand being an error") {
-			return false, arithError{msg: "invalid regular expression: empty (sub)expression"}
-		}
-		// The expression and the subject as the *engine* must see them,
-		// which is not always as the script wrote them: the case fold is
-		// narrowed to ASCII under a C or POSIX locale, and the only way to
-		// narrow the engine's is to write the characters it must not fold
-		// out of its reach. back maps an offset in the subject it matched
-		// against back to an offset in the script's own. See regexmatch.go.
-		expr, subject, back := r.regexOperands(pat, left)
-		re, err := regexp.Compile(expr)
-		if err != nil {
-			// The pattern as the script wrote it, never the folded spelling:
-			// a script that never asked for `(?i)` must not read about one.
-			return false, arithError{msg: "invalid regular expression: " + pat}
-		}
-		// The captures are the point of matching, not a by-product: element 0
-		// is the whole match and the rest are the groups. The core records
-		// them and a dialect names the record — see regexmatch.go.
-		//
-		// The offsets are asked for rather than the texts, because the two
-		// records a dialect can ask for want different things out of one
-		// match: the dense array wants the strings, and the reporting
-		// parameters want where each span began and ended. Matching twice to
-		// get both would be two answers to one question.
-		loc := scriptOffsets(re.FindStringSubmatchIndex(subject), back)
-		var m []string
-		if loc != nil {
-			m = make([]string, len(loc)/2)
-			for i := range m {
-				if loc[2*i] >= 0 {
-					m[i] = left[loc[2*i]:loc[2*i+1]]
-				}
-			}
-		}
-		r.recordRegexMatch(m)
-		r.publishRegexCapture(left, loc)
-		return loc != nil, nil
+		return r.regexMatch(pat, left)
 
 	case "-nt", "-ot", "-ef":
 		return r.compareFiles(x.Op, left, right)
@@ -631,4 +586,57 @@ func procSubSource(s syntax.Span) string {
 		open = "=("
 	}
 	return open + s.Value + ")"
+}
+
+// regexMatch is `=~`: whether left holds a match for the extended regular
+// expression pat, with the captures recorded the way the dialect names them.
+// Shared by the conditional and by the `[[` that is a command, which differ
+// in what a quoted pattern means and in nothing past that.
+func (r *Runner) regexMatch(pat, left string) (bool, error) {
+	// An empty right operand is where the engine underneath shows
+	// through. POSIX ERE, which the shells that refuse this are built
+	// on, has no empty expression; Go's regexp compiles `` happily and
+	// then matches the empty string at every position, so a global
+	// replace over `abc` writes between every pair of characters
+	// instead of doing nothing. The compile cannot report it, so the
+	// emptiness is asked about before the compile rather than by it.
+	if pat == "" && r.ask(r.sem().EmptyRegexOperandIsAnError,
+		"an empty =~ right operand being an error") {
+		return false, arithError{msg: "invalid regular expression: empty (sub)expression"}
+	}
+	// The expression and the subject as the *engine* must see them,
+	// which is not always as the script wrote them: the case fold is
+	// narrowed to ASCII under a C or POSIX locale, and the only way to
+	// narrow the engine's is to write the characters it must not fold
+	// out of its reach. back maps an offset in the subject it matched
+	// against back to an offset in the script's own. See regexmatch.go.
+	expr, subject, back := r.regexOperands(pat, left)
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		// The pattern as the script wrote it, never the folded spelling:
+		// a script that never asked for `(?i)` must not read about one.
+		return false, arithError{msg: "invalid regular expression: " + pat}
+	}
+	// The captures are the point of matching, not a by-product: element 0
+	// is the whole match and the rest are the groups. The core records
+	// them and a dialect names the record — see regexmatch.go.
+	//
+	// The offsets are asked for rather than the texts, because the two
+	// records a dialect can ask for want different things out of one
+	// match: the dense array wants the strings, and the reporting
+	// parameters want where each span began and ended. Matching twice to
+	// get both would be two answers to one question.
+	loc := scriptOffsets(re.FindStringSubmatchIndex(subject), back)
+	var m []string
+	if loc != nil {
+		m = make([]string, len(loc)/2)
+		for i := range m {
+			if loc[2*i] >= 0 {
+				m[i] = left[loc[2*i]:loc[2*i+1]]
+			}
+		}
+	}
+	r.recordRegexMatch(m)
+	r.publishRegexCapture(left, loc)
+	return loc != nil, nil
 }

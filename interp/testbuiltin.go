@@ -37,6 +37,36 @@ func init() {
 	builtins["["] = biBracket
 }
 
+// errTestRegexDoesNotCompile is a `=~` right operand the engine refused, in
+// the form that reports it with its status alone.
+var errTestRegexDoesNotCompile = errors.New("regular expression does not compile")
+
+// testForm is which of the two expression languages a `test`-shaped builtin
+// reads: `test` and `[` themselves, or the `[[` that is a command in the one
+// dialect whose `[[` is not grammar (see syntax.Dialect.DoubleBracketIsACommand).
+//
+// The two share the argument-count rules and the grammar past four words, and
+// differ in exactly three places, each measured on BusyBox v1.37.0 on
+// 2026-09-16 against `[` in the same shell:
+//
+//   - the connectives are `&&` and `||`, and `-a` and `-o` are not connectives
+//     at all — `[[ a = a -a b = b ]]` is `-a: unknown operand` where `[ a = a
+//     -a b = b ]` is 0;
+//   - `=`, `==` and `!=` match their right operand as a *pattern*, whatever
+//     quoting it was written with, since the builtin sees only the expanded
+//     word — `[[ abc == "a*" ]]` is 0 and `[ abc == "a*" ]` is 1;
+//   - `=~` is a regular expression match, which `[` refuses as an operand.
+type testForm struct {
+	and, or  string
+	patterns bool
+}
+
+// testCommandForm is `test` and `[`.
+var testCommandForm = testForm{and: "-a", or: "-o"}
+
+// doubleBracketCommandForm is `[[` read as a command.
+var doubleBracketCommandForm = testForm{and: "&&", or: "||", patterns: true}
+
 func biTest(r *Runner, _ context.Context, args []string) int {
 	return r.runTest("test", args)
 }
@@ -49,14 +79,40 @@ func biTest(r *Runner, _ context.Context, args []string) int {
 // between them is not an expression.
 func biBracket(r *Runner, _ context.Context, args []string) int {
 	if len(args) == 0 || args[len(args)-1] != "]" {
-		r.diagf("%s\n", Wording(r.diag().TestMissingBracket, "[: missing ]"))
+		r.diagf("%s\n", Wording(r.diag().TestMissingBracket, "[: missing ]", "]"))
 		return 2
 	}
 	return r.runTest("[", args[:len(args)-1])
 }
 
+// biDoubleBracket is `[[` in a dialect whose `[[` is a command rather than a
+// keyword: `test` in its own form, closed by a `]]` that is an ordinary last
+// argument. Reached only where syntax.Dialect.DoubleBracketIsACommand says so
+// — see lookupBuiltin — so a shell whose `[[` is grammar has no command of
+// that name, which is what `v='[['; $v a ]]` measures there.
+//
+// Measured on BusyBox v1.37.0, 2026-09-16: `[[ a` is `missing ]]` at 2, `[[ ]]`
+// is 1 as `[ ]` is, `[[ a ]] ]]` is `]]: unknown operand` because only the
+// last word closes, and `[[ a "]]"` is 0 because the builtin never sees the
+// quotes. A regular expression that will not compile is 2 *with nothing
+// written*: `[[ abc =~ "(b" ]]` is silent there.
+func biDoubleBracket(r *Runner, _ context.Context, args []string) int {
+	if len(args) == 0 || args[len(args)-1] != "]]" {
+		r.diagf("%s\n", Wording(r.diag().TestMissingBracket, "[[: missing ]]", "]]"))
+		return 2
+	}
+	return r.runTestForm("[[", doubleBracketCommandForm, args[:len(args)-1])
+}
+
 func (r *Runner) runTest(name string, args []string) int {
-	ok, err := r.testExpr(args)
+	return r.runTestForm(name, testCommandForm, args)
+}
+
+func (r *Runner) runTestForm(name string, form testForm, args []string) int {
+	ok, err := r.testExpr(form, args)
+	if errors.Is(err, errTestRegexDoesNotCompile) {
+		return 2
+	}
 	if err != nil {
 		var te *testError
 		if errors.As(err, &te) {
@@ -217,7 +273,7 @@ func (r *Runner) bareTerminalTest() bool {
 //
 // Only past four arguments does a grammar take over, with `-a` binding tighter
 // than `-o`. All of this is unanimous across the panel.
-func (r *Runner) testExpr(args []string) (bool, error) {
+func (r *Runner) testExpr(form testForm, args []string) (bool, error) {
 	switch len(args) {
 	case 0:
 		// No expression is false rather than an error.
@@ -240,10 +296,10 @@ func (r *Runner) testExpr(args []string) (bool, error) {
 		}
 		return r.unaryTest(args[0], args[1])
 	case 3:
-		if ok, err, handled := r.binaryTest(args[0], args[1], args[2]); handled {
+		if ok, err, handled := r.binaryTest(form, args[0], args[1], args[2]); handled {
 			return ok, err
 		}
-		if args[1] == "-a" || args[1] == "-o" {
+		if args[1] == form.and || args[1] == form.or {
 			// The connectives, over two *strings* rather than over two
 			// expressions: three words leave no room for an operator on
 			// either side, so each side is true when it is non-empty and
@@ -264,13 +320,13 @@ func (r *Runner) testExpr(args []string) (bool, error) {
 			// tighter, and a primary that swallowed `a -o b` whole would
 			// make `[ a -o b -a c ]` associate the other way.
 			left, right := args[0] != "", args[2] != ""
-			if args[1] == "-a" {
+			if args[1] == form.and {
 				return left && right, nil
 			}
 			return left || right, nil
 		}
 		if args[0] == "!" {
-			v, err := r.testExpr(args[1:])
+			v, err := r.testExpr(form, args[1:])
 			return !v, err
 		}
 		if args[0] == "(" && args[2] == ")" {
@@ -293,14 +349,14 @@ func (r *Runner) testExpr(args []string) (bool, error) {
 		return false, &testError{kind: errBinaryExpected, operand: blamed}
 	case 4:
 		if args[0] == "!" {
-			v, err := r.testExpr(args[1:])
+			v, err := r.testExpr(form, args[1:])
 			return !v, err
 		}
 		if args[0] == "(" && args[3] == ")" {
-			return r.testExpr(args[1:3])
+			return r.testExpr(form, args[1:3])
 		}
 	}
-	p := &testParser{r: r, args: args}
+	p := &testParser{r: r, form: form, args: args}
 	v, err := p.orExpr()
 	if err != nil {
 		return false, err
@@ -335,6 +391,7 @@ func (p *testParser) lastTaken() string {
 // tighter than `-o`, `!` binds tighter still, and `( )` groups.
 type testParser struct {
 	r    *Runner
+	form testForm
 	args []string
 	pos  int
 }
@@ -353,7 +410,7 @@ func (p *testParser) orExpr() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	for p.more() && p.peek() == "-o" {
+	for p.more() && p.peek() == p.form.or {
 		p.pos++
 		right, err := p.andExpr()
 		if err != nil {
@@ -369,7 +426,7 @@ func (p *testParser) andExpr() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	for p.more() && p.peek() == "-a" {
+	for p.more() && p.peek() == p.form.and {
 		p.pos++
 		right, err := p.notExpr()
 		if err != nil {
@@ -410,7 +467,7 @@ func (p *testParser) primary() (bool, error) {
 	// before a unary one: `test -n = -n` compares two strings rather than
 	// testing whether "=" is non-empty.
 	if p.pos+2 < len(p.args) {
-		if ok, err, handled := p.r.binaryTest(p.args[p.pos], p.args[p.pos+1], p.args[p.pos+2]); handled {
+		if ok, err, handled := p.r.binaryTest(p.form, p.args[p.pos], p.args[p.pos+1], p.args[p.pos+2]); handled {
 			p.pos += 3
 			return ok, err
 		}
@@ -474,10 +531,10 @@ func (p *testParser) unknownOperator() error {
 	switch next := p.pos + 1; {
 	case next >= len(p.args):
 		return nil
-	case p.args[next] == "-a", p.args[next] == "-o", p.args[next] == ")":
+	case p.args[next] == p.form.and, p.args[next] == p.form.or, p.args[next] == ")":
 		return nil
 	}
-	if (word == "-a" || word == "-o") && p.r.diag().TestConnectiveIsALeftoverWord {
+	if (word == p.form.and || word == p.form.or) && p.r.diag().TestConnectiveIsALeftoverWord {
 		// The same reading unaryTest gives the two-word form: a connective
 		// this dialect has, standing where a primary begins and without the
 		// file test behind it, is a string with a word left over.
@@ -810,7 +867,23 @@ func (r *Runner) stringOrderOperator(op string) bool {
 // binaryTest is `a OP b`. The third return says whether the middle word was an
 // operator at all, which is what lets the caller fall back to another reading
 // rather than guessing.
-func (r *Runner) binaryTest(left, op, right string) (bool, error, bool) {
+func (r *Runner) binaryTest(form testForm, left, op, right string) (bool, error, bool) {
+	if form.patterns {
+		switch op {
+		case "=", "==", "!=":
+			// A pattern, and never a quoted literal: the words were expanded
+			// and had their quotes removed before the builtin was called, so
+			// there is nothing left to say which characters were quoted.
+			got := r.matchPatternR(right, left, true)
+			return got == (op != "!="), nil, true
+		case "=~":
+			ok, err := r.regexMatch(right, left)
+			if err != nil {
+				return false, errTestRegexDoesNotCompile, true
+			}
+			return ok, nil, true
+		}
+	}
 	switch op {
 	case "=":
 		// A *string* comparison, and never a pattern. `[[ abc == a* ]]` is

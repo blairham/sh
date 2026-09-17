@@ -13538,6 +13538,46 @@ type Semantics struct {
 	// empty array and no field, while a name nothing declared is one field.
 	UnsetNameAtIsOneEmptyField Answer
 
+	// EmptyArrayIsSet calls an array that exists and holds **no elements** a
+	// set parameter, so `${a[@]+S}` substitutes and `${a[@]-D}` does not.
+	//
+	// The sibling of UnsetNameAtIsOneEmptyField one question along. That
+	// axis is about how many *fields* a name nothing declared comes to; this
+	// is about whether a name that was declared and is empty answers the
+	// `-`/`+` test at all, and the columns split the other way round on it.
+	//
+	// Measured 2026-09-16, `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a file:
+	//
+	//	e=(); f=(x)
+	//	echo "[${e[@]+S}] [${f[@]+S}]"; echo "[${e[@]-D}]"
+	//
+	//	bash 5.3.20   [] [S]   [D]
+	//	bash 3.2.57   [] [S]   [D]
+	//	ksh93u+       [] [S]   [D]   (with `set -A e`, which is how that
+	//	                             shell makes one — `e=()` there is a
+	//	                             compound variable, the confound
+	//	                             UnsetNameAtIsOneEmptyField records)
+	//	zsh 5.9.2     [S] [S]  []
+	//	dash, ash     no arrays to ask it of
+	//
+	// So three columns read an empty array as unset and one reads it as set,
+	// and this shell was giving the fourth one's answer in every dialect.
+	//
+	// **It counts elements rather than reading the value.** An array holding
+	// one empty string is set in every column, and it joins to the same
+	// nothing an empty one does — a value-shaped test cannot tell them
+	// apart.
+	//
+	// **The `*` spelling answers with the `@` one**, measured in bash 5.3.20,
+	// bash 3.2.57, ksh93u+ and zsh 5.9.2: the join is what differs between
+	// them and the existence question is not about the join. dash and
+	// BusyBox ash have no arrays and no spelling to compare.
+	//
+	// Asked only where it decides: the whole array, existing, with no
+	// elements, under a colon-less test. `${a[@]:-D}` fires on the empty
+	// value whichever way this is answered and never reaches it.
+	EmptyArrayIsSet Answer
+
 	// SubstringNegativeLengthIsEmpty answers `${x:1:-2}` with nothing at
 	// all: ksh93 alone. bash 5.3 — under either name — zsh and BusyBox ash
 	// count the negative length from the end, so `x=abcdef` gives `bcd`.
@@ -17701,7 +17741,11 @@ func PosixSemantics() Semantics {
 		// panel is all there is to follow.
 		WholeSubscriptOnAScalarSlicesIt: Yes,
 		UnsetNameAtIsOneEmptyField:      No,
-		SubstringNegativeLengthIsEmpty:  No,
+		// The standard has no arrays, so this follows the three columns
+		// that have one and read an array with no elements as unset. zsh
+		// is the column that overrides it.
+		EmptyArrayIsSet:                No,
+		SubstringNegativeLengthIsEmpty: No,
 		// The standard has no arrays, so this follows the two columns with
 		// associative arrays that keep a key a string. zsh is the column
 		// that overrides it.

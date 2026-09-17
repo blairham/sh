@@ -1008,7 +1008,32 @@ func (r *Runner) conditionalFires(e *syntax.ParamExpr, value string, set bool) b
 	if e.Colon {
 		return !set || value == ""
 	}
-	return !r.listOfNoPositionalsIsSet(e, set)
+	return !r.listOfNoPositionalsIsSet(e, r.emptyWholeArrayIsSet(e, set))
+}
+
+// emptyWholeArrayIsSet resolves Semantics.EmptyArrayIsSet for one colon-less
+// conditional, and leaves every other parameter as it found it.
+//
+// Three guards, and each is a place the panel agrees:
+//
+//   - the subject has to be the **whole** array. `${a[0]+S}` is one element
+//     and a missing element is unset in every column.
+//   - the array has to exist and have **no elements**. One holding a single
+//     empty string is set everywhere, which is why this counts them rather
+//     than reading the joined value — the two join to the same bytes.
+//   - the colon form never gets here, for listOfNoPositionalsIsSet's reason:
+//     it fires on the empty value whichever way the set-ness is answered,
+//     and `${a[@]:-D}` is `D` in all four columns.
+func (r *Runner) emptyWholeArrayIsSet(e *syntax.ParamExpr, set bool) bool {
+	if !set || e.Index == nil || !wholeArraySubscript(r.subscriptText(e.Subscript())) {
+		return set
+	}
+	elems, ok := r.arraySubscript(e)
+	if !ok || len(elems) > 0 {
+		return set
+	}
+	return r.ask(r.sem().EmptyArrayIsSet,
+		"whether an array with no elements is a set parameter")
 }
 
 // listOfNoPositionalsIsSet resolves Semantics.PositionalListWithNoneIsSet for

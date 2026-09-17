@@ -96,26 +96,30 @@ func TestUnsetOfEveryElementOfAScalar(t *testing.T) {
 // nothing said why.
 func TestUnsetOfEveryElementIsAnOrdinaryBadSubscript(t *testing.T) {
 	for _, c := range []struct {
-		name  string
-		fatal Answer
-		want  string
+		name   string
+		giveUp BadSubscriptPolicy
+		want   string
 	}{
-		{"fatal", Yes, ""},
-		{"a failed builtin", No, "st=1 n=3"},
+		{"the script ends", BadSubscriptEndsTheScript, ""},
+		{"the command is given up", BadSubscriptAbandonsTheCommand, ""},
+		{"a failed builtin", BadSubscriptReported, "st=1 n=3"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := runGrammar(t, `a=(p q r); unset "a[@]"; echo "st=$? n=${#a[@]}"`, nil,
 				func(r *Runner) {
 					sem := *r.Semantics
 					sem.UnsetArraySpan = UnsetArraySpanIsAnExpression
-					sem.BadSubscriptToUnsetFatal = c.fatal
+					sem.BadSubscriptToUnset = c.giveUp
 					r.Semantics = &sem
 				})
 			if !strings.Contains(out, "@") {
 				t.Errorf("output = %q, want the subscript named", out)
 			}
 			if c.want == "" {
-				// The script stopped, so nothing after the `unset` ran.
+				// The script stopped, or the command was given up with the
+				// rest of its line — and on one line those print the same
+				// nothing, which is exactly why the two are told apart in
+				// TestABadSubscriptToUnsetGivesUpAsMuchAsTheDialectDoes.
 				if strings.Contains(out, "st=") {
 					t.Errorf("output = %q, want nothing after the unset", out)
 				}

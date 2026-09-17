@@ -28,7 +28,7 @@ func unsetAxisRun(t *testing.T, src string, skip, last Answer) (string, int) {
 		sem.ArrayBaseIsZero = No
 		sem.ArraysAreSparse = Yes
 		sem.UnsetArraySpan = UnsetArraySpanLeavesOneEmptyElement
-		sem.BadSubscriptToUnsetFatal = No
+		sem.BadSubscriptToUnset = BadSubscriptReported
 		sem.UnsetSubscriptSkippedWhenNameUnset = skip
 		sem.UnsetStatusIsTheLastSubscripts = last
 	}, Diagnostics{})

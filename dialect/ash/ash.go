@@ -530,6 +530,15 @@ func Semantics() interp.Semantics {
 	s.DeclarationTakesASubscript = interp.No
 	s.TypesetTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.No
+	// unanswered BadSubscriptToUnset: there is no subscript to evaluate here,
+	// so the arithmetic the axis is about is never reached. Measured
+	// 2026-09-17 in the pinned image, BusyBox v1.37.0: `q=1; unset 'q[b c]'`
+	// is `unset: q[b c]: bad variable name` and the shell ends at 2 — the
+	// name is refused one complaint earlier.
+	//
+	// unanswered BadSubscriptToAnOutputOperand: the same wall one builtin
+	// over. `echo Y | read 'q[b c]'` is `read: 'q[b c]': bad variable name`
+	// at 1, so the store that walks the brackets is never reached either.
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.ReadNameOperands = interp.PlainNamesOnly

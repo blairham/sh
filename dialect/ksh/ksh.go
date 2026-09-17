@@ -2113,7 +2113,12 @@ func Semantics() interp.Semantics {
 	s.BlankArithSubscriptIsTheEmptyExpression = interp.Yes
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
-	s.BadSubscriptToUnsetFatal = interp.No
+	s.BadSubscriptToUnset = interp.BadSubscriptReported
+	// The store behind `read 'r[…]'` answers the same way, and it is the one
+	// column where the two questions have the same answer as bash's pair do:
+	// measured 2026-09-17, `read 'r[1/0]' <<< Y; echo same-line` writes the
+	// complaint, 1, and then `same-line`.
+	s.BadSubscriptToAnOutputOperand = interp.BadSubscriptReported
 	// And it reads the brackets whether or not it has the name: `unset a
 	// "a[x+]"` complains and reports 1 where bash and zsh are silent at 0,
 	// and `i=0; unset "nodecl[i++]"` leaves i at 1.
@@ -2776,8 +2781,12 @@ func Diagnostics() interp.Diagnostics {
 		UnsetBadFunctionName:                "unset: %[1]s: invalid function name",
 		// The builtin names itself in front of the arithmetic sentence, which
 		// it does not do for the identical failure in an expansion.
-		UnsetBadSubscript:    "unset: %[1]s",
-		SetInvalidOptionName: "set: %[1]s: bad option(s)",
+		UnsetBadSubscript: "unset: %[1]s",
+		// And the store an operand's brackets walk into names the builtin
+		// that was handed the operand: `read 'r[1/0]'` is `read: 1/0: divide
+		// by zero` here, where bash and zsh write the sentence alone.
+		StoreOperandBadSubscript: "%[1]s: %[2]s",
+		SetInvalidOptionName:     "set: %[1]s: bad option(s)",
 		// The letter as the script spelled it: `set +q` is refused as `+q`
 		// here, as it is in bash.
 		SetInvalidOptionLetter: "set: %[1]s: unknown option",

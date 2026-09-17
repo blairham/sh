@@ -65,41 +65,82 @@ func TestABadSubscriptInAnAssignmentEndsTheScript(t *testing.T) {
 	}
 }
 
-// `unset` is where the panel divides, so it is the axis. One answer gives up
-// on the script the way a bad expression does anywhere else; the other leaves
-// a failed builtin behind and runs the next command, which is the shape a
-// script can test.
-func TestABadSubscriptToUnsetIsFatalOrNot(t *testing.T) {
-	const src = `a=(x y z); unset "a[1+]"; echo "st=$? n=${#a[@]}"`
+// `unset` is where the panel divides, and it divides three ways rather than
+// two. The rows are run over a *pair of lines* on purpose: a give-up that
+// takes the rest of the line with it and a give-up that ends the script print
+// the same nothing on one line, which is how bash came to be recorded as
+// ending a script it runs to the end (#3485).
+func TestABadSubscriptToUnsetGivesUpAsMuchAsTheDialectDoes(t *testing.T) {
+	const src = "a=(x y z)\n" +
+		`unset "a[1+]"; echo "same=$? n=${#a[@]}"` + "\n" +
+		`echo "next=$?"`
 	for _, c := range []struct {
-		name  string
-		fatal Answer
-		tail  string
+		name   string
+		giveUp BadSubscriptPolicy
+		want   []string
+		absent []string
 	}{
-		{"fatal", Yes, ""},
-		{"a failed builtin", No, "st=1 n=3"},
+		// The array is untouched under all three: the element named was
+		// never resolved, so there was nothing to take away.
+		{
+			"a failed builtin", BadSubscriptReported,
+			[]string{"same=1 n=3", "next=0"},
+			nil,
+		},
+		{
+			"the command and its line", BadSubscriptAbandonsTheCommand,
+			[]string{"next=1"},
+			[]string{"same="},
+		},
+		{
+			"the script", BadSubscriptEndsTheScript,
+			nil,
+			[]string{"same=", "next="},
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := runGrammar(t, src, nil, func(r *Runner) {
 				sem := *r.Semantics
-				sem.BadSubscriptToUnsetFatal = c.fatal
+				sem.BadSubscriptToUnset = c.giveUp
+				// The give-up takes the dialect's own fatal status, so the
+				// row has to answer that axis or it would be asserting on
+				// the core's refusal instead of on the give-up.
+				sem.FatalErrorStatusIsOne = Yes
 				r.Semantics = &sem
 			})
 			if !strings.Contains(out, "1+") {
 				t.Errorf("output %q does not name the expression", out)
 			}
-			if c.tail == "" {
-				if strings.Contains(out, "st=") {
-					t.Errorf("output %q ran on past the failure", out)
+			for _, want := range c.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("output %q is missing %q", out, want)
 				}
-				return
 			}
-			// The array is untouched either way: the element named was never
-			// resolved, so there was nothing to take away.
-			if got := lastLine(out); got != c.tail {
-				t.Errorf("got %q, want %q", got, c.tail)
+			for _, absent := range c.absent {
+				if strings.Contains(out, absent) {
+					t.Errorf("output %q ran %q, which this answer gives up", out, absent)
+				}
 			}
 		})
+	}
+}
+
+// And the answer that gives up a command gives up a **command string** whole,
+// which is the one place it and the fatal answer coincide. Measured on bash,
+// where a script file resumes at the next command and `-c` does not.
+func TestGivingUpACommandGivesUpACommandStringWhole(t *testing.T) {
+	const src = "a=(x y z)\n" + `unset "a[1+]"` + "\n" + `echo "next=$?"`
+	out, st := runGrammar(t, src, nil, func(r *Runner) {
+		sem := *r.Semantics
+		sem.BadSubscriptToUnset = BadSubscriptAbandonsTheCommand
+		r.Semantics = &sem
+		r.Route = RouteCommandString
+	})
+	if strings.Contains(out, "next=") {
+		t.Errorf("output %q ran on past the failure", out)
+	}
+	if st == 0 {
+		t.Errorf("status 0, want a failure")
 	}
 }
 
@@ -107,7 +148,7 @@ func TestABadSubscriptToUnsetIsFatalOrNot(t *testing.T) {
 func TestABadSubscriptToUnsetRefusesAnUnspecifiedAxis(t *testing.T) {
 	out, _ := runGrammar(t, `a=(x y z); unset "a[1+]"; echo "st=$?"`, nil, func(r *Runner) {
 		sem := *r.Semantics
-		sem.BadSubscriptToUnsetFatal = Unspecified
+		sem.BadSubscriptToUnset = BadSubscriptUnspecified
 		r.Semantics = &sem
 	})
 	if !strings.Contains(out, "no dialect was chosen") {
@@ -140,13 +181,13 @@ func TestASubscriptThatReadsIsUnaffected(t *testing.T) {
 	}
 }
 
-// runBadSubscript runs src with the `unset` fatality axis answered, so a case
+// runBadSubscript runs src with the `unset` give-up axis answered, so a case
 // that does not turn on it is not refused for want of it.
 func runBadSubscript(t *testing.T, src string) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, nil, func(r *Runner) {
 		sem := *r.Semantics
-		sem.BadSubscriptToUnsetFatal = Yes
+		sem.BadSubscriptToUnset = BadSubscriptEndsTheScript
 		r.Semantics = &sem
 	})
 }

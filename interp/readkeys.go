@@ -266,7 +266,11 @@ func (r *Runner) readKeysInto(next func() (byte, int), count int, args []string)
 	// leaves `v=ab` at status 1 — which is the shape `read`'s ordinary end of
 	// input has and the reason a caller can tell "nothing came" from "not
 	// enough came" by looking at the variable.
-	r.storeThroughOperand(name, text)
+	if st, refused := r.storeThroughOperand(name, text); refused {
+		// Nothing was stored, so the short-read status below has nothing to
+		// report about — the store's own answer is the builtin's.
+		return st
+	}
 	if !whole {
 		return 1
 	}

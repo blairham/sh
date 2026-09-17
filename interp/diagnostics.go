@@ -1288,6 +1288,29 @@ type Diagnostics struct {
 	// this is a set rather than following NamesBuiltinInLocation.
 	SubscriptRefusalNamesBuiltin map[string]bool
 
+	// StoreOperandBadSubscript wraps the sentence about a subscript that will
+	// not evaluate in an operand a builtin *stores through* — `read 'r[…]'`,
+	// `printf -v 'r[…]'`, a registered builtin reaching
+	// [Runner.StoreThroughOperand]. Two verbs: the builtin that was handed
+	// the operand, and that sentence, already worded by ArithError.
+	//
+	// The sibling of UnsetBadSubscript one builtin over, and the same column
+	// splits it — except that here the name is the *caller's* rather than a
+	// constant, since more than one builtin arrives. Empty leaves the
+	// sentence to stand alone, which is what bash and zsh do: bash's `read
+	// 'r[1/0]'` is the bare `1/0: division by 0` its `$(( ))` writes, and
+	// zsh's is the `division by zero` the assignment `a[1/0]=x` writes.
+	// Measured 2026-09-17, a script file, ksh93u+ on `r=(1 2 3)`:
+	//
+	//	read 'r[1/0]'                 read: 1/0: divide by zero
+	//	read 'r[-9]'                  read: r: subscript out of range
+	//	readonly ro=1; read 'ro'      read: warning: ro: is read only
+	//
+	// The last two are the same column naming the builtin at the region's
+	// other complaints; only the first is worded here, because only the first
+	// is written at this call.
+	StoreOperandBadSubscript string
+
 	// ArithErrorNamesTheBuiltin puts the name of the builtin that raised an
 	// arithmetic complaint in front of the sentence.
 	//

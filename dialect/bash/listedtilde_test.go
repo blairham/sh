@@ -120,7 +120,7 @@ func shellQuoted(v string) string {
 // Semantics.SubscriptKeyExpandsALeadingTilde.
 //
 // `HOME` here is the one the shell started with, which is deliberate: bash
-// 5.3.20 caches it and a `HOME=` in the script does not move `~` (#3480), so
+// 5.3.20 caches it and a `HOME=` in the script does not move `~` (#3484), so
 // a row that set HOME itself would be measuring that instead.
 func TestASubscriptsLeadingTildeNamesTheHomeDirectory(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{

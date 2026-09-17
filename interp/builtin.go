@@ -2620,6 +2620,15 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		return status
 	}
 	for _, name := range args {
+		// A reference aimed at an **element** is unset through: `declare -n
+		// r=B[1]; unset -v r` takes `B[1]` away and leaves the rest of `B`,
+		// measured 2026-09-17 on bash 5.3.20, where this shell left the
+		// element standing. Only the element shape is redirected here; a
+		// reference aimed at a plain name is already followed below, and the
+		// two answers must not be written twice.
+		if aimed, is := r.namerefTarget(name); is && !isNameLike(aimed) {
+			name = aimed
+		}
 		base, sub, subscripted := r.subscriptOperand(name)
 		if !subscripted {
 			base = name

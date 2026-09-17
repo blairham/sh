@@ -11,6 +11,25 @@
 # looks — the same spelling after a blank, inside double quotes, or inside
 # backticks joins in every shell, and so does the top-level form. See #2869,
 # which this case is the record of.
+#
+# These rows are expected to disagree, and #2869 says why they are not being
+# fixed: ksh93's answer is not a function of the word. Measured 2026-09-16
+# against ksh93u+ 2012-08-01, three identical words in one file, differing
+# only in what stands in front of them in their own command:
+#
+#     f() { printf '<%s>' "$@"; }
+#     $(f x ab\⏎cd)           <x><ab\⏎cd>       kept
+#     $(f x x ab\⏎cd)         <x><x><abcd>      joined
+#     $(ffffffff x x ab\⏎cd)  <x><x><ab\⏎cd>    kept
+#
+# So whether the two characters survive depends on the count, the widths and
+# the quoting of the earlier words of the command — lexer state, with no
+# grammar rule behind it that a dialect flag could name. Rows 6 and 7 below
+# are that measurement, executable: the same word one argument apart. A
+# first-order reading — "one to four name characters in front of it, nothing
+# but kept continuations since, and the word not reached across a
+# continuation" — fits every row here and is still false, because it says
+# row 7 keeps. Do not implement it to make this file strict.
 printf '1[%s]\n' "$(printf '%s' ab\
 cd)"
 printf '2[%s]\n' "$(printf '%s' ab\
@@ -21,6 +40,11 @@ printf '4[%s]\n' "$(printf '%s%s' ab \
 cd)"
 printf '5[%s]\n' "$( printf '%s' ab\
 cd )"
+f() { printf '<%s>' "$@"; }
+printf '6[%s]\n' "$(f x ab\
+cd)"
+printf '7[%s]\n' "$(f x x ab\
+cd)"
 
 # A hex escape in $'...'. bash and zsh stop after two digits, so $'\x414' is
 # the two characters A and 4; ksh93 keeps taking hex digits.

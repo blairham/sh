@@ -11664,10 +11664,12 @@ one. bash draws that line itself: `-c 'echo "${a[b c]}"'` exits 1 where
 (`ExpansionFailureStatusFromCommandString`, recorded under #577). A bad
 expression is not a word that could not be read.
 
-**Writing through one is unanimous and `unset` is not.** `a[1+]=v` ends
-the script in all four; `unset a[1+]` ends it only in bash, and ksh93 and
-zsh leave a failed builtin behind — `BadSubscriptToUnsetFatal`, in the
-catalog below.
+**Writing through one is unanimous and a builtin's operand is not.**
+`a[1+]=v` ends the script in all four; `unset a[1+]` ends it in none of
+them — bash gives up the command it is running, and ksh93 and zsh leave a
+failed builtin behind. A `read 'r[1+]'` splits differently again, zsh
+ending the script where it did not for `unset`. See `BadSubscriptToUnset`
+and `BadSubscriptToAnOutputOperand` in the catalog below.
 
 ### What a substring's range is blamed on
 
@@ -19332,34 +19334,72 @@ Still recorded rather than modeled: the same reading through an
 calls — which bash treats the same way and this shell does not, because a
 prefix takes no scope here (#3440).
 
-**`BadSubscriptToUnsetFatal`** — bash yes · dash unspecified · ksh93 no · zsh no
+**`BadSubscriptToUnset`** — bash the command · dash unspecified · ksh93 reported · zsh reported
 
-Ends the script when an `unset` operand's subscript will not evaluate.
-This is the one place a bad subscript does not behave the same way in all
-four: everywhere else — reading an element, its length, an operator that
-reaches one, an assignment through one, a substring's offset — the word
-is abandoned and the script with it, unanimously.
+**`BadSubscriptToAnOutputOperand`** — bash the command · dash unspecified · ksh93 reported · zsh the script
 
-    a=(x y z); unset "a[1+]"; echo "st=$? n=${#a[@]}"
+How much is given up when a subscript handed to a builtin will not
+evaluate: the `unset` operand, and the *store* a `read 'r[…]'` or a
+`printf -v 'r[…]'` operand walks into. Everywhere else — reading an
+element, its length, an operator that reaches one, an assignment through
+one, a substring's offset — the word is abandoned and the script with it,
+unanimously. These two are where that stops being true, and they do not
+stop being true together.
 
-    bash 5.3    1+: arithmetic syntax error: operand expected …  and stops
-    ksh93       unset: 1+: more tokens expected                  st=1 n=3
-    zsh         bad math expression: operand expected …          st=1 n=3
+    a=(x y z)
+    unset "a[1+]"; echo "same=$? n=${#a[@]}"
+    echo "next=$?"
 
-So bash gives up on the script as it does for any bad expression, and the
-other two leave a *failed builtin* behind — which is the shape a script can
-test, and the reason this is an axis rather than a wording.
+    bash 5.3    1+: arithmetic syntax error …   no same=, next=1
+    ksh93       unset: 1+: more tokens expected  same=1 n=3, next=0
+    zsh         bad math expression: operand …   same=1 n=3, next=0
 
-It was silent in all three: the subscript's error came back and nothing
-read it, so `unset a[b c]` was a no-op at status 0.
+    r=(1 2 3)
+    read 'r[1/0]' <<< Y; echo "same=$?"
+    echo "next=$?"
 
-ksh93 also names the builtin in front of the sentence
-(`Diagnostics.UnsetBadSubscript`), where it words the identical failure in
-an expansion without one. That is a wording and not a second axis.
+    bash 5.3    1/0: division by 0 …             no same=, next=1
+    ksh93       read: 1/0: divide by zero        same=1, next=0
+    zsh         division by zero                 the script stops
+
+So there are three answers, not two. ksh93 leaves a *failed builtin*
+behind at both sites and zsh does so at `unset` alone; bash gives up the
+**command** at both — the rest of its line with it, and the enclosing
+function, list, `if`, loop or subshell whole — and carries on at the next
+top-level command with 1 behind it.
+
+**bash was recorded as ending the script here and it does not** (#3485).
+The measurement that says so has to be taken from a script file with a
+second command on a *later line*: inside `( … )` the subshell is what
+bash gives up, and under `-c` bash gives the whole string up, so a probe
+written either way agrees with the wrong answer. What a script file sees
+is that `unset 'q[b c]'` complains and the next line runs — at the top
+level, in a function, in an `&&` list, in an `if`, in a loop and inside a
+command substitution, `set -o posix` included.
+
+That `-c` behavior is part of what "gives up the command" means rather
+than an axis of its own: only the column that gives up a command can
+reach the question, and it is not a property of abandoning in general —
+bash's refusal of `r=2` on a readonly `r` under `-c` runs the next
+command.
+
+`mapfile 'a[1/0]'` is **not** the store route in bash: the name is
+refused a step earlier as `mapfile: 'a[1/0]': not a valid identifier` at
+1, with the subscript never evaluated and the rest of the line still
+running. No other column has the builtin.
+
+Both were silent in all three once: the subscript's error came back and
+nothing read it, so `unset a[b c]` was a no-op at status 0.
+
+ksh93 also names the builtin in front of the sentence — `unset` through
+`Diagnostics.UnsetBadSubscript`, and whichever builtin was handed the
+operand through `Diagnostics.StoreOperandBadSubscript` — where it words
+the identical failure in an expansion without one. That is a wording and
+not a third axis.
 
 Asked only for an operand whose subscript actually failed. dash has no
-subscript to evaluate — `UnsetTakesASubscript` is no there — so the axis
-is absent rather than false.
+subscript to evaluate — `UnsetTakesASubscript` is no there — so the axes
+are absent rather than false.
 
 **`UnsetSubscriptOnAScalarIsAnError`** — bash yes · dash absent · ksh93 no · zsh unreachable
 

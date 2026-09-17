@@ -162,7 +162,7 @@ echo "[${a[0]}] [${a[1]}]"`)
 // Measured 2026-09-17 with `tgt=T`: `typeset -i k; typeset -n k=tgt` is
 // `declare -n k="tgt"` in bash 5.3.20 with no `i` left in it, and the `-l`
 // and `-u` spellings likewise, while `typeset -x k` keeps its `x`. The
-// behaviour agrees with the listing in both shells: `typeset -i k; typeset -n
+// behavior agrees with the listing in both shells: `typeset -i k; typeset -n
 // k=tgt; k=3+4` leaves `tgt` holding the text `3+4`.
 func TestADeclarationOfAReferenceDiscardsTheFoldingAttributes(t *testing.T) {
 	for _, tc := range []struct{ letter, want string }{
@@ -178,7 +178,7 @@ func TestADeclarationOfAReferenceDiscardsTheFoldingAttributes(t *testing.T) {
 		}
 	}
 
-	// The behaviour behind the listing: an integer attribute that survived
+	// The behavior behind the listing: an integer attribute that survived
 	// would evaluate what is written through the reference.
 	out, _ := runElementArith(t, `tgt=zz; typeset -i k; typeset -n k=tgt; k=3+4; echo "[$tgt]"`)
 	if !strings.Contains(out, "[3+4]") {

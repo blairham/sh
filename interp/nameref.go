@@ -670,7 +670,7 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 // measured rather than derived from the sentence above. With `tgt=T`,
 // `typeset -i k; typeset -n k=tgt` lists as `declare -n k="tgt"` in bash
 // 5.3.20 with no `i` left in it, and so do the `-l` and `-u` spellings, while
-// `typeset -x k` keeps its `x` — `declare -nx k="tgt"`. The behaviour agrees
+// `typeset -x k` keeps its `x` — `declare -nx k="tgt"`. The behavior agrees
 // with the listing in both shells: `typeset -i k; typeset -n k=tgt; k=3+4`
 // leaves `tgt` holding the text `3+4` in bash 5.3.20 and ksh93u+ alike, so
 // the attribute is gone rather than merely unlisted. A reference holds no

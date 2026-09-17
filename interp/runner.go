@@ -7724,6 +7724,42 @@ func (r *Runner) refuseReadonlyInACommand(name string) bool {
 // base array's freeze is what refuses `declare -n e=ra[0]; e=7`, and both
 // shells name the array in it — a route storeThroughNamerefElement already
 // takes.
+// frozenNameOfAnUnset is the name whose freeze can refuse an `unset`, which is
+// **where the unset lands** rather than what the script wrote.
+//
+// The same rule frozenNameOfAnAssignment states for a write, and it was
+// missing from the other half: the store followed a reference for the *delete*
+// while the refusal above was asked against the written name, so the two read
+// different names and both directions were wrong. Measured 2026-09-17 on bash
+// 5.3.20, script files under `env -i`:
+//
+//	x=1; declare -rn RO=x; unset RO
+//	  there: 0, `x` gone, `RO` still a frozen reference
+//	  here:  `unset: RO: cannot unset: readonly variable`, `x` kept
+//
+//	y=1; readonly y; declare -n RT=y; unset RT
+//	  there: `unset: y: cannot unset: readonly variable`, `y` kept
+//	  here:  0, and a frozen variable removed
+//
+// A **subscripted** operand keeps its base, and that is the reason for the
+// second argument rather than a tidiness: `unset r[0]` names the array the
+// brackets index, and a reference standing in front of that base is a
+// different question nobody has measured.
+//
+// A reference aimed at an *element* never arrives here as a reference — the
+// unset loop has already rewritten it to the element, so the base this sees is
+// the array — and `unset -n` never arrives at all, because the letter names
+// the reference and its own freeze is asked in that branch.
+func (r *Runner) frozenNameOfAnUnset(name string, subscripted bool) string {
+	if subscripted {
+		return name
+	}
+	if target, aimed := r.namerefTarget(name); aimed && isNameLike(target) {
+		return target
+	}
+	return name
+}
+
 func (r *Runner) frozenNameOfAnAssignment(name string) string {
 	target, aimed := r.namerefTarget(name)
 	if !aimed {

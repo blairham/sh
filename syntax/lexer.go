@@ -63,6 +63,11 @@ type Lexer struct {
 	// quotes nothing there.
 	wordStart Pos
 
+	// continuations is where the line continuations of the arithmetic
+	// expression being read stand, while one is being read, and nil
+	// otherwise. See Lexer.collectContinuations.
+	continuations *[]int
+
 	// inRegex is set while the token being read is the operand of `=~`. Its
 	// parentheses belong to the regular expression rather than to the shell,
 	// and in two of the three dialects that have `[[ ]]` so does a bare `|`.
@@ -3312,6 +3317,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	}
 	inner := l.lastInner
 	l.lastInner = ""
+	joined := l.collectContinuations()
 	for depth > 0 {
 		if l.eof() {
 			if !l.incomplete && inner != "" && inner != openingOf(kind) {
@@ -3329,6 +3335,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		case '`':
 			l.skipBackticks()
 		case '\\':
+			l.noteContinuation()
 			l.advance()
 			if !l.eof() {
 				l.advance()
@@ -3442,7 +3449,14 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	for n := 1; n <= closers(kind) && end > start && l.src[end-1] == ')'; n++ {
 		end--
 	}
-	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
+	value := joined(start, end)
+	if kind != ArithSubst {
+		// A program's text is read again by a parser of its own, which
+		// removes its continuations where its own quoting says they are
+		// continuations — and in a single-quoted part they are not.
+		value = l.src[start:end]
+	}
+	return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 }
 
 // failedToClose records a parenthesised construct the input ran out inside.
@@ -3475,6 +3489,59 @@ func (l *Lexer) failedToClose(open Pos, kind SpanKind) {
 	l.failUnmatched(open, openingOf(kind), closingOf(kind), "unterminated "+kind.String())
 }
 
+// collectContinuations starts recording the line continuations of an
+// arithmetic expression, and returns what ends the recording: the text between
+// two offsets with every recorded continuation taken out of it.
+//
+// A backslash-newline is removed before tokens are formed, here as everywhere
+// else, so it can stand anywhere in an expression — inside a number, between
+// the two characters of `<<`, inside a name. Measured 2026-09-16 from script
+// files, and unanimous in bash 5.3, bash 3.2, zsh 5.9.2, ksh93u+ and dash for
+// every shape each of them has: `$(( 1\⏎2 + 1 ))` is 13, `$(( 1 <\⏎< 3 ))`
+// is 8, `ab\⏎c` is the name abc, in `$(( ))`, in `(( ))`, in a C-style `for`
+// header, in `$[ ]` and in a here-document body. The scanners that find where
+// an expression ends step over the pair and used to keep it, so the
+// evaluator was handed a backslash and a newline no arithmetic grammar has a
+// rule for, and the script stopped there (#3442).
+//
+// Recorded where the scanner meets them rather than found again afterwards,
+// because the scanner is what knows which backslashes are the expression's:
+// one in a single-quoted part is a literal, and one inside a `$( )` is that
+// program's to read by its own rules. What a scanner skips over through
+// skipQuoted is hidden from the recording unless it is a double-quoted part
+// of the expression itself, where a continuation is removed as it is in any
+// double-quoted string.
+func (l *Lexer) collectContinuations() func(from, to int) string {
+	var cuts []int
+	outer := l.continuations
+	l.continuations = &cuts
+	return func(from, to int) string {
+		l.continuations = outer
+		if len(cuts) == 0 {
+			return l.src[from:to]
+		}
+		var b strings.Builder
+		at := from
+		for _, c := range cuts {
+			if c < at || c+2 > to {
+				continue
+			}
+			b.WriteString(l.src[at:c])
+			at = c + 2
+		}
+		b.WriteString(l.src[at:to])
+		return b.String()
+	}
+}
+
+// noteContinuation records the backslash at the cursor if it begins a line
+// continuation and an expression is collecting them.
+func (l *Lexer) noteContinuation() {
+	if l.continuations != nil && l.peek() == '\\' && l.peekAt(1) == '\n' {
+		*l.continuations = append(*l.continuations, l.off)
+	}
+}
+
 // scanBracket reads `$[ … ]`, the older spelling of `$(( … ))`.
 //
 // It produces an ArithSubst span, because that is what it is: everything
@@ -3493,6 +3560,7 @@ func (l *Lexer) scanBracket(q Quoting) Span {
 	l.advance() // [
 	depth := 1
 	start := l.off
+	joined := l.collectContinuations()
 
 	for depth > 0 {
 		if l.eof() {
@@ -3511,6 +3579,7 @@ func (l *Lexer) scanBracket(q Quoting) Span {
 		case '"':
 			l.skipQuoted('"', true)
 		case '\\':
+			l.noteContinuation()
 			l.advance()
 			if !l.eof() {
 				l.advance()
@@ -3530,7 +3599,7 @@ func (l *Lexer) scanBracket(q Quoting) Span {
 	if end > start && l.src[end-1] == ']' {
 		end--
 	}
-	return Span{Kind: ArithSubst, Value: l.src[start:end], Quoting: q, Pos: open, Bracketed: true}
+	return Span{Kind: ArithSubst, Value: joined(start, end), Quoting: q, Pos: open, Bracketed: true}
 }
 
 // parseToClose reads the contents of a command substitution and returns the
@@ -3728,23 +3797,26 @@ func (l *Lexer) scanBracedArithmetic(open Pos, start int, q Quoting) (Span, bool
 	l.advance() // the first (
 	l.advance() // the second (
 	from := l.off
+	joined := l.collectContinuations()
 	// Two parentheses to close, counted the way `$(( ))` counts them, so
 	// `${(((1+2)))}` ends at the third `)` and not at the first pair.
 	if !l.skipToDepth(2) {
+		value := joined(from, l.off)
 		l.ranOut("${")
 		l.failUnmatched(open, "${", "}", "unterminated arithmetic expansion")
-		return Span{Kind: ArithSubst, Braced: true, Value: l.src[from:l.off], Quoting: q, Pos: open}, true
+		return Span{Kind: ArithSubst, Braced: true, Value: value, Quoting: q, Pos: open}, true
 	}
 	end := l.off - closers(ArithSubst)
+	value := joined(from, end)
 	if l.eof() || l.peek() != '}' {
 		// The brace has to sit directly behind the `))` with nothing between
 		// them, not even a blank — the same shape the subshell spelling has,
 		// and measured the same way.
 		l.failUnmatched(open, "${", "}", "unterminated arithmetic expansion")
-		return Span{Kind: ArithSubst, Braced: true, Value: l.src[from:end], Quoting: q, Pos: open}, true
+		return Span{Kind: ArithSubst, Braced: true, Value: value, Quoting: q, Pos: open}, true
 	}
 	l.advance() // the }
-	return Span{Kind: ArithSubst, Braced: true, Value: l.src[from:end], Quoting: q, Pos: open}, true
+	return Span{Kind: ArithSubst, Braced: true, Value: value, Quoting: q, Pos: open}, true
 }
 
 // scanSubshellSubstitution reads `${(list)}`, the spelling whose body is a
@@ -4262,6 +4334,14 @@ func unescapeBackquoted(s string, q Quoting) string {
 // the whole of their specification, and `escapes` is the flag that already
 // separates the two.
 func (l *Lexer) skipQuoted(quote byte, escapes bool) {
+	// A continuation inside a double-quoted part of an expression is the
+	// expression's to remove, and one inside anything this run steps over on
+	// the way — a `$( )`, a `${ }` — belongs to that construct instead, so the
+	// collection is taken for this run's own backslashes and hidden from the
+	// rest.
+	cuts := l.continuations
+	l.continuations = nil
+	defer func() { l.continuations = cuts }()
 	open := l.pos()
 	l.advance() // opening quote
 	for !l.eof() {
@@ -4271,6 +4351,9 @@ func (l *Lexer) skipQuoted(quote byte, escapes bool) {
 			return
 		}
 		if escapes && c == '\\' {
+			if cuts != nil && l.peekAt(1) == '\n' {
+				*cuts = append(*cuts, l.off)
+			}
 			l.advance()
 			if !l.eof() {
 				l.advance()
@@ -4431,6 +4514,7 @@ func (l *Lexer) skipToDepth(depth int) bool {
 		case '`':
 			l.skipBackticks()
 		case '\\':
+			l.noteContinuation()
 			l.advance()
 			if !l.eof() {
 				l.advance()
@@ -4522,6 +4606,7 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 	depth := 0
 	exprStart := l.off
 	exprEnd := -1
+	joined := l.collectContinuations()
 
 	for exprEnd < 0 {
 		if l.eof() {
@@ -4536,6 +4621,7 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 		case '"':
 			l.skipQuoted('"', true)
 		case '\\':
+			l.noteContinuation()
 			l.advance()
 			if !l.eof() {
 				l.advance()
@@ -4595,6 +4681,7 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 			// `((echo a); echo b)` is two groupings, and every shell on the
 			// panel runs it as one.
 			if l.peekAt(1) != ')' {
+				joined(exprStart, exprStart)
 				return Token{}, false
 			}
 			exprEnd = l.off
@@ -4605,7 +4692,7 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 		}
 	}
 
-	expr := l.src[exprStart:exprEnd]
+	expr := joined(exprStart, exprEnd)
 	return Token{
 		Kind:  TokArithCmd,
 		Pos:   start,

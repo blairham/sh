@@ -445,6 +445,9 @@ func Semantics() interp.Semantics {
 	// And POSIX mode takes double-quoted text out of its reach. See
 	// Semantics.HistoryExpansionSparesDoubleQuotesInPosixMode.
 	s.HistoryExpansionSparesDoubleQuotesInPosixMode = interp.Yes
+	// And an event's words are the shell's own. See
+	// Semantics.HistoryWords.
+	s.HistoryWords = interp.HistoryWordsShell
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.

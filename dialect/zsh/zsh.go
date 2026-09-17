@@ -815,6 +815,9 @@ func Semantics() interp.Semantics {
 	// reached. The spellings that reach the expander are `setopt banghist`
 	// and the borrowed `set -o histexpand`.
 	s.HistoryExpansion = interp.Yes
+	// An event's words are the shell's own, a `${ }` included. See
+	// Semantics.HistoryWords.
+	s.HistoryWords = interp.HistoryWordsShellBraces
 	// No keyword option. The letter is not the option here: zsh spells
 	// `interactivecomments` with `-k` and answers `no such option` to `set
 	// -o keyword`, both measured 2026-09-16, so a `name=value` word after

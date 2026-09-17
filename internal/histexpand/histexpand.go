@@ -58,10 +58,13 @@ type Chars struct {
 	// read. See Semantics.HistoryExpansionSparesDoubleQuotesInPosixMode for
 	// the shell that sets it and when.
 	DoubleQuotesProtect bool
+
+	// Words is how an event is cut into words. See Words.
+	Words Words
 }
 
 // Default is what a shell starts with: `!^#`.
-var Default = Chars{Event: '!', Quick: '^', Comment: '#'}
+var Default = Chars{Event: '!', Quick: '^', Comment: '#', Words: WordsShell}
 
 // List is the history the designators index, oldest entry first.
 //
@@ -377,7 +380,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	case j < len(src) && src[j] == '#':
 		// The line up to here, which is the one event that is not in the
 		// list at all.
-		words, raw = fields(sofar), sofar
+		words, raw = fields(sofar, c.Words), sofar
 		haveWords = true
 		j++
 	case j < len(src) && (src[j] == c.Event):
@@ -385,7 +388,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(j + 1)}
 		}
-		words, raw = fields(entry), entry
+		words, raw = fields(entry, c.Words), entry
 		haveWords = true
 		j++
 	case j < len(src) && isWordDesignator(src[j], c):
@@ -395,7 +398,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(j + 1)}
 		}
-		words, raw = fields(entry), entry
+		words, raw = fields(entry, c.Words), entry
 		haveWords = true
 	case j < len(src) && src[j] == '?':
 		k := j + 1
@@ -411,7 +414,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			return "", 0, false, &NotFound{Ref: ref(k)}
 		}
 		st.matched = want
-		words, raw = fields(entry), entry
+		words, raw = fields(entry, c.Words), entry
 		haveWords = true
 		j = k
 	default:
@@ -435,7 +438,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			if !ok {
 				return "", 0, false, &NotFound{Ref: ref(digits)}
 			}
-			words, raw = fields(entry), entry
+			words, raw = fields(entry, c.Words), entry
 			haveWords = true
 			j = digits
 			break
@@ -453,7 +456,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(k)}
 		}
-		words, raw = fields(entry), entry
+		words, raw = fields(entry, c.Words), entry
 		haveWords = true
 		j = k
 	}
@@ -509,10 +512,227 @@ func search(hist List, want string, substring bool) (string, bool) {
 	return "", false
 }
 
-// fields splits an entry into the words a designator indexes. Whitespace, the
-// way the history library splits it — this is not the shell's own word
-// splitting, and it runs over text that has not been expanded at all.
-func fields(entry string) []string { return strings.Fields(entry) }
+// Words is how an event is cut into the words a designator indexes.
+//
+// Not the shell's own word splitting — it runs over text nothing has expanded
+// — and not one answer either. Measured 2026-09-16 by recalling single words
+// of one command: bash 5.3.20 from a script with `history -p`, zsh 5.9.2 and
+// ksh93u+ at a prompt through a pseudo-terminal with `:q` on the word.
+//
+//	event                  bash            zsh             ksh93
+//	echo "a b"c d      :1  "a b"c          "a b"c          "a b"c
+//	echo a\ b c        :1  a\ b            a\ b            a\
+//	echo $(echo x y) z :1  $(echo x y)     $(echo x y)     $(echo
+//	echo ${v:-a b} z   :1  ${v:-a          ${v:-a b}       ${v:-a
+//	echo x;echo b      :2  ;               ;               b (x;echo is :1)
+//	echo a 2>/dev/null :2  2>              2>              2>/dev/null
+//
+// So a quoted string is one word everywhere, and the rest is three readings.
+type Words uint8
+
+const (
+	// WordsQuotes cuts at blanks outside a single- or double-quoted string,
+	// and nowhere else: ksh93's reading, and the zero value because it is
+	// the part all three agree on.
+	WordsQuotes Words = iota
+	// WordsShell is bash's: a backslash, a command or arithmetic
+	// substitution, a backquoted one and a process substitution each hold
+	// their blanks, and an operator is a word of its own — `;`, `|`, `&&`,
+	// `>`, `>>`, `&>`, `>|`, `2>&1`, with a numeral standing alone in front
+	// of a redirection joining it (`12>`), measured. A `(` or `)` standing
+	// alone is a word too, which is what a `case` pattern's closer is.
+	WordsShell
+	// WordsShellBraces is zsh's: WordsShell, and a `${ }` holds its blanks
+	// as well.
+	WordsShellBraces
+)
+
+// fields splits an entry into the words a designator indexes, the way rule
+// reads it.
+func fields(entry string, rule Words) []string {
+	if rule == WordsQuotes {
+		return quoteFields(entry)
+	}
+	return shellFields(entry, rule == WordsShellBraces)
+}
+
+func isBlank(b byte) bool { return b == ' ' || b == '\t' || b == '\n' }
+
+// quoteFields is WordsQuotes.
+func quoteFields(s string) []string {
+	var out []string
+	for i := 0; i < len(s); {
+		for i < len(s) && isBlank(s[i]) {
+			i++
+		}
+		if i >= len(s) {
+			break
+		}
+		start := i
+		for i < len(s) && !isBlank(s[i]) {
+			if s[i] == '\'' || s[i] == '"' {
+				i = closeQuote(s, i)
+			}
+			i++
+		}
+		out = append(out, s[start:min(i, len(s))])
+	}
+	return out
+}
+
+// closeQuote is the index of the quote that closes the one opened at i, or
+// the last index of s where nothing does. A backslash escapes the next
+// character inside double quotes only.
+func closeQuote(s string, i int) int {
+	q := s[i]
+	for j := i + 1; j < len(s); j++ {
+		switch {
+		case q == '"' && s[j] == '\\':
+			j++
+		case s[j] == q:
+			return j
+		}
+	}
+	return len(s) - 1
+}
+
+// closeParen is the index of the `)` that balances the `(` at i, stepping
+// over quotes, or the last index of s where nothing does.
+func closeParen(s string, i int) int {
+	depth := 0
+	for j := i; j < len(s); j++ {
+		switch s[j] {
+		case '\\':
+			j++
+		case '\'', '"', '`':
+			j = closeQuote(s, j)
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return j
+			}
+		}
+	}
+	return len(s) - 1
+}
+
+func isOperatorByte(b byte) bool {
+	return b == ';' || b == '&' || b == '|' || b == '<' || b == '>' || b == '(' || b == ')'
+}
+
+// operatorsByLength are the operators WordsShell reads as one word, longest
+// first so that `>>` is not read as two.
+var operatorsByLength = []string{"<<<", "<<-", "&>>", ";;", "&&", "||", ">>", "<<", "&>", ">|", ">&", "<&", "<>"}
+
+// operatorEnd is the index just past the operator beginning at i. A `>&` or
+// `<&` takes the descriptor after it, and a `<(` or `>(` is not an operator —
+// the caller has already taken those.
+func operatorEnd(s string, i int) int {
+	for _, op := range operatorsByLength {
+		if strings.HasPrefix(s[i:], op) {
+			end := i + len(op)
+			if op == ">&" || op == "<&" {
+				for end < len(s) && (s[end] >= '0' && s[end] <= '9' || s[end] == '-') {
+					end++
+				}
+			}
+			return end
+		}
+	}
+	return i + 1
+}
+
+// shellFields is WordsShell, and WordsShellBraces where braces is set.
+func shellFields(s string, braces bool) []string {
+	var out []string
+	i := 0
+	for i < len(s) {
+		for i < len(s) && isBlank(s[i]) {
+			i++
+		}
+		if i >= len(s) {
+			break
+		}
+		start := i
+		if isOperatorByte(s[i]) && !(i+1 < len(s) && (s[i] == '<' || s[i] == '>') && s[i+1] == '(') {
+			i = operatorEnd(s, i)
+			out = append(out, s[start:i])
+			continue
+		}
+		for i < len(s) && !isBlank(s[i]) {
+			c := s[i]
+			if (c == '<' || c == '>') && i+1 < len(s) && s[i+1] == '(' {
+				i = closeParen(s, i+1) + 1
+				continue
+			}
+			if isOperatorByte(c) {
+				if (c == '<' || c == '>') && allDigits(s[start:i]) {
+					// A descriptor number in front of a redirection is
+					// part of it.
+					i = operatorEnd(s, i)
+				}
+				break
+			}
+			switch {
+			case c == '\\':
+				i += 2
+				continue
+			case c == '\'' || c == '"' || c == '`':
+				i = closeQuote(s, i) + 1
+				continue
+			case strings.IndexByte("$+@*?!", c) >= 0 && i+1 < len(s) && s[i+1] == '(':
+				// A command or arithmetic substitution, and an extended
+				// glob's group: measured, `echo /+(one|two)/x y` has
+				// `/+(one|two)/x` as its first word. With extglob on: off,
+				// the line is a syntax error and never an event at all.
+				i = closeParen(s, i+1) + 1
+				continue
+			case braces && c == '$' && i+1 < len(s) && s[i+1] == '{':
+				i = closeBrace(s, i+1) + 1
+				continue
+			}
+			i++
+		}
+		i = min(i, len(s))
+		out = append(out, s[start:i])
+	}
+	return out
+}
+
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// closeBrace is closeParen for a `${`.
+func closeBrace(s string, i int) int {
+	depth := 0
+	for j := i; j < len(s); j++ {
+		switch s[j] {
+		case '\\':
+			j++
+		case '\'', '"', '`':
+			j = closeQuote(s, j)
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return j
+			}
+		}
+	}
+	return len(s) - 1
+}
 
 // designate applies a word designator, reporting whether one was written.
 //

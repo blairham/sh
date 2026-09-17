@@ -76,6 +76,14 @@ func (r *Runner) HistoryRecording() bool { return r.histRecord }
 func (r *Runner) HistoryChars() histexpand.Chars {
 	c := histexpand.Default
 	c.DoubleQuotesProtect = r.posixMode && r.sem().HistoryExpansionSparesDoubleQuotesInPosixMode == Yes
+	switch r.sem().HistoryWords {
+	case HistoryWordsShell:
+		c.Words = histexpand.WordsShell
+	case HistoryWordsShellBraces:
+		c.Words = histexpand.WordsShellBraces
+	default:
+		c.Words = histexpand.WordsQuotes
+	}
 	v, ok := r.GetVar(historyCharsParameter)
 	if !ok {
 		return c

@@ -209,15 +209,28 @@ func TestEveryRefusedSubscriptedPrefixGetsALine(t *testing.T) {
 // refusal that expanded first would report `a[1]` here, and would print
 // `side`.
 func TestARefusedSubscriptedPrefixEvaluatesNothing(t *testing.T) {
-	sem := permissive()
-	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
-	out, errs, _ := subscriptPrefixRun(t,
-		`f() { :; }; i=1; a[$i]=$(echo side) f; echo "done"`, sem)
-	if want := "done\n"; out != want {
-		t.Errorf("stdout = %q, want %q — the value must not have run", out, want)
-	}
-	if want := "testsh: `a[$i]': not a valid identifier\n"; errs != want {
-		t.Errorf("stderr = %q, want %q", errs, want)
+	// Once for each route that applies a prefix, because each of them
+	// expands a value on its own and each has to be kept from doing it here.
+	// The substitution writes to standard error, which is the only place a
+	// run of it can be seen: its output is the value, and the value goes
+	// nowhere.
+	for _, tc := range []struct{ route, cmd, out string }{
+		{"a function", "f", "done\n"},
+		{"a builtin", "eval :", "done\n"},
+		{"an external", "/bin/echo ran", "ran\ndone\n"},
+	} {
+		t.Run(tc.route, func(t *testing.T) {
+			sem := permissive()
+			sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
+			out, errs, _ := subscriptPrefixRun(t,
+				`f() { :; }; i=1; a[$i]=$(echo side >&2) `+tc.cmd+`; echo "done"`, sem)
+			if out != tc.out {
+				t.Errorf("stdout = %q, want %q", out, tc.out)
+			}
+			if want := "testsh: `a[$i]': not a valid identifier\n"; errs != want {
+				t.Errorf("stderr = %q, want %q — the value must not have run", errs, want)
+			}
+		})
 	}
 }
 
@@ -367,10 +380,22 @@ func TestASubscriptedPrefixPutsNothingInAChildsEnvironment(t *testing.T) {
 		}()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, _, _ := subscriptPrefixRun(t,
-				`a[1]=v /usr/bin/env | grep '^a' || echo "(none)"`, tc.sem)
-			if want := "(none)\n"; out != want {
-				t.Errorf("stdout = %q, want %q", out, want)
+			// The scalar beside it is the control: it says the child ran and
+			// was handed this prefix, so a missing `a` is an absence and not
+			// a command that never started.
+			out, errs, _ := subscriptPrefixRun(t, `w=1 a[1]=v /usr/bin/env`, tc.sem)
+			lines := strings.Split(out, "\n")
+			hasW := false
+			for _, l := range lines {
+				if l == "w=1" {
+					hasW = true
+				}
+				if strings.HasPrefix(l, "a=") || strings.HasPrefix(l, "a[") {
+					t.Errorf("the child was handed %q", l)
+				}
+			}
+			if !hasW {
+				t.Errorf("stdout = %q stderr = %q, want the child run and handed w=1", out, errs)
 			}
 		})
 	}

@@ -367,6 +367,10 @@ func Dialect() syntax.Dialect {
 	// `echo <->; echo done` therefore runs nothing and reaches nothing after
 	// it (#918).
 	d.RenameOnSuccessRedirect = true
+	// `<#((expr))` and `>#((expr))`, the file-position redirections — the
+	// other half of what this shell alone does to a descriptor. Measured
+	// 2026-09-16 on ksh93u+ 2012-08-01 (#3034).
+	d.SeekRedirect = true
 	// `times` is a reserved word here, so `times foo` is a syntax error
 	// rather than a builtin ignoring an argument — the one place in the panel
 	// where which builtin a shell has changes what parses.
@@ -2785,6 +2789,9 @@ func Diagnostics() interp.Diagnostics {
 		// CannotOpen is worded reason-first in one of the other dialects
 		// (#734).
 		DuplicationSourceNotOpen: "%[1]s: cannot open [%[2]s]",
+		SeekDescriptorNotOpen:    "%[1]s: bad file unit number [%[2]s]",
+		SeekOffsetRefused:        "%[1]s: invalid seek offset",
+		SeekStreamHasNoPosition:  "%[1]s: not seekable",
 		// And quotes the move's suffix with it: `exec 6<&5-` with nothing
 		// open at 5 is `5-: cannot open [Bad file descriptor]`, where bash
 		// names the number alone.

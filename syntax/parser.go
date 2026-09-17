@@ -2285,6 +2285,28 @@ func (p *Parser) parseRedirect() *Redirect {
 	p.next()
 	p.lex.noAssignment, p.lex.inRedirectTarget = savedNoAssign, savedInRedirect
 	p.lex.inHeredocDelimiter = savedDelimiter
+	if r.Op.IsSeek() {
+		// The file-position operators take an arithmetic command where every
+		// other redirection takes a target: `exec 3<#((0))` seeks, and the
+		// expression may name parameters. The token already holds the
+		// expression as an ArithSubst span — the same span `$((…))` produces
+		// — so the word is built from it and the offset is whatever that
+		// expands to, with no second evaluator to keep in step.
+		//
+		// The text is kept as it was written, which is both what the printer
+		// writes back and the only record that the parentheses were there.
+		if p.tok.Kind != TokArithCmd {
+			// ksh93 reads a pattern here as well and seeks to the line that
+			// matches it; this grammar does not claim that half, so a word
+			// is refused rather than read as something it is not (#3034).
+			p.failUnexpectedOperand("a seek offset")
+			return nil
+		}
+		r.Word = p.newWord(p.tok.Spans, p.tok.Pos, p.tok.End)
+		r.Text = p.textBetween(p.tok.Pos, p.tok.End)
+		p.next()
+		return r
+	}
 	if p.tok.Kind != TokWord {
 		// The token that is there, not the one that is missing. `cat <(x)` in
 		// a dialect without process substitution is `"(" unexpected` in dash,

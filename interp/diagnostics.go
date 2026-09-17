@@ -4261,6 +4261,43 @@ type Diagnostics struct {
 	// *first* and would answer `bad file descriptor: 10` here (#734).
 	DuplicationSourceNotOpen string
 
+	// SeekDescriptorNotOpen is `<#((expr))` and `>#((expr))` over a number
+	// nothing is open at. Two verbs, the same pair
+	// DuplicationSourceNotOpen takes: %[1]s is the number and %[2]s the
+	// reason.
+	//
+	// A sentence of its own rather than the duplication's, because the one
+	// dialect with the operators does not reuse it. Measured 2026-09-16 on
+	// ksh93u+ 2012-08-01 over a script file:
+	//
+	//	exec 6>&7       7: cannot open [Bad file descriptor]
+	//	exec 6<#((0))   6: bad file unit number [Bad file descriptor]
+	//
+	// See Semantics — there is none: the operators exist in one grammar, so
+	// only that dialect ever reaches this. Empty is the substrate's own
+	// `%[1]s: %[2]s`.
+	SeekDescriptorNotOpen string
+	// SeekOffsetRefused is an offset a file-position redirection will not
+	// take: a negative one, and a stream that has no position at all. One
+	// verb, the offset as it came out of the expression — or the descriptor
+	// number, where the refusal is about the stream rather than the number
+	// written.
+	//
+	// Measured 2026-09-16 on ksh93u+ 2012-08-01: `exec 3<#((-1))` is
+	// `-1: invalid seek offset`, and `exec 0<#((0))` with standard input on
+	// /dev/null is `0: invalid seek offset`.
+	SeekOffsetRefused string
+	// SeekStreamHasNoPosition is a file-position redirection over a stream
+	// that has none — a pipe, and a character device the kernel will not
+	// seek. One verb: the descriptor number.
+	//
+	// Measured 2026-09-16 on ksh93u+ 2012-08-01, `exec 0<#((0))` over a
+	// script file: a pipe and /dev/zero are `0: not seekable`, a regular
+	// file succeeds, and /dev/null is `0: invalid seek offset` — the one row
+	// this shell does not reproduce, because the seek there succeeds and
+	// nothing measured says what ksh93 rejected it for.
+	SeekStreamHasNoPosition string
+
 	// NamesTheDuplicationTargetAsWritten makes that message quote the word
 	// the script wrote rather than what it expanded to.
 	//

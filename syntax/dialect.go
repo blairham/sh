@@ -2128,6 +2128,34 @@ type Dialect struct {
 	// was the clue: the `<` had already taken its operand.
 	RenameOnSuccessRedirect bool
 
+	// SeekRedirect reads `<#` and `>#`, one dialect's **file-position**
+	// redirections. They move where a descriptor next reads or writes rather
+	// than deciding what it is aimed at, so `exec 3<#((0))` rewinds
+	// descriptor 3 and nothing is opened, closed or duplicated.
+	//
+	// The operand is a word. The one this grammar reads is an arithmetic
+	// command — `((expr))`, whose expression may name parameters and assign
+	// to them — so the parser takes a TokArithCmd where every other
+	// redirection takes a target. ksh93 also reads a *pattern* there and
+	// seeks to the line matching it; that half is not claimed here, and the
+	// operand is refused rather than misread (#3034).
+	//
+	// Measured 2026-09-16 on ksh93u+ 2012-08-01, script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin on /dev/null:
+	//
+	//	printf abcdefghij > f; exec 3< f
+	//	read -n4 v <&3       [abcd]
+	//	exec 3<#((0)); read -n2 v <&3    [ab]
+	//	exec 3<#((6)); read -n2 v <&3    [gh]
+	//
+	// bash 5.3.20, zsh 5.9 and dash all refuse the text, each in its own
+	// words, and none has the operator at all — so with the flag off the two
+	// bytes fall back to `<` or `>` followed by a `#`, which begins a
+	// comment and leaves the redirection with no target. That is the syntax
+	// error those three report and the one this shell reported before the
+	// operator existed.
+	SeekRedirect bool
+
 	// HeredocEndsAtClosingParen lets a here-document's body end at the
 	// closing parenthesis of the construct it sits inside, so that the
 	// delimiter is a delimiter even with the `)` written onto its line:

@@ -4243,6 +4243,27 @@ type Diagnostics struct {
 	// refusal. See Runner.refuseIndirection.
 	IndirectionUndeclared string
 	IndirectionNotAName   string
+	// IndirectionUnaimedReference is the third refusal the same expansion
+	// makes, and the one state the two above cannot reach: `${!r}` where `r`
+	// is a name **reference with nothing to point at**. One verb: the name as
+	// written. Empty is the reading with no refusal.
+	//
+	// Its own field because the two shells that spell a reference word it
+	// differently and one of them words it differently from its own
+	// IndirectionUndeclared — measured 2026-09-17 from script files under
+	// `env -i`, with `typeset -n u` and then `echo "[${!u}]"`:
+	//
+	//	bash 5.3.20    u: invalid indirect expansion
+	//	ksh93u+ 2012   u: no reference name
+	//
+	// and ksh93 reaches neither of the other two at all, since
+	// Semantics.IndirectionYieldsName sends `${!v}` somewhere else there.
+	//
+	// What the refusal costs is FailedExpansionAbandonsTheLine's question and
+	// is not asked twice: bash gives up the rest of the line and runs the
+	// next one, ksh93 ends the script at 1, which is what that axis already
+	// says of the two.
+	IndirectionUnaimedReference string
 	// InvalidNumber is the reason given when arithmetic text is not a
 	// number. No verbs: it is a reason, not a message — ArithError wraps it
 	// with the expression and the offending token.

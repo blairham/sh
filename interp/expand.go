@@ -2502,6 +2502,31 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		if target, is := r.namerefTarget(e.Name); is {
 			return target
 		}
+		// A reference with **nothing to point at** is the one state neither
+		// refusal below can reach, and both shells that spell a reference
+		// refuse it. Here it answered the empty string at status 0, which
+		// reads exactly like a reference aimed at a name holding nothing —
+		// and `declare -n out; some_fn out` before the call is an ordinary
+		// way for a script to be in that state. See
+		// Diagnostics.IndirectionUnaimedReference, where the panel is.
+		//
+		// Ahead of the axis below because it is not that question: this is
+		// the same refusal in the dialect that reads `${!x}` as the name and
+		// in the one that reads it as an indirection, and the dialect that
+		// reads it as the name reaches no other indirection refusal at all.
+		//
+		// Ahead of the operators too, which is measured rather than assumed:
+		// `${!u-DEF}` and `${!u:?msg}` are the same refusal in bash 5.3.20,
+		// so the word behind the operator never stands in for the value.
+		if w := r.diag().IndirectionUnaimedReference; w != "" && r.isNameref(e.Name) {
+			r.diagf("%s\n", Wording(w, "", e.Name))
+			// What it costs the script is FailedExpansionAbandonsTheLine's
+			// question — bash gives up the rest of the line and runs the
+			// next, ksh93 ends the script at 1 — which expandErr already
+			// puts to it, exactly as refuseIndirection's two sentences do.
+			r.expandErr = true
+			return ""
+		}
 		// `${!x}` reads x, then reads *that* as a name — in bash. ksh93
 		// parses the same text and yields the name itself, so the grammar
 		// having accepted it is not enough to know what it means.

@@ -2449,6 +2449,9 @@ func Diagnostics() interp.Diagnostics {
 		// interp.Runner.refuseIndirection.
 		IndirectionUndeclared: "%[1]s: invalid indirect expansion",
 		IndirectionNotAName:   "%[1]s: invalid variable name",
+		// The same sentence this shell writes for a name nothing declared,
+		// and a different one from ksh93's — see the field.
+		IndirectionUnaimedReference: "%[1]s: invalid indirect expansion",
 		// The letter as the script spelled it, sign and all: `set +q` is
 		// refused as `+q` here where dash and zsh write `-q` either way.
 		// The refusal is this shell's ordinary bad-option complaint, so

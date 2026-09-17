@@ -3467,6 +3467,14 @@ func Diagnostics() interp.Diagnostics {
 		// substrate's fallback is bash's wording.
 		NamerefBadTarget:     "%[1]s: invalid variable name",
 		NamerefSelfReference: "%[1]s: invalid self reference",
+		// A `${!r}` over a reference with nothing to point at, which is the
+		// one indirection refusal this shell makes: IndirectionYieldsName
+		// sends the rest of that expansion somewhere else here, so the two
+		// sentences beside this one in Diagnostics are bash's alone.
+		// Measured 2026-09-17 on ksh93u+ 2012-08-01 from a script file under
+		// `env -i`: `typeset -n u; echo "[${!u}]"` writes `u: no reference
+		// name` and the script is over, at 1.
+		IndirectionUnaimedReference: "%[1]s: no reference name",
 		// The one nameref sentence this shell and bash write identically,
 		// measured on both: `r: reference variable cannot be an array`.
 		NamerefCannotBeAnArray: "%[1]s: reference variable cannot be an array",

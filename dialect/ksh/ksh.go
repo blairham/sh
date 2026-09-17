@@ -1536,6 +1536,11 @@ func Semantics() interp.Semantics {
 	s.TestHasTheFileExistsLetter = interp.Yes
 	s.TestHasTheShellOptionOperator = interp.Yes
 	s.TestHasTheModifiedSinceReadOperator = interp.Yes
+	// The column with no operand count: `test x = x y` is 0 here and a
+	// refusal in the other six. See
+	// Semantics.TestReadsOneExpressionOffTheOperands for the seam that makes
+	// it a rule rather than a leniency, and #2959.
+	s.TestReadsOneExpressionOffTheOperands = interp.Yes
 	// And `>` alone: `test b '<' a` here is `test: <: unknown operator` at 2
 	// while `test b '>' a` is 0, which is the split the enum exists for.
 	s.TestStringOrder = interp.TestStringOrderGreaterOnly
@@ -3518,12 +3523,16 @@ func Diagnostics() interp.Diagnostics {
 		TestUnaryExpected:       "%[2]s: %[1]s: unknown operator",
 		TestBinaryExpected:      "%[2]s: %[1]s: unknown operator",
 		TestIntegerExpected:     "%[2]s: %[1]s: integer expected",
-		TestTooManyArguments:    "%[2]s: too many arguments",
-		TestOperandExpected:     "%[2]s: argument expected",
-		TestMissingBracket:      "[: ']' missing",
-		OptionListingHeader:     "Current option settings",
-		OptionListingWidth:      25,
-		PlusOListsActive:        true,
+		// No TestTooManyArguments: this shell has no such sentence, and the
+		// reading is why — it drops the words behind an expression instead
+		// of counting them (Semantics.TestReadsOneExpressionOffTheOperands).
+		// What it says about a list the grammar could not finish is below.
+		TestIncorrectSyntax: "%[2]s: incorrect syntax",
+		TestOperandExpected: "%[2]s: argument expected",
+		TestMissingBracket:  "[: ']' missing",
+		OptionListingHeader: "Current option settings",
+		OptionListingWidth:  25,
+		PlusOListsActive:    true,
 		// Labeled lines, one figure each, and no children's times at all —
 		// genuinely less information than the other three report.
 		TimesLayout:   interp.TimesUserAndSystem,

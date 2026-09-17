@@ -447,6 +447,15 @@ type Diagnostics struct {
 	// TestTooManyArguments is a well-formed expression with words left over.
 	// No verbs.
 	TestTooManyArguments string
+	// TestIncorrectSyntax is a list the grammar could not finish. No verbs.
+	//
+	// Only the column that reads one expression off the front of the operand
+	// list has this sentence, and it is the other half of that reading rather
+	// than a second name for the count above: a reader that drops the words
+	// behind an expression needs a way to say when it will not, and it is
+	// reached only where Semantics.TestReadsOneExpressionOffTheOperands says
+	// yes. Every other column refuses those same lists as a count.
+	TestIncorrectSyntax string
 	// TestMissingBracket is `[` without its closing `]`. One verb, the closing
 	// word that was wanted — `]`, or `]]` for the `[[` that is a command (see
 	// syntax.Dialect.DoubleBracketIsACommand) — and every shell in the panel

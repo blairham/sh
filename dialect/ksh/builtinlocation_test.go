@@ -82,8 +82,10 @@ func TestOnlyKshNamesThePlaceTwoWays(t *testing.T) {
 //	t.sh[1]: test: b: unknown operator      test a b c
 //	t.sh[1]: [: b: unknown operator         [ a b c ]
 //	t.sh[1]: [: -Q: unknown operator        [ -Q x ]
+//	t.sh[1]: test: argument expected        test x junk
+//	t.sh[1]: test: incorrect syntax         test x = x -a x = x junk
 //
-// All three bracketed, so the disagreement was ours alone (#3035). The cause
+// All bracketed, so the disagreement was ours alone (#3035). The cause
 // was a rule measured on the dialect that writes a builtin's name *into* the
 // location — there `test a b c` is `zsh:1: condition expected: b`, the same
 // as `[[ a b c ]]`, which is not a builtin — applied to a dialect that has a
@@ -93,8 +95,15 @@ func TestTestKeepsTheBuiltinLocation(t *testing.T) {
 	for _, tc := range []struct{ name, src string }{
 		{"a word where a binary operator belongs", "test a b c"},
 		{"the same through the bracket", "[ a b c ]"},
-		{"a word after a file test", "test -n x y"},
 		{"a word where a unary operator belongs", "[ -Q x ]"},
+		// The other two complaints this shell has. `test -n x y` used to
+		// stand here and no longer refuses anything: the word after a file
+		// test is one this reader never looks at — see
+		// Semantics.TestReadsOneExpressionOffTheOperands — so a row that
+		// asks where a diagnostic is written needs a list that still has
+		// one.
+		{"a form that ran out of operands", "test x junk"},
+		{"a list the grammar could not finish", "test x = x -a x = x junk"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// On line 2, because line 1 of a command string names no line

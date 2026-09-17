@@ -15282,13 +15282,61 @@ many arguments` while `test -Q f` is `unknown condition: -Q`, so `-a` is a
 word that shell knows — as the connective — and `-Q` is not. dash and ash
 have the same connectives and draw no such distinction.
 
-**What is not modeled**: at exactly three words the panel disagrees about
-whether `!` binds tighter than the connective. `test ! -a f` is 0 in bash
-and zsh, which read `-a` as the connective between two non-empty strings; 1
-in ksh93, which reads it as `!` negating a file test; and `-a: unexpected
+**Half modeled**: at exactly three words the panel disagrees about whether
+`!` binds tighter than the connective. `test ! -a f` is 0 in bash and zsh,
+which read `-a` as the connective between two non-empty strings; 1 in
+ksh93, which reads it as `!` negating a file test; and `-a: unexpected
 operator` in dash, which reads the `!` first and then has no unary `-a` to
-apply. This shell gives bash's answer, which is what it gave before these
-four axes and is unchanged by them.
+apply. This shell gives bash's answer on the common path, which is what it
+gave before these four axes — and ksh93's own answer where
+`TestReadsOneExpressionOffTheOperands` says yes, because that column's
+three-word reading asks the `!` question first and the ordering is part of
+the reading rather than a separate switch. dash's answer is still not
+modeled.
+
+#### One expression off the front of the operands
+
+**`TestReadsOneExpressionOffTheOperands`** — ksh93 yes · bash no · dash no ·
+zsh no · ash no
+
+Reads a single expression from the *front* of `test`'s operand list and
+never looks at the words behind it. `test x = x y` is 0 in the one column
+that says yes and a refusal in the other six, and that column has no `too
+many arguments` sentence at all: its three complaints are `b: unknown
+operator` for a word standing where an operator was required, `argument
+expected` for a form that ran out, and `incorrect syntax` for a list the
+grammar could not finish — and none of the three can be reached by adding
+operands to an expression that already reads.
+
+It is not "trailing operands are ignored", and one pair of lists is enough
+to say so. They hold the same words and differ only in where the connective
+sits:
+
+    test x = x junk -a junk      0, silent
+    test x = x -a x = x junk     incorrect syntax, 2
+
+When the connective is the word straight after the reading, the whole list
+becomes load-bearing; when it is not, nothing past the reading is looked at.
+A connective *inside a group* does not arm it — `test ( x = x -a y = z )
+junk` is 1.
+
+The rest of the reading follows from the same measurement and is why this is
+a second reader rather than a flag on the first. Up to four operands the
+arity is fixed and the words past the reading are dropped (`test -n x y` is
+0, `test -z "" -a` is 0); past four a grammar takes over, and the grammar's
+primary asks the same questions in the same order — a comparison beats the
+file test but a connective in that place does not, so `test -n = x y` is 1
+and `test -z -a y z` is 1. A two-word form whose first word is not an
+operator says it ran out rather than naming a word, and only a word spelled
+like a one-letter operator is named: `test x junk` and `test -QQ x` are
+`argument expected` where `test -Q x` and `test - x` are `unknown operator`.
+
+Measured over 152 operand lists on 2026-09-16, each a script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null in a fresh
+directory — that shell's preset aliases make an interactive probe answer a
+different question. `interp/testfrontexpression.go` carries the reading with
+the row each of its steps is pinned by, `share/suite/ksh/conditions.tests`
+asks them against the real shell, and #2959 is the issue.
 
 
 ### the names a builtin will and will not take

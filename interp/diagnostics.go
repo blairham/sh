@@ -4123,6 +4123,13 @@ type Diagnostics struct {
 	// `typeset:` in it, where its refusals on the same line carry the
 	// builtin's name.
 	NamerefCircularWarning string
+	// NamerefArrayLiteralDropsTheAttribute is what a shell says when an
+	// array literal is assigned through a reference that has nothing to
+	// point at: the reference stops being one and the name takes the array.
+	// Measured 2026-09-17 on bash 5.3.20 — `declare -n u; u=(a b)` writes
+	// `warning: u: removing nameref attribute` and leaves `declare -a
+	// u=([0]="a" [1]="b")`. Empty where the dialect says nothing.
+	NamerefArrayLiteralDropsTheAttribute string
 
 	// NamerefDepthWarning is what a *write* through a self reference says in
 	// the same dialect, which is a different sentence from the read's: bash

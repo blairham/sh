@@ -1300,6 +1300,15 @@ func (p *printer) redirs(rs []*Redirect) {
 			p.word(rd.N)
 		}
 		p.str(rd.Op.String())
+		if rd.Op.IsSeek() {
+			// The operand is an arithmetic command and is written back as
+			// one: the span is the same ArithSubst `$((…))` carries, and the
+			// general word printer would spell it `$((0))` — which is a word
+			// where an arithmetic command has to stand, and does not parse
+			// back as a seek at all.
+			p.str("((" + seekExpr(rd.Word) + "))")
+			continue
+		}
 		// A space, because the two run together otherwise: `< <(cmd)`
 		// written without one is `<<`, a here-document, which is not a
 		// redirection with a target at all. The round trip found that; a
@@ -1887,4 +1896,17 @@ func numericRangeIn(s string) (int, bool) {
 		return 0, false
 	}
 	return i + 1, true
+}
+
+// seekExpr is the expression a file-position redirection's operand holds. The
+// parser builds that word from one ArithSubst span; anything else reached
+// this from a tree built by hand, and the literal text is the best it can do.
+func seekExpr(w *Word) string {
+	if w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == ArithSubst {
+		return w.Spans[0].Value
+	}
+	if w == nil {
+		return ""
+	}
+	return w.Literal()
 }

@@ -231,5 +231,9 @@ func Dialect() syntax.Dialect {
 	// other six report at the `;`, so the grammar that has to *read* every
 	// case is the one that takes it, as above.
 	d.RenameOnSuccessRedirect = true
+	// `<#((expr))` and `>#((expr))`, the file-position redirections — the
+	// other half of what this shell alone does to a descriptor. Measured
+	// 2026-09-16 on ksh93u+ 2012-08-01 (#3034).
+	d.SeekRedirect = true
 	return d
 }

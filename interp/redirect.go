@@ -209,6 +209,24 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				fd = n
 			}
 		}
+		// `<#` and `>#` move where a descriptor next reads or writes. No
+		// file is opened, closed or duplicated, so this is settled before
+		// anything below goes looking for one — and before the gate, which
+		// has nothing to see: the descriptor was opened already and this
+		// only changes where in it the next byte comes from.
+		if rd.Op.IsSeek() {
+			if rd.N == nil && rd.Op == syntax.TokLessHash {
+				// The reading operator with no number is standard input,
+				// exactly as a plain `<` is.
+				fd = 0
+			}
+			if !r.seekRedirect(rd, fd) {
+				r.redirErr = true
+				return closers, nil
+			}
+			continue
+		}
+
 		// A here-document and a here-string are input the shell already
 		// holds, so there is no file to open and nothing for the gate to
 		// see — the bytes never leave this process on their way in. Before
@@ -1425,6 +1443,140 @@ func (r *Runner) errBadFd(fd int, written string) error {
 	}
 	return errors.New(Wording(r.diag().DuplicationSourceNotOpen, "%[1]s: %[2]s",
 		name, r.diag().reasonText(reason(syscall.EBADF))))
+}
+
+// seekRedirect moves a descriptor's position, which is what `<#((expr))` and
+// `>#((expr))` do and the whole of what they do: nothing is opened, nothing
+// is closed, and the change outlives the command, because the position
+// belongs to the open file and not to the number.
+//
+// Measured 2026-09-16 on ksh93u+ 2012-08-01, script files under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null:
+//
+//	printf abcdefghij > f; exec 3< f
+//	read -n4 v <&3                     [abcd]
+//	exec 3<#((0)); read -n2 v <&3      [ab]
+//	exec 3<#((6)); read -n2 v <&3      [gh]
+//	printf 0123456789 > g; exec 4<> g
+//	exec 4>#((3)); printf XY >&4       g holds 012XY56789
+//
+// And it is not restored when a command that wrote one ends:
+// `{ read -n2 v <&3; } 3<#((6))` leaves the next read of 3 at 8, where
+// putting the position back would leave it at 2.
+//
+// A seek past the end is not an error — the read after it returns nothing at
+// status 1 — and a negative offset is refused.
+func (r *Runner) seekRedirect(rd *syntax.Redirect, fd int) bool {
+	f, open := r.seekableFd(fd)
+	if !open {
+		// A different sentence from the one a duplication writes about a
+		// number nothing is open at, which is measured: `exec 6>&7` is
+		// `7: cannot open [Bad file descriptor]` and `exec 6<#((0))` is
+		// `6: bad file unit number [Bad file descriptor]`.
+		r.diagf("%s\n", Wording(r.diag().SeekDescriptorNotOpen, "%[1]s: %[2]s",
+			itoa(fd), r.diag().reasonText(reason(syscall.EBADF))))
+		r.status = r.diag().redirectFailureStatus()
+		return false
+	}
+	cur, err := f.Seek(0, io.SeekCurrent)
+	var end int64
+	if err == nil {
+		end, err = f.Seek(0, io.SeekEnd)
+		if err == nil {
+			_, err = f.Seek(cur, io.SeekStart)
+		}
+	}
+	if err == nil && !regularFile(f) {
+		// A character device the kernel *will* seek is still not a file with
+		// a position in it, and this shell is the one that has to say so:
+		// macOS takes an lseek on /dev/zero where ksh93 answers
+		// `0: not seekable`. Asked only of an *os.File — an embedder's own
+		// seekable stream is taken at its word.
+		err = syscall.ESPIPE
+	}
+	if err != nil {
+		// A pipe or a terminal has no position to move, and asking for one
+		// is where that is found out. A different sentence from the one a
+		// refused *offset* earns, which is measured: with standard input on
+		// a pipe `exec 0<#((0))` is `0: not seekable`, and with it on a
+		// regular file and a negative offset it is `-1: invalid seek
+		// offset`.
+		r.diagf("%s\n", Wording(r.diag().SeekStreamHasNoPosition, "%[1]s: not seekable", itoa(fd)))
+		r.status = r.diag().redirectFailureStatus()
+		return false
+	}
+	// CUR and EOF stand for the position and the size **inside the
+	// expression only**: measured, `CUR=99; exec 3<#((CUR))` seeks to where
+	// the descriptor stands and leaves `CUR` holding 99 afterwards, and
+	// `exec 3<#((EOF-3))` reads the last three bytes. An assignment the
+	// expression makes still reaches the shell — `exec 3<#((zz=6))` sets
+	// `zz` — so the two names are saved and put back rather than evaluated
+	// in a scope of their own.
+	undo := []savedVar{r.saveVar("CUR"), r.saveVar("EOF")}
+	r.setVar("CUR", strconv.FormatInt(cur, 10))
+	r.setVar("EOF", strconv.FormatInt(end, 10))
+	names, bad := r.redirectTargetForItsProcess(rd)
+	r.restoreVars(undo)
+	if bad {
+		return false
+	}
+	written := strings.Join(names, " ")
+	off, ok := atoiSigned(written)
+	if !ok || off < 0 {
+		return r.refuseSeekOffset(written)
+	}
+	if _, err := f.Seek(int64(off), io.SeekStart); err != nil {
+		return r.refuseSeekOffset(written)
+	}
+	return true
+}
+
+// refuseSeekOffset reports an offset the descriptor will not take: a negative
+// one, and a stream with no position at all.
+func (r *Runner) refuseSeekOffset(written string) bool {
+	r.diagf("%s\n", Wording(r.diag().SeekOffsetRefused, "%[1]s: invalid seek offset", written))
+	r.status = r.diag().redirectFailureStatus()
+	return false
+}
+
+// regularFile reports whether a seekable stream is a file with a position in
+// it, rather than a device that merely tolerates the call. Anything that is
+// not one of this process's own files is taken at its word: an embedder may
+// hand a Runner a stream of its own, and this has nothing to ask it.
+func regularFile(s io.Seeker) bool {
+	f, ours := s.(*os.File)
+	if !ours {
+		return true
+	}
+	st, err := f.Stat()
+	return err == nil && st.Mode().IsRegular()
+}
+
+// seekableFd is the open file behind one of this shell's descriptor numbers,
+// where there is one that can be positioned.
+//
+// The named three answer for themselves and everything above them comes out
+// of the table, which is the same split [Runner.SystemDescriptor] makes. A
+// here-document's text, an embedder's buffer and a pipe are all "not one"
+// here: none has a position, and saying so is the honest answer rather than
+// seeking something that is not the file the script meant.
+func (r *Runner) seekableFd(fd int) (io.Seeker, bool) {
+	var held any
+	switch fd {
+	case 0:
+		held = r.stdin()
+	case 1:
+		held = r.stdout()
+	case 2:
+		held = r.stderr()
+	default:
+		var open bool
+		if held, open = r.fds[fd]; !open {
+			return nil, false
+		}
+	}
+	s, ok := held.(io.Seeker)
+	return s, ok
 }
 
 // dupFd points one descriptor at another, or closes it.

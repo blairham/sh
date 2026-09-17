@@ -1308,7 +1308,8 @@ var operators = []Kind{
 	TokDGreatClobber, TokDGreatBang, TokAmpGreatClobber, TokAmpGreatBang, // 3 bytes
 	TokAndAnd, TokOrOr, TokDSemi, TokSemiAmp, TokDGreat, TokLessAmp, TokGreatAmp,
 	TokLessGreat, TokClobber, TokClobberBang, TokDLess, TokAmpGreat,
-	TokAmpBang, TokAmpPipe, TokPipeAmp, TokSemiPipe, TokGreatSemi, // 2 bytes
+	TokAmpBang, TokAmpPipe, TokPipeAmp, TokSemiPipe, TokGreatSemi,
+	TokLessHash, TokGreatHash, // 2 bytes
 	TokAmp, TokPipe, TokSemi, TokLeftParen, TokRightParen, TokLess, TokGreat, // 1 byte
 }
 
@@ -1343,6 +1344,8 @@ func (l *Lexer) enabled(k Kind) bool {
 		return l.dialect.ClobberOverrideMarker
 	case TokGreatSemi:
 		return l.dialect.RenameOnSuccessRedirect
+	case TokLessHash, TokGreatHash:
+		return l.dialect.SeekRedirect
 	case TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang:
 		// The marker on the both-streams operators needs those operators
 		// first: where `&>` is not read at all, `&>|` cannot be the marker on

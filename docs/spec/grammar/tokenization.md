@@ -1239,6 +1239,54 @@ Grammar flag: `RenameOnSuccessRedirect` — core: off; `ksh`: on. Off
 everywhere else, where the fallback is the reading those shells have: `>`
 then `;`, and a redirection with no target.
 
+### `<#` and `>#` — the file-position redirections
+
+The other pair ksh93 has alone, and the only redirections in the panel
+that open nothing: they move where a descriptor next reads or writes.
+`exec 3<#((0))` rewinds descriptor 3; `exec 4>#((3))` puts the write
+position three bytes in. The operand is an *arithmetic command* — the
+same `((expr))` the grammar already reads at command position — so the
+offset may be computed and may name parameters.
+
+Measured 2026-09-16 on ksh93u+ 2012-08-01, script files under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null:
+
+| written | ksh93u+ | bash 5.3.20 · zsh 5.9 · dash 0.5.12 |
+| --- | --- | --- |
+| `exec 3< f; exec 3<#((0))` | descriptor 3 is at 0 | syntax error |
+| `n=2; exec 3<#((n * 3 + 1))` | at 7 | the same |
+| `exec 4<> g; exec 4>#((3))` | the next write lands at 3 | the same |
+| `exec 3<#((CUR))` | the position it already had | the same |
+| `exec 3<#((EOF-3))` | three bytes before the end | the same |
+
+`CUR` and `EOF` stand for the position and the size **inside the
+expression only**: `CUR=99; exec 3<#((CUR))` seeks to where the
+descriptor stands and leaves `CUR` holding 99 afterwards. An assignment
+the expression makes does reach the shell — `exec 3<#((zz=6))` sets `zz`
+— so the two names are shadowed rather than evaluated somewhere else.
+
+The position is the *open file's* and not the command's, so a seek
+written on an ordinary command is not taken back when it ends:
+`{ read -n2 v <&3; } 3<#((6))` leaves the next read of 3 at 8.
+
+Three refusals, each its own sentence: `exec 6<#((0))` over a number
+nothing is open at is `6: bad file unit number [Bad file descriptor]` —
+not the `7: cannot open [Bad file descriptor]` a duplication writes —
+`exec 3<#((-1))` is `-1: invalid seek offset`, and a stream with no
+position is `0: not seekable`. A seek *past* the end is not an error at
+all: the read after it returns nothing at status 1. Standard input on
+/dev/null is the one measured row this shell does not reproduce — ksh93
+answers `0: invalid seek offset` there and the seek succeeds here.
+
+ksh93 also reads a **pattern** after `<#` and seeks to the line matching
+it; that half is not claimed, and the operand is refused rather than read
+as something it is not. A plain word is no guide either: `exec 3<#0`
+segfaults ksh93u+ 2012-08-01 outright.
+
+Grammar flag: `SeekRedirect` — core: off; `ksh`: on. Off everywhere else,
+where the `#` opens a comment and the fallback is a redirection with no
+target — the syntax error the other three report.
+
 ### `|&` — a pipe of both streams, or a coprocess
 
 The other operator whose two bytes mean two different things. Measured

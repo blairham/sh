@@ -82,6 +82,15 @@ const (
 	// a syntax error where `>; f` is not. See
 	// [Dialect.RenameOnSuccessRedirect].
 	TokGreatSemi // >;
+	// TokLessHash and TokGreatHash are `<#` and `>#`, one dialect's
+	// **file-position** redirections: they move where a descriptor next
+	// reads or writes rather than deciding what it is aimed at. The operand
+	// is a word, and the one this reads is an arithmetic command — `exec
+	// 3<#((0))` is a seek to the start — so the parser takes a TokArithCmd
+	// where every other redirection takes a target. See
+	// [Dialect.SeekRedirect].
+	TokLessHash  // <#
+	TokGreatHash // >#
 )
 
 // text is the source spelling of each operator, and the table the lexer
@@ -101,6 +110,7 @@ var text = map[Kind]string{
 	TokDLess: "<<", TokDLessDash: "<<-",
 	TokTLess: "<<<", TokAmpGreat: "&>", TokAmpDGreat: "&>>",
 	TokGreatSemi: ">;",
+	TokLessHash:  "<#", TokGreatHash: ">#",
 }
 
 // String returns the operator's spelling, or a name for the non-operators.
@@ -133,11 +143,16 @@ func (k Kind) IsRedirect() bool {
 		TokClobberBang, TokDGreatClobber, TokDGreatBang,
 		TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang,
 		TokDLess, TokDLessDash, TokTLess, TokAmpGreat, TokAmpDGreat,
-		TokGreatSemi:
+		TokGreatSemi, TokLessHash, TokGreatHash:
 		return true
 	}
 	return false
 }
+
+// IsSeek reports whether k is one of the file-position operators, whose
+// operand is an arithmetic command rather than a target. See
+// [Dialect.SeekRedirect].
+func (k Kind) IsSeek() bool { return k == TokLessHash || k == TokGreatHash }
 
 // IsHeredoc reports whether k begins a here-document, whose body is read from
 // the lines after the current one rather than from the token stream.

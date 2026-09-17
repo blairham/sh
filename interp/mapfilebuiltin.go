@@ -138,6 +138,16 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 	if len(args) > 0 {
 		target = args[0]
 	}
+	// Through a reference, if the name is one: the array this fills is the
+	// one the reference points at, and a reference aimed at an *element* is
+	// refused by the check below rather than quietly making a parameter whose
+	// name has a subscript in it. Measured 2026-09-17 on bash 5.3.20 —
+	// `declare -n r=A[0]; mapfile -t r` is ``mapfile: `A[0]': not a valid
+	// identifier`` at 1, and no `A[0]` comes into being; here it did, and the
+	// array the script meant was never written.
+	if aimed, is := r.namerefTarget(target); is {
+		target = aimed
+	}
 	if target == "" {
 		// A sentence of its own and a usage-error status, measured
 		// 2026-09-16 on bash 5.3.20: `mapfile ""` is `empty array variable

@@ -60,8 +60,8 @@ func TestADoubleDashEndsTheOptionsOfANumericOperand(t *testing.T) {
 		{
 			"past the marker a dash word is the count", Yes,
 			`for i in 1 2; do break -- -1; echo body; done; echo "B=$?"`,
-			"sh: break: -1: out of range\nB=0\n",
-			"the complaint names the number behind the marker, not the marker, and the count falls back to one so the loop still ends",
+			"sh: break: -1: out of range\nB=1\n",
+			"the complaint names the number behind the marker, not the marker, and the loop ends at 1 — bash 5.3.20 answers `B=1` here",
 		},
 		{
 			"only the first marker is one", Yes,

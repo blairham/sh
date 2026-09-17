@@ -2941,6 +2941,35 @@ type Dialect struct {
 	// `!` is scanned as an ordinary name (#2415).
 	ParamLengthRefusesTheBangName bool
 
+	// ParamContinuationNeedsAName keeps a line continuation inside `${ }` —
+	// so the expansion is refused — where no name has begun: directly behind
+	// the `${`, or its `#` or `!` prefix, or behind a positional or special
+	// parameter.
+	//
+	// A backslash-newline anywhere else in the expansion is removed before it
+	// is read, and that is unanimous; this is the one shape the panel splits
+	// on. Measured 2026-09-16 from script files under `env -i`, stdin on
+	// /dev/null, fresh directory:
+	//
+	//	probe                   bash 5.3  bash 3.2  zsh 5.9.2  dash  ksh93u+
+	//	xy=5 ${x\⏎y}            5         5         5          5     5
+	//	${x\⏎}  ${x:\⏎-d}        value     value     value      value value
+	//	${#x\⏎}  ${@:\⏎-d}       value     value     value      value value
+	//	${\⏎x}  ${#\⏎x}          value     value     value      value refused
+	//	${1\⏎}  ${12\⏎}  ${@\⏎}  value     value     value      value refused
+	//	${?\⏎}  ${#\⏎}  ${$\⏎}   value     value     value      value refused
+	//
+	// "refused" is ``syntax error at line 1: `\' unexpected``, status 3, which
+	// is what the kept pair already reads as there. The last two rows are
+	// the boundary: the continuation is kept until a name has begun, and a
+	// special or positional parameter never begins one — `${1:-a\⏎b}` and
+	// `${@:\⏎-d}` read, because an operator stands before the pair.
+	//
+	// ksh93 alone, and not in an unquoted here-document body, where its
+	// continuations are gone before the expansion is scanned: `${\⏎x}` is
+	// the value there.
+	ParamContinuationNeedsAName bool
+
 	// BareBraceNestsInExpansion makes an unquoted `{` inside `${…}` open a
 	// nesting level, so the expansion ends at the brace that *balances* it
 	// rather than at the first `}`.

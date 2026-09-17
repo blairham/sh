@@ -537,6 +537,10 @@ double-quoted string, and kept inside a single-quoted part and inside a
 command substitution's program, which reads it by its own rules. A body of
 an unquoted here-document reads its `$(( ))` through the same scanner.
 
+A parameter expansion's text is read with the rule in force too: `${x\⏎y}`
+is `${xy}` on the whole panel. `parameter-expansion.md` has the shapes and
+the one place ksh93 refuses the pair.
+
 Two shapes at the construct's **delimiters** split the panel and are not
 this rule: a continuation between the `$(` and the second `(` of the opener,
 or between the two `)` of the closer, decides whether the construct is

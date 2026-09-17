@@ -276,6 +276,11 @@ func Dialect() syntax.Dialect {
 	// then expanded, where bash 5.3, bash 3.2 and dash answer the single
 	// field `[{a,q.z}]`.
 	d.BareBraceNestsInExpansion = true
+	// A line continuation inside `${ }` is removed only once a name has
+	// begun: `${x\⏎}` is the value and `${\⏎x}`, `${#\⏎x}`, `${1\⏎}` and
+	// `${@\⏎}` are ``syntax error at line 1: `\' unexpected`` here, where the
+	// other four read them all. See the flag for the rows.
+	d.ParamContinuationNeedsAName = true
 	// A function body that is not compound may carry no redirection here:
 	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
 	// >out` are all a syntax error at the operator. A braced body is not

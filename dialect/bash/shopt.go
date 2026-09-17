@@ -318,6 +318,24 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).KeepsLastPipelineElement,
 		set: (*interp.Runner).SetKeepsLastPipelineElement,
 	},
+	// The third name here that moves a semantics axis, and the one whose
+	// sense is inverted: what it asks for is the answer
+	// interp.Semantics.UnsetRemovesAnEnclosingLocal calls **No**. This shell
+	// removes a caller's local outright — `v=GLOBAL; g(){ unset v; };
+	// f(){ local v=L; g; echo "${v-UNSET}"; }; f` prints GLOBAL here and
+	// UNSET in zsh, dash and BusyBox ash — and `shopt -s localvar_unset` is
+	// what makes it answer the way the rest of the panel already does.
+	//
+	// So the option and the default are one axis and not a feature beside a
+	// bug, which is why this could not be closed by writing `true` into
+	// shoptStates: the name sat there reporting off over a shell that was
+	// giving the option's answer with the option unset, so a script setting
+	// it was refused for asking to keep behavior it already had, and one
+	// that never mentioned it read the wrong value in silence (#3435).
+	"localvar_unset": {
+		get: func(r *interp.Runner) bool { return !r.UnsetRemovesAnEnclosingLocal() },
+		set: func(r *interp.Runner, on bool) { r.SetUnsetRemovesAnEnclosingLocal(!on) },
+	},
 	// The second name here that moves a semantics axis, and the one that
 	// moves the same axis `set -o posix` does. Whether a `$(…)` body's own
 	// shell holds `set -e` is
@@ -566,7 +584,6 @@ var shoptStates = map[string]bool{
 	"interactive_comments": true,
 	"lithist":              true,
 	"localvar_inherit":     false,
-	"localvar_unset":       false,
 	"mailwarn":             false,
 	"noexpand_translation": false,
 	"progcomp_alias":       false,

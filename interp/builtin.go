@@ -2763,6 +2763,15 @@ func (r *Runner) unsetName(name string) {
 		// `ls >/dev/null; unset PATH; hash` reports an empty table in bash.
 		r.forgetEveryHashedCommand()
 	}
+	// A name a *calling* function made local is where the panel splits, and
+	// in one column the name does not go away at all: the binding does, and
+	// what it displaced answers from here on. See
+	// interp/unsetenclosinglocal.go, which puts the outer binding back —
+	// including the parameter above, which is why this stands after the hash
+	// and ahead of everything that takes the name out of a table.
+	if r.unsetTakesAnEnclosingLocal(name) {
+		return
+	}
 	// And the parameter whose patterns take names out of a pathname
 	// expansion stops where it is unset — taking the hidden-name switch back
 	// off with it, whoever turned that on. See interp/ignorednames.go.

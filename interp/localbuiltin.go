@@ -354,15 +354,7 @@ func (r *Runner) localInTheInnermostScope(name string) bool {
 	if len(r.scopes) == 0 {
 		return false
 	}
-	sc := r.scopes[len(r.scopes)-1]
-	if _, ok := sc.saved[name]; ok {
-		return true
-	}
-	if _, ok := sc.savedArrays[name]; ok {
-		return true
-	}
-	_, ok := sc.savedAssoc[name]
-	return ok
+	return r.scopes[len(r.scopes)-1].shadows(name)
 }
 
 // bareLocalListing answers `local` with no operands, inside a function.

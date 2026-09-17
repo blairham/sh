@@ -283,7 +283,9 @@ func (r *Runner) bareTerminalTest() bool {
 // precedence.
 //
 // Only past four arguments does a grammar take over, with `-a` binding tighter
-// than `-o`. All of this is unanimous across the panel.
+// than `-o`. That shape is unanimous across the panel; what is *inside* it is
+// not, and one column reads the counts and the grammar differently enough to
+// need a reader of its own — see the axis read on the first line of the body.
 func (r *Runner) testExpr(form testForm, args []string) (bool, error) {
 	if r.sem().TestReadsOneExpressionOffTheOperands == Yes {
 		// One column reads a single expression off the front of the list and

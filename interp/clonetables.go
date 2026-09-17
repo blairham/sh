@@ -329,6 +329,17 @@ func (c *Runner) ownTables(r *Runner) {
 	// still holds is what this file exists to prevent.
 	c.prefixTraceAssigns = slices.Clone(r.prefixTraceAssigns)
 	c.prefixTraceValues = slices.Clone(r.prefixTraceValues)
+	// And the names the running command's prefix is holding, with what they
+	// held before it and what a declaration has done to them, for the same
+	// reason and with the same reading: a clone started inside a prefixed
+	// command goes on to run a different command, and appending into an array
+	// the parent still holds is the hazard this file is about. See
+	// Runner.prefixHeldNames.
+	c.prefixHeldNames = slices.Clone(r.prefixHeldNames)
+	c.prefixKeptNames = slices.Clone(r.prefixKeptNames)
+	c.prefixShadowed = slices.Clone(r.prefixShadowed)
+	c.prefixHeldUndo = slices.Clone(r.prefixHeldUndo)
+	c.functionPrefixNames = slices.Clone(r.functionPrefixNames)
 	c.scopes = cloneScopes(r.scopes)
 	// Appended to in place as well, so each needs an array of its own. Their
 	// *elements* stay shared on purpose: a `*Job` is one job to whoever holds

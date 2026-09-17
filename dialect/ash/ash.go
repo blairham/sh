@@ -173,6 +173,13 @@ func Semantics() interp.Semantics {
 	// 2026-09-12 in the pinned alpine image (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// And not at a builtin, measured 2026-09-16 in the pinned alpine image:
+	// `v=1; v=9 eval 'env | grep "^v="'` shows the child nothing, and the
+	// attribute is left where it was. Its sibling's two lines, for the same
+	// reason — `readonly` and `export` are the only declaration words and
+	// their prefix persists here already (#3437).
+	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
+	s.DeclarationPromotesThePrefixEntry = interp.No
 	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split, and
 	// this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes

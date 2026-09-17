@@ -3042,7 +3042,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}
-			r.exported[base] = !strings.ContainsRune(opts, 'n')
+			r.declarationExports(base, !strings.ContainsRune(opts, 'n'))
 			continue
 		}
 		// The export attribute goes to what a reference points at, and this
@@ -3087,7 +3087,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		// in through the environment is exported by having done so, and only
 		// an explicit "no" can take that off. Deleting the record put the
 		// question back to the environment, which answers yes.
-		r.exported[name] = !strings.ContainsRune(opts, 'n')
+		r.declarationExports(name, !strings.ContainsRune(opts, 'n'))
 	}
 	if ended {
 		// See biDeclare: the names are exported and then the script stops.

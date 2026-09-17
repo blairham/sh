@@ -106,6 +106,11 @@ func seedStacks(r *Runner) {
 	r.optionLists = append(make([]optionList, 0, 4), optionList{})
 	r.prefixTraceAssigns = append(make([]*syntax.Assign, 0, 4), nil)
 	r.prefixTraceValues = append(make([]string, 0, 4), "seed")
+	r.prefixHeldNames = append(make([]string, 0, 4), "seed")
+	r.prefixKeptNames = append(make([]string, 0, 4), "seed")
+	r.prefixShadowed = append(make([]string, 0, 4), "seed")
+	r.prefixHeldUndo = append(make([]savedVar, 0, 4), savedVar{name: "seed"})
+	r.functionPrefixNames = append(make([]string, 0, 4), "seed")
 }
 
 // TestACloneOwnsEveryStack is TestACloneOwnsEveryTable for the slices, and it

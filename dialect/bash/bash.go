@@ -767,6 +767,20 @@ func Semantics() interp.Semantics {
 	// that moves under it, which is what macOS `/bin/sh` is (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// And a prefix to a *builtin* is exported too, which is the reading that
+	// makes it the command's environment rather than a value this shell holds
+	// for one line: `v=1; v=9 eval 'env | grep "^v="'` hands the child `v=9`
+	// and `c=1; c=2 declare -p c` reads `declare -x c="2"` on a name nobody
+	// exported. Measured 2026-09-16 in 5.3.20 and in 3.2.57, and bash is the
+	// only column that does either (#3437).
+	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOn
+	// A declaration naming `-x` or `-r` over the name its own prefix is
+	// standing in front of keeps the prefix's value: `b=7; b=8 readonly b`
+	// leaves `declare -rx b="8"`, and so do `export` and `typeset -r`. Not
+	// the special-builtin rule above — `b=8 :` leaves `7` here — and not
+	// every declaration: `x=2 declare x`, `i=2 declare -i i` and `t=2
+	// declare +x t` all leave the shell's own value standing (#3437).
+	s.DeclarationPromotesThePrefixEntry = interp.Yes
 	// echo reads -n, -e and -E, the last of -e/-E deciding, with the hex
 	// and ESC escapes on top of the XSI set.
 	s.EchoOptions = "neE"

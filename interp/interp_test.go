@@ -683,11 +683,16 @@ func TestAssignmentPrefixIsAnAxisWithTwoSides(t *testing.T) {
 	src := `set -- a b; x=1 shift; printf "[%s]" "$x"`
 
 	persists := PosixSemantics()
+	// The *other* prefix question at a builtin — what it does to the export
+	// attribute — is asked here whichever way this one is answered, and it is
+	// not this axis. Answered at the reading that changes nothing (#3437).
+	persists.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
 	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &persists }); got != "[1]" {
 		t.Errorf("with the axis set to Yes the assignment should persist, got %q", got)
 	}
 	drops := PosixSemantics()
 	drops.AssignmentPrefixPersistsOnSpecialBuiltin = No
+	drops.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
 	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &drops }); got != "[]" {
 		t.Errorf("with it set to No it should not, got %q", got)
 	}

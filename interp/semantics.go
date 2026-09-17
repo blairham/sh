@@ -714,6 +714,71 @@ type Semantics struct {
 	// what says so (#2407).
 	PrefixToAFunctionIsExported Answer
 
+	// PrefixExportAtABuiltin is what an assignment prefix does to the export
+	// attribute of the name it stands in front of, for the length of a
+	// *builtin* — so it decides what a builtin that reads the attribute back
+	// sees, and what a child the builtin starts is told. See
+	// PrefixExportAtABuiltinPolicy: three answers, because the panel moves
+	// the attribute in both directions and one column moves it neither way.
+	//
+	// The same question PrefixToAFunctionIsExported asks about a function, at
+	// the other kind of command, and a separate axis because a column that
+	// answers one does not answer the other: zsh exports a prefix to a
+	// function and leaves a prefix to a builtin alone.
+	//
+	// A prefix that reached a builtin through `command` is exported in every
+	// column and is not this — see the unanimous line in Runner.builtinCode
+	// that #2408 added (#3437).
+	PrefixExportAtABuiltin PrefixExportAtABuiltinPolicy
+
+	// DeclarationPromotesThePrefixEntry keeps the value an assignment prefix
+	// set, where the builtin it stands in front of is a declaration that
+	// names the export or the readonly attribute over that same name.
+	//
+	//	b=7; b=8 readonly b;   declare -p b
+	//	d=7; d=8 export d;     declare -p d
+	//	y=1; y=2 typeset -r y; declare -p y
+	//
+	//	              bash 5.3            zsh 5.9.2
+	//	readonly      declare -rx b="8"   typeset -g b=7
+	//	export        declare -x d="8"    typeset -g d=7
+	//	typeset -r    declare -rx y="2"   typeset -g y=1
+	//
+	// **It is not the special-builtin persistence rule**, which is the
+	// obvious reading and is the wrong one. Measured in the same script:
+	// `b=7; b=8 :` and `e=7; e=8 shift` both read `[7]` afterwards in bash,
+	// so AssignmentPrefixPersistsOnSpecialBuiltin is already answering the
+	// question it is about — and `readonly` and `export` are special
+	// builtins. What keeps the value is the attribute, not the word's class.
+	//
+	// **And not every declaration.** Asked only where the command names `-x`
+	// or `-r`, because that is the only place the panel's own rows part:
+	//
+	//	x=1; x=2 typeset x;     declare -p x   bash  declare -- x="1"
+	//	i=1; i=2 typeset -i i;  declare -p i   bash  declare -- i="1"
+	//	t=1; t=2 typeset +x t;  declare -p t   bash  declare -- t="1"
+	//
+	// A bare declaration, some other attribute letter, and a plus form taking
+	// the attribute *off* all leave the shell's own value standing. The
+	// letters may be written together and either word may carry them:
+	// `n=2 typeset -ir n` reads back `declare -irx n="2"`, so it is the
+	// presence of one of the two attributes and not the spelling of the
+	// command.
+	//
+	// The entry is kept where the prefix put it, which is the scope the
+	// declaration is running in rather than the shell's globals: inside a
+	// function `f(){ a=3 readonly a; }` called as `a=7 f` leaves the outer
+	// `a` untouched, because the function's own prefix is taken back around
+	// it by the axes above.
+	//
+	// `No` in the other five columns, and in three of them the question is
+	// invisible rather than answered the other way: ksh93 persists a prefix
+	// on a special builtin and on `typeset` alike, and dash and BusyBox ash
+	// have no declaration word but the two special builtins, so every row
+	// above already reads the prefix's value there for a reason this axis is
+	// not (#3437).
+	DeclarationPromotesThePrefixEntry Answer
+
 	// PrefixToARegularBuiltinIsRefused applies the readonly refusal to an
 	// assignment written in front of a *regular builtin* — `readonly x=1;
 	// x=2 true`.
@@ -20548,6 +20613,76 @@ func (p PrefixRefusalFatalityPolicy) String() string {
 		return "fatal on a special builtin or a function"
 	case PrefixRefusalFatalOnACommandThisShellRuns:
 		return "fatal on a command this shell runs"
+	}
+	return "unspecified"
+}
+
+// PrefixExportAtABuiltinPolicy is what `v=9 cmd` does to `v`'s export
+// attribute while `cmd` is a builtin — see [Semantics.PrefixExportAtABuiltin].
+//
+// Three answers because the attribute moves in both directions and one column
+// moves it neither way, which no pair of them can stand in for. Measured
+// 2026-09-16 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin
+// closed, over two readings — a child the builtin starts, and the attribute
+// read straight back:
+//
+//	v=1;          v=9 eval 'env | grep "^v=" || echo none'
+//	export z=1;   z=2 typeset -p z
+//	c=1;          c=2 typeset -p c
+//
+//	              the child   already exported   not exported
+//	bash 5.3        v=9       declare -x z="2"   declare -x c="2"
+//	bash 3.2        v=9       declare -x z="2"   declare -x c="2"
+//	zsh 5.9.2       none      export z=2         typeset c=2
+//	ksh93u+         none      z=2                c=2
+//	dash            none      no such builtin    no such builtin
+//	BusyBox ash     none      no such builtin    no such builtin
+//
+// The middle column is the one that makes this an enum: read only the third,
+// and zsh and ksh93 agree that a plain prefix is not exported; read only the
+// second, and ksh93 is alone. Both are true at once and only a third answer
+// says so.
+type PrefixExportAtABuiltinPolicy int
+
+const (
+	// PrefixExportAtABuiltinUnspecified is no answer, and it is refused by
+	// name rather than guessed at: the three answers leave a name exported,
+	// unexported, and however it already was, and the rows above show no two
+	// of them standing in for each other.
+	PrefixExportAtABuiltinUnspecified PrefixExportAtABuiltinPolicy = iota
+	// PrefixExportAtABuiltinOn gives the name the attribute for the length of
+	// the builtin: bash, in both builds measured, where `v=9 eval env` hands
+	// the child `v=9` and `c=2 declare -p c` reads `declare -x c="2"` on a
+	// name nobody exported.
+	//
+	// This is the `x` in the `declare -rx b="8"` that
+	// [Semantics.DeclarationPromotesThePrefixEntry] leaves behind: the entry a
+	// declaration keeps is the one the prefix was holding, attribute and all.
+	PrefixExportAtABuiltinOn
+	// PrefixExportAtABuiltinUnchanged leaves the attribute exactly where it
+	// was: zsh, dash and BusyBox ash. A name that was exported before the
+	// command still is — zsh's child sees `z=2` — and one that was not stays
+	// unexported.
+	PrefixExportAtABuiltinUnchanged
+	// PrefixExportAtABuiltinOff takes the attribute *off* for the length of
+	// the builtin: ksh93u+, where `export z=1; z=2 typeset -p z` reads a bare
+	// `z=2` and the child of `z=2 eval env` is told nothing at all.
+	//
+	// The same direction ksh93 moves a prefix to a function in — see
+	// [Semantics.PrefixToAFunctionIsExported], where it is also the lone
+	// column — and for the same reading: a prefix that is an ordinary
+	// assignment to this shell has no reason to be in anybody's environment.
+	PrefixExportAtABuiltinOff
+)
+
+func (p PrefixExportAtABuiltinPolicy) String() string {
+	switch p {
+	case PrefixExportAtABuiltinOn:
+		return "exported for the builtin"
+	case PrefixExportAtABuiltinUnchanged:
+		return "the attribute left alone"
+	case PrefixExportAtABuiltinOff:
+		return "unexported for the builtin"
 	}
 	return "unspecified"
 }

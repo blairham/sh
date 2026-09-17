@@ -89,6 +89,16 @@ func permissive() Semantics {
 	// TestBareLocalLists — and the suite that is *about* the axis runs both
 	// sides itself (#2999).
 	s.ValuelessDeclarationRecordsTheName = Yes
+	// What an assignment prefix does to the export attribute of the name it
+	// stands in front of at a *builtin*: the leave-alone reading, which is
+	// four of the six columns and is the one that changes nothing about a
+	// suite asking something else. The suite that is about the axis sets it
+	// itself — see interp/prefixbuiltinexport_test.go (#3437).
+	s.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
+	// And whether a declaration keeps the value its own prefix set. No,
+	// which is five of the six and is the answer every suite here that
+	// merely writes `x=1 readonly y` already expects.
+	s.DeclarationPromotesThePrefixEntry = No
 	s.BuiltinSyntaxErrorFatal = No
 	s.DotMissingFileFatal = No
 	s.DotWithNoOperandIsAnError = Yes

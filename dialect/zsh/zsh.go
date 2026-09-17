@@ -1487,6 +1487,17 @@ func Semantics() interp.Semantics {
 	// the off-panel reading that keeps the two questions apart (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// A prefix to a *builtin* is the other question and this shell answers it
+	// the other way: the attribute is left exactly where it was. `export z=1;
+	// z=2 typeset -p z` lists `export z=2` and `c=1; c=2 typeset -p c` lists a
+	// plain `typeset c=2`, so nothing is gained and nothing taken off.
+	// Measured 2026-09-16 in 5.9.2 (#3437).
+	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
+	// And a declaration keeps nothing: `b=7; b=8 readonly b` reads `7` back
+	// and unfrozen, `d=8 export d` reads `7`, `y=2 typeset -r y` reads `1`.
+	// The temporary the prefix made is what the attribute went on, and it
+	// leaves with the command (#3437).
+	s.DeclarationPromotesThePrefixEntry = interp.No
 	// An assignment prefix to a frozen name is answered by the kind of
 	// command too, and on a different line from ksh93's: everything this
 	// shell runs itself ends the script, and an external one does not.

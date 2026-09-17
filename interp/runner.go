@@ -1327,6 +1327,34 @@ type Runner struct {
 	// pretend to be one.
 	prefixTraceAssigns []*syntax.Assign
 	prefixTraceValues  []string
+	// prefixHeldNames are the names the running builtin's own assignment
+	// prefix is holding, and prefixKeptNames those of them a declaration
+	// inside it has taken for the shell rather than for the command — see
+	// Runner.keepThePrefixEntry and Semantics.DeclarationPromotesThePrefixEntry.
+	//
+	// Slices and not maps, for the reason the two above are: a prefix is one,
+	// two or three assignments, so the scan is shorter than hashing, and a
+	// map here would be a *table* on the Runner that every clone has to own
+	// or be excused from sharing. Both are per-command scratch, saved and put
+	// back around the builtin because a builtin can run another one.
+	prefixHeldNames []string
+	prefixKeptNames []string
+	// prefixShadowed are the names a declaration inside the running builtin
+	// has taken a *fresh* scope for while a prefix was holding them, so the
+	// entry has moved into the cell the declaration made and the outer name
+	// is no longer this command's to keep. See Runner.prefixEntryShadowed.
+	prefixShadowed []string
+	// prefixHeldUndo is what those names held before the running builtin's
+	// prefix was applied, so a declaration that takes one into a scope of its
+	// own can hand the take-back over to that scope. See
+	// Runner.scopeTakesOverThePrefixEntry.
+	prefixHeldUndo []savedVar
+	// functionPrefixNames are the names the running function call's own
+	// assignment prefix is holding — a second live prefix, one frame out from
+	// the one above, and the one `f(){ local c; }` called as `c=2 f` meets.
+	// Saved and put back around each call, so an inner call written without a
+	// prefix of its own is holding nothing.
+	functionPrefixNames []string
 	// expandingWord is the word being expanded and expandingSpan which of
 	// its spans, so a diagnostic about an expansion can name the text around
 	// it: two dialects blame the word rather than the `${…}`, and by the
@@ -5245,6 +5273,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// *after* the call, and whether a command the function starts is
 		// told about it, are the two axes taken back below.
 		var undo []savedVar
+		var callHeld []string
 		for _, a := range c.Assigns {
 			if a.Operand {
 				continue
@@ -5267,6 +5296,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// which is the event the operator names. See
 			// interp/prefixdiscipline.go.
 			r.prefixStore(a, true)
+			callHeld = append(callHeld, a.Name)
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
 			// alone: where the prefix is the command's *environment* the name
@@ -5290,6 +5320,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				r.exported[a.Name] = on
 			}
 		}
+		// The names this call's prefix is holding, for a valueless
+		// declaration inside the body that would otherwise hide them — see
+		// Runner.prefixEntryShadowed. Put back rather than cleared, because
+		// a function calls functions: an inner call written without a prefix
+		// of its own is holding nothing, and the outer call's names come back
+		// when it returns.
+		outerCallHeld := r.functionPrefixNames
+		r.functionPrefixNames = callHeld
+		defer func() { r.functionPrefixNames = outerCallHeld }()
 		// The line the *call* was written on, because the take-back below
 		// runs once the body has moved the record to wherever its last
 		// command was. A refusal of the axis there is about this command and
@@ -5336,6 +5375,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			defer r.holdCommandHashAcrossAPrefixedPath()()
 		}
 		var undo []savedVar
+		var held []string
 		for _, a := range c.Assigns {
 			if a.Operand {
 				// An argument to the builtin, not a prefix to it.
@@ -5367,6 +5407,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// a prefix that reached here through `command` before an
 			// external is the child's store. See interp/prefixdiscipline.go.
 			r.prefixStore(a, kind.kind != prefixBeforeRegularBuiltin)
+			held = append(held, a.Name)
 			if kind.throughCommand {
 				// `command` is a precommand word rather than a command, so
 				// the prefix in front of it belongs to whatever it goes on
@@ -5391,9 +5432,32 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 					r.exported = map[string]bool{}
 				}
 				r.exported[a.Name] = true
+			} else if on, moves := r.prefixExportAtABuiltin(); moves {
+				// Every other builtin, where the panel does split and the
+				// attribute moves in both directions: bash hands the builtin
+				// an environment and exports the name, ksh93 reads the prefix
+				// as an ordinary assignment and takes the attribute off a
+				// name that had it, and the rest leave it exactly as it was.
+				// See Semantics.PrefixExportAtABuiltin.
+				if r.exported == nil {
+					r.exported = map[string]bool{}
+				}
+				r.exported[a.Name] = on
 			}
 		}
-		defer r.restoreVars(undo)
+		// The names this command's prefix is holding, for the declaration
+		// that may keep one of them — and the outer pair put back first,
+		// because a builtin can run another one. See Runner.prefixHeldNames.
+		outerHeld, outerKept, outerShadowed := r.prefixHeldNames, r.prefixKeptNames, r.prefixShadowed
+		outerUndo := r.prefixHeldUndo
+		r.prefixHeldNames, r.prefixKeptNames, r.prefixShadowed = held, nil, nil
+		r.prefixHeldUndo = undo
+		defer func() {
+			kept, shadowed := r.prefixKeptNames, r.prefixShadowed
+			r.prefixHeldNames, r.prefixKeptNames, r.prefixShadowed = outerHeld, outerKept, outerShadowed
+			r.prefixHeldUndo = outerUndo
+			r.restoreVarsExcept(undo, kept, shadowed)
+		}()
 		// The builtin is on the record for the duration, so a dialect that
 		// names it in a diagnostic's location can. Saved and put back rather
 		// than cleared: a builtin can run another one.
@@ -6794,6 +6858,28 @@ type savedVar struct {
 	// different things to the shell that inherited it. See Runner.isExported.
 	exported     bool
 	exportSpoken bool
+	// frozen is whether the name was readonly at the moment the prefix was
+	// applied, so a declaration the command ran over it does not leave the
+	// attribute behind. `b=7; b=8 readonly b` gives the name back to the
+	// shell at `7` and *writable* in zsh 5.9.2, and `y=2 typeset -r y` the
+	// same — the attribute went on the temporary the prefix made and leaves
+	// with it. Measured 2026-09-16 (#3437).
+	//
+	// A plain flag and not the export attribute's tri-state: readonly is
+	// recorded in one map with no environment behind it, so absent and
+	// `false` are the same thing.
+	frozen bool
+	// attrs are the declaration attributes the name carried then — the
+	// integer, case, float and width letters — for the same reason: a
+	// declaration the command ran leaves none of them behind. `i=1; i=2
+	// typeset -i i` lists `declare -- i="1"` in bash 5.3.20 and `typeset -g
+	// i=1` in zsh 5.9.2, with no letter on either. Measured 2026-09-16
+	// (#3437).
+	//
+	// The whole struct rather than a letter at a time, because it is the same
+	// capture a local's shadow takes and the two must not come to disagree
+	// about what an attribute is. See Runner.captureAttributes.
+	attrs nameAttributes
 	// assigned is the message a *produced* parameter's producer was last
 	// sent, and a tri-state for the reason the export attribute is: a name
 	// nobody has assigned and one assigned the empty string are different
@@ -6866,6 +6952,7 @@ func (r *Runner) saveVarAlone(name string) savedVar {
 	assigned, assignedSpoken := r.assigned[name]
 	return savedVar{
 		name: name, value: old, present: present, removed: r.removed[name],
+		frozen: r.readonly[name], attrs: r.captureAttributes(name),
 		array: a.clone(), inArray: inArray,
 		table: m.clone(), inTable: inTable,
 		exported: exported, exportSpoken: exportSpoken,
@@ -6965,6 +7052,15 @@ func (r *Runner) restoreVar(u savedVar) {
 	} else {
 		delete(r.exported, u.name)
 	}
+	if u.frozen {
+		if r.readonly == nil {
+			r.readonly = map[string]bool{}
+		}
+		r.readonly[u.name] = true
+	} else {
+		delete(r.readonly, u.name)
+	}
+	r.restoreAttributes(u.name, u.attrs)
 	if u.assignedSpoken {
 		if r.assigned == nil {
 			r.assigned = map[string]string{}

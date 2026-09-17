@@ -85,6 +85,15 @@ func Semantics() interp.Semantics {
 	// this shell rather than compliance with anything (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// Not at a builtin, though: `v=1; v=9 eval 'env | grep "^v="'` shows the
+	// child nothing, and the attribute this shell already had is left where it
+	// was. Measured 2026-09-16 (#3437).
+	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
+	// This shell has no declaration word but `readonly` and `export`, both
+	// special builtins whose prefix persists here by the axis above — so the
+	// value a promoting shell keeps is one this shell keeps for another
+	// reason, and there is nothing left for this axis to move (#3437).
+	s.DeclarationPromotesThePrefixEntry = interp.No
 	// An unquoted list is its elements taken one at a time, never their
 	// join — the reading POSIX describes, and the one an empty element
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three

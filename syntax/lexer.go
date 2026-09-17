@@ -36,6 +36,16 @@ type Lexer struct {
 	// expansion, a here-document. The first one wins: a quote inside a
 	// substitution ends the input once, and it is the quote that is waiting.
 	openWord string
+	// innerOpen is what a program between parentheses was itself still
+	// inside when the input ran out there — the here-document or quote a
+	// `$(` holds — which openWord cannot say, because the read of that
+	// program is a lexer of its own and its running out never reaches this
+	// one. Empty where nothing was open inside. See Lexer.OpenInnermost.
+	innerOpen string
+	// lastInner is what the most recent failed read of a program between
+	// parentheses was inside when it ran out, waiting for scanParens to run
+	// out of the same input.
+	lastInner string
 
 	// wordStart is where the word being read began, kept for the diagnostic
 	// that quotes it back.
@@ -443,6 +453,22 @@ func (l *Lexer) Incomplete() bool { return l.incomplete }
 // recursion — a substitution runs a parser of its own — so the innermost is
 // the one this level knows about, and the outer ones are the callers'.
 func (l *Lexer) Open() string { return l.openWord }
+
+// OpenInnermost is Open for a reader that needs the **innermost** thing still
+// open rather than the outermost: the here-document inside a `$(`, where Open
+// says `$(`.
+//
+// Measured 2026-09-16 on bash 5.3.20 from a script with history expansion on:
+// `echo $(cat <<EOF` / `echo !!` / `EOF` / `)` writes `echo !!` — the body
+// line is a here-document's and is not expanded, inside a substitution
+// exactly as outside one — where reading only the outer construct expanded
+// it. See driver's history gate, the one caller.
+func (l *Lexer) OpenInnermost() string {
+	if l.innerOpen != "" {
+		return l.innerOpen
+	}
+	return l.openWord
+}
 
 // ranOut records that the input ended inside something, and what.
 //
@@ -3253,6 +3279,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// and the refusal landed 214 lines from the cause (#1397). Reading
 		// them here is the fold: one scanner, one comment rule, one answer
 		// to where a body ends, for all three kinds that hold a program.
+		l.lastInner = ""
 		if end, remarks, ok := l.parseToClose(start); ok {
 			// What that read had to say comes back with it. A parse inside a
 			// parse otherwise says nothing — the reason takeRemarks exists
@@ -3280,8 +3307,13 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// gets the common shapes right and reports the rest as unterminated,
 		// which is what an unfinished substitution is.
 	}
+	inner := l.lastInner
+	l.lastInner = ""
 	for depth > 0 {
 		if l.eof() {
+			if !l.incomplete && inner != "" && inner != openingOf(kind) {
+				l.innerOpen = inner
+			}
 			l.ranOut(openingOf(kind))
 			l.failedToClose(open, kind)
 			break
@@ -3556,6 +3588,12 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 	sub := newParserOn(lex, l.dialect)
 	sub.parseList()
 	if sub.err != nil || !sub.at(TokRightParen) {
+		// Kept for the one caller that goes on to run out of input itself,
+		// which is where it becomes true of this lexer too. See innerOpen.
+		l.lastInner = ""
+		if sub.lex.incomplete {
+			l.lastInner = sub.lex.OpenInnermost()
+		}
 		return 0, nil, false
 	}
 	return from + int(sub.tok.Pos.Offset), sub.lex.remarks, true

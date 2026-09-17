@@ -103,6 +103,10 @@ type histGate struct {
 	// heredoc records that one of those separators was a here-document's,
 	// which changes how the whole entry is joined. See join.
 	heredoc bool
+	// endsInBody records that the newest collected line was read inside a
+	// here-document — its body or its delimiter — which is what puts a
+	// newline at the end of the entry. See join.
+	endsInBody bool
 	// spaceNext makes the next separator a space. One thing sets it: a `:p`
 	// line inside a compound command, which is in the entry and was never
 	// handed to the parser — measured, bash writes `if true; then echo echo
@@ -156,6 +160,7 @@ func (g *histGate) next() (string, bool) {
 			// It still belongs to the command, and the list holds it.
 			g.at++
 			g.keep(body)
+			g.endsInBody = true
 			return line, true
 		}
 		if !g.r.HistoryRecording() {
@@ -173,7 +178,7 @@ func (g *histGate) next() (string, bool) {
 			g.keep(body)
 			return line, true
 		}
-		res, err := g.r.ExpandHistoryIn(body, quoteOf(g.open), g.r.HistoryEntries(), 1)
+		res, err := g.r.ExpandHistoryIn(body, quoteOf(g.open), g.r.HistoryEntries(), g.r.HistoryFirst())
 		if err != nil {
 			// A reference the list does not hold. bash complains, does not
 			// run the line, leaves the status where the command before it put
@@ -255,6 +260,7 @@ func (g *histGate) keep(line string) {
 		g.seps = append(g.seps, g.separator())
 	}
 	g.cur = append(g.cur, line)
+	g.endsInBody = false
 }
 
 // separator is what goes between the line already collected and the one
@@ -348,7 +354,7 @@ func (g *histGate) record() {
 		return
 	}
 	entry := g.join()
-	g.cur, g.seps, g.heredoc, g.spaceNext = nil, nil, false, false
+	g.cur, g.seps, g.heredoc, g.spaceNext, g.endsInBody = nil, nil, false, false, false
 	if !g.r.HistoryRecording() {
 		return
 	}
@@ -369,7 +375,11 @@ func (g *histGate) join() string {
 		}
 		b.WriteString(line)
 	}
-	if g.heredoc {
+	if g.heredoc && g.endsInBody {
+		// Only where the command *ends* on the document's last line.
+		// Measured: `echo $(cat <<EOF` / `x` / `EOF` / `)` comes back as the
+		// four lines with no blank one after them, because the `)` that
+		// closed the command was read after the document had ended.
 		b.WriteString("\n")
 	}
 	return b.String()

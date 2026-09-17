@@ -51,10 +51,32 @@ type Chars struct {
 	Event   rune
 	Quick   rune
 	Comment rune
+
+	// DoubleQuotesProtect makes a double-quoted string as safe from this
+	// pass as a single-quoted one. Not a character, but carried beside them
+	// because it is the same kind of fact: how the text being scanned is
+	// read. See Semantics.HistoryExpansionSparesDoubleQuotesInPosixMode for
+	// the shell that sets it and when.
+	DoubleQuotesProtect bool
+
+	// Words is how an event is cut into words. See Words.
+	Words Words
+
+	// QuoteInPlace applies a `:q` or `:x` where it is written in a chain of
+	// modifiers, rather than once the chain has run. Measured 2026-09-16
+	// over the word `two.three`: `:q:r` is `'two'` in bash 5.3.20 and
+	// ksh93u+, which quote last, and `'two` in zsh 5.9.2, which quotes in
+	// place and so takes the root of the quoted word.
+	QuoteInPlace bool
+
+	// CommentStops ends expansion for the rest of the line at a Comment
+	// character that begins a word outside quotes. See
+	// Semantics.HistoryCommentStopsExpansion.
+	CommentStops bool
 }
 
 // Default is what a shell starts with: `!^#`.
-var Default = Chars{Event: '!', Quick: '^', Comment: '#'}
+var Default = Chars{Event: '!', Quick: '^', Comment: '#', Words: WordsShell}
 
 // List is the history the designators index, oldest entry first.
 //
@@ -65,6 +87,22 @@ var Default = Chars{Event: '!', Quick: '^', Comment: '#'}
 type List struct {
 	Lines []string
 	First int
+
+	// Memory is what earlier expansions left for later ones, and nil gives
+	// each call a fresh one. See Memory.
+	Memory *Memory
+}
+
+// Memory is the last substitution and the last `?string?` search, which
+// outlive the line that wrote them.
+//
+// Measured 2026-09-16 on bash 5.3.20 from a script, and on zsh 5.9.2 and
+// ksh93u+ at a prompt: after `!!:s/o/0/` on one line, `!!:&` on the **next**
+// repeats it and `!!:s//X/` replaces the `o` it named — in all three. So the
+// state is the shell's, kept by whoever calls Expand for it, rather than one
+// line's.
+type Memory struct {
+	state
 }
 
 // number is the history number of the last entry, or First-1 for an empty
@@ -92,6 +130,36 @@ func (e *NotFound) Error() string { return e.Ref + ": event not found" }
 type BadModifier struct{ Mod string }
 
 func (e *BadModifier) Error() string { return e.Mod + ": unrecognized history modifier" }
+
+// BadWordSpecifier is a word designator naming a word the event does not have,
+// or a range running backwards. Ref is the designator as written, from its
+// colon where it has one — bash and ksh93 both say `:2-9: bad word specifier`
+// and `-9: bad word specifier` — and zsh names nothing.
+type BadWordSpecifier struct{ Ref string }
+
+func (e *BadWordSpecifier) Error() string { return e.Ref + ": bad word specifier" }
+
+// NoPreviousSubstitution is a `:&`, or a substitution with an empty left side,
+// in a shell that has not substituted anything yet. Ref is the modifier as
+// written with the colon and any `g` in front of it: measured 2026-09-16,
+// bash says `:g&: no previous substitution` and `:s//X/: no previous
+// substitution`, and `:s^^X^` for a quick substitution; ksh93 says the same
+// of `:g&`; zsh says `no previous substitution` and names nothing.
+type NoPreviousSubstitution struct{ Ref string }
+
+func (e *NoPreviousSubstitution) Error() string { return e.Ref + ": no previous substitution" }
+
+// modifierRef is a substitution modifier as written, from the colon before
+// any `g` or `a` in front of it to end.
+func modifierRef(src []rune, start, end int) string {
+	for start > 0 && (src[start-1] == 'g' || src[start-1] == 'a') {
+		start--
+	}
+	if start > 0 && src[start-1] == ':' {
+		start--
+	}
+	return string(src[start:end])
+}
 
 // SubstFailed is an `s/old/new/` or `^old^new^` whose left side is not in the
 // event it was applied to.
@@ -124,6 +192,18 @@ type state struct {
 	matched string
 	old     string
 	new     string
+}
+
+// previousOld is what an empty left side stands for: the last substitution's
+// left side, or where nothing has been substituted, the last `?string?`
+// searched for. Measured 2026-09-16 on bash 5.3.20 from a script: after
+// `echo !?two?%`, `!!:s//X/` and `^^X^` each replace `two`, and with neither
+// before them both are `no previous substitution`.
+func (st *state) previousOld() string {
+	if st.old != "" {
+		return st.old
+	}
+	return st.matched
 }
 
 // Quote is what the text handed to ExpandIn begins inside.
@@ -171,9 +251,12 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 	if c.Event == 0 {
 		return Result{Line: line}, nil
 	}
-	var st state
+	st := &state{}
+	if hist.Memory != nil {
+		st = &hist.Memory.state
+	}
 	if in == Unquoted && c.Quick != 0 && strings.HasPrefix(line, string(c.Quick)) {
-		return quick(line, hist, c, &st)
+		return quick(line, hist, c, st)
 	}
 	src := []rune(line)
 	var out strings.Builder
@@ -205,13 +288,18 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 			out.WriteRune(r)
 			i++
 			continue
-		case r == c.Event && !single:
+		case c.CommentStops && c.Comment != 0 && r == c.Comment && !single && !double && (i == 0 || isBlank(byte(src[i-1])) || isOperatorByte(byte(src[i-1]))):
+			// The rest of the line is a comment and is left as written.
+			out.WriteString(string(src[i:]))
+			i = len(src)
+			continue
+		case r == c.Event && !single && (!double || !c.DoubleQuotesProtect):
 			if literal(src, i, c, double) {
 				out.WriteRune(r)
 				i++
 				continue
 			}
-			text, next, print, err := one(src, i, out.String(), hist, c, &st)
+			text, next, print, err := one(src, i, out.String(), hist, c, st)
 			if err != nil {
 				return Result{}, err
 			}
@@ -309,7 +397,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	case j < len(src) && src[j] == '#':
 		// The line up to here, which is the one event that is not in the
 		// list at all.
-		words, raw = fields(sofar), sofar
+		words, raw = fields(sofar, c.Words), sofar
 		haveWords = true
 		j++
 	case j < len(src) && (src[j] == c.Event):
@@ -317,7 +405,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(j + 1)}
 		}
-		words, raw = fields(entry), entry
+		words, raw = fields(entry, c.Words), entry
 		haveWords = true
 		j++
 	case j < len(src) && isWordDesignator(src[j], c):
@@ -327,7 +415,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(j + 1)}
 		}
-		words, raw = fields(entry), entry
+		words, raw = fields(entry, c.Words), entry
 		haveWords = true
 	case j < len(src) && src[j] == '?':
 		k := j + 1
@@ -343,7 +431,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			return "", 0, false, &NotFound{Ref: ref(k)}
 		}
 		st.matched = want
-		words, raw = fields(entry), entry
+		words, raw = fields(entry, c.Words), entry
 		haveWords = true
 		j = k
 	default:
@@ -367,13 +455,21 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			if !ok {
 				return "", 0, false, &NotFound{Ref: ref(digits)}
 			}
-			words, raw = fields(entry), entry
+			words, raw = fields(entry, c.Words), entry
 			haveWords = true
 			j = digits
 			break
 		}
 		k = j
-		for k < len(src) && !strings.ContainsRune(eventEnd, src[k]) && src[k] != c.Event {
+		if k < len(src) && src[k] == '-' {
+			// A leading `-` that no number followed is still the start of
+			// the string; only a later one ends it.
+			k++
+		}
+		for k < len(src) && !strings.ContainsRune(eventEnd, src[k]) && src[k] != '-' && src[k] != c.Event {
+			// A `-` ends the string because it begins a word range with
+			// no colon: measured 2026-09-16, `!ech-2` after `echo a b c d`
+			// is `echo a b` in bash 5.3.20, zsh 5.9.2 and ksh93u+ alike.
 			k++
 		}
 		if k == j {
@@ -385,7 +481,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 		if !ok {
 			return "", 0, false, &NotFound{Ref: ref(k)}
 		}
-		words, raw = fields(entry), entry
+		words, raw = fields(entry, c.Words), entry
 		haveWords = true
 		j = k
 	}
@@ -401,7 +497,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	if ok {
 		text = strings.Join(chosen, " ")
 	}
-	text, j, print, err := modifiers(src, j, text, ref(j), st)
+	text, j, print, err := modifiers(src, j, text, ref(j), st, c)
 	if err != nil {
 		return "", 0, false, err
 	}
@@ -441,16 +537,253 @@ func search(hist List, want string, substring bool) (string, bool) {
 	return "", false
 }
 
-// fields splits an entry into the words a designator indexes. Whitespace, the
-// way the history library splits it — this is not the shell's own word
-// splitting, and it runs over text that has not been expanded at all.
-func fields(entry string) []string { return strings.Fields(entry) }
+// Words is how an event is cut into the words a designator indexes.
+//
+// Not the shell's own word splitting — it runs over text nothing has expanded
+// — and not one answer either. Measured 2026-09-16 by recalling single words
+// of one command: bash 5.3.20 from a script with `history -p`, zsh 5.9.2 and
+// ksh93u+ at a prompt through a pseudo-terminal with `:q` on the word.
+//
+//	event                  bash            zsh             ksh93
+//	echo "a b"c d      :1  "a b"c          "a b"c          "a b"c
+//	echo a\ b c        :1  a\ b            a\ b            a\
+//	echo $(echo x y) z :1  $(echo x y)     $(echo x y)     $(echo
+//	echo ${v:-a b} z   :1  ${v:-a          ${v:-a b}       ${v:-a
+//	echo x;echo b      :2  ;               ;               b (x;echo is :1)
+//	echo a 2>/dev/null :2  2>              2>              2>/dev/null
+//
+// So a quoted string is one word everywhere, and the rest is three readings.
+type Words uint8
+
+const (
+	// WordsQuotes cuts at blanks outside a single- or double-quoted string,
+	// and nowhere else: ksh93's reading, and the zero value because it is
+	// the part all three agree on.
+	WordsQuotes Words = iota
+	// WordsShell is bash's: a backslash, a command or arithmetic
+	// substitution, a backquoted one and a process substitution each hold
+	// their blanks, and an operator is a word of its own — `;`, `|`, `&&`,
+	// `>`, `>>`, `&>`, `>|`, `2>&1`, with a numeral standing alone in front
+	// of a redirection joining it (`12>`), measured. A `(` or `)` standing
+	// alone is a word too, which is what a `case` pattern's closer is.
+	WordsShell
+	// WordsShellBraces is zsh's: WordsShell, and a `${ }` holds its blanks
+	// as well.
+	WordsShellBraces
+)
+
+// fields splits an entry into the words a designator indexes, the way rule
+// reads it.
+func fields(entry string, rule Words) []string {
+	if rule == WordsQuotes {
+		return quoteFields(entry)
+	}
+	return shellFields(entry, rule == WordsShellBraces)
+}
+
+func isBlank(b byte) bool { return b == ' ' || b == '\t' || b == '\n' }
+
+// quoteFields is WordsQuotes.
+func quoteFields(s string) []string {
+	var out []string
+	for i := 0; i < len(s); {
+		for i < len(s) && isBlank(s[i]) {
+			i++
+		}
+		if i >= len(s) {
+			break
+		}
+		start := i
+		for i < len(s) && !isBlank(s[i]) {
+			if s[i] == '\'' || s[i] == '"' {
+				i = closeQuote(s, i)
+			}
+			i++
+		}
+		out = append(out, s[start:min(i, len(s))])
+	}
+	return out
+}
+
+// closeQuote is the index of the quote that closes the one opened at i, or
+// the last index of s where nothing does. A backslash escapes the next
+// character inside double quotes only.
+func closeQuote(s string, i int) int {
+	q := s[i]
+	for j := i + 1; j < len(s); j++ {
+		switch {
+		case q == '"' && s[j] == '\\':
+			j++
+		case s[j] == q:
+			return j
+		}
+	}
+	return len(s) - 1
+}
+
+// closeParen is the index of the `)` that balances the `(` at i, stepping
+// over quotes, or the last index of s where nothing does.
+func closeParen(s string, i int) int {
+	depth := 0
+	for j := i; j < len(s); j++ {
+		switch s[j] {
+		case '\\':
+			j++
+		case '\'', '"', '`':
+			j = closeQuote(s, j)
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return j
+			}
+		}
+	}
+	return len(s) - 1
+}
+
+func isOperatorByte(b byte) bool {
+	return b == ';' || b == '&' || b == '|' || b == '<' || b == '>' || b == '(' || b == ')'
+}
+
+// operatorsByLength are the operators WordsShell reads as one word, longest
+// first so that `>>` is not read as two.
+var operatorsByLength = []string{"<<<", "<<-", "&>>", ";;", "&&", "||", ">>", "<<", "&>", ">|", ">&", "<&", "<>"}
+
+// operatorEnd is the index just past the operator beginning at i. A `>&` or
+// `<&` takes the descriptor after it, and a `<(` or `>(` is not an operator —
+// the caller has already taken those.
+func operatorEnd(s string, i int) int {
+	for _, op := range operatorsByLength {
+		if strings.HasPrefix(s[i:], op) {
+			end := i + len(op)
+			if op == ">&" || op == "<&" {
+				for end < len(s) && (s[end] >= '0' && s[end] <= '9' || s[end] == '-') {
+					end++
+				}
+			}
+			return end
+		}
+	}
+	return i + 1
+}
+
+// shellFields is WordsShell, and WordsShellBraces where braces is set.
+func shellFields(s string, braces bool) []string {
+	var out []string
+	i := 0
+	for i < len(s) {
+		for i < len(s) && isBlank(s[i]) {
+			i++
+		}
+		if i >= len(s) {
+			break
+		}
+		start := i
+		if isOperatorByte(s[i]) && !startsProcessSubstitution(s, i) {
+			i = operatorEnd(s, i)
+			out = append(out, s[start:i])
+			continue
+		}
+		for i < len(s) && !isBlank(s[i]) {
+			c := s[i]
+			if startsProcessSubstitution(s, i) {
+				i = closeParen(s, i+1) + 1
+				continue
+			}
+			if isOperatorByte(c) {
+				if (c == '<' || c == '>') && allDigits(s[start:i]) {
+					// A descriptor number in front of a redirection is
+					// part of it.
+					i = operatorEnd(s, i)
+				}
+				break
+			}
+			switch {
+			case c == '\\':
+				i += 2
+				continue
+			case c == '\'' || c == '"' || c == '`':
+				i = closeQuote(s, i) + 1
+				continue
+			case strings.IndexByte("$+@*?!", c) >= 0 && i+1 < len(s) && s[i+1] == '(':
+				// A command or arithmetic substitution, and an extended
+				// glob's group: measured, `echo /+(one|two)/x y` has
+				// `/+(one|two)/x` as its first word. With extglob on: off,
+				// the line is a syntax error and never an event at all.
+				i = closeParen(s, i+1) + 1
+				continue
+			case braces && c == '$' && i+1 < len(s) && s[i+1] == '{':
+				i = closeBrace(s, i+1) + 1
+				continue
+			}
+			i++
+		}
+		i = min(i, len(s))
+		out = append(out, s[start:i])
+	}
+	return out
+}
+
+// startsProcessSubstitution reports whether s holds `<(` or `>(` at i.
+func startsProcessSubstitution(s string, i int) bool {
+	return i+1 < len(s) && (s[i] == '<' || s[i] == '>') && s[i+1] == '('
+}
+
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// closeBrace is closeParen for a `${`.
+func closeBrace(s string, i int) int {
+	depth := 0
+	for j := i; j < len(s); j++ {
+		switch s[j] {
+		case '\\':
+			j++
+		case '\'', '"', '`':
+			j = closeQuote(s, j)
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return j
+			}
+		}
+	}
+	return len(s) - 1
+}
 
 // designate applies a word designator, reporting whether one was written.
+//
+// Measured 2026-09-16 over `echo a b c d e` on bash 5.3.20 from a script, and
+// on zsh 5.9.2 and ksh93u+ at a prompt through a pseudo-terminal, where the
+// three agree on every rule below:
+//
+//   - `x-$` runs to the last word — `!!:2-$` is `b c d e`;
+//   - a range with no start begins at word zero — `!!:-3` is `echo a b c`,
+//     `!!:-` is `echo a b c d` — and so does one written with no colon at
+//     all, `!!-3` and `!-2-3` alike;
+//   - `*` is not a range start, so `!!:*-` is `a b c d e-` with the `-` left
+//     as text;
+//   - a word the event does not have is an error that stops the line — `:9`,
+//     `:2-9`, `:3-2`, `:9-` and `:9*` are each refused — rather than the
+//     nothing this used to put in its place.
 func designate(src []rune, j int, words []string, c Chars, st *state) ([]string, int, bool, error) {
 	if j >= len(src) {
 		return nil, j, false, nil
 	}
+	from := j
 	colon := false
 	if src[j] == ':' {
 		colon = true
@@ -477,6 +810,10 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 	}
 	// A number, or one of the single-character designators.
 	start, end := -1, -1
+	// ranged says a `-` or `*` after the start makes a range of it, which
+	// every start but `*` and `%` does.
+	ranged := true
+	bad := func(to int) error { return &BadWordSpecifier{Ref: string(src[from:to])} }
 	switch r := src[j]; {
 	case c.Quick != 0 && r == c.Quick:
 		start, end = 1, 1
@@ -489,10 +826,14 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 			return nil, j + 1, true, nil
 		}
 		start, end = 1, last
+		ranged = false
 		j++
 	case r == '%':
-		for i, w := range words {
-			if st.matched != "" && strings.Contains(w, st.matched) {
+		// The word the search matched in, reading from the end of the event:
+		// measured on bash 5.3.20, `!?e?%` against `echo two.three` is
+		// `two.three`, not the `echo` in front of it.
+		for i := len(words) - 1; i >= 0; i-- {
+			if st.matched != "" && strings.Contains(words[i], st.matched) {
 				start, end = i, i
 				break
 			}
@@ -500,6 +841,7 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 		if start < 0 {
 			return nil, j + 1, true, nil
 		}
+		ranged = false
 		j++
 	case r >= '0' && r <= '9':
 		k := j
@@ -509,6 +851,10 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 		n, _ := strconv.Atoi(string(src[j:k]))
 		start, end = n, n
 		j = k
+	case r == '-':
+		// No start written, so the range begins at word zero. The `-` is
+		// read by the range below.
+		start, end = 0, 0
 	default:
 		if colon {
 			// A `:` that named no word is a modifier's colon; hand it back.
@@ -516,31 +862,54 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 		}
 		return nil, j, false, nil
 	}
-	// A range: `x-y`, `x-` (up to the last but one) or `x*` (up to the last).
-	if j < len(src) && src[j] == '-' {
+	// A range: `x-y`, `x-$`, `x-` (up to the last but one) or `x*` (up to
+	// the last).
+	if ranged && j < len(src) && src[j] == '-' {
 		k := j + 1
 		for k < len(src) && src[k] >= '0' && src[k] <= '9' {
 			k++
 		}
-		if k > j+1 {
+		switch {
+		case k > j+1:
 			n, _ := strconv.Atoi(string(src[j+1 : k]))
+			if start > last || n > last || start > n {
+				return nil, k, false, bad(k)
+			}
 			return pick(start, n), k, true, nil
+		case k < len(src) && src[k] == '$':
+			if start > last {
+				return nil, k + 1, false, bad(k + 1)
+			}
+			return pick(start, last), k + 1, true, nil
+		}
+		if start > last {
+			return nil, j + 1, false, bad(j + 1)
 		}
 		if last-1 >= start {
 			return pick(start, last-1), j + 1, true, nil
 		}
 		return nil, j + 1, true, nil
 	}
-	if j < len(src) && src[j] == '*' {
+	if ranged && j < len(src) && src[j] == '*' {
+		if start > last {
+			return nil, j + 1, false, bad(j + 1)
+		}
 		return pick(start, last), j + 1, true, nil
+	}
+	if start > last {
+		return nil, j, false, bad(j)
 	}
 	return pick(start, end), j, true, nil
 }
 
 // modifiers applies the `:h`, `:t`, `:r`, `:e`, `:p`, `:q`, `:x`, `:s` and
 // `:&` chain, and reports whether `:p` was among them.
-func modifiers(src []rune, j int, text, ref string, st *state) (string, int, bool, error) {
+func modifiers(src []rune, j int, text, ref string, st *state, c Chars) (string, int, bool, error) {
 	print := false
+	// quote is the `q` or `x` the chain asked for, applied once the rest of
+	// it has run where the shell quotes last. See Chars.QuoteInPlace. A
+	// second quoting modifier replaces the first.
+	var quote rune
 	for j < len(src) && src[j] == ':' {
 		j++
 		if j >= len(src) {
@@ -570,16 +939,12 @@ func modifiers(src []rune, j int, text, ref string, st *state) (string, int, boo
 		case 'p':
 			print = true
 			j++
-		case 'q':
-			text = "'" + strings.ReplaceAll(text, "'", `'\''`) + "'"
+		case 'q', 'x':
+			quote = src[j]
 			j++
-		case 'x':
-			parts := strings.Fields(text)
-			for i, p := range parts {
-				parts[i] = "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
+			if c.QuoteInPlace {
+				text, quote = quoteText(text, quote), 0
 			}
-			text = strings.Join(parts, " ")
-			j++
 		case 's', '&':
 			var err error
 			text, j, err = substitute(src, j, text, ref, global, st)
@@ -590,7 +955,23 @@ func modifiers(src []rune, j int, text, ref string, st *state) (string, int, boo
 			return "", 0, false, &BadModifier{Mod: string(src[j])}
 		}
 	}
-	return text, j, print, nil
+	return quoteText(text, quote), j, print, nil
+}
+
+// quoteText applies `:q` (the whole text as one quoted word) or `:x` (each
+// blank-separated word quoted), or nothing for any other letter.
+func quoteText(text string, quote rune) string {
+	switch quote {
+	case 'q':
+		return "'" + strings.ReplaceAll(text, "'", `'\''`) + "'"
+	case 'x':
+		parts := strings.Fields(text)
+		for i, p := range parts {
+			parts[i] = "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
+		}
+		return strings.Join(parts, " ")
+	}
+	return text
 }
 
 // substitute applies `s/old/new/` or the `&` that repeats the last one.
@@ -602,7 +983,7 @@ func substitute(src []rune, j int, text, ref string, global bool, st *state) (st
 	if src[j] == '&' {
 		j++
 		if st.old == "" {
-			return "", 0, &SubstFailed{Ref: ":" + string(src[start:j])}
+			return "", 0, &NoPreviousSubstitution{Ref: modifierRef(src, start, j)}
 		}
 		out, err := apply(text, st.old, st.new, global, ":"+string(src[start:j]))
 		return out, j, err
@@ -633,14 +1014,42 @@ func substitute(src []rune, j int, text, ref string, global bool, st *state) (st
 	old, _ := read()
 	repl, _ := read()
 	if old == "" {
-		old = st.old
+		old = st.previousOld()
 	}
 	if old == "" {
-		return "", 0, &SubstFailed{Ref: ref}
+		return "", 0, &NoPreviousSubstitution{Ref: modifierRef(src, start, j)}
 	}
+	repl = replacement(repl, old)
 	st.old, st.new = old, repl
 	out, err := apply(text, old, repl, global, ":"+string(src[start:j]))
 	return out, j, err
+}
+
+// replacement reads the right side of a substitution: an `&` in it is the text
+// being replaced, and a backslash before one makes it an ordinary `&`.
+//
+// Unanimous, measured 2026-09-16 on bash 5.3.20 from a script and on zsh
+// 5.9.2 and ksh93u+ at a prompt: after `echo one two one`, `:s/o/&&/` is
+// `echoo one two one` in all three, and `:s/o/\&/` puts a lone `&` where the
+// `o` was — which, being an `&`, then runs `ech` in the background in both
+// columns whose output could be read. Any other backslash stays as written.
+func replacement(raw, old string) string {
+	if !strings.Contains(raw, "&") {
+		return raw
+	}
+	var b strings.Builder
+	for i := 0; i < len(raw); i++ {
+		switch {
+		case raw[i] == '\\' && i+1 < len(raw) && raw[i+1] == '&':
+			b.WriteByte('&')
+			i++
+		case raw[i] == '&':
+			b.WriteString(old)
+		default:
+			b.WriteByte(raw[i])
+		}
+	}
+	return b.String()
 }
 
 // apply is the substitution itself, which fails rather than doing nothing when
@@ -685,18 +1094,22 @@ func quick(line string, hist List, c Chars, st *state) (Result, error) {
 	repl, i := read(i)
 	written := string(src[:i])
 	if old == "" {
-		return Result{}, &SubstFailed{Ref: ":s" + written, Bare: written}
+		old = st.previousOld()
+	}
+	if old == "" {
+		return Result{}, &NoPreviousSubstitution{Ref: ":s" + written}
 	}
 	if !strings.Contains(entry, old) {
 		return Result{}, &SubstFailed{Ref: ":s" + written, Bare: written}
 	}
+	repl = replacement(repl, old)
 	st.old, st.new = old, repl
 	out := strings.Replace(entry, old, repl, 1)
 	// Anything after the closing character is a modifier chain on the result.
 	if i < len(src) {
 		var err error
 		var print bool
-		out, _, print, err = modifiers(src, i, out, line, st)
+		out, _, print, err = modifiers(src, i, out, line, st, c)
 		if err != nil {
 			return Result{}, err
 		}

@@ -75,6 +75,17 @@ func (r *Runner) HistoryRecording() bool { return r.histRecord }
 // value turns the expander off, which is measured in both shells that have it.
 func (r *Runner) HistoryChars() histexpand.Chars {
 	c := histexpand.Default
+	c.DoubleQuotesProtect = r.posixMode && r.sem().HistoryExpansionSparesDoubleQuotesInPosixMode == Yes
+	c.QuoteInPlace = r.sem().HistoryQuoteModifierInPlace == Yes
+	c.CommentStops = r.sem().HistoryCommentStopsExpansion == Yes
+	switch r.sem().HistoryWords {
+	case HistoryWordsShell:
+		c.Words = histexpand.WordsShell
+	case HistoryWordsShellBraces:
+		c.Words = histexpand.WordsShellBraces
+	default:
+		c.Words = histexpand.WordsQuotes
+	}
 	v, ok := r.GetVar(historyCharsParameter)
 	if !ok {
 		return c
@@ -121,7 +132,7 @@ func (r *Runner) ExpandHistory(line string, lines []string, first int) (histexpa
 // purpose. Measured — `set -o history; echo one two three; history -p "!!"`
 // writes `echo one two three` with the letter never written.
 func (r *Runner) ExpandHistoryAlways(line string, lines []string, first int) (histexpand.Result, error) {
-	return histexpand.Expand(line, histexpand.List{Lines: lines, First: first}, r.HistoryChars())
+	return histexpand.Expand(line, histexpand.List{Lines: lines, First: first, Memory: r.historyMemory()}, r.HistoryChars())
 }
 
 // ExpandHistoryIn is the same for a front end handing over one **physical**
@@ -133,7 +144,16 @@ func (r *Runner) ExpandHistoryIn(line string, in histexpand.Quote, lines []strin
 	if !r.histExpand {
 		return histexpand.Result{Line: line}, nil
 	}
-	return histexpand.ExpandIn(line, in, histexpand.List{Lines: lines, First: first}, r.HistoryChars())
+	return histexpand.ExpandIn(line, in, histexpand.List{Lines: lines, First: first, Memory: r.historyMemory()}, r.HistoryChars())
+}
+
+// historyMemory is the shell's histexpand.Memory, made the first time a line
+// needs one.
+func (r *Runner) historyMemory() *histexpand.Memory {
+	if r.histMemory == nil {
+		r.histMemory = &histexpand.Memory{}
+	}
+	return r.histMemory
 }
 
 // SetHistoryStore hands the Runner the list `history` keeps, so that the
@@ -185,6 +205,19 @@ func (r *Runner) HistoryEntries() []string {
 	return r.histEntries(r)
 }
 
+// SetHistoryNumbering hands the Runner the history number of the list's
+// oldest entry, for a dialect whose list drops entries off the front and
+// keeps numbering from where it was. Nil numbers from one.
+func (r *Runner) SetHistoryNumbering(first func(*Runner) int) { r.histFirst = first }
+
+// HistoryFirst is the history number of the oldest entry HistoryEntries holds.
+func (r *Runner) HistoryFirst() int {
+	if r.histFirst == nil {
+		return 1
+	}
+	return r.histFirst(r)
+}
+
 // RecordHistoryEntry appends one command to the list.
 //
 // The **expanded** text, which is what every reference after it resolves
@@ -221,6 +254,10 @@ func (r *Runner) HistoryExpansionRefusal(err error) string {
 		return Wording(d.HistoryEventNotFound, "%[1]s: event not found", e.Ref, bare)
 	case *histexpand.SubstFailed:
 		return Wording(d.HistorySubstitutionFailed, "%[1]s: substitution failed", e.Ref, e.Bare)
+	case *histexpand.NoPreviousSubstitution:
+		return Wording(d.HistoryNoPreviousSubstitution, "%[1]s: no previous substitution", e.Ref)
+	case *histexpand.BadWordSpecifier:
+		return Wording(d.HistoryBadWordSpecifier, "%[1]s: bad word specifier", e.Ref)
 	case *histexpand.BadModifier:
 		return Wording(d.HistoryBadModifier, "%[1]s: unrecognized history modifier", e.Mod, e.Mod)
 	}
@@ -229,4 +266,47 @@ func (r *Runner) HistoryExpansionRefusal(err error) string {
 	// — but a fourth added later must not print its Go error text at
 	// somebody's prompt without at least being legible.
 	return err.Error()
+}
+
+// SetHistoryFile hands the Runner the two moments a **script's** history
+// list meets a file: start runs the first time the list is turned on, and
+// finish runs as the shell ends with the list still on.
+//
+// Measured 2026-09-16 on bash 5.3.20, from a script file with no terminal
+// anywhere: `HISTFILE=f; set -o history; history` lists f's lines, and the
+// same script leaves f with its own two lines appended. Neither happens in a
+// subshell's ending, a shell killed by a signal, a shell `exec` replaced, or
+// a shell that turned the list off again before it ended — each measured.
+//
+// The file is the dialect's business, as the list is, and a front end with an
+// interactive session keeps its own: repl reads and writes the file around a
+// prompt, and a Runner that is Interactive never runs either of these.
+func (r *Runner) SetHistoryFile(start, finish func(*Runner)) {
+	r.histStart, r.histFinish = start, finish
+}
+
+// setHistoryRecording is `set -o history` and `set +o history`.
+//
+// The start runs **once**, at the first time the state goes from off to on:
+// measured, `set -o history` a second time, or after a `set +o history`,
+// neither reads the file again nor puts back a HISTSIZE the script unset. A
+// first `set -o history` with no HISTFILE to read still counts as the first,
+// so naming the file afterwards and toggling reads nothing.
+func (r *Runner) setHistoryRecording(on bool) {
+	first := on && !r.histRecord && !r.histStarted
+	r.histRecord = on
+	if !first || r.Interactive || r.histStart == nil {
+		return
+	}
+	r.histStarted = true
+	r.histStart(r)
+}
+
+// finishHistoryFile runs the dialect's finish, where the shell that is ending
+// is one the file is written for.
+func (r *Runner) finishHistoryFile() {
+	if r.histFinish == nil || !r.histStarted || !r.histRecord || r.inSubshell || r.Interactive || r.killedBy != "" {
+		return
+	}
+	r.histFinish(r)
 }

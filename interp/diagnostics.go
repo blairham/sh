@@ -2525,6 +2525,20 @@ type Diagnostics struct {
 	// modifier`.
 	HistoryBadModifier string
 
+	// HistoryBadWordSpecifier is a word designator naming a word the event
+	// does not have — `!!:9` after a two-word command — and `%[1]s` is the
+	// designator as written. Measured 2026-09-16: bash from a script and
+	// ksh93 at a prompt both say `:9: bad word specifier`, and zsh at a
+	// prompt says `no such word in event` and names nothing.
+	HistoryBadWordSpecifier string
+
+	// HistoryNoPreviousSubstitution is a `:&`, or a substitution with an
+	// empty left side, before anything has been substituted, and `%[1]s` is
+	// the modifier as written. Measured 2026-09-16: bash from a script and
+	// ksh93 at a prompt say `:g&: no previous substitution`, and zsh at a
+	// prompt says `no previous substitution`.
+	HistoryNoPreviousSubstitution string
+
 	// ImmovableOptionLetters are, per builtin, the option letters this shell
 	// *has* and will not move — the letter half of SetImmovableOptionName,
 	// and a third answer beside "does not have it" and "has not built it".

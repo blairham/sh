@@ -14042,6 +14042,47 @@ type Semantics struct {
 	// happened" and the row would read as agreement.
 	HistoryExpansionInAScript Answer
 
+	// HistoryExpansionSparesDoubleQuotesInPosixMode leaves a `!` inside
+	// double quotes alone while the shell is in POSIX mode, as it leaves one
+	// inside single quotes alone everywhere.
+	//
+	// Measured 2026-09-16 on bash 5.3.20 from a script holding `set -o
+	// history`, `echo a`, `set -H`: `echo "!!"` writes `echo "echo a"` and
+	// runs it, and the same line after `set -o posix` writes the two
+	// characters, as does `echo "!x"` where the reference would otherwise be
+	// `event not found`. An unquoted `!!` on the same line still expands.
+	//
+	// bash's row alone: POSIX mode is the state `set -o posix` names, and the
+	// other shells with an expander either have no such option or, as zsh
+	// invoked as `sh`, turn the expander off along with it. Read rather than
+	// asked, because the expander scans every line a history-keeping shell
+	// reads and an unanswered preset would put a refusal in front of each.
+	HistoryExpansionSparesDoubleQuotesInPosixMode Answer
+
+	// HistoryWords is how a history event is cut into the words `!!:2`,
+	// `!$` and the rest index. Quoted strings are one word in every shell
+	// with the feature; what else holds its blanks, and whether an operator
+	// is a word of its own, is three readings. See HistoryWordReading.
+	HistoryWords HistoryWordReading
+
+	// HistoryQuoteModifierInPlace applies a history reference's `:q` or `:x`
+	// where it stands in the chain of modifiers. Measured 2026-09-16 over
+	// the word `two.three`: `:q:r` is `'two'` in bash 5.3.20 from a script
+	// and in ksh93u+ at a prompt, which quote once the chain has run, and
+	// `'two` — an unclosed quote, and a continuation prompt — in zsh 5.9.2,
+	// which quotes where the letter is written. Read, not asked, for the
+	// reason HistoryWords is.
+	HistoryQuoteModifierInPlace Answer
+
+	// HistoryCommentStopsExpansion leaves the rest of a line alone from a
+	// word that begins with the comment character — the third of histchars,
+	// `#` by default. Measured 2026-09-16: `echo ab c # !nosuch` writes `ab
+	// c` in bash 5.3.20 from a script, where zsh 5.9.2 and ksh93u+ at a
+	// prompt both say the event is not found; `echo ab c#!nosuch`, where the
+	// character does not begin a word, is not found in all three. Read, not
+	// asked, for the reason HistoryWords is.
+	HistoryCommentStopsExpansion Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -17439,6 +17480,15 @@ func PosixSemantics() Semantics {
 		HistoryExpansion:          No,
 		HistoryExpansionAtAPrompt: No,
 		HistoryExpansionInAScript: No,
+		// And so no POSIX mode of the standard's own spares anything from it.
+		HistoryExpansionSparesDoubleQuotesInPosixMode: No,
+		// The part every shell with an expander agrees on: a quoted string
+		// is one word.
+		HistoryWords: HistoryWordsQuoted,
+		// Two of the three shells with an expander quote last.
+		HistoryQuoteModifierInPlace: No,
+		// And one of them stops at a comment.
+		HistoryCommentStopsExpansion: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
 		// dash is the one shell that refuses the letter, and overrides.
@@ -18708,6 +18758,37 @@ func (r *Runner) quoteStyle() PrintfQuoteStyle {
 	}
 	return p
 }
+
+// HistoryWordReading is how a history event is cut into words — see
+// [Semantics.HistoryWords]. Measured 2026-09-16 by recalling one word of each
+// of these events: bash 5.3.20 from a script through `history -p`, zsh 5.9.2
+// and ksh93u+ at a prompt through a pseudo-terminal with `:q` on the word.
+//
+//	event                  bash            zsh             ksh93
+//	echo "a b"c d      :1  "a b"c          "a b"c          "a b"c
+//	echo a\ b c        :1  a\ b            a\ b            a\
+//	echo $(echo x y) z :1  $(echo x y)     $(echo x y)     $(echo
+//	echo ${v:-a b} z   :1  ${v:-a          ${v:-a b}       ${v:-a
+//	echo x;echo b      :2  ;               ;               b
+//	echo a 2>/dev/null :2  2>              2>              2>/dev/null
+type HistoryWordReading int
+
+const (
+	// HistoryWordsUnspecified is no answer. It is read, never asked — the
+	// expander scans every line a history-keeping shell reads — and reads as
+	// HistoryWordsQuoted, the part every column agrees on.
+	HistoryWordsUnspecified HistoryWordReading = iota
+	// HistoryWordsQuoted cuts at blanks outside a quoted string and nowhere
+	// else. ksh93u+.
+	HistoryWordsQuoted
+	// HistoryWordsShell holds a backslash-escaped blank, a command,
+	// arithmetic or process substitution and a backquoted one together, and
+	// makes an operator a word of its own. bash 5.3.20.
+	HistoryWordsShell
+	// HistoryWordsShellBraces is HistoryWordsShell with a `${ }` holding its
+	// blanks too. zsh 5.9.2.
+	HistoryWordsShellBraces
+)
 
 // BracketEscapePolicy is what a backslash inside a bracket expression does —
 // see [Semantics.BracketEscape] for the three measured columns.

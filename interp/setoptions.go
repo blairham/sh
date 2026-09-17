@@ -329,7 +329,7 @@ var extraSetOptions = map[string]setOption{
 	// then does is read by the front end, which is the only part of this
 	// tree holding a history list to index. See Semantics.HistoryExpansion.
 	"history": {
-		apply: func(r *Runner, on bool) { r.histRecord = on },
+		apply: func(r *Runner, on bool) { r.setHistoryRecording(on) },
 		get:   func(r *Runner) bool { return r.histRecord },
 	},
 	"histexpand": {

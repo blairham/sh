@@ -672,10 +672,27 @@ type CoprocClause struct {
 	// Name is what the coprocess was called, or empty for the default. A
 	// name can only be written before a compound command: with a simple one
 	// the first word is the command itself.
-	Name   string
-	Cmd    Command
-	Coproc Pos
-	Stop   Pos
+	//
+	// Set only where the word was written as a bare unquoted name. Anything
+	// else the grammar admits there lands in NameWord instead.
+	Name string
+	// NameWord is the word standing where the name belongs when it was not
+	// written as a bare name — `coproc $v { … }`, `coproc "q" { … }`, and
+	// every word that is no name at all. The shell with this construct
+	// **expands that word and judges the result when the clause runs**,
+	// which is why the tree keeps the word rather than its text: measured
+	// 2026-09-17 on bash 5.3.20, `v=q; coproc $v { … }` puts the near ends
+	// in `q`, and `coproc @ { … }` reports that `@` is not an identifier and
+	// runs nothing.
+	//
+	// Beside Name rather than replacing it, the shape [FuncDecl.NameWord]
+	// already has: the bare-name case is nearly every coprocess anyone
+	// writes, and a word there would make every reader expand before it
+	// could ask what the name was.
+	NameWord *Word
+	Cmd      Command
+	Coproc   Pos
+	Stop     Pos
 }
 
 func (c *CoprocClause) Pos() Pos     { return c.Coproc }

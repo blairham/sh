@@ -773,7 +773,16 @@ func (p *printer) command(c Command) {
 		p.command(x.Body)
 	case *CoprocClause:
 		p.str("coproc ")
-		if x.Name != "" {
+		// The word as written where it was not a bare name: printing what it
+		// expands to would name a different coprocess, and printing the text
+		// of a word the shell refuses would hand back a program refused for
+		// a different reason. Same care as a function name — see
+		// FuncDecl.NameWord above.
+		switch {
+		case x.NameWord != nil:
+			p.word(x.NameWord)
+			p.str(" ")
+		case x.Name != "":
 			p.str(x.Name + " ")
 		}
 		p.command(x.Cmd)

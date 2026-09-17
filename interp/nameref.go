@@ -285,7 +285,7 @@ func (r *Runner) storeThroughNamerefElement(base, sub, value string) {
 // reference with nothing to point at is aimed by its first value — and it is
 // also what `for r in x y` does, which is why the loop re-points the
 // reference in both shells rather than writing through it.
-func (r *Runner) namerefAssignmentTarget(name, value string) (target string, write bool) {
+func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (target string, write bool) {
 	if !r.isNameref(name) {
 		return name, true
 	}
@@ -293,8 +293,59 @@ func (r *Runner) namerefAssignmentTarget(name, value string) (target string, wri
 	if aimed {
 		return target, true
 	}
+	if !r.namerefTargetIsAName(value) {
+		r.refuseNamerefAim(value, form)
+		return "", false
+	}
 	r.setNameref(name, value)
 	return name, false
+}
+
+// refuseNamerefAim reports a value that cannot aim a reference, and is the
+// **assignment's** half of the check the declaration makes in
+// [Runner.declareNameref]: a reference with nothing to point at is aimed by
+// its first value, and a value that is no possible name aims it nowhere.
+//
+// Measured 2026-09-17 on bash 5.3.20, script files under `env -i
+// PATH=/usr/bin:/bin` with a scratch HOME, each over `declare -n q` and then
+// one write:
+//
+//	q=/                  `` `/': not a valid identifier ``, 1, and the
+//	                     *rest of the input line is given up*
+//	read q <<< /         `read: `/': not a valid identifier``, 1, and the
+//	                     rest of the line runs
+//	declare q=/          `declare: `/': not a valid identifier``, 1, rest
+//	                     of the line runs
+//	q=a, q=a[0], q=a[@]  taken, and the reference is aimed there
+//
+// So the sentence is the one a bad *target* earns everywhere else, the
+// builtin that made the write names itself where there was one, and the
+// reference is left unaimed: `declare -p q` is `declare -n q` afterwards and
+// the name never becomes the text. This shell aimed the reference at whatever
+// it was handed, so `${!q}` answered `/` and every later write through it
+// went to a parameter no shell can name.
+//
+// Giving up the rest of the line for the bare form and not for a builtin's is
+// the split [assignForm] already draws for the readonly refusal, and it is
+// the same observation: `declare -n t; t=/ ; echo after` never prints
+// `after`, where the `read` and `declare` spellings both do. See
+// selfNamerefAssignment, whose two lines these are.
+//
+// The wording is written out rather than taken from [Diagnostics] for
+// namerefArrayLiteralTarget's reason: only a dialect that spells references
+// reaches it, and of those only bash reaches it *here* — ksh93 refuses the
+// aim at the declaration and ends the script, so it has no assignment left
+// to make.
+func (r *Runner) refuseNamerefAim(value string, form assignForm) {
+	if r.inBuiltin != "" {
+		r.diagf("%s: `%s': not a valid identifier\n", r.inBuiltin, value)
+	} else {
+		r.diagf("`%s': not a valid identifier\n", value)
+	}
+	r.status, r.assignFailed = 1, true
+	if form == assignedAlone {
+		r.ctl, r.abandonLine = controlAbandon, r.line
+	}
 }
 
 // namerefArrayLiteralTarget answers where an array literal assigned through a
@@ -407,7 +458,14 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 // name, and both complain about a reference that reaches itself; what they do
 // about the second one is [Semantics.NamerefCycleIsRefused], where the
 // measurements are.
-func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen bool) int {
+// adopts says a value already standing under the name may aim the reference —
+// false where *this declaration* created the cell, which is a binding nothing
+// has written to whatever the name meant outside it. Measured 2026-09-17 on
+// bash 5.3.20: `outer=good` and then `f(){ local -n outer; }` or `f(){
+// declare -n outer; }` leave `declare -n outer` unaimed, where `f(){ declare
+// -gn outer; }` — no new cell — aims at `good`, and `f(){ local x=good;
+// local -n x; }` aims at it too.
+func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, adopts bool) int {
 	// The readonly refusal a **frozen reference** makes, in the one place its
 	// order against the other two is measured. bash 5.3.20 puts the bad
 	// target ahead of it and nothing else: `v=1; declare -rn r=v` then
@@ -445,6 +503,40 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen b
 			}
 			if refuseFrozen() {
 				return 1
+			}
+			// **A value the name already holds aims the reference.** The
+			// letter on its own does not always leave a reference with
+			// nothing to point at: measured 2026-09-17 on bash 5.3.20 and
+			// ksh93u+ 2012-08-01, script files under `env -i`, `good=G;
+			// r=good; typeset -n r` lists back as a reference to `good` in
+			// both and `$r` reads `G`. Only a name nothing has set becomes
+			// the unaimed reference below.
+			//
+			// Every value is adopted, not only the ones that read as names:
+			// `a=(p q); t=a[1]; declare -n t` aims at the element and `$t`
+			// is `q`. What is *not* a possible target is refused in the
+			// declaration's own words — `e=""; declare -n e` and `b=/;
+			// typeset -n b` both report the bad target at 1 and leave the
+			// name the plain scalar it was, in bash and in ksh93 alike
+			// (ksh93 ends the script over it, which refuseNameref already
+			// asks).
+			//
+			// The self-reference refusals the valued form makes are
+			// deliberately **not** asked here, and that is measured rather
+			// than an omission: `declare -n s=s` is `nameref variable self
+			// references not allowed` at 1 in bash 5.3.20, while `s=s;
+			// declare -n s` is a silent 0 that lists as `declare -n s="s"`
+			// and warns `circular name reference` at the first read. So the
+			// value route goes through the target's validity and nothing
+			// else.
+			if held, set := r.getVar(name); set && adopts {
+				if !r.namerefTargetIsAName(held) {
+					return r.refuseNameref(builtin, Wording(r.diag().NamerefBadTarget,
+						"%[1]s: invalid variable name for name reference", held))
+				}
+				r.namerefEmptiesTheCell(name)
+				r.setNameref(name, held)
+				return 0
 			}
 			r.namerefEmptiesTheCell(name)
 			r.setNameref(name, "")

@@ -32,9 +32,9 @@ import (
 // a Go value. Closing the write end through `{v}>&-` is what lets the
 // command see its input finish, which is why that close is a real one.
 func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error {
-	name := c.Name
-	if name == "" {
-		name = "COPROC"
+	name, ok := r.coprocName(c)
+	if !ok {
+		return nil
 	}
 	job, err := r.startCoproc(ctx, name, func(sub *Runner) error {
 		err := sub.command(ctx, c.Cmd)
@@ -57,6 +57,50 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	}
 	r.status = 0
 	return nil
+}
+
+// coprocName is what this clause's near ends are published under, and reports
+// whether the clause runs at all.
+//
+// The word standing where the name belongs is **expanded here and judged
+// here**, which is the whole reason the grammar no longer refuses it. Measured
+// 2026-09-17 on bash 5.3.20, script files under `env -i PATH=/usr/bin:/bin`
+// with a scratch HOME:
+//
+//	v=q; coproc $v { … }      the ends land in q, status 0
+//	coproc "q" { … }          the same — quoting is not part of the name
+//	v="a b"; coproc $v { … }  `` `a b': not a valid identifier ``, status 1
+//	touch zz1 zz2
+//	  coproc zz* { … }        `` `zz*': not a valid identifier ``, status 1
+//	coproc @ { … }            `` `@': not a valid identifier ``, status 1
+//
+// So it expands as an assignment's value does — one field, no splitting and
+// no globbing — and a result that is not a name is reported, leaves the body
+// unrun and carries on. The next line runs and sees 1.
+//
+// **An expansion that comes to nothing is the one shape not copied.** For
+// `coproc ${nosuch} { … }` bash names the target `(null)`, which is its C
+// library rendering a pointer it never filled in rather than anything about
+// the language; the empty name is reported as the empty name here.
+//
+// The sentence is written out rather than taken from [Diagnostics], for the
+// reason namerefArrayLiteralTarget's identical one is: only a dialect with
+// [syntax.Dialect.CoprocName] can reach it, and that is bash alone, so a
+// field would be a wording no second shell could ever disagree with.
+func (r *Runner) coprocName(c *syntax.CoprocClause) (string, bool) {
+	if c.NameWord == nil {
+		if c.Name == "" {
+			return "COPROC", true
+		}
+		return c.Name, true
+	}
+	name := r.expandAssignValue(c.NameWord)
+	if isPlainName(name) {
+		return name, true
+	}
+	r.diagf("`%s': not a valid identifier\n", name)
+	r.status = 1
+	return "", false
 }
 
 // coprocStmt runs `cmd |&`, ksh93's spelling of the same construct: a

@@ -7745,7 +7745,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		r.selfNamerefAssignment(name, value, form)
 		return
 	}
-	if target, write := r.namerefAssignmentTarget(name, value); !write {
+	if target, write := r.namerefAssignmentTarget(name, value, form); !write {
 		// The value **aimed** the reference rather than being written
 		// through it, which is what a reference with nothing to point at
 		// does with its first assignment. See interp/nameref.go.

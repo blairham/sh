@@ -2014,13 +2014,23 @@ func (p *Parser) parseCommand() Command {
 // `coproc MY { cat; }` is `MY {` followed by an unexpected `}` there — which
 // is the failure zsh reports, and it falls out of the missing flag rather
 // than being written down twice.
+//
+// **The word standing there is not required to be a name.** Measured
+// 2026-09-17 on bash 5.3.20, from script files under `env -i`: `coproc @
+// { :; }`, `coproc a-b { :; }` and `coproc 1x { :; }` all parse, report that
+// the word is not an identifier when the clause runs, leave the body unrun
+// and carry on at status 1 — where refusing them here ended the script at 2
+// and took every later line of it with them. So the grammar takes the word
+// and [Runner.coprocClause] judges what it expands to. bash 3.2 does refuse
+// these while parsing, and that is not a second answer to this question: it
+// has no `coproc` word at all, and what it refuses is `@ {` as a command.
 func (p *Parser) parseCoproc() Command {
 	c := &CoprocClause{Coproc: p.tok.Pos}
 	p.next()
-	if p.dialect.CoprocName && p.at(TokWord) && isPlainName(p.tokenLiteral()) && !stopWords[p.tokenLiteral()] {
+	if p.dialect.CoprocName && p.at(TokWord) && p.mayNameACoproc() {
 		w := p.word()
 		if p.startsCompoundCommand() {
-			c.Name = w.Literal()
+			c.setName(w)
 			c.Cmd = p.parseCommand()
 		} else {
 			// The word was the command after all, and the rest of the
@@ -2044,6 +2054,31 @@ func (p *Parser) parseCoproc() Command {
 		c.Stop = c.Cmd.End()
 	}
 	return c
+}
+
+// mayNameACoproc reports whether the current word could be the name in
+// `coproc NAME compound` rather than the start of the command itself.
+//
+// It is not a check that the word *is* a name — see parseCoproc — but a check
+// that reading it as one cannot swallow the command. A word that opens a
+// compound command is the command (`coproc { :; }`, `coproc if …`), a stop
+// word ends the enclosing list, and `!` is refused outright where the name
+// belongs: measured the same day, `coproc ! { :; }` is a syntax error at the
+// `!` in bash 5.3.20 while `coproc @ { :; }` parses.
+func (p *Parser) mayNameACoproc() bool {
+	lit := p.tokenLiteral()
+	return lit != "!" && !stopWords[lit] && !p.startsCompoundCommand()
+}
+
+// setName records the word written where a coprocess name belongs, as text
+// where that is all it is and as the word itself otherwise. See
+// [CoprocClause.NameWord].
+func (c *CoprocClause) setName(w *Word) {
+	if lit, ok := unquotedLiteralWord(w); ok && isPlainName(lit) {
+		c.Name = lit
+		return
+	}
+	c.NameWord = w
 }
 
 // startsCompoundCommand reports whether the current token opens a compound

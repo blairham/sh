@@ -68,6 +68,11 @@ type Chars struct {
 	// ksh93u+, which quote last, and `'two` in zsh 5.9.2, which quotes in
 	// place and so takes the root of the quoted word.
 	QuoteInPlace bool
+
+	// CommentStops ends expansion for the rest of the line at a Comment
+	// character that begins a word outside quotes. See
+	// Semantics.HistoryCommentStopsExpansion.
+	CommentStops bool
 }
 
 // Default is what a shell starts with: `!^#`.
@@ -282,6 +287,11 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 			double = !double
 			out.WriteRune(r)
 			i++
+			continue
+		case c.CommentStops && c.Comment != 0 && r == c.Comment && !single && !double && (i == 0 || isBlank(byte(src[i-1])) || isOperatorByte(byte(src[i-1]))):
+			// The rest of the line is a comment and is left as written.
+			out.WriteString(string(src[i:]))
+			i = len(src)
 			continue
 		case r == c.Event && !single && !(double && c.DoubleQuotesProtect):
 			if literal(src, i, c, double) {

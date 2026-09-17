@@ -14074,6 +14074,15 @@ type Semantics struct {
 	// reason HistoryWords is.
 	HistoryQuoteModifierInPlace Answer
 
+	// HistoryCommentStopsExpansion leaves the rest of a line alone from a
+	// word that begins with the comment character — the third of histchars,
+	// `#` by default. Measured 2026-09-16: `echo ab c # !nosuch` writes `ab
+	// c` in bash 5.3.20 from a script, where zsh 5.9.2 and ksh93u+ at a
+	// prompt both say the event is not found; `echo ab c#!nosuch`, where the
+	// character does not begin a word, is not found in all three. Read, not
+	// asked, for the reason HistoryWords is.
+	HistoryCommentStopsExpansion Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -17478,6 +17487,8 @@ func PosixSemantics() Semantics {
 		HistoryWords: HistoryWordsQuoted,
 		// Two of the three shells with an expander quote last.
 		HistoryQuoteModifierInPlace: No,
+		// And one of them stops at a comment.
+		HistoryCommentStopsExpansion: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
 		// dash is the one shell that refuses the letter, and overrides.

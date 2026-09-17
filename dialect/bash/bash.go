@@ -2104,6 +2104,8 @@ func Semantics() interp.Semantics {
 	// here, because a reader arriving from macOS's /bin/bash would otherwise
 	// read this as a claim about their shell.
 	s.BadSetOptionNameFatalInPosixMode = interp.Yes
+	// See interp.Semantics.BuiltinSyntaxErrorFatalInPosixMode.
+	s.BuiltinSyntaxErrorFatalInPosixMode = interp.Yes
 	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// `-o` takes the next word and never the rest of its own: measured,
 	// `set -oe x` is `x: invalid option name` with errexit left off, and

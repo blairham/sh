@@ -573,6 +573,8 @@ func Semantics() interp.Semantics {
 	// this shell runs to the end — the same shape as #2629's bug, arriving
 	// through the mode instead of through the preset (#2641).
 	s.BadSetOptionNameFatalInPosixMode = interp.No
+	// See interp.Semantics.BuiltinSyntaxErrorFatalInPosixMode.
+	s.BuiltinSyntaxErrorFatalInPosixMode = interp.Yes
 	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// `set -ozzznosuch` here is a bare `-o` — the whole option table on
 	// standard output — and then the letters of `zzznosuch`, so it stops at

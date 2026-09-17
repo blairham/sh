@@ -468,6 +468,15 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 		if r.ask(r.sem().ReturnOutsideAFunctionIsRefused, "a `return` with nothing to return from") {
 			r.diagf("%s\n", Wording(r.diag().ReturnOutsideAFunction,
 				"return: can only `return' from a function or sourced script"))
+			if r.badOptionEndsTheScript("return") {
+				// A special builtin's misuse, and the one shell that refuses
+				// it ends the script over it in POSIX mode: measured
+				// 2026-09-16, bash 5.3.20 under `set -o posix` and called `sh`
+				// writes the refusal and exits 2, where under its own name the
+				// next line runs.
+				r.fatalUsageQuiet()
+				return r.status
+			}
 			// Reported and not obeyed: no control flow is set, so the next
 			// statement runs.
 			return 2

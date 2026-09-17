@@ -558,6 +558,8 @@ func (r *Runner) SetPosixMode(on bool) {
 	redir, unsetRO := r.posixSaved, r.posixSavedUnsetReadonly
 	reassignRO := r.posixSavedReassignReadonly
 	specialRO := r.posixSavedSpecialReadonly
+	badDeclName, dotMissing := r.posixSavedBadDeclName, r.posixSavedDotMissing
+	builtinSyntax := r.posixSavedBuiltinSyntax
 	targetPattern := r.posixSavedTargetPattern
 	forName := r.posixSavedForName
 	funcName := r.posixSavedFuncName
@@ -576,6 +578,12 @@ func (r *Runner) SetPosixMode(on bool) {
 		reassignRO = Yes
 		r.posixSavedSpecialReadonly = r.sem().ReadonlyReassignmentBySpecialBuiltinFatal
 		specialRO = Yes
+		r.posixSavedBadDeclName = r.sem().BadNameToDeclarationFatal
+		badDeclName = Yes
+		r.posixSavedDotMissing = r.sem().DotMissingFileFatal
+		dotMissing = Yes
+		r.posixSavedBuiltinSyntax = r.sem().BuiltinSyntaxErrorFatal
+		builtinSyntax = r.sem().BuiltinSyntaxErrorFatalInPosixMode
 		r.posixSavedForName = r.sem().ForNameWhenTheLoopRuns
 		r.posixSavedFuncName = r.sem().FunctionNameWhenTheDefinitionRuns
 		r.posixSavedExportListing = r.sem().ExportListing
@@ -660,6 +668,19 @@ func (r *Runner) SetPosixMode(on bool) {
 		// the mode moves for the same reason and `declare` does not: see
 		// ReadonlyReassignmentBySpecialBuiltinFatal for the measurement.
 		s.ReadonlyReassignmentBySpecialBuiltinFatal = specialRO
+		// Three more special-builtin failures, measured 2026-09-16 from
+		// script files with the failure on one line and `echo after` on the
+		// next. `export 1x=2` and `readonly 1x` end the script in bash 5.3.20
+		// under the mode and carry on without it; `. ./nosuchfile` the same.
+		// Both take the standard's answer, because every other column
+		// already ends the script there under every name — zsh called `sh`
+		// included, which stops on the missing file where plain zsh carries
+		// on. `eval 'if'` does not: zsh and ksh93 called `sh` carry on, so
+		// that one is the dialect's twin — see
+		// BuiltinSyntaxErrorFatalInPosixMode.
+		s.BadNameToDeclarationFatal = badDeclName
+		s.DotMissingFileFatal = dotMissing
+		s.BuiltinSyntaxErrorFatal = builtinSyntax
 		// The third axis the mode moves, and the one that needs a saved
 		// value most: the dialect answers with a *form* rather than a bool,
 		// and only one of that form's three values belongs to the mode. A

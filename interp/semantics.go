@@ -11957,6 +11957,19 @@ type Semantics struct {
 	// Diagnostics.
 	BuiltinSyntaxErrorFatal Answer
 
+	// BuiltinSyntaxErrorFatalInPosixMode is the same question asked of a
+	// shell in POSIX mode, swapped in by [Runner.SetPosixMode] the way
+	// BadSetOptionNameFatalInPosixMode is.
+	//
+	// Measured 2026-09-16, a script file with `eval 'if'` on one line and
+	// `echo after` on the next: bash 5.3.20 carries on under its own name and
+	// ends the script at 2 under `set -o posix` and called `sh`; zsh 5.9.2
+	// and ksh93u+ called `sh` carry on as they do under their own names; dash
+	// ends it under every name. So it is the dialect's answer and not the
+	// standard's, and the core, whose mode nobody measured, leaves it
+	// unanswered.
+	BuiltinSyntaxErrorFatalInPosixMode Answer
+
 	// EvalRunsWhatItParsed runs the commands `eval` has already read when a
 	// later line of its text will not parse, instead of reading the text
 	// through and running none of it.

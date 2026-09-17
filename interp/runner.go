@@ -1749,6 +1749,11 @@ type Runner struct {
 	// same reason.
 	posixSavedReassignReadonly Answer
 	posixSavedSpecialReadonly  Answer
+	// The three special-builtin failures the mode also moves; see
+	// Runner.SetPosixMode.
+	posixSavedBadDeclName   Answer
+	posixSavedDotMissing    Answer
+	posixSavedBuiltinSyntax Answer
 	// arithCommand counts the `(( ))` commands being evaluated, and
 	// refusedInACommand says a readonly refusal was made inside one or inside
 	// a builtin — see Runner.refuseReadonlyInACommand.

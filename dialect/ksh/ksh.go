@@ -2269,6 +2269,8 @@ func Semantics() interp.Semantics {
 	// core's mode has: both spellings stop at 2 there as they do under
 	// `ksh`. The mode moves neither (#2641).
 	s.BadSetOptionNameFatalInPosixMode = interp.Yes
+	// See interp.Semantics.BuiltinSyntaxErrorFatalInPosixMode.
+	s.BuiltinSyntaxErrorFatalInPosixMode = interp.No
 	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// One of the two columns that weld: `set -oerrexit zzznosuch` turns
 	// errexit on and leaves `zzznosuch` as $1, and `set -oe` refuses `e` as

@@ -1080,6 +1080,8 @@ func Semantics() interp.Semantics {
 	// mode moves nothing here, which is the answer written down rather than
 	// left to a refusal (#2641).
 	s.BadSetOptionNameFatalInPosixMode = interp.Yes
+	// See interp.Semantics.BuiltinSyntaxErrorFatalInPosixMode.
+	s.BuiltinSyntaxErrorFatalInPosixMode = interp.Yes
 	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// As in bash: `set -oe x` is `Illegal option -o x`, and `set -ozzznosuch`
 	// with nothing behind it lists the options and then stops at `-z`.

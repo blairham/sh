@@ -2644,6 +2644,8 @@ func Semantics() interp.Semantics {
 	// moves neither, and this preset says so for the same reason it declines
 	// the special-builtin move above (#2641).
 	s.BadSetOptionNameFatalInPosixMode = interp.Yes
+	// See interp.Semantics.BuiltinSyntaxErrorFatalInPosixMode.
+	s.BuiltinSyntaxErrorFatalInPosixMode = interp.No
 	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// The other welding column, and it agrees with ksh93 word for word on
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,

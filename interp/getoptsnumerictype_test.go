@@ -49,6 +49,9 @@ printf ' end=%s\n' "$OPTIND"`
 		{"a negative number", "-n -3 rest", "[n:-3] end=3\n", "[n:unset][?:unset] end=3\n"},
 		{"digits then an operand", "-n7 rest", "[n:7] end=2\n", "[n:unset][?:unset] end=2\n"},
 		{"nothing numeric there", "-n", "[?:unset] end=2\n", "[n:unset] end=2\n"},
+		// Attached and not a numeral: the rest of the word goes with the
+		// complaint under the type, and is read as option letters without it.
+		{"attached and not a numeral", "-nab", "[?:unset] end=2\n", "[n:unset][?:unset][?:unset] end=2\n"},
 		// The wart, recorded rather than tidied: an attached argument that
 		// does not fill the word puts the **rest of the word** in OPTARG and
 		// leaves the scan on the byte after the numeral.

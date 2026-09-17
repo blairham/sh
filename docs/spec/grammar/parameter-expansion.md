@@ -738,6 +738,54 @@ value the two sides disagree about: under one the expansion is a
 `ParamExpr{Name: "!", Length: true}` and under the other it is no
 expansion at all (#2415).
 
+### A line continuation inside the braces
+
+A backslash-newline is removed before tokens are formed, so it can stand
+anywhere between `${` and `}` and the expansion reads as if it were not
+there. Measured 2026-09-16 from script files, and unanimous in bash 5.3,
+bash 3.2, zsh 5.9.2, ksh93u+ and dash for every shape each shell has:
+
+    xy=5; echo "[${x\
+    y}]"                     →  [5]     inside the name
+    x=5;  echo "[${x\
+    }]"                      →  [5]     before the closing brace
+    x=;   echo "[${x:\
+    -d}]"                    →  [d]     between the colon and the operator
+    x=a.b.c; echo "[${x%\
+    %.*}]"                   →  [a]     between a trim's two characters
+    x=a.b.c; echo "[${x#\
+    *.}]"                    →  [b.c]   in front of a pattern
+
+Unquoted, in an operand, in a subscript, in a nested expansion and in an
+unquoted here-document body it is the same. It is kept where a
+continuation is kept anywhere else: in a single-quoted part of an operand,
+behind an escaped backslash, and inside a command substitution's program,
+which reads it by its own rules (a quoted here-document in one keeps it).
+
+ksh93 alone keeps it, and refuses the file with ``syntax error at line 1:
+`\' unexpected``, status 3, where no name has begun yet:
+
+| probe | bash 5.3 | bash 3.2 | zsh 5.9.2 | dash | ksh93u+ |
+| --- | --- | --- | --- | --- | --- |
+| `${x\⏎}`, `${x:\⏎-d}`, `${#x\⏎}` | value | value | value | value | value |
+| `${@:\⏎-d}`, `${1:-a\⏎b}` | value | value | value | value | value |
+| `${\⏎x}`, `${#\⏎x}` | value | value | value | value | refused |
+| `${1\⏎}`, `${12\⏎}`, `${@\⏎}` | value | value | value | value | refused |
+| `${?\⏎}`, `${#\⏎}`, `${$\⏎}` | value | value | value | value | refused |
+
+That means directly behind the `${` or its `#` or `!` prefix, or behind a
+positional or special parameter, which never begins a name. Once an
+operator stands in front of the pair it is removed there too. In an
+unquoted here-document body it reads everywhere, because that shell's
+continuations are gone before the expansion is scanned.
+
+Grammar flag: `ParamContinuationNeedsAName`. ksh yes, everyone else no.
+It is a grammar flag because it decides whether the text is an expansion
+at all (#3452).
+
+A pair **in front of** the brace, between `$` and `{`, is a separate
+shape. It is a delimiter question and is not this rule (#3457).
+
 ### An expansion with no name at all
 
 zsh alone reads `${` with no parameter in front of the operator. The name
@@ -6164,6 +6212,9 @@ reason: `${$((6*7))[1]}`.
                            ${u:-{a,q}.z}, where a bare `{` in an *unquoted*
                            operand opens a level so the expansion ends at
                            the brace that balances it — zsh and ksh93
+    ParamContinuationNeedsAName
+                           ${\⏎x}, ${#\⏎x}, ${1\⏎}: a line continuation is
+                           kept, and refused, until a name has begun — ksh93
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag`,

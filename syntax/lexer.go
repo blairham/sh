@@ -4221,13 +4221,14 @@ func (l *Lexer) continuationWaitsForAName(from int) bool {
 		s = s[1:]
 	}
 	switch {
-	case s == "" || s == ".":
+	case s == ".":
 		// A `.` alone has not begun one either: it opens a compound name,
 		// and `${.sh\⏎.version}` reads where `${.\⏎sh.version}` is refused.
 		return true
 	case len(s) == 1 && strings.IndexByte("@*#?$!-", s[0]) >= 0:
 		return true
 	}
+	// Nothing at all yet, or a positional parameter's digits.
 	return strings.Trim(s, "0123456789") == ""
 }
 

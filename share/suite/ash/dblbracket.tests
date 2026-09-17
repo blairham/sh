@@ -1,0 +1,127 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# [[ ]] in BusyBox ash — the ext/ area this column does not run.
+#
+# ext/dblbracket.tests is asked of bash, zsh and ksh93, whose [[ is grammar.
+# BusyBox has the spelling and not the construct: its [[ is a builtin, the
+# test command with a closing ]] and with && and || for connectives. Its
+# words are expanded like any command's, so they split and glob, a quoted
+# pattern is still a pattern, < and > are redirections, and ( is the syntax
+# error it is after any word (#3409).
+#
+# Every row prints the status it left rather than a message: which word a
+# refusal names, and where, is test's wording in this shell and a question
+# of its own. Each row runs in a subshell so that none can stop the file.
+
+st() { printf '%-44s %s\n' "$1" "$2"; }
+
+printf -- '--- a pattern, however it was quoted ---\n'
+
+( [[ abc == a* ]] ); st 'unquoted pattern' $?
+( [[ abc == "a*" ]] ); st 'double-quoted pattern' $?
+( [[ abc == 'a*' ]] ); st 'single-quoted pattern' $?
+( [[ abc = "a*" ]] ); st 'one equals sign' $?
+( [[ abc != "a*" ]] ); st 'negated' $?
+( [[ "a*" == abc ]] ); st 'the left side is never one' $?
+( [[ abc == ?b? ]] ); st 'single-character wildcards' $?
+( [[ abc == [ab]bc ]] ); st 'a bracket expression' $?
+( [[ abc == a\* ]] ); st 'an escaped star' $?
+( [[ 'a*' == 'a\*' ]] ); st 'a backslash in the value escapes' $?
+( [[ 'a\b' == 'a\b' ]] ); st 'and is not a literal backslash' $?
+( [ abc = "a*" ] ); st 'the control: [ compares strings' $?
+
+printf -- '--- operands are split, and an empty one is gone ---\n'
+
+spaced='two words'
+( [[ $spaced == "two words" ]] ) 2>/dev/null; st 'an unquoted value splits' $?
+( [[ "$spaced" == "two words" ]] ); st 'a quoted one does not' $?
+empty=
+( [[ $empty == "" ]] ) 2>/dev/null; st 'an unquoted empty is no word' $?
+( [[ -z $empty ]] ); st 'so -z alone is a non-empty string' $?
+( [[ -n $empty ]] ); st 'and so is -n' $?
+( [[ -n "$empty" ]] ); st 'quoted, -n is a test' $?
+( [[ ]] ); st 'no expression' $?
+
+printf -- '--- the connectives ---\n'
+
+( [[ -n x && -z "" ]] ); st '&&' $?
+( [[ -z x || -z y ]] ); st '||' $?
+( [[ -n x&&-n y ]] ); st '&& with no blanks' $?
+( [[ a = a || a = b && a = b ]] ); st '&& binds tighter' $?
+( [[ a && "" ]] ); st 'three words: two strings' $?
+( [[ ! -z x ]] ); st '!' $?
+( [[ ! ]] ); st '! alone is a string' $?
+( [[ a = a '&&' a = b ]] ); st 'a quoted && is still one' $?
+conn='||'
+( [[ a = b $conn a = a ]] ); st 'and so is an expanded one' $?
+( [[ a = a -a b = b ]] ) 2>/dev/null; st '-a is not a connective' $?
+( [[ a = b -o a = a ]] ) 2>/dev/null; st 'nor is -o' $?
+( [ a = a -a b = b ] ); st 'the control: [ has -a' $?
+( [[ a = a || ]] ) 2>/dev/null; st 'a connective with nothing after' $?
+( [[ \( a = a \) ]] ); st 'an escaped paren groups' $?
+( [[ '(' a ')' && a ]] ); st 'and a quoted one' $?
+
+printf -- '--- the closing word ---\n'
+
+( [[ a = a ) 2>/dev/null; st 'no ]]' $?
+( [[ a ]] ]] ) 2>/dev/null; st 'only the last word closes' $?
+( [[ a "]]" ); st 'a quoted ]] closes' $?
+( [[ a = "]]" ]] ); st 'and compares as a word' $?
+
+printf -- '--- numbers, files and the rest of test ---\n'
+
+( [[ 3 -lt 10 ]] ); st 'numeric' $?
+( [[ 010 -eq 8 ]] ); st 'a leading zero is decimal' $?
+( [[ 1+2 -eq 3 ]] ) 2>/dev/null; st 'no arithmetic' $?
+( [[ 10 \< 9 ]] ); st 'an escaped < compares strings' $?
+( [[ b \> a ]] ); st 'and >' $?
+printf 'contents\n' > afile
+( [[ -f afile ]] ); st 'a regular file' $?
+( [[ -s afile ]] ); st 'not empty' $?
+( [[ -d afile ]] ); st 'not a directory' $?
+( [[ afile -nt nosuchfile ]] ); st '-nt' $?
+
+printf -- '--- a regular expression ---\n'
+
+( [[ abc =~ a.c ]] ); st 'matches' $?
+( [[ abc =~ b ]] ); st 'unanchored' $?
+( [[ abc =~ "^b" ]] ); st 'anchored' $?
+( [[ abc =~ 'a|x' ]] ); st 'extended' $?
+( [[ abc =~ "a.c" ]] ); st 'quoting does not make it literal' $?
+( [[ abc =~ "" ]] ); st 'an empty one matches' $?
+( [[ abc =~ "(b" ]] ); st 'one that will not compile' $?
+( [ abc =~ a.c ] ) 2>/dev/null; st 'the control: [ has no =~' $?
+
+printf -- '--- < and > are redirections ---\n'
+
+( [[ a < nosuchfile ]] ) 2>/dev/null; st '< opens its file' $?
+( [[ b > made ]] ); st '> creates its file' $?
+[ -f made ] && printf 'made exists\n'
+rm -f made afile
+
+printf -- '--- a command, not a keyword ---\n'
+
+type '[[' | sed 's/^/type: /'
+open='[['
+( $open -n x ]] ); st 'run through a parameter' $?
+( command [[ -n x ]] ); st 'through command' $?
+[[() { printf 'a function named [[\n'; }
+[[ a ]]
+unset -f '[['
+( [[ -n x ]] ); st 'and the builtin again' $?
+
+printf -- '--- where && and || are words ---\n'
+
+echo [[ a && b ]]
+echo [[ a&&b ]] && echo 'the list goes on after ]]'
+echo [[ a ]]x && b ]]
+echo "[[" a && echo 'a quoted [[ opens nothing'
+echo \[[ a && echo 'nor an escaped one'
+echo x[[ a && echo 'nor one inside a word'
+echo [[ a || b | cat
+echo [[ a &&
+echo 'a newline ends it, and the ]] is never reached'
+printf '%s\n' "$(echo [[ a && b ]])"
+
+echo done

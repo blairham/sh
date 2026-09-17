@@ -467,10 +467,18 @@ single word was not worth a substrate edit.
 A seventh is a difference in kind rather than in wording: **`[[ ]]` here is
 a builtin, not a keyword.** `type '[['` answers `[[ is a shell builtin`,
 and it does not suppress word splitting — `v="a b"; [[ $v == "a b" ]]` is
-`b: unknown operand`. The parser still has to know the construct, because
-`&&` and `||` inside it are not the shell's operators, so the dialect
-sets `DoubleBracket` and accepts that our `[[` is the keyword kind. It is
-the largest single family of remaining corpus disagreements (28 rows).
+`b: unknown operand`. It is `test` with a closing `]]`, reading `&&` and
+`||` as its connectives (and `-a` and `-o` as nothing), matching `=`, `==`
+and `!=` against a pattern however the pattern was quoted, and taking `=~`.
+The parser has one thing to know: after an unquoted `[[` word of a simple
+command, `&&` and `||` are words until an unquoted `]]` word, which is why
+`echo [[ a && b ]]` prints all five. Everything else — `<` and `>` as
+redirections, `(` as a syntax error after a word, a newline ending the
+command — is what a simple command already does. The dialect used to set
+`DoubleBracket` and accept the keyword kind, and it was the largest single
+family of corpus disagreements (28 rows); it sets
+`DoubleBracketIsACommand` since #3409, and `share/suite/ash/dblbracket.tests`
+holds the rows.
 
 ## Vector summary
 

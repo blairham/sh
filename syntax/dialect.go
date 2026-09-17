@@ -4823,6 +4823,30 @@ type Dialect struct {
 	// the word `[[` would break `echo`.
 	DoubleBracket bool
 
+	// DoubleBracketIsACommand reads `[[` as the *name of a command* — `test`
+	// with a closing word — rather than as the conditional's keyword. Meant
+	// for a dialect with DoubleBracket off; with both on, the keyword wins
+	// where a command begins and this still governs every other `[[` word.
+	//
+	// Measured 2026-09-16 on BusyBox v1.37.0 in the pinned alpine image, the
+	// one shell in the panel that answers this way. `type '[['` is `[[ is a
+	// shell builtin`; `v='[['; $v -n x ]]` runs it; its operands are split
+	// and globbed (`s="two words"; [[ $s == "two words" ]]` is `words:
+	// unknown operand` at 2); `[[ a < b ]]` opens `b` for reading; and `[[ (
+	// -n x ) ]]` is a syntax error at the `(`, because every operator the
+	// shell has is still an operator.
+	//
+	// All but two. After an unquoted `[[` word of a simple command, `&&` and
+	// `||` are *words* until an unquoted `]]` word, so the builtin receives
+	// them as its connectives: `[[ -n x && -z "" ]]` is 0. The rule is about
+	// the word and not about command position — `echo [[ a && b ]] && echo
+	// c` prints `[[ a && b ]]` and then `c` — and it is the parser's rather
+	// than the lexer's, since `for w in [[ a && b ]]` is `unexpected "&&"`
+	// there. A quoted `"[["`, `\[[` or `x[[` opens nothing, `]]x` closes
+	// nothing, and `;`, `|`, `&`, a newline and the redirections keep their
+	// meaning inside: `[[ -n x &&` at the end of a line is `missing ]]`.
+	DoubleBracketIsACommand bool
+
 	// ProcessSubstitution is `<(cmd)` and `>(cmd)`: a command run with one end
 	// of a pipe, expanding to a path the other end can be opened by.
 	//

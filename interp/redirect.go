@@ -1531,8 +1531,10 @@ func (r *Runner) seekRedirect(rd *syntax.Redirect, fd int) bool {
 	return true
 }
 
-// refuseSeekOffset reports an offset the descriptor will not take: a negative
-// one, and a stream with no position at all.
+// refuseSeekOffset reports an offset the descriptor will not take, which after
+// the check above is a negative one and a seek the kernel refused outright.
+// A stream with no position at all is the *other* sentence — see
+// Diagnostics.SeekStreamHasNoPosition.
 func (r *Runner) refuseSeekOffset(written string) bool {
 	r.diagf("%s\n", Wording(r.diag().SeekOffsetRefused, "%[1]s: invalid seek offset", written))
 	r.status = r.diag().redirectFailureStatus()

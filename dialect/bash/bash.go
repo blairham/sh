@@ -1525,6 +1525,10 @@ func Semantics() interp.Semantics {
 	// into the name (#3275).
 	s.GetoptsCountsTheWordOnTheNextCall = interp.No
 	s.GetoptsEndOfOptionsNamesIt = interp.Yes
+	// `getopts 'n#' o` is two options here, neither of which takes anything:
+	// `-n 5` leaves the 5 as an operand and `-n5` reports 5 as unknown.
+	// Measured 2026-09-16, bash 5.3.20 (#2947).
+	s.GetoptsOptionStringHasANumericType = interp.No
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
 	// A freeze on OPTARG or OPTIND is consulted here — `readonly OPTARG;

@@ -2869,6 +2869,45 @@ type Semantics struct {
 	// scan that ran out both print a question mark at status 1.
 	GetoptsLocalOptindRestoresTheCursor Answer
 
+	// GetoptsOptionStringHasANumericType reads a `#` after a letter in the
+	// option string as saying that letter takes a **numeric** argument,
+	// rather than as another option letter.
+	//
+	// POSIX gives the option string one piece of punctuation after a letter,
+	// and one shell here has a second. Where the type exists, `n#` is one
+	// option that takes a number; where it does not, `n#` is two options
+	// that take none — so the same string means something different, and
+	// both readings run without a word.
+	//
+	// Measured 2026-09-16 under `env -i PATH=/usr/bin:/bin LC_ALL=C`, as a
+	// script file with stdin on /dev/null, `getopts 'n#' o` over the two
+	// spellings — all seven columns:
+	//
+	//	                -n 5                       -n5
+	//	ksh93u+      n, OPTARG=5, OPTIND 1->3   n, OPTARG=5, OPTIND 1->2
+	//	bash 5.3.20  n, OPTARG unset, 1->2      n then `?`, 1->2
+	//	bash as `sh` n, OPTARG unset, 1->2      n then `?`, 1->2
+	//	bash 3.2.57  n, OPTARG unset, 1->2      n then `?`, 1->2
+	//	zsh 5.9      n, OPTARG empty, 1->2      n then `?`, 1->2
+	//	dash 0.5.12  n, OPTARG empty, 1->2      n then `?`, 1->2
+	//	BusyBox ash  n, OPTARG empty, 1->2      n then `?`, 1->2
+	//	 1.37.0
+	//
+	// One column and six, and the six differ only in what they already
+	// differ about. In the separate-word spelling the other six leave the
+	// 5 as an operand, so OPTIND stops one short and the number is never
+	// seen; in the attached spelling the digits are read as further option
+	// letters and the 5 is reported as unknown. Both are silent wrong
+	// answers to a script that meant the type, which is why it is modeled
+	// rather than recorded (#2947).
+	//
+	// A marker is not an option letter: `getopts 'n#' o -#` is
+	// `-#: unknown option` where the type exists, and `getopts '#n' o -#` —
+	// a `#` that follows no letter — is the option `#` everywhere, this
+	// shell included. See getoptsSpecLookup, which is why the lookup is a
+	// walk rather than an index.
+	GetoptsOptionStringHasANumericType Answer
+
 	// GetoptsClearsOptarg empties OPTARG when `getopts` reports a bad option
 	// rather than leaving it unset. zsh alone, and a script testing
 	// `${OPTARG-}` can tell the two apart.

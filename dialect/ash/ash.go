@@ -837,6 +837,9 @@ func Semantics() interp.Semantics {
 	// bash 5.3 and ksh93u+ see them once. BusyBox ash answers both of these
 	// exactly as dash does (#2944).
 	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsTheCallsOwn
+	// `#` in an option string is another option letter here. Measured
+	// 2026-09-16, BusyBox ash 1.37.0 (#2947).
+	s.GetoptsOptionStringHasANumericType = interp.No
 	s.GetoptsClearsOptarg = interp.No
 	// But OPTARG is *emptied* rather than unset when the option that was read
 	// is one the string has and takes no argument, which `${OPTARG-…}` and

@@ -142,11 +142,13 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 	}
 
 	c := word[r.optChar]
-	at := strings.IndexByte(spec, c)
+	kind, known := r.getoptsLetterTakes(spec, c)
 	switch {
-	case at < 0 || c == ':':
-		return r.getoptsBad(name, string(c), silent, false, func() bool { return r.advance(word, ind) })
-	case at+1 < len(spec) && spec[at+1] == ':':
+	case !known || c == ':':
+		return r.getoptsBad(name, string(c), silent, getoptsUnknownOption, func() bool { return r.advance(word, ind) })
+	case kind == getoptsTakesANumber:
+		return r.getoptsNumericArgument(name, string(c), silent, word, words, ind)
+	case kind == getoptsTakesAString:
 		// The option takes an argument: the rest of this word if there is
 		// any, and the next word otherwise.
 		if rest := word[r.optChar+1:]; rest != "" {
@@ -170,10 +172,10 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 			if r.ask(r.sem().GetoptsCountsTheWordOnTheNextCall,
 				"OPTIND staying on a spent word until the next `getopts` call") {
 				r.optChar = len(word)
-				return r.getoptsBad(name, string(c), silent, true, func() bool { return r.setOptind(ind) })
+				return r.getoptsBad(name, string(c), silent, getoptsMissingArgument, func() bool { return r.setOptind(ind) })
 			}
 			r.optChar = 1
-			return r.getoptsBad(name, string(c), silent, true, func() bool { return r.setOptind(ind + 1) })
+			return r.getoptsBad(name, string(c), silent, getoptsMissingArgument, func() bool { return r.setOptind(ind + 1) })
 		}
 		r.optChar = 1
 		if !r.getoptsWrite("OPTARG", words[ind]) && r.getoptsRefusalEndsTheBuiltin() {
@@ -195,6 +197,230 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 		}
 		return r.getoptsSetName(name, string(c), 0)
 	}
+}
+
+// getoptsComplaint is which of the three things `getopts` found wrong. It
+// decides the wording, and in silent mode it decides whether the name is
+// written `?` or `:` — a letter the string does not have is the first, and
+// anything about the argument the letter *does* take is the second.
+type getoptsComplaint uint8
+
+const (
+	getoptsUnknownOption getoptsComplaint = iota
+	getoptsMissingArgument
+	getoptsBadNumericArgument
+)
+
+// getoptsArgumentKind is what a letter in the option string takes.
+type getoptsArgumentKind uint8
+
+const (
+	getoptsTakesNothing getoptsArgumentKind = iota
+	// getoptsTakesAString is the POSIX `letter:` — the rest of the word if
+	// there is any, and the next word otherwise, whatever it holds.
+	getoptsTakesAString
+	// getoptsTakesANumber is `letter#`, which one dialect has and the rest
+	// read as a second option letter. See
+	// Semantics.GetoptsOptionStringHasANumericType.
+	getoptsTakesANumber
+)
+
+// getoptsSpecLookup walks the option string and answers two questions about
+// it at once: what the letter c takes, and whether a `#` sits anywhere a type
+// marker goes.
+//
+// One walk for both because the second question decides how the first is
+// read, and a separate scan for it is exactly the shape that lets the two
+// come to disagree about where a marker is: with the numeric type off a `#`
+// after a letter is a *letter*, so every position after it shifts, and a
+// standalone "does this string have a numeric marker" scan would be reading a
+// different string from the one the lookup walked.
+//
+// The lookup is a walk rather than an IndexByte because a marker is not an
+// option: `getopts 'n#' o -#` is an unknown option in the shell that has the
+// type, and `getopts '#n' o -#` — where the `#` follows no letter — is the
+// option `#` in every shell here. Measured 2026-09-16 on ksh93u+ 2012-08-01.
+func getoptsSpecLookup(spec string, c byte, numeric bool) (kind getoptsArgumentKind, found, marked bool) {
+	for i := 0; i < len(spec); {
+		letter := spec[i]
+		i++
+		k := getoptsTakesNothing
+		if i < len(spec) {
+			switch spec[i] {
+			case ':':
+				k, i = getoptsTakesAString, i+1
+			case '#':
+				marked = true
+				if numeric {
+					k, i = getoptsTakesANumber, i+1
+				}
+			}
+		}
+		if letter == c && !found {
+			kind, found = k, true
+		}
+	}
+	return kind, found, marked
+}
+
+// getoptsLetterTakes is that lookup with the axis put in, and it is the only
+// place the axis is asked: an option string with no `#` where a marker goes —
+// which is every option string a portable script writes — reaches no question
+// at all.
+func (r *Runner) getoptsLetterTakes(spec string, c byte) (getoptsArgumentKind, bool) {
+	kind, found, marked := getoptsSpecLookup(spec, c, true)
+	if !marked {
+		return kind, found
+	}
+	if r.ask(r.sem().GetoptsOptionStringHasANumericType,
+		"a `#` in an option string naming a numeric argument rather than another option letter") {
+		return kind, found
+	}
+	kind, found, _ = getoptsSpecLookup(spec, c, false)
+	return kind, found
+}
+
+// getoptsNumericArgument reads the argument a `letter#` option takes.
+//
+// It is the `letter:` branch's shape with one thing added and one thing taken
+// away. Added: the argument has to *be* a numeral, and is complained about
+// where it is not. Taken away: an attached argument no longer spends the
+// word, because the numeral ends where it ends — `-n5x` reads 5 and leaves
+// the scan on `x`, which the next call reports as an option of its own.
+//
+// Measured 2026-09-16 on ksh93u+ 2012-08-01, over a script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null, `getopts 'n#' o`:
+//
+//	-n 5        n   OPTARG=5       OPTIND 1 -> 3
+//	-n5         n   OPTARG=5       OPTIND 1 -> 2
+//	-n -3       n   OPTARG=-3      OPTIND 1 -> 3
+//	-n5x        n   OPTARG=5x      OPTIND 1 -> 1, then `-x: unknown option`
+//	-n abc      ?   OPTARG unset   OPTIND 1 -> 3, `-n: numeric argument expected`
+//	-nabc       ?   OPTARG unset   OPTIND 1 -> 2, the same line
+//	-n          ?   OPTARG unset   OPTIND 1 -> 2, the same line
+//
+// The fourth row is the one worth writing down: OPTARG holds the **rest of
+// the word** and not the numeral, so the `x` the scan is about to report as
+// an option is in the argument as well. Recorded as measured rather than
+// tidied — a shell reading OPTARG as a number stops at the same place the
+// scan did.
+func (r *Runner) getoptsNumericArgument(name, letter string, silent bool, word string, words []string, ind int) int {
+	if rest := word[r.optChar+1:]; rest != "" {
+		n, ok := getoptsNumeral(rest)
+		if !ok {
+			// Nothing numeric there, and the rest of the word goes with the
+			// complaint rather than being read as more option letters.
+			return r.getoptsBad(name, letter, silent, getoptsBadNumericArgument,
+				func() bool { return r.advanceBy(word, ind, len(word)-r.optChar) })
+		}
+		// OPTARG ahead of OPTIND, for the reason the string branch writes it
+		// first: a refusal is visible in the order.
+		if !r.getoptsWrite("OPTARG", rest) && r.getoptsRefusalEndsTheBuiltin() {
+			return getoptsRefusedStatus
+		}
+		if !r.advanceBy(word, ind, 1+n) && r.getoptsRefusalEndsTheBuiltin() {
+			return getoptsRefusedStatus
+		}
+		return r.getoptsSetName(name, letter, 0)
+	}
+	if ind >= len(words) {
+		// Missing outright, which is the same question the string branch
+		// asks here — the word is spent and the count stays where it was in
+		// the one column that lags. The wording is the numeric one even so:
+		// the shell that has the type says `numeric argument expected` for a
+		// missing argument as well as for an unreadable one.
+		if r.ask(r.sem().GetoptsCountsTheWordOnTheNextCall,
+			"OPTIND staying on a spent word until the next `getopts` call") {
+			r.optChar = len(word)
+			return r.getoptsBad(name, letter, silent, getoptsBadNumericArgument,
+				func() bool { return r.setOptind(ind) })
+		}
+		r.optChar = 1
+		return r.getoptsBad(name, letter, silent, getoptsBadNumericArgument,
+			func() bool { return r.setOptind(ind + 1) })
+	}
+	r.optChar = 1
+	arg := words[ind]
+	if n, ok := getoptsNumeral(arg); !ok || n < len(arg) {
+		// The word has to be a numeral all the way through, which is what
+		// separates it from the attached spelling above: `-n 5x` is refused
+		// where `-n5x` reads 5. Both words are consumed either way.
+		return r.getoptsBad(name, letter, silent, getoptsBadNumericArgument,
+			func() bool { return r.setOptind(ind + 2) })
+	}
+	if !r.getoptsWrite("OPTARG", arg) && r.getoptsRefusalEndsTheBuiltin() {
+		return getoptsRefusedStatus
+	}
+	if !r.setOptind(ind+2) && r.getoptsRefusalEndsTheBuiltin() {
+		return getoptsRefusedStatus
+	}
+	return r.getoptsSetName(name, letter, 0)
+}
+
+// getoptsNumeral measures the numeral at the front of s and reports how many
+// bytes it took, including any blanks in front of it.
+//
+// The shape is strtol's rather than the arithmetic evaluator's, and the
+// difference is what the measurements show: `1+1` is refused where `16#ff`,
+// `0x1f`, `+4`, `08` and `007` are all taken, so this reads a *numeral* and
+// never an expression. Measured 2026-09-16 on ksh93u+ 2012-08-01 with
+// `getopts 'n#' o -n «word»`, taken where the whole word is consumed:
+//
+//	taken     5  -3  +4  0  00  007  08  0x10  0X1F  16#FF  36#z  64#_  " 5"  ""  " "
+//	refused   abc  -x  --  -  +  1+1  3.5  .5  1e3  5x  "5 "  0b101  0x  0xg  1_0
+//	          2#   2#12  1#0  0#5  99#5  65#1
+//
+// So: blanks, then a sign, then either `0x` and hex digits, or decimal digits
+// and — where those name a base of 2 through 64 — a `#` and that base's
+// digits. A word of blanks alone, and the empty word, are taken: nothing is
+// left over, which is the whole of the test. baseDigitValue is the alphabet,
+// shared with the arithmetic reader so the two cannot come to disagree about
+// what a base-64 digit is.
+func getoptsNumeral(s string) (int, bool) {
+	i := 0
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\v' || s[i] == '\f' || s[i] == '\r') {
+		i++
+	}
+	if i == len(s) {
+		return i, true
+	}
+	if s[i] == '+' || s[i] == '-' {
+		i++
+	}
+	if i+2 < len(s) && s[i] == '0' && (s[i+1] == 'x' || s[i+1] == 'X') && isHexDigitByte(s[i+2]) {
+		i += 2
+		for i < len(s) && isHexDigitByte(s[i]) {
+			i++
+		}
+		return i, true
+	}
+	start := i
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == start {
+		return 0, false
+	}
+	if i < len(s) && s[i] == '#' {
+		if base, err := strconv.Atoi(s[start:i]); err == nil && base >= 2 && base <= 64 {
+			j := i + 1
+			for j < len(s) {
+				v, known := baseDigitValue(s[j], base)
+				if !known || v >= base {
+					break
+				}
+				j++
+			}
+			if j > i+1 {
+				i = j
+			}
+		}
+	}
+	return i, true
+}
+
+func isHexDigitByte(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
 
 // getoptsRefusedStatus is what `getopts` reports when a freeze refused one of
@@ -303,20 +529,28 @@ func (r *Runner) getoptsRefusalEndsTheBuiltin() bool {
 // leaves OPTIND at the first word neither it nor its argument occupies in
 // every column.
 func (r *Runner) advance(word string, ind int) bool {
-	if r.optChar+1 >= len(word) {
+	return r.advanceBy(word, ind, 1)
+}
+
+// advanceBy is the same move over n characters rather than one, which is what
+// a letter whose argument is *inside* the word consumes: `-n5x` under the
+// numeric type reads `5` and leaves the scan on `x`, so the word is not spent
+// and the two counting axes are asked exactly as a cluster asks them.
+func (r *Runner) advanceBy(word string, ind, n int) bool {
+	if r.optChar+n >= len(word) {
 		if r.ask(r.sem().GetoptsCountsTheWordOnTheNextCall,
 			"OPTIND staying on a spent word until the next `getopts` call") {
 			// zsh has not counted the word at all. Leaving optChar past the
 			// end is what says it is spent, and the next call walks on to
 			// the following word by the check it already makes at the top —
 			// which is this shell's own model, not a simulation of it.
-			r.optChar++
+			r.optChar = len(word)
 			return r.setOptind(ind)
 		}
 		r.optChar = 1
 		return r.setOptind(ind + 1)
 	}
-	r.optChar++
+	r.optChar += n
 	if r.ask(r.sem().GetoptsCountsTheWordAtItsFirstLetter,
 		"OPTIND counting a clustered word at its first letter") {
 		// dash and BusyBox ash have already counted past the word; the
@@ -379,7 +613,7 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 // measured 2026-09-16, a frozen OPTARG over `set -- -z` leaves dash 0.5.12 and
 // BusyBox ash 1.37.0 refusing at 2 with OPTIND still 1, so neither had counted
 // past the word when the refusal ended the run.
-func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool, advanceOptind func() bool) int {
+func (r *Runner) getoptsBad(name, letter string, silent bool, why getoptsComplaint, advanceOptind func() bool) int {
 	if silent {
 		if !r.getoptsWrite("OPTARG", letter) && r.getoptsRefusalEndsTheBuiltin() {
 			return getoptsRefusedStatus
@@ -387,7 +621,7 @@ func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool, advanc
 		if !advanceOptind() && r.getoptsRefusalEndsTheBuiltin() {
 			return getoptsRefusedStatus
 		}
-		if missingArg {
+		if why != getoptsUnknownOption {
 			return r.getoptsSetName(name, ":", 0)
 		}
 		return r.getoptsSetName(name, "?", 0)
@@ -408,7 +642,7 @@ func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool, advanc
 	if r.readonly[name] && r.sem().ReadonlyRefusalInABuiltinIsFatal == Yes {
 		return r.getoptsSetName(name, "?", 0)
 	}
-	r.getoptsBadOptionComplaint(letter, missingArg)
+	r.getoptsBadOptionComplaint(letter, why)
 	// And what becomes of OPTARG after it: measured 2026-09-16, dash 0.5.12
 	// and BusyBox ash 1.37.0 write `Illegal option -z` and *then* `getopts:
 	// OPTARG: is read only` over a frozen OPTARG, in that order.
@@ -424,7 +658,7 @@ func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool, advanc
 // getoptsBadOptionComplaint writes the line a bad option or a missing
 // argument earns, in a function of its own so that the name `getopts` fills
 // in can be written after it — see getoptsBad.
-func (r *Runner) getoptsBadOptionComplaint(letter string, missingArg bool) {
+func (r *Runner) getoptsBadOptionComplaint(letter string, why getoptsComplaint) {
 	// Not the builtin's complaint as far as the one dialect that names a
 	// builtin in the location is concerned: `getopts` reports like `test`
 	// rather than like `shift`, with no name between the shell and the line.
@@ -434,8 +668,11 @@ func (r *Runner) getoptsBadOptionComplaint(letter string, missingArg bool) {
 
 	d := r.diag()
 	wording, fallback := d.GetoptsBadOption, "illegal option -- %[1]s"
-	if missingArg {
+	switch why {
+	case getoptsMissingArgument:
 		wording, fallback = d.GetoptsMissingArgument, "option requires an argument -- %[1]s"
+	case getoptsBadNumericArgument:
+		wording, fallback = d.GetoptsNumericArgument, "option requires a numeric argument -- %[1]s"
 	}
 	msg := Wording(wording, fallback, letter)
 	switch {

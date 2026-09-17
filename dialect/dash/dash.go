@@ -754,6 +754,9 @@ func Semantics() interp.Semantics {
 	// done; }` called twice on `-a -b` sees both options both times, where
 	// bash 5.3 and ksh93u+ see them once (#2944).
 	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsTheCallsOwn
+	// `#` in an option string is another option letter here. Measured
+	// 2026-09-16, dash 0.5.12 (#2947).
+	s.GetoptsOptionStringHasANumericType = interp.No
 	s.GetoptsClearsOptarg = interp.No
 	// But OPTARG is *emptied* rather than unset when the option that was read
 	// is one the string has and takes no argument, which `${OPTARG-…}` and

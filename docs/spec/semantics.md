@@ -17463,6 +17463,59 @@ unbounded shape — can still be measured
 reaches the same wrong letter without looping, because its `OPTIND` has
 already counted past the word by the time the declaration is made.
 
+**`GetoptsOptionStringHasANumericType`** — bash no · dash no · ksh93 yes ·
+zsh no · BusyBox ash no
+
+Reads a `#` after a letter in the option string as saying that letter
+takes a **numeric** argument, rather than as another option letter.
+
+POSIX gives the option string one piece of punctuation after a letter,
+and ksh93 has a second. Where the type exists `n#` is one option that
+takes a number; where it does not, `n#` is two options that take none —
+so the same string means something different in each, and both readings
+run without a word. Measured 2026-09-16 under
+`env -i PATH=/usr/bin:/bin LC_ALL=C`, as script files with stdin on
+/dev/null, `getopts 'n#' o`:
+
+| shell | `-n 5` | `-n5` |
+| --- | --- | --- |
+| ksh93u+ 2012-08-01 | `n`, OPTARG=5, OPTIND 1→3 | `n`, OPTARG=5, OPTIND 1→2 |
+| bash 5.3.20 | `n`, OPTARG unset, 1→2 | `n` then `?`, 1→2 |
+| bash as `sh` | `n`, OPTARG unset, 1→2 | `n` then `?`, 1→2 |
+| bash 3.2.57 | `n`, OPTARG unset, 1→2 | `n` then `?`, 1→2 |
+| zsh 5.9 | `n`, OPTARG empty, 1→2 | `n` then `?`, 1→2 |
+| dash 0.5.12 | `n`, OPTARG empty, 1→2 | `n` then `?`, 1→2 |
+| BusyBox ash 1.37.0 | `n`, OPTARG empty, 1→2 | `n` then `?`, 1→2 |
+
+One column and six. In the separate-word spelling the other six leave
+the 5 as an operand, so OPTIND stops one short and the number is never
+seen; in the attached spelling the digits are read as further option
+letters and the 5 is reported as unknown. Both are silent wrong answers
+to a script that meant the type (#2947).
+
+Three things about the type are measured rather than guessed at, and all
+three are in `interp/getoptsbuiltin.go`:
+
+* **The argument is a numeral and not an expression.** `5`, `-3`, `+4`,
+  `007`, `08`, `0x10`, `16#FF` and `64#_` are all taken; `1+1`, `3.5`,
+  `1e3`, `0b101`, `2#12`, `99#5` and `abc` are all refused with
+  `-n: numeric argument expected`. So it is blanks, then a sign, then
+  either `0x` and hex digits or decimal digits and — where those name a
+  base of 2 through 64 — a `#` and that base's digits, with nothing left
+  over. The empty word is taken, and so is a word of blanks.
+* **An attached argument does not spend the word.** `-n5x` reads 5 and
+  leaves the scan on `x`, which the next call reports as an option of
+  its own — and OPTARG holds `5x`, the whole rest of the word rather
+  than the numeral. Recorded as measured rather than tidied.
+* **A marker is not an option letter.** `getopts 'n#' o -#` is
+  `-#: unknown option`, while `getopts '#n' o -#` — a `#` that follows
+  no letter — is the option `#` in every shell here. That is why the
+  lookup walks the option string instead of indexing into it.
+
+A missing argument is worded as a numeric one too: `getopts 'n#' o -n`
+says `numeric argument expected` rather than `argument expected`, and in
+silent mode reports `:` like any other argument failure.
+
 **`GetoptsClearsOptarg`** — bash no · dash no · ksh93 no · zsh yes
 
 Empties OPTARG when `getopts` reports a bad option rather than leaving

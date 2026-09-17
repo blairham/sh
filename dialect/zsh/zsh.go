@@ -2145,6 +2145,9 @@ func Semantics() interp.Semantics {
 	// anything was declared, so a declaration inside one cannot be the
 	// thing that loses the caller's place.
 	s.GetoptsLocalOptindRestoresTheCursor = interp.Yes
+	// `#` in an option string is another option letter here. Measured
+	// 2026-09-16, zsh 5.9.2 (#2947).
+	s.GetoptsOptionStringHasANumericType = interp.No
 	s.GetoptsClearsOptarg = interp.Yes
 	// And the same for an option that simply takes none, which is the other
 	// axis and the one this shell shares with dash and BusyBox ash.

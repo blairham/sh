@@ -4683,6 +4683,25 @@ type Dialect struct {
 	// tracking (#1516).
 	ChainedSubscript bool
 
+	// SubscriptDotRange reads a braced expansion's subscript written
+	// `lo..hi` as a range of elements rather than as one arithmetic
+	// expression: `${a[1..3]}` is the elements 1 through 3, as separate
+	// fields, where every other grammar hands `1..3` to the arithmetic and
+	// refuses it.
+	//
+	// Measured 2026-09-16 with `a=(a b c d e)`, script files under `env -i`:
+	// ksh93u+ 2012-08-01 answers `b c d` and `"${a[1..3]}"` is three fields;
+	// bash 5.3 calls it an arithmetic syntax error, and zsh 5.9.2 a bad
+	// floating point constant. An additive split, so a grammar flag.
+	//
+	// The `..` must be written, in a literal of the subscript — quoted or not
+	// — and not produced: `x=1..3; ${a[$x]}` is the arithmetic refusal in the
+	// shell with the construct, and so is `${a[1\..3]}`. The first one
+	// written is the separator, which is why `(1..3)` splits inside its
+	// parentheses there and is refused as unbalanced. What the range then
+	// names is the run's — see interp/dotrange.go.
+	SubscriptDotRange bool
+
 	// ChainedAssignSubscript lets an assignment's name carry more than one
 	// subscript, where the later ones reach *into* the value the earlier one
 	// named rather than being part of its text: `a[1][2]=v` puts `v` at 2 of

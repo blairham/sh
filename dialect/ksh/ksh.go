@@ -70,6 +70,12 @@ func Dialect() syntax.Dialect {
 	// *reading* is not — see Semantics.ChainedSubscriptReadsANestedValue
 	// (#2830).
 	d.ChainedSubscript = true
+	// `${a[lo..hi]}` is a range of elements rather than one arithmetic
+	// subscript: `a=(a b c d e); ${a[1..3]}` is `b c d`, three fields when
+	// quoted. bash and zsh hand the same text to the arithmetic and refuse
+	// it. Measured 2026-09-16 on 93u+; the rules for what the range names are
+	// in interp/dotrange.go (#3408).
+	d.SubscriptDotRange = true
 	// A backslash the input ends immediately after is kept only where it is
 	// the first thing in the word: `printf "[%s]" \` is `[\]` here and
 	// `printf "[%s]" x\` is `[x]`, where bash 5.3 keeps both and zsh drops

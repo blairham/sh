@@ -97,6 +97,11 @@ const (
 	// is not recorded and the entry before it survives the call, so a builtin
 	// whose line was left out has nothing of its own to drop.
 	historyOwnLine = ".bash.history.ownline"
+	// historyDropped is how many entries HISTSIZE has taken off the front of
+	// the list, which is what the numbers go on from: measured, `HISTSIZE=2`
+	// after `echo a`, `echo b`, `echo c` lists `3  HISTSIZE=2` and
+	// `4  history`, and `!1` is then an event the list does not hold.
+	historyDropped = ".bash.history.dropped"
 )
 
 // historyUsage is the line a refused option prints after the complaint, in
@@ -113,6 +118,7 @@ func registerHistory(r *interp.Runner) {
 	// the subshell reason is written down.
 	r.SetHistoryStore(historyEntries, historyRecord)
 	r.SetHistoryFile(historyStartFile, historyFinishFile)
+	r.SetHistoryNumbering(historyFirst)
 }
 
 // historyFlags is the letters one call carried.
@@ -179,6 +185,7 @@ func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		// write, and measured, `echo 1; history -c; echo 2` leaves only
 		// `echo 2` appended when the shell ends.
 		historySetUnwritten(r, 0)
+		historySetDropped(r, 0)
 	}
 	if flags.delete {
 		if code := historyDelete(r, flags.offset); code != 0 {
@@ -285,7 +292,7 @@ func historyList(r *interp.Runner, rest []string) int {
 		}
 	}
 	for i := from; i < len(entries); i++ {
-		_, _ = fmt.Fprintf(r.Out(), "%5d  %s\n", i+1, entries[i])
+		_, _ = fmt.Fprintf(r.Out(), "%5d  %s\n", historyFirst(r)+i, entries[i])
 	}
 	return 0
 }
@@ -302,11 +309,15 @@ func historyDelete(r *interp.Runner, offset string) int {
 		historyWriteUsage(r)
 		return 2
 	}
-	if n < 1 || n > len(entries) {
+	// A history number, so counted from wherever HISTSIZE left the front of
+	// the list: measured, after `HISTSIZE=3` has dropped the first entry,
+	// `history -d 1` is out of range.
+	i := n - historyFirst(r)
+	if i < 0 || i >= len(entries) {
 		r.Diagnosef("history: %d: history position out of range\n", n)
 		return 1
 	}
-	r.SetArray(historyStore, append(entries[:n-1:n-1], entries[n:]...))
+	r.SetArray(historyStore, append(entries[:i:i], entries[i+1:]...))
 	historySetUnwritten(r, historyUnwrittenCount(r)-1)
 	return 0
 }
@@ -329,7 +340,7 @@ func historyPrint(r *interp.Runner, rest []string) int {
 	out := make([]string, 0, len(rest))
 	entries := historyEntries(r)
 	for _, arg := range rest {
-		res, err := r.ExpandHistoryAlways(arg, entries, 1)
+		res, err := r.ExpandHistoryAlways(arg, entries, historyFirst(r))
 		if err != nil {
 			r.Diagnosef("history: %s: history expansion failed\n", arg)
 			return 1
@@ -468,14 +479,83 @@ func historyErasesDups(r *interp.Runner) bool {
 // historyAdd is an entry this session made — a line the reader recorded or
 // one `-s` stored — which a later `-a`, or the shell ending, will write.
 func historyAdd(r *interp.Runner, line string) {
-	historyLoad(r, line)
+	historyAppend(r, line, true)
 	historySetUnwritten(r, historyUnwrittenCount(r)+1)
 }
 
 // historyLoad is an entry read from a file, which is already written and is
 // not counted.
 func historyLoad(r *interp.Runner, line string) {
-	r.SetArray(historyStore, append(historyEntries(r), line))
+	historyAppend(r, line, false)
+}
+
+// historyAppend puts one entry at the end of the list, keeping no more than
+// HISTSIZE of them, and moves the numbering on for what fell off the front
+// where numbered is set.
+//
+// The numbers are the part worth being exact about, and they were measured on
+// bash 5.3.20 one shape at a time rather than derived:
+//
+//   - `echo a`, `echo b`, `echo c`, `HISTSIZE=3`, `echo d`, `echo e`,
+//     `history` lists `4 echo d`, `5 echo e`, `6 history` — every entry
+//     pushed off a full list moves the numbers on by one;
+//   - the same with `HISTSIZE=2` and then `history` lists `3 HISTSIZE=2`,
+//     `4 history` — a list already longer than the new size loses the
+//     excess at once, and the numbers move on by one fewer than it lost;
+//   - `HISTSIZE=1` before a two-line HISTFILE is read and then `history`
+//     lists `2 history` — an entry read from a file moves nothing.
+func historyAppend(r *interp.Runner, line string, numbered bool) {
+	entries := historyEntries(r)
+	keep, bounded := historySize(r)
+	dropped := historyDroppedCount(r)
+	if bounded && len(entries) > keep {
+		if numbered {
+			dropped += len(entries) - keep - 1
+		}
+		entries = entries[len(entries)-keep:]
+	}
+	entries = append(entries, line)
+	if bounded && len(entries) > keep {
+		if numbered {
+			dropped += len(entries) - keep
+		}
+		entries = entries[len(entries)-keep:]
+	}
+	historySetDropped(r, dropped)
+	r.SetArray(historyStore, entries)
+}
+
+// historySize is HISTSIZE as a count of entries the list keeps, or false where
+// it keeps them all. Measured on bash 5.3.20: `HISTSIZE=2` after three
+// commands lists only the newest two, `HISTSIZE=0` keeps nothing — `history`
+// then lists nothing at all, its own line included — and a negative value
+// keeps everything.
+func historySize(r *interp.Runner) (int, bool) {
+	value, ok := r.GetVar("HISTSIZE")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+// historyFirst is the history number of the oldest entry the list holds.
+func historyFirst(r *interp.Runner) int { return historyDroppedCount(r) + 1 }
+
+func historyDroppedCount(r *interp.Runner) int {
+	value, _ := r.GetVar(historyDropped)
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func historySetDropped(r *interp.Runner, n int) {
+	r.SetVar(historyDropped, strconv.Itoa(max(n, 0)))
 }
 
 func historyUnwrittenCount(r *interp.Runner) int {

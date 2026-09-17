@@ -204,6 +204,19 @@ func (r *Runner) HistoryEntries() []string {
 	return r.histEntries(r)
 }
 
+// SetHistoryNumbering hands the Runner the history number of the list's
+// oldest entry, for a dialect whose list drops entries off the front and
+// keeps numbering from where it was. Nil numbers from one.
+func (r *Runner) SetHistoryNumbering(first func(*Runner) int) { r.histFirst = first }
+
+// HistoryFirst is the history number of the oldest entry HistoryEntries holds.
+func (r *Runner) HistoryFirst() int {
+	if r.histFirst == nil {
+		return 1
+	}
+	return r.histFirst(r)
+}
+
 // RecordHistoryEntry appends one command to the list.
 //
 // The **expanded** text, which is what every reference after it resolves

@@ -178,7 +178,7 @@ func (g *histGate) next() (string, bool) {
 			g.keep(body)
 			return line, true
 		}
-		res, err := g.r.ExpandHistoryIn(body, quoteOf(g.open), g.r.HistoryEntries(), 1)
+		res, err := g.r.ExpandHistoryIn(body, quoteOf(g.open), g.r.HistoryEntries(), g.r.HistoryFirst())
 		if err != nil {
 			// A reference the list does not hold. bash complains, does not
 			// run the line, leaves the status where the command before it put

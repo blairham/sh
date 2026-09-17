@@ -1533,6 +1533,7 @@ type Runner struct {
 	// file when a script first turns the list on and when the shell ends,
 	// and histStarted says the first of them has happened. See
 	// SetHistoryFile.
+	histFirst   func(*Runner) int
 	histStart   func(*Runner)
 	histFinish  func(*Runner)
 	histStarted bool

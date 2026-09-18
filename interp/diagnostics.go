@@ -445,6 +445,26 @@ type Diagnostics struct {
 	// bool. See the constants.
 	TestUnknownLongOperator TestUnknownOperatorReport
 
+	// TestTwoWordUnknownOperatorLeavesAnOperand gives the *two-word* form the
+	// same reading, which is a separate question and splits the panel the
+	// other way.
+	//
+	// Two words go straight to the unary evaluation in six of the seven
+	// columns, so the word in front is the operator and is what gets named:
+	// `[ -Q f ]` is `-Q: unary operator expected` in bash, `-Q: unexpected
+	// operator` in dash, `unknown condition: -Q` in zsh. BusyBox ash parses
+	// the two words instead, so an unknown operator is a *string* and the
+	// word after it is one operand too many — measured 2026-09-17 in the
+	// digest-pinned alpine image, `[ -Q g.f ]` and `[ -N n.f ]` are
+	// `g.f: unknown operand` and `n.f: unknown operand` there, with
+	// `[ n -eq 5 ]` beside them as the control that says a complaint really
+	// about the operand names the operand in both (#3278).
+	//
+	// A field of its own rather than TestUnknownLongOperator reaching further
+	// down: dash holds that value and names the *operator* here, so one field
+	// for both would move a column that was measured the other way.
+	TestTwoWordUnknownOperatorLeavesAnOperand bool
+
 	// TestUnaryExpected is what `test` says about a word where a unary
 	// operator belonged. One verb: the word.
 	TestUnaryExpected string
@@ -1266,6 +1286,16 @@ type Diagnostics struct {
 	// `invalid number`. Empty is ReadBadNumber (#3218).
 	ReadBadTimeout        string
 	ReadBadDescriptorSpec string
+	// ReadBadCount is the third of them, for `-n` and `-N`. Measured
+	// 2026-09-17 in the digest-pinned alpine image, BusyBox v1.37.0:
+	// `read -n x v` is `invalid count`, `-t` is `invalid timeout` and `-u` is
+	// `invalid file descriptor`, each of them the whole message with the
+	// operand nowhere in it — so that column words all three by the letter
+	// where bash words two and leaves `-n` on the shared sentence (#3367).
+	ReadBadCount string
+	// ReadBadNumberStatus is what any of those four reports. Zero means 1,
+	// which is bash's; BusyBox ash answers 2.
+	ReadBadNumberStatus int
 	// ReadBadFileDescriptor is `read -u` on a descriptor this shell holds
 	// nothing open at, taking the number as given. Empty means nothing is
 	// said — one shell in the panel reports 1 in silence — so this path has
@@ -1660,6 +1690,21 @@ type Diagnostics struct {
 	// as a name in this column, sentence, status and all — see
 	// storeOperandEmptySubscript (#3513).
 	BuiltinBadNameStatusFor map[string]int
+
+	// BuiltinBadNameNamesTheShellAlone writes that one complaint with the
+	// shell's own name in front and nothing else — no script, no line — while
+	// the builtin's name stays in the sentence, keyed by builtin.
+	//
+	// The narrow sibling of [BuiltinNamesTheShellAlone], which says the same
+	// thing about *every* complaint a builtin makes. One column and one
+	// builtin need the narrow one: BusyBox ash writes `ash: read: '1bad': bad
+	// variable name` and `<file>: read: line N: no arg for -d option` in the
+	// same run, so `read` reports as the applet here and as a located builtin
+	// one letter over. Measured 2026-09-17 in the digest-pinned alpine image,
+	// with `unset`, `export`, `readonly`, `local` and `getopts` beside it as
+	// the controls — all five located, all five at that dialect's status
+	// (#3367).
+	BuiltinBadNameNamesTheShellAlone map[string]bool
 
 	// BuiltinBadNameKeepsValue quotes the operand back as written, `1x=v` and
 	// all, rather than the name in front of the `=`. True in bash and ksh93;

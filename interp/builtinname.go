@@ -3,7 +3,10 @@
 
 package interp
 
-import "strings"
+import (
+	"path"
+	"strings"
+)
 
 // An operand a builtin was given where it wanted a name.
 //
@@ -434,7 +437,17 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 			defer func() { r.inBuiltin = outer }()
 		}
 	}
-	r.diagf("%s\n", Wording(wording, "%[1]s: `%[2]s': not a valid identifier", builtin, shown))
+	line := Wording(wording, "%[1]s: `%[2]s': not a valid identifier", builtin, shown)
+	if d.BuiltinBadNameNamesTheShellAlone[key] {
+		// This one complaint reports as the shell itself, where the same
+		// builtin's other refusals are located — see
+		// Diagnostics.BuiltinBadNameNamesTheShellAlone. The builtin's name
+		// stays in the sentence, which is what parts this from
+		// BuiltinNamesTheShellAlone next door.
+		r.errf("%s: %s\n", path.Base(r.invokedAs()), line)
+	} else {
+		r.diagf("%s\n", line)
+	}
 	status := orDefault(d.BuiltinBadNameStatus, 1)
 	if own, has := d.BuiltinBadNameStatusFor[key]; has {
 		// The builtin's own number where it differs from the dialect's — see

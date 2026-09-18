@@ -542,6 +542,74 @@ family of corpus disagreements (28 rows); it sets
 `DoubleBracketIsACommand` since #3409, and `share/suite/ash/dblbracket.tests`
 holds the rows.
 
+## `test` reports as the applet, and parses its two-word form
+
+Every complaint `test`, `[` and `[[` make here opens with the shell's own
+name and nothing else, where every other complaint in the same shell opens
+`<file>: <builtin>: line N:`. That is the shape `printf` already had in
+this column, and `kill` and `read` have at one site each; `[` is the
+third builtin in the group (#3278, #3165).
+
+The word named is the second difference and it is not a swap. Measured
+2026-09-17 in the digest-pinned image, BusyBox v1.37.0:
+
+| case | BusyBox 1.37.0 | ours, before |
+| --- | --- | --- |
+| `n=5; [ n -eq 5 ]` | `ash: n: out of range` | `case.sh: [: line N: n: out of range` |
+| `[ -Q g.f ]` | `ash: g.f: unknown operand` | `-Q: unknown operand` |
+| `[ -N n.f ]` | `ash: n.f: unknown operand` | `-N: unknown operand` |
+| `[ a b c ]` | `ash: b: unknown operand` | `case.sh: line N: b: unknown operand` |
+| `[ 1 -eq 2` | `ash: missing ]` | `case.sh: [: line N: missing ]` |
+| `test -Q g.f` | `ash: g.f: unknown operand` | `-Q: unknown operand` |
+
+The first row is the control that says the two are not simply swapped:
+where the complaint really is about the operand, both name the operand.
+What parts them is that **the two-word form is parsed here** rather than
+sent straight to the unary evaluation, so a word this shell has no
+operator for is a *string* and the word after it is one operand too many.
+Six of the seven columns send it straight there and name the word in
+front — bash `-Q: unary operator expected`, dash `-Q: unexpected
+operator`, zsh `unknown condition: -Q` — which is why
+`Diagnostics.TestTwoWordUnknownOperatorLeavesAnOperand` is a field of its
+own rather than `TestUnknownLongOperator` reaching one word further down.
+
+**Three rows of the same class are measured and not modeled**, and they
+are the rest of the same fact: that shell's `test` is an expression parser
+over the words rather than the argument-count table POSIX describes, so
+its complaint is about the word the parse stopped at.
+
+    [ 1 -eq ]      BusyBox `-eq: argument expected`   ours `-eq: unknown operand`
+    [ g.f -ot ]    BusyBox `-ot: argument expected`   ours `-ot: unknown operand`
+    [ -z a b ]     BusyBox `b: unknown operand`       ours `a: unknown operand`
+
+The word named is already right in the first two and the sentence is not;
+the third is the leftover-word rule one form further on. #3550 holds them.
+
+## `read`'s complaints are its own, and one of them is the applet's
+
+Four separate differences, measured the same day and in the same way:
+
+| probe | BusyBox 1.37.0 | ours, before |
+| --- | --- | --- |
+| `read -d` | `no arg for -d option`, 2 | `No arg`, 2 |
+| `read -u x v` | `invalid file descriptor`, 2 | `x: invalid number`, 1 |
+| `read -n x v` | `invalid count`, 2 | `x: invalid number`, 1 |
+| `read -t x v` | `invalid timeout`, 2 | `x: invalid number`, 1 |
+| `read 1bad` | `ash: read: '1bad': bad variable name`, 1 | located, 2 |
+
+`read` is the only builtin in this shell that reaches
+`OptionNeedsArgument` at all — the five letters above are the whole of the
+measurement — so the capitalisation was dash's with nothing else holding
+it up. The three numeric complaints are worded by the letter rather than
+by one sentence with the operand in it, and the operand appears in none of
+them.
+
+The last row is the narrow half of the applet shape: `read` reports as the
+applet for a bad *name* and as a located builtin one letter over, in the
+same run. `unset`, `export`, `readonly`, `local` and `getopts` refuse the
+same operand located and at 2, which is the control that says the
+exception is this one complaint's rather than the dialect's.
+
 ## Vector summary
 
 `dialect/ash/ash.go` carries the evidence for each answer beside the

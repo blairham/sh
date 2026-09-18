@@ -1302,11 +1302,16 @@ func Diagnostics() interp.Diagnostics {
 		SetInvalidOptionLetterStatus: 2,
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters dash has and this shell does not: -b job
-			// notices, -i interactive, -s reading standard input, and the
-			// three about its line editor and end-of-file — -E emacs, -V
-			// vi, -I ignoreeof. Measured 2026-09-05 by asking dash for
-			// every letter of the alphabet in both cases and both signs.
-			"set": "bisEIV",
+			// notices, -i interactive, and the three about its line editor
+			// and end-of-file — -E emacs, -V vi, -I ignoreeof. Measured
+			// 2026-09-05 by asking dash for every letter of the alphabet in
+			// both cases and both signs.
+			//
+			// `s` was the sixth and is gone: the letter abbreviates the
+			// `stdin` name this dialect already lists, so it is declared in
+			// the letter table Apply installs and moves the same state the
+			// name moves (#3411).
+			"set": "biEIV",
 		},
 		// Said whichever spelling asked, so the verb goes unused; status 0,
 		// the field's default, is what makes it a remark rather than an
@@ -1678,6 +1683,25 @@ func Apply(r *interp.Runner) {
 	// (#2624), and the two that describe the invocation are exactly the two
 	// nothing else in the language can tell a dash script.
 	r.AddSetOptions("interactive", "stdin", "debug")
+	// And the letter that abbreviates the second of them. `set -s` is not a
+	// request this shell has to build anything for: it is the `stdin` name
+	// above, spelled short, and the letter and the name are one request with
+	// one answer — measured 2026-09-17 from a script file under
+	// `env -i PATH=/usr/bin:/bin`, `set -s` leaves `$-` as `s` and `stdin
+	// on` in the listing, `set +s` empties both, and nothing else was
+	// observed to move: the program is not re-read.
+	//
+	// Declared in this dialect's own letter table rather than in the shared
+	// one because `s` is a letter the panel spells three different options
+	// with, which is exactly what that table is for — ksh93 sorts its
+	// operands with it (Semantics.SetSLetterSortsTheOperands), zsh means its
+	// own invocation option, and bash refuses it outright. The shared
+	// reading answers on that axis, which is `No` here, so before this the
+	// letter reached the refusal `s` carried in
+	// Diagnostics.UnimplementedOptionLetters above and a script that wrote
+	// it ended at 2 where dash carries on (#3411). See
+	// interp.Runner.SetOptionLetterNames.
+	r.SetOptionLetterNames(map[rune]string{'s': "stdin"})
 	// dash has no `builtin`.
 	r.Unregister("builtin")
 	// No `compgen` here; it is bash's alone.

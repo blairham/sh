@@ -66,13 +66,14 @@ func TestDashRefusesAnInvocationOptionAtLineNought(t *testing.T) {
 	}
 }
 
-// TestDashKeepsTheSetLettersItHasAndThisShellDoesNot: `-b`, `-i`, `-s` and
-// the three about its line editor and end-of-file are dash's own.
+// TestDashKeepsTheSetLettersItHasAndThisShellDoesNot: `-b`, `-i` and the
+// three about its line editor and end-of-file are dash's own. `-s` was the
+// sixth until #3411 and is implemented now — see the test below it.
 func TestDashKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := dash.Diagnostics().UnimplementedOptionLetters["set"], "bisEIV"; got != want {
+	if got, want := dash.Diagnostics().UnimplementedOptionLetters["set"], "biEIV"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "bisEIV" {
+	for _, l := range "biEIV" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than illegal", src, got)

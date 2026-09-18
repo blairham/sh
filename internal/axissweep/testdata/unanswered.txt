@@ -195,6 +195,7 @@ ash   TableUnderAnArrayDeclaration
 ash   TableUnderAnArrayLiteralDeclaration
 ash   TestAndArithmeticUpdatePipelineStatus
 ash   TraceArrayLiteralShowsTheExpandedElements
+ash   TraceSubscriptedArrayLiteralIsElementAssignments
 ash   TraceElementSubscriptIsEvaluated
 ash   TransformLetterCheckedOnlyWhenValued
 ash   TwoCaseLettersOnOneDeclarationCancel
@@ -436,6 +437,7 @@ dash  TableUnderAnArrayDeclaration
 dash  TableUnderAnArrayLiteralDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
 dash  TraceArrayLiteralShowsTheExpandedElements
+dash  TraceSubscriptedArrayLiteralIsElementAssignments
 dash  TraceElementSubscriptIsEvaluated
 dash  TransformLetterCheckedOnlyWhenValued
 dash  TwoCaseLettersOnOneDeclarationCancel

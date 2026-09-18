@@ -227,19 +227,33 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 }
 
 // TestBadPatternIsFatal is the composite the bracket policy stands for here:
-// an unterminated bracket in a case pattern abandons the script with status 0,
-// where the same pattern against the filesystem gives 1. Both are measured;
-// neither is guessable from the other.
+// an unterminated bracket abandons the script, at this shell's own fatal 1 for
+// a `case` arm and against the filesystem, and at the condition's 2 inside
+// `[[ ]]`.
+//
+// The first row used to want 0, and the measurement behind it read a
+// *subshell's* `$?` rather than the script's own exit. Re-measured 2026-09-18
+// from a script file under `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`:
+// `case "[" in [) …` ends real zsh at 1 and `[[ "[" == [ ]]` ends it at 2
+// (#3398).
 func TestBadPatternIsFatal(t *testing.T) {
-	out, st := answersRun(t, `case "[" in [) echo hit;; *) echo miss;; esac; echo after`)
-	if !strings.Contains(out, "bad pattern: [") {
-		t.Errorf("got %q", out)
-	}
-	if strings.Contains(out, "after") || strings.Contains(out, "hit") || strings.Contains(out, "miss") {
-		t.Errorf("the script should stop, got %q", out)
-	}
-	if st != 0 {
-		t.Errorf("status = %d, want 0", st)
+	for _, tc := range []struct {
+		src  string
+		want int
+	}{
+		{`case "[" in [) echo hit;; *) echo miss;; esac; echo after`, 1},
+		{`[[ "[" == [ ]]; echo after`, 2},
+	} {
+		out, st := answersRun(t, tc.src)
+		if !strings.Contains(out, "bad pattern: [") {
+			t.Errorf("%s: got %q", tc.src, out)
+		}
+		if strings.Contains(out, "after") || strings.Contains(out, "hit") || strings.Contains(out, "miss") {
+			t.Errorf("%s: the script should stop, got %q", tc.src, out)
+		}
+		if st != tc.want {
+			t.Errorf("%s: status = %d, want %d", tc.src, st, tc.want)
+		}
 	}
 	for _, src := range []string{`echo [a`, `echo a[`} {
 		out, st := answersRun(t, src)
@@ -249,6 +263,31 @@ func TestBadPatternIsFatal(t *testing.T) {
 		if st != 1 {
 			t.Errorf("%s: status = %d, want 1", src, st)
 		}
+	}
+}
+
+// And a refused pattern inside text a special builtin is running ends that
+// text rather than the script, which is the boundary this shell already draws
+// for every other fatal error. Measured 2026-09-18: `eval` reports 1 and the
+// script carries on, a `.` of the same file reports 126 and the script carries
+// on, and the same pattern in a function body still ends the script (#3398).
+func TestARefusedPatternInsideAnEvalEndsTheEval(t *testing.T) {
+	out, st := answersRun(t, `eval 'case "[" in [) echo hit;; esac'; echo "st=$?"; echo after`)
+	if !strings.Contains(out, "bad pattern: [") {
+		t.Errorf("got %q", out)
+	}
+	if !strings.HasSuffix(out, "st=1\nafter\n") {
+		t.Errorf("got %q, want the eval to report 1 and the script to carry on", out)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
+	}
+	out, st = answersRun(t, `f() { case "[" in [) echo hit;; esac; }; f; echo after`)
+	if strings.Contains(out, "after") {
+		t.Errorf("got %q, want a function body to be no boundary", out)
+	}
+	if st != 1 {
+		t.Errorf("status = %d, want 1", st)
 	}
 }
 

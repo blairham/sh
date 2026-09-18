@@ -1370,6 +1370,41 @@ type Semantics struct {
 	// for an answer. The valueless `typeset -n r` asks nothing: both shells
 	// refuse it on the attribute alone.
 	NamerefArrayRefusal NamerefArrayRefusal
+
+	// NamerefLetterStandsAlone refuses a declaration that writes the `n`
+	// letter beside any other one, rather than deciding which of the two
+	// wins.
+	//
+	// The other answer is a table of one-letter decisions: `-na` drops the
+	// reference and keeps the array, `-ni` refuses the assignment, `-nu`
+	// folds the name the reference is aimed at. A shell that answers Yes
+	// here never reaches any of that, because the *combination* is what it
+	// will not read — the refusal is its option parser's and not a sentence
+	// about references.
+	//
+	// Measured 2026-09-18 from a script file under `env -i` with a scratch
+	// HOME, against ksh93u+ 2012-08-01 and bash 5.3.20, with `v=1`:
+	//
+	//	                  ksh93u+                    bash 5.3.20
+	//	typeset -n r=v    0, the reference           0, the reference
+	//	typeset -rn r=v   usage block, 2, fatal      0, a frozen reference
+	//	typeset -ni r=v   usage block, 2, fatal      1, silently, nothing made
+	//	typeset -nx r=v   usage block, 2, fatal      0, an exported reference
+	//	typeset -nu r=v   usage block, 2, fatal      0, aimed at `V`
+	//	typeset -na r=v   usage block, 2, fatal      0, a plain array
+	//	typeset -n -i r=v usage block, 2, fatal      1
+	//	typeset +n -i r   usage block, 2, fatal      the array letter's own row
+	//
+	// So the letters need not be bundled into one word and the sign does not
+	// matter: what is refused is the `n` letter in company. The complaint is
+	// the *bare* usage block, with none of the `typeset: -Q: unknown option`
+	// line an option the builtin does not have gets in front of it — which
+	// is the control that says the parser is refusing the pair rather than
+	// the letter.
+	//
+	// Asked only where an `n` letter really stood beside another, so a
+	// dialect that has no reference at all is never asked.
+	NamerefLetterStandsAlone Answer
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other

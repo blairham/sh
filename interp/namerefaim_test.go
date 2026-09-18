@@ -28,6 +28,11 @@ func namerefAimSemantics() Semantics {
 	sem.ScalarOverACompoundIsAnInconsistentType = No
 	sem.ArrayScalarIsTheWholeArray = No
 	sem.NamerefArrayRefusal = NamerefArrayCheckedLastOnTheAttribute
+	// And the `n` letter is read beside another one rather than refusing
+	// its company, which is what lets a case here write `typeset -rn` at
+	// all. The other answer is its own subject — see
+	// interp/namerefletters_test.go.
+	sem.NamerefLetterStandsAlone = No
 	// The letters `local` takes, and the two axes a case walks past on its
 	// way to this one: `${!r}` naming the reference's target rather than
 	// expanding it twice, and a valueless declaration bringing the name into

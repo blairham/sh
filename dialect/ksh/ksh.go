@@ -1331,6 +1331,16 @@ func Semantics() interp.Semantics {
 	// The associative attribute does make an object, `typeset -A m=()`, and
 	// is refused (#3103).
 	s.NamerefArrayRefusal = interp.NamerefArrayCheckedFirstOnTheContents
+	// And the `n` letter is read **alone** or not at all. Measured
+	// 2026-09-18 on ksh93u+ 2012-08-01, `env -i` with a scratch HOME, from
+	// a file: `typeset -n r=v` is the reference at 0, while `-rn`, `-ni`,
+	// `-nx`, `-nu`, `-na`, `-nl`, `-nt`, the two-word `-n -i` and `-i -n`,
+	// and even `+n -i` are each the builtin's bare usage block at 2 with
+	// the script ending there. `typeset -Q r=v` is the control: an option
+	// this shell has not got writes `typeset: -Q: unknown option` in front
+	// of the same block, and the pair writes no such line — the parser is
+	// refusing the company rather than a letter (#3171).
+	s.NamerefLetterStandsAlone = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No

@@ -6,6 +6,7 @@ package interp
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -480,7 +481,7 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 // declare -n outer; }` leave `declare -n outer` unaimed, where `f(){ declare
 // -gn outer; }` — no new cell — aims at `good`, and `f(){ local x=good;
 // local -n x; }` aims at it too.
-func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, adopts bool) int {
+func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, hasValue, frozen, adopts bool) int {
 	// The readonly refusal a **frozen reference** makes, in the one place its
 	// order against the other two is measured. bash 5.3.20 puts the bad
 	// target ahead of it and nothing else: `v=1; declare -rn r=v` then
@@ -549,11 +550,11 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 					return r.refuseNameref(builtin, Wording(r.diag().NamerefBadTarget,
 						"%[1]s: invalid variable name for name reference", held))
 				}
-				r.namerefEmptiesTheCell(name)
+				r.namerefEmptiesTheCell(name, df)
 				r.setNameref(name, held)
 				return 0
 			}
-			r.namerefEmptiesTheCell(name)
+			r.namerefEmptiesTheCell(name, df)
 			r.setNameref(name, "")
 			return 0
 		}
@@ -564,6 +565,7 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 		if refuseFrozen() {
 			return 1
 		}
+		r.namerefKeepsOnlyThisLinesFolding(name, df)
 		return 0
 	}
 	d := r.diag()
@@ -591,10 +593,19 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 		return r.refuseNameref(builtin, Wording(d.NamerefBadTarget,
 			"%[1]s: invalid variable name for name reference", target))
 	}
+	aim, aimIsAName := r.namerefAim(target, df)
+	if !aimIsAName {
+		// The letter shaped the name into something that is not one, which
+		// is refused **in silence** — see namerefAim. Behind the check above
+		// and not folded into it, because the two are worded differently and
+		// the difference is measured: the word as written gets the sentence,
+		// what the letters made of it gets nothing at all.
+		return 1
+	}
 	if refuseFrozen() {
 		return 1
 	}
-	if target == name {
+	if target == name || aim == name {
 		// A reference aimed straight at itself, and **where it is written
 		// decides what happens to it**.
 		//
@@ -638,11 +649,11 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 		// that shadowed the name is holding, which is untouched by this
 		// (#3048). What goes is the value standing in the live table under
 		// the name this binding just took over.
-		r.namerefEmptiesTheCell(name)
-		r.setNameref(name, target)
+		r.namerefEmptiesTheCell(name, df)
+		r.setNameref(name, aim)
 		return 0
 	}
-	if r.namerefSelfReference(name, target) {
+	if r.namerefSelfReference(name, aim) {
 		if r.ask(r.sem().NamerefCycleIsRefused, "a name reference that reaches itself") {
 			return r.refuseNameref(builtin, Wording(d.NamerefSelfReference,
 				"%[1]s: invalid self reference", name))
@@ -661,9 +672,61 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 		return r.refuseNameref(builtin, Wording(d.NamerefCannotBeAnArray,
 			"%[1]s: reference variable cannot be an array", name))
 	}
-	r.namerefEmptiesTheCell(name)
-	r.setNameref(name, target)
+	r.namerefEmptiesTheCell(name, df)
+	r.setNameref(name, aim)
 	return 0
+}
+
+// namerefAim is what the letters on a `-n` declaration make of the name the
+// reference is aimed at.
+//
+// **A reference's own cell holds the target's name**, so a letter that shapes
+// a value shapes that name — the same letter, doing the same thing, to the
+// one string the cell has. Measured 2026-09-18 on bash 5.3.20, `env -i` with
+// a scratch HOME, from a file, with `v=1` and `V=BIGV`:
+//
+//	declare -nu r=v     declare -nu r="V"     and `$r` reads BIGV
+//	declare -nl r=V     declare -nl r="v"     and `$r` reads 1
+//	declare -nu r=a[1]  declare -nu r="A[1]"  the element of `A`, not of `a`
+//	declare -ni r=v     refused at 1, in silence, and nothing is made
+//
+// The last row is the same rule reaching its end: the integer letter makes
+// what the cell holds a **number**, and a number is not a name. So the
+// declaration has nowhere to aim and is refused — with no sentence at all,
+// which is measured and is the one thing here that is not simply the letter
+// doing its job. The word as *written* still gets the ordinary complaint:
+// `declare -ni r=1` is “declare: `1': invalid variable name for name
+// reference“ in that shell, because `1` fails the check on the written word
+// before this is reached, where `declare -ni r=v` passes it and fails here.
+//
+// The fold runs **in front of** the self-reference check and the written word
+// is still tested too, which is two measurements rather than one: `declare
+// -nl r=R` is `nameref variable self references not allowed` — the fold is
+// what made it one — and `declare -nu r=r` is the same refusal, where the
+// fold alone would have aimed it at `R` and let it through. `declare -nu r=R`
+// is taken at 0, which is the control that says the comparison is not merely
+// case-blind.
+//
+// Core rather than an axis for the reason the rest of interp/nameref.go is:
+// bash is the only column that reads the two letters together at all. The
+// other shell that spells a reference refuses the pair at the option parser
+// and never arrives — see Semantics.NamerefLetterStandsAlone.
+//
+// Read off the declaration's own letters rather than off the name's, because
+// the two answer different questions: an attribute the name was already
+// carrying is discarded by this very declaration and shapes nothing. See
+// namerefEmptiesTheCell.
+func (r *Runner) namerefAim(target string, df declareFlags) (string, bool) {
+	if df.integer && !df.integerOff {
+		return "", false
+	}
+	switch {
+	case df.lower:
+		return r.caseChanged(target, unicode.ToLower), true
+	case df.upper:
+		return r.caseChanged(target, unicode.ToUpper), true
+	}
+	return target, true
 }
 
 // namerefEmptiesTheCell is what a `-n` declaration does to whatever the name
@@ -695,6 +758,17 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 // is the reference's own and is kept: `typeset -n y; typeset -i y` lists as
 // `declare -in y` there.
 //
+// **And only what it found already standing.** A letter written on the `-n`
+// line itself is the reference's own from the start and survives: measured
+// 2026-09-18 on bash 5.3.20, `v=1; declare -nu r=v` lists as `declare -nu
+// r="V"` where `declare -u r; declare -n r=v` lists as `declare -n r="v"` —
+// the same letter, kept in one and discarded in the other, and the only
+// difference is which line wrote it. That is why df is read here rather than
+// the maps: by the time this runs applyAttributes has already put this
+// line's letters in them, so the maps can no longer say which line they came
+// from. See namerefAim for what the kept letter then does to the name the
+// reference is aimed at.
+//
 // The **array attribute goes with it**, and that is measured rather than
 // assumed. Almost no array reaches here at all — a `-n` declaration over one
 // is refused, see [NamerefArrayRefusal] — but one shape does: ksh93 takes
@@ -711,17 +785,38 @@ func (r *Runner) declareNameref(builtin, name, target string, hasValue, frozen, 
 // `typeset -n r=NOT_A_NAME` or by a refused self reference reports 1 and
 // leaves `r` holding OUTER in both shells — so every caller is on a path that
 // has already decided the reference is going to be made.
-func (r *Runner) namerefEmptiesTheCell(name string) {
+func (r *Runner) namerefEmptiesTheCell(name string, df declareFlags) {
 	delete(r.Arrays, name)
 	delete(r.AssocArrays, name)
-	delete(r.integer, name)
-	delete(r.lowered, name)
-	delete(r.uppered, name)
+	r.namerefKeepsOnlyThisLinesFolding(name, df)
 	// hideVar rather than a bare delete: a name that came from the
 	// environment is not in Vars to begin with, so deleting nothing would
 	// leave the inherited value answering every read of the cell the
 	// reference has just taken over.
 	r.hideVar(name)
+}
+
+// namerefKeepsOnlyThisLinesFolding takes the three value-shaping attributes
+// off a name a `-n` declaration has just made a reference of, except the ones
+// that declaration wrote itself.
+//
+// Its own function because a *second* `typeset -n r` over a reference that is
+// already aimed changes nothing else at all and still does this: measured
+// 2026-09-18 on bash 5.3.20, `declare -nu r=v` lists as `declare -nu r="V"`
+// and a bare `declare -n r` after it lists as `declare -n r="V"` — the letter
+// gone, the name it had already folded left standing. So the discard belongs
+// to the `n` letter rather than to the emptying of the cell, and the two
+// paths through the declaration share it.
+func (r *Runner) namerefKeepsOnlyThisLinesFolding(name string, df declareFlags) {
+	if !df.integer {
+		delete(r.integer, name)
+	}
+	if !df.lower {
+		delete(r.lowered, name)
+	}
+	if !df.upper {
+		delete(r.uppered, name)
+	}
 }
 
 // namerefAttributeRemoved is `typeset +n r`: the reference goes and **the name

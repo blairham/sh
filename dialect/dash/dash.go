@@ -497,6 +497,8 @@ func Semantics() interp.Semantics {
 	// a cycle of. Measured 2026-09-15, `typeset` is not a builtin here —
 	// `typeset: not found` at 127 — so the declaration that would build one
 	// cannot be written (#2553).
+	// unanswered NamerefLetterStandsAlone: `typeset` is not a builtin here,
+	// so there is no line for an `n` letter to keep company on (#3171).
 	// unanswered NamerefArrayRefusal: the same wall, and no arrays either —
 	// `r=(a b)` is `Syntax error: "(" unexpected` — so neither half of the
 	// question can be put (#3103).

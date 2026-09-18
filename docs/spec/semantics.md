@@ -15595,6 +15595,72 @@ not be taken away from it: doing that put the fill outside the prefix past
 `fmt`'s ceiling and inside it below, which is two answers to one question
 (#3089).
 
+**`PrintfFloatHalf`** — bash to even · dash to even · ksh93 **away from zero above a tenth** · zsh to even · ash to even
+
+How a floating conversion resolves an operand that falls *exactly*
+halfway at the precision asked for. Asked for nothing else, because
+nothing else parts the readings: `printf '%.2f' 1.005` is `1.00`
+everywhere, since 1.005 is under the half once it is a double.
+
+Measured 2026-09-18 under `LC_ALL=C` from a script file. The five agree
+on every row and ksh93u+ 2012-08-01 answers every one of them
+differently:
+
+    printf '%.0f %.0f %.0f' 2.5 4.5 -2.5   five 2 4 -2     ksh93 3 5 -3
+    printf '%.1f' 0.25                     five 0.2        ksh93 0.3
+    printf '%.2f' 0.125                    five 0.12       ksh93 0.13
+    printf '%.0e' 2.5                      five 2e+00      ksh93 3e+00
+    printf '%.2g' 0.125                    five 0.12       ksh93 0.13
+    printf '%.4f' 0.09375                  five 0.0938     ksh93 0.0937
+    printf '%.0f' 0.5                      five 0          ksh93 0
+
+**An enumeration rather than a bool, because the last two rows are the
+same shell taking a half the other way.** A half under a tenth goes
+toward zero there — `%.3f` of 0.0625 and 0.0875 are `0.062` and `0.087`
+— and so does one the precision reaches no digit of, which is the `%.0f`
+of 0.5 row, where agreement with the other five is arrived at from the
+opposite side. A field that could say only "away from zero" would be
+wrong about both, and the second row is what keeps the away reading off
+a value it does not govern.
+
+**Two facts about that column are written down and not modeled**, so
+the axis is not taken for more than it is. ksh93u+ renders from the
+*shortest decimal* that names the value rather than from the value —
+`printf '%.20f' 0.15` is `0.15000000000000000000` there against bash's
+`0.14999999999999999445` — so it writes `0.2` for `%.1f` of 0.15 where
+the double is below the half. And it is not self-consistent between
+adjacent precisions: `%.2f` of 0.995 is `0.99` while `%.1f` of it is
+`1.0`, and `%.3f` of 0.0999 is `0.099` while `%.2f` of it is `0.10`.
+Neither is a rounding rule and neither is reachable through an exact
+half, so this shell disagrees with that column on those rows before this
+axis and after it alike.
+
+The answer is applied as **one representable step of the operand** and
+not as a renderer of its own: a half nudged by a step is no longer a
+half, so the flags, the width and the precision are still laid out by
+the one path every other operand takes. A step is far below the place
+being rounded, since a value that is a half there is representable
+there.
+
+**`PrintfUnknownEscapeDropsTheBackslash`** — bash no · dash no · ksh93 **yes** · zsh no · ash no
+
+Writes the character alone for an escape a printf *format* does not
+define, rather than the backslash and the character.
+
+    printf '[\q][\z][\8][\-]'   five [\q][\z][\8][\-]   ksh93 [q][z][8][-]
+
+Measured 2026-09-18 under `LC_ALL=C` from a script file.
+
+The format's site alone. A `%b` operand keeps the backslash in all six —
+`printf '%b' '[\q]'` is `[\q]` in ksh93u+ too — which is the two-site
+split `PrintfEscEscape` and `PrintfBEscEscape` are, arrived at from the
+opposite direction: there one column takes a letter at one site only,
+here one column drops a backslash at one site only.
+
+A format ending in a backslash is not this question and is unanimous:
+`printf 'a\'` writes `a\` in every column, because there is no
+character for the backslash to have been in front of.
+
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 
 Is how `%q` quotes, which is three answers and an absence rather than a
@@ -19079,7 +19145,7 @@ Measured 2026-09-18 over a script file under `env -i PATH=/usr/bin:/bin` with
 | bash 3.2.57 | `x: readonly variable` | `after 0` |
 
 Unanimous on the fatality and not on the status, so it is core rather than an
-axis — and it is neither neighbour's answer. zsh ends the script for a
+axis — and it is neither neighbor's answer. zsh ends the script for a
 builtin's refused write and does not for this one; ksh93 ends it for
 `readonly x=1; (( x = 2 ))` and does not for the same write through `let`.
 `Runner.refuseReadonlyInACommand` answers it there (#3470). Ours took the

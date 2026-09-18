@@ -1821,6 +1821,21 @@ func Semantics() interp.Semantics {
 	// and no there.
 	s.PrintfEscEscape = interp.Yes
 	s.PrintfCapitalEscEscape = interp.Yes
+	// An escape this shell's format does not define is written without its
+	// backslash: `printf '[\q][\z][\8][\-]'` is `[q][z][8][-]`, where
+	// the other five columns write the backslash too. The `%b` site is not
+	// this one and keeps it — `printf '%b' '[\q]'` is `[\q]` here as it is
+	// everywhere.
+	s.PrintfUnknownEscapeDropsTheBackslash = interp.Yes
+	// And a floating conversion's exact half goes away from zero rather
+	// than to the even neighbor — `printf '%.0f %.0f %.0f' 2.5 4.5 -2.5`
+	// is `3 5 -3` here against `2 4 -2` in the other five, and `%.2f` of
+	// 0.125 is `0.13` against `0.12` — but only above a tenth: `%.3f` of
+	// 0.0125 is `0.012` here and `0.013` there, and `%.4f` of 0.09375 is
+	// `0.0937` against `0.0938`. Both arms are this one constant because
+	// they are one shell's one rule. Measured 2026-09-18 under `LC_ALL=C`
+	// from a script file.
+	s.PrintfFloatHalf = interp.PrintfFloatHalfAwayFromZeroAboveATenth
 	// `\E` is the escape character and `\e` is two characters — the opposite
 	// of zsh, which is why one axis could not answer for both letters.
 	s.PrintfBEscEscape = interp.No

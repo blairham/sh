@@ -738,6 +738,14 @@ func Semantics() interp.Semantics {
 	// this is the text read as written rather than an omission.
 	s.PrintfEscEscape = interp.No
 	s.PrintfCapitalEscEscape = interp.No
+	// An escape a format does not define keeps its backslash — `printf
+	// '[\q][\z][\8][\-]'` is `[\q][\z][\8][\-]` — and a floating
+	// conversion's exact half goes to the even neighbor: `printf '%.0f
+	// %.0f %.0f' 2.5 4.5 -2.5` is `2 4 -2` and `%.2f` of 0.125 is `0.12`.
+	// Measured 2026-09-18 under `LC_ALL=C` from a script file; ksh93 is the
+	// one column on the other side of both.
+	s.PrintfUnknownEscapeDropsTheBackslash = interp.No
+	s.PrintfFloatHalf = interp.PrintfFloatHalfToEven
 	s.PrintfBEscEscape = interp.No
 	s.PrintfBCapitalEscEscape = interp.No
 	// The octal needs no `\0` here, which is the one thing this shell and

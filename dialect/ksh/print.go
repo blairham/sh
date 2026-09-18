@@ -31,7 +31,12 @@ import (
 //     next word; a number nothing writable is open at — or a word that is no
 //     number at all — is `bad file unit number [Bad file descriptor]`, 1.
 //   - `--` ends the options, and so does a lone `-`: `print - -n` prints the
-//     word. Neither of them does after `-R`, where both print as words.
+//     word. Neither of them does after `-R`, where both print as words. A
+//     *third* dash puts the word past the options entirely, so `print ---`
+//     and `print "--- a title ---"` print (#3163).
+//   - a word of two dashes and something else is a long option, of which
+//     there are none here; it is refused as the whole word, cut at a `=`,
+//     with a usage line of its own.
 //   - `-R` is `-r` plus the end of this shell's option parsing: the rest of
 //     its own bundle goes unread, and of the words after it only a bare `-n`
 //     is still an option — `print -R -e a` writes `-e a`, where zsh's `-R`
@@ -51,6 +56,42 @@ import (
 //
 // An unknown letter is `unknown option` with the usage line after it, 2.
 const printUsage = "Usage: print [-enprsvC] [-f format] [-u fd] [string ...]"
+
+// printLongUsage is the usage line a *long* option's refusal carries, which
+// is not the one a letter's refusal carries. Measured 2026-09-16 under
+// `env -i` from a script file: `print -x` is answered with the letters spelled
+// out and `print --x` with `Usage: print [ options ] [string ...]`, both at 2.
+const printLongUsage = "Usage: print [ options ] [string ...]"
+
+// dashesEndTheOptions reports a word this command reads as an operand on
+// account of a *third* dash.
+//
+// Measured 2026-09-16 under `env -i` from a script file: `print ---`,
+// `print ----`, `print ---x`, `print ---=` and `print "--- a title ---"` all
+// write the word and exit 0, where `print --x`, `print "-- x"` and `print
+// --after` are refused. So the rule is the prefix and not the whole word —
+// option parsing ends at a bare `--` and a third dash puts the word past it.
+//
+// `print "--- a title ---"` is a shape a script really writes, and reading
+// the first two characters as options refused it at 2 with the title
+// unwritten (#3163).
+func dashesEndTheOptions(word string) bool {
+	return strings.HasPrefix(word, "---")
+}
+
+// longOptionName is the text a long option's refusal quotes: the word itself,
+// cut at the first `=`. Measured the same day — `print --x=1` and `print --x=`
+// are both `print: --x: unknown option`, and `print --=` is `print: -:
+// unknown option`, which is what the empty name falls back to.
+func longOptionName(word string) string {
+	if i := strings.IndexByte(word, '='); i >= 0 {
+		word = word[:i]
+	}
+	if word == "--" {
+		return "-"
+	}
+	return word
+}
 
 // registerPrint installs the builtin.
 func registerPrint(r *interp.Runner) {
@@ -105,7 +146,17 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest []string, code int) {
 	rest = args
 	echoMode := false
-	for !echoMode && len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" && rest[0] != "--" {
+	for !echoMode && len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" && rest[0] != "--" && !dashesEndTheOptions(rest[0]) {
+		if strings.HasPrefix(rest[0], "--") {
+			// A word of two dashes and something else is a *long* option,
+			// and there are none here. It is refused as the whole word
+			// rather than as its first two characters, which is the
+			// difference between a script being told which word was
+			// refused and every long option getting one sentence.
+			r.Diagnosef("print: %s: unknown option\n", longOptionName(rest[0]))
+			_, _ = fmt.Fprintf(r.Err(), "%s\n", printLongUsage)
+			return nil, 2
+		}
 		word := rest[0][1:]
 		rest = rest[1:]
 		for i := 0; i < len(word); i++ {

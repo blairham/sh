@@ -43,6 +43,8 @@ func printfSem() Semantics {
 	s.PrintfNumberOperand = PrintfNumberLeadingNumber
 	s.PrintfRefusedOperandKeepsItsLeadingNumber = No
 	s.PrintfFloatOperandIsEvaluatedTwice = No
+	s.PrintfUnknownEscapeDropsTheBackslash = No
+	s.PrintfFloatHalf = PrintfFloatHalfToEven
 	return s
 }
 
@@ -1703,6 +1705,12 @@ func TestPrintfGDefaultsToSixSignificantDigits(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := CoreSemantics()
+			// One row above is a half at the precision the default chooses —
+			// `%g` of 999999.5 — and a core answers nothing where the shells
+			// disagree. Both readings write `1e+06` there, so the answer is
+			// filled in rather than the row changed: what is under test is the
+			// default precision.
+			sem.PrintfFloatHalf = PrintfFloatHalfToEven
 			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
 			if out != tc.want || st != 0 {
 				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)

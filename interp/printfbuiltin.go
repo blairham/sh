@@ -1487,6 +1487,7 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 			text, stop := r.printfHexFloat(spec, verb, f)
 			return text, code, stop
 		}
+		f = r.printfFloatTie(spec, verb, f)
 		if verb == 'g' || verb == 'G' {
 			spec = printfSignificantDigits(spec)
 		}
@@ -2862,6 +2863,13 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, printfPassEnd) {
 		// UTF-8 spells U+00C0 with, and a format is a byte string: `\300`
 		// is 0xc0 alone in every shell in the panel.
 		return string([]byte{byte(n)}), 1 + digits, printfPassRan
+	}
+	// An escape the format does not define. Five columns write the two
+	// characters as they stand and one writes the character alone, so the
+	// axis is asked here — where the table has run out — and nowhere on the
+	// way to it. See Semantics.PrintfUnknownEscapeDropsTheBackslash.
+	if r.ask(r.sem().PrintfUnknownEscapeDropsTheBackslash, "`printf` writing an undefined escape's character without its backslash") {
+		return string(s[1]), 2, printfPassRan
 	}
 	return `\` + string(s[1]), 2, printfPassRan
 }

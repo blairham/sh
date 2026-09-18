@@ -1365,6 +1365,12 @@ func Semantics() interp.Semantics {
 	// A descriptor number the process cannot hold is not checked before the
 	// open.
 	s.FdNumberBoundedByOpenFileLimit = interp.No
+	// No descriptor-number ceiling of this shell's own (#3210), a `-t` that
+	// is refused rather than evaluated — `read: invalid timeout` at 2
+	// (#3209) — and a `-v` echo that writes a line as it was read (#3130).
+	s.DescriptorNumberCeiling = interp.NoDescriptorNumberCeiling
+	s.VerboseEchoAddsAMissingNewline = interp.No
+	s.ReadTimeoutOperandIsArithmetic = interp.No
 	// `[[ ]]` is a builtin here rather than a keyword — `type '[['` answers
 	// `[[ is a shell builtin` — so an unknown option inside it is a status
 	// rather than a parse failure.

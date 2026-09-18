@@ -4987,7 +4987,23 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	timeout, timed := time.Duration(-1), false
 	if word, ok := optArg['t']; ok {
 		secs, err := strconv.ParseFloat(word, 64)
-		if err != nil || secs < 0 {
+		if err != nil {
+			// Not a written number. One column reads the argument as an
+			// *expression* instead — the same shape UlimitOperandIsArithmetic
+			// records at the other builtin — so `read -t abc` there is an
+			// unset name, which is nought, and times out at once in silence.
+			// The axis is asked here and not in front of the plain reading,
+			// so `read -t 3` never puts the question.
+			n, ok := r.readTimeoutArithmetic(word)
+			if r.unspecified {
+				return r.status
+			}
+			if !ok {
+				return r.readBadNumberFor(r.diag().ReadBadTimeout, word)
+			}
+			secs = n
+		}
+		if secs < 0 {
 			return r.readBadNumberFor(r.diag().ReadBadTimeout, word)
 		}
 		timeout, timed = time.Duration(secs*float64(time.Second)), true
@@ -5538,6 +5554,32 @@ func (r *Runner) readLastFieldValue(field, ifs string) string {
 		return trimmed
 	}
 	return field
+}
+
+// readTimeoutArithmetic is `read -t` given a word that is not a written
+// number, in the one dialect that reads the argument as an expression.
+//
+// An unset name is nought there, which is the whole of what the issue's case
+// comes to: `read -t abc` is a timeout of nought and times out at once,
+// silently. A word the expression grammar cannot read at all — `3abc` — is
+// refused, and the caller words it.
+//
+// Not ulimitArithmetic's reading, and the difference is measured: that one
+// refuses an expression naming a parameter that is not set, and this one
+// evaluates it to nought.
+func (r *Runner) readTimeoutArithmetic(word string) (float64, bool) {
+	if !r.ask(r.sem().ReadTimeoutOperandIsArithmetic, "`read -t` reading its argument as an expression") {
+		return 0, false
+	}
+	tree, err := r.arithTree(nil, word)
+	if err != nil {
+		return 0, false
+	}
+	n, err := r.evalArith(tree)
+	if err != nil {
+		return 0, false
+	}
+	return float64(n), true
 }
 
 // readBadNumberFor is a count, timeout or descriptor argument that is not a

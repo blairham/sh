@@ -1474,7 +1474,19 @@ func (r *Runner) errBadFd(fd int, written string) error {
 	if written != "" {
 		name = written
 	}
-	return errors.New(Wording(r.diag().DuplicationSourceNotOpen, "%[1]s: %[2]s",
+	wording := r.diag().DuplicationSourceNotOpen
+	if ceiling := r.sem().DescriptorNumberCeiling.number(); ceiling > 0 && fd >= ceiling {
+		// Past the shell's own ceiling the refusal is about the *number*
+		// rather than about what is open at it, and it carries no errno —
+		// which is the one refusal about a descriptor that column writes
+		// without one. An empty wording leaves the ordinary sentence
+		// standing, which is what a shell with no ceiling wants and what the
+		// core wants. See Semantics.DescriptorNumberCeiling.
+		if over := r.diag().FdNumberOverCeiling; over != "" {
+			wording = over
+		}
+	}
+	return errors.New(Wording(wording, "%[1]s: %[2]s",
 		name, r.diag().reasonText(reason(syscall.EBADF))))
 }
 

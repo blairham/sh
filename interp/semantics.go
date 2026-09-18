@@ -13602,6 +13602,90 @@ type Semantics struct {
 	// so the number the variable holds is already dead.
 	FdVariableOutlivesTheCommand Answer
 
+	// DescriptorNumberCeiling is the highest descriptor number a duplication
+	// may name, past which the refusal is about the *number* rather than
+	// about what is open at it.
+	//
+	// A ceiling of the shell's own and not the kernel's, which is what
+	// parts it from FdNumberBoundedByOpenFileLimit below: measured
+	// 2026-09-18 against ksh93u+ 2012-08-01 from a script file under `env
+	// -i`, the boundary sits at 64 with `ulimit -n` at 1048576 and stays at
+	// 64 with `ulimit -n 20`, so nothing about the process moves it.
+	//
+	//	echo x >&63   ksh93u+ `63: cannot open [Bad file descriptor]`, 1
+	//	echo x >&64   ksh93u+ `64: bad file unit number`, 1
+	//	echo x >&99   the same sentence — and no errno in brackets, where
+	//	              every other refusal this shell writes about a
+	//	              descriptor carries one
+	//	exec 6>&7     `7: cannot open [Bad file descriptor]` — below the
+	//	              ceiling the ordinary sentence stands on every route
+	//
+	// bash 5.3.20, zsh 5.9.2, dash 0.5.12 and BusyBox ash have no such
+	// bound: `echo x >&99` is each shell's ordinary bad-descriptor sentence
+	// there.
+	//
+	// The duplication target alone, which is measured rather than assumed:
+	// `echo x 70>/dev/null` is fine in that shell because its lexer never
+	// read `70` as a descriptor prefix at all — the word is an operand and
+	// the redirection is an ordinary `>`.
+	DescriptorNumberCeiling DescriptorNumberCeiling
+
+	// VerboseEchoAddsAMissingNewline ends the echo of a `set -v` line that
+	// the input did not end, so the last line of a `-c` string or of a file
+	// without a final newline is written with one.
+	//
+	// `-v` echoes the shell's input **as it was read**, which is what the
+	// other columns take literally. Measured 2026-09-18 through `od -c`,
+	// `-v -c 'echo one\necho two'` and the same two lines in a file with no
+	// final newline:
+	//
+	//	bash 5.3.20   `echo two\n` on both routes — the newline is added
+	//	ksh93u+       `echo two` with none, so the echo and the first byte
+	//	              the script writes land on the same line
+	//	dash 0.5.12   none, on the file route; it echoes no `-c` string
+	//	zsh 5.9.2     none, on the file route
+	//
+	// A script **file** that ends with a newline reaches this at no line at
+	// all, which is why the divergence is invisible until the input's last
+	// line is short of one.
+	//
+	// **Read rather than asked**, which is the shape the front end's other
+	// verbose fields have: there is nowhere for an echo to raise a question
+	// from, and a refusal in the middle of one would be output about the
+	// axis in the stream the axis is about. A vector with no answer keeps
+	// the newline, which is what this echo did everywhere before the field
+	// existed.
+	//
+	// Not modeled, and named here so it is not mistaken for this: zsh
+	// echoes the whole of a `-c` string before running any of it, where
+	// every other column echoes a line as it is read. That is a different
+	// mechanism and the trailing newline it writes belongs to it.
+	VerboseEchoAddsAMissingNewline Answer
+
+	// ReadTimeoutOperandIsArithmetic reads `read -t`'s argument as an
+	// arithmetic expression rather than as a written number.
+	//
+	// The same shape UlimitOperandIsArithmetic records at the other builtin,
+	// and the same column. Measured 2026-09-18 against ksh93u+ 2012-08-01
+	// from a script file under `env -i`, timing each read against a source
+	// that answers a second later:
+	//
+	//	read -t abc    ksh93u+ silent, and times out at once — an unset
+	//	               name is nought there, so this is a timeout of nought
+	//	               and not a refusal
+	//	read -t 0x3    waits and reads: a hexadecimal numeral
+	//	read -t " 3"   waits and reads: the blanks are an expression's
+	//	read -t 3abc   `read: 3abc: arithmetic syntax error`, 1
+	//
+	// bash 5.3.20, bash 3.2.57 and bash-as-`sh` answer `read: abc: invalid
+	// timeout specification` at 1; zsh's `-t` takes no argument at all, so
+	// the word is an operand there; dash has no `-t`; BusyBox ash 1.37.0
+	// says `read: invalid timeout` at 2.
+	//
+	// Asked only for an argument that is not already a written number, so
+	// `read -t 3` and `read -t 1.5` reach nobody.
+	ReadTimeoutOperandIsArithmetic Answer
+
 	// FirstAllocatedDescriptor is the number the shell counts up from when it
 	// picks a descriptor for itself — `exec {fd}< file`, and the two zsh
 	// builtins that hand a number back the same way.
@@ -18993,6 +19077,12 @@ func PosixSemantics() Semantics {
 		// column that reads the text as written, at both letters.
 		PrintfEscEscape:        No,
 		PrintfCapitalEscEscape: No,
+		// XCU says `-v` writes the shell's input to standard error as it
+		// is read, which is a line without the newline the input did not
+		// have. And it has no `read -t` at all, so an argument to it is
+		// nobody's to read as an expression.
+		VerboseEchoAddsAMissingNewline: No,
+		ReadTimeoutOperandIsArithmetic: No,
 		// XCU leaves a format's undefined escape sequence undefined, so
 		// there is nothing for the standard to defer to and the standing
 		// answer is the one five of the six columns give: the two
@@ -22210,6 +22300,40 @@ func (r *Runner) emptyMatchDeclined() EmptyMatchDeclinedPolicy {
 // DescriptorAllocationBase is the number a shell counts up from when it picks
 // a descriptor for itself. See Semantics.FirstAllocatedDescriptor, which is
 // the only reader and which records why this type has no unanswered value.
+// DescriptorNumberCeiling is the shell's own bound on a duplication's
+// descriptor number — see [Semantics.DescriptorNumberCeiling].
+//
+// A named value rather than a plain int, for the reason
+// [DescriptorAllocationBase] beside it is one: what the panel exhibits is a
+// short list of measured numbers, and a field that took any integer would
+// accept a ceiling no shell has.
+type DescriptorNumberCeiling int
+
+const (
+	// NoDescriptorNumberCeiling is a shell with no bound of its own, which
+	// is four of the five columns and the zero value.
+	NoDescriptorNumberCeiling DescriptorNumberCeiling = iota
+	// DescriptorNumbersStopAtSixtyFour is ksh93: 63 is an ordinary
+	// descriptor and 64 is a bad file unit number.
+	DescriptorNumbersStopAtSixtyFour
+)
+
+// number is the first descriptor number the ceiling refuses, and nought where
+// there is no ceiling.
+func (c DescriptorNumberCeiling) number() int {
+	if c == DescriptorNumbersStopAtSixtyFour {
+		return 64
+	}
+	return 0
+}
+
+func (c DescriptorNumberCeiling) String() string {
+	if c == DescriptorNumbersStopAtSixtyFour {
+		return "at 64"
+	}
+	return "none"
+}
+
 type DescriptorAllocationBase int
 
 const (

@@ -3319,6 +3319,15 @@ func Semantics() interp.Semantics {
 	// a number this shell reads is one digit and the shell picks its own for
 	// `{name}>f`.
 	s.FdNumberBoundedByOpenFileLimit = interp.No
+	// No descriptor-number ceiling of this shell's own (#3210), and `read
+	// -t` takes no argument here at all, so the word after it is an operand
+	// and never an expression (#3209). The `-v` echo of a file's last line
+	// writes no newline the input did not have (#3130) — measured on a file
+	// with no final newline; the `-c` route is a different mechanism there
+	// and is named in the axis.
+	s.DescriptorNumberCeiling = interp.NoDescriptorNumberCeiling
+	s.VerboseEchoAddsAMissingNewline = interp.No
+	s.ReadTimeoutOperandIsArithmetic = interp.No
 
 	// `[[ -v ]]` reads more kinds of name here than either of the other two
 	// shells that have the operator: a positional, as bash does, and every

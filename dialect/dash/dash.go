@@ -1329,6 +1329,12 @@ func Semantics() interp.Semantics {
 	// back. Unreachable for a two-digit number, which this shell does not
 	// read as one at all.
 	s.FdNumberBoundedByOpenFileLimit = interp.No
+	// No descriptor-number ceiling of this shell's own (#3210), and no `-t`
+	// on `read` at all, so nothing here reads one as an expression (#3209).
+	// The `-v` echo writes a file's last line as it was read (#3130).
+	s.DescriptorNumberCeiling = interp.NoDescriptorNumberCeiling
+	s.VerboseEchoAddsAMissingNewline = interp.No
+	s.ReadTimeoutOperandIsArithmetic = interp.No
 
 	return s
 }

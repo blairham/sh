@@ -176,13 +176,15 @@ func inputsFor(src string) []string {
 // two. Unset is the whole sweep, which is what a developer gets and what
 // `make test` runs.
 //
-// CI splits the sweep across the two operating systems it already builds on.
-// The property is one of the parser and not of the platform, so running the
-// whole of it twice only made it possible for two runs of one question to
-// disagree, while one leg sat idle waiting for the other. Split, each leg
-// answers for half and the pair still answers for all of it.
+// CI splits the sweep across two jobs of its own — `Dialect sweep (0/2)` and
+// `(1/2)`, both on Linux since #3335 — and they run beside the test jobs
+// rather than behind them. The property is one of the parser and not of the
+// platform, so running the whole of it twice only made it possible for two
+// runs of one question to disagree while one leg sat idle waiting for the
+// other. Split, each shard answers for half and the pair still answers for
+// all of it.
 //
-// Half each rather than all of it on whichever leg looks idle, and that is
+// Both on Linux rather than one on whichever leg looks idle, and that is
 // measured rather than assumed: across runs the Linux leg is steady — 90s of
 // interp, 206s of instrumented tests, twice within a second of each other —
 // while the macOS leg moved 1.5x between two runs an hour apart, 110s of
@@ -229,8 +231,17 @@ const raceProbeCases = 100
 // the parser panic, and that is proved over every case under every vector —
 // 132 vectors x 2542 cases on the day this was written, each expanded again by
 // inputsFor. Nothing about that is sampled or shortened: it is what `make
-// test` runs and what CI's uninstrumented step runs, and it is the whole
-// corpus every time.
+// test` runs and what CI's two `Dialect sweep` shards run between them, and
+// it is the whole corpus every time.
+//
+// Where it is *not* run is CI's uninstrumented `Build and test` leg, which
+// skips this test outright (#3324). That is a decision about duplication and
+// not about coverage: those two shards had already produced the answer, and
+// the leg carrying the second copy was the critical path — the whole of this
+// package was 237.5s there and 0.75s of it is everything else in the package.
+// TestTheSweepIsProvedWhereThisLegStopsPayingForIt holds the workflow to it,
+// because "skipped here, proved over there" is a claim that goes silently
+// false the moment the shards change.
 //
 // The other property was never this test's to prove and was being paid for on
 // every case anyway. `recover()` is what catches a panic, and it catches one

@@ -5961,7 +5961,8 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// business, and nothing could exercise it either way.
 			if !r.declarationCarriesAnArrayLiteral(name) {
 				r.declareEmpty(name, fresh, f.export || f.readonly,
-					withoutMatching(f) != (declareFlags{}))
+					withoutMatching(f) != (declareFlags{}),
+					f.inherit || r.LocalInheritsTheOuterValue())
 			}
 		}
 		if f.readonly && !f.readonlyOff {
@@ -6216,7 +6217,11 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			// the local unset where the shell that scopes it leaves the
 			// empty string, which is DeclaredNameWithoutValueIsEmpty's
 			// answer and not a second reading of its own.
-			r.declareEmpty(name, fresh, true, true)
+			// `readonly` has no letter for inheriting and the shell-wide
+			// name is about a *local* declaration, which this is: measured
+			// 2026-09-17, `readonly R` inside a function with the option on
+			// takes the enclosing value the same way `local R` does.
+			r.declareEmpty(name, fresh, true, true, r.LocalInheritsTheOuterValue())
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}

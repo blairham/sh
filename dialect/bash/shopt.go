@@ -459,6 +459,23 @@ var shoptSwitches = map[string]struct {
 			r.SetMatchOption(interp.PeriodPatternListsDotAndDotDot, !on)
 		},
 	},
+	// A valueless local declaration takes the value **and the attributes** of
+	// the name at the enclosing scope instead of starting empty. The
+	// wholesale spelling of what the `-I` letter on one declaration asks
+	// for, and the two are one request with one answer — measured, `local -I
+	// v` with this off and `local v` with it on produce the same binding
+	// down to the letters.
+	//
+	// It sat in shoptStates refusing the write, and the refusal was the
+	// honest kind while nothing implemented it — a shell that granted the
+	// name and went on making empty bindings would be the silent wrong
+	// answer, since the whole observable is what the local holds. See
+	// interp/localinherit.go for the measured table and the edges that
+	// bound it (#3434).
+	"localvar_inherit": {
+		get: (*interp.Runner).LocalInheritsTheOuterValue,
+		set: (*interp.Runner).SetLocalInheritsTheOuterValue,
+	},
 }
 
 // shoptReadOnly are the two names that are indicators rather than switches:
@@ -679,7 +696,6 @@ var shoptStates = map[string]bool{
 	"huponexit":            false,
 	"interactive_comments": true,
 	"lithist":              true,
-	"localvar_inherit":     false,
 	"mailwarn":             false,
 	"noexpand_translation": false,
 	"progcomp_alias":       false,

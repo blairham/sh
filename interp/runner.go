@@ -1694,6 +1694,16 @@ type Runner struct {
 	// *on*: a Runner that was never told follows its dialect's axis, which is
 	// what the zero value already did.
 	echoExpandsEscapes bool
+	// localInherits makes a valueless local declaration take the value and
+	// attributes of the name at the enclosing scope instead of starting
+	// empty — bash's `localvar_inherit`, and the only name any shell in the
+	// panel has for the question.
+	//
+	// The positive direction, because the fresh binding every shell with a
+	// local scope makes is what the zero value already does. The letter that
+	// asks for the same thing one declaration at a time is declareFlags'
+	// `inherit`. See localinherit.go.
+	localInherits bool
 	// cdCorrectsSpelling is permission for `cd` to correct a misspelled
 	// operand rather than refuse it — bash's `cdspell`, and the only shell in
 	// the panel with a name for it. The correction itself is in

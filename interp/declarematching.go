@@ -164,6 +164,15 @@ func patternHalves(operands []string) []string {
 // attribute would silently fall off the end of.
 func withoutMatching(f declareFlags) declareFlags {
 	f.matching, f.matchNames, f.remove, f.added = false, false, false, false
+	// And the inheritance letter, which is not something a *name* carries:
+	// it says where the binding this declaration makes starts from, and it
+	// leaves no attribute behind for a listing to filter on or for a bare
+	// record to be suppressed by. Measured 2026-09-17 on bash 5.3.20 —
+	// `declare -I` with no operands writes the whole variable table exactly
+	// as the bare word does, and `f(){ local -I zz; declare -p zz; }` over an
+	// unset `zz` writes `declare -- zz`, which is the bare record a line that
+	// had named an attribute would not have made. See localinherit.go.
+	f.inherit = false
 	// The record of which letters were written goes with them: it is a seam's
 	// input rather than a thing the line asked for, and leaving it in would
 	// make every lettered line look like one that said something more. See

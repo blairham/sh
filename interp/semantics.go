@@ -2906,6 +2906,41 @@ type Semantics struct {
 	// advances.
 	GetoptsCountsTheWordOnTheNextCall Answer
 
+	// GetoptsTakesAPlusPrefixedOption reads a word beginning with `+` as an
+	// option word, exactly as a word beginning with `-`, and reports the
+	// letter with the sign still in front of it.
+	//
+	// One dialect has it and six read `+a` as an operand that ends the scan.
+	// Where it exists the two spellings are one option with two senses —
+	// `+a` is how several real tools spell "turn this off" — and the sign is
+	// the only thing that tells a script which it was given, so the name
+	// holds `+a` rather than `a`.
+	//
+	// Measured 2026-09-17 over a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with stdin on /dev/null, `getopts a o +a` in a function with
+	// OPTIND reset:
+	//
+	//	zsh 5.9.2                                        st=0, name `+a`
+	//	bash 5.3.20, bash as `sh`, bash 3.2.57           st=1, the scan ended
+	//	ksh93u+, dash 0.5.12, BusyBox ash 1.37.0         st=1, the scan ended
+	//
+	// Everything else about the word is the scan it already is: `+ab` is two
+	// options in one word, `+a val` and `+aval` take the argument a `a:`
+	// letter takes, and a letter the string does not have is the ordinary
+	// complaint with the sign in it — `bad option: +z`, and `+z` rather than
+	// `z` in OPTARG under the silent form. All measured the same day.
+	//
+	// Two words are not options under either answer. A lone `+` is an
+	// operand and ends the scan, as a lone `-` does everywhere. And `++` is
+	// **not** the `--` that ends the options: it is the option `+`, which no
+	// ordinary option string has, so it is reported as a bad one. That
+	// asymmetry is measured rather than assumed — see getoptsOptionSign,
+	// where the end-of-options word is checked by the caller for it.
+	//
+	// POSIX has an option word begin with a `-`, which is why the standard's
+	// preset and the substrate both answer no.
+	GetoptsTakesAPlusPrefixedOption Answer
+
 	// GetoptsEndOfOptionsNamesIt writes `?` into the name operand on the run
 	// that reports "no more options", rather than leaving whatever the name
 	// held.
@@ -17704,6 +17739,10 @@ func PosixSemantics() Semantics {
 		// The standard has the name set to a question mark when the options
 		// run out.
 		GetoptsEndOfOptionsNamesIt: Yes,
+		// And it has an option word begin with a `-`, so a `+` word is an
+		// operand. zsh is the one column that reads it as an option and says
+		// so itself.
+		GetoptsTakesAPlusPrefixedOption: No,
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,
@@ -18608,6 +18647,12 @@ func CoreSemantics() Semantics {
 		// builtin's ordinary use rather than a disagreement about it. zsh,
 		// the one column that leaves the name alone, says so itself.
 		GetoptsEndOfOptionsNamesIt: Yes,
+		// An option word begins with a `-`, which is the standard's wording
+		// and six of the seven columns. Answered rather than refused for the
+		// reason the answer above is: a `+` word reaching `getopts` is an
+		// operand somebody passed, and refusing it would make the substrate
+		// refuse a script the six columns run.
+		GetoptsTakesAPlusPrefixedOption: No,
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,

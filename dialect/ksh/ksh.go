@@ -1832,6 +1832,11 @@ func Semantics() interp.Semantics {
 	// scan runs out (#3275).
 	s.GetoptsCountsTheWordOnTheNextCall = interp.No
 	s.GetoptsEndOfOptionsNamesIt = interp.Yes
+	// A `+`-prefixed word is an operand and ends the scan: measured
+	// 2026-09-17 on ksh93u+ 2012-08-01, `getopts a o +a` is 1 with the name
+	// `?` — which is worth measuring rather than inheriting, this shell's own
+	// `set` and `typeset` reading `+x` as the sense of `-x`.
+	s.GetoptsTakesAPlusPrefixedOption = interp.No
 	// The `letter#` numeric type, which is this shell's alone: `getopts 'n#' o`
 	// reads `-n 5` and `-n5` as the number 5 where the other three read `#` as a
 	// second option letter. Measured 2026-09-16 on ksh93u+ 2012-08-01 (#2947).

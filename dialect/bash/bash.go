@@ -1575,6 +1575,10 @@ func Semantics() interp.Semantics {
 	// into the name (#3275).
 	s.GetoptsCountsTheWordOnTheNextCall = interp.No
 	s.GetoptsEndOfOptionsNamesIt = interp.Yes
+	// A `+`-prefixed word is an operand and ends the scan: measured
+	// 2026-09-17 on 5.3.20, on 3.2.57 and under the name `sh`, `getopts a o
+	// +a` is 1 with the name `?`.
+	s.GetoptsTakesAPlusPrefixedOption = interp.No
 	// `getopts 'n#' o` is two options here, neither of which takes anything:
 	// `-n 5` leaves the 5 as an operand and `-n5` reports 5 as unknown.
 	// Measured 2026-09-16, bash 5.3.20 (#2947).

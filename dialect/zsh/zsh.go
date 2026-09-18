@@ -2193,6 +2193,14 @@ func Semantics() interp.Semantics {
 	// read something that is the last letter still standing, which is how it
 	// reads as a written value and is not one.
 	s.GetoptsEndOfOptionsNamesIt = interp.No
+	// A `+`-prefixed word is an option word here, and this shell is alone in
+	// it: `getopts a o +a` is 0 with `+a` in the name, the sign kept so a
+	// script can tell it from `-a`. `+ab` clusters, `+a val` and `+aval` take
+	// the argument an `a:` letter takes, and a letter the string does not
+	// have is `bad option: +z` with `+z` in OPTARG under the silent form. A
+	// lone `+` is still an operand and `++` is the option `+` rather than an
+	// end-of-options word. Measured 2026-09-17 on 5.9.2.
+	s.GetoptsTakesAPlusPrefixedOption = interp.Yes
 	// OPTIND is local to a shell function here: the call starts at 1 and the
 	// caller's position — words and the place inside a clustered word alike —
 	// comes back on return. It is what lets this shell's own function
@@ -3867,8 +3875,14 @@ func Diagnostics() interp.Diagnostics {
 		// No "printf:" in front: zsh puts the builtin in the location.
 		// The reason first and the operand after it, which is the reverse of
 		// everyone else — and lowercased, which LowercaseReason already says.
-		GetoptsBadOption:       "bad option: -%[1]s",
-		GetoptsMissingArgument: "argument expected after -%[1]s option",
+		// The sign is the wording's second verb here, where the other four
+		// dialects spell a `-` into the format: this is the one shell that
+		// reads a `+`-prefixed word as an option, so it is the one shell
+		// whose complaint has two signs to write. `getopts a o +z` is `bad
+		// option: +z` and `getopts a: o +a` is `argument expected after +a
+		// option`. Measured 2026-09-17 on 5.9.2.
+		GetoptsBadOption:       "bad option: %[2]s%[1]s",
+		GetoptsMissingArgument: "argument expected after %[2]s%[1]s option",
 		// Not a usage line at all here — this shell counts the operands and
 		// says so, and it is the same sentence several of its builtins write
 		// for too few words. Measured 2026-09-14: `<script>:getopts:1: not

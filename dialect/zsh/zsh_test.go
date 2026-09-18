@@ -250,7 +250,7 @@ func TestSemantics(t *testing.T) {
 		// `set -A` refusing a name that is not one leaves 0 behind when the
 		// program came from an argument and 1 from a script file. Measured
 		// on every neighboring refusal too, all of which leave 1 (#1172).
-		{"SetArrayBadNameLeavesZeroFromCommandString", s.SetArrayBadNameLeavesZeroFromCommandString, interp.Yes},
+		{"SetArrayBadNameLeavesZero", s.SetArrayBadNameLeavesZero, interp.Yes},
 		// And here, which is what leaves bash alone on the other answer
 		// (#1171).
 		{"FailedExpansionAbandonsTheLine", s.FailedExpansionAbandonsTheLine, interp.No},

@@ -164,11 +164,16 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 // storeRefusalEndedTheDeclaration is the status a declaration leaves behind
 // when the *store* refused its element and ended the shell.
 //
-// One dialect leaves 0 there where every other route to the same refusal
-// leaves 1, and it does so only when the program came from `-c`: measured,
-// `zsh -f -c 'a=(x y); typeset "a[0]"=v'` exits 0 and the same line in a
-// script file exits 1, with byte-identical stderr and nothing after it
-// running on either route (#1770). So what moves is the number alone.
+// One dialect leaves 0 there where every other refusal it makes leaves 1,
+// with byte-identical stderr and nothing after it running either way, so what
+// moves is the number alone (#1770).
+//
+// **Where that 0 is raised back to 1 is not the route**, which is what this
+// used to test: a subshell in a *script file* leaves 0 there and an `&&` list
+// under `-c` leaves 1, so both halves of `Route == RouteCommandString` were
+// wrong (#3504). Runner.refusalZeroIsRaisedBackToOne holds the three places
+// that raise it, measured, and is shared with the two sites next door rather
+// than restated here.
 //
 // Called from the one place the builtin's name is put aside, and that is the
 // whole of the scoping. The region exists because zsh's store complains
@@ -184,14 +189,8 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 // looking at either has to see the same answer. declareElement returns
 // nothing, so r.status is the whole of it here.
 func (r *Runner) storeRefusalEndedTheDeclaration() {
-	if r.ctl != controlExit || r.Route != RouteCommandString {
-		return
-	}
-	if !r.ask(r.sem().StoreRefusalOfADeclaredElementLeavesZeroFromCommandString,
-		"a declaration whose store refused its element leaving 0 behind when the program came from an argument") {
-		return
-	}
-	r.status = 0
+	r.refusalLeavesZero(r.sem().StoreRefusalOfADeclaredElementLeavesZero,
+		"a declaration whose store refused its element leaving 0 behind", r.status)
 }
 
 // elementDeclarationRefused asks the three axes a declaration of an element

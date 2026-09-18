@@ -195,3 +195,19 @@ func (r *Runner) restoreVarsExcept(undo []savedVar, kept, shadowed []string) {
 		r.restoreVar(undo[i])
 	}
 }
+
+// exportTheArrayOfAnElement records the export letter on the **array** where
+// `export a[1]` and `export a[1]=v` record one at all.
+//
+// One column does and puts the value in a child's environment; the other
+// writes the element and leaves the array's attributes alone, so the listing
+// there shows no `x` at all. Both operand shapes go through this one call, so
+// a dialect cannot come to answer the valueless spelling and the one with a
+// value differently. See
+// Semantics.ExportThroughASubscriptedOperandRecordsTheLetter for the rows.
+func (r *Runner) exportTheArrayOfAnElement(base string, on bool) {
+	if r.ask(r.sem().ExportThroughASubscriptedOperandRecordsTheLetter,
+		"an `export` through a subscripted operand recording the letter on the array") {
+		r.declarationExports(base, on)
+	}
+}

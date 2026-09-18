@@ -118,7 +118,7 @@ func setArrayStatusRunFatality(t *testing.T, src string, answer Answer, route Ro
 	sem.BadSetOptionNameFatal = Yes
 	sem.BadSetOptionLetterFatal = Yes
 	sem.FatalErrorStatusIsOne = Yes
-	sem.SetArrayBadNameLeavesZeroFromCommandString = answer
+	sem.SetArrayBadNameLeavesZero = answer
 	var out, errs bytes.Buffer
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{

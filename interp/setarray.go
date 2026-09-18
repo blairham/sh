@@ -49,18 +49,16 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 		if status == 0 {
 			status = 2
 		}
-		if r.ctl == controlExit && r.Route == RouteCommandString &&
-			r.ask(r.sem().SetArrayBadNameLeavesZeroFromCommandString,
-				"a `set -A` bad name leaving 0 behind when the program came from an argument") {
-			// The refusal still ends the shell — the words after it do not
-			// run on either route — and the number it leaves behind is 0
-			// rather than the 1 a script file gets. Both fields, because
-			// controlExit is what Run reports and `status` is what the
-			// builtin returns, and a caller reading either has to see the
-			// same answer.
-			r.status, status = 0, 0
-		}
-		return status
+		// The refusal still ends the shell — the words after it do not run —
+		// and the number it leaves behind is 0 in the one column that
+		// answers so. Where that 0 is raised back to 1 is the same
+		// measurement the declaration's store next door reads, and the same
+		// one this used to get wrong by asking about the route: measured
+		// 2026-09-17, `( set -A 1bad v; echo x ); echo "next=$?"` is 0 in a
+		// *script file* as well as under `-c`, and `set -A 1bad v && echo
+		// yes` is 1 under `-c` as well as in a file (#3504).
+		return r.refusalLeavesZero(r.sem().SetArrayBadNameLeavesZero,
+			"a `set -A` bad name leaving 0 behind", status)
 	}
 	if r.assocDeclared(name) {
 		// An association is a different operation under the same spelling and

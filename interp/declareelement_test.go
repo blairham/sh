@@ -17,6 +17,11 @@ func declareElementSemantics() Semantics {
 	s := permissive()
 	s.TypesetTakesASubscript = Yes
 	s.DeclarationTakesASubscript = Yes
+	// Whether an `export` through a subscripted operand records the letter on
+	// the array is its own axis with its own test, answered flat here so that
+	// a row about the *element* sees the element and not a question about the
+	// attribute (#3510).
+	s.ExportThroughASubscriptedOperandRecordsTheLetter = Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = Yes
 	s.SubscriptedOperandTakesTheContainerAttribute = Yes
 	s.SubscriptedOperandTakesALocalDeclaration = Yes

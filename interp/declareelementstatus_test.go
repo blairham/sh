@@ -12,16 +12,21 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// A declaration whose *store* refuses the element it names is fatal on both
-// routes and leaves a different number behind on each, in the dialect that
-// answers so.
+// A declaration whose *store* refuses the element it names is fatal either
+// way and leaves **0** behind in the dialect that answers so.
 //
-// The pairing is the whole test. The refusal is fatal either way and its
-// sentence is byte-identical either way, so a probe that read the diagnostic
-// — or that ran one route — cannot see this at all; the only observable is
-// the status the shell exits with, and that is what #1770 was filed from with
-// `-c` alone measured.
-func TestAStoreRefusalOfADeclaredElementFollowsTheRoute(t *testing.T) {
+// The refusal is fatal on both routes and its sentence is byte-identical on
+// both, so a probe that read the diagnostic cannot see this at all; the only
+// observable is the status, which is what #1770 was filed from.
+//
+// The rows below are the refusal **alone at the top level**, where a script
+// file reports 1 whatever the refusal left — that is the shell's own exit and
+// not the number, which is the reading #1770 took for a rule about the route
+// and #3504 disproved. What raises the 0 back to 1 is
+// Runner.refusalZeroIsRaisedBackToOne, whose three places are pinned in
+// TestWhereARefusalsZeroIsRaisedBackToOne; a subshell in a script file leaves
+// the 0 standing.
+func TestAStoreRefusalOfADeclaredElementLeavesZeroAtTheTopLevel(t *testing.T) {
 	for _, tc := range []struct {
 		why    string
 		answer Answer
@@ -29,8 +34,8 @@ func TestAStoreRefusalOfADeclaredElementFollowsTheRoute(t *testing.T) {
 		want   int
 	}{
 		{"answered yes, from a command string: 0", Yes, RouteCommandString, 0},
-		{"answered yes, from a script file: the refusal's own 1", Yes, RouteScriptFile, 1},
-		{"answered no, from a command string: 1 like every other route", No, RouteCommandString, 1},
+		{"answered yes, from a script file: the file's own exit, 1", Yes, RouteScriptFile, 1},
+		{"answered no, from a command string: 1 like every other refusal", No, RouteCommandString, 1},
 		{"answered no, from a script file: 1", No, RouteScriptFile, 1},
 	} {
 		out, errs, st := declaredElementRun(t,
@@ -98,7 +103,7 @@ func declaredElementRun(t *testing.T, src string, answer Answer, route Route) (s
 	sem.TypesetTakesASubscript = Yes
 	sem.NegativeSubscriptPastTheStartInserts = No
 	sem.FatalErrorStatusIsOne = Yes
-	sem.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString = answer
+	sem.StoreRefusalOfADeclaredElementLeavesZero = answer
 	return declaredElementRunWith(t, src, sem, route)
 }
 

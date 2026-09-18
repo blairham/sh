@@ -2063,6 +2063,10 @@ func Semantics() interp.Semantics {
 	// count releases.
 	s.ReadCountJudgesTheNamesAfterTheFirst = interp.No
 	s.DeclarationTakesASubscript = interp.Yes
+	// And the letter lands on the array: measured 2026-09-17,
+	// `a=(1 2 3); export 'a[1]'=v` leaves `typeset -x -a a` and puts `a=1`
+	// in a child's environment, and the valueless spelling agrees.
+	s.ExportThroughASubscriptedOperandRecordsTheLetter = interp.Yes
 	// The declaration builtins take one as well — `typeset a[1]=v` creates
 	// the element — so this shell gives the two the same answer where bash
 	// splits them.
@@ -2743,8 +2747,11 @@ func Semantics() interp.Semantics {
 	// And the refusal of a name that is not one leaves 1 by both routes
 	// here, which is the answer that makes the other shell's 0 a quirk of
 	// that shell rather than a rule about the letter.
-	s.SetArrayBadNameLeavesZeroFromCommandString = interp.No
-	s.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString = interp.No
+	s.SetArrayBadNameLeavesZero = interp.No
+	s.StoreRefusalOfADeclaredElementLeavesZero = interp.No
+	// No `-v` here — `printf -v x %s Q` is `printf: -v: unknown option` at
+	// 2 — so the store is never reached through that builtin.
+	s.StoreRefusalThroughPrintfLeavesZero = interp.No
 	// And the option parse carries on past the name here: `set -A ff -x -y`
 	// takes `-x` as xtrace and refuses `-y`, and `set -A dd -- 1 2` stores
 	// two elements because the `--` still ends the options. So the values are

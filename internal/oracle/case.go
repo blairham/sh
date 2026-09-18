@@ -24784,7 +24784,7 @@ echo "st=$?"`,
 		Category: "declarations",
 		Script:   true,
 		Snippet:  "a=(x y)\ntypeset \"a[0]\"=v\necho after\n",
-		Why:      "the other half of the pair, and the half that says the split is the *route's*: the same three lines from a file leave 1 in the column that leaves 0 from an argument. Every other column answers both routes alike, which is what makes this a status axis with one dissenter rather than a rule about declarations -- see Semantics.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString",
+		Why:      "the other half of the pair: the same three lines alone at a script file's top level leave 1 in the column that leaves 0 from an argument, which is the shell's own exit and not the refusal's number -- a subshell in a file leaves 0 there. Every other column answers both routes alike, which is what makes this a status axis with one dissenter rather than a rule about declarations -- see Semantics.StoreRefusalOfADeclaredElementLeavesZero",
 	},
 	{
 		ID:       "declare/the-refusals-in-front-of-the-store-do-not-follow-the-route",

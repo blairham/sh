@@ -425,7 +425,10 @@ func Semantics() interp.Semantics {
 	// table and no literal to write one with. Measured 2026-09-12,
 	// `m=([k]+=x)` is `Syntax error: "(" unexpected` before any element is
 	// looked at, so no value is ever joined to anything (#2405).
-	// unanswered StoreRefusalOfADeclaredElementLeavesZeroFromCommandString:
+	// unanswered StoreRefusalThroughPrintfLeavesZero: this shell's
+	// `printf` has no `-v`, so no store is reached through it.
+	//
+	// unanswered StoreRefusalOfADeclaredElementLeavesZero:
 	// there is no declaration utility and no array for one's operand to name
 	// an element of, so no store of this shell's can refuse a declaration's
 	// element on either route. Measured 2026-09-14, `a=(x y); typeset
@@ -1026,6 +1029,8 @@ func Semantics() interp.Semantics {
 	// ReadCountJudgesTheNamesAfterTheFirst is left unanswered: dash's
 	// `read` has no count letter — `-n` and `-N` are both `Illegal option`
 	// — so nothing here can ask it.
+	// unanswered ExportThroughASubscriptedOperandRecordsTheLetter: no
+	// arrays and no subscripted operand, so nothing reaches it.
 	s.DeclarationTakesASubscript = interp.No
 	// No arrays at all, so no subscripted operand is a name to any
 	// declaration here either.

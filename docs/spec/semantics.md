@@ -12415,6 +12415,119 @@ The last row is also behavior and not wording: a refused store is the
 printed `z` at status 0 here, which is a `{name}>` aimed at a name the
 shell cannot write opening the file and carrying on as if it had (#3491).
 
+## The number a refused store leaves behind
+
+One dialect leaves **0** behind when a store through an operand refuses,
+where every other refusal it makes leaves 1. Three separate things about
+that 0 were wrong, and all three were wrong in the same way: they were
+written as rules about the *route* the program reached the shell by.
+
+### Where the 0 is raised back to 1
+
+Measured 2026-09-17, zsh 5.9.2, `env -i PATH=/usr/bin:/bin LC_ALL=C
+HOME=$d`, stdin `/dev/null`, a fresh directory, each program run twice —
+once as a script file and once as one `-c` string — with the refusal
+wrapped so the number is readable at all:
+
+    a=(1 2 3)
+    ( <the refusal> )
+    echo "next=$?"
+
+                                                next=   file   -c
+    ( typeset "a[b c]"=v )                                0     0
+    ( typeset "a[b c]"=v && echo yes )                    1     1
+    ( typeset "a[b c]"=v || echo no )                     0     0
+    ( ! typeset "a[b c]"=v )                              0     0
+    ( if typeset "a[b c]"=v; then echo t; fi )            0     0
+    ( while typeset "a[b c]"=v; do break; done )          1     1
+    ( while :; do typeset "a[b c]"=v; break; done )       1     1
+    ( until typeset "a[b c]"=v; do break; done )          0     0
+    ( for i in 1; do typeset "a[b c]"=v; done )           1     1
+    ( { typeset "a[b c]"=v; } )                           0     0
+    ( { typeset "a[b c]"=v; } && echo yes )               1     1
+    ( true && typeset "a[b c]"=v )                        0     0
+    ( typeset "a[b c]"=v; echo tail )                     0     0
+    ( echo z | typeset "a[b c]"=v )                       0     0
+    ( case x in x) typeset "a[b c]"=v;; esac )            0     0
+    ( ( typeset "a[b c]"=v ) )                            0     0
+
+So three places raise it: the left operand of an `&&` list, a loop, and a
+script file's own top level — the last of which shows as the process exit
+status, since the same refusal alone at the top level exits 1 from a file
+and 0 from `-c`. `||` and `until` continue on a *failure* and leave the 0
+standing, which is what makes the first of those about `&&` rather than
+about and-or lists.
+
+`set -A 1bad v` — a different refusal in a different builtin — answers
+every row identically, which is why the two axes read one function rather
+than a rule each.
+
+`Semantics.StoreRefusalOfADeclaredElementLeavesZero` and
+`SetArrayBadNameLeavesZero` are those axes; both lost
+`FromCommandString` from their names along with the condition. #1770
+measured two rows, both alone at a top level, where the file/`-c`
+difference is real — and read it as a rule about the route. A subshell in
+a *file* leaves 0 and an `&&` list under `-c` leaves 1, so both halves
+were wrong (#3504).
+
+**And a `!` does not invert a status the shell is ending with.** That is
+how the negated row above was found: the refusal's 0 became a 1 from a
+negation that was not testing anything. Measured on the same shell,
+`( ! exit 3 )` leaves **3**, where a command that merely failed is still
+inverted — `( ! nosuchcommand )` is 0. The `exit` row was wrong here
+before any of this and in the other direction.
+
+### `read` and `printf -v` part on it
+
+The two builtins reach one store through one operand, and in the column
+where the refusal ends the shell they leave different numbers. Measured
+2026-09-17 on zsh 5.9.2, with `printf 'Y\n' > in.txt` for the `read`
+rows:
+
+                                                file   -c
+    ( printf -v "a[1/0]" X ); echo $?             0     0
+    ( read "a[1/0]" < in.txt ); echo $?           1     1
+    printf -v "a[1/0]" X          (exit status)   1     0
+    read "a[1/0]" < in.txt        (exit status)   1     1
+
+`( printf -v 'a[]' X )` is 0 and `( read 'a[]' )` is 1, so the empty
+subscript answers the same way — it is the *builtin* and not which
+subscript refused.
+`Semantics.StoreRefusalThroughPrintfLeavesZero` is the field, true in zsh
+and false in bash and ksh93, where the refusal is not fatal at all and
+the builtin's own status is what a script reads; dash and BusyBox ash
+have no `-v` to reach it. Nothing after the failure runs on any row, so
+what moves is the number alone (#3497, #3518).
+
+## An `export` through a subscripted operand
+
+**`ExportThroughASubscriptedOperandRecordsTheLetter`** — ksh93 yes ·
+zsh no · bash, dash, ash unanswered
+
+`export 'a[1]'` and `export 'a[1]'=v` write the element, and whether the
+**array** comes away carrying the export letter is the dialect's.
+Measured 2026-09-17, a script file, with `a=(1 2 3)` in front and
+`typeset -p a` and a child's environment read back after:
+
+                          zsh 5.9.2                ksh93u+
+    export 'a[1]'=v       typeset -a a=( v 2 3 )   typeset -x -a a
+    export 'a[1]'         typeset -a a=( '' 2 3 )  typeset -x -a a
+    in a child's env      nothing                  a=1
+
+Nothing reaches the environment in the zsh column either way, so what
+this decides is the attribute and the listing behind it — and the column
+that records the letter is the one whose child carries the value, which
+is why it is a field rather than a line to delete. bash cannot be asked:
+it refuses the bracketed operand one complaint earlier, as ``export:
+`a[1]': not a valid identifier`` at 1, which `DeclarationTakesASubscript`
+already records.
+
+The axis is asked **once**, in front of both operand shapes, because they
+record the letter by different routes: the shape with a value records it
+afterwards and the valueless one carries it into the element
+declaration's own flags. A second call is how the two would come to
+answer differently (#3510).
+
 ## A subscript before the first element
 
 Issue #617. An assignment whose subscript lands before the array's first

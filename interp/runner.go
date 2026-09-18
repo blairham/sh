@@ -1147,6 +1147,14 @@ type Runner struct {
 	// than lexical: a loop that calls a function that loops is two, because
 	// what the stop is inside is what matters.
 	loopDepth int
+
+	// andLeftOperand counts the `&&` lists whose **left** operand is running,
+	// which is one of the three places a refusal's 0 is raised back to 1 —
+	// see Runner.refusalZeroIsRaisedBackToOne, where the rows are. Not
+	// r.tested, which counts the non-final operand of an `||` list too and
+	// those leave the 0 standing: measured, `( T || echo no )` is 0 where
+	// `( T && echo yes )` is 1.
+	andLeftOperand int
 	// callLoopFloor and subshellLoopFloor are the loop depths at the
 	// innermost function call and the innermost `( )`, which is how far a
 	// `break` written inside one can still see if that boundary stops it.
@@ -4568,7 +4576,13 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		// `set -e`. The tree is left-associative, so everything but the
 		// final operand is inside X, and one counter covers the lot.
 		r.tested++
+		if x.Op == syntax.TokAndAnd {
+			r.andLeftOperand++
+		}
 		err := r.expr(ctx, x.X)
+		if x.Op == syntax.TokAndAnd {
+			r.andLeftOperand--
+		}
 		r.tested--
 		if err != nil {
 			return err
@@ -4680,6 +4694,20 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 // would make `! grep -q pat file` unanswerable in the core, which is a
 // question the shells never posed.
 func (r *Runner) negationInverts() bool {
+	if r.ctl == controlExit {
+		// The shell is ending, and a status it is ending *with* is not a
+		// status the `!` was testing. Measured 2026-09-17 on zsh 5.9.2, a
+		// script file, each inside `( … )` so the number is readable:
+		// `! exit 3` leaves 3, `! set -A 1bad v` leaves the 0 that refusal
+		// leaves, and `! typeset "a[b c]"=v` leaves its 0 — where inverting
+		// gave 0, 1 and 1. A command that merely *failed* is still inverted,
+		// which is the control: `! nosuchcommand` is 0 there and here.
+		//
+		// This was reachable before and wrong in one direction only; the
+		// refusals that leave 0 made it wrong in the other as well, which is
+		// how it was found (#3504).
+		return false
+	}
 	if !r.noexec {
 		return true
 	}

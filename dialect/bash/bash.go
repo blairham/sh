@@ -1183,7 +1183,10 @@ func Semantics() interp.Semantics {
 	// And a subscripted operand's letters land on the name: `typeset -x
 	// a[1]=v` lists `declare -ax a=([1]="v")` here (#1380).
 	s.SubscriptedOperandCarriesTheAttributes = interp.Yes
-	s.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString = interp.No
+	s.StoreRefusalOfADeclaredElementLeavesZero = interp.No
+	// The refusal is not fatal here at all, so the builtin's own status is
+	// what a script reads and there is no give-up whose number could move.
+	s.StoreRefusalThroughPrintfLeavesZero = interp.No
 	// `a=(1 2); a+=x` joins the first element and leaves the rest standing —
 	// `declare -a a=([0]="1x" [1]="2")`, two elements, in 5.3.15, in the same
 	// binary under argv[0] of `sh` and in 3.2.57. The value lands at the base
@@ -1809,6 +1812,10 @@ func Semantics() interp.Semantics {
 	// `read -n 3 a 1bad` refuses `1bad` and fills a with the three
 	// characters, exactly as `read a 1bad` refuses it.
 	s.ReadCountJudgesTheNamesAfterTheFirst = interp.Yes
+	// unanswered ExportThroughASubscriptedOperandRecordsTheLetter: the
+	// operand is refused one complaint earlier here, as
+	// ``export: `a[1]': not a valid identifier`` at 1, so no element
+	// is written and no letter could land.
 	s.DeclarationTakesASubscript = interp.No
 	// And a *declaration* takes one where `export` does not, which is this
 	// shell alone splitting the two: `export a[1]=v` is `not a valid

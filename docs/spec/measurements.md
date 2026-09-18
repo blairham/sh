@@ -22048,7 +22048,7 @@ grades it and nothing drift-checks it either, for the same reason.
   typeset "a[0]"=v
   echo after
   ```
-- `declare/a-store-refused-element-from-a-script-file` — the other half of the pair, and the half that says the split is the *route's*: the same three lines from a file leave 1 in the column that leaves 0 from an argument. Every other column answers both routes alike, which is what makes this a status axis with one dissenter rather than a rule about declarations -- see Semantics.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString
+- `declare/a-store-refused-element-from-a-script-file` — the other half of the pair: the same three lines alone at a script file's top level leave 1 in the column that leaves 0 from an argument, which is the shell's own exit and not the refusal's number -- a subshell in a file leaves 0 there. Every other column answers both routes alike, which is what makes this a status axis with one dissenter rather than a rule about declarations -- see Semantics.StoreRefusalOfADeclaredElementLeavesZero
   ```sh
   a=(x y)
   typeset "a[0]"=v

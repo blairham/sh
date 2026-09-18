@@ -17568,6 +17568,77 @@ which is the only spelling that can. A non-negative one below the base —
 `a[0]` where the first element is 1 — is refused by every shell measured,
 zsh included, so it needs no answer from anyone.
 
+**`OperandSubscriptQuoting`** — bash every quote · dash unspecified · ksh93 the backslash · zsh nothing
+
+Which quoting written inside a **builtin operand's** subscript holds a
+`]` back from ending it. A builtin's operand is a *string*: the shell's
+own quoting came off in front of it, so `unset "a['x]y']"` reaches the
+builtin with the single quotes still in the word.
+
+Measured 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, storing the key under each spelling and naming it back to
+`unset`, `${#a[@]}` read afterwards:
+
+    operand              bash 5.3.20   ksh93u+       zsh 5.9.2
+    unset "a[x\]y]"      removed       removed       left standing
+    unset "a['x]y']"     removed       refused       refused
+    unset "a[\"x]y\"]"    removed       refused       refused
+
+This is **not** `syntax.Dialect.SubscriptQuoteProtectsTheClosingBracket`,
+which is the same question put to the parser over source text: there
+ksh93 quotes with all four constructs and zsh with the backslash alone,
+so neither column's two scans agree with each other and one field could
+not hold both.
+
+The quoting a dialect reads is also the quoting it *removes*. The bytes
+are how the subscript was written and never part of the key —
+`a['x]y']=1` stores `x]y` in every column with a table — so an operand
+keeping its quotes would name an element nothing has.
+
+**`SubscriptBeforeTheFirstElementRead`** — bash reported · dash unspecified · ksh93 the script ends · zsh nothing
+
+The same reach read from the right of `=`. Measured 2026-09-18, a script
+file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on
+/dev/null, `a=(x y z)` in front of each and an `echo after` behind it:
+
+    echo "[${a[-4]}]"   ksh93u+     → a: subscript out of range, 1, no after
+                        bash 5.3.20 → a: bad array subscript, [], after, 0
+                        zsh 5.9.2   → [], after, 0, nothing said
+
+Three answers and not a bool, and the middle is the one a bool loses:
+bash says something and then carries on with the empty value, which
+reads like silence from the status and like a refusal from the
+transcript.
+
+Every read route in the two complaining columns answers alike —
+`${a[-4]}`, `${#a[-4]}`, `${a[-4]+set}`, `${a[-4]:-d}`, `$(( a[-4] ))`
+and `[[ -v a[-4] ]]` — which is why the rule sits under the element
+lookup and not at each expansion.
+
+Asked only where a *negative* subscript resolves before the first
+element. A non-negative one below the base is the neighboring question
+and every column refuses it; a subscript past the *end* is no element
+anywhere and is silent.
+
+**`SubscriptBeforeTheFirstElementNeedsAnElement`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+Withholds that refusal from a name holding no element at all. The two
+complaining columns disagree about what counting back from nothing is,
+measured the same day with `echo "[${a[-1]}]"`:
+
+    unset a            ksh93 → [], 0, silent    bash → a: bad array subscript
+    a=()               ksh93 → [], 0, silent    bash → a: bad array subscript
+    a=x                ksh93 → [], 0, silent    bash → a: bad array subscript
+    a[5]=q  ${a[-6]}   both  → [], 0, silent
+    a[5]=q  ${a[-7]}   ksh93 → out of range     bash → bad array subscript
+
+So ksh93 reads a name with no elements as having no end to count back
+from; bash reads the missing end as an end at zero, which puts every
+negative subscript before the first element. The sparse rows are the
+control: with one element at 5 the two columns agree exactly where the
+boundary is, so this is about the empty name and not about how either
+counts.
+
 **`ArrayLiteralSubscriptIsAKey`** — bash no · dash unspecified · ksh93 yes · zsh no
 
 Reads a subscript written inside an array literal as the text between

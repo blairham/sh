@@ -2167,6 +2167,15 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		if v, ok := scalarElemAt(elems[0], n, r.arrayBase()); ok {
 			return []string{v}, true
 		}
+		if n < 0 {
+			// A string has one place and it is at the base, so counting back
+			// from it reaches past the first element in the one step. The
+			// same door elemAt goes through, with no end to count from,
+			// which is what Semantics.SubscriptBeforeTheFirstElementNeedsAnElement
+			// answers: measured, `a=x; echo "${a[-1]}"` is `a: bad array
+			// subscript` in bash 5.3.20 and silent in ksh93u+.
+			r.subscriptBeforeTheFirstElement(src.name, n, 0)
+		}
 		// No hook here, and that is measured rather than an omission: a
 		// scalar has one place, so `g=raw; ${g[1]}` enters nothing in
 		// ksh93u+ where `a=(p q r); ${a[9]}` enters the hook with `9`. The
@@ -2717,17 +2726,26 @@ func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
 	}
 	compacted := stored && len(elems) != a.pastTheEnd()
 
+	end := len(elems)
+	if compacted {
+		end = a.pastTheEnd()
+	}
 	var pos int
 	if n < 0 {
-		end := len(elems)
-		if compacted {
-			end = a.pastTheEnd()
-		}
 		pos = end + n
 	} else {
 		pos = n - r.arrayBase()
 	}
 	if pos < 0 {
+		if n < 0 {
+			// Counting back past the first element, which is the one reach
+			// that is not simply "no element". See
+			// Runner.subscriptBeforeTheFirstElement for the three answers and
+			// where each was measured; a non-negative subscript below the
+			// base arrives here too and is the neighboring question, which
+			// every column refuses alike.
+			r.subscriptBeforeTheFirstElement(name, n, end)
+		}
 		return "", false
 	}
 	if compacted {

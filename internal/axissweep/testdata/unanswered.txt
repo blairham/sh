@@ -153,6 +153,7 @@ ash   NumericTypeLetterRetypesAFrozenName
 ash   NumericTypeLettersAreExclusive
 ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
+ash   OperandSubscriptQuoting
 ash   OperatorAfterTheSubscriptListingIsBad
 ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
@@ -190,6 +191,8 @@ ash   StoreOperandWholeArraySubscript
 ash   StoreOperandWholeArraySubscriptOverATable
 ash   StoreRefusalOfADeclaredElementLeavesZero
 ash   StoreRefusalThroughPrintfLeavesZero
+ash   SubscriptBeforeTheFirstElementNeedsAnElement
+ash   SubscriptBeforeTheFirstElementRead
 ash   SubscriptExpressionStopsAtASeparator
 ash   SubscriptIsAQuotingContext
 ash   SubscriptedArrayLiteral
@@ -399,6 +402,7 @@ dash  NumericTypeLetterRetypesAFrozenName
 dash  NumericTypeLettersAreExclusive
 dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
+dash  OperandSubscriptQuoting
 dash  OperatorAfterTheSubscriptListingIsBad
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixListingNamesADeclaredOnlyCompound
@@ -441,6 +445,8 @@ dash  StoreOperandWholeArraySubscript
 dash  StoreOperandWholeArraySubscriptOverATable
 dash  StoreRefusalOfADeclaredElementLeavesZero
 dash  StoreRefusalThroughPrintfLeavesZero
+dash  SubscriptBeforeTheFirstElementNeedsAnElement
+dash  SubscriptBeforeTheFirstElementRead
 dash  SubscriptExpressionStopsAtASeparator
 dash  SubscriptIsAQuotingContext
 dash  SubscriptedArrayLiteral

@@ -12760,6 +12760,112 @@ type Semantics struct {
 	// shell measured, zsh included, so it needs no answer from anyone.
 	NegativeSubscriptPastTheStartInserts Answer
 
+	// SubscriptBeforeTheFirstElementRead is what a *read* does with a
+	// negative subscript that counts back past the first element — the other
+	// end of NegativeSubscriptPastTheStartInserts, which answers the same
+	// reach on the left of `=`.
+	//
+	// Measured 2026-09-18, a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with standard input on /dev/null, `a=(x y z)` in front of
+	// each and an `echo after` behind it:
+	//
+	//	ksh93u+       a: subscript out of range, 1, no `after`
+	//	bash 5.3.20   a: bad array subscript, then `[]` and `after`, 0
+	//	zsh 5.9.2     `[]` and `after`, 0, nothing said
+	//
+	// Three answers and not a bool because the panel needs three, and the
+	// middle one is the one a bool loses: bash *says something* and then
+	// carries on with the empty value, which reads like silence from the
+	// status and like a refusal from the transcript.
+	//
+	// Every read route in the refusing column goes through it, which is what
+	// makes it one axis rather than one per spelling: `${a[-4]}`,
+	// `${#a[-4]}`, `${a[-4]+set}`, `${a[-4]:-d}`, `$(( a[-4] ))` and
+	// `[[ -v a[-4] ]]` all answer alike in ksh93 and in bash.
+	//
+	// Asked only where a *negative* subscript resolves before the first
+	// element. A non-negative one below the base is the neighboring
+	// question and is refused by every column; a subscript past the *end* is
+	// no element anywhere and says nothing.
+	//
+	// dash and BusyBox ash have no arrays, so there is no read to answer for.
+	SubscriptBeforeTheFirstElementRead SubscriptBeforeStartPolicy
+
+	// SubscriptBeforeTheFirstElementNeedsAnElement withholds that refusal
+	// from a name that holds no element at all — an unset name, a name
+	// holding a plain string, and an array that has been emptied.
+	//
+	// The two columns that complain disagree about what counting back from
+	// nothing *is*. Measured the same day and the same way, with `echo
+	// "[${a[-1]}]"`:
+	//
+	//	                     ksh93u+            bash 5.3.20
+	//	unset a              [] , 0, silent     a: bad array subscript
+	//	a=()                 [] , 0, silent     a: bad array subscript
+	//	a=x                  [] , 0, silent     a: bad array subscript
+	//	a[5]=q  ${a[-6]}     [], 0, silent      [], 0, silent
+	//	a[5]=q  ${a[-7]}     out of range       bad array subscript
+	//
+	// So ksh93 reads a name with no elements as having no end to count back
+	// from, which makes the subscript name nothing rather than name a place
+	// that is not there; bash reads the missing end as an end at zero, and
+	// every negative subscript is then before the first element. The sparse
+	// rows are the control: with one element at 5 the two columns agree
+	// exactly where the boundary is, so this is about the *empty* name and
+	// not about how either counts.
+	//
+	// A field of its own rather than a fourth value on the policy above,
+	// because it is a different question: the policy says what the refusal
+	// costs, and this says whether there is one to cost anything. A dialect
+	// that says nothing at all — zsh — answers this one and is never
+	// observed either way, which is why the verdict below names a test.
+	//
+	// Read where a subscript reaches an array or a string, which is the
+	// emptied-array row and the scalar row. The complaint the reporting
+	// column also makes for a name holding **nothing at all** arrives before
+	// any of that — there is no target to count in — and is not answered
+	// here; #3591 has it, with the length route's own subject and status.
+	//
+	// unpinned zsh: the policy above is `nothing` there, so no row of any
+	// corpus can see this. TestCountingBackFromANameWithNoElementsIsSilent
+	// pins it by giving zsh's reading the complaining policy.
+	// unpinned dash, ash: neither has arrays.
+	SubscriptBeforeTheFirstElementNeedsAnElement Answer
+
+	// OperandSubscriptQuoting is which quoting written inside a **builtin
+	// operand's** subscript holds a `]` back from ending it — `unset
+	// "a['x]y']"`, where the quotes reached the builtin because the shell's
+	// own quoting came off in front of them.
+	//
+	// syntax.Dialect.SubscriptQuoteProtectsTheClosingBracket is the same
+	// question put to the *parser*, over source text, and it is a separate
+	// field because the panel does not answer the two alike. Measured
+	// 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, storing the key under each spelling and then naming it back
+	// to `unset`, with `${#a[@]}` read afterwards:
+	//
+	//	                       a[x\]y]     a['x]y']    a["x]y"]
+	//	bash 5.3.20            removed     removed     removed
+	//	ksh93u+ 2012-08-01     removed     refused     refused
+	//	zsh 5.9.2              left        refused     refused
+	//
+	// where the read side has ksh93 quoting with all four constructs and zsh
+	// with the backslash alone — so neither column's two scans agree with
+	// each other, and a single field would have had to pick one of them.
+	//
+	// Three answers and not the parser's bitset, because the three columns
+	// land on three points of one ladder and a set the sweep cannot move is
+	// an axis nothing grades.
+	//
+	// The quoting a dialect reads is also the quoting it *removes*: the
+	// bytes are how the subscript was written and never part of the key, so
+	// `a['x]y']=1` stores `x]y` and an operand keeping its quotes names an
+	// element nothing has.
+	//
+	// dash and BusyBox ash have no arrays, so no operand of theirs carries a
+	// subscript at all.
+	OperandSubscriptQuoting OperandSubscriptQuotingPolicy
+
 	// ArrayLiteralSubscriptIsAKey reads a subscript written inside an array
 	// literal as the text between the brackets rather than as an arithmetic
 	// expression — and, because the two go together, makes such a literal
@@ -23014,6 +23120,83 @@ const (
 	// zsh, for a store through an operand and there alone.
 	BadSubscriptEndsTheScript
 )
+
+// OperandSubscriptQuotingPolicy is which quoting a builtin operand's
+// subscript scan steps over: none of it, the backslash alone, or every
+// construct the parser knows.
+//
+// Three answers and not a bool because the panel needs three — see
+// Semantics.OperandSubscriptQuoting for the rows. A ladder rather than a set,
+// which is what the three measured columns are: nothing, the backslash, and
+// the backslash with both quotes.
+type OperandSubscriptQuotingPolicy uint8
+
+const (
+	// OperandSubscriptQuotingUnspecified is no answer, and is refused like
+	// any other.
+	OperandSubscriptQuotingUnspecified OperandSubscriptQuotingPolicy = iota
+	// OperandSubscriptQuotesNothing ends the subscript at the first `]`
+	// however it was written: zsh.
+	OperandSubscriptQuotesNothing
+	// OperandSubscriptBackslashQuotes steps over `\]` and nothing else:
+	// ksh93.
+	OperandSubscriptBackslashQuotes
+	// OperandSubscriptEveryQuote steps over `\]`, `'…]…'` and `"…]…"`:
+	// bash.
+	OperandSubscriptEveryQuote
+)
+
+func (p OperandSubscriptQuotingPolicy) String() string {
+	switch p {
+	case OperandSubscriptQuotesNothing:
+		return "the subscript ends at the first `]` however it is written"
+	case OperandSubscriptBackslashQuotes:
+		return "a backslash holds the `]` back"
+	case OperandSubscriptEveryQuote:
+		return "a backslash and either quote hold the `]` back"
+	}
+	return "unspecified"
+}
+
+// SubscriptBeforeStartPolicy is what a read whose negative subscript counts
+// back past the first element produces: nothing at all, a complaint the line
+// survives, or a complaint that ends the shell.
+//
+// Three answers and not a bool because the panel holds all three — see
+// Semantics.SubscriptBeforeTheFirstElementRead for the rows. The middle one is
+// what a bool cannot hold: bash writes the complaint and then hands the
+// expansion an empty value and runs the rest of the line at 0, which looks
+// like the silent answer to anything reading the status and like the fatal one
+// to anything reading stderr.
+type SubscriptBeforeStartPolicy uint8
+
+const (
+	// SubscriptBeforeStartUnspecified is no answer, and is refused like any
+	// other.
+	SubscriptBeforeStartUnspecified SubscriptBeforeStartPolicy = iota
+	// SubscriptBeforeStartIsNothing expands to nothing and says nothing, the
+	// way a subscript past the *end* does in every column: zsh.
+	SubscriptBeforeStartIsNothing
+	// SubscriptBeforeStartIsReported writes the complaint, expands to
+	// nothing and leaves the status alone, so the rest of the line runs:
+	// bash.
+	SubscriptBeforeStartIsReported
+	// SubscriptBeforeStartEndsTheScript writes the complaint and stops the
+	// shell where a fatal expansion stops it: ksh93.
+	SubscriptBeforeStartEndsTheScript
+)
+
+func (p SubscriptBeforeStartPolicy) String() string {
+	switch p {
+	case SubscriptBeforeStartIsNothing:
+		return "the subscript names nothing and nothing is said"
+	case SubscriptBeforeStartIsReported:
+		return "the complaint is made and the line carries on"
+	case SubscriptBeforeStartEndsTheScript:
+		return "the script ends"
+	}
+	return "unspecified"
+}
 
 // ValuelessSubscriptedOperandPolicy is what a declaration does with a
 // subscripted operand carrying no value: leave the brackets unread, read them

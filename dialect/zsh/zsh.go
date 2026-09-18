@@ -1105,6 +1105,17 @@ func Semantics() interp.Semantics {
 	// 1 here.
 	s.AliasRemembersTheNamesItNames = interp.No
 	s.AliasSeparatorEndsTheLookup = interp.No
+	// The two builtins that keep an assignment written in front of them here
+	// without being special ones — `V=1 alias` and `V=1 hash` leave `V` set,
+	// where `V=1 :` and `V=1 shift 0` do not. See
+	// interp.Semantics.BuiltinsKeepingAnAssignmentPrefix for the rows and for
+	// why this is not the specialness axis (#3313).
+	s.BuiltinsKeepingAnAssignmentPrefix = "alias hash"
+	// And a command word that expanded to exactly `-` is thrown away here,
+	// where the other six columns look it up and report 127. Not the same
+	// question as LoneDashIsAnOption below, which this shell also answers
+	// yes: that one is a dash-word a builtin was handed (#3236).
+	s.LoneDashInCommandPositionIsDiscarded = interp.Yes
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
 	s.AliasListingQuotesTheName = interp.Yes
@@ -4220,7 +4231,16 @@ func Diagnostics() interp.Diagnostics {
 		DirectoryReason:           "Permission denied",
 		HashNotFound:              "no such command: %[1]s",
 		HashNamedDirNotFound:      "hash: no such directory name: %[1]s",
-		HashNamedDirBadName:       "hash: invalid character in directory name: %[1]s",
+		// `rehash` and `unhash` are this shell's own names for the two
+		// halves of the table, and each refuses under its own name.
+		// Measured 2026-09-18 on zsh 5.9.2: `rehash foo` is `too many
+		// arguments`, `unhash` alone is `not enough arguments`, and every
+		// table answers a name it has not got with the identical `no such
+		// hash table element` — all three at 1 (#3109).
+		RehashTooManyArguments: "too many arguments",
+		UnhashNoOperands:       "not enough arguments",
+		UnhashElementNotFound:  "no such hash table element: %[2]s",
+		HashNamedDirBadName:    "hash: invalid character in directory name: %[1]s",
 		// `ls=/bin/ls`, the shape an assignment would have — zsh and ksh93
 		// both write the table that way.
 		HashListing: interp.HashListingNameEqualsPath,
@@ -4752,6 +4772,17 @@ func Apply(r *interp.Runner) {
 	// leaves that loader's temporary stubs standing over `compdef`,
 	// `autoload`, `source`, `bindkey`, `zstyle`, `alias` and `zle` for the
 	// rest of the session (#1487).
+	// `rehash` and `unhash`, which are this shell's names for clearing the
+	// command hash and for taking one entry out of a table. The behavior was
+	// here — `hash -r` empties the table — and the *names* were not, so a
+	// startup file that added a directory to `$path` and called `rehash`
+	// died on that line at 127, which reads to a script exactly like a typo.
+	// Registered rather than written as prelude functions because each
+	// refuses under its own name: `rehash -x` is `bad option: -x` naming
+	// `rehash`, where a function calling `hash -r` would have named `hash`.
+	// See interp/rehashbuiltin.go (#3109).
+	r.Register("rehash", interp.RehashBuiltin())
+	r.Register("unhash", interp.UnhashBuiltin())
 	r.Register("functions", interp.FunctionsBuiltin())
 	r.Register("unfunction", interp.UnfunctionBuiltin())
 	if typeset, ok := r.Builtin("typeset"); ok {

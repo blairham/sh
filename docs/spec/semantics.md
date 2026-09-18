@@ -361,6 +361,171 @@ variable the construct turned out to depend on — including the control,
 an ordinary prefix to a name nothing froze, which complains about nothing
 in all six columns.
 
+## An assignment kept in front of a builtin that is not special
+
+Measured 2026-09-16 over the whole panel and the four columns on this machine
+re-measured 2026-09-18: script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with a scratch `HOME`, no startup files and stdin `/dev/null`, over
+`-c` and a script file alike. BusyBox v1.37.0 is the pinned Alpine image the
+oracle reaches, under `--init`; dash was read twice, Apple's `dash-16` and
+0.5.12 in `debian:stable-slim`.
+
+```sh
+V1=1 alias    >/dev/null 2>&1; printf 'alias V1=[%s]\n'   "${V1-UNSET}"
+V2=1 unalias -a >/dev/null 2>&1; printf 'unalias V2=[%s]\n' "${V2-UNSET}"
+V3=1 typeset  >/dev/null 2>&1; printf 'typeset V3=[%s]\n' "${V3-UNSET}"
+V4=1 cd .     >/dev/null 2>&1; printf 'cd V4=[%s]\n'      "${V4-UNSET}"
+V5=1 export   >/dev/null 2>&1; printf 'export V5=[%s]\n'  "${V5-UNSET}"
+```
+
+| column | alias | unalias | typeset | cd | export |
+| --- | --- | --- | --- | --- | --- |
+| bash 5.3.20 | UNSET | UNSET | UNSET | UNSET | UNSET |
+| that binary as `sh` | UNSET | UNSET | UNSET | UNSET | 1 |
+| bash 3.2.57 | UNSET | UNSET | UNSET | UNSET | UNSET |
+| **zsh 5.9.2** | **1** | UNSET | UNSET | UNSET | UNSET |
+| ksh93u+ 2012-08-01 | 1 | 1 | 1 | UNSET | 1 |
+| dash 0.5.12 | UNSET | UNSET | UNSET | UNSET | 1 |
+| BusyBox ash 1.37.0 | UNSET | UNSET | UNSET | UNSET | 1 |
+
+`cd` is the control and is UNSET in all seven. `export` is the second control
+and says what `Semantics.AssignmentPrefixPersistsOnSpecialBuiltin` answers in
+each column: zsh drops it, so zsh is a column that does **not** keep a special
+builtin's prefix — and `:` and `shift 0`, which are POSIX's own, confirm it
+from inside that shell.
+
+So the zsh row for `alias` is not specialness. Narrowed, it is two names:
+
+```
+V1=1 alias      V1=[1]
+V2=1 hash       V2=[1]
+V3=1 true       V3=[UNSET]
+V4=1 :          V4=[UNSET]
+V5=1 shift 0    V5=[UNSET]
+```
+
+`Semantics.BuiltinsKeepingAnAssignmentPrefix` is that roster — `"alias hash"`
+in the zsh preset and empty everywhere else. ksh93 keeps a prefix in front of
+`alias` too and reaches it through `SpecialBuiltinsBeyondPosix`, which names
+`alias` there; `hash` is spelled `alias -t --` in that shell, so its row is
+the same fact and needs nothing.
+
+A second roster and not a widening of the first, because the two come apart
+exactly here: adding `alias` to the specialness roster to get this would also
+have given zsh that shell's `type` sentence for it and the fatality of a
+special builtin's failure, neither of which it has. Reading it as specialness
+would have put `alias` on zsh's roster for a reason the panel does not
+support.
+
+Three further rows are measured and left out on purpose. The value is set and
+**not exported** — `export -p` does not name it — so it is the shell's own and
+no child sees it. `V=1 builtin` keeps the value and `V=1 builtin true` does
+not, which is a command with no command word rather than a fact about
+`builtin`: the modifier is taken away and what is left is an assignment on its
+own, which persists in every column. And under `emulate sh` the same `V1=1
+alias` drops the value, so this belongs to that shell's own emulation.
+
+The discriminating probe the issue asked for was run: `V1=1 alias` does **not**
+define an alias called `V1`. The listing afterwards holds the shell's two
+presets and nothing else, so the word in front is a prefix assignment and not
+an operand the builtin read.
+
+## A command word that is exactly `-`
+
+zsh throws it away and runs the rest of the command. Six columns look it up
+and report 127.
+
+Measured 2026-09-16 over the whole panel, with zsh and BusyBox re-measured
+2026-09-18: script files under `env -i` with a scratch `HOME` and no startup
+files, both streams captured separately, with the status printed per line and
+a `MARK` after — every column reached the `MARK`, so the statuses are the
+whole of the answer.
+
+| column | `- echo hi` | `- - echo two` | `-- echo three` | `-` alone | `$v echo four`, `v=-` |
+| --- | --- | --- | --- | --- | --- |
+| bash 5.3.20 / as `sh` / 3.2.57 | `-: command not found`, 127 | 127 | 127 | 127 | 127 |
+| ksh93u+ 2012-08-01 | `-: not found`, 127 | 127 | 127 | 127 | 127 |
+| dash 0.5.12 | `-: not found`, 127 | 127 | 127 | 127 | 127 |
+| BusyBox ash 1.37.0 | `-: not found`, 127 | 127 | 127 | 127 | 127 |
+| **zsh 5.9.2** | **`hi`, 0** | **`two`, 0** | `--: command not found`, 127 | **0, silent** | **`four`, 0** |
+
+`Semantics.LoneDashInCommandPositionIsDiscarded`. The `--` column is the
+control: two dashes is an ordinary command name there as everywhere else, so
+this is the word being *exactly* one dash rather than a leading one. Quoting
+does not protect it and neither does arriving through an expansion, which is
+why it is asked after the word has been expanded rather than on the text.
+
+Three rows past the issue's own table, each of which narrows what "discarded"
+means:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `- v=1 echo hi` | `command not found: v=1`, 127 |
+| `v=1 -` | 0, and `v` is `1` afterwards |
+| `- >f` | `redirection with no command`, and the script ends |
+
+So the word after the dash is a **command word** and not a prefix — the
+assignments were read before the dash and nothing re-reads them. With nothing
+left, what is left is the assignments, and they persist exactly as `v=1`
+written on its own does. And a redirection has no command to belong to, which
+is **not** the state `>f` written with no word at all is in: that runs this
+shell's null command and succeeds. A word that was written and discarded is a
+different state from no word, and that is why the discard is asked *after* the
+null-command substitution rather than before it.
+
+### It is not the option question, and the wrong reading survives probing
+
+`Semantics.LoneDashIsAnOption` is the same shell's answer to a different
+question: a dash-word handed to a **builtin**, where `echo - x` prints `x`
+because the builtin's option reader ate the word. This one is about the word
+standing where the command name goes, and nothing has been looked up when it
+is asked.
+
+The two are hard to tell apart from outside. `eval - echo hi` prints `hi` in
+zsh, which reads as "`eval` ate the `-`" — but `eval "- echo hi"`, one
+argument, prints `hi` too, and `eval - -- echo hi` reports `--` as the
+command. Both are explained by the text `- echo hi` running with the `-`
+discarded, and neither is explained by an option. A probe that only ever
+writes the dash as a separate word in front of another word cannot tell them
+apart; the one-argument form is the shape that can.
+
+## `rehash` and `unhash`: a name that was missing, not a behavior
+
+zsh clears the command hash with `rehash` and takes one entry out of a table
+with `unhash`. The behavior was here — `hash -r` empties the table and always
+did — and the **names** were not: `grep -rn '"rehash"'` found nothing in the
+tree, so the word fell through to a PATH search and came back 127, which reads
+to a script exactly like a typo. A startup file that adds a directory to
+`$path` and calls `rehash` is an ordinary thing to write, and it died on that
+line.
+
+Measured 2026-09-18 on zsh 5.9.2, a letter at a time over `-a -d -f -m -p -r
+-s -v -L -t -i -n`:
+
+| builtin | letters it takes | everything else |
+| --- | --- | --- |
+| `rehash` | `-d`, `-f` — silent, 0 | `bad option: -X`, 1 |
+| `unhash` | `-a`, `-d`, `-f`, `-m`, `-s` | `bad option: -X`, 1 |
+
+`rehash` takes no operand at all: `rehash foo` is `too many arguments` at 1
+and nothing is cleared. `unhash` needs one — `not enough arguments` at 1,
+since a removal with no operand would be a removal of everything and there is
+no spelling for that. Each letter chooses the **table** the operands name, and
+all five answer a name they have not got with the identical sentence:
+
+    zsh:unhash:1: no such hash table element: nosuch
+
+`-m` makes the operands patterns, and there a pattern matching nothing is a
+**failure** at 1 with no complaint, where `alias -m` and `unalias -m` are both
+silent success. The status is the whole of the answer.
+
+They are registered builtins rather than prelude functions wrapping `hash`,
+and the refusals are why: `rehash -x` is `bad option: -x` naming **`rehash`**,
+where a function calling `hash -r` would have named `hash`. See
+interp/rehashbuiltin.go, which is in `interp` for the reason `IntegerBuiltin`
+is — the tables are that package's, and a dialect reimplementing a removal
+beside the one already there is the copy this seam exists to avoid.
+
 ## One axis, two places
 
 The glob-expansion row governs more than pathname expansion. The same

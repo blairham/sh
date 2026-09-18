@@ -155,6 +155,20 @@ func (r *Runner) IsSpecialBuiltinHere(name string) bool {
 	return nameInRoster(r.sem().SpecialBuiltinsBeyondPosix, name)
 }
 
+// builtinKeepsAnAssignmentPrefix reports whether this dialect keeps an
+// assignment written in front of this builtin, without the builtin being
+// special.
+//
+// A second question from IsSpecialBuiltinHere and not a widening of it: the
+// column that answers Yes here answers **no** to
+// Semantics.AssignmentPrefixPersistsOnSpecialBuiltin, so a name added to the
+// specialness roster to get this would also have gained that shell's
+// `type` sentence and its fatality. See
+// Semantics.BuiltinsKeepingAnAssignmentPrefix.
+func (r *Runner) builtinKeepsAnAssignmentPrefix(name string) bool {
+	return nameInRoster(r.sem().BuiltinsKeepingAnAssignmentPrefix, name)
+}
+
 // nameInRoster reports whether a space-separated roster holds this name.
 //
 // Written out rather than strings.Fields + a loop because it is asked on

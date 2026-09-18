@@ -16584,6 +16584,61 @@ type Semantics struct {
 	// there is not specialness. Filed separately rather than read as one.
 	SpecialBuiltinsBeyondPosix string
 
+	// BuiltinsKeepingAnAssignmentPrefix is the names, space separated, that
+	// keep an assignment written in front of them **without being special**.
+	//
+	// A roster for the reason the one above is one, and a *second* roster
+	// rather than a widening of it because the two answers come apart in the
+	// column that has this one. Measured 2026-09-16 and again 2026-09-18 on
+	// zsh 5.9.2, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// with a scratch HOME and no startup files, over `-c` and a script file
+	// alike, and inside a function, a `( … )`, a `$( … )` and both ends of a
+	// pipeline:
+	//
+	//	V=1 alias        V=[1]
+	//	V=1 hash         V=[1]
+	//	V=1 :            V=[UNSET]
+	//	V=1 shift 0      V=[UNSET]
+	//	V=1 true         V=[UNSET]
+	//	V=1 export       V=[UNSET]
+	//	V=1 unalias -a   V=[UNSET]
+	//	V=1 typeset      V=[UNSET]
+	//	V=1 cd .         V=[UNSET]
+	//
+	// `:` and `shift` are POSIX's own special builtins and `export` is the
+	// one every other column keeps, so that shell answers
+	// AssignmentPrefixPersistsOnSpecialBuiltin **no** and keeps these two
+	// anyway — which is the opposite shape from the one a specialness
+	// reading predicts, and is why reading it as specialness would have put
+	// `alias` on that roster for a reason the panel does not support
+	// (#3313).
+	//
+	// Two rows are measured and deliberately not here. `V=1 builtin` keeps
+	// the value and `V=1 builtin true` does not, which is a command with no
+	// command word rather than a fact about `builtin`: the modifier is taken
+	// away and what is left is an assignment on its own, which persists in
+	// every column. And under `emulate sh` the same `V=1 alias` drops the
+	// value, so this belongs to the shell's own emulation rather than to the
+	// builtin — which is what SetPosixMode would move if that mode is ever
+	// asked to.
+	//
+	// Empty everywhere else. ksh93 keeps a prefix in front of `alias` too
+	// and reaches it through SpecialBuiltinsBeyondPosix, which names `alias`
+	// there; `hash` is `alias -t --` in that shell, so its row is the same
+	// fact and needs nothing here.
+	BuiltinsKeepingAnAssignmentPrefix string
+
+	// LoneDashInCommandPositionIsDiscarded throws away a command word that
+	// expanded to exactly `-` and runs whatever follows it.
+	//
+	// zsh 5.9.2 alone against six: bash 5.3.20, that binary as `sh`, bash
+	// 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 all
+	// answer `- echo hi` with `command not found` at 127 and carry on. See
+	// interp/lonedashcommand.go for the rows and for why it is not
+	// LoneDashIsAnOption, which is the same shell's answer to a different
+	// question (#3236).
+	LoneDashInCommandPositionIsDiscarded Answer
+
 	// BadOptionToSpecialBuiltinFatal ends the script when a special builtin is
 	// given an option it does not have. True in dash and ksh93, which is the
 	// POSIX rule that a special builtin's failure is fatal; bash and zsh

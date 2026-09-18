@@ -89,6 +89,10 @@ type declareFlags struct {
 	hideString      bool
 	hideStringNamed bool
 	unique          bool
+	// traced is the `t` letter: an attribute the name carries, that every
+	// listing writes back, and that nothing else in this engine reads. See
+	// Runner.traced.
+	traced bool
 	// inherit is the `I` letter: this declaration's fresh binding takes the
 	// value and the attributes of the name at the enclosing scope rather
 	// than starting empty. The per-declaration spelling of what one shell's
@@ -513,6 +517,15 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// thing. So the sign is read and discarded here rather than
 				// kept the way `-h`'s is.
 				f.inherit = true
+			case 't':
+				// The trace attribute. Recorded and listed and otherwise
+				// inert, which is measured rather than a shortcut: on all
+				// three shells with the letter the name reads back, expands
+				// and assigns exactly as it would without it, and the only
+				// reader is the DEBUG trap. So this is the same shape `-U`
+				// and `-H` have — a property of the *name* that every later
+				// listing consults — and `+t` takes it off again.
+				f.traced = true
 			case 'U':
 				// Keep only the first occurrence of each element. Like
 				// `-i` and the case attributes it is a property of the
@@ -728,17 +741,20 @@ func (r *Runner) refuseTheReferenceLetterInCompany(name string, f declareFlags) 
 // sibling letter beside it in Diagnostics.UnimplementedOptionLetters stops it.
 // One refusal, two exits, is exactly the drift this repository keeps finding.
 //
-// **Operands are required**, and that is measured rather than a caution.
-// ksh93's `typeset -fu` with no names is the *listing* of the functions the
-// letter marks, and with none marked it is silent at 0 — which this shell
-// already answers correctly through the marked-function listing. Refusing the
-// bare word would have replaced a right answer with a complaint. The form
-// that is missing is the one with names, which is the declaration.
+// **The table is what says the letter is missing**, and the bare word is
+// refused with the named one. It used to require operands, on the reading
+// that ksh93's `typeset -fu` with no names is the *listing* of the functions
+// the letter marks — which is true and is not this table's business: `u` is
+// not in ksh93's row here, precisely because the letter is built. A letter
+// that really is missing has no listing to write either, so requiring an
+// operand left the bare form falling through to the whole function table —
+// `typeset -ft` writing every body in the shell where the letter asks for the
+// traced ones (#3101).
 func (r *Runner) refuseAFunctionLineLetter(name string, f declareFlags, rest []string) int {
 	if code := r.refuseAVariableOnlyLetter(name, f, rest); code != 0 {
 		return code
 	}
-	if !f.function || f.functionOff || len(rest) == 0 {
+	if !f.function || f.functionOff {
 		return 0
 	}
 	c, missing := f.letterMissingOnAFunctionLine(
@@ -2584,6 +2600,20 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			}
 		}
 	}
+	if f.traced {
+		if r.traced == nil {
+			r.traced = map[string]bool{}
+		}
+		if f.remove {
+			// `+t` takes the letter off and leaves everything else standing:
+			// measured on all three shells with the attribute, `typeset -t
+			// T=1` then `typeset +t T` lists the plain form with the value
+			// still there.
+			delete(r.traced, name)
+		} else {
+			r.traced[name] = true
+		}
+	}
 	if f.hidden {
 		if r.hidden == nil {
 			r.hidden = map[string]bool{}
@@ -2962,6 +2992,7 @@ func withoutListingLetters(f declareFlags) declareFlags {
 	f.readonly, f.readonlyOff = false, false
 	f.export, f.assoc, f.array = false, false, false
 	f.lower, f.upper, f.unique, f.hidden = false, false, false, false
+	f.traced = false
 	f.global, f.inert = false, false
 	// The reference letter is a listing letter too — see attributeFilter,
 	// where the measurement is. Without this line `declare -n` with no

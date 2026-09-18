@@ -206,6 +206,7 @@ func (r *Runner) inheritAttributes(name string, a nameAttributes) bool {
 		{&r.lowered, a.lower},
 		{&r.uppered, a.upper},
 		{&r.unique, a.unique},
+		{&r.traced, a.traced},
 		{&r.hidden, a.hidden},
 	} {
 		if at.on {

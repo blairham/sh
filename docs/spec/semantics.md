@@ -10773,6 +10773,60 @@ evidence there is that the feature exists: #3084 was a bug against what
 a declaration over a name that holds an array, which both shells refuse
 in the same words and disagreed only about the shape of.
 
+### The trace letter, `-t`
+
+Measured 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with a scratch HOME, against bash 5.3.20, zsh 5.9.2 and ksh93u+
+2012-08-01. dash and BusyBox ash have no declaration builtin to ask.
+
+Every shell that has the letter records it on the name and writes it back:
+`typeset -t T=1` is a silent 0 and `typeset -p T` is `declare -t T="1"`,
+`typeset -t T=1` and `typeset -t T=1` in the three columns. `typeset +t T`
+takes the letter off and leaves the value where it is. The attribute is
+otherwise **inert**: a traced name expands, splits and assigns exactly as an
+untraced one does, and the only reader of the mark is the DEBUG trap, which
+is a separate question — `set -o functrace` is that question asked
+wholesale.
+
+So it is the shape `-U` and `-H` already have, and `Runner.traced` is the
+table. What each dialect decides is only whether the letter exists at all
+(`Semantics.DeclareOptions` and the per-builtin sets beside it) and **where
+it sits among the other letters a listing writes**, which the three columns
+disagree about:
+
+    bash 5.3.20    a A i n r t x l u    `declare -irtx`, `-art`, `-tu`, `-At`
+    zsh 5.9.2      … l u r t x U T      `typeset -ut`, `-lt`, `-atU`, `-Ft`
+    ksh93u+        x r t <kind> …       `typeset -x -r -t -l -u -i`
+
+bash writes it **before** the case letters and zsh **after** them, which is
+the pair that says the two orders are measured rather than one order written
+twice. ksh93 writes it as a word of its own, behind export and readonly and
+in front of the kind letter.
+
+A **filtered** listing selects on it like any other attribute letter —
+`typeset -t` with no operand writes the traced names alone — and the
+whole-table walk has to reach a name whose only attribute is this one, since
+it is in none of the other tables.
+
+**The function half is a different thing under the same letter, and only one
+column's is built.** `declare -ft f` in bash marks the *function*: `declare
+-F` then writes `declare -ft f`, `declare -Ft` narrows to the marked ones,
+and a function carrying all three lists as `declare -frtx f`. That is
+`Semantics.FunctionAttributeLetters` — the table `readonly -f` and `export
+-f` already write into — so `t` joins `r` and `x` there and
+`Runner.tracedFuncs` is the record. What a marked function then *does* there
+is not built: `Runner.SetTracedFunctions` is the seam, bash fills in none,
+and the DEBUG and RETURN trap inheritance the mark asks for is #3051's
+larger half.
+
+zsh writes its mark **inside the body** — `f () {` then a `# traced` comment
+line — rather than as a row after it, so the two renderings are not one
+rendering and that column's function half is named as missing on a `-f` line
+alone: `typeset -t v=1` is a declaration there and `typeset -ft f` and the
+bare `typeset -ft` are `-t is not implemented yet`. ksh93's is built
+already, through `Semantics.FunctionLettersThatMarkUndefined` and
+`dialect/ksh`'s own marks.
+
 ## The bare declaration listing, and the sign that reaches it
 
 Measured 2026-09-12, bash 5.3.15 `--norc --noprofile` with a scrubbed

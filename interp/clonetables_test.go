@@ -286,6 +286,7 @@ func seedTables(r *Runner) {
 	r.exported = map[string]bool{"seed": true}
 	r.exportedFuncs = map[string]bool{"seed": true}
 	r.readonlyFuncs = map[string]bool{"seed": true}
+	r.tracedFuncs = map[string]bool{"seed": true}
 	r.extraOptions = map[string]bool{"seed": true}
 	r.negatedOptions = map[string]string{"seed": "noseed"}
 	r.immovableOptions = map[string]bool{"seed": true}
@@ -321,6 +322,7 @@ func seedTables(r *Runner) {
 	r.tied = map[string]tie{"seed": {}}
 	r.traps = map[string]string{"seed": "v"}
 	r.unique = map[string]bool{"seed": true}
+	r.traced = map[string]bool{"seed": true}
 	r.nameref = map[string]string{"seed": "target"}
 	r.floatExponent = map[string]bool{"seed": true}
 	r.uppered = map[string]bool{"seed": true}

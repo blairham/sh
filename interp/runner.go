@@ -486,7 +486,14 @@ type Runner struct {
 	// cannot be redefined and cannot be unset, and both refusals are the
 	// function table's rather than the variable table's: `readonly f` and
 	// `readonly -f f` freeze two different things under one word.
-	readonlyFuncs                      map[string]bool
+	readonlyFuncs map[string]bool
+	// tracedFuncs are the functions a `-ft` line has marked, in the one
+	// dialect that spells the trace that way — see
+	// Semantics.FunctionAttributeLetters. The mark is recorded and listed
+	// back; whether a marked function then runs with the trace on is
+	// Runner.SetTracedFunctions' answer and that dialect has not filled it
+	// in, so this is the listing's record alone (#3051).
+	tracedFuncs                        map[string]bool
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string
 	// undefinedFunctions is the dialect's answer to "has this function's body
@@ -3034,6 +3041,17 @@ type Runner struct {
 	// refuses it and ksh93 does not have it, so the dialect decides who may
 	// set it — see Semantics.DeclareOptions.
 	unique map[string]bool
+	// traced names the parameters carrying the trace attribute — `typeset
+	// -t`. Every shell on the panel but the two without the builtin records
+	// it and lists it back, and none of them lets it change what a *value*
+	// is: what a traced name does is read by the DEBUG trap and by nothing
+	// else, so a table beside the others is the whole of it here. A property
+	// of the name like `unique` and `hidden`, which is why it travels through
+	// nameAttributes and a shadowed binding gets the outer one back.
+	//
+	// The dialect decides who may write the letter at all —
+	// see Semantics.DeclareOptions.
+	traced map[string]bool
 	// nameref names the parameters that are **references to another
 	// parameter**: the entry is the name — or the name and subscript — that
 	// every read, write and `unset` through this one really lands on. See

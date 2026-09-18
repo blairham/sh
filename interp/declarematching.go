@@ -250,7 +250,7 @@ func (f DeclarationFilterForm) String() string {
 func (f declareFlags) attributeLetterWritten() bool {
 	return f.integer || f.float || f.readonly || f.export || f.array ||
 		f.assoc || f.lower || f.upper || f.unique || f.hidden ||
-		f.nameref
+		f.traced || f.nameref
 }
 
 // attributeFilter is the test the attribute letters make of a declaration, or
@@ -286,6 +286,7 @@ func (r *Runner) attributeFilter(f declareFlags) (func(declaration) bool, bool) 
 	add(f.upper, func(d declaration) bool { return d.upper }, &attrs)
 	add(f.unique, func(d declaration) bool { return d.unique }, &attrs)
 	add(f.hidden, func(d declaration) bool { return d.hidden }, &attrs)
+	add(f.traced, func(d declaration) bool { return d.traced }, &attrs)
 	// The reference letter selects like any other attribute, and it is the
 	// one letter this filter did not read. `declare -n` over a table holding
 	// one reference, one integer and one export writes the reference alone

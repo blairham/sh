@@ -117,6 +117,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.hidden = maps.Clone(r.hidden)
 	c.localMarked = maps.Clone(r.localMarked)
 	c.unique = maps.Clone(r.unique)
+	c.traced = maps.Clone(r.traced)
 	c.nameref = maps.Clone(r.nameref)
 	c.hideInScope = maps.Clone(r.hideInScope)
 	c.tied = maps.Clone(r.tied)
@@ -211,6 +212,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// there — measured, `readonly -f f; ( f() { :; } )` is refused inside the
 	// subshell in bash 5.3.20.
 	c.readonlyFuncs = maps.Clone(r.readonlyFuncs)
+	c.tracedFuncs = maps.Clone(r.tracedFuncs)
 	c.aliases = maps.Clone(r.aliases)
 	c.suffixAliases = maps.Clone(r.suffixAliases)
 	// And the names one dialect remembers having named, which is owned

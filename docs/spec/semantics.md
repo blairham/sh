@@ -17779,6 +17779,55 @@ Asked only where a script has set OPTERR to a value that reads as zero, so
 an ordinary `getopts` — and an ordinary bad option in any of the six shells
 without the parameter — reaches no question at all.
 
+**`GetoptsTakesAPlusPrefixedOption`** — bash no · dash no · ksh93 no ·
+zsh **yes** · BusyBox ash no
+
+Reads a word beginning with `+` as an option word, exactly as a word
+beginning with `-`, and reports the letter with the sign still in front of
+it. zsh alone; everywhere else `+a` is an operand and the scan stops at it.
+
+Where it exists the two spellings are one option with two senses — `+a` is
+how several real tools spell "turn this off" — and the sign is the only
+thing that tells a script which it was given, so the name holds `+a` rather
+than `a`. A loop over `getopts` sees the word there and ends at it here.
+
+Measured 2026-09-17 over a script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null, `getopts a o
++a` with OPTIND reset:
+
+| shell | status | name |
+| --- | --- | --- |
+| **zsh 5.9.2** | **0** | **`+a`** |
+| bash 5.3.20 | 1 | the scan ended |
+| bash as `sh` | 1 | the scan ended |
+| bash 3.2.57 | 1 | the scan ended |
+| ksh93u+ 2012-08-01 | 1 | the scan ended |
+| dash 0.5.12 | 1 | the scan ended |
+| BusyBox ash 1.37.0 | 1 | the scan ended |
+
+Everything else about the word is the scan it already is: `+ab` is two
+options in one word, `+a val` and `+aval` take the argument an `a:` letter
+takes, and the two signs mix freely in one command line. A letter the
+string does not have is the ordinary complaint with the sign in it —
+`bad option: +z`, and `+z` rather than `z` in OPTARG under the silent form.
+
+Two words are not options under either answer. A lone `+` is an operand and
+ends the scan, as a lone `-` does everywhere. And `++` is **not** the `--`
+that ends the options: it is the option `+`, which no ordinary option string
+has, so it is reported as a bad one. That asymmetry is measured rather than
+assumed.
+
+The sign reaches the wording as `Diagnostics.GetoptsBadOption`'s **second
+verb**. The four dialects that cannot see a `+` spell the `-` into the
+format itself, which is honest there; the one that can takes the verb and
+writes `bad option: +z` where it writes `bad option: -z`. The two are
+carried apart rather than glued together because a word's sign and its
+letter can both be a `+`: `getopts a o -+` is `bad option: -+` and
+`getopts a o ++` is `bad option: ++`.
+
+POSIX has an option word begin with a `-`, which is why the standard's
+preset and the substrate both answer no.
+
 **`GetoptsOptionStringHasANumericType`** — bash no · dash no · ksh93 yes ·
 zsh no · BusyBox ash no
 

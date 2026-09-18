@@ -473,7 +473,13 @@ type Diagnostics struct {
 	PrintfBadDateOperand string
 
 	// GetoptsBadOption is an option `getopts` does not have in its string.
-	// One verb: the letter.
+	// Two verbs: the letter, and the sign of the word it came out of.
+	//
+	// The sign is `-` in every dialect but the one that reads a `+`-prefixed
+	// word as an option too — see Semantics.GetoptsTakesAPlusPrefixedOption —
+	// so the four that cannot see a `+` spell the `-` into the wording and
+	// never name the second verb. It is there for the one that can, which
+	// writes `bad option: +z` where it writes `bad option: -z`.
 	GetoptsBadOption string
 	// GetoptsMissingArgument is an option whose argument is not there. Same.
 	GetoptsMissingArgument string

@@ -768,6 +768,9 @@ func Semantics() interp.Semantics {
 	// counting it late, and this shell is at the early end (#3275).
 	s.GetoptsCountsTheWordOnTheNextCall = interp.No
 	s.GetoptsEndOfOptionsNamesIt = interp.Yes
+	// A `+`-prefixed word is an operand and ends the scan: measured
+	// 2026-09-17 on 0.5.12, `getopts a o +a` is 1 with the name `?`.
+	s.GetoptsTakesAPlusPrefixedOption = interp.No
 	// A shell function call gets a `getopts` scan of its own here, while
 	// OPTIND itself stays the shell's: a helper called twice reads its
 	// arguments twice, and `$OPTIND` inside the call is still the caller's

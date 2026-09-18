@@ -14,9 +14,9 @@ type recordingCompleter struct {
 	answer []string
 }
 
-func (c *recordingCompleter) Complete(req Completion) []string {
+func (c *recordingCompleter) Complete(req Completion) []Candidate {
 	c.asked = append(c.asked, req)
-	return c.answer
+	return Words(c.answer...)
 }
 
 // What a completer is told is the whole of the question: the line, where the
@@ -99,7 +99,7 @@ func TestTheFirstCompleterWithAnAnswerIsTheWholeAnswer(t *testing.T) {
 	matches := e.complete(completers{first, second})
 
 	if matches != nil {
-		t.Errorf("one match should be filled in rather than listed, got %q", matches)
+		t.Errorf("one match should be filled in rather than listed, got %v", matches)
 	}
 	if got := string(e.line); got != "alpha " {
 		t.Errorf("the line is %q, want %q", got, "alpha ")
@@ -210,11 +210,12 @@ func TestAShellWithoutARunnerReportsNoDirectory(t *testing.T) {
 
 // A function is a completer, which is the shape a caller with one rule writes.
 func TestCompleterFuncIsACompleter(t *testing.T) {
-	var c Completer = CompleterFunc(func(req Completion) []string {
-		return []string{req.Word + "-suffixed"}
+	var c Completer = CompleterFunc(func(req Completion) []Candidate {
+		return Words(req.Word + "-suffixed")
 	})
-	if got := c.Complete(Completion{Word: "w"}); !reflect.DeepEqual(got, []string{"w-suffixed"}) {
-		t.Errorf("got %q, want %q", got, []string{"w-suffixed"})
+	want := []Candidate{{Word: "w-suffixed"}}
+	if got := c.Complete(Completion{Word: "w"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
@@ -230,14 +231,14 @@ func TestCompleterFuncIsACompleter(t *testing.T) {
 // `printf` is given the completed word, so a completion that arrived wrong is
 // a different line of output rather than a different-looking screen.
 func TestACallersCompleterReachesTheEditorAtATerminal(t *testing.T) {
-	mine := CompleterFunc(func(req Completion) []string {
+	mine := CompleterFunc(func(req Completion) []Candidate {
 		if req.Command || req.Word != "sur" {
 			return nil
 		}
 		// Through Escape rather than by hand: the seam's answers are
 		// replacement words in the line's own quoting, and a completer that
 		// wrote the space out plainly would have offered two arguments.
-		return []string{req.Escape("surprising name.txt")}
+		return Words(req.Escape("surprising name.txt"))
 	})
 	s := newSessionWith(t, func(sh *Shell) { sh.Completers = []Completer{mine} })
 

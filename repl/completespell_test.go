@@ -53,7 +53,20 @@ func spellCompleter(dir string, dirspell, direxpand bool) (runnerCompleter, *int
 }
 
 func completeWord(c Completer, word string) []string {
-	return c.Complete(Completion{Line: word, Point: len(word), Word: word})
+	return completionWords(c.Complete(Completion{Line: word, Point: len(word), Word: word}))
+}
+
+// completionWords is the replacement words of an answer, which is what every
+// test in this file is about — the row a candidate draws is completelist's.
+func completionWords(candidates []Candidate) []string {
+	if len(candidates) == 0 {
+		return nil
+	}
+	out := make([]string, len(candidates))
+	for i, c := range candidates {
+		out[i] = c.Word
+	}
+	return out
 }
 
 // The pair, which is the finding both #1445 and #1562 turn on: three of the

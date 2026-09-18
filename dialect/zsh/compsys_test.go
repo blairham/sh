@@ -30,6 +30,24 @@ import (
 // #2770 left and this issue found.
 func completionFor(t *testing.T, src, line string) []string {
 	t.Helper()
+	return completionWords(completionCandidatesFor(t, src, line))
+}
+
+// completionWords is the replacement words of an answer: what goes into the
+// line, which is what the rows below are about. What a listing *draws* for
+// them is candidatesFor's, next to the measurement that says so.
+func completionWords(candidates []repl.Candidate) []string {
+	var out []string
+	for _, c := range candidates {
+		out = append(out, c.Word)
+	}
+	return out
+}
+
+// completionCandidatesFor is the same completion with the rows and the blocks
+// still on it — see compadd.go for what each `compadd` letter puts there.
+func completionCandidatesFor(t *testing.T, src, line string) []repl.Candidate {
+	t.Helper()
 	r := bindkeyRunner(t, src)
 	start := strings.LastIndexAny(line, " \t") + 1
 	return zsh.RunCompletion(r, t.Context(), "probewid", repl.Completion{

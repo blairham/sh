@@ -51,34 +51,37 @@ import (
 //	alpha  -- one
 //	beta   -- two
 //
-// # One group out for one group in
+// # Two groups out for one group in
 //
-// zsh splits its answer further than this: one group per distinct listing
-// arrangement, so that its listing can draw the described matches a row each
-// and pack the undescribed ones together. This hands back one group per
-// definition instead.
+// zsh splits its answer further than a definition splits it: one group per
+// distinct listing **arrangement**, so that its listing can draw the described
+// matches a row each and pack the undescribed ones together.
 //
 // Measured on zsh 5.9.2, 2026-09-16 through a pseudo-terminal, with a function
 // shadowing this builtin and the shipped `_arguments` driving it over
-// `gzip -c<TAB>` — one definition in, and the two shells' answers side by
-// side:
+// `gzip -c<TAB>` — one definition in, two groups out:
 //
-//	          zsh                                   here
-//	group 1   -l -S '' -J -default-                 -l -S ''
-//	          -cd … -cV -cS  (the described)        -cd … -cV -c1 … -c9 -cS
-//	group 2   -S '' -J -default-                    (none)
-//	          -c1 … -c9      (the undescribed)
+//	group 1   -l -S '' -J -default-      -cd … -cV -cS  (the described)
+//	group 2   -S '' -J -default-         -c1 … -c9      (the undescribed)
 //
-// so it is the **same twenty-three matches**, and the difference is which of
-// them share a `-l`. `-l` is "one match per line", which is what a row
-// carrying a description needs and what a bare name does not; splitting on it
-// is a listing arrangement, and this editor draws one listing of replacement
-// words and has no second one to ask for. A person sees the same twenty-three
-// words from both shells, in one block here and in two there.
+// and what the person sees, drawn by real zsh over the same line:
 //
-// Descriptions are built and handed over all the same, so the day repl's
-// completion seam can carry one (#3041) they are already here — and the day it
-// can draw a second arrangement, the split is one comparison in group().
+//	-d  -- decompress
+//	-f  -- force overwrite
+//	…
+//	-1  -2  -3  -4  -5  -6  -7  -8  -9
+//
+// This file used to hand back one group per definition and say so, on the
+// reasoning that repl draws one listing of replacement words and has no
+// second arrangement to ask for. It has one now — a Group is what a
+// repl.Candidate is drawn in, and `-l` is a field on it (#3232) — so the
+// split is made here, where the measurement puts it: a definition whose rows
+// carry descriptions and whose rows do not is two groups, described first.
+//
+// The `-l` is what makes it a split rather than a re-ordering. A row reading
+// `-d  -- decompress` needs a line of its own and a bare `-1` does not, so
+// running the two together would either waste the screen on the short ones or
+// wrap the long ones, and both are worse than what one comparison buys.
 
 // describeState is one `-i`/`-I` call: the groups it defined and how far `-g`
 // has read them.
@@ -88,6 +91,11 @@ type describeState struct {
 	expl         string
 	groups       []describeGroup
 	at           int
+
+	// pending is the bare half of a definition whose described half has
+	// already been answered — see group(), where one definition becomes two
+	// groups because the two halves are drawn differently.
+	pending []describeRun
 }
 
 // describeGroup is one definition: where the names and descriptions come
@@ -200,6 +208,19 @@ func (d *describeState) group(r *interp.Runner, into []string) int {
 		return 1
 	}
 	for {
+		if len(d.pending) > 0 {
+			// The bare half of a definition already answered, before the next
+			// definition: zsh draws the described block and then the bare one
+			// from the same `-g` loop, so the order they come back in is the
+			// order they are drawn in.
+			run := d.pending[0]
+			d.pending = d.pending[1:]
+			r.SetVar(into[0], "")
+			r.SetArray(into[1], d.options(d.groups[d.at], false))
+			r.SetArray(into[2], run.words)
+			r.SetArray(into[3], run.displays)
+			return 0
+		}
 		d.at++
 		if d.at >= len(d.groups) {
 			return 1
@@ -214,22 +235,68 @@ func (d *describeState) group(r *interp.Runner, into []string) int {
 			matches, _ = r.GetArray(g.matches)
 		}
 		words, displays := describeRows(pairs, matches, d)
-		// `$compstate[list]` is left as it was: this editor draws one
-		// listing and has no second arrangement to ask for.
+		described, bare := splitByDescription(words, displays)
+		if len(described.words) > 0 && len(bare.words) > 0 {
+			// Two arrangements in one definition. The described half is
+			// answered now and the bare half is queued so that the caller's
+			// next `-g` reads it — which is the loop the caller already runs,
+			// and is how zsh comes to answer three groups to a definition
+			// that named one.
+			d.pending = append(d.pending, bare)
+			words, displays = described.words, described.displays
+		}
+		// `$compstate[list]` is left as it was: what a listing looks like is
+		// the editor's, and the arrangement is carried by the `-l` in the
+		// options rather than by a request to list.
 		r.SetVar(into[0], "")
-		r.SetArray(into[1], d.options(g))
+		r.SetArray(into[1], d.options(g, len(described.words) > 0))
 		r.SetArray(into[2], words)
 		r.SetArray(into[3], displays)
 		return 0
 	}
 }
 
+// describeRun is one arrangement's worth of a definition: the matches and the
+// rows drawn for them.
+type describeRun struct {
+	words, displays []string
+}
+
+// splitByDescription divides a definition's rows into the ones that carry a
+// description and the ones that are a bare name.
+//
+// By the row rather than by the pair, because that is what the arrangement
+// turns on: describeRows already decided which names got a description
+// written after them — a `-i` call gives none of them one, and a pair with an
+// empty description after the colon gets the name back — so a display that is
+// not the word is exactly a row that needs a line to itself.
+func splitByDescription(words, displays []string) (described, bare describeRun) {
+	for i, word := range words {
+		row := ""
+		if i < len(displays) {
+			row = displays[i]
+		}
+		at := &bare
+		if row != "" && row != word {
+			at = &described
+		}
+		at.words = append(at.words, word)
+		at.displays = append(at.displays, row)
+	}
+	return described, bare
+}
+
 // options is the `compadd` options one group is answered with: this builtin's
 // own listing flag, the group's options, and whatever the explanation array
 // holds.
-func (d *describeState) options(g describeGroup) []string {
+//
+// The `-l` goes only on the half that carries descriptions. Measured — see
+// the file comment: zsh answers `gzip -c` with a `-l` group of described
+// options and a plain group of undescribed ones, and it is the flag rather
+// than the definition that tells the two apart.
+func (d *describeState) options(g describeGroup, described bool) []string {
 	var out []string
-	if d.descriptions {
+	if d.descriptions && described {
 		// `-l` lists the display strings one per line, which is what a
 		// listing with a description on every row needs. Measured: it is in
 		// the `_args` array zsh answers `uname -` with.

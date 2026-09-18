@@ -19,7 +19,7 @@ import (
 
 // completedThroughShell types keys into an editor whose Tab is bound to a
 // completion the shell supplies, and hands back the line and everything drawn.
-func completedThroughShell(t *testing.T, answer func(Completion) []string, keys string) (string, string) {
+func completedThroughShell(t *testing.T, answer func(Completion) []Candidate, keys string) (string, string) {
 	t.Helper()
 	var out strings.Builder
 	s := Shell{
@@ -30,12 +30,12 @@ func completedThroughShell(t *testing.T, answer func(Completion) []string, keys 
 		// answered" and "the editor answered" are distinguishable — a test
 		// where the editor had nothing to say could not tell an answer that
 		// won from an answer that was merely the only one.
-		Completers: []Completer{CompleterFunc(func(Completion) []string {
-			return []string{"editors-own"}
+		Completers: []Completer{CompleterFunc(func(Completion) []Candidate {
+			return Words("editors-own")
 		})},
 	}
 	if answer != nil {
-		s.RunCompletion = func(_ context.Context, name string, c Completion) []string {
+		s.RunCompletion = func(_ context.Context, name string, c Completion) []Candidate {
 			if name != "w" {
 				t.Errorf("completion name = %q, want %q", name, "w")
 			}
@@ -55,9 +55,9 @@ func completedThroughShell(t *testing.T, answer func(Completion) []string, keys 
 // the shell configured completes what the shell says it completes.
 func TestAShellsOwnCompletionAnswersTheKeyItWasBoundTo(t *testing.T) {
 	var saw Completion
-	line, _ := completedThroughShell(t, func(c Completion) []string {
+	line, _ := completedThroughShell(t, func(c Completion) []Candidate {
 		saw = c
-		return []string{"checkout"}
+		return Words("checkout")
 	}, "git che\t\n")
 	if want := "git checkout "; line != want {
 		t.Errorf("line = %q, want %q", line, want)
@@ -80,10 +80,10 @@ func TestAShellsOwnCompletionAnswersTheKeyItWasBoundTo(t *testing.T) {
 func TestAShellThatAnswersNothingLeavesThisEditorsCompletionStanding(t *testing.T) {
 	for _, c := range []struct {
 		name   string
-		answer func(Completion) []string
+		answer func(Completion) []Candidate
 	}{
-		{"nothing to say", func(Completion) []string { return nil }},
-		{"an empty list", func(Completion) []string { return []string{} }},
+		{"nothing to say", func(Completion) []Candidate { return nil }},
+		{"an empty list", func(Completion) []Candidate { return []Candidate{} }},
 		{"no shell wired in", nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestAShellThatAnswersNothingLeavesThisEditorsCompletionStanding(t *testing.
 func TestAKeyBoundToCompletionStillListsOnTheSecondPress(t *testing.T) {
 	matches := []string{"checkout", "cherry", "cherry-pick"}
 	line, drawn := completedThroughShell(t,
-		func(Completion) []string { return matches }, "git che\t\t\n")
+		func(Completion) []Candidate { return Words(matches...) }, "git che\t\t\n")
 	// The first press filled in as far as the three agree, which is no
 	// further than what was typed, so the line is unchanged.
 	if want := "git che"; line != want {
@@ -124,7 +124,7 @@ func TestAKeyBoundToCompletionStillListsOnTheSecondPress(t *testing.T) {
 // listed on every press and never filled anything in.
 func TestOnePressOfABoundCompletionKeyDoesNotList(t *testing.T) {
 	_, drawn := completedThroughShell(t,
-		func(Completion) []string { return []string{"checkout", "cherry"} }, "git che\t\n")
+		func(Completion) []Candidate { return Words("checkout", "cherry") }, "git che\t\n")
 	if strings.Contains(drawn, "cherry") {
 		t.Errorf("one press listed; it drew %q", drawn)
 	}

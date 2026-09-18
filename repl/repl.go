@@ -361,7 +361,7 @@ type Shell struct {
 	// Asked **before** Completers and before this shell's own completion, and
 	// never instead of either: nothing it returns is merged and nothing it
 	// fails to return costs the word its other answers. See completerFor.
-	RunCompletion func(ctx context.Context, name string, c Completion) []string
+	RunCompletion func(ctx context.Context, name string, c Completion) []Candidate
 
 	// HistoryRecorders are told every line this session records, besides the
 	// history file, which is always told too. Nil is a session whose history
@@ -1451,7 +1451,7 @@ func (c runnerCompleter) shell() shellCompleter {
 // The branch is on the request rather than on the line, because where a word
 // sits is the editor's rule and this is one of two callers of it. See
 // Completion.Command.
-func (c runnerCompleter) Complete(req Completion) []string { return c.shell().Complete(req) }
+func (c runnerCompleter) Complete(req Completion) []Candidate { return c.shell().Complete(req) }
 
 // reservedWords is the grammar's own vocabulary, which no builtin table holds.
 var reservedWords = []string{

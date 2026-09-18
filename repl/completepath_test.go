@@ -48,7 +48,21 @@ func typeAndTab(t *testing.T, c Completer, typed string) (string, []string) {
 	t.Helper()
 	e := &editor{line: []rune(typed), pos: len([]rune(typed)), out: &strings.Builder{}}
 	listed := e.complete(c)
-	return string(e.line), listed
+	return string(e.line), drawnRows(listed)
+}
+
+// drawnRows is what a listing would print for these candidates, which is what
+// the tests below are about — the word a candidate inserts is asserted
+// through the line.
+func drawnRows(candidates []Candidate) []string {
+	if len(candidates) == 0 {
+		return nil
+	}
+	out := make([]string, len(candidates))
+	for i, c := range candidates {
+		out[i] = c.Display
+	}
+	return out
 }
 
 // What Tab does to an argument, against the fixture the real shells were

@@ -746,6 +746,43 @@ func TestCompdescribe(t *testing.T) {
 			 say "${a[*]}"`,
 			"-l -M r:|=*",
 		},
+		// One definition whose rows are not all described is **two** groups,
+		// the described half first and carrying the `-l`. Measured through a
+		// pseudo-terminal on zsh 5.9.2 over `gzip -c`, where the described
+		// options are drawn a row each and `-1` … `-9` are packed under
+		// them; the trace of that line is in compdescribe.go (#3232).
+		{
+			"a definition with both kinds is two groups",
+			`local -a g=(alpha:one bare: beta:two) expl=()
+			 compdescribe -I '' 40 '-- ' expl g || return
+			 local csl; local -a a m d; local out=
+			 while compdescribe -g csl a m d; do out="${out}[${a[*]}|${m[*]}]"; done
+			 say "$out"`,
+			"[-l|alpha beta][|bare]",
+		},
+		// And a definition where every row is described is still one group,
+		// which is what says the split is the arrangement rather than a
+		// second pass over everything.
+		{
+			"a definition of one kind stays one group",
+			`local -a g=(alpha:one beta:two) expl=()
+			 compdescribe -I '' 40 '-- ' expl g || return
+			 local csl; local -a a m d; local out=
+			 while compdescribe -g csl a m d; do out="${out}[${a[*]}|${m[*]}]"; done
+			 say "$out"`,
+			"[-l|alpha beta]",
+		},
+		// `-i` describes nothing, so nothing carries `-l` and there is
+		// nothing to split.
+		{
+			"nothing described is one plain group",
+			`local -a g=(alpha:one beta:two) expl=()
+			 compdescribe -i '' 40 expl g || return
+			 local csl; local -a a m d; local out=
+			 while compdescribe -g csl a m d; do out="${out}[${a[*]}|${m[*]}]"; done
+			 say "$out"`,
+			"[|alpha beta]",
+		},
 		{"no state", `compdescribe -g a b c d 2>/dev/null; say $?`, "1"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

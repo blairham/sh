@@ -27,27 +27,43 @@ import (
 //
 // Returning the matches rather than printing them: the editor owns the screen,
 // and deciding *when* to list is its business — the second Tab, not the first.
-func (e *editor) complete(c Completer) []string {
+func (e *editor) complete(c Completer) []Candidate {
 	if c == nil {
 		return nil
 	}
 	start := wordStart(e.line, e.pos)
 	word := string(e.line[start:e.pos])
-	matches := c.Complete(e.completion(start))
-	if len(matches) == 0 {
+	candidates := c.Complete(e.completion(start))
+	if len(candidates) == 0 {
 		return nil
 	}
-	if len(matches) == 1 {
-		e.replaceWord(start, matches[0]+completionSuffix(word, matches[0]))
+	// The words are what is inserted and what the prefix is computed over;
+	// a candidate with no word is a row of a listing and nothing else, so
+	// two of those and one word is a lone match rather than three.
+	words := insertableWords(candidates)
+	if len(words) == 1 {
+		e.replaceWord(start, words[0]+completionSuffix(word, words[0]))
 		return nil
 	}
 	// Several. Fill in as far as they agree, which is what makes a second Tab
 	// worth pressing rather than a repeat of the first.
-	if common := commonPrefix(matches); len(common) > len(word) {
+	if common := commonPrefix(words); len(words) > 1 && len(common) > len(word) {
 		e.replaceWord(start, common)
 		return nil
 	}
-	return displayNames(matches, word)
+	return displayCandidates(candidates, word)
+}
+
+// insertableWords are the replacement words among the candidates: everything a
+// listing-only row is not.
+func insertableWords(candidates []Candidate) []string {
+	out := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		if c.Word != "" {
+			out = append(out, c.Word)
+		}
+	}
+	return out
 }
 
 // completion is the question this keystroke asks, as the seam states it.
@@ -80,19 +96,24 @@ func (e *editor) dir() string {
 	return e.workingDir()
 }
 
-// displayNames are the matches as a listing shows them: without the directory
-// already typed, which every one of them carries and none of them is about.
+// displayCandidates are the candidates as a listing shows them: each one's row
+// settled, and the directory already typed taken off the rows that are nothing
+// but a word.
 //
 // Measured in both shells — `: sub/` lists `nested.txt`, not `sub/nested.txt`.
-// The opening quote goes the same way, for the same reason.
-func displayNames(matches []string, word string) []string {
+// The opening quote goes the same way, for the same reason. A candidate that
+// brought its own Display is left exactly as it is: the completion system that
+// built that string has already decided what the row says, and trimming a
+// path off the front of a padded `name  -- sentence` would cut it in the
+// middle of the padding.
+func displayCandidates(candidates []Candidate, word string) []Candidate {
 	prefix := wordPrefix(word)
-	if prefix == "" {
-		return matches
-	}
-	out := make([]string, len(matches))
-	for i, m := range matches {
-		out[i] = strings.TrimPrefix(m, prefix)
+	out := make([]Candidate, len(candidates))
+	for i, c := range candidates {
+		if c.Display == "" {
+			c.Display = strings.TrimPrefix(c.Word, prefix)
+		}
+		out[i] = c
 	}
 	return out
 }
@@ -331,7 +352,15 @@ func (s shellCompleter) files(word string) []string { return s.paths(word, nil) 
 // says. One place decides it — the editor, when it builds the Completion — so
 // a caller's completer and this one are looking at the same fact rather than
 // each deciding for itself.
-func (s shellCompleter) Complete(c Completion) []string {
+func (s shellCompleter) Complete(c Completion) []Candidate {
+	return Words(s.words(c)...)
+}
+
+// words is this completer's answer before it is dressed as candidates. A
+// separate method because everything below it hands back names, and a name is
+// the whole of what this completer knows about a match — no shell state here
+// carries a sentence to draw beside one.
+func (s shellCompleter) words(c Completion) []string {
 	if c.Command {
 		if c.Word == "" && s.emptyWordOffersNothing {
 			// Nothing, which is the whole of the option: with it on, bash
@@ -380,12 +409,12 @@ const listQueryThreshold = 100
 // single key read here rather than at the top of the loop, and the line is
 // redrawn afterwards either way. It is the one place the editor reads a key
 // in the middle of drawing.
-func (e *editor) confirmList(matches []string, prompt drawnPrompt) bool {
+func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 	if e.listQuery == "" || len(matches) < listQueryThreshold {
 		return true
 	}
 	e.endLine(prompt, "")
-	e.write(fmt.Sprintf(e.listQuery, len(matches), len(columns(matches, e.cols()))))
+	e.write(fmt.Sprintf(e.listQuery, len(matches), len(listingRows(matches, e.cols()))))
 	for {
 		var buf [1]byte
 		// Through nextByte and not the reader: this editor buffers what the
@@ -442,7 +471,7 @@ func (e *editor) completerFor(name string) Completer {
 	if name == "" || e.shellComplete == nil {
 		return e.comp
 	}
-	return completers{CompleterFunc(func(c Completion) []string {
+	return completers{CompleterFunc(func(c Completion) []Candidate {
 		return e.shellComplete(name, c)
 	}), e.comp}
 }
@@ -457,7 +486,7 @@ func (e *editor) completerFor(name string) Completer {
 // in editor.go that calls this, and lastTab for why the listing is the second
 // keystroke's and not the first's.
 func (e *editor) completeKey(c Completer, wasTab bool, prompt drawnPrompt) {
-	var matches []string
+	var matches []Candidate
 	e.change(false, func() { matches = e.complete(c) })
 	if len(matches) > 0 && wasTab && e.confirmList(matches, prompt) {
 		e.list(matches, prompt)

@@ -100,11 +100,90 @@ func (c Completion) Escape(name string) string {
 	return string(quote) + escapeName(name, quote, true)
 }
 
+// Candidate is one thing the word under the cursor could become, and what a
+// listing draws for it.
+//
+// Two fields where this seam had one string, and the reason the string was not
+// enough is that a listing and an insertion are different texts. A shell with
+// a completion system draws `checkout  -- checkout branch or paths to working
+// tree` and inserts `checkout`; computing the common prefix over the first of
+// those, or putting it into the line, is what a single string forces. So the
+// word a completion *is* and the row it is *drawn as* are separated here, and
+// neither is derived from the other.
+//
+// The zero Candidate is not a completion. A Candidate with no Word is a row
+// the listing draws and the editor never inserts — a heading's worth of text
+// from a completion system with something to say and nothing to offer — and
+// one with neither Word nor Display draws no row at all, which is how a Group
+// comes to exist without a match in it.
+type Candidate struct {
+	// Word is the whole replacement word, in the line's own quoting: what
+	// goes into the line, and what the common prefix is computed over.
+	//
+	// Empty is a row that is listed and never inserted. It takes no part in
+	// the prefix, it is not what a lone match means, and a listing of nothing
+	// but these is still a listing.
+	Word string
+
+	// Display is the row a listing draws. Empty is Word itself, which is what
+	// a completer with nothing extra to say leaves it as — so `[]Candidate`
+	// built from names alone behaves exactly as `[]string` did.
+	//
+	// Whole rather than a description beside a name, because that is the
+	// shape the measurement has: zsh's `compadd -d` replaces the drawn text
+	// outright, and the `name  -- sentence` rows people mean when they say
+	// zsh's completion is better than bash's are those strings, already laid
+	// out and padded by the function that built them. A `Description` field
+	// would be this package inventing a layout nobody asked it for.
+	Display string
+
+	// Group is the block of the listing this candidate is drawn in.
+	Group Group
+}
+
+// Group is a block of a listing: candidates whose Group compares equal are
+// drawn together, under one heading, in one arrangement.
+//
+// By value rather than by pointer or by index, so that a completer builds one
+// and puts it on each candidate without holding anything. Equality is the
+// whole of the identity — Name is what distinguishes two blocks that are
+// otherwise alike, and nothing here reads it.
+//
+// The zero Group is one block, sorted, packed into columns and unheaded,
+// which is the listing this package drew before groups existed.
+type Group struct {
+	// Name distinguishes this block from another with the same heading and
+	// the same arrangement. Nothing draws it.
+	Name string
+
+	// Heading is drawn above the block, or none.
+	//
+	// Rows rather than a row: a newline in it draws another line. A
+	// completion system that reaches the same block twice has two things to
+	// say about it and says both — measured on zsh, where two explanations
+	// for one group draw two rows over one sorted block — and a string keeps
+	// a Group comparable, which is what makes it the identity of a block
+	// rather than a thing looked up beside one.
+	Heading string
+
+	// Unsorted draws the block in the order the candidates arrived rather
+	// than sorted by the word. A completion system that has already ordered
+	// its answer — by relevance, by a definition's own order — asks for this;
+	// anything else is better read alphabetically.
+	Unsorted bool
+
+	// OnePerLine draws one row per line instead of packing the block into
+	// columns. What a row carrying a sentence needs and what a bare name does
+	// not, which is why it is a property of the block rather than of the
+	// listing.
+	OnePerLine bool
+}
+
 // Completer answers what the word under the cursor could become.
 //
-// The answers are whole replacement words in the line's own quoting, not
-// display text: the editor puts one straight into the line when it is the only
-// one, and trims the directory already typed off all of them when it lists.
+// The words are whole replacements in the line's own quoting, not display
+// text: the editor puts one straight into the line when it is the only one,
+// and trims the directory already typed off all of them when it lists.
 // Returning nothing means this completer has nothing to say about this word,
 // which is different from saying the word cannot be completed — see the
 // composition rule on Shell.Completers.
@@ -112,14 +191,28 @@ func (c Completion) Escape(name string) string {
 // Called on the editor's goroutine while a key is being handled. Read the note
 // at the top of this file before writing one that does I/O.
 type Completer interface {
-	Complete(c Completion) []string
+	Complete(c Completion) []Candidate
 }
 
 // CompleterFunc adapts a function to Completer.
-type CompleterFunc func(Completion) []string
+type CompleterFunc func(Completion) []Candidate
 
 // Complete calls f.
-func (f CompleterFunc) Complete(c Completion) []string { return f(c) }
+func (f CompleterFunc) Complete(c Completion) []Candidate { return f(c) }
+
+// Words is the candidates for a list of replacement words that carry nothing
+// else — the shape every completer had before a candidate could carry a row
+// of its own, and the shape most of them still want.
+func Words(words ...string) []Candidate {
+	if len(words) == 0 {
+		return nil
+	}
+	out := make([]Candidate, len(words))
+	for i, w := range words {
+		out[i] = Candidate{Word: w}
+	}
+	return out
+}
 
 // completers is a list of them consulted as one.
 //
@@ -138,7 +231,7 @@ func (f CompleterFunc) Complete(c Completion) []string { return f(c) }
 // answer, from one source, is a list that means something.
 type completers []Completer
 
-func (cs completers) Complete(c Completion) []string {
+func (cs completers) Complete(c Completion) []Candidate {
 	for _, one := range cs {
 		if one == nil {
 			continue

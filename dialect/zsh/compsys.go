@@ -101,9 +101,20 @@ type completionState struct {
 	state map[string]string
 
 	// matches is what `compadd` has collected: whole replacement words in the
-	// line's own quoting, which is what repl's completion seam is answered
+	// line's own quoting, each with the row a listing draws for it and the
+	// block it is drawn in, which is what repl's completion seam is answered
 	// with.
-	matches []string
+	matches []repl.Candidate
+
+	// groups is the headings each block has collected, keyed by the block
+	// itself with its heading left empty — see compadd.go's group(), which
+	// carries the measurement for why a heading cannot identify a block.
+	groups map[repl.Group][]string
+
+	// groupOrder is the order `compgroups` declared the blocks in, by name.
+	// Empty is a completion that never called it, which is one where the
+	// blocks are drawn in the order they were added.
+	groupOrder []string
 
 	// computil is what the eight `zsh/computil` builtins keep for the length
 	// of this one completion — the parsed `_arguments` specs, the tag loop,
@@ -162,7 +173,7 @@ func completionFrom(ctx context.Context) (*completionState, bool) {
 // as "no opinion about this word" and completes its own way.
 func RunCompletion(
 	r *interp.Runner, ctx context.Context, name string, c repl.Completion,
-) []string {
+) []repl.Candidate {
 	def, defined := widgetDefinitionOf(r, name)
 	if !defined || def.completer == "" || !r.HasFunction(def.function) {
 		return nil
@@ -186,13 +197,13 @@ func RunCompletion(
 	if err != nil {
 		return nil
 	}
-	return cs.matches
+	return cs.groupedMatches()
 }
 
 // newCompletionState splits the word the editor asked about the way zsh
 // splits it, and seeds `$compstate` with the values a fresh completion has.
 func newCompletionState(c repl.Completion) *completionState {
-	cs := &completionState{c: c, state: freshCompstate(c)}
+	cs := &completionState{c: c, state: freshCompstate(c), groups: map[repl.Group][]string{}}
 	// The opening quote, if the word is inside one, is QIPREFIX and not part
 	// of PREFIX — measured, `echo "fo` reports `PREFIX=fo QIPREFIX="`.
 	word := c.Word

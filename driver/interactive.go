@@ -189,11 +189,11 @@ func (sh Shell) runWidget(r *interp.Runner) func(context.Context, string, repl.L
 // runCompletion is the same for the dialect's completion system, and is nil
 // for the same reason: repl asks whether it has one before a key's binding can
 // name anything for it to run.
-func (sh Shell) runCompletion(r *interp.Runner) func(context.Context, string, repl.Completion) []string {
+func (sh Shell) runCompletion(r *interp.Runner) func(context.Context, string, repl.Completion) []repl.Candidate {
 	if sh.RunCompletion == nil {
 		return nil
 	}
-	return func(ctx context.Context, name string, c repl.Completion) []string {
+	return func(ctx context.Context, name string, c repl.Completion) []repl.Candidate {
 		return sh.RunCompletion(r, ctx, name, c)
 	}
 }

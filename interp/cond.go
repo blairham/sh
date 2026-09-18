@@ -628,15 +628,19 @@ func (r *Runner) regexMatch(pat, left string) (bool, error) {
 	// get both would be two answers to one question.
 	loc := scriptOffsets(re.FindStringSubmatchIndex(subject), back)
 	var m []string
+	var took []bool
 	if loc != nil {
-		m = make([]string, len(loc)/2)
+		m, took = make([]string, len(loc)/2), make([]bool, len(loc)/2)
 		for i := range m {
 			if loc[2*i] >= 0 {
-				m[i] = left[loc[2*i]:loc[2*i+1]]
+				m[i], took[i] = left[loc[2*i]:loc[2*i+1]], true
 			}
 		}
 	}
-	r.recordRegexMatch(m)
+	// The offsets and not the texts say which groups took part: a group that
+	// matched the empty string and a group the match never reached are both
+	// the empty string by the time they are elements.
+	r.recordRegexMatch(m, took)
 	r.publishRegexCapture(left, loc)
 	return loc != nil, nil
 }

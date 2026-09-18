@@ -1244,6 +1244,11 @@ func Semantics() interp.Semantics {
 	// dash has no `[[ ]]` to ask it in; answered so that a shell built from
 	// this preset with the construct turned back on is not left refusing.
 	s.UnknownConditionOptionIsAStatus = interp.No
+	// unanswered RegexMatchSurvivesAFailedMatch,
+	// RegexMatchOmitsGroupsThatDidNotMatch: there is no `=~` here to
+	// evaluate, and nothing names a record for one to fill, so neither
+	// question can be put. The line above is the same absence at the
+	// construct that would hold the operator.
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// `break` with no loop around it is ignored here, silently: measured,
 	// `echo t; break; echo after` prints both and ends at 0, with no

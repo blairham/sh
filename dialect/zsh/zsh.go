@@ -1915,6 +1915,13 @@ func Semantics() interp.Semantics {
 	// the shipped `regexp-replace`, where an accepted empty pattern would
 	// write the replacement between every pair of characters (#2043).
 	s.EmptyRegexOperandIsAnError = interp.Yes
+	// unanswered RegexMatchSurvivesAFailedMatch,
+	// RegexMatchOmitsGroupsThatDidNotMatch: this shell keeps its captures
+	// through the reporting parameters a pattern flag fills rather than
+	// through a named array, so the record those two axes are about is never
+	// written here and neither question is put.
+	// TestARegexMatchReportsWhatItMatched pins the shape it does
+	// have.
 	s.ProcessSubstitutionInCondition = interp.No
 	// A substitution's body reads what the *shell* is reading, and this shell
 	// is alone in it. `printf "PIPE\n" | cat <(cat)` with the shell's own

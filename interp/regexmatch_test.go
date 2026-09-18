@@ -10,10 +10,18 @@ import (
 	. "github.com/blairham/sh/interp"
 )
 
-// rematch runs with the `=~` capture record exposed under a name, which is
-// all a dialect supplies.
+// rematch runs with the `=~` capture record exposed under a name, and with
+// the two questions a named record raises answered the dense way — which is
+// the shape the rows below are about. Moving them is
+// TestWhatARegexMatchLeavesInTheRecord's business.
 func rematch(name string) func(*Runner) {
-	return func(r *Runner) { r.SetRegexMatch(name) }
+	return func(r *Runner) {
+		sem := permissive()
+		sem.RegexMatchSurvivesAFailedMatch = No
+		sem.RegexMatchOmitsGroupsThatDidNotMatch = No
+		r.Semantics = &sem
+		r.SetRegexMatch(name)
+	}
 }
 
 // What the record holds: element 0 is the whole match and the rest are the

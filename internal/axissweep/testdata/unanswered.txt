@@ -81,6 +81,7 @@ ash   DebugTrapRefiresOnEnteringAFunction
 ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
+ash   DeclarationThroughAReferenceNamesTheOperand
 ash   DeclareGlobalReachesPastALocal
 ash   DeclareHideInScopeLetter
 ash   DeclareHideValueLetter
@@ -138,11 +139,10 @@ ash   ListedNonAsciiIsOrdinary
 ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
-ash   DeclarationThroughAReferenceNamesTheOperand
 ash   NamerefArrayRefusal
+ash   NamerefCycleIsRefused
 ash   NamerefLetterStandsAlone
 ash   NamerefTargetResolvedWhenAimed
-ash   NamerefCycleIsRefused
 ash   NegatedTestRecordsThePostNegationStatus
 ash   NegativeSubscriptCountsOverAPromotedScalar
 ash   NegativeSubscriptPastTheStartInserts
@@ -169,6 +169,8 @@ ash   ReadPartialCountSucceeds
 ash   ReadonlyAttributeCanBeRemoved
 ash   ReadonlyElement
 ash   ReadonlyRecordsTheCompoundAttribute
+ash   RegexMatchOmitsGroupsThatDidNotMatch
+ash   RegexMatchSurvivesAFailedMatch
 ash   ReplacementEmptyMatchDeclined
 ash   ScalarAppendedToAnArrayBecomesANewElement
 ash   ScalarAssignedOverACompoundReplacesTheName
@@ -204,8 +206,8 @@ ash   TableUnderAnArrayDeclaration
 ash   TableUnderAnArrayLiteralDeclaration
 ash   TestAndArithmeticUpdatePipelineStatus
 ash   TraceArrayLiteralShowsTheExpandedElements
-ash   TraceSubscriptedArrayLiteralIsElementAssignments
 ash   TraceElementSubscriptIsEvaluated
+ash   TraceSubscriptedArrayLiteralIsElementAssignments
 ash   TransformLetterCheckedOnlyWhenValued
 ash   TwoCaseLettersOnOneDeclarationCancel
 ash   TypeFSaysTheFunctionBack
@@ -313,6 +315,7 @@ dash  DebugTrapRefiresOnEnteringAFunction
 dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter
+dash  DeclarationThroughAReferenceNamesTheOperand
 dash  DeclareGlobalReachesPastALocal
 dash  DeclareHideInScopeLetter
 dash  DeclareHideValueLetter
@@ -385,11 +388,10 @@ dash  ListedNonAsciiIsOrdinary
 dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
-dash  DeclarationThroughAReferenceNamesTheOperand
 dash  NamerefArrayRefusal
+dash  NamerefCycleIsRefused
 dash  NamerefLetterStandsAlone
 dash  NamerefTargetResolvedWhenAimed
-dash  NamerefCycleIsRefused
 dash  NegatedTestRecordsThePostNegationStatus
 dash  NegativeSubscriptCountsOverAPromotedScalar
 dash  NegativeSubscriptPastTheStartInserts
@@ -421,6 +423,8 @@ dash  ReadonlyAttributeCanBeRemoved
 dash  ReadonlyElement
 dash  ReadonlyRecordsTheCompoundAttribute
 dash  ReadonlyReferenceLetter
+dash  RegexMatchOmitsGroupsThatDidNotMatch
+dash  RegexMatchSurvivesAFailedMatch
 dash  ReplacementAnchors
 dash  ReplacementEmptyMatchDeclined
 dash  ReplacementOperandTakesTheEnclosingQuoting
@@ -458,8 +462,8 @@ dash  TableUnderAnArrayDeclaration
 dash  TableUnderAnArrayLiteralDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
 dash  TraceArrayLiteralShowsTheExpandedElements
-dash  TraceSubscriptedArrayLiteralIsElementAssignments
 dash  TraceElementSubscriptIsEvaluated
+dash  TraceSubscriptedArrayLiteralIsElementAssignments
 dash  TransformLetterCheckedOnlyWhenValued
 dash  TwoCaseLettersOnOneDeclarationCancel
 dash  TypeFSaysTheFunctionBack
@@ -510,6 +514,7 @@ ksh   TrapSingleUnknownConditionIsUsage
 ksh   UnsetEndsTheProducedPipelineStatus
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
+zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
@@ -521,11 +526,10 @@ zsh   JobsListsWhatChangedSinceTheLastReport
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
 zsh   LongOptionValueIsANumber
-zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   NamerefArrayRefusal
+zsh   NamerefCycleIsRefused
 zsh   NamerefLetterStandsAlone
 zsh   NamerefTargetResolvedWhenAimed
-zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   OperatorAfterTheSubscriptListingIsBad
 zsh   OptionNamespaceIgnoresSeparators
@@ -539,6 +543,8 @@ zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
 zsh   ReadonlyReferenceLetter
+zsh   RegexMatchOmitsGroupsThatDidNotMatch
+zsh   RegexMatchSurvivesAFailedMatch
 zsh   ReportsAKilledCommandInACommandSubstitution
 zsh   SubstringRangeThirdColonIsABadSubstitution
 zsh   TableLetterReachesItsOwnOperandsSubscript

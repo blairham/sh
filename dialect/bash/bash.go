@@ -1142,6 +1142,12 @@ func Semantics() interp.Semantics {
 	// compile it and match at every position. bash 3.2 refuses it too, with
 	// the same status and no diagnostic.
 	s.EmptyRegexOperandIsAnError = interp.Yes
+	// A failed `=~` empties the record rather than leaving the match before
+	// last in it, and a group that took no part keeps its number as an empty
+	// element — `[[ abcd =~ (b)(z)?(c) ]]` is four elements here (#2916).
+	// Both measured 2026-09-18.
+	s.RegexMatchSurvivesAFailedMatch = interp.No
+	s.RegexMatchOmitsGroupsThatDidNotMatch = interp.No
 	// A process substitution may stand as a condition's operand here, and is
 	// performed there: `[[ $v == <(cmd) ]]` runs cmd and matches against the
 	// path, which is false for anything a script would have written down.

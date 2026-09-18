@@ -261,17 +261,46 @@ func scriptOffsets(loc, back []int) []int {
 
 // recordRegexMatch stores what a `=~` evaluation captured.
 //
-// Called for every evaluation, not only matching ones: a failed match stores
-// an empty array rather than leaving the previous capture, so a script that
-// forgets to check the status reads nothing instead of the match before last.
-// And it is the *evaluation* that records, before `!` or `&&` see the result
-// — a negated match still fills the record, exactly as the pipeline-status
-// record is taken before `!` inverts anything.
+// It is the *evaluation* that records, before `!` or `&&` see the result — a
+// negated match still fills the record, exactly as the pipeline-status record
+// is taken before `!` inverts anything.
 //
-// An optional group that matched nothing is an empty element, not a gap: the
-// record is dense, so the group after it keeps its number.
-func (r *Runner) recordRegexMatch(m []string) {
+// took says, per element, whether that group took part in the match; element
+// 0 is the whole match and took part whenever there was one. It is a slice of
+// its own because the texts cannot carry the distinction: a group that
+// matched the empty string and a group the match never reached are both the
+// empty string, and one column leaves the second out of the record entirely.
+//
+// Two axes and both are one column's, asked only where a dialect named the
+// record at all — see Semantics.RegexMatchSurvivesAFailedMatch and
+// RegexMatchOmitsGroupsThatDidNotMatch.
+func (r *Runner) recordRegexMatch(m []string, took []bool) {
 	if r.regexMatchName == "" {
+		// No dialect named the record, so there is nothing to keep and
+		// nobody to ask.
+		return
+	}
+	if m == nil {
+		// A match that failed. One column stores an empty array, so a script
+		// that forgets to check the status reads nothing rather than the
+		// match before last; the other leaves the record where it was.
+		if r.ask(r.sem().RegexMatchSurvivesAFailedMatch, "a failed `=~` leaving the record of the last match alone") ||
+			r.unspecified {
+			return
+		}
+		r.setArray(r.regexMatchName, nil)
+		return
+	}
+	if r.ask(r.sem().RegexMatchOmitsGroupsThatDidNotMatch, "a group that took no part being left out of the `=~` record") {
+		kept := make([]string, 0, len(m))
+		for i := range m {
+			if took[i] {
+				kept = append(kept, m[i])
+			}
+		}
+		m = kept
+	}
+	if r.unspecified {
 		return
 	}
 	r.setArray(r.regexMatchName, m)

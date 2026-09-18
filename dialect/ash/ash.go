@@ -256,6 +256,10 @@ func Semantics() interp.Semantics {
 	// the preset's `Yes` — the refusal — because nothing asked (#3248's
 	// class).
 	s.EmptyRegexOperandIsAnError = interp.No
+	// unanswered RegexMatchSurvivesAFailedMatch,
+	// RegexMatchOmitsGroupsThatDidNotMatch: there is no `=~` here — the
+	// line above is the empty-operand question this shell cannot be asked
+	// either — so no evaluation ever reaches a record.
 	// A `<(cmd)` may stand as a condition's operand and is performed there,
 	// as it is in bash. Measured 2026-09-16 in the pinned alpine image:
 	// `[[ "<(echo x)" == <(echo x) ]]` is **1**, because the right side

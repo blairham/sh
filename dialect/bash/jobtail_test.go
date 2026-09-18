@@ -185,12 +185,16 @@ func TestJobAxes(t *testing.T) {
 		{"JobSpecsByName", s.JobSpecsByName},
 		{"AmbiguousJobNameIsRefused", s.AmbiguousJobNameIsRefused},
 		{"WaitReportsAMissingJob", s.WaitReportsAMissingJob},
-		{"WaitNWaitsForTheNextJob", s.WaitNWaitsForTheNextJob},
 		{"DisownRemovesTheJob", s.DisownRemovesTheJob},
 	} {
 		if tc.got != interp.Yes {
 			t.Errorf("%s = %v, want yes", tc.axis, tc.got)
 		}
+	}
+	// `wait -n` left the Answer group when a seventh column turned out to
+	// have a third reading of the letter — see interp.WaitNextJobReading.
+	if got := s.WaitNextJob; got != interp.WaitNextJobFirstToFinish {
+		t.Errorf("WaitNextJob = %v, want the first job to finish", got)
 	}
 }
 

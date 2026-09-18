@@ -728,7 +728,7 @@ func Semantics() interp.Semantics {
 	// alike. See the axis for the narrower answer this same binary gives
 	// when it is invoked as `sh`.
 	s.WaitRemembersAReapedJob = interp.Yes
-	s.WaitNWaitsForTheNextJob = interp.Yes
+	s.WaitNextJob = interp.WaitNextJobFirstToFinish
 	// And `-p var` beside it, which names the job the status came from.
 	// bash 5's letter alone: the 3.2 build answers `wait: -p: invalid
 	// option`. Measured 2026-09-13.

@@ -978,7 +978,18 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		return code
 	}
 	if opts.next {
-		return r.waitNext(args, opts)
+		if opts.reading == WaitNextJobFirstToSucceed {
+			if len(args) == 0 {
+				return r.waitUntilOneSucceeds(opts)
+			}
+			// With operands the letter changes nothing, measured: `wait -n
+			// p1 p2` waits both out and reports the last one's status,
+			// exactly as `wait p1 p2` does. So this falls through to the
+			// ordinary operand walk below rather than to waitNext.
+			opts.next = false
+		} else {
+			return r.waitNext(args, opts)
+		}
 	}
 	if len(args) == 0 {
 		// A bare `wait` names no job, so `-p` empties its variable rather
@@ -1110,8 +1121,8 @@ func (r *Runner) waitOptions(args []string) (rest []string, opts waitOpts, code 
 		if a == "-n" {
 			// Asked on the exact word: in the shell with no options at all
 			// the same word is a job spec, and the axis below decides that.
-			if r.ask(r.sem().WaitNWaitsForTheNextJob, "`wait -n` waiting for the next job to finish") {
-				args, opts.next = args[1:], true
+			if reading := r.waitNextJob(); reading != WaitNextJobAbsent {
+				args, opts.next, opts.reading = args[1:], true, reading
 				continue
 			}
 			if r.unspecified {
@@ -1147,6 +1158,10 @@ type waitOpts struct {
 	// next is `-n`: report the first job to finish rather than waiting the
 	// operands out in order.
 	next bool
+	// reading is which of the two shapes of `-n` this dialect has, carried
+	// beside the flag so the waiting code does not ask the axis a second
+	// time. See Semantics.WaitNextJob.
+	reading WaitNextJobReading
 	// pvar is `-p`'s argument, the name the finished job's process id is
 	// stored under, and named says the letter was given at all. The two are
 	// separate because the store happens even when there is no job to name:
@@ -1167,13 +1182,14 @@ func (r *Runner) waitLetters(word string, rest []string, opts *waitOpts) (used, 
 	for i := 0; i < len(letters); i++ {
 		switch letters[i] {
 		case 'n':
-			if !r.ask(r.sem().WaitNWaitsForTheNextJob, "`wait -n` waiting for the next job to finish") {
+			reading := r.waitNextJob()
+			if reading == WaitNextJobAbsent {
 				if r.unspecified {
 					return 0, 2
 				}
 				return 0, r.refuseOption("wait", word, "")
 			}
-			opts.next = true
+			opts.next, opts.reading = true, reading
 		case 'p':
 			if !r.ask(r.sem().WaitPNamesTheFinishedJob, "`wait -p var` naming the job the status came from") {
 				if r.unspecified {
@@ -1215,6 +1231,81 @@ func (r *Runner) waitLetters(word string, rest []string, opts *waitOpts) (used, 
 // defect: a script that named the jobs it cared about was answered by
 // whichever unrelated job happened to end first, seconds too early and with
 // another job's status.
+// waitNextJob resolves the axis, and only where a `-n` word was really
+// written. An unanswered one refuses the way every other axis does.
+func (r *Runner) waitNextJob() WaitNextJobReading {
+	reading := r.sem().WaitNextJob
+	if reading == WaitNextJobUnspecified {
+		r.diagf("%s\n", r.unanswered("`wait -n`"))
+		r.status = 2
+		r.unspecified = true
+		return WaitNextJobAbsent
+	}
+	return reading
+}
+
+// waitUntilOneSucceeds is the second reading of `wait -n` with no operands:
+// the jobs are waited out in order and the first one that exited 0 ends the
+// wait at 0, while running out without one reports 129.
+//
+// See Semantics.WaitNextJobFirstToSucceed for the four arrangements that tell
+// this from the reading next door, from a plain `wait`, and from a refusal.
+// The jobs that were not reached are left where they are, exactly as a bare
+// `wait` leaves the ones it reaped: a job still owed a notice is still owed
+// one.
+func (r *Runner) waitUntilOneSucceeds(opts waitOpts) int {
+	r.storeWaitedPID(opts, nil)
+	// The jobs that were still running when this wait *began*, taken as a
+	// snapshot rather than asked per job as the loop goes.
+	//
+	// A job that had already ended does not count: measured, with `sh -c
+	// 'exit 7' &` and a second in between, `wait -n` is 0 there, and 129 for
+	// the same job when it is still running. So the 129 is about a job this
+	// wait really waited out, which is what makes a shell that has already
+	// reaped everything answer 0 rather than "none succeeded".
+	//
+	// Asked once at the top because the loop takes time: a job that was
+	// running when the wait began and finished while an earlier one was
+	// being waited out is still one of this wait's jobs, and asking it again
+	// halfway through would drop it. That is the second row of the
+	// measurement — two jobs, the failing one finishing first — where the
+	// answer is the later job's success.
+	var live []*Job
+	for _, j := range r.jobs {
+		if !j.Finished() {
+			live = append(live, j)
+		}
+	}
+	waited := false
+	for _, j := range live {
+		status, sig, hit, stopped := r.waitFor(j)
+		if r.unspecified {
+			return r.status
+		}
+		if hit {
+			return r.interruptedWaitStatus(sig, false)
+		}
+		if stopped {
+			// Said and stepped over, as a bare `wait` does: giving up on one
+			// job is not giving up on the rest.
+			r.reportStoppedWait(j, r.diag().WaitJobStopped, j.Ident())
+			continue
+		}
+		if status == 0 {
+			return 0
+		}
+		waited = true
+	}
+	if !waited {
+		// Nothing was waited out, so nothing failed to succeed: measured,
+		// `wait -n` with no jobs at all is 0 there, where the other reading
+		// answers 127. The 129 is what a run that *did* wait and found no
+		// success reports.
+		return 0
+	}
+	return waitNextJobNoneSucceeded
+}
+
 func (r *Runner) waitNext(args []string, opts waitOpts) int {
 	jobs, code := r.waitNextJobs(args)
 	if code != 0 {

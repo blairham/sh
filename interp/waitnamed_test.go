@@ -30,7 +30,7 @@ const twoJobs = "{ sleep 0.1; exit 4; } &\n{ sleep 0.5; exit 5; } &\n"
 func waitSemantics(hasP Answer) Semantics {
 	sem := testSemantics()
 	sem.WaitReadsOptions = Yes
-	sem.WaitNWaitsForTheNextJob = Yes
+	sem.WaitNextJob = WaitNextJobFirstToFinish
 	sem.WaitPNamesTheFinishedJob = hasP
 	sem.WaitReportsAMissingJob = Yes
 	// Answered because a row passes through it and not because it is the

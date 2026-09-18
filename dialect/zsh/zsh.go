@@ -3907,6 +3907,12 @@ func Diagnostics() interp.Diagnostics {
 		// and marks it at exactly twenty as well — see the field. The other
 		// three print the whole word or none of it.
 		UnmatchedNearMaxBytes: 20,
+		// And a control character in that text is written as an escape
+		// rather than sent to the terminal — a tab as `\t`, a `\001` as
+		// `^A`. Measured 2026-09-17 one byte at a time; see
+		// Diagnostics.NearTextEscapesControlCharacters for the seven rows
+		// and for where the high half stops (#3563).
+		NearTextEscapesControlCharacters: true,
 		// And the same cut on the second message a substitution body refused
 		// at expansion time is given — see the field.
 		SubstitutionParseFailureQuotesTheWord: true,

@@ -3691,6 +3691,41 @@ type Diagnostics struct {
 	// character boundary would be a nicer diagnostic than the shell's and
 	// would not match it.
 	UnmatchedNearMaxBytes int
+
+	// NearTextEscapesControlCharacters writes a control character in that
+	// quoted text as an escape rather than sending the byte to the terminal.
+	//
+	// The dialect that quotes text back is the dialect that has to, because a
+	// tab in a diagnostic moves the caret and an escape character starts a
+	// sequence: a shell that wrote the byte through would let a script's own
+	// text repaint the screen it is being complained about on.
+	//
+	// Measured 2026-09-17 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin LC_ALL=C
+	// zsh s.sh` with stdin from /dev/null, one byte at a time inside
+	// `v=$(echo<byte>a` and again inside `v=$(echo<byte>a; for)`:
+	//
+	//	0x09
+	//	0x0a
+
+	//	0x00-0x1f otherwise  ^@ … ^_   the byte with 0x40 added
+	//	0x7f                 ^?
+	//	0x80-0x9f            \M- and then that rule over the low seven bits,
+	//	                     so 0x80 is \M-^@, 0x89 is \M-	 and 0x9f is \M-^_
+	//	0xa0 and above       the byte, as written
+	//
+	// So two of the C0 characters have a letter and the rest are caret
+	// notation, and the high half is the same rule behind a meta prefix until
+	// 0xa0, where it stops — 0xff is written through, which is the row that
+	// says the boundary is 0xa0 and not "anything with the top bit set".
+	//
+	// Both messages that quote text move together, which is measured rather
+	// than assumed: a construct the input ran out inside and a substitution
+	// body that would not parse each render a tab as `	`.
+	//
+	// The cut comes first and this comes after it, so the limit counts the
+	// bytes of the script and not of the rendering — which is what
+	// UnmatchedNearMaxBytes is measured in.
+	NearTextEscapesControlCharacters bool
 	// UnmatchedArithSubst is `$((` or `$[` the input ran out inside. Same
 	// verbs, and both spellings take it: everything about them but the
 	// delimiters is one construct, and %[2]s carries which closer never
@@ -6613,10 +6648,55 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 // not `>` because the shell appends its ellipsis at exactly the limit, with
 // nothing removed, and the slice is by byte because the shell's is.
 func (d Diagnostics) nearText(text string) string {
-	if d.UnmatchedNearMaxBytes <= 0 || len(text) < d.UnmatchedNearMaxBytes {
+	if d.UnmatchedNearMaxBytes > 0 && len(text) >= d.UnmatchedNearMaxBytes {
+		text = text[:d.UnmatchedNearMaxBytes] + "..."
+	}
+	if !d.NearTextEscapesControlCharacters {
 		return text
 	}
-	return text[:d.UnmatchedNearMaxBytes] + "..."
+	return escapeControlBytes(text)
+}
+
+// escapeControlBytes renders a control character the way the dialect that
+// quotes a script's own text back at it does. See
+// [Diagnostics.NearTextEscapesControlCharacters] for the seven measured rows.
+//
+// A byte loop and not a rune one: the bytes it changes are the ones a UTF-8
+// decoder would refuse or pass through unchanged, and the bytes it leaves
+// alone — 0xa0 and above — are exactly the ones a multibyte character is made
+// of. So text that holds no control character comes back as itself.
+func escapeControlBytes(text string) string {
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c >= 0x80 && c < 0xa0 {
+			b.WriteString(`\M-`)
+			b.WriteString(escapeControlByte(c - 0x80))
+			continue
+		}
+		b.WriteString(escapeControlByte(c))
+	}
+	return b.String()
+}
+
+// escapeControlByte is that rendering for one byte of the low half, and the
+// byte itself for everything the dialect writes through.
+func escapeControlByte(c byte) string {
+	switch c {
+	case '\t':
+		return `\t`
+	case '\n':
+		return `\n`
+	case 0x7f:
+		return "^?"
+	}
+	if c < 0x20 {
+		return "^" + string([]byte{c + 0x40})
+	}
+	// The byte as it stands, and as a *byte*: `string(c)` on a byte over
+	// 0x7f encodes it as UTF-8, so a quoted `\377` came back as two bytes
+	// and the diagnostic no longer held the script's own text.
+	return string([]byte{c})
 }
 
 func (d Diagnostics) ParseFailure(err error) string {

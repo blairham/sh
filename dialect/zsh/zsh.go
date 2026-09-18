@@ -4283,7 +4283,14 @@ func Diagnostics() interp.Diagnostics {
 		TestIntegerExpected:     "integer expression expected: %[1]s",
 		// The whole substitution as it was written, not its inside.
 		ProcessSubstitutionNotInCondition: "process substitution %[1]s cannot be used here",
-		TestTooManyArguments:              "too many arguments",
+		// An empty `=~` right operand, which this shell refuses in its
+		// engine's words and leaves the condition **false** over — 1, the
+		// status a match that did not happen gives, where bash calls the
+		// same operand a failure of the construct and ends at 2. Measured
+		// 2026-09-18, `[[ abc =~ "" ]]` in a script file (#3279).
+		EmptyRegexOperand:       "failed to compile regex: empty (sub)expression",
+		EmptyRegexOperandStatus: 1,
+		TestTooManyArguments:    "too many arguments",
 		// `-a` and `-o` are words this shell knows — as the connectives —
 		// so one standing where a unary operator belongs is a string with a
 		// word left over rather than an operator it has never heard of.

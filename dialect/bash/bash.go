@@ -3131,6 +3131,12 @@ func Diagnostics() interp.Diagnostics {
 		TestTooManyArguments: "%[2]s: too many arguments",
 		TestOperandExpected:  "%[2]s: argument expected",
 		TestMissingBracket:   "[: missing `]'",
+		// An empty `=~` right operand, which this shell names the construct
+		// for and quotes the operand back in — the operand being empty, so
+		// the quotes close on nothing. Status 2, the construct's own failure,
+		// where zsh calls it a match that did not happen and leaves 1.
+		// Measured 2026-09-18, `[[ abc =~ "" ]]` in a script file (#3279).
+		EmptyRegexOperand: "[[: invalid regular expression `': empty (sub)expression",
 		// `kill` puts the process in parentheses and the reason after a dash,
 		// which is the only wording in the panel a script could not confuse
 		// with a message about a signal name.

@@ -1351,6 +1351,11 @@ type Runner struct {
 	// expandErr is cleared.
 	badSubscript bool
 
+	// refusalSpokenAs is the name a refusal this declaration reaches through
+	// a name reference should say, which is the operand as written rather
+	// than the cell the redirect led to. Empty everywhere else. See
+	// Runner.declarationRefusalNamesTheOperand.
+	refusalSpokenAs string
 	// declarationSpeaker is the builtin whose operand a declaration's element
 	// store is running for, kept while the store has that builtin's name out
 	// of the location. The one complaint in that region which is the
@@ -7849,6 +7854,13 @@ func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm) bool {
 // kind of command that follows it — so the sentence is shared and the
 // consequence is decided where the refusal happened (#1219).
 func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool) {
+	if r.refusalSpokenAs != "" {
+		// A declaration that reached this through a name **reference**, in
+		// the column that speaks of the operand the script wrote rather than
+		// the cell the write would have landed in. See
+		// Runner.declarationRefusalNamesTheOperand.
+		name = r.refusalSpokenAs
+	}
 	// Two arguments only where the wording asks for two: a format with no
 	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
 	// what Wording's own note is about.

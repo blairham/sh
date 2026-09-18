@@ -602,6 +602,21 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 		// what the letters made of it gets nothing at all.
 		return 1
 	}
+	// And what the letters made of it is what a dialect that settles the
+	// target here settles: the fold shapes the word and the settling reads
+	// the shaped one. The two never meet in a real dialect — the column that
+	// settles refuses an `n` letter in company at all, see
+	// Semantics.NamerefLetterStandsAlone — so the order is the one the two
+	// rules read in rather than a measurement.
+	if settled, ok := r.namerefTargetSettledHere(aim); ok {
+		aim = settled
+	} else if r.unspecified || r.badSubscript {
+		// The subscript would not evaluate, which in the column that
+		// evaluates it here is this declaration's failure rather than a
+		// later read's. badSubscriptToADeclaration has already reported it
+		// and decided how much of the input goes with it.
+		return r.status
+	}
 	if refuseFrozen() {
 		return 1
 	}
@@ -727,6 +742,78 @@ func (r *Runner) namerefAim(target string, df declareFlags) (string, bool) {
 		return r.caseChanged(target, unicode.ToUpper), true
 	}
 	return target, true
+}
+
+// namerefTargetSettledHere is the target a reference records where the
+// dialect settles it **at the declaration** rather than at every read.
+//
+// Two shapes and one rule. A subscript is arithmetic, so it is evaluated now
+// and the number is what the reference holds — which is why a later change to
+// the variable the subscript named moves nothing. And a target that is itself
+// a reference is followed to the end of its chain now, so re-aiming the
+// middle link afterwards leaves this one where it was. See
+// Semantics.NamerefTargetResolvedWhenAimed, where the panel is.
+//
+// A **keyed table's** subscript is a key rather than an expression and is
+// left as written, in that column as much as in the other:
+// `typeset -A m=([k]=1); typeset -n r=m[k]` lists `m[k]` in both. The same
+// question a declaration's own subscripted operand asks, answered through the
+// same function, so the two cannot come to read one set of brackets two ways.
+//
+// A **negative** subscript is resolved too, against the array as it stands:
+// `a=(x y z); typeset -n r=a[-1]` records `a[2]`. Which is the position the
+// element store would have used, so it is the store's own arithmetic and not
+// a second copy.
+//
+// The second result is false where nothing was settled — either because the
+// dialect does not settle here, or because the subscript would not evaluate,
+// which in this column is the declaration's own failure and is reported as
+// one.
+func (r *Runner) namerefTargetSettledHere(target string) (string, bool) {
+	base, sub, element := r.indirectElement(target)
+	chained := !element && r.isNameref(target)
+	if !element && !chained {
+		// A plain name is the same declaration under either answer, so the
+		// axis is not put to a dialect that only ever writes one.
+		return "", false
+	}
+	if !r.ask(r.sem().NamerefTargetResolvedWhenAimed,
+		"a name reference's target being settled at the declaration") {
+		return "", false
+	}
+	if chained {
+		end, _ := r.namerefTarget(target)
+		return end, true
+	}
+	if _, _, isKey := r.subscriptedOperandKey(base, sub, r.assocDeclared(base)); isKey {
+		// A key, not an expression — and not evaluated in either column.
+		return target, !r.unspecified
+	}
+	if r.unspecified {
+		return "", false
+	}
+	// The same put-aside declareElement makes for the same complaint: the
+	// sentence is the *language's* — `typeset: @: arithmetic syntax error` —
+	// so the builtin leaves the location and is recorded for the one reader
+	// that still names it. Without it the subscript this declaration cannot
+	// evaluate was reported with an empty name where the element store one
+	// function over reports the builtin's.
+	outer := r.inBuiltin
+	r.inBuiltin, r.declarationSpeaker = "", outer
+	defer func() { r.inBuiltin, r.declarationSpeaker = outer, "" }()
+	idx, err := r.subscriptValueOfReference(sub)
+	if err != nil {
+		r.badSubscriptToADeclaration(sub, err)
+		return "", false
+	}
+	if idx < 0 {
+		// Counted forwards from the end the array has *now*, which is the
+		// whole of what settling it here means for a negative.
+		if pos, in := r.elemPos(r.Arrays[base], idx); in {
+			idx = pos + r.arrayBase()
+		}
+	}
+	return base + "[" + itoa(idx) + "]", true
 }
 
 // namerefEmptiesTheCell is what a `-n` declaration does to whatever the name

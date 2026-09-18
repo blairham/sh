@@ -33,6 +33,10 @@ func namerefAimSemantics() Semantics {
 	// all. The other answer is its own subject — see
 	// interp/namerefletters_test.go.
 	sem.NamerefLetterStandsAlone = No
+	// A reference's target is the text the declaration was written with,
+	// looked up again at every read — the other answer is its own subject,
+	// in interp/namerefsettled_test.go.
+	sem.NamerefTargetResolvedWhenAimed = No
 	// The letters `local` takes, and the two axes a case walks past on its
 	// way to this one: `${!r}` naming the reference's target rather than
 	// expanding it twice, and a valueless declaration bringing the name into
@@ -54,10 +58,17 @@ func namerefAimSemantics() Semantics {
 // points, and `<<<`, which feeds `read` without a file.
 func runNameref(t *testing.T, src string) (string, int) {
 	t.Helper()
-	sem := namerefAimSemantics()
+	return runNamerefWith(t, namerefAimSemantics(), src)
+}
+
+// runNamerefWith is runNameref for a case whose subject is one axis of that
+// vector, moved.
+func runNamerefWith(t *testing.T, sem Semantics, src string) (string, int) {
+	t.Helper()
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
 		d.Herestring = true
+		d.ArrayLiteral = true
 	}, func(r *Runner) { r.Semantics = &sem })
 }
 

@@ -138,8 +138,10 @@ ash   ListedNonAsciiIsOrdinary
 ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
+ash   DeclarationThroughAReferenceNamesTheOperand
 ash   NamerefArrayRefusal
 ash   NamerefLetterStandsAlone
+ash   NamerefTargetResolvedWhenAimed
 ash   NamerefCycleIsRefused
 ash   NegatedTestRecordsThePostNegationStatus
 ash   NegativeSubscriptCountsOverAPromotedScalar
@@ -382,8 +384,10 @@ dash  ListedNonAsciiIsOrdinary
 dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
+dash  DeclarationThroughAReferenceNamesTheOperand
 dash  NamerefArrayRefusal
 dash  NamerefLetterStandsAlone
+dash  NamerefTargetResolvedWhenAimed
 dash  NamerefCycleIsRefused
 dash  NegatedTestRecordsThePostNegationStatus
 dash  NegativeSubscriptCountsOverAPromotedScalar
@@ -514,8 +518,10 @@ zsh   JobsListsWhatChangedSinceTheLastReport
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
 zsh   LongOptionValueIsANumber
+zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   NamerefArrayRefusal
 zsh   NamerefLetterStandsAlone
+zsh   NamerefTargetResolvedWhenAimed
 zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   OperatorAfterTheSubscriptListingIsBad

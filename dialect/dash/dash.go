@@ -499,6 +499,10 @@ func Semantics() interp.Semantics {
 	// cannot be written (#2553).
 	// unanswered NamerefLetterStandsAlone: `typeset` is not a builtin here,
 	// so there is no line for an `n` letter to keep company on (#3171).
+	// unanswered DeclarationThroughAReferenceNamesTheOperand: no references,
+	// and no `typeset` to write one on (#3173).
+	// unanswered NamerefTargetResolvedWhenAimed: no `typeset` and no arrays,
+	// so neither half of the question can be written (#3124).
 	// unanswered NamerefArrayRefusal: the same wall, and no arrays either —
 	// `r=(a b)` is `Syntax error: "(" unexpected` — so neither half of the
 	// question can be put (#3103).

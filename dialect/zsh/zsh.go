@@ -1746,6 +1746,12 @@ func Semantics() interp.Semantics {
 	// beside another one. Measured 2026-09-18 on zsh 5.9.2, `typeset -ni
 	// r=v` is `typeset: bad option: -n` at 1 — the complaint names the
 	// missing letter and never reaches a question about the pair (#3171).
+	// unanswered DeclarationThroughAReferenceNamesTheOperand: there is no
+	// reference for a declaration to be redirected through (#3173).
+	// unanswered NamerefTargetResolvedWhenAimed: the same missing letter —
+	// there is no reference for a target to be settled on. Measured
+	// 2026-09-18, `typeset -n r=a[1]` is `typeset: bad option: -n` at 1
+	// (#3124).
 	// unanswered NamerefArrayRefusal: the letter is the same missing one, so
 	// there is no declaration for an array to be refused under. Measured
 	// 2026-09-16, `r=(a b); typeset -n r=v` is `typeset: bad option: -n` at 1

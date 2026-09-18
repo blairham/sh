@@ -1371,6 +1371,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	// the one that was frozen. See numericTypeLetterRetypesFrozen.
 	outerRetyping := r.retypingFrozen
 	defer func() { r.retypingFrozen = outerRetyping }()
+	// And the name a refusal through a **reference** speaks of, which is
+	// this operand's own where the dialect says so — see
+	// Runner.declarationRefusalNamesTheOperand. Restored rather than cleared
+	// for the reason above it: a declaration can be written inside one.
+	outerSpokenAs := r.refusalSpokenAs
+	defer func() { r.refusalSpokenAs = outerSpokenAs }()
 
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
@@ -1492,7 +1498,19 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if df.namerefOff && r.namerefAttributeRemoved(name) {
 			continue
 		}
+		r.refusalSpokenAs = outerSpokenAs
 		if target, follows := r.attributeFollowsTheReference(name, df); follows {
+			// The refusal the redirect leads to may still be spoken of under
+			// the name the script wrote, which is one column's answer and
+			// only for a declaration carrying a value. Recorded before the
+			// name is replaced, because that is the only place it is still
+			// here. See Runner.declarationRefusalNamesTheOperand.
+			if hasValue && r.declarationRefusalNamesTheOperand() {
+				r.refusalSpokenAs = name
+			}
+			if r.unspecified {
+				return r.status
+			}
 			name = target
 			// Re-read for the redirected name, since the question it answers
 			// — what the *shadowed* name carried before this line — is about
@@ -4723,6 +4741,46 @@ func (r *Runner) functionDefinitionFile(name string) string {
 // so the exponent letter wins over the other two wherever it stands.
 func numericTypeLetterCompany(f declareFlags) bool {
 	return strings.ContainsRune(f.letters, 'i') && strings.ContainsRune(f.letters, 'E')
+}
+
+// declarationRefusalNamesTheOperand reports whether a refusal a declaration
+// reaches **through a reference** is spoken of under the name the script
+// wrote rather than the one it landed on.
+//
+// The redirect itself is not in question — the freeze that refuses is the
+// *target's*, and the row that says so is the one where the **reference** is
+// the frozen one: measured 2026-09-18 on bash 5.3.20, `u=1; declare -rn s=u;
+// declare s=9` writes 9 into `u` at 0, so a frozen reference is walked
+// straight past. Only the name in the sentence moves.
+//
+// And only for a declaration carrying a **value**, which is the pair that
+// makes it a rule rather than a wording table. With `u=1; readonly u;
+// declare -n s=u`, measured the same day, `env -i` with a scratch HOME, from
+// a file:
+//
+//	declare -i s      declare: u: readonly variable   the target
+//	declare s=9       declare: s: readonly variable   the reference
+//	declare -i s=9    declare: s: readonly variable   the reference
+//	declare -a s=9    declare: s: readonly variable   the reference
+//	declare s+=9      declare: s: readonly variable   the reference
+//	u=9               u: readonly variable            the target
+//	s=9               u: readonly variable            the target
+//	export s=9        u: readonly variable            the target
+//	readonly s=9      u: readonly variable            the target
+//	local s=9         local: u: readonly variable     the target
+//
+// So it is the `declare`/`typeset` word and the value together; every
+// neighbor names the cell the write would have landed in. Every row is status
+// 1 in both shells and no write happens in either, so the name is the whole
+// of the difference.
+//
+// Asked only where a declaration with a value really redirected through a
+// reference, so a dialect without references never meets it. ksh93 spells one
+// and answers the other way — `typeset s=9` through a reference to a frozen
+// `u` is `u: is read only` there — which is what makes this a field.
+func (r *Runner) declarationRefusalNamesTheOperand() bool {
+	return r.ask(r.sem().DeclarationThroughAReferenceNamesTheOperand,
+		"a declaration's refusal through a reference naming the operand")
 }
 
 // namerefLetterIsDropped reports whether an `n` letter beside `a` or `A` is

@@ -24,6 +24,10 @@ func elementArithSemantics() Semantics {
 	s.NamerefCycleIsRefused = No
 	s.BadNameToDeclarationFatal = No
 	s.NamerefArrayRefusal = NamerefArrayCheckedLastOnTheAttribute
+	// A reference's target is the text the declaration was written with,
+	// looked up again at every read — the other answer is its own subject,
+	// in interp/namerefsettled_test.go.
+	s.NamerefTargetResolvedWhenAimed = No
 	return s
 }
 

@@ -1348,6 +1348,19 @@ func Semantics() interp.Semantics {
 	// of the same block, and the pair writes no such line — the parser is
 	// refusing the company rather than a letter (#3171).
 	s.NamerefLetterStandsAlone = interp.Yes
+	// And the target is settled **at the declaration**: measured 2026-09-18,
+	// `a=(x y z); i=2; typeset -n r=a[i]` lists `typeset -n r='a[2]'` and
+	// goes on reading `z` after `i=0`, `typeset -n s=u; typeset -n s2=s`
+	// lists `s2=u` and stays there when `s` is re-aimed, and `typeset -n
+	// r=a[@]` is `@: arithmetic syntax error` with the script ending —
+	// because `@` is not an expression and this shell has no target text to
+	// keep (#3124, #3172).
+	s.NamerefTargetResolvedWhenAimed = interp.Yes
+	// And a refusal through a reference names the cell the write would have
+	// landed in, whether or not the declaration carried a value: measured
+	// 2026-09-18, `u=1; readonly u; typeset -n s=u; typeset s=9` is `u: is
+	// read only` here (#3173).
+	s.DeclarationThroughAReferenceNamesTheOperand = interp.No
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No

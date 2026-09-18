@@ -93,8 +93,11 @@ func (r *Runner) textInForce() (string, int) {
 // ParseDiagnostic reads it.
 //
 // The parenthesised spellings only. The backquoted one is placed by a rule of
-// its own in the dialect that tags it — at the line its command *ends* on,
-// plus the body's — and that is not modeled here; see #3354.
+// its own, and the panel splits three ways on it: measured 2026-09-17, one
+// dialect numbers the body from the file and adds a line where the command
+// holding it is a bare assignment, one numbers it from the body's own first
+// line, and this places it at the line the command begins on. Filed as #3553
+// with the seven shapes rather than guessed at here.
 func (r *Runner) substFailureAtItsLine(span syntax.Span, failure error) func() {
 	d := r.diag()
 	line := d.ParseFailureLine(failure)
@@ -112,7 +115,7 @@ func (r *Runner) substFailureAtItsLine(span syntax.Span, failure error) func() {
 //
 // failure is the refusal already shifted into the script's lines, and raw the
 // same refusal in the body's own.
-func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure error) (string, int) {
+func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure error, failureBase int) (string, int) {
 	d := r.diag()
 	var se *syntax.Error
 	if !errors.As(failure, &se) || se.Kind != syntax.ErrUnexpected {
@@ -137,13 +140,14 @@ func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure er
 		return "", 0
 	}
 	text, textBase := r.textInForce()
-	lines := substTextLines(span, body, text, r.lineBase+int(span.Pos.Line)-textBase)
+	start := failureBase + 1 - textBase
+	lines := substTextLines(span, body, text, start)
 	if lines == nil {
 		return "", 0
 	}
 	own := line - textBase
 	if d.EchoesTheOffendingLine {
-		return d.offendingLine(own, failure, text), line
+		return r.substBodyEcho(span, lines, start, own, d.offendingLine(own, failure, text)), line
 	}
 	return r.substWordEcho(span, lines, r.lineBase+int(span.Pos.Line)-textBase, own, line)
 }
@@ -230,4 +234,41 @@ func (r *Runner) substWordEcho(span syntax.Span, lines []string, start, own, lin
 		line++
 	}
 	return Wording(r.diag().SyntaxUnexpected, `"%[1]s" unexpected`, r.diag().nearText(row[from:])) + "\n", line
+}
+
+// substBodyEcho cuts the echoed line back to the text the shell was reading,
+// for the dialect that names the construct because it read that text at
+// expansion time.
+//
+// A here-document body is a program that dialect reads on its own, and the
+// line it echoes is a line of *that* program: measured 2026-09-17 on bash
+// 5.3.20, a body of `before $(echo hi; for) after` on line 4 is echoed
+// `echo hi; for) after` — from just past the opener, because that is where
+// the text it was reading began. A body whose substitution runs onto a second
+// line echoes that line whole, `for) y`, for the same reason: the opener is
+// not on it.
+//
+// The older spelling is read at expansion time too and does **not** take
+// this: a `$( … )` refused inside a backquoted body is echoed `echo $(for)`
+// — the enclosing text's line, whole — so the cut belongs to the
+// here-document body alone and is keyed on the line that body begins at.
+//
+// The line as written is the answer everywhere else, and it is the answer
+// here too when the opener is not where the span says — a `<<-` body has had
+// its leading tabs taken off, so the column the body was lexed at is not the
+// file's. Checked rather than assumed, because the cost of trusting it is a
+// sentence cut in the middle of a word.
+func (r *Runner) substBodyEcho(span syntax.Span, lines []string, start, own int, echo string) string {
+	if r.expansionBodyLine == 0 || span.Backquoted || own != start || echo == "" {
+		return echo
+	}
+	if own < 1 || own > len(lines) {
+		return echo
+	}
+	row := lines[own-1]
+	at := int(span.Pos.Col) - 1
+	if at < 0 || at+2 > len(row) || row[at:at+2] != "$(" {
+		return echo
+	}
+	return "`" + row[at+2:] + "'\n"
 }

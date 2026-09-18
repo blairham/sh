@@ -1251,6 +1251,17 @@ type Runner struct {
 	// one question and a second name for it is the one that would drift.
 	Route Route
 
+	// InputName is what the front end calls where the program came from —
+	// `-c`, and empty for a script file or standard input.
+	//
+	// The front end's to say, for the reason Diagnostics.NamesTheInputInLocation
+	// gives: nothing here knows a shell has a `-c` at all. It is the same
+	// string that front end passes to Diagnostics.ParseDiagnostic, held on
+	// the runner so a refusal raised at *run* time — a substitution body
+	// parsed when the word is expanded — can name the route the front end
+	// named for a failure it saw itself.
+	InputName string
+
 	// Invocation is the name the shell's own process was started under —
 	// argv[0], not `$0`.
 	//
@@ -2531,6 +2542,35 @@ type Runner struct {
 	// by enterTrapBody and put back by the restore it hands out, so a nesting
 	// leaves it as it found it.
 	inTrapBody bool
+
+	// trapBodyCond is the condition that body belongs to — `EXIT`, `ERR`, a
+	// signal's name — which one dialect writes into the location of a parse
+	// failure read out of the body. `inCommandTrap` cannot answer it: that
+	// field names a *group* of three conditions, and this needs each of them
+	// apart. Set and put back beside inTrapBody, by enterTrapBody.
+	trapBodyCond string
+
+	// inBodyReadAtExpansion says the text the shell is running was read at
+	// expansion time rather than with the script's line — a backquoted
+	// substitution's body, or a here-document body being expanded. One
+	// dialect names those two in the location of a refusal inside them and
+	// names nothing for a `$( … )` written on the script's line, which is
+	// what this tells apart. See Runner.substFailureRoute.
+	inBodyReadAtExpansion bool
+
+	// expansionBodyLine is the file line such a body begins on, or nought
+	// where the body has no line of its own — the older spelling's, which is
+	// numbered by the span the parser already placed in the file.
+	//
+	// A here-document body is lexed again from its own text, so a span in it
+	// carries the body's numbering and not the file's. Read where a refusal
+	// is *located* and deliberately not added to Runner.lineBase, because
+	// the two are different questions with different answers: measured
+	// 2026-09-17 on bash 5.3.20, a command that is not found inside such a
+	// substitution is reported at the line the *redirection* is on where the
+	// refusal is reported at the line the body holds it on. Shifting the
+	// base moved both and made the first one wrong.
+	expansionBodyLine int
 
 	// running is the command the shell is running, for a dialect with a
 	// parameter naming it — see RunningCommand.
@@ -4357,11 +4397,10 @@ func (r *Runner) reportTrapParseFailure(err error, body string) {
 	if r.ask(r.sem().TrapParseFailureNamesWhereItFired, "a trap body's parse failure naming where the trap fired") {
 		r.reportTrapParseFailureAtFiringLine(err, body)
 	} else if !r.unspecified {
-		where := "trap"
-		if r.inExitTrap {
-			where = "exit trap"
-		}
-		r.errf("%s", r.diag().ParseDiagnostic(r.name(), where, err, body))
+		// What the location calls this body, which is the condition's and
+		// not simply "a trap": see trapLocationName for the six words and
+		// for the second message that reads the same one.
+		r.errf("%s", r.diag().ParseDiagnostic(r.name(), trapLocationName(r.trapBodyCond), err, body))
 	}
 	// No status of its own where the failure is not fatal: measured, a
 	// signal trap whose body will not parse leaves `$?` at 0 in both

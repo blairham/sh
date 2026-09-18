@@ -1060,6 +1060,96 @@ at the top of each line without keeping the tree would answer the two
 rows above and still get the alias row wrong, which is one rule with two
 implementations and the shape this tree has been bitten by before.
 
+## Where a refused body says it happened, and what it was looking for
+
+A `$( … )` body that will not parse is refused at run time here, and one
+dialect writes two facts into that refusal that the rest do not.
+
+### The route the text arrived by
+
+Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C bash s.sh` with
+stdin from `/dev/null`, on bash 5.3.20. Each row holds
+`v=$(echo hi; for)` somewhere, and both lines of the refusal carry the
+same prefix:
+
+| where the substitution is written | location |
+| --- | --- |
+| on the script's own line | `s.sh: line 2:` |
+| inside `eval '…'` | `s.sh: eval: line 2:` |
+| in an EXIT trap's body | `s.sh: exit trap: line 1:` |
+| in an ERR trap's body | `s.sh: error trap: line 2:` |
+| in a DEBUG trap's body | `s.sh: debug trap: line 2:` |
+| in a RETURN trap's body | `s.sh: return trap: line 2:` |
+| in an INT trap's body | `s.sh: interrupt trap: line 1:` |
+| in any other signal's trap body | `s.sh: trap: line 1:` |
+| under `-c` | `bash: -c: line 1:` |
+| as `$( … )` inside a backquoted body | `s.sh: command substitution: line 1:` |
+| in a here-document body | `s.sh: command substitution: line 2:` |
+| inside a file `.` read | `./inner.sh: line 2:` |
+| as `$( … )` inside `$( … )` | `s.sh: line 1:` |
+
+The last two rows are the controls, and they are what make this a
+question about the **route** rather than about depth. A sourced file
+replaces the shell's own name and names no route beside it. A
+substitution inside a substitution names none either, because that shell
+reads both bodies while it is reading the script's line — and the two
+rows that *are* named `command substitution` are the two it reads at
+expansion time instead.
+
+A **run-time** diagnostic from the same places is located plainly: `eval
+'nosuchcmd'` is `s.sh: line 1: nosuchcmd: command not found`, with no
+`eval:`. So this belongs to the refusal and not to the frame.
+
+`INT` is the one signal with a word of its own; `TERM`, `HUP`, `QUIT`,
+`USR1`, `USR2` and `ALRM` all fall back to the builtin's name. That is
+measured rather than assumed from the four pseudo-conditions each having
+one.
+
+A here-document body is lexed again from its own text, so everything in
+it is numbered from the body's first line. The refusal is located in the
+**file** — `line 4` for a body the here-document holds on line 4, and
+`line 4` again for the second line of a two-line body — while a command
+that is not found inside the same substitution is reported at the line
+the *redirection* is on. The two are different numbers in that shell and
+are read from different places here.
+
+The text the here-document body's refusal quotes back is a line of the
+substitution rather than of the script:
+
+    cat <<E
+    before $(echo hi; for) after
+    E
+
+is `` `echo hi; for) after' `` — from just past the opener, because that
+is where the text being read began — and a body whose substitution runs
+onto a second line quotes that line whole, `` `for) y' ``. The older
+spelling does not take that cut: a `$( … )` refused inside a backquoted
+body is quoted `` `echo $(for)' ``, the enclosing line entire.
+
+### The closer it was still looking for
+
+A token the grammar did not want *inside* a `$( … )` body names the
+parenthesis that would have closed it. Measured the same way:
+
+| body | sentence |
+| --- | --- |
+| `v=$(echo hi; ;)` | ``syntax error near unexpected token `;' while looking for matching `)'`` |
+| `v=$(for z in 1 2 3; done)` | ``… `done' while looking for matching `)'`` |
+| `v=$(} )` | ``… `}' while looking for matching `)'`` |
+| `v=$(esac)` | ``… `esac' while looking for matching `)'`` |
+| `v=$(echo hi; for)` | ``syntax error near unexpected token `)'`` |
+| `` v=`echo hi; ;` `` | ``syntax error near unexpected token `;'`` |
+
+Two things it is not. It is not every refusal: where the unexpected token
+*is* the closer, nothing is added, because that is the very thing the
+shell was looking for and it found it. And it is not both spellings: the
+older one is refused with no such clause, which is the same split the
+construct tag turns on one message over.
+
+The closer named is the construct's own. `v=${ echo hi; ;}` is
+``syntax error near unexpected token `;' while looking for matching `}'``
+in the same shell.
+
 ## What this does not cover
 
 The internal grammar of each form: arithmetic operators and their

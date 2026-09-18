@@ -146,17 +146,24 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		// without moving when the body is read means asking about the
 		// spelling, which is what Diagnostics.BackquotedSubstitutionRestartsLines
 		// already does one message over.
-		construct := ""
-		if span.Backquoted && r.diag().SubstitutionParseFailureNamesTheConstruct {
-			construct = "command substitution"
-		}
+		construct := r.substFailureRoute(span)
 		raw := r.substParseErrorAtItsCloser(span, src, err)
-		failure := shiftParseError(raw, base)
+		// The refusal's own base, which is the body's where the body was
+		// read at expansion time and has lines of its own. See
+		// Runner.expansionBodyLine for why this is not Runner.lineBase.
+		failureBase := base
+		if !span.Backquoted && r.expansionBodyLine > 0 {
+			failureBase += r.expansionBodyLine - 1
+		}
+		failure := shiftParseError(raw, failureBase)
 		// Placed at the failure's line and followed by the text it was
 		// found in, for the dialects that write one. See substecho.go.
 		putBack := r.substFailureAtItsLine(span, failure)
-		r.errf("%s", r.diagLineNamed(construct, "%s\n", r.diag().ParseFailure(failure)))
-		if echo, at := r.substFailureEcho(span, src, raw, failure); echo != "" {
+		// The sentence, with the clause one dialect adds while it is still
+		// looking for the closing parenthesis — see Runner.substBodyExpecting.
+		r.errf("%s", r.diagLineNamed(construct, "%s%s\n",
+			r.diag().ParseFailure(failure), r.substBodyExpecting(span, failure)))
+		if echo, at := r.substFailureEcho(span, src, raw, failure, failureBase); echo != "" {
 			if at > 0 {
 				r.line = at
 			}
@@ -274,6 +281,12 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		// $(for)` rather than the script's line, measured on bash 5.3.20.
 		// See runningText.
 		sub.runText = runningText{text: src, base: base, borrowed: true}
+		// And the body is text read at expansion time, which the same
+		// dialect names in the location of anything refused *inside* it: a
+		// `$( … )` written in a backquoted body is `command substitution:`
+		// there, where the same `$( … )` written on the script's line is
+		// not. See Runner.substFailureRoute.
+		sub.inBodyReadAtExpansion = true
 	}
 	sub.Stdout = &out
 	// The same group a subshell gets, and the same lifetime: the expansion

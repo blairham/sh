@@ -63,6 +63,45 @@ func (r *Runner) firedAt() int {
 	return 1
 }
 
+// trapLocationName is what a diagnostic's location calls the trap body it
+// was read out of, in the dialect that names one.
+//
+// Measured 2026-09-17 on bash 5.3.20, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+// over a script file, with a body that will not parse set for each condition
+// in turn and with a refused substitution inside a body that does:
+//
+//	EXIT                 exit trap
+//	ERR                  error trap
+//	DEBUG                debug trap
+//	RETURN               return trap
+//	INT                  interrupt trap
+//	TERM HUP QUIT USR1 USR2 ALRM    trap
+//
+// So `INT` is the one *signal* with a word of its own and every other signal
+// falls back to the builtin's name — which is measured rather than assumed
+// from the four pseudo-conditions having one each.
+//
+// One reader for both messages that write it. A trap body's own parse failure
+// and a substitution refused inside a body that parsed are two sentences
+// about the same place, and they were two switches: the first knew EXIT and
+// nothing else, so ERR, DEBUG, RETURN and INT wrote `trap` there while the
+// second wrote nothing at all.
+func trapLocationName(cond string) string {
+	switch cond {
+	case "EXIT":
+		return "exit trap"
+	case "ERR":
+		return "error trap"
+	case "DEBUG":
+		return "debug trap"
+	case "RETURN":
+		return "return trap"
+	case "INT":
+		return "interrupt trap"
+	}
+	return "trap"
+}
+
 // bodyLineStyle is which of the two questions this body is: the one every
 // trap asks, or the one the two conditions that fire at a command ask.
 //
@@ -83,6 +122,7 @@ func (r *Runner) bodyLineStyle() TrapBodyLineStyle {
 // reads: EXIT is the one trap whose body is not a level of indirection.
 func (r *Runner) enterTrapBody(cond string) func() {
 	base, pin, command, inTrap := r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody
+	trapCond := r.trapBodyCond
 	text := r.runText
 	indirection := r.indirection
 	// A trap body is text read again, and the one dialect that counts levels
@@ -121,6 +161,7 @@ func (r *Runner) enterTrapBody(cond string) func() {
 	line := r.line
 	restore := func() {
 		r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody = base, pin, command, inTrap
+		r.trapBodyCond = trapCond
 		r.runText = text
 		r.line, r.indirection = line, indirection
 	}
@@ -139,6 +180,11 @@ func (r *Runner) enterTrapBody(cond string) func() {
 	// record of what the shell is running belongs to the script, so nothing a
 	// body runs may move it — see Runner.recordRunning.
 	r.inTrapBody = true
+	// And which condition it is, which the location of a refusal read out of
+	// the body names. Beside inTrapBody rather than derived from
+	// inCommandTrap, because that flag groups three conditions the naming
+	// keeps apart.
+	r.trapBodyCond = cond
 	return restore
 }
 

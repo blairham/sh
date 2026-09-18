@@ -549,3 +549,103 @@ func TestTheEntryReadingFiltersEveryListing(t *testing.T) {
 		}
 	}
 }
+
+// TestADescentListsDotAndDotDotWhereTheListingHasThem is #3175, and it is the
+// axis above asked at the second place a listing is read. A `**` descent
+// reads one directory per level, so a dialect whose listing holds `.` and
+// `..` holds them at every level the walk enters and not only at the one a
+// component match happened to look in.
+//
+// Measured 2026-09-18 with the ignore parameter set so the leading-period
+// rule is off and the two names are visible at all, in a tree holding `topf`,
+// `p/pf` and `p/q/qf`: the column that lists them and crosses levels writes
+// `[.][..][p][p/.][p/..][p/pf][p/q][p/q/.][p/q/..][p/q/qf][topf]` where this
+// walk wrote `[p][p/pf][p/q][p/q/qf][topf]`.
+//
+// Both names are produced and neither is followed, which is a separate rule
+// and not the axis: a walk descending into `..` would climb out of the tree
+// it was given and never stop. The two rows that say so are the trailing
+// slash, which keeps both because both are directories, and a component
+// *behind* the `**`, which sees neither because neither is a level the walk
+// entered.
+func TestADescentListsDotAndDotDotWhereTheListingHasThem(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "p", "q"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"topf", "p/pf", "p/q/qf"} {
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(f)), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The walk that crosses levels, in the dialect whose listing holds the
+	// two names, with the leading-period rule lifted the way that dialect's
+	// ignore parameter lifts it.
+	descending := func(lists Answer) func(*Runner) {
+		return func(r *Runner) {
+			r.Dir = dir
+			r.Semantics.GlobListsDotAndDotDot = lists
+			r.Semantics.IgnoredNamesVariable = "FIGNORE"
+			r.Semantics.IgnoredNamesRevealHiddenNames = true
+			// The facility's own three axes, answered the way the dialect
+			// that both lists the two names and crosses levels answers them
+			// — scaffolding here, since the value matches nothing and the
+			// question is what the listing holds.
+			r.Semantics.IgnoredNamesValueIsOnePattern = Yes
+			r.Semantics.IgnoredNamesMatchTheLastComponent = Yes
+			r.Semantics.IgnoredNamesFollowTheParameter = Yes
+			r.Env = []string{"FIGNORE=zz"}
+			r.SetMatchOption(StarStarCrossesDirectories, true)
+			r.SetMatchOption(StarStarAloneCrossesDirectories, true)
+			r.SetMatchOption(StarStarSeesLinkedDirectories, true)
+		}
+	}
+	for _, tc := range []struct {
+		name  string
+		lists Answer
+		src   string
+		want  string
+	}{
+		{
+			"a descent lists them at every level", Yes,
+			`printf "[%s]" **`,
+			`[.][..][p][p/.][p/..][p/pf][p/q][p/q/.][p/q/..][p/q/qf][topf]`,
+		},
+		{
+			"and does not where the listing has neither", No,
+			`printf "[%s]" **`,
+			`[p][p/pf][p/q][p/q/qf][topf]`,
+		},
+		// Both are directories, so the trailing-slash form keeps them.
+		{
+			"the trailing slash keeps both", Yes,
+			`printf "[%s]" **/`,
+			`[../][./][p/][p/../][p/./][p/q/][p/q/../][p/q/./]`,
+		},
+		// And neither is a level the walk entered, so a real component
+		// behind the `**` never arrives through one: `p/q/./qf` is not an
+		// answer, and the single `p/q/qf` is.
+		{
+			"a component behind it sees neither", Yes,
+			`printf "[%s]" **/qf`,
+			`[p/q/qf]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, descending(tc.lists))
+			if out != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, out, tc.want)
+			}
+		})
+	}
+	// The leading-period rule is what keeps both names out of a descent that
+	// nothing asked to see hidden names, which is every ordinary script: the
+	// axis is on and the answer is the same as with it off.
+	plain := func(r *Runner) {
+		descending(Yes)(r)
+		r.Env = nil
+	}
+	if out, _ := run(t, `printf "[%s]" **`, plain); out != `[p][p/pf][p/q][p/q/qf][topf]` {
+		t.Errorf("a descent with the leading-period rule on = %s", out)
+	}
+}

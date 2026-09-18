@@ -1839,6 +1839,68 @@ where bash keeps only directories. Nothing here can reach it, because
 zsh never reaches the question: its bare `**` does not cross levels at
 all, and with a slash behind it the separator comes from the pattern.
 
+### A `**` never enters a link, and two questions follow anyway
+
+Every column with the construct refuses to descend **through** a symbolic
+link, which is what keeps a `**` finite on a tree holding a link to its own
+ancestor. Two separate questions survive that, and the panel answers them
+with different columns. Measured 2026-09-18 in a directory holding `r/x`,
+a symlink `s` to `r`, a file `y` and a symlink `up` to the directory itself,
+with `a/b/sl` a second symlink to `r`:
+
+| pattern | bash 5.3.20 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `**/` | `r/ s/ up/` | `r/ s/ up/` | `r/` |
+| `**/x` | `r/x` | `r/x` | `r/x` |
+| `./**/x` | `./r/x ./s/x` | `./r/x` | `./r/x` |
+| `a/**/x` | `a/b/sl/x` | no match | no match |
+| `./**/y` | `./up/y ./y` | `./y` | `./y` |
+
+**Is a linked level one of the names `**/` reports?** bash and ksh93 say yes,
+zsh says no — `StarStarSeesLinkedDirectories`, and it is the first two rows.
+
+**May the component *behind* a `**` look inside one?** bash says yes and both
+others say no, which is the opposite pairing and is why this is a second
+switch rather than the first read twice —
+`ComponentBehindStarStarSeesLinkedLevels`. The set the next component is
+offered widens; the set the walk enters does not, so the last row is still
+finite in every column.
+
+**The column that says yes exempts a `**` that begins the word**, which is
+measured rather than chosen: `**/x` and `./**/x` name the same files by every
+other rule and are answered differently there, and an absolute spelling,
+`**//x`, and `a/**/**/x` all look inside. The exemption is that narrow — the
+word's first component, with one separator and a real component behind it —
+and modeling the shell means modeling it, since a pattern written either way
+is a pattern scripts write (#3176).
+
+### A descent reads a listing, so it holds whatever a listing holds
+
+`Semantics.GlobListsDotAndDotDot` says whether a pathname expansion's listing
+holds `.` and `..` beside the entries, and a `**` descent reads one listing
+per level. It is the same answer at a second place and not a second answer.
+Measured 2026-09-18 with the ignore parameter set so the leading-period rule
+is off and the two names are visible at all, in a tree holding `topf`,
+`p/pf`, `p/q/qf`, `p/q/w/leaf` and `p/q/w/q/deepq`:
+
+| pattern | the column whose listing holds them |
+| --- | --- |
+| `**` | `. .. p p/. p/.. p/pf p/q p/q/. p/q/.. p/q/qf … topf` |
+| `**/` | `../ ./ p/ p/../ p/./ p/q/ …` |
+| `**/qf` | `p/q/qf` |
+| `p/**` | `p/. p/.. p/pf p/q p/q/. …` |
+
+**Both names are produced and neither is followed.** That is a rule of its
+own rather than the axis: a walk descending into `..` would climb out of the
+tree it was given and never stop, and no column does that. The third row is
+what says so — neither name is a level the walk entered, so a real component
+behind the `**` never arrives through one — and the second is the control,
+since both names are directories and the trailing-slash form keeps them.
+
+**The leading-period rule is what keeps them out of an ordinary descent**,
+exactly as it keeps them out of an ordinary `*`: with nothing asked, `**` is
+`p p/pf p/q p/q/qf topf` in that column too (#3175).
+
 ### Nothing takes duplicates out, so a run of `**` is an axis
 
 **A pathname expansion is not a set.** Two `**` components are two

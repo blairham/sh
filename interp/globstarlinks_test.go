@@ -241,3 +241,53 @@ func TestAStarStarPatternReadsNoLinkedDirectoryWhereTheDialectSaysSo(t *testing.
 		})
 	}
 }
+
+// TestAComponentBehindAStarStarLooksInsideALinkedLevelWhereTheDialectSaysSo
+// is #3176, and it is the half the option above was measured too narrow for.
+// That one says whether a linked level is **named** by `**/`; this one says
+// whether the component *behind* a `**` may look **inside** one. The two are
+// not the same answer: the panel column that names such a level for `**/`
+// and then refuses to look inside it exists, which is what makes this a row.
+//
+// Measured 2026-09-18 in this fixture, which holds a link `s` to `r` one
+// level down from the walk's start: `./**/x` is `./r/x ./s/x` in bash 5.3.20
+// under `shopt -s globstar` and `./r/x` in ksh93u+ under `set -o globstar`
+// and in zsh — while `**/` names `s/` in the first two and not in the third.
+//
+// The walk is untouched either way, and the assertion below says so: with the
+// option on, a link to the directory's own ancestor is still never descended
+// through, so the answer is finite and is the same one.
+func TestAComponentBehindAStarStarLooksInsideALinkedLevelWhereTheDialectSaysSo(t *testing.T) {
+	dir := starStarLinkDir(t)
+	for _, tc := range []struct {
+		name string
+		sees bool
+		src  string
+		want string
+	}{
+		// The reproduction. A leading `**` is the one shape the option is
+		// not asked of, so the pattern writes the `.` that makes the
+		// component a component behind one — which is the whole measured
+		// difference in the column that has this on.
+		{"looking inside", true, `printf "[%s]" ./**/x`, `[./r/x][./s/x]`},
+		{"not looking inside", false, `printf "[%s]" ./**/x`, `[./r/x]`},
+		// And the exemption, which is measured rather than chosen: the very
+		// first component of the word, with one separator behind it, is
+		// answered the other way in the same shell over the same files.
+		{"a star-star that begins the word", true, `printf "[%s]" **/x`, `[r/x]`},
+		{"the same, with the option off", false, `printf "[%s]" **/x`, `[r/x]`},
+		// The set the next component is offered is wider; the set the walk
+		// enters is not. `up` points at the directory holding it, so a walk
+		// that had started following links would not come back at all.
+		{"the walk stays bounded", true, `printf "[%s]" ./**/y`, `[./up/y][./y]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opt := withOption(ComponentBehindStarStarSeesLinkedLevels, tc.sees,
+				withOption(StarStarSeesLinkedDirectories, true, crossing(dir)))
+			out, _ := run(t, tc.src, opt)
+			if out != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, out, tc.want)
+			}
+		})
+	}
+}

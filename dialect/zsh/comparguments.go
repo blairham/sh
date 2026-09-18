@@ -112,6 +112,37 @@ const (
 	optArgEqualDirect                       // -opt=- after an `=`, and only there
 )
 
+// attachesToTheName reports whether this option's **first** argument may be
+// written against the option's own name with nothing between them, which is
+// what decides whether the cursor sitting at the end of the name is sitting
+// in that argument.
+//
+// Measured on zsh 5.9.2, 2026-09-18, the word under the cursor being exactly
+// an option's name and `comparguments -D` asked from inside a widget:
+//
+//	-f+[file]:file:   cmd -f<TAB>   option-f-1     the argument attaches
+//	-d-[dir]:dir:     cmd -d<TAB>   option-d-1     and here it must
+//	-T[sep]:t:        cmd -T<TAB>   nothing        the next word holds it
+//	-n[none]          cmd -n<TAB>   nothing        there is no argument
+func (s optionArgStyle) attachesToTheName() bool {
+	return s == optArgDirect || s == optArgOptDirect
+}
+
+// takesTheNextWord reports whether this option's **first** argument may be a
+// word of its own, which is what decides whether the empty word after the
+// option is that argument rather than the first normal one.
+//
+// Measured the same way, with a blank after the option:
+//
+//	-f+[file]:file:   cmd -f <TAB>  option-f-1     either way, so yes
+//	-T[sep]:t:        cmd -T <TAB>  option-T-1     the next word is where it is
+//	-o=[out]:out:     cmd -o <TAB>  option-o-1     an `=` is not the only way
+//	-d-[dir]:dir:     cmd -d <TAB>  argument-1     attached and only attached
+//	-e=-[eq]:eq:      cmd -e <TAB>  argument-1     after an `=` and only there
+func (s optionArgStyle) takesTheNextWord() bool {
+	return s == optArgSeparate || s == optArgOptDirect || s == optArgEqual
+}
+
 // optionSpec is one `optspec` from the spec list: what may be typed, what it
 // shuts off, and what follows it.
 type optionSpec struct {
@@ -133,6 +164,25 @@ type argumentSpec struct {
 	message  string
 	action   string
 	excl     []string
+}
+
+// optionArgHere is an option's own argument, being written at the cursor.
+type optionArgHere struct {
+	name  string       // the option, as it is written on the line
+	index int          // 1-based: which of the option's arguments this is
+	spec  argumentSpec // its `:message:action`
+}
+
+// tag is what `_tags` is asked for on this argument's behalf, which is the
+// option's name and the argument's place in it rather than a position on the
+// line. Measured on zsh 5.9.2, 2026-09-18 from inside a `zle -C` widget:
+// `cmd -f<TAB>` against `-f+[file]:file:_files` reports `option-f-1`,
+// `cmd --orphan=<TAB>` reports `option--orphan-1`, and `cmd -T a <TAB>`
+// against a two-argument `-T` reports `option-T-2`. So **one** leading dash
+// goes and the rest of the name stays — `--orphan` keeps the second — and the
+// index counts the option's own arguments rather than a place on the line.
+func (o optionArgHere) tag() string {
+	return "option-" + strings.TrimLeft(o.name[:1], "-+") + o.name[1:] + "-" + itoa(o.index)
 }
 
 // tag is what `_tags` is asked for on this argument's behalf, and is the
@@ -170,6 +220,11 @@ type argumentsState struct {
 	// cursorOption is that option's name, where the word is exactly it. It
 	// is the one spent option that may still be offered — see offeredBack.
 	cursorOption string
+	// cursorOptArg is the option argument the cursor is standing in, where
+	// it is standing in one: the option's name and which of its arguments.
+	// Nil is a cursor that is not writing an option's argument, which is
+	// every position `-D` used to answer for. See optionArgumentHere.
+	cursorOptArg *optionArgHere
 	// stackInProgress is whether the word under the cursor is a stack of
 	// single-letter options being continued: what `-s` answers, and half of
 	// what decides offeredBack.
@@ -177,8 +232,13 @@ type argumentsState struct {
 	here            []int    // indices into args of the specs applying at the cursor
 	line            []string // the normal arguments, `$line`
 	optArgs         map[string]string
+	optArgValues    map[string]int  // how many values each name has collected
 	spent           map[string]bool // option names already on the line
 	shutOff         map[string]bool // what an option on the line excluded
+	// shutOffShort is what the option *under the cursor* excluded, which
+	// reaches only the single-letter names. See spend, which carries the
+	// measurement.
+	shutOffShort map[string]bool
 }
 
 // defaultArgumentsMatcher is what `-M` answers when `_arguments` was given no
@@ -242,7 +302,12 @@ func compargumentsInit(r *interp.Runner, cs *completionState, st *computilState,
 	}
 	a.analyze(r, cs)
 	st.arguments = a
-	return boolStatus(a.optionsHere || len(a.here) > 0)
+	// An option's own argument counts as something to complete, which is
+	// what makes `-i` and `-D` agree. Measured: `cmd -f x<TAB>` against
+	// `-f+[file]:file:_files` is 0 and describes `option-f-1`; without this
+	// the word is not an option, no normal argument applies, and a 0 from
+	// `-D` sat behind a 1 from `-i`.
+	return boolStatus(a.optionsHere || len(a.here) > 0 || a.cursorOptArg != nil)
 }
 
 // readSwitches takes `_arguments`' own letters off the front, stopping at the

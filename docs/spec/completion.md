@@ -286,6 +286,32 @@ so `compgroups` is the order the blocks come out in and `compdescribe`
 splits a definition whose rows are not all described into the described
 half and the bare one — which is what `gzip -c` is two blocks of.
 
+**An option's own argument is described.** `comparguments -D` answers for
+the argument the cursor is standing in, and where the cursor is standing in
+an *option's* argument rather than one of the command's it says so: the tag
+is `option-S-1` rather than `argument-1`, and the message and action are the
+option spec's own. That is what `gzip -S<TAB>` and
+`git checkout --orphan=<TAB>` want, and it was answered with nothing until
+#3229.
+
+Where an option's argument may be written is the whole of the rule, and the
+forms differ. Measured 2026-09-18 through a pseudo-terminal from inside a
+`zle -C` widget, one spec set, the cursor at the end of each line:
+
+| form | `cmd -x` | `cmd -x ` |
+| --- | --- | --- |
+| `-f+[…]:file:` attached or a word | the option's | the option's |
+| `-d-[…]:dir:` attached only | the option's | the command's first |
+| `-o=[…]:out:` after `=` or a word | the command's first | the option's |
+| `-e=-[…]:eq:` after `=` only | nothing | the command's first |
+| `-n[…]` no argument | nothing | the command's first |
+| `-T[…]:one::two:` two words | nothing | the option's, first |
+
+The third row is the one a guess gets wrong twice over: `-o` alone is not
+read as an option at all — `$line` holds it and `$opt_args` is empty — and
+`-o=` is. Inside a stack of single-letter options every form but the last
+attaches, because a stack is written without separators by definition.
+
 **And what a shipped completion reaches is not decided here alone.**
 Several completions stop short somewhere outside `zsh/computil` — `_nl`
 and `_od` on the `(R)` expansion flag, and `_file_modes` on the

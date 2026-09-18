@@ -128,6 +128,20 @@ type Lexer struct {
 	// Exactly the shape inPattern has, for exactly the same reason.
 	inArgument bool
 
+	// inDeclarationOperand is set while the token being read stands where a
+	// *declaration utility's* operand does — behind `typeset`, `local`,
+	// `export` or `readonly` written the way the dialect requires, and
+	// between the parentheses of the array literal such an operand opens.
+	//
+	// It is what lets [Lexer.arrayLiteralCouldStandHere] say yes in argument
+	// position without saying yes to every argument. `local a=(x y)` reaches
+	// the parser as the word `a=` and then a parenthesis, which is exactly
+	// what an array literal produces; `print -r -- x=(a|b)c` is one word with
+	// a group in it, and nothing in the *word* tells the two apart. The
+	// command's name does, and only the parser can see it — the same shape
+	// inArgument and inArrayLiteral have, set for the same reason (#3087).
+	inDeclarationOperand bool
+
 	// inArrayLiteral is set while the token being read stands where an
 	// *element* of a compound array literal does — between the parentheses
 	// of `a=( … )` — and it exists for one question: an element that opens
@@ -956,14 +970,18 @@ func (l *Lexer) atAssignValue() bool {
 // an `=` is a shape a shipped completion function writes, and this is what it
 // stopped at (#3040).
 //
-// **An *argument* is a fourth position and is deliberately not here.**
-// `print -r -- x=(a|b)c` is one word in that shell and is still refused here,
-// because the array reading is what a declaration utility's operand needs —
-// `local a=(x y)` reaches the parser as the word `a=` and then a parenthesis
-// — and the lexer cannot see the command's name. Filed rather than guessed
-// at; see #3087.
+// **An *argument* is a fourth position**, and it is the one the answer is not
+// uniform in. An array literal is what a declaration utility's operand needs —
+// `local a=(x y)` reaches the parser as the word `a=` and then a parenthesis —
+// and it is exactly what an ordinary argument must not get: `print -r -- // x=(a|b)c` is one word with a group in it in zsh 5.9.2, and
+// `print -r -- x=(a)` is a word with a glob qualifier on it. Nothing in the
+// *word* tells the two apart; the command's name does, so the parser says
+// which position this is through inDeclarationOperand (#3087).
 func (l *Lexer) arrayLiteralCouldStandHere() bool {
-	return !l.inCondition && !l.inCaseArm && !l.inCaseParenList
+	if l.inCondition || l.inCaseArm || l.inCaseParenList {
+		return false
+	}
+	return !l.inArgument || l.inDeclarationOperand
 }
 
 // startsNumericRange reports whether the cursor is on a numeric range

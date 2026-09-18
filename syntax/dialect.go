@@ -500,6 +500,30 @@ const (
 // form, which is what it knows.
 func (f DollarForms) Has(form DollarForms) bool { return f&form != 0 }
 
+// DeclarationArrayWord is how a declaration utility's name must be *written*
+// for a `name=( … )` operand behind it to be read as an array literal.
+//
+// The grammar half of what [interp.Semantics.DeclarationCommandWord] answers
+// for expansion, and it is a separate question because it decides where the
+// *word ends* rather than how the operand expands: under one reading
+// `'typeset' a=(x y)` is a syntax error and under the other it is an array.
+// See [Dialect.DeclarationArrayFromTheCommandWord].
+type DeclarationArrayWord uint8
+
+const (
+	// DeclarationArrayFromAnUnquotedLiteralWord reads the operand as an
+	// array only where the command word is one unquoted literal with no
+	// quoting of any kind in it. `'typeset'`, `\typeset`, `type"set"` and
+	// `$cmd` all take the reading away. bash 5.3 and zsh 5.9.2, and the
+	// core.
+	DeclarationArrayFromAnUnquotedLiteralWord DeclarationArrayWord = iota
+
+	// DeclarationArrayFromAWrittenWord keeps the reading through quoting —
+	// `'typeset'`, `\typeset` and `type"set"` all still open an array — and
+	// loses it only where part of the word is an expansion. ksh93u+.
+	DeclarationArrayFromAWrittenWord
+)
+
 // Dialect says which constructs the lexer accepts.
 //
 // Fields are named for the construct rather than for the shell that wants it,
@@ -4121,6 +4145,32 @@ type Dialect struct {
 	//
 	// Empty means none, which is dash: it has no array literal at all.
 	DeclarationUtilities map[string]bool
+
+	// DeclarationArrayFromTheCommandWord is how the command word must be
+	// written for a `name=( … )` operand behind it to be an array literal.
+	//
+	// Measured 2026-09-16 from script files, `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, `'typeset' a=(x y); echo "[${a[1]}]"` and the spellings
+	// below, each in a script file of its own:
+	//
+	//	probe                   bash 5.3        zsh 5.9.2        ksh93u+
+	//	typeset a=(x y)         [y]             [x]              [y]
+	//	'typeset' a=(x y)       syntax error    a glob qualifier [y]
+	//	\typeset a=(x y)        syntax error    a glob qualifier [y]
+	//	type"set" a=(x y)       syntax error    a glob qualifier [y]
+	//	cmd=typeset; $cmd a=(…) syntax error    a glob qualifier syntax error
+	//
+	// "a glob qualifier" is `unknown file attribute:` at 1 with the next line
+	// still running: that shell reads the parenthesis as a qualifier on the
+	// word `a=`, which is what it does with any argument that is not a
+	// declaration's operand. bash has no such reading, so the `(` is left
+	// standing behind a word and the file ends there. dash and BusyBox ash
+	// have no array literal at all and the question does not reach them.
+	//
+	// The array route used to key on the command word with its quotes
+	// removed, so every dialect took the array form from every spelling —
+	// which is ksh93's answer given to two columns that refuse it (#3351).
+	DeclarationArrayFromTheCommandWord DeclarationArrayWord
 
 	// ReservedPrecommands are words that may stand in front of a simple
 	// command, are taken away before it runs, and change nothing the command

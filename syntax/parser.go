@@ -2860,7 +2860,7 @@ func (p *Parser) parseSimple() Command {
 	// ends it has already been read by the time this returns, so restoring
 	// the flag here is soon enough and is the only place that catches every
 	// way out.
-	defer func() { p.lex.inArgument = false }()
+	defer func() { p.lex.inArgument, p.lex.inDeclarationOperand = false, false }()
 
 	for p.err == nil {
 		switch {
@@ -3024,6 +3024,17 @@ func (p *Parser) parseSimple() Command {
 			// p.word() is what reads it — so the lexer is told before the
 			// call rather than after it. One dialect reads a `(` there as
 			// part of a word; everywhere else the flag changes nothing.
+			//
+			// And whether it stands where a *declaration's* operand does,
+			// which is the same question one token earlier: an operand of a
+			// declaration utility may open an array literal and an ordinary
+			// argument may not, and the word being read here is the only
+			// thing that says which. Set once, on the command word, and it
+			// lasts as long as the command — `typeset a=(1) b=(2)` is two
+			// arrays. See Lexer.arrayLiteralCouldStandHere.
+			if len(c.Args) == 0 && p.declarationWordWritten(p.tok.Spans) {
+				p.lex.inDeclarationOperand = true
+			}
 			p.lex.inArgument = true
 			c.Args = append(c.Args, p.word())
 		case p.at(TokLeftParen) && len(c.Assigns) == 0 && len(c.Redirs) > 0 &&
@@ -3146,6 +3157,13 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// is what ends argument position for the command.
 		saved := p.lex.inArgument
 		p.lex.inArgument = true
+		// An element of a declaration's array is still inside the
+		// declaration, so the nested `q=(p r)` of a compound variable keeps
+		// the array reading that argument position would otherwise take away.
+		// Restored with the rest, so the flag reaches no further than these
+		// parentheses.
+		savedDecl := p.lex.inDeclarationOperand
+		p.lex.inDeclarationOperand = true
 		// And where an *element* stands, which is a second question the
 		// lexer cannot ask for itself: an element opening with `[` runs to
 		// its matching `]` through the blanks inside it, so
@@ -3174,11 +3192,13 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			if p.err == nil && !p.at(TokRightParen) {
 				p.lex.inArgument = saved
 				p.lex.inArrayLiteral = savedArray
+				p.lex.inDeclarationOperand = savedDecl
 				p.failUnexpected(")")
 				return a
 			}
 			p.lex.inArgument = saved
 			p.lex.inArrayLiteral = savedArray
+			p.lex.inDeclarationOperand = savedDecl
 			if p.err != nil {
 				return a
 			}
@@ -3215,6 +3235,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 				} else if subscripted && !subscriptedElementSpans(at.Spans) {
 					p.lex.inArgument = saved
 					p.lex.inArrayLiteral = savedArray
+					p.lex.inDeclarationOperand = savedDecl
 					p.failUnexpectedAt(at, "", false)
 					return a
 				}
@@ -3232,10 +3253,12 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		}
 		if !p.at(TokRightParen) && p.giveUpOnTheArray(saved) {
 			p.lex.inArrayLiteral = savedArray
+			p.lex.inDeclarationOperand = savedDecl
 			return a
 		}
 		p.lex.inArgument = saved
 		p.lex.inArrayLiteral = savedArray
+		p.lex.inDeclarationOperand = savedDecl
 		if !p.at(TokRightParen) {
 			// Named rather than described: bash answers
 			// `syntax error near unexpected token `;'` and the `)` this used
@@ -3382,7 +3405,7 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 	if len(c.Args) == 0 || len(p.dialect.DeclarationUtilities) == 0 {
 		return nil, false
 	}
-	if !p.dialect.DeclarationUtilities[c.Args[0].Literal()] {
+	if !p.declarationWordWritten(c.Args[0].Spans) {
 		return nil, false
 	}
 	h, ok := p.isAssign(p.tok)
@@ -3411,6 +3434,37 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 	// once, by this, and not again by the caller.
 	c.Args = append(c.Args, p.newWord(tok.Spans, tok.Pos, tok.End))
 	return nil, true
+}
+
+// declarationWordWritten reports whether a command word made of these spans
+// names a declaration utility the way [Dialect.DeclarationArrayFromTheCommandWord]
+// requires, so that a `name=( … )` operand behind it is an array literal.
+//
+// Spans rather than a Word, because the question is asked of a token the
+// parser has not turned into one yet — the lexer has to be told what position
+// the *next* word stands in before it reads it. `Word.Literal()` is what this
+// replaced and is exactly what it must not be: it hands back the text with the
+// quotes taken off, so `'typeset'` and `typeset` are one word to it, and two
+// of the three columns that have the construct refuse the first (#3351).
+func (p *Parser) declarationWordWritten(spans []Span) bool {
+	if len(p.dialect.DeclarationUtilities) == 0 {
+		return false
+	}
+	var b strings.Builder
+	for _, s := range spans {
+		// An expansion anywhere in the word takes the reading away under
+		// both readings: `cmd=typeset; $cmd a=(x y)` is refused in bash and
+		// in ksh93 and is a glob qualifier in zsh.
+		if s.Kind != Literal {
+			return false
+		}
+		if p.dialect.DeclarationArrayFromTheCommandWord == DeclarationArrayFromAnUnquotedLiteralWord &&
+			s.Quoting != Unquoted {
+			return false
+		}
+		b.WriteString(s.Value)
+	}
+	return p.dialect.DeclarationUtilities[b.String()]
 }
 
 // looksLikeFuncDef reports whether the current word begins `name()`.

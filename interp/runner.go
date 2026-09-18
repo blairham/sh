@@ -4272,6 +4272,13 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	if r.killedBy != "" && !r.ask(r.sem().ExitTrapRunsOnSignalDeath, "the EXIT trap after a fatal signal") {
 		return false
 	}
+	// And a shell ending over an error it reported, with `set -e` on, in the
+	// one column that runs no EXIT trap there — see
+	// Runner.exitTrapSkippedByAFatalError for the table and for why neither
+	// the error nor the option is the discriminator on its own.
+	if r.exitTrapSkippedByAFatalError() {
+		return false
+	}
 	body := *r.exitTrap
 	// Cleared before running so the body cannot fire it again, and so a
 	// `trap` inside it replaces rather than recurses.

@@ -15579,6 +15579,107 @@ is already the shell's last word — the corpus row
 `trap/exit-trap-can-override-the-status` is the same rule at the top
 level, where every shell in the panel agrees about it.
 
+**A `return` written inside such a trap is the caller's**, and that is a
+rule rather than an axis: the frame whose trap it is has already been left
+by the time the handler runs, so the `return` acts on the frame the shell
+is returning *into*. Measured 2026-09-18 over script files under `env -i`,
+in both columns that fire a function-local EXIT trap at all — zsh by this
+rule, and ksh93 because a `function name { … }` call has a trap table of
+its own:
+
+| written | both columns |
+| --- | --- |
+| `p() { trap 'return 9' EXIT; return 3; }; p; printf after` | nothing, exit 9 |
+| `q() { p; printf 'in q'; }; q; printf 'after -> %s' "$?"` | `after -> 9` |
+| `r() { q; printf 'in r'; }; r; printf ' after'` | `in r after` |
+| `( p; printf 'in sub' )` | nothing from the subshell |
+
+So it is exactly one frame and not "the shell": with a caller, the caller
+returns and *its* caller carries on; with none, the script ends. bash and
+dash never fire a function-local EXIT trap, so the question cannot be put
+to them, and the two columns that can be asked agree — which makes it the
+core's answer rather than a switch. This shell consumed the `return` as the
+call's own, so a script carried on into the next line at the status the
+trap named (#2990).
+
+`exit` in the same body needs none of it and never did.
+
+**`FatalErrorUnderErrexitSkipsTheExitTrap`** — bash no · dash no · ksh93 no
+· zsh yes · ash no
+
+Runs no EXIT trap at all when the shell ends over an error it **reported**
+*and* `set -e` is on. zsh alone, and the discriminator is the pair rather
+than either half.
+
+Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, each row written under `trap 'echo TRAP_RAN' EXIT` and run
+twice — once plain and once with `set -e` in front:
+
+| row | plain | under `set -e` |
+| --- | --- | --- |
+| `set -Z` | ends, `TRAP_RAN` | ends, **no** `TRAP_RAN` |
+| `readonly r=1; readonly r=2` | ends, `TRAP_RAN` | ends, **no** `TRAP_RAN` |
+| `break` | ends, `TRAP_RAN` | ends, **no** `TRAP_RAN` |
+| `set -u; echo "$nosuch"` | ends, `TRAP_RAN` | ends, **no** `TRAP_RAN` |
+| `echo $((1/0))` | ends, `TRAP_RAN` | ends, **no** `TRAP_RAN` |
+| `false` | runs on, `TRAP_RAN` | ends, `TRAP_RAN` |
+| `exit 3` | ends, `TRAP_RAN` | ends, `TRAP_RAN` |
+| `echo "${nosuch?word}"` | ends, `TRAP_RAN` | ends, `TRAP_RAN` |
+| `shift 5` | runs on, `TRAP_RAN` | ends, `TRAP_RAN` |
+| `unset -Z` | runs on, `TRAP_RAN` | ends, `TRAP_RAN` |
+| `cd /nonexistent` | runs on, `TRAP_RAN` | ends, `TRAP_RAN` |
+| `: > /nonexistent/x` | runs on, `TRAP_RAN` | ends, `TRAP_RAN` |
+
+The rows that lose the handler are exactly the ones the shell reported and
+gave up over — `abandonError` and `abandonUsage` in `interp/fileabandon.go`
+— and never the ones it was asked to make. `false` and `exit 3` keep it,
+which says the option is not enough on its own; the same rows keep it with
+the option off, which says the error is not either. `${x?word}` keeps it in
+this column because that operator is a *request to stop* here rather than
+an error — see `ParamErrorIsAnExitRequest` — a classification this shell
+already had.
+
+bash, dash, ksh93 and BusyBox ash run the trap on every row of that table.
+
+It reaches further than the case it was filed on: #2744 recorded it as a
+refused `set` option, and the same rows hold for a readonly reassignment, a
+`break` outside a loop, an unset parameter under `set -u` and a division by
+zero.
+
+Read without asking. A shell that has chosen nothing runs the trap, which
+is what the other four columns do and what a cleanup handler is written
+expecting.
+
+**`SetAppliesTheWordsAfterARefusedOption`** — bash no · dash no · ksh93 no
+· zsh yes · ash no
+
+Keeps the option loop **applying** past a word it refused. zsh alone, and
+it is a third thing rather than a reading of `SetReportsEveryBadOption`:
+that one is about how many words are *reported*, and this is about how many
+are *done*.
+
+The two split the panel differently and neither predicts the other.
+Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, reading the option table `-o` writes:
+
+| written | zsh 5.9.2 | ksh93u+ | bash 5.3.20 |
+| --- | --- | --- | --- |
+| `set -Z -x -o` | one refusal, the table, `xtrace on` | one refusal, a usage line | one refusal, a usage line |
+| `set -Z -Y -x -o` | one refusal, the table, `xtrace on` | **two** refusals, a usage line | one refusal, a usage line |
+| `set -e -Z -o` | one refusal, the table, `errexit on` | one refusal, a usage line | one refusal, a usage line |
+
+So zsh reports one bad word and applies everything, ksh93 reports every bad
+word and applies nothing, and bash, dash and BusyBox ash stop at the first
+word in both senses. The `-o` table is what makes "applies" and "reports"
+separable at all: it is written by the applying loop, so a shell that never
+reaches it never prints one, and the `-x` behind the refusal shows in it as
+`on`.
+
+The refusal is still the builtin's failure and still as fatal as the
+dialect says — what carries on is the loop, not the script. zsh's `set`
+ends a script over this, and it does so *after* the table has been written,
+which is the whole reason the row is visible. #2744.
+
 **`ExitTrapRunsOnSignalDeath`** — bash yes · dash no · ksh93 yes · zsh no
 
 Fires the EXIT trap when the shell is ending because a signal it had no

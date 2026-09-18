@@ -2132,6 +2132,14 @@ func Semantics() interp.Semantics {
 	// `${v//(b|)/<>}` under extendedglob is `<>a<><>c`.
 	s.ReplacementEmptyMatchDeclined = interp.EmptyMatchDeclinedAtTheEnd
 	s.ExitTrapIsFunctionLocal = interp.Yes
+	// And the shell runs no EXIT trap at all when it ends over an error it
+	// reported with `set -e` on. Measured 2026-09-18 over twelve rows, each
+	// written twice: a refused `set` option, a readonly reassignment, a
+	// `break` outside a loop, an unset parameter under `set -u` and a
+	// division by zero all lose the handler under the option and keep it
+	// without; `exit 3`, a plain `false` under the option and `${x?word}` all
+	// keep it. See interp.Runner.exitTrapSkippedByAFatalError (#2744).
+	s.FatalErrorUnderErrexitSkipsTheExitTrap = interp.Yes
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
 	// The operand of `exit` and of `return` is an arithmetic expression here,
 	// and alone in the panel: `return r` is the value of `r` and `return r+1`
@@ -2923,6 +2931,17 @@ func Semantics() interp.Semantics {
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
 	// and `set -oe` is `no such option: e`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// The option loop goes on *applying* the words behind one it refused,
+	// which is the other half of the same loop from SetReportsEveryBadOption
+	// and splits the panel the other way. Measured 2026-09-18 from a script
+	// file under `env -i`: `set -Z -x -o` writes one refusal, then the whole
+	// option table with `xtrace on` in it, and `set -e -Z -o` writes the
+	// table with `errexit on`. The table is what the applying loop prints, so
+	// a shell that stops at the bad word never writes one — bash, dash and
+	// BusyBox ash do not, and ksh93 does not either although it is the column
+	// that reports every bad word. The refusal is still as fatal as it was;
+	// what carries on is the loop and not the script.
+	s.SetAppliesTheWordsAfterARefusedOption = interp.Yes
 	// Every `setopt` name is an invocation word here too, and reaching it
 	// costs nothing beyond saying so: the resolver, the folding and the
 	// refusal are this dialect's option table, which `-o NAME` already goes

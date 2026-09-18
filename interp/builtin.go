@@ -1793,6 +1793,14 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 		return
 	}
 	if !r.atInvocation {
+		if r.setRefusalOwed && !r.reportsEveryBadSetOption() {
+			// A word behind one this loop has already refused, in the
+			// dialect that carries on applying rather than reporting: it
+			// reports the *first* bad word and no other. Measured, `set -Z
+			// -Y -x -o` writes one sentence there and two in the dialect
+			// that reports every one.
+			return
+		}
 		r.diagf("%s\n", msg)
 		if usage {
 			if r.reportsEveryBadSetOption() {
@@ -1931,14 +1939,14 @@ func (r *Runner) setRefusalStatus(sp setRefusalSpelling, why string) bool {
 	}
 	status := sp.status(r.diag())
 	r.setOptionStatus = status
-	if r.reportsEveryBadSetOption() {
+	if r.reportsEveryBadSetOption() || r.setAppliesPastARefusal() {
 		if !r.setRefusalOwed {
 			// The first refusal's spelling, because that is the word every
 			// other dialect stops at: what this one owes is the fatality it
 			// deferred, not a fresh one for the last word it read. ksh93 is
-			// the only dialect that gets here and it answers the two
-			// spellings alike, so the choice is unmeasurable today — which
-			// is why it is written down.
+			// the only dialect that gets here by the first route and it
+			// answers the two spellings alike, so the choice is unmeasurable
+			// today — which is why it is written down.
 			r.setRefusalSpelling = sp
 		}
 		r.setRefusalOwed = true
@@ -1946,6 +1954,19 @@ func (r *Runner) setRefusalStatus(sp setRefusalSpelling, why string) bool {
 	}
 	r.endOnSetRefusal(status, sp, why)
 	return false
+}
+
+// setAppliesPastARefusal reports whether the option loop goes on *applying*
+// the words behind one it refused — see
+// Semantics.SetAppliesTheWordsAfterARefusedOption, which is a different
+// question from how many of them are reported.
+//
+// Scoped exactly as reportsEveryBadSetOption is, and for the same reason: the
+// invocation and environment routes have parse quirks of their own that are
+// not this.
+func (r *Runner) setAppliesPastARefusal() bool {
+	return !r.atInvocation && !r.fromEnvironment &&
+		r.sem().SetAppliesTheWordsAfterARefusedOption == Yes
 }
 
 // endOnSetRefusal ends the script where a refused `set` option ends one, and

@@ -358,6 +358,11 @@ func (c *Runner) ownTables(r *Runner) {
 	// it, and copying the pointer is what keeps a subshell looking at the
 	// parent's job rather than a snapshot of it.
 	c.redirFds = slices.Clone(r.redirFds)
+	// The chain of names an arithmetic value is being resolved through is
+	// pushed and popped around each resolution, so a clone evaluating its own
+	// arithmetic must not write into the parent's array — the cycle bound
+	// reads it back to decide whether a name has come round on itself.
+	c.arithValueNames = slices.Clone(r.arithValueNames)
 	c.jobs = slices.Clone(r.jobs)
 	c.jobOrder = slices.Clone(r.jobOrder)
 	// And the memory of the ones already reported, which a body a real shell

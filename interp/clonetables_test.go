@@ -65,6 +65,7 @@ func seedStacks(r *Runner) {
 	r.InheritedFiles = append(make([]*os.File, 0, 4), nil)
 	r.ProcessAnchor = append(make([]string, 0, 4), "seed")
 	r.redirFds = append(make([]int, 0, 4), 0)
+	r.arithValueNames = append(make([]string, 0, 4), "seed")
 	r.jobs = append(make([]*Job, 0, 4), nil)
 	r.jobOrder = append(make([]*Job, 0, 4), nil)
 	r.reaped = append(make([]*Job, 0, 4), nil)

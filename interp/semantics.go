@@ -686,6 +686,12 @@ type Semantics struct {
 	// Unspecified is right for a dialect with no such listing at all, where
 	// it is unreachable rather than unanswered.
 	PrefixInAWholeTableListing PrefixInAWholeTableListing
+	// PrefixExpandedBeforeTheRedirections decides whether a command's
+	// assignment prefix is worked through **before** its redirections are
+	// opened, so that a substitution in a value still runs when a redirection
+	// fails. See interp/prefixredirorder.go for the panel, for the third
+	// answer, and for the written order that comes with it.
+	PrefixExpandedBeforeTheRedirections PrefixRedirectionOrder
 
 	// AssignmentPrefixPersistsAfterAFunction keeps `v=9 f` set once `f` has
 	// returned, instead of giving the name back what it held before the call.
@@ -19457,7 +19463,13 @@ func PosixSemantics() Semantics {
 		GlobExpansionResults:                     Yes,
 		GlobNoMatchIsError:                       No,
 		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,
-		EchoInterpretsEscapes:                    No,
+		// XCU 2.9.1 gives the order plainly: the redirections are performed
+		// in step 3 and each variable assignment is expanded in step 4. So
+		// the standard's answer is that the redirections open first, which
+		// is what zsh, dash and BusyBox ash do; bash and ksh93 are the
+		// departures and say so in their own presets.
+		PrefixExpandedBeforeTheRedirections: PrefixExpandedBeforeRedirectionsNever,
+		EchoInterpretsEscapes:               No,
 		// POSIX has `echo` and `printf` exit greater than zero when "an
 		// error occurred", and a write that went nowhere is one; dash
 		// complies. zsh is the holdout, keeping status 0.
@@ -20577,6 +20589,14 @@ func CoreSemantics() Semantics {
 		// answer is one shell's register and not a second reading of `$?`.
 		BareExitReportsTheUnitsOwnStatus: No,
 		LengthOfSpecialIsCount:           Yes,
+		// The redirections open first, which is the standard's own order —
+		// XCU 2.9.1 performs them in step 3 and expands the assignments in
+		// step 4 — and three of the five columns. Answered here rather than
+		// left to refuse because the question is asked of every command that
+		// carries a prefix at all, so a refusal would be the substrate
+		// refusing `x=1 cmd`. bash and ksh93 are the departures and say so
+		// themselves. See interp/prefixredirorder.go.
+		PrefixExpandedBeforeTheRedirections: PrefixExpandedBeforeRedirectionsNever,
 		// A clustered `-abc` leaves OPTIND naming the word until its last
 		// letter has been read, which is what four of the six columns do and
 		// what a script shifting by `OPTIND-1` between calls needs. dash and

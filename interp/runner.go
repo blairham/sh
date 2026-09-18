@@ -5444,12 +5444,35 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// opens a redirection, so `a[1]=$(echo side) f >/nope/x` writes this
 	// complaint, then the file's, and never runs the substitution. See
 	// interp/prefixsubscript.go.
-	r.refuseSubscriptedPrefixes(c.Assigns)
+	early, answered := r.prefixExpandedBeforeTheRedirections(c.Assigns, argv)
+	if !answered {
+		return nil
+	}
+	if !early {
+		r.refuseSubscriptedPrefixes(c.Assigns)
+	}
 	if r.refusePrefixesEarly(c.Assigns, argv) {
 		return nil
 	}
 	defer func() { r.prefixTraceAssigns, r.prefixTraceValues = nil, nil }()
-	if tracesPrefix && !prefixFollows {
+	tracedHere := false
+	if early {
+		// The ordered walk two columns make before they open anything: the
+		// refusals and the values in the order the script wrote them, and the
+		// per-entry trace line with them where the shell writes one. See
+		// interp/prefixredirorder.go. After the frozen-name check above, so
+		// the column that refuses a prefix before it evaluates anything still
+		// evaluates nothing.
+		tracedHere = r.walkThePrefixBeforeTheRedirections(c.Assigns,
+			tracesPrefix && !prefixFollows && r.tracesEachPrefixEntryOnItsOwnLine())
+		if r.unspecified {
+			return nil
+		}
+	}
+	if tracedHere {
+		// The prefix's lines are written; the command's is all that is left.
+		r.traceCommand(argv)
+	} else if tracesPrefix && !prefixFollows {
 		// Ahead of the redirections, which is measured and not incidental:
 		// `z=1 cmd >/nope/f` writes `+ z=1` and `+ cmd` and *then* the
 		// complaint about the file, in bash and in dash alike. After the

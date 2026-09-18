@@ -111,6 +111,9 @@ func Semantics() interp.Semantics {
 	// special builtin here so the prefix has *persisted* by then and there is
 	// no second table to tell apart from the first. The axis needs a shell
 	// whose prefix is taken back, and this is not one (#3446).
+	// The redirections are opened first: measured 2026-09-18, `w=$(echo S
+	// >&2) f > /nope/x` writes the file complaint alone, at 2 (#3449).
+	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// This shell has no declaration word but `readonly` and `export`, both
 	// special builtins whose prefix persists here by the axis above — so the

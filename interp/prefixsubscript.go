@@ -99,25 +99,43 @@ func subscriptedPrefixSpelling(a *syntax.Assign) string {
 // one, two or three assignments, and a list is the shape of state a route
 // forgets to clear.
 func (r *Runner) refuseSubscriptedPrefixes(assigns []*syntax.Assign) {
-	if !aPrefixIsSubscripted(assigns) {
-		return
-	}
-	switch r.sem().SubscriptedAssignmentPrefix {
-	case SubscriptedPrefixStoresTheElement:
-		return
-	case SubscriptedPrefixIsRefused:
-	default:
-		r.diagf("%s\n", r.unanswered("a subscripted assignment written as a command prefix"))
-		r.status, r.unspecified = 2, true
+	if !r.subscriptedPrefixRefusalAnswered(assigns) {
 		return
 	}
 	for _, a := range assigns {
 		if !prefixIsSubscripted(a) {
 			continue
 		}
-		r.diagf("%s\n", Wording(r.diag().SubscriptedPrefixIsNotAName,
-			"`%[1]s': not a valid identifier", subscriptedPrefixSpelling(a)))
+		r.refuseOneSubscriptedPrefix(a)
 	}
+}
+
+// subscriptedPrefixRefusalAnswered settles the dialect's reading of a
+// subscripted prefix and reports whether there is anything left to refuse.
+//
+// Split out of the loop so that the **ordered** walk can share it: the reading
+// is one question about the command and the refusal is one line per word, and
+// a second copy of the first is how the two walks would come to refuse in
+// different shells. See interp/prefixredirorder.go.
+func (r *Runner) subscriptedPrefixRefusalAnswered(assigns []*syntax.Assign) bool {
+	if !aPrefixIsSubscripted(assigns) {
+		return false
+	}
+	switch r.sem().SubscriptedAssignmentPrefix {
+	case SubscriptedPrefixStoresTheElement:
+		return false
+	case SubscriptedPrefixIsRefused:
+		return true
+	}
+	r.diagf("%s\n", r.unanswered("a subscripted assignment written as a command prefix"))
+	r.status, r.unspecified = 2, true
+	return false
+}
+
+// refuseOneSubscriptedPrefix is the complaint for one such word.
+func (r *Runner) refuseOneSubscriptedPrefix(a *syntax.Assign) {
+	r.diagf("%s\n", Wording(r.diag().SubscriptedPrefixIsNotAName,
+		"`%[1]s': not a valid identifier", subscriptedPrefixSpelling(a)))
 }
 
 // subscriptedPrefixDropped reports whether a prefix entry is one this dialect

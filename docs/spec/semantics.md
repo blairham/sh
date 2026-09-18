@@ -434,6 +434,63 @@ unreachable rather than unanswered: neither has a `typeset`, `export -p` is
 their only whole-table declaration listing, and `export` is a special builtin
 there whose prefix has *persisted* by the time the listing runs — so there is
 no second table to tell apart from the first.
+## A prefix against the command's redirections
+
+Measured 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with a scratch HOME, and in the digest-pinned image for the ash
+column, with `f() { :; }`:
+
+    w=$(echo S >&2) f > /nope/x
+
+| shell | stderr | status |
+| --- | --- | --- |
+| bash 5.3.20 | `S`, then the file complaint | 1 |
+| ksh93u+ 2012-08-01 | `S`, then the file complaint | 1 |
+| zsh 5.9.2 | the file complaint alone | 1 |
+| dash 0.5.12 | the file complaint alone | 2 |
+| BusyBox ash 1.37.0 | the file complaint alone | 1 |
+
+The side effect of a substitution in a value is the instrument: where the
+redirection fails, the substitution either ran or it did not, and it is the
+only thing that makes the order observable at all.
+
+**POSIX gives the order plainly** — XCU 2.9.1 performs the redirections in
+step 3 and expands each variable assignment in step 4 — so the standard's
+answer is that the redirections open first, which is what three of the five
+columns do. bash and ksh93 are the departures.
+
+**And ksh93's departure is narrower than bash's**, which is what makes this a
+named type rather than a bool. Measured the same day, the same probe with the
+command changed:
+
+    f (a function)     S      eval : (special)   S
+    true (builtin)     none   print (builtin)    none
+    /usr/bin/true      none   command /bin/echo  none
+
+That is exactly the set whose prefix ksh93 **keeps**. So the third answer is
+"first where the assignment is a real store", against bash's "first, whatever
+the command is".
+
+### The walk is in written order
+
+The same two columns show it with a word one of them refuses:
+
+    w=$(echo S1 >&2) a[1]=v f     bash: S1, then `a[1]': not a valid identifier
+
+This engine reported every refused subscripted word in a pass of its own,
+ahead of every value and every trace line — the same *set* of lines in a
+different order. So the refusals and the values are one walk now, and under a
+trace the per-entry lines go through the same walk:
+
+    set -x; w=1 a[1]=v q=1 f      + w=1
+                                  `a[1]': not a valid identifier
+                                  + q=1
+                                  + f
+
+The refused word's **own** value is still never expanded, which is what keeps
+the walk from being "expand everything, then refuse": `a[1]=$(echo side) f
+>/nope/x` writes the identifier complaint, then the file's, and never runs the
+substitution.
 
 ## An assignment kept in front of a builtin that is not special
 

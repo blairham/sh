@@ -867,6 +867,12 @@ func Semantics() interp.Semantics {
 	// and `c=1; c=2 declare -p c` reads `declare -x c="2"` on a name nobody
 	// exported. Measured 2026-09-16 in 5.3.20 and in 3.2.57, and bash is the
 	// only column that does either (#3437).
+	// The prefix is worked through **before** the redirections are opened, so
+	// a substitution in a value still runs when one fails: measured
+	// 2026-09-18, `f() { :; }; w=$(echo S >&2) f > /nope/x` writes `S` and
+	// then the file complaint, where zsh, dash and BusyBox ash write the
+	// complaint alone (#3449).
+	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsAlways
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOn
 	// And a listing with **no operand** does not see that prefix at all: it
 	// answers from the shell's own variables, so `export k=1; k=9 export -p`

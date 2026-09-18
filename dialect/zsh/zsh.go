@@ -1606,6 +1606,10 @@ func Semantics() interp.Semantics {
 	// z=2 typeset -p z` lists `export z=2` and `c=1; c=2 typeset -p c` lists a
 	// plain `typeset c=2`, so nothing is gained and nothing taken off.
 	// Measured 2026-09-16 in 5.9.2 (#3437).
+	// The redirections are opened first, so a substitution in a prefix's value
+	// never runs when one fails: measured 2026-09-18, `w=$(echo S >&2) f >
+	// /nope/x` writes the file complaint alone (#3449).
+	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// And a listing with no operand sees the prefix's entry as an ordinary
 	// one: its value is written and the attribute tables say the rest, so

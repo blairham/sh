@@ -52,7 +52,16 @@ func (r *Runner) wordForRun(w *syntax.Word) *syntax.Word {
 			// bash, with the two other words on the same line expanding
 			// normally. Worded through the same formatter an operand's failed
 			// second read uses, because it is the same kind of failure.
-			r.diagf("%s\n", r.diag().ParseFailure(err))
+			if wording := r.diag().SecondReadingBadSubstitution; wording != "" {
+				// The column that reaches this at all words it against the
+				// **brace** and names the word as it was written, which is a
+				// different sentence from the parse-time one the same shell
+				// gives the same text — see
+				// Diagnostics.SecondReadingBadSubstitution.
+				r.diagf("%s\n", Wording(wording, "", syntax.PrintWord(w)))
+			} else {
+				r.diagf("%s\n", r.diag().ParseFailure(err))
+			}
 			r.expandErr = true
 			return w
 		}

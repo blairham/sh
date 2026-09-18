@@ -589,6 +589,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	assignPrefix := r.posixSavedAssignPrefix
 	aliasReserved := r.posixSavedAliasReserved
 	quoteProtects := r.posixSavedQuoteProtects
+	funcSpecial := r.posixSavedFuncSpecial
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
@@ -610,6 +611,8 @@ func (r *Runner) SetPosixMode(on bool) {
 		bareListing = posixListing(r.posixSavedBareListing)
 		r.posixSavedBadOption = r.sem().BadOptionToSpecialBuiltinFatal
 		badOption = r.sem().BadOptionToSpecialBuiltinFatalInPosixMode
+		r.posixSavedFuncSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionName
+		funcSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionNameInPosixMode
 		r.posixSavedBadSetName = r.sem().BadSetOptionNameFatal
 		r.posixSavedBadSetLetter = r.sem().BadSetOptionLetterFatal
 		badSetName = r.sem().BadSetOptionNameFatalInPosixMode
@@ -701,6 +704,12 @@ func (r *Runner) SetPosixMode(on bool) {
 		// that asserted the standard's answer on the way out would hand it
 		// bash's (#1296).
 		s.FunctionNameWhenTheDefinitionRuns = funcName
+		// And a name that **is** a name and is a special builtin, which is a
+		// separate question from the one above and reaches a separate set:
+		// there the word is not a name at all, here it is one the mode
+		// declines to bind. Saved and restored the same way, since a script
+		// may enter the mode, define nothing, and leave it (#2987).
+		s.SpecialBuiltinNameIsNotAFunctionName = funcSpecial
 		// The fifth, sixth and seventh, and the first the mode moves that
 		// are about what a builtin *writes* rather than about what ends a
 		// script. Measured 2026-09-12 on bash 5.3.15 and the 3.2.57 macOS

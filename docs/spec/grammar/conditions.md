@@ -368,6 +368,45 @@ Two boundaries the same measurement draws, and neither is this rule:
 - The opener also ends the word before it: `echo a<(:)b` writes three
   fields in ksh93 where this shell writes one.
 
+## An operand whose expansion failed ends the condition
+
+    [[ $((1/0)) -eq 0 ]]
+
+The expansion fails, every column says so, and what the condition then
+answers is where they part. Measured 2026-09-18, script files under
+`env -i PATH=/usr/bin:/bin LC_ALL=C`, with a `printf` on either side:
+
+| shell | what happens |
+| --- | --- |
+| bash 5.3.20, bash 3.2.57 | the division is reported, the condition is **false** at 1, and the next line runs |
+| zsh 5.9.2, ksh93u+, BusyBox ash | the division is reported and the script ends |
+
+So the panel needs **no axis of its own here**: a failed expansion is
+already fatal in three of the four columns and already not in the fourth,
+which `Semantics.FailedExpansionAbandonsTheLine` and
+`Semantics.FatalErrorStatusIsOne` answer. What was missing is that the
+condition asked neither of them — the failed expansion left an empty
+string, and an empty string compares equal to zero.
+
+**The condition is abandoned whole rather than the primary being false**,
+which two shapes say and a plain false could not:
+
+| written | bash | a false primary would give |
+| --- | --- | --- |
+| `[[ ! $((1/0)) -eq 0 ]]` | 1 | 0 |
+| `[[ $((1/0)) -eq 0 \|\| 1 -eq 1 ]]` | 1 | 0 |
+
+and `[[ 1 -eq 1 \|\| $((1/0)) -eq 0 ]]` is the control: 0, with no
+division attempted at all, because the condition is evaluated left to
+right and lazily. The left operand is settled before the right one is
+expanded, so a command written in the right operand does not run.
+
+**An empty operand is not this.** `[[ "" -eq 0 ]]` and
+`[[ $nosuch -eq 0 ]]` are both 0, so the rule is about the expansion
+having failed and not about the text it left behind — which is what makes
+`[[ -z $((1/0)) ]]` and `[[ $((1/0)) == "" ]]` the sharpest rows: an empty
+string passes both and the failure answers 1 (#3556).
+
 ## `-gt` is numeric and `>` is a string comparison
 
     [[ 10 -gt 9 ]]  →  true

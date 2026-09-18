@@ -989,6 +989,24 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 		r.fatal("%s\n", Wording(wording, fallback, c.Name))
 		return nil
 	}
+	// And a name that **is** a name and is a special builtin, which one
+	// column refuses in POSIX mode and every column takes outside it. Behind
+	// the punctuation check above, because a name carrying punctuation is
+	// not one of the roster's and the two refusals cannot both fire.
+	if r.IsSpecialBuiltinHere(c.Name) &&
+		r.ask(r.sem().SpecialBuiltinNameIsNotAFunctionName,
+			"a function named after a special builtin being refused") {
+		// 2 rather than the dialect's generic fatal status, which is 1 in
+		// the one column that makes this refusal — the same split
+		// condWrongArity records, and written here for the same reason: the
+		// number is the refusal's and not the shell's. Measured 2026-09-18,
+		// `set -o posix; export() { :; }; printf b` prints nothing and exits
+		// 2 where the same shell's ordinary fatal error exits 1.
+		r.diagf("%s\n", Wording(r.diag().FunctionNameIsASpecialBuiltin,
+			"%[1]s: is a special builtin", c.Name))
+		r.endTheScriptAt(2)
+		return nil
+	}
 	if r.unspecified {
 		r.status = 2
 		return nil

@@ -37,13 +37,23 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 		// primary writes each of them from inside the walk below. One tracer
 		// answers both; see condTrace.
 		defer r.beginConditionTrace()()
-		r.unspecified = false
+		// The same clearing a compound command's heading does, and for the
+		// same reason: an operand is expanded before the condition decides
+		// anything, and a failure left over from the previous command would
+		// abandon this one. See Runner.beginHeading.
+		r.beginHeading()
 		ok, err := r.evalCond(c.Expr)
 		if r.unspecified {
 			r.status = 2
 			return nil
 		}
 		if err != nil {
+			if errors.Is(err, errCondOperandFailed) {
+				// An operand whose expansion failed, already complained
+				// about where it failed and already ended whatever this
+				// dialect ends. The status failedHeading left stands.
+				return nil
+			}
 			// A status the condition produced for itself, already complained
 			// about where it happened; anything else is a failure this
 			// construct reports at 2.
@@ -173,6 +183,9 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 	// one operand however it was written — which is why `[[ -z $u ]]` needs
 	// no quoting where the `[` builtin does.
 	s := r.condOperandText(x.X)
+	if r.condOperandDidNotExpand() {
+		return false, errCondOperandFailed
+	}
 	r.traceConditionPrimary(x.Op, r.traceCondOperand(s))
 	switch x.Op {
 	case "-n":
@@ -267,6 +280,9 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		return false, err
 	}
 	leftMarked := r.condOperand(x.X)
+	if r.condOperandDidNotExpand() {
+		return false, errCondOperandFailed
+	}
 	left := syntax.UnmarkArithValue(leftMarked)
 
 	if pattern {
@@ -296,6 +312,9 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	// where every shell that has the construct puts it — and because the
 	// expansion must happen exactly once however many readers it has.
 	rightMarked := r.condOperand(x.Y)
+	if r.condOperandDidNotExpand() {
+		return false, errCondOperandFailed
+	}
 	right := syntax.UnmarkArithValue(rightMarked)
 	r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(right))
 
@@ -707,4 +726,39 @@ func (r *Runner) regexMatch(pat, left string) (bool, error) {
 	r.recordRegexMatch(m, took)
 	r.publishRegexCapture(left, loc)
 	return loc != nil, nil
+}
+
+// errCondOperandFailed is a condition whose operand did not expand: the
+// complaint is already written and whatever the dialect ends is already
+// ended, so testClause takes the status that was left and says nothing more.
+var errCondOperandFailed = errors.New("condition operand did not expand")
+
+// condOperandDidNotExpand reports whether the operand just expanded failed,
+// and ends what a failed expansion ends in this dialect.
+//
+// The same question a compound command's heading asks, through the same
+// helper, and that is the whole of why the panel needs no axis of its own
+// here: a failed expansion is fatal in three of the four columns with the
+// construct and is not in the fourth, which is already measured and already
+// answered. Measured 2026-09-18, a script file under `env -i`, over
+// `[[ $((1/0)) -eq 0 ]]` with a `printf` on either side of it:
+//
+//	bash 5.3.20, bash 3.2.57   the division is reported, the condition is
+//	                           **false** at 1, and the script carries on
+//	zsh 5.9.2, ksh93u+, ash    the division is reported and the script ends
+//
+// The condition is abandoned whole rather than the primary being false,
+// which is what the two shapes past a plain reading say: `[[ ! $((1/0)) -eq
+// 0 ]]` is 1 in bash rather than the 0 a negated false would give, and
+// `[[ $((1/0)) -eq 0 || 1 -eq 1 ]]` is 1 rather than the 0 the right-hand
+// side would give. The `||` that never reaches it is the control —
+// `[[ 1 -eq 1 || $((1/0)) -eq 0 ]]` is 0 and starts no division at all.
+//
+// An **empty** operand is not this: `[[ "" -eq 0 ]]` and `[[ $nosuch -eq 0 ]]`
+// are both 0 in bash, so the row is about the expansion having failed and
+// not about the text it left behind — which is exactly what this shell used
+// to answer, the failed expansion leaving an empty string that read as zero
+// and made the comparison hold (#3556).
+func (r *Runner) condOperandDidNotExpand() bool {
+	return r.failedHeading()
 }

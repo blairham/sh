@@ -3021,6 +3021,43 @@ type Diagnostics struct {
 	// the whole of how the third value is visible from outside.
 	UnknownConditionOptionStatus int
 
+	// SecondReadingBadSubstitution is a word the parse accepted under one
+	// reading of [syntax.Dialect.QuoteProtectsTheClosingBrace] and the run
+	// divides under the other, where the `${` no longer closes. One verb: the
+	// word as it was written, enclosing quotes and all.
+	//
+	// It is a **run-time** failure belonging to the word rather than a syntax
+	// error belonging to the line — the words beside it on the same line
+	// expand normally — and the one column that reaches it words it against
+	// the **brace**, not against the quote the word opened with. Measured
+	// 2026-09-18 on bash 5.3.20 invoked as `sh`:
+	//
+	//	v=V; f(){ printf '[%s]' "${v-'a}"; echo; }; set +o posix; f
+	//	  bad substitution: no closing `}' in "${v-'a}"     status 1
+	//
+	// The same shell words the *parse-time* case against the quote, which is
+	// what makes these two questions and not one: the same text read under
+	// the protecting reading alone is `unexpected EOF while looking for
+	// matching `"'` at 2, while it is reading the file. A re-read runs on a
+	// word the parse already accepted, so there is no unmatched quote in it
+	// — the quote that closed the word is part of the text
+	// syntax.ParamExpr.RawTail holds.
+	//
+	// Empty leaves the lexer's own sentence, which is what every dialect
+	// whose POSIX mode does not move the brace scan gets, and they are all
+	// of them but one (#2969).
+	SecondReadingBadSubstitution string
+
+	// FunctionNameIsASpecialBuiltin is a definition whose name is one of the
+	// special builtins, in the state where the dialect refuses one — see
+	// [Semantics.SpecialBuiltinNameIsNotAFunctionName]. One verb: the name.
+	//
+	// Measured 2026-09-18 on bash 5.3.20 under `set -o posix` and on the same
+	// binary invoked as `sh`: ``export': is a special builtin``, quoted the
+	// way that shell quotes a reserved word, at status 2 and with the rest of
+	// the script unread.
+	FunctionNameIsASpecialBuiltin string
+
 	// UnknownCondition is `[[ … ]]` given a known conditional operator with
 	// the wrong number of operands, in the dialect whose grammar accepts
 	// that and refuses it when it runs — see

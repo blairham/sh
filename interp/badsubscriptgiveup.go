@@ -261,7 +261,7 @@ func (r *Runner) emptyDeclarationSubscript(base, sub string, hasValue bool) bool
 // reaches the builtin, removes element **zero** in bash 5.3.20 where
 // `unset 'a[]'` removes nothing, and zsh writes the arithmetic reader's
 // `bad math expression: empty string` there where it writes `invalid subscript`
-// here. That neighbour is Semantics.EmptySubscriptTextIsAMathError and this
+// here. That neighbor is Semantics.EmptySubscriptTextIsAMathError and this
 // must not answer for it — hence the test on the operand's own text.
 //
 // **And a blank subscript is not an empty one.** `a[ ]` holds whitespace and

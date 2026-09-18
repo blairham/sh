@@ -277,7 +277,7 @@ func TestAnEmptySubscriptToAStoreIsAnsweredAheadOfTheTablesKey(t *testing.T) {
 	}
 }
 
-// A subscript that is **blank** rather than empty is the neighbouring axis and
+// A subscript that is **blank** rather than empty is the neighboring axis and
 // keeps its own answer: measured, bash's `unset 'a[ ]'` removes element 0 where
 // `unset 'a[]'` removes nothing.
 func TestABlankOperandSubscriptIsNotAnEmptyOneAtTheseRoutes(t *testing.T) {
@@ -295,7 +295,7 @@ func TestABlankOperandSubscriptIsNotAnEmptyOneAtTheseRoutes(t *testing.T) {
 // measured apart from this one: `i=; unset 'a[$i]'`, single-quoted so the `$i`
 // reaches the builtin, removes element **zero** in bash 5.3.20 where
 // `unset 'a[]'` removes nothing. Semantics.EmptySubscriptTextIsAMathError is
-// that neighbour and this must not answer for it.
+// that neighbor and this must not answer for it.
 func TestASubscriptThatExpandedToNothingIsNotAWrittenEmptyOne(t *testing.T) {
 	src := "a=(1 2 3); i=\n" +
 		`unset 'a[$i]'; echo "same=$?"` + "\n" +
@@ -346,7 +346,7 @@ func emptyOpRunWith(t *testing.T, p EmptyArithSubscriptPolicy, dg Diagnostics,
 		// that a row varies the emptiness alone; one row below varies them.
 		s.BadSubscriptToUnset = BadSubscriptReported
 		s.BadSubscriptToAnOutputOperand = BadSubscriptReported
-		// The neighbouring emptinesses are answered flat for the same
+		// The neighboring emptinesses are answered flat for the same
 		// reason: a subscript that is blank, and one whose text expanded to
 		// nothing, are constructs of their own and measured apart from this.
 		s.BlankArithSubscriptIsTheEmptyExpression = No

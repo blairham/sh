@@ -2602,8 +2602,9 @@ type Semantics struct {
 	BackgroundJobInput BackgroundJobInputPolicy
 	// LastBackgroundPid is what `$!` reads before a background command has
 	// been started. See LastBackgroundPidPolicy for the answers, for the
-	// measurement, and for why the four columns need a form rather than the
-	// two flags this used to be.
+	// measurement across bash, dash, BusyBox ash, ksh93 and zsh, and for why
+	// those five columns need a form rather than the two flags this used to
+	// be.
 	LastBackgroundPid LastBackgroundPidPolicy
 	// ProcessSubstitutionIsTheLastBackgroundJob makes a process substitution
 	// set `$!` to its own body, which `wait "$!"` then waits for and reports

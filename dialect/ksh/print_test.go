@@ -116,3 +116,54 @@ func TestPrintCapitalRStopsTheOptionParser(t *testing.T) {
 		}
 	}
 }
+
+// A third dash makes the word an operand, and a long option is refused as
+// the whole word (#3163). Measured 2026-09-16 against ksh93u+ 2012-08-01
+// under `env -i` from a script file.
+//
+// Two separate things wear one shape. Option parsing ends at a bare `--` and
+// a third dash puts the word past it, so `print "--- a title ---"` prints —
+// this shell read the first two characters and refused it at 2 with the title
+// missing. And where the word genuinely is a long option, the refusal quotes
+// the word rather than the `--`, so a script can tell which one was refused.
+func TestPrintReadsALineOfDashesAsAWord(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`print ---`, "---\n"},
+		{`print ----`, "----\n"},
+		{`print '--- a title ---'`, "--- a title ---\n"},
+		// The dashes end the options exactly as any other operand does, and
+		// a letter in front of them is still read.
+		{`print -n --- x`, "--- x"},
+		{`print --- -n x`, "--- -n x\n"},
+		{`print -r ---`, "---\n"},
+		// The prefix and not the whole word: a third dash is enough,
+		// whatever follows it.
+		{`print ---x`, "---x\n"},
+		{`print ---=`, "---=\n"},
+		// The two shorter spellings are unchanged: `--` ends the options and
+		// `-` is an operand.
+		{`print -- ---`, "---\n"},
+		{`print --`, "\n"},
+		{`print -`, "\n"},
+	} {
+		out, st := runKsh(t, t.TempDir(), tc.src)
+		if st != 0 || out != tc.want {
+			t.Errorf("%s: out %q status %d, want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+	for _, tc := range []struct{ src, named string }{
+		{`print --x`, "--x"},
+		{`print --after`, "--after"},
+		{`print --1`, "--1"},
+		// The name is the word cut at its first `=`, and an empty name
+		// falls back to the single dash the reference writes there.
+		{`print --x=1`, "--x"},
+		{`print --=`, "-"},
+	} {
+		out, st := runKsh(t, t.TempDir(), tc.src)
+		if st != 2 || !strings.Contains(out, "print: "+tc.named+": unknown option") ||
+			!strings.Contains(out, "Usage: print [ options ] [string ...]") {
+			t.Errorf("%s: out %q status %d, want %q named and the long usage at 2", tc.src, out, st, tc.named)
+		}
+	}
+}

@@ -4711,6 +4711,39 @@ type Semantics struct {
 	// never reached there (#3089).
 	PrintfHexFloatZeroFillPrecedesThePrefix Answer
 
+	// PrintfFloatHalf is how a floating conversion resolves an operand that
+	// falls *exactly* halfway at the precision asked for.
+	//
+	// Asked for nothing else, because nothing else separates the readings:
+	// `printf '%.2f' 1.005 2.675` is `1.00` and `2.67` in every column,
+	// since neither value is a half once it is a double. An operand the
+	// reader cannot hold exactly never reaches this.
+	//
+	// See PrintfFloatHalfPolicy for the measurements and for the two facts
+	// about the one column that departs which are written down there rather
+	// than modeled.
+	PrintfFloatHalf PrintfFloatHalfPolicy
+
+	// PrintfUnknownEscapeDropsTheBackslash writes the character alone for an
+	// escape a printf *format* does not define, rather than the backslash
+	// and the character.
+	//
+	// Measured 2026-09-18 under `LC_ALL=C` from a script file, `printf
+	// '[\q][\z][\8][\-]'`: bash 5.3.20, bash 3.2.57, zsh 5.9.2, dash 0.5.12
+	// and BusyBox ash 1.37.0 all write `[\q][\z][\8][\-]` and ksh93u+
+	// 2012-08-01 writes `[q][z][8][-]`.
+	//
+	// The format's site alone. A `%b` operand keeps the backslash in all six
+	// — `printf '%b' '[\q]'` is `[\q]` in ksh93u+ too — which is the same
+	// two-site split PrintfEscEscape and PrintfBEscEscape are, arrived at
+	// from the opposite direction: there one column takes a letter at one
+	// site only, here one column drops a backslash at one site only.
+	//
+	// A format ending in a backslash is not this question and is unanimous:
+	// `printf 'a\'` writes `a\` in every column, ksh93u+ included, because
+	// there is no character for the backslash to have been in front of.
+	PrintfUnknownEscapeDropsTheBackslash Answer
+
 	// RedirectsUseEveryTarget makes a stream redirected more than once use
 	// *every* file it names rather than only the last, in both directions:
 	// output goes to all of them and input arrives as all of them in the
@@ -18929,6 +18962,15 @@ func PosixSemantics() Semantics {
 		// column that reads the text as written, at both letters.
 		PrintfEscEscape:        No,
 		PrintfCapitalEscEscape: No,
+		// XCU leaves a format's undefined escape sequence undefined, so
+		// there is nothing for the standard to defer to and the standing
+		// answer is the one five of the six columns give: the two
+		// characters as they were written.
+		PrintfUnknownEscapeDropsTheBackslash: No,
+		// A floating conversion is C's `printf()` again, and C rounds to the
+		// current rounding direction — to nearest, ties to even, on every
+		// machine this is built for.
+		PrintfFloatHalf: PrintfFloatHalfToEven,
 		// POSIX has `kill -l` turn the status of a signal-killed process
 		// back into a name, which one subtraction does; it says nothing
 		// about a second, gives no output for a number that names nothing,
@@ -20374,6 +20416,89 @@ func (r *Runner) statusArgument(builtin string) StatusArgumentPolicy {
 	if p == StatusArgUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered(builtin+": this argument")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// PrintfFloatHalfPolicy is how a floating conversion resolves an operand that
+// falls exactly halfway at the precision asked for.
+//
+// Two answers, and the second one is a rule rather than a rounding direction
+// — which is why this is an enumeration and not a bool that says "away from
+// zero". One column resolves a half *both* ways depending on where the
+// value's leading digit sits, so a field that could say only one of them
+// would have to be wrong about half the rows it governs.
+//
+// Measured 2026-09-18 under `LC_ALL=C` from a script file. bash 5.3.20, bash
+// 3.2.57, zsh 5.9.2, dash 0.5.12 and BusyBox ash 1.37.0 answer every row
+// below the same way and ksh93u+ 2012-08-01 answers every one of them
+// differently:
+//
+//	printf '%.0f %.0f %.0f' 2.5 4.5 -2.5   five: 2 4 -2       ksh93: 3 5 -3
+//	printf '%.1f' 0.25                     five: 0.2          ksh93: 0.3
+//	printf '%.2f' 0.125                    five: 0.12         ksh93: 0.13
+//	printf '%.0e' 2.5                      five: 2e+00        ksh93: 3e+00
+//	printf '%.2g' 0.125                    five: 0.12         ksh93: 0.13
+//	printf '%.4f' 0.09375                  five: 0.0938       ksh93: 0.0937
+//	printf '%.0f' 0.5                      five: 0            ksh93: 0
+//
+// The last two rows are what the second constant's name is about, and both
+// are halves the same shell takes the *other* way. 0.09375 is under a tenth,
+// where ksh93u+ writes `0.0937` — neither nearest nor away — and so are the
+// rest of the halves down there: `%.3f` of 0.0625 and 0.0875 are `0.062` and
+// `0.087`. And 0.5 at `%.0f` is a half the precision reaches no digit of,
+// where every column writes `0` — which is agreement arrived at from the
+// opposite side, and the row that keeps the away reading from spreading to a
+// value it does not govern.
+//
+// **Two further facts about that column are written down here rather than
+// modeled**, so that a later reader does not take this axis for more than it
+// is. Measured the same day: ksh93u+ renders from the *shortest decimal* that
+// names the value rather than from the value — `printf '%.20f' 0.15` is
+// `0.15000000000000000000` there against bash's `0.14999999999999999445` —
+// so it writes `0.2` for `%.1f` of 0.15 where the double is below the half
+// and the other five write `0.1`. And it is not self-consistent between
+// adjacent precisions: `%.2f` of 0.995 is `0.99` there while `%.1f` of it is
+// `1.0`, and `%.3f` of 0.0999 is `0.099` while `%.2f` of it is `0.10`.
+// Neither is a rounding rule, neither is reachable through an exact half, and
+// this shell disagrees with that column on those rows before this axis and
+// after it alike.
+type PrintfFloatHalfPolicy uint8
+
+const (
+	// PrintfFloatHalfUnspecified is no answer, and is refused like any other.
+	PrintfFloatHalfUnspecified PrintfFloatHalfPolicy = iota
+	// PrintfFloatHalfToEven takes the neighbor whose last digit is even,
+	// which is C's rounding direction on every machine this is built for:
+	// bash, zsh, dash and BusyBox ash.
+	PrintfFloatHalfToEven
+	// PrintfFloatHalfAwayFromZeroAboveATenth takes the larger magnitude for
+	// a value of a tenth or more whose precision keeps a digit, and the
+	// smaller for everything else: ksh93. The name states the whole rule
+	// because the rule is the reading — see the type's own comment for the
+	// rows on each side of it.
+	PrintfFloatHalfAwayFromZeroAboveATenth
+)
+
+func (p PrintfFloatHalfPolicy) String() string {
+	switch p {
+	case PrintfFloatHalfToEven:
+		return "to even"
+	case PrintfFloatHalfAwayFromZeroAboveATenth:
+		return "away from zero above a tenth"
+	}
+	return "unspecified"
+}
+
+// floatHalf resolves the axis, and only for an operand that really is a half
+// at the precision it is being written to.
+func (r *Runner) floatHalf() PrintfFloatHalfPolicy {
+	p := r.sem().PrintfFloatHalf
+	if p == PrintfFloatHalfUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("printf: a floating conversion's exact half")))
 		r.status = 2
 		r.unspecified = true
 	}

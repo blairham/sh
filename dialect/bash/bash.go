@@ -1593,6 +1593,14 @@ func Semantics() interp.Semantics {
 	// column where the two sites cannot tell each other apart.
 	s.PrintfEscEscape = interp.Yes
 	s.PrintfCapitalEscEscape = interp.Yes
+	// An escape a format does not define keeps its backslash — `printf
+	// '[\q][\z][\8][\-]'` is `[\q][\z][\8][\-]` — and a floating
+	// conversion's exact half goes to the even neighbor: `printf '%.0f
+	// %.0f %.0f' 2.5 4.5 -2.5` is `2 4 -2` and `%.2f` of 0.125 is `0.12`.
+	// Measured 2026-09-18 under `LC_ALL=C` from a script file; ksh93 is the
+	// one column on the other side of both.
+	s.PrintfUnknownEscapeDropsTheBackslash = interp.No
+	s.PrintfFloatHalf = interp.PrintfFloatHalfToEven
 	s.PrintfBEscEscape = interp.Yes
 	s.PrintfBCapitalEscEscape = interp.Yes
 	// `printf '%b' 'a\101Z'` is `aAZ`: the octal needs no `\0` to introduce

@@ -1221,6 +1221,15 @@ func Semantics() interp.Semantics {
 	// `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from a script file with
 	// each row in a subshell (#3241).
 	s.ErrorOperatorSeesOnlyTheBareElement = interp.Yes
+	// And the **colon** form of the same operator tests the array's first
+	// element alone, however many non-empty elements follow it:
+	// `a=("" c); "${a[@]:-x}"` is `[x]` and `"${a[@]:+y}"` is `[]`, where
+	// bash 5.3.20 and zsh 5.9.2 both keep the two elements. `b=(c "")` is
+	// the control and is `[c][]` in every column. The `[*]` spelling answers
+	// with the `[@]` one here, which is where it parts from zsh. Measured
+	// 2026-09-18 on ksh93u+ 2012-08-01 under `env -i HOME=…
+	// PATH=/usr/bin:/bin LC_ALL=C`, from a script file (#3425).
+	s.WholeArrayColonTest = interp.WholeArrayColonTestReadsTheFirstElement
 	// A keyword-defined function's `typeset -x` is local like any other
 	// declaration; the POSIX-style function that leaks it has no scope to
 	// leak out of, which TypesetLocalNeedsKeywordFunction already answers.

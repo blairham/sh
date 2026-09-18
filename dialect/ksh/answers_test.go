@@ -133,6 +133,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ErrorOperatorSeesOnlyTheBareElement", s.ErrorOperatorSeesOnlyTheBareElement, interp.Yes},
 		{"LengthOfAMissingElementIsRefused", s.LengthOfAMissingElementIsRefused, interp.No},
 		{"UnsetNameWithAWholeArraySubscriptIsRefused", s.UnsetNameWithAWholeArraySubscriptIsRefused, interp.No},
+		// And the colon form of the same operator reads the array's first
+		// element alone (#3425).
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},

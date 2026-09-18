@@ -110,6 +110,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"LengthOfAMissingElementIsRefused", s.LengthOfAMissingElementIsRefused, interp.Yes},
 		{"UnsetNameWithAWholeArraySubscriptIsRefused", s.UnsetNameWithAWholeArraySubscriptIsRefused, interp.Yes},
 		{"ErrorOperatorSeesOnlyTheBareElement", s.ErrorOperatorSeesOnlyTheBareElement, interp.No},
+		// And the colon form counts the elements under `[@]`, so a
+		// one-element array holding "" is a value (#3425).
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},

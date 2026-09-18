@@ -97,22 +97,44 @@ func (r *Runner) indirectTargetValue(e *syntax.ParamExpr, text string) (string, 
 //
 // So the node *becomes* the target and everything below answers it, which is
 // the rewrite namerefAimedAtTheWholeArray and bareArrayAsList already make on
-// this path. Only for the plain spelling — no operator, no length, no
-// subscript of its own — which is the shape the two bash columns agree about.
-// An operator on a list-valued target is three questions and none of them is
-// this one: the trims map over the elements in both columns and join here,
-// `@Q` arrived after bash 3.2, and a slice takes the list in bash 5.3 and a
-// substring of the join in bash 3.2 — `${!v:1}` on `v='a[@]'` is `B C`
-// against ` B C` — which wants an axis before either is written down. The
-// table is in #3243.
+// this path.
+//
+// **An operator written around it comes with it**, and that is the half #3243
+// filed. The operator acts on what the target came to, so a target that is a
+// list is a list for the operator too — it maps over the elements exactly as
+// it does when the target is written out. Measured 2026-09-18 on bash 5.3.20
+// with `set -- p q r`, `a=(A B C)`, `at='@'` and `ea='a[@]'`, counting fields:
+//
+//	${!ea#A}    3:<><B><C>          ${!ea/A/z}   3:<z><B><C>
+//	${!ea%C}    3:<A><B><>          ${!ea//A/z}  3:<z><B><C>
+//	${!ea@Q}    3:<'A'><'B'><'C'>   ${!ea,,}     3:<a><b><c>
+//	${!at@Q}    3:<'p'><'q'><'r'>   ${!ea-D}     3:<A><B><C>
+//	${!at#p}    3:<><q><r>          ${!ea+S}     1:<S>
+//
+// Every one of those was **one joined field** here, so `${!ea#A}` trimmed an
+// `A` off the front of a joined string instead of off each element and three
+// fields came back as one. bash 3.2.57 agrees on the trims and drops the field
+// an operator emptied where 5.3 keeps it, which is a second and much smaller
+// question; `@Q` arrived after 3.2 and that column's refusal is its own answer
+// rather than a disagreement.
+//
+// The **slice** is the one shape the two columns really part on — `${!at:1}`
+// is three fields in 5.3 and one substring of the join in 3.2 — and it needs no
+// axis of its own here: once the node is the target, `${!at:1}` *is* `${@:1}`
+// and Semantics.SubstringOfPositionalsSlicesTheList is already the field that
+// decides it. Answering it anywhere else would be a second copy of a question
+// this shell has.
+//
+// Length and the prefix listing stay out. `${!name@}` is a different
+// construct that never resolves a target at all, and a length is answered
+// before any of this.
 //
 // The axis is read rather than asked here. An unanswered
 // Semantics.IndirectionYieldsName has to be reported once, and the scalar path
 // is where it is reported: asking twice would write the line twice for one
 // expansion.
 func (r *Runner) indirectAimedAtAList(e *syntax.ParamExpr) (*syntax.ParamExpr, bool) {
-	if !e.Indirect || e.Inner != nil || e.Index != nil || e.Length ||
-		e.Prefix != 0 || e.Op != syntax.ParamNone {
+	if !e.Indirect || e.Inner != nil || e.Index != nil || e.Length || e.Prefix != 0 {
 		return nil, false
 	}
 	if r.sem().IndirectionYieldsName != No {
@@ -133,7 +155,41 @@ func (r *Runner) indirectAimedAtAList(e *syntax.ParamExpr) (*syntax.ParamExpr, b
 	if !r.indirectNamesAList(text) {
 		return nil, false
 	}
-	return r.indirectTargetNode(e, text), true
+	node := r.indirectTargetNode(e, text)
+	if e.Op == syntax.ParamNone {
+		return node, true
+	}
+	return aimedWithTheOperator(e, node), true
+}
+
+// aimedWithTheOperator is the outer expansion with its **parameter** replaced
+// by the target the indirection resolved to, and everything else left exactly
+// as it was written.
+//
+// This way round rather than the other, and that is the point. Copying the
+// operator onto the target's node would mean listing every field an operator
+// owns — the word, the second word, the two raw texts, the global flag, the
+// anchor, the transform letter, the colon, the unreadable operand — and a
+// field added to that set later would silently stop traveling. The set this
+// lists instead is what says *which parameter* the expansion is about, which
+// is small, and a new member of it is a new way to name a parameter rather
+// than a new operator.
+//
+// The target's node is never written to. It is held for the rest of the span
+// (see Runner.indirectTargetNode), so a mutation here would reach the next
+// reader of the same text.
+func aimedWithTheOperator(e *syntax.ParamExpr, node *syntax.ParamExpr) *syntax.ParamExpr {
+	aimed := *e
+	aimed.Indirect = false
+	aimed.Name = node.Name
+	aimed.Index = node.Index
+	aimed.IndexText = node.IndexText
+	aimed.IndexFlags = node.IndexFlags
+	aimed.IndexRange = node.IndexRange
+	aimed.IndexDots = node.IndexDots
+	aimed.Leading = node.Leading
+	aimed.BareIndexText = nil
+	return &aimed
 }
 
 // indirectNamesAList reports whether a resolved text names the positional

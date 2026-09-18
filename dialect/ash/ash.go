@@ -960,6 +960,17 @@ func Semantics() interp.Semantics {
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// A trim on `$@` runs over the whole list once, as it does in dash.
 	s.OperatorDistributesOverTheFieldList = interp.No
+	// And a **non-global** replacement over that joined list ends it at the
+	// parameter it replaced in: `set -- xb alpha beta; n "${@/a/-}"` is
+	// `2:<xb><-lpha>` here, where the join reading alone would keep `beta`
+	// and bash 5.3.20, zsh 5.9.2 and ksh93u+ all replace in every parameter.
+	// A pattern that matches nothing keeps all three, the global `//` cuts
+	// nothing, and the unquoted spelling is cut identically — so it is the
+	// first match and not the quoting. dash 0.5.12, the other column that
+	// joins, has no `${x/pat/rep}` at all. Measured 2026-09-18 on BusyBox
+	// ash 1.37.0 in the digest-pinned Alpine image, with `cmd/ash`
+	// cross-compiled into the same container (#3413).
+	s.ReplacementEndsTheJoinedFieldList = interp.Yes
 	// And nor does it over `"$*"`, which is dash's and zsh's answer:
 	// `"${*#a}"` over `aa ab ba` is `a ab ba`. Measured 2026-09-16, and
 	// unanswered until now, so the construct was a refusal.

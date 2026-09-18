@@ -1053,6 +1053,9 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// And a job it has already reported stays waitable by its process id.
 	s.WaitRemembersAReapedJob = interp.Yes
+	// `Terminated: 15` on the reap, which is the same sentence this shell
+	// writes for a foreground command a signal ended.
+	s.WaitReportsTheSignalThatEndedTheJob = interp.Yes
 	s.WaitNextJob = interp.WaitNextJobAbsent
 	// Nor `-p`: `wait: Illegal option -p`. Measured 2026-09-13.
 	s.WaitPNamesTheFinishedJob = interp.No
@@ -1231,6 +1234,7 @@ func Semantics() interp.Semantics {
 	// job` — so the listing is the whole of the evidence here.
 	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
+	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
 
 	// `jobs`' letters: POSIX's pair and nothing else. `-r`, `-s`, `-n` and
 	// `-x` are all "Illegal option" here, which is why the letter set is a

@@ -892,6 +892,9 @@ func Semantics() interp.Semantics {
 	// `wait %1; wait "$p"` is 127 there where it is the job's status in
 	// every other column measured.
 	s.WaitRemembersAReapedJob = interp.No
+	// And it says so in a sentence of its own — see
+	// Diagnostics.WaitSignalNotice.
+	s.WaitReportsTheSignalThatEndedTheJob = interp.Yes
 	s.WaitNextJob = interp.WaitNextJobAbsent
 	// `wait -p` is not ksh93's either: `wait: -p: unknown option`, beside
 	// its own usage line. Measured 2026-09-13.
@@ -2551,6 +2554,10 @@ func Semantics() interp.Semantics {
 	// here too — so what differs is only whether a later `&` takes it back.
 	s.StoppedJobTakesTheCurrentJobMarker = interp.No
 	s.JobsListFinishedJobs = interp.Yes
+	// A `&` job is reaped under the monitor and nowhere else, so with no
+	// monitor the listing goes on saying the job is running — after a
+	// `wait` that reaped it, too.
+	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.Yes
 
 	// `jobs`' letters, as its own usage line gives them: `-lnp`. The state
 	// filters `-r` and `-s` are unknown options here.
@@ -3269,13 +3276,19 @@ func Diagnostics() interp.Diagnostics {
 		// measured through a pseudo-terminal on 2026-09-05.
 		JobResumedInBackground: "[%[1]d]\t%[3]s&",
 		JobUnknownCommand:      "<command unknown>",
-		// ksh93 lists a job that has already ended as "Running", and it is
-		// not a reaping race — it still says so after `wait`. Recorded as
-		// the word ksh uses rather than corrected, which would be inventing
-		// a shell that does not exist. The leading space is ksh's too: see
-		// JobLine below.
-		JobDone:       " Running",
-		JobDoneNotice: " Done",
+		// A job that has ended is `Done`, and `Done(N)` where it ended with
+		// a status. The leading space is ksh's: see JobLine below.
+		//
+		// This used to be spelt ` Running`, on the measurement that ksh93
+		// lists an ended job as running and says so even after a `wait`.
+		// That measurement was made with the monitor off, where it holds —
+		// and it is the shell not having reaped the job rather than the word
+		// it writes, which `set -m` shows: the same listing is `Done(7)`
+		// there. The blind spot is
+		// Semantics.EndedJobIsListedAsRunningWithoutTheMonitor now, and
+		// these are the words for a job this shell knows has ended (#3537).
+		JobDone:   " Done",
+		JobExited: " Done(%[1]d)",
 		// The name first, then the verb with the OS string bracketed after
 		// it — the same shape ksh93 uses for `.`, which DotCannotOpen
 		// already says.

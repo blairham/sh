@@ -770,6 +770,9 @@ func Semantics() interp.Semantics {
 	// alike. See the axis for the narrower answer this same binary gives
 	// when it is invoked as `sh`.
 	s.WaitRemembersAReapedJob = interp.Yes
+	// Nothing is said about the signal that ended a job a `wait` reaped,
+	// measured — where the same death in the foreground is reported.
+	s.WaitReportsTheSignalThatEndedTheJob = interp.No
 	s.WaitNextJob = interp.WaitNextJobFirstToFinish
 	// And `-p var` beside it, which names the job the status came from.
 	// bash 5's letter alone: the 3.2 build answers `wait: -p: invalid
@@ -2293,6 +2296,7 @@ func Semantics() interp.Semantics {
 	// unmarked at all, which no reading of the table's order produces.
 	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
+	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
 
 	// `jobs`' letters. bash has the widest set in the panel: POSIX's `-l`
 	// and `-p`, the state filters `-r` and `-s`, `-n` for what has changed

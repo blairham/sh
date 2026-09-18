@@ -83,6 +83,20 @@ func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
 		r.status, r.unspecified = status, false
 		return
 	}
+	r.killedNotice(sig, pid, r.killedCommandText())
+}
+
+// killedNotice is the sentence itself, once, for both routes that write it.
+//
+// The foreground route above asks the questions a foreground command raises —
+// whether an interrupt ends the script, whether a pipeline element that is not
+// the last is remarked on, whether a command substitution hides it — and then
+// arrives here. A `wait` that reaped a background job killed by a signal asks
+// none of those and arrives here too, which is what
+// Semantics.WaitReportsTheSignalThatEndedTheJob is for. The wording is shared
+// rather than written twice: a second copy is how a dialect gains a sentence
+// on one route and not the other.
+func (r *Runner) killedNotice(sig syscall.Signal, pid int, command string) {
 	dg := r.diag()
 	if sig == syscall.SIGTERM && dg.KilledCommandNoticeBareForTerminate != "" {
 		// One signal, in one shell, written with neither the location nor
@@ -95,12 +109,12 @@ func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
 		// 5.3 does; if it is fixed upstream the drift check is what will
 		// say so.
 		r.errf("%s\n", Wording(dg.KilledCommandNoticeBareForTerminate, "%-27[1]s%[2]s",
-			r.signalDescription(sig), r.killedCommandText()))
+			r.signalDescription(sig), command))
 		return
 	}
 	// Three verbs, and the dialects use one, two and all three of them.
 	notice := Wording(dg.KilledCommandNotice, "%5[1]d %-27[2]s%[3]s",
-		pid, r.signalDescription(sig), r.killedCommandText())
+		pid, r.signalDescription(sig), command)
 	if dg.KilledCommandNoticeUnprefixed {
 		r.errf("%s\n", notice)
 		return

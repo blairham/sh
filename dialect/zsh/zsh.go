@@ -599,6 +599,13 @@ func Dialect() syntax.Dialect {
 	// is `{x}` here and `${x}` in the other shell that stops at it.
 	d.ContinuationStopsADollarAtInDoubleQuotes = syntax.EveryDollarForm &^ syntax.DollarBareParameter
 	d.DollarGoesWhenAContinuationStopsItAtABrace = true
+	// A line continuation between the two `)` of an arithmetic expansion
+	// parts them here, so `echo "[$(( 1 + 2 )\⏎)]"` is a command
+	// substitution holding the subshell `( 1 + 2 )` — `command not found: 1`,
+	// and the expansion empty — where bash 5.3, bash 3.2 and dash answer 3.
+	// The *opener* is not this: `echo "[$(\⏎( 1 + 2 ))]"` is 3 here as it is
+	// in bash, which is why the two ends are two fields.
+	d.ContinuationPartsTheArithmeticCloser = true
 	// A run of digits after an unbraced `$` is one positional parameter here.
 	// Measured 2026-09-15 with `set -- 1 2 3 4 5 6 7 8 9 ten eleven`: `$10` is
 	// `ten` and `$11` is `eleven` in this shell, where bash 5.3, bash 3.2,

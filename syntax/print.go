@@ -1658,7 +1658,12 @@ func (p *printer) span(s Span) {
 		// minimal shells have no such reading, and the space is what a body
 		// of theirs was written with in the first place — the construct is
 		// unreachable there without it.
-		if strings.HasPrefix(s.Value, "(") && doubleParenIsArith("$("+s.Value+")", 0) {
+		// Asked with both delimiter pairs *joined*, which is the reading that
+		// finds arithmetic in the most texts and so writes the space in the
+		// most. A space nobody needed is layout; a space omitted where some
+		// dialect would read the construct back as arithmetic is a changed
+		// program. See Dialect.ContinuationPartsTheArithmeticOpener.
+		if strings.HasPrefix(s.Value, "(") && doubleParenIsArith("$("+s.Value+")", 3, false) {
 			p.str("$( " + s.Value + ")")
 			return
 		}

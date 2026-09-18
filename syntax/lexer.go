@@ -808,6 +808,20 @@ func (l *Lexer) next() Token {
 	// in still finds it.
 	if l.dialect.ArithCommand && !l.inCondition && !l.inCaseArm && !l.inOperand &&
 		l.peek() == '(' && l.peekAt(1) == '(' {
+		// A line continuation standing *directly* behind the second
+		// parenthesis opens nothing in one dialect: the two parentheses and
+		// the pair are consumed, no command is produced, and reading starts
+		// again from what follows — which is why the refusals that shape
+		// draws there are at the leftovers rather than at the continuation.
+		// See Dialect.ContinuationEndsTheArithmeticCommandOpener.
+		if l.dialect.ContinuationEndsTheArithmeticCommandOpener &&
+			l.peekAt(2) == '\\' && l.peekAt(3) == '\n' {
+			l.advance() // (
+			l.advance() // (
+			l.advance() // the backslash
+			l.advance() // the newline
+			return l.next()
+		}
 		saved := *l
 		if tok, ok := l.scanArithCommand(start); ok {
 			return tok
@@ -2658,7 +2672,7 @@ func (l *Lexer) scanDelimiterSubstitution(q Quoting) Span {
 	case l.peek() == '`':
 		l.scanBackticks(q)
 	case l.peekAt(1) == '(' && l.peekAt(2) == '(':
-		l.scanParens(l.doubleParenKind(), q)
+		l.scanParens(l.doubleParenKind(0), q)
 	case l.peekAt(1) == '[':
 		l.scanBracket(q)
 	case l.peekAt(1) == '(':
@@ -2718,14 +2732,14 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		flush()
 		return []Span{l.scanDelimiterSubstitution(Unquoted)}, true
 
-	case c == '$' && l.peekAt(1+skip) == '(' && l.peekAt(2+skip) == '(':
+	case l.opensDoubleParen(skip):
 		// `$((` is arithmetic, unless the parentheses say otherwise: a
 		// command substitution whose first command is a subshell may be
 		// written with the two touching, and doubleParenKind is where the two
 		// readings are told apart. Decided here because by the time the
 		// parser sees tokens the choice has been made.
 		flush()
-		return []Span{l.scanParens(l.doubleParenKind(), Unquoted)}, true
+		return []Span{l.scanParens(l.doubleParenKind(skip), Unquoted)}, true
 
 	case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 		// The older spelling of the case above. Where the flag is off this
@@ -2874,9 +2888,9 @@ func (l *Lexer) heredocSpans() []Span {
 		// treated differently from a quoted one. Marked as double-quoted
 		// because that is what stops the result being split: a body is one
 		// blob of input, not a list of fields.
-		case c == '$' && l.peekAt(1+skip) == '(' && l.peekAt(2+skip) == '(':
+		case l.opensDoubleParen(skip):
 			flush()
-			out = append(out, l.scanParens(l.doubleParenKind(), DoubleQuoted))
+			out = append(out, l.scanParens(l.doubleParenKind(skip), DoubleQuoted))
 			litPos = l.pos()
 		case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 			flush()
@@ -3035,9 +3049,9 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Spa
 		// scripts spell a substitution — so they are spans of their own here
 		// too. The quoting is carried on them because it decides whether the
 		// result is split afterwards, which is the only thing it changes.
-		case c == '$' && l.peekAt(1+skip) == '(' && l.peekAt(2+skip) == '(':
+		case l.opensDoubleParen(skip):
 			flush()
-			out = append(out, l.scanParens(l.doubleParenKind(), DoubleQuoted))
+			out = append(out, l.scanParens(l.doubleParenKind(skip), DoubleQuoted))
 			litPos = l.pos()
 		case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 			flush()
@@ -3209,14 +3223,64 @@ func (l *Lexer) Tokens() []Token {
 // unfinished `$((` is `unexpected EOF while looking for matching `)'` there,
 // and the command-substitution reading would blame a different construct for
 // text that never closed either one.
-func (l *Lexer) doubleParenKind() SpanKind {
+// skip is how far the `$` at the cursor reached across a line continuation
+// written behind it, which [Lexer.continuationAfterADollar] already answered
+// for the dispatcher that routed here.
+func (l *Lexer) doubleParenKind(skip int) SpanKind {
 	if !l.dialect.ArithSubstFallsBackToCommandSubst {
 		return ArithSubst
 	}
-	if doubleParenIsArith(l.src, l.off) {
+	// The expression begins behind `$`, the pair the `$` reached across, `(`,
+	// the pair *that* reached across, and `(`.
+	from := l.off + 3 + skip + l.arithOpenerContinuationAt(l.off+2+skip)
+	if doubleParenIsArith(l.src, from, l.dialect.ContinuationPartsTheArithmeticCloser) {
 		return ArithSubst
 	}
 	return CommandSubst
+}
+
+// continuationWidthAt is how many bytes of line continuation stand at i in
+// src, zero where none does.
+//
+// A plain count over the text rather than the lexer's own reader, for the
+// reason skipQuotedFrom is one: every caller asks about a delimiter it has
+// not reached yet, and may not move the cursor to find out.
+func continuationWidthAt(src string, i int) int {
+	n := 0
+	for i+n+1 < len(src) && src[i+n] == '\\' && src[i+n+1] == '\n' {
+		n += 2
+	}
+	return n
+}
+
+// arithOpenerContinuationAt is the width of a line continuation standing at
+// i, between the two parentheses of an opening `$((` — zero where none stands
+// there, and zero where the dialect parts the two. See
+// [Dialect.ContinuationPartsTheArithmeticOpener].
+func (l *Lexer) arithOpenerContinuationAt(i int) int {
+	if l.dialect.ContinuationPartsTheArithmeticOpener {
+		return 0
+	}
+	return continuationWidthAt(l.src, i)
+}
+
+// opensDoubleParen reports whether a `$((` stands at the cursor, reaching over
+// a line continuation between the two parentheses where the dialect joins
+// them — and over the one the `$` itself reached across, whose width the
+// dispatcher has already worked out and hands in as skip.
+func (l *Lexer) opensDoubleParen(skip int) bool {
+	return l.peek() == '$' && l.peekAt(1+skip) == '(' &&
+		l.peekAt(2+skip+l.arithOpenerContinuationAt(l.off+2+skip)) == '('
+}
+
+// takeArithOpenerContinuation steps a scanner's cursor over that pair, from
+// between the two parentheses it has just read the first of. Asked again from
+// there rather than handed in, so the scanner and the dispatcher that routed
+// to it cannot disagree about what was skipped.
+func (l *Lexer) takeArithOpenerContinuation() {
+	for range l.arithOpenerContinuationAt(l.off) {
+		l.advance()
+	}
 }
 
 // doubleParenIsArith applies that rule to the `$((` at off in src.
@@ -3225,9 +3289,11 @@ func (l *Lexer) doubleParenKind() SpanKind {
 // text it is about to write: a command substitution whose body opens with a
 // parenthesis is written back without a space only where reading it again
 // gives the construct back. One rule, asked from both ends.
-func doubleParenIsArith(src string, off int) bool {
+// from is the offset the expression begins at — behind the whole opener,
+// however many line continuations it was written with.
+func doubleParenIsArith(src string, from int, partsCloser bool) bool {
 	depth := 1
-	for i := off + 3; i < len(src); i++ {
+	for i := from; i < len(src); i++ {
 		switch src[i] {
 		case '\\':
 			i++
@@ -3240,7 +3306,11 @@ func doubleParenIsArith(src string, off int) bool {
 		case ')':
 			depth--
 			if depth == 0 {
-				return i+1 < len(src) && src[i+1] == ')'
+				j := i + 1
+				if !partsCloser {
+					j += continuationWidthAt(src, j)
+				}
+				return j < len(src) && src[j] == ')'
 			}
 		}
 	}
@@ -3287,6 +3357,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	l.advance() // (
 	depth := 1
 	if kind == ArithSubst {
+		l.takeArithOpenerContinuation()
 		l.advance() // the second (
 		depth = 2
 	}
@@ -3474,10 +3545,18 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			l.failedToClose(open, kind)
 		}
 	}
-	// Trim the closing delimiters the loop consumed.
+	// Trim the closing delimiters the loop consumed, reaching back over a
+	// line continuation between them where the dialect joins the two: the
+	// pair is not part of the expression, and leaving it in handed a `)` to
+	// the evaluator. See Dialect.ContinuationPartsTheArithmeticCloser.
 	end := stop
 	for n := 1; n <= closers(kind) && end > start && l.src[end-1] == ')'; n++ {
 		end--
+		if n < closers(kind) && !l.dialect.ContinuationPartsTheArithmeticCloser {
+			for end-2 >= start && l.src[end-2] == '\\' && l.src[end-1] == '\n' {
+				end -= 2
+			}
+		}
 	}
 	value := joined(start, end)
 	if kind != ArithSubst {

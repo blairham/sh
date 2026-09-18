@@ -301,6 +301,21 @@ func Dialect() syntax.Dialect {
 	// for. See #3523.
 	d.ContinuationStopsADollarAt = syntax.DollarBareParameter | syntax.DollarParens
 	d.ContinuationStopsADollarAtInDoubleQuotes = syntax.EveryDollarForm
+	// A line continuation between either pair of an arithmetic expansion's
+	// delimiters parts them here, so the construct is a command substitution
+	// holding a subshell. Measured 2026-09-16 from script files: both
+	// `echo "[$(\⏎( 1 + 2 ))]"` and `echo "[$(( 1 + 2 )\⏎)]"` say `1: not
+	// found` and expand to nothing, where bash 5.3, bash 3.2 and dash read
+	// both as arithmetic and answer 3.
+	d.ContinuationPartsTheArithmeticOpener = true
+	d.ContinuationPartsTheArithmeticCloser = true
+	// And a continuation directly behind the `((` of an arithmetic *command*
+	// opens nothing at all here: the two parentheses and the pair are
+	// consumed and no command is produced, so `echo pre⏎((\⏎echo hi⏎echo b`
+	// prints all three lines at status 0 and `false⏎((\⏎echo "rc=$?"` prints
+	// `rc=1`. See the flag for the refusals that shape produces, each of
+	// which is the text that followed being read on its own.
+	d.ContinuationEndsTheArithmeticCommandOpener = true
 	// A function body that is not compound may carry no redirection here:
 	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
 	// >out` are all a syntax error at the operator. A braced body is not

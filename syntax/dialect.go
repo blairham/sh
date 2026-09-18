@@ -3058,6 +3058,69 @@ type Dialect struct {
 	// `$[1+2]` there.
 	DollarGoesWhenAContinuationStopsItAtABrace bool
 
+	// ContinuationPartsTheArithmeticOpener reads a line continuation written
+	// between the `$(` and the second `(` as *parting* them, so `$(\⏎( 1 + 2
+	// ))` is a command substitution whose first command is a subshell rather
+	// than an arithmetic expansion.
+	//
+	// ContinuationPartsTheArithmeticCloser is the same question at the other
+	// end: whether a pair standing between the two `)` still closes an
+	// arithmetic expansion.
+	//
+	// Two fields, because the panel splits differently at the two ends and a
+	// single answer could not be given a value for the shell that joins one
+	// and parts the other. Measured 2026-09-16 from script files, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, stdin on /dev/null, fresh directory;
+	// BusyBox ash has no arithmetic expansion of this shape and was not
+	// measured:
+	//
+	//	probe                bash 5.3, 3.2  dash  zsh 5.9.2  ksh93u+
+	//	echo "[$(\⏎( 1 + 2 ))]"  3          3     3          runs `1`
+	//	echo "[$(( 1 + 2 )\⏎)]"  3          3     runs `1`   runs `1`
+	//
+	// "runs `1`" is the command-substitution reading: the body is the
+	// subshell `( 1 + 2 )`, whose first word is a command nobody has, so the
+	// diagnostic names `1` and the expansion is empty.
+	//
+	// A blank on either side of the pair takes the question away and is the
+	// control: `$( \⏎( 1 + 2 ))` and `$(( 1 + 2 ) \⏎)` are a command
+	// substitution in every column, because the parentheses are no longer
+	// adjacent whatever becomes of the continuation.
+	//
+	// The arithmetic *command*'s closer is not this question and needs no
+	// field: `(( 1 + 2 )\⏎)` is two groupings running `1` in bash 5.3, zsh
+	// 5.9.2, ksh93u+ and dash alike (#3454).
+	ContinuationPartsTheArithmeticOpener bool
+	ContinuationPartsTheArithmeticCloser bool
+
+	// ContinuationEndsTheArithmeticCommandOpener makes `((` followed
+	// *directly* by a line continuation open nothing at all: the two
+	// parentheses and the pair are consumed, no command is produced, and the
+	// next token is read as though the construct had never been written.
+	//
+	// ksh93u+ alone, measured 2026-09-16 from script files under `env -i`,
+	// stdin on /dev/null. The visible answer is a syntax error, but the error
+	// is at the *leftovers* rather than at the continuation, which is what
+	// says the two characters were consumed and discarded:
+	//
+	//	((\⏎x = 5 )); echo "[$x]"      `)' unexpected at line 2, status 3
+	//	if ((\⏎1 )); then …            `)' unexpected
+	//	for ((\⏎i=0; i<1; i++)); do …  `i' unexpected
+	//	((\⏎)); echo st=$?             `)' unexpected
+	//	echo pre⏎((\⏎echo hi⏎echo b    pre, hi and b, status 0
+	//	false⏎((\⏎echo "rc=$?"         rc=1 — not even the status moved
+	//
+	// The last two rows are the whole of it: the construct runs nothing and
+	// leaves nothing behind, and every refusal above is the text that
+	// followed being read on its own. bash 5.3, bash 3.2 and zsh read all six
+	// as an ordinary arithmetic command; dash has no `((` and reads two
+	// groupings.
+	//
+	// A blank in front of the backslash takes the rule away — `(( \⏎x = 5 ))`
+	// is 5 there — and so does anything at all: `((x\⏎ = 5 ))` is 5 too. It
+	// is the pair standing *directly* behind the second parenthesis (#3455).
+	ContinuationEndsTheArithmeticCommandOpener bool
+
 	// BareBraceNestsInExpansion makes an unquoted `{` inside `${…}` open a
 	// nesting level, so the expansion ends at the brace that *balances* it
 	// rather than at the first `}`.

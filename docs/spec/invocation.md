@@ -884,7 +884,26 @@ would read `$-`, so the letter cannot be observed directly. `-i -c` at a
 terminal answers `mi`, and `m` before `i` is what that reversal
 predicts.
 
-These are recorded as one string per dialect rather than as four named
+**BusyBox ash** has a fifth order, and it is close enough to dash's to
+have been taken for it: ours reported `ic` where BusyBox reports `ci`,
+which is a permutation of the right letters and so passes every
+membership test and fails every equality one (#3256). Measured
+2026-09-17 in the digest-pinned alpine image, one letter at a time and
+then every settable letter at once — `set -EubaCvxI` under `-c` is
+`EubaCvxcI`, `-i` puts `i` between `c` and `I`, and a terminal with `-m`
+puts `m` there too, giving `EubaCvxcmiIfe`. The `-s` route puts its
+letter where `c` stands on the other one: `set -Eubax` over a pipe is
+`Eubaxs`. It is dash's discipline — the reverse of this shell's own
+`set -o` table, with the two invocation letters inserted where that table
+has no row — and it is not dash's *string*, since the two shells' option
+tables differ.
+
+`n` is the one letter nothing observes, here as in dash: `set -n` stops
+the `echo` that would read `$-`, on every route including an interactive
+one, so its place in the ash string is taken from that reversal rather
+than from a run.
+
+These are recorded as one string per dialect rather than as five named
 disciplines, so that a letter's place is a measurement a reader can check
 against a shell, and so that the member whose order is its own table's
 needs no special case. A letter a dialect's string does not name follows

@@ -1734,7 +1734,11 @@ func Apply(r *interp.Runner) {
 	// Their absence was three rows missing from a seventeen-row listing
 	// (#2624), and the two that describe the invocation are exactly the two
 	// nothing else in the language can tell a dash script.
-	r.AddSetOptions("interactive", "stdin", "debug")
+	// `emacs` and `nolog` are here rather than in the substrate's common
+	// table since #3366: BusyBox ash has neither, so the table stopped
+	// being unanimous. Both are in this shell's own listing, measured on
+	// dash 0.5.12.
+	r.AddSetOptions("interactive", "stdin", "debug", "emacs", "nolog")
 	// And the letter that abbreviates the second of them. `set -s` is not a
 	// request this shell has to build anything for: it is the `stdin` name
 	// above, spelled short, and the letter and the name are one request with

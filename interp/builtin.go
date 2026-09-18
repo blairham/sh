@@ -1317,8 +1317,10 @@ func (r *Runner) hasSetLetter(opt rune) bool {
 	switch opt {
 	case 'h':
 		return r.sem().SetHasTheHLetter != No
-	case 'E', 'T':
-		return r.sem().SetHasTraceLetters != No
+	case 'E':
+		return r.sem().SetHasTheErrtraceLetter != No
+	case 'T':
+		return r.sem().SetHasTheFunctraceLetter != No
 	case 't':
 		return r.sem().SetHasTheTLetter != No ||
 			strings.ContainsRune(r.diag().ImmovableOptionLetters["set"], opt)
@@ -1488,10 +1490,15 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			// name cannot answer differently.
 			r.keywordAssignments = on
 		case 'E', 'T':
-			// bash's trap-carriage letters. zsh spells different options
-			// with the same letters and dash and ksh93 have neither, so a
-			// wrong guess here would quietly mean something else.
-			if !r.ask(r.sem().SetHasTraceLetters, "`set -E` and `set -T` carrying traps into functions") {
+			// The trap-carriage letters. zsh spells different options with
+			// the same letters and dash and ksh93 have neither, so a wrong
+			// guess here would quietly mean something else — and the two are
+			// asked apart because one column has `E` and refuses `T`.
+			has, why := r.sem().SetHasTheErrtraceLetter, "`set -E` carrying the ERR trap into functions"
+			if opt == 'T' {
+				has, why = r.sem().SetHasTheFunctraceLetter, "`set -T` carrying the DEBUG and RETURN traps into functions"
+			}
+			if !r.ask(has, why) {
 				if r.unspecified {
 					return false
 				}

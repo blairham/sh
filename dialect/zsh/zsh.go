@@ -4417,6 +4417,13 @@ func Apply(r *interp.Runner) {
 	// `opt/command-tracking-has-two-long-names`.
 	r.AddSetOptions(
 		"braceexpand",
+		// The state behind this shell's own `emacs` option, which its table
+		// reads and writes through Runner.NamedOption exactly as `stdin`
+		// below does. It was in the substrate's common table until #3366
+		// took it out — BusyBox ash has no such name — so it is declared
+		// here for the same reason and with the same effect: this list
+		// reaches nothing but the two named-option calls setopt.go makes.
+		"emacs",
 		"hashall",
 		"histexpand",
 		"histignoredups",

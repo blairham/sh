@@ -142,7 +142,8 @@ func TestAFunctionBodyIsNeverAHead(t *testing.T) {
 	} {
 		out, _, _ := trapRun(t, src, func(s *Semantics) {
 			headSem(heads)(s)
-			s.SetHasTraceLetters = Yes
+			s.SetHasTheErrtraceLetter = Yes
+			s.SetHasTheFunctraceLetter = Yes
 		}, Diagnostics{})
 		// The call and the body's one command, and nothing for the body's
 		// own braces.

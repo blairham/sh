@@ -415,6 +415,68 @@ said* below and accounts for a large share of this column's wording-only
 mismatches, and a refused `-o` **name at an invocation**, which writes the
 complaint, declines to run the command string, and exits **0** (#2639).
 
+## The `set -o` table is this shell's own, and it was dash's
+
+`dialect/ash` held dash's fourteen names, sorted. Three things were wrong
+at once, and a count catches none of them, because dash's table has
+fourteen names too. Measured 2026-09-17 in the digest-pinned image,
+BusyBox v1.37.0, against `cmd/ash` in the same container (#3366):
+
+| probe | BusyBox 1.37.0 | ours, before |
+| --- | --- | --- |
+| `set -o errtrace` | 0 | `illegal option -o errtrace`, 1 |
+| `set -E` | 0 | `illegal option -E`, 2 |
+| `set -T` | `illegal option -T`, 2 | the same |
+| `set -b` / `set -I` | 0 | `illegal option`, 2 |
+| `set -o emacs` | `illegal option -o emacs`, 1 | accepted, 0 |
+| `set -o nolog` | `illegal option -o nolog`, 1 | accepted, 0 |
+| `set -o pipefail` | 0, **and listed after** | 0, **and not listed** |
+| the listing's order | this shell's own table | dash's names, sorted |
+
+BusyBox's listing, in its order:
+
+    errexit noglob ignoreeof monitor noexec xtrace verbose noclobber
+    allexport notify nounset errtrace vi pipefail
+
+`pipefail` is the one that costs a script something silently: the option
+was taken and then not written, so `set -o pipefail; set +o` did not say
+the shell was in it and a script saving state with that output lost it.
+
+Two substrate changes fall out, and both are the same shape as the one
+above — a question that looked like one and is two once a seventh column
+is asked.
+
+`emacs` and `nolog` left the substrate's *unanimous* table, since this
+shell has neither, and are declared by the four dialects that do have
+them. "Every shell in the panel" is a measurement, not a definition.
+
+`Semantics.SetHasTraceLetters` became `SetHasTheErrtraceLetter` and
+`SetHasTheFunctraceLetter`, because this shell takes `-E` and refuses
+`-T`. One answer could only have given it both letters or neither. There
+is no ERR trap here for the carriage to be about — what the option moves
+is nothing, and what a script can see is the letter, the name and the
+listing row.
+
+`-b` and `-I` are declared through `Runner.SetOptionLetterNames`, which
+is what that table is for: no other column in the panel spells `notify`
+or `ignoreeof` with a letter.
+
+## The letters of `$-` are in this shell's order too
+
+Same family, same session, and a different kind of wrong answer: status
+0, the right set of letters, the wrong string. `ash -i -c 'echo "$-"'`
+is `ci` there and was `ic` here, which passes `case $- in *i*)` and fails
+every comparison against a saved string (#3256).
+
+The order is dash's *discipline* — the reverse of this shell's own
+`set -o` table, with the invocation letters inserted where that table has
+no row — and not dash's string, since the two tables differ. Measured a
+letter at a time and then all at once: `set -EubaCvxI` under `-c` is
+`EubaCvxcI`, `-i` puts `i` between `c` and `I`, and a terminal with `-m`
+puts `m` there too. The `-s` route puts its letter where `c` stands on
+the other one. `n` is the one letter nothing can observe, here as in
+dash, because `set -n` stops the `echo` that would read `$-`.
+
 ## What could not be said
 
 Three measured behaviors have no value on any existing axis. They are

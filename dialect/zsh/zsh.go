@@ -1205,6 +1205,10 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheSetuidLetter = interp.No
 	// Neither: `bad symbolic mode permission: u`, and the same for X.
 	s.SymbolicMaskTakesAPermissionCopy = interp.No
+	// unanswered UmaskPermissionCopyBesideLetters: a copy is refused here
+	// before anything looks at what is beside it — the line above is that
+	// refusal — so a clause holding a copy and a letter cannot reach the
+	// question. TestUmaskRefusesAPermissionCopy pins the refusal.
 	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.No
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	// A dash word is an option unless it is all digits, which is what
@@ -1238,6 +1242,8 @@ func Semantics() interp.Semantics {
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.DisownRemovesTheJob = interp.Yes
+	// And it reports what it did, as bash does (#3187).
+	s.DisownAlwaysFails = interp.No
 	s.CommandRejectsUnknownOption = interp.No
 	// Whether `command -v` answers for every name it was given, and what
 	// decides the status when it found some of them. See
@@ -1732,6 +1738,9 @@ func Semantics() interp.Semantics {
 	s.HeldExitListsTheJobs = interp.No
 	// CDPATH moves in silence here.
 	s.CdpathAnnouncesTheDirectory = interp.No
+	// And CDPATH is a search beside the ordinary relative lookup, with the
+	// fallback POSIX gives it (#2896).
+	s.CdpathReplacesTheRelativeLookup = interp.No
 	// And so does `autocd`: `setopt autocd` then `subdir` at a prompt moves
 	// and writes nothing, where bash writes `cd -- subdir` first. Measured
 	// 2026-09-08 through a pseudo-terminal against zsh 5.9.2 started `-f`.
@@ -2455,6 +2464,9 @@ func Semantics() interp.Semantics {
 	s.UmaskPrintsFourDigits = interp.No
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No
+	// An empty operand is a limit of nought: `ulimit -n ""` is silent at 0
+	// and leaves `ulimit -n` answering `0` (#3064). Measured 2026-09-18.
+	s.UlimitEmptyOperandIsZero = interp.Yes
 	s.UlimitHasResidentSet = interp.No
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No

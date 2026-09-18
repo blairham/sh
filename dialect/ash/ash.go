@@ -927,6 +927,11 @@ func Semantics() interp.Semantics {
 	// refused whole: `umask u=rwXs` is refused where `umask u+X` is taken.
 	s.SymbolicMaskTakesTheSetuidLetter = interp.No
 	s.SymbolicMaskTakesAPermissionCopy = interp.Yes
+	// And a copy is taken **alone**: beside a permission letter, in either
+	// order, the whole operand is `illegal mode` at 2 — `umask -S g=uw` and
+	// `umask -S g=wu` both, where the copy on its own is fine (#3074).
+	// Measured 2026-09-18 in the digest-pinned alpine image.
+	s.UmaskPermissionCopyBesideLetters = interp.UmaskPermissionCopyRefusesTheMixture
 	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	// `shift -1` is `Illegal number: -1`, so every dash word is read as the
@@ -1110,6 +1115,13 @@ func Semantics() interp.Semantics {
 	// dash's; the block unit and the resources it knows were read off that
 	// listing.
 	s.UlimitBlockIsKilobyte = interp.No
+	// An empty operand is refused — `invalid number ''` at 1, with the limit
+	// untouched — which is the answer bash 5.3 gives and not dash's (#3064).
+	// Measured 2026-09-18 in the digest-pinned alpine image.
+	s.UlimitEmptyOperandIsZero = interp.No
+	// And CDPATH is a search beside the ordinary relative lookup, with the
+	// fallback POSIX gives it (#2896).
+	s.CdpathReplacesTheRelativeLookup = interp.No
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
@@ -2361,6 +2373,9 @@ func Apply(r *interp.Runner) {
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}
+	// unanswered DisownAlwaysFails: the builtin is unregistered below, so
+	// there is no `disown` here whose status could report anything.
+	// TestDisownIsNotABuiltin pins the absence.
 	r.Unregister("typeset")
 	r.Unregister("declare")
 	r.Unregister("disown")

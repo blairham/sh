@@ -317,6 +317,7 @@ func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskF
 			// `umask "=w"` the 0555 every other column gives it. See #2057.
 			i++
 			perms := 0
+			sawCopy, sawLetter := false, false
 			for ; i < len(clause); i++ {
 				if copied, isCopy := maskCopySource(clause[i], allowed); isCopy {
 					if !r.ask(r.sem().SymbolicMaskTakesAPermissionCopy,
@@ -326,14 +327,29 @@ func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskF
 						}
 						return 0, maskFailure{bad: clause[i]}, false
 					}
+					sawCopy = true
 					// POSIX makes a copy an *alternative* to a list of
 					// permission characters rather than one of them, so
-					// nothing portable writes the two together. bash reads
-					// the pair anyway and the copy replaces what the letters
-					// before it accumulated — `umask 222; umask -S g=wu` is
-					// `g=rx` there and `g=rwx` in dash, which ORs it in. The
-					// reading here is bash's, and #3074 has the measurement.
-					perms = copied
+					// nothing portable writes the two together — and the
+					// three shells that read it anyway read it three
+					// different ways. The axis is asked only for the clause
+					// that really holds both, which is what keeps the
+					// portable spelling out of the question. See
+					// Semantics.UmaskPermissionCopyBesideLetters.
+					if !sawLetter {
+						perms = copied
+						continue
+					}
+					switch r.permissionCopy() {
+					case UmaskPermissionCopyReplaces:
+						perms = copied
+					case UmaskPermissionCopyContributes:
+						perms |= copied
+					case UmaskPermissionCopyRefusesTheMixture:
+						return 0, maskFailure{bad: clause[i]}, false
+					default:
+						return 0, maskFailure{}, false
+					}
 					continue
 				}
 				bit, isPerm := umaskPermissionBits[clause[i]]
@@ -349,6 +365,18 @@ func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskF
 				if refused, stop := r.maskLetterRefused(clause[i]); stop {
 					return 0, refused, false
 				}
+				if sawCopy {
+					// A letter *after* a copy, which is the other order of
+					// the same mixture — and one column refuses both.
+					switch r.permissionCopy() {
+					case UmaskPermissionCopyReplaces, UmaskPermissionCopyContributes:
+					case UmaskPermissionCopyRefusesTheMixture:
+						return 0, maskFailure{bad: clause[i]}, false
+					default:
+						return 0, maskFailure{}, false
+					}
+				}
+				sawLetter = true
 				perms |= bit<<6 | bit<<3 | bit
 			}
 			switch op {

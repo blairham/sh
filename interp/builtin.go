@@ -4382,7 +4382,16 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		// that wins decides the announcement: a plain `.` moves quietly, and
 		// any other winner is printed — in three of the four; zsh moves in
 		// silence either way.
-		if found, viaPath := r.searchCdpath(dir); viaPath != "" {
+		//
+		// One column searches a dotted operand too and refuses a miss
+		// outright, which is the same axis read in two places: see
+		// Semantics.CdpathReplacesTheRelativeLookup.
+		found, viaPath, searched := r.searchCdpath(dir)
+		if r.unspecified {
+			return 2
+		}
+		switch {
+		case viaPath != "":
 			if viaPath != "." &&
 				r.ask(r.sem().CdpathAnnouncesTheDirectory, "`cd` printing where CDPATH sent it") {
 				announced = true
@@ -4391,6 +4400,15 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 				return 2
 			}
 			dir = found
+		case searched && r.cdpathReplacesTheLookup():
+			// The search ran and missed, in the shell where there is no
+			// ordinary relative lookup left to fall back to. What it says is
+			// the ordinary missing-directory sentence, which is what the
+			// reference writes, so the failure below does the talking.
+			return r.cdNotThere(named)
+		}
+		if r.unspecified {
+			return 2
 		}
 	}
 	if !filepath.IsAbs(dir) {
@@ -4514,14 +4532,20 @@ type cdFlags struct {
 // a dot, returning the joined path of the first entry holding a directory of
 // that name and the entry that held it. All four shells search; who prints
 // afterwards is the axis at the call.
-func (r *Runner) searchCdpath(operand string) (found, via string) {
+func (r *Runner) searchCdpath(operand string) (found, via string, searched bool) {
 	if strings.HasPrefix(operand, "./") || strings.HasPrefix(operand, "../") {
-		return "", ""
+		// A dot component names a place rather than starting a search, in
+		// every column. See Semantics.CdpathReplacesTheRelativeLookup for
+		// the one row this leaves disagreeing and why it is not modeled.
+		return "", "", false
 	}
 	cdpath, ok := r.getVar("CDPATH")
 	if !ok || cdpath == "" {
-		return "", ""
+		// An empty CDPATH is no search at all, which is why the shell that
+		// has no fallback still reaches an ordinary relative `cd` with one.
+		return "", "", false
 	}
+	searched = true
 	for _, entry := range strings.Split(cdpath, string(filepath.ListSeparator)) {
 		if entry == "" {
 			entry = "."
@@ -4534,10 +4558,36 @@ func (r *Runner) searchCdpath(operand string) (found, via string) {
 		// Through the gate; an entry the policy hides is walked past the
 		// way an entry with no such directory is.
 		if st, err := r.stat(abs); err == nil && st.IsDir() {
-			return abs, entry
+			return abs, entry, true
 		}
 	}
-	return "", ""
+	return "", "", searched
+}
+
+// cdNotThere is the ordinary missing-directory refusal, for the one place a
+// `cd` fails without ever asking the filesystem: a CDPATH search that missed
+// in the shell that has no relative lookup left to fall back to.
+//
+// The same wording and the same status the walk below produces, from the same
+// errno, so a script trapping on `cd` cannot tell the two apart — which is
+// what the reference does, since there the search *is* the lookup.
+func (r *Runner) cdNotThere(named string) int {
+	err := &fs.PathError{Op: "chdir", Path: named, Err: syscall.ENOENT}
+	r.NoteErrno(err)
+	r.diagf("%s\n", Wording(r.diag().CdCannotChange, "cd: %[1]s: %[2]s",
+		named, r.diag().reasonText(reason(err))))
+	return orDefault(r.diag().CdStatus, 1)
+}
+
+// cdpathReplacesTheLookup resolves the axis, and only where a CDPATH is set
+// and non-empty — a shell with none has no search for the answer to be about.
+// See Semantics.CdpathReplacesTheRelativeLookup.
+func (r *Runner) cdpathReplacesTheLookup() bool {
+	if cdpath, ok := r.getVar("CDPATH"); !ok || cdpath == "" {
+		return false
+	}
+	return r.ask(r.sem().CdpathReplacesTheRelativeLookup,
+		"`cd` resolving a relative operand through CDPATH alone")
 }
 
 // cdDestination works out where a `cd` was asked to go, reporting whether it

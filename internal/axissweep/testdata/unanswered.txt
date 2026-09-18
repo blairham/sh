@@ -82,6 +82,7 @@ ash   DebugTrapRefiresOnEnteringAFunction
 ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
+ash   DeclarationThroughAReferenceNamesTheOperand
 ash   DeclareGlobalReachesPastALocal
 ash   DeclareHideInScopeLetter
 ash   DeclareHideValueLetter
@@ -91,6 +92,7 @@ ash   DeclareMatchingLetter
 ash   DeclareNumberDetachedOnlyAtTheWordEnd
 ash   DeclarePrintReportsAMissingName
 ash   DeclareTypeLetter
+ash   DisownAlwaysFails
 ash   DisownRemovesTheJob
 ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   EmptyArithSubscript
@@ -139,11 +141,10 @@ ash   ListedNonAsciiIsOrdinary
 ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
-ash   DeclarationThroughAReferenceNamesTheOperand
 ash   NamerefArrayRefusal
+ash   NamerefCycleIsRefused
 ash   NamerefLetterStandsAlone
 ash   NamerefTargetResolvedWhenAimed
-ash   NamerefCycleIsRefused
 ash   NegatedTestRecordsThePostNegationStatus
 ash   NegativeSubscriptCountsOverAPromotedScalar
 ash   NegativeSubscriptPastTheStartInserts
@@ -205,8 +206,8 @@ ash   TableUnderAnArrayDeclaration
 ash   TableUnderAnArrayLiteralDeclaration
 ash   TestAndArithmeticUpdatePipelineStatus
 ash   TraceArrayLiteralShowsTheExpandedElements
-ash   TraceSubscriptedArrayLiteralIsElementAssignments
 ash   TraceElementSubscriptIsEvaluated
+ash   TraceSubscriptedArrayLiteralIsElementAssignments
 ash   TransformLetterCheckedOnlyWhenValued
 ash   TwoCaseLettersOnOneDeclarationCancel
 ash   TypeFSaysTheFunctionBack
@@ -315,6 +316,7 @@ dash  DebugTrapRefiresOnEnteringAFunction
 dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter
+dash  DeclarationThroughAReferenceNamesTheOperand
 dash  DeclareGlobalReachesPastALocal
 dash  DeclareHideInScopeLetter
 dash  DeclareHideValueLetter
@@ -324,6 +326,7 @@ dash  DeclareMatchingLetter
 dash  DeclareNumberDetachedOnlyAtTheWordEnd
 dash  DeclarePrintReportsAMissingName
 dash  DeclareTypeLetter
+dash  DisownAlwaysFails
 dash  DisownRemovesTheJob
 dash  DollarSingleBackslashC
 dash  DollarSingleCaretMeta
@@ -387,11 +390,10 @@ dash  ListedNonAsciiIsOrdinary
 dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
-dash  DeclarationThroughAReferenceNamesTheOperand
 dash  NamerefArrayRefusal
+dash  NamerefCycleIsRefused
 dash  NamerefLetterStandsAlone
 dash  NamerefTargetResolvedWhenAimed
-dash  NamerefCycleIsRefused
 dash  NegatedTestRecordsThePostNegationStatus
 dash  NegativeSubscriptCountsOverAPromotedScalar
 dash  NegativeSubscriptPastTheStartInserts
@@ -460,8 +462,8 @@ dash  TableUnderAnArrayDeclaration
 dash  TableUnderAnArrayLiteralDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
 dash  TraceArrayLiteralShowsTheExpandedElements
-dash  TraceSubscriptedArrayLiteralIsElementAssignments
 dash  TraceElementSubscriptIsEvaluated
+dash  TraceSubscriptedArrayLiteralIsElementAssignments
 dash  TransformLetterCheckedOnlyWhenValued
 dash  TwoCaseLettersOnOneDeclarationCancel
 dash  TypeFSaysTheFunctionBack
@@ -509,9 +511,11 @@ ksh   TestAndArithmeticUpdatePipelineStatus
 ksh   TransformLetterCheckedOnlyWhenValued
 ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
+ksh   UmaskPermissionCopyBesideLetters
 ksh   UnsetEndsTheProducedPipelineStatus
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
+zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
@@ -523,11 +527,10 @@ zsh   JobsListsWhatChangedSinceTheLastReport
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
 zsh   LongOptionValueIsANumber
-zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   NamerefArrayRefusal
+zsh   NamerefCycleIsRefused
 zsh   NamerefLetterStandsAlone
 zsh   NamerefTargetResolvedWhenAimed
-zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   OperatorAfterTheSubscriptListingIsBad
 zsh   OptionNamespaceIgnoresSeparators
@@ -550,5 +553,6 @@ zsh   TrapPrintsBareWithConditions
 zsh   TrapPrintsBareWithP
 zsh   TrapPrintsWithP
 zsh   TrapSingleUnknownConditionIsUsage
+zsh   UmaskPermissionCopyBesideLetters
 zsh   UnsetReferenceLetterRemovesANonReference
 zsh   ValuelessDeclarationRecordsTheName

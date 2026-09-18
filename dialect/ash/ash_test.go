@@ -327,3 +327,13 @@ func TestPrintfGroupingFlag(t *testing.T) {
 		t.Errorf("PrintfGroupingFlagAfterTheWidth = %v, want %v", got, want)
 	}
 }
+
+// There is no `disown` here, which is what the unanswered verdict on
+// Semantics.DisownAlwaysFails stands on: the name resolves to nothing at all,
+// so there is no status for the axis to be about.
+func TestDisownIsNotABuiltin(t *testing.T) {
+	out, st := run(t, `disown; echo st=$?`)
+	if !strings.Contains(out, "disown: not found") || !strings.Contains(out, "st=127") {
+		t.Errorf("got %q status %d, want the name unresolved at 127", out, st)
+	}
+}

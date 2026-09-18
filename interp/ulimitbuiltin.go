@@ -262,6 +262,16 @@ func (r *Runner) ulimitOperand(word string, unit, cur, curHard int64) (int64, bo
 	if n, ok := parseLimit(word, unit); ok {
 		return n, true
 	}
+	if word == "" {
+		// An empty operand, which four of the seven columns read as a limit
+		// of **nought** rather than refusing — and nought is what it sets,
+		// so neither answer is a line that does nothing. See
+		// Semantics.UlimitEmptyOperandIsZero, where the panel is.
+		if r.ask(r.sem().UlimitEmptyOperandIsZero, "`ulimit -n \"\"` reading an empty operand as nought") {
+			return 0, true
+		}
+		return 0, false
+	}
 	switch word {
 	case "hard":
 		if r.ask(r.sem().UlimitTakesHardKeyword, "`ulimit -n hard`") {

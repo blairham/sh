@@ -971,6 +971,10 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	// Both, in silence — this shell sets and prints nothing.
 	s.SymbolicMaskTakesAPermissionCopy = interp.Yes
+	// And a copy beside permission letters is OR-ed in like any other
+	// permission, so `umask 222; umask -S g=wu` is `g=rwx` here where bash
+	// answers `g=rx` (#3074). Measured 2026-09-18.
+	s.UmaskPermissionCopyBesideLetters = interp.UmaskPermissionCopyContributes
 	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	// No options and no marker: `shift -x`, `shift -1` and `shift --` are all
@@ -989,6 +993,9 @@ func Semantics() interp.Semantics {
 	// Only numbers, `%%`, `%+` and `%-` resolve here: a `%name` is a job
 	// that is not there. `wait` complains about it with its own wording and
 	// status, and there is no -n and no disown at all.
+	// unanswered DisownAlwaysFails: there is no `disown` here to answer for
+	// — the builtin is unregistered below — so what its status would report
+	// is nobody's to infer. TestDisownIsNotABuiltin pins the absence.
 	s.JobSpecsByName = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
 	// And a job it has already reported stays waitable by its process id.
@@ -1035,6 +1042,12 @@ func Semantics() interp.Semantics {
 	s.ErrExitEntersACommandSubstitution = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No
+	// An empty operand is a limit of nought, silently, and leaves the limit
+	// at 0 afterwards (#3064). Measured 2026-09-18.
+	s.UlimitEmptyOperandIsZero = interp.Yes
+	// And CDPATH is a search beside the ordinary relative lookup, with the
+	// fallback POSIX gives it (#2896).
+	s.CdpathReplacesTheRelativeLookup = interp.No
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes

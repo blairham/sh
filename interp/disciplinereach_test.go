@@ -37,6 +37,9 @@ func disciplineGrammar(d *syntax.Dialect) {
 	d.ParameterIsSetTest = true
 	d.FunctionKeyword = true
 	d.ArrayLiteral = true
+	// And the dot in a name, which is what lets a hook read and write the
+	// parameter it is entered with.
+	d.DottedName = true
 }
 
 func disciplineSemantics() Semantics {

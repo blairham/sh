@@ -23151,6 +23151,54 @@ straight past and the freeze that refuses is always the target's. Only
 the name in the sentence moves. ksh93 answers No — `typeset s=9` through
 a reference to a frozen `u` is `u: is read only` there (#3173).
 
+## An external command's assignment prefix is a store, in the child
+
+`docs/spec/semantics.md` already records the rule a variable's hooks keep:
+the hook fires **where the value is actually stored**, so a prefix in
+front of a regular builtin fires nothing and one in front of a special
+builtin or a POSIX-form function fires. One row of that panel was left
+unexplained — an external command's prefix fires a hook in ksh93u+ and
+fired none here — and the reason it fires there is that the store **is**
+made, in the process that has just forked.
+
+Measured 2026-09-18 from a script file under `env -i` with a scratch
+HOME, against ksh93u+ 2012-08-01:
+
+    s=5 /usr/bin/env             SET[5], and the child is shown s=5
+    s=5 /bin/nosuchfile          SET[5], then `not found`
+    s=5 nosuchcmd99              SET[5], then `not found`
+    s+=5 /usr/bin/env            APP[5], and the child is shown s=base5
+    function s.set { .sh.value=REPLACED; }
+                                 the child is shown s=REPLACED
+    function s.set { t=HOOKRAN; }
+                                 the parent's `t` is empty afterwards
+    function s.set { return 7; } the command's status is the command's
+    export E=parent
+    function s.set { E=child; }  the child is shown E=child
+    a=1 b=2 /usr/bin/env         b's hook sees what a's hook wrote
+
+The last two decide the shape. **One fork serves the whole prefix list**,
+so the hooks share a state; and that state is what the child's
+environment is built from, so a hook's write to some *other* exported
+name reaches the child. A per-name save-and-restore can say neither,
+because a hook may write any name at all — so this is a copy of the
+variable tables, made with the same `ownTables` a subshell is made with,
+written into, read for the child's environment, and thrown away when the
+command has been started.
+
+The copy is made only where a hook is really watching one of the names.
+With none it would be invisible anyway: the stores in it and the entries
+they produce are what `prefixValue` already computed, so what the gate
+buys is not correctness but the cost of copying every table in the shell
+in front of an ordinary `PATH=/x cmd`.
+
+Two details are measured rather than derived. The value the child is
+handed is read back **from the store** and not returned from the join,
+because a `.set` hook may replace it. And the hook's status stays where
+it is — the same hook in front of a *special builtin* leaves 7 in `$?`,
+because that store is this shell's, and this one belongs to a shell that
+is about to be discarded (#3159).
+
 ## An axis nothing objects to is not a measurement
 
 Every field above claims a fact about real shells: they were run, they

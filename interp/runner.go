@@ -5861,7 +5861,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// to have expanded below, because the order of the two is a dialect
 	// question and not this one's.
 	external := prefixCommand{kind: prefixBeforeExternal}
-	env := r.environ()
+	// The shell the prefix's stores land in. An external command is run by a
+	// **child**, and where a hook is watching one of these names the store is
+	// the child's — see Runner.prefixChildForTheDisciplines.
+	child := r.prefixChildForTheDisciplines(c.Assigns)
+	var prefixEnv []string
 	// The PATH the prefix supplies, if it supplies one, held so that the
 	// search below is made with it — see reachPrefixedPath.
 	prefixPath, pathFromPrefix := "", false
@@ -5905,7 +5909,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// right-hand side runs. See interp/prefixsubscript.go.
 			continue
 		}
-		value := r.prefixValue(a)
+		// Split rather than prefixValue, because the two halves are two
+		// different things to a hook: `.append` is entered with the part
+		// being appended and `.set` with the whole value. Expanded here
+		// either way, so a substitution in the right-hand side runs once and
+		// runs where the trace wrote it.
+		part := r.prefixExpansion(a)
+		value := r.prefixJoined(a, part)
 		if prefixIsSubscripted(a) {
 			// A child runs this command, so an element store would be the
 			// child's — and an array reaches no child's environment, so
@@ -5933,14 +5943,27 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// hands the refused value on is not a refusal.
 			continue
 		}
+		if child != nil {
+			// The store the child makes, and the hook that goes with it:
+			// what the hook leaves is what the child is handed.
+			value = child.prefixStoredForAChild(a, part)
+		}
 		if a.Name == "PATH" {
 			// The last one wins, the same way the child's environment
 			// resolves `PATH=/a PATH=/b cmd`: what is appended last is what
 			// reaches it.
 			prefixPath, pathFromPrefix = value, true
 		}
-		env = append(env, a.Name+"="+value)
+		prefixEnv = append(prefixEnv, a.Name+"="+value)
 	}
+	// Read after the stores above rather than before them, so a hook that
+	// wrote some *other* exported name is answered by the environment the
+	// child is given. See Runner.prefixChildForTheDisciplines.
+	env := r.environ()
+	if child != nil {
+		env = child.environ()
+	}
+	env = append(env, prefixEnv...)
 	if _, stop := r.refusePrefixes(c.Assigns, external, !r.expandErr); stop {
 		return nil
 	}

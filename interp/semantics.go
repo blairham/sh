@@ -9965,6 +9965,36 @@ type Semantics struct {
 	// option in dash, and a shared letter set would have this engine accept
 	// it everywhere and answer dash's scripts differently from dash.
 	JobsOptions string
+	// JobsListsWhatChangedSinceTheLastReport is `jobs -n`: the listing keeps
+	// only the jobs whose state has moved since the shell last said
+	// something about them.
+	//
+	// ksh93 alone, and the letter is in its own usage line — `jobs [-lnp]`.
+	// Measured 2026-09-17 from a script file under `env -i`, on ksh93u+
+	// 2012-08-01:
+	//
+	//	set -m; ( sleep 0.3 ) & ( exit 7 ) &; sleep 0.15; jobs -n
+	//	    [2] +  Done(7)     <command unknown>      status 0
+	//	the same `jobs -n` again                      nothing, status 0
+	//	the same script without `set -m`              nothing, status 0
+	//
+	// The third row is the one worth reading, because it is what a script
+	// gets: with the monitor off that shell has not *noticed* the job end at
+	// all — its bare `jobs` calls a job that has already exited `Running` —
+	// so there is no change for this letter to report. This engine reaps on
+	// every listing, so the noticing is what has to be modeled, and it is:
+	// the changed set is empty where the shell would not have told anybody.
+	//
+	// bash has a letter of the same name and it is **not** this one — it
+	// counts a job that has only just started as a change — so it stays in
+	// that dialect's UnimplementedOptionLetters and this axis is what keeps
+	// a dialect from acquiring ksh93's reading by acquiring the letter.
+	//
+	// unpinned bash, zsh, dash, ash, posix: the letter is not in those
+	// dialects' JobsOptions, so no case can reach the question — see
+	// TestJobsListsOnlyWhatChangedSinceTheLastReport.
+	JobsListsWhatChangedSinceTheLastReport Answer
+
 	// JobsPidsOnlyOption makes `jobs -p` print one process id per line and
 	// nothing else — no number, no marker, no state, no command. dash, bash
 	// and ksh93 all do; zsh reads the same letter as "put the job's process

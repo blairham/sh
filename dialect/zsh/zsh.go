@@ -2671,6 +2671,11 @@ func Semantics() interp.Semantics {
 	// process *group* id in the listing" and prints its ordinary rows,
 	// where the other three print the ids and nothing else — so
 	// `kill $(jobs -p)` is a bash idiom rather than a portable one.
+	// unanswered JobsListsWhatChangedSinceTheLastReport: `jobs -n` is not a
+	// letter this shell has — it is not in JobsOptions — so the axis is
+	// never consulted here. ksh93 is the one column with the letter, and
+	// bash's letter of the same name is a different question that stays
+	// unimplemented (#3390).
 	s.JobsPidsOnlyOption = interp.No
 	// Both filters at once list a job in either state here, where bash lets
 	// the last letter given decide.

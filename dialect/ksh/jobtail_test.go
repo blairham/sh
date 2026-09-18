@@ -55,8 +55,10 @@ func TestTypePAndF(t *testing.T) {
 }
 
 // `jobs` takes `-lnp` here, as its own usage line says: `-p` is the process
-// ids alone, `-n` rides the unimplemented letters, and the state filters
-// bash has are unknown options.
+// ids alone, `-n` is the jobs whose state has moved since this shell last said
+// so — none, in a script, and see TestThisPresetTakesTheJobsChangedLetter for
+// the measurement (#3390) — and the state filters bash has are unknown
+// options.
 func TestJobsOptionLetters(t *testing.T) {
 	out, _ := runKsh(t, t.TempDir(), `/bin/sleep 0.3 & echo "bang=$!"
 jobs -p
@@ -68,8 +70,8 @@ wait`)
 
 	out, _ = runKsh(t, t.TempDir(), `jobs -n; echo n=$?
 jobs -r; echo r=$?`)
-	if !strings.Contains(out, "jobs: -n is not implemented yet") {
-		t.Errorf("got %q, want the letter ksh93 has named as missing", out)
+	if !strings.Contains(out, "n=0") || strings.Contains(out, "jobs: -n") {
+		t.Errorf("got %q, want -n taken and silent in a script", out)
 	}
 	if !strings.Contains(out, "jobs: -r: unknown option") ||
 		!strings.Contains(out, "Usage: jobs [-lnp] [job ...]") || !strings.Contains(out, "r=2") {

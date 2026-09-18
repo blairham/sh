@@ -122,6 +122,16 @@ type Job struct {
 	stopNote chan struct{}
 	stopOnce sync.Once
 	stopSig  syscall.Signal
+	// reportedState is the state this job was in the last time the shell
+	// said anything about it. `jobs -n` is the only reader: it lists the
+	// jobs whose state has moved since, which is a question about what the
+	// shell has *told somebody* rather than about the job.
+	//
+	// The zero value is the running state and that is the right start rather
+	// than a convenience: a job is running when it is made, so a shell that
+	// has said nothing about it yet has nothing to correct.
+	reportedState jobReportState
+
 	// noticedStop says the shell has already taken that note into the job's
 	// own Stopped and StopSig. Written only on the shell's own goroutine,
 	// which is what keeps `bg` from being undone: a job the script resumed
@@ -498,6 +508,29 @@ func (r *Runner) backgroundStdin() io.Reader {
 		}
 	}
 	return emptyReader{}
+}
+
+// jobReportState is the coarse state a listing reports: running, stopped, or
+// ended. Only the transitions between these three are what `jobs -n` calls a
+// change — a job that is still running is still running however much it has
+// done since.
+type jobReportState int
+
+const (
+	jobRunningState jobReportState = iota
+	jobStoppedState
+	jobEndedState
+)
+
+// reportState is what a listing would say about this job right now.
+func (j *Job) reportState() jobReportState {
+	switch {
+	case j.Finished():
+		return jobEndedState
+	case j.Stopped:
+		return jobStoppedState
+	}
+	return jobRunningState
 }
 
 // Ident is the number a script names this job by.
@@ -884,6 +917,42 @@ func (r *Runner) waitOutPolledJob(j *Job) {
 	}
 }
 
+// noticeWaitedSignal says out loud that the child this `wait` reaped was ended
+// by a signal, in the one dialect that does.
+//
+// Only a `wait` that *named* something. A bare `wait` says nothing in every
+// column, measured, which is why this is called from the two narrowed routes
+// and not from the loop over every job.
+//
+// The signal is read back out of the status rather than carried on the Job,
+// and that is exact rather than a guess in the only dialect that reaches here:
+// its encoding is 256 plus the signal (Semantics.SignalDeathStatusIsTwoFiftySix)
+// and no `exit` can produce a status above 255, so nothing but a signal death
+// lands in that range. A dialect encoding with 128 would be ambiguous — 143 is
+// both `exit 143` and a TERM — and none of those has a wording here, so the
+// ambiguity is not reachable. If one ever gains one, the signal wants carrying
+// on the Job instead.
+func (r *Runner) noticeWaitedSignal(j *Job, status int) {
+	w := r.diag().WaitSignalNotice
+	if w == "" {
+		return
+	}
+	base := r.signalDeathStatus(0)
+	if r.unspecified {
+		return
+	}
+	sig := status - base
+	if sig <= 0 || sig > maxNamedSignal {
+		return
+	}
+	r.diagf("%s\n", Wording(w, "wait: %[1]d: %[2]s", j.Ident(), r.signalDescription(syscall.Signal(sig))))
+}
+
+// maxNamedSignal bounds what a status may be read back as a signal. Higher
+// than any signal either supported platform has, and low enough that an
+// ordinary status cannot reach it once the 256 base is taken off.
+const maxNamedSignal = 64
+
 // biWait waits for background jobs.
 //
 // With no arguments it waits for all of them and reports 0, which is what
@@ -992,6 +1061,7 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 			}
 			last, named = st, j
 			found = true
+			r.noticeWaitedSignal(j, st)
 			// And the job is finished with, exactly as the `%` spec route
 			// finishes with the job it waited out: its number goes back to
 			// the table. See Runner.reap.
@@ -1302,6 +1372,7 @@ func (r *Runner) waitJobSpecNaming(spec string) (int, *Job) {
 			return r.stoppedWaitStatus(j), nil
 		}
 		r.reap(j)
+		r.noticeWaitedSignal(j, st)
 		return st, j
 	case jobSpecAmbiguous:
 		r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,

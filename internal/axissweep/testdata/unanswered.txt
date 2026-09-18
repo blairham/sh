@@ -123,6 +123,7 @@ ash   IntegerBaseNegativeIsTwosComplement
 ash   IntegerBaseTenIsNoBase
 ash   IntegerPlusFormTakesAttributesOff
 ash   InteractiveStartupFileWhenLogin
+ash   JobsListsWhatChangedSinceTheLastReport
 ash   JobsStateFiltersAccumulate
 ash   KeptTrapListingIncludesExit
 ash   KeyedLiteralAppendJoinsTheReplacedValue
@@ -215,7 +216,6 @@ ash   ValuelessSubscriptedOperand
 ash   WholeArraySubscriptAssigningATable
 ash   WholeArraySubscriptAssigningAnArray
 ash   WritingSubstitutionIsWaitedForAtTheCommand
-
 bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
@@ -233,6 +233,7 @@ bash  ExitTrapFiresPastTheEnd
 bash  FloatFormatLetterE
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
+bash  JobsListsWhatChangedSinceTheLastReport
 bash  LongOptionNameIgnoresHyphens
 bash  LongOptionValueIsANumber
 bash  NumericTypeLetterPrecedence
@@ -245,7 +246,6 @@ bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
 bash  SubscriptedPrefixIsTakenBack
-
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
 dash  AnchoredEmptyReplacementPattern
@@ -359,6 +359,7 @@ dash  IntegerBaseNegativeIsTwosComplement
 dash  IntegerBaseTenIsNoBase
 dash  IntegerPlusFormTakesAttributesOff
 dash  InteractiveStartupFileWhenLogin
+dash  JobsListsWhatChangedSinceTheLastReport
 dash  JobsStateFiltersAccumulate
 dash  KeptTrapListingIncludesExit
 dash  KeyedLiteralAppendJoinsTheReplacedValue
@@ -458,7 +459,6 @@ dash  ValuelessSubscriptedOperand
 dash  WholeArraySubscriptAssigningATable
 dash  WholeArraySubscriptAssigningAnArray
 dash  WritingSubstitutionIsWaitedForAtTheCommand
-
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
@@ -485,7 +485,6 @@ ksh   TransformLetterCheckedOnlyWhenValued
 ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
 ksh   UnsetEndsTheProducedPipelineStatus
-
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
 zsh   ExpansionResultSuppliesGroupSyntax
@@ -495,6 +494,7 @@ zsh   IgnoredNamesFollowTheParameter
 zsh   IgnoredNamesMatchTheLastComponent
 zsh   IgnoredNamesValueIsOnePattern
 zsh   IndirectionYieldsName
+zsh   JobsListsWhatChangedSinceTheLastReport
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
 zsh   LongOptionValueIsANumber

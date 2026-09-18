@@ -2297,11 +2297,13 @@ func Semantics() interp.Semantics {
 	s.JobsListFinishedJobs = interp.Yes
 
 	// `jobs`' letters, as its own usage line gives them: `-lnp`. The state
-	// filters `-r` and `-s` are unknown options here, and `-n` rides
-	// UnimplementedOptionLetters — ksh93 reads it as the jobs that have
-	// stopped or ended since it last said, which is not bash's reading of
-	// the same letter.
-	s.JobsOptions = "lp"
+	// filters `-r` and `-s` are unknown options here.
+	s.JobsOptions = "lnp"
+	// And `-n` means the jobs whose state has moved since this shell last
+	// said anything about them, which in a script is none — see the axis for
+	// the measurement, and note bash's letter of the same name is a different
+	// question and stays unimplemented there.
+	s.JobsListsWhatChangedSinceTheLastReport = interp.Yes
 	s.JobsPidsOnlyOption = interp.Yes
 
 	// Whether a `&` job's command appears in a `jobs` listing.
@@ -3288,7 +3290,13 @@ func Diagnostics() interp.Diagnostics {
 		BadOptionNaming:    interp.BadOptionWholeWord,
 		// `ls=/bin/ls`: ksh93's hash is `alias -t`, so its listing is the
 		// alias shape — which is zsh's too, by a different road.
-		HashListing:      interp.HashListingNameEqualsPath,
+		HashListing: interp.HashListingNameEqualsPath,
+		// `wait` names the builtin and the process id when the child it
+		// reaped was ended by a signal — its own sentence, and not the
+		// general one this shell writes for a foreground command a signal
+		// killed. Measured 2026-09-17: `wait: <pid>: Terminated` then 271,
+		// and `wait: <pid>: User signal 1` then 286 (#3392).
+		WaitSignalNotice: "wait: %[1]d: %[2]s",
 		WaitBadJob:       "wait: %[1]s: Arguments must be %%job, process ids, or job pool names",
 		WaitBadJobStatus: 1,
 		// ksh93 has `--version` here, which this shell does not.
@@ -3331,12 +3339,11 @@ func Diagnostics() interp.Diagnostics {
 			// ReadNoCoprocess's wording when none is running.
 			"read": "-CSv",
 			"type": "-qv",
-			// `jobs -n`: the jobs that have stopped or ended since this
-			// shell last said so, which needs a record of what it has
-			// already reported — and reads differently from bash's letter
-			// of the same name, which counts a job that has only just
-			// started as a change.
-			"jobs": "-n",
+			// `jobs -n` has left this list: the record of what the shell
+			// has already reported is on the job now, and the letter is in
+			// Semantics.JobsOptions with
+			// JobsListsWhatChangedSinceTheLastReport deciding what it means
+			// (#3390).
 			// typeset's letters this engine does not hold: the floats'
 			// -F, padding and alignment, mappings and the rest of its usage
 			// line.

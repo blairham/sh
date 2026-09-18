@@ -3036,6 +3036,31 @@ type Diagnostics struct {
 	// ksh93 only, since ksh93 is the only dialect that refuses the form.
 	TrapConditionRequired string
 
+	// WaitSignalNotice is what a named `wait` says when the child it reaped
+	// was ended by a signal. Two verbs: the process id, and this shell's
+	// words for the signal.
+	//
+	// ksh93 alone, and it is `wait`'s own sentence rather than the general
+	// one — it names the builtin and the process id, where the same shell's
+	// report for a *foreground* command a signal killed names neither and
+	// goes through Semantics.ReportsACommandKilledBySignal. Measured
+	// 2026-09-17 from a script file under `env -i`, ksh93u+ 2012-08-01:
+	//
+	//	sh -c 'kill -TERM $$' &; wait $!
+	//	    ./case.sh[2]: wait: <pid>: Terminated        then 271
+	//	the same with `wait %1`                          the same, naming the pid
+	//	the same with USR1                               wait: <pid>: User signal 1, 286
+	//	`sh -c 'exit 3' &; wait $!`                      nothing, 3
+	//	a bare `wait`                                    nothing, 0
+	//
+	// dash is the only other column that says anything, and it says the
+	// general sentence rather than a `wait`-flavored one — so this is a
+	// second site and not the same wording reached twice. bash and zsh write
+	// nothing at all.
+	//
+	// Empty is silence, which is what four of the five columns want.
+	WaitSignalNotice string
+
 	// KillNoSuchProcess is a target that is not there. One verb: the pid.
 	//
 	// The four are worth reading together, because they are the same fact

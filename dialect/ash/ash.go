@@ -1101,6 +1101,11 @@ func Semantics() interp.Semantics {
 	// agreement with dash. The axis is read and never asked, so an
 	// unanswered dialect gets the answer five of the six measured columns
 	// give rather than a refusal (#1563).
+	// unanswered JobsListsWhatChangedSinceTheLastReport: `jobs -n` is not a
+	// letter this shell has — it is not in JobsOptions — so the axis is
+	// never consulted here. ksh93 is the one column with the letter, and
+	// bash's letter of the same name is a different question that stays
+	// unimplemented (#3390).
 	s.JobsListFinishedJobs = interp.Yes
 	s.JobsOptions = "lp"
 	s.JobsPidsOnlyOption = interp.Yes

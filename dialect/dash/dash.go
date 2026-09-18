@@ -1091,6 +1091,11 @@ func Semantics() interp.Semantics {
 	// `-x` are all "Illegal option" here, which is why the letter set is a
 	// dialect answer rather than one string in the engine.
 	s.JobsOptions = "lp"
+	// unanswered JobsListsWhatChangedSinceTheLastReport: `jobs -n` is not a
+	// letter this shell has — it is not in JobsOptions — so the axis is
+	// never consulted here. ksh93 is the one column with the letter, and
+	// bash's letter of the same name is a different question that stays
+	// unimplemented (#3390).
 	s.JobsPidsOnlyOption = interp.Yes
 
 	// Whether a `&` job's command appears in a `jobs` listing.

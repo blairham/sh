@@ -2068,6 +2068,11 @@ func Semantics() interp.Semantics {
 	s.JobsOptions = "lprs"
 	// `jobs -p` here is the process ids and nothing else, which is what
 	// makes `kill $(jobs -p)` mean what it is written to mean.
+	// unanswered JobsListsWhatChangedSinceTheLastReport: `jobs -n` is not a
+	// letter this shell has — it is not in JobsOptions — so the axis is
+	// never consulted here. ksh93 is the one column with the letter, and
+	// bash's letter of the same name is a different question that stays
+	// unimplemented (#3390).
 	s.JobsPidsOnlyOption = interp.Yes
 	// With both filters at once the last letter given decides, so
 	// `jobs -rs` lists the stopped jobs and `jobs -sr` the running ones.

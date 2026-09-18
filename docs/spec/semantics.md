@@ -1502,6 +1502,84 @@ plain listing — that the table is not the same on two operating systems — is
 what the platform table above answers: the listing is a fact about the
 machine, and now it is the machine's.
 
+## `jobs -n` is a filter on what the shell has already said
+
+Measured 2026-09-17 from a script file under `env -i PATH=/usr/bin:/bin` with
+stdin from `/dev/null`, against ksh93u+ 2012-08-01, bash 5.3.20, zsh 5.9.2 and
+dash.
+
+    ( exit 7 ) &
+    jobs -n >/dev/null 2>&1
+    echo "jobs -n: $?"
+
+| shell | status |
+| --- | --- |
+| ksh93 | 0 |
+| bash 5.3 | 0 |
+| zsh | 1 |
+| dash | 2 |
+| here, before | 2 — `jobs: -n: unknown option` and the usage block |
+
+The letter is in ksh93's own usage line, `jobs [-lnp]`, and it is **not** a
+state filter: `-r` and `-s` ask what state a job is in, and `-n` asks whether
+that state has *moved since anybody was told*. With the monitor on:
+
+    set -m; ( sleep 0.3 ) & ( exit 7 ) & sleep 0.15
+    jobs -n      [2] +  Done(7)   <command unknown>      status 0
+    jobs -n      nothing                                 status 0
+
+and the same script without `set -m` prints nothing at 0 — which is what a
+script gets. That row is worth reading rather than skipping: with the monitor
+off ksh93 has not **noticed** the job end at all, and its bare `jobs` calls a
+job that has already exited `Running`. This engine reaps on every listing, so
+the noticing is what has to be modeled, and
+`Runner.jobsThatChangedSinceTheyWereReported` is where: with nobody to tell,
+the changed set is empty.
+
+`Semantics.JobsListsWhatChangedSinceTheLastReport` is the axis, and it is an
+axis rather than a reading of the letter because **bash has a letter of the
+same name and means something else by it** — bash counts a job that has only
+just started as a change, and prints both jobs where ksh93 prints one. bash's
+stays in that dialect's `UnimplementedOptionLetters`; the axis is what stops a
+dialect acquiring ksh93's reading by acquiring the letter (#3390).
+
+## `wait` has a sentence of its own for a signal
+
+Measured 2026-09-17, same arrangement.
+
+    sh -c 'kill -TERM $$' &
+    wait $!
+
+| shell | what it writes | status |
+| --- | --- | --- |
+| ksh93 | `./case.sh[2]: wait: <pid>: Terminated` | 271 |
+| bash 5.3 | nothing | 143 |
+| zsh | nothing | 143 |
+| dash | `Terminated: 15` | 143 |
+| here, before | nothing | 271 |
+
+The **status** was already right — 256 plus the signal is ksh93's encoding,
+through `Semantics.SignalDeathStatusIsTwoFiftySix`. What was missing is the
+sentence, and it is `wait`'s own rather than the general one: it names the
+builtin and the process id, where the same shell's report for a *foreground*
+command a signal killed names neither and goes through
+`Semantics.ReportsACommandKilledBySignal`. dash is the only other column that
+says anything and it says the general sentence, so a shared implementation
+would have to know which of the two it was writing — which is why this is
+`Diagnostics.WaitSignalNotice`, a second site (#3392).
+
+Three shapes stay silent and all three are measured: a bare `wait`, a child
+that exited ordinarily, and every column but ksh93. Other signals take the
+same shape with their own name — `wait: <pid>: User signal 1` at 286 — and the
+words are that shell's own table rather than the machine's, which is why USR1
+is `User signal 1` where the host says `User defined signal 1`.
+
+The signal is read back out of the status rather than carried on the job, and
+that is exact rather than a guess in the one dialect that reaches it: no `exit`
+can produce a status above 255, so nothing but a signal death lands above the
+256 base. A dialect encoding with 128 would be ambiguous, and none of those has
+a wording here.
+
 ## Handing the death to the driver is not the same as dying
 
 Measured 2026-09-05 against bash 5.3, bash 3.2, dash, ksh93 and zsh, and

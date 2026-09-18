@@ -4892,10 +4892,17 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 			break
 		}
 		switch l.peek() {
-		case '\'':
-			l.skipQuoted('\'', false)
-		case '"':
-			l.skipQuoted('"', true)
+		case '\'', '"':
+			// A quoted run is stepped over whole, so a `)` inside it closes
+			// nothing — unless the dialect's scan is blind to quoting, where
+			// the quote is an ordinary character and the `)` behind it is
+			// counted like any other. See
+			// Dialect.ArithCommandScanIgnoresQuoting for the rows.
+			if l.dialect.ArithCommandScanIgnoresQuoting {
+				l.advance()
+				continue
+			}
+			l.skipQuoted(l.peek(), l.peek() == '"')
 		case '\\':
 			l.noteContinuation()
 			l.advance()

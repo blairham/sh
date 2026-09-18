@@ -2251,6 +2251,44 @@ type Dialect struct {
 	// different program.
 	ArithCommand bool
 
+	// ArithCommandScanIgnoresQuoting makes the scan that looks for an
+	// arithmetic command's closing `))` blind to quoting, so a `)` written
+	// inside quotes closes the expression's nesting like any other — and,
+	// arriving where nothing closes it twice, gives the arithmetic reading up
+	// and leaves two groupings behind.
+	//
+	// `((` is ambiguous and ArithCommand's own doc has the rule that settles
+	// it: the reading holds where the expression's nesting is closed by two
+	// *adjacent* `)`. This is the narrower question of whether the scan
+	// looking for them sees a `)` inside a quoted run at all, and the panel
+	// splits on it where the rule itself is unanimous. Measured 2026-09-15,
+	// each probe in a script file of its own:
+	//
+	//	probe                 bash 5.3, 3.2, as sh  zsh 5.9.2   ksh93u+
+	//	((echo "a)b"))        arithmetic error, 1   prints a)b  prints a)b
+	//	((echo 'a)b'))        arithmetic error, 1   prints a)b  prints a)b
+	//	((echo "(" ))         arithmetic error, 1   prints (    `"' unmatched, 3
+	//	((echo a\) ))         arithmetic error, 1   arith error arith error
+	//	((echo $(echo a) ))   arithmetic error, 1   arith error arith error
+	//
+	// dash and BusyBox ash have no `((` at all and print the text in every
+	// row. The last two rows are what keeps the flag narrow: a backslash and a
+	// command substitution are stepped over by every column, so this is about
+	// *quoting* and not about skipping in general.
+	//
+	// It is not shared with the `$((` fallback, which asks the same-shaped
+	// question at a different construct: bash tracks quoting there too and
+	// zsh and ksh93 do not, but the two were measured separately and nothing
+	// here assumes they move together. See
+	// ArithSubstFallsBackToCommandSubst and `substitutions.md`.
+	//
+	// ksh93's third row is its own third answer and is a fact about that
+	// shell's *fallback* rather than about this scan: having given the
+	// reading up at the `(` inside the quotes it meets a quote it cannot
+	// close, where the flag alone leaves two groupings that print `(`. It is
+	// measured and left (#3069).
+	ArithCommandScanIgnoresQuoting bool
+
 	// FunctionKeyword enables `function name { ... }`. Absent from dash,
 	// present in bash, ksh93 and zsh.
 	FunctionKeyword bool

@@ -3652,6 +3652,47 @@ one line. `(((1+1)))` is arithmetic over the expression `(1+1)` — the
 last two `)` are adjacent at depth zero — while `(((echo a); echo b); echo c)`
 gives the reading up three times over and prints `a` `b` `c`.
 
+#### Whether the scan looking for the closer sees quoting is a dialect flag
+
+The rule above is unanimous. What is not is the narrower question of whether
+the scan looking for that adjacent `)` sees one written **inside quotes**.
+
+If it does not, the quoted run is skipped whole, the `))` at the end is found,
+and the line is an arithmetic command over an expression that then fails. If
+it does, the `)` inside the quotes is reached at depth zero with text behind
+it, the arithmetic reading is given up, and the line is two groupings running
+the command.
+
+Measured 2026-09-15, each probe in a script file of its own:
+
+| probe | bash 5.3, 3.2, as `sh` | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- |
+| `((echo "a)b"))` | arithmetic error, 1 | prints `a)b`, 0 | prints `a)b`, 0 |
+| `((echo 'a)b'))` | arithmetic error, 1 | prints `a)b`, 0 | prints `a)b`, 0 |
+| `((echo "(" ))` | arithmetic error, 1 | prints `(`, 0 | `` `"' unmatched ``, 3 |
+| `((echo a\) ))` | arithmetic error, 1 | arithmetic error, 2 | arithmetic error, 1 |
+| `((echo $(echo a) ))` | arithmetic error, 1 | arithmetic error, 2 | arithmetic error, 1 |
+
+dash and BusyBox ash have no `((` at all and print the text in every row.
+
+So it is a clean two-way split along the bash line, and
+`Dialect.ArithCommandScanIgnoresQuoting` is what records it. The last two rows
+are what keeps it about *quoting*: a backslash and a command substitution are
+stepped over by all five, so neither is part of this.
+
+ksh93's third row is its own third answer and is a fact about that shell's
+**fallback** rather than about the scan. Having given the reading up at the
+`(` inside the quotes it meets a quote it cannot close, where the flag alone
+leaves two groupings that print `(`, as zsh does. It is measured and left
+(#3069).
+
+The `$((` fallback asks a question of the same shape at a different
+construct, and the two are **not** one flag. They were measured separately and
+agree: `echo $(( '0)' + 1 ))` is an arithmetic error in the three bash columns
+and runs `0)` as a command in zsh and ksh93, which is the same two-way split.
+We follow bash there; see *Quoting is the one edge the five do not share* in
+`substitutions.md` and #3530.
+
 `[[ … ]]` is the **parser's**, despite `<` and `>` meaning something
 different inside it. `[[` is only special where a command may begin —
 `echo [[ a ]]` prints `[[ a ]]` — and the lexer does not know where

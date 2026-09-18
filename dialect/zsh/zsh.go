@@ -606,6 +606,13 @@ func Dialect() syntax.Dialect {
 	// The *opener* is not this: `echo "[$(\⏎( 1 + 2 ))]"` is 3 here as it is
 	// in bash, which is why the two ends are two fields.
 	d.ContinuationPartsTheArithmeticCloser = true
+	// The scan that looks for an arithmetic command's `))` is blind to
+	// quoting here, so `((echo "a)b"))` and `((echo 'a)b'))` give the
+	// arithmetic reading up and print `a)b` as two groupings, where the three
+	// bash columns call each an arithmetic syntax error. Measured 2026-09-15;
+	// a backslash and a command substitution are stepped over in every column
+	// and are not this. See the flag for the five rows.
+	d.ArithCommandScanIgnoresQuoting = true
 	// A run of digits after an unbraced `$` is one positional parameter here.
 	// Measured 2026-09-15 with `set -- 1 2 3 4 5 6 7 8 9 ten eleven`: `$10` is
 	// `ten` and `$11` is `eleven` in this shell, where bash 5.3, bash 3.2,

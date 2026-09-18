@@ -1816,6 +1816,10 @@ func Semantics() interp.Semantics {
 	// reads `-n 5` and `-n5` as the number 5 where the other three read `#` as a
 	// second option letter. Measured 2026-09-16 on ksh93u+ 2012-08-01 (#2947).
 	s.GetoptsOptionStringHasANumericType = interp.Yes
+	// OPTERR is an ordinary variable here: measured 2026-09-17 on ksh93u+
+	// 2012-08-01, a bad option is one line on stderr with it set to 0 as with
+	// it set to 1.
+	s.GetoptsOptErrSilencesTheComplaint = interp.No
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
 	// OPTARG and OPTIND are the builtin's own here: `readonly OPTARG;

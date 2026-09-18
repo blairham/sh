@@ -1579,6 +1579,14 @@ func Semantics() interp.Semantics {
 	// `-n 5` leaves the 5 as an operand and `-n5` reports 5 as unknown.
 	// Measured 2026-09-16, bash 5.3.20 (#2947).
 	s.GetoptsOptionStringHasANumericType = interp.No
+	// OPTERR is this shell's alone, and setting it to zero turns the
+	// `getopts` diagnostic off without moving to the silent form — which is
+	// the only spelling for "keep `?` and lose the noise", the leading colon
+	// changing the name and OPTARG as well. Measured 2026-09-17 on 5.3.20, on
+	// 3.2.57 and under the name `sh`: a bad option and a missing argument are
+	// each one line on stderr at OPTERR=1 and none at OPTERR=0, with the name,
+	// the status and OPTARG the same either way.
+	s.GetoptsOptErrSilencesTheComplaint = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.GetoptsEmptiesOptargForAnArgumentlessOption = interp.No
 	// A freeze on OPTARG or OPTIND is consulted here — `readonly OPTARG;

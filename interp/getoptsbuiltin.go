@@ -681,7 +681,9 @@ func (r *Runner) getoptsBad(name, letter string, silent bool, why getoptsComplai
 	if r.readonly[name] && r.sem().ReadonlyRefusalInABuiltinIsFatal == Yes {
 		return r.getoptsSetName(name, "?", 0)
 	}
-	r.getoptsBadOptionComplaint(letter, why)
+	if !r.getoptsComplaintSilenced() {
+		r.getoptsBadOptionComplaint(letter, why)
+	}
 	// And what becomes of OPTARG after it: measured 2026-09-16, dash 0.5.12
 	// and BusyBox ash 1.37.0 write `Illegal option -z` and *then* `getopts:
 	// OPTARG: is read only` over a frozen OPTARG, in that order.
@@ -692,6 +694,57 @@ func (r *Runner) getoptsBad(name, letter string, silent bool, why getoptsComplai
 		return getoptsRefusedStatus
 	}
 	return r.getoptsSetName(name, "?", 0)
+}
+
+// getoptsComplaintSilenced reports whether a parameter the script set turns
+// this builtin's complaint off.
+//
+// The parameter is read before the axis rather than after it, which is what
+// keeps the question off the path every other shell takes: a script that has
+// not set OPTERR, or has set it to something that is not zero, is not asking
+// the question at all. See Semantics.GetoptsOptErrSilencesTheComplaint.
+//
+// The empty string is not zero here. `OPTERR=` writes the sentence exactly as
+// an unset OPTERR does, so a name with nothing in it is read as no answer
+// rather than as a zero — which is the one spelling that separates this from
+// an ordinary number read.
+func (r *Runner) getoptsComplaintSilenced() bool {
+	v, ok := r.getVar("OPTERR")
+	if !ok || v == "" || !leadingNumberIsZero(v) {
+		return false
+	}
+	return r.ask(r.sem().GetoptsOptErrSilencesTheComplaint,
+		"OPTERR reading zero silencing the `getopts` complaint")
+}
+
+// leadingNumberIsZero reads a number off the front of s the way a shell reads
+// one out of a string that was never meant to hold one, and reports whether it
+// came to zero.
+//
+// Blanks, then an optional sign, then decimal digits, stopping at the first
+// byte that is not one — so `x`, `0x0`, `0abc`, `-`, `+` and a lone blank are
+// all zero, and `08` is eight rather than an octal eight-that-is-not. All six
+// of space, tab, newline, vertical tab, form feed and carriage return are
+// skipped, each measured in front of a `0` and of a `1`. Whether
+// a digit that is not `0` was seen is the whole of the test, which is also why
+// no integer is built: `9999999999999999999999` is not zero and overflowing an
+// int to decide that would be reading the string twice as carefully as the
+// answer needs.
+func leadingNumberIsZero(s string) bool {
+	i := 0
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' ||
+		s[i] == '\v' || s[i] == '\f' || s[i] == '\r') {
+		i++
+	}
+	if i < len(s) && (s[i] == '+' || s[i] == '-') {
+		i++
+	}
+	for ; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
+		if s[i] != '0' {
+			return false
+		}
+	}
+	return true
 }
 
 // getoptsBadOptionComplaint writes the line a bad option or a missing

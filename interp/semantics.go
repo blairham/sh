@@ -3038,6 +3038,50 @@ type Semantics struct {
 	// walk rather than an index.
 	GetoptsOptionStringHasANumericType Answer
 
+	// GetoptsOptErrSilencesTheComplaint lets a script turn the `getopts`
+	// diagnostic off by setting the parameter OPTERR to zero, without moving
+	// to the silent form.
+	//
+	// One dialect has the parameter and the rest read it as an ordinary
+	// variable. It is not the silent form by another spelling, which is why
+	// it is worth having: a leading colon in the option string also changes
+	// what arrives in the name and in OPTARG, where this changes only whether
+	// the sentence is written. A script that wants to keep `?` and lose the
+	// noise has exactly one way to say so.
+	//
+	// Measured 2026-09-17 over a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with stdin on /dev/null, counting lines on stderr from
+	// `getopts a o -z` and from `getopts a: o -a`:
+	//
+	//	                OPTERR=1   OPTERR=0   unset
+	//	bash 5.3.20        1          0         1
+	//	bash as `sh`       1          0         1
+	//	bash 3.2.57        1          0         1
+	//	ksh93u+            1          1         1
+	//	dash 0.5.12        1          1         1
+	//	BusyBox ash        1          1         1
+	//	zsh 5.9.2          1          1         1
+	//
+	// — the same for a bad option and for a missing argument, and the name,
+	// the status and OPTARG are untouched either way, so only the sentence
+	// moves. What it does **not** reach is the usage complaint `getopts`
+	// writes when it was not given both operands: that is still one line at
+	// OPTERR=0.
+	//
+	// The **value** is read the way that shell reads a number out of a
+	// string rather than the way arithmetic does: leading blanks, an optional
+	// sign, then decimal digits, stopping at the first byte that is not one.
+	// So `x`, `0x0`, `0abc`, `-`, `+` and a lone blank are all zero and all
+	// silence it, where `08` is eight and `1abc` is one and neither does. The
+	// one value that is not read at all is the empty string: `OPTERR=` writes
+	// the sentence, exactly as an unset OPTERR does. Measured the same day
+	// over fourteen spellings.
+	//
+	// Asked only where a script has set OPTERR to a value that reads as zero,
+	// so an ordinary `getopts` — and an ordinary bad option under any of the
+	// six shells without the parameter — reaches no question at all.
+	GetoptsOptErrSilencesTheComplaint Answer
+
 	// GetoptsClearsOptarg empties OPTARG when `getopts` reports a bad option
 	// rather than leaving it unset. zsh alone, and a script testing
 	// `${OPTARG-}` can tell the two apart.

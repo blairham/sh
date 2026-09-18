@@ -264,7 +264,7 @@ axis-coverage: ## Report every interp.Semantics axis a dialect does not answer, 
 # check with its whole ledger printed, and `ARGS=-write` regenerates the
 # committed reading after a probe is added. See internal/axissweep/grade.go
 # for why most pairs have no probe and why that number is printed (#2441).
-axis-grade: ## Grade every dialect preset against the golden record and report the pairs nothing compares (#2441)
+axis-grade: ## Grade every dialect preset against the golden record, and report the pairs nothing compares and the splits no tier can express (#2441, #3482)
 	@go run ./internal/cmd/axissweep -grade $(ARGS)
 
 sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binaries, and report what the boundary stopped

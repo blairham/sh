@@ -211,6 +211,13 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 		if a.Operand {
 			continue
 		}
+		if _, held := r.prefixTraceValue(a); held {
+			// Already expanded, by the ordered walk one dialect makes before
+			// it opens the command's redirections — see
+			// interp/prefixredirorder.go. Expanding again would run a
+			// substitution in the value twice.
+			continue
+		}
 		if _, ok := positionalAssignIndex(a.Name); ok && a.IsArray {
 			// The splice form, which has no one value to expand. See
 			// Runner.tracesItsPrefix.
@@ -331,4 +338,33 @@ func (r *Runner) tracePrefixAfterTheCommand(assigns []*syntax.Assign) {
 	for _, w := range words {
 		r.traceLine(w, d)
 	}
+}
+
+// prefixEntryHasATraceableValue reports whether this prefix entry is one a
+// value is expanded and recorded for at all — the three skips
+// expandPrefixTraceValues makes, said once so that the ordered walk in
+// interp/prefixredirorder.go makes the same three.
+//
+// The splice form has no one value; a frozen name is refused and no column
+// writes a line for a prefix that did not happen; and a subscripted word the
+// dialect refuses is refused rather than expanded.
+func (r *Runner) prefixEntryHasATraceableValue(a *syntax.Assign) bool {
+	if _, ok := positionalAssignIndex(a.Name); ok && a.IsArray {
+		return false
+	}
+	return !r.readonly[a.Name] && !r.subscriptedPrefixDropped(a)
+}
+
+// tracesEachPrefixEntryOnItsOwnLine reports whether this dialect writes one
+// trace line per prefix entry ahead of the command, which is the only shape
+// the ordered walk can interleave a refusal into.
+//
+// The other two shapes put the whole prefix on the command's own line, where
+// there is no "between two entries" for a complaint to land in.
+func (r *Runner) tracesEachPrefixEntryOnItsOwnLine() bool {
+	switch r.diag().TracePrefixAssignment {
+	case TracePrefixOwnLineBefore, TracePrefixOwnLineAfter:
+		return true
+	}
+	return false
 }

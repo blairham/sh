@@ -203,6 +203,10 @@ func Semantics() interp.Semantics {
 	// listing, and `export` is a special builtin whose prefix persists, so
 	// there is no second table for the axis to tell apart from the first
 	// (#3446).
+	// The redirections are opened first, as in dash: measured 2026-09-18 in
+	// the digest-pinned image, `w=$(echo S >&2) f > /nope/x` writes `can't
+	// create /nope/x` alone (#3449).
+	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	s.DeclarationPromotesThePrefixEntry = interp.No
 	// unanswered SubscriptedAssignmentPrefix, SubscriptedPrefixIsTakenBack:

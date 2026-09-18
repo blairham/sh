@@ -1209,6 +1209,15 @@ func Semantics() interp.Semantics {
 	// typeset -p z` reads a bare `z=2` here against bash's `declare -x z="2"`,
 	// and the child of `z=2 eval env` is told nothing. Measured 2026-09-16 in
 	// 93u+ 2012-08-01 (#3437).
+	// The prefix is worked through before the redirections are opened, as in
+	// bash: measured 2026-09-18, `w=$(echo S >&2) f > /nope/x` writes `S` and
+	// then `cannot create` (#3449).
+	// …and only where the assignment is a real store: an external command and
+	// a regular builtin open the redirections first here, which is exactly
+	// the set whose prefix this shell does not keep. Measured 2026-09-18 —
+	// `f` and `eval :` write their letter, `/usr/bin/true`, `true` and
+	// `print` write none.
+	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsWhereItPersists
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOff
 	// And a listing with no operand walks the **environment** the command
 	// was handed, so the prefix's entry is in it and counts as exported

@@ -227,8 +227,13 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 	// the first (#2462).
 	line, own := r.line, r.diag().ParseFailureLine(err)
 	if own > 0 {
-		line = own + r.lineBase
-		err = shiftParseError(err, r.lineBase)
+		// The route's origin as well as the text's offset, which is what
+		// Runner.lineOf adds for every *run-time* diagnostic from the same
+		// text. It was missing here, so one column's `eval` parse failure was
+		// the only line it wrote on `-c` that did not count from zero —
+		// `eval: line 1` against BusyBox's `line 0` (#3141).
+		line = own + r.lineBase + r.lineOrigin
+		err = shiftParseError(err, r.lineBase+r.lineOrigin)
 	}
 	d := r.diag()
 	if d.BorrowedTextRendersTheCallStack {
@@ -292,13 +297,23 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	outerBase := r.lineBase
 	r.lineBase = 0
 	defer func() { r.lineBase = outerBase }()
-	if s.eval && r.line > 1 {
-		// Asked at the disagreement and nowhere else: on the shell's first
+	if s.eval && r.line != 1+r.lineOrigin {
+		// Asked at the disagreement and nowhere else: on the route's *first*
 		// line the two readings are the same offset — nothing — so an `eval`
 		// there has nothing to disagree about, and that is the shape most
 		// `-c` text has.
+		//
+		// The first line is `1+r.lineOrigin` and not 1, which is the whole of
+		// #3141's eval row. One column numbers a `-c` program from zero, so
+		// its first line is 0 and its *second* is 1 — and the old `r.line > 1`
+		// read that second line as the first and left the offset at nothing.
+		// Measured 2026-09-17 in the digest-pinned alpine image: `ash -c
+		// $'echo one\neval "echo )"'` is `eval: line 1` there.
 		if r.ask(r.sem().EvalTextContinuesTheCallersLines, evalLinesAxis) {
-			r.lineBase = r.line - 1
+			// In the route's own numbering, since lineOrigin is added again
+			// by everything that renders a line out of this offset. Without
+			// the subtraction a zero-based route counts its origin twice.
+			r.lineBase = r.line - 1 - r.lineOrigin
 		}
 		if r.unspecified {
 			return 2

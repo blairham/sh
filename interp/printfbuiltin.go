@@ -2041,8 +2041,40 @@ func (r *Runner) lengthModifierRun(s string, i int) int {
 			n++
 		}
 		return n
+	case PrintfLengthModifiersC99ExceptJAndT:
+		// The same run, over four of the six letters. `j` and `t` are not
+		// modifiers in this answer, so a conversion carrying one arrives
+		// below as the character it is and is refused there.
+		n := 0
+		for i+n < len(s) && strings.IndexByte("hlzL", s[i+n]) >= 0 {
+			n++
+		}
+		return n
 	}
 	return 0
+}
+
+// quotedDirective is the directive a refusal names, which one dialect writes
+// without the length modifiers it just read past.
+//
+// See Diagnostics.PrintfDirectiveDropsLengthModifiers. The letters are the
+// ones lengthModifierRun above takes, and the drop is applied to the text
+// rather than to the scan, because the scan already accepted them: `%zd`
+// writes its operand in that shell and only a directive that *fails* is ever
+// quoted back.
+func (r *Runner) quotedDirective(conversion string) string {
+	if !r.diag().PrintfDirectiveDropsLengthModifiers {
+		return conversion
+	}
+	var b strings.Builder
+	b.Grow(len(conversion))
+	for i := 0; i < len(conversion); i++ {
+		if strings.IndexByte("hlzLjt", conversion[i]) >= 0 {
+			continue
+		}
+		b.WriteByte(conversion[i])
+	}
+	return b.String()
 }
 
 // timeZone is the zone a date is written in, which is `$TZ` — the Runner's,
@@ -2568,7 +2600,7 @@ func (r *Runner) printfBadVerb(conversion, verb string) int {
 	if i := strings.LastIndexByte(conversion, '%'); i >= 0 {
 		conversion = conversion[i:]
 	}
-	r.diagf("%s\n", Wording(d.PrintfBadVerb, "printf: %[2]s: invalid directive", verb, conversion))
+	r.diagf("%s\n", Wording(d.PrintfBadVerb, "printf: %[2]s: invalid directive", verb, r.quotedDirective(conversion)))
 	return orDefault(d.PrintfBadVerbStatus, 1)
 }
 
@@ -2585,7 +2617,7 @@ func (r *Runner) printfMissingVerb(conversion string) int {
 	if i := strings.LastIndexByte(conversion, '%'); i >= 0 {
 		conversion = conversion[i:]
 	}
-	r.diagf("%s\n", Wording(d.PrintfMissingVerb, "printf: %[1]s: missing format character", conversion))
+	r.diagf("%s\n", Wording(d.PrintfMissingVerb, "printf: %[1]s: missing format character", r.quotedDirective(conversion)))
 	return orDefault(d.PrintfMissingVerbStatus, 1)
 }
 
@@ -2821,9 +2853,16 @@ func (r *Runner) hexEscapeText(p PrintfHexEscapePolicy, s string) (string, int) 
 	case used == 0 && p == PrintfHexEscapeByte:
 		// The escape stands, with a warning that does not change the status:
 		// `printf 'a\x'; echo $?` writes the complaint, the two characters,
-		// and a zero.
-		d := r.diag()
-		r.diagf("%s\n", Wording(d.PrintfMissingHexDigit, `printf: missing hex digit for \x`))
+		// and a zero. One of the two shells that get here says nothing at
+		// all, which is an answer rather than an empty wording — see
+		// Semantics.PrintfReportsAMissingHexDigit.
+		if r.ask(r.sem().PrintfReportsAMissingHexDigit, "`printf '\\x'` reporting a missing hex digit") {
+			d := r.diag()
+			r.diagf("%s\n", Wording(d.PrintfMissingHexDigit, `printf: missing hex digit for \x`))
+		}
+		if r.unspecified {
+			return "", 0
+		}
 		return `\x`, 2
 	case used == 0:
 		// An empty digit run is a zero, and neither site ends at a NUL, so

@@ -10251,6 +10251,26 @@ type Semantics struct {
 	// holds in the dialects where the two are never apart.
 	TypeNamesAnAliasOnlyWhenExpanded Answer
 
+	// PrintfReportsAMissingHexDigit says something when a `\x` in a format
+	// has no hexadecimal digit after it. The escape stands either way and the
+	// status is 0 either way, so this is the whole of the difference a script
+	// can see.
+	//
+	// bash yes, BusyBox ash no — measured 2026-09-17 in the digest-pinned
+	// alpine image, `printf 'a\xZb'` writes `a\xZb` at 0 with nothing on
+	// standard error, where bash writes `printf: missing hex digit for \x`
+	// first. An empty Diagnostics.PrintfMissingHexDigit cannot say this: an
+	// empty wording means the substrate's own, which is the same shape
+	// AliasReportsNotFound below was added for (#3239).
+	//
+	// unpinned dash, ksh93, zsh: none of the three reaches the site. The
+	// complaint belongs to the reading that leaves the escape standing
+	// (PrintfHexEscapeByte) and those three hold PrintfHexEscapeAbsent,
+	// PrintfHexEscapeCodePoint and PrintfHexEscapeByteOrNul, each of which
+	// answers an empty digit run some other way. TestPrintfMissingHexDigit
+	// pins the pair that does reach it.
+	PrintfReportsAMissingHexDigit Answer
+
 	// AliasReportsNotFound says something when `alias` is given a name the
 	// table does not hold. True in bash, dash and ksh93; zsh reports 1 and
 	// prints nothing.
@@ -19629,6 +19649,17 @@ const (
 	// `%zz` as happily as `%ll`, which is what makes this a skipped run and
 	// not a list of spellings.
 	PrintfLengthModifiersC99
+	// PrintfLengthModifiersC99ExceptJAndT is a run of `h`, `l`, `z` and `L`
+	// and nothing else: BusyBox ash, which is neither of the two above.
+	//
+	// Measured 2026-09-17 in the digest-pinned alpine image, BusyBox v1.37.0,
+	// a letter at a time with a conversion after it: `%zd`, `%zs`, `%zc`,
+	// `%ld`, `%hd`, `%Ld`, `%hhd` and `%lld` all write their operand, while
+	// `%jd` and `%td` are `%jd: invalid format` — so the run is C99's minus
+	// the two letters that name an integer *type* rather than a width. It
+	// takes runs rather than one letter, which is what parts it from the C89
+	// answer next door (#3141).
+	PrintfLengthModifiersC99ExceptJAndT
 )
 
 func (p PrintfLengthModifierSet) String() string {
@@ -19639,6 +19670,8 @@ func (p PrintfLengthModifierSet) String() string {
 		return "h, l and L"
 	case PrintfLengthModifiersC99:
 		return "h, hh, l, ll, j, z, t and L"
+	case PrintfLengthModifiersC99ExceptJAndT:
+		return "h, hh, l, ll, z and L"
 	}
 	return "unspecified"
 }

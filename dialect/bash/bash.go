@@ -1489,6 +1489,10 @@ func Semantics() interp.Semantics {
 	// `\x41` is an `A`, and at most two digits: `\x0ff` is 0x0f then an
 	// `f`. A `\x` with no digit after it stands as written, with a warning
 	// on standard error and a status that is still zero.
+	// And it says so when the digit run is empty, which is the half a
+	// dialect answers separately from the wording: `printf 'a\xZb'` writes
+	// the complaint, the two characters and a zero.
+	s.PrintfReportsAMissingHexDigit = interp.Yes
 	s.PrintfHexEscape = interp.PrintfHexEscapeByte
 	// A `%b` argument reads the same `\x` a format does here, and both of
 	// the escape-character spellings: `\e` and `\E` are both 0x1b.

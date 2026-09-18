@@ -118,8 +118,17 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 				var found bool
 				res, scale, found = lookupResource(c)
 				if !found || !r.hasResource(res) {
-					r.diagf("%s\n", Wording(r.diag().UlimitBadOption,
-						"ulimit: -%[1]s: invalid option", string(c)))
+					line := Wording(r.diag().UlimitBadOption,
+						"ulimit: -%[1]s: invalid option", string(c))
+					// One column writes this one bare, where every other
+					// bad-option refusal of the same shell carries the
+					// script, the builtin and the line. See
+					// Diagnostics.UlimitBadOptionUnprefixed.
+					if r.diag().UlimitBadOptionUnprefixed {
+						r.errf("%s\n", line)
+					} else {
+						r.diagf("%s\n", line)
+					}
 					// The usage line every other builtin's refusal is
 					// followed by, in the dialects that print one. This
 					// builtin has a refusal of its own — the letters are

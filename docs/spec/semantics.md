@@ -3064,6 +3064,29 @@ which is C89's set — the refusals are precisely C99's additions; bash and
 ksh93 have all eight and skip a *run* of the letters rather than a list
 of spellings, which is why `%llld` and `%hld` are accepted.
 
+**BusyBox ash is a fourth answer**, and it took dash's until #3141 was
+measured. It skips a run of `h`, `l`, `z` and `L` and stops at `j` and
+`t` — C99's set minus the two letters that name an integer *type* rather
+than a width. Measured 2026-09-17 in the digest-pinned alpine image,
+BusyBox v1.37.0:
+
+    printf '%zd' 1   1        printf '%jd' 1   %jd: invalid format
+    printf '%zs' 1   1        printf '%td' 1   %td: invalid format
+    printf '%zc' 1   1
+    printf '%hhd' 1  1        printf '%lld' 1  1
+
+**And that column writes the directive back without the modifiers**, which
+is what makes `printf '%z' x` read `%: invalid format` there and `%z`
+everywhere else. `Diagnostics.PrintfDirectiveDropsLengthModifiers` is the
+flag. It is the modifiers alone: `%5.2lz` is `%5.2`, `%+ #0z` is `%+ #0`,
+and `%zq` is `%q`, so the flags, the width, the precision and a conversion
+character all survive the drop.
+
+One row there is measured and not modeled. That shell reads `q` as a
+modifier it keeps and does not implement, so `%qd` is `%qd: invalid
+format` there and `%q` here; `%jd` and `%td` are the same shape. It is
+neither the drop nor the scan, since `%qd` fails where `%zd` succeeds.
+
 Every one of them is read and thrown away. `printf '%hhd' 300` is 300 and
 not 44 in all four that take it, and `printf '%lld'` with the largest
 signed 64-bit value is that value — a shell's arithmetic is one width and
@@ -3220,6 +3243,17 @@ which is why `PrintfHexEscape` is one enumeration rather than a bool:
   `printf: missing hex digit for \x` on standard error, with a status that
   is still 0 — a warning rather than a failure. ksh93 and zsh read the
   empty run as a zero and write a NUL.
+
+**Whether anything is said about it is a fourth question**, and it is a
+`Semantics` answer rather than an empty wording, because an empty
+`Diagnostics.PrintfMissingHexDigit` already means "the substrate's own".
+`Semantics.PrintfReportsAMissingHexDigit` is where it lives. Only the
+reading that leaves the escape standing reaches it, so only bash and
+BusyBox ash answer, and the two split: measured 2026-09-17 in the
+digest-pinned alpine image, `printf 'a\xZb'` writes `a\xZb` at 0 with an
+empty standard error there, and the same line under bash writes the
+complaint first. Ours wrote bash's sentence in the ash column because an
+empty wording falls back to the default rather than to silence (#3239).
 
 One thing measured here is **not** modeled. ksh93's code point may run
 past the last one there is, and it writes a nonstandard encoding for it:

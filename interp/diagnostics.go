@@ -845,6 +845,28 @@ type Diagnostics struct {
 	PrintfMissingVerb string
 	// PrintfMissingVerbStatus is what that reports. Zero means 1.
 	PrintfMissingVerbStatus int
+	// PrintfDirectiveDropsLengthModifiers writes the directive back without
+	// the length modifiers it carried, in the two complaints above.
+	//
+	// One column: BusyBox ash names the `%` alone where every other shell
+	// names what was written. Measured 2026-09-17 in the digest-pinned alpine
+	// image, BusyBox v1.37.0 — `printf '%z' x` is `ash: %: invalid format`,
+	// `%lz` and `%llz` and `%hhz` are the same sentence, `%5.2lz` is
+	// `%5.2: invalid format` and `%+ #0z` is `%+ #0`, so it is the modifiers
+	// and not the flags, the width or the precision that go. `%zq` is `%q`,
+	// which is the control saying a conversion character survives the drop.
+	//
+	// A bool rather than a letter set, because the letters are exactly the
+	// ones Semantics.PrintfLengthModifiers just read past: a dialect that
+	// quoted a *different* set from the one it scans would be two facts, and
+	// nothing measured is that.
+	//
+	// One row is measured and not modeled. That shell reads `q` as a
+	// modifier it keeps and does not implement, so `%qd` is `%qd: invalid
+	// format` there and `%q` here — `%jd` and `%td` are the same shape. It is
+	// not this field, and it is not the scan either, since `%qd` fails where
+	// `%zd` succeeds (#3141).
+	PrintfDirectiveDropsLengthModifiers bool
 	// PrintfMissingHexDigit is a `\x` in a format with no hexadecimal digit
 	// after it. No verbs.
 	//
@@ -1475,6 +1497,15 @@ type Diagnostics struct {
 	// resource letter this dialect lacks. One verb: the letter.
 	UlimitBadOption string
 
+	// UlimitBadOptionUnprefixed writes it without the shell, the builtin and
+	// the line in front of it, which one column does here and almost nowhere
+	// else. Measured 2026-09-17 in the digest-pinned alpine image, BusyBox
+	// v1.37.0: `ulimit -Z` is a bare `ulimit: unrecognized option: Z` at 1,
+	// while `unset -Z`, `read -Z` and `trap -Z` in the same shell all carry
+	// the script, the builtin and the line and report 2. So it is this
+	// builtin's exception rather than a house style, and the sibling of
+	// AliasNotFoundUnprefixed one builtin over (#3141).
+	UlimitBadOptionUnprefixed bool
 	// UlimitBadOptionStatus is what that reports. Zero means the substrate's
 	// own, which is 2.
 	UlimitBadOptionStatus int
@@ -5734,6 +5765,14 @@ type Diagnostics struct {
 	//
 	// Applied through Runner.lineOrigin, on top of the offset borrowed text
 	// carries, because an `eval`'s first line is 0 here too.
+	//
+	// It reaches a borrowed text's *parse* failure as well as its run-time
+	// diagnostics, and did not until #3141: `ash -c 'eval "echo )"'` is
+	// `eval: line 0` there and was `line 1` here, which was the one line that
+	// route wrote without counting from zero. The offset an `eval` carries is
+	// held in the route's own numbering for the same reason — see
+	// Semantics.EvalTextContinuesTheCallersLines, whose asking point is the
+	// route's first line and not line 1.
 	CommandStringLinesFromZero bool
 
 	// StdinBuiltinLocation is BuiltinLocation for the same route: zsh

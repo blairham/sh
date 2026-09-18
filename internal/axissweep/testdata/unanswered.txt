@@ -391,6 +391,7 @@ dash  PrefixRefusalCostsTheCommand
 dash  PrintfFloatOperandIsEvaluatedTwice
 dash  PrintfOutputPrecedesComplaint
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
+dash  PrintfReportsAMissingHexDigit
 dash  ProducedParameterListing
 dash  QuitResetRestoresTheDefault
 dash  ReadCountJudgesTheNamesAfterTheFirst
@@ -476,6 +477,7 @@ ksh   LocalDashSavesTheShellOptions
 ksh   LocalOutsideAFunctionIsFatal
 ksh   LongOptionNameIgnoresHyphens
 ksh   NegatedTestRecordsThePostNegationStatus
+ksh   PrintfReportsAMissingHexDigit
 ksh   QuitResetRestoresTheDefault
 ksh   ReadonlyRecordsTheCompoundAttribute
 ksh   SelectAssumesUnboundedWidth
@@ -505,6 +507,7 @@ zsh   OperatorAfterTheSubscriptListingIsBad
 zsh   PrefixListingNamesADeclaredOnlyCompound
 zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfOutputPrecedesComplaint
+zsh   PrintfReportsAMissingHexDigit
 zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds

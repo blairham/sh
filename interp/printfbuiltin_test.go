@@ -23,6 +23,7 @@ func printfSem() Semantics {
 	s.PrintfUnfinishedConversionIsAPercent = No
 	s.PrintfHexEscape = PrintfHexEscapeAbsent
 	s.PrintfBHexEscape = PrintfHexEscapeAbsent
+	s.PrintfReportsAMissingHexDigit = Yes
 	s.PrintfUnicodeEscape = PrintfUnicodeEscapeAbsent
 	s.PrintfBUnicodeEscape = PrintfUnicodeEscapeAbsent
 	s.PrintfEscEscape = No
@@ -97,6 +98,36 @@ func TestPrintfHexEscapeWithNoDigitsWarnsWithoutFailing(t *testing.T) {
 	})
 	if out != "sh: printf: no hex digit\na\\xZ" || st != 0 {
 		t.Errorf("got %q status %d, want the complaint, the text, and 0", out, st)
+	}
+}
+
+// Whether it says anything is a second answer, not an empty wording: the two
+// shells that reach the reading split on it, and an empty
+// Diagnostics.PrintfMissingHexDigit already means "the substrate's own".
+// See Semantics.PrintfReportsAMissingHexDigit (#3239).
+func TestPrintfMissingHexDigit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		says Answer
+		want string
+	}{
+		{"the column that says so", Yes, "sh: printf: no hex digit\na\\xZ"},
+		{"the column that says nothing", No, "a\\xZ"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfHexEscape = PrintfHexEscapeByte
+			sem.PrintfReportsAMissingHexDigit = tc.says
+			diag := Diagnostics{PrintfMissingHexDigit: "printf: no hex digit"}
+			out, st := run(t, `printf 'a\xZ'`, func(r *Runner) {
+				r.Semantics = &sem
+				r.Diagnostics = &diag
+			})
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0 — the escape stands "+
+					"and the status is 0 either way", out, st, tc.want)
+			}
+		})
 	}
 }
 

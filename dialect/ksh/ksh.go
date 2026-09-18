@@ -1351,6 +1351,13 @@ func Semantics() interp.Semantics {
 	// ReadonlyRecordsTheCompoundAttribute is not answered here — the letter
 	// that raises the question does not exist, so the axis cannot be
 	// reached rather than being left undecided (#2277).
+	// unanswered ReadonlyReferenceLetter: `readonly -n` is refused here, so
+	// the letter never reaches the axis. Measured 2026-09-18 under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`: `readonly -n zz` is `readonly: -n: unknown option`
+	// with the builtin's usage block.
+	//
+	// ReadonlyOptions has no `n`, which is what keeps the question off
+	// this column rather than answered wrongly.
 	s.ReadonlyOptions = "p"
 	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` gone at 0, which is
 	// what `unset x` does — the letter changes nothing for a name that is not

@@ -1805,6 +1805,12 @@ func Semantics() interp.Semantics {
 	// script a success it did not earn — see Semantics.ReadonlyOptions.
 	// Making `readonly` read DeclareOptions here is the honest fix and has
 	// its own measurements to make.
+	// unanswered ReadonlyReferenceLetter: `readonly -n` is refused here, so
+	// the letter never reaches the axis. Measured 2026-09-18 under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`: `readonly -n zz` is `readonly: bad option: -n` at 1.
+	//
+	// ReadonlyOptions has no `n`, which is what keeps the question off
+	// this column rather than answered wrongly.
 	s.ReadonlyOptions = "paAf"
 	// And it is `typeset -r` in the other half too: a `readonly` written
 	// inside a function declares a **local**, where every other shell in

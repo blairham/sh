@@ -882,7 +882,16 @@ func Semantics() interp.Semantics {
 	// its usage line is `readonly [-af]` — which is a change within bash
 	// rather than a difference between shells, and this is 5.3's set,
 	// the binary the panel measures.
-	s.ReadonlyOptions = "paAf"
+	s.ReadonlyOptions = "paAfn"
+	// And what the `n` of that set does, which is not what the same letter
+	// does on `export`: nothing is taken off. Measured 2026-09-18 from a
+	// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch
+	// HOME — `v=1; readonly -n r=v` is 0 and `declare -p r` is `declare --
+	// r="v"`, which `r=5` then writes; `readonly q=1; readonly -n q` leaves
+	// `q` frozen; and `readonly -n z=2` over a frozen `z` is the ordinary
+	// `z: readonly variable` at 1. So the letter suppresses the freeze this
+	// call would have made and does nothing else (#3464).
+	s.ReadonlyReferenceLetter = interp.ReadonlyReferenceLetterDeclaresAnUnfrozenName
 	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` at 1 and reports 0,
 	// where ksh93 removes it. `-n` names the reference and this shell reads a
 	// name that is not one as naming nothing at all — far enough that

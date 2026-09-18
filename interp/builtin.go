@@ -6118,8 +6118,21 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	// loop carries it. `readonly` was a fourth loop that read `aA` and
 	// applied neither mark, so `readonly -a a` froze a name and recorded
 	// nothing about what it was (#1554).
+	// The `n` letter, where the dialect has one: it suppresses the freeze
+	// this call would otherwise make and changes nothing else. Read once,
+	// here, so that every branch below — the listing, the kind letters, the
+	// append and the plain store — is the branch it always was and only the
+	// freeze is missing. See Semantics.ReadonlyReferenceLetter.
+	freezes := true
+	if strings.ContainsRune(opts, 'n') {
+		var answered bool
+		freezes, answered = r.readonlyReferenceLetterFreezes()
+		if !answered {
+			return r.status
+		}
+	}
 	f := declareFlags{
-		readonly: true,
+		readonly: freezes,
 		array:    strings.ContainsRune(opts, 'a'),
 		assoc:    strings.ContainsRune(opts, 'A'),
 	}
@@ -6143,10 +6156,12 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		}
 		return r.freezeFunctions(names)
 	}
-	if (strings.ContainsRune(opts, 'p') || opts == "") && len(args) == 0 {
+	if (strings.ContainsRune(opts, 'p') || opts == "" || opts == "n") && len(args) == 0 {
 		// The listing: readonly names alone, in the dialect's shape. `-p` and
 		// nothing at all list alike, which is the same rule `export` follows
-		// and is measured the same way.
+		// and is measured the same way. The `n` letter with no operand lists
+		// too rather than declaring nothing: measured 2026-09-18, a bare
+		// `readonly -n` writes the same frozen names a bare `readonly` does.
 		form, dashP := r.bareOrDashP(opts, r.sem().ReadonlyListing)
 		return r.declarePrintForm(nil, form, dashP,
 			func(d declaration) bool { return d.readonly })
@@ -6248,7 +6263,9 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				if r.unspecified {
 					return r.status
 				}
-				r.markReadonly(name)
+				if freezes {
+					r.markReadonly(name)
+				}
 				continue
 			}
 			r.setVarAs(name, value, assignedByDeclaration)
@@ -6285,7 +6302,13 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
-		r.markReadonly(name)
+		if freezes {
+			// The `n` letter's whole effect: the name is declared, holds what
+			// it holds and is not frozen. Nothing is taken *off* either — a
+			// name the shell already froze stays frozen, which is why this is
+			// a skip of the mark rather than an unmark.
+			r.markReadonly(name)
+		}
 	}
 	if ended {
 		// See biDeclare.
@@ -6296,6 +6319,27 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		return 1
 	}
 	return status
+}
+
+// readonlyReferenceLetterFreezes asks what the `n` letter does here, and
+// answers whether this call still freezes what it declares.
+//
+// Asked only where the letter was written, which is the whole of the
+// disagreement: a `readonly` without it freezes in every column and raises no
+// question. The second result is whether the dialect answered at all — see
+// Semantics.ReadonlyReferenceLetter, where Unspecified is what a dialect
+// whose `readonly` has no `n` holds and is unreachable from here.
+func (r *Runner) readonlyReferenceLetterFreezes() (freezes, answered bool) {
+	switch r.sem().ReadonlyReferenceLetter {
+	case ReadonlyReferenceLetterDeclaresAnUnfrozenName:
+		return false, true
+	case ReadonlyReferenceLetterIsInert:
+		return true, true
+	}
+	r.errf("%s\n", r.diag().Report(r.name(), r.line,
+		r.unanswered("the `n` letter of `readonly`")))
+	r.status, r.unspecified = 2, true
+	return true, false
 }
 
 // readonlyDeclaresALocal saves the name in the innermost scope where the

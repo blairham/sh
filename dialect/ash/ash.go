@@ -508,7 +508,15 @@ func Semantics() interp.Semantics {
 	// all, so even the listing that would show the attribute is missing —
 	// which is why ReadonlyRecordsTheCompoundAttribute is unreachable in
 	// this column rather than unanswered (#2277).
-	s.ReadonlyOptions = "p"
+	//
+	// `-n` is the exception and is the one letter beyond POSIX's: measured
+	// 2026-09-18 in the digest-pinned image, `readonly -n r=v` is 0 where
+	// `-a`, `-A` and `-f` are refused. It buys a script nothing but that
+	// status — the name is frozen regardless, and `r=5` after it is `r: is
+	// read only` — which is the other reading of the letter and why it is an
+	// axis rather than a fact. See Semantics.ReadonlyReferenceLetter.
+	s.ReadonlyOptions = "pn"
+	s.ReadonlyReferenceLetter = interp.ReadonlyReferenceLetterIsInert
 	// `export -n` is accepted and reports 0, which dash refuses outright.
 	s.ExportTakesTheAttributeOff = interp.Yes
 	// `export -f` is `illegal option -f`, so a function does not travel.

@@ -1282,15 +1282,14 @@ type Semantics struct {
 	//	ksh93u+                p           `-a: unknown option`
 	//	BusyBox ash            p           `readonly: line 0: illegal option -a`
 	//
-	// Two things the table deliberately leaves out, both measured and
-	// neither modeled.
+	// **`-n` has joined two of the rows**, and what earned it the place is
+	// the row that grades an *effect*: see ReadonlyReferenceLetter, which is
+	// the two readings the three shells that take the letter split into. It
+	// was left out while nothing here did anything with it, on the rule that
+	// a letter accepted and ignored hands a script a success it did not earn
+	// (#3464).
 	//
-	// **`-n`.** bash 5.3, bash 3.2 and BusyBox ash all take `readonly -n zz`
-	// at status 0; dash, ksh93 and zsh refuse it. It is not in any set here
-	// because nothing in this shell does anything with it, and a letter
-	// accepted with no effect is a worse answer than a refusal: the script
-	// gets a success it did not earn. A row that grades an *effect* is what
-	// would earn it a place.
+	// One thing the table still leaves out, measured and not modeled.
 	//
 	// **zsh's wider set.** `readonly` there is `typeset -r` wearing another
 	// name, so `-i`, `-x`, `-g`, `-l`, `-u` and `-t` are all taken at status
@@ -1299,6 +1298,34 @@ type Semantics struct {
 	// is `readonly` reading DeclareOptions there, and that is a change with
 	// its own measurements to make.
 	ReadonlyOptions string
+	// ReadonlyReferenceLetter is what the `n` letter does on `readonly`,
+	// where the dialect spells it in ReadonlyOptions at all.
+	//
+	// The letter is `export -n`'s spelled under the other word, and it does
+	// not mean there what it means there: nothing is taken *off*. Measured
+	// 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with a scratch HOME:
+	//
+	//	bash 5.3.20     `v=1; readonly -n r=v` is 0 and `declare -p r` is
+	//	                `declare -- r="v"` — an ordinary, unfrozen scalar,
+	//	                which `r=5` then writes. `readonly q=1; readonly -n q`
+	//	                leaves `q` frozen, so nothing is unfrozen either; and
+	//	                `readonly -n z=2` over a frozen `z` is the ordinary
+	//	                `z: readonly variable` at 1. So the letter suppresses
+	//	                the freeze this call would have made and does nothing
+	//	                else: `readonly -na arr=1` still records the array,
+	//	                `readonly -n w+=b` still joins, and a bare
+	//	                `readonly -n` is the same listing a bare `readonly` is.
+	//	BusyBox ash     takes the letter at 0 and freezes the name anyway —
+	//	1.37.0          `readonly -n r=v` then `r=5` is `r: is read only`.
+	//	dash, ksh93,    refuse it: the letter is in none of their
+	//	zsh             ReadonlyOptions and the builtin's own bad-option
+	//	                refusal is what a script meets, so the axis is never
+	//	                asked there.
+	//
+	// Unspecified is right for a dialect whose `readonly` has no `n`, and is
+	// refused by name for one that has.
+	ReadonlyReferenceLetter ReadonlyReferenceLetterPolicy
 	// UnsetReferenceLetterRemovesANonReference decides `unset -n name` where
 	// the name is an ordinary variable rather than a name reference.
 	//
@@ -23123,6 +23150,39 @@ func (p ReadonlyElementPolicy) String() string {
 		return "the array is frozen first and the element write lost to it"
 	case ReadonlyElementRefused:
 		return "the operand is refused"
+	}
+	return "unspecified"
+}
+
+// ReadonlyReferenceLetterPolicy is what the `n` letter does on `readonly`.
+//
+// Two answers and not a bool, because the third is the one most of the panel
+// holds: the letter is not the builtin's at all there, and Unspecified is
+// what a dialect whose ReadonlyOptions has no `n` says. A bool would have had
+// to call that "no", which reads as a measured answer to a question the shell
+// refuses to be asked. See Semantics.ReadonlyReferenceLetter for the panel.
+type ReadonlyReferenceLetterPolicy uint8
+
+const (
+	// ReadonlyReferenceLetterUnspecified is no answer, and is refused like
+	// any other — reachable only where the dialect spells the letter.
+	ReadonlyReferenceLetterUnspecified ReadonlyReferenceLetterPolicy = iota
+	// ReadonlyReferenceLetterDeclaresAnUnfrozenName suppresses the freeze
+	// this call would have made and does nothing else, so `readonly -n r=v`
+	// is an ordinary scalar a later assignment writes: bash.
+	ReadonlyReferenceLetterDeclaresAnUnfrozenName
+	// ReadonlyReferenceLetterIsInert takes the letter and freezes the name
+	// regardless, so the only thing it buys a script is a status 0 where
+	// another shell's `readonly` refuses the option: BusyBox ash.
+	ReadonlyReferenceLetterIsInert
+)
+
+func (p ReadonlyReferenceLetterPolicy) String() string {
+	switch p {
+	case ReadonlyReferenceLetterDeclaresAnUnfrozenName:
+		return "the letter declares an unfrozen name"
+	case ReadonlyReferenceLetterIsInert:
+		return "the letter is taken and the name frozen anyway"
 	}
 	return "unspecified"
 }

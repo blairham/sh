@@ -420,6 +420,7 @@ dash  ReadZeroTimeout
 dash  ReadonlyAttributeCanBeRemoved
 dash  ReadonlyElement
 dash  ReadonlyRecordsTheCompoundAttribute
+dash  ReadonlyReferenceLetter
 dash  ReplacementAnchors
 dash  ReplacementEmptyMatchDeclined
 dash  ReplacementOperandTakesTheEnclosingQuoting
@@ -499,6 +500,7 @@ ksh   NegatedTestRecordsThePostNegationStatus
 ksh   PrintfReportsAMissingHexDigit
 ksh   QuitResetRestoresTheDefault
 ksh   ReadonlyRecordsTheCompoundAttribute
+ksh   ReadonlyReferenceLetter
 ksh   SelectAssumesUnboundedWidth
 ksh   SetValidatesOptionLettersFirst
 ksh   TestAndArithmeticUpdatePipelineStatus
@@ -536,6 +538,7 @@ zsh   PrintfReportsAMissingHexDigit
 zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
+zsh   ReadonlyReferenceLetter
 zsh   ReportsAKilledCommandInACommandSubstitution
 zsh   SubstringRangeThirdColonIsABadSubstitution
 zsh   TableLetterReachesItsOwnOperandsSubscript

@@ -1161,6 +1161,42 @@ type Dialect struct {
 	// and it is a construct of its own rather than a corner of this one.
 	SubshellSubstitution bool
 
+	// FlagGroupRefusedAtExpansion defers the refusal of a `${(…)…}` an
+	// expansion flag group was written in to the moment the word expands,
+	// in a grammar that has no such group and refuses every other unreadable
+	// expansion while reading.
+	//
+	// The two halves are what make it a flag of its own rather than a
+	// reading of BadSubstitutionAtParseTime. Measured 2026-09-18 on ksh93u+
+	// 2012-08-01, a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// with standard input on /dev/null, each body written as
+	// `echo one; echo "[<body>]"; echo two`:
+	//
+	//	${(f)x}     one, then `syntax error at line 2: `x}]' unexpected`, 3
+	//	${(qq)x}    one, then the same shape
+	//	${(j:|:)x}  one, then a refusal naming a token of its own
+	//	${%%%}      refused before `one` runs
+	//	${~x}       refused before `one` runs
+	//	${=x}       refused before `one` runs
+	//	${+x}       refused before `one` runs
+	//
+	// So the deferral is the *group* and not the brace: four other
+	// unreadable expansions in the same shell stop the input where it is
+	// read, and only the parenthesis waits. The control that says it is the
+	// expansion rather than the line is a group in a branch never taken —
+	// `if false; then echo "${(f)x}"; fi` writes nothing and exits 0 there,
+	// where `if false; then echo "${%%%}"; fi` is still refused.
+	//
+	// The refusal itself does not move: the same failure the parser builds
+	// today, kind, token and word tail alike, is carried on the node and
+	// written when the word expands. See ParamExpr.RefusedAtExpansion, and
+	// Error.FlagGroupWordTail for the text that shell quotes back.
+	//
+	// Read only where ParamExpansionFlags is off and
+	// BadSubstitutionAtParseTime is on, which is the one state that refuses
+	// a group while reading at all.
+	FlagGroupRefusedAtExpansion bool
+
 	// BracedArithmeticExpansion reads `${((expr))}` as an arithmetic
 	// expansion. ksh93 has it and nothing else in the panel does: the three
 	// bash columns and dash call it a bad substitution, BusyBox ash words

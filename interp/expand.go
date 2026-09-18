@@ -1252,6 +1252,12 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	if s.Kind != syntax.ParamExp || s.Param == nil {
 		return nil, false
 	}
+	if s.Param.RefusedAtExpansion != nil {
+		// A carried parse failure is not a shape either, and for a stronger
+		// reason: the word was refused before the reading that would have
+		// said which shape it is. Left to the scalar path, which writes it.
+		return nil, false
+	}
 	if s.Param.Bad {
 		// An expansion the grammar could not read is not a shape at all, so
 		// none of the shapes below applies to it. Left to the scalar path,
@@ -2365,6 +2371,12 @@ func (r *Runner) transformHasValue(e *syntax.ParamExpr) bool {
 // expandParam handles the forms this slice implements.
 func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	if e == nil {
+		return ""
+	}
+	if r.refusedAtExpansion(e) {
+		// A parse failure the parser carried here rather than raising where
+		// it was found. Ahead of Bad, because a node holding one was never
+		// read far enough for any other field on it to mean anything.
 		return ""
 	}
 	if e.Bad {

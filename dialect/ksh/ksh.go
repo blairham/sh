@@ -395,6 +395,20 @@ func Dialect() syntax.Dialect {
 	// the blank spelling of the same body runs both commands. See
 	// syntax.Dialect.SubshellSubstitution for the six rows (#2615).
 	d.SubshellSubstitution = true
+
+	// A flag group written for another shell is refused when the word
+	// expands here, where every other unreadable expansion is refused while
+	// the line is read. Measured 2026-09-18 on ksh93u+ 2012-08-01, a script
+	// file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on
+	// /dev/null, each body as `echo one; echo "[<body>]"; echo two`:
+	// `${(f)x}`, `${(qq)x}` and `${(j:|:)x}` all write `one` first and then
+	// refuse at 3, while `${%%%}`, `${~x}`, `${=x}` and `${+x}` refuse
+	// before `one` runs. `if false; then echo "${(f)x}"; fi` writes nothing
+	// and exits 0, where the same line with `${%%%}` in it is still refused
+	// — which is what says the deferral reaches the *expansion* and not
+	// merely the line. See syntax.Dialect.FlagGroupRefusedAtExpansion
+	// (#3013).
+	d.FlagGroupRefusedAtExpansion = true
 	// `${((expr))}`, a second spelling for an arithmetic expansion — and not
 	// the form above with a subshell inside it: `${((echo hi))}` is an
 	// arithmetic syntax error here where a subshell body would have printed

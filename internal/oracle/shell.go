@@ -15,6 +15,7 @@ package oracle
 import (
 	"context"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -283,11 +284,60 @@ func version(ctx context.Context, path string) string {
 		if err != nil {
 			continue
 		}
-		if line := firstLine(string(out)); line != "" && !strings.Contains(line, "not found") {
-			return line
+		line := firstLine(string(out))
+		if strings.Contains(line, "not found") || !LooksLikeABuild(line) {
+			continue
 		}
+		return line
 	}
 	return "unknown"
+}
+
+// buildNumber is the mark of an answer: a build string names a build, so it
+// carries a release number or the date of one. Every build string any column
+// has ever reported does — `5.3.20`, `5.9.2`, `93u+ 2012-08-01`, `v1.37.0` —
+// and no refusal any of them prints does.
+var buildNumber = regexp.MustCompile(`[0-9]+\.[0-9]+|[0-9]{4}-[0-9]{2}-[0-9]{2}`)
+
+// LooksLikeABuild is the gate on [Version]: is this line an identification,
+// or is it the shell declining to give one?
+//
+// Deliberately a rule about what an answer has rather than a list of the
+// refusals seen so far. A blocklist is beaten by the first refusal nobody has
+// met yet, and this rule can only ever be too strict — too strict is a column
+// recording that it could not tell, which is the honest failure and the one a
+// reader acts on correctly.
+//
+// # Why it lives here and not beside the report that needed it
+//
+// Because this is the second time a copy of [version] has drifted from it.
+// internal/suite had one that had lost the `${.sh.version}` spelling and the
+// exit-status check, and it printed `Usage: ksh [ options ] [arg ...]` as the
+// ksh column's build for as long as that job existed — so the runner's ksh
+// being a *different lineage* from the build the column is written against
+// went unsaid, and the column's gap was read as ours (#3135). That repair
+// folded the copy back onto this function and added this rule on the far
+// side of it. A rule that only guards the caller leaves the hole in the
+// probe, and the hole is real: the exit-status check keeps dash's refusal
+// out and asking `${.sh.version}` before `--help` keeps ksh93 from ever
+// reaching the fallback, but a shell answering neither, whose `--help` exits
+// **zero** with usage on the first line, still records that usage as its
+// build. BusyBox is why `--help` is asked at all and BusyBox happens to lead
+// with its version; the next shell to need that fallback may not (#3148).
+//
+// Applying it to every spelling rather than to `--help` alone costs nothing
+// measurable — every version string in testdata/golden.json passes it
+// unchanged — and means a probe that answers with a refusal falls through to
+// the next one instead of ending the loop.
+func LooksLikeABuild(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" || !buildNumber.MatchString(line) {
+		return false
+	}
+	// A usage line carrying a number anyway — a path with a version in it, a
+	// bracketed option that takes one — is still a refusal. That is the shape
+	// #3135 was: ksh's `--help` exits zero and its first line is usage.
+	return !strings.HasPrefix(strings.ToLower(line), "usage:")
 }
 
 func firstLine(s string) string {

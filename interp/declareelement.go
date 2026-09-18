@@ -105,10 +105,18 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 	// range` with no builtin in the location, and `readonly a[1]=v` from the
 	// same shell says `readonly:` in it. Put aside and given back, the way
 	// badSubscriptOperand and the readonly refusal already do it.
+	//
+	// The name is recorded rather than only put aside, because the one
+	// complaint in here that is the *language's* still wants it: ksh93 writes
+	// `typeset: b c: arithmetic syntax error` for an unevaluable subscript
+	// and located it as the builtin's, where `typeset` lost its name entirely
+	// here. See Runner.badSubscriptToADeclaration, which is the only reader —
+	// the region's other refusals are the store's own and keep the shell's
+	// location in that column too (#3496).
 	outer := r.inBuiltin
-	r.inBuiltin = ""
+	r.inBuiltin, r.declarationSpeaker = "", outer
 	defer func() {
-		r.inBuiltin = outer
+		r.inBuiltin, r.declarationSpeaker = outer, ""
 		r.storeRefusalEndedTheDeclaration()
 	}()
 	if len(leading) > 0 {

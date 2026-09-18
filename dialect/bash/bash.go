@@ -2006,6 +2006,13 @@ func Semantics() interp.Semantics {
 	// `readonly` and `export` never reach it: the bracketed operand is
 	// refused one complaint earlier as ``readonly: `a[b c]': not a valid
 	// identifier`` at 1, with the rest of the line still running.
+	// A subscript inside `(( ))` is given up as the subscript's failure
+	// here, which is the rule every other bracketed site follows in this
+	// column: measured 2026-09-17, `a=(1 2 3); (( a[b c] )); echo "same=$?"`
+	// prints no `same=`, the next line reads 1, and a `-c` string is given
+	// up whole. `(( b c ))` — the construct's own arithmetic — is reported
+	// and the line carries on, which is the control.
+	s.BadSubscriptEscapesAnArithmeticCommand = interp.Yes
 	s.BadSubscriptToADeclaration = interp.BadSubscriptAbandonsTheCommand
 	// And with no value the brackets are never read at all, which is why the
 	// axis above is reachable here only through an operand carrying one:
@@ -3086,8 +3093,15 @@ func Diagnostics() interp.Diagnostics {
 		// than as a circle: `f() { local -n r=r; r=SET; }` writes `warning:
 		// r: maximum nameref depth (8) exceeded` and the value reaches the
 		// global cell. Measured 2026-09-15 on 5.3.20 (#3048).
-		NamerefDepthWarning:    "warning: %[1]s: maximum nameref depth (8) exceeded",
-		TrapPrintsSignalPrefix: "SIG",
+		NamerefDepthWarning: "warning: %[1]s: maximum nameref depth (8) exceeded",
+		// The second sentence a refused `{name}>` store writes, after
+		// whatever the store itself said: measured 2026-09-17, `declare -n
+		// s; exec {s}>/dev/null` is ``exec: `10': not a valid identifier``
+		// and then this, at 1, and `readonly s=1` in front of the same line
+		// is `s: readonly variable` and then this. No other column was asked:
+		// zsh refuses `typeset -n` and ksh93 has no nameref of this spelling.
+		CannotAssignFdToVariable: "%[1]s: cannot assign fd to variable",
+		TrapPrintsSignalPrefix:   "SIG",
 		// One wording for all three, and the operand quoted back exactly as
 		// given: `export 1x=v` says `1x=v', not `1x'.
 		BuiltinBadName: map[string]string{

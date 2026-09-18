@@ -72,9 +72,19 @@ func (r *Runner) badSubscriptGivesUp(p BadSubscriptPolicy, what, sentence string
 // from zeroing it — the same pair changeCompoundKind's abandoning branch sets,
 // one refusal over.
 func (r *Runner) badSubscriptToADeclaration(sub string, err error) {
+	// The builtin that was handed the operand: put out of the location by
+	// declareElement and kept here for the two claims one column makes — the
+	// name in the sentence, through Diagnostics.DeclarationBadSubscript, and
+	// the builtin's own location, through keptBuiltinLocation. `typeset` lost
+	// both where `unset` and `read` kept them (#3496).
+	builtin := r.declarationSpeaker
+	outer := r.inBuiltin
+	r.inBuiltin = r.keptBuiltinLocation(builtin)
+	defer func() { r.inBuiltin = outer }()
 	r.status = r.badSubscriptGivesUp(r.sem().BadSubscriptToADeclaration,
 		"how much a declaration gives up for an operand's unevaluable subscript",
-		r.subscriptFailure(sub, err))
+		Wording(r.diag().DeclarationBadSubscript, "%[2]s",
+			builtin, r.subscriptFailure(sub, err)))
 	r.assignFailed = true
 }
 
@@ -385,4 +395,23 @@ func (r *Runner) storeOperandEmptySubscript(base, operand, sub, builtin string) 
 	r.diagf("%s\n", r.unanswered("a subscript written with nothing in it"))
 	r.status, r.unspecified = 2, true
 	return 2, true
+}
+
+// keptBuiltinLocation is the speaker a site leaves in place while it puts the
+// builtin's name out of the *sentence*.
+//
+// Three sites report a complaint the **language** makes through a builtin —
+// `unset 'a[b c]'`, `read 'a[b c]'` and `typeset 'a[b c]'=v` — and all three
+// cleared the speaker outright. That is two claims at once: the name leaves
+// the sentence, and the location falls back from the builtin's style to the
+// shell's. One column makes only the first, so the second is a value and this
+// is the one door it is read through.
+//
+// See Diagnostics.BadSubscriptKeepsTheBuiltinsLocation for the rows and for
+// the control line that tells the two claims apart.
+func (r *Runner) keptBuiltinLocation(builtin string) string {
+	if r.diag().BadSubscriptKeepsTheBuiltinsLocation {
+		return builtin
+	}
+	return ""
 }

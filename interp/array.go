@@ -1491,8 +1491,13 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 	//
 	// One column does name it — see Diagnostics.StoreOperandBadSubscript,
 	// which is why the name is kept here rather than simply dropped.
+	//
+	// The *location* is a separate claim and one column keeps the builtin's
+	// there — see Diagnostics.BadSubscriptKeepsTheBuiltinsLocation, measured
+	// against a bare `$(( b c ))` in the same shell, which that column
+	// locates the other way (#3496).
 	builtin := r.inBuiltin
-	r.inBuiltin = ""
+	r.inBuiltin = r.keptBuiltinLocation(builtin)
 	defer func() { r.inBuiltin = builtin }()
 	if st, refused := r.storeOperandEmptySubscript(base, name, sub, builtin); refused {
 		// A subscript written with nothing in it, which is what `read

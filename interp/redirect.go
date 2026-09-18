@@ -315,7 +315,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.setFd(hfd, held)
 				r.redirWrote(hfd)
 				if fdVar != "" {
-					r.setFdVar(fdVar, itoa(hfd))
+					if !r.setFdVar(fdVar, itoa(hfd)) {
+						r.redirErr = true
+						return closers, nil
+					}
 				}
 			}
 			continue
@@ -532,7 +535,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 			r.redirWrote(fd)
 			if fdVar != "" {
-				r.setFdVar(fdVar, itoa(fd))
+				if !r.setFdVar(fdVar, itoa(fd)) {
+					r.redirErr = true
+					return closers, nil
+				}
 			}
 			continue
 		}
@@ -883,7 +889,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.setFd(fd, held)
 				r.redirWrote(fd)
 				if fdVar != "" {
-					r.setFdVar(fdVar, itoa(fd))
+					if !r.setFdVar(fdVar, itoa(fd)) {
+						r.redirErr = true
+						return closers, nil
+					}
 				}
 			}
 			if numbered {
@@ -2029,7 +2038,31 @@ func (r *Runner) fdVarValue(ref string) (string, bool) {
 // holding a *string* has the value spliced into its characters rather than
 // becoming an array. A second walk of the brackets here is how one of the
 // two would come to answer `{buf[$#buf+1]}` differently from `buf[$#buf+1]`.
-func (r *Runner) setFdVar(ref, value string) {
+// It reports whether the number landed. A store the shell refuses is the
+// redirection failing, and a redirection that failed is a command that does
+// not run: measured 2026-09-17 on bash 5.3.20, `declare -n s; { echo z; }
+// {s}>/dev/null` prints no `z` and leaves 1 behind. Here the group ran and
+// the status was 0, so a `{name}>` aimed at a name the shell cannot write
+// opened the file and carried on as if it had.
+//
+// The refusal is **two sentences** there and this wrote one. The first is
+// the store's own — whatever it is refused for — reported under the command
+// word the redirection belongs to, which is r.redirForCommandWord; the
+// second is this one, naming the operand as written. Measured on bash
+// 5.3.20, a script file:
+//
+//	declare -n s; exec {s}>/dev/null    exec: `10': not a valid identifier
+//	                                    s: cannot assign fd to variable    1
+//	declare -n s; true {s}>/dev/null    true: `10': …  + the same second     1
+//	declare -n s; { echo z; } {s}>…     `10': …        + the same second     1
+//	readonly s=1; exec {s}>/dev/null    s: readonly variable
+//	                                    s: cannot assign fd to variable    1
+//
+// So the second sentence is written for **any** refused store and not for
+// one of them, and the first names the command word where there is one —
+// which is why the brace group's is unprefixed and the external command's
+// says `/bin/echo`. See Diagnostics.CannotAssignFdToVariable (#3491).
+func (r *Runner) setFdVar(ref, value string) bool {
 	if n, ok := positionalFdVar(ref); ok {
 		// A positional parameter receives the number, which is how a
 		// function that was handed a descriptor hands back the one the
@@ -2038,9 +2071,23 @@ func (r *Runner) setFdVar(ref, value string) {
 		if n >= 1 && n <= len(r.Params) {
 			r.Params[n-1] = value
 		}
-		return
+		return true
 	}
-	r.storeThroughOperand(ref, value)
+	// The command word speaks for the store's own refusal, which is where
+	// the shell puts it: put aside and given back, the way every other site
+	// that lends a speaker does it.
+	outerSpeaker, outerFailed := r.fdVarSpeaker, r.assignFailed
+	r.fdVarSpeaker, r.assignFailed = r.redirForCommandWord, false
+	_, refused := r.storeThroughOperand(ref, value)
+	failed := refused || r.assignFailed || r.ctl == controlExit
+	r.fdVarSpeaker, r.assignFailed = outerSpeaker, outerFailed || failed
+	if !failed {
+		return true
+	}
+	if w := r.diag().CannotAssignFdToVariable; w != "" {
+		r.diagf("%s\n", Wording(w, "%[1]s: cannot assign fd to variable", ref))
+	}
+	return false
 }
 
 // positionalFdVar reads a `{name}` that names a positional parameter.

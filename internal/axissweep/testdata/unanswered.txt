@@ -51,6 +51,7 @@ ash   AttributeOverAFrozenNameIsRefused
 ash   AttributeRereadsTheValueItFinds
 ash   AutoCdAnnouncesTheSubstitution
 ash   BadNameToPrintfFatal
+ash   BadSubscriptEscapesAnArithmeticCommand
 ash   BadSubscriptToADeclaration
 ash   BadSubscriptToAnOutputOperand
 ash   BadSubscriptToUnset
@@ -272,6 +273,7 @@ dash  AttributeOverAFrozenNameIsRefused
 dash  AttributeRereadsTheValueItFinds
 dash  AutoCdAnnouncesTheSubstitution
 dash  BadNameToPrintfFatal
+dash  BadSubscriptEscapesAnArithmeticCommand
 dash  BadSubscriptToADeclaration
 dash  BadSubscriptToAnOutputOperand
 dash  BadSubscriptToUnset

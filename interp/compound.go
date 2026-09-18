@@ -571,6 +571,17 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 	}
 	v, err := r.evalArith(resolved)
 	if err != nil {
+		if r.badSubscript {
+			// A **subscript's** failure is not the header's, and it is given
+			// up as the subscript's in the column that gives one up: see
+			// Runner.badSubscriptInAnArithmeticConstruct, where `for
+			// (( i=b c; … ))` is the control that keeps the prefix (#3507).
+			if !r.badSubscriptInAnArithmeticConstruct(r.arithFailure(expanded, err)) &&
+				!r.unspecified {
+				r.forHeaderArithFailed()
+			}
+			return 0, false
+		}
 		// The part is named, the way the construct it is part of names one:
 		// `((: i<1/0: division by 0` and not a bare `division by 0`, which
 		// said nothing about which of the three parts had failed (#1985).

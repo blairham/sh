@@ -16542,6 +16542,49 @@ type Semantics struct {
 	//     subscript, so neither can be asked.
 	BadSubscriptToADeclaration BadSubscriptPolicy
 
+	// BadSubscriptEscapesAnArithmeticCommand lets a subscript that will not
+	// evaluate **inside `(( ))`** be given up as the subscript's failure
+	// rather than caught and reported as the construct's.
+	//
+	// `$(( a[b c] ))` and `(( a[b c] ))` are the same subscript in the same
+	// arithmetic one construct apart, and they answered differently here:
+	// the expansion gave up the line as every other bracketed site does since
+	// #3502, and the command swallowed the failure, wrote `((: ` in front of
+	// the sentence and reported 1 on a line that carried on.
+	//
+	// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=$d`,
+	// stdin /dev/null, a fresh directory, a script file and the same program
+	// as one `-c` string. The `; echo "same=$?"` is what discriminates — on
+	// one line a give-up and a report print the same nothing:
+	//
+	//	a=(1 2 3)
+	//	(( a[b c] )); echo "same=$?"
+	//	echo "next=$?"
+	//	echo end
+	//
+	//	bash 5.3.20  no `same=`, `next=1`, `end`, 0   `-c`: nothing else, exit 1
+	//	bash 3.2.57  the same                         the same
+	//	zsh 5.9.2    `same=2`, `next=0`, `end`, 0      the same
+	//	ksh93u+      the input ends, exit 1            the same
+	//	dash, ash    no `(( ))` grammar
+	//
+	// So it is Yes in bash alone, and the two Noes are not one answer read
+	// twice — zsh reports the construct's own 2 and carries on, ksh93 ends
+	// the input — but both of those are what the construct already does with
+	// any other failed expression, through ArithCommandErrorIsFatal and
+	// ArithCommandErrorStatusIsTwo. What this field adds is the third
+	// reading: the give-up belongs to the *subscript*, so it takes the line
+	// with it and takes a `-c` string whole, which is
+	// Runner.giveUpForABadSubscript's rule.
+	//
+	// **The wording is not an axis and is not here.** No column puts the
+	// construct in front of a subscript's sentence — bash writes `b c:
+	// arithmetic syntax error …` where `(( b c ))`, the construct's *own*
+	// arithmetic, is `((: b c : …`, and zsh and ksh93 write the bare sentence
+	// for both. So the prefix is dropped at the site whenever the failure was
+	// a subscript's, unanimously (#3507).
+	BadSubscriptEscapesAnArithmeticCommand Answer
+
 	// ValuelessSubscriptedOperand is what a declaration does with an operand
 	// that names an element and carries **no value** — `typeset 'a[1]'`,
 	// `declare`, `local`, and `readonly`/`export` where those take a

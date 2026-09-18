@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -337,9 +338,23 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 // aim at the declaration and ends the script, so it has no assignment left
 // to make.
 func (r *Runner) refuseNamerefAim(value string, form assignForm) {
-	if r.inBuiltin != "" {
-		r.diagf("%s: `%s': not a valid identifier\n", r.inBuiltin, value)
-	} else {
+	// Who made the write, which is what the sentence names. Two routes reach
+	// here with no builtin running and neither was named: `(( r = 1 ))`,
+	// where the *construct* names itself as it names its own arithmetic —
+	// measured 2026-09-17, bash 5.3.20 writes ``((: `1': not a valid
+	// identifier`` — and the descriptor a `{name}>` redirection stores, where
+	// the command word the redirection belongs to speaks (#3491).
+	speaker := r.inBuiltin
+	if speaker == "" {
+		speaker = r.fdVarSpeaker
+	}
+	switch {
+	case speaker != "":
+		r.diagf("%s: `%s': not a valid identifier\n", speaker, value)
+	case r.arithCommand > 0:
+		r.diagf("%s\n", r.diag().arithConstructFailure("((",
+			fmt.Sprintf("`%s': not a valid identifier", value)))
+	default:
 		r.diagf("`%s': not a valid identifier\n", value)
 	}
 	r.status, r.assignFailed = 1, true

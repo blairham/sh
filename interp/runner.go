@@ -1322,6 +1322,13 @@ type Runner struct {
 	// door this routes to (#3502). Cleared with expandErr, everywhere
 	// expandErr is cleared.
 	badSubscript bool
+
+	// declarationSpeaker is the builtin whose operand a declaration's element
+	// store is running for, kept while the store has that builtin's name out
+	// of the location. The one complaint in that region which is the
+	// *language's* rather than the store's still names it in one column —
+	// see Runner.badSubscriptToADeclaration.
+	declarationSpeaker string
 	// prefixCheckedFirst records that this command's assignment prefix has
 	// already been checked for a frozen name, ahead of its values and its
 	// redirections — the order Semantics.PrefixToAFrozenNameIsCheckedFirst
@@ -2412,6 +2419,19 @@ type Runner struct {
 	// builtin's — while the dialect that writes the builtin's name into the
 	// location does not name it for that message.
 	redirectForBuiltin string
+
+	// redirForCommandWord is the command word whose redirections are being
+	// opened, builtin or not. A `{name}>f` whose store is refused names it —
+	// `exec: `10': not a valid identifier`, `read: …`, `/bin/echo: …` — and
+	// a compound command, which has no word, names nothing. Measured
+	// 2026-09-17 on bash 5.3.20; see Runner.setFdVar.
+	redirForCommandWord string
+
+	// fdVarSpeaker is the command word lent to a `{name}>` store's own
+	// refusal while that store runs, since the store is reached from a
+	// redirection rather than from inside a builtin and r.inBuiltin is empty
+	// there. See Runner.setFdVar and Runner.refuseNamerefAim.
+	fdVarSpeaker string
 
 	// redirForOwnProcess says the redirections being opened belong to a
 	// command this shell will run as a process of its own, which is where a
@@ -5196,6 +5216,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// say so. Cleared before the builtin runs: from there on it is the
 	// builtin itself that is speaking.
 	if len(argv) > 0 {
+		// The word itself, whatever it names: a refused `{name}>` store is
+		// reported under it whether it is a builtin or a program — measured,
+		// `declare -n s; /bin/echo hi {s}>/dev/null` is `/bin/echo: `10':
+		// not a valid identifier` in bash 5.3.20.
+		r.redirForCommandWord = argv[0]
 		if _, ok := r.lookupBuiltin(argv[0]); ok {
 			r.redirectForBuiltin = argv[0]
 		}
@@ -5230,7 +5255,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// And whether the command is one this shell runs itself, which decides
 	// where a here-document body is expanded — see heredocprocess.go.
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, !r.commandRunsInThisShell(argv))
-	r.redirectForBuiltin = ""
+	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	// Read here rather than in the defer: a builtin that runs a program of its
 	// own — `eval`, `.` — applies redirections of its own on the way, and this
 	// command's are the ones that were just applied.

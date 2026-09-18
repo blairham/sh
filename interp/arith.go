@@ -2670,6 +2670,14 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			return nil
 		}
 		if err != nil {
+			if r.badSubscript {
+				// A **subscript's** failure is not the construct's, and no
+				// column words it as one: see
+				// Semantics.BadSubscriptEscapesAnArithmeticCommand, where
+				// `(( b c ))` is the control that keeps the prefix.
+				r.status = r.arithCommandBadSubscript(r.arithFailure(text, err))
+				return nil
+			}
 			// The expression is named here as it is everywhere else an
 			// expression fails. It was not, and a loop doing arithmetic
 			// reported `division by 0` with nothing to say which iteration
@@ -2683,6 +2691,61 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		r.arithZeroLeft = !v
 		return nil
 	})
+}
+
+// arithCommandBadSubscript is `(( a[b c] ))` — a `(( ))` whose failure came
+// from a **subscript** rather than from the expression around it.
+//
+// Two things part it from the neighbor below, and the first is unanimous.
+// **The sentence names no construct**: measured 2026-09-17, bash 5.3.20
+// writes `b c: arithmetic syntax error …` here and `((: b c : …` for
+// `(( b c ))`, which is the construct's own arithmetic and is the control;
+// zsh and ksh93 write the bare sentence for both. We wrote `((: ` for both,
+// so a computed subscript was blamed on the brackets it sat in.
+//
+// **And the give-up is the subscript's in one column.** bash gives up the
+// input line wherever a bad subscript is written — `$(( a[b c] ))`, the same
+// subscript one construct over, already goes through
+// Runner.giveUpForABadSubscript — and gave up nothing here, so `(( a[b c] ));
+// echo "same=$?"` printed a `same=` bash never reaches. The other two let the
+// construct catch it and answer with its own status and fatality, which is
+// what arithCmdFailed already does for them: zsh's 2 with the line running on
+// and ksh93's ended input are both that. See
+// Semantics.BadSubscriptEscapesAnArithmeticCommand (#3507).
+//
+// The C-style `for` header words its parts through the construct at the same
+// two calls and is left alone: it is a different construct with three
+// expressions and its own naming rule, and nothing here was measured about
+// it.
+func (r *Runner) arithCommandBadSubscript(sentence string) int {
+	if r.badSubscriptInAnArithmeticConstruct(sentence) || r.unspecified {
+		return r.status
+	}
+	return r.arithCmdFailed(1)
+}
+
+// badSubscriptInAnArithmeticConstruct is the half both arithmetic constructs
+// share: the sentence with no construct in front of it, and the give-up in
+// the column that gives a bad subscript up wherever one is written. It
+// reports whether that give-up was taken, leaving the caller to let its own
+// construct answer where it was not.
+//
+// One door for `(( ))` and for the C-style `for` header, because the same
+// measurement covers both and a second copy that answered one of them is how
+// this repository keeps re-finding the same bug. Measured 2026-09-17, bash
+// 5.3.20, a script file: `for (( i=a[b c]; i<1; i++ ))` writes `b c:
+// arithmetic syntax error …` and gives up the line, exactly as `(( a[b c] ))`
+// does, where `for (( i=b c; … ))` — the header's own arithmetic — is `((:
+// i=b c: …` with the line still running. zsh and ksh93 end the input at the
+// header either way, which is what they already did here.
+func (r *Runner) badSubscriptInAnArithmeticConstruct(sentence string) bool {
+	r.diagf("%s\n", sentence)
+	if !r.ask(r.sem().BadSubscriptEscapesAnArithmeticCommand,
+		"a bad subscript inside `(( ))` being given up as the subscript's failure") {
+		return false
+	}
+	r.giveUpForABadSubscript()
+	return true
 }
 
 // arithCmdFailed is what `(( ))` leaves behind once it has said what went

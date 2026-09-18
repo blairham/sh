@@ -2610,6 +2610,11 @@ func Semantics() interp.Semantics {
 	// the script ends at 1, with nothing on a later line reached — from the
 	// top level, a function, an `&&` list, an `if` condition and a loop body
 	// alike (#3495).
+	// The construct catches it and answers with its own status: measured
+	// 2026-09-17, `(( a[b c] )); echo "same=$?"` prints `same=2` and the
+	// line carries on, by both routes. The expansion `$(( a[b c] ))` in the
+	// same shell ends the input, so the two constructs really do part here.
+	s.BadSubscriptEscapesAnArithmeticCommand = interp.No
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
 	// And a valueless subscripted operand is the empty-value form under
 	// another spelling, which is measured and not inferred: `a=(1 2 3);

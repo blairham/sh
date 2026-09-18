@@ -92,6 +92,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.absentParams = maps.Clone(r.absentParams)
 	c.declaredEmpty = maps.Clone(r.declaredEmpty)
 	c.declaredOnlyCompound = maps.Clone(r.declaredOnlyCompound)
+	c.compoundHeldAnElement = maps.Clone(r.compoundHeldAnElement)
 	c.declaredBare = maps.Clone(r.declaredBare)
 	c.compoundVariable = maps.Clone(r.compoundVariable)
 
@@ -427,6 +428,7 @@ func cloneScopes(scopes []*scope) []*scope {
 		c.arrayExisted = maps.Clone(sc.arrayExisted)
 		c.removedBefore = maps.Clone(sc.removedBefore)
 		c.declaredOnlyBefore = maps.Clone(sc.declaredOnlyBefore)
+		c.heldAnElementBefore = maps.Clone(sc.heldAnElementBefore)
 		c.assocExisted = maps.Clone(sc.assocExisted)
 		c.savedReadonly = maps.Clone(sc.savedReadonly)
 		c.savedHideInScope = maps.Clone(sc.savedHideInScope)

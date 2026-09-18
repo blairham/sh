@@ -4552,6 +4552,7 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			sc.declaredOnlyBefore = map[string]bool{}
 		}
 		sc.declaredOnlyBefore[name] = r.declaredOnlyCompound[name]
+		setBool(&sc.heldAnElementBefore, name, r.compoundHeldAnElement[name])
 	}
 	// And the other half of a tie the shell made for itself, which is one
 	// value under two names and so cannot have one of them saved alone. See

@@ -286,6 +286,14 @@ func (r *Runner) storeArray(name string, a Array) {
 	// holding before. The one chokepoint every indexed write reaches, which
 	// is what this note relies on — see compounddeclaredonly.go.
 	r.compoundWasAssigned(name)
+	if len(a) > 0 {
+		// And the third state, which only grows: an array that has held an
+		// element and lost every one of them is not an array that never held
+		// any, and one listing tells them apart. Set rather than written on
+		// every store, because the emptying write comes through here too and
+		// would clear exactly what it is supposed to record.
+		setBool(&r.compoundHeldAnElement, name, true)
+	}
 	// A plain `$a` has to keep working. The first element is stored rather
 	// than the scalar view, because *which* view it is depends on a dialect
 	// and building an array must not need one: getVar asks, and only when

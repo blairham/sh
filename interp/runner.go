@@ -973,6 +973,17 @@ type Runner struct {
 	// for the two controls that say a brace group starts no unit.
 	unitRanACommand bool
 
+	// compoundHeldAnElement are names whose *indexed* array has had an
+	// element in it at some point and may have none now.
+	//
+	// A third state beside declaredOnlyCompound and not a reading of it: an
+	// assignment that puts nothing in — `typeset -a b=()` — takes the name
+	// out of the declared-only set without ever putting an element in it, so
+	// the two sets draw different lines and one listing asks each. See
+	// interp/compounddeclaredonly.go for both, and
+	// Runner.bareAssignmentValue for the listing that reads this one.
+	compoundHeldAnElement map[string]bool
+
 	// declaredBare are names a declaration brought into being with no
 	// letters, no value and nothing in them — declared and unset at once.
 	// See baredeclaration.go for the measurement, and for why the record is
@@ -6959,6 +6970,12 @@ type scope struct {
 	// declaration had just made it. Saved beside the two compound tables and
 	// put back with them. See compounddeclaredonly.go.
 	declaredOnlyBefore map[string]bool
+	// heldAnElementBefore is the same save for the third state: whether the
+	// name's indexed array had ever held an element when it was shadowed, so
+	// a local array that is emptied inside a call does not leave the
+	// caller's name reading as one that has lost its elements. See
+	// Runner.compoundHeldAnElement.
+	heldAnElementBefore map[string]bool
 	// savedAssoc shadows the associative table the same way, attribute and
 	// all: what comes back on exit is whether the name was associative as
 	// much as what it held.

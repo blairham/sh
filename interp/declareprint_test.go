@@ -155,7 +155,14 @@ func TestDeclarePrintBareAssignmentsForm(t *testing.T) {
 		// Subscripts appear only where they carry information.
 		{`arr=(x y); typeset -p arr`, `typeset -a arr=(x y)`},
 		{`arr=(x); arr[3]=z; typeset -p arr`, `typeset -a arr=([0]=x [3]=z)`},
-		{`arr=(); typeset -p arr`, `typeset -a arr=()`},
+		// An indexed array that has never held an element lists with no
+		// value part at all in this form, which is the state a declaration's
+		// own empty literal leaves: `typeset -a b=(); typeset -p b` is
+		// `typeset -a b` in the shell this form was measured from, where an
+		// array *emptied* by an unset is `([0]=)`. See
+		// Runner.bareAssignmentValue (#3407). The table one row down is the
+		// contrast and keeps its empty pair however it got there.
+		{`arr=(); typeset -p arr`, `typeset -a arr`},
 		{`typeset -A m; m[b]=2; m[a]=1; typeset -p m`, `typeset -A m=([a]=1 [b]=2)`},
 		{`typeset -A m; m=(["x y"]=2); typeset -p m`, `typeset -A m=(['x y']=2)`},
 		{`typeset -A m; typeset -p m`, `typeset -A m=()`},

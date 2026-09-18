@@ -71,28 +71,29 @@ func seedStacks(r *Runner) {
 	r.procSubJobs = append(make([]*Job, 0, 4), nil)
 	r.enclosingProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.scopes = append(make([]*scope, 0, 4), &scope{
-		saved:              map[string]string{"seed": "v"},
-		existed:            map[string]bool{"seed": true},
-		savedArrays:        map[string]Array{"seed": {0: {Str: "v"}}},
-		arrayExisted:       map[string]bool{"seed": true},
-		removedBefore:      map[string]bool{"seed": true},
-		declaredOnlyBefore: map[string]bool{"seed": true},
-		savedAssoc:         map[string]AssocArray{"seed": {"k": {Str: "v"}}},
-		assocExisted:       map[string]bool{"seed": true},
-		savedReadonly:      map[string]bool{"seed": true},
-		savedHideInScope:   map[string]bool{"seed": true},
-		hiddenShadow:       map[string]bool{"seed": true},
-		suspendedProducers: map[string]suspendedProducer{"seed": {}},
-		savedAttrs:         map[string]nameAttributes{"seed": {}},
-		savedAssigned:      map[string]string{"seed": "v"},
-		assignedSpoken:     map[string]bool{"seed": true},
-		savedExported:      map[string]bool{"seed": true},
-		exportedSpoken:     map[string]bool{"seed": true},
-		exportedShadow:     map[string]string{"seed": "v"},
-		savedTraps:         map[string]savedTrapState{"seed": {}},
-		savedOptions:       map[string]bool{"seed": true},
-		sealed:             map[string]sealedName{"seed": {}},
-		onReturn:           append(make([]func(), 0, 4), func() {}),
+		saved:               map[string]string{"seed": "v"},
+		existed:             map[string]bool{"seed": true},
+		savedArrays:         map[string]Array{"seed": {0: {Str: "v"}}},
+		arrayExisted:        map[string]bool{"seed": true},
+		removedBefore:       map[string]bool{"seed": true},
+		declaredOnlyBefore:  map[string]bool{"seed": true},
+		heldAnElementBefore: map[string]bool{"seed": true},
+		savedAssoc:          map[string]AssocArray{"seed": {"k": {Str: "v"}}},
+		assocExisted:        map[string]bool{"seed": true},
+		savedReadonly:       map[string]bool{"seed": true},
+		savedHideInScope:    map[string]bool{"seed": true},
+		hiddenShadow:        map[string]bool{"seed": true},
+		suspendedProducers:  map[string]suspendedProducer{"seed": {}},
+		savedAttrs:          map[string]nameAttributes{"seed": {}},
+		savedAssigned:       map[string]string{"seed": "v"},
+		assignedSpoken:      map[string]bool{"seed": true},
+		savedExported:       map[string]bool{"seed": true},
+		exportedSpoken:      map[string]bool{"seed": true},
+		exportedShadow:      map[string]string{"seed": "v"},
+		savedTraps:          map[string]savedTrapState{"seed": {}},
+		savedOptions:        map[string]bool{"seed": true},
+		sealed:              map[string]sealedName{"seed": {}},
+		onReturn:            append(make([]func(), 0, 4), func() {}),
 	})
 	r.aroundFunctionCalls = append(make([]func(*Runner) func(), 0, 4), nil)
 	r.selfPending = append(make([]string, 0, 4), "seed")
@@ -277,6 +278,7 @@ func seedTables(r *Runner) {
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
 	r.declaredEmpty = map[string]bool{"seed": true}
 	r.declaredOnlyCompound = map[string]bool{"seed": true}
+	r.compoundHeldAnElement = map[string]bool{"seed": true}
 	r.declaredBare = map[string]bool{"seed": true}
 	r.compoundVariable = map[string]bool{"seed": true}
 	r.declaring = map[string]bool{"seed": true}

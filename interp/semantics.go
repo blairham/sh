@@ -21581,8 +21581,9 @@ func (r *Runner) killListAcceptsName() Answer {
 // CollatingElementPolicy is what a `[.x.]` or a `[=x=]` inside a bracket
 // expression is — see [Semantics.CollatingElements].
 //
-// A type of its own with four answers, because none of them is a variation on
-// the others and the panel holds a column for each. It was an [Answer] until
+// A type of its own rather than an [Answer], because the readings below are
+// four and none of them is a variation on the others — the panel holds a
+// column for each. It was an [Answer] until
 // #3379, which is the shape that made two of the four look like one: a shell
 // that reads the delimiters and never finds an element answers neither "the
 // element is a member" nor "there is no construct", and with a boolean it had

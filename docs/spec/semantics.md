@@ -17782,6 +17782,61 @@ three-word reading asks the `!` question first and the ordering is part of
 the reading rather than a separate switch. dash's answer is still not
 modeled.
 
+#### A connective with nothing behind it
+
+**`TestTrailingConnectiveTakesAMissingOperand`** — dash yes · zsh yes · bash
+no · ksh93 no · ash no
+
+A `-a` or a `-o` that ends the operand list is the connective it is, with a
+right operand that is missing and therefore false — rather than a word where
+an operator or an operand belonged. Measured 2026-09-18, script files under
+`env -i PATH=/usr/bin:/bin LC_ALL=C`, over nine shapes:
+
+| list | dash 0.5.12 | zsh 5.9.2 | bash 5.3.20 | ksh93u+ | BusyBox ash |
+| --- | --- | --- | --- | --- | --- |
+| `[ x -a ]` | 1 | 1 | refuses | refuses | refuses |
+| `[ x -o ]` | 0 | 0 | refuses | refuses | refuses |
+| `[ "" -o ]` | 1 | 1 | refuses | refuses | refuses |
+| `[ -z a -a ]` | 1 | 1 | refuses | 1 | refuses |
+| `[ a = b -a ]` | 1 | 1 | refuses | refuses | refuses |
+| `[ ( x ) -a ]` | 1 | 1 | refuses | refuses | refuses |
+| `[ 1 -eq 1 -a ]` | 1 | 1 | refuses | refuses | refuses |
+| `[ 1 -eq 1 -o ]` | 0 | 0 | refuses | refuses | refuses |
+| `[ x -a x -a ]` | 1 | 1 | refuses | refuses | refuses |
+
+Two columns against four, and **it reaches every length** rather than only
+the two-word form POSIX gives its own rule — which is what makes it an axis
+about the connective and not about the count. The statuses are what say the
+operand is false and not merely absent: `-a` answers 1 over a left side that
+`-o` answers 0 over, and a left side that is itself false answers 1 under
+both. Both columns are silent throughout, so the status is the whole answer.
+
+The count rules win first, and that is measured rather than an ordering this
+reader chose: `[ a -a -a ]` is three words and is the both-set guard over the
+strings `a` and `-a`, so it is 0 in every column including these two, and a
+rule that read the last word as a connective before counting would make it 1.
+
+ksh93's `[ -z a -a ]` row is that shell reading one expression off the front
+of the operands — the axis below — and not this one.
+
+**One shape is measured and not modeled**, because the two columns that hold
+the axis disagree about it: `[ ! x -a ]` is 0 in dash and 1 in zsh. Three
+words beginning with `!` are POSIX's own count rule, so dash negates the
+two-word `x -a` this axis has already answered false, while zsh reads the
+negation as the connective's left side. Both follow from *where* the rule is
+asked rather than from the rule; this shell asks it where the count rule has
+finished, which is dash's answer. #2917 is the issue.
+
+The wording of the refusal in the four columns that do not answer is a
+separate question, and two of them word it about the **operator** rather than
+about the word in front: `Diagnostics.TestTrailingBinaryOperandExpected` is
+`[: =: argument expected` in dash and `ash: -eq: argument expected` in
+BusyBox ash, where bash says `x: unary operator expected` and ksh93 names
+nothing. The set it applies to is exactly the binary operators each shell
+has, which is what makes it a reading of the form rather than a list: dash
+names `<` and `>` and falls back for `==`, BusyBox names `==` and falls back
+for `=~`.
+
 #### One expression off the front of the operands
 
 **`TestReadsOneExpressionOffTheOperands`** — ksh93 yes · bash no · dash no ·

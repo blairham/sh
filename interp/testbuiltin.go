@@ -207,6 +207,11 @@ const (
 	errBinaryExpected
 	// errOperandExpected is an operator with nothing after it.
 	errOperandExpected
+	// errTrailingOperandExpected is the same with the operator named, for
+	// the two columns that parse the two-word form rather than reading the
+	// first word as a unary operator. See
+	// Diagnostics.TestTrailingBinaryOperandExpected.
+	errTrailingOperandExpected
 	// errTooManyArguments is a well-formed expression with words left over.
 	errTooManyArguments
 	// errIncorrectSyntax is a list the grammar could not finish: a word it
@@ -232,6 +237,8 @@ func (e *testError) fallback() string {
 	switch e.kind {
 	case errOperandExpected:
 		return "%[2]s: argument expected"
+	case errTrailingOperandExpected:
+		return "%[2]s: %[1]s: argument expected"
 	case errTooManyArguments:
 		return "%[2]s: too many arguments"
 	case errIncorrectSyntax:
@@ -252,6 +259,8 @@ func (e *testError) format(d Diagnostics) string {
 	switch e.kind {
 	case errOperandExpected:
 		return d.TestOperandExpected
+	case errTrailingOperandExpected:
+		return d.TestTrailingBinaryOperandExpected
 	case errTooManyArguments:
 		return d.TestTooManyArguments
 	case errIncorrectSyntax:
@@ -359,7 +368,27 @@ func (r *Runner) testExpr(form testForm, args []string) (bool, error) {
 		if args[0] == "(" && args[2] == ")" {
 			return args[1] != "", nil
 		}
+		if v, err, handled := r.trailingConnectiveOver(func() (bool, error) {
+			return r.testExpr(form, args[:2])
+		}, args[2], args[0] != "("); handled {
+			// Two words this reader has already refused once, and a
+			// connective behind them with nothing behind it.
+			return v, err
+		}
+		if (args[2] == "-a" || args[2] == "-o") && r.diag().TestNamesTheWordTheParseStoppedAt {
+			// A connective with nothing behind it, in the column that parses
+			// the words: an operator missing its right operand rather than a
+			// word the parse stopped at, so nothing is named.
+			return false, &testError{kind: errOperandExpected}
+		}
 		blamed := args[1]
+		if r.diag().TestNamesTheWordTheParseStoppedAt && r.isTestUnary(args[0]) {
+			// The parse took two words rather than one, so the word it
+			// stopped at is the third. `[ -z a b ]` names `b` where
+			// `[ a b c ]` names `b` as well — one past the expression each
+			// time, which is the same rule and not two.
+			blamed = args[2]
+		}
 		if r.diag().TestNamesFirstOperand {
 			// dash names the last word of the expression that *did* parse
 			// rather than the one that should have been an operator, which
@@ -396,7 +425,13 @@ func (r *Runner) testExpr(form testForm, args []string) (bool, error) {
 		// `y`, `test a -a b c` names `b` and `test a b c d` names `a`, one
 		// past the end of the expression each time. Every other dialect's
 		// format ignores it.
-		return false, &testError{kind: errTooManyArguments, operand: p.lastTaken()}
+		leftover := p.lastTaken()
+		if r.diag().TestNamesTheWordTheParseStoppedAt {
+			// The other reading of the same position: the first word the
+			// parse did *not* take, rather than the last one it did.
+			leftover = p.args[p.pos]
+		}
+		return false, &testError{kind: errTooManyArguments, operand: leftover}
 	}
 	return v, nil
 }
@@ -454,6 +489,11 @@ func (p *testParser) orExpr() (bool, error) {
 	}
 	for p.more() && p.peek() == p.form.or {
 		p.pos++
+		if !p.more() && p.r.trailingConnectiveIsMissing() {
+			// Nothing behind the connective, and this dialect reads that as
+			// a right operand that is missing and therefore false.
+			return left, nil
+		}
 		right, err := p.andExpr()
 		if err != nil {
 			return false, err
@@ -470,6 +510,11 @@ func (p *testParser) andExpr() (bool, error) {
 	}
 	for p.more() && p.peek() == p.form.and {
 		p.pos++
+		if !p.more() && p.r.trailingConnectiveIsMissing() {
+			// The same, and false rather than left: an `and` over a missing
+			// right operand is false whatever stood in front of it.
+			return false, nil
+		}
 		right, err := p.notExpr()
 		if err != nil {
 			return false, err
@@ -709,6 +754,20 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		return on, nil
 	}
 	if !isTestUnary(op) {
+		if w := r.diag().TestTrailingBinaryOperandExpected; w != "" && r.hasTestBinaryOperator(operand) {
+			// The two words are a left operand and a binary operator this
+			// shell has, so what is missing is the operator's right operand
+			// — see Diagnostics.TestTrailingBinaryOperandExpected. Asked
+			// before the readings below, which all name the word in front.
+			return false, &testError{kind: errTrailingOperandExpected, operand: operand}
+		}
+		if v, err, handled := r.trailingConnective(operand, op != "", op != "(" && op != ")"); handled {
+			// The word behind is a connective with nothing behind *it*, so
+			// the left side is the one word in front read as a string. Asked
+			// before the refusals below, because in the columns that hold
+			// the axis this is not a refusal at all.
+			return v, err
+		}
 		if (op == "-a" || op == "-o") && r.diag().TestConnectiveIsALeftoverWord {
 			// A connective this dialect has, standing where a unary operator
 			// belongs and without the file test behind it: read as a string
@@ -716,11 +775,15 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 			// See Diagnostics.TestConnectiveIsALeftoverWord.
 			return false, &testError{kind: errTooManyArguments}
 		}
-		if r.diag().TestTwoWordUnknownOperatorLeavesAnOperand {
+		if r.diag().TestNamesTheWordTheParseStoppedAt {
 			// One column parses the two words rather than reading the first
 			// as the operator, so the word it has no operator for is the
-			// *second* one. See
-			// Diagnostics.TestTwoWordUnknownOperatorLeavesAnOperand.
+			// *second* one — unless that word is a connective, which is an
+			// operator missing its right operand and is said with nothing
+			// named. See Diagnostics.TestNamesTheWordTheParseStoppedAt.
+			if operand == "-a" || operand == "-o" {
+				return false, &testError{kind: errOperandExpected}
+			}
 			return false, &testError{kind: errBinaryExpected, operand: operand}
 		}
 		return false, &testError{kind: errUnaryExpected, operand: op}
@@ -1067,4 +1130,78 @@ func plainNumeral(text string) bool {
 	}
 	_, err := strconv.Atoi(strings.TrimSpace(text))
 	return err == nil
+}
+
+// trailingConnectiveIsMissing resolves
+// [Semantics.TestTrailingConnectiveTakesAMissingOperand], and is asked only
+// where a connective really has nothing behind it — so a dialect with no
+// answer is not asked a question no expression posed.
+func (r *Runner) trailingConnectiveIsMissing() bool {
+	return r.ask(r.sem().TestTrailingConnectiveTakesAMissingOperand,
+		"`test x -a` reading the connective with a right operand that is missing")
+}
+
+// trailingConnective answers the two-word form whose second word is a
+// connective: `test x -a` and `test x -o`, where the left side is the one
+// word in front read as a string and the right side is missing.
+//
+// The third result is whether the axis took the question. False leaves the
+// caller's own refusal in place, which is what four of the six columns give.
+//
+// standsAlone is false where the word in front is a **grouping** token rather
+// than a left side: `[ ( -a ]` is `closing paren expected` in dash and
+// `argument expected` in zsh, so a parenthesis nothing closed is still a
+// parenthesis nothing closed and the connective never gets that far.
+func (r *Runner) trailingConnective(word string, left, grouped bool) (bool, error, bool) {
+	return r.trailingConnectiveOver(func() (bool, error) { return left, nil }, word, grouped)
+}
+
+// trailingConnectiveOver is the same over a left side the caller evaluates —
+// the three-word form, where the two words in front are an expression this
+// reader has already tried once.
+//
+// The left side is evaluated only where the axis takes the question, so a
+// dialect that refuses does not run an expression it is about to complain
+// about; and its own refusal, where it has one, is what comes back.
+func (r *Runner) trailingConnectiveOver(left func() (bool, error), word string, standsAlone bool) (bool, error, bool) {
+	if word != "-a" && word != "-o" || !standsAlone {
+		return false, nil, false
+	}
+	if !r.trailingConnectiveIsMissing() {
+		return false, nil, false
+	}
+	v, err := left()
+	if err != nil {
+		return false, err, true
+	}
+	// The missing operand is **false**, which the statuses are what prove:
+	// `-a` answers 1 over a true left side where `-o` answers 0, and both
+	// answer 1 over a false one.
+	if word == "-a" {
+		return false, nil, true
+	}
+	return v, nil, true
+}
+
+// hasTestBinaryOperator reports whether a word is a binary operator this
+// dialect has, which is what decides whether the two-word form ending in one
+// is an operator missing its right operand or a word in the wrong place.
+//
+// The roster is read rather than asked: every arm below is a question the
+// dialect has already answered in its vector, and a complaint about a missing
+// operand must not itself produce an "unanswered axis" refusal about an
+// operator the expression never got to use.
+func (r *Runner) hasTestBinaryOperator(op string) bool {
+	switch op {
+	case "=", "!=", "-nt", "-ot", "-ef", "-eq", "-ne", "-lt", "-le", "-gt", "-ge":
+		return true
+	case "==":
+		return r.sem().TestAcceptsDoubleEqual == Yes
+	case "<":
+		return r.sem().TestStringOrder == TestStringOrderBoth
+	case ">":
+		o := r.sem().TestStringOrder
+		return o == TestStringOrderBoth || o == TestStringOrderGreaterOnly
+	}
+	return false
 }

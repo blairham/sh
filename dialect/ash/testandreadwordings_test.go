@@ -114,3 +114,46 @@ func TestReadsBadNameIsTheAppletFormAtOne(t *testing.T) {
 		}
 	}
 }
+
+// The rest of that parse, which is what the argument-count reading could not
+// give: the word named is the one the parse **stopped at**, and an operator
+// standing where its right operand belonged is missing an argument rather
+// than leaving one behind.
+//
+// Measured 2026-09-18 inside the same pinned image, BusyBox v1.37.0, a script
+// file under `env -i PATH=/usr/bin:/bin LC_ALL=C` (#3550).
+func TestTheTestBuiltinNamesTheWordItsParseStoppedAt(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want string
+		why  string
+	}{
+		// One word further along each time, which is the same rule and not
+		// three: the expression ends and the next word is named.
+		{`[ a b c ]`, "ash: b: unknown operand", "`a` is the expression"},
+		{`[ -z a b ]`, "ash: b: unknown operand", "`-z a` is"},
+		{`[ ! a b ]`, "ash: b: unknown operand", "and `! a` is"},
+		{`[ -Q x y ]`, "ash: x: unknown operand", "`-Q` is, being no operator here"},
+		{`[ -z a b c ]`, "ash: b: unknown operand", "the first leftover, not the last word taken"},
+		{`[ a = b = c ]`, "ash: =: unknown operand", "which here is the second `=`"},
+		// A binary operator this shell has, with nothing behind it: the
+		// operator is named, because what is missing is its right operand.
+		{`[ 1 -eq ]`, "ash: -eq: argument expected", "an arithmetic comparison"},
+		{`[ g.f -ot ]`, "ash: -ot: argument expected", "and a file one"},
+		{`[ a == ]`, "ash: ==: argument expected", "`==` is in this shell's set"},
+		{`[ a =~ ]`, "ash: =~: unknown operand", "and `=~` is not"},
+		// A connective is an operator missing its right operand too, and
+		// that one is said with nothing named at all — at every length.
+		{`[ x -a ]`, "ash: argument expected", "two words"},
+		{`[ -z a -a ]`, "ash: argument expected", "three"},
+		{`[ 1 -eq 1 -a ]`, "ash: argument expected", "and four"},
+	} {
+		out, status := run(t, tc.src+"\n")
+		if !strings.HasPrefix(out, tc.want) {
+			t.Errorf("%s = %q, want it to open %q — %s", tc.src, out, tc.want, tc.why)
+		}
+		if status != 2 {
+			t.Errorf("%s: status %d, want 2", tc.src, status)
+		}
+	}
+}

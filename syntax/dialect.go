@@ -5313,8 +5313,8 @@ type Dialect struct {
 	// The ash column was measured late and reads the other way from what
 	// this comment used to claim: 2026-09-16, BusyBox v1.37.0, `exec
 	// 10>f10; echo hi >&10` leaves three bytes in `f10`, while a bare `10`
-	// is still a command that is not found. The flag is not set for that
-	// dialect yet — #3238.
+	// is still a command that is not found. That dialect sets the flag
+	// since #3238.
 	//
 	// It is the lexer's because the token is: digits immediately before `<`
 	// or `>` are either a number or the tail of a word, and nothing later can

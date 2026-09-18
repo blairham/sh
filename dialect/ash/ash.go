@@ -135,6 +135,16 @@ func Dialect() syntax.Dialect {
 	// next line to the word. zsh and bash 3.2 are the columns that do not.
 	// See syntax.Dialect.AliasBodyBackslashJoinsTheNextLine (#2710).
 	d.AliasBodyBackslashJoinsTheNextLine = true
+	// `exec 10>f` names descriptor ten, as it does in bash. Measured
+	// 2026-09-17 in the pinned image, BusyBox v1.37.0: `exec 10>f10` is 0,
+	// `echo hi >&10` puts three bytes in the file, and `exec 100>f100` is 0
+	// too, so the width is not two. A bare `10` on a line of its own is
+	// still `10: not found` at 127, which is the control that says the
+	// digits are a descriptor only in front of a redirection operator
+	// (#3238). The target side is the other question and splits the panel
+	// the other way — see Semantics.MultiDigitDuplicationTargetIsAnError,
+	// already measured for this column.
+	d.MultiDigitFdNumber = true
 	// Deliberately absent, each refused when run: arrays (`a=(1 2 3)` is
 	// `unexpected "("`, `${a[0]}` is `bad substitution`), the C-style `for`,
 	// `select`, `<<<`, `(( ))`, `$[…]`, floating-point arithmetic, `${v^^}`,
@@ -822,10 +832,18 @@ func Semantics() interp.Semantics {
 	s.UmaskSetWithSPrints = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
-	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
+	// The two bits a umask has no room for split this shell the opposite way
+	// from dash, and both were inherited rather than measured until #3237.
+	// Measured 2026-09-17 in the pinned image, BusyBox v1.37.0, with
+	// `umask u+r` beside each as the control: `umask u+s` is
+	// `umask: illegal mode: u+s` at 2 — the whole clause named, not the
+	// letter — and `umask u+t` and `umask o+t` are both taken at 0. So the
+	// refusal is the setuid letter's alone, and a clause carrying it is
+	// refused whole: `umask u=rwXs` is refused where `umask u+X` is taken.
+	s.SymbolicMaskTakesTheSetuidLetter = interp.No
 	s.SymbolicMaskTakesAPermissionCopy = interp.Yes
 	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
-	s.SymbolicMaskTakesTheStickyLetter = interp.No
+	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	// `shift -1` is `Illegal number: -1`, so every dash word is read as the
 	// count and there is no `--` to end options with.
 	s.ShiftOptionWords = interp.ShiftOptionWordsNone

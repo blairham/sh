@@ -10442,15 +10442,17 @@ type Semantics struct {
 	// mode: u+s`, naming the whole clause rather than the letter. bash 3.2
 	// refuses it as well, which is the version line.
 	//
-	// The dialect value for ash still says yes and is wrong. #3237 holds the
-	// measurement and the fix, which needs a wording as well as an answer.
 	// Measured with `umask u+r` beside it as the control, so what is refused
-	// is the letter and not the shape of the clause.
+	// is the letter and not the shape of the clause, and re-measured for the
+	// ash column in #3237 — which had held the majority's yes from the group
+	// a doc comment put it in rather than from a run.
 	SymbolicMaskTakesTheSetuidLetter Answer
 
 	// SymbolicMaskTakesTheStickyLetter is the same question about `t`, and a
-	// different set of shells: bash and ksh93 take it, dash and zsh do not.
-	// Two fields because the two letters are not answered together.
+	// different set of shells: bash, ksh93 and BusyBox ash take it, dash and
+	// zsh do not. Two fields because the two letters are not answered
+	// together — and this pair is the proof, since ash takes the one dash
+	// refuses and refuses the one dash takes (#3237).
 	SymbolicMaskTakesTheStickyLetter Answer
 
 	// SymbolicMaskTakesAPermissionCopy accepts POSIX's third alternative

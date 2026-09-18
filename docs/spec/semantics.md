@@ -19710,6 +19710,73 @@ made, and every shell with the builtin leaves that standing. See the note
 under `LocalInheritsTheExportAttribute` for the measurement and for the
 `typeset -g` route to the same place (#999).
 
+**And one shell lets a script ask for the opposite**, which is
+`Runner.LocalInheritsTheOuterValue` rather than a third answer here: bash's
+`shopt -s localvar_inherit`, with `local -I` as the per-declaration spelling
+of the same request. The fresh binding then starts from what the enclosing
+scope holds instead of from nothing — **value and attributes both**, which is
+the half a restore of the scalar alone would miss.
+
+Measured 2026-09-17 on bash 5.3.20, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+from a script file, over a caller's `v=OUTER`, `declare -i n=5`,
+`declare -a a=(x y)`, `declare -A m=([k]=w)`, `declare -x e=EXP`,
+`declare -u up=abc` and `declare -l lo=ABC`:
+
+| `declare -p` inside `f(){ local NAME; … }` | off | on |
+| --- | --- | --- |
+| `v` | `declare -- v` | `declare -- v="OUTER"` |
+| `n` | `declare -- n` | `declare -i n="5"` |
+| `a` | `declare -- a` | `declare -a a=([0]="x" [1]="y")` |
+| `m` | `declare -- m` | `declare -A m=([k]="w" )` |
+| `e` | `declare -- e` | `declare -x e="EXP"` |
+| `up` | `declare -- up` | `declare -u up="ABC"` |
+| `lo` | `declare -- lo` | `declare -l lo="abc"` |
+
+The export attribute travels far enough to reach a child: `env` inside that
+function lists `e=EXP`.
+
+It is a **restore** rather than a shadow that never happened, and that is what
+keeps it small: the scope has already put every one of those aside so it can
+give them back on return, so inheriting is handing the same record to the cell
+that was just made. Nothing reaches past the innermost scope — a function
+called from one holding `v=MID` inherits `MID` over a global `OUT`.
+
+Six measurements bound it, and each was a way a smaller change would have been
+wrong.
+
+- **A value on the declaration wins.** `local -I v=NEW` is
+  `declare -- v="NEW"`, with no attribute inherited either. So the question is
+  asked only of a declaration that brought no value.
+- **The declaration's own letters are kept and the inherited ones are added.**
+  `local -a n` over an `-i n=5` is `declare -ai n=([0]="5")` — the scalar
+  becoming the array's first element, because the cell is *not* being built
+  empty. With the option off the same line is `declare -ai n=()`, which is the
+  measurement that pins "a local declaration builds the array cell rather than
+  converting one" to exactly the case where the cell is built.
+- **The inherited compound is what a container letter then has to convert.**
+  `declare -a a=(x y); f(){ local -A a; }` is `cannot convert indexed to
+  associative array` with the option on and a silent `declare -A a` with it
+  off. Same line, two answers, and the difference is whether there was
+  anything in the cell to convert.
+- **A name the enclosing scope does not hold is inherited as nothing**, not as
+  the empty string: `local zzz` is `declare -- zzz` at 0, the same cell a
+  shell that inherits nothing makes.
+- **The name-reference attribute does not travel.** Over a caller's
+  `declare -n nr=v`, `local nr` is `declare -- nr="v"` — the *text* the
+  reference held, and not the reference. A local that inherited the reference
+  would aim the callee's own name at whatever the caller was pointing at.
+- **Only a fresh cell.** `local v=S; local v` is `declare -- v="S"` with the
+  option on as without it: the second declaration has no enclosing binding in
+  front of it, only the local the first one made.
+
+The letter is not something a *name* carries, so it neither filters a listing
+nor suppresses the bare record: `declare -I` with no operands writes the whole
+variable table exactly as the bare word does, and `local -I zz` over an unset
+`zz` writes `declare -- zz`.
+
+`+I` asks for the same thing as `-I`, measured — there is no spelling that
+turns inheritance off for one declaration.
+
 **`DeclarationAssignmentClearsTheExportAttribute`** — bash no · dash absent · ksh93 yes · zsh no
 
 Takes the export attribute off a name a declaration utility assigns to.

@@ -2294,10 +2294,12 @@ func Semantics() interp.Semantics {
 	// here, with `-F` naming functions rather than setting a float's
 	// precision, which no other engine spells this way. `-n` is here since
 	// #2553: it is the **name reference**, a language feature rather than an
-	// attribute, and interp/nameref.go is the whole of it. The trace letter
-	// this shell also has still rides in
+	// attribute, and interp/nameref.go is the whole of it. `-I` joined them
+	// in #3434: it is the per-declaration spelling of `localvar_inherit`,
+	// and interp/localinherit.go is the whole of it. The trace letter this
+	// shell also has still rides in
 	// Diagnostics.UnimplementedOptionLetters.
-	s.DeclareOptions = "aAfFgilnprux"
+	s.DeclareOptions = "aAfFgiIlnprux"
 	// unanswered FloatFormatLetterE: this shell has no `-E` on a declaration
 	// to give a rendering to. Measured 2026-09-15 on 5.3.15 and 3.2.57
 	// alike, `declare -E 3 a=1.5` is `declare: -E: invalid option` (#2559).
@@ -2333,8 +2335,11 @@ func Semantics() interp.Semantics {
 	// `local -n` is the common spelling of a reference and not an afterthought
 	// of `declare -n`: a function taking the name of a variable to fill in is
 	// what the letter exists for, and the letter has to be on this word for
-	// the fresh binding to be the function's own.
-	s.LocalOptions = "aAgilnprux"
+	// the fresh binding to be the function's own. `-I` is here for the same
+	// reason from the other side: it is what says the fresh binding is *not*
+	// the function's own but a copy of the caller's, so it belongs on the
+	// word that makes the binding (#3434).
+	s.LocalOptions = "aAgiIlnprux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// A lone `-` or `+` is a *name* here and not an option word, and not one
@@ -3010,15 +3015,15 @@ func Diagnostics() interp.Diagnostics {
 			// whole of it.
 			"read": "Ee",
 			// The trace attribute, under both of the builtin's names — and
-			// `local`'s extras: `-I` inheritance, and the function letters,
-			// which this shell takes and ignores where no operand is a
-			// function. `-n` left this list when name references landed
-			// (#2553); the two tables are one table, so a letter named here
-			// while DeclareOptions spells it would refuse what the attribute
-			// grants.
-			"declare": "It",
-			"typeset": "It",
-			"local":   "fFIt",
+			// `local`'s extras: the function letters, which this shell takes
+			// and ignores where no operand is a function. `-n` left this
+			// list when name references landed (#2553) and `-I` when
+			// inheritance did (#3434); the two tables are one table, so a
+			// letter named here while DeclareOptions spells it would refuse
+			// what the attribute grants.
+			"declare": "t",
+			"typeset": "t",
+			"local":   "fFt",
 		},
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall

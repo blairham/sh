@@ -89,6 +89,18 @@ type declareFlags struct {
 	hideString      bool
 	hideStringNamed bool
 	unique          bool
+	// inherit is the `I` letter: this declaration's fresh binding takes the
+	// value and the attributes of the name at the enclosing scope rather
+	// than starting empty. The per-declaration spelling of what one shell's
+	// `localvar_inherit` asks for wholesale — see
+	// Runner.LocalInheritsTheOuterValue, which is the same request and is
+	// read beside this.
+	//
+	// One bool and no sign, which is measured rather than an omission: that
+	// shell reads `+I` as the same request, so `local +I v` inherits in a
+	// shell with the option off exactly as `-I` does. There is no spelling
+	// that turns inheritance *off* for one declaration.
+	inherit bool
 	// nameref is the `n` letter: the name being declared is a **reference**
 	// to another parameter rather than a parameter of its own, and the value
 	// on the operand is the name it points at. Its own field rather than a
@@ -490,6 +502,17 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// is its own declaration rather than the absence of one —
 				// see namerefAttributeRemoved.
 				f.nameref, f.namerefOff = !f.remove, f.remove
+			case 'I':
+				// Inherit: the cell this declaration makes starts from what
+				// the enclosing scope's name holds instead of from nothing.
+				// Recorded rather than acted on here, because what it means
+				// depends on whether a scope is taken at all and on whether
+				// the operand carries a value — see declareEmpty.
+				//
+				// Both signs, which is measured: `+I` asks for the same
+				// thing. So the sign is read and discarded here rather than
+				// kept the way `-h`'s is.
+				f.inherit = true
 			case 'U':
 				// Keep only the first occurrence of each element. Like
 				// `-i` and the case attributes it is a property of the
@@ -1639,7 +1662,8 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// pins that rather than the guard that appeared to do it.
 			if !r.declarationCarriesAnArrayLiteral(name) {
 				r.declareEmpty(name, fresh, df.export || df.readonly,
-					withoutMatching(df) != (declareFlags{}))
+					withoutMatching(df) != (declareFlags{}),
+					df.inherit || r.LocalInheritsTheOuterValue())
 			}
 		}
 		if df.readonly && !df.readonlyOff {
@@ -1701,7 +1725,14 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 	// Ahead of the `remove` return, because a fresh cell holds nothing
 	// whatever the declaration's letters say: `local +a arr` is still a
 	// declaration into a cell this call made.
-	r.dropTheOuterCompound(name, fresh)
+	// `!declarationInherits` because a declaration that asked for the
+	// enclosing binding is not building an empty cell: the compound it would
+	// drop is the one it was handed. Measured 2026-09-17 on bash 5.3.20 with
+	// `localvar_inherit` on — `declare -a a=(x y); f(){ declare -A a; }` is
+	// `cannot convert indexed to associative array` there, which is the
+	// check one line below reading the array this would otherwise have taken
+	// away. See localinherit.go.
+	r.dropTheOuterCompound(name, fresh && !r.declarationInherits(f))
 	if f.remove {
 		return true
 	}
@@ -2054,7 +2085,16 @@ func (r *Runner) declaredCompoundOverAScalar(name string, f declareFlags, p Scal
 	// scalar `2` untouched, where this engine writes the local cell and never
 	// reaches the global array at all. A test would have to pin that wrong
 	// answer to reach the term. See the mutation note in the pull request.
-	if !f.global && r.localCell(name) {
+	// Unless this very declaration asked for the enclosing binding, in which
+	// case the cell is *not* being built empty and the scalar standing in it
+	// is the one it was handed. Measured 2026-09-17 on bash 5.3.20: with
+	// `localvar_inherit` on, `declare -i n=5; f(){ local -a n; declare -p n;
+	// }` is `declare -ai n=([0]="5")`, where the same line with the option
+	// off is `declare -ai n=()`. So the sentence above — "a local
+	// declaration builds the array cell rather than converting one" — holds
+	// exactly where the cell is built, and this is the one request that says
+	// it is not. See localinherit.go.
+	if !f.global && r.localCell(name) && !r.declarationInherits(f) {
 		return "", ScalarUnderACompoundDiscardsIt
 	}
 	// getVar rather than Runner.Vars, for the reason appendedOverAScalar
@@ -3501,7 +3541,7 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 // The name is now local, or attributed, or both — but whether it also *exists*
 // is a dialect's answer, so this is the one place that decides it and both
 // `local` and `typeset` come through here.
-func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, namesAnAttribute bool) {
+func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, namesAnAttribute, inherits bool) {
 	// A name that already holds a value is not one this declaration is
 	// bringing into being, and nothing about being declared empties it:
 	// `typeset -x v` on a `v=abc` leaves `abc` alone in all four shells that
@@ -3598,6 +3638,22 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 	// asks nothing. Only for an operand that named no attribute, because a
 	// letter is already a record: every shell that has one lists `typeset
 	// -i xyz` for a name holding nothing. See baredeclaration.go.
+	// The script has asked for the enclosing binding rather than for
+	// nothing, either through this declaration's own letter or through the
+	// shell-wide name. Ahead of everything below, because all of it is about
+	// a cell that holds no value and this one does: the bare-declaration
+	// record would make a listing write `declare -- v` over an inherited
+	// `v="OUTER"`, the ignore parameter would be taken out of view, and the
+	// axis under it asks whether the outer value is *hidden* — which a cell
+	// that has just been handed it has no occasion to ask.
+	//
+	// `fresh` is the same gate everything below keeps: a second declaration
+	// of a name its own scope already made has no enclosing binding in front
+	// of it. See localinherit.go for the measurement, and for why a scope
+	// that held nothing falls through to the ordinary fresh binding.
+	if fresh && inherits && r.restoreTheOuterBinding(name) {
+		return
+	}
 	if !namesAnAttribute {
 		r.recordBareDeclaration(name)
 	}

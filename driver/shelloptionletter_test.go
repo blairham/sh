@@ -79,9 +79,17 @@ func TestTheShellOptionLetterTakesTheNextWordAndNotTheScript(t *testing.T) {
 			moved: []string{"-checkhash"}, out: "RAN\n",
 		},
 		{
-			name: "no letter named leaves it a script", letter: "",
+			// And a dialect naming no letter does not take the word: `-O`
+			// is read as a `set` letter, which this one has not got, and
+			// `checkhash` is left to be an operand. What is reported is the
+			// refused *letter* and not the operand, which is the order every
+			// shell in the panel has and which this front end took until
+			// #3284 — it opened the operand first and answered 127 about a
+			// file nobody named. The letter is unanswered in this synthetic
+			// dialect, so the refusal is the substrate's own.
+			name: "no letter named leaves the word an operand", letter: "",
 			argv: []string{"testsh", "-O", "checkhash", "-c", "echo RAN"},
-			code: 127,
+			code: 2,
 		},
 		// Both signs carry it, which is measured: `bash +O extglob` turns the
 		// named option off.

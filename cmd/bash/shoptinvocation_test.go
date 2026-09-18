@@ -32,15 +32,13 @@ import (
 // the letter, the `shopt` table and the diagnostics are one binary, which is
 // the only place the two can be wrong together.
 //
-// Held out, and it is not this letter's: **when** a refused invocation option
-// is reported relative to opening the script operand. bash reads every option
-// before it looks at an operand, so `bash -O nosuchopt /nope/x.sh` complains
-// about the name at status 2; this front end resolves the source first and
-// answers `/nope/x.sh: No such file or directory` at 127. It is not new here
-// and it is not about `-O` — `bash -o nosuchname /nope/x.sh` divides the same
-// way, and has since long before this letter existed, because a `set` option
-// cannot be applied until there is a runner to apply it to. The rows below
-// that reach it say so where they sit.
+// The ordering this file used to hold out is closed (#3284). Every shell in
+// the panel judges its option words before it looks at the operand behind
+// them, and this front end resolved the source first — so `bash -O nosuchopt
+// /nope/x.sh` answered `/nope/x.sh: No such file or directory` at 127 where
+// bash names the option at 2. The operand is resolved lazily now: a script
+// that will not open is carried on the source and raised once the options
+// have been applied. Two rows below moved with it and say so.
 
 // invalidOptionZ is what this shell says about a letter nobody has, which is
 // bash's own usage block byte-for-byte — measured on 5.3.20, where the only
@@ -138,14 +136,15 @@ func TestTheShoptOptionLetterIsReadAtInvocation(t *testing.T) {
 		{
 			// Whatever the word looks like, including a word that is itself
 			// an option: `bash -O -c 'echo hi'` takes `-c` as the name.
-			// Measured on bash 5.3.20, which refuses it at status 2; this
-			// shell reaches the same refusal by a longer road, because it
-			// opens the script operand before any option is applied — see
-			// the held-out note at the top of this file. Both agree that
-			// `echo RAN` became an operand and that nothing ran.
+			// Measured on bash 5.3.20, which refuses it at status 2 — and
+			// this shell now says the same sentence at the same status.
+			// Until #3284 it reached a refusal by a longer road, answering
+			// `echo RAN: No such file or directory` at 127 about a word
+			// that was never a path, because the operand was opened before
+			// any option was applied.
 			name: "the word may itself look like an option",
 			argv: []string{"-O", "-c", "echo RAN"},
-			errs: "bash: echo RAN: No such file or directory\n", code: 127,
+			errs: "bash: line 0: -c: invalid shell option name\n", code: 2,
 		},
 		{
 			// A letter written *ahead* of this one in the same word is
@@ -153,14 +152,34 @@ func TestTheShoptOptionLetterIsReadAtInvocation(t *testing.T) {
 			// sequence rather than two passes. Measured: `bash -ZO
 			// nosuchopt_zz -c cmd` names `-Z` and not the option name.
 			//
-			// Only in that order here. bash validates every letter while it
-			// is still reading the line, so `bash -O nosuchopt_zz -Z -c cmd`
-			// names `-Z` too; this front end has no option table of its own
-			// and answers with the option name — the held-out ordering at
-			// the top of this file, reached by a second road.
+			// And in the other order too, since #3284: `bash -O
+			// nosuchopt_zz -Z -c cmd` names `-Z` as well. bash judges every
+			// `set` letter and every `set -o` name before it looks at a
+			// `shopt` name, whichever order the words were written in, and
+			// this front end applies the second namespace last for that
+			// reason — see driver.Shell.applyOptions for the six rows it was
+			// measured from. The `set -o` names are **not** reordered, which
+			// was measured in the same run.
 			name: "a letter ahead of it in the same word is judged first",
 			argv: []string{"-ZO", "nosuchopt_zz", "-c", "echo RAN"},
 			errs: invalidOptionZ, code: 2,
+		},
+		{
+			// And a letter written *behind* it, which is the row that pins
+			// the deferral: the shopt name is applied after every letter
+			// and every `set -o` name however the words were ordered.
+			name: "and a letter behind it is judged first too",
+			argv: []string{"-O", "nosuchopt_zz", "-Z", "-c", "echo RAN"},
+			errs: invalidOptionZ, code: 2,
+		},
+		{
+			// The same the other way about: a `set -o` name this shell does
+			// not have beats a shopt name it does not have, in either
+			// order. Measured on bash 5.3.20, both are `nosuchname:
+			// invalid option name`.
+			name: "and so is a set -o name behind it",
+			argv: []string{"-O", "nosuchopt_zz", "-o", "nosuchname", "-c", "echo RAN"},
+			errs: "bash: line 0: bash: nosuchname: invalid option name\n", code: 2,
 		},
 		{
 			// And a welded name is not a name: the next word is. Measured on

@@ -388,6 +388,30 @@ func Semantics() interp.Semantics {
 	// answers on standard output at status 0, and the first line is the one
 	// scripts read — see version, in prelude.go, for why the tag is there.
 	s.VersionOption = interp.VersionOption{Spellings: "--version", Text: versionLine()}
+	// And `--help`, which is the same usage block Diagnostics already writes
+	// under a refused option with a version line over it and six lines under
+	// it. Measured 2026-09-18 on bash 5.3.20 with standard input on
+	// /dev/null: `bash --help` and `bash --badopt` were diffed line by line
+	// and the twenty-two lines between them are byte-identical, which is why
+	// the block is drawn from the one place rather than copied here.
+	//
+	// On standard output and at 0, where the refusal is standard error at 2 —
+	// the word is a request this shell has rather than one it does not, and
+	// before #3268 it was answered as `--help: invalid option` with the right
+	// block under the wrong sentence.
+	//
+	// The trailer names the shell twice, as the block above it does. The last
+	// two lines are addresses and the blank line before them is part of the
+	// output, measured.
+	s.HelpOption = interp.HelpOption{
+		Spellings: "--help",
+		Text:      helpVersionLine(),
+		Trailer: "Type `%[1]s -c \"help set\"' for more information about shell options.\n" +
+			"Type `%[1]s -c help' for more information about shell builtin commands.\n" +
+			"Use the `bashbug' command to report bugs.\n" +
+			"\nbash home page: <http://www.gnu.org/software/bash>\n" +
+			"General help using GNU software: <http://www.gnu.org/gethelp/>",
+	}
 	// `-O shopt_option`, which is this shell's alone: the letter whose next
 	// word is a name in the `shopt` table rather than a `set` option. The
 	// usage block above already advertises it — `-ilrsD or -c command or -O

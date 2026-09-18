@@ -265,6 +265,22 @@ func Semantics() interp.Semantics {
 	// alike. bash 3.2.57 is the third answer and does not even end the
 	// subshell, which is the row above rather than this one (#3274).
 	s.SubstitutionParseErrorEscapesASubshell = interp.Yes
+	// And a **here-document body** is the one redirection half it does not
+	// end the script from. Measured 2026-09-17 on bash 5.3.20: `cat <<END`
+	// over a body holding `$(echo hi; for)` reports the refusal, does not run
+	// `cat`, and runs the rest of the script with 1 left behind — where the
+	// *target* of the same redirection, `cat < "$(echo hi; for)"`, ends the
+	// script at 2. The two halves are measured apart because this column is
+	// the one that splits them (#3318).
+	s.SubstitutionParseFailureInAHeredocBodyEndsTheShell = interp.No
+	// The 1 that carries on is a fatal error's number and not a syntax
+	// error's, and the borrowed-text rows are what say so rather than the
+	// here-document row alone: measured 2026-09-17, `v=$(echo hi; for)` at
+	// the top level of a script exits 2 here, where the same failure inside a
+	// file `.` read or inside an `eval` argument exits **1**. A plain syntax
+	// error in that sourced file is the control and is a different shape
+	// entirely — `.` reports 2 and the script runs on (#3319).
+	s.SubstitutionParseFailureCarriesTheFatalStatus = interp.Yes
 	// An associative array's subscript is a quoting context here: the key is
 	// the text inside its quotes, so `m["k"]=W` stores under `k` and
 	// `${m["k"]}` reads it back. zsh takes the subscript as written and

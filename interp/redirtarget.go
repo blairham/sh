@@ -99,7 +99,7 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, boo
 			// what it costs is the command. Same mechanism as a body's, and
 			// deliberately the same one: a second copy of an abandonment
 			// boundary is a second place for it to be subtly different.
-			r.giveUpTheCommand()
+			r.giveUpTheCommand(redirTargetBoundary)
 		}
 	case failed && r.ctl == controlNone:
 		// The expansion happened here, so the failure is this shell's and

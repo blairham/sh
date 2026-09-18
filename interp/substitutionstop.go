@@ -107,3 +107,27 @@ func (r *Runner) holdScriptStop() func() {
 		}
 	}
 }
+
+// substParseFailureStatus is the status a substitution body that would not
+// parse leaves behind.
+//
+// The refusal's own number is the shell's syntax status, and one column
+// reports a fatal error's instead wherever the failure is not the script's
+// own line being read — see
+// Semantics.SubstitutionParseFailureCarriesTheFatalStatus for the two panels
+// and for the controls that say the 1 is neither the sourced-syntax status
+// nor a failed redirection's.
+//
+// offTheScriptsLine is the caller saying so, and it is the gate as well as
+// the question: the script's own line is the row every column agrees on, and
+// asking there would move it. Two callers say yes — text `.` or `eval`
+// borrowed, and a here-document body the shell carried on from — which are
+// the same question asked at opposite ends.
+func (r *Runner) substParseFailureStatus(offTheScriptsLine bool) int {
+	if offTheScriptsLine &&
+		r.ask(r.sem().SubstitutionParseFailureCarriesTheFatalStatus,
+			"a substitution body that does not parse carrying a fatal error's status") {
+		return r.fatalStatus()
+	}
+	return r.diag().SyntaxStatus()
+}

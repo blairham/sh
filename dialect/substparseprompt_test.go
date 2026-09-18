@@ -197,30 +197,25 @@ func session(t *testing.T, p dialecttest.Preset, src string) (out, errs string) 
 // A here-document body holding such a substitution costs the **command** in
 // every column: measured 2026-09-16 from a script, none of bash 5.3.20, zsh
 // 5.9.2, ksh93u+ or dash runs `cat`, and bash 3.2.57 is the third answer as it
-// is everywhere in this file. How far the stop then reaches is a second
-// question and they split on it — bash 5.3.20 carries on at 1 and ksh93u+ at
-// 3, where zsh 5.9.2 ends at 1 and dash at 2. So the stop is left standing,
-// which is zsh's and dash's answer and is **filed as a gap in bash's and
-// ksh's** rather than guessed at.
+// is everywhere in this file. That half is what these rows hold: `cat` runs in
+// no dialect, whatever becomes of the stop.
 //
-// The two are separable, which is what these rows are for: giving up the stop
-// as well would make the script carry on in every dialect, and giving up
-// neither would run `cat` with a body the substitution left half-expanded —
-// output no column produces.
+// **How far the stop then reaches is the second half and the columns split on
+// it** — bash 5.3.20 carries the script on at 1 and ksh93u+ at 3, where zsh
+// 5.9.2 ends it at 1 and dash and BusyBox ash at 2. That was filed as a gap
+// and is now
+// Semantics.SubstitutionParseFailureInAHeredocBodyEndsTheShell, whose panel
+// and whose statuses are in substheredocgiveup_test.go. Kept apart here so
+// that this file stays about the annotation the prompt boundary reads: giving
+// up neither would run `cat` with a body the substitution left half-expanded,
+// which is output no column produces.
 func TestAHereDocumentBodyIsTheOneBoundaryThatKeepsItsAnswer(t *testing.T) {
 	const src = "printf 'start\\n'\ncat <<END\nbefore $(echo hi; for) after\nEND\nprintf 'after st=%s\\n' \"$?\"\n"
-	for _, c := range []struct {
-		preset string
-		status int
-	}{
-		// zsh, dash and ash are exact. bash and ksh are the gap named above:
-		// they carry on where this stops, at 1 and at 3.
-		{"bash", 2}, {"zsh", 1}, {"ksh", 3}, {"dash", 2}, {"ash", 2}, {"posix", 2},
-	} {
-		t.Run(c.preset, func(t *testing.T) {
-			out, errs, st := splitRun(t, presets[c.preset], src)
-			if out != "start\n" || st != c.status {
-				t.Errorf("wrote %q at %d, want %q at %d — `cat` must not run and the stop must stand", out, st, "start\n", c.status)
+	for _, preset := range []string{"bash", "zsh", "ksh", "dash", "ash", "posix"} {
+		t.Run(preset, func(t *testing.T) {
+			out, errs, _ := splitRun(t, presets[preset], src)
+			if !strings.HasPrefix(out, "start\n") || strings.Contains(out, "before") {
+				t.Errorf("wrote %q, want it to begin `start` and never hold the body — `cat` must not run", out)
 			}
 			if errs == "" {
 				t.Errorf("nothing was reported")

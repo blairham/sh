@@ -530,6 +530,15 @@ func Semantics() interp.Semantics {
 	s.DeclarationTakesASubscript = interp.No
 	s.TypesetTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.No
+	// No arrays here either, so the same rule: a bracketed `read` operand
+	// is a bad variable name and not a subscript. See dash, whose sentence
+	// and status this column shares.
+	//
+	// unanswered StoreOperandWholeArraySubscript: the operand is refused as
+	// a name before any subscript is read.
+	// unanswered StoreOperandWholeArraySubscriptOverATable: no tables
+	// either, so the keyed half is one further out of reach again.
+	s.StoreOperandTakesASubscript = interp.No
 	// unanswered BadSubscriptToUnset: there is no subscript to evaluate here,
 	// so the arithmetic the axis is about is never reached. Measured
 	// 2026-09-17 in the pinned image, BusyBox v1.37.0: `q=1; unset 'q[b c]'`
@@ -629,6 +638,8 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameAtInvocationExitsZero = interp.Yes
 	// `read` is not one of the three: `printf 'x\n' | read 1bad` reports at 1
 	// — not dash's 2 — and the script carries on.
+	// unanswered BadNameToPrintfFatal: no `-v` here either, so no output
+	// operand is judged.
 	s.BadNameToReadFatal = interp.No
 	// `echo` needs `-e` to interpret an escape, and has `-E` and `-n` beside
 	// it: `echo "a\tb"` writes the backslash, `echo -e "a\tb"` writes a tab,

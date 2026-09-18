@@ -1348,6 +1348,101 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 	}
 }
 
+// storeOperandWholeArraySubscript is `read 'r[@]'` and `printf -v 'r[*]'` —
+// a builtin's output operand whose brackets name the **whole array** rather
+// than an element — and reports the status the builtin carries along with
+// whether the operand was answered here.
+//
+// No column reads those brackets as arithmetic and this walked to the
+// evaluator in every dialect, so bash got `@: arithmetic syntax error:
+// operand expected` where it writes `r[@]: bad array subscript`, and zsh
+// ended the script over a line it fills at 0 (#3486, #3498). ksh93 was right
+// by accident: it really does evaluate them, and `@` really is not an
+// operand.
+//
+// **The table is asked first, and both halves are fields of their own**,
+// because the assignment's pair does not answer for the operand: ksh93 swaps
+// sides on the table — `m[@]=Z` is `@: invalid subscript in assignment` and
+// ends the input where `read 'm[@]'` stores under the key `@` at 0 — and on
+// the array it gives an arithmetic complaint the line survives where the
+// assignment ends the input. bash parts from itself too: it gives the command
+// list up for `x[@]=Z` and not for `read 'x[@]'`, measured — `read 'r[@]'
+// <<< Y; echo "same=$?"` prints `same=1` with the array whole.
+//
+// That is four rows of six disagreeing, which is the same evidence that made
+// WholeArraySubscriptAssigningATable a second field rather than a reading of
+// WholeArraySubscriptAssigningAnArray. Reading the assignment's fields here
+// was tried and gave the ksh column a refusal it does not make.
+//
+// The status is the refusal's 1 and not the builtin's own 2, which is the
+// opposite of the bad-*name* refusal one branch over: measured, `printf -v
+// 'r[@]' %s Q` is 1 where `printf -v '1x' %s Q` is 2. So this does not read
+// Diagnostics.BuiltinBadNameStatusFor.
+//
+// One row is measured and not matched: bash answers 2 rather than 1 when the
+// refusal stops a `read` with names still to come — `read 'r[@]' b` is 2 and
+// `read 'r[@]'` is 1, with `b` untouched either way. That is
+// Semantics.ReadRefusedWriteIsOneOnTheLastName's rule, which wants the count
+// of names left, and the store is reached from `printf -v` as well and has
+// no such count. Routing the refusal through readFrozenStatus instead would
+// have given ksh93's `read 'r[1/0]' b` a 2 where it measures 1.
+func (r *Runner) storeOperandWholeArraySubscript(base, sub, value string) (status int, refused, handled bool) {
+	if r.assocDeclared(base) {
+		switch r.sem().StoreOperandWholeArraySubscriptOverATable {
+		case WholeArraySubscriptIsAnOrdinaryKey, WholeArraySubscriptNamesEveryElement:
+			// A table has no elements to replace, so the column that takes
+			// the spelling over an array answers the key here as well — and
+			// the key is what bash and ksh93 both store.
+			r.setAssocElem(base, sub, value)
+			return 0, false, true
+		case WholeArraySubscriptIsASliceOfATable:
+			r.fatal("%s\n", Wording(r.diag().SliceOfAnAssociativeArray,
+				"%[1]s: attempt to set slice of associative array", base))
+			return r.status, true, true
+		case WholeArraySubscriptIsInvalidInAnAssignment:
+			r.fatal("%s\n", Wording(r.diag().InvalidSubscriptInAssignment,
+				"%s: invalid subscript in assignment", sub))
+			return r.status, true, true
+		case WholeArraySubscriptIsABadSubscript:
+			r.diagf("%s\n", Wording(r.diag().BadArraySubscript,
+				"%[1]s[%[2]s]: bad array subscript", base, sub))
+			return 1, true, true
+		}
+		r.diagf("%s\n", r.unanswered(
+			"the whole-array subscript on a builtin's operand over a table"))
+		r.status, r.unspecified = 2, true
+		return 2, true, true
+	}
+	switch r.sem().StoreOperandWholeArraySubscript {
+	case StoreOperandWholeArraySubscriptNamesEveryElement:
+		// The whole name and not its elements, which is the same reading the
+		// bare assignment takes there: `r=(1 2 3); read 'r[@]'` on `Y`
+		// leaves one element holding `Y`. Not a split — measured, `read
+		// 'r[@]' b` on `X Y` leaves `r` as the one element `X` and fills `b`
+		// with `Y`, so the operand takes its field like any other name and
+		// what makes the array one element is what the spelling means.
+		r.setArray(base, []string{value})
+		return 0, false, true
+	case StoreOperandWholeArraySubscriptIsBad:
+		// Reported, 1, nothing written, and the rest of the line still
+		// running — which is how this parts from the unevaluable subscript
+		// next door, where bash gives the command up. The sentence names the
+		// operand as written and says nothing about arithmetic.
+		r.diagf("%s\n", Wording(r.diag().BadArraySubscript,
+			"%[1]s[%[2]s]: bad array subscript", base, sub))
+		return 1, true, true
+	case StoreOperandWholeArraySubscriptIsAnExpression:
+		// `@` and `*` are not operands, so the evaluator's own complaint is
+		// the answer: nothing is handled here and the caller walks on to the
+		// arithmetic it would have reached anyway.
+		return 0, false, false
+	}
+	r.diagf("%s\n", r.unanswered(
+		"the whole-array subscript on a builtin's output operand"))
+	r.status, r.unspecified = 2, true
+	return 2, true, true
+}
+
 // storeThroughOperand writes a value through a name that may carry a
 // subscript, which is the shape a *builtin* is handed one in: `read 'buf[2]'`
 // and `read m[k]` arrive as a single word rather than as a parsed assignment,
@@ -1405,6 +1500,19 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 		// key as well as of the arithmetic, which is measured — see
 		// storeOperandEmptySubscript, where the rows are.
 		return st, true
+	}
+	if wholeArraySubscript(sub) {
+		// `read 'r[@]'` and `printf -v 'r[*]'` name the whole array rather
+		// than an element, and no column sends the brackets to the
+		// arithmetic evaluator — which is what this walked on to doing in
+		// every dialect, so bash got the evaluator's sentence in place of its
+		// own and zsh refused a line it fills (#3486, #3498). See
+		// storeOperandWholeArraySubscript for the rows; the one column that
+		// really does evaluate them hands the walk back rather than
+		// answering, so its complaint stays the evaluator's own.
+		if st, refused, handled := r.storeOperandWholeArraySubscript(base, sub, value); handled {
+			return st, refused
+		}
 	}
 	if r.assocDeclared(base) {
 		r.setAssocElem(base, sub, value)

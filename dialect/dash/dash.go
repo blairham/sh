@@ -992,6 +992,9 @@ func Semantics() interp.Semantics {
 	s.BadNameToUnsetFatal = interp.Yes
 	// `read` is not one of the three, so its bad name is reported at dash's
 	// usual 2 and the script carries on.
+	// unanswered BadNameToPrintfFatal: `printf` has no `-v` here, so no
+	// output operand is ever judged — PrintfAssignsWithV is what stands in
+	// front of it, and the option is refused before a name is read.
 	s.BadNameToReadFatal = interp.No
 	// And so is a readonly name it is asked to remove.
 	s.UnsetReadonlyFatal = interp.Yes
@@ -1019,6 +1022,19 @@ func Semantics() interp.Semantics {
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.TypesetTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.No
+	// No arrays at all, so a bracketed `read` operand is a word holding
+	// characters a variable name may not hold: measured 2026-09-17,
+	// `read 'r[2]' < in.txt` is `read: r[2]: bad variable name` at 2 with
+	// nothing stored, and `r[b c]`, `r[]`, `r[@]` and `r[*]` all get that
+	// one sentence — the same one the bare `1x` gets.
+	//
+	// unanswered StoreOperandWholeArraySubscript: the operand is refused as
+	// a name before any subscript is read, so there is no whole-array
+	// reading to have here.
+	// unanswered StoreOperandWholeArraySubscriptOverATable: this shell has
+	// no tables either, so the keyed half of that question is one further
+	// out of reach again.
+	s.StoreOperandTakesASubscript = interp.No
 	// unanswered BadSubscriptToUnset: there is no subscript to evaluate here,
 	// so the arithmetic the axis is about is never reached. Measured
 	// 2026-09-17: `q=1; unset 'q[b c]'` is `unset: q[b c]: bad variable name`

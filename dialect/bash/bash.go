@@ -1756,6 +1756,11 @@ func Semantics() interp.Semantics {
 	// `read` is not a special builtin anywhere, so its bad name is not fatal
 	// here either — `read 1bad; echo after` prints both lines.
 	s.BadNameToReadFatal = interp.No
+	// And `printf -v` refuses the same operands without ending anything:
+	// measured 2026-09-17, `printf -v '1x' %s Q` is
+	// ``printf: `1x': not a valid identifier`` at 2 with the rest of the
+	// line still running, and `a-b` is the same sentence.
+	s.BadNameToPrintfFatal = interp.No
 	// The refusal to unset a readonly name is reported and not fatal — and
 	// this is the one of bash's `unset` answers that POSIX mode moves, which
 	// is why it is not BadNameToUnsetFatal read twice. `set -o posix` makes
@@ -1789,6 +1794,23 @@ func Semantics() interp.Semantics {
 	// identifier` and `typeset a[1]=v` creates the element, measured.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// `read 'a[2]'` and `printf -v 'a[2]'` fill the element, measured
+	// 2026-09-10 on `a=(x y z)` — `x Q z`, in 3.2 as well as 5.3.
+	s.StoreOperandTakesASubscript = interp.Yes
+	// `r[@]` and `r[*]` on a builtin's operand are refused by the operand
+	// as written and say nothing about arithmetic: measured 2026-09-17,
+	// `r=(1 2 3); read 'r[@]' <<< Y; echo "same=$?"` is
+	// `r[@]: bad array subscript`, `same=1`, the array whole and the rest
+	// of the line still running. `printf -v 'r[@]'` answers identically,
+	// 1 included — the number here is the refusal's and not the
+	// builtin's own 2.
+	s.StoreOperandWholeArraySubscript = interp.StoreOperandWholeArraySubscriptIsBad
+	// Over a **table** the same brackets are an ordinary key, silently and
+	// at 0: measured 2026-09-17, `typeset -A m=([k]=v); read 'm[@]'` on
+	// `Z` leaves the keys `@` and `k` standing. So the array is refused
+	// here and the table is taken, which is the way round this shell
+	// answers the bare assignment too.
+	s.StoreOperandWholeArraySubscriptOverATable = interp.WholeArraySubscriptIsAnOrdinaryKey
 	// And what a declaration of an element may also do to the array: the
 	// integer attribute lands on it and the element is stored converted —
 	// `typeset -i a[1]=0x10` reads back 16 — and inside a function the array
@@ -3047,6 +3069,13 @@ func Diagnostics() interp.Diagnostics {
 			// `read "v?p"` is `` `v?p' `` here, because bash has no prompt
 			// operand to split it at.
 			"read": "%[1]s: `%[2]s': not a valid identifier",
+			// And `printf -v 1bad`, which is the same sentence under this
+			// builtin's name at this builtin's own status — measured
+			// 2026-09-17, ``printf: `1x': not a valid identifier`` at 2.
+			// Named rather than left to the default for the reason the two
+			// declaration builtins above are: the table is meant to be the
+			// whole answer for every builtin that asks it.
+			"printf": "%[1]s: `%[2]s': not a valid identifier",
 		},
 		// `printf` counts the identical refusal as a usage error where `read`
 		// counts it as a failure: measured 2026-09-17, a script file,

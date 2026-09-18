@@ -1959,6 +1959,10 @@ func Semantics() interp.Semantics {
 	s.BadNameToDeclarationFatal = interp.Yes
 	s.BadNameToUnsetFatal = interp.No
 	// And not to `read`, which is not a special builtin in any shell.
+	// unanswered BadNameToPrintfFatal: this shell's `printf` has no `-v` —
+	// measured 2026-09-17, `printf -v '1x' %s Q` is `printf: -v: unknown
+	// option` and a usage line at 2 — so it never reaches an operand to
+	// judge.
 	s.BadNameToReadFatal = interp.No
 	// Not fatal here either, and ksh93 goes further than any other member of
 	// the panel in saying so: it calls the refusal a *warning*.
@@ -1988,6 +1992,23 @@ func Semantics() interp.Semantics {
 	// splits them.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// `read 'a[2]'` fills the element, measured 2026-09-10 on `a=(x y z)`.
+	s.StoreOperandTakesASubscript = interp.Yes
+	// This column really does evaluate the brackets, and `@` is not an
+	// operand: measured 2026-09-17, `r=(1 2 3); read 'r[@]'` is
+	// `read: @: arithmetic syntax error` at 1 with the array whole and the
+	// rest of the line still running. `r[*]` answers the same way. That is
+	// not what the same shell says to the *assignment* `r[@]=Z`, which is
+	// `@: invalid subscript in assignment` and ends the input — the reason
+	// this is a field of its own rather than the assignment's read twice.
+	s.StoreOperandWholeArraySubscript = interp.StoreOperandWholeArraySubscriptIsAnExpression
+	// And over a **table** the brackets are a key rather than an
+	// expression, so the operand stores one: measured 2026-09-17,
+	// `typeset -A m; m[k]=v; read 'm[@]'` on `Z` is status 0 with the keys
+	// `@` and `k` standing. This column swaps sides between the operand and
+	// the assignment — `m[@]=Z` is `@: invalid subscript in assignment` and
+	// ends the input — which is why the operand has a field of its own.
+	s.StoreOperandWholeArraySubscriptOverATable = interp.WholeArraySubscriptIsAnOrdinaryKey
 	// And nothing a declaration carries makes it refuse the element:
 	// measured 2026-09-07, `typeset -i a[1]=0x10` reads back 16,
 	// `readonly a[1]=v` writes v and freezes `a` over it, and a declaration

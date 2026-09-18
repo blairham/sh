@@ -2983,6 +2983,17 @@ func Semantics() interp.Semantics {
 	// errno: with `ulimit -n 6`, `exec 8>f` is `bad file unit number [Invalid
 	// argument]`.
 	s.FdNumberBoundedByOpenFileLimit = interp.Yes
+	// A duplication's descriptor number stops at 64 here, above which the
+	// refusal is about the number and carries no errno: `echo x >&63` is
+	// `cannot open [Bad file descriptor]` and `echo x >&64` is `bad file
+	// unit number` (#3210). The `-v` echo writes a line as it was read, so
+	// the last line of a `-c` string with no newline is echoed without one
+	// (#3130). And `read -t` takes an expression, as `ulimit`'s operand
+	// does here — `read -t abc` is a timeout of nought in silence (#3209).
+	// All measured 2026-09-18.
+	s.DescriptorNumberCeiling = interp.DescriptorNumbersStopAtSixtyFour
+	s.VerboseEchoAddsAMissingNewline = interp.No
+	s.ReadTimeoutOperandIsArithmetic = interp.Yes
 
 	return s
 }
@@ -3161,9 +3172,13 @@ func Diagnostics() interp.Diagnostics {
 		// CannotOpen is worded reason-first in one of the other dialects
 		// (#734).
 		DuplicationSourceNotOpen: "%[1]s: cannot open [%[2]s]",
-		SeekDescriptorNotOpen:    "%[1]s: bad file unit number [%[2]s]",
-		SeekOffsetRefused:        "%[1]s: invalid seek offset",
-		SeekStreamHasNoPosition:  "%[1]s: not seekable",
+		// And past this shell's own ceiling of 64 the sentence is about the
+		// number and carries no errno at all: `echo x >&63` is `cannot open
+		// [Bad file descriptor]` and `echo x >&64` is this (#3210).
+		FdNumberOverCeiling:     "%[1]s: bad file unit number",
+		SeekDescriptorNotOpen:   "%[1]s: bad file unit number [%[2]s]",
+		SeekOffsetRefused:       "%[1]s: invalid seek offset",
+		SeekStreamHasNoPosition: "%[1]s: not seekable",
 		// And quotes the move's suffix with it: `exec 6<&5-` with nothing
 		// open at 5 is `5-: cannot open [Bad file descriptor]`, where bash
 		// names the number alone.

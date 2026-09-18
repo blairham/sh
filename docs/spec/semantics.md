@@ -14164,6 +14164,94 @@ that does not read two as a substitution. Asked only where
 that have the form are no longer in the conversation — so the yes for
 ksh93 and zsh is recorded rather than reached.
 
+**`DescriptorNumberCeiling`** — bash none · dash none · ksh93 **at 64** · zsh none · ash none
+
+The highest descriptor number a duplication may name, past which the
+refusal is about the *number* rather than about what is open at it.
+
+A ceiling of the shell's own and not the kernel's, which is what parts it
+from `FdNumberBoundedByOpenFileLimit`: measured 2026-09-18 against
+ksh93u+ 2012-08-01 from a script file under `env -i`, the boundary sits
+at 64 with `ulimit -n` at 1048576 and stays at 64 with `ulimit -n 20`, so
+nothing about the process moves it.
+
+    echo x >&63   ksh93u+ `63: cannot open [Bad file descriptor]`, 1
+    echo x >&64   ksh93u+ `64: bad file unit number`, 1
+    echo x >&99   the same sentence — and no errno in brackets, where
+                  every other refusal that shell writes about a
+                  descriptor carries one
+    exec 6>&7     `7: cannot open [Bad file descriptor]` — below the
+                  ceiling the ordinary sentence stands on every route
+
+bash 5.3.20, zsh 5.9.2, dash 0.5.12 and BusyBox ash have no such bound.
+The duplication target alone, measured rather than assumed: `echo x
+70>/dev/null` is fine in that shell because its lexer never read `70` as
+a descriptor prefix — the word is an operand and the redirection an
+ordinary `>`.
+
+The wording is `Diagnostics.FdNumberOverCeiling`, and an empty one leaves
+`DuplicationSourceNotOpen` standing, which is what a shell with no
+ceiling wants and what the core wants.
+
+**`VerboseEchoAddsAMissingNewline`** — bash **yes** · dash no · ksh93 no · zsh no · ash no
+
+Ends the echo of a `set -v` line that the input did not end, so the last
+line of a `-c` string or of a file without a final newline is written
+with a newline.
+
+`-v` echoes the shell's input **as it was read**, which the other columns
+take literally. Measured 2026-09-18 through `od -c`, `-v -c 'echo
+one\necho two'` and the same two lines in a file with no final newline:
+
+    bash 5.3.20   `echo two\n` on both routes — the newline is added
+    ksh93u+       `echo two` with none, so the echo and the first byte
+                  the script writes land on the same line
+    dash 0.5.12   none, on the file route; it echoes no `-c` string
+    zsh 5.9.2     none, on the file route
+
+A script *file* that ends with a newline reaches this at no line at all,
+which is why the divergence is invisible until the input's last line is
+short of one.
+
+**Read rather than asked**, which is the shape the front end's other
+verbose fields have: there is nowhere for an echo to raise a question
+from, and a refusal in the middle of one would be output about the axis
+in the stream the axis is about. A vector with no answer keeps the
+newline, which is what this echo did everywhere before the field existed.
+
+Not modeled, and named so it is not mistaken for this: zsh echoes the
+whole of a `-c` string before running any of it, where every other column
+echoes a line as it is read. That is a different mechanism and the
+trailing newline it writes belongs to it.
+
+**`ReadTimeoutOperandIsArithmetic`** — bash no · dash no · ksh93 **yes** · zsh no · ash no
+
+Reads `read -t`'s argument as an arithmetic expression rather than as a
+written number — the same shape `UlimitOperandIsArithmetic` records at
+the other builtin, and the same column.
+
+Measured 2026-09-18 against ksh93u+ 2012-08-01 from a script file under
+`env -i`, timing each read against a source that answers a second later:
+
+    read -t abc    ksh93u+ silent, and times out at once — an unset name
+                   is nought there, so this is a timeout of nought and
+                   not a refusal
+    read -t 0x3    waits and reads: a hexadecimal numeral
+    read -t " 3"   waits and reads: the blanks are an expression's
+    read -t 3abc   `read: 3abc: arithmetic syntax error`, 1
+
+bash 5.3.20, bash 3.2.57 and bash-as-`sh` answer `read: abc: invalid
+timeout specification` at 1; zsh's `-t` takes no argument at all, so the
+word is an operand there; dash has no `-t`; BusyBox ash 1.37.0 says
+`read: invalid timeout` at 2.
+
+Asked only for an argument that is not already a written number, so `read
+-t 3` and `read -t 1.5` reach nobody. Two refusals of that column are
+left where they were and are wordings rather than readings: the
+expression that will not parse is `arithmetic syntax error` there and
+`invalid number` here, and a negative timeout is `cannot set alarm
+[Invalid argument]` there where the number is refused here.
+
 **`CdpathAnnouncesTheDirectory`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Prints where CDPATH sent a `cd`, when the winning entry was not a plain

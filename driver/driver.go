@@ -2635,8 +2635,9 @@ func (sh Shell) sayVerbose(w io.Writer, src string, upTo int, at verbosePos, ech
 	for at.line < upTo && at.off <= len(src) {
 		rest := src[at.off:]
 		text := rest
+		ended := false
 		if i := strings.IndexByte(rest, '\n'); i >= 0 {
-			text, at.off = rest[:i], at.off+i+1
+			text, at.off, ended = rest[:i], at.off+i+1, true
 		} else {
 			// The piece after the last newline, which the input may yet
 			// continue but which is a line of its own for as long as this is
@@ -2644,7 +2645,7 @@ func (sh Shell) sayVerbose(w io.Writer, src string, upTo int, at verbosePos, ech
 			at.off = len(src) + 1
 		}
 		if echo {
-			echoLine(w, text)
+			sh.echoLine(w, text, ended)
 		}
 		at.line++
 	}
@@ -2671,15 +2672,16 @@ func (sh Shell) sayVerboseRest(w io.Writer, src string, at verbosePos, echo bool
 	for at.off < len(src) {
 		rest := src[at.off:]
 		text := rest
+		ended := false
 		if i := strings.IndexByte(rest, '\n'); i >= 0 {
-			text, at.off = rest[:i], at.off+i+1
+			text, at.off, ended = rest[:i], at.off+i+1, true
 		} else {
 			// The piece after the last newline. One past the end says it has
 			// been taken, which is the same convention sayVerbose keeps.
 			at.off = len(src) + 1
 		}
 		if echo {
-			echoLine(w, text)
+			sh.echoLine(w, text, ended)
 		}
 	}
 }
@@ -2738,7 +2740,17 @@ func linesIn(text string) int {
 // script has arranged. The ignored error is ignored for the same reason errf
 // ignores its own — there is nowhere left to report a failed write to standard
 // error.
-func echoLine(w io.Writer, text string) {
+//
+// ended says the input really ended the line. Where it did not — the last
+// line of a `-c` string, or of a file with no final newline — one column
+// writes the newline anyway and the rest leave the echo and the first byte
+// the script writes on the same line. See
+// interp.Semantics.VerboseEchoAddsAMissingNewline.
+func (sh Shell) echoLine(w io.Writer, text string, ended bool) {
+	if !ended && sh.Semantics.VerboseEchoAddsAMissingNewline == interp.No {
+		_, _ = io.WriteString(w, text)
+		return
+	}
 	_, _ = fmt.Fprintf(w, "%s\n", text)
 }
 

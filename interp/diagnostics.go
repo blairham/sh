@@ -4763,6 +4763,21 @@ type Diagnostics struct {
 	// *first* and would answer `bad file descriptor: 10` here (#734).
 	DuplicationSourceNotOpen string
 
+	// FdNumberOverCeiling is a duplication naming a descriptor number at or
+	// above the shell's own ceiling — see
+	// Semantics.DescriptorNumberCeiling, which is what decides that there is
+	// one. Two verbs: the number as written, and the errno.
+	//
+	// Empty leaves DuplicationSourceNotOpen standing, which is what every
+	// column without a ceiling wants and what the core wants, since a shell
+	// with no ceiling never reaches this.
+	//
+	// The one column that has it writes `64: bad file unit number` and uses
+	// **neither** the errno nor the brackets its other descriptor refusals
+	// carry, which Wording allows. Measured 2026-09-18 against ksh93u+
+	// 2012-08-01 from a script file under `env -i`.
+	FdNumberOverCeiling string
+
 	// SeekDescriptorNotOpen is `<#((expr))` and `>#((expr))` over a number
 	// nothing is open at. Two verbs, the same pair
 	// DuplicationSourceNotOpen takes: %[1]s is the number and %[2]s the

@@ -2574,6 +2574,13 @@ func Semantics() interp.Semantics {
 	// `63 60`, `62 58`, `61 56` and `59 54`, while `exec {v}>/dev/null` with
 	// one running still answers 10 (#2596).
 	s.CoprocessEndPlacement = interp.CoprocEndsAtTheTopOfTheTable
+	// A duplication's descriptor number has no ceiling of this shell's own
+	// — `echo x >&99` is the ordinary bad-descriptor sentence (#3210) — the
+	// `-v` echo ends a line the input did not end (#3130), and `read -t`
+	// takes a written number rather than an expression (#3209).
+	s.DescriptorNumberCeiling = interp.NoDescriptorNumberCeiling
+	s.VerboseEchoAddsAMissingNewline = interp.Yes
+	s.ReadTimeoutOperandIsArithmetic = interp.No
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededEscaped
 
 	// `[[ -v 1 ]]` and `[[ -v 0 ]]` ask about a positional parameter here,

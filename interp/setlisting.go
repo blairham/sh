@@ -65,6 +65,7 @@ func (r *Runner) setListing() int {
 	if r.unspecified {
 		return r.status
 	}
+	defer r.walkingTheWholeTable()()
 	for _, name := range names {
 		// A produced parameter takes the dialect's answer here exactly as it
 		// does under `-p`. The name-with-no-value states then fall out of the

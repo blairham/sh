@@ -181,6 +181,11 @@ func Semantics() interp.Semantics {
 	// A prefix to a function, both halves with its sibling: visible and
 	// exported for the length of the call, gone afterwards. Measured
 	// 2026-09-12 in the pinned alpine image (#2407).
+	// And `command` in front of a special builtin takes its persistence away,
+	// as it does in dash. Measured 2026-09-18 in the digest-pinned image:
+	// `s=base; s=C command :` leaves `base` where the bare `s=P :` leaves
+	// `P` (#3448).
+	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
 	// And not at a builtin, measured 2026-09-16 in the pinned alpine image:
@@ -188,6 +193,11 @@ func Semantics() interp.Semantics {
 	// attribute is left where it was. Its sibling's two lines, for the same
 	// reason — `readonly` and `export` are the only declaration words and
 	// their prefix persists here already (#3437).
+	// unanswered PrefixInAWholeTableListing: as in dash — there is no
+	// `typeset` here, `export -p` is the only whole-table declaration
+	// listing, and `export` is a special builtin whose prefix persists, so
+	// there is no second table for the axis to tell apart from the first
+	// (#3446).
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	s.DeclarationPromotesThePrefixEntry = interp.No
 	// unanswered SubscriptedAssignmentPrefix, SubscriptedPrefixIsTakenBack:

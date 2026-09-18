@@ -86,11 +86,25 @@ func Semantics() interp.Semantics {
 	// saying out loud in the shell that targets the standard's text —
 	// 2.9.1 makes both of these unspecified, so this is a measurement of
 	// this shell rather than compliance with anything (#2407).
+	// And `command` in front of a special builtin takes its persistence away
+	// here, where the other shell that persists a prefix looks through the
+	// word. Measured 2026-09-18 from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`: `s=base; s=C command :` leaves `base`
+	// and the bare `s=P :` leaves `P`, which is the control that says the
+	// difference is `command`'s (#3448).
+	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
 	// Not at a builtin, though: `v=1; v=9 eval 'env | grep "^v="'` shows the
 	// child nothing, and the attribute this shell already had is left where it
 	// was. Measured 2026-09-16 (#3437).
+	// unanswered PrefixInAWholeTableListing: there is no `typeset` here and
+	// `export -p` is this shell's only whole-table declaration listing, which
+	// a prefix cannot be written in front of usefully — measured 2026-09-18,
+	// `export k=1; k=9 export -p` writes `export k='9'`, but `export` is a
+	// special builtin here so the prefix has *persisted* by then and there is
+	// no second table to tell apart from the first. The axis needs a shell
+	// whose prefix is taken back, and this is not one (#3446).
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// This shell has no declaration word but `readonly` and `export`, both
 	// special builtins whose prefix persists here by the axis above — so the

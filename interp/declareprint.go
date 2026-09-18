@@ -612,6 +612,10 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 	var produced map[string]bool
 	var listing ProducedListing
 	if len(names) == 0 {
+		// No operand, so this is the shape that answers differently about the
+		// running command's own assignment prefix — see
+		// interp/prefixlisting.go.
+		defer r.walkingTheWholeTable()()
 		names = r.declarableNames()
 		filtered = keep != nil
 		if !filtered {
@@ -639,10 +643,18 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 	}
 	for _, name := range names {
 		d, known := r.listedDeclarationOf(name, produced[name], listing)
-		if known && filtered && !keep(d) {
+		if known && filtered && !keep(d) && !keep(r.prefixCountsAsExportedInAFilteredListing(name, d)) {
 			continue
 		}
 		if !known {
+			if r.listingWalksTheWholeTable {
+				// Nobody asked for this name: the walk collected it and the
+				// prefix reading then said the shell has no such variable —
+				// `z=9 export -p` in the column that answers from the shell's
+				// own table. A row that is not there is not a missing operand
+				// and is written as nothing, in silence.
+				continue
+			}
 			// A missing name is reported or passed over in silence, and the
 			// silence is measured rather than a shortcut: one shell prints
 			// nothing and answers 0 however many names were missing.

@@ -824,6 +824,12 @@ type Runner struct {
 	// see listedDeclarationOf. Not cloned: it is live only inside one
 	// builtin's own call.
 	listingDrawsNoReading bool
+	// listingWalksTheWholeTable is set while a listing with **no operand** is
+	// building its rows, which is the one shape that answers differently
+	// about the running command's own assignment prefix — see
+	// interp/prefixlisting.go. Not cloned, for the reason above it: it is
+	// live only inside one listing.
+	listingWalksTheWholeTable bool
 
 	// producedReading is the value a produced parameter last gave a *script*,
 	// kept for the one listing form that writes the reading rather than
@@ -5723,7 +5729,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				_ = r.prefixExpansion(a)
 				continue
 			}
-			if (!r.IsSpecialBuiltinHere(argv[0]) || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting")) &&
+			if !r.prefixPersistsAtThisBuiltin(argv[0], kind) &&
 				!r.builtinKeepsAnAssignmentPrefix(argv[0]) &&
 				r.subscriptedPrefixTakenBack(a) {
 				// The second reason a prefix is not taken back, and it is a

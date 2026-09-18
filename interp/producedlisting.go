@@ -326,13 +326,20 @@ func (r *Runner) lastProducedReading(name string) (string, bool) {
 // value thrown away after.
 func (r *Runner) listedDeclarationOf(name string, produced bool, p ProducedListing) (declaration, bool) {
 	if !produced {
-		return r.declarationOf(name)
+		// The one place a whole-table listing differs from a named one: what
+		// it makes of the running command's own assignment prefix. See
+		// interp/prefixlisting.go, and note that this is the chokepoint for
+		// the same reason the reading gate above it is — four copies of the
+		// question is how one of them would come to disagree.
+		d, known := r.declarationOf(name)
+		return r.prefixInAWholeTableListing(name, d, known)
 	}
 	if p != ProducedListingWithValue {
 		r.listingDrawsNoReading = true
 		defer func() { r.listingDrawsNoReading = false }()
 	}
 	d, known := r.declarationOf(name)
+	d, known = r.prefixInAWholeTableListing(name, d, known)
 	if !known {
 		return d, false
 	}

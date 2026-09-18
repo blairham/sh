@@ -643,6 +643,50 @@ type Semantics struct {
 	// and the twin had to be added (#2583).
 	AssignmentPrefixPersistsOnSpecialBuiltin Answer
 
+	// CommandKeepsASpecialBuiltinsPrefix decides whether the `command` word
+	// in front of a special builtin takes that persistence away.
+	//
+	// Asked only where [AssignmentPrefixPersistsOnSpecialBuiltin] is yes and
+	// `command` was really written in front of one, which is the whole of the
+	// disagreement — the two shells that persist a bare `s=P :` split on the
+	// `command` spelling of it. Measured 2026-09-18 from a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME:
+	//
+	//	                        s=C command :   s=E command eval :   s=P :
+	//	ksh93u+ 2012-08-01      C               E                    P
+	//	dash 0.5.12             base            base                 P
+	//	BusyBox ash 1.37.0      base            base                 P
+	//	bash 5.3.20, zsh 5.9.2  base            base                 base
+	//
+	// The last column is the control that says the split is about `command`
+	// and not about the builtin: the same prefix on a bare `:` persists in
+	// all three of the shells that persist anything.
+	//
+	// It reaches the subscripted spelling too, where one is taken at all:
+	// `arr=(x y z); arr[1]=A command :` leaves `A` in ksh93u+ and does not
+	// here. And it is about the **special** builtin behind the word rather
+	// than about `command` — `s=Q command true` is `base` in ksh93 as well,
+	// because a regular builtin's prefix never persisted.
+	//
+	// Unspecified is right for a dialect that persists nothing, where it is
+	// unreachable rather than unanswered.
+	CommandKeepsASpecialBuiltinsPrefix Answer
+
+	// PrefixInAWholeTableListing is what a declaration listing with **no
+	// operand** — `export -p`, a bare `typeset -p`, a bare `set` — makes of
+	// the running command's own assignment prefix.
+	//
+	// A listing that *names* a variable sees the prefix's entry in every
+	// column, which PrefixExportAtABuiltin and
+	// DeclarationPromotesThePrefixEntry already answer. The operand-less
+	// listing is a different question and splits three ways — see
+	// interp/prefixlisting.go for the panel and for what each value is set
+	// from.
+	//
+	// Unspecified is right for a dialect with no such listing at all, where
+	// it is unreachable rather than unanswered.
+	PrefixInAWholeTableListing PrefixInAWholeTableListing
+
 	// AssignmentPrefixPersistsAfterAFunction keeps `v=9 f` set once `f` has
 	// returned, instead of giving the name back what it held before the call.
 	//

@@ -281,3 +281,36 @@ func (r *Runner) refusePrefixesNow(assigns []*syntax.Assign, p prefixCommand, re
 	}
 	return true, skip
 }
+
+// prefixPersistsAtThisBuiltin reports whether a prefix in front of the
+// builtin about to run is one the shell keeps.
+//
+// Two questions rather than one, and the second exists because `command` is a
+// **precommand word**: the builtin whose name reaches `lookupBuiltin` is
+// `command` itself, which is regular, while the thing the prefix is really in
+// front of is whatever `command` names. prefixCommandOf has already looked
+// through it — that is what `kind` holds — so the only thing left to decide is
+// whether looking through is what this dialect does, and the panel splits on
+// exactly that. See Semantics.CommandKeepsASpecialBuiltinsPrefix.
+//
+// Asked at the disagreement and nowhere else: a word that is itself a special
+// builtin asks the first question alone, and a dialect that persists nothing
+// never reaches the second.
+func (r *Runner) prefixPersistsAtThisBuiltin(word string, kind prefixCommand) bool {
+	throughCommand := false
+	if !r.IsSpecialBuiltinHere(word) {
+		if !kind.throughCommand || kind.kind != prefixBeforeSpecialBuiltin {
+			return false
+		}
+		throughCommand = true
+	}
+	if !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin,
+		"an assignment before a special builtin persisting") {
+		return false
+	}
+	if !throughCommand {
+		return true
+	}
+	return r.ask(r.sem().CommandKeepsASpecialBuiltinsPrefix,
+		"`command` in front of a special builtin keeping its prefix")
+}

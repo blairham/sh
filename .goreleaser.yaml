@@ -275,16 +275,16 @@ release:
 
     ### Where it stands
 
-    Each dialect graded against the real shell it models, over 4106 cases —
+    Each dialect graded against the real shell it models, over 4379 cases —
     `make conformance-dialects`:
 
     | binary | against | exact | behavioral |
     | --- | --- | --- | --- |
-    | `bash` | bash 5.3.15 | 96% | **100%** |
+    | `bash` | bash 5.3.20 | 97% | **100%** |
     | `zsh` | zsh 5.9.2 | 98% | 99% |
     | `dash` | dash | 98% | **100%** |
-    | `ksh` | ksh93 AJM 93u+ | 94% | 98% |
-    | `ash` | BusyBox 1.37 ash | 80% | 98% |
+    | `ksh` | ksh93 AJM 93u+ | 96% | 99% |
+    | `ash` | BusyBox 1.37 ash | 92% | 99% |
 
     *Exact* is byte-identical stdout, stderr and status; *behavioral* allows a
     diagnostic to be worded differently when the status and output agree. The

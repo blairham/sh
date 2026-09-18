@@ -7107,6 +7107,134 @@ for it to be a view of.
   merge, `$aliases`, `$galiases`, `$saliases` and `$nameddirs` empty
   first, and an empty literal empties nothing. All measured on zsh 5.9.2.
 
+## The alias table has more states than `name=value`
+
+Measured 2026-09-18 on AT&T ksh93u+ 2012-08-01 as script files under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`, and again over `-c` and
+stdin with the same bytes on each. bash 5.3.20, zsh 5.9.2 and Apple's dash are
+the controls.
+
+Three answers about one builtin, and none of them is about what an alias
+*stands for*.
+
+### `--` ends the lookup, not only the options
+
+`r` is an alias in every column below — one of ksh93's own presets, and
+`alias r=q` in the other three.
+
+| probe | ksh93u+ | bash 5.3.20 | zsh 5.9.2 | dash 0.5.12 |
+| --- | --- | --- | --- | --- |
+| `alias r` | its line, 0 | its line, 0 | its line, 0 | its line, 0 |
+| `alias -- r` | **silent, 0** | its line, 0 | its line, 0 | `alias: -- not found`, then its line, 1 |
+| `alias nosuch` | `nosuch: alias not found`, 1 | `alias: nosuch: not found`, 1 | silent, 1 | `alias: nosuch not found`, 1 |
+| `alias -- nosuch` | **silent, 0** | `alias: nosuch: not found`, 1 | silent, 1 | both complaints, 1 |
+| `alias -- z=1` | defines, 0 | defines, 0 | defines, 0 | defines, 0 |
+| `alias -p -- r` | **silent, 0** | its line, 0 | `bad option: -p`, 1 | two complaints, then its line, 1 |
+
+The second row is what says this is not a quieter report: `r` is one of the
+nineteen preset aliases and its line does not appear either. A definition
+behind the separator still defines, so what `--` ends is the reading of an
+operand as a *question*, leaving only the naming behind it. That is the shape
+`alias -t --` already has in this shell, and `alias -t --` is what `hash` is
+here.
+
+`Semantics.AliasSeparatorEndsTheLookup` is the axis. It is the one place in
+this tree where a builtin has to know that a separator was *written* rather
+than only where the options ended, which is why `builtinOptionsSeparated`
+exists: a second scan of the same words would be a second copy of "where do
+the options end", and the two would part company the first time a letter grew
+an argument.
+
+dash's row is not a disagreement about the separator — it reads no options for
+`alias` at all, so `--` is a name there.
+
+### A name a subshell's `alias` names is remembered in the parent
+
+`Semantics.AliasRemembersTheNamesItNames` keeps a name after `alias` has
+*named* it, so a later `unalias` of that name succeeds. The boundary that
+answer is asked across is measured rather than assumed. Each cell is the
+status of the `unalias` the row names, in the shell the row puts it in.
+
+| row | ksh93u+ |
+| --- | --- |
+| `( alias z )`, then `unalias z` in the parent | **0** |
+| `x=$(alias z)`, then `unalias z` in the parent | **0** |
+| `` x=`alias z` ``, then `unalias z` in the parent | **0** |
+| `( ( alias z ) )`, then `unalias z` in the parent | **0** |
+| `( alias z=1 )`, then `alias z` in the parent | `not found`, 1 |
+| `( alias z=1 )`, then `unalias z` in the parent | **0** |
+| `alias z \| cat`, then `unalias z` in the parent | 1 |
+| `( alias z ) &` then `wait`, then `unalias z` | 1 |
+| `( alias z )`, then `( unalias z )` | 1 |
+| `( alias z; unalias z )`, both inside | 1 |
+
+So the carry-over is **names alone** — the value the parentheses defined is
+rolled back and only the name survives — and it crosses a `( … )` and a
+`$( … )` and nothing else. That is its non-forking subshell adding entries to
+the table the parent holds while rolling the values back.
+
+It is taken at the boundary rather than through a set the two shells share.
+`Runner.adoptAliasNames` runs in the **parent**, with the body already
+finished, so there is no instant at which two shells hold one map — which is
+the whole of why a process substitution, which runs on a goroutine here, is
+not a caller. `interp/clonetables.go` carries what a shared map costs: not a
+leak but `fatal error: concurrent map read and map write`, which panicguard
+cannot catch.
+
+### A mark with no value behind it
+
+`alias -x bb` for a name the table has not got defines **no alias**: the plain
+listing and `alias -x` alike are empty of it, and `alias bb` is still `alias
+not found` at 1. What it leaves is a mark, and exactly one reader can see it.
+
+| probe | ksh93u+ |
+| --- | --- |
+| `alias -x bb; alias -p` | a bare `alias ` at `bb`'s sorted position |
+| `alias -x bb; alias -px` | the same |
+| `alias -x bb; alias` | nothing |
+| `alias -x bb; alias -x` | nothing |
+| `alias -x bb; alias bb` | `bb: alias not found`, 1 |
+| `alias -x bb; alias bb=1; alias -p` | an ordinary `alias bb=1` |
+| `alias -x bb; unalias bb; alias -p` | no trace |
+
+The prefixed listing writes the prefix and then nothing at all — no name, no
+`=` and **no newline** — so the entry after it glues onto the same line:
+`alias alias command='command '` between `autoload` and `command`.
+
+`Runner.markedAliasNames` is the set, and it is beside the table for the
+reason `namedAliases` is beside it. A third state inside `aliasDef` would be
+one every listing, every lookup, `whence`, `type`, `command -v` and the
+parser's expansion hook had to remember to skip, and what it buys is a partial
+line no script wants. One of them would forget, and the one that forgot would
+list an alias standing for nothing.
+
+### A reserved word an alias supplied, behind an assignment prefix
+
+This one is the parser's, and it is
+`syntax.Dialect.AliasedReservedWordStandsBehindAnAssignmentPrefix`.
+
+| construct | written out | `alias g="…"` then `v=x g` |
+| --- | --- | --- |
+| `{ :; }` | `` `}' `` | **`` `{' ``** |
+| `while :; do :; done` | `` `do' `` | **`` `while' ``** |
+| `if :; then :; fi` | `` `then' `` | **`` `if' ``** |
+| `case a in a) :;; esac` | `` `)' `` | **`` `case' ``** |
+| `( : )` | `` `(' `` | `` `(' `` |
+
+Written out, `{` behind an assignment prefix is an ordinary word: the list
+runs on and the complaint lands on the `}` that closes nothing. Supplied by an
+alias it is still the reserved word, a compound command has nowhere to stand
+behind an assignment, and the complaint is at the word itself. The `(` row is
+the control — an operator rather than a word, so no reading is ever taken away
+from it and the two spellings agree.
+
+bash never reaches this question, since it expands no alias in a
+non-interactive shell without `shopt -s expand_aliases`; dash quotes the far
+end for both spellings. zsh quotes the near word for **both**, because it
+keeps the reading for a written-out reserved word too, and it also parses
+`>/dev/null { echo hi; }`, which the other three refuse. Neither is this flag,
+and both are measured in #3560.
+
 ## A bundle of option letters is one word and several options
 
 `read -ra arr` means `read -r -a arr` in every shell there is. The rule is

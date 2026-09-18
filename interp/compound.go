@@ -138,6 +138,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// Runner.anchorForkedBody.
 		defer sub.anchorForkedBody()()
 		err := sub.runList(ctx, c.List)
+		// What its `alias` *named* outlives it in one column, where the
+		// values it defined do not. Taken here, with the body finished, so
+		// nothing is shared while both are running. See
+		// Runner.adoptAliasNames.
+		r.adoptAliasNames(sub)
 		// The subshell is over, which for a real shell is a process exit: its
 		// own EXIT trap runs here, before the status is read, so a handler
 		// that exits with one of its own is the status these parentheses

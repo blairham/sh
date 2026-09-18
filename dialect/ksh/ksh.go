@@ -33,6 +33,12 @@ func Dialect() syntax.Dialect {
 	// next line to the word. zsh and bash 3.2 are the columns that do not.
 	// See syntax.Dialect.AliasBodyBackslashJoinsTheNextLine (#2710).
 	d.AliasBodyBackslashJoinsTheNextLine = true
+	// A reserved word an alias supplied is still the reserved word behind an
+	// assignment prefix, where a written-out one is an ordinary name there:
+	// `alias g="{ :; }"; v=x g` quotes the `{` and `v=x { :; }` quotes the
+	// `}`. See [syntax.Dialect.AliasedReservedWordStandsBehindAnAssignmentPrefix]
+	// for the five rows (#2888).
+	d.AliasedReservedWordStandsBehindAnAssignmentPrefix = true
 	// A subscript written at command position runs to its matching `]`:
 	// `m[foo bar]=v` is the element keyed `foo bar`, read back here as
 	// `typeset -A m=(['foo bar']=v)`. Measured 2026-09-12 on 93u+ beside
@@ -749,6 +755,7 @@ func Semantics() interp.Semantics {
 	// remove. Naming is enough — a failed `alias z` leaves the name
 	// behind — and `unalias -a` clears them (#2926).
 	s.AliasRemembersTheNamesItNames = interp.Yes
+	s.AliasSeparatorEndsTheLookup = interp.Yes
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteWhenNeededDollar
 	s.AliasListingQuotesTheName = interp.No

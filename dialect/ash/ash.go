@@ -1010,6 +1010,7 @@ func Semantics() interp.Semantics {
 	// pinned Alpine image, BusyBox 1.37: `alias h=1; unalias h; unalias
 	// h` is 0 then 1, and a name only looked up is not remembered either.
 	s.AliasRemembersTheNamesItNames = interp.No
+	s.AliasSeparatorEndsTheLookup = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	// `type -- cd` reads the `--` as a name rather than as the end of
 	// options, so no letter of its own is reachable — `-t` included.

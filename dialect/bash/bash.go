@@ -601,6 +601,7 @@ func Semantics() interp.Semantics {
 	// A removed alias leaves nothing behind: `alias h=1; unalias h;
 	// unalias h` is 0 then 1 here, as it is in zsh, dash and BusyBox ash.
 	s.AliasRemembersTheNamesItNames = interp.No
+	s.AliasSeparatorEndsTheLookup = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysEscaped
 	s.AliasListingQuotesTheName = interp.No

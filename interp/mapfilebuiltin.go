@@ -40,7 +40,7 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 	// one dialect has the command at all. Through the shared reader, so a
 	// bundle splits — `-tn 1` is `-t -n 1` — and an unknown letter is
 	// refused with the dialect's wording and usage line.
-	args, opts, optArg, code := r.builtinOptionsArg(name, args, "C:c:d:n:O:s:tu:")
+	args, opts, optArg, _, code := r.builtinOptionsArg(name, args, "C:c:d:n:O:s:tu:")
 	if code != 0 {
 		return code
 	}

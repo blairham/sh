@@ -27,8 +27,25 @@ import "strings"
 // fail. `known` says which letters this builtin takes; anything else is
 // refused.
 func (r *Runner) builtinOptions(name string, args []string, known string) (rest []string, opts string, code int) {
-	rest, opts, _, code = r.builtinOptionsArg(name, args, known)
+	rest, opts, _, _, code = r.builtinOptionsArg(name, args, known)
 	return rest, opts, code
+}
+
+// builtinOptionsSeparated is builtinOptions for the one builtin that has to
+// know whether a `--` was *written*, rather than only where the options
+// ended.
+//
+// The separator is ordinarily invisible on purpose: every builtin in the tree
+// reads `alias -- x` and `alias x` as the same call, which is what a POSIX
+// separator is for. One column does not — see
+// Semantics.AliasSeparatorEndsTheLookup — so the fact has to leave the option
+// reader, and it leaves it here rather than being scanned for a second time
+// by the caller. A second scan would be a second copy of "where do the
+// options end", and the two would part company the first time a letter grew
+// an argument.
+func (r *Runner) builtinOptionsSeparated(name string, args []string, known string) (rest []string, opts string, separated bool, code int) {
+	rest, opts, _, separated, code = r.builtinOptionsArg(name, args, known)
+	return rest, opts, separated, code
 }
 
 // builtinOptionsArg is builtinOptions for a builtin some of whose letters take
@@ -65,7 +82,7 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 // letter took no argument and the bundle carries on, while a digit commits the
 // **whole** remainder to being the number, so `2v` is handed on to be refused
 // rather than being read as `2` and a letter `v`.
-func (r *Runner) builtinOptionsArg(name string, args []string, known string) (rest []string, opts string, optArg map[byte]string, code int) {
+func (r *Runner) builtinOptionsArg(name string, args []string, known string) (rest []string, opts string, optArg map[byte]string, separated bool, code int) {
 	for len(args) > 0 {
 		a := args[0]
 		if a == "-" {
@@ -78,7 +95,7 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 				continue
 			}
 			if r.unspecified {
-				return nil, opts, optArg, 2
+				return nil, opts, optArg, false, 2
 			}
 			break
 		}
@@ -86,7 +103,7 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 			break
 		}
 		if a == "--" {
-			return args[1:], opts, optArg, 0
+			return args[1:], opts, optArg, true, 0
 		}
 		if a == helpOption {
 			// Here rather than before the loop, so it is only `--help`
@@ -95,7 +112,7 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 			// that takes an argument has taken this word as one — measured,
 			// `read -d --help` reads until a `-` rather than printing help.
 			if status, ok := r.builtinHelpAnswer(name); ok {
-				return nil, opts, optArg, status
+				return nil, opts, optArg, false, status
 			}
 		}
 		// Where the letters start. One dialect skips every leading dash
@@ -109,7 +126,7 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 		for i := start; i < len(a); i++ {
 			takes, ok := optionLetter(known, a[i])
 			if !ok {
-				return nil, opts, optArg, r.refuseOption(name, a, known)
+				return nil, opts, optArg, false, r.refuseOption(name, a, known)
 			}
 			opts += string(a[i])
 			if takes == argNone {
@@ -138,7 +155,7 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 			case len(args) > 1:
 				value, args = args[1], args[1:]
 			default:
-				return nil, opts, optArg, r.optionNeedsArgument(name, a[i])
+				return nil, opts, optArg, false, r.optionNeedsArgument(name, a[i])
 			}
 			if optArg == nil {
 				optArg = map[byte]string{}
@@ -148,7 +165,7 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 		}
 		args = args[1:]
 	}
-	return args, opts, optArg, 0
+	return args, opts, optArg, false, 0
 }
 
 // optionArgument is what a letter in an optstring takes after it.

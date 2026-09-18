@@ -307,6 +307,9 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// The status of a substitution is the status of what ran inside it, which
 	// `x=$(false)` relies on.
 	r.status = sub.status
+	// And what its `alias` *named* outlives it in one column, as an explicit
+	// `( … )`'s does. See Runner.adoptAliasNames.
+	r.adoptAliasNames(sub)
 	return strings.TrimRight(out.String(), "\n")
 }
 

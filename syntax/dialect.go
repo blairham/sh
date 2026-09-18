@@ -2536,6 +2536,46 @@ type Dialect struct {
 	// Off in the core, which refuses what the panel disagrees about.
 	AliasesExpandReservedWords bool
 
+	// AliasedReservedWordStandsBehindAnAssignmentPrefix keeps a reserved
+	// word an alias supplied reserved where the command word stands behind
+	// an assignment prefix, which is the one position a *written* one loses
+	// the reading in.
+	//
+	// The two spellings part company only there, which is what makes this a
+	// question about the expansion rather than about the construct. Measured
+	// 2026-09-18 on ksh93u+ 2012-08-01 from script files under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`:
+	//
+	//	written out          alias g="…" then `v=x g`
+	//	v=x { :; }      `}'  `{'
+	//	v=x while …     `do' `while'
+	//	v=x if …        `then' `if'
+	//	v=x case …      `)'  `case'
+	//	v=x ( : )       `('  `('
+	//
+	// Written out, `{` behind the prefix is an ordinary word and the list
+	// runs on until the `}` that closes nothing — which is why the token
+	// quoted there is the far end of the group. Supplied by an alias it is
+	// the reserved word, a compound command has nowhere to stand behind an
+	// assignment, and the complaint is at the word itself. `(` is an
+	// operator in both spellings and so agrees in both, which is the control
+	// row: this is about *words* the lexer would otherwise hand on as names.
+	//
+	// bash never reaches the question — it expands no alias in a
+	// non-interactive shell without `shopt -s expand_aliases` — and dash
+	// quotes the far end for both spellings. zsh quotes the near word for
+	// both, because it keeps the reading for a written-out reserved word
+	// too; that is a separate answer this flag does not carry, and is
+	// measured in #3560.
+	//
+	// The prefix is an **assignment** one. A redirection alone does not take
+	// the reading away from a written reserved word in the shell this is
+	// for — `>/dev/null { echo hi; }` is `` `}' unexpected `` there and
+	// `>/dev/null g` with the same alias runs the group — so that row is
+	// measured and left as it is, being a compound command to parse rather
+	// than a token to name (#3560).
+	AliasedReservedWordStandsBehindAnAssignmentPrefix bool
+
 	// AliasBodyCountsLines counts the newlines inside a substituted alias
 	// body as lines of the input, so that every later line shifts by one per
 	// newline and a command written on the body's second line is reported

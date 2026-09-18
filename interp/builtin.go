@@ -4713,7 +4713,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if letters == "" {
 		letters = "r"
 	}
-	args, opts, optArg, code := r.builtinOptionsArg("read", args, letters)
+	args, opts, optArg, _, code := r.builtinOptionsArg("read", args, letters)
 	if code != 0 {
 		return code
 	}

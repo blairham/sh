@@ -1100,6 +1100,7 @@ func Semantics() interp.Semantics {
 	// A removed alias leaves nothing behind: `unalias h` twice is 0 then
 	// 1 here.
 	s.AliasRemembersTheNamesItNames = interp.No
+	s.AliasSeparatorEndsTheLookup = interp.No
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
 	s.AliasListingQuotesTheName = interp.Yes

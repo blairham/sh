@@ -1012,6 +1012,15 @@ type Runner struct {
 	// nothing. A set beside the table is read by `unalias` alone.
 	namedAliases map[string]bool
 
+	// markedAliases is every name `alias -x` marked while the table held no
+	// entry for it — a mark with no value behind it, which is a state the
+	// dialect with the letter really keeps. Beside the table for the reason
+	// namedAliases is: the prefixed listing is its only reader, where a
+	// third state inside [aliasDef] would be something every listing, every
+	// lookup and the parser's expansion hook had to remember to skip. See
+	// [Runner.markedAliasNames].
+	markedAliases map[string]bool
+
 	// cmdHash is the command hash: a bare name PATH resolved, and where it
 	// resolved to. cmdHashOrder is the same names in the order they were
 	// first put there, which is the order a listing walks unless the dialect

@@ -241,6 +241,11 @@ type aliasForm struct {
 	defining  bool // `-L`: a line that would define the alias back.
 	namesOnly bool // `+g` and its siblings: the name and nothing else.
 	exported  bool // `-x`: mark an entry, and list only the marked ones.
+	// separated is whether a `--` stood between the options and the
+	// operands. Every other builtin in the tree reads the separator and
+	// forgets it; one column does not. See
+	// Semantics.AliasSeparatorEndsTheLookup.
+	separated bool
 }
 
 func biAlias(r *Runner, _ context.Context, args []string) int {
@@ -260,11 +265,16 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 			return code
 		}
 		args = rest
-		minus, code := "", 0
-		args, minus, code = r.builtinOptions("alias", args, known)
+		minus, separated, code := "", false, 0
+		args, minus, separated, code = r.builtinOptionsSeparated("alias", args, known)
 		if code != 0 {
 			return code
 		}
+		// A bare `+` reaches the option reader spelled `--`, so the
+		// separator it reports there is one nobody wrote. It cannot be
+		// mistaken for one: the plus form is zsh's alone and zsh answers the
+		// axis below No, so the two never meet. See readAliasPlusWords.
+		form.separated = separated
 		opts += minus
 		if countKindLetters(opts) > 1 {
 			// The kinds are namespaces and a filter over one table, so one
@@ -295,7 +305,15 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 		// `alias -m` with no pattern is the plain listing rather than a
 		// refusal, measured — unlike `unalias -m`, where a removal with no
 		// pattern would be a removal of everything.
+		marked := r.markedAliasNames(form)
 		for _, name := range r.aliasNames(form.kind) {
+			// A mark with no value behind it stands in the sorted order and
+			// writes the prefix alone — see Runner.markedAliasNames, which
+			// has the measurement and the reason there is no newline.
+			for len(marked) > 0 && marked[0] < name {
+				r.printf("%s", "alias ")
+				marked = marked[1:]
+			}
 			// `-x` narrows the listing to the entries it marks, which is
 			// the half of the letter a mark alone could not show: a stock
 			// ksh93 answers `alias -x` with nothing while `alias` lists its
@@ -304,6 +322,9 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 				continue
 			}
 			r.printf("%s\n", r.aliasLine(name, form))
+		}
+		for range marked {
+			r.printf("%s", "alias ")
 		}
 		return 0
 	}
@@ -347,6 +368,17 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 			// remembered above all the same, so `alias -x zz; unalias zz`
 			// is 0.
 			r.markAliasExported(name)
+			continue
+		}
+		if form.separated && r.ask(r.sem().AliasSeparatorEndsTheLookup,
+			"a name after `alias --` being named rather than looked up") {
+			// The separator ends the *lookup* and not only the options in
+			// one column: the operand is named, as the mark above names one,
+			// and nothing is printed for it whether the table holds it or
+			// not. Measured — `alias -- r` says nothing where `alias r`
+			// writes the preset's line, and `alias -- nosuch` is silent at 0
+			// where `alias nosuch` is `not found` at 1. So it is not a
+			// quieter report; there is no report and no listing.
 			continue
 		}
 		found, listed := r.lookupForListing(name, form.kind)
@@ -512,26 +544,72 @@ func (r *Runner) defineAlias(name, value string, kind AliasKind) {
 	// ee=4` still lists under `alias -x`, as `ee=4`. It is a mark on the name
 	// rather than a part of what the name stands for, and only a removal
 	// takes it off.
+	//
+	// A mark with no value behind it is the same mark, so a definition takes
+	// it over rather than leaving a second one standing: `alias -x bb; alias
+	// bb=1; alias -p` writes the ordinary line and no glue, and the entry is
+	// exported. See Runner.markedAliasNames.
+	exported := r.aliases[name].exported || r.markedAliases[name]
+	delete(r.markedAliases, name)
 	r.aliases[name] = aliasDef{
 		value:    value,
 		global:   kind == AliasGlobalKind,
-		exported: r.aliases[name].exported,
+		exported: exported,
 	}
 }
 
-// markAliasExported puts ksh93's `-x` mark on an entry the table holds.
+// markAliasExported puts ksh93's `-x` mark on an entry the table holds, and
+// records the mark on its own where the table holds nothing.
 //
-// A name the table does not hold is not created here: `alias -x zz` for a
-// name that is no alias defines nothing — the plain listing and `alias -x`
-// alike are empty afterwards — and the only trace it leaves is the
-// remembered name rememberAliasName wrote.
+// A name the table does not hold gains **no alias**: `alias -x zz` defines
+// nothing, the plain listing and `alias -x` alike are empty afterwards, and
+// `alias zz` is still `alias not found` at 1. What it does gain is a mark
+// with no value behind it, and the one reader of that is the prefixed
+// listing — see Runner.markedAliasNames (#3430).
+//
+// Beside the table rather than a third state inside aliasDef, for the reason
+// namedAliases is beside it: an entry that every listing, every lookup and
+// the parser's expansion hook had to remember to skip is an entry one of
+// them would forget, and what it buys is a partial line.
 func (r *Runner) markAliasExported(name string) {
 	a, ok := r.aliases[name]
 	if !ok {
+		if r.markedAliases == nil {
+			r.markedAliases = map[string]bool{}
+		}
+		r.markedAliases[name] = true
 		return
 	}
 	a.exported = true
 	r.aliases[name] = a
+}
+
+// markedAliasNames is the names carrying a `-x` mark and no value, which a
+// prefixed listing walks in sorted order beside the real entries.
+//
+// The line it writes for one is the prefix and nothing else — no name, no
+// `=`, and **no newline** — so the entry after it glues onto the same line.
+// That is measured rather than inferred: `alias -x bb; alias -p` writes
+// `alias alias command='command '` at `bb`'s sorted position in ksh93u+
+// 2012-08-01, between `autoload` and `command`. `alias -px` writes the bare
+// `alias ` alone.
+//
+// The mark is gone the moment the name gains a value or loses the name:
+// `alias -x bb; alias bb=1; alias -p` writes an ordinary `alias bb=1`, and
+// `alias -x bb; unalias bb; alias -p` writes no glue at all.
+func (r *Runner) markedAliasNames(form aliasForm) []string {
+	if !form.prefixed || form.kind == AliasSuffixKind || len(r.markedAliases) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(r.markedAliases))
+	for name := range r.markedAliases {
+		if _, ok := r.aliases[name]; ok {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // rememberAliasName records that `alias` has named this name.
@@ -545,6 +623,39 @@ func (r *Runner) rememberAliasName(name string) {
 		r.namedAliases = map[string]bool{}
 	}
 	r.namedAliases[name] = true
+}
+
+// adoptAliasNames takes the names a subshell's `alias` named and keeps them
+// here, which is what makes `( alias z ); unalias z` succeed.
+//
+// The carry-over is **names alone**: `( alias z=1 ); alias z` is still
+// `alias not found`, so the value the parentheses defined is rolled back and
+// only the name survives. That is what a set beside the table can say and a
+// shared table could not.
+//
+// Taken at the boundary rather than through a set the two shells share. A
+// `( … )` and a `$( … )` are run to completion by the shell that made them,
+// so this runs in the parent with the child already finished and there is no
+// instant at which two shells hold one map — which is the whole of why a
+// process substitution, which runs on a goroutine, is not a caller here.
+// interp/clonetables.go carries what a shared map costs.
+//
+// The callers are the boundaries measured to carry: the two above and
+// nothing else. A pipeline element and a background job are subshells too
+// and neither carries — `alias z | cat; unalias z` and `( alias z ) & wait;
+// unalias z` are both 1 in the column that has this — so they do not call
+// it. See Semantics.AliasRemembersTheNamesItNames.
+func (r *Runner) adoptAliasNames(sub *Runner) {
+	if len(sub.namedAliases) == 0 {
+		return
+	}
+	if !r.ask(r.sem().AliasRemembersTheNamesItNames,
+		"a name a subshell's `alias` named outliving the subshell") {
+		return
+	}
+	for name := range sub.namedAliases {
+		r.rememberAliasName(name)
+	}
 }
 
 // rememberedAliasName reports whether a name the tables do not hold is one
@@ -670,6 +781,9 @@ func biUnalias(r *Runner, _ context.Context, args []string) int {
 			// ksh93 had named fails like any other, measured — `alias z=1;
 			// unalias -a; unalias z` is 1 there, and so is a preset's name.
 			r.namedAliases = nil
+			// And the marks with no value behind them, which are the same
+			// table's third reader. See Runner.markedAliasNames.
+			r.markedAliases = nil
 		}
 		return 0
 	}
@@ -727,6 +841,12 @@ func (r *Runner) removeAlias(name string, kind AliasKind) bool {
 		return true
 	}
 	if _, ok := r.aliases[name]; !ok {
+		// A mark with no value behind it goes here, which is what stops the
+		// glue: `alias -x bb; unalias bb; alias -p` writes no partial line.
+		// The removal's *status* is the remembered name's below, because the
+		// mark is not an entry — measured, both are 0 in the column that has
+		// either.
+		delete(r.markedAliases, name)
 		// Nothing to take out, which is the answer in four of the five
 		// columns. In the fifth the name may still be one `alias` has
 		// named, and a removal of *that* succeeds.

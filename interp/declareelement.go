@@ -126,14 +126,14 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 		// evaluated as an expression and the number it came to is the key.
 		idx, err := r.subscriptValue(sub)
 		if err != nil {
-			r.fatal("%s\n", r.subscriptFailure(sub, err))
+			r.badSubscriptToADeclaration(sub, err)
 			return
 		}
 		r.setAssocElem(base, itoa(idx), value)
 	default:
 		idx, err := r.subscriptValue(sub)
 		if err != nil {
-			r.fatal("%s\n", r.subscriptFailure(sub, err))
+			r.badSubscriptToADeclaration(sub, err)
 			return
 		}
 		r.setArrayElem(base, idx, sub, value)

@@ -2538,6 +2538,13 @@ func Semantics() interp.Semantics {
 	// where the identical expression handed to `unset` one line earlier only
 	// left a failed builtin behind.
 	s.BadSubscriptToAnOutputOperand = interp.BadSubscriptEndsTheScript
+	// And a declaration ends it too, which is the site where zsh and ksh93
+	// agree with each other and both part from bash: measured 2026-09-17,
+	// `typeset "a[b c]"=v` in a script file writes `bad math expression` and
+	// the script ends at 1, with nothing on a later line reached — from the
+	// top level, a function, an `&&` list, an `if` condition and a loop body
+	// alike (#3495).
+	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
 	// And a name it has never heard of is left alone with its brackets
 	// unread: `unset a "a[x+]"` is silent at 0, and `i=0; unset
 	// "nodecl[i++]"` leaves i at 0. What counts as heard of is set-ness and

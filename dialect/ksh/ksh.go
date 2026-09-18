@@ -2119,6 +2119,14 @@ func Semantics() interp.Semantics {
 	// measured 2026-09-17, `read 'r[1/0]' <<< Y; echo same-line` writes the
 	// complaint, 1, and then `same-line`.
 	s.BadSubscriptToAnOutputOperand = interp.BadSubscriptReported
+	// A *declaration* is the one of the three that ksh93 does not survive,
+	// and it is why the declaration is a field of its own: measured
+	// 2026-09-17, `typeset "a[b c]"=v` in a script file writes `typeset: b c:
+	// arithmetic syntax error` and the script ends at 1, where the identical
+	// expression handed to `unset` or to `read` two lines earlier left a
+	// failed builtin behind and ran the very next thing. `readonly` and
+	// `export` take a subscript here as well and answer the same (#3495).
+	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
 	// And it reads the brackets whether or not it has the name: `unset a
 	// "a[x+]"` complains and reports 1 where bash and zsh are silent at 0,
 	// and `i=0; unset "nodecl[i++]"` leaves i at 1.

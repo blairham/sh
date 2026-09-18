@@ -1958,6 +1958,17 @@ func Semantics() interp.Semantics {
 	// into gives up exactly as much, which is the half zsh answers
 	// differently.
 	s.BadSubscriptToAnOutputOperand = interp.BadSubscriptAbandonsTheCommand
+	// And a declaration gives up exactly as much again — `declare 'a[b c]'=v`,
+	// `typeset` and `local`, measured 2026-09-17 at the top level, in a
+	// function, in an `&&` list, in an `if` condition, in a loop body, inside
+	// `( … )` and inside `$( … )`. This is the site where the panel parts
+	// company with bash twice over: zsh and ksh93 both end the script here,
+	// where at `unset` both carry on (#3495).
+	//
+	// `readonly` and `export` never reach it: the bracketed operand is
+	// refused one complaint earlier as ``readonly: `a[b c]': not a valid
+	// identifier`` at 1, with the rest of the line still running.
+	s.BadSubscriptToADeclaration = interp.BadSubscriptAbandonsTheCommand
 	// But a name it has never heard of takes its brackets with it: `unset a
 	// "a[x+]"` is silent at 0 here as in zsh, and `i=0; unset "nodecl[i++]"`
 	// leaves i at 0. bash 3.2 agrees, so this is not a version split.

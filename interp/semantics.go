@@ -16246,6 +16246,57 @@ type Semantics struct {
 	// on the same line still running. No other column has the builtin.
 	BadSubscriptToAnOutputOperand BadSubscriptPolicy
 
+	// BadSubscriptToADeclaration is the same question at the third site: how
+	// much a *declaration* gives up when the subscript in an operand it is
+	// declaring will not evaluate. `declare 'a[b c]'=v`, `typeset`, `local`,
+	// and — where the dialect lets those two builtins take a subscript at all
+	// — `readonly` and `export`.
+	//
+	// A third field and not either of the two above, because the panel splits
+	// a third way. Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C
+	// HOME=$d`, stdin /dev/null, a fresh directory, a script file holding
+	// `a=(1 2 3)` and then the declaration, with the second command on a
+	// *later line* — which is the pairing this question has to be asked on:
+	//
+	//	                            bash 5.3  bash 3.2  zsh 5.9  ksh93
+	//	declare …; echo same-line   no        no        —        —
+	//	the next line               runs, 1   runs, 1   —        —
+	//	declare … && a || b         neither   neither   —        —
+	//	if declare …; then a; fi    neither   neither   —        —
+	//	while :; do declare …; done neither   neither   —        —
+	//	( declare …; echo x )       no x      no x      no x     no x
+	//	v=$( declare …; echo x )    v empty   v empty   v empty  v empty
+	//	the script's exit status    0         0         1        1
+	//
+	// An em dash is a column that never reaches a second command: zsh and
+	// ksh93 both end the script here. That is what makes this the third
+	// answer rather than a copy of a neighbor's — at `unset` those two carry
+	// on, and at a store through an operand zsh ends and ksh93 carries on.
+	// Three sites, three splits, so no existing field's vector fits.
+	//
+	// Nor is it Semantics.FailedExpansionAbandonsTheLine, whose two values
+	// happen to coincide with this site's two: that axis is about a word the
+	// shell could not expand and has no third value for the outcome a
+	// *builtin* can leave behind, which is the one the two neighboring
+	// fields spend most of their time reporting. It also carries none of the
+	// `-c` rule BadSubscriptAbandonsTheCommand carries, and bash does give
+	// the whole `-c` string up here.
+	//
+	// The columns that do not reach the arithmetic at all:
+	//
+	//   - bash reads no subscript when the operand carries **no value**:
+	//     `declare 'a[b c]'` is silent at 0, where zsh and ksh93 both
+	//     evaluate it and end the script. That is a question of its own
+	//     (#3501) and not this one, which is asked only where a subscript
+	//     actually failed.
+	//   - bash's `readonly` and `export` refuse the bracketed operand one
+	//     complaint earlier — ``readonly: `a[b c]': not a valid identifier``
+	//     at 1, with the rest of the line still running — so only
+	//     `declare`/`typeset`/`local` reach it there.
+	//   - dash and BusyBox ash have no declaration utility that takes a
+	//     subscript, so neither can be asked.
+	BadSubscriptToADeclaration BadSubscriptPolicy
+
 	// UnsetSubscriptSkippedWhenNameUnset looks the operand's *name* up before
 	// it reads the brackets, and leaves the whole operand alone — quietly, at
 	// 0 — where the shell has never heard of that name. The sibling of

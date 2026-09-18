@@ -19301,6 +19301,11 @@ func PosixSemantics() Semantics {
 		// deliberately did not use it. Four of the five columns agree, and
 		// this is the safe direction of the two.
 		DefaultPathSearchIsRemembered: No,
+		// And a command word is a command name whatever it is spelled: POSIX
+		// gives `-` no meaning there, and six of the seven columns report it
+		// as a command that was not found. zsh throws the word away and says
+		// so in its own preset.
+		LoneDashInCommandPositionIsDiscarded: No,
 		// And POSIX gives `command` a builtin to run: bypassing the function
 		// table is what the utility is for, not bypassing the builtins too.
 		CommandReachesABuiltin: Yes,

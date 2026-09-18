@@ -20,7 +20,9 @@ import "testing"
 // editor asks for it before it *parses* the line (#2537). `banghist` is the
 // sixth and the most recent: it is the switch the history expander reads, so
 // `unsetopt banghist` at a prompt really does stop `!!` being rewritten
-// (#3093).
+// (#3093). `octalzeroes` is the seventh and is not read by a session at all:
+// it moves Semantics.ArithLeadingZeroIsOctal, which is what makes `$(( 010 ))`
+// eight rather than ten, and it was accepted and inert until #2884.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr", "interactivecomments", "banghist"} {
 		o, _, ok := resolveOptionName(base)
@@ -43,7 +45,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 140; recordedCount != want {
+	if want := 139; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

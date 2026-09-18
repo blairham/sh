@@ -573,7 +573,64 @@ var zshOptions = []zshOption{
 	recorded("notify", true),
 	matchBacked("nullglob", false, interp.UnmatchedPatternIsEmpty, false),
 	recorded("numericglobsort", false),
-	recorded("octalzeroes", false),
+	{
+		// zsh's OCTAL_ZEROES, and the one name in this table that turns the
+		// *rest of the panel's* arithmetic back on. A leading zero is not a
+		// base here — `$(( 010 ))` is ten, alone among the six columns —
+		// and this option is how a script written for bash, ksh93 or dash
+		// asks for the reading those shells have.
+		//
+		// Semantics.ArithLeadingZeroIsOctal is that disagreement and this is
+		// the only switch in the panel that moves it, which is why the
+		// option reads off the axis rather than off a stored bit: a
+		// `(setopt octal_zeroes)` stays in the subshell exactly as every
+		// other axis-backed name here does.
+		//
+		// Measured 2026-09-17 on zsh 5.9.2, from a script file under
+		// `env -i PATH=/usr/bin:/bin LC_ALL=C`, with the option set and
+		// again without it:
+		//
+		//	                        set      unset
+		//	$(( 010 ))               8        10
+		//	$(( 0100 ))             64       100
+		//	$(( 0_10 ))              8        10
+		//	k=010; $(( k ))          8        10
+		//	typeset -i d=010      8#10        10
+		//	let "x=010"; $x       8#10        10
+		//	$(( 0x10 ))             16        16
+		//	$(( 08 ))            refused       8
+		//
+		// Four of those rows are other axes agreeing with this one rather
+		// than second questions, and every one of the four is already
+		// answered the way the column reads: the value out of a name goes
+		// through the same reader as the literal
+		// (ArithStoredValueReadsALeadingZeroAsDecimal, No), so does an
+		// assignment to an integer name
+		// (IntegerAssignmentReadsALeadingZeroAsDecimal, No) and so does
+		// `let` (LetReadsALeadingZeroAsDecimal, No), and a digit the base
+		// cannot hold is refused (ArithInvalidOctalDigitIsError, Yes). The
+		// `8#10` in the two integer rows is this shell's own base-carrying
+		// display and not a different number — the value is eight, written
+		// in the base it was read in.
+		//
+		// A prefix is untouched in both directions: `0x10` is sixteen with
+		// the option set and without it, so this is the bare leading zero
+		// and not radix reading generally.
+		//
+		// It was `recorded` until #2884 — accepted, remembered and acted on
+		// by nothing, which is the shape that reads as working: a script
+		// that sets the option draws no diagnostic and gets the other
+		// shells' number wrong, silently, in a place where both answers are
+		// plausible and file modes are written this way.
+		base: "octalzeroes", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ArithLeadingZeroIsOctal == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			swapAxes(r, func(s *interp.Semantics) { s.ArithLeadingZeroIsOctal = answer(on) })
+			return 0
+		},
+	},
 	recorded("overstrike", false),
 	recorded("pathdirs", false),
 	recorded("pathscript", false),

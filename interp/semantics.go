@@ -10449,10 +10449,17 @@ type Semantics struct {
 	//	set -sA a z y                    a is y z, $@ untouched
 	//	a=(z 2); set -s +A a b a         a is a b
 	//
-	// bash refuses the letter (`-s: invalid option`); zsh has it and means
-	// the invocation's read-from-standard-input option, which its own letter
-	// table answers before this is asked; dash takes it silently as that
-	// same invocation letter.
+	// bash refuses the letter (`-s: invalid option`) and BusyBox ash refuses
+	// it too (`illegal option -s`, measured 2026-09-17 in the pinned alpine
+	// image). zsh has it and means the invocation's read-from-standard-input
+	// option, and so does dash — each answers it out of its own letter table
+	// before this is asked, dash's since #3411, where the letter is that
+	// shell's `stdin` name spelled short.
+	//
+	// So this axis answers only the columns with no name of their own for
+	// the letter, which is what a dialect letter table is for: a letter two
+	// shells spell different options with is not a question the shared
+	// reading can settle.
 	SetSLetterSortsTheOperands Answer
 
 	// TestHasTheFileExistsLetter gives `test` a *unary* `-a`, which asks the

@@ -5708,11 +5708,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 14 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 15 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 7 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All seven are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 5 | `aliases`, `autocd`, `banghist`, `checkjobs` and `cprecedences`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, and the arithmetic operators really do change the order they bind in |
-| **recorded** | 140 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 139 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -5749,6 +5749,50 @@ sends a stream to every target it names and reads it from every source, and
 the other two are what a command that is only redirections runs — csh's
 reading refuses it, sh's runs `:`, and both are reached by pointing the
 null-command parameters at a name a script cannot write.
+
+**`octalzeroes` is the eleventh name to leave "recorded"** (#2884), and it
+is the one that turns *the rest of the panel's* arithmetic back on rather
+than one of this shell's own behaviors. A leading zero is not a base here —
+`$(( 010 ))` is ten, alone among the six columns, which is the row
+`ArithLeadingZeroIsOctal` holds in the table at the top of this file — and
+the option is how a script written against bash, ksh93 or dash asks for the
+reading those shells have. So this is the only switch in the panel that
+moves that axis, and the only place it is asked of a *running* shell rather
+than of a preset.
+
+Measured 2026-09-17 on zsh 5.9.2, from a script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C`, with the option set and again without
+it:
+
+    $(( 010 ))               8       10
+    $(( 0100 ))             64      100
+    $(( 0_10 ))              8       10
+    k=010; $(( k ))          8       10
+    typeset -i d=010      8#10       10
+    let "x=010"           8#10       10
+    $(( 0x10 ))             16       16
+    $(( 08 ))            refused      8
+
+Four of those rows are other axes agreeing with this one rather than second
+questions, and each was already answered the way the column reads except the
+integer assignment, which this shell had never been asked:
+`ArithStoredValueReadsALeadingZeroAsDecimal` and
+`LetReadsALeadingZeroAsDecimal` are `No`, so a value out of a name and a
+`let` go through the same reader as the literal;
+`IntegerAssignmentReadsALeadingZeroAsDecimal` is now written down as `No`
+too, which is the answer the `8#10` row states — eight, written in the base
+it was read in — and ksh93 is the one column that answers otherwise. A digit
+the base cannot hold is refused (`ArithInvalidOctalDigitIsError`, `Yes`),
+though the *wording* is not modeled: zsh stops the numeral at the zero and
+says `bad math expression: operator expected at ` where bash names the token
+and the base. A prefix is untouched in both directions, so this is the bare
+leading zero and not radix reading generally.
+
+Recorded is exactly the wrong answer for a name like this, and #2884 is the
+record of why: accepted, remembered and acted on by nothing is the shape that
+reads as *working*. A script sets it, draws no diagnostic, and gets the other
+shells' number — in a place where both answers are plausible and file modes
+are written this way.
 
 **Ten names moved the other way in #1739** — out of "fixed" and into
 "recorded", except two which went further. Real zsh moves all twelve of the
@@ -15160,9 +15204,20 @@ leaves the positional parameters where they were. Measured 2026-09-16 on
 93u+ 2012-08-01 under `LC_ALL=C`: `set -- B a 10 9 ''; set +s` is
 `'' 10 9 B a`, and `a=(z 2); set -s +A a b a` leaves `a b`. bash refuses
 the letter; zsh's own letter table reads it as the invocation's
-standard-input option before this is asked. The order is byte order, which
+standard-input option before this is asked, and **dash's does the same**
+since #3411 — the letter is that shell's `stdin` name spelled short, and
+`set -s` there leaves `$-` as `s` and `stdin on` in the listing, `set +s`
+empties both, and the program is not re-read. BusyBox ash is the column
+that refuses it outright, measured through the container: `illegal option
+-s`, and this shell says the same sentence. The order is byte order, which
 is ksh93's in the C locale — a locale's collation is not attempted, for the
 reasons `interp/order.go` gives.
+
+So three of the four columns that are not ksh93 reach this axis through
+something else, which is worth stating because it is what the axis is
+*for*: a letter two shells spell different options with belongs in each
+dialect's own letter table, and the shared reading is what answers only the
+columns that have no name of their own for it.
 
 **`SetHasThePrivilegedLetter`** — bash yes · ksh93 yes · zsh yes · dash no ·
 ash no

@@ -1733,6 +1733,16 @@ func Semantics() interp.Semantics {
 	// Nothing makes a leading zero octal here, so `let` and `(( ))` read one
 	// alike and the axis that parts them elsewhere has nothing to change.
 	s.LetReadsALeadingZeroAsDecimal = interp.No
+	// And the same for the assignment reader, which is reachable here only
+	// under `setopt octal_zeroes` — the one switch in the panel that moves
+	// the axis above, so this shell is the only column where the question is
+	// asked of a *running* shell rather than of a preset. Measured 2026-09-17
+	// on zsh 5.9.2 with the option set: `typeset -i d=010` and
+	// `e=010; typeset -i e` both leave `8#10`, which is eight written in the
+	// base it was read in, so the assignment goes through the expression
+	// reader's octal rule rather than around it. ksh93 is the column that
+	// answers otherwise, and this one does not join it (#2884).
+	s.IntegerAssignmentReadsALeadingZeroAsDecimal = interp.No
 	// A name an arithmetic assignment *creates* is an integer here, which
 	// outlives the expression: `(( x = 5 )); x=2+3` is 5 where the same two
 	// commands leave the three characters `2+3` everywhere else. Only a name

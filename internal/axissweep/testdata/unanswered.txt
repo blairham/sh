@@ -486,7 +486,6 @@ zsh   IgnoredNamesFollowTheParameter
 zsh   IgnoredNamesMatchTheLastComponent
 zsh   IgnoredNamesValueIsOnePattern
 zsh   IndirectionYieldsName
-zsh   IntegerAssignmentReadsALeadingZeroAsDecimal
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
 zsh   LongOptionValueIsANumber

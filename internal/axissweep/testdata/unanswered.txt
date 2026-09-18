@@ -332,6 +332,7 @@ dash  DollarSingleNul
 dash  DollarSingleQuestionEscape
 dash  DollarSingleUnicodeEscapes
 dash  DollarSingleUnknownEscape
+dash  DotWithNoOperandIsFatal
 dash  EarlierDeclarationLetterBlocksALaterPlus
 dash  EchoLastEscapeFlagWins
 dash  EmptyArithSubscript

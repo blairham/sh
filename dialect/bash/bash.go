@@ -1333,6 +1333,10 @@ func Semantics() interp.Semantics {
 	// the script the shell was started for still runs.
 	s.ParamErrorIsAnExitRequest = interp.No
 	s.DotMissingFileFatal = interp.No
+	// And neither is a missing operand: `.` and `source` with none write
+	// `filename argument required` and the builtin's usage, leave 2 behind,
+	// and the script runs on. Measured 2026-09-18 on bash 5.3.20.
+	s.DotWithNoOperandIsFatal = interp.No
 	s.DotPassesArguments = interp.Yes
 	// A directory operand is an error here and success in zsh and dash.
 	// Measured, `. ./` is `bash: line 1: .: ./: is a directory` at 1, and

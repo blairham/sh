@@ -634,6 +634,9 @@ func Semantics() interp.Semantics {
 	// `.` and `eval` is the POSIX answer, which dash keeps and the others have
 	// each moved away from.
 	s.DotWithNoOperandIsAnError = interp.No
+	// unanswered DotWithNoOperandIsFatal: the axis above says a missing
+	// operand is not an error here at all — measured, `.` alone is silent at 0
+	// — so there is no failure for a cost to be asked about.
 	s.DotReadsOptions = interp.Yes
 	// `eval` reads none, unlike `.` above: `eval -- echo hi` is `eval: --:
 	// not found` at 127, so the marker is the command.

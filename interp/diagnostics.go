@@ -186,6 +186,15 @@ type Diagnostics struct {
 	// usage — a usage line is not a diagnostic there.
 	DotNoOperandUnprefixed bool
 
+	// DotNoOperandSilent writes nothing at all. BusyBox ash alone, and it is
+	// the one place in this file where "there is an error here" and "there is
+	// a sentence for it" come apart: measured 2026-09-18 in the
+	// digest-pinned alpine image, BusyBox v1.37.0, `.` and `source` with no
+	// operand each leave 2 behind with an empty standard error and the script
+	// runs on. An empty DotNoOperand cannot say that — empty means the
+	// substrate's own wording — so the silence is a field (#3277).
+	DotNoOperandSilent bool
+
 	// DotCannotOpen is what `.` says when it cannot read the file. Two verbs,
 	// positional because the shells order them differently: %[1]s is the
 	// operand as written and %[2]s the reason.

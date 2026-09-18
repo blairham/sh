@@ -1685,6 +1685,14 @@ func Semantics() interp.Semantics {
 	// is the one sentence ksh93 uses for every `.` failure, with the reason
 	// filling the bracket, so DotCannotOpen already carries it.
 	s.DotDirectoryOperandIsAnError = interp.Yes
+	// And a missing operand ends it too, at 2 rather than at this shell's
+	// usual fatal 1 — the usage line and nothing after it, measured
+	// 2026-09-18 on ksh93u+ 2012-08-01 from a script file. The one column in
+	// the panel that stops here. Only the `.` spelling reaches it: `source`
+	// is an alias for `command .` in this shell, and the word takes the
+	// failure, so `source` with no operand writes the same usage line and the
+	// script runs on (#3473).
+	s.DotWithNoOperandIsFatal = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	// `-a` and `-c`, and no `-l`: this shell reports the letter as an
@@ -4244,7 +4252,62 @@ func Apply(r *interp.Runner) {
 		})
 	}
 	r.Register("builtin", func(rr *interp.Runner, _ context.Context, args []string) int {
+		// And it reads four letters and a `--`, which is what the usage line
+		// this dialect already prints for it has said all along — `Usage:
+		// builtin [-dls] [-f lib] [pathname ...]`. Measured 2026-09-18 on
+		// ksh93u+ 2012-08-01, one probe at a time, under
+		// `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+		//
+		//	builtin -q            -q: unknown option, the usage line, 2
+		//	builtin -lq           the same, naming only the bad letter
+		//	builtin -f            -f: lib argument expected, the usage, 2
+		//	builtin -- echo hi    builtin: hi: not found, 1
+		//	builtin --            the whole listing, 0
+		//	builtin +d            builtin: +d: not found, 1
+		//
+		// The plus sign is the row that says these are options and not a
+		// general dash-word reading: `+d` is looked up as a *name* and is not
+		// found, which is what this command already answered (#3473).
+		args, opts, optArg, code := rr.BuiltinOptions("builtin", args, "dlsf:")
+		if code != 0 {
+			return code
+		}
+		switch {
+		case strings.ContainsRune(opts, 's'):
+			// The special builtins alone, and `-s` beats `-l` where both are
+			// written: `builtin -ls` writes the same twenty-one rows `-s`
+			// does there. What it lists is *this* shell's special roster
+			// rather than that shell's, exactly as the bare listing lists
+			// this shell's builtins — the two rosters differ because the
+			// shells do, and a listing that named names we do not have would
+			// be the worse answer.
+			for _, name := range rr.BuiltinNames() {
+				if rr.IsSpecialBuiltinHere(name) {
+					_, _ = fmt.Fprintln(rr.Stdout, name)
+				}
+			}
+			return 0
+		case strings.ContainsRune(opts, 'd'):
+			// `-d` removes a builtin that was *registered* by an earlier
+			// `builtin -f`, and nothing in this shell can be. Measured
+			// silent at 0 there for every shape probed — `builtin -d`,
+			// `builtin -d echo` (with `echo` still working afterwards) and
+			// `builtin -d nosuchzz` — so the operands are read and no name
+			// is judged, which is what a delete of nothing does.
+			return 0
+		case strings.ContainsRune(opts, 'f'):
+			// A shared library to load builtins out of, which this shell has
+			// no loader for. ksh93 reports the dynamic loader's own sentence
+			// at 1; the status is the shell's and the words are not, so this
+			// says the library is not found in the voice this command
+			// already uses for a name it cannot find.
+			_, _ = fmt.Fprintf(rr.Stderr, "builtin: %s: not found\n", optArg['f'])
+			return 1
+		}
 		if len(args) == 0 {
+			// `-l` and a bare call write the same listing, which is measured:
+			// `builtin` and `builtin -l` are byte-for-byte one output there,
+			// and so is `builtin --` with nothing behind it.
 			for _, name := range rr.BuiltinNames() {
 				_, _ = fmt.Fprintln(rr.Stdout, name)
 			}

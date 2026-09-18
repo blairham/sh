@@ -12936,6 +12936,37 @@ type Semantics struct {
 	// to hold what is really three independent questions.
 	DotWithNoOperandIsAnError Answer
 
+	// DotWithNoOperandIsFatal decides what that error costs, and it is a
+	// separate question from what a `.` on a **file it cannot open** costs —
+	// which is DotMissingFileFatal next door, and which the two columns below
+	// answer the other way round.
+	//
+	// ksh93 alone ends the script here. Measured 2026-09-18, one probe at a
+	// time, each from a script file with a line after it:
+	//
+	//	ksh93u+       the usage line, 2, and nothing after it runs
+	//	bash 5.3.20   `filename argument required` and its usage, 2, runs on
+	//	zsh 5.9.2     `not enough arguments`, 1, runs on
+	//	BusyBox ash   nothing at all, 2, runs on
+	//	dash 0.5.12   not an error — the axis above is No and this is not asked
+	//
+	// BusyBox ash is what parted this from DotMissingFileFatal: there a `.`
+	// on a missing file **does** end the script (measured in the same run,
+	// `. ./nope.sh` writes `can't open './nope.sh'` and the line after it
+	// never runs) while a `.` with no operand does not. One axis for both
+	// would have had to be wrong about one of the two, and it was: this site
+	// read DotMissingFileFatal, so that column ended its script over a
+	// missing operand it should have carried on from (#3277).
+	//
+	// ksh93 reaches this by one spelling only. `source` is an alias for
+	// `command .` there — `whence -v source` says so — so the second spelling
+	// arrives under the word that takes a special builtin's failure, and the
+	// script runs on. That is not this axis and needs nothing of it: the
+	// fatality is raised through the usage door so that `command` can catch
+	// it, which is what every other fatal failure of this builtin already
+	// did (#3473).
+	DotWithNoOperandIsFatal Answer
+
 	// DotDirectoryOperandIsAnError decides whether `.` naming a **directory**
 	// is a failure at all, which the panel is split down the middle on.
 	// Measured 2026-09-08, `. ./` from a script file in a scratch directory:

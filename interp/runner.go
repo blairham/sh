@@ -5802,6 +5802,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// /bin/echo hi` leaves `a b`, and `1=X /usr/bin/env` shows the
 			// child no `1`. Not applied and not exported, which is both
 			// halves of that.
+			//
+			// The value expands all the same, which is measured rather than
+			// assumed and is the same reading the subscripted prefix below
+			// gets: `set -- p q; 1=$(echo side >&2; echo v) /bin/echo hi`
+			// writes `side` in zsh 5.9.2, with or without a trace, and
+			// leaves the parameters where they were. Expanding here is also
+			// what keeps the value the trace renders from being a second
+			// expansion, since prefixExpansion reads back what
+			// expandPrefixTraceValues put aside.
+			_ = r.prefixValue(a)
 			continue
 		}
 		if r.prefixCheckedFirst && r.readonly[a.Name] {

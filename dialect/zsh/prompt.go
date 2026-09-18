@@ -94,6 +94,14 @@ func PromptStyle() interp.PromptStyle {
 			// where measured through a pty both come to the shell's own name.
 			'x': interp.FieldSourceFile,
 			'N': interp.FieldUnitName,
+			// The line being read, counted from the start of whatever unit
+			// `%N` names. Measured 2026-09-17 over a script file: `print -P
+			// '%i'` on the first line draws `1` and on the first line of a
+			// function body draws `0`. It is a row because this shell's
+			// *default* PS4 spells it — `+%N:%i> ` — so the prefix a trace
+			// draws from the parameter is the prefix it drew from a built-in
+			// string only if the code is here (#2928).
+			'i': interp.FieldLineNumber,
 			// Draws nothing and counts as a column, which is what a prompt
 			// uses to tell the shell that bytes it has hidden inside `%{ %}`
 			// do reach the screen. Measured, `%G` alone leaves the text empty
@@ -266,6 +274,11 @@ func PromptStyle() interp.PromptStyle {
 		},
 		Default:          "%m%# ",
 		DefaultContinued: "%_> ",
+		// The one column whose trace prefix is a *location*, spelled in this
+		// shell's own prompt language: the unit being read and the line in
+		// it. Measured 2026-09-17 with nothing inherited, `-c` and `-i`
+		// alike. See interp.PromptStyle.DefaultTrace.
+		DefaultTrace: "+%N:%i> ",
 		// Set and *empty* in a shell with nobody to prompt, which is a third
 		// answer rather than either of the other two: measured on `-c` and on
 		// a script file alike with nothing inherited, `${PS1+set}` is `set`

@@ -1012,6 +1012,11 @@ func Semantics() interp.Semantics {
 	// `a=( 'p q' )` — one element, because nothing here splits an unquoted
 	// parameter — which is this column's own expansion in its own trace.
 	s.TraceArrayLiteralShowsTheExpandedElements = interp.Yes
+	// One line for a subscripted literal as much as for a plain one:
+	// measured 2026-09-17, `typeset -A m; set -x; m=([k]=v [j]=w)` is a
+	// single `m=( … )` line in zsh 5.9.2, with the shell's own separator
+	// byte where the brackets were.
+	s.TraceSubscriptedArrayLiteralIsElementAssignments = interp.No
 	// The subscript is not resolved, though: `i=2; a[$i]=v` is `a[$i]=v`
 	// here where ksh93 writes `a[2]=v`. That pair is why the two are
 	// separate axes.

@@ -1464,6 +1464,8 @@ func Semantics() interp.Semantics {
 	// unanswered TraceArrayLiteralShowsTheExpandedElements: no array literal
 	// here either — `a=(1 2)` is a syntax error — so nothing of this shape
 	// is ever traced (#1959).
+	// unanswered TraceSubscriptedArrayLiteralIsElementAssignments: the
+	// subscripted shape is the same literal and does not parse here either.
 	// unanswered TraceElementSubscriptIsEvaluated: and no subscript, so
 	// `a[1]=v` names a variable spelled `a[1]` and there is nothing to
 	// resolve.

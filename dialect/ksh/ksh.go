@@ -1568,6 +1568,9 @@ func Semantics() interp.Semantics {
 	// `a=( p q )` — this column's own field splitting, visible in its own
 	// trace.
 	s.TraceArrayLiteralShowsTheExpandedElements = interp.Yes
+	// And a literal whose elements name where their values go is traced as
+	// those writes, one line each — see the axis for the table.
+	s.TraceSubscriptedArrayLiteralIsElementAssignments = interp.Yes
 	// And the subscript is the one the assignment resolved: `i=2; a[$i]=v`
 	// is `a[2]=v`, `a[i]=v` is too, and a table's `m[k$x]=v` is `m[k]=v`.
 	// The only column that does.

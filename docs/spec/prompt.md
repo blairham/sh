@@ -589,6 +589,33 @@ Three rules go with the value, each measured:
 `--norc`, `--noprofile` and `-f` do not suppress any of this: with no startup
 file read at all, every column still has its default in hand.
 
+**`PS4` is the third parameter and it does not take the first rule.** Measured
+2026-09-17 with nothing inherited, on `-c` and under `-i` alike, every column
+has it set — `+ ` in four and `+%N:%i> ` in zsh — where `PS1` is unset in two
+of them and `PS2` in one. So it is `PromptStyle.DefaultTrace`, written before
+the interactive question is asked, and it is not exported. Until #2928 it was
+a fallback in the tracer and nothing else, so the trace was right and the
+parameter was empty — which loses the `+ ` out of the ordinary idiom for
+*extending* the prefix:
+
+```sh
+PS4="$PS4"'[$LINENO] '
+```
+
+The one column whose prefix is a **location** spells that location in its own
+prompt language, `+%N:%i> `, so the default being a parameter needs `%i` to
+draw the line number the built-in prefix drew. It is in the percent table
+above and had been measured and not implemented; the escape and the prefix are
+one reader now, and an explicit `PS4='+%N:%i> '` draws what the default draws.
+
+**And the pair `PS1`/`PS2` needs two answers, because one column splits them.**
+ksh93 with nobody to prompt leaves `PS1` unset and has `PS2` set to `> `. The
+table used to assign the two together and took `PS1`'s answer for both —
+because `PS1` is what a startup file guards on — so that shell's
+`printf '%s' "$PS2"` was empty where the real one writes `> `. See
+`PromptStyle.ContinuedAssignedWithNobodyToPrompt`, which is read as well as
+`AssignsWithNobodyToPrompt` and never instead of it.
+
 ### When, relative to the startup files
 
 Five of the six have `PS1` before the run-commands file runs. **ksh93 is the
@@ -610,23 +637,15 @@ is the same on every machine. See `prompt/the-default-prompt-is-a-parameter-at-a
 
 ### Standing differences
 
-- **ksh93's non-interactive `PS2`.** ksh93 with nobody to prompt leaves `PS1`
-  unset and has `PS2` set to `> `. The table assigns the two together, so the
-  answer taken is the one `PS1` gives — `PS2` is left unset there. Recorded
-  here rather than fixed, because splitting the entry per parameter would be a
-  knob for one column.
 - **`PS3`.** ksh93 and zsh set it (`#? ` and `?# `). It is not assigned here
   and not read: `select` writes its own prompt. Measured and recorded; not
   implemented.
-- **`PS4` is read but not assigned.** The trace prefix is this parameter in
-  every column and has been here since #1454 — see "The trace prefix is a
-  prompt" below — but the *default* is still a fallback in the code rather
-  than a value written into the parameter. Every column assigns it on every
-  route, interactive or not: `+ ` in four of them and `+%N:%i> ` in zsh. The
-  difference that leaves is what `unset PS4` does, and it is measured: three
-  columns then draw no prefix at all and ksh93 draws `+ ` again, where this
-  shell falls back to its dialect's prefix in every case. See
-  `xtrace/ps4-unset-is-not-the-default-again`.
+- **What `unset PS4` does.** Measured 2026-09-17 over a script file: bash
+  5.3.20, zsh 5.9.2 and dash 0.5.12 then draw **no prefix at all** and ksh93u+
+  draws `+ ` again. This shell falls back to its dialect's prefix in every
+  case, which is ksh93's answer in four columns. Recorded rather than fixed:
+  it is one axis over a parameter a script has to go out of its way to remove.
+  See `xtrace/ps4-unset-is-not-the-default-again`.
 
 ## The trace prefix is a prompt
 

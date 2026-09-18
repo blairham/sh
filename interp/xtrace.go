@@ -326,6 +326,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 	}
 	d := r.diag()
 	words := make([]string, 0, len(assigns))
+	var elementLines []string
 	for i, a := range assigns {
 		if p := prepared[i]; p != nil && p.tracesAfterTheStore && !p.subscriptSet {
 			// The line waits for the store to resolve its subscript, and
@@ -343,7 +344,23 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 			// not one, and `b=()` is none at all.
 			continue
 		}
+		if lines, ok := r.traceLiteralAsElementWrites(a, prepared[i], d); ok {
+			// A literal whose elements name where their values go, in the
+			// column that traces it as the writes it performs rather than as
+			// the literal it was written as. Its own lines, so an assignment
+			// beside it on the same line still gets a word — see
+			// Semantics.TraceSubscriptedArrayLiteralIsElementAssignments.
+			elementLines = append(elementLines, lines...)
+			continue
+		}
 		words = append(words, r.traceAssign(a, values[i], prepared[i], d))
+	}
+	if len(elementLines) > 0 {
+		r.awaitTraceTurn()
+		for _, line := range elementLines {
+			r.traceLine(line, d)
+		}
+		r.releaseTraceTurn()
 	}
 	if len(words) == 0 {
 		// Every assignment on the line wrote its own lines, or wrote none.
@@ -396,8 +413,57 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 		b.WriteString(traceArrayLiteral(a.Elems, expandedElemsOf(e), d.TraceArrayLiteral, d))
 		return b.String()
 	}
+	if value == "" && d.TraceEmptyAssignmentValueIsBare {
+		// The name, the operator and nothing — one column's answer for an
+		// empty *value*, where the same column writes `''` for an empty
+		// argument. See the field.
+		return b.String()
+	}
 	b.WriteString(traceQuote(value, d.TraceQuoting, d.TraceMetacharacters))
 	return b.String()
+}
+
+// traceLiteralAsElementWrites renders a subscripted array literal as the
+// element assignments it performs, one line each, and reports whether this
+// dialect writes it that way.
+//
+// Asked here rather than in traceAssign because the answer is a *line count*
+// and not a rendering: the one column that gives it writes `a=([2]=c [0]=a)`
+// as two lines, where every other assignment shape is one word on one line.
+//
+// The element list is the one prepareTracedAssign expanded, which is why this
+// needs no expansion of its own — and why the subscript is the value it came
+// to rather than the text, with `a=([$((i++))]=c)` stepping `i` exactly once.
+// See Semantics.TraceSubscriptedArrayLiteralIsElementAssignments.
+func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign, d Diagnostics) ([]string, bool) {
+	if !a.IsArray || e == nil || !e.elemsSet || len(e.elems) == 0 {
+		return nil, false
+	}
+	for _, el := range e.elems {
+		if !el.subscripted {
+			// A literal the dialect read as plain words, or a mixed one:
+			// measured, `a=(p [2]=c)` is one line in that column too, with
+			// the bracketed word quoted as the word it is.
+			return nil, false
+		}
+	}
+	if !r.ask(r.sem().TraceSubscriptedArrayLiteralIsElementAssignments,
+		"a subscripted array literal traced as the element writes it performs") {
+		return nil, false
+	}
+	lines := make([]string, 0, len(e.elems))
+	for _, el := range e.elems {
+		// The literal's own `+=` is not written: `a+=([5]=z)` performs the
+		// element write `a[5]=z`, and that is what the line says. An append
+		// on the *element* is kept, for the same reason.
+		op := "="
+		if el.appendValue {
+			op = "+="
+		}
+		lines = append(lines, a.Name+"["+el.sub+"]"+op+
+			traceQuote(el.value, d.TraceQuoting, d.TraceMetacharacters))
+	}
+	return lines, true
 }
 
 // traceArrayLiteral renders `(1 2)` from the elements as they were written.

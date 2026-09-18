@@ -188,6 +188,17 @@ func (r *Runner) prefixAssignsPositional(ctx context.Context, a *syntax.Assign) 
 	if _, ok := positionalAssignIndex(a.Name); !ok {
 		return false
 	}
+	if value, ok := r.prefixTraceValue(a); ok {
+		// Expanded once already, by the trace that is about to write this
+		// line — see Runner.expandPrefixTraceValues. Handed to the store the
+		// way the three other prefix routes take it, rather than expanded a
+		// second time, which is what keeps `1=$(date) f` from running the
+		// substitution twice under a trace: the double run #1915 fixed for a
+		// scalar's value, and the reason this position had no trace line at
+		// all until #3157.
+		r.withPreparedValue(ctx, &expandedAssign{assign: a, value: value})
+		return true
+	}
 	r.assign(ctx, a)
 	return true
 }

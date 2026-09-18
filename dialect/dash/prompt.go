@@ -24,6 +24,7 @@ func PromptStyle() interp.PromptStyle {
 		// left empty so the dialect describes itself.
 		Default:          "$ ",
 		DefaultContinued: "> ",
+		DefaultTrace:     "+ ",
 		// And dash assigns them to a script as well, which is one of the
 		// three answers the panel gives. Measured on `-c` and on a script
 		// file alike with nothing inherited: dash reports PS1 `$ ` and PS2

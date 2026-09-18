@@ -1246,6 +1246,62 @@ Their fields are `Diagnostics.TracePrefixAssignment` and
 `TracePrefixAppendIsTheJoinedValue`, and interp/xtraceprefix.go carries the
 panel they were measured from.
 
+Three more cells were measured 2026-09-17 and are answered now.
+
+**A positional parameter in a prefix.** `1=X f` is an assignment in exactly one
+column, and only that column's trace was missing a word: the four shells with
+no such assignment read `1=X` as a *command name* and are byte-identical here
+already. It was left out because the positional store expands the value for
+itself, so rendering one for the line would have been a second expansion and
+`1=$(date) f` would have run the substitution twice — the double run #1915
+fixed for a scalar. The store takes the pre-expanded value the three other
+prefix routes take instead (#3157). Measured beside it and fixed with it: an
+external command's positional prefix is applied to nothing and exported to
+nothing, and its value **does** expand — `set -- p q; 1=$(echo side >&2; echo
+v) /bin/echo hi` writes `side` in zsh 5.9.2 with or without a trace — where
+ours evaluated nothing at all.
+
+**An empty assignment value.** bash writes the name, the operator and nothing;
+ksh93 and zsh write two quotes; dash and BusyBox ash quote nothing anywhere.
+
+    set -x; A=          bash 5.3.20  + A=        ksh93u+, zsh 5.9.2  + A=''
+
+It is the *position* and not the quoting: the same bash writes `+ : ''` for an
+empty **argument** and `+ B='a b'` for a value with a space in it, so it cannot
+be read off `TraceQuoting`, which is one value for the whole command and which
+bash shares with a column that writes `''` here. Every shape of the value
+answers alike — a bare assignment, an append, an element write and a prefix —
+so it is one field, `Diagnostics.TraceEmptyAssignmentValueIsBare` (#3158).
+
+**A subscripted array literal.** A literal whose elements name *where their
+values go* is traced in ksh93 as the writes it performs, one line each, and in
+bash and zsh as one line for the literal:
+
+    written              ksh93u+              bash 5.3.20
+    a=([2]=c [0]=a)      + a[2]=c, + a[0]=a   + a=([2]=c [0]=a)
+    a+=([5]=z)           + a[5]=z             + a+=([5]=z)
+    a=([2]+=c)           + a[2]+=c            + a=([2]+=c)
+    a=(1 2)              + a=( 1 2 )          + a=(1 2)
+
+The last row is the control: a literal of plain words is one line in every
+column, so the question is the subscripted shape and not array literals. It is
+a line *count* rather than a rendering, which is why it is
+`Semantics.TraceSubscriptedArrayLiteralIsElementAssignments` and not a value of
+the axis that decides whether the elements are shown expanded — that one falls
+back to the word as written for a subscripted element, which is what the other
+column does with it. The subscript written on the line is the value it came to,
+which falls out of the element list being expanded once by whoever stores it:
+`x=2; a=([$((x++))]=c)` is `+ a[2]=c` and steps `x` once (#2866).
+
+One row of the same family is measured and **not** answered here: a
+*declaration command* carrying an array operand is traced as an assignment line
+before the command word in bash and ksh93 alike — `set -x; typeset -A m=([k]=v)`
+is `+ m=(['k']='v')` then `+ typeset -A m` in bash, and `+ m[k]=v` then
+`+ typeset -A m` in ksh93 — where this shell writes the command line alone. That
+is the operand-assignment route rather than the literal's shape, and it is the
+same gap for a scalar operand in ksh93, which writes `+ x=1` before
+`+ typeset x`.
+
 **The structure is not what this document said it was.** It said "every
 simple command to stderr, expanded, before it runs, and compound commands
 not traced", and the second half is false: every shell that has `[[ … ]]`

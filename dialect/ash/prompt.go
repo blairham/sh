@@ -20,6 +20,7 @@ func PromptStyle() interp.PromptStyle {
 		Expand:                             interp.PromptExpandsAlways,
 		Default:                            "$ ",
 		DefaultContinued:                   "> ",
+		DefaultTrace:                       "+ ",
 		AssignsWithNobodyToPrompt:          true,
 		DefaultWithNobodyToPrompt:          "$ ",
 		DefaultContinuedWithNobodyToPrompt: "> ",

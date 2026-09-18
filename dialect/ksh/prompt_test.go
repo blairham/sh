@@ -64,3 +64,23 @@ func TestTheStartupFileDoesNotSeeTheDefaultPrompt(t *testing.T) {
 		t.Errorf("default prompt = %q, want %q — the value is the same, only the moment differs", st.Default, "$ ")
 	}
 }
+
+// And the pair a shell with nobody to prompt is assigned splits here: PS1 is
+// left unset — which is what a startup file's `[ -z "$PS1" ] && return`
+// detects — and PS2 is `> `. Measured 2026-09-17 against ksh93u+ 2012-08-01
+// on `-c` and on a script file, `env -i` with nothing inherited. The table
+// used to assign the two together and took PS1's answer for both, so this
+// shell's `printf '%s' "$PS2"` was empty where the real one writes `> `
+// (#2928).
+func TestTheContinuationIsSetWithNobodyToPromptAndTheFirstIsNot(t *testing.T) {
+	st := ksh.PromptStyle()
+	if st.AssignsWithNobodyToPrompt {
+		t.Error("PS1 is unset in a shell with nobody to prompt here")
+	}
+	if !st.ContinuedAssignedWithNobodyToPrompt {
+		t.Error("PS2 is set in a shell with nobody to prompt here")
+	}
+	if got := st.DefaultContinuedWithNobodyToPrompt; got != "> " {
+		t.Errorf("PS2 with nobody to prompt = %q, want %q", got, "> ")
+	}
+}

@@ -2287,13 +2287,56 @@ type Semantics struct {
 	// Asked only where an array literal is being traced, which is why dash
 	// and ash — neither of which has one — leave it unanswered.
 	//
-	// One shape in the same family is measured and deliberately not modeled:
-	// a **subscripted** literal is traced as element assignments in ksh93,
-	// one line each — `set -x; a=([2]=c [0]=a)` is `+ a[2]=c` and `+ a[0]=a`
-	// there, and `typeset -A m=([k]=v)` is `+ m[k]=v` then `+ typeset -A m`.
-	// That is a different construct rather than a different rendering of this
-	// one; see #2866.
+	// A **subscripted** literal is a different construct rather than a
+	// different rendering of this one, and it has an axis of its own — see
+	// TraceSubscriptedArrayLiteralIsElementAssignments (#2866). Under this
+	// axis's yes reading a subscripted element falls back to the word as
+	// written, which is what the other column does with it.
 	TraceArrayLiteralShowsTheExpandedElements Answer
+	// TraceSubscriptedArrayLiteralIsElementAssignments traces a literal whose
+	// elements name *where their values go* as the writes it performs, one
+	// line each, rather than as one line for the whole literal.
+	//
+	// Measured 2026-09-17, LC_ALL=C over a script file, `-c` and standard
+	// input alike:
+	//
+	//	written                	ksh93u+          	bash 5.3.20
+	//	a=([2]=c [0]=a)        	+ a[2]=c, + a[0]=a	+ a=([2]=c [0]=a)
+	//	a=([2]='p q')          	+ a[2]='p q'      	+ a=([2]='p q')
+	//	a+=([5]=z)             	+ a[5]=z          	+ a+=([5]=z)
+	//	a=([2]+=c)             	+ a[2]+=c         	+ a=([2]+=c)
+	//	a=(1 2)                	+ a=( 1 2 )       	+ a=(1 2)
+	//
+	// The last row is the control: a literal of plain words is one line in
+	// every column, so this is about the subscripted shape and not about
+	// array literals. zsh 5.9.2 writes one line too — `m=([k]=v [j]=w)` is a
+	// single `m=( … )` there, with its own separator byte where the brackets
+	// were — so the panel splits one against two.
+	//
+	// The element's *subscript* is the value it came to and not the text:
+	// `x=2; a=([$((x++))]=c)` is `+ a[2]=c` in that column. That falls out
+	// rather than being a second question, because the element list is
+	// expanded once by whoever is about to store it — see
+	// TraceArrayLiteralShowsTheExpandedElements, which is the axis that puts
+	// the expanded list where the trace can read it, and which every column
+	// answering yes here also answers yes.
+	//
+	// The literal's own append is dropped where its elements carry their own:
+	// `a+=([5]=z)` is the element write `a[5]=z`, because that is what the
+	// assignment performs. An append on the *element* is kept for the same
+	// reason.
+	//
+	// Asked only where a subscripted literal is being traced, so dash and
+	// BusyBox ash — neither of which has an array literal — leave it
+	// unanswered.
+	//
+	// unpinned: no row of the corpus traces a subscripted literal — the
+	// eighty-odd `set -x` cases are commands, scalars and plain literals —
+	// so a flip costs nothing there. The pair is pinned instead by
+	// TestASubscriptedLiteralIsTracedAsTheWritesItPerforms in dialect/ksh
+	// and TestASubscriptedLiteralIsOneLine in dialect/bash, which are the
+	// two sides of it against the measurement above.
+	TraceSubscriptedArrayLiteralIsElementAssignments Answer
 	// TraceElementSubscriptIsEvaluated prints the subscript of `a[$i]=v` as
 	// the number or the key it resolved to, rather than as the text.
 	//

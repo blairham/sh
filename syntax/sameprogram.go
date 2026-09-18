@@ -64,15 +64,23 @@ func SameProgram(a, b *File) (string, bool) {
 // is the same program, and the diagnostic it would earn names the spelling
 // that is now there.
 //
-// The fourth is a span's Bare, which says a parameter expansion was written
-// without braces. `${x}` and `$x` are one program and the printer moves
-// between them freely — it adds braces wherever what follows would run into
-// the name — so the flag on its own is spelling. What is *not* spelling is
-// the reading the short form can carry, and that has a field of its own:
-// ParamExpr.BareIndexText is set exactly where an unbraced expansion took a
-// subscript, and it is compared like any other node. So `$a[1]` printed as
-// `${a[1]}` is still caught, by the field that says the two mean different
-// things, rather than by the one that says they are spelled differently.
+// The fourth is Bare, which says a parameter expansion was written without
+// braces, and which the span and the expansion node each carry. `${x}` and
+// `$x` are one program and the printer moves between them freely — it adds
+// braces wherever what follows would run into the name — so the flag on its
+// own is spelling. What is *not* spelling is the reading the short form can
+// carry, and that has a field of its own: ParamExpr.BareIndexText is set
+// exactly where an unbraced expansion took a subscript, and it is compared
+// like any other node. So `$a[1]` printed as `${a[1]}` is still caught, by
+// the field that says the two mean different things, rather than by the one
+// that says they are spelled differently.
+//
+// ParamExpr.Bare is the same flag on the node, kept there because one
+// diagnostic reads it: `set -u` writes the `$` back in front of a positional
+// in one dialect and drops it for the braced spelling of the same parameter.
+// That is the rule the first paragraph states — a spelling kept so something
+// can quote the input back — so `${7}` printed as `$7` is the same program,
+// and the refusal it would earn names the spelling that is now there.
 func spellingOnly(t reflect.Type, name string) bool {
 	if name == "Text" {
 		return t == stmtType || t == redirType
@@ -81,7 +89,7 @@ func spellingOnly(t reflect.Type, name string) bool {
 		return t == assignType || t == paramExprType
 	}
 	if name == "Bare" {
-		return t == spanType
+		return t == spanType || t == paramExprType
 	}
 	if name == "Tail" {
 		// The expression's text from a numeral to the end of it, kept so one

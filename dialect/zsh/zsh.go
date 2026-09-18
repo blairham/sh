@@ -1382,6 +1382,19 @@ func Semantics() interp.Semantics {
 	// all read it as unset. Measured 2026-09-16 on zsh 5.9.2 under
 	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a file (#2298).
 	s.EmptyArrayIsSet = interp.Yes
+	// `set -u` reaches two subscripted shapes here that it reaches in no
+	// other column. The length of an element that is not there is a refusal
+	// — `a=(x y z); echo "${#a[9]}"` is `a[9]: parameter not set` where bash
+	// 5.3.20, bash 3.2.57 and ksh93u+ all answer `0` at 0 — and a
+	// whole-array subscript on a name holding nothing at all is one too:
+	// `${nope[@]}` and `${nope[*]}` are refused here and in bash 3.2.57,
+	// against `[]` at 0 in bash 5.3.20 and ksh93u+. `b=(); ${b[@]}` is the
+	// control for the second and is `[]` at 0 here, so what it refuses is
+	// the absent name rather than the empty array. Measured 2026-09-18 on
+	// zsh 5.9.2 under `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from a
+	// script file with each row in a subshell (#2980).
+	s.LengthOfAMissingElementIsRefused = interp.Yes
+	s.UnsetNameWithAWholeArraySubscriptIsRefused = interp.Yes
 	// And an attribute added to a name that already holds a value re-reads
 	// it at once, as ksh93 does: `FOO=bar; typeset -i FOO` stores 0 and
 	// `d=MiXeD; typeset -u d` stores MIXED. A separate question from the

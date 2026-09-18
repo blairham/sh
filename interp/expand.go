@@ -1034,6 +1034,15 @@ func (r *Runner) conditionalFires(e *syntax.ParamExpr, value string, set bool) b
 	if e.Colon {
 		return !set || value == ""
 	}
+	if !r.errorOperatorSeesTheElement(e) {
+		// One column's colon-less `?` reaches only the element a *bare* read
+		// of the name means, so brackets pointing anywhere else leave it
+		// quiet however absent that element is. See
+		// errorOperatorSeesTheElement, where the controls are — the same
+		// shell's `-` and `+` do see the element, and its `${nope[0]?m}`
+		// refuses exactly as `${nope?m}` does.
+		return false
+	}
 	return !r.listOfNoPositionalsIsSet(e, r.emptyWholeArrayIsSet(e, set))
 }
 
@@ -1374,8 +1383,11 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	if elems, ok := r.listBase(e); ok {
 		// `set -u` refuses a subscript that named no element, and this is
 		// the path a plain `${a[9]}` takes — the scalar path's own check
-		// never sees one. See checkNounsetElement (#2911).
+		// never sees one. See checkNounsetElement (#2911), and
+		// checkNounsetWholeArray for the list-shaped subscript it skips
+		// (#2980).
 		r.checkNounsetElement(e, elems)
+		r.checkNounsetWholeArray(e)
 		if e.Indirect && !dotRanged(e) {
 			// A range has already answered with the subscripts it named.
 			//
@@ -2479,6 +2491,10 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// as 0 rather than as the length of the element.
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Length { //nolint:nestif // the Length question is answered here on purpose
+				// The count is taken in front of every refusal below, so
+				// `set -u` is asked here or nowhere. See
+				// checkNounsetLength (#2980).
+				r.checkNounsetLength(e, elems)
 				// `${#a[@]}` is the number of elements; `${#a[0]}` is the
 				// length of one. The subscript decides which question was
 				// asked, which is why this is here rather than below.
@@ -2557,7 +2573,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// parses the same text and yields the name itself, so the grammar
 		// having accepted it is not enough to know what it means.
 		if r.ask(r.sem().IndirectionYieldsName, "${!x} yielding the name") {
-			if !set {
+			if !r.indirectNameIsSet(e, set) {
 				// The value is never read in this dialect, so the refusal is
 				// the *written* parameter's — which is what it was before the
 				// check moved below, and the reason it is repeated here.
@@ -2711,20 +2727,12 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// Fatal in all four, and with the same four statuses an unset
 			// parameter under `set -u` gets — so it goes through the same
 			// door rather than carrying a status of its own.
-			// The subject is the name as written, except that an
-			// indirection wears its `!`: measured 2026-09-16, `${!v?msg}` is
-			// `!v: msg` and `${!a[9]?msg}` is `!a[9]: msg` in bash 5.3.20 and
-			// bash 3.2.57 alike, where this wrote `v` and `w`. Only for an
-			// indirection, because what a *written* subscript does to this
-			// subject is a question of its own — `${a[9]?m}` is `a[9]: m` in
-			// both bash columns and no refusal at all in ksh93u+, which is a
-			// second split and not this one (#3241).
-			subject := e.Name
-			if e.Indirect {
-				subject = r.indirectSubject(e)
-			}
+			// The subject is the name as written, with the brackets of a
+			// written subscript on it and an indirection's `!` in front of
+			// it. See Runner.paramErrorSubject, which holds the panel and
+			// the one column that names the array instead (#3241).
 			r.fatalParamError("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
-				subject, r.paramErrorWord(e, set)))
+				r.paramErrorSubject(e), r.paramErrorWord(e, set)))
 			return ""
 		}
 		return value
@@ -5600,7 +5608,7 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		// ksh93 alone lets `$1` be empty here. bash writes the `$` back for
 		// a positional and not for a name, which is why the wording is its
 		// own field rather than a decoration applied here.
-		r.fatalExpansion("%s\n", r.unboundSigilWording(e.Name))
+		r.fatalExpansion("%s\n", r.unboundSigilWording(e, e.Name))
 		return
 	}
 	if e.Name == "!" {
@@ -5616,7 +5624,7 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		// from the other axis instead — it never reaches this line, so
 		// asking would be asking the wrong question of the one dialect it
 		// would change.
-		r.fatalExpansion("%s\n", r.unboundSigilWording(e.Name))
+		r.fatalExpansion("%s\n", r.unboundSigilWording(e, e.Name))
 		return
 	}
 	if !isPositional(e.Name) {
@@ -5662,13 +5670,25 @@ func (r *Runner) unboundSubject(e *syntax.ParamExpr) string {
 		// `nope: invalid indirect expansion` for an unset *outer* name is a
 		// different sentence and is still #2891's.
 		//
-		// Not for a whole-array subscript either. `${nope[@]}` is refused
-		// by zsh 5.9.2 and by bash 3.2.57, and passed over in silence by
-		// bash 5.3 — the same binary as `sh` included — and by ksh93u+, so
-		// `[@]` is a question of its own with a split of its own. Answering
-		// it here would make every column refuse it.
+		// A whole-array subscript is a question of its own — `${nope[@]}` is
+		// refused by zsh 5.9.2 and by bash 3.2.57 and passed over in silence
+		// by bash 5.3 and ksh93u+ — and **whether** it is refused is
+		// Semantics.UnsetNameWithAWholeArraySubscriptIsRefused, asked at
+		// Runner.checkNounsetWholeArray so that this is not what decides it.
+		// What the two columns that do refuse write is the brackets, exactly
+		// as for an element: measured 2026-09-18 under `set -u` from a script
+		// file, `${nope[@]}` is `nope[@]: parameter not set` in zsh 5.9.2 and
+		// `nope[@]: unbound variable` in bash 3.2.57 (#2980).
+		//
+		// Not under an indirection, where the same two columns say nothing at
+		// all: `${!nope[@]}` is empty at status 0 in bash 5.3.20 and in bash
+		// 3.2.57 alike, so there is no sentence to name a subject in and the
+		// bare name is what the other readers of this function are left with.
 		if r.wholeArrayIndex(e) {
-			return e.Name
+			if e.Indirect {
+				return e.Name
+			}
+			return e.Name + "[" + r.unboundSubscript(e) + "]"
 		}
 		if e.Indirect {
 			return r.indirectSubject(e)
@@ -5794,9 +5814,23 @@ func (r *Runner) subscriptReadsCharacters(e *syntax.ParamExpr) bool {
 // for each of them and says `unbound variable`, and the other three write the
 // name alone and say `parameter not set`, which is what UnboundVariable
 // already holds. Empty means the two are the same line.
-func (r *Runner) unboundSigilWording(name string) string {
+//
+// The sigil follows the **spelling** and not the parameter. Measured
+// 2026-09-18 from a two-line script file, `set -u` and then the expansion:
+//
+//	$7     $7: unbound variable       ${7}     7: unbound variable
+//	$!     $!: unbound variable       ${!}     !: unbound variable
+//	$x     x: unbound variable        ${x}     x: unbound variable
+//
+// so bash writes back what was typed in front of the name, and a name gets
+// nothing either way. This is not an axis: bash is the only column with a
+// sigil at all — zsh, ksh93 and dash say `parameter not set` for every one of
+// the six — so the braced half is that one wording's rule rather than a place
+// the panel divides. The wording is still the dialect's, which is why the
+// spelling decides between the two fields rather than editing either (#3466).
+func (r *Runner) unboundSigilWording(e *syntax.ParamExpr, name string) string {
 	format := r.diag().UnboundPositional
-	if format == "" {
+	if format == "" || !e.Bare {
 		format = r.diag().UnboundVariable
 	}
 	return Wording(format, "%s: parameter not set", name)

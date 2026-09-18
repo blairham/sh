@@ -1291,7 +1291,7 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 	case syntax.ParamError:
 		if fires {
 			r.fatalParamError("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
-				e.Name, r.paramErrorWord(e, set)))
+				r.paramErrorSubject(e), r.paramErrorWord(e, set)))
 			return nil, false, false, false
 		}
 	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,

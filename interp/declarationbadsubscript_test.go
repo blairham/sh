@@ -83,6 +83,11 @@ func TestADeclarationGivingUpACommandUnwindsOutOfAConstruct(t *testing.T) {
 		{"an && list", `typeset 'a[b c]'=v && echo yes || echo no`},
 		{"an if condition", `if typeset 'a[b c]'=v; then echo t; else echo f; fi`},
 		{"a loop body", `while :; do typeset 'a[b c]'=v; echo body; break; done`},
+		// The subshell row does not discriminate between this answer and
+		// ending the script, and is here for what it does pin — the body
+		// given up and the next line reached. That is exactly the trap
+		// #3485 is about: a probe written inside `( … )` agrees with both
+		// answers, so the three rows above it are what decide the axis.
 		{"a subshell", `( typeset 'a[b c]'=v; echo x )`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -183,7 +188,10 @@ func TestADeclarationRefusesAnUnspecifiedBadSubscriptAxis(t *testing.T) {
 	if !strings.Contains(out, "no dialect was chosen") {
 		t.Errorf("output %q is not a refusal naming the axis", out)
 	}
-	if strings.Contains(out, "arithmetic") || strings.Contains(out, "expression") {
+	// The subscript's own text is the tell: the refusal names the axis and
+	// nothing else, so `b c` appearing at all means the sentence about the
+	// expression was written under it.
+	if strings.Contains(out, "b c") {
 		t.Errorf("output %q wrote the complaint under the refusal", out)
 	}
 	if !strings.Contains(out, "same=2") {

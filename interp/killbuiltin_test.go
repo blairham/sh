@@ -6,6 +6,7 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -600,6 +601,17 @@ func TestAJoinedSignalIsRefusedWhenUnanswered(t *testing.T) {
 // is the whole reason the form exists. Every shell on the panel does it, and
 // this engine refused all four columns until #3053.
 func TestKillListReadsAnExitStatus(t *testing.T) {
+	// A number this kernel has no signal for at all, which is where the
+	// reduction runs out and the axes start. It is the platform's and not a
+	// constant: 32 is past the last signal on macOS and is a perfectly good
+	// one on Linux, where the numbers run to 64 — so a case written around
+	// 32 asks a different question on the two machines, and asked the wrong
+	// one on the one it was not written on (#3168, #3287).
+	none := unnamedSignalNumber()
+	past := strconv.Itoa(none)
+	// The same number an exit status carries it as, which is the shape a
+	// script writes: `kill -l "$?"` for a child a signal ended.
+	pastPlus128 := strconv.Itoa(none + 128)
 	// The shape bash, zsh and dash share: one subtraction, kept only when
 	// what is left names a signal.
 	once := killSem()
@@ -636,14 +648,14 @@ func TestKillListReadsAnExitStatus(t *testing.T) {
 		// reductions apart.
 		{"257 needs a second subtraction", repeated, `kill -l 257`, "HUP\n"},
 		{"300 lands on a number", repeated, `kill -l 300`, "44\n"},
-		{"160 is reduced and printed", repeated, `kill -l 160`, "32\n"},
-		{"160 is printed as written", printed, `kill -l 160`, "160\n"},
+		{"the exit status is reduced and printed", repeated, `kill -l ` + pastPlus128, past + "\n"},
+		{"the exit status is printed as written", printed, `kill -l ` + pastPlus128, pastPlus128 + "\n"},
 		{"257 is printed as written", printed, `kill -l 257`, "257\n"},
 		// Zero is the trap table's pseudo-signal, not the kernel's.
 		{"0 is EXIT", once, `kill -l 0`, "EXIT\n"},
 		{"0 without EXIT is the number", printed, `kill -l 0`, "0\n"},
 		// And a number below 128 that names nothing.
-		{"32 printed back", printed, `kill -l 32`, "32\n"},
+		{"a number past the range printed back", printed, `kill -l ` + past, past + "\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			out, errs, st := killRun(t, tt.src, tt.sem, Diagnostics{})
@@ -664,9 +676,9 @@ func TestKillListReadsAnExitStatus(t *testing.T) {
 		sem  Semantics
 		src  string
 	}{
-		{"160 refused after one subtraction", once, `kill -l 160`},
+		{"the exit status refused after one subtraction", once, `kill -l ` + pastPlus128},
 		{"257 refused after one subtraction", once, `kill -l 257`},
-		{"32 refused", once, `kill -l 32`},
+		{"a number past the range refused", once, `kill -l ` + past},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			out, errs, st := killRun(t, tt.src, tt.sem, Diagnostics{})
@@ -683,8 +695,8 @@ func TestKillListReadsAnExitStatus(t *testing.T) {
 		KillInvalidSignal: "kill: invalid signal number or name: %[1]s",
 		KillListBadNumber: "kill: invalid signal number or exit status: %[1]s",
 	}
-	_, errs, _ := killRun(t, `kill -l 32`, once, dg)
-	if !strings.Contains(errs, "exit status: 32") {
+	_, errs, _ := killRun(t, `kill -l `+past, once, dg)
+	if !strings.Contains(errs, "exit status: "+past) {
 		t.Errorf("stderr = %q, want the listing form's own wording", errs)
 	}
 	_, errs, _ = killRun(t, `kill -s NOPE 1`, once, dg)

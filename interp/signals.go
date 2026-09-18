@@ -270,15 +270,24 @@ func catchableSignal(sig syscall.Signal) bool {
 // `SIGNOPE`, which names no signal with the prefix taken off either.
 func (r *Runner) canonicalSignal(s string) (string, syscall.Signal, signalWord) {
 	up := strings.ToUpper(s)
+	byNumber := false
 	if name, ok := signalNumbers[s]; ok {
-		up = name
-	} else if trimmed, had := strings.CutPrefix(up, "SIG"); had && knownSignal(trimmed) {
+		up, byNumber = name, true
+	} else if trimmed, had := strings.CutPrefix(up, "SIG"); had && r.knownSignal(trimmed) {
 		if !r.ask(r.sem().SIGPrefixAccepted, "the SIG prefix on a signal name") {
 			// Not a name this dialect has, so it names nothing — which is
 			// what dash reports it as.
 			return "", 0, signalUnknown
 		}
 		up = trimmed
+	}
+	if !byNumber && !r.knownSignal(up) {
+		// A name this shell's own table has never had, which is not the same
+		// as a signal the machine does not have — see
+		// Semantics.SignalNamesTheShellLacks. Measured on the pair it is
+		// about: ksh93 answers `trap 'x' INFO` with `bad trap` and `trap 'x'
+		// 29` with 0, so the refusal follows the word and not the signal.
+		return up, 0, signalUnknown
 	}
 	if sig, ok := trappableSignals[up]; ok {
 		return up, sig, signalTrappable

@@ -451,19 +451,19 @@ func (r *Runner) printedSignalName(name string) string {
 	return r.diag().TrapPrintsSignalPrefix + name
 }
 
-// listSignals is `trap -l`.
+// listSignals is `trap -l`, and it is `kill -l`'s listing.
 //
-// The same plain listing `kill -l` prints, and for the same reason: the real
-// shells number the table and lay it out in columns, and the table is not the
-// same on two operating systems. Printed plainly here and kept out of the
-// corpus rather than recorded as a fact about a machine.
+// Measured 2026-09-17 from a script file: bash 5.3.20 answers `trap -l` with
+// the same numbered table its `kill -l` writes, byte for byte, and bash 3.2
+// writes that table in its own width. This wrote one bare name per line while
+// `kill` in the same shell wrote the table, so one shell had two answers for
+// one question (#3474). It is one table and one renderer now — see
+// Runner.listSignalTable, which the dialect's KillListing shapes.
+//
+// Only one dialect reaches it. zsh writes nothing for `trap -l` and ksh93 and
+// dash have no such letter, each of which its own TrapOptions already says.
 func (r *Runner) listSignals() int {
-	byNumber := append([]signalEntry{}, knownSignals...)
-	sort.Slice(byNumber, func(i, j int) bool { return byNumber[i].Sig < byNumber[j].Sig })
-	for _, k := range byNumber {
-		r.printf("%s\n", k.Name)
-	}
-	return 0
+	return r.listSignalTable()
 }
 
 // listedTrapOrder is the conditions a bare listing prints, in the order this

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,8 +65,17 @@ func init() {
 //
 // The numbers come from the host's own constants rather than a table written
 // here, because they are not the same everywhere — 7 is EMT on a BSD and BUS
-// on Linux. Only the signals both agree exist are listed, which is why SIGEMT
-// and SIGINFO are missing on the machine that has them.
+// on Linux. sharedSignals below is the part every platform has; the rest of
+// the table is the platform's own, in platformsignals_<goos>.go, which is
+// what makes SIGEMT and SIGINFO present on the machine that has them and
+// SIGSTKFLT and SIGPWR present on the machine that has those.
+//
+// That file also carries platformSignalMax, and the two are not the same
+// question. The table is what the shell can *name*; the bound is what the
+// kernel will *take*, and on Linux the gap between them is thirty-three
+// signals — a script that says `kill -40` there is asking for a real-time
+// signal that every reference sends and that this shell refused in every
+// dialect (#3168, #3287).
 type signalEntry struct {
 	Name string
 	Sig  syscall.Signal
@@ -82,7 +92,7 @@ type signalEntry struct {
 	Fatal bool
 }
 
-var knownSignals = []signalEntry{
+var sharedSignals = []signalEntry{
 	{"HUP", syscall.SIGHUP, true},
 	{"INT", syscall.SIGINT, true},
 	{"QUIT", syscall.SIGQUIT, true},
@@ -114,10 +124,44 @@ var knownSignals = []signalEntry{
 	{"USR2", syscall.SIGUSR2, true},
 }
 
+var knownSignals = append(append([]signalEntry{}, sharedSignals...), platformSignals...)
+
+// signalInPlatformRange reports whether a number is a signal on this kernel,
+// whether or not the table above has a name for it.
+//
+// The two questions come apart only where a platform has more signals than
+// names — Linux's real-time range — and that is exactly where every reference
+// sends and this shell refused. A bound of zero is a platform nobody
+// measured, where the table stays the whole answer.
+func signalInPlatformRange(n int) bool {
+	return n >= 1 && n <= platformSignalMax
+}
+
+// signalTable is the table this dialect reads names out of, which is the
+// platform's minus the names this shell has never heard of.
+//
+// Filtered per Runner rather than per process because it is the *shell's*
+// table and not the machine's: ksh93 on this machine names EMT and has no
+// name for signal 29, which every other column calls INFO. See
+// Semantics.SignalNamesTheShellLacks.
+func (r *Runner) signalTable() []signalEntry {
+	lacks := r.sem().SignalNamesTheShellLacks
+	if lacks == "" {
+		return knownSignals
+	}
+	table := make([]signalEntry, 0, len(knownSignals))
+	for _, k := range knownSignals {
+		if !slices.Contains(strings.Fields(lacks), k.Name) {
+			table = append(table, k)
+		}
+	}
+	return table
+}
+
 // knownSignal reports whether a bare, uppercased name is one of the signals
 // this shell can send.
-func knownSignal(name string) bool {
-	for _, k := range knownSignals {
+func (r *Runner) knownSignal(name string) bool {
+	for _, k := range r.signalTable() {
 		if k.Name == name {
 			return true
 		}
@@ -261,8 +305,24 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 		}
 		for _, k := range knownSignals {
 			if int(k.Sig) == n {
+				// The name is the *platform's* here rather than the
+				// dialect's, and deliberately: a shell with no name for a
+				// number still sends it. ksh93 refuses `kill -INFO` and
+				// sends `kill -29`, which is the same split every column
+				// draws between a word it will not read and a number the
+				// kernel understands.
 				return k.Name, k.Sig, nil
 			}
+		}
+		if form != killSpecOption && signalInPlatformRange(n) {
+			// A signal this kernel has and this table cannot name — Linux's
+			// real-time range, where every reference sends and this engine
+			// refused in every dialect. Core rather than an axis: the shells
+			// that check are checking the range and not a list of names, so
+			// there is nothing here for a dialect to disagree about. `-s`
+			// stays out for the reason it stays out below: it takes a name,
+			// and a number there is already the wrong kind of word.
+			return "", syscall.Signal(n), nil
 		}
 		// A number this shell has no name for. Two dialects hand it to the
 		// kernel anyway and let `kill(2)` be the one to refuse it, which is
@@ -285,7 +345,7 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 		return bad()
 	}
 	up := strings.ToUpper(spec)
-	if trimmed, had := strings.CutPrefix(up, "SIG"); had && knownSignal(trimmed) {
+	if trimmed, had := strings.CutPrefix(up, "SIG"); had && r.knownSignal(trimmed) {
 		// Whether the prefix is part of a name is the dialect's answer, the
 		// same one `trap` asks — dash reads `SIGCONT` as neither a signal nor
 		// an option and says so twice over. Asked only where it decides
@@ -295,7 +355,7 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 		}
 		up = trimmed
 	}
-	for _, k := range knownSignals {
+	for _, k := range r.signalTable() {
 		if k.Name == up {
 			return k.Name, k.Sig, nil
 		}
@@ -813,42 +873,68 @@ func (r *Runner) killStatus(sent, failed int) int {
 	}
 }
 
+// listSignalTable writes the whole signal table, which is what `kill -l`
+// with no operands prints and — in the one dialect whose `trap` has the
+// letter — what `trap -l` prints too.
+//
+// One function for both because they are one listing: measured 2026-09-17,
+// bash 5.3.20's `trap -l` is its `kill -l` byte for byte, and the table is
+// the shell's rather than either builtin's (#3474). This wrote one bare name
+// per line under `trap` while `kill` already had all four shapes, so the
+// same shell answered the same question two ways.
+//
+// The order is the host's numbering and not the order the table is written
+// in, which is what makes the listing a fact about the machine rather than
+// about this file.
+func (r *Runner) listSignalTable() int {
+	byNumber := append([]signalEntry{}, r.signalTable()...)
+	sort.Slice(byNumber, func(i, j int) bool { return byNumber[i].Sig < byNumber[j].Sig })
+	names := make([]string, len(byNumber))
+	for i, k := range byNumber {
+		names[i] = k.Name
+	}
+	// Four shells, four shapes; the constant says whose this is.
+	switch r.diag().KillListing {
+	case KillListingNumbered:
+		var b strings.Builder
+		for i, k := range byNumber {
+			fmt.Fprintf(&b, "%2d) SIG%s", int(k.Sig), k.Name)
+			// A tab after every entry and a newline instead of it at the end
+			// of a row, so a short last row carries the tab it was separated
+			// by and then a newline of its own. Measured: bash's last line is
+			// `31) SIGUSR2<tab>` on a 31-signal machine and
+			// `64) SIGRTMAX<tab>` on a 64-signal one, and the full rows above
+			// them end with no tab at all.
+			if (i+1)%5 == 0 {
+				b.WriteByte('\n')
+				continue
+			}
+			b.WriteByte('\t')
+			if i == len(byNumber)-1 {
+				b.WriteByte('\n')
+			}
+		}
+		r.printf("%s", b.String())
+	case KillListingSpaceJoined:
+		r.printf("%s\n", strings.Join(names, " "))
+	case KillListingZeroFirst:
+		r.printf("0\n%s\n", strings.Join(names, "\n"))
+	default:
+		r.printf("%s\n", strings.Join(names, "\n"))
+	}
+	return 0
+}
+
 // killList is `kill -l`.
 //
 // The translating forms are the useful ones and the panel agrees on them:
 // a number gives the name and a name gives the number. The bare listing is
-// four different formats over a table that is not the same on two operating
-// systems, so it is printed plainly here and left out of the corpus rather
-// than recorded as a fact about a machine.
+// four different formats over the platform's table, which is why it took a
+// platform table to write: it was one machine's shortest column before, and
+// a case recording it could not pass on both.
 func (r *Runner) killList(args []string) int {
 	if len(args) == 0 {
-		byNumber := append([]signalEntry{}, knownSignals...)
-		sort.Slice(byNumber, func(i, j int) bool { return byNumber[i].Sig < byNumber[j].Sig })
-		names := make([]string, len(byNumber))
-		for i, k := range byNumber {
-			names[i] = k.Name
-		}
-		// Four shells, four shapes; the constant says whose this is.
-		switch r.diag().KillListing {
-		case KillListingNumbered:
-			var b strings.Builder
-			for i, k := range byNumber {
-				fmt.Fprintf(&b, "%2d) SIG%s", int(k.Sig), k.Name)
-				if (i+1)%5 == 0 || i == len(byNumber)-1 {
-					b.WriteByte('\n')
-				} else {
-					b.WriteByte('\t')
-				}
-			}
-			r.printf("%s", b.String())
-		case KillListingSpaceJoined:
-			r.printf("%s\n", strings.Join(names, " "))
-		case KillListingZeroFirst:
-			r.printf("0\n%s\n", strings.Join(names, "\n"))
-		default:
-			r.printf("%s\n", strings.Join(names, "\n"))
-		}
-		return 0
+		return r.listSignalTable()
 	}
 	for _, a := range args {
 		if n, err := strconv.Atoi(a); err == nil {
@@ -905,16 +991,27 @@ func (r *Runner) killList(args []string) int {
 // number it did not reduce — only ever reaches this with the original,
 // because the one subtraction it makes is kept only when it names a signal.
 func (r *Runner) killListName(n int) (string, bool) {
-	if name, ok := killSignalName(n); ok {
+	if name, ok := r.killSignalName(n); ok {
 		return name, true
+	}
+	if name, ok, answered := r.killListUnnamedInRange(n); answered {
+		return name, ok
 	}
 	// One 128 off, kept when what is left names a signal. Unanimous across
 	// the seven columns — bash 5.3, bash-as-`sh`, bash 3.2, zsh, ksh93, dash
 	// and BusyBox ash all answer `kill -l 129` with `HUP` and `kill -l 159`
 	// with the last signal on the table — so it is core and asks nobody.
+	//
+	// The subtraction has to be followed by the same unnamed-in-range answer
+	// the whole number got, and that is measured rather than symmetry: dash
+	// on Linux answers `kill -l 160` with `32`, which is 160 less 128 landing
+	// on a signal it has no name for.
 	if n >= 128 {
-		if name, ok := killSignalName(n - 128); ok {
+		if name, ok := r.killSignalName(n - 128); ok {
 			return name, true
+		}
+		if name, ok, answered := r.killListUnnamedInRange(n - 128); answered {
+			return name, ok
 		}
 	}
 	// Past here the panel parts, and each question is asked only where the
@@ -944,10 +1041,40 @@ func (r *Runner) killListName(n int) (string, bool) {
 	return "", false
 }
 
+// killListUnnamedInRange answers `kill -l N` for a number this kernel really
+// has and this shell has no name for, and reports whether that was the
+// question at all.
+//
+// The panel writes the number back at status 0 — dash included, which refuses
+// a number *outside* the range at 2. Those are two questions and running them
+// together is what made dash's row read as a dialect answer (#3287). bash is
+// the one column that answers with an empty line, which is the axis.
+//
+// Nothing on a platform whose whole range the table names can reach this
+// through a number alone; on macOS it is reached through a shell whose own
+// table is short of the platform's, which is ksh93 and signal 29.
+func (r *Runner) killListUnnamedInRange(n int) (name string, ok, answered bool) {
+	if !signalInPlatformRange(n) {
+		return "", false, false
+	}
+	if r.ask(r.sem().KillListLeavesAnUnnamedSignalBlank,
+		"`kill -l` writing nothing for a signal it has no name for") {
+		return "", true, true
+	}
+	if r.unspecified {
+		return "", false, true
+	}
+	return strconv.Itoa(n), true, true
+}
+
 // killSignalName is the signal table read backwards, and the only lookup
 // `kill -l` had before #3053.
-func killSignalName(n int) (string, bool) {
-	for _, k := range knownSignals {
+//
+// This dialect's table rather than the platform's, which is what makes
+// ksh93's `kill -l 29` the number 29 where every other column here writes
+// INFO: the signal is there and the shell has no name for it.
+func (r *Runner) killSignalName(n int) (string, bool) {
+	for _, k := range r.signalTable() {
 		if int(k.Sig) == n {
 			return k.Name, true
 		}

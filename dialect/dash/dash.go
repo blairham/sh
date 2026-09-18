@@ -642,6 +642,13 @@ func Semantics() interp.Semantics {
 	s.KillListReducesRepeatedly = interp.No
 	s.KillListPrintsANumberItCannotName = interp.No
 	s.KillListNamesZeroAsExit = interp.No
+	// And one name short of the machine's table on Linux: `kill -l 16` is
+	// `16` here where bash, zsh and BusyBox ash write STKFLT, and
+	// `kill -STKFLT` is `Illegal option -S`. Measured 2026-09-17 on dash
+	// 0.5.12 in the panel's Alpine image. The number in range is still sent,
+	// which is what separates this from the refusal a number out of range
+	// draws at 2.
+	s.SignalNamesTheShellLacks = "STKFLT"
 	s.SIGPrefixAccepted = interp.No
 	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure

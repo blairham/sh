@@ -2577,6 +2577,57 @@ type Semantics struct {
 	// at 2.
 	KillListPrintsANumberItCannotName Answer
 
+	// KillListLeavesAnUnnamedSignalBlank answers `kill -l N` for a number the
+	// kernel really has and this shell has no name for — Linux's real-time
+	// range, and any position a shell's own table skips.
+	//
+	// The number is written back in every column but one, at status 0. bash
+	// writes an **empty line** there, also at 0: measured 2026-09-17 in the
+	// panel's Alpine image with Debian-built bash 5.3 beside BusyBox 1.37.0,
+	// dash 0.5.12 and zsh 5.9, where `kill -l 32` is `32` in dash, zsh and
+	// ash and nothing at all in bash, and `kill -l 160` — the same row after
+	// the one unanimous subtraction of 128 — moves with it.
+	//
+	// It is reachable on a machine with no real-time signals too, through a
+	// shell whose own table is short of the platform's: ksh93 on macOS has no
+	// name for signal 29, which every other column there calls INFO, and its
+	// `kill -l 29` is `29`. See SignalNamesTheShellLacks.
+	//
+	// Distinct from KillListPrintsANumberItCannotName, which is the same
+	// question asked *outside* the kernel's range — `kill -l 65` on Linux,
+	// `kill -l 32` on macOS — where bash and dash refuse and zsh, ksh93 and
+	// BusyBox ash print the number. dash answers those two questions
+	// differently, which is what says they are two (#3287).
+	KillListLeavesAnUnnamedSignalBlank Answer
+
+	// SignalNamesTheShellLacks are the signals this platform has that this
+	// shell's own table has no name for.
+	//
+	// A shell carries a table rather than asking the kernel, and the tables
+	// are not all the same length. Measured 2026-09-17, each reference under
+	// a matching `argv[0]`: on macOS arm64 ksh93 93u+ names EMT and has no
+	// name for signal 29 — `kill -INFO $$` is four `unknown option` lines and
+	// a usage block at 2, `kill -l INFO` is `INFO: unknown signal name`, and
+	// `trap 'x' INFO` is `bad trap` — where bash 5.3.20, zsh 5.9.2 and dash
+	// all call it INFO. On Linux it is dash that is short, of STKFLT: its
+	// `kill -l 16` is `16` where bash, zsh and BusyBox ash write the name.
+	//
+	// It reaches names and not numbers, which is measured and is the whole
+	// shape of it: the same ksh93 that refuses `trap 'x' INFO` accepts `trap
+	// 'x' 29` at 0 and sends `kill -29`. A number is the kernel's and a name
+	// is the shell's.
+	//
+	// A name for a signal this platform does not have costs nothing and is
+	// never looked up, so a preset lists what it lacks on either platform
+	// rather than carrying a build tag of its own.
+	//
+	// Space-separated, in the spelling the table uses — `INFO`, never
+	// `SIGINFO` — and a string rather than a slice for the reason every
+	// other set field here is one: a Semantics is compared with `==` in
+	// several places, and a slice field takes that away from every axis at
+	// once.
+	SignalNamesTheShellLacks string
+
 	// KillListNamesZeroAsExit gives `kill -l 0` the name `EXIT`, which is the
 	// pseudo-signal a shell's own trap table has at that number rather than
 	// one the kernel knows.
@@ -17671,6 +17722,11 @@ func PosixSemantics() Semantics {
 		KillListReducesRepeatedly:         No,
 		KillListPrintsANumberItCannotName: No,
 		KillListNamesZeroAsExit:           No,
+		// And a signal the kernel has that the table cannot name is written
+		// back as its number, which is what four of the five columns do and
+		// what a standard saying nothing about names past its own list
+		// implies: the number is the portable spelling.
+		KillListLeavesAnUnnamedSignalBlank: No,
 		// POSIX gives `exec` no options at all, so none of its three letters
 		// is one: a leading `-l` there is the name of a command.
 		ExecTakesTheLoginLetter:            No,

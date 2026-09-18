@@ -1,0 +1,16 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build !darwin && !linux
+
+package interp
+
+// A platform nobody has measured, so the table is the range: no extra names,
+// and no numbers past the ones the shared table already carries.
+//
+// Zero is not "no signals" — it is read as "no bound of our own", and the
+// shared table goes on answering for every number it names. Guessing a
+// range here would be guessing which numbers a kernel nobody ran will take.
+var platformSignals []signalEntry
+
+const platformSignalMax = 0

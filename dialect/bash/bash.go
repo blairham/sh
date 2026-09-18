@@ -1420,6 +1420,11 @@ func Semantics() interp.Semantics {
 	s.KillListReducesRepeatedly = interp.No
 	s.KillListPrintsANumberItCannotName = interp.No
 	s.KillListNamesZeroAsExit = interp.Yes
+	// The one column that writes an empty line for a signal it has no name
+	// for, rather than the number. Measured 2026-09-17 on Linux, where the
+	// question arises: `kill -l 32` is a blank line at 0 here and `32` in
+	// dash, zsh and BusyBox ash (#3287).
+	s.KillListLeavesAnUnnamedSignalBlank = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnySuccess

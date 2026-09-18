@@ -1413,6 +1413,95 @@ unknown *option* in ksh93, zsh and ash alike, and two of the three returned
 2 for it. `kill -99 $$` was the only miss in the ksh93 and zsh columns of
 `internal/cmd/diagsample`, and one of four in ash.
 
+## The signal table is the platform's and the range is the kernel's
+
+Measured 2026-09-17, each reference under a matching `argv[0]`: on macOS
+arm64 against bash 5.3.20, zsh 5.9.2, ksh93u+ (AJM 93u+ 2012-08-01) and
+Apple's dash-16, and on Linux arm64 in the panel's pinned Alpine image —
+BusyBox v1.37.0 with Alpine's dash 0.5.12, bash 5.3 and zsh 5.9 beside it.
+
+This engine had **one** list of signals standing in for two different
+questions: the names both platforms agree on. It was the right list for
+neither.
+
+| `kill -l N` | macOS | Linux |
+| --- | --- | --- |
+| 7 | `EMT` in all four | `BUS` in all four |
+| 16 | `URG` in all four | `STKFLT` in bash, zsh, ash; `16` in dash |
+| 29 | `INFO` in bash, zsh, dash; `29` in ksh93 | `IO`/`POLL` in all four |
+| 30 | `USR1` in all four | `PWR` in all four |
+| 32 | `32` in zsh and ksh93, refused in bash and dash | `32` in dash, zsh, ash; **an empty line** in bash |
+| 40 | refused or the number — nothing is there | a real-time signal in all four |
+| 64 | the same | the same |
+| 65 | the same | refused in bash, dash and ash; `65` in zsh |
+
+Three separate facts come out of that, and this engine had all three
+wrong at once.
+
+**The names are the platform's.** `EMT` and `INFO` exist on macOS and
+`STKFLT` and `PWR` exist on Linux, and every column names the ones its own
+machine has. `kill -l 7` was a refusal in the bash and dash dialects and the
+bare number in the other three, in a shell running on the machine that calls
+7 `EMT`. The table is split now: the shared part in `interp/killbuiltin.go`
+and the rest in `interp/platformsignals_<goos>.go`, which is the same shape
+`ulimit`'s per-platform letters take, and for the same reason — a table
+written once is wrong on one of the two machines.
+
+**The range is not the table.** Linux has 64 signals and names for 33 of
+them, and every reference sends all 64: `kill -40` is a real send in bash,
+dash, zsh and BusyBox ash there, and 65 is the first refusal. This shell
+refused everything above 31 in the bash and ash dialects, because it checked
+a list of names; ksh93 and zsh were accidentally right, because
+`KillSendsASignalNumberItCannotName` has them hand a number to `kill(2)`
+unchecked. So a *bound* lives beside the table — `platformSignalMax`, 31 on
+macOS and 64 on Linux, measured by asking which number `kill(2)` first
+answers EINVAL for — and a number inside it is sent in every dialect whether
+or not anything can name it. That is core rather than an axis: the shells
+that check are checking the range, so there is nothing for a dialect to
+disagree about (#3168).
+
+**A shell's own table can be shorter than the platform's**, which is
+`Semantics.SignalNamesTheShellLacks`. ksh93 on macOS has no name for 29 and
+dash on Linux has none for 16, and each writes the number back where the rest
+of its panel writes the name. The gap is in the *names* only, which is
+measured at the pair it is about: ksh93 answers `trap 'x' INFO` with `bad
+trap` and `trap 'x' 29` with 0, and sends `kill -29`. A number is the
+kernel's and a name is the shell's, so the field is consulted wherever a name
+is read and nowhere a number is.
+
+`Semantics.KillListLeavesAnUnnamedSignalBlank` is what is written for a
+signal that is there and has no name. Four columns write the number at status
+0 and bash writes an empty line, also at 0. It is a different question from
+`KillListPrintsANumberItCannotName`, which is the same words asked *outside*
+the range — and dash is the column that proves they are two, since it prints
+`32` for a signal Linux has and refuses `65` at status 2 (#3287).
+
+Two gaps are left open and are worth naming rather than discovering:
+
+- **Linux's real-time signals have names this table does not carry.** bash
+  and dash write `RTMIN+5` for 40 and `RTMAX` for 64, where zsh and BusyBox
+  ash write the numbers. Sending them is fixed; naming them is not, so the
+  two columns that name them get the numbers.
+- **ksh93 writes `SIG29` in its bare listing** for the position it cannot
+  name, and `IOT` where every other column writes `ABRT`. The listing drops
+  the row instead. Both are alias questions about that one column's table.
+
+## `trap -l` and `kill -l` are one listing
+
+Measured 2026-09-17 from a script file on macOS: bash 5.3.20's `trap -l` is
+its `kill -l` byte for byte, and bash 3.2.57 writes the same table in its own
+width. zsh writes nothing for `trap -l`, and ksh93 and dash have no such
+letter — so bash is the only column that reaches the listing through `trap`
+at all.
+
+This engine wrote one bare name per line under `trap -l` while `kill -l` in
+the same shell already had all four of the panel's shapes, so one shell gave
+one question two answers. They are one renderer now, shaped by
+`Diagnostics.KillListing` (#3474). The reason the old comment gave for the
+plain listing — that the table is not the same on two operating systems — is
+what the platform table above answers: the listing is a fact about the
+machine, and now it is the machine's.
+
 ## Handing the death to the driver is not the same as dying
 
 Measured 2026-09-05 against bash 5.3, bash 3.2, dash, ksh93 and zsh, and

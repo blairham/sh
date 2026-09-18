@@ -1629,6 +1629,13 @@ func Semantics() interp.Semantics {
 	s.KillListReducesRepeatedly = interp.Yes
 	s.KillListPrintsANumberItCannotName = interp.Yes
 	s.KillListNamesZeroAsExit = interp.Yes
+	// This shell's signal table is one name short of the machine's on macOS:
+	// signal 29 is INFO to every other column and nothing at all here, so
+	// `kill -l 29` is `29`, `kill -l INFO` is `INFO: unknown signal name`
+	// and `trap 'x' INFO` is `bad trap` — while `trap 'x' 29` is 0 and
+	// `kill -29` sends, because a number is the kernel's. Measured
+	// 2026-09-17 on ksh93 93u+ 2012-08-01.
+	s.SignalNamesTheShellLacks = "INFO"
 	// And a signal written onto the option with no space: `kill -n9` and
 	// `kill -sKILL` both send. Measured 2026-09-12. This shell is looser
 	// still — it takes `kill -s9` too, which the axis records and does not

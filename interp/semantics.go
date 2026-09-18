@@ -13113,6 +13113,107 @@ type Semantics struct {
 	// subscript at all.
 	OperandSubscriptQuoting OperandSubscriptQuotingPolicy
 
+	// ArithmeticOnlyBodyIsAnArithmeticExpansion reads a command substitution
+	// whose *whole* body is one `(( … ))` as the arithmetic expansion
+	// `$(( … ))` rather than as a substitution with a command in it.
+	//
+	// Measured 2026-09-18, a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with standard input on /dev/null:
+	//
+	//	                                  ksh93u+   bash 5.3.20, zsh 5.9.2
+	//	echo "[$( (( 1+1 )) )]"           [2]       []
+	//	n=0; $( (( n+=5 )) ); echo $n     5         0
+	//	echo "[${ (( 1+1 )); }]"          [2]       no such spelling
+	//	echo "[`(( 1+1 ))`]"              []        []
+	//	echo "[$( (( 1+1 )); echo hi )]"  [hi]      [hi]
+	//	echo "[$( echo hi; (( 1+1 )) )]"  [hi]      [hi]
+	//	echo "[$( (( 1+1 )) >/dev/null)]" refused   []
+	//	echo "[$( (( 1+1 )) & )]"         []        []
+	//
+	// Three rows are the discriminators and each rules out a different way of
+	// reading the first one as a substitution. The value is the
+	// *expression's*, where `(( … ))` prints nothing at all. An assignment in
+	// it reaches the shell that wrote it, where a subshell's could not. And a
+	// redirection written after it is a **syntax error** rather than a
+	// redirection, which is what says the text was never read as a command.
+	//
+	// dash and BusyBox ash have no `(( … ))` command, so a body of theirs can
+	// never be one: measured the same day, `echo "[$( (( 1+1 )) )]"` is
+	// `1+1: not found` and `[]` in both — a nested subshell running a command
+	// named `1+1`, which is the answer this axis's No already gives them.
+	//
+	// Asked only where the body *is* that one command, which is what keeps
+	// every ordinary substitution away from the question: a second command in
+	// the body, a background `&`, a redirection, and the backquoted spelling
+	// all read as themselves in every column.
+	//
+	// #3364 filed the consequence — `set -e; x=$( (( 0 )) )` not stopping
+	// there — as #3348's rule reaching through a substitution's own copy of
+	// the shell. It is neither a copy nor a command: an expansion has no
+	// status for `set -e` to judge, which is why `x=$( ( (( 0 )) ) )` and
+	// `x=$(f() { (( 0 )); }; f)` *do* stop in the same shell.
+	//
+	// One shape is measured and *not* reproduced: `$( (( 1+1 )) >/dev/null )`
+	// is `` `>' unexpected `` in that shell, because the reading is its
+	// lexer's and the `))` has already closed the expansion by the time the
+	// redirection is read. Here the body is read as a command with a
+	// redirection on it, which takes it out of this shape and leaves the
+	// ordinary substitution's empty value. Moving that would mean moving the
+	// reading into the lexer, which is a change of a different size.
+	//
+	// unpinned dash, ash: the grammar has no arithmetic command, so no body
+	// of theirs can be one and no row can move the value. The measured rows
+	// above are what the No records, and
+	// TestASubstitutionWhoseWholeBodyIsArithmeticIsAnExpansion pins both
+	// answers.
+	ArithmeticOnlyBodyIsAnArithmeticExpansion Answer
+
+	// BareExitReportsTheUnitsOwnStatus makes an operand-less `exit` or
+	// `return` report the last status the **execution unit** it stands in
+	// produced — 0 where the unit has run nothing — rather than `$?`.
+	//
+	// A unit is started by a subshell, a command substitution, a `${ …;}`
+	// body, a function call, an `eval` and a sourced file. Measured
+	// 2026-09-18, a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// with standard input on /dev/null:
+	//
+	//	                                        ksh93u+  bash 5.3.20  dash
+	//	false; a=$( exit );        echo $?      0        1            1
+	//	false; a=$( false; exit ); echo $?      1        1            1
+	//	false; ( exit );           echo $?      0        1            1
+	//	g() { exit; };   false; g               0        1            1
+	//	g() { return; }; false; g; echo $?      0        1            1
+	//	false; eval exit                        0        1            1
+	//	false; . f   (f holds `return`)         0        1            1
+	//	false; { exit; }                        1        1            1
+	//	false; exit                             1        1            1
+	//
+	// The last two rows are the controls, and they are what make it a *unit*
+	// rather than a nesting depth: a brace group starts none, and neither
+	// does the top of the script. Both report the 1 the `false` left, in
+	// every column.
+	//
+	// **It is a second register and not a reading of `$?`**, which is the
+	// row #3184 filed the axis on: `(exit 3); j=${ echo "saw=$?"; }` is
+	// `saw=3` in the same shell, so the body reads the inherited value out
+	// of `$?` while a bare `exit` on the next word reports 0.
+	//
+	// Asked only where no operand was written, which is the only spelling
+	// that can tell the readings apart — `exit 7` is 7 in every column, and
+	// so is `return 9` where the shell survives to read it.
+	//
+	// Answered `No` by the standard's own preset rather than by each shell,
+	// because XCU words both utilities as reporting `$?` and six of the
+	// seven columns do: measured the same day, zsh 5.9.2 and BusyBox 1.37.0
+	// answer 1 to every row above that their grammars have. Only the column
+	// that keeps a register overrides it.
+	//
+	// unpinned bash, zsh, dash, ash: a bare word in a unit is `$?` there, so
+	// no row of any corpus can move the value.
+	// TestABareExitReportsTheUnitsOwnStatusWhereTheDialectKeepsOne pins both
+	// answers.
+	BareExitReportsTheUnitsOwnStatus Answer
+
 	// ArrayLiteralSubscriptIsAKey reads a subscript written inside an array
 	// literal as the text between the brackets rather than as an arithmetic
 	// expression — and, because the two go together, makes such a literal
@@ -19308,6 +19409,11 @@ const (
 func PosixSemantics() Semantics {
 	return Semantics{
 		SplitParamExpansion: Yes,
+		// An operand-less `exit` or `return` reports `$?`, which is what
+		// XCU's own wording for both utilities says and what six of the
+		// seven columns do. The one that keeps a register of its own
+		// overrides it; see Semantics.BareExitReportsTheUnitsOwnStatus.
+		BareExitReportsTheUnitsOwnStatus: No,
 		// 2.6.5's field splitting reads the expansion's result, and a quoted
 		// null is a field there: bash, dash and BusyBox ash all keep it, and
 		// ksh93 is the departure.
@@ -20465,7 +20571,12 @@ func PosixSemantics() Semantics {
 func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,
-		LengthOfSpecialIsCount:   Yes,
+		// The reading XCU states for both utilities and six of the seven
+		// columns hold, which is what keeps a Runner with no dialect able to
+		// leave: see Semantics.BareExitReportsTheUnitsOwnStatus, whose other
+		// answer is one shell's register and not a second reading of `$?`.
+		BareExitReportsTheUnitsOwnStatus: No,
+		LengthOfSpecialIsCount:           Yes,
 		// A clustered `-abc` leaves OPTIND naming the word until its last
 		// letter has been read, which is what four of the six columns do and
 		// what a script shifting by `OPTIND-1` between calls needs. dash and

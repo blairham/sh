@@ -965,6 +965,14 @@ type Runner struct {
 	// this one rather than its complement.
 	declaredOnlyCompound map[string]bool
 
+	// unitRanACommand says whether a command has completed in this execution
+	// unit — the shell, or the subshell, command substitution, function
+	// call, `eval` or sourced file that started one. It is what an
+	// operand-less `exit` or `return` reports in the column that reports
+	// something other than `$?`; see interp/unitstatus.go for the rows and
+	// for the two controls that say a brace group starts no unit.
+	unitRanACommand bool
+
 	// declaredBare are names a declaration brought into being with no
 	// letters, no value and nothing in them — declared and unset at once.
 	// See baredeclaration.go for the measurement, and for why the record is
@@ -3303,6 +3311,10 @@ func (r *Runner) clone() *Runner {
 	}
 	c := *r
 	c.inSubshell = true
+	// A new execution unit, so a bare `exit` in it reports a status of the
+	// copy's own rather than the one this shell was holding. See
+	// interp/unitstatus.go for the rows and for the columns that do not.
+	c.unitRanACommand = false
 	// And nothing it has written *itself* yet, which is what one column's
 	// element unset turns on: an array this shell has not touched is one it
 	// is only looking at, and removing an element of it there takes the whole
@@ -4581,6 +4593,12 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	if err := r.expr(ctx, st.Expr); err != nil {
 		return err
 	}
+	// This unit has now run a command, which is what an operand-less `exit`
+	// or `return` reports in the one column that reports anything but `$?`.
+	// Here rather than at each place a status is written, because a
+	// statement is the thing the register counts: see interp/unitstatus.go,
+	// where a brace group starting no unit is the control.
+	r.unitRanACommand = true
 	if _, isChain := st.Expr.(*syntax.BinaryExpr); !isChain && !lastIsNegated(st.Expr) &&
 		(!reportsItsBody(st.Expr) || r.stmtSerial == serial) {
 		// A chain judges itself, inside expr, because only its final operand

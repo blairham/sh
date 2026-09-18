@@ -2238,6 +2238,7 @@ func Semantics() interp.Semantics {
 	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartIsReported
 	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.No
 	s.OperandSubscriptQuoting = interp.OperandSubscriptEveryQuote
+	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
 	// `declare a=1; declare a+=2` is `12`: a declaration's operand carries
 	// the append operator here, where the other three refuse the name `a+`.
 	s.DeclarationTakesAnAppendOperand = interp.Yes

@@ -278,6 +278,12 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// them. See Runner.tracePrefixDepth.
 	r.indirection++
 	defer func() { r.indirection-- }()
+	// And an execution unit, so a bare `exit` or `return` in the text
+	// reports what the text has run rather than what the caller left behind.
+	// Both routes here are units in the column that keeps the register:
+	// measured, `false; eval exit` and `false; . f` with `return` in the
+	// file both report 0 there and 1 in the rest. See interp/unitstatus.go.
+	defer r.enterExecutionUnit()()
 	// Where this text's lines sit, which is a question every borrowed text
 	// has to answer and none of them used to: whatever offset was in force
 	// stayed in force, so a `. f.sh` inside a command substitution reported

@@ -162,6 +162,11 @@ func Dialect() syntax.Dialect {
 // behavior.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// As dash, and measured on BusyBox 1.37.0 in the pinned image the same
+	// day: `echo "[$( (( 1+1 )) )]"` is `1+1: not found` and `[]` at 0 — a
+	// nested subshell running a command named `1+1`, since this shell has no
+	// arithmetic command either (#3364).
+	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
 	// unanswered WritingSubstitutionIsWaitedForAtTheCommand: this shell has
 	// no process substitution, so there is no `>(cmd)` body for a command to
 	// wait for or not. `echo >(:)` is the two characters as written (#2197).

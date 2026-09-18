@@ -70,6 +70,12 @@ func Dialect() syntax.Dialect {
 // Semantics is what dash means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// A body that is nothing but `(( … ))` is a nested subshell running a
+	// command, because this shell has no arithmetic command at all. Measured
+	// 2026-09-18, `echo "[$( (( 1+1 )) )]"` is `1+1: not found` and `[]` at
+	// 0 — the parentheses nest and the word inside them is a command name
+	// (#3364).
+	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
 	// unanswered BuiltinReadsOptions: there is no `builtin` here to read one —
 	// `builtin -q` is `builtin: not found` at 127 (#3217).
 	//

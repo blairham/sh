@@ -120,7 +120,9 @@ func TestASubscriptedOperandsAttributesAreAnAxis(t *testing.T) {
 }
 
 // A subscripted operand carrying **no value** declares the name as an array
-// and writes no element.
+// and writes no element — which is one of the three answers to
+// Semantics.ValuelessSubscriptedOperand, and the one whose column never reads
+// the brackets at all.
 //
 // It used to declare a variable literally named `a[3]` — invisible to
 // `${a[3]}` and to `typeset -p a`, at status 0, so a script that declared an
@@ -149,6 +151,7 @@ func TestAValuelessSubscriptedOperandDeclaresTheArray(t *testing.T) {
 				sem := *r.Semantics
 				sem.ArraysAreSparse = Yes
 				sem.TypesetTakesASubscript = Yes
+				sem.ValuelessSubscriptedOperand = ValuelessSubscriptedOperandDeclaresTheName
 				r.Semantics = &sem
 			})
 			if out != tc.want || st != 0 {

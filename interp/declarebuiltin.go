@@ -1347,24 +1347,32 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				// store made the whole line a no-op at status 0 — see
 				// declareelement.go.
 				r.declareElement(base, subs[:len(subs)-1], sub, value, df, true)
-				if r.unspecified || r.ctl == controlExit {
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
 				continue
 			}
 			// A subscripted operand carrying no value declares the *name*
-			// as an array and writes no element: measured 2026-09-12,
-			// `typeset a[3]` leaves `declare -a a` in bash and `${#a[@]}`
-			// is 0 in bash and ksh93 alike, and an array already standing
-			// is left as it is. It used to declare a variable literally
-			// named `a[3]` — invisible to `${a[3]}` and to `typeset -p a`,
-			// at status 0 (#1380).
-			//
-			// The name and not the operand, and the array letter whether or
-			// not one was written: the brackets are what say the name is an
-			// array.
-			name = base
-			df.array = df.array || !df.assoc
+			// as an array and writes no element in one column, reads the
+			// brackets first in another, and writes the element in the
+			// third: see valuelessSubscriptedOperand, which owns all three
+			// and hands back the name and the letters to declare. Measured
+			// 2026-09-12, `typeset a[3]` leaves `declare -a a` in bash and
+			// `${#a[@]}` is 0 in bash and ksh93 alike, and an array already
+			// standing is left as it is. It used to declare a variable
+			// literally named `a[3]` — invisible to `${a[3]}` and to
+			// `typeset -p a`, at status 0 (#1380).
+			n, letters, done := r.valuelessSubscriptedOperand(base, subs, df, true)
+			if done {
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
+					return r.status
+				}
+				continue
+			}
+			if r.unspecified {
+				return r.status
+			}
+			name, df = n, letters
 		}
 		if r.exportRefusesACompound(name, df) {
 			// The export letter over a compound, which one shell will not

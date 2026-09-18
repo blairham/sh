@@ -1033,6 +1033,11 @@ func Semantics() interp.Semantics {
 	// (`declare: not found`, 127), and its `readonly` and `export` take a
 	// name rather than a subscript — `readonly 'q[b c]'=v` is `readonly:
 	// q[b c]: bad variable name` at 2, the same complaint as `unset`.
+	//
+	// unanswered ValuelessSubscriptedOperand: the same wall, one operand
+	// shape over. `readonly 'q[b c]'` with no value is the same `bad
+	// variable name` at 2, so there is no subscripted operand here to read
+	// the brackets of.
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes

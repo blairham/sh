@@ -2127,6 +2127,13 @@ func Semantics() interp.Semantics {
 	// failed builtin behind and ran the very next thing. `readonly` and
 	// `export` take a subscript here as well and answer the same (#3495).
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
+	// And this is the third answer to what a *valueless* subscripted operand
+	// does: the brackets are read and no element is written. Measured
+	// 2026-09-17, `a=(1 2 3); typeset 'a[1]'` leaves the array exactly as it
+	// found it where `typeset 'a[1]='` replaces an element, and yet `typeset
+	// 'a[b c]'` ends the script and `i=0; typeset 'a[i++]'` moves i. bash
+	// reads nothing and zsh writes the element, so ksh93 is neither (#3501).
+	s.ValuelessSubscriptedOperand = interp.ValuelessSubscriptedOperandReadsTheSubscript
 	// And it reads the brackets whether or not it has the name: `unset a
 	// "a[x+]"` complains and reports 1 where bash and zsh are silent at 0,
 	// and `i=0; unset "nodecl[i++]"` leaves i at 1.

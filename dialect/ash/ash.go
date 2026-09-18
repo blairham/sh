@@ -546,6 +546,10 @@ func Semantics() interp.Semantics {
 	// 127), and `readonly 'q[b c]'=v` ends the script at 2 with `q[b c]: bad
 	// variable name` — a name refused, with no subscript read. `export` is
 	// the same complaint at the same status.
+	//
+	// unanswered ValuelessSubscriptedOperand: the same wall, one operand
+	// shape over. `readonly 'q[b c]'` with no value is the same refusal at
+	// the same status, so there is no subscripted operand here at all.
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.ReadNameOperands = interp.PlainNamesOnly

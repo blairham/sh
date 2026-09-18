@@ -1763,8 +1763,18 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 	sub := &arithParser{src: inner, at: a.at, p: a.p, dial: a.dial, stopped: -1, expanded: a.expanded}
 	e := sub.expr()
 	sub.space()
-	if e == nil || sub.off < len(sub.src) {
-		a.p.err = held
+	// Whether it read the text at all, and not only whether it came back
+	// with a tree: `1+` leaves a partial tree *and* a refusal, and the
+	// restore below used to happen on the other branch alone — so that
+	// refusal escaped as the whole expansion's parse failure while `b c`,
+	// which comes back with no tree, was left to the evaluator. Two readings
+	// of one failure, and the run-time one is the one the panel words:
+	// measured, bash 5.3.20 and 3.2.57 give a `-c` string up whole for
+	// `$(( a[1+] ))` exactly as they do for `$(( a[b c] ))`, which is what a
+	// failure reported here rather than at the subscript cannot see (#3502).
+	refused := a.p.err != held
+	a.p.err = held
+	if e == nil || refused || sub.off < len(sub.src) {
 		return arithSubscript{Present: true, Text: inner, Marked: marked}
 	}
 	return arithSubscript{Present: true, Index: e, Text: inner, Marked: marked}

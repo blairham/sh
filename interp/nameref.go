@@ -344,7 +344,7 @@ func (r *Runner) refuseNamerefAim(value string, form assignForm) {
 	}
 	r.status, r.assignFailed = 1, true
 	if form == assignedAlone {
-		r.ctl, r.abandonLine = controlAbandon, r.line
+		r.abandonTheCommand()
 	}
 }
 
@@ -932,7 +932,7 @@ func (r *Runner) selfNamerefAssignment(name, value string, form assignForm) {
 	r.warnAboutACycle(name)
 	r.status, r.assignFailed = 1, true
 	if !form.declaresRatherThanAssigns() {
-		r.ctl, r.abandonLine = controlAbandon, r.line
+		r.abandonTheCommand()
 	}
 }
 

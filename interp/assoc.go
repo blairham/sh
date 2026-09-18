@@ -471,7 +471,7 @@ func (r *Runner) assocAssignKey(name string, w *syntax.Word) (string, bool) {
 	// prints no `A` and the line after it runs. No axis, because only one
 	// column refuses at all — see refuseReadonly, where the same two fields
 	// carry the same behavior for the neighboring refusal.
-	r.ctl, r.abandonLine = controlAbandon, r.line
+	r.abandonTheCommand()
 	return "", false
 }
 

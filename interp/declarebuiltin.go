@@ -1911,7 +1911,7 @@ func (r *Runner) changeCompoundKind(name string, p CompoundKindChangePolicy,
 		// refuseReadonly, which reaches controlAbandon for the same reading.
 		r.diagf("%s\n", Wording(wording, fallback, name, r.inBuiltin))
 		r.status, r.assignFailed = 1, true
-		r.ctl, r.abandonLine = controlAbandon, r.line
+		r.abandonTheCommand()
 		return false
 	case CompoundKindChangeKeepsTheElements, CompoundKindChangeEmptiesTheName:
 		convert()

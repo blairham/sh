@@ -75,7 +75,7 @@ func (r *Runner) giveUpThePromptExpansion() bool {
 		return false
 	}
 	if r.expandErr {
-		r.expandErr = false
+		r.expandErr, r.badSubscript = false, false
 		caught = true
 	}
 	return caught

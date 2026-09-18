@@ -651,6 +651,17 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 // pair of brackets has nothing to quote, and blaming the empty string would
 // send arithFailure back to the whole expression by a longer road.
 func (r *Runner) blamedOnTheSubscript(x *syntax.ArithIndex, n arithNum, err error) (arithNum, error) {
+	if err != nil {
+		// Whatever it comes to be worded as, the failure is a subscript's,
+		// which is what decides how much a give-up over it gives up: see
+		// Runner.giveUpForABadSubscript. Marked here and not only in
+		// Runner.subscriptFailure because a subscript the *parser* built a
+		// tree for is refused by the evaluator and worded by the general
+		// arithmetic path — `$(( a[1+] ))` names `1+` with no brackets in
+		// the sentence, and bash gives a `-c` string up for it exactly as it
+		// does for `$(( a[b c] ))` (#3502).
+		r.badSubscript = true
+	}
 	if err == nil || x.Sub == "" {
 		return n, err
 	}
@@ -1868,7 +1879,7 @@ func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 			// parse, which is the failure a written one earns, worded the
 			// same way and blaming the value rather than the name it came
 			// out of: `v="3 4"; $(( v ))` names `3 4`.
-			return intNum(0), arithError{msg: r.subscriptFailure(text, err), complete: true}
+			return intNum(0), arithError{msg: r.expressionFailure(text, err), complete: true}
 		}
 		// Nowhere for it to be an expression, so it is simply not a number.
 		// No ask: every dialect refuses this text and only the sentence

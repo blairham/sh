@@ -566,6 +566,89 @@ what bash lets past.
   That is what separates this from the neighboring rule that `exit` in a
   startup file ends the shell and the files after it are not read.
 
+### How much a give-up gives up
+
+The unit is **the input line the shell is currently running**, and that is
+not the same thing as the line the failing command was written on. Measured
+2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin `/dev/null`, a
+script file, with `; echo "same=$?"` behind the *call* and `echo "next=$?"`
+on the line after it:
+
+    a=(1 2 3)
+    f() { unset "a[b c]"; echo inside; }
+    f; echo "same=$?"
+    echo "next=$?"
+
+| | inside | same= | next= |
+| --- | --- | --- | --- |
+| bash 5.3 | no | **no** | `next=1` |
+| bash 3.2 | no | **no** | `next=1` |
+| ksh93, zsh | yes | `same=0` | `next=0` |
+
+ksh93 and zsh leave a failed builtin behind here rather than giving
+anything up, so bash is the only column with an answer — the same
+arrangement as every other question about abandoning. The rows are the
+same with a reassignment to a readonly name and with `echo "$((1/0))"` in
+place of the `unset`, so this is the mechanism and not one site's reading.
+
+Three further measurements fix the unit:
+
+- **A function body is not a frame.** The same give-up through an `if`, a
+  loop, a group, a second function and a function whose body spans several
+  lines gives up the caller's line in every one.
+
+- **The `;` counts, and so does a compound's last line.** `unset 'a[b c]'
+  \` continued onto a line holding `; echo "same=$?"` prints no `same`,
+  and `if true; then` … `fi; echo "same=$?"` prints none either — one input
+  line in both, however many physical lines it took.
+
+- **The complaint's own location does not move.** bash writes `line 3` for
+  a failure three lines inside a function body while giving up the line 6
+  the call was on, so where a failure is *reported* and how much it costs
+  are two separate facts.
+
+A subshell is the one shape that changes the answer, and it needs no rule
+of its own: the parentheses are a process, so the give-up ends the
+subshell and the rest of the caller's line runs. `( f; echo insub ); echo
+"same=$?"` prints `same=1`.
+
+Borrowed text is a frame, which is the measurement in the section above:
+an `eval` or a `.` gives up a line of *its own* text and the caller's line
+carries on.
+
+**And a give-up over an unevaluable subscript gives a `-c` string up
+whole.** That is recorded on `BadSubscriptAbandonsTheCommand` for the two
+builtin-operand sites; the same rule holds wherever a subscript is
+*expanded*, and it is a rule about brackets rather than about failed
+expansions. Measured 2026-09-17 on bash 5.3.20 and bash 3.2.57, each
+program as a script file and as one `-c` string, `a=(1 2 3)` first and
+`echo "next=$?"; echo end` behind the failure on their own lines:
+
+| the failure | script file | `-c` string |
+| --- | --- | --- |
+| `a[b c]=v` | `next=1`, `end`, 0 | nothing, **1** |
+| `a[b c]+=v` | `next=1`, `end`, 0 | nothing, **1** |
+| `a=([b c]=v)` | `next=1`, `end`, 0 | nothing, **1** (bash 5.3 only) |
+| `${a[b c]}` | `next=1`, `end`, 0 | nothing, **1** |
+| `${#a[b c]}` | `next=1`, `end`, 0 | nothing, **1** |
+| `$(( a[b c] ))`, `$(( a[1+] ))` | `next=1`, `end`, 0 | nothing, **1** |
+| `a[1/0]=v` | `next=1`, `end`, 0 | nothing, **1** |
+| `$((1/0))`, `$((b c))` | `next=1`, `end`, 0 | `next=1`, `end`, 0 |
+| `${v:b c:2}` | `next=1`, `end`, 0 | `next=1`, `end`, 0 |
+| `readonly r=1` then `r=2` | `next=1`, `end`, 0 | `next=1`, `end`, 0 |
+
+bash 3.2 reads a subscripted array literal as an ordinary word and never
+evaluates the subscript at all — `a=([b c]=v)` is silent there at 0 — which
+is why that one row is bash 5.3's alone.
+
+So the bracketed spellings end the string and the bare ones — the same
+arithmetic, one pair of brackets away — do not. The status is the generic
+fatal 1 and not the 127 a failed expansion carries from a `-c` string in
+that shell: `bash -c 'set -u; echo $NOPE'` is 127 and every row above is
+1. dash, ksh93, zsh and BusyBox ash end the script at all of these by both
+routes and so cannot be asked, which is what keeps this a property of
+abandoning rather than an axis (#3502, #3503).
+
 ### Where the borrowed text is *named*, once something inside it fails
 
 A separate question from all of the above, and asked of a run-time failure
@@ -19349,8 +19432,12 @@ evaluate: the `unset` operand, the *store* a `read 'r[…]'` or a `printf
 -v 'r[…]'` operand walks into, and the element a **declaration** names.
 Everywhere else — reading an element, its length, an operator that
 reaches one, an assignment through one, a substring's offset — the word
-is abandoned and the script with it, unanimously. These three are where
-that stops being true, and they do not stop being true together.
+is abandoned, and what goes with it is the input line in bash and the
+script in every other column. These three are where even that stops
+being true, and they do not stop being true together. (The brackets
+still decide one thing at every site: a subscript that will not evaluate
+gives a `-c` string up whole where the same arithmetic outside brackets
+does not — see *How much a give-up gives up*.)
 
     a=(x y z)
     unset "a[1+]"; echo "same=$? n=${#a[@]}"

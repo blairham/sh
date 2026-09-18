@@ -163,7 +163,7 @@ func (r *Runner) extraNumericOperands(name string, args []string) (int, bool) {
 		// That is controlAbandon, which the refused readonly assignment
 		// beside it already raises — see interp/compound.go.
 		r.status = 2
-		r.ctl, r.abandonLine = controlAbandon, r.line
+		r.abandonTheCommand()
 		return 2, true
 	}
 	// Refused and nothing given up: the loop around it runs on and complains

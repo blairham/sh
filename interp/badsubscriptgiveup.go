@@ -39,19 +39,12 @@ func (r *Runner) badSubscriptGivesUp(p BadSubscriptPolicy, what, sentence string
 		r.fatalQuiet()
 		return r.status
 	case BadSubscriptAbandonsTheCommand:
-		if r.Route == RouteCommandString {
-			// A `-c` string is given up whole rather than resumed at its next
-			// command — measured, and the reason is on the constant.
-			r.fatalQuiet()
-			return r.status
-		}
-		r.setFatalStatus()
-		// controlAbandon rather than controlExit: it unwinds past loops,
-		// functions, groups and subshells alike and is consumed at the
-		// top-level statement loop, which is precisely the shape measured.
-		// abandonLine is what takes the rest of the line with it, so
-		// `unset 'q[b c]'; echo x` prints no x and the next *line* runs.
-		r.ctl, r.abandonLine = controlAbandon, r.line
+		// The same door the sites that *expand* a subscript go through, `-c`
+		// rule and all: see Runner.giveUpForABadSubscript, which is where
+		// the rule this branch used to spell out by hand now lives. It is
+		// what takes the rest of the line with it, so `unset 'q[b c]'; echo
+		// x` prints no x and the next *line* runs.
+		r.giveUpForABadSubscript()
 		return r.status
 	}
 	return 1

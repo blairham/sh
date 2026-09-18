@@ -391,9 +391,11 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 // news and not the command's, and it has to reach the caller.
 func (r *Runner) assignBookkeeping() func() {
 	substRan, assignFailed, expandErr := r.substRan, r.assignFailed, r.expandErr
+	badSubscript := r.badSubscript
 	disciplineSet, disciplineStatus := r.disciplineStatusSet, r.disciplineStatus
 	return func() {
 		r.substRan, r.assignFailed, r.expandErr = substRan, assignFailed, expandErr
+		r.badSubscript = badSubscript
 		r.disciplineStatusSet, r.disciplineStatus = disciplineSet, disciplineStatus
 	}
 }

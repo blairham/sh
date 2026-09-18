@@ -72,7 +72,17 @@ func (r *Runner) readMayWrite(name string) bool {
 // frozenReadName is the name a `read` operand's freeze is asked about: the
 // array a subscript belongs to, or whatever a reference points at.
 func (r *Runner) frozenReadName(name string) string {
-	if base, _, ok := r.subscriptOperand(name); ok && isPlainName(base) {
+	if base, sub, ok := r.subscriptOperand(name); ok && isPlainName(base) {
+		if r.operandEmptySubscript(sub) {
+			// The brackets name no element in this column, so the array's
+			// freeze is not what the operand is refused by: measured
+			// 2026-09-17, `a=(1 2 3); readonly a; read 'a[]'` is the
+			// bad-name refusal in bash 5.3.20 and `not an identifier: a[]`
+			// in zsh 5.9.2, neither of them `a: readonly variable`, where
+			// ksh93 reads element zero and does refuse it by the freeze. The
+			// store answers it a step below; see storeOperandEmptySubscript.
+			return r.frozenNameOfAnAssignment(name)
+		}
 		return base
 	}
 	return r.frozenNameOfAnAssignment(name)

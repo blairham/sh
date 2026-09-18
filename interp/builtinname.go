@@ -436,6 +436,12 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 	}
 	r.diagf("%s\n", Wording(wording, "%[1]s: `%[2]s': not a valid identifier", builtin, shown))
 	status := orDefault(d.BuiltinBadNameStatus, 1)
+	if own, has := d.BuiltinBadNameStatusFor[key]; has {
+		// The builtin's own number where it differs from the dialect's — see
+		// Diagnostics.BuiltinBadNameStatusFor, where bash's `printf` is the
+		// row that has one.
+		status = own
+	}
 	if r.ask(fatal, "a bad name to a special builtin ending the script") {
 		r.status = status
 		r.fatalUsageQuiet()

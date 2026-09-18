@@ -23496,6 +23496,145 @@ cannot arise there and is never asked.
 Narrower than it looks: an ordinary failing pipeline — `true | false` —
 stops all three, and this is only about the failure the option adds.
 
+**`TimedCommandIsJudged`** — bash yes · dash *unanswered* · ksh93 no ·
+zsh yes · ash yes
+
+Lets `set -e` and the ERR trap judge what a `time` clause timed. ksh93
+alone says no, and there the timing is a context in which nothing is
+judged at all — not the timed command, not the commands inside whatever
+it calls, and not the clause itself — the way a condition is.
+
+Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, each row run as `( set -e; <row>; printf ' survived' )` and
+again as `( trap 'printf E' ERR; <row>; printf ' .' )`, with the timing
+report filtered:
+
+| row | ksh93u+ | bash 5.3.20 | zsh 5.9.2 | BusyBox ash |
+| --- | --- | --- | --- | --- |
+| `time false` | survived | stops, 1 | stops, 1 | stops |
+| `time /usr/bin/false` | survived | stops | stops | — |
+| `time true \| false` | survived | stops | stops | — |
+| `time { false; echo in; }` | `in`, survived | stops | stops | — |
+| `f() { false; }; time f` | survived | stops | stops | — |
+| `time for i in 1; do false; done` | survived | stops | stops | — |
+| the same rows under ERR | no `E` | `E` | `E` | `E` |
+
+The suspension is **dynamic and it ends with the clause**, which is what
+makes it a context rather than an option. Measured the same day in
+ksh93u+: `g() { false; printf in-g; }; time g` prints `in-g` and carries
+on, so it reaches inside a function the timed command calls; `g() { time
+false; printf in-g; }` under `set -e` prints and returns, so it is the
+clause and not the option; and `set -e; time true; false` still stops at
+the `false`, so it is over when the clause is.
+
+The **status is untouched**: `time false` leaves 1 in `$?` in every
+column, and `time false || printf ran` runs the right-hand side in
+ksh93u+ as everywhere. So it is the judging alone that is suspended, and
+not the failure.
+
+Implemented as both halves of one suspension, because the halves are
+different. `Runner.tested` — the counter an `if` condition and a `!`
+already use — covers what runs *inside*, since it is inherited; and it is
+dropped when the clause returns, so the clause itself is covered by
+`Runner.unjudged`, a mark the statement check reads and every statement
+clears. Raising the counter alone left `set -e; time false` stopping the
+script, which is the row the issue was filed on.
+
+dash is **unanswered**: it has no `time` keyword, so `time false` there
+reaches the *external* `/usr/bin/time` and the script stops on its
+status — an answer about a command and not about the construct. #3349.
+
+**`CompoundRedirectionFailureIsJudged`** — bash yes · dash yes · ksh93 no
+· zsh yes · ash *unanswered*
+
+Lets `set -e` and the ERR trap see a redirection this shell could not
+open on a **compound** command — a group, a loop, an `if`, a `case`, a
+subshell. ksh93 alone says no: the diagnostic is written, the body does
+not run, status 1 is left behind, and neither judge is called.
+
+Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, with `> /nonexistent/x`:
+
+| row | ksh93u+ | bash 5.3.20 | zsh 5.9.2 | dash |
+| --- | --- | --- | --- | --- |
+| `{ echo b; } > …` | survived | stops | stops | stops |
+| `for i in 1; do :; done > …` | survived | stops | stops | stops |
+| `while false; do :; done > …` | survived | stops | stops | stops |
+| `if :; then :; fi > …` | survived | stops | stops | stops |
+| `case x in x) :;; esac > …` | survived | stops | stops | stops |
+| `( echo x ) > …` | survived | stops | stops | stops |
+| `{ echo b; } < /nonexistent/x` | survived | stops | stops | stops |
+| `echo x > …` | **stops** | stops | stops | stops |
+| the compound rows under ERR | no `E` | `E` | `E` | — |
+| the simple row under ERR | `E` | `E` | `E` | — |
+
+The last two rows of each half are the control: on a *simple* command it
+is a failure in ksh93 as it is everywhere, so the axis is about the
+compound and not about redirection. `$?` is 1 in every column and every
+row, so the status is not what differs either.
+
+BusyBox ash is **unanswered**, and that is the absence of an answer
+rather than a third one. Measured 2026-09-18 in the digest-pinned image,
+one script file per row: it survives for a group, an `if` and a `case`
+and stops for a `for`, a `while` and a subshell, and its ERR rows do not
+agree with its `set -e` rows. A dialect must not be given a rule its
+reference does not follow. Unanswered judges, which is what the other
+three columns with the construct do. #3350.
+
+**`ASubshellAsTheLastPipelineElementJudgesItself`** — bash yes · dash
+*unanswered* · ksh93 no · zsh no · ash no
+
+Fires the ERR trap inside the last element of a pipeline when that
+element is written as a subshell, as well as judging the pipeline in the
+shell itself. bash alone.
+
+Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, each row as `( trap 'printf E' ERR; <row>; printf ' .' )`:
+
+| row | bash 5.3.20 | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- |
+| `( false )` | `E` | `EE` | `E` |
+| `true \| ( false )` | `EE` | `EE` | `E` |
+| `true \| ( exit 3 )` | `EE` | `E` | `E` |
+| `true \| ( true; false )` | `EE` | `EE` | `E` |
+| `true \| ( ( false ) )` | `EE` | `EEE` | `E` |
+| `false \| ( false )` | `EE` | `EE` | `E` |
+| `true \| ( false ) \| ( false )` | `EE` | `EE` | `E` |
+| `true \| ( false; true )` | none | `E` | none |
+| `true \| { ( false ); }` | `E` | `EE` | `E` |
+| `f() { ( false ); }; true \| f` | `E` | `EE` | `EEE` |
+| `( false ) \| true` | none | none | none |
+
+`( exit 3 )` is the discriminating row: it has no failing command in it,
+so the second `E` is not the body firing. The **subshell command** is
+judged inside the element's own process, where the trap is still set, and
+then the pipeline is judged in the shell. A group holding the same
+subshell writes one, a function whose body is one writes one, and an
+element that is not the last does not fire at all —
+`true | ( false ) | ( false )` is two and not three. So it is the element
+being written as `( … )` that decides, and the tree is what answers it.
+
+That last row needs a trap writing to standard **error** to see: an
+element's standard output is the pipe to the element after it, so a
+firing anywhere but the last element writes into that pipe. Measured that
+way too, and bash still writes two.
+
+zsh's second `E` is a different mechanism — its ERR trap runs inside
+subshells at all, which is why `( false )` alone is already two there —
+and it is not this axis reached by another route.
+
+Only the trap fires. `set -e` needs nothing on this road: the element has
+already finished and the pipeline carries its status to the shell, which
+stops there. The inherited-subshell gate is deliberately lifted for the
+firing, which is the measured shape rather than a shortcut — the one
+column that does this answers `ErrTrapRunsInSubshells` **no**.
+
+With `lastpipe` on the element runs in this shell instead and
+`FailingPipelineWhoseLastElementRanHere` is what answers; the two cannot
+both apply, because one is about an element in a process of its own and
+the other about one that is not. dash is unanswered: it has no ERR trap
+for a second firing to be about. #3358.
+
 **`PipefailSubstitutesTheBareSignal`** — bash no · dash unspecified · ksh93 yes · zsh no
 
 Reports an element `pipefail` chose over the pipeline's last one, and

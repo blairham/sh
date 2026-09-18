@@ -76,6 +76,7 @@ ash   ChainedSubscriptReadsANestedValue
 ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
+ash   CompoundRedirectionFailureIsJudged
 ash   CoprocEndsInAnArray
 ash   ConditionWholeArraySubscript
 ash   DebugTrapRefiresOnEnteringAFunction
@@ -261,6 +262,7 @@ bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
 bash  SubscriptedPrefixIsTakenBack
+dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
 dash  AnchoredEmptyReplacementPattern
@@ -467,6 +469,7 @@ dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration
 dash  TableUnderAnArrayLiteralDeclaration
 dash  TestAndArithmeticUpdatePipelineStatus
+dash  TimedCommandIsJudged
 dash  TraceArrayLiteralShowsTheExpandedElements
 dash  TraceElementSubscriptIsEvaluated
 dash  TraceSubscriptedArrayLiteralIsElementAssignments

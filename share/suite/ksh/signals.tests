@@ -62,3 +62,45 @@ h() { true; }
 
 # The same for a pipeline: the stage that failed, and then the pipeline.
 ( trap 'printf "err\n"' ERR; true | false; printf 'after pipeline\n' ) 2> /dev/null
+
+# Two contexts ksh93 declines to judge, where the rest of the panel judges. A
+# `time` clause is one of them: neither `set -e` nor the ERR trap sees
+# anything the timing covers — not the timed command, not the commands inside
+# whatever it calls, and not the clause itself. bash and zsh stop on every one
+# of these rows and write an `err` for every one of the ERR rows.
+#
+# The timing report itself is a clock and cannot be an expectation, so every
+# row here sends it to /dev/null and prints its own line.
+( set -e; time false; printf 'timed simple -> survived\n' ) 2> /dev/null
+( set -e; time { false; printf 'timed group ran its body\n'; }
+	printf 'timed group -> survived\n' ) 2> /dev/null
+( set -e; tf() { false; }; time tf; printf 'timed call -> survived\n' ) 2> /dev/null
+( trap 'printf "err\n"' ERR; time false; printf 'timed under ERR -> quiet\n' ) 2> /dev/null
+
+# And the suspension ends with the clause, which is what makes it a context
+# rather than an option: the status is the timed command's, a `||` still sees
+# the failure, and a plain failure after the clause still stops the script.
+( time false; printf 'status after a timed failure -> %s\n' "$?" ) 2> /dev/null
+( set -e; time false || printf 'the or-list still ran\n'
+	printf 'and the script carried on\n' ) 2> /dev/null
+( set -e; time true; false; printf 'NOT REACHED\n' ) 2> /dev/null
+printf 'a failure after the clause still stopped it\n'
+
+# The other one is a redirection that cannot be opened on a *compound*
+# command. The diagnostic is written, the body does not run, 1 is left behind,
+# and neither judge is called. On a simple command it is a failure here as it
+# is everywhere, which is the row that says this is about the compound.
+( set -e; { printf 'NOT REACHED\n'; } > /nonexistent/x
+	printf 'group redirection -> survived\n' ) 2> /dev/null
+( set -e; for i in 1; do :; done > /nonexistent/x
+	printf 'loop redirection -> survived\n' ) 2> /dev/null
+( set -e; ( printf 'NOT REACHED\n' ) > /nonexistent/x
+	printf 'subshell redirection -> survived\n' ) 2> /dev/null
+( set -e; printf 'NOT REACHED\n' > /nonexistent/x
+	printf 'NOT REACHED EITHER\n' ) 2> /dev/null
+printf 'a simple command stopped on the same redirection\n'
+( trap 'printf "err\n"' ERR; { :; } > /nonexistent/x
+	printf 'compound redirection under ERR -> quiet, status %s\n' "$?" ) 2> /dev/null
+( trap 'printf "err\n"' ERR; printf 'NOT REACHED\n' > /nonexistent/x
+	printf 'simple redirection under ERR -> status %s\n' "$?" ) 2> /dev/null
+printf 'done\n'

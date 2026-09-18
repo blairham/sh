@@ -1794,6 +1794,25 @@ func Semantics() interp.Semantics {
 	// and 271.
 	s.PipefailSubstitutesTheBareSignal = interp.Yes
 	s.ErrexitSeesPipefailFailure = interp.No
+	// `time` times its command in a context where neither `set -e` nor the
+	// ERR trap judges anything — not the timed command, not what it calls,
+	// and not the clause. Measured 2026-09-18: `set -e; time { false; echo
+	// in; }; echo survived` writes both lines here and stops at the `false`
+	// in bash and zsh, and `trap 'printf E' ERR; time false` writes no E.
+	// The status is untouched — `time false` leaves 1 in `$?` — so it is the
+	// judging alone.
+	s.TimedCommandIsJudged = interp.No
+	// And a redirection this shell cannot open on a *compound* command is a
+	// failure neither judge sees: the diagnostic is written, the body does
+	// not run, 1 is left behind and the script carries on. Measured the same
+	// day over a group, a `for`, a `while`, an `if`, a `case`, a subshell and
+	// an input redirection; a *simple* command stops here as it does
+	// everywhere, which is the control.
+	s.CompoundRedirectionFailureIsJudged = interp.No
+	// A subshell written as the last element of a pipeline is judged once
+	// here — `trap 'printf E' ERR; true | ( false )` writes one E, where bash
+	// writes two.
+	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.No
 	// Alone in the panel: `PATH=` finds nothing here, where dash, bash and
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No

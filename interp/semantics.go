@@ -1902,6 +1902,113 @@ type Semantics struct {
 	// name inside a subscript turned out to be unset, so `$(( a[1] ))` and
 	// `$(( b ))` never raise it (#2817).
 	ArithSubscriptNameMustBeSet Answer
+
+	// ArithUnsetNameUnderNounsetIsRefused makes `set -u` reach **arithmetic**:
+	// a name read by an expression and never set is the option's own refusal
+	// rather than the zero arithmetic otherwise gives it.
+	//
+	// The two axes above are the same refusal with nounset *off*, which is
+	// why this is a third field and not a widening of either: they are one
+	// shell reading a name as a parameter in two particular places, and this
+	// is every shell that has the option reading every name in the expression
+	// once the option is on. `$(( b ))` at the top of the expression — which
+	// neither of those ever raises, by their own measurement — is the whole
+	// of it and needs no array, no subscript and no reference.
+	//
+	// Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C` from a
+	// script file, with `b` never set, each row followed by `echo OK`:
+	//
+	//	                             bash 5.3.20   ksh93u+   zsh 5.9.2   dash   ash
+	//	set -u; : $((b))             refused       refused   refused     OK     OK
+	//	set -u; echo $((b))          refused       refused   refused     0 OK   0 OK
+	//	set -u; a=(x); ${a[b]}       refused       refused   refused     —      —
+	//	set -u; a=(x); ${#a[b]}      refused       refused   refused     —      —
+	//	set -u; (( b ))              refused       refused   refused     —      —
+	//	set -u; for ((i=0;i<b;i++))  refused       refused   refused     —      —
+	//	set -u; let "x=b"            refused       refused   refused     —      —
+	//	set -u; typeset -i n; n=b    refused       refused   refused     —      —
+	//	set -u; b=; : $((b))         OK            OK        OK          OK     OK
+	//
+	// So it is **five columns against two** rather than a split of the big
+	// shells, and the two are the panel's POSIX-minimal members: dash and
+	// BusyBox ash read a name in an expression as text that might be a
+	// number, and never as a parameter `set -u` has an opinion about. That is
+	// the preset the standard gets — 2.6.4 hands arithmetic to the ISO C
+	// integer expressions and does not say the option reaches them — and it
+	// is why this is an axis rather than a fix applied everywhere.
+	//
+	// The last row is the control that makes this about being **unset** and
+	// not about being empty, which is the same line ArithSubscriptNameMustBeSet
+	// is drawn on: a name holding the empty string is zero in all seven.
+	//
+	// Every arithmetic read of a name reaches it, which is what makes this a
+	// seam rather than a row: `$(( ))`, `(( ))`, a C-style `for` header, an
+	// array subscript, `let`, and an assignment to a name declared integer
+	// all go through Runner.arithValueOf and all refuse together above.
+	//
+	// Silent when it is wrong, and expensively so: `set -u` is what a script
+	// turns on to be told about a name it did not set, and every counter,
+	// index and limit a shell script computes is read by arithmetic. It also
+	// hid a second defect behind a plausible sentence — `set -u; declare -n
+	// r=a[b]; : "$r"` reads as the *reference* being unbound in this shell
+	// and as the subscript's `b` in bash, because with the subscript's own
+	// refusal never firing the reference was the only thing left to be
+	// unbound about (#3574, #3125).
+	//
+	// Asked only where a name read by an expression turned out to be unset
+	// with the option on, so an expression over names that are set never
+	// raises it.
+	ArithUnsetNameUnderNounsetIsRefused Answer
+
+	// ArithNounsetRefusalIsFatal stops the shell over the refusal above,
+	// wherever the expression was written, instead of leaving it to be the
+	// expression's failure and letting the construct holding it decide.
+	//
+	// Measured 2026-09-18 alongside the rows above, `b` unset, each row
+	// followed by `echo "st=$?"; echo OK`:
+	//
+	//	                        bash 5.3.20   ksh93u+          zsh 5.9.2
+	//	: $((b))                stops         stops            stops
+	//	x=$((b)) || echo caught stops          stops            stops
+	//	( : $((b)) )            subshell dies  subshell dies    subshell dies
+	//	(( b ))                 stops         stops            st=2, runs on
+	//	(( b )) || echo caught  stops         stops            caught
+	//	let "x=b"               stops         st=1, runs on    st=1, runs on
+	//	for ((i=0;i<b;i++))     stops         stops            stops
+	//
+	// bash is the column that needs the field: there the refusal is an
+	// expansion failure and expansion failures under `set -u` end the shell,
+	// so it stops in all seven rows. In ksh93 and zsh it is an ordinary
+	// arithmetic failure and the *construct* answers for it, which the
+	// existing axes already say: `(( b ))` is ArithCommandErrorIsFatal — Yes
+	// in ksh93, No in zsh, and zsh's 2 is ArithCommandErrorStatusIsTwo — the
+	// header is ForHeaderArithmeticErrorIsFatal, Yes in both, and `let`
+	// reports and returns 1 in both as any failed `let` does. That those
+	// three axes predict all six of the non-bash cells is what says this is
+	// one field rather than one per construct.
+	//
+	// The control is the identical construct failing for an ordinary reason:
+	// `(( 1+ ))` and `let "x=1+"` are **not** fatal in bash, and `x=$((1+))`
+	// is fatal in all three. So what bash makes fatal here is the refusal and
+	// not the arithmetic, which is why this cannot be folded into
+	// ArithCommandErrorIsFatal — that one is No in bash and would have to
+	// become Yes to carry this, taking `(( 1+ ))` with it.
+	//
+	// Asked only where the refusal above was raised.
+	//
+	// unpinned dash: it does not refuse at all —
+	// ArithUnsetNameUnderNounsetIsRefused is No there — so the refusal this
+	// field is about is never raised and an answer would be a value nothing
+	// can measure. The two that do refuse and part on it are pinned by
+	// TestTheArithmeticNounsetRefusalIsFatalWhereverItIsWritten in
+	// dialect/bash and TestTheArithmeticNounsetRefusalIsTheExpressionsFailure
+	// in dialect/zsh.
+	//
+	// unpinned ash: the same, and for the same reason — BusyBox reads a name
+	// in an expression as text that might be a number whether or not `set -u`
+	// is on, so nothing here is ever reached. See
+	// TestTheOptionDoesNotReachArithmetic in dialect/ash.
+	ArithNounsetRefusalIsFatal Answer
 	// ArithShortCircuitEvaluatesTheRightOperand runs the right operand of
 	// `&&` or `||` even when the left one has already decided the answer, so
 	// an assignment or an increment written there takes effect anyway.
@@ -19718,6 +19825,15 @@ func PosixSemantics() Semantics {
 		// the standard's answer is No, and it is five of the panel's seven
 		// columns.
 		ArithShortCircuitEvaluatesTheRightOperand: No,
+		// `set -u` is written about *parameter expansion* in 2.5.2, and
+		// 2.6.4 hands arithmetic to the ISO C integer expressions without
+		// saying the option reaches them. dash and BusyBox ash — the two
+		// columns that read the standard and stop — leave a name in an
+		// expression as zero with the option on, so the preset does too.
+		// ArithNounsetRefusalIsFatal is deliberately left unanswered beside
+		// it: with no refusal there is nothing for it to be about, and an
+		// answer here would be a value nothing can measure.
+		ArithUnsetNameUnderNounsetIsRefused: No,
 		// ArithRecursedNameMustBeSet is deliberately left unanswered: with
 		// no recursion there is no name below the top for it to be asked
 		// about, so an answer here would be a value nothing can measure.

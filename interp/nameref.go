@@ -251,6 +251,18 @@ func (r *Runner) readThroughNamerefElement(base, sub string) (string, bool) {
 	}
 	idx, err := r.subscriptValue(sub)
 	if err != nil {
+		if r.arithNounsetNamedTheParameter {
+			// `set -u` naming a name the *subscript* read, which is the one
+			// failure here that is not this reference's: measured
+			// 2026-09-18, `set -u; declare -n r=a[b]; : "$r"` is `b: unbound
+			// variable` in bash 5.3.20 and `r: unbound variable` for the
+			// same line with a literal subscript, which is the control. The
+			// sentence is written here because this is the site that read
+			// the expression, and checkNounset says nothing further about
+			// `r` once it has been (#3574, #3125).
+			r.diagf("%s\n", err)
+			return "", false
+		}
 		return "", false
 	}
 	elems, ok := r.arrayElems(base)

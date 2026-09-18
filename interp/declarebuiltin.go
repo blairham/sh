@@ -3463,6 +3463,14 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 		// carries no surrounding blanks — `$(( 0x ))` in the same shell is
 		// `` 0x `` with them, from the same wording and a different text
 		// (#2420).
+		if r.arithNounsetNamedTheParameter {
+			// Already fatal and already carrying the status that route gives
+			// a `set -u` refusal — 127 from a `-c` string in bash, which
+			// Runner.fatal would put its own 1 over. See
+			// Runner.arithNounsetRefusal.
+			r.diagf("%s\n", r.arithFailure(text, err))
+			return 0, false
+		}
 		r.fatal("%s\n", r.arithFailure(text, err))
 		return 0, false
 	}

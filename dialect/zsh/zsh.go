@@ -1906,6 +1906,13 @@ func Semantics() interp.Semantics {
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
 	s.ArithRecursedNameMustBeSet = interp.No
 	s.ArithSubscriptNameMustBeSet = interp.No
+	// With nounset on, though, an unset name an expression reads is refused
+	// as it is in bash and ksh93: `set -u; : $((b))` is `b: parameter not
+	// set`. Not fatal of itself — the construct answers, so `(( b ))` leaves
+	// 2 and the line runs on where `$(( b ))` in a word stops the shell
+	// (#3574).
+	s.ArithUnsetNameUnderNounsetIsRefused = interp.Yes
+	s.ArithNounsetRefusalIsFatal = interp.No
 	s.BraceExpansion = interp.Yes
 	// Agrees with bash on where the scan resumes after a group that did not
 	// expand: one byte past its open brace, so `{a{b,c}}` is `{ab} {ac}`

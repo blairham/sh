@@ -131,3 +131,31 @@ n=0; ( ((n=5)) ); printf 'a subshell written with blanks: %s\n' "$n"
 # An expression that is nothing but parentheses still evaluates.
 (( (1+2)*3 == 9 )); printf 'a parenthesised expression: %s\n' "$?"
 (( ((2)) )); printf 'parentheses and nothing else: %s\n' "$?"
+
+# `set -u` reaches arithmetic, and it reaches every route into an arithmetic
+# read of a name rather than the expansion alone. Measured 2026-09-18 against
+# bash 5.3.20, ksh93u+ 2012-08-01 and zsh 5.9.2, which write these bytes
+# identically; dash and BusyBox ash read a name in an expression as text that
+# might be a number whether or not the option is on, which is why this is here
+# and not in core/ (#3574).
+#
+# Each row is a subshell with its stderr discarded, because the refusal is
+# fatal in all three of these shells and the wording is each shell's own — the
+# status and the line that did not run are what they agree on.
+
+( set -u; printf 'expansion: %s\n' "$(( b ))"; printf 'ran on\n' ) 2>/dev/null
+printf 'expansion status: %s\n' "$?"
+( set -u; a=1; printf 'operand: %s\n' "$(( a + b ))"; printf 'ran on\n' ) 2>/dev/null
+printf 'operand status: %s\n' "$?"
+( set -u; a=(x y z); printf 'subscript: %s\n' "${a[b]}"; printf 'ran on\n' ) 2>/dev/null
+printf 'subscript status: %s\n' "$?"
+( set -u; for (( i = 0; i < b; i++ )); do :; done; printf 'ran on\n' ) 2>/dev/null
+printf 'for header status: %s\n' "$?"
+
+# The two controls, and they are what say this is a lookup rule turned on by
+# the option rather than a change to what arithmetic reads. A name holding the
+# empty string is zero, and with the option off an unset one is zero too.
+( set -u; b=; printf 'an empty name: %s\n' "$(( b + 7 ))" ) 2>/dev/null
+printf 'an empty name status: %s\n' "$?"
+( printf 'the option off: %s\n' "$(( b + 7 ))" ) 2>/dev/null
+printf 'the option off status: %s\n' "$?"

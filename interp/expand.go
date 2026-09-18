@@ -5667,6 +5667,15 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 	if !r.nounset {
 		return
 	}
+	if r.arithNounsetNamedTheParameter {
+		// The same option has already refused a name an expression inside
+		// this expansion read — a reference aimed at `a[b]`, a subscript —
+		// and the shell is already stopping. A second sentence about the
+		// parameter the brackets were attached to would be the first one's
+		// aftermath, and it names the one name in the line that is perfectly
+		// well defined. See Runner.arithNounsetRefusal.
+		return
+	}
 	switch e.Op {
 	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamAlternate, syntax.ParamError:
 		return

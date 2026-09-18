@@ -541,9 +541,68 @@ A parameter expansion's text is read with the rule in force too: `${x\⏎y}`
 is `${xy}` on the whole panel. `parameter-expansion.md` has the shapes and
 the one place ksh93 refuses the pair.
 
-Two shapes at the construct's **delimiters** split the panel and are not
-this rule: a continuation between the `$(` and the second `(` of the opener,
-or between the two `)` of the closer, decides whether the construct is
+The **backquoted** command substitution is the exception to "not inside
+single quotes": the pair is removed from its text before that text is
+parsed, in every quoting written inside it, so `` `printf %s 'a\⏎b'` ``
+produces `ab` on the whole panel where the `$( )` spelling of it keeps
+both characters. `substitutions.md` has the shapes.
+
+### A continuation between the `$` and what it introduces
+
+The pair can also stand at the construct's **front**, between the `$` and the
+character that says which construct this is. The pair is removed there in
+every shell; what splits is whether the `$` then **reaches** what stands
+behind it, or stays as text.
+
+Measured 2026-09-16 from script files, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+stdin on /dev/null, fresh directory, with `x=5` and `set -- a b`. BusyBox ash
+was not measured.
+
+| probe | bash 5.3, 3.2 | dash | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- | --- |
+| `$\⏎x` | `5` | `5` | `5` | `$x` |
+| `$\⏎{x}` | `5` | `5` | `5` | `5` |
+| `$\⏎(echo hi)` | `hi` | `hi` | `hi` | `` `(' unexpected `` |
+| `$\⏎[1+2]` | `3` | — | `3` | — |
+| `$\⏎'a	b'` | `a`⇥`b` | — | `a`⇥`b` | `a`⇥`b` |
+| `"$\⏎x"` | `5` | `5` | `5` | `$x` |
+| `"$\⏎{x}"` | `5` | `5` | `{x}` | `${x}` |
+| `"$\⏎(echo hi)"` | `hi` | `hi` | `$(echo hi)` | `$(echo hi)` |
+| `"$\⏎[1+2]"` | `3` | — | `$[1+2]` | — |
+| `"$\⏎1"` | `a` | `a` | `a` | `$1` |
+
+A `—` is a shell with no such form at all, so nothing there is a measurement
+of this question. The ksh93 refusal row is the `$` staying as text and a `(`
+then being unable to begin a word.
+
+**A `$` reaches a *form*, not simply the next character.** `$\⏎ x` is `$ x`
+and `$\⏎` at the end of a word is `$`, in every column — so the pair is not
+removed and forgotten; the question is asked about what it uncovered.
+
+So the sets are `Dialect.ContinuationStopsADollarAt` and
+`…InDoubleQuotes`: zsh stops at everything but a bare parameter inside double
+quotes and at nothing outside them; ksh93 stops at a bare parameter and a
+parenthesis outside quotes and at every form inside them. Neither set contains
+the other. `Dialect.DollarGoesWhenAContinuationStopsItAtABrace` is the second
+question the brace row asks: the same stop yields `{x}` in one shell and
+`${x}` in the other, so what becomes of the `$` is not derivable from whether
+it was stopped.
+
+An unquoted here-document body stops nothing, in every dialect: a body holding
+`[$\⏎x][$\⏎{x}]` is `[5][5]` in bash 5.3, zsh 5.9.2, ksh93u+ and dash. That is
+the same exemption ksh93's `${ }` refusal has, and for the same reason — the
+body's continuations are gone before an expansion in it is scanned.
+
+One shape is measured and deliberately not modeled. Outside quotes ksh93
+takes its own stop away when a **pattern character stands earlier in the same
+word**: `[$\⏎x]`, `{$\⏎x`, `*$\⏎x` and `?$\⏎x` all expand there while `a$\⏎x`
+and `!$\⏎x` do not. Reading that would make the `$` depend on glob characters
+already passed, which is a question about the word rather than about this
+delimiter (#3523).
+
+Two further shapes at a construct's **delimiters** split the panel and are not
+this rule either: a continuation between the `$(` and the second `(` of the
+opener, or between the two `)` of the closer, decides whether the construct is
 arithmetic at all; and ksh93 alone refuses one directly behind the `((` of an
 arithmetic *command*.
 

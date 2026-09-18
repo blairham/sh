@@ -587,6 +587,18 @@ func Dialect() syntax.Dialect {
 	// shell alone, which is why it is set here and nowhere else.
 	d.BareSubscript = true
 	d.BareParamFlags = true
+	// A line continuation written between a `$` and what it introduces stops
+	// the `$` at everything but a bare parameter inside double quotes, and at
+	// nothing outside them. Measured 2026-09-16 from script files with `x=5`
+	// and `set -- a b`: `"$\⏎x"` is 5 and `"$\⏎1"` is `a`, where
+	// `"$\⏎(echo hi)"` is the text `$(echo hi)` and `"$\⏎[1+2]"` is
+	// `$[1+2]`. Unquoted, every one of those reads through the pair as it
+	// does in bash.
+	//
+	// The brace is the one it stops at *and* drops the `$` for: `"$\⏎{x}"`
+	// is `{x}` here and `${x}` in the other shell that stops at it.
+	d.ContinuationStopsADollarAtInDoubleQuotes = syntax.EveryDollarForm &^ syntax.DollarBareParameter
+	d.DollarGoesWhenAContinuationStopsItAtABrace = true
 	// A run of digits after an unbraced `$` is one positional parameter here.
 	// Measured 2026-09-15 with `set -- 1 2 3 4 5 6 7 8 9 ten eleven`: `$10` is
 	// `ten` and `$11` is `eleven` in this shell, where bash 5.3, bash 3.2,

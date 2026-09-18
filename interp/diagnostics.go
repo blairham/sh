@@ -5432,6 +5432,30 @@ type Diagnostics struct {
 	// the brackets a second time — and a second evaluation runs a command
 	// substitution written in them twice.
 	UnboundElementNamesTheSubscriptsValue bool
+	// ParamErrorNamesTheArray writes the bare name back when `${a[9]:?word}`
+	// refuses, where the rest of the panel writes the subscript with it.
+	//
+	// Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from
+	// a script file with each row in a subshell, `a=(x y z)` and
+	// `typeset -A m; m[k]=v`:
+	//
+	//	                bash 5.3.20   zsh 5.9.2    ksh93u+ 2012-08-01
+	//	${a[9]:?m}      a[9]: m       a[9]: m      a: m
+	//	${nope[1]:?m}   nope[1]: m    nope[1]: m   nope: m
+	//	${m[q]:?m}      m[q]: m       m[q]: m      m: m
+	//	${nope:?m}      nope: m       nope: m      nope: m
+	//
+	// Row four is the control: with no subscript written there is nothing to
+	// leave out, and all three name the same thing.
+	//
+	// Its own field and not a reuse of UnboundBareArrayNamesElementZero or of
+	// Diagnostics' other subject rules, because the one column that answers
+	// this way answers the **other** subject the opposite way: the same
+	// ksh93u+ writes `a[9]: parameter not set` for `set -u` on `${a[9]}`. A
+	// shared subject would have to be wrong at one of the two sites, which is
+	// why Runner.paramErrorSubject is a function of its own rather than a
+	// call to Runner.unboundSubject (#3241).
+	ParamErrorNamesTheArray bool
 
 	// SubscriptIsAnIndexAndARange is what a subscript says when one reading
 	// of it needs the single index it named and another makes it a span. No

@@ -194,6 +194,16 @@ type ParamExpr struct {
 	// is a word rather than a string: the brackets are text, and text in a
 	// word is expanded, split and matched like any other.
 	BareIndexText *Word
+	// Bare records that the expansion was written **without braces** — `$x`
+	// and `$7` rather than `${x}` and `${7}`. It is [Span.Bare] kept on the
+	// node, because one diagnostic is decided by the spelling and reaches
+	// the node alone: bash writes the `$` back in front of a parameter whose
+	// name is not a name — `$7: unbound variable`, `$!: unbound variable` —
+	// and drops it for the braced spelling of the very same parameter.
+	//
+	// False on a node this package did not parse, which is the reading a
+	// synthesized reference wants: nothing constructs one for a positional.
+	Bare bool
 	// Length is `${#x}`.
 	Length bool
 	// Indirect is `${!x}`. bash alone means indirection by it; ksh93 means
@@ -716,12 +726,14 @@ const specialParams = "@*#?-$!0123456789"
 // The lexer already found the matching brace, tracking quoting so a `}` inside
 // quotes did not end it early, so src here is exactly the inside.
 //
-// bare says the expansion was written without braces, which is Span.Bare and
-// is read for one thing only: the subscript such an expansion carries is
-// recorded as text as well as as a subscript, because a run-time answer
-// decides which of the two it is. See ParamExpr.BareIndexText.
+// bare says the expansion was written without braces, which is Span.Bare. It
+// is read for two things: the subscript such an expansion carries is recorded
+// as text as well as as a subscript, because a run-time answer decides which
+// of the two it is (see ParamExpr.BareIndexText), and the spelling itself is
+// kept on the node, because one refusal writes the `$` back only for it (see
+// ParamExpr.Bare).
 func (p *Parser) parseParamExp(src string, start Pos, q Quoting, bare bool) *ParamExpr {
-	e := &ParamExpr{Start: start, Stop: start}
+	e := &ParamExpr{Start: start, Stop: start, Bare: bare}
 	s := src
 
 	if strings.HasPrefix(s, "(") {

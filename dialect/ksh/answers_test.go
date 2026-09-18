@@ -127,6 +127,12 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"PrintfFieldCountsCharacters", s.PrintfFieldCountsCharacters, interp.No},
 		{"PrintfLongModifierCountsCharacters", s.PrintfLongModifierCountsCharacters, interp.No},
 		{"EmptyArrayIsSet", s.EmptyArrayIsSet, interp.No},
+		// The one column whose colon-less `?` reaches only the element a
+		// bare read names, so `${a[9]?m}` is quiet and `${nope[0]?m}` is
+		// not (#3241).
+		{"ErrorOperatorSeesOnlyTheBareElement", s.ErrorOperatorSeesOnlyTheBareElement, interp.Yes},
+		{"LengthOfAMissingElementIsRefused", s.LengthOfAMissingElementIsRefused, interp.No},
+		{"UnsetNameWithAWholeArraySubscriptIsRefused", s.UnsetNameWithAWholeArraySubscriptIsRefused, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},

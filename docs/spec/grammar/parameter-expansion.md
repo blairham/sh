@@ -1437,8 +1437,10 @@ too wide:
   that holds *nothing* rather than about an element: zsh refuses it and
   so does bash 3.2, where bash 5.3 — the same binary as `sh` included —
   and ksh93 print nothing and carry on. That is the existence half
-  `UnsetNameAtIsOneEmptyField` already measures from the other side, and
-  it is not modeled here.
+  `UnsetNameAtIsOneEmptyField` already measures from the other side. It
+  is `UnsetNameWithAWholeArraySubscriptIsRefused`, asked at
+  `Runner.checkNounsetWholeArray` so that the element refusal here still
+  never fires for `[@]` (#2980).
 - **A subscript on a plain string**, where the section above applies: a
   position past the end of a string is empty and quiet in the column
   that counts characters, and a missing element in the two that read a
@@ -1460,10 +1462,82 @@ time and running any command substitution in them twice. Its `(null)` for
 a missing key is that shell showing an unset pointer, and is recorded
 too.
 
-Two neighboring rows are measured and **not** modeled, for want of a
-column that agrees: zsh refuses `${#a[9]}` where bash and ksh93 answer
-`0`, and zsh and bash 3.2 refuse `${nope[@]}` where bash 5.3 and ksh93
-are silent.
+Both neighboring rows that used to sit here unmodeled are now axes.
+`${#a[9]}` is `LengthOfAMissingElementIsRefused` — zsh refuses it where
+bash and ksh93 answer `0` — asked in the length branch, which is in front
+of every refusal below it, so the question is put where the count is
+decided or nowhere. `${nope[@]}` is the whole-array axis above. Both keep
+their unanimous halves as core: a length taken through a name that is not
+there is refused everywhere, and an array that exists and holds no
+elements is quiet everywhere.
+
+Two rows are still measured and not matched, and they are named here so
+they are not rediscovered. `${#nope[@]}` is a *count* rather than a
+length and has three answers — `nope: …` in both bash columns,
+`nope[@]: …` in zsh, `0` at 0 in ksh93 — so it keeps ksh93's reading
+everywhere. And a declared table holding nothing parts bash from ksh93
+under a length: `typeset -A t; ${#t[q]}` is a refusal in bash 5.3 and `0`
+in ksh93, where the two agree that `typeset -A u; u[k]=v; ${#u[q]}` is
+`0`. ksh93's reading is taken for both — see `Runner.nameHoldsSomething`.
+
+### The `?` operator's subject, and what it sees through a subscript
+
+| probe | bash 5.3 | zsh | ksh93 |
+| --- | --- | --- | --- |
+| `a=(x y z); "[${a[9]?m}]"` | `a[9]: m` | `a[9]: m` | `[]` (0) |
+| `"[${nope[1]?m}]"` | `nope[1]: m` | `nope[1]: m` | `[]` (0) |
+| `typeset -A m; m[k]=v; "[${m[q]?m}]"` | `m[q]: m` | `m[q]: m` | `[]` (0) |
+| `"[${nope?m}]"` | `nope: m` | `nope: m` | `nope: m` |
+| `"[${nope[0]?m}]"` | `nope[0]: m` | `nope[0]: m` | `nope: m` |
+| `a=(x y z); "[${a[9]:?m}]"` | `a[9]: m` | `a[9]: m` | `a: m` |
+| `a=(x y z); "[${a[9]-D}]"` | `[D]` | `[D]` | `[D]` |
+| `a=(x y z); "[${a[9]+S}]"` | `[]` | `[]` | `[]` |
+
+Measured 2026-09-18 under `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`,
+from a script file with each row in a subshell. dash and BusyBox ash have
+no arrays.
+
+**The subject is the element**, brackets and all, exactly as `set -u`'s
+is one branch away. This wrote the bare array for every dialect, so a
+script's `${cfg[port]?port is required}` reported `cfg` and told its
+reader the wrong thing was missing (#3241). One column writes the array
+instead — `Diagnostics.ParamErrorNamesTheArray` — and it is that column's
+own field rather than a reuse of the `set -u` subject, because the same
+shell writes `a[9]` there and `a` here.
+
+**And the colon-less form is aimed rather than exempt.** ksh93 reaches
+only the element a bare read of the name means, which is element zero
+where arrays start at zero, so rows one to three are quiet there and rows
+four and five are not. `ErrorOperatorSeesOnlyTheBareElement` is the axis.
+The last two rows are the control that makes it the `?` operator's own:
+`-` and `+` see the missing element in every column, ksh93 included.
+
+### Where `${!x}` is the name, `set -u` is about the name
+
+| probe, `set -u`, ksh93 | answer |
+| --- | --- |
+| `unset v; "[${!v}]"` | `v: parameter not set`, the script ends |
+| `a=(x y z); "[${!a[9]}]"` | `[a[9]]` (0) |
+| `"[${!nosucharr[9]}]"` | `nosucharr[9]: parameter not set` |
+| `typeset -A m; m[k]=1; "[${!m[zz]}]"` | `[m[zz]]` (0) |
+| `a=(x y z); "[${a[9]}]"` | `a[9]: parameter not set` |
+
+Measured 2026-09-18, a script file with each row in a subshell. In the
+dialect where `${!x}` yields the **name** it was written on —
+`IndirectionYieldsName` — the value is never read, so there is nothing
+for `set -u` to be about unless the parameter itself is absent. Rows two
+and four were a fatal refusal here where the shell answers, which is a
+script ended rather than a wrong value (#3242).
+
+Rows one and three are the controls on either side: a wholly absent name
+is still refused, and the sentence still names the subscript. Row five is
+the sharper one — the same subscript without the `!` is refused in that
+shell too — so the split is the indirection's and not the subscript's.
+bash has the other answer to the axis and is not this question: it reads
+the target, and `${!a[9]}` is `!a[9]: unbound variable` there. The
+question the refusal asks is whether the **name** is one the shell has at
+all, which a bare read cannot answer for a declared table — see
+`Runner.nameHoldsSomething`.
 
 ### A subscript on a parameter that is not a name
 

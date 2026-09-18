@@ -14807,6 +14807,108 @@ type Semantics struct {
 	// value whichever way this is answered and never reaches it.
 	EmptyArrayIsSet Answer
 
+	// ErrorOperatorSeesOnlyTheBareElement reaches, for the colon-less
+	// `${a[i]?word}`, only the element an unsubscripted read of the name
+	// means — element zero, where arrays are numbered from zero. Brackets
+	// pointing anywhere else leave the operator quiet however absent that
+	// element is.
+	//
+	// Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from
+	// a script file with each row in a subshell, `a=(x y z)` and
+	// `typeset -A m; m[k]=v`:
+	//
+	//	              bash 5.3.20   zsh 5.9.2    ksh93u+ 2012-08-01
+	//	${a[9]?m}     a[9]: m       a[9]: m      [] at 0
+	//	${nope[1]?m}  nope[1]: m    nope[1]: m   [] at 0
+	//	${m[q]?m}     m[q]: m       m[q]: m      [] at 0
+	//	${nope?m}     nope: m       nope: m      nope: m
+	//	${nope[0]?m}  nope[0]: m    nope[0]: m   nope: m
+	//
+	// dash and BusyBox ash have no arrays and refuse the line, so the panel
+	// for this is the three columns above.
+	//
+	// Row four is the first control: with no subscript written, the column
+	// this axis is for refuses exactly as the other two do — so the operator
+	// is not switched off, it is aimed. Row five is the sharper one and is
+	// why this is not "the test asks whether the *name* is set": `nope` is
+	// absent in rows two and five alike, and only the subscript naming the
+	// bare element refuses.
+	//
+	// **The `-` and `+` operators are not this**, which is the control that
+	// makes it the `?` operator's own field rather than a reading of a
+	// subscript: measured in the same run, `${a[9]-D}` is `D` and
+	// `${a[9]+S}` is empty in all three columns. A subscript that reached no
+	// element is unset for them everywhere.
+	//
+	// **And the colon form still fires.** `${a[9]:?m}` is a refusal in every
+	// column, because the element's value is empty whichever aim is taken.
+	// What that column does differently there is name the array — see
+	// Diagnostics.ParamErrorNamesTheArray, the same reading showing through
+	// the other half of the sentence (#3241).
+	//
+	// A keyed table has no bare element, so the brackets never name one:
+	// measured, `typeset -A t; ${t[k]?m}` and `${m[q]?m}` are both quiet in
+	// that column, and the key is never sent to the arithmetic evaluator to
+	// find that out.
+	ErrorOperatorSeesOnlyTheBareElement Answer
+
+	// LengthOfAMissingElementIsRefused counts `${#a[9]}` on an element that
+	// is not there as an unset parameter under `set -u`, rather than as the
+	// length of nothing.
+	//
+	// Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from
+	// a script file under `set -u` with `a=(x y z)`, each row in a subshell:
+	//
+	//	              bash 5.3.20   bash 3.2.57   ksh93u+      zsh 5.9.2
+	//	${#a[9]}      0 at 0        0 at 0        0 at 0       a[9]: …
+	//	${#nope[9]}   nope[9]: …    nope: …       nope[9]: …   nope[9]: …
+	//
+	// The second row is the control and it is unanimous: a length taken
+	// through a name that is **not there** is refused in every column that
+	// has arrays, so what this axis is about is the missing *element* of a
+	// name that is. Three to one, and this shell answered the three for
+	// every dialect (#2980).
+	//
+	// dash and BusyBox ash have no arrays. bash 3.2.57 names the bare `nope`
+	// in row two where bash 5.3.20 names the subscript; that is
+	// Diagnostics.UnboundElementNamesTheSubscriptsValue's neighborhood and
+	// not a preset here, so the row is recorded rather than modeled.
+	//
+	// Not asked of a list-shaped subscript. `${#a[@]}` is a count rather
+	// than a length and the panel gives it three answers — see
+	// Runner.checkNounsetLength, where that row is written down as measured
+	// and not matched.
+	LengthOfAMissingElementIsRefused Answer
+
+	// UnsetNameWithAWholeArraySubscriptIsRefused counts `${nope[@]}` on a
+	// name holding nothing at all as an unset parameter under `set -u`,
+	// rather than as no fields.
+	//
+	// Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from
+	// a script file under `set -u`, each row in a subshell:
+	//
+	//	               bash 5.3.20   bash 3.2.57   ksh93u+   zsh 5.9.2
+	//	${nope[@]}     [] at 0       nope[@]: …    [] at 0   nope[@]: …
+	//	${nope[*]}     [] at 0       nope[*]: …    [] at 0   nope[*]: …
+	//	b=(); ${b[@]}  [] at 0       b[@]: …       —         [] at 0
+	//
+	// Three to two, and the two are not neighbors: bash 3.2.57 refuses it
+	// and bash 5.3.20 — the same lineage, and the same binary invoked as
+	// `sh` — does not.
+	//
+	// Row three is the control and it is what makes this a question about
+	// **existence** rather than about emptiness: an array that exists and
+	// holds no elements is no fields and no complaint in zsh as well as in
+	// bash 5.3.20, so the column that refuses rows one and two is refusing
+	// the absent *name*. That is the same fact UnsetNameAtIsOneEmptyField
+	// measures from the other side. bash 3.2.57 refuses row three too and is
+	// a third reading of the control; it is not a preset here.
+	//
+	// The `*` spelling answers with the `@` one in every column, as it does
+	// for EmptyArrayIsSet and for the same reason: the join is what differs
+	// between them and existence is not about the join.
+	UnsetNameWithAWholeArraySubscriptIsRefused Answer
+
 	// SubstringNegativeLengthIsEmpty answers `${x:1:-2}` with nothing at
 	// all: ksh93 alone. bash 5.3 — under either name — zsh and BusyBox ash
 	// count the negative length from the end, so `x=abcdef` gives `bcd`.
@@ -19539,8 +19641,21 @@ func PosixSemantics() Semantics {
 		// The standard has no arrays, so this follows the three columns
 		// that have one and read an array with no elements as unset. zsh
 		// is the column that overrides it.
-		EmptyArrayIsSet:                No,
-		SubstringNegativeLengthIsEmpty: No,
+		EmptyArrayIsSet: No,
+		// The standard has no arrays, so all three of these follow the
+		// columns that have one and read a subscript as naming an element.
+		// The `?` operator sees the element the brackets reach in bash
+		// 5.3.20 and zsh 5.9.2, where ksh93u+ reaches only the bare one and
+		// is the column that overrides this. A length of a missing element
+		// is `0` at status 0 in bash 5.3.20, bash 3.2.57 and ksh93u+, and a
+		// whole-array subscript on an absent name is no fields in bash
+		// 5.3.20 and ksh93u+; zsh 5.9.2 refuses both and is the column that
+		// overrides those two. dash 0.5.12 and BusyBox ash 1.37.0 have no
+		// arrays, so none of the three can be put to them.
+		ErrorOperatorSeesOnlyTheBareElement:        No,
+		LengthOfAMissingElementIsRefused:           No,
+		UnsetNameWithAWholeArraySubscriptIsRefused: No,
+		SubstringNegativeLengthIsEmpty:             No,
 		// The standard has no arrays, so this follows the two columns with
 		// associative arrays that keep a key a string. zsh is the column
 		// that overrides it.

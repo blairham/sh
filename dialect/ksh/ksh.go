@@ -1206,6 +1206,17 @@ func Semantics() interp.Semantics {
 	// Semantics.UnsetNameAtIsOneEmptyField records. 2026-09-16 on ksh93u+
 	// (#2298).
 	s.EmptyArrayIsSet = interp.No
+	// The colon-less `${a[i]?word}` reaches only the element a bare read of
+	// the name means here: with `a=(x y z)`, `${a[9]?m}`, `${nope[1]?m}` and
+	// `${m[q]?m}` on a declared table are all `[]` at 0, where bash 5.3.20
+	// and zsh 5.9.2 refuse all three. `${nope?m}` and `${nope[0]?m}` are the
+	// controls and refuse here too — so the operator is aimed rather than
+	// switched off by brackets — and `${a[9]-D}` and `${a[9]+S}` are the
+	// sharper ones: those two do see the missing element, in this column as
+	// in the others. Measured 2026-09-18 on ksh93u+ 2012-08-01 under
+	// `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from a script file with
+	// each row in a subshell (#3241).
+	s.ErrorOperatorSeesOnlyTheBareElement = interp.Yes
 	// A keyword-defined function's `typeset -x` is local like any other
 	// declaration; the POSIX-style function that leaks it has no scope to
 	// leak out of, which TypesetLocalNeedsKeywordFunction already answers.
@@ -2951,6 +2962,14 @@ func Diagnostics() interp.Diagnostics {
 		// set -u; echo "${a[$i]}"` is `a[9]: parameter not set` here where
 		// bash 5.3 and zsh 5.9.2 both write `a[$i]` back (#2911).
 		UnboundElementNamesTheSubscriptsValue: true,
+		// And the `?` operator's refusal names the array where `set -u`'s
+		// names the element: `a=(x y z); echo "${a[9]:?m}"` is `a: m` here,
+		// against `a[9]: m` in bash 5.3.20 and zsh 5.9.2 alike, while the
+		// same shell's `set -u` on `${a[9]}` writes `a[9]`. The same holds
+		// for a table's key and for a name that is not there at all, and
+		// `${nope:?m}` — with nothing to leave out — is the control that
+		// agrees with the other two columns. Measured 2026-09-18 (#3241).
+		ParamErrorNamesTheArray: true,
 		// A leading numeral that met a second point straight after its
 		// first has a sentence of its own here, naming the character:
 		// `$(( 1..2 ))` is `.: invalid character in expression -  1..2 `

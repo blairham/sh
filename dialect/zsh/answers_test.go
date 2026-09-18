@@ -105,6 +105,11 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"PrintfFieldCountsCharacters", s.PrintfFieldCountsCharacters, interp.Yes},
 		{"PrintfLongModifierCountsCharacters", s.PrintfLongModifierCountsCharacters, interp.No},
 		{"EmptyArrayIsSet", s.EmptyArrayIsSet, interp.Yes},
+		// The one column `set -u` reaches through a length and through a
+		// whole-array subscript on an absent name (#2980).
+		{"LengthOfAMissingElementIsRefused", s.LengthOfAMissingElementIsRefused, interp.Yes},
+		{"UnsetNameWithAWholeArraySubscriptIsRefused", s.UnsetNameWithAWholeArraySubscriptIsRefused, interp.Yes},
+		{"ErrorOperatorSeesOnlyTheBareElement", s.ErrorOperatorSeesOnlyTheBareElement, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},

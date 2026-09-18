@@ -129,6 +129,11 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"PrintfFieldCountsCharacters", s.PrintfFieldCountsCharacters, interp.No},
 		{"PrintfLongModifierCountsCharacters", s.PrintfLongModifierCountsCharacters, interp.Yes},
 		{"EmptyArrayIsSet", s.EmptyArrayIsSet, interp.No},
+		// The three subscripted refusals this column takes the common
+		// reading of (#2980, #3241).
+		{"ErrorOperatorSeesOnlyTheBareElement", s.ErrorOperatorSeesOnlyTheBareElement, interp.No},
+		{"LengthOfAMissingElementIsRefused", s.LengthOfAMissingElementIsRefused, interp.No},
+		{"UnsetNameWithAWholeArraySubscriptIsRefused", s.UnsetNameWithAWholeArraySubscriptIsRefused, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},

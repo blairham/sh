@@ -15123,15 +15123,25 @@ Read without asking, for the reason above. Unanswered means the
 parameter is set and empty, which is what this shell did before the axis
 existed and what the two shells that carry on do.
 
-One spelling is recorded and not claimed. bash writes `$!` back for the
-`$!` spelling and `!` alone for `${!}` — measured, `set -u; echo "${!}"`
-is `!: unbound variable` in 5.3.15 where `$!` is `$!: unbound variable`,
-and 3.2.57 prints *two* lines for the braced form. This shell says
-`$!: unbound variable` for both. A second wording field would hold a
-copy of the first in all four presets to carry one character in one
-shell in a form nothing writes, and the braced spelling collides with
-bash's indirection syntax besides, which is what the two lines from 3.2
-are.
+The **spelling** chooses between those two fields, and it is not a third
+one. bash writes the `$` back for `$!` and `$7` and drops it for `${!}`
+and `${7}` — measured 2026-09-18 from a two-line script file, `set -u`
+and then the expansion: `${7}` is `7: unbound variable` where `$7` is
+`$7: unbound variable`, `${!}` is `!: unbound variable` where `$!` is
+`$!: unbound variable`, and `$x` and `${x}` are `x: unbound variable`
+either way. This shell wrote the sigil for both spellings, which is two
+lines of the `errors` row of #2298 (#3466).
+
+So it is a rule on one wording rather than an axis: bash is the only
+column with a sigil at all — zsh, ksh93 and dash say `parameter not set`
+for every one of the six — and `Runner.unboundSigilWording` reads
+`syntax.ParamExpr.Bare` to pick between `Diagnostics.UnboundPositional`
+and `Diagnostics.UnboundVariable`, both of which already exist. A second
+wording field would hold a copy of one of them in all four presets.
+
+bash 3.2.57 prints *two* lines for `${!}`, because the braced spelling
+collides with its indirection syntax. 5.3.20 is what the bash preset is,
+and that column is recorded rather than followed.
 
 Corpus: `jobs/the-last-background-pid-before-any-job` reads the
 parameter, `jobs/an-unstarted-last-background-pid-under-set-u` asks
@@ -17607,6 +17617,103 @@ direction from the one that story predicted: `a=()` there is a set, empty
 array and no field, while a name nothing declared is one field. The
 careful idiom `"${a[@]+"${a[@]}"}"` guards the unset name, which is what
 it was always for.
+
+**`ErrorOperatorSeesOnlyTheBareElement`** — bash no · dash n/a · ksh93 yes · zsh no
+
+Reaches, for the colon-less `${a[i]?word}`, only the element an
+unsubscripted read of the name means — element zero, where arrays are
+numbered from zero. Brackets pointing anywhere else leave the operator
+quiet however absent that element is. Measured 2026-09-18, `env -i
+HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from a script file with each row in
+a subshell, `a=(x y z)` and `typeset -A m; m[k]=v`:
+
+| written | bash 5.3.20 | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- |
+| `${a[9]?m}` | `a[9]: m` | `a[9]: m` | `[]` at 0 |
+| `${nope[1]?m}` | `nope[1]: m` | `nope[1]: m` | `[]` at 0 |
+| `${m[q]?m}` | `m[q]: m` | `m[q]: m` | `[]` at 0 |
+| `${nope?m}` | `nope: m` | `nope: m` | `nope: m` |
+| `${nope[0]?m}` | `nope[0]: m` | `nope[0]: m` | `nope: m` |
+
+dash and BusyBox ash have no arrays and refuse the line, so the panel is
+those three columns.
+
+Row four is the first control: with no subscript written, the column this
+axis is for refuses exactly as the other two do — the operator is aimed
+rather than switched off. Row five is the sharper one, and it is why this
+is not "the test asks whether the *name* is set": `nope` is absent in
+rows two and five alike, and only the subscript naming the bare element
+refuses.
+
+**The `-` and `+` operators are not this.** Measured in the same run,
+`${a[9]-D}` is `D` and `${a[9]+S}` is empty in all three columns, so a
+subscript that reached no element is unset for them everywhere. That is
+what makes this the `?` operator's own axis rather than a reading of a
+subscript, and it is the control a fix here has to keep.
+
+The colon form still fires, because the element's value is empty whichever
+aim is taken. What that column does differently there is name the array —
+`Diagnostics.ParamErrorNamesTheArray`, the same reading showing through
+the other half of the sentence. A keyed table has no bare element, so the
+brackets never name one and the key is never sent to the arithmetic
+evaluator to find that out.
+
+**`LengthOfAMissingElementIsRefused`** — bash no · dash n/a · ksh93 no · zsh yes
+
+Counts `${#a[9]}` on an element that is not there as an unset parameter
+under `set -u`, rather than as the length of nothing. Measured
+2026-09-18, from a script file under `set -u` with `a=(x y z)`, each row
+in a subshell:
+
+| written | bash 5.3.20 | bash 3.2.57 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- | --- |
+| `${#a[9]}` | `0` at 0 | `0` at 0 | `0` at 0 | `a[9]: …` |
+| `${#nope[9]}` | `nope[9]: …` | `nope: …` | `nope[9]: …` | `nope[9]: …` |
+
+The second row is the control and it is unanimous: a length taken through
+a name that is **not there** is refused in every column that has arrays,
+so the axis is about the missing *element* of a name that is. The length
+is counted in front of every refusal below it, so the question is asked
+where the count is decided or nowhere — which is the half #2980 filed
+rather than modeled.
+
+Two rows are measured and not matched. `${#nope[@]}` is a *count* rather
+than a length and has three answers — `nope: …` in both bash columns,
+`nope[@]: …` in zsh, `0` at 0 in ksh93u+ — so it keeps ksh93's reading in
+every dialect. And a **declared table holding nothing** parts bash from
+ksh93: `typeset -A t; ${#t[q]}` is a refusal in bash 5.3.20 and `0` at 0
+in ksh93u+, where the same two agree that `typeset -A u; u[k]=v;
+${#u[q]}` is `0`. So bash asks whether the name holds an element and
+ksh93 asks whether the name is there; ksh93's reading is taken for both.
+
+**`UnsetNameWithAWholeArraySubscriptIsRefused`** — bash no · dash n/a · ksh93 no · zsh yes
+
+Counts `${nope[@]}` on a name holding nothing at all as an unset
+parameter under `set -u`, rather than as no fields. Measured 2026-09-18,
+from a script file under `set -u`, each row in a subshell:
+
+| written | bash 5.3.20 | bash 3.2.57 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- | --- |
+| `${nope[@]}` | `[]` at 0 | `nope[@]: …` | `[]` at 0 | `nope[@]: …` |
+| `${nope[*]}` | `[]` at 0 | `nope[*]: …` | `[]` at 0 | `nope[*]: …` |
+| `b=(); ${b[@]}` | `[]` at 0 | `b[@]: …` | — | `[]` at 0 |
+
+Three to two, and the two are not neighbors: bash 3.2.57 refuses it and
+bash 5.3.20 — the same lineage, and the same binary invoked as `sh` —
+does not.
+
+Row three is the control and it is what makes this a question about
+**existence** rather than about emptiness: an array that exists and holds
+no elements is no fields and no complaint in zsh as well as in bash
+5.3.20, so the column that refuses rows one and two is refusing the
+absent *name*. That is `UnsetNameAtIsOneEmptyField` from the other side.
+bash 3.2.57 refuses row three too and is a third reading of the control;
+it is not a preset here.
+
+`checkNounsetElement` skips every list-shaped subscript on purpose, so
+this **moves** the question rather than deleting that guard: the element
+check still never fires for `[@]`, and this one never fires for anything
+else.
 
 
 ### arithmetic

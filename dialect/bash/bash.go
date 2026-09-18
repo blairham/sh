@@ -2694,7 +2694,13 @@ func Diagnostics() interp.Diagnostics {
 		CannotCreate:            "%[1]s: %[2]s",
 		NoclobberRefusal:        "%[1]s: cannot overwrite existing file",
 		NamesTheInputInLocation: true,
-		EchoesTheOffendingLine:  true,
+		// The newlines between a `$(` and the first command of its body
+		// count for nothing here, so that command is on the opener's line —
+		// `echo "$(` on line 2 with the command under it reports `$LINENO`
+		// as 2 where zsh, ksh93 and dash all report 3, and three blank lines
+		// between them still report 2. Measured 2026-09-17 (#3362).
+		SubstitutionBodyStartsAtItsOpenersLine: true,
+		EchoesTheOffendingLine:                 true,
 		// A substitution body read at expansion time and refused is named
 		// as the construct it came from, which goes with the failure being
 		// the word's rather than the script's — see

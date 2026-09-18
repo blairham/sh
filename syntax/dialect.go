@@ -98,6 +98,16 @@ const (
 	// anywhere, the bar included. zsh: `echo one | ; ; cat -n` numbers the
 	// line, and so does `echo one | ; ⏎ ; cat -n`.
 	AnySeparatorWhereACommandBelongs
+
+	// SeparatorOnlyWhereAnAndOrWantsOne steps over a single `;` where an
+	// and-or's right-hand side belongs and nowhere else at all.
+	//
+	// No dialect holds this as its own answer: it is what
+	// OneSeparatorExceptAfterABarOrBeforeACondition becomes inside the body
+	// of a `$( … )` or a `${ …;}` in the shell that holds that value — see
+	// [Dialect.SubstitutionBodyRefusesASteppedOverSeparator], which is where
+	// the measurement is.
+	SeparatorOnlyWhereAnAndOrWantsOne
 )
 
 // ArraySemicolon is how far a dialect will take a `;` inside an array
@@ -4508,6 +4518,45 @@ type Dialect struct {
 	// bash-as-`sh` refuse every line above; ksh93 and zsh differ from each
 	// other in exactly two ways, which is what the values below record.
 	SeparatorWhereACommandBelongs SeparatorSkip
+
+	// SubstitutionBodyRefusesASteppedOverSeparator takes that reading away
+	// inside the body of a `$( … )` or a `${ …;}`, leaving only the position
+	// where an and-or's right-hand side belongs.
+	//
+	// ksh93 alone, and it is the one place that shell's own answer does not
+	// reach. Measured 2026-09-17 over a script file, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C ksh s.sh` with stdin from /dev/null:
+	//
+	//	echo a; ;                 runs — the top level takes it
+	//	v=`echo a; ;`             runs — and so does the older spelling
+	//	v=`; echo a`              runs
+	//	v=`false || ; echo b`     runs
+	//	v=$(echo a; ;)            `;' unexpected
+	//	v=$(; echo a)             `;' unexpected
+	//	v=$(echo a; ; echo b)     `;' unexpected
+	//	v=$(echo a & ; echo b)    `;' unexpected
+	//	v=$(echo a | ; cat)       `;' unexpected
+	//	v=$(if ; then echo a; fi) `;' unexpected
+	//	v=$( ; )                  `;' unexpected
+	//	v=${ echo a; ;}           `;' unexpected
+	//	v=$(false || ; echo b)    runs, and the value is `b`
+	//	v=$(echo a; )             runs — a separator *terminating* a
+	//	                          statement is not this question
+	//
+	// So the two spellings of one construct part company, exactly as they do
+	// for where a refusal is located and for whether a line continuation at
+	// the front is removed — and the last two rows are what keep the rule
+	// from being "the body refuses a `;`": an and-or still takes one, and a
+	// terminator was never this.
+	//
+	// zsh takes every row, so the wider value is unaffected; bash 5.3, bash
+	// 3.2, bash-as-`sh`, dash and BusyBox ash step over no separator anywhere
+	// and so have nothing here to narrow.
+	//
+	// Read by the interpreter where the body is parsed rather than by the
+	// parser, because only the caller knows it is reading a body and which
+	// spelling opened it. See interp's bodyDialect.
+	SubstitutionBodyRefusesASteppedOverSeparator bool
 
 	// AbsentAndOrOperandIsAnEmptyCommand supplies a command that does nothing
 	// and succeeds where an and-or's right-hand side is missing after a

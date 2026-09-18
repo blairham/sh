@@ -138,10 +138,13 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			// the closer for *every* refused body would pass everything
 			// above.
 			//
-			// zsh and ksh are empty here because this engine accepts `echo
-			// hi; ;` in both — real zsh accepts it too and ksh93 refuses it
-			// at 3, which is a gap of its own and filed. What the row pins is
-			// that this change did not move any of the six.
+			// zsh is empty here because this engine accepts `echo hi; ;`
+			// there and so does real zsh. ksh93 refuses it at 3, and since
+			// #3333 so does the ksh preset — the step-over that shell has at
+			// the top level does not reach inside a `$( … )` body. See
+			// syntax.Dialect.SubstitutionBodyRefusesASteppedOverSeparator.
+			// What the row pins either way is that the closer changed
+			// nothing: the first refusal stands.
 			//
 			// The bash row carries the clause that dialect adds while it is
 			// still looking for the closer, which is exactly the shape this
@@ -152,7 +155,7 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `;' while looking for matching `)'\n",
 				"zsh":   "",
-				"ksh":   "",
+				"ksh":   "ksh: line 2: syntax error at line 2: `;' unexpected\n",
 				"dash":  "dash: 2: Syntax error: \";\" unexpected\n",
 				"ash":   "ash: syntax error: unexpected \";\"\n",
 				"posix": "sh: \";\" unexpected\n",

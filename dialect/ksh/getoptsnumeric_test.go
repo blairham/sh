@@ -32,9 +32,10 @@ func getoptsRun(t *testing.T, src string) (string, int) {
 // The scan, over both spellings and over the failures.
 //
 // stderr goes to /dev/null here and the wording is asserted on its own below,
-// because the **location** in front of it is a separate divergence: ksh93
-// writes `file: -n: …` where this shell writes `file: line N: -n: …` (#3438).
-// Asserting the whole line would pin that in as if it were right.
+// because what the scan does and what it says are two claims. The location in
+// front of it was a third and is now the same as the shell's — this builtin's
+// complaint carries no line (#3438) — and getoptslocation_test.go is where
+// that is pinned.
 func TestGetoptsReadsTheNumericArgumentType(t *testing.T) {
 	for _, tc := range []struct{ name, words, want string }{
 		{"the next word", "-n 5", "[n:5] end=3\n"},
@@ -66,8 +67,9 @@ func TestGetoptsReadsTheNumericArgumentType(t *testing.T) {
 // `numeric argument expected` where a `:` letter says `argument expected`,
 // and it says it for a missing argument as much as for an unreadable one.
 //
-// Measured 2026-09-16 on ksh93u+ 2012-08-01. Matched on the message rather
-// than on the whole line for the location gap in #3438.
+// Measured 2026-09-16 on ksh93u+ 2012-08-01, and matched on the message so
+// that the location it is written with stays one claim in one place — see
+// getoptslocation_test.go, which pins that this builtin writes no line.
 func TestGetoptsNumericArgumentWording(t *testing.T) {
 	for _, tc := range []struct{ words, want string }{
 		{"-n abc", "-n: numeric argument expected\n"},

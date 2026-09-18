@@ -17804,6 +17804,35 @@ both. The name operand is not this question either: a freeze on it ends
 the builtin in every column that reaches one, except at the end of the
 options, where bash keeps its own 1.
 
+**`GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal`** — bash no · dash no ·
+ksh93 **yes** · zsh n/a
+
+Gives up the rest of the script when a freeze refuses the **name operand**
+on the run that reports "no more options", where the same freeze over a
+letter the scan *found* only reports and returns. One builtin, one name,
+one freeze, and two answers separated by nothing but which path inside
+`getopts` reached it — which is why it is not a reading of
+`ReadonlyRefusalInABuiltinIsFatal`, answered **no** by the one shell that
+answers this yes.
+
+Measured 2026-09-17 over a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with stdin on /dev/null, and again through `-c` and through
+standard input, with `N=kept; readonly N` in front and an `echo` after:
+
+    bash 5.3.20     letter: reports, 2   end: reports, 1    both echoes run
+    bash 3.2.57     letter: reports, 1   end: reports, 1    both echoes run
+    dash 0.5.12     letter: reports, 2   end: reports, 2    both echoes run
+    BusyBox ash     letter: reports, 2   end: reports, 2    both echoes run
+    ksh93u+         letter: reports, 2   end: reports, the script is over
+
+All three ways of running out answer alike — a non-option word, a `--`,
+and no words at all — and so does the silent form. The status that leaves
+the script is the **builtin's own** 2 and not the shell's fatal status,
+which is 1 there: a readonly reassignment, a division by zero, a `shift`
+past the end and `${x?}` all exit 1 in that shell. zsh never reaches it,
+`GetoptsEndOfOptionsNamesIt` being no, so there is no write for the
+freeze to refuse.
+
 **`ReadonlyRefusalInABuiltinIsFatal`** — bash no · dash no · ksh93 no · zsh yes
 
 Ends the script where a **builtin** writing its own output parameter is

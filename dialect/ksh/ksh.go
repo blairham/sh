@@ -1833,6 +1833,15 @@ func Semantics() interp.Semantics {
 	// Unreachable while the answer above is yes — answered so that nothing
 	// reports an axis this shell cannot be asked.
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// The **name** is not the builtin's, so a freeze does refuse it — and
+	// this shell is the one column that answers the refusal by which path
+	// reached it. `N=kept; readonly N; getopts a: N` reports and returns 2
+	// where the scan found `-a`, and ends the script at 2 where it had run
+	// out. Measured 2026-09-17 over a script file, through `-c` and through
+	// standard input, and for all three ways of running out — a non-option
+	// word, a `--` and no words at all — with the silent form answering the
+	// same.
+	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.Yes
 	// And `read` does not stop either: every frozen name is reported and
 	// every other name is filled — `readonly a; printf 'x y\n' | { read a b; }`
 	// leaves b holding `y` here, where bash, dash and BusyBox ash leave it
@@ -3104,7 +3113,13 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsBadOption:       "-%[1]s: unknown option",
 		GetoptsMissingArgument: "-%[1]s: argument expected",
 		GetoptsNumericArgument: "-%[1]s: numeric argument expected",
-		CdCannotChange:         "cd: %[1]s: [%[2]s]",
+		// `getopts` is the one builtin whose complaint here carries no line.
+		// Every other diagnostic this shell writes names a location — either
+		// `file: line N:` or `file[N]:` — and these three write the script's
+		// path and then the message, on the script route and on `-c` and
+		// standard input alike, where the name is the shell's own.
+		GetoptsNamesNoLine: true,
+		CdCannotChange:     "cd: %[1]s: [%[2]s]",
 		// One message for both, where bash names which variable was missing.
 		CdHomeNotSet: "cd: bad directory",
 		// The same sentence for an empty operand and for a HOME set to

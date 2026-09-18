@@ -906,6 +906,15 @@ type Runner struct {
 	// had, and three of the four restart the word on the strength of the
 	// assignment rather than the number.
 	optindAssigned bool
+	// optRanOut records that the `getopts` write in flight is the name
+	// operand on the run that reports "no more options", which is the one
+	// write whose freeze a dialect answers apart from every other write the
+	// builtin makes — see Semantics.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal.
+	//
+	// Set around that one call rather than for the builtin, because the
+	// question is which path inside `getopts` reached the freeze and nothing
+	// in the value being written says so.
+	optRanOut bool
 
 	// removed are names `unset` took away that came from the environment
 	// rather than from Vars.

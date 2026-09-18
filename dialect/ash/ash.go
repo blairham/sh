@@ -898,6 +898,11 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.Yes
+	// And a freeze on the **name** costs the same whichever path reached it:
+	// measured 2026-09-17 in the pinned image, `readonly N` with `set -- -a v`
+	// and with `set -- x` both write `getopts: line 1: N: is read only` at 2
+	// and the script runs on.
+	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
 	// And `read` the same, at 2 wherever the frozen name stood. Measured in
 	// the pinned 1.37.0 image, 2026-09-16 (#3208).
 	s.ReadRefusedWriteEndsTheBuiltin = interp.Yes

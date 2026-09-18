@@ -259,14 +259,15 @@ func TestDashDashEndsGetoptsOptions(t *testing.T) {
 	}
 }
 
-// getoptsFrozenSem is getoptsSem plus the three answers a freeze on one of
+// getoptsFrozenSem is getoptsSem plus the four answers a freeze on one of
 // `getopts`'s own names reaches, set to the shape bash measures: the freeze is
 // consulted, the refusal is reported, and neither the builtin nor the script
-// gives anything up.
+// gives anything up — wherever inside the builtin the refusal was reached.
 func getoptsFrozenSem() Semantics {
 	s := getoptsSem()
 	s.GetoptsOwnParametersIgnoreAFreeze = No
 	s.GetoptsRefusedWriteEndsTheBuiltin = No
+	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = No
 	s.ReadonlyRefusalInABuiltinIsFatal = No
 	s.ReadonlyReassignmentFatal = No
 	s.FatalErrorStatusIsOne = Yes

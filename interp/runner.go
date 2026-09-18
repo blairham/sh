@@ -1435,6 +1435,13 @@ type Runner struct {
 	// Saved and put back around each call, so an inner call written without a
 	// prefix of its own is holding nothing.
 	functionPrefixNames []string
+	// callPrefixes is one frame per *enclosing* call that was written with an
+	// assignment prefix, outermost first: the names it is holding and what
+	// they held before it. functionPrefixNames above is the innermost frame's
+	// names and answers "does this call have a prefix"; this answers "is any
+	// call I am inside holding this name", which is a different question and
+	// the one `unset` asks. See interp/unsetenclosinglocal.go.
+	callPrefixes []callPrefixFrame
 	// expandingWord is the word being expanded and expandingSpan which of
 	// its spans, so a diagnostic about an expansion can name the text around
 	// it: two dialects blame the word rather than the `${…}`, and by the
@@ -1543,8 +1550,15 @@ type Runner struct {
 	// to run is below the level. See interp/underscoreframe.go.
 	inputLastArg    string
 	inputLastArgSet bool
-	atInputLevel    bool
-	pendingInputArg underscorePending
+	// underscoreWritten says a script has assigned to `$_` since the last
+	// time the shell stamped it. The value is in Runner.assigned like any
+	// other message to a producer; this is what says it is newer than the
+	// stamp, which is the whole of what makes it readable in the one dialect
+	// that stamps between the commands it *reads* rather than before every
+	// command. See interp/underscoreframe.go.
+	underscoreWritten bool
+	atInputLevel      bool
+	pendingInputArg   underscorePending
 	// noexec is `set -n`: read, never run, never unset — even the `set +n`
 	// that would clear it is a command.
 	noexec bool
@@ -4089,6 +4103,10 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 			// the next one reads. See interp/underscoreframe.go for the
 			// dialect this is the whole of `$_` for.
 			r.inputLastArg, r.inputLastArgSet = arg, true
+			// And the stamp is what a write to the name gives way to: a
+			// value a script wrote stands until the next command the shell
+			// reads puts its own last argument there.
+			r.underscoreWritten = false
 		}
 		r.atInputLevel = false
 		if err != nil {
@@ -5646,7 +5664,28 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// when it returns.
 		outerCallHeld := r.functionPrefixNames
 		r.functionPrefixNames = callHeld
-		defer func() { r.functionPrefixNames = outerCallHeld }()
+		// And the same names as a **frame**, so that an `unset` written
+		// inside a function this one calls can find them: the field above is
+		// reset for every call and answers about the innermost one alone.
+		// See interp/unsetenclosinglocal.go.
+		//
+		// Pushed only where there is a prefix, and taken off by *truncating*
+		// rather than by putting a saved slice back. Both matter and the
+		// second is what an early version got wrong: a call written without a
+		// prefix of its own pushed an empty frame and then restored the slice
+		// it had captured on the way in, which threw away the entry an
+		// `unset` inside it had just taken out of an **outer** call's frame —
+		// so `q=P c` with `c(){ d; }` and `d(){ unset q; q=NEW; }` gave the
+		// name back its old value on the way out.
+		frame := len(r.callPrefixes)
+		if len(callHeld) > 0 {
+			r.callPrefixes = append(r.callPrefixes,
+				callPrefixFrame{names: callHeld, undo: undo, scoped: scoped})
+		}
+		defer func() {
+			r.functionPrefixNames = outerCallHeld
+			r.callPrefixes = r.callPrefixes[:frame]
+		}()
 		// The line the *call* was written on, because the take-back below
 		// runs once the body has moved the record to wherever its last
 		// command was. A refusal of the axis there is about this command and
@@ -5655,7 +5694,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		defer func() {
 			bodyLine := r.line
 			r.line = callLine
-			r.takeBackFunctionPrefix(undo, scoped)
+			// From the frame and not from `undo`, because an `unset` inside
+			// the body may have taken an entry out: putting that one back
+			// would resurrect a binding the script has just removed.
+			left := undo
+			if frame < len(r.callPrefixes) {
+				left = r.callPrefixes[frame].undo
+			}
+			r.takeBackFunctionPrefix(left, scoped)
 			r.line = bodyLine
 		}()
 		// `$_` belongs to the *call* and not to the body: whatever the last
@@ -8287,6 +8333,14 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		}
 		r.assigned[name] = value
 		delete(r.removed, name)
+		if name == "_" {
+			// A *write* to `$_`, which is a value a script may read back in
+			// the dialects that do not stamp the name before every command.
+			// The producer decides whether it is visible; this is the record
+			// that it happened, and the stamp is what takes it off again.
+			// See interp/underscoreframe.go.
+			r.underscoreWritten = true
+		}
 		// And where the producer has a writer, the message is delivered
 		// rather than merely left for it to find. The two are not
 		// alternatives: SECONDS reads what was assigned the next time it is

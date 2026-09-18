@@ -3,6 +3,8 @@
 
 package interp
 
+import "slices"
+
 // `unset` of a name a *calling* function made local, which is one of the two
 // questions in the builtin that scoping decides and the one the panel splits
 // on. See Semantics.UnsetRemovesAnEnclosingLocal for the rows.
@@ -64,7 +66,17 @@ package interp
 func (r *Runner) unsetTakesAnEnclosingLocal(name string) bool {
 	sc, ok := r.enclosingShadowOf(name)
 	if !ok {
-		return false
+		if sc != nil {
+			// The **running** scope declared it, which is the one shape
+			// every column answers alike: the local is unset where it
+			// stands. A call's prefix further out is not reached, because
+			// this scope's binding is the innermost one and is what `unset`
+			// is about.
+			return false
+		}
+		// No scope holds the name at all, so the innermost binding — if
+		// there is one — belongs to an enclosing call's assignment prefix.
+		return r.unsetTakesACallPrefixBinding(name)
 	}
 	takes := r.ask(r.sem().UnsetRemovesAnEnclosingLocal,
 		"`unset` of a name a calling function made local taking the binding away")
@@ -129,4 +141,101 @@ func (r *Runner) SetUnsetRemovesAnEnclosingLocal(on bool) {
 	r.swapSemantics(func(s *Semantics) {
 		s.UnsetRemovesAnEnclosingLocal = a
 	})
+}
+
+// callPrefixFrame is what one enclosing call's assignment prefix is holding.
+//
+// A frame rather than a flat list because `unset` has to find the *innermost*
+// call holding the name, and because taking one entry out must leave the rest
+// of that call's prefix to be given back as it always was.
+type callPrefixFrame struct {
+	names []string
+	undo  []savedVar
+	// scoped says the prefix wrote a cell belonging to the call rather than
+	// to the shell — see Runner.prefixScopedToTheCall — which the take-back
+	// needs and which is a property of the call rather than of a name.
+	scoped bool
+}
+
+// cloneCallPrefixes copies the frames a subshell inherits, down to each
+// frame's own slices: a name a subshell's `unset` takes out of a frame is a
+// name the parent's call still has.
+func cloneCallPrefixes(frames []callPrefixFrame) []callPrefixFrame {
+	if frames == nil {
+		return nil
+	}
+	out := make([]callPrefixFrame, len(frames))
+	for i, f := range frames {
+		out[i] = callPrefixFrame{
+			names:  slices.Clone(f.names),
+			undo:   slices.Clone(f.undo),
+			scoped: f.scoped,
+		}
+	}
+	return out
+}
+
+// unsetTakesACallPrefixBinding is unsetTakesAnEnclosingLocal's other place to
+// look: a name an assignment prefix in front of a **function call** gave the
+// shell, which is a binding like any other to the dialect that removes one.
+//
+// Measured 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C` with a scratch HOME:
+//
+//	v=GLOBAL
+//	g() { unset v; echo "  g [${v-U}]"; }
+//	f() { g; echo "  f [${v-U}]"; }
+//	v=PRE f; echo "global [${v-U}]"
+//
+//	bash 5.3.20, 3.2.57   [GLOBAL] [GLOBAL] [GLOBAL]
+//	zsh 5.9.2, dash       [U]      [U]      [GLOBAL]
+//
+// So it is `UnsetRemovesAnEnclosingLocal` again — the same axis #3435 built
+// for `local`, reached through the other mechanism — and not a second one: the
+// panel splits the same way and one shell's `shopt localvar_unset` moves both.
+// The global shows through for the rest of `g` *and* for the rest of `f`,
+// which is what says the binding is gone rather than emptied.
+//
+// A prefix to a call takes no scope here, so `r.scopes` records nothing and
+// the search above finds nothing to take away. The frames are where it is
+// written down instead, and the **innermost** one holding the name is the one
+// removed: a call two frames out keeps its own entry.
+//
+// Removing it means giving the name back what the prefix displaced and then
+// forgetting the entry, so the call's own take-back does not put the prefix's
+// value back on the way out — which would resurrect a binding the script has
+// just removed.
+func (r *Runner) unsetTakesACallPrefixBinding(name string) bool {
+	frame := -1
+	for i := len(r.callPrefixes) - 1; i >= 0; i-- {
+		if slices.Contains(r.callPrefixes[i].names, name) {
+			frame = i
+			break
+		}
+	}
+	if frame < 0 {
+		return false
+	}
+	takes := r.ask(r.sem().UnsetRemovesAnEnclosingLocal,
+		"`unset` of a name a call's assignment prefix gave the shell taking the binding away")
+	if r.unspecified {
+		// The refusal is the answer and the name stays where it is, exactly
+		// as for the `local` spelling above.
+		return true
+	}
+	if !takes {
+		return false
+	}
+	f := &r.callPrefixes[frame]
+	i := slices.IndexFunc(f.undo, func(u savedVar) bool { return u.name == name })
+	if i < 0 {
+		// Held and not saved, which is a prefix this dialect keeps: there is
+		// nothing displaced to give back, so the ordinary `unset` runs.
+		f.names = slices.DeleteFunc(slices.Clone(f.names), func(n string) bool { return n == name })
+		return false
+	}
+	r.restoreVars(f.undo[i : i+1])
+	f.undo = slices.Delete(slices.Clone(f.undo), i, i+1)
+	f.names = slices.DeleteFunc(slices.Clone(f.names), func(n string) bool { return n == name })
+	return true
 }

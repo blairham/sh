@@ -202,3 +202,45 @@ func (r *Runner) underscoreValue() (string, bool) {
 	}
 	return r.lastArg, r.lastArgSet
 }
+
+// underscoreWrittenValue is what a script's own assignment to `$_` left, and
+// whether it is what a read of the name answers.
+//
+// `_` is a name a script may **write** in the dialects that do not stamp it
+// before every command, and every write to it was being lost: the parameter is
+// produced rather than stored, so setVarAs records the assignment in
+// Runner.assigned — which is right, and is how SECONDS works — and the
+// producer never looked.
+//
+// Whether it is readable is the stamping rule and not a second question, so it
+// is Semantics.UnderscoreMovesOnlyBetweenInputCommands again. Measured
+// 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+// with a scratch HOME, on ksh93u+ 2012-08-01, which is the column that answers
+// yes:
+//
+//	: alpha
+//	_=TOP;              $_ is TOP
+//	: beta;             $_ is beta      — the next command the shell reads
+//	_=SECOND; echo "$_"                 — SECOND, two commands on one line
+//	f(){ _=INFN; echo "$_"; }; f        — INFN inside, and `f` after the call
+//
+// So the write stands until the **next command the shell reads** stamps the
+// name, which is exactly the record that axis already distinguishes: a shell
+// that stamps before every command overwrites the write before anything can
+// see it — bash and zsh both answer `read _ rest` with `rest` — and one with
+// no producer at all keeps the value by storing it, which is what dash and
+// BusyBox ash do.
+//
+// Runner.underscoreWritten is what says the write is newer than the stamp; the
+// stamp clears it, so there is no ordering to keep in two places.
+func (r *Runner) underscoreWrittenValue() (string, bool) {
+	if !r.underscoreWritten {
+		return "", false
+	}
+	if !r.ask(r.sem().UnderscoreMovesOnlyBetweenInputCommands,
+		"`$_` moving only between the commands the shell reads") {
+		return "", false
+	}
+	value, ok := r.assigned["_"]
+	return value, ok
+}

@@ -346,6 +346,10 @@ func (c *Runner) ownTables(r *Runner) {
 	c.prefixShadowed = slices.Clone(r.prefixShadowed)
 	c.prefixHeldUndo = slices.Clone(r.prefixHeldUndo)
 	c.functionPrefixNames = slices.Clone(r.functionPrefixNames)
+	// A frame at a time, because a subshell may take a name out of one and
+	// the parent's frame must not lose it: the slice of frames is cloned and
+	// so is each frame's own pair of slices.
+	c.callPrefixes = cloneCallPrefixes(r.callPrefixes)
 	c.scopes = cloneScopes(r.scopes)
 	// Appended to in place as well, so each needs an array of its own. Their
 	// *elements* stay shared on purpose: a `*Job` is one job to whoever holds

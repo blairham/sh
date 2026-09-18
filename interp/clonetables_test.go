@@ -111,6 +111,8 @@ func seedStacks(r *Runner) {
 	r.prefixShadowed = append(make([]string, 0, 4), "seed")
 	r.prefixHeldUndo = append(make([]savedVar, 0, 4), savedVar{name: "seed"})
 	r.functionPrefixNames = append(make([]string, 0, 4), "seed")
+	r.callPrefixes = append(make([]callPrefixFrame, 0, 4),
+		callPrefixFrame{names: []string{"seed"}, undo: []savedVar{{name: "seed"}}})
 }
 
 // TestACloneOwnsEveryStack is TestACloneOwnsEveryTable for the slices, and it

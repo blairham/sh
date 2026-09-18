@@ -22356,10 +22356,69 @@ what makes the option and the default one axis rather than two features:
 with it set, bash answers exactly as the `no` column does. No other shell
 in the panel has a name for the question.
 
-Still recorded rather than modeled: the same reading through an
-**assignment prefix** — `v=PRE f`, then `unset v` inside a function `f`
-calls — which bash treats the same way and this shell does not, because a
-prefix takes no scope here (#3440).
+**And it is the same axis through an assignment prefix**, which is the
+other way a caller can be holding a name. Measured 2026-09-18 from a
+script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch
+HOME:
+
+    v=GLOBAL
+    g() { unset v; echo "  g [${v-U}]"; }
+    f() { g; echo "  f [${v-U}]"; }
+    v=PRE f; echo "global [${v-U}]"
+
+    bash 5.3.20, 3.2.57   [GLOBAL]  [GLOBAL]  [GLOBAL]
+    zsh 5.9.2, dash       [U]       [U]       [GLOBAL]
+
+Same split, same axis, and one shell's `shopt localvar_unset` moves both —
+so it is not a second question. ksh93 is out of the table because its
+prefix *persists*, which is a divergence reached before `unset` is (#3161).
+
+A prefix to a call takes no scope here, so `r.scopes` records nothing and
+the search above finds nothing to take away. The binding is written down
+in a **frame** instead, one per enclosing call that carried a prefix, and
+three rows shape it:
+
+    q=PRE c, c(){ d; }, d(){ unset q; q=NEW; }   NEW afterwards — the
+                                                binding is gone, so the
+                                                write reaches the shell
+    z=OUTER a, a(){ z=INNER b; }, b(){ unset z }  the innermost frame is
+                                                the one removed
+    w=PRE j, j(){ k; }, k(){ local w=L; unset w } the running scope's own
+                                                local wins, and the frame
+                                                is untouched
+
+The second and third are what make it a stack read innermost-first rather
+than one live prefix, and the first is what the entry has to be *removed*
+for: the call's take-back would otherwise put the prefix's value back on
+the way out and resurrect a binding the script had just taken away.
+
+### A write to `$_`
+
+`_` is a name a script may **write** in the columns that do not stamp it
+before every command, and every write to it was lost here: the parameter
+is produced rather than stored, so an assignment is recorded as a message
+to the producer — which is right, and is how `SECONDS` works — and the
+producer never read it.
+
+Measured 2026-09-18, the same way, on ksh93u+ 2012-08-01:
+
+    : alpha; _=TOP; echo "$_"          TOP
+    : beta;        echo "$_"           beta
+    _=SECOND; echo "$_"                SECOND — two commands, one line
+    f(){ _=INFN; echo "$_"; }; f       INFN inside; `f` after the call
+    echo "a b" | { read _ rest; … }    [a] and [b]
+    for _ in loopval; do :; done       loopval
+
+So the write stands until the **next command the shell reads** stamps the
+name, which is exactly what `UnderscoreMovesOnlyBetweenInputCommands`
+already distinguishes — no second axis. A shell that stamps before every
+command overwrites the write before anything can see it (bash and zsh both
+answer `read _ rest` with `rest`), and one with no producer at all keeps
+the value by storing it, which is dash's and BusyBox ash's answer.
+
+`read _ rest` is the standard way to throw a field away and `for _ in …`
+the standard way to loop a fixed number of times; both leave a name the
+script may then read, and in that column both read empty.
 
 **`BadSubscriptToUnset`** — bash the command · dash unspecified · ksh93 reported · zsh reported
 

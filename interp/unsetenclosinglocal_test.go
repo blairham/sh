@@ -289,3 +289,80 @@ func TestTheSwitchOverTakingACallersBinding(t *testing.T) {
 		t.Error("the switch did not travel back")
 	}
 }
+
+// The same axis reached through an **assignment prefix** in front of a
+// function call rather than through `local`. A prefix takes no scope here, so
+// nothing in r.scopes records it and the search above finds nothing — the
+// binding is in a frame of its own. See interp/unsetenclosinglocal.go, and
+// note that the frame has to be reachable from a function the prefixed one
+// *calls*, which is the shape the panel measures.
+func TestUnsetOfACallsPrefixBindingCanTakeItAway(t *testing.T) {
+	const src = `v=GLOBAL
+g() { unset v; echo "g=[${v-UNSET}]"; }
+f() { g; echo "f=[${v-UNSET}]"; }
+v=PRE f
+echo "top=[${v-UNSET}]"`
+	out, errs, st := declRun(t, src, takesTheBinding, Diagnostics{})
+	want := "g=[GLOBAL]\nf=[GLOBAL]\ntop=[GLOBAL]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("taking the binding = %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+	out, errs, st = declRun(t, src, keepsTheBinding, Diagnostics{})
+	want = "g=[UNSET]\nf=[UNSET]\ntop=[GLOBAL]\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("keeping the binding = %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
+// And once the binding is gone, a later assignment writes what it revealed —
+// which is the row that says the binding was *removed* rather than emptied,
+// and the one an early version of the frames got wrong: the prefix-less call
+// in the middle put back the slice it had captured on the way in and
+// resurrected the entry.
+func TestAWriteAfterUnsettingACallsPrefixBindingReachesTheShell(t *testing.T) {
+	const src = `q=GLOBAL
+d() { unset q; q=NEW; }
+c() { d; echo "c=[${q-UNSET}]"; }
+q=PRE c
+echo "top=[${q-UNSET}]"`
+	out, _, st := declRun(t, src, takesTheBinding, Diagnostics{})
+	if want := "c=[NEW]\ntop=[NEW]\n"; out != want || st != 0 {
+		t.Errorf("taking the binding = %q (status %d), want %q", out, st, want)
+	}
+	out, _, st = declRun(t, src, keepsTheBinding, Diagnostics{})
+	if want := "c=[NEW]\ntop=[GLOBAL]\n"; out != want || st != 0 {
+		t.Errorf("keeping the binding = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The innermost frame is the one removed: a call two frames out keeps its own
+// entry, which is what makes this a stack rather than one live prefix.
+func TestUnsetTakesTheInnermostCallsPrefixBinding(t *testing.T) {
+	const src = `z=GLOBAL
+b() { unset z; echo "b=[${z-UNSET}]"; }
+a() { z=INNER b; echo "a=[${z-UNSET}]"; }
+z=OUTER a
+echo "top=[${z-UNSET}]"`
+	out, _, st := declRun(t, src, takesTheBinding, Diagnostics{})
+	if want := "b=[OUTER]\na=[OUTER]\ntop=[GLOBAL]\n"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And a name the *running* scope declared is still the running scope's,
+// whatever a call further out is holding: the local is unset where it stands
+// under both answers, and the prefix's entry is untouched.
+func TestARunningScopesLocalIsNotACallsPrefixBinding(t *testing.T) {
+	const src = `w=GLOBAL
+k() { local w=L; unset w; echo "k=[${w-UNSET}]"; }
+j() { k; echo "j=[${w-UNSET}]"; }
+w=PRE j
+echo "top=[${w-UNSET}]"`
+	want := "k=[UNSET]\nj=[PRE]\ntop=[GLOBAL]\n"
+	for _, set := range []func(*Semantics){takesTheBinding, keepsTheBinding} {
+		out, _, st := declRun(t, src, set, Diagnostics{})
+		if out != want || st != 0 {
+			t.Errorf("got %q (status %d), want %q", out, st, want)
+		}
+	}
+}

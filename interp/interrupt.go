@@ -71,7 +71,7 @@ func (r *Runner) takeInterrupt() bool {
 func (r *Runner) abandonForInterrupt() {
 	r.diedOfSig = syscall.SIGINT
 	r.status = r.signalDeathStatus(syscall.SIGINT)
-	r.ctl, r.abandonLine = controlAbandon, r.line
+	r.abandonTheCommand()
 }
 
 // breakLoopsForAStop ends the loops the stopped command was inside.

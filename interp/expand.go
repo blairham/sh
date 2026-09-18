@@ -3690,7 +3690,7 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 			restore()
 		}
 		r.diagf("%s\n", Wording(r.diag().SubstringRangeError, "%[2]s",
-			r.paramSubject(e), r.subscriptFailure(blame, err)))
+			r.paramSubject(e), r.expressionFailure(blame, err)))
 		r.expandErr = true
 		// One complaint per range, which is unanimous: `${x:&&:&&}` is one
 		// line in bash 5.3 and one in ksh93u+, and we wrote two — the

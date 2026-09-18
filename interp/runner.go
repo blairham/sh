@@ -1302,6 +1302,17 @@ type Runner struct {
 	// number that is not one. The command does not run, which is what every
 	// shell in the panel does and what the exit status has to say.
 	expandErr bool
+	// badSubscript records that the expansion which failed was a **subscript**
+	// that would not evaluate, rather than any other unreadable expression.
+	//
+	// A second flag beside expandErr rather than a reading of it, because the
+	// give-up they lead to differs by exactly this much: a bracketed
+	// expression gives a `-c` string up whole and the same arithmetic outside
+	// brackets resumes at the next command. Measured at seven bracketed sites
+	// and four bare ones — see Runner.giveUpForABadSubscript, which is the
+	// door this routes to (#3502). Cleared with expandErr, everywhere
+	// expandErr is cleared.
+	badSubscript bool
 	// prefixCheckedFirst records that this command's assignment prefix has
 	// already been checked for a frozen name, ahead of its values and its
 	// redirections — the order Semantics.PrefixToAFrozenNameIsCheckedFirst
@@ -2392,11 +2403,27 @@ type Runner struct {
 	// the per-command check to a comparison; see cancel.go.
 	cancelWatch *cancelWatch
 
-	// abandonLine is the line the statement that gave up was on, so the rest
-	// of that *line* is given up with it. Measured: `r=2; echo one` on one
-	// line prints nothing, and `r=2` with `echo one` on the line after it
+	// abandonLine is the input line the statement that gave up was on, so the
+	// rest of that *line* is given up with it. Measured: `r=2; echo one` on
+	// one line prints nothing, and `r=2` with `echo one` on the line after it
 	// runs the echo.
+	//
+	// Written from Runner.giveUpLine and never from r.line, which is the line
+	// of whatever failed rather than the line the shell is running: inside a
+	// function body the two are different numbers and it is the caller's that
+	// is given up (#3503).
 	abandonLine int
+
+	// inputLine is the last line of the top-level statement being run — the
+	// line a give-up anywhere inside it takes with it. Set by the two
+	// statement loops that read a shell's input, RunPart and the borrowed
+	// text in interp/source.go; zero when neither is on the stack.
+	//
+	// A function body is deliberately *not* one of those loops, which is the
+	// whole point of the field: it runs in this runner with no loop of its
+	// own, so a give-up inside it has to reach the caller's line to find out
+	// how much to give up. See Runner.giveUpLine for the rows.
+	inputLine int
 
 	// assignFailed marks an assignment that was refused rather than made,
 	// so the status it left is not zeroed by the assignment that follows
@@ -3835,8 +3862,12 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	}
 	r.programEnd = int(f.End().Line + 1)
 	abandoned := 0
+	// The field says which line a give-up inside this chunk gives up, and it
+	// is put back afterwards for a caller that drives a runner both ways.
+	outerInputLine := r.inputLine
+	defer func() { r.inputLine = outerInputLine }()
 	for i, st := range f.Stmts {
-		if abandoned != 0 && r.lineOf(st.Pos()) == abandoned {
+		if abandoned != 0 && r.lineOf(st.Pos()) <= abandoned {
 			// The rest of the line the last statement gave up on goes with
 			// it. Everything inside a construct has already unwound; this is
 			// what makes `r=2; echo one` print nothing where the same two on
@@ -3846,11 +3877,23 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 			// earlier line: the numbers only go up, so a stale one matches
 			// nothing. Clearing it was equivalent under mutation, which is
 			// how that was established rather than assumed.
+			//
+			// `<=` rather than `==` for the same reason the line it compares
+			// against is the statement's *end*: a compound that gave up
+			// spans several lines and the `echo` behind its `fi` is on the
+			// last of them, while a backslash-continued command ends before
+			// the `;` that separates it from the next. Sequential statements
+			// cannot start before the one ahead of them ends, so the two
+			// spellings agree on every shape either can reach.
 			continue
 		}
 		// The one place a statement is read at the level a shell reads its
 		// input, which is the level one dialect's `$_` moves at.
 		r.atInputLevel = r.aLoneSimpleCommandOnItsLine(f.Stmts, i)
+		// And the level a give-up is measured from: whatever fails inside
+		// this statement gives up this much of the input. See
+		// Runner.giveUpLine.
+		r.inputLine = r.inputLineOf(st)
 		err := r.stmt(ctx, st)
 		if arg, ok := r.takeInputLevelArgument(); ok {
 			// The statement is over, so the line's own last argument is what
@@ -4780,7 +4823,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			return nil
 		}
 	}
-	r.unspecified, r.expandErr, r.assignFailed = false, false, false
+	r.unspecified, r.expandErr, r.badSubscript, r.assignFailed = false, false, false, false
 	// Whatever this command's process substitutions opened is closed when the
 	// command is done, whether it turned out to be a builtin, a function or
 	// something on PATH.
@@ -6748,7 +6791,7 @@ func (r *Runner) fatalUsage(format string, args ...any) {
 // the give-up does not clear it. A heading that tested the flag without
 // clearing it first would abandon itself over the previous line's failure.
 func (r *Runner) beginHeading() {
-	r.unspecified, r.expandErr = false, false
+	r.unspecified, r.expandErr, r.badSubscript = false, false, false
 }
 
 // failedHeading reports whether expanding a compound command's heading
@@ -6829,8 +6872,15 @@ func (r *Runner) failedExpansion() {
 		r.fatalQuiet()
 		return
 	}
+	if r.badSubscript {
+		// A bracketed expression gives up more than a bare one: see
+		// Runner.giveUpForABadSubscript, which is where that is measured and
+		// which the two builtin-operand sites already went through (#3502).
+		r.giveUpForABadSubscript()
+		return
+	}
 	r.setFatalStatus()
-	r.ctl, r.abandonLine = controlAbandon, r.line
+	r.abandonTheCommand()
 }
 
 // failedSubscript is what an element assignment the shell *refuses* ends: the
@@ -6862,6 +6912,13 @@ func (r *Runner) failedExpansion() {
 // reached by three, which is why this one asks.
 func (r *Runner) failedSubscript(format string, args ...any) {
 	r.diagf(format, args...)
+	// A subscript, whatever wording reached here: the `-c` rule on
+	// Runner.giveUpForABadSubscript is a rule about brackets and the door
+	// below cannot see them. Set rather than assumed, because
+	// Runner.subscriptFailure is only one of the two ways a caller words
+	// this — an out-of-range index and a whole-array subscript have
+	// sentences of their own (#3502).
+	r.badSubscript = true
 	r.failedExpansion()
 }
 
@@ -7657,7 +7714,7 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// command on the same line, which is the tell that this is about a bare
 	// assignment failing rather than about the refusal.
 	if !form.declaresRatherThanAssigns() {
-		r.ctl, r.abandonLine = controlAbandon, r.line
+		r.abandonTheCommand()
 	}
 	return true
 }

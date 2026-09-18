@@ -296,7 +296,7 @@ func (r *Runner) printfArithValue(text string) (arithNum, error, bool) {
 		// operand, or a parenthesis that never closed, is not.
 		var se *syntax.Error
 		left := errors.As(err, &se) && se.Kind == syntax.ErrArithOperator
-		return intNum(0), arithError{msg: r.subscriptFailure(text, err), complete: true}, left
+		return intNum(0), arithError{msg: r.expressionFailure(text, err), complete: true}, left
 	}
 	outer, held := r.arithValueSurvivesTheDivision, r.arithDivisionFailure
 	r.arithValueSurvivesTheDivision, r.arithDivisionFailure = true, nil

@@ -1334,7 +1334,7 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 		r.diagf("%s\n", Wording(r.diag().BadArraySubscript,
 			"%[1]s[%[2]s]: bad array subscript", a.Name, a.IndexText))
 		r.status, r.assignFailed = 1, true
-		r.ctl, r.abandonLine = controlAbandon, r.line
+		r.abandonTheCommand()
 	case WholeArraySubscriptIsInvalidInAnAssignment:
 		// The subscript is the verb here, not the name.
 		r.fatal("%s\n", Wording(r.diag().InvalidSubscriptInAssignment,
@@ -2861,7 +2861,40 @@ func (r *Runner) expressionValue(text string) (int, error) {
 // for `$(( ))` already. The same two wordings serve here, because a subscript
 // is an expression and every shell measured says about `${a[b c]}` exactly
 // what it says about `$((b c))`.
+//
+// It also records that a **subscript** is what failed, which is what decides
+// how much a give-up over it gives up: see Runner.badSubscript and
+// Runner.giveUpForABadSubscript. Here rather than at each of the two dozen
+// callers because wording one of these *is* that fact, and because several of
+// them are two frames away from the give-up that reads it — behind an
+// arithError a `$(( a[b c] ))` carries out of the evaluator. A caller that
+// ends the script instead never reads the flag, and it is cleared with
+// expandErr per command.
+//
+// The three callers with no brackets in front of them take
+// Runner.expressionFailure, which is this wording without the mark. Written
+// that way round on purpose: a subscript site added later is right by
+// default, where a mark set at the call sites would have to be remembered at
+// each of them — which is how a second helper came to omit a case three times
+// in this package already.
 func (r *Runner) subscriptFailure(text string, err error) string {
+	r.badSubscript = true
+	return r.expressionFailure(text, err)
+}
+
+// expressionFailure is subscriptFailure's wording for an expression that is
+// **not** a subscript: a substring range's end, a `printf` numeric operand,
+// and the value of a name re-read as an expression. The sentence is the same
+// one — every shell measured says about `${a[b c]}` exactly what it says
+// about `$((b c))` — and the give-up is not, which is the whole of why there
+// are two doors.
+//
+// Measured 2026-09-17 on bash 5.3.20 and 3.2.57, as a script file and as one
+// `-c` string, `echo "next=$?"; echo end` behind each on its own lines:
+// `${v:b c:2}` writes the complaint and then `next=1` and `end` by **both**
+// routes, where `${a[b c]}` — the same arithmetic, in brackets — writes
+// nothing after the complaint under `-c` and exits 1 (#3502).
+func (r *Runner) expressionFailure(text string, err error) string {
 	var se *syntax.Error
 	if errors.As(err, &se) {
 		switch se.Kind {

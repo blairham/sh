@@ -256,7 +256,7 @@ func (r *Runner) giveUpTheCommand() {
 	// simple and withRedirs already read for "the redirections did not come
 	// out", which is exactly what happened.
 	r.redirErr = true
-	r.expandErr = false
+	r.expandErr, r.badSubscript = false, false
 }
 
 // commandRunsInThisShell reports whether the shell will run this command

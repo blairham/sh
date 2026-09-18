@@ -418,6 +418,14 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// the half that was missing: there the give-up passes straight through
 	// and the subshell ends with it. See the clause that reads r.inSubshell
 	// below for the measurement (#2747).
+	// Borrowed text is the other statement loop that reads a shell's input,
+	// so a give-up inside it gives up a line of *this* text — see
+	// Runner.giveUpLine, and the note on `abandoned` just below for the
+	// measurement. The caller's line goes back afterwards, or a give-up in
+	// the function that called this `eval` would give up a line of text that
+	// has stopped running.
+	outerInputLine := r.inputLine
+	defer func() { r.inputLine = outerInputLine }()
 	abandoned, stopped := 0, false
 	for !stopped {
 		f, ok := nextBorrowedLine(p, &whole)
@@ -438,9 +446,10 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		}
 		for _, st := range f.Stmts {
 			ran = true
-			if abandoned != 0 && r.lineOf(st.Pos()) == abandoned {
+			if abandoned != 0 && r.lineOf(st.Pos()) <= abandoned {
 				continue
 			}
+			r.inputLine = r.inputLineOf(st)
 			if err := r.stmt(ctx, st); err != nil {
 				// A Builtin returns a status and not an error, so there is
 				// nowhere for this to go but a diagnostic — the same place

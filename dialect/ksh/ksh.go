@@ -1665,10 +1665,12 @@ func Semantics() interp.Semantics {
 	s.GlobListsDotAndDotDot = interp.Yes
 	s.UnknownCharacterClass = interp.UnknownClassEmptiesTheBracket
 	// `[[.a.]]` and `[[=a=]]` are the collating element and the equivalence
-	// class, matching `a`. A body this shell cannot read empties the bracket
-	// the way an unknown class name does: measured 2026-09-16,
-	// `[a[.nosuch.]b]` matches neither a nor b.
-	s.CollatingSymbols = interp.Yes
+	// class, matching `a`. One character is the whole of an element here:
+	// measured 2026-09-18 under `LC_ALL=C`, `[[.hyphen.]]` matches no `-`,
+	// where bash reads that body as a name. A body this shell cannot read
+	// empties the bracket the way an unknown class name does: measured
+	// 2026-09-16, `[a[.nosuch.]b]` matches neither a nor b.
+	s.CollatingElements = interp.OneCharacterIsACollatingElement
 	// `[[:]` makes the whole bracket match nothing, wherever the `[:` stands — the same shape this shell gives a class name it has not got.
 	// See interp.Semantics.UnterminatedCharacterClass (#1431).
 	s.UnterminatedCharacterClass = interp.UnterminatedClassEmptiesTheBracket

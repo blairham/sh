@@ -2855,8 +2855,67 @@ remaining gap; zsh cannot be doing more than a few thousand steps in
 Both want their own design note and their own differential run against the
 panel, which is why they are not in the change that wrote this section.
 
-## What this does not cover
+## Collating elements and equivalence classes
 
-Collating symbols and equivalence classes (`[[.a.]]`, `[[=a=]]`), which
-POSIX defines and which no consumer in this project has needed. Recorded
-so their absence is a decision rather than an oversight.
+`[.x.]` and `[=x=]` inside a bracket expression, and the panel answers them
+four ways rather than two. Measured 2026-09-18 under `LC_ALL=C`, script files
+under `env -i`:
+
+| pattern | bash 5.3.20 | bash 3.2.57 | ksh93u+ | dash 0.5.12 | zsh 5.9.2 | BusyBox ash 1.37.0 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `[[.a.]]` | `a` | `a` | `a` | `a` | `a]` | *nothing* |
+| `[[.a.]x]` | `a` and `x` | `a` and `x` | `a` and `x` | `a` and `x` | *nothing* | `x` |
+| `[a[.nosuch.]b]` | `a` and `b` | `a` and `b` | *nothing* | `a` | *nothing* | `a` and `b` |
+| `[[.hyphen.]]` | `-` | `-` | *nothing* | *nothing* | `a]`-shaped | *nothing* |
+| `[[=space=]]` | a space | *nothing* | *nothing* | *nothing* | — | *nothing* |
+
+**The first row separates every reading.** Where the element is a member,
+`[[.a.]]` is the one-member set holding `a`. Where there is no construct the
+bracket ends at the element's own `]`, so the same text is the three-member
+set `[`, `.`, `a` with a literal `]` behind it. Where the delimiters are read
+and no body is ever an element the set is **empty**, which matches nothing at
+all — and the second row is what says the delimiters were read rather than the
+bracket having failed, since a member written behind the element still counts.
+
+**A body of more than one character is not an element in the C locale**, and
+what that does to the bracket around it is the same question an unrecognized
+`[:name:]` asks — inert, the scan given up, or the whole bracket emptied. The
+third row is that question, and each column answers it there exactly as it
+answers a class name it has not got.
+
+**One column looks a longer body up as a name.** `[[.hyphen.]]` is `-` in
+bash 5.3 and in bash as `sh`, and in nothing else in the panel. Two things
+about the roster are measured rather than derived, and both matter:
+
+- It is **not the standard's charmap aliases**. Of the 87 names of the
+  portable character set that can be written in a shell word, 86 are taken
+  under both delimiters and `low-line` is refused — that character being
+  reached under `underscore`. `NUL` is the 88th and cannot be asked at all,
+  since no shell word holds the character.
+- It holds **eight names from outside the set** — the control abbreviations
+  `BS`, `HT`, `LF`, `VT`, `FF` and `CR`, and `minus` and `dash` for the
+  hyphen — while refusing `BEL`, `NL`, `SP`, `XON`, `XOFF`, `left-bracket`,
+  `right-bracket`, `underline` and `vertical-bar`. So the abbreviations are a
+  chosen set and not a pattern to extend by guessing, and the lookup is
+  case-sensitive: `HYPHEN` and `Hyphen` are refused where `hyphen` is taken.
+
+**bash 3.2 reads the names for `[.` and not for `[=`**, which is the same
+delimiter split that column already has on an unrecognized body. No preset
+here claims that column.
+
+`Semantics.CollatingElements` carries all four readings as a type of its own.
+It was an `Answer` until the BusyBox column was measured, and that column is
+the shape a boolean could not hold: a shell that reads the delimiters and
+finds an element in no body answers neither "the element is a member" nor
+"there is no construct", so with a boolean it had to be filed as one of them —
+and it had been, as the wrong one (#3378, #3379).
+
+**One neighboring shape is recorded and not implemented.** In the column
+that finds no element, a `-` behind such a sub-expression makes a range whose
+low bound is the `[` that opened it: `[[.a.]-c]` is the run from `[` to `c`
+there and `[[.a.]-_]` is `[ \ ] ^ _`, while `[[.a.]q]` matches no `[` at all,
+so the character is a bound and never a member. Every other column answers the
+same pattern with an empty bracket and this one follows them. The wider
+question — what a range bound that is not an element does anywhere — is
+#3607, and it is already wrong in the other columns for reasons that predate
+this reading.

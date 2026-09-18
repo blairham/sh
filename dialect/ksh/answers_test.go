@@ -162,9 +162,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassEmptiesTheBracket; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}
-	// `[[.a.]]` is the collating element `a`.
-	if got, want := s.CollatingSymbols, interp.Yes; got != want {
-		t.Errorf("CollatingSymbols = %v, want %v", got, want)
+	// `[[.a.]]` is the collating element `a`, and one character is the whole
+	// of an element: `[[.hyphen.]]` matches no `-` here.
+	if got, want := s.CollatingElements, interp.OneCharacterIsACollatingElement; got != want {
+		t.Errorf("CollatingElements = %v, want %v", got, want)
 	}
 	// And the `[:` that nothing closes, which is the axis beside it
 	// rather than a corner of it — see #1431.

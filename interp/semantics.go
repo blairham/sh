@@ -2424,40 +2424,13 @@ type Semantics struct {
 	// The class is properly closed here, which is what makes this a question
 	// of its own rather than part of #1431's unterminated `[:`.
 	UnknownCharacterClass UnknownClassPolicy
-	// CollatingSymbols reads `[.x.]` and `[=x=]` inside a bracket expression
-	// as a collating element and an equivalence class rather than as the
-	// ordinary characters they spell.
+	// CollatingElements is what `[.x.]` and `[=x=]` inside a bracket
+	// expression are: one collating element and one equivalence class, the
+	// ordinary characters they spell, or a sub-expression holding nothing.
 	//
-	// Measured 2026-09-16 under `LC_ALL=C`, `case a in [[.a.]])`:
-	//
-	//	bash 5.3, bash 3.2, bash-as-sh   a collating element
-	//	ksh93u+, dash                    a collating element
-	//	zsh 5.9.2                        no construct: `[`, `.` and `a` are members
-	//
-	// zsh is the column that has neither, and it is visible as a *shape*
-	// rather than only as a missed match: the bracket it reads ends at the
-	// `.]`'s own `]`, so `[[.a.]]` there is the three-member set followed by
-	// a literal `]` and matches `a]`. Every other column matches `a`.
-	//
-	// In the C locale every collating element is one character, so a body of
-	// more than one is not an element. What a shell does with one it cannot
-	// read is [UnknownCharacterClass] — measured rather than assumed to be
-	// the same question, with `[a[.nosuch.]b]`: bash matches a and b and
-	// nothing of the body, dash matches a alone, ksh93 matches neither,
-	// which is each column's own value for that axis. The same three
-	// readings answer a `[.` that nothing closes, `[x[.a]y]`, where the
-	// inert column's answer is the characters standing for themselves.
-	//
-	// bash reads a body of more than one character as a *name* from the
-	// portable character set — `[[.hyphen.]]` is `-` there — which this
-	// shell does not and #3378 holds. Until it does, such a body is a
-	// body it cannot read, which is the reading above.
-	//
-	// BusyBox ash is unmeasured here: no BusyBox was reachable on the
-	// machine this was measured on, so the preset keeps the reading the
-	// shell already had rather than borrowing dash's — #3368 is what
-	// borrowing that column costs.
-	CollatingSymbols Answer
+	// Four readings and the panel has a column for each — see
+	// [CollatingElementPolicy], which carries the measurement.
+	CollatingElements CollatingElementPolicy
 	// UnterminatedCharacterClass is what a bracket does with a `[:` that
 	// nothing closes — `[[:]`, whose four characters hold no class name at
 	// all because the `:]` that would end one never arrives.
@@ -22246,6 +22219,131 @@ func (r *Runner) killListAcceptsName() Answer {
 	return a
 }
 
+// CollatingElementPolicy is what a `[.x.]` or a `[=x=]` inside a bracket
+// expression is — see [Semantics.CollatingElements].
+//
+// A type of its own rather than an [Answer], because the readings below are
+// four and none of them is a variation on the others — the panel holds a
+// column for each. It was an [Answer] until
+// #3379, which is the shape that made two of the four look like one: a shell
+// that reads the delimiters and never finds an element answers neither "the
+// element is a member" nor "there is no construct", and with a boolean it had
+// to be filed as one of them.
+//
+// Measured 2026-09-18 under `LC_ALL=C`, script files under `env -i`, with the
+// bracket written so that each reading is visible as a *shape* rather than
+// only as a missed match:
+//
+//	                          [[.a.]]  [[.a.]x]  [a[.nosuch.]b]
+//	bash 5.3.20, bash-as-sh   a        a and x   a and b
+//	bash 3.2.57               a        a and x   a and b
+//	ksh93u+ 2012-08-01        a        a and x   nothing
+//	dash 0.5.12               a        a and x   a
+//	zsh 5.9.2                 a]       nothing   nothing
+//	BusyBox ash 1.37.0        nothing  x         a and b
+//
+// The first column separates all three of the readings below. Where the
+// element is a member `[[.a.]]` is the one-member set holding `a`. Where
+// there is no construct the bracket ends at the element's own `]`, so the
+// same text is the three-member set `[`, `.`, `a` with a literal `]` behind
+// it and matches `a]`. Where the delimiters are read and nothing is ever an
+// element the set is **empty**, which matches nothing at all — and the second
+// column is what says the delimiters were read rather than the bracket simply
+// having failed: a member written behind the element still counts.
+//
+// The third column is the control that keeps the third reading apart from the
+// unknown-body question: a body that is not an element is
+// [Semantics.UnknownCharacterClass] in every column that has the construct,
+// and BusyBox ash answers it inert there exactly as it answers an unknown
+// `[:name:]`. So its own value below is about *every* body and not about the
+// ones nobody can read.
+type CollatingElementPolicy int
+
+const (
+	// CollatingElementsUnspecified is no answer, and is refused like any
+	// other — but only where a pattern really opens one, which is what keeps
+	// an ordinary `[abc]` off the question.
+	CollatingElementsUnspecified CollatingElementPolicy = iota
+
+	// NoCollatingElements reads neither construct: `[`, `.` and the body are
+	// ordinary members and the bracket ends at the first `]`. zsh 5.9.2.
+	NoCollatingElements
+
+	// CollatingElementsHoldNothing reads the delimiters as a sub-expression
+	// — so the `]` inside one does not end the bracket — and finds an
+	// element in no body at all. Every body is then the unknown-body case
+	// and [Semantics.UnknownCharacterClass] says what that does to the
+	// bracket around it. BusyBox ash 1.37.0.
+	//
+	// One further thing that column does is measured and **not** modeled: a
+	// `-` behind such a sub-expression makes a range whose low bound is the
+	// `[` that opened it, so `[[.a.]-c]` is the run from `[` to `c` there
+	// and `[[.a.]-_]` is `[ \ ] ^ _`. The same shell matches no `[` for
+	// `[[.a.]q]`, so the character is a bound and never a member, which is
+	// what makes it a property of that scanner rather than a rule. Every
+	// other column with the construct answers the same pattern with an empty
+	// bracket, and this one follows them. What a range bound that is not an
+	// element does anywhere is #3607, which is wrong in three columns for
+	// reasons older than this reading.
+	CollatingElementsHoldNothing
+
+	// OneCharacterIsACollatingElement reads a body of exactly one character
+	// as the element it spells, which in the C locale is every element there
+	// is. A longer body is not an element, and what that does to the bracket
+	// is [Semantics.UnknownCharacterClass]. ksh93u+ and dash 0.5.12.
+	OneCharacterIsACollatingElement
+
+	// ACollatingElementMayBeNamed reads a longer body as a **name** from the
+	// portable character set as well, so `[[.hyphen.]]` is `-` and
+	// `[[=space=]]` is a space. bash 5.3.20 and bash as `sh`.
+	//
+	// The names are this shell's own table and not the charmap's aliases,
+	// which is measured: 86 of the 87 names of the portable character set
+	// are taken under both delimiters and `low-line` is not, that character
+	// being reached as `underscore`; four names outside the set are taken
+	// (`BS`, `HT`, `LF`, `VT`, `FF`, `CR`, `minus` and `dash`) while `BEL`,
+	// `NL`, `SP`, `XON`, `XOFF`, `left-bracket`, `right-bracket`,
+	// `underline` and `vertical-bar` are not. The roster is in
+	// interp/collatingname.go with the sweep that produced it, and a name
+	// outside it is a body that is not an element like any other.
+	//
+	// bash 3.2.57 is the column that reads the names for `[.` and not for
+	// `[=` — the same delimiter split that column already has on an
+	// unrecognized body — and no preset here claims it.
+	ACollatingElementMayBeNamed
+)
+
+func (c CollatingElementPolicy) String() string {
+	switch c {
+	case NoCollatingElements:
+		return "no construct"
+	case CollatingElementsHoldNothing:
+		return "read and never an element"
+	case OneCharacterIsACollatingElement:
+		return "one character"
+	case ACollatingElementMayBeNamed:
+		return "one character or a name"
+	}
+	return "unspecified"
+}
+
+// collatingElements resolves the axis, and only for a pattern that really
+// opens a `[.` or a `[=` inside a bracket expression — so a shell with no
+// answer is not asked a question the pattern never poses.
+func (r *Runner) collatingElements(pattern string) CollatingElementPolicy {
+	if !hasCollatingDelimiter(pattern) {
+		return NoCollatingElements
+	}
+	p := r.sem().CollatingElements
+	if p == CollatingElementsUnspecified {
+		r.diagf("%s\n", r.unanswered("`[.x.]` and `[=x=]` inside a bracket expression"))
+		r.status = 2
+		r.unspecified = true
+		return NoCollatingElements
+	}
+	return p
+}
+
 // UnknownClassPolicy is what a bracket does with a character class whose name
 // the shell does not know — `[[:nope:]]`, and the empty `[[::]]` with it.
 //
@@ -23826,7 +23924,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		escapes:           r.sem().PatternEscapeReaches,
 		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),
-		collating:         r.readsCollatingSymbols(pattern),
+		collating:         r.collatingElements(pattern),
 		unknownClass:      r.unknownClassPolicy(pattern),
 		unterminatedClass: r.unterminatedClassPolicy(pattern),
 		// Handed as a question rather than an answer: a bracket a

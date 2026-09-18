@@ -143,10 +143,12 @@ func TestTheAnswersThatSideWithBashRatherThanDash(t *testing.T) {
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}
-	// Unmeasured: no BusyBox was reachable when the axis was taken, so this
-	// keeps the reading the shell already had rather than borrowing dash's.
-	if got, want := s.CollatingSymbols, interp.No; got != want {
-		t.Errorf("CollatingSymbols = %v, want %v", got, want)
+	// The delimiters are read and no body is ever an element, which is this
+	// column alone: measured 2026-09-18 in BusyBox v1.37.0 in the pinned
+	// image, `[[.a.]]` matches nothing at all while `[[.a.]x]` matches `x`
+	// (#3379).
+	if got, want := s.CollatingElements, interp.CollatingElementsHoldNothing; got != want {
+		t.Errorf("CollatingElements = %v, want %v", got, want)
 	}
 	// Unmeasured for the same reason, and the same treatment: the answer the
 	// shell already gave, which is dash's (#3379).

@@ -2134,6 +2134,10 @@ func Semantics() interp.Semantics {
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// The same two digits bash reads, and an empty digit run is a zero
 	// rather than an escape left standing: `printf 'a\xZ'` is a NUL here.
+	// unanswered PrintfReportsAMissingHexDigit: an empty digit run is a zero
+	// here too, by the reading beside this line, so the complaint's site is
+	// unreachable. The two columns that do reach it split, and
+	// TestPrintfMissingHexDigit pins the pair (#3239).
 	s.PrintfHexEscape = interp.PrintfHexEscapeByteOrNul
 	// A `%b` argument reads the same escape the same way, NUL and all.
 	s.PrintfBHexEscape = interp.PrintfHexEscapeByteOrNul

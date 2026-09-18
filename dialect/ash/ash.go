@@ -717,6 +717,14 @@ func Semantics() interp.Semantics {
 	// the text as written. The digit rule is the same at both sites and the
 	// same as `echo -e`'s: two digits at most, so `printf 'a\x4142b'` is
 	// `aA42b`.
+	// And it says nothing when the digit run is empty, where bash — the only
+	// other column that reaches the question — writes a complaint. Measured
+	// 2026-09-17 in the pinned image, BusyBox v1.37.0: `printf 'a\xZb'`
+	// writes `a\xZb` at 0 with an empty standard error, and `printf '%b'
+	// 'a\xZb'` is the same. The escape standing and the status were already
+	// right; the extra sentence was bash's, inherited because an empty
+	// wording means the substrate's own rather than silence (#3239).
+	s.PrintfReportsAMissingHexDigit = interp.No
 	s.PrintfHexEscape = interp.PrintfHexEscapeByte
 	s.PrintfBHexEscape = interp.PrintfHexEscapeByte
 	s.PrintfUnicodeEscape = interp.PrintfUnicodeEscapeAbsent
@@ -756,7 +764,13 @@ func Semantics() interp.Semantics {
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	// `printf '%ld\n' 5` is 5, so the length modifiers are read rather than
 	// refused as conversions.
-	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
+	// A run of `h`, `l`, `z` and `L`, which is neither of the two answers the
+	// other columns hold. Measured 2026-09-17 in the pinned image: `%zd`,
+	// `%zs`, `%zc`, `%ld`, `%hd`, `%Ld`, `%hhd` and `%lld` each write their
+	// operand, while `%jd` and `%td` are `%jd: invalid format` — so the run
+	// is C99's minus the two letters naming an integer type rather than a
+	// width, and it is a run rather than one letter (#3141).
+	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99ExceptJAndT
 	// Bytes, with or without an `l`, under `LC_ALL=C.UTF-8` as under C:
 	// `printf '[%.2s|%.2ls|%lc]' αβγ αβγ αβγ` is `[α|α|` and the byte 0xce,
 	// BusyBox ash 1.37.0 in the pinned Alpine image, 2026-09-16.
@@ -1841,7 +1855,17 @@ func Diagnostics() interp.Diagnostics {
 		SetInvalidOptionLetterStatus: 2,
 		BuiltinBadOption:             "illegal option %[2]s",
 		OptionNeedsArgument:          "%[1]s: No arg for -%[2]s option",
-		UlimitBadOption:              "unrecognized option: %[1]s",
+		UlimitBadOption:              "ulimit: unrecognized option: %[1]s",
+		// Written bare — no script, no line — and reported 1,
+		// where `unset -Z`, `read -Z` and `trap -Z` in this same shell each
+		// carry the script and the line and report 2. So it is this
+		// builtin's exception rather than a house style of ours. The
+		// wording carries the builtin's name for the reason every
+		// unprefixed wording in the panel does: NamesBuiltinInLocation takes
+		// it back out of the located form, and nothing takes it out of this
+		// one (#3141).
+		UlimitBadOptionUnprefixed: true,
+		UlimitBadOptionStatus:     1,
 		// `ulimit -a`, row for row as the engine writes it — the label in a
 		// fixed 32-column field, the letter in its own parenthesis at the
 		// end, `(kb)` where bash writes `(kbytes, -d)`, and the units spelled
@@ -2115,6 +2139,13 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinNamesTheShellAlone: map[string]bool{"printf": true, "kill": true},
 		PrintfBadVerb:             "%[2]s: invalid format",
 		PrintfMissingVerb:         "%[1]s: invalid format",
+		// And the directive it names is written without the length
+		// modifiers it just read past: `printf '%z' x` is
+		// `ash: %: invalid format` where every other column names what was
+		// written. `%5.2lz` is `%5.2` and `%+ #0z` is `%+ #0`, so the flags,
+		// the width and the precision all survive; `%zq` is `%q`, so a
+		// conversion character survives too (#3141).
+		PrintfDirectiveDropsLengthModifiers: true,
 	}
 }
 

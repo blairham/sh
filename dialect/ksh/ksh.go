@@ -1767,6 +1767,10 @@ func Semantics() interp.Semantics {
 	// Every digit that follows, and more than two of them make the value a
 	// code point rather than a byte: `\xff` is one byte and `\x0ff` is
 	// U+00FF in UTF-8. An empty digit run is a zero.
+	// unanswered PrintfReportsAMissingHexDigit: an empty digit run is a zero
+	// here and the escape never stands, so there is nothing for the complaint
+	// to be about. The two columns that do reach it split, and
+	// TestPrintfMissingHexDigit pins the pair (#3239).
 	s.PrintfHexEscape = interp.PrintfHexEscapeCodePoint
 	// And no `\x` at all in a `%b` argument, which is this shell alone and
 	// the reason the two sites are two axes: `printf '%b' 'a\x41Z'` is the

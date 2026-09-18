@@ -713,6 +713,10 @@ func Semantics() interp.Semantics {
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// No `\x` in a format at all: `printf 'a\x41Z'` is the six characters
 	// as written, which is the whole panel's one holdout.
+	// unanswered PrintfReportsAMissingHexDigit: there is no `\x` escape here
+	// for a digit run to be empty after, so the complaint's site is out of
+	// reach. The two columns that do reach it split, and
+	// TestPrintfMissingHexDigit pins the pair (#3239).
 	s.PrintfHexEscape = interp.PrintfHexEscapeAbsent
 	// Nor in a `%b` argument, and neither spelling of the escape character.
 	s.PrintfBHexEscape = interp.PrintfHexEscapeAbsent

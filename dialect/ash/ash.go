@@ -779,6 +779,8 @@ func Semantics() interp.Semantics {
 	// None of C99's three: `printf '%F' 1.5` is `%F]: invalid format` at 1
 	// in BusyBox ash 1.37.
 	s.PrintfC99FloatConversions = interp.No
+	// unanswered PrintfHexFloatZeroFillPrecedesThePrefix: and so no fill to
+	// place in it either.
 	// unanswered PrintfHexFloatDefaultIsTwelveDigits: there is no `%a` here
 	// to have a default precision.
 	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: this shell keeps

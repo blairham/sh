@@ -152,6 +152,7 @@ ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
 ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfHexFloatDefaultIsTwelveDigits
+ash   PrintfHexFloatZeroFillPrecedesThePrefix
 ash   PrintfOutputPrecedesComplaint
 ash   PrintfRefusedOperandKeepsItsLeadingNumber
 ash   PrintfTimeOperandIsADateString
@@ -502,6 +503,7 @@ zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   OperatorAfterTheSubscriptListingIsBad
 zsh   PrefixListingNamesADeclaredOnlyCompound
 zsh   PrintfHexFloatDefaultIsTwelveDigits
+zsh   PrintfHexFloatZeroFillPrecedesThePrefix
 zsh   PrintfOutputPrecedesComplaint
 zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial

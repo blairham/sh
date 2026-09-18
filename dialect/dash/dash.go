@@ -689,6 +689,8 @@ func Semantics() interp.Semantics {
 	// `0x1.999999999999ap-4`, the shortest run that names the value.
 	s.PrintfC99FloatConversions = interp.Yes
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.No
+	// And a `%a`'s zero fill goes between the `0x` and the digits.
+	s.PrintfHexFloatZeroFillPrecedesThePrefix = interp.No
 	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: as in bash — the
 	// reading above never evaluates an operand, so no arithmetic failure ever
 	// reaches this question, and none reaches

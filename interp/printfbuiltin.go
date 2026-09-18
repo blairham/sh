@@ -1320,10 +1320,36 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 	// A width past what `fmt` renders is laid out here instead. Done before
 	// the argument is taken so the conversion below sees exactly the spec it
 	// would have, minus a width it could not have honored.
-	if narrow, flags, width, wide := printfWideField(spec); wide {
+	// One conversion lays out its own width however wide it is, so the
+	// ceiling below does not apply to it: `%a` builds its field by hand
+	// down to the fill, and taking the width away from it put the fill
+	// outside the `0x` on one side of the ceiling and inside it on the
+	// other. The two sides have to agree — that is what a ceiling is —
+	// which is what #3089 was.
+	if verb != 'a' && verb != 'A' {
+		if narrow, flags, width, wide := printfWideField(spec); wide {
+			_, _, prec := printfSpecParts(spec)
+			zero := strings.Contains(flags, "0") &&
+				!r.printfZeroFlagIsIgnored(flags, prec, verb)
+			field, code, stop := r.printfConvert(narrow, verb, timeFmt, next)
+			return r.printfPadWideField(field, verb, width,
+				strings.Contains(flags, "-"), zero), code, stop
+		}
+	}
+	// And the column that keeps the `0` flag against a precision lays the
+	// field out here for the same reason `fmt` cannot: the flag it would
+	// need is one `fmt` obeys C about. See
+	// Semantics.PrintfZeroFlagSurvivesAPrecision.
+	if narrow, width, ok := printfZeroFillShape(spec, verb); ok {
 		field, code, stop := r.printfConvert(narrow, verb, timeFmt, next)
-		return printfPadToWidth(field, width,
-			strings.Contains(flags, "-"), strings.Contains(flags, "0")), code, stop
+		if stop || len(field) >= width {
+			// A field the value already fills has no fill to place, and the
+			// two readings coincide there — so nothing is asked, the way
+			// printfAlternatePrefixField asks nothing of `%#3x`.
+			return field, code, stop
+		}
+		return printfPadToWidth(field, width, false,
+			r.printfZeroFlagSurvivesAPrecision()), code, stop
 	}
 	arg, present := next()
 	// The conversion character, for the one column that names it in a
@@ -1569,9 +1595,15 @@ func (r *Runner) printfHexFloat(spec string, verb byte, f float64) (string, bool
 	case !strings.ContainsRune(flags, '0'):
 		return fill + field, false
 	}
+	zeros := strings.Repeat("0", width-len(field))
+	if r.ask(r.sem().PrintfHexFloatZeroFillPrecedesThePrefix,
+		"`printf '%a'` putting its zero fill in front of the `0x` rather than inside it") {
+		// One column's placement, at the same total width — see the axis.
+		return sign + zeros + body, false
+	}
 	// The zero flag pads between the `0x` and the digits, which is where C
 	// puts it and is the one place Go's own `%x` gets the position wrong.
-	return sign + body[:2] + strings.Repeat("0", width-len(field)) + body[2:], false
+	return sign + body[:2] + zeros + body[2:], false
 }
 
 // printfHexFloatDigits is the unsigned significand and exponent of a `%a`,

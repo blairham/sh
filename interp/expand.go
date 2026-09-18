@@ -1011,7 +1011,21 @@ func (r *Runner) yieldsTheArray(e *syntax.ParamExpr) bool {
 	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError:
 		return !r.testFires(e)
 	case syntax.ParamAlternate:
-		return r.testFires(e)
+		if !r.testFires(e) {
+			return false
+		}
+		// A fired `+` yields **nothing**, and the list path answers that
+		// with no fields at all — which is right exactly when the list has
+		// none. One reading of the colon test fires on a list that still
+		// has elements (Semantics.WholeArrayColonTest, the first-element
+		// one), and there the shell answers with the scalar path's one
+		// empty field rather than with the elements: measured 2026-09-18,
+		// `a=("" c); n "${a[@]:+y}"` is `1:<>` in ksh93u+ where this
+		// returned the two elements. Sending it down the array path was
+		// safe only while a fired `+` implied an empty list, which was the
+		// assumption before that axis existed.
+		elems, _, ok := r.wholeListElements(e)
+		return !ok || len(elems) == 0
 	}
 	return false
 }
@@ -1032,6 +1046,12 @@ func (r *Runner) testFires(e *syntax.ParamExpr) bool {
 // not — see listOfNoPositionalsIsSet.
 func (r *Runner) conditionalFires(e *syntax.ParamExpr, value string, set bool) bool {
 	if e.Colon {
+		if fires, answered := r.wholeListColonFires(e, value, set); answered {
+			// A whole list is not one value, and what the colon reads of it
+			// splits the panel three ways. See wholeListColonFires, which is
+			// asked only where the three readings differ (#3425).
+			return fires
+		}
 		return !set || value == ""
 	}
 	if !r.errorOperatorSeesTheElement(e) {
@@ -3485,23 +3505,75 @@ const listBoundary = "\x00"
 //
 // Asked only where the two readings differ, which is the rule the `[*]` axis
 // beside it follows: `set -- aa ab; "${@%b}"` is `aa a` either way and needs
-// no answer. An empty list is not asked at all, because joining nothing and
-// splitting it back would turn no fields into one empty one.
+// no answer.
+//
+// **An empty list is asked too**, and that is a correction. This used to skip
+// one on the reasoning that joining nothing and splitting it back would turn
+// no fields into one empty field — which is exactly what the two shells that
+// join do. Measured 2026-09-18, `set --; n "${@#o}"` is `1:<>` in dash 0.5.12
+// and in BusyBox ash 1.37.0 and `0:<>` in bash 5.3.20, zsh 5.9.2 and ksh93u+,
+// with the replacement and the global replacement answering the same way and
+// `n "$@"` with no operator answering `0:<>` everywhere. So the field the join
+// makes is the measurement rather than an artifact of it, and the control one
+// row down is what says the operator is what produces it (#3413).
 func (r *Runner) joinsTheListBeforeAnOperator(e *syntax.ParamExpr, elems, mapped []string,
 	apply func(string) string,
 ) ([]string, bool) {
-	if len(elems) == 0 || !r.keepsFieldsUnderAnOperator(e) {
+	if !r.keepsFieldsUnderAnOperator(e) {
 		return nil, false
 	}
 	joined := strings.Split(apply(strings.Join(elems, listBoundary)), listBoundary)
-	if slices.Equal(joined, mapped) {
+	cut := replacementCut(e, elems, joined)
+	if slices.Equal(joined, mapped) && cut < 0 {
 		return nil, false
 	}
 	if r.ask(r.sem().OperatorDistributesOverTheFieldList,
 		"an operator on `$@` applying to each field") {
 		return nil, false
 	}
+	if cut >= 0 && r.ask(r.sem().ReplacementEndsTheJoinedFieldList,
+		"a replacement ending `$@` at the field it replaced in") {
+		return joined[:cut], true
+	}
 	return joined, true
+}
+
+// replacementCut is where a joined field list ends when a **non-global**
+// replacement is what the dialect cuts it at, or -1 when there is nothing to
+// cut: the length the list keeps, counting the field the replacement landed
+// in.
+//
+// One shell in the panel cuts, and it is the shape a script cannot see coming:
+// measured 2026-09-18 in the digest-pinned Alpine image with `cmd/ash`
+// cross-compiled into the same container, `set -- xb alpha beta; n "${@/a/-}"`
+// is `2:<xb><-lpha>` in BusyBox ash 1.37.0 — the parameters before the match
+// are kept, the one holding it is replaced, and every parameter after it is
+// gone — against `3:<xb><-lpha><beta>` from the join reading alone and
+// `3:<xb><-lpha><bet->` from bash 5.3.20, zsh 5.9.2 and ksh93u+, which replace
+// in every parameter. See Semantics.ReplacementEndsTheJoinedFieldList, where
+// the three controls are.
+//
+// Computed without asking anything, because it is also what tells the caller
+// the two *distribute* readings differ in outcome: they can produce the same
+// fields — `set -- 'p q' r; "${@/q/-}"` is `p -` and `r` either way — and
+// still part over how many of those fields survive.
+//
+// -1 where no field but the last changed, so a replacement in the final
+// parameter and a pattern that matched nothing never reach an axis.
+func replacementCut(e *syntax.ParamExpr, elems, joined []string) int {
+	if e.Op != syntax.ParamReplace || e.All {
+		return -1
+	}
+	for i := range joined {
+		if i < len(elems) && joined[i] == elems[i] {
+			continue
+		}
+		if i+1 >= len(joined) {
+			return -1
+		}
+		return i + 1
+	}
+	return -1
 }
 
 // keepsFieldsUnderAnOperator is the shape the axis above is about: the one

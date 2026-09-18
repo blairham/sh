@@ -1769,6 +1769,55 @@ yes, zsh no; unanswered in the core).
 `${#a[@]}` is untouched by all of this: it is the count, and the length
 question is answered before any operator runs.
 
+### An operator on an **empty** `$@`
+
+The join reading turns no fields into one empty field, which is a
+measurement rather than an artifact of it. Measured 2026-09-18, with
+`n() { printf '%s:' "$#"; printf '<%s>' "$@"; printf '\n'; }`:
+
+| probe, with `set --` | dash 0.5.12 | BusyBox ash 1.37.0 | bash 5.3.20 / zsh 5.9.2 / ksh93u+ |
+| --- | --- | --- | --- |
+| `n "${@#o}"` | `1:<>` | `1:<>` | `0:<>` |
+| `n "${@/o/-}"` | *no such operator* | `1:<>` | `0:<>` |
+| `n "${@//o/-}"` | *no such operator* | `1:<>` | `0:<>` |
+| `n "$@"` | `0:<>` | `0:<>` | `0:<>` |
+
+The last row is the control and it is unanimous: with no operator on it, an
+empty `"$@"` is no field anywhere, so the field the first three rows make is
+the **operator's**. `OperatorDistributesOverTheFieldList` is what decides it
+— joining nothing and splitting it back is one field — and the empty list
+used to be skipped on the reasoning that it could not be (#3413).
+
+### A **non-global** replacement over the joined list
+
+One column cuts the list short at the parameter the replacement landed in.
+Measured 2026-09-18 in the digest-pinned Alpine image, `cmd/ash`
+cross-compiled into the same container so both halves come from one kernel:
+
+| probe | BusyBox ash 1.37.0 | bash 5.3.20 |
+| --- | --- | --- |
+| `set -- xb alpha beta; n "${@/a/-}"` | `2:<xb><-lpha>` | `3:<xb><-lpha><bet->` |
+| `set -- ab ab ab; n "${@/a/-}"` | `1:<-b>` | `3:<-b><-b><-b>` |
+| `set -- ab ab ab; n "${@/b}"` | `1:<a>` | `3:<a><a><a>` |
+| `set -- 'p q' r; n "${@/q/-}"` | `1:<p ->` | `2:<p -><r>` |
+| `set -- xb alpha beta; n "${@/zz/-}"` | `3:<xb><alpha><beta>` | the same |
+| `set -- ab ab ab; n "${@//b/-}"` | `3:<a-><a-><a->` | the same |
+| `set -- 'p q' r; n ${@/q/-}` | `2:<p><->` | `3:<p><-><r>` |
+
+The parameters before the match are kept, the one holding it is replaced, and
+every parameter after it is gone. Three controls: a pattern matching nothing
+keeps every parameter, so the cut follows the *replacement*; the global `//`
+cuts nothing, so it is the first-match form; and the **unquoted** spelling
+(last row) is cut identically, so it is not the quoted list that is short.
+#3413 reported that last row as three fields and read the cut as a property
+of the quoting; re-measuring it is what says otherwise.
+
+Semantics axis: `ReplacementEndsTheJoinedFieldList` (BusyBox ash yes, every
+other column no). It is only reachable where the list is joined at all —
+dash, the other column that joins, has no `${x/pat/rep}` and answers `Bad
+substitution` — so for every other dialect the answer follows by
+construction.
+
 ## The `@` transformation family
 
 `${x@Q}` transforms the value rather than testing or editing it. The

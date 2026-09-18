@@ -1419,6 +1419,15 @@ func Semantics() interp.Semantics {
 	// script file with each row in a subshell (#2980).
 	s.LengthOfAMissingElementIsRefused = interp.Yes
 	s.UnsetNameWithAWholeArraySubscriptIsRefused = interp.Yes
+	// And the colon form of the same operator counts the elements under
+	// `[@]` rather than reading the join, so a one-element array holding the
+	// empty string is a **value**: `f=(""); "${f[@]:-x}"` is `[]` and
+	// `"${f[@]:+y}"` is `[y]`, where bash 5.3.20 answers `[x]` and `[]`.
+	// `"${f[*]:-x}"` is `[x]` in both columns, which is what keeps the two
+	// spellings apart here and is why this is not simply the element count.
+	// Measured 2026-09-18 on zsh 5.9.2 under `env -i HOME=…
+	// PATH=/usr/bin:/bin LC_ALL=C`, from a script file (#3425).
+	s.WholeArrayColonTest = interp.WholeArrayColonTestCountsTheElementsUnderAt
 	// And an attribute added to a name that already holds a value re-reads
 	// it at once, as ksh93 does: `FOO=bar; typeset -i FOO` stores 0 and
 	// `d=MiXeD; typeset -u d` stores MIXED. A separate question from the

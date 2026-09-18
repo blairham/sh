@@ -18006,6 +18006,77 @@ this **moves** the question rather than deleting that guard: the element
 check still never fires for `[@]`, and this one never fires for anything
 else.
 
+**`WholeArrayColonTest`** — bash the join · dash n/a · ksh93 the first element · zsh the element count under `[@]`
+
+What the **colon** of `${a[@]:-word}` and `${a[@]:+word}` tests when the
+parameter is a whole list rather than one value. `EmptyArrayIsSet` above is
+the colon-*less* half of the same operator, and the columns split
+differently on the two.
+
+Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from a
+script file, each cell `printf "[%s]" …; echo`:
+
+| probe | ksh93u+ | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `a=("" c); "${a[@]:-x}"` | `[x]` | `[][c]` | `[][c]` |
+| `a=("" c); "${a[*]:-x}"` | `[x]` | `[ c]` | `[ c]` |
+| `a=("" c); "${a[@]:+y}"` | `[]` | `[y]` | `[y]` |
+| `b=(c ""); "${b[@]:-x}"` | `[c][]` | `[c][]` | `[c][]` |
+| `e=("" ""); "${e[@]:-x}"` | `[x]` | `[][]` | `[][]` |
+| `f=(""); "${f[@]:-x}"` | `[x]` | `[x]` | `[]` |
+| `f=(""); "${f[@]:+y}"` | `[]` | `[]` | `[y]` |
+| `f=(""); "${f[*]:-x}"` | `[x]` | `[x]` | `[x]` |
+| `v=("" ""); "${v[*]:-x}"` | `[x]` | `[ ]` | `[ ]` |
+| `h=(a b); "${h[@]:-x}"` | `[a][b]` | `[a][b]` | `[a][b]` |
+
+dash 0.5.12 and BusyBox ash 1.37.0 have no arrays and refuse the line.
+
+Three readings, and no two agree on every row. **bash reads the join**, for
+`[@]` and `[*]` alike and exactly as it does for a scalar — `f=("")` joins to
+nothing and is null, `v=("" "")` joins to a separator and is not. **ksh93
+reads the first element**, for both spellings and however many non-empty
+elements follow it; row four is its control, since the same two elements the
+other way round are not null anywhere. **zsh counts the elements under
+`[@]`** and reads the join under `[*]`; rows six to eight are what that needs.
+
+Row ten is the control the axis rests on: a list of ordinary values is never
+null anywhere, under either spelling.
+
+**The positional list is the same question**, and it is the commoner source
+by a long way: `set -- "" c; "${@:-x}"` is `[x]` in ksh93u+ and two fields in
+bash 5.3.20, zsh 5.9.2 and dash 0.5.12, and `set -- ""; "${@:-x}"` is `[]` in
+zsh 5.9.2 alone. So the axis is asked of `$@` and `$*` as well as of a
+whole-array subscript.
+
+**Asked only where the readings differ**, which they do only for a list
+holding an empty element. Every other list — ordinary values, or none at all
+— is answered the same way by all three, so a `"${@:-default}"` in an
+ordinary script never reaches the axis.
+
+A **fired `+`** on a list that still has elements is one empty field rather
+than the elements: `a=("" c); n "${a[@]:+y}"` is `1:<>` in ksh93u+. Sending
+it down the array path was safe only while a fired `+` implied an empty list,
+which was the assumption before this axis existed.
+
+One row is measured and not matched: `e=(); n "${e[@]:+y}"` is `1:<>` in zsh
+5.9.2 and `0:<>` in bash 5.3.20 and here. That is the empty-array question
+`UnsetNameAtIsOneEmptyField` and `EmptyArrayIsSet` sit on, unchanged by this
+axis in either direction.
+
+**`${!v}` with a list target carries its operator with it.** An operator
+written around an indirection acts on what the target came to, so a target
+naming `@` or `a[@]` maps the operator over the elements. Measured
+2026-09-18 on bash 5.3.20 with `set -- p q r`, `a=(A B C)`, `at='@'` and
+`ea='a[@]'`, counting fields: `${!ea#A}` is `3:<><B><C>`, `${!ea@Q}` is
+`3:<'A'><'B'><'C'>`, `${!at#p}` is `3:<><q><r>`, `${!ea,,}` is `3:<a><b><c>`
+and `${!ea-D}` is the three elements. Every one was **one joined field** here,
+so a trim came off the front of a join instead of off each element (#3243).
+
+The **slice** needs no axis of its own: once the node is the target,
+`${!at:1}` *is* `${@:1}` and `SubstringOfPositionalsSlicesTheList` already
+decides it. bash 3.2.57 takes a substring of the join for all of these and is
+recorded rather than modeled, as that column is throughout.
+
 
 ### arithmetic
 

@@ -3103,6 +3103,40 @@ type Semantics struct {
 	// one empty one.
 	OperatorDistributesOverTheFieldList Answer
 
+	// ReplacementEndsTheJoinedFieldList cuts `"${@/pat/rep}"` short at the
+	// parameter the **non-global** replacement replaced in: the parameters
+	// before it are kept, the one holding the match is replaced, and every
+	// parameter after it is gone.
+	//
+	// Only reachable in a dialect that joins the field list before an
+	// operator — OperatorDistributesOverTheFieldList above — since a shell
+	// that runs the operator per field has no list to cut. Measured
+	// 2026-09-18 in the digest-pinned Alpine image, `cmd/ash` cross-compiled
+	// into the same container so both halves come from one kernel, with
+	// `n() { printf '%s:' "$#"; printf '<%s>' "$@"; printf '\n'; }`:
+	//
+	//	                                   BusyBox ash 1.37.0   bash 5.3.20
+	//	set -- xb alpha beta; n "${@/a/-}"   2:<xb><-lpha>       3:<xb><-lpha><bet->
+	//	set -- ab ab ab; n "${@/a/-}"        1:<-b>              3:<-b><-b><-b>
+	//	set -- ab ab ab; n "${@/b}"          1:<a>               3:<a><a><a>
+	//	set -- 'p q' r; n "${@/q/-}"         1:<p ->             2:<p -><r>
+	//	set -- xb alpha beta; n "${@/zz/-}"  3:<xb><alpha><beta> the same
+	//	set -- ab ab ab; n "${@//b/-}"       3:<a-><a-><a->      the same
+	//	set -- 'p q' r; n ${@/q/-}           2:<p><->            3:<p><-><r>
+	//
+	// dash 0.5.12 has no `${x/pat/rep}` at all and answers `Bad
+	// substitution`, so the shell beside it in the join column cannot be
+	// asked this. zsh 5.9.2 and ksh93u+ replace per parameter like bash.
+	//
+	// Three controls, and each rules out a wider reading. A pattern matching
+	// nothing keeps every parameter, so the cut follows the *replacement*.
+	// The global `//` cuts nothing, so it is the first-match form and not
+	// replacement in general. And the **unquoted** spelling is cut
+	// identically — the last row — so it is not the quoted list that is
+	// short: #3413 reported that row as three fields and read the cut as a
+	// property of the quoting, and re-measuring it is what says otherwise.
+	ReplacementEndsTheJoinedFieldList Answer
+
 	// GetoptsCountsTheWordAtItsFirstLetter moves OPTIND past a clustered
 	// word as soon as its *first* letter has been read, keeping the place
 	// inside the word somewhere a script cannot see.
@@ -15000,6 +15034,53 @@ type Semantics struct {
 	// between them and existence is not about the join.
 	UnsetNameWithAWholeArraySubscriptIsRefused Answer
 
+	// WholeArrayColonTest is what the **colon** of `${a[@]:-word}` and
+	// `${a[@]:+word}` tests when the subscript names the whole array. The
+	// colon-less form is EmptyArrayIsSet's; this is the other half of the
+	// same operator and the columns split on it differently.
+	//
+	// Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from
+	// a script file, each cell `printf "[%s]" …; echo`:
+	//
+	//	                       ksh93u+   bash 5.3.20   zsh 5.9.2
+	//	a=("" c); "${a[@]:-x}"   [x]       [][c]         [][c]
+	//	a=("" c); "${a[*]:-x}"   [x]       [ c]          [ c]
+	//	a=("" c); "${a[@]:+y}"   []        [y]           [y]
+	//	b=(c ""); "${b[@]:-x}"   [c][]     [c][]         [c][]
+	//	e=("" ""); "${e[@]:-x}"  [x]       [][]          [][]
+	//	f=(""); "${f[@]:-x}"     [x]       [x]           []
+	//	f=(""); "${f[@]:+y}"     []        []            [y]
+	//	f=(""); "${f[*]:-x}"     [x]       [x]           [x]
+	//	v=("" ""); "${v[*]:-x}"  [x]       [ ]           [ ]
+	//	h=(a b); "${h[@]:-x}"    [a][b]    [a][b]        [a][b]
+	//
+	// dash 0.5.12 and BusyBox ash 1.37.0 have no arrays and refuse the line.
+	//
+	// Three readings, and no two of them are the same on every row:
+	//
+	//   - **bash reads the join**, exactly as it does for a scalar, for both
+	//     spellings. `f=("")` joins to nothing and is null; `v=("" "")` joins
+	//     to a separator and is not. Rows six and nine are that pair.
+	//   - **ksh93 reads the first element**, for both spellings, however many
+	//     non-empty elements follow it. Row one is where that is visible and
+	//     row four is its control — the same two elements the other way round
+	//     are not null anywhere.
+	//   - **zsh counts the elements under `[@]`** and reads the join under
+	//     `[*]`. Rows six to eight are the three that need: a one-element
+	//     array holding the empty string is a value for `[@]` and null for
+	//     `[*]` in that column alone.
+	//
+	// Row ten is the control the whole axis rests on: an array of ordinary
+	// values is never null, in any column and under either spelling.
+	//
+	// The ksh93 range `${a[0..1]:-x}` goes through the same path, so the
+	// first-element reading reaches it too (#3408, #3425).
+	//
+	// ksh93's `a=()` is a compound variable rather than an empty array — the
+	// confound UnsetNameAtIsOneEmptyField records — so the empty-array rows
+	// are not measurable in that column and are not part of this.
+	WholeArrayColonTest WholeArrayColonTestPolicy
+
 	// SubstringNegativeLengthIsEmpty answers `${x:1:-2}` with nothing at
 	// all: ksh93 alone. bash 5.3 — under either name — zsh and BusyBox ash
 	// count the negative length from the end, so `x=abcdef` gives `bcd`.
@@ -18971,7 +19052,12 @@ func PosixSemantics() Semantics {
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
 		// over the whole list once and say so themselves.
 		OperatorDistributesOverTheFieldList: Yes,
-		SignalHandlerSeesEarlierStatus:      No,
+		// And a replacement on `$@` leaves the parameters after the one it
+		// replaced in standing. Only reachable in a dialect that joins the
+		// list first, so this is the answer for every other column by
+		// construction; BusyBox ash is the one that overrides it.
+		ReplacementEndsTheJoinedFieldList: No,
+		SignalHandlerSeesEarlierStatus:    No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
 		// entered — which is what six of the seven columns do. Measured
@@ -19816,6 +19902,13 @@ func PosixSemantics() Semantics {
 		LengthOfAMissingElementIsRefused:           No,
 		UnsetNameWithAWholeArraySubscriptIsRefused: No,
 		SubstringNegativeLengthIsEmpty:             No,
+		// The standard has no arrays, so this follows the reading that is
+		// the scalar's own: bash 5.3.20 tests the value the expansion joins
+		// to, under `[@]` and `[*]` alike. ksh93u+ tests the first element
+		// and zsh 5.9.2 counts the elements under `[@]`; both are the
+		// columns that override it. dash 0.5.12 and BusyBox ash 1.37.0 have
+		// no arrays and never reach it.
+		WholeArrayColonTest: WholeArrayColonTestReadsTheJoinedValue,
 		// The standard has no arrays, so this follows the two columns with
 		// associative arrays that keep a key a string. zsh is the column
 		// that overrides it.
@@ -19964,6 +20057,11 @@ func CoreSemantics() Semantics {
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
 		// over the whole list once and say so themselves.
 		OperatorDistributesOverTheFieldList: Yes,
+		// And a replacement on `$@` leaves the parameters after the one it
+		// replaced in standing. Only reachable in a dialect that joins the
+		// list first, so this is the answer for every other column by
+		// construction; BusyBox ash is the one that overrides it.
+		ReplacementEndsTheJoinedFieldList: No,
 		// Whether `$_` exists at all is left unanswered here, which is the
 		// substrate refusing it. *How* it moves is answered anyway, at the
 		// reading two of the three shells that have the parameter share:
@@ -21892,6 +21990,34 @@ const (
 	// WholeArraySubscriptIsASliceOfATable refuses by name — a table has no
 	// slice to set — and ends the input. zsh, for a name declared a table.
 	WholeArraySubscriptIsASliceOfATable
+)
+
+// WholeArrayColonTestPolicy is what the colon in `${a[@]:-word}` and
+// `${a[@]:+word}` tests when the subscript names the whole array — see
+// Semantics.WholeArrayColonTest for the rows.
+type WholeArrayColonTestPolicy int
+
+const (
+	// WholeArrayColonTestUnspecified is no answer, and it is refused rather
+	// than guessed at: the three columns that have arrays give three
+	// readings and two of them differ from each other on rows the third
+	// agrees with.
+	WholeArrayColonTestUnspecified WholeArrayColonTestPolicy = iota
+	// WholeArrayColonTestReadsTheJoinedValue tests the value the expansion
+	// joins to, exactly as it does for a scalar, for `[@]` and `[*]` alike.
+	// So `a=("")` is null and `a=("" "")` is not, because the second joins to
+	// a separator. bash.
+	WholeArrayColonTestReadsTheJoinedValue
+	// WholeArrayColonTestReadsTheFirstElement tests the array's **first**
+	// element alone, however many follow it: `a=("" c)` takes the default and
+	// drops the alternate, and `b=(c "")` does neither. For `[*]` as well as
+	// for `[@]`. ksh93.
+	WholeArrayColonTestReadsTheFirstElement
+	// WholeArrayColonTestCountsTheElementsUnderAt calls `[@]` null only when
+	// the array holds **no elements at all**, so a single empty element is a
+	// value. `[*]` still reads the join, which is what keeps the two
+	// spellings apart in that column. zsh.
+	WholeArrayColonTestCountsTheElementsUnderAt
 )
 
 // StoreOperandWholeArraySubscriptPolicy is what a builtin's output operand

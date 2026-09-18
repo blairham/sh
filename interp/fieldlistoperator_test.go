@@ -58,12 +58,31 @@ func TestOperatorDistributesOverTheFieldListAxis(t *testing.T) {
 			want: "[]",
 		},
 		{
-			// An empty list stays empty. Joining nothing and splitting it
-			// back would make one empty field out of no fields at all, so the
-			// count is what this asks — `printf` writes its format once for
-			// no operands and would hide the difference.
-			name: "an empty list is left alone", answer: No,
+			// An empty list is one empty field to the join reading, and the
+			// count is what asks it — `printf` writes its format once for no
+			// operands and would hide the difference. This row used to want
+			// `n=0` on the reasoning that joining nothing and splitting it
+			// back *would* make a field out of none; re-measured 2026-09-18,
+			// that is exactly what both joining shells do. `dash 0.5.12` and
+			// BusyBox ash 1.37.0 answer `1:<>` for the trim, the replacement
+			// and the global replacement alike (#3413).
+			name: "an empty list is one field to the join", answer: No,
 			src:  `set --; set -- "${@#a}"; printf 'n=%s' "$#"`,
+			want: "n=1",
+		},
+		{
+			// The other answer to the same row, and the control that says
+			// the field above is the join's: bash 5.3.20, zsh 5.9.2 and
+			// ksh93u+ all leave no field.
+			name: "an empty list stays empty where the operator distributes", answer: Yes,
+			src:  `set --; set -- "${@#a}"; printf 'n=%s' "$#"`,
+			want: "n=0",
+		},
+		{
+			// And the control for both: with no operator on it, an empty
+			// `"$@"` is no field in every column.
+			name: "an empty list with no operator", answer: No,
+			src:  `set --; set -- "$@"; printf 'n=%s' "$#"`,
 			want: "n=0",
 		},
 		{

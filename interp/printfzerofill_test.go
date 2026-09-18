@@ -75,6 +75,9 @@ func TestTheZeroFillAgainstAnAlternatePrefixIsAnAxis(t *testing.T) {
 				t.Run(r.name, func(t *testing.T) {
 					sem := CoreSemantics()
 					sem.PrintfZeroFillCountsTheAlternatePrefix = r.a
+					// And C's reading of the other fill question, which
+					// one row here reaches and none is about.
+					sem.PrintfZeroFlagSurvivesAPrecision = No
 					out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
 					if out != r.want || st != 0 {
 						t.Errorf("got %q status %d, want %q and 0", out, st, r.want)
@@ -119,6 +122,9 @@ func TestTheZeroFillAxisIsAskedOnlyWhereTheReadingsPart(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := CoreSemantics()
+			// The precision row reaches the other fill axis, which this
+			// case is not about — see PrintfZeroFlagSurvivesAPrecision.
+			sem.PrintfZeroFlagSurvivesAPrecision = No
 			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
 			if !tc.refuses {
 				if out != tc.want || st != 0 {

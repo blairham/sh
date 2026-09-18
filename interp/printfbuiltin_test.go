@@ -2082,6 +2082,10 @@ func TestPrintfHexFloatIsLaidOutCsWay(t *testing.T) {
 			sem := printfSem()
 			sem.PrintfC99FloatConversions = Yes
 			sem.PrintfHexFloatDefaultIsTwelveDigits = No
+			// C's placement for the fill: between the `0x` and the digits.
+			// The other reading is PrintfHexFloatZeroFillPrecedesThePrefix
+			// and has a case of its own below.
+			sem.PrintfHexFloatZeroFillPrecedesThePrefix = No
 			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
 			if out != tc.want || st != 0 {
 				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
@@ -2235,6 +2239,65 @@ func TestPrintfFlagAfterTheFieldIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
 			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
 			if got := strings.Contains(out, "past a field"); got != tc.refused {
 				t.Errorf("got %q, want the axis consulted = %v", out, tc.refused)
+			}
+		})
+	}
+}
+
+// The other reading of the same fill: in front of the `0x` rather than
+// between it and the digits, at the same total width. Both are measured; see
+// Semantics.PrintfHexFloatZeroFillPrecedesThePrefix.
+func TestPrintfHexFloatFillMayPrecedeThePrefix(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the fill goes in front", `printf '[%014a]' 1.5`, "[0000000x1.8p+0]"},
+		{"and behind the sign, which is still counted", `printf '[%014a]' -1.5`, "[-000000x1.8p+0]"},
+		{"the capital is the same question", `printf '[%014A]' 1.5`, "[0000000X1.8P+0]"},
+		{"a space fill is unanimous", `printf '[%14a]' 1.5`, "[      0x1.8p+0]"},
+		{"and the - flag voids a zero fill", `printf '[%-014a]' 1.5`, "[0x1.8p+0      ]"},
+		{"a width narrower than the value asks nothing", `printf '[%5a]' 1.5`, "[0x1.8p+0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfC99FloatConversions = Yes
+			sem.PrintfHexFloatDefaultIsTwelveDigits = No
+			sem.PrintfHexFloatZeroFillPrecedesThePrefix = Yes
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// Whether the `0` flag survives a precision on an integer conversion, which
+// is asked only where there is a fill to place: a width the rendered field
+// already fills leaves the two readings identical, and neither is consulted.
+func TestPrintfZeroFlagAgainstAPrecision(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		survives  Answer
+		want      string
+	}{
+		{"the flag is ignored, which is C", `printf '[%08.3d]' 7`, No, "[     007]"},
+		{"and kept, which is the other reading", `printf '[%08.3d]' 7`, Yes, "[00000007]"},
+		{"a sign keeps its place in front of the fill", `printf '[%+05.0d]' 7`, Yes, "[+0007]"},
+		{"and in front of the blanks", `printf '[%+05.0d]' 7`, No, "[   +7]"},
+		{"an octal's alternate form is inside the fill", `printf '[%#05.0o]' 7`, Yes, "[00007]"},
+		{"a precision that produced no digits still has a field", `printf '[%08.0d]' 0`, Yes, "[00000000]"},
+		// The arrangements neither reading is asked about, so an unanswered
+		// axis is no refusal: no width, no `0` flag, a `-`, and a field the
+		// value already fills.
+		{"no width", `printf '[%.3d]' 7`, Unspecified, "[007]"},
+		{"no zero flag", `printf '[%8.3d]' 7`, Unspecified, "[     007]"},
+		{"a - flag", `printf '[%-08.3d]' 7`, Unspecified, "[007     ]"},
+		{"a precision wider than the width", `printf '[%08.10d]' 7`, Unspecified, "[0000000007]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfZeroFlagSurvivesAPrecision = tc.survives
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
 			}
 		})
 	}

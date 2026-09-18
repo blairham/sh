@@ -4331,6 +4331,40 @@ type Semantics struct {
 	// and the fix is one column staying where it was while six move (#3066).
 	PrintfZeroFillCountsTheAlternatePrefix Answer
 
+	// PrintfZeroFlagSurvivesAPrecision keeps the `0` flag's fill on an
+	// integer conversion that also states a precision, where C ignores the
+	// flag outright for `d`, `i`, `o`, `u`, `x` and `X`.
+	//
+	// Six of the seven columns comply with C and one does not. Measured
+	// 2026-09-17 under `LC_ALL=C` with `printf '[%s]' N`, at a nought and at
+	// a nonzero value, because the nought is where the row was first seen
+	// and it cannot tell a precision that was ignored from one that produced
+	// no digits:
+	//
+	//	              bash 5.3.20  zsh 5.9.2  dash  ash   ksh93u+
+	//	%08.3d 7      `     007`   `     007` …     …     00000007
+	//	%+05.0d 7     `   +7`      `   +7`    …     …     +0007
+	//	%#05.0o 7     `   07`      `   07`    …     …     00007
+	//	%08.0d 0      `        `   `        ` …     …     00000000
+	//	%05.2d 7      `   07`      `   07`    …     …     00007
+	//	%8.3d 7       `     007`   `     007` …     …     `     007`
+	//	%-08.3d 7     `007     `   `007     ` …     …     `007     `
+	//	%.3d 7        007          007        …     …     007
+	//	%08.10d 7     0000000007   0000000007 …     …     0000000007
+	//
+	// The last four rows are the controls and each takes a simpler reading
+	// off the table. Without the `0` flag the columns agree, so this is the
+	// flag and not the width. With `-` they agree too, because `-` voids a
+	// zero fill everywhere. With no width there is no fill to place. And a
+	// precision *wider* than the width is unanimous, which says the column
+	// that keeps the flag is not ignoring the precision: it applies the
+	// precision and then fills the field with `0` rather than with blanks.
+	//
+	// Asked only where a width, a precision and the `0` flag are all written
+	// on an integer conversion and no `-` is, which is the one arrangement
+	// the two readings differ on (#3067).
+	PrintfZeroFlagSurvivesAPrecision Answer
+
 	// PrintfNumberOperand is how a numeric conversion reads an operand that
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
@@ -4535,6 +4569,33 @@ type Semantics struct {
 	// width. `printf '%.13a' 0.1` is the same string in all three, which is
 	// what says the difference is the default and not the renderer.
 	PrintfHexFloatDefaultIsTwelveDigits Answer
+
+	// PrintfHexFloatZeroFillPrecedesThePrefix puts a `%a`'s zero fill in
+	// *front* of the `0x` rather than between the prefix and the digits.
+	//
+	// It is a placement and not an arithmetic, which is what parts it from
+	// PrintfZeroFillCountsTheAlternatePrefix: both readings produce a field
+	// exactly as wide as the width asked for, and they differ only in where
+	// the run of zeros sits. The same column answers the two questions
+	// differently, so one axis could not carry both.
+	//
+	// Measured 2026-09-17 under `LC_ALL=C`, `printf '[%s]' 1.5`:
+	//
+	//	%030a   bash 5.3.20, dash 0.5.12  0x00000000000000000000001.8p+0
+	//	%030a   ksh93u+                   000000000000x1.800000000000p+0
+	//	%-30a   all three                 the digits, then blanks
+	//	%30a    all three                 blanks, then the digits
+	//
+	// The ksh93 row is eleven zeros and then its whole `0x1.800000000000p+0`,
+	// which the twelve-digit default makes nineteen characters — so the two
+	// columns disagree about the *placement* at the same total width. The two
+	// controls are the same ones every fill question needs: `-` and a space
+	// fill are unanimous, so the question is the `0` flag's.
+	//
+	// zsh 5.9.2 and BusyBox ash have no `%a` at all, so
+	// PrintfC99FloatConversions has already answered for them and this is
+	// never reached there (#3089).
+	PrintfHexFloatZeroFillPrecedesThePrefix Answer
 
 	// RedirectsUseEveryTarget makes a stream redirected more than once use
 	// *every* file it names rather than only the last, in both directions:
@@ -18419,6 +18480,10 @@ func PosixSemantics() Semantics {
 		// specifications to C's `printf()`, so it answers this one too, and
 		// ksh93 is the departure here as it is above.
 		PrintfZeroFillCountsTheAlternatePrefix: Yes,
+		// And C ignores the `0` flag outright where a precision is written
+		// on `d`, `i`, `o`, `u`, `x` or `X`. The same deferral answers this,
+		// and ksh93 is the departure a third time.
+		PrintfZeroFlagSurvivesAPrecision: No,
 		// XCU gives printf's format the XSI escape set and nothing else —
 		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so
 		// neither spelling of the escape character is in it and a backslash

@@ -1508,6 +1508,9 @@ func Semantics() interp.Semantics {
 	// And the shortest run of digits that names the value, which is C's
 	// default: `printf '%a' 0.1` is `0x1.999999999999ap-4` here.
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.No
+	// And a `%a`'s zero fill goes between the `0x` and the digits, which is
+	// where C puts it.
+	s.PrintfHexFloatZeroFillPrecedesThePrefix = interp.No
 	// unanswered PrintfRefusedOperandKeepsItsLeadingNumber: the question is
 	// what survives an *arithmetic* failure, and this shell runs no
 	// arithmetic over a printf operand. Keeping the number at the front is

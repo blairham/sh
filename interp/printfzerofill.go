@@ -84,3 +84,35 @@ func (r *Runner) printfAlternatePrefixField(spec string, verb byte, n int64) (st
 	}
 	return prefix + strings.Repeat("0", fill) + digits, true
 }
+
+// printfPadWideField lays a rendered field out to a width `fmt` refused,
+// putting a zero fill *inside* an alternate prefix the same way the
+// conversion just below the ceiling does.
+//
+// The two sides of a ceiling have to agree, and they did not: past it the
+// width was taken out of the spec, `fmt` wrote a bare `0x7`, and the fill
+// went in front of the whole thing — `printf '%#010000020x' 7` was ten
+// million zeros and then `0x7`, which is neither reading of
+// PrintfZeroFillCountsTheAlternatePrefix. Both of those put the fill between
+// the prefix and the digits and differ only in the arithmetic, so what this
+// needs from the dialect is the same answer printfAlternatePrefixField asks
+// for (#3089).
+func (r *Runner) printfPadWideField(field string, verb byte, width int, left, zero bool) string {
+	if !zero || left || (verb != 'x' && verb != 'X') || len(field) < 2 ||
+		field[0] != '0' || (field[1] != 'x' && field[1] != 'X') {
+		return printfPadToWidth(field, width, left, zero)
+	}
+	prefix, digits := field[:2], field[2:]
+	// C counts the prefix against the width and the other reading pads the
+	// digits to it, which is two characters wider. The narrow path answers
+	// the same question; asking it here is what makes the ceiling invisible.
+	fill := width - len(digits)
+	if r.ask(r.sem().PrintfZeroFillCountsTheAlternatePrefix,
+		"`printf` counting the `0x` C's `#` wrote against the width a `0` flag fills") {
+		fill = width - len(prefix) - len(digits)
+	}
+	if fill <= 0 {
+		return field
+	}
+	return prefix + strings.Repeat("0", fill) + digits
+}

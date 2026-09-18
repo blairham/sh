@@ -15527,9 +15527,73 @@ keeps one is the column that does not count it.
 
 This shell answered as ksh93 does in every dialect until #3066, because
 Go's `fmt` is the second reading — `fmt.Sprintf("%#05x", 7)` is `0x00007`.
-A precision is a different question again: it ignores the `0` flag in C,
-in `fmt` and in six columns, and ksh93 honors it there, which is measured
-and filed rather than modeled (#3067).
+
+**Past the width `fmt` will render, the fill used to land in front of the
+prefix**, which is neither reading — both put it between the `0x` and the
+digits. The width was taken out of the spec so the conversion could be laid
+out by hand, `fmt` wrote a bare `0x7`, and the outer padding went where an
+outer padding goes. So `printf '%#010000020x' 7` was ten million zeros and
+then `0x7` where bash writes `0x` and then ten million zeros, while the same
+call one below the ceiling was right. The two sides of a ceiling have to
+agree; the wide layout asks this axis the same question the narrow one does
+(#3089).
+
+**`PrintfZeroFlagSurvivesAPrecision`** — bash no · dash no · ksh93 **yes** · zsh no · ash no
+
+Keeps the `0` flag's fill on an integer conversion that also states a
+precision, where C ignores the flag outright for `d`, `i`, `o`, `u`, `x` and
+`X`. Six of the seven columns comply with C and ksh93 does not.
+
+Measured 2026-09-17 under `LC_ALL=C` with `printf '[%s]' N`, at a nonzero
+value as well as at the nought #3024 found it beside — the nought alone
+cannot tell a precision that was ignored from one that produced no digits:
+
+    %08.3d 7     `     007`            ksh93 00000007
+    %+05.0d 7    `   +7`               ksh93 +0007
+    %#05.0o 7    `   07`               ksh93 00007
+    %08.0d 0     `        `            ksh93 00000000
+    %05.2d 7     `   07`               ksh93 00007
+    %8.3d 7      `     007`            all seven: no `0` flag, no question
+    %-08.3d 7    `007     `            all seven: `-` voids a zero fill
+    %.3d 7       007                   all seven: no width, no fill
+    %08.10d 7    0000000007            all seven: the precision is applied
+
+The last row is the one that says ksh93 is not *ignoring* the precision: a
+precision wider than the width produces the same ten digits everywhere. What
+that column does is apply the precision and then fill the field with `0`
+rather than with blanks, so the layout is the ordinary one and only the fill
+character moves.
+
+`fmt` follows C here — `fmt.Sprintf("%08.3d", 7)` is `     007` — so the
+column that keeps the flag lays its field out by hand, from the same spec
+with the width taken off. The wide-width path reads the same answer, which
+it did not: `printf '%010000020.3d' 7` was zero-filled in every dialect
+because that path took the `0` flag at face value (#3067).
+
+**`PrintfHexFloatZeroFillPrecedesThePrefix`** — bash no · dash no · ksh93 **yes** · zsh absent · ash absent
+
+Puts a `%a`'s zero fill in *front* of the `0x` rather than between the
+prefix and the digits. It is a placement and not an arithmetic, which is
+what parts it from the axis above: both readings produce a field exactly as
+wide as the width asked for. The same column answers the two questions
+differently, so one axis could not carry both.
+
+Measured 2026-09-17 under `LC_ALL=C`, `printf '[%s]' 1.5`:
+
+    %030a    0x00000000000000000000001.8p+0   ksh93 000000000000x1.800000000000p+0
+    %0100a   the same shape at 100            ksh93 the same shape at 100
+    %-30a    the digits, then blanks          all three
+    %30a     blanks, then the digits          all three
+
+The ksh93 row is eleven zeros and then its whole `0x1.800000000000p+0`,
+which `PrintfHexFloatDefaultIsTwelveDigits` makes nineteen characters. zsh
+and BusyBox ash have no `%a` at all, so `PrintfC99FloatConversions` has
+already answered for them.
+
+The conversion lays out its own field down to the fill, so the width must
+not be taken away from it: doing that put the fill outside the prefix past
+`fmt`'s ceiling and inside it below, which is two answers to one question
+(#3089).
 
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 

@@ -60,6 +60,10 @@ func TestASignSurvivesAPrecisionOfNought(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := CoreSemantics()
+			// C's reading of the `0` flag against a precision, which these
+			// rows are not about: the one column that keeps the flag is
+			// PrintfZeroFlagSurvivesAPrecision's and has its own case.
+			sem.PrintfZeroFlagSurvivesAPrecision = No
 			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
 			if out != tc.want || st != 0 {
 				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)

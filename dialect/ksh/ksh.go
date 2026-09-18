@@ -1761,6 +1761,10 @@ func Semantics() interp.Semantics {
 	// digits, the thirteenth rounded away rather than padded.
 	s.PrintfC99FloatConversions = interp.Yes
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.Yes
+	// And a `%a`'s zero fill goes in front of the `0x` here, where the two
+	// columns that share this shell's alternate-prefix arithmetic put it
+	// between the prefix and the digits.
+	s.PrintfHexFloatZeroFillPrecedesThePrefix = interp.Yes
 	// An integer operand is carried in this shell's floating type, so one
 	// past 2^53 comes back rounded: `printf '%d' 123456789012345678` is
 	// `123456789012345680` (#2907).
@@ -1857,6 +1861,10 @@ func Semantics() interp.Semantics {
 	// characters, where the other six write `0x007` (#3066). The width
 	// is the digits' alone and the `0x` is written past it.
 	s.PrintfZeroFillCountsTheAlternatePrefix = interp.No
+	// And the `0` flag survives a precision here, where C ignores it: the
+	// precision is applied and the field is then filled with `0` rather
+	// than with blanks. See the axis for the table.
+	s.PrintfZeroFlagSurvivesAPrecision = interp.Yes
 	// The same `\c` as the printf format, and the arithmetic is bit 6
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled

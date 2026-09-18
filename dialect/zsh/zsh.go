@@ -591,6 +591,7 @@ func Dialect() syntax.Dialect {
 	// shell alone, which is why it is set here and nowhere else.
 	d.BareSubscript = true
 	d.BareParamFlags = true
+	d.BareParamModifiers = true
 	// A line continuation written between a `$` and what it introduces stops
 	// the `$` at everything but a bare parameter inside double quotes, and at
 	// nothing outside them. Measured 2026-09-16 from script files with `x=5`

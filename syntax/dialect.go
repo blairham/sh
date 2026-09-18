@@ -5092,6 +5092,42 @@ type Dialect struct {
 	// since a bare `$=` expands to nothing there rather than printing.
 	BareParamFlags bool
 
+	// BareParamModifiers lets a parameter written without braces carry a
+	// history-style modifier list: `$p:t` is the tail of `$p`, and `$b:q` is
+	// each element of `$b` quoted.
+	//
+	// One shell in the panel. Measured on zsh 5.9.2 against bash 5.3.20,
+	// bash 3.2.57, bash as `sh`, ksh93u+, dash and BusyBox ash, 2026-09-18
+	// with `s='p q'`: `$s:q` is `p\ q` there and the six characters `p q:q`
+	// in all six of the others — which is what this grammar already did, so
+	// the flag is what one shell adds rather than what six of them lose.
+	//
+	// It is the lexer's for the reason BareSubscript and BareParamFlags are:
+	// the word boundary moves. `$s:q` is one expansion where the flag is on
+	// and an expansion followed by two literal characters where it is off,
+	// and nothing downstream can tell the two apart once the spans are cut.
+	//
+	// **The braced spelling is not this**, which is the measurement that
+	// makes the flag about the *bare* form alone: `${b}:q` leaves the `:q` as
+	// text in that shell too, and `${b:q}` is the modifier written inside the
+	// braces, which is ParamSubstring and needs no flag. So a grammar with
+	// modifiers in braces and without this one is a coherent grammar and not
+	// a half-finished one.
+	//
+	// **The bare form takes the letter and nothing after it**, where the
+	// braced form takes a count. Measured with `p=/a/bb/c.txt`: `${p:h2}` is
+	// `/a` — the head twice — and `$p:h2` is `/a/bb2`, the head once with a
+	// literal `2` after it. `$p:t2` is `c.txt2` the same way, and `$s:qX` is
+	// `p\ qX`. The one exception is `:s`, which takes its whole delimited
+	// substitution: `$p:s/a/Z/x` is `/Z/bb/c.txtx`.
+	//
+	// **A letter that names no modifier is not one**, and there is no
+	// complaint: `$s:zz` is `p q:zz` and `$s:` is `p q:`, where the braced
+	// `${s:zz}` is refused. So the scan gives the colon back rather than
+	// failing on it, which is what lets a bare `:` after an expansion go on
+	// meaning whatever it meant.
+	BareParamModifiers bool
+
 	// MultiDigitPositional makes a run of digits after an unbraced `$` one
 	// positional parameter: `$10` is the tenth, not `$1` followed by a `0`.
 	//

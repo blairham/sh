@@ -5400,12 +5400,107 @@ func (l *Lexer) scanBareParam(q Quoting) []Span {
 	name := l.src[begin:l.off]
 	kept, hasKept := l.bareSubscript(name, q)
 	if hasKept {
+		// The brackets were given back as text, so anything after them is
+		// text too: a modifier list belongs to an expansion, and what stands
+		// in front of these characters is a name followed by a `[`.
 		return []Span{
 			{Kind: ParamExp, Value: name, Quoting: q, Pos: open, Bare: true},
 			kept,
 		}
 	}
+	l.bareModifiers()
 	return []Span{{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open, Bare: true}}
+}
+
+// bareModifiers takes a `:h:t:s/a/b/` run written straight after an unbraced
+// expansion into that expansion, and takes nothing where the colon does not
+// begin one.
+//
+// Into the span's text rather than onto a field of its own, because the
+// braced spelling of the same list is already a ParamSubstring whose operand
+// is that text — `${p:t}` and `$p:t` are one expansion written two ways, and
+// the parser reads the second by being handed `p:t`. See
+// Dialect.BareParamModifiers for what the two spellings do differ about.
+//
+// **The letter and nothing after it**, which is the difference: `$p:h2` is
+// the head with a literal `2` after it where `${p:h2}` is the head twice. So
+// a segment here is a colon and one letter, except `s`, which is a delimited
+// substitution and is taken whole.
+//
+// A colon that begins nothing is left where it is, with no complaint —
+// `$s:zz` is the value and four characters, measured — which is why this
+// scans on a copy of the cursor and commits a segment at a time.
+func (l *Lexer) bareModifiers() {
+	if !l.dialect.BareParamModifiers {
+		return
+	}
+	for {
+		next, ok := bareModifierSegment(l.src[l.off:])
+		if !ok {
+			return
+		}
+		for range next {
+			l.advance()
+		}
+	}
+}
+
+// bareModifierSegment measures one `:` segment at the front of src, and
+// reports how many bytes it takes.
+func bareModifierSegment(src string) (int, bool) {
+	if len(src) < 2 || src[0] != ':' {
+		return 0, false
+	}
+	letter := src[1]
+	if _, known := ModifierLetters[letter]; !known {
+		return 0, false
+	}
+	if letter != 's' {
+		return 2, true
+	}
+	// `:s` carries a delimited pattern and replacement, whose delimiter is
+	// whatever byte follows the letter. Measured: the closing delimiter may
+	// be left off at the end of the word — `$p:s/a/Z` substitutes — so the
+	// scan takes what is there rather than requiring three.
+	if len(src) < 3 {
+		return 0, false
+	}
+	delim := src[2]
+	seen := 0
+	for i := 3; i < len(src); i++ {
+		switch {
+		case src[i] == '\\' && i+1 < len(src):
+			// A backslash protects the delimiter, which is what keeps
+			// `$p:s/\//:/` one segment. What the escape then *means* is the
+			// modifier's — see interp/modifier.go.
+			i++
+		case src[i] == delim:
+			seen++
+			if seen == 2 {
+				return i + 1, true
+			}
+		case bareModifierEnds(src[i]):
+			// The word ends here whatever this scan wanted, so the
+			// substitution is however much of it was written.
+			return i, seen > 0
+		}
+	}
+	return len(src), seen > 0
+}
+
+// bareModifierEnds reports whether a byte ends the word an unbraced modifier
+// list is being read inside.
+//
+// The blanks and the operators, which is the set that would have ended the
+// word anyway: a `:s` whose second delimiter is missing takes the rest of the
+// word and not the rest of the line, so `echo $p:s/a/Z; echo done` is two
+// commands.
+func bareModifierEnds(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', ';', '&', '|', '(', ')', '<', '>':
+		return true
+	}
+	return false
 }
 
 // startsBareParam reports whether the `$` under the cursor begins a bare

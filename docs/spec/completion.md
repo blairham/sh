@@ -283,10 +283,12 @@ it gives are correct rather than approximate.
 
 **And what a shipped completion reaches is not decided here alone.**
 Several completions stop short somewhere outside `zsh/computil` — `_nl`
-and `_od` on the `(R)` expansion flag, `_file_modes` on the
-`zsh/complete` conditions, and `git checkout <branch>` on a `:q`
-modifier written after a bare parameter expansion (#3127), which leaves
-a literal `:q` for `compadd` to stop reading options at.
+and `_od` on the `(R)` expansion flag, and `_file_modes` on the
+`zsh/complete` conditions. `git checkout <branch>` was a third and is
+not: a `:q` modifier written after a bare parameter expansion left a
+literal `:q` for `compadd` to stop reading options at, and the unbraced
+spelling of a modifier list is read now (#3127). See
+`docs/spec/semantics.md`.
 
 **Descriptions are not carried either.** `compadd -d`, `-X` and `-x`
 are read and their argument consumed, and the listing this editor draws

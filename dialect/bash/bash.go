@@ -1822,6 +1822,12 @@ func Semantics() interp.Semantics {
 	// panel with a ceiling on it: a level of 1000 or more is refused with a
 	// warning and the count starts again. See interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelCountedToACeiling
+	// And a shell that replaces this process stands in its place rather than
+	// under it: measured 2026-09-18, `exec /usr/bin/env` from a script file
+	// under `env -i` hands over `SHLVL=0` where this shell holds 1, so the
+	// shell it starts reads the same number this one did. The floor above is
+	// what makes an inherited `-1` read 1 on the far side rather than 0.
+	s.ShellLevelExec = interp.ShellLevelExecNotCounted
 	// `PWD` is a different answer from OLDPWD's here: the starting directory
 	// is named by what the kernel reports, in 5.3 and 3.2 alike.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel

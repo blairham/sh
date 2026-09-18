@@ -453,6 +453,7 @@ dash  SetArrayBadNameLeavesZero
 dash  SetArrayLetter
 dash  SetArrayOptionsContinuePastTheName
 dash  SetArrayWithNoValuesUnsetsTheName
+dash  ShellLevelExec
 dash  StoreOperandWholeArraySubscript
 dash  StoreOperandWholeArraySubscriptOverATable
 dash  StoreRefusalOfADeclaredElementLeavesZero

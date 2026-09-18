@@ -906,6 +906,11 @@ func Semantics() interp.Semantics {
 	// starts counts from one. Not an omission here — see
 	// interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelNotCounted
+	// unanswered ShellLevelExec: this column has no depth to hand over, so
+	// there is no way to ask it what a replacement does with one. Measured
+	// 2026-09-18 anyway, for the record: `exec /usr/bin/env` from dash 0.5.12
+	// writes no `SHLVL` at all, and an `SHLVL` a script assigned and exported
+	// crosses exactly as the script wrote it.
 	// dash names its starting directory by asking the kernel, whatever it was
 	// handed, which is where it parts company with the other ash-derived
 	// shell in the panel.

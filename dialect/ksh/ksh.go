@@ -2132,6 +2132,10 @@ func Semantics() interp.Semantics {
 	// name the integer attribute, which is #3099's row and not this one.
 	// See interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelCounted
+	// And a shell that replaces this process counts one deeper, which is the
+	// other side of that split: measured 2026-09-18, `exec /usr/bin/env`
+	// hands over `SHLVL=1` untouched and the shell it starts reads 2.
+	s.ShellLevelExec = interp.ShellLevelExecCounted
 	// And the name this shell gives the directory it starts in: a `PWD` it
 	// was handed is kept whatever it says, and with none handed over the
 	// directory is named under `$HOME` where it sits there — where three of

@@ -384,6 +384,8 @@ func (g *GradeResult) Report() string {
 	if u := g.Ungraded(); len(u) > 0 {
 		fmt.Fprintf(&b, "%d dialect(s) no probe could grade at all: %s\n\n", len(u), strings.Join(u, ", "))
 	}
+	b.WriteString(g.SplitReport())
+	b.WriteString("\n")
 	b.WriteString("every probed pair:\n")
 	for _, j := range g.Judgments {
 		switch j.Outcome {

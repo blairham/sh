@@ -2402,6 +2402,11 @@ func Semantics() interp.Semantics {
 	// reaching it — the two shells whose special builtins are fatal both
 	// carry on past this one.
 	s.BadNameToReadFatal = interp.Yes
+	// And `printf -v` ends it too: measured 2026-09-17,
+	// `printf -v '1x' %s Q` is `not an identifier: 1x` and nothing after
+	// it runs, the same as `read '1x'`. `a-b` gets that sentence as well,
+	// which is why there is no BuiltinBadNameNumeric row beside printf's.
+	s.BadNameToPrintfFatal = interp.Yes
 	// Fatal here too, and unlike bash's this does not move: `emulate sh`,
 	// `emulate ksh` and `emulate zsh` all stop. It is the axis that keeps
 	// this question apart from RedirectErrorOnSpecialBuiltinFatal, which zsh
@@ -2440,6 +2445,21 @@ func Semantics() interp.Semantics {
 	// and reports success, measured.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// `read 'a[2]'` fills the element, measured 2026-09-10 on `a=(x y z)`.
+	s.StoreOperandTakesASubscript = interp.Yes
+	// The brackets name the whole array and the operand fills it, silently
+	// and at 0: measured 2026-09-17, `r=(1 2 3); read 'r[@]'` on `Y`
+	// leaves `r` as the one element `Y`. Not a split — `read 'r[@]' b` on
+	// `X Y` leaves `r` as the one element `X` and fills `b` with `Y` — so
+	// the operand takes its field like any other name and the spelling is
+	// what makes the array one element, exactly as `r[@]=X` does.
+	s.StoreOperandWholeArraySubscript = interp.StoreOperandWholeArraySubscriptNamesEveryElement
+	// Over a **table** it is refused by name and the input ends: measured
+	// 2026-09-17, `typeset -A m=(k v); read 'm[@]'` is `m: attempt to set
+	// slice of associative array` and nothing after it runs. So this shell
+	// takes the array and refuses the table, the other way round from bash
+	// — the same swap the bare assignment makes.
+	s.StoreOperandWholeArraySubscriptOverATable = interp.WholeArraySubscriptIsASliceOfATable
 	// An element is not a name, so a declaration that would freeze, type or
 	// localize the *array* refuses the operand instead of doing half of it —
 	// and it ends the script. Three wordings for the three, measured
@@ -3486,7 +3506,10 @@ func Diagnostics() interp.Diagnostics {
 		// `unset 1x` and `typeset 1w` from this same shell do.
 		// `read` joins `set` in it: `zsh:1: not an identifier: 1bad` has no
 		// `read:` in the location where `zsh:export:1:` has the builtin.
-		BadNameRefusalHidesTheBuiltin: map[string]bool{"set": true, "read": true},
+		// `printf` joins the two: measured 2026-09-17, its refusal is
+		// `./f.sh:1: not an identifier: 1x` with no builtin in the location,
+		// where `typeset 1x` is `./f.sh:typeset:1: …`.
+		BadNameRefusalHidesTheBuiltin: map[string]bool{"set": true, "read": true, "printf": true},
 		// `set -t`, the one letter this shell has and refuses to move. It is
 		// `singlecommand` under a borrowed spelling, one of the five options
 		// about being interactive that this shell will not let a script
@@ -3967,6 +3990,11 @@ func Diagnostics() interp.Diagnostics {
 			// no BuiltinBadNameNumeric entry beside this — the two are the
 			// same sentence here.
 			"read": "not an identifier: %[2]s",
+			// `printf -v` says exactly what `read` says, and says it to
+			// `a-b` as well as to `1x` — measured 2026-09-17,
+			// `printf -v 'a-b' %s Q` is `not an identifier: a-b`. So there
+			// is no BuiltinBadNameNumeric row beside this one either.
+			"printf": "not an identifier: %[2]s",
 		},
 		// An operand that starts with a digit is a different complaint, for
 		// the two that have one. `unset` says the same to both.

@@ -68,6 +68,22 @@ func biPrintf(r *Runner, _ context.Context, args []string) (status int) {
 	}
 	format, operands := args[0], args[1:]
 
+	// An output parameter that is not a name is refused before anything is
+	// formatted, and ahead of the freeze, which is the order the operand
+	// forces: a word that cannot be a name is not a name anything could have
+	// frozen. `read` has judged its operands since #1440 and this builtin
+	// judged nothing at all — it stored under whatever word it was handed and
+	// reported 0, so `printf -v '1x' %s Q` left a parameter no expansion can
+	// read back and said nothing about it, where both columns that have `-v`
+	// refuse (#3515). See Runner.isPrintfName and
+	// Semantics.BadNameToPrintfFatal.
+	if assign != "" && !r.isPrintfName(assign) {
+		if r.unspecified {
+			return 2
+		}
+		return r.badPrintfName(assign)
+	}
+
 	// A frozen output parameter is refused before anything is formatted, and
 	// the freeze is asked of the *name a subscript belongs to* — the same
 	// question `read` asks through the same function, because it is the same

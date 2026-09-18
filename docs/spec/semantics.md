@@ -16866,6 +16866,133 @@ route and not on the expansion one, which is
 error, and would mean holding the report until the construct flushes it
 at every one of the five sites that word a math failure.
 
+## A builtin's output operand: the brackets, and the word in front of them
+
+`read 'r[2]'` and `printf -v 'r[2]'` hand a builtin one word where a
+parsed assignment would have handed it a name, a subscript and a value,
+so the word has to be split and read before anything can be stored.
+Three separate questions were not being asked of it.
+
+**`StoreOperandTakesASubscript`** — bash yes · ksh93 yes · zsh yes ·
+dash no · ash no
+
+Whether this dialect's brackets are a subscript at all. The three
+columns with arrays fill the element — measured 2026-09-10, `a=(x y z);
+read 'a[2]'` on `Q` is `x Q z` in bash 5.3, bash 3.2, ksh93u+ and zsh
+5.9.2 alike — and the two without them have no subscripts to read, so
+the word is characters a variable name may not hold:
+
+    /bin/dash, a script file, `printf 'Y\n' > in.txt`
+
+    read 'r[2]'  < in.txt   read: r[2]: bad variable name    2, nothing stored
+    read 'r[b c]'           the same sentence                2
+    read 'r[]'              the same sentence                2
+    read 'r[@]'             the same sentence                2
+    read '1x'               the same sentence                2
+
+One sentence for all five, which is the finding: the brackets are not a
+failed subscript there, they are an ordinary bad name. Without the axis
+the operand walked into the array machinery and refused array axes by
+name — `an unassigned subscript being no element at all: … no dialect
+was chosen` — after reporting 0 (#3516). `unset` never did, because
+`UnsetTakesASubscript` already stood in front of its subscripted branch,
+and this is that guard at the store.
+
+It is a **fourth** field beside `UnsetTakesASubscript`,
+`TypesetTakesASubscript` and `DeclarationTakesASubscript` for the reason
+those three are three: the answer is per builtin, and bash refuses
+`export a[1]` while filling `read 'a[1]'`. It is **read** rather than
+asked, which is `SetArrayLetter`'s reason: a dialect that answers
+nothing has arrays in the core, so the fallback is a correct answer
+rather than a missing one.
+
+**`StoreOperandWholeArraySubscript`** — bash a bad array subscript ·
+ksh93 an arithmetic expression · zsh names every element
+
+What `@` and `*` mean in those brackets, where the name is not a
+declared table. They name the **whole array** rather than an element and
+no column reads them as arithmetic, which is what this did in every
+dialect. Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+stdin `/dev/null`, a script file and again as one `-c` string, `r=(1 2
+3)` in front, the status on the same line and the array on the next:
+
+    bash 5.3.20   r[@]: bad array subscript        same=1  r 1 2 3  next=0 end
+    ksh93u+       read: @: arithmetic syntax error same=1  r 1 2 3  next=0 end
+    zsh 5.9.2     (nothing)                        same=0  r Y      next=0 end
+
+`r[*]` answers identically in each, so there is one field and not two,
+which is the finding `WholeArraySubscriptAssigningAnArray` records one
+construct over. `printf -v 'r[@]'` answers identically too, **the 1
+included** — so the status here is the refusal's and not the builtin's,
+which is the opposite of the bad-*name* refusal one branch over, where
+bash counts `printf` at 2 and `read` at 1.
+
+zsh's is not a split: `read 'r[@]' b` on `X Y` leaves `r` as the one
+element `X` and fills `b` with `Y`, so the operand takes its field like
+any other name and the spelling is what makes the array one element —
+exactly what `r[@]=X` does there.
+
+**`StoreOperandWholeArraySubscriptOverATable`** — bash an ordinary key ·
+ksh93 an ordinary key · zsh a slice of a table
+
+The same spelling over a name declared a table, where the brackets hold
+a key rather than an expression. Measured 2026-09-17 with `typeset -A m;
+m[k]=v` in front and the keys read back:
+
+    bash 5.3.20   stores under the key `@`, silently, at 0
+    ksh93u+       the same
+    zsh 5.9.2     m: attempt to set slice of associative array, input ends
+
+**Neither of these two is the assignment's field read from a second
+place**, and that was tried. Four of the six rows disagree: ksh93 swaps
+sides on both — `x[@]=Z` is `@: invalid subscript in assignment` and
+ends the input where the operand is an arithmetic complaint the line
+survives, and `m[@]=Z` ends the input where the operand stores the key
+at 0 — and bash gives the command list up for the assignment and not for
+the operand. That is the same evidence which made
+`WholeArraySubscriptAssigningATable` a second field rather than a
+reading of the first.
+
+One row is measured and not matched: bash answers **2** rather than 1
+when the refusal stops a `read` with names still to come — `read 'r[@]'
+b` is 2 and `read 'r[@]'` is 1, with `b` untouched either way. That is
+`ReadRefusedWriteIsOneOnTheLastName`'s rule, which wants the count of
+names left; the store is reached from `printf -v` as well and has no
+such count, and routing the refusal through the frozen-name status
+instead would have given ksh93's `read 'r[1/0]' b` a 2 where it measures
+1.
+
+**`BadNameToPrintfFatal`** — bash no · zsh yes · ksh93, dash, ash
+unanswered (no `-v`)
+
+Whether `printf -v` judges the word in front of the brackets at all.
+It did not: the builtin stored under whatever word it was handed and
+reported 0, so `printf -v '1x' %s Q` left a parameter no expansion can
+read back and said nothing about it. `read` has refused the same
+operands since #1440.
+
+Measured 2026-09-17, a script file and again under `( … )` and `-c`:
+
+    bash 5.3.20   printf: `1x': not a valid identifier   same=2, the line goes on
+    zsh 5.9.2     not an identifier: 1x                  the script ends
+    ksh93u+       printf: -v: unknown option + usage     same=2 — no `-v` there
+    /bin/dash     no `-v`
+
+`a-b` gets the same sentence as `1x` in both columns that have the
+option, so the leading-digit wording is not a split here. bash's status
+is `printf`'s own 2 rather than the 1 it gives `read`, which
+`Diagnostics.BuiltinBadNameStatusFor` already held — measured for the
+empty subscript in #3513 — and which is the second reason the two
+builtins are not one field. The strictness itself *is* read twice:
+`ReadNameOperands` answers both, measured — `set -- A B; printf -v 1 %s
+Q` and `read 1` both fill `$1` in zsh and are both refused in bash.
+
+A subscripted operand is still a name to `printf -v` where the dialect
+has subscripts, which is the row a second copy of the rule would have
+got wrong: bash fills the element for `printf -v 'r[1]'` and refuses
+`printf -v '1x'` in the same run. One function answers both builtins for
+that reason.
+
 **`EmptyParamSubscriptIsAnError`** — bash yes · dash unspecified · ksh93 no · zsh yes
 
 Refuses `${a[]}` — the same brackets one construct over, where a

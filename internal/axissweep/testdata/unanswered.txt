@@ -50,6 +50,7 @@ ash   AssignmentUpdatesPipelineStatus
 ash   AttributeOverAFrozenNameIsRefused
 ash   AttributeRereadsTheValueItFinds
 ash   AutoCdAnnouncesTheSubstitution
+ash   BadNameToPrintfFatal
 ash   BadSubscriptToADeclaration
 ash   BadSubscriptToAnOutputOperand
 ash   BadSubscriptToUnset
@@ -177,6 +178,8 @@ ash   SetArrayLetter
 ash   SetArrayOptionsContinuePastTheName
 ash   SetArrayWithNoValuesUnsetsTheName
 ash   StoppedJobTakesTheCurrentJobMarker
+ash   StoreOperandWholeArraySubscript
+ash   StoreOperandWholeArraySubscriptOverATable
 ash   StoreRefusalOfADeclaredElementLeavesZeroFromCommandString
 ash   SubscriptExpressionStopsAtASeparator
 ash   SubscriptIsAQuotingContext
@@ -268,6 +271,7 @@ dash  AssignmentUpdatesPipelineStatus
 dash  AttributeOverAFrozenNameIsRefused
 dash  AttributeRereadsTheValueItFinds
 dash  AutoCdAnnouncesTheSubstitution
+dash  BadNameToPrintfFatal
 dash  BadSubscriptToADeclaration
 dash  BadSubscriptToAnOutputOperand
 dash  BadSubscriptToUnset
@@ -414,6 +418,8 @@ dash  SetArrayBadNameLeavesZeroFromCommandString
 dash  SetArrayLetter
 dash  SetArrayOptionsContinuePastTheName
 dash  SetArrayWithNoValuesUnsetsTheName
+dash  StoreOperandWholeArraySubscript
+dash  StoreOperandWholeArraySubscriptOverATable
 dash  StoreRefusalOfADeclaredElementLeavesZeroFromCommandString
 dash  SubscriptExpressionStopsAtASeparator
 dash  SubscriptIsAQuotingContext
@@ -454,6 +460,7 @@ dash  WritingSubstitutionIsWaitedForAtTheCommand
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
+ksh   BadNameToPrintfFatal
 ksh   BareSubscriptIsASubscript
 ksh   BuiltinReadsOptions
 ksh   CompoundPipelineStatusRecord

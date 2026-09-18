@@ -16068,6 +16068,32 @@ type Semantics struct {
 	// builtin. zsh is the one that stops here, and it stops for `export` too.
 	BadNameToReadFatal Answer
 
+	// BadNameToPrintfFatal is that same question at `printf -v`, whose
+	// operand is judged at all only since #3515: the builtin took any word
+	// it was handed, stored under it and reported 0, so `printf -v '1x' %s Q`
+	// made a parameter no expansion can read back and said nothing.
+	//
+	// A field of its own rather than BadNameToReadFatal read twice, for the
+	// reason that field is not BadNameToUnsetFatal read twice: the panel
+	// answers per builtin and the wording table beside it already does.
+	// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin
+	// /dev/null, a script file, and again under `( … )` and `-c`:
+	//
+	//	bash 5.3.20   printf: `1x': not a valid identifier   2, the line goes on
+	//	zsh 5.9.2     not an identifier: 1x                  the script ends
+	//	ksh93u+       no `-v` — `printf: -v: unknown option`
+	//	dash, ash     no `-v`
+	//
+	// So the two columns that have the option both refuse, and they part on
+	// the cost alone. bash's status is `printf`'s own 2 rather than the 1 it
+	// gives `read` — Diagnostics.BuiltinBadNameStatusFor already holds that
+	// row, measured for the empty subscript in #3513 — which is the second
+	// reason the two builtins are not one field.
+	//
+	// `a-b` is the same sentence as `1x` in both columns, measured, so the
+	// leading-digit wording is not a split here.
+	BadNameToPrintfFatal Answer
+
 	// UnsetReadonlyFatal ends a non-interactive shell when `unset` is asked
 	// to remove a readonly name. True in dash and zsh; bash and ksh93 report
 	// it, leave the value standing and carry on with a status of 1.
@@ -16188,6 +16214,38 @@ type Semantics struct {
 	// BusyBox ash refuse it, both with `a[0]: bad variable name` and both
 	// fatally, at 2.
 	UnsetTakesASubscript Answer
+
+	// StoreOperandTakesASubscript is that same question asked of the operand
+	// a builtin **writes through** — `read 'r[2]'` and `printf -v 'r[2]'`.
+	//
+	// A fourth field for the reason the three above are three: the answer is
+	// per builtin. bash refuses `export a[1]` and fills `read 'a[1]'`, so no
+	// rule over one of them reaches the other.
+	//
+	// True in bash, ksh93 and zsh, which all fill the element — measured
+	// 2026-09-10, `a=(x y z); read 'a[2]'` on `Q` is `x Q z` in bash 5.3,
+	// bash 3.2, ksh93u+ and zsh 5.9.2 alike. False in dash and BusyBox ash,
+	// which have no arrays at all: measured 2026-09-17, `/bin/dash` answers
+	// `read: r[2]: bad variable name` at 2 and stores nothing, and answers
+	// `r[b c]`, `r[]`, `r[@]`, `r[*]` and the bare `1x` with that one
+	// sentence — the brackets are not a subscript there, they are characters
+	// a variable name may not hold.
+	//
+	// Runner.isReadName took a subscripted operand for a name whenever the
+	// base was one, deliberately, and had nothing beside it asking whether
+	// *this* dialect has subscripts — so the dash and ash columns walked
+	// into the array machinery and refused array axes by name, or stored
+	// something and refused two on the way back out (#3516). `unset` never
+	// did, because UnsetTakesASubscript already stood in front of its
+	// subscripted branch; this is that guard at the store.
+	//
+	// **Read** rather than asked, which is Runner.setArrayLetter's reason one
+	// construct over: a dialect that answers nothing here has arrays in the
+	// core and reaching them is what this path already did, so an unanswered
+	// axis has a correct answer to fall back on rather than a missing one to
+	// complain about — and complaining would put a second sentence under the
+	// bad-name refusal that is about to be written anyway.
+	StoreOperandTakesASubscript Answer
 
 	// BadNameDeclaresTheOperandsAfterIt keeps declaring past an operand the
 	// builtin refused, where the refusal is fatal.
@@ -16371,6 +16429,67 @@ type Semantics struct {
 	// `mapfile: 'a[1/0]': not a valid identifier` at 1, with the next command
 	// on the same line still running. No other column has the builtin.
 	BadSubscriptToAnOutputOperand BadSubscriptPolicy
+
+	// StoreOperandWholeArraySubscript reads the `@` or `*` a builtin's output
+	// operand carries — `read 'r[@]'` and `printf -v 'r[*]'` — where the name
+	// is **not** a declared table. The brackets name the whole array rather
+	// than an element, and no column sends them to the arithmetic evaluator.
+	//
+	// Three columns, three answers, so a policy rather than a bool. Measured
+	// 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin /dev/null, a
+	// script file and again as one `-c` string, with `r=(1 2 3)` in front and
+	// the status read on the *same* line:
+	//
+	//	              read 'r[@]' <<< Y
+	//	bash 5.3.20   `r[@]: bad array subscript`, 1, `1 2 3`, the line goes on
+	//	ksh93u+       `read: @: arithmetic syntax error`, 1, `1 2 3`, likewise
+	//	zsh 5.9.2     silent at 0, and `r` is the one element `Y`
+	//
+	// `r[*]` answers identically in each, so a second field would have
+	// nothing to say — the same finding WholeArraySubscriptAssigningAnArray
+	// records one construct over. `printf -v 'r[@]' %s Q` answers identically
+	// too, bash's 1 included: the status here is the refusal's and not the
+	// builtin's, where the bad-*name* refusal next door is the builtin's own.
+	//
+	// **This is not the assignment's pair of fields read from a second
+	// place**, which was the first thing tried. `x[@]=Z` is ksh93's
+	// `@: invalid subscript in assignment` and ends the input, where
+	// `read 'x[@]'` is an arithmetic complaint that leaves the line running;
+	// and over a declared table `m[@]=Z` ends ksh93 where `read 'm[@]'`
+	// stores under the key `@` at 0. Two rows out of six disagree, which is
+	// exactly the evidence that made WholeArraySubscriptAssigningATable a
+	// second field rather than a reading of the first.
+	//
+	// The **table** is the other half and it is
+	// StoreOperandWholeArraySubscriptOverATable, below.
+	//
+	// Before this the operand walked to the arithmetic evaluator in every
+	// dialect, so bash got the evaluator's sentence in place of its own and
+	// zsh refused a line it fills (#3486, #3498).
+	StoreOperandWholeArraySubscript StoreOperandWholeArraySubscriptPolicy
+
+	// StoreOperandWholeArraySubscriptOverATable is that same spelling on an
+	// operand whose name is **declared a table**, where the brackets hold a
+	// key rather than an expression and the panel is not the same panel.
+	//
+	// Measured 2026-09-17 with `typeset -A m=([k]=v)` in front of it and the
+	// keys read back afterwards:
+	//
+	//	bash 5.3.20   `read 'm[@]'` stores under the key `@`, silently, at 0
+	//	ksh93u+       the same
+	//	zsh 5.9.2     `m: attempt to set slice of associative array`, input ends
+	//
+	// `printf -v 'm[@]'` answers identically in each.
+	//
+	// It reads WholeArraySubscriptAssignPolicy because the answers are that
+	// type's, and it is a **field** of its own rather than
+	// WholeArraySubscriptAssigningATable read from a second place because
+	// ksh93 swaps sides between the two: `m[@]=Z` is
+	// `@: invalid subscript in assignment` there and ends the input, where
+	// the operand stores the key at 0. Reading the assignment's field gave
+	// that column a refusal it does not make — measured, and the reason this
+	// pair exists at all is that the two constructs were assumed to agree.
+	StoreOperandWholeArraySubscriptOverATable WholeArraySubscriptAssignPolicy
 
 	// BadSubscriptToADeclaration is the same question at the third site: how
 	// much a *declaration* gives up when the subscript in an operand it is
@@ -20492,6 +20611,46 @@ const (
 	// slice to set — and ends the input. zsh, for a name declared a table.
 	WholeArraySubscriptIsASliceOfATable
 )
+
+// StoreOperandWholeArraySubscriptPolicy is what a builtin's output operand
+// means when its subscript is `@` or `*` over a name that is not a table —
+// see Semantics.StoreOperandWholeArraySubscript for the rows.
+type StoreOperandWholeArraySubscriptPolicy int
+
+const (
+	// StoreOperandWholeArraySubscriptUnspecified is no answer, and it is
+	// refused rather than guessed at: one column fills the whole array at 0,
+	// one refuses by the operand as written, and one evaluates the brackets
+	// and reports what the arithmetic says.
+	StoreOperandWholeArraySubscriptUnspecified StoreOperandWholeArraySubscriptPolicy = iota
+	// StoreOperandWholeArraySubscriptIsBad refuses with the bad-subscript
+	// sentence, naming the operand as written and saying nothing about
+	// arithmetic, leaves 1 behind and writes nothing. The rest of the line
+	// still runs, which is how it differs from the unevaluable subscript
+	// BadSubscriptToAnOutputOperand governs. bash.
+	StoreOperandWholeArraySubscriptIsBad
+	// StoreOperandWholeArraySubscriptIsAnExpression sends the brackets to
+	// the arithmetic evaluator like any other subscript, where `@` and `*`
+	// are not operands and the complaint is the evaluator's. ksh93.
+	StoreOperandWholeArraySubscriptIsAnExpression
+	// StoreOperandWholeArraySubscriptNamesEveryElement replaces the whole
+	// array with the one value the builtin read — `r=(1 2 3); read 'r[@]'`
+	// on `Y` leaves one element holding `Y`, not a split — silently and at
+	// 0. zsh.
+	StoreOperandWholeArraySubscriptNamesEveryElement
+)
+
+func (p StoreOperandWholeArraySubscriptPolicy) String() string {
+	switch p {
+	case StoreOperandWholeArraySubscriptIsBad:
+		return "a bad array subscript"
+	case StoreOperandWholeArraySubscriptIsAnExpression:
+		return "an arithmetic expression"
+	case StoreOperandWholeArraySubscriptNamesEveryElement:
+		return "names every element"
+	}
+	return "unspecified"
+}
 
 func (p WholeArraySubscriptAssignPolicy) String() string {
 	switch p {

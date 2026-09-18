@@ -459,15 +459,64 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 // that a new caller would not have to restate it, and restating it here is
 // how the same bug comes back in a fifth place.
 //
-// A subscripted operand is not judged here. `read a[0]` fills the element in
-// bash, bash 3.2 and ksh93, so refusing it as a bad name would answer three of
-// the six wrongly; what this shell does with it is a separate question and
-// this leaves it exactly where it was.
+// A subscripted operand is not judged as a name in the dialects that have
+// subscripts. `read a[0]` fills the element in bash, bash 3.2, ksh93 and zsh,
+// so refusing it there would answer four of the six wrongly; what this shell
+// does with it is a separate question and this leaves it where it was.
+//
+// **In the dialects that have no arrays it is simply not a name**, which is
+// the half that was missing. dash and BusyBox ash have no subscripts at all,
+// so `read 'r[2]'` is a word holding two characters a variable name may not
+// hold and gets the one sentence they give any other: measured 2026-09-17,
+// `/bin/dash` answers `read: r[2]: bad variable name` at 2 and stores
+// nothing, and answers `r[b c]`, `r[]`, `r[@]`, `r[*]` and the bare `1x` with
+// that same sentence. Without the gate the operand reached the array
+// machinery and refused array axes by name there — `an unassigned subscript
+// being no element at all: … no dialect was chosen` — after reporting 0
+// (#3516). Semantics.StoreOperandTakesASubscript is the axis, and it is the
+// guard UnsetTakesASubscript already stands in front of `unset`'s subscripted
+// branch, which is why `unset 'a[]'` was right in those columns all along.
 func (r *Runner) isReadName(name string) bool {
-	if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
+	return r.isStoreOperandName("read", name)
+}
+
+// isPrintfName is that question at `printf -v`, and it is the same function
+// rather than a second copy of it — a copy that omitted the subscript gate is
+// how one of these two would come to refuse `printf -v 'a[0]'` while the
+// other fills it.
+//
+// The strictness is ReadNameOperands read a second time because it is
+// measured identical, not assumed: `set -- A B; printf -v 1 %s Q` and
+// `read 1` both fill `$1` in zsh 5.9.2 and are both refused in bash 5.3.20,
+// measured 2026-09-17, so the positional row the field exists for answers the
+// two builtins alike. What differs is the sentence and the number, and those
+// are keyed by builtin in the tables already.
+func (r *Runner) isPrintfName(name string) bool {
+	return r.isStoreOperandName("printf", name)
+}
+
+// isStoreOperandName is the shared rule: an operand a builtin writes through
+// is a name, or it names an element of one where the dialect has elements.
+func (r *Runner) isStoreOperandName(builtin, name string) bool {
+	if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) &&
+		r.sem().StoreOperandTakesASubscript != No {
 		return true
 	}
-	return r.isBuiltinName("read", name, r.sem().ReadNameOperands)
+	return r.isBuiltinName(builtin, name, r.sem().ReadNameOperands)
+}
+
+// badPrintfName reports an operand `printf -v` cannot write through, through
+// the same wording table, the same status table and the same fatality gate as
+// every other bad name.
+//
+// `printf -v` judged nothing at all until #3515: it took whatever word it was
+// handed, stored under it and reported 0, so `printf -v '1x' %s Q` left a
+// parameter no expansion can read back and said nothing about it. `read` is
+// the neighbor that was already right, and this is the same door — the
+// machinery has been keyed by builtin since #3513 put printf's own status in
+// Diagnostics.BuiltinBadNameStatusFor.
+func (r *Runner) badPrintfName(name string) int {
+	return r.badBuiltinName("printf", name, name, r.sem().BadNameToPrintfFatal)
 }
 
 // badReadName reports it, through the same wording table and the same

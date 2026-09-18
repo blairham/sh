@@ -1205,10 +1205,11 @@ func Semantics() interp.Semantics {
 	// A job started with `&` reads an empty standard input: `ash -c
 	// '/bin/cat & wait; echo ---' < f` writes `---` and nothing else.
 	s.BackgroundJobInput = interp.BackgroundJobInputEmpty
-	// `set -u; echo "[$!]"` before any background command is `!: parameter
-	// not set` at 2, so the parameter is unset rather than zero.
-	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
-	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
+	// `$!` before any background command is unset rather than zero: measured
+	// 2026-09-18 in the pinned image, `${!-unset}` takes its default,
+	// `${!+set}` is empty, and `set -u; echo "[$!]"` is `!: parameter not
+	// set` at 2.
+	s.LastBackgroundPid = interp.LastBackgroundPidUnset
 	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	// A `jobs` listing keeps a job that has already ended, and shows the
 	// `&`-started command's own text.

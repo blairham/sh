@@ -2501,17 +2501,21 @@ func Semantics() interp.Semantics {
 	// which the `-i -c` run above is the whole evidence for: there is no prompt
 	// on that route and ksh93 writes it anyway.
 	s.FinishedJobNoticeNeedsAPrompt = interp.No
-	// `$!` before any background command is set and empty here, so `set -u`
-	// has nothing to say about it: measured, `set -u; echo "[$!]"; echo
-	// "st=$?"` writes `[]` and then `st=0`. Stated rather than left
-	// unanswered, because ksh93 is on the quiet side of a two-against-two
-	// split and an unanswered field would read as "not yet measured".
+	// `$!` before any background command is *unset* here, and `set -u` still
+	// has nothing to say about it — the combination no other column has.
+	// Measured 2026-09-18 from a script file under `env -i`: `${!-unset}`
+	// takes its default and `${!+set}` is empty, so every operator that can
+	// see the difference reads the parameter as absent, while
+	// `set -u; echo "[$!]"; echo "st=$?"` writes `[]` and then `st=0`.
+	//
+	// It read as set and empty here until #3011, because the question was two
+	// Answer fields whose four combinations had no spelling for this one.
 	//
 	// Note this is *not* UnsetPositionalIsAllowed reached from another route.
-	// ksh93 does let an unset `$1` be empty, and it lets `$!` be empty too,
+	// ksh93 does let an unset `$1` be empty, and it is quiet about `$!` too,
 	// but the two are separate answers: bash refuses both and dash refuses
 	// both, while zsh refuses `$1` and not `$!`.
-	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.No
+	s.LastBackgroundPid = interp.LastBackgroundPidUnsetButNotRefused
 	// A job started with `&` reads an empty standard input, not the shell's:
 	// measured 2026-09-07, `ksh -c '/bin/cat & wait; echo ---; /bin/cat' < f`
 	// writes `---` and then the file's line on ksh93u+. POSIX XCU 2.9.3.
@@ -2521,10 +2525,6 @@ func Semantics() interp.Semantics {
 	// at 0 in dash and bash and `cat: stdin: Bad file descriptor` here. What
 	// it cannot dup it leaves alone, so a closed fd 0 reaches the job closed.
 	s.BackgroundJobInput = interp.BackgroundJobInputEmptyUnlessClosed
-	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`,
-	// which is what makes ksh93's empty a *set* parameter with no value where
-	// zsh's is a value.
-	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No

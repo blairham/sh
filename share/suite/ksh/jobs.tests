@@ -51,6 +51,24 @@ show() {
 	printf -- '--- %s -> [%s] status %s\n' "$1" "$2" "$3"
 }
 
+# `$!` before anything has been started is a state and not a pid, so it is
+# the one part of this parameter a suite can ask: every other reading of it
+# carries a process id, which is not the same twice. It reads as nothing
+# here, and it reads as *unset* — `${!-unset}` takes its default and
+# `${!+set}` is empty — while `set -u` still says nothing about it, which is
+# the combination no other column in the panel has (#3011).
+#
+# In a subshell of its own so that nothing below it can have started a job
+# first, and ahead of everything for the same reason the section under it is.
+printf -- '=== the last background process before any job ===\n'
+(
+	show 'the bare reading' "$!" "$?"
+	show 'the dash form' "${!-unset}" "$?"
+	show 'the plus form' "${!+set}" "$?"
+	set -u
+	show 'and under set -u' "$!" "$?"
+)
+
 # **This section comes first, ahead of every coprocess, and that is not
 # tidiness.** Placed after them, ksh93u+m 1.0.8 answered `wait "$a" "$b"` 2
 # on some runs and 127 on others: 21 of 40 runs of this file said 127 on a

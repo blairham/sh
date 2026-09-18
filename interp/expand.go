@@ -956,11 +956,11 @@ func (r *Runner) readParamSource(e *syntax.ParamExpr) (value string, set, subscr
 	if !set {
 		value, set = r.getVar(e.Name)
 	}
-	if e.Name == "!" && !r.lastJobPIDSet &&
-		r.sem().LastBackgroundPidIsUnsetBeforeAnyJob == Yes {
-		// `$!` before anything has been started is *unset* in two of the
-		// four shells rather than set and empty, and `set -u` is fatal about
-		// it there. Asked here rather than in specialParam because that
+	if e.Name == "!" && r.lastBackgroundPidIsUnset() {
+		// `$!` before anything has been started is *unset* in four of the
+		// five columns rather than set and empty, and in three of those four
+		// `set -u` is fatal about it. Asked here rather than in specialParam
+		// because that
 		// function's bool says "this is a parameter and not a variable" —
 		// three other callers read it that way — and answering false would
 		// send `$!` off to look for a variable of that name.
@@ -5286,7 +5286,7 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 			// One shell answers with a number nothing ever had. Read
 			// without asking, so a preset that has not chosen answers with
 			// nothing — which is what the other five do.
-			if r.sem().LastBackgroundPidIsZeroBeforeAnyJob == Yes {
+			if r.sem().LastBackgroundPid == LastBackgroundPidZero {
 				return "0", true
 			}
 			return "", true
@@ -5685,18 +5685,21 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 	}
 	if e.Name == "!" {
 		// `$!` before any background command, where the dialect calls that
-		// unset — see LastBackgroundPidIsUnsetBeforeAnyJob, which is what
-		// decides whether this is reached at all. The sigil is written back
-		// by the same shell and the same rule as for a positional, so it is
-		// the same field: `$!: unbound variable` against
-		// `!: parameter not set`.
+		// unset — see LastBackgroundPidPolicy, which is what decides both
+		// whether this is reached at all and whether it stops the script.
+		// One column reads the parameter as unset and is still quiet here,
+		// so the refusal is the policy's second answer rather than a
+		// consequence of its first. The sigil is written back by the same
+		// shell and the same rule as for a positional, so it is the same
+		// field: `$!: unbound variable` against `!: parameter not set`.
 		//
 		// Not through UnsetPositionalIsAllowed. That axis is ksh93 letting an
-		// argument it was not given be empty, and ksh93's answer here comes
-		// from the other axis instead — it never reaches this line, so
-		// asking would be asking the wrong question of the one dialect it
-		// would change.
-		r.fatalExpansion("%s\n", r.unboundSigilWording(e, e.Name))
+		// argument it was not given be empty, and zsh refuses `$1` while
+		// leaving `$!` alone — so the pair splits the panel differently and
+		// asking it here would be asking the wrong question.
+		if r.lastBackgroundPidRefusedUnderNounset() {
+			r.fatalExpansion("%s\n", r.unboundSigilWording(e, e.Name))
+		}
 		return
 	}
 	if !isPositional(e.Name) {

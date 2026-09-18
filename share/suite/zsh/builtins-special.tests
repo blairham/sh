@@ -14,12 +14,17 @@
 # it is usually reached for: `command unset x` is a working line in three
 # shells on this panel and a failure in the fourth.
 #
-# Held out until #2887 lands, which is the other zsh-alone answer in this
-# area: `readonly name` with no value gives the name an empty value in zsh
-# and leaves it unset in the other three, and ours still leaves it unset.
-#
-#   readonly frozen
-#   printf 'unvalued readonly -> [%s]\n' "${frozen-unset}"
+# The other zsh-alone answer in this area, held out until #2887 landed: an
+# attribute word with no value brings the name into being here, set and
+# empty, where the other three leave it unset. `export` is the same answer
+# under the other word (#3345), and the colon form is the control that says
+# the two states really are distinguishable — it takes its default in every
+# column, because the value is empty wherever the name exists at all.
+
+readonly frozen
+printf 'unvalued readonly -> [%s] [%s]\n' "${frozen-unset}" "${frozen:-empty}"
+export shipped
+printf 'unvalued export -> [%s] [%s]\n' "${shipped-unset}" "${shipped:-empty}"
 
 command : 2> /dev/null
 printf 'command on a special builtin -> %s\n' "$?"

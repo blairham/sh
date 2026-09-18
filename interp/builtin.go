@@ -3234,10 +3234,25 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
-		// `export` is an attribute word, so naming a name a previous
-		// declaration left with no value of its own gives it the empty in
-		// its own right — see declarationOwnsTheStandingEmpty.
-		r.declarationOwnsTheStandingEmpty(name)
+		if hasValue {
+			// `export` is an attribute word, so naming a name a previous
+			// declaration left with no value of its own gives it the empty in
+			// its own right — see declarationOwnsTheStandingEmpty.
+			r.declarationOwnsTheStandingEmpty(name)
+		} else {
+			// And with no value it is a declaration like any other, so what
+			// a bare `export v` leaves behind is
+			// DeclaredNameWithoutValueIsEmpty's — the same question `typeset
+			// v` asks under a word that also carries an attribute. This
+			// builtin never takes a scope, so the cell is never a fresh one
+			// and the inherit answer never arrives; declareEmpty does the
+			// standing-empty half itself, which is why it replaces the call
+			// above rather than following it (#3345).
+			r.declareEmpty(name, false, true, true, false, true)
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+		}
 		// Recorded either way rather than deleted for `-n`: a name that came
 		// in through the environment is exported by having done so, and only
 		// an explicit "no" can take that off. Deleting the record put the
@@ -6021,7 +6036,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			if !r.declarationCarriesAnArrayLiteral(name) {
 				r.declareEmpty(name, fresh, f.export || f.readonly,
 					withoutMatching(f) != (declareFlags{}),
-					f.inherit || r.LocalInheritsTheOuterValue())
+					f.inherit || r.LocalInheritsTheOuterValue(), false)
 			}
 		}
 		if f.readonly && !f.readonlyOff {
@@ -6284,20 +6299,26 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		}
 		// `readonly` is an attribute word too — see biExport and
 		// declarationOwnsTheStandingEmpty.
-		r.declarationOwnsTheStandingEmpty(name)
-		if fresh && !hasValue {
-			// A valueless declaration into a scope this call just made: the
-			// cell is new and holds nothing whatever the caller held, so
-			// what it shows is the same question every other declaration
-			// word asks. Without it a `readonly R` inside a function left
-			// the local unset where the shell that scopes it leaves the
-			// empty string, which is DeclaredNameWithoutValueIsEmpty's
-			// answer and not a second reading of its own.
-			// `readonly` has no letter for inheriting and the shell-wide
-			// name is about a *local* declaration, which this is: measured
-			// 2026-09-17, `readonly R` inside a function with the option on
-			// takes the enclosing value the same way `local R` does.
-			r.declareEmpty(name, fresh, true, true, r.LocalInheritsTheOuterValue())
+		if hasValue {
+			r.declarationOwnsTheStandingEmpty(name)
+		} else {
+			// A valueless declaration: the name shows whatever
+			// DeclaredNameWithoutValueIsEmpty says a declared name holds,
+			// which is the same question every other declaration word asks.
+			// Without it a `readonly R` inside a function left the local
+			// unset where the shell that scopes it leaves the empty string,
+			// and a `readonly R` at the *top level* did the same in that
+			// shell — the freeze landed on a name that did not exist, so
+			// `${R-unset}` took its default there and nowhere else (#2887).
+			//
+			// The scope gate this used to carry was doing the standing-empty
+			// call's job as well: declareEmpty owns that half, so `fresh` is
+			// passed rather than tested. `readonly` has no letter for
+			// inheriting and the shell-wide name is about a *local*
+			// declaration: measured 2026-09-17, `readonly R` inside a
+			// function with the option on takes the enclosing value the same
+			// way `local R` does.
+			r.declareEmpty(name, fresh, true, true, r.LocalInheritsTheOuterValue(), true)
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}

@@ -1043,6 +1043,8 @@ func Semantics() interp.Semantics {
 	s.ReadNoFieldsIsOneEmptyElement = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.TypesetTakesASubscript = interp.No
+	// unanswered UnsetElementEmptiesAnUnwrittenArrayInASubshell: no
+	// arrays, so no element for a subshell to remove.
 	s.UnsetTakesASubscript = interp.No
 	// No arrays at all, so a bracketed `read` operand is a word holding
 	// characters a variable name may not hold: measured 2026-09-17,

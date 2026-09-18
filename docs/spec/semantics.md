@@ -12528,6 +12528,75 @@ afterwards and the valueless one carries it into the element
 declaration's own flags. A second call is how the two would come to
 answer differently (#3510).
 
+## An element removed inside a subshell
+
+**`UnsetElementEmptiesAnUnwrittenArrayInASubshell`** — ksh93 yes · bash no ·
+zsh no · dash, ash unanswered
+
+In one column `unset 'a[1]'` inside a subshell empties the **whole array**
+for the rest of that subshell, where the array is one the subshell has not
+written to itself. The parent's copy is untouched either way.
+
+Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=$d`, stdin
+`/dev/null`, a fresh directory, a script file and again under `-c`:
+
+    a=(1 2 3)
+    ( unset "a[1]"; echo "in=[${a[*]}]" )
+    echo "after=[${a[*]}]"
+
+    ksh93u+       in=[]       after=[1 2 3]
+    bash 5.3.20   in=[1 3]    after=[1 2 3]
+    zsh 5.9.2     in=[1 3]    after=[1 2 3]
+
+Four controls say what the ksh93 row is about, and each one removes a
+candidate:
+
+    ( echo "[${a[*]}]" )                    [1 2 3]  the inherited copy is fine
+    ( a[0]=9; echo "[${a[*]}]" )            [9 2 3]  a write is fine
+    ( a[0]=9; unset "a[1]"; … )             [9 3]    a write first, and the
+                                                     unset is ordinary
+    ( b=(1 2 3); unset "b[1]"; … )          [1 3]    an array the subshell made
+                                                     is its own
+
+So it is an element unset of an array the subshell has only been *looking
+at*, and the engine records that at `storeArray`, which is the one
+chokepoint every array write reaches. It is **indexed arrays only**: a
+table's key removal takes the one key there, and `unset a` and a scalar's
+`unset v` are ordinary in every column. A nested subshell answers for
+itself — the inner one empties its own view and the outer one still has all
+three — and a command substitution, being a subshell, answers the same way.
+
+**Measured on one build**, which is worth saying because a shell's
+bookkeeping is where builds differ: the only ksh93 on this machine is
+AT&T's 2012 one. It is also the binary the oracle panel's ksh column is, so
+the preset agrees with the column it is graded against, and a second build
+disagreeing would be a row to add rather than a value to flip (#3517).
+
+### A valueless operand's subscript is read twice where it is read at all
+
+The column that *reads* a valueless subscripted declaration operand's
+brackets reads them on two passes, so a side effect inside them fires twice.
+Measured 2026-09-17, ksh93u+, a script file:
+
+    c=(1 2 3); i=0; typeset 'c[i++]'      i is 2
+    c=(1 2 3); i=0; readonly 'c[i++]'     i is 2
+    c=(1 2 3); i=0; export 'c[i++]'       i is 2
+    c=(1 2 3); i=0; typeset 'c[i++]'=v    i is 1
+    c=(1 2 3); i=0; unset 'c[i++]'        i is 1
+    c=(1 2 3); i=0; echo "${c[i++]}"      i is 1
+
+So it belongs to `ValuelessSubscriptedOperandReadsTheSubscript` rather than
+to subscripts: the same brackets with a value are read once, and so is every
+other route to one. The second pass is discarded — the value was already
+found and a failure already answered — so nothing but the side effect comes
+of it.
+
+The three remaining rows of #3511 are about what that column **records**: a
+declared element that exists without holding a value, counted by `${#a[@]}`
+but absent from `${!a[@]}` and from an indexed array's listing while a
+table's prints it as `[k]=`. That wants a third state for an element and is
+left open.
+
 ## A subscript before the first element
 
 Issue #617. An assignment whose subscript lands before the array's first

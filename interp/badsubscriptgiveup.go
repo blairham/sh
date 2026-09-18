@@ -152,6 +152,20 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 			r.badSubscriptToADeclaration(sub, err)
 			return "", letters, true
 		}
+		// **Twice**, and that is measured rather than a slip. The column
+		// that reads a valueless operand's subscript reads it on two passes,
+		// so a side effect in the brackets fires twice: measured 2026-09-17,
+		// ksh93u+, `c=(1 2 3); i=0; typeset 'c[i++]'` leaves `i` at 2, and
+		// so do the `readonly` and `export` spellings. It is this operand
+		// shape alone — the same brackets with a value are read once
+		// (`typeset 'c[i++]'=v` leaves 1), and so are `unset 'c[i++]'` and
+		// the expansion `${c[i++]}`.
+		//
+		// The second pass is discarded, which is the whole of it: the value
+		// was already found and a failure was already answered above, so
+		// nothing but the side effect can come of it. See #3511, whose other
+		// three rows are about what this column *records* and are not here.
+		_, _ = r.subscriptValue(sub)
 		return base, letters, false
 	case ValuelessSubscriptedOperandWritesTheElement:
 		// The empty-value form under another spelling, which is measured

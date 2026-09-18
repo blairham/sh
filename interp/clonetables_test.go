@@ -323,6 +323,7 @@ func seedTables(r *Runner) {
 	r.nameref = map[string]string{"seed": "target"}
 	r.floatExponent = map[string]bool{"seed": true}
 	r.uppered = map[string]bool{"seed": true}
+	r.subshellWroteArrays = map[string]bool{"seed": true}
 }
 
 // TestACloneOwnsEveryTable is the check behind ownTables, and it is a check

@@ -125,6 +125,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// this is the boundary the panel splits over: a command substitution
 		// and a pipeline element are subshells too and neither is one.
 		sub.subshellLoopFloor = sub.loopDepth
+		// And the arrays it inherited are a *view* rather than a fork's copy,
+		// which one column's element unset is about — the same reading a
+		// `$( … )` gets and a background job, a pipeline element and a
+		// process substitution do not. See Runner.unsetEmptiesAnUnwrittenArray.
+		sub.arraysAreAView = !r.forkedForABackgroundJob
 		sub.inheritJobs(jobBoundaryCompound)
 		// The group a real shell's fork would have given these parentheses,
 		// for a body that asks which process it is. Its lifetime is the

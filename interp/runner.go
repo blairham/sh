@@ -2681,6 +2681,30 @@ type Runner struct {
 	// main script, and not in either of those — so the copy must know it is
 	// a copy.
 	inSubshell bool
+
+	// subshellWroteArrays names the arrays this shell has written to since it
+	// began — nil until one is written, and cleared by clone so a subshell
+	// starts having written nothing. Recorded at storeArray, which is the one
+	// chokepoint every array write reaches.
+	//
+	// It exists for one measured question, and only one column asks it: see
+	// Semantics.UnsetElementEmptiesAnUnwrittenArrayInASubshell.
+	subshellWroteArrays map[string]bool
+
+	// arraysAreAView marks the two contexts whose arrays that question is
+	// about: an explicit `( … )` and a `$( … )`. Cleared by clone and set by
+	// those two alone, because the panel splits there and not on "a subshell"
+	// — measured 2026-09-17, ksh93u+ empties the array for both and leaves it
+	// alone for a background job, either end of a pipeline and a process
+	// substitution, which are the contexts that shell forks.
+	arraysAreAView bool
+
+	// forkedForABackgroundJob marks the shell a background job runs in, so
+	// that a `( … )` standing as that job's body does not take the view above
+	// — it is the fork, in the column this is measured on. Cleared by clone
+	// along with the flag it governs, so it reaches the job's own body and no
+	// further.
+	forkedForABackgroundJob bool
 	// inCommandSubst narrows that to a command substitution, which one
 	// dialect treats differently from a subshell written out: bash says
 	// nothing about a command killed inside `$(…)` and does report one
@@ -3174,6 +3198,13 @@ func (r *Runner) clone() *Runner {
 	}
 	c := *r
 	c.inSubshell = true
+	// And nothing it has written *itself* yet, which is what one column's
+	// element unset turns on: an array this shell has not touched is one it
+	// is only looking at, and removing an element of it there takes the whole
+	// view with it. Cleared along with the flag, so a context that wants the
+	// reading turns it on rather than inheriting it. See
+	// Runner.unsetEmptiesAnUnwrittenArray.
+	c.subshellWroteArrays, c.arraysAreAView, c.forkedForABackgroundJob = nil, false, false
 	// A subshell body is not running inside the frames the copy inherited.
 	c.funcFloor = c.depth
 	// A pending process substitution belongs to the command being built in

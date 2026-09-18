@@ -209,6 +209,7 @@ ash   TypePathAnswerIsASentence
 ash   TypesetLocalNeedsKeywordFunction
 ash   UnicodeEscapeOutsideTheLocale
 ash   UnsetArraySpan
+ash   UnsetElementEmptiesAnUnwrittenArrayInASubshell
 ash   UnsetEndsTheProducedPipelineStatus
 ash   UnsetReferenceLetterRemovesANonReference
 ash   UnsetStatusIsTheLastSubscripts
@@ -454,6 +455,7 @@ dash  TypePathAnswerIsASentence
 dash  TypesetLocalNeedsKeywordFunction
 dash  UnicodeEscapeOutsideTheLocale
 dash  UnsetArraySpan
+dash  UnsetElementEmptiesAnUnwrittenArrayInASubshell
 dash  UnsetEndsTheProducedPipelineStatus
 dash  UnsetReferenceLetterRemovesANonReference
 dash  UnsetStatusIsTheLastSubscripts

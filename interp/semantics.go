@@ -16906,6 +16906,43 @@ type Semantics struct {
 	// between two.
 	UnsetSubscriptOnAScalarIsAnError Answer
 
+	// UnsetElementEmptiesAnUnwrittenArrayInASubshell makes `unset 'a[1]'`
+	// inside a subshell empty the **whole array** for the rest of that
+	// subshell, where the array is one the subshell has not written to
+	// itself. The parent's copy is untouched either way.
+	//
+	// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=$d`,
+	// stdin /dev/null, a fresh directory, a script file and again under `-c`:
+	//
+	//	a=(1 2 3)
+	//	( unset "a[1]"; echo "in=[${a[*]}]" )
+	//	echo "after=[${a[*]}]"
+	//
+	//	ksh93u+       in=[]       after=[1 2 3]
+	//	bash 5.3.20   in=[1 3]    after=[1 2 3]
+	//	zsh 5.9.2     in=[1 3]    after=[1 2 3]
+	//
+	// Four controls say what the ksh93 row is about, and each removes a
+	// candidate: the inherited copy is fine on its own (`( echo "${a[*]}" )`
+	// is all three), a write is fine (`( a[0]=9; … )` is `9 2 3`), a write
+	// *before* the unset makes the unset ordinary (`9 3`), and an array the
+	// subshell made itself is ordinary too (`( b=(1 2 3); unset "b[1]" )` is
+	// `1 3`). So it is an element unset of an array the subshell has only
+	// been looking at.
+	//
+	// Indexed arrays only: a table's key removal takes the one key there,
+	// and `unset a` and a scalar's `unset v` are ordinary in every column.
+	//
+	// **Measured on one build**, which is worth saying because a shell's
+	// bookkeeping is where builds differ: the only ksh93 on this machine is
+	// AT&T's 2012 one. It is also the binary the oracle panel's ksh column
+	// is, so the preset agrees with the column it is graded against, and a
+	// second build disagreeing would be a row to add rather than a value to
+	// flip.
+	//
+	// unanswered dash, ash: no arrays, so no element to remove (#3517).
+	UnsetElementEmptiesAnUnwrittenArrayInASubshell Answer
+
 	// UnsetArraySpan is what `unset` does to the elements a subscript names,
 	// and the panel gives three answers rather than two — see
 	// UnsetArraySpanPolicy.

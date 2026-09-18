@@ -315,3 +315,40 @@ func valuelessSubSemantics(s *Semantics) {
 	s.BadSubscriptToADeclaration = BadSubscriptEndsTheScript
 	s.FatalErrorStatusIsOne = Yes
 }
+
+// The column that **reads** a valueless operand's subscript reads it on two
+// passes, so a side effect inside the brackets fires twice.
+//
+// Measured 2026-09-17, ksh93u+ 2012-08-01, a script file: `c=(1 2 3); i=0;
+// typeset 'c[i++]'` leaves `i` at 2, and the `readonly` and `export`
+// spellings agree. It is this operand shape alone — `typeset 'c[i++]'=v`
+// leaves 1, and so do `unset 'c[i++]'` and the expansion `${c[i++]}` — which
+// is what makes it a property of this policy rather than of subscripts
+// (#3511).
+func TestAValuelessOperandsSubscriptIsReadTwiceWhereItIsReadAtAll(t *testing.T) {
+	for _, spelling := range []string{"typeset", "readonly", "export"} {
+		src := "c=(1 2 3); i=0\n" + spelling + " 'c[i++]'\n" + `echo "i=$i"`
+		out, _ := valuelessSubRun(t, ValuelessSubscriptedOperandReadsTheSubscript, src)
+		if !strings.Contains(out, "i=2") {
+			t.Errorf("%s: out %q, want the subscript read twice", spelling, out)
+		}
+	}
+	// With a value it is read once, which is the control that keeps the rows
+	// above about the valueless shape.
+	out, _ := valuelessSubRun(t, ValuelessSubscriptedOperandReadsTheSubscript,
+		"c=(1 2 3); i=0\ntypeset 'c[i++]'=v\n"+`echo "i=$i"`)
+	if !strings.Contains(out, "i=1") {
+		t.Errorf("out %q, want a valued operand's subscript read once", out)
+	}
+	// And the columns that do not read the subscript do not read it twice
+	// either: the second pass belongs to the reading answer.
+	for _, p := range []ValuelessSubscriptedOperandPolicy{
+		ValuelessSubscriptedOperandDeclaresTheName,
+		ValuelessSubscriptedOperandWritesTheElement,
+	} {
+		out, _ := valuelessSubRun(t, p, "c=(1 2 3); i=0\ntypeset 'c[i++]'\n"+`echo "i=$i"`)
+		if strings.Contains(out, "i=2") {
+			t.Errorf("answered %v: out %q reads the subscript twice", p, out)
+		}
+	}
+}

@@ -316,6 +316,14 @@ func Dialect() syntax.Dialect {
 	// `rc=1`. See the flag for the refusals that shape produces, each of
 	// which is the text that followed being read on its own.
 	d.ContinuationEndsTheArithmeticCommandOpener = true
+	// The scan that looks for an arithmetic command's `))` is blind to
+	// quoting here too: `((echo "a)b"))` and `((echo 'a)b'))` print `a)b` as
+	// two groupings. One row of that measurement is left standing —
+	// `((echo "(" ))` is `` `"' unmatched `` at 3 in this shell and two
+	// groupings printing `(` here — because it is a fact about where that
+	// shell resumes after giving the reading up rather than about the scan.
+	// See the flag for the five rows.
+	d.ArithCommandScanIgnoresQuoting = true
 	// A function body that is not compound may carry no redirection here:
 	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
 	// >out` are all a syntax error at the operator. A braced body is not

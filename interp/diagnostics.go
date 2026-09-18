@@ -1525,6 +1525,23 @@ type Diagnostics struct {
 	// means 1 — dash says 2.
 	BuiltinBadNameStatus int
 
+	// BuiltinBadNameStatusFor is that status where one builtin answers with
+	// its own rather than with the dialect's, keyed by builtin.
+	//
+	// bash is the dialect with one: measured 2026-09-17, a script file,
+	// `read '1x'` is `read: '1x': not a valid identifier` — bash's own
+	// leading backquote in place of the first quote — at **1** where
+	// `printf -v '1x'` is the same sentence under printf's name at **2**. The
+	// wording table above says they word it alike and this says they do not
+	// count it alike, which is what an entry is for; an absent entry is the
+	// dialect's number.
+	//
+	// Reached through a builtin's *output operand* as well as through a name
+	// the script wrote badly: an operand whose subscript is empty is refused
+	// as a name in this column, sentence, status and all — see
+	// storeOperandEmptySubscript (#3513).
+	BuiltinBadNameStatusFor map[string]int
+
 	// BuiltinBadNameKeepsValue quotes the operand back as written, `1x=v` and
 	// all, rather than the name in front of the `=`. True in bash and ksh93;
 	// dash and zsh name `1x`.

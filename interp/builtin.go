@@ -2652,7 +2652,18 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		//
 		// And asked of the name the unset **lands on**, which through a
 		// reference is the target. See frozenNameOfAnUnset.
-		if code := r.unsetReadonly(r.frozenNameOfAnUnset(base, subscripted)); code != 0 {
+		//
+		// **Unless the brackets name no element at all**, where the freeze on
+		// the array is not the question that gets asked: measured 2026-09-17,
+		// `a=(1 2 3); readonly a; unset 'a[]'` is silent at 0 in bash 5.3.20
+		// and `invalid subscript` at 1 in zsh 5.9.2 — neither mentions the
+		// freeze — where ksh93, which reads the empty brackets as element
+		// zero, does refuse it. See operandEmptySubscript.
+		frozen := r.frozenNameOfAnUnset(base, subscripted)
+		if subscripted && r.operandEmptySubscript(sub) {
+			frozen = name
+		}
+		if code := r.unsetReadonly(frozen); code != 0 {
 			status = code
 			if r.ctl == controlExit {
 				return status
@@ -2725,6 +2736,18 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				// its element by searching rather than by counting. Ahead of
 				// the arithmetic below, which is what the whole operand went
 				// to before and what made it `bad math expression`.
+				status = r.carryUnsetStatus(status, code)
+				if r.ctl == controlExit {
+					return status
+				}
+				continue
+			}
+			if handled, code := r.unsetEmptySubscript(base, sub); handled {
+				// A subscript written with nothing in it, which is what
+				// `unset "a[$i]"` is once a blank `$i` has gone in. Ahead of
+				// the arithmetic below, which read it as the expression that
+				// is zero in every dialect and so removed the array's
+				// *first* element at status 0. See unsetEmptySubscript.
 				status = r.carryUnsetStatus(status, code)
 				if r.ctl == controlExit {
 					return status

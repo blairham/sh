@@ -16728,9 +16728,65 @@ subscript` of the first and `operand expected at end of string` of the
 second. The trimming now stops short of turning the one into the other,
 which is what makes the second axis reachable through an operand at all.
 
-The `unset` operand is the one route still answering the empty
-subscript as the blank one — it removes element zero where bash removes
-nothing — and is filed separately.
+**And the other two operand routes answer it as well** — `unset 'a[]'`
+and a builtin's output operand, `read 'a[]'` and `printf -v 'a[]'`,
+which are what `unset "a[$i]"` and `read "a[$i]"` are once a blank `$i`
+has gone in. The same axis is read at all four, and the three columns
+part on every part of it. Measured 2026-09-17, a script file and
+repeated under `( … )` and under `-c`, `a=(1 2 3)`, with the status on
+the same line as the builtin and the array on the next:
+
+                 unset 'a[]'               read 'a[]', printf -v 'a[]'
+    bash 5.3.20  silent at 0, nothing      the builtin's own bad-name
+                 removed                   refusal, nothing written
+    bash 3.2.57  not a valid identifier    the same as 5.3
+                 at 1, nothing removed
+    zsh 5.9.2    invalid subscript at 1,   not an identifier: a[], and
+                 the line carries on       the script ends
+    ksh93u+      element zero removed      element zero written
+
+So the brackets name **no element** in the bash column, and what each
+builtin does about that is the builtin's own answer rather than this
+axis's: a delete of no element is nothing to do, and it is silent at 0
+with the array whole — `readonly a; unset 'a[]'` is silent there too, so
+the array is never reached — while a store has nowhere to put the value
+and the whole operand is refused as a *name*. That refusal is not an
+approximation of the bad-name one but the same one: `read 'a[]'` and
+`read '1x'` are one sentence at 1, and `printf -v 'a[]'` and `printf -v
+'1x'` are that sentence under printf's name at **2**. The status is the
+builtin's, which is `Diagnostics.BuiltinBadNameStatusFor`.
+
+The refusing column writes the **read's** sentence of a delete and the
+**write's** of a store — `invalid subscript` against `not an identifier:
+a[]` — so `ArithEmptySubscript` and `ArithEmptySubscriptTarget` carry
+both routes and no further fields are needed. How much the refusal gives
+up stays the route's own axis, `BadSubscriptToUnset` and
+`BadSubscriptToAnOutputOperand`: zsh leaves a failed `unset` behind and
+ends the script for a store, which is the same split those axes already
+record for a subscript that will not evaluate. **It is not read from
+them**, because bash parts from itself there — it abandons the command
+for `unset 'a[b c]'` and only reports `unset 'a[]'`.
+
+Two orderings are measured and they are opposites. A store is answered
+in front of the **table's key** where a delete is not: `read 'm[]'` on a
+declared table is refused in both complaining columns, while `unset
+'m[]'` on the same table is silent at 0 and leaves zsh's empty key
+standing. And both are answered in front of the **freeze**, where the
+declaration is answered behind the attribute refusals: `readonly r; read
+'r[]'` is the name refusal and not `r: readonly variable`.
+
+**A subscript whose text expanded to nothing is a third construct**, and
+the operand routes are where the two are told apart most plainly:
+measured, `i=; unset 'a[$i]'` — single-quoted, so the `$i` reaches the
+builtin — removes element **zero** in bash where `unset 'a[]'` removes
+nothing, and zsh writes the arithmetic reader's `bad math expression:
+empty string` there where it writes `invalid subscript` here. That is
+`EmptySubscriptTextIsAMathError`, and the emptiness this axis answers
+has to be in the operand as the builtin receives it.
+
+Every dialect acted on element zero at both routes and said nothing
+before this, so `unset "a[$i]"` with a blank `$i` deleted the array's
+first element and `read "a[$i]"` replaced it, both at status 0 (#3513).
 
 The grammar refused an empty subscript in this one position until #1764,
 which made all four dialects answer with a sentence — `operand

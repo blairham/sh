@@ -3048,6 +3048,12 @@ func Diagnostics() interp.Diagnostics {
 			// operand to split it at.
 			"read": "%[1]s: `%[2]s': not a valid identifier",
 		},
+		// `printf` counts the identical refusal as a usage error where `read`
+		// counts it as a failure: measured 2026-09-17, a script file,
+		// `printf -v '1x' %s Q` and `printf -v 'a[]' X` are both 2 with the
+		// rest of the line still running, where `read '1x'` and `read 'a[]'`
+		// are 1. See Diagnostics.BuiltinBadNameStatusFor.
+		BuiltinBadNameStatusFor:  map[string]int{"printf": 2},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		BuiltinHelpStatus:        2,

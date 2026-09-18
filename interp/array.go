@@ -1399,6 +1399,13 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 	builtin := r.inBuiltin
 	r.inBuiltin = ""
 	defer func() { r.inBuiltin = builtin }()
+	if st, refused := r.storeOperandEmptySubscript(base, name, sub, builtin); refused {
+		// A subscript written with nothing in it, which is what `read
+		// "a[$i]"` is once a blank `$i` has gone in. Ahead of the table's
+		// key as well as of the arithmetic, which is measured — see
+		// storeOperandEmptySubscript, where the rows are.
+		return st, true
+	}
 	if r.assocDeclared(base) {
 		r.setAssocElem(base, sub, value)
 		return 0, false

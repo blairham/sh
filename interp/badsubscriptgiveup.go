@@ -187,13 +187,11 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 // measured: zsh's `readonly 'a[]'=v` is `can't create readonly array
 // elements` and not this sentence, so the attribute refusals answer first.
 func (r *Runner) emptyDeclarationSubscript(base, sub string, hasValue bool) bool {
-	if sub != "" {
-		return false
-	}
-	if r.sem().EmptyArithSubscript == EmptyArithSubscriptIsTheEmptyExpression {
-		// The brackets hold an expression that happens to be empty, which is
-		// zero — so the operand is element zero and there is nothing to
-		// refuse. The caller carries on.
+	if !r.operandEmptySubscript(sub) {
+		// Either the brackets are not empty, or they hold an expression that
+		// happens to be empty — which is zero, so the operand is element zero
+		// and there is nothing to refuse. The one test every operand route
+		// shares; see operandEmptySubscript. The caller carries on.
 		return false
 	}
 	// The sentence names no builtin in its *location*, which is the rule the
@@ -223,4 +221,168 @@ func (r *Runner) emptyDeclarationSubscript(base, sub string, hasValue bool) bool
 	r.diagf("%s\n", r.unanswered("a subscript written with nothing in it"))
 	r.status, r.unspecified = 2, true
 	return true
+}
+
+// operandEmptySubscript reports whether a **builtin's operand** carries a
+// subscript that is empty and that this column does not read as the empty
+// expression — `unset 'a[]'`, `read 'a[]'`, `printf -v 'a[]'` and
+// `typeset 'a[]'=v`, which is what `unset "a[$i]"` and the rest are once a
+// blank `$i` has gone in, the word being expanded before the builtin sees it.
+//
+// One test for all four routes, because the brackets are the same brackets and
+// a route left out is a route that goes on writing element zero in silence. It
+// says only that the operand names no element *here*; what each builtin does
+// about that is measured per builtin below, and the three columns do not agree
+// on any of it.
+//
+// Semantics.EmptyArithSubscript is the axis, read rather than a field of its
+// own: every shell gives a builtin's operand the disposition it gives the same
+// brackets in an expression. ksh93 takes them as an expression that happens to
+// be empty, which is zero, and acts on element zero everywhere; bash acts on
+// nothing and says so where there is something to say; zsh refuses the
+// subscript. Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin
+// /dev/null, a script file, `a=(1 2 3)` in front of each, with the status read
+// on the *same* line and the array on the next:
+//
+//	                     unset 'a[]'                read 'a[]' / printf -v 'a[]'
+//	bash 5.3.20          silent at 0, nothing gone  the builtin's bad-name
+//	                                                refusal, nothing written
+//	bash 3.2.57          `unset: `a[]': not a       the same as 5.3
+//	                     valid identifier` at 1
+//	zsh 5.9.2            `invalid subscript` at 1,  `not an identifier: a[]`
+//	                     the line carries on        and the script ends
+//	ksh93u+              element zero is removed    element zero is written
+//
+// bash 3.2's `unset` is the one row not matched; the preset is 5.3's.
+//
+// **The emptiness has to be in the operand as the builtin receives it**, which
+// is a different construct from a subscript whose *text* expanded to nothing
+// and is measured apart from it: `i=; unset 'a[$i]'`, single-quoted so the `$i`
+// reaches the builtin, removes element **zero** in bash 5.3.20 where
+// `unset 'a[]'` removes nothing, and zsh writes the arithmetic reader's
+// `bad math expression: empty string` there where it writes `invalid subscript`
+// here. That neighbor is Semantics.EmptySubscriptTextIsAMathError and this
+// must not answer for it — hence the test on the operand's own text.
+//
+// **And a blank subscript is not an empty one.** `a[ ]` holds whitespace and
+// reaches Semantics.BlankArithSubscriptIsTheEmptyExpression: measured, bash's
+// `unset 'a[ ]'` removes element 0 where `unset 'a[]'` removes nothing, and
+// zsh answers the first `operand expected at end of string` and the second
+// `invalid subscript`. subscriptOperandText is what keeps the one from arriving
+// as the other (#3509).
+func (r *Runner) operandEmptySubscript(sub string) bool {
+	return sub == "" && r.sem().EmptyArithSubscript != EmptyArithSubscriptIsTheEmptyExpression
+}
+
+// unsetEmptySubscript is `unset 'a[]'`, and reports whether the operand was
+// answered here along with the status it leaves.
+//
+// A **delete** is the one route where the column that complains has nothing to
+// complain about: the brackets name no element, and removing no element is not
+// a failure. Measured, bash 5.3.20's `a=(1 2 3); unset 'a[]'` is silent at 0
+// with all three elements standing, and `readonly a; unset 'a[]'` is silent at
+// 0 as well — so the array is never reached, which is what tells that row from
+// a refusal that happens to be quiet. The array's freeze is kept out of the
+// way for it in unsetBuiltin, ahead of this.
+//
+// The refusing column writes the **read's** sentence here, not the write's:
+// `unset` reads the brackets to find the element it is to remove, and zsh says
+// `invalid subscript` of them — the same words Diagnostics.ArithEmptySubscript
+// already holds for `$(( a[] ))`, where `read 'a[]'` one route over gets
+// `not an identifier: a[]`, the write's. So the wording is read from the
+// existing pair rather than duplicated into two more fields.
+//
+// How much the refusal gives up is the route's own axis and not this one:
+// Semantics.BadSubscriptToUnset, which the unevaluable subscript next door
+// already asks, answers `unset` with a failed builtin and the next command
+// still running in the column that refuses — measured, zsh's line carries on
+// to print its own status.
+//
+// Before this every dialect removed element **zero** and said nothing, so
+// `unset "a[$i]"` with a blank `$i` quietly deleted the array's first element
+// at status 0 (#3513).
+func (r *Runner) unsetEmptySubscript(base, sub string) (handled bool, code int) {
+	if !r.operandEmptySubscript(sub) {
+		return false, 0
+	}
+	if r.sem().EmptyArithSubscript == EmptyArithSubscriptIsReported {
+		// Nothing removed and nothing said. See above: the complaint this
+		// column makes about an expression's empty brackets is about a value
+		// it still has to produce, and a delete has none.
+		return true, 0
+	}
+	// The sentence is the language's and names no builtin in its location,
+	// which is what badSubscriptToUnset does one refusal over for the same
+	// operand: measured, zsh writes `./f.sh:2: invalid subscript` where its
+	// own `unset` bad-name refusal writes `./f.sh:unset:1: 1x: invalid
+	// parameter name`.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	if r.sem().EmptyArithSubscript != EmptyArithSubscriptIsInvalid {
+		r.diagf("%s\n", r.unanswered("a subscript written with nothing in it"))
+		r.status, r.unspecified = 2, true
+		return true, 2
+	}
+	return true, r.badSubscriptGivesUp(r.sem().BadSubscriptToUnset,
+		"how much an `unset` operand's unevaluable subscript gives up",
+		Wording(r.diag().UnsetBadSubscript, "%[1]s",
+			Wording(r.diag().ArithEmptySubscript, "invalid subscript", base)))
+}
+
+// storeOperandEmptySubscript is `read 'a[]'` and `printf -v 'a[]'` — a
+// builtin's **output operand** with an empty subscript — and reports whether
+// the operand was refused here along with the status the builtin carries.
+//
+// In front of the table's key path rather than behind it, which is measured
+// and is the opposite of what the delete does: bash's `typeset -A m; read
+// 'm[]'` is refused as a name, sentence and all, and zsh's ends the script,
+// where `unset 'm[]'` on the same table is silent at 0 in both and leaves an
+// empty key standing in zsh. A store has nowhere to put the value either way,
+// so the brackets are answered before anything asks what kind of array it is;
+// only ksh93 reaches the key, and it reaches it as the empty expression.
+//
+// The column that acts on nothing refuses the **whole operand as a name**, and
+// that is not an approximation of the bad-name refusal but the same refusal:
+// measured 2026-09-17, bash 5.3.20 answers `read 'a[]'` and `read '1x'` with
+// one sentence — `read: 'a[]': not a valid identifier`, with bash's own
+// leading backquote in place of the first quote — at 1, and `printf -v 'a[]'`
+// and `printf -v '1x'` with that sentence under printf's name at **2**, the
+// same refusal in each pair. The status is the builtin's own, which is why it
+// is read
+// from Diagnostics.BuiltinBadNameStatusFor and not from this axis. It stands
+// ahead of the freeze as well: `readonly a; read 'a[]'` is the name refusal
+// and not `a: readonly variable`, which frozenReadName is what arranges.
+//
+// The refusing column writes the **write's** sentence — zsh's `not an
+// identifier: a[]`, which Diagnostics.ArithEmptySubscriptTarget already holds
+// for `(( a[] = 4 ))` — and gives up as much as
+// Semantics.BadSubscriptToAnOutputOperand says, which in that column is the
+// script. Both read from the fields the expression's write already uses; the
+// two sentences and the two give-ups are what part `unset` from a store here.
+//
+// Before this every dialect wrote element **zero**, so `read "a[$i]"` with a
+// blank `$i` quietly replaced the array's first element at status 0 (#3513).
+func (r *Runner) storeOperandEmptySubscript(base, operand, sub, builtin string) (status int, refused bool) {
+	if !r.operandEmptySubscript(sub) {
+		return 0, false
+	}
+	switch r.sem().EmptyArithSubscript {
+	case EmptyArithSubscriptIsReported:
+		// The builtin's bad-name refusal, quoting the operand back whole and
+		// carrying that builtin's own status — and not fatal, which is what
+		// this axis value says everywhere: the complaint is made and the
+		// input survives it. The one column that ends a script here answers
+		// the axis below instead.
+		return r.badBuiltinName(builtin, operand, operand, No), true
+	case EmptyArithSubscriptIsInvalid:
+		return r.badSubscriptGivesUp(r.sem().BadSubscriptToAnOutputOperand,
+			"how much a store through a builtin's operand gives up for an unevaluable subscript",
+			Wording(r.diag().StoreOperandBadSubscript, "%[2]s", builtin,
+				Wording(r.diag().ArithEmptySubscriptTarget,
+					"not an identifier: %[1]s[]", base))), true
+	}
+	r.diagf("%s\n", r.unanswered("a subscript written with nothing in it"))
+	r.status, r.unspecified = 2, true
+	return 2, true
 }

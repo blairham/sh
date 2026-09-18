@@ -1293,6 +1293,8 @@ func Semantics() interp.Semantics {
 	// bash's letter of the same name is a different question that stays
 	// unimplemented (#3390).
 	s.JobsListFinishedJobs = interp.Yes
+	// Every ended job is listed as ended, monitor or no monitor.
+	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
 	s.JobsOptions = "lp"
 	s.JobsPidsOnlyOption = interp.Yes
 	s.JobsShowBackgroundCommand = interp.No
@@ -1337,6 +1339,9 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// And a job it has already reported stays waitable by its process id.
 	s.WaitRemembersAReapedJob = interp.Yes
+	// `sh -c 'kill -TERM $$' &` then `wait $!` writes `Terminated` here,
+	// which is the sentence a killed foreground command earns.
+	s.WaitReportsTheSignalThatEndedTheJob = interp.Yes
 	// `wait -n` is taken here and is not bash's `-n`. Measured 2026-09-17 in
 	// the pinned image, BusyBox v1.37.0, with the jobs' exit statuses as the
 	// discriminator — a probe using bare `sleep` jobs cannot tell the two

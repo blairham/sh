@@ -940,10 +940,6 @@ func (r *Runner) waitOutPolledJob(j *Job) {
 // ambiguity is not reachable. If one ever gains one, the signal wants carrying
 // on the Job instead.
 func (r *Runner) noticeWaitedSignal(j *Job, status int) {
-	w := r.diag().WaitSignalNotice
-	if w == "" {
-		return
-	}
 	base := r.signalDeathStatus(0)
 	if r.unspecified {
 		return
@@ -952,7 +948,22 @@ func (r *Runner) noticeWaitedSignal(j *Job, status int) {
 	if sig <= 0 || sig > maxNamedSignal {
 		return
 	}
-	r.diagf("%s\n", Wording(w, "wait: %[1]d: %[2]s", j.Ident(), r.signalDescription(syscall.Signal(sig))))
+	said := r.status
+	if !r.ask(r.sem().WaitReportsTheSignalThatEndedTheJob, "a `wait` naming the signal that ended the job it reaped") {
+		// A refusal to *say* something, so the status stays what the wait
+		// reports: the signal already made it, and two of the five columns
+		// reach here and write nothing.
+		r.status, r.unspecified = said, false
+		return
+	}
+	if w := r.diag().WaitSignalNotice; w != "" {
+		r.diagf("%s\n", Wording(w, "wait: %[1]d: %[2]s", j.Ident(), r.signalDescription(syscall.Signal(sig))))
+		return
+	}
+	// No sentence of its own, so the one a signal that ended a foreground
+	// command earns — which is what the two columns without a `wait`-flavored
+	// wording write here, byte for byte.
+	r.killedNotice(syscall.Signal(sig), j.Ident(), j.Command)
 }
 
 // maxNamedSignal bounds what a status may be read back as a signal. Higher

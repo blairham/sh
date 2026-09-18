@@ -25,8 +25,13 @@ func waitNoticeRun(t *testing.T, src string, notice bool) string {
 		// The encoding that makes the signal readable back out of the
 		// status, which is the dialect this wording belongs to.
 		sem.SignalDeathStatusIsTwoFiftySix = Yes
+		// Whether the reap says anything is the axis; which sentence it says
+		// is the wording. This helper moves them together, since the shape it
+		// is about is the one column that has a sentence of its own.
+		sem.WaitReportsTheSignalThatEndedTheJob = No
 		dg := Diagnostics{}
 		if notice {
+			sem.WaitReportsTheSignalThatEndedTheJob = Yes
 			dg.WaitSignalNotice = "wait: %[1]d: signal %[2]s"
 		}
 		r.Semantics, r.Diagnostics, r.Stderr = &sem, &dg, &errs
@@ -57,9 +62,11 @@ func TestWaitNamesTheSignalThatEndedTheChildItReaped(t *testing.T) {
 		})
 	}
 
-	// And a vector with no wording says nothing at all, which is what four of
-	// the five columns want — the silence is the absence of the string rather
-	// than a second rule.
+	// And a vector that does not report says nothing at all, which is what
+	// two of the five columns want. The silence is the axis rather than the
+	// empty wording: a vector that reports and holds no sentence of its own
+	// writes the one a killed foreground command earns — see
+	// TestWhatAWaitSaysAboutTheSignalThatEndedTheJob.
 	errs := waitNoticeRun(t, "sh -c 'kill -TERM $$' &\nwait $!\n", false)
 	if strings.TrimSpace(errs) != "" {
 		t.Errorf("with no wording, stderr %q, want nothing", errs)

@@ -6972,6 +6972,32 @@ type Semantics struct {
 	// the session.
 	JobsListFinishedJobs Answer
 
+	// EndedJobIsListedAsRunningWithoutTheMonitor makes a `jobs` listing say
+	// a job is still running when the shell has not been asked to watch its
+	// children. True in ksh93 alone.
+	//
+	// The other four columns know a background job has ended whether or not
+	// `set -m` is on, and say so. ksh93 reaps a `&` job only under the
+	// monitor, so without one the listing reports what the shell last knew
+	// rather than what is true — and it keeps saying it after a `wait` that
+	// reaped the job, which is what makes this a statement about the listing
+	// and not a race.
+	//
+	// It is an axis rather than a wording because this implementation always
+	// knows: a background statement runs on a goroutine that finishes whether
+	// anybody asked for the monitor or not, so the ignorance has to be
+	// reproduced deliberately. It was a wording until now — the dialect spelt
+	// its `Done` word `Running` — which answered the listing without the
+	// monitor and answered it wrongly with one.
+	//
+	// Measured 2026-09-18, a script file under `env -i PATH=/usr/bin:/bin`
+	// with stdin on /dev/null, over `( exit 0 ) &`, `( exit 7 ) &` and a
+	// `sleep` that outlives the listing: with `set -m` ksh93u+ writes `Done`,
+	// `Done(7)` and `Running`; without it, `Running` three times, and again
+	// after `wait`. bash 5.3.20, zsh 5.9.2, dash and BusyBox ash 1.37.0 write
+	// the ended rows either way.
+	EndedJobIsListedAsRunningWithoutTheMonitor Answer
+
 	// SetReportsEveryBadOption makes `set` report every option word it
 	// cannot use before it gives up, rather than stopping at the first.
 	//
@@ -10638,6 +10664,33 @@ type Semantics struct {
 	//
 	// Bounded rather than kept forever — see reapedJobsKept.
 	WaitRemembersAReapedJob Answer
+
+	// WaitReportsTheSignalThatEndedTheJob says out loud that a signal ended
+	// the background job a `wait` naming it has just reaped. True in dash,
+	// BusyBox ash and ksh93; bash and zsh say nothing at all.
+	//
+	// Which sentence is the dialect's: ksh93 has one of its own, naming the
+	// builtin and the process id (Diagnostics.WaitSignalNotice), and the
+	// other two write the same sentence a signal that ended a *foreground*
+	// command earns — so where that wording is empty this reaches
+	// Runner.killedNotice, which is the one the foreground route already
+	// writes. That is the whole of the difference this axis records: the
+	// sentence exists in all three, and in two of them the reap could not
+	// reach it.
+	//
+	// Only a `wait` that named something, which is the same narrowing
+	// Diagnostics.WaitSignalNotice carries: a bare `wait` for the same job
+	// says nothing in every column, measured.
+	//
+	// Measured 2026-09-18 over `sh -c 'kill -TERM $$' &` followed by `wait
+	// $!`, a script file under `env -i PATH=/usr/bin:/bin` with stdin on
+	// /dev/null. Apple's dash-16 writes `Terminated: 15` and BusyBox ash
+	// 1.37.0 and Alpine's dash 0.5.12 write `Terminated`, which is the libc
+	// suffix and not a dialect question; ksh93u+ writes `wait: <pid>:
+	// Terminated`; bash 5.3.20 and zsh 5.9.2 write nothing. Every column
+	// reports 143.
+	WaitReportsTheSignalThatEndedTheJob Answer
+
 	// WaitNextJob is what `wait` does with a `-n`, and the panel gives three
 	// answers rather than two — see the constants.
 	//

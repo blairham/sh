@@ -3010,6 +3010,42 @@ type Diagnostics struct {
 	// answer it would have to refuse to report the line at all.
 	BackquotedSubstitutionRestartsLines bool
 
+	// SubstitutionBodyStartsAtItsOpenersLine numbers a `$( … )` body from the
+	// line the `$(` is on rather than from the line its text begins on, so
+	// the newlines between the opener and the first command of the body count
+	// for nothing.
+	//
+	// bash alone. Measured 2026-09-17 over a script file with `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, stdin from /dev/null, `echo one` on line
+	// one and the substitution written from line two:
+	//
+	//	body                                    physical  bash  zsh/ksh93/dash
+	//	`$(⏎echo "L=$LINENO"⏎)`                        3     2   3
+	//	`$(⏎⏎echo "L=$LINENO"⏎)`                       4     2   4
+	//	`$(⏎⏎⏎echo "L=$LINENO"⏎)`                      5     2   5
+	//	`$(⏎echo x⏎echo "L=$LINENO"⏎)`                 4     3   4
+	//	`$(echo "L=$LINENO"⏎)`                         2     2   2
+	//
+	// The last row is the control and is why this is about the *opener* and
+	// not about the body: with text after the `$(`, every column including
+	// bash answers 2. The third row is what says it is not a constant offset
+	// of one — however many newlines stand between the opener and the first
+	// command, that command is the opener's line there.
+	//
+	// The line *after* the substitution is 5 in every column, so nothing is
+	// shifted for the rest of the file; the offset lives inside the body.
+	//
+	// The same number shows in a diagnostic as well as in `$LINENO`, because
+	// both are read off the offset the body's runner is given — which is why
+	// this sits beside BackquotedSubstitutionRestartsLines rather than in the
+	// semantics vector: they are one question about where a body's lines are
+	// counted from, asked of the two spellings.
+	//
+	// The older spelling is a third answer in that shell and is not this
+	// field: `` v=`⏎echo "L=$LINENO"⏎` `` is 5 there, which is the numbering
+	// #3553 measures.
+	SubstitutionBodyStartsAtItsOpenersLine bool
+
 	// JobStarted announces a backgrounded job. Two verbs: the job number and
 	// the process id.
 	//

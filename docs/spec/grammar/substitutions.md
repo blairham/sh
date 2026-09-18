@@ -1150,6 +1150,42 @@ The closer named is the construct's own. `v=${ echo hi; ;}` is
 ``syntax error near unexpected token `;' while looking for matching `}'``
 in the same shell.
 
+## Where a body's lines are counted from
+
+A `$( … )` body is parsed on its own, so something has to say which file
+line its first line is. Two of the three answers in the panel are already
+written down — a `$( … )` is numbered from the file everywhere, and the
+older spelling restarts from one in dash — and the third is a `$(` that
+ends the line.
+
+Measured 2026-09-17 over a script file with `env -i PATH=/usr/bin:/bin
+LC_ALL=C` and stdin from `/dev/null`, `echo one` on line one and the
+substitution written from line two:
+
+| body | physical line of the command | bash 5.3.20 | zsh, ksh93, dash |
+| --- | --- | --- | --- |
+| `$(⏎echo "L=$LINENO"⏎)` | 3 | **2** | 3 |
+| `$(⏎⏎echo "L=$LINENO"⏎)` | 4 | **2** | 4 |
+| `$(⏎⏎⏎⏎echo "L=$LINENO"⏎)` | 6 | **2** | 6 |
+| `$(⏎echo x⏎echo "L=$LINENO"⏎)` | 4 | **3** | 4 |
+| `$(echo "L=$LINENO"⏎)` | 2 | 2 | 2 |
+
+The last row is the control and is why this is about the **opener**: with
+text after the `$(`, every column answers 2. The third row is what says it
+is not a constant offset of one — however many newlines stand between the
+opener and the first command, that command is the opener's line there.
+
+The line *after* the substitution is 5 in every column, so nothing is
+shifted for the rest of the file; the offset lives inside the body. The
+same number shows in a **diagnostic** as well as in `$LINENO`, because
+both are read off the one offset the body's runner is given.
+
+Diagnostics value: `SubstitutionBodyStartsAtItsOpenersLine` — bash alone.
+It sits beside `BackquotedSubstitutionRestartsLines` because the two are
+one question about where a body's lines are counted from, asked of the two
+spellings. The older spelling is a third answer again in that shell and is
+neither field's; it is measured in #3553.
+
 ## What this does not cover
 
 The internal grammar of each form: arithmetic operators and their

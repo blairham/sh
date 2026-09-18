@@ -1062,7 +1062,7 @@ func (p *Parser) NextLine() (*File, bool) {
 		// A `;` where a command belongs, for the dialects that step over one:
 		// `; echo two` and `true ; ; echo two` alike, since the second
 		// statement of a line begins here as much as the first does.
-		if p.skipSeparators(false, false) {
+		if p.skipSeparators(separatorAtAStatement) {
 			p.skipNewlines()
 		}
 		st := p.parseStmt()
@@ -1190,6 +1190,32 @@ func (p *Parser) skipArrayElementSeparators(afterAnElement bool) (ended bool) {
 	return false
 }
 
+// separatorPosition is where the parser was looking for a command when it met
+// a `;`. The dialects that step over one draw their lines by position rather
+// than by the token, so this is what a caller has to say.
+type separatorPosition uint8
+
+const (
+	// separatorAtAStatement is where a statement of a list begins — the top
+	// of a file, and between two statements of any list.
+	separatorAtAStatement separatorPosition = iota
+	// separatorAfterABar is the command a pipeline wants after its bar.
+	separatorAfterABar
+	// separatorInACondition is a statement of a keyword's condition list.
+	separatorInACondition
+	// separatorAtAnAndOrOperand is an and-or's right-hand side.
+	separatorAtAnAndOrOperand
+)
+
+// conditionPosition names the position a list's own separator is in, which is
+// one of two depending on whether the list is a condition's.
+func conditionPosition(inCondition bool) separatorPosition {
+	if inCondition {
+		return separatorInACondition
+	}
+	return separatorAtAStatement
+}
+
 // skipSeparators steps over a `;` written where a command belongs, as far as
 // the dialect goes, and reports whether it stepped over any.
 //
@@ -1206,22 +1232,26 @@ func (p *Parser) skipArrayElementSeparators(afterAnElement bool) (ended bool) {
 // nothing on its right, and `echo two` is the next statement — which is why
 // only the wider value steps over what follows.
 //
-// afterBar says the caller is a pipeline looking for the command after its
-// bar, and inCondition that it is a keyword's condition list looking for a
-// statement of its own. Those are the two positions ksh93 will not take, and
-// they are both the caller's to know: the wider value takes them both.
-func (p *Parser) skipSeparators(afterBar, inCondition bool) bool {
+// at says which of the four positions the caller is in. They are the caller's
+// to know and not the token's — the same `;` is taken in one and refused in
+// another — and the wider value takes all four.
+func (p *Parser) skipSeparators(at separatorPosition) bool {
 	limit := 0
 	crossNewlines := false
 	switch p.dialect.SeparatorWhereACommandBelongs {
 	case OneSeparatorExceptAfterABarOrBeforeACondition:
-		if afterBar || inCondition {
+		if at == separatorAfterABar || at == separatorInACondition {
 			return false
 		}
 		limit = 1
 	case AnySeparatorWhereACommandBelongs:
 		limit = -1
 		crossNewlines = true
+	case SeparatorOnlyWhereAnAndOrWantsOne:
+		if at != separatorAtAnAndOrOperand {
+			return false
+		}
+		limit = 1
 	default:
 		return false
 	}
@@ -1272,7 +1302,7 @@ func (p *Parser) parseList() []*Stmt {
 	p.inCondition = false
 	var out []*Stmt
 	p.skipNewlines()
-	if p.skipSeparators(false, inCondition) {
+	if p.skipSeparators(conditionPosition(inCondition)) {
 		// A newline after the separator ends nothing here: between two
 		// statements it is an ordinary terminator, which every shell takes.
 		// It is only where an and-or's right-hand side belongs that one shell
@@ -1303,7 +1333,7 @@ func (p *Parser) parseList() []*Stmt {
 			break
 		}
 		p.skipNewlines()
-		if p.skipSeparators(false, inCondition) {
+		if p.skipSeparators(conditionPosition(inCondition)) {
 			p.skipNewlines()
 		}
 	}
@@ -1725,7 +1755,7 @@ func (p *Parser) parseAndOr() Expr {
 		p.open = append(p.open, opener{word: op.String(), line: int(pos.Line)})
 		p.next()
 		p.skipNewlines()
-		skipped := p.skipSeparators(false, false)
+		skipped := p.skipSeparators(separatorAtAnAndOrOperand)
 		right := p.parsePipeline()
 		if right == nil {
 			if skipped && p.dialect.AbsentAndOrOperandIsAnEmptyCommand &&
@@ -1920,7 +1950,7 @@ func (p *Parser) parsePipeline() Expr {
 		// And a `;` written where the command after the bar belongs, for the
 		// one dialect that steps over one there. ksh93 will not: it takes
 		// `a || ; b` and refuses `a | ; b`, which is why this asks.
-		p.skipSeparators(true, false)
+		p.skipSeparators(separatorAfterABar)
 	}
 }
 

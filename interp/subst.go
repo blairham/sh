@@ -109,6 +109,16 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
 		base = 0
 	}
+	if !span.Backquoted && r.diag().SubstitutionBodyStartsAtItsOpenersLine {
+		// The newlines between the opener and the first command of the body
+		// count for nothing in one dialect, so the first command is on the
+		// opener's line however many of them were written. Taken off the
+		// offset rather than off the text, which would move every position
+		// the body's own refusals and traces are written from. See
+		// Diagnostics.SubstitutionBodyStartsAtItsOpenersLine for the five
+		// rows and for the control that says this is the opener's question.
+		base -= leadingNewlines(src)
+	}
 	f := p.Parse()
 	if err := p.Err(); err != nil {
 		// A substitution re-parses, so the syntax-error status is the
@@ -557,6 +567,21 @@ func (r *Runner) localizeReply() func() {
 func (r *Runner) bodyDialect(span syntax.Span) syntax.Dialect {
 	d := r.dialect()
 	d.Comments = span.Comments
+	if !span.Backquoted && d.SubstitutionBodyRefusesASteppedOverSeparator &&
+		d.SeparatorWhereACommandBelongs != syntax.NoSeparatorWhereACommandBelongs {
+		// A `;` standing where a command belongs is read here by the
+		// dialect's own rule everywhere but inside the newer spellings'
+		// bodies, where one shell takes it only as an and-or's missing
+		// operand. See syntax.Dialect.SubstitutionBodyRefusesASteppedOverSeparator
+		// for the fourteen measured rows, and note that the *older* spelling
+		// keeps the shell's ordinary answer — which is why the span decides
+		// rather than the construct.
+		//
+		// Guarded on the dialect having an answer to narrow: setting the
+		// narrower value over a dialect that steps over nothing would widen
+		// it, and accept the one position that dialect refuses.
+		d.SeparatorWhereACommandBelongs = syntax.SeparatorOnlyWhereAnAndOrWantsOne
+	}
 	return d
 }
 
@@ -675,4 +700,24 @@ func (r *Runner) substParseErrorAtItsCloser(span syntax.Span, src string, err er
 		return closed
 	}
 	return err
+}
+
+// leadingNewlines counts the newlines a substitution's body opens with, which
+// is how far one dialect's numbering of it is out from the file's.
+//
+// Blanks and tabs before a newline count as part of it: `$(  ⏎echo x)` is the
+// same shape as `$(⏎echo x)` to a reader and to that shell. Anything else
+// ends the count, because the body has begun.
+func leadingNewlines(src string) int {
+	n := 0
+	for i := 0; i < len(src); i++ {
+		switch src[i] {
+		case '\n':
+			n++
+		case ' ', '\t':
+		default:
+			return n
+		}
+	}
+	return n
 }

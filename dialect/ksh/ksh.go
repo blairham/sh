@@ -155,6 +155,13 @@ func Dialect() syntax.Dialect {
 	// a separate question from the and-or rather than one rule about control
 	// operators.
 	d.SeparatorWhereACommandBelongs = syntax.OneSeparatorExceptAfterABarOrBeforeACondition
+	// And the one place that reading does not reach: the body of a `$( … )`
+	// or a `${ …;}`, where only an and-or's missing operand still takes one.
+	// Measured 2026-09-17 over fourteen shapes — `echo a; ;` runs at the top
+	// level and inside backquotes and is `` `;' unexpected `` inside either
+	// newer spelling, while `v=$(false || ; echo b)` runs and leaves `b`
+	// (#3333).
+	d.SubstitutionBodyRefusesASteppedOverSeparator = true
 	// And where a separator was stepped over and nothing came after it at
 	// all, an empty command stands there and succeeds: `false || ;` answers
 	// 0 here and 1 in zsh, which drops the operator instead. The `&&` row

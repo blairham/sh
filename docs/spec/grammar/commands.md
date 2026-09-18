@@ -223,6 +223,47 @@ same position through `OpenEndedAndOr`, which drops the operator instead,
 and setting both would accept lines neither shell does — ksh93 refuses
 `false ||` and `{ false || ⏎ }` outright.
 
+**The step-over does not reach inside a `$( … )` body in ksh93.** Measured
+2026-09-17 over a script file with `env -i PATH=/usr/bin:/bin LC_ALL=C`
+and stdin from `/dev/null`:
+
+| written | ksh93 | zsh |
+| --- | --- | --- |
+| `echo a; ;` | runs | runs |
+| `` v=`echo a; ;` `` | runs | runs |
+| `` v=`; echo a` `` | runs | runs |
+| `` v=`false \|\| ; echo b` `` | runs, `b` | runs |
+| `v=$(echo a; ;)` | `` `;' unexpected `` | runs |
+| `v=$(; echo a)` | `` `;' unexpected `` | runs |
+| `v=$(echo a; ; echo b)` | `` `;' unexpected `` | runs |
+| `v=$(echo a & ; echo b)` | `` `;' unexpected `` | runs |
+| `v=$(echo a \| ; cat)` | `` `;' unexpected `` | runs |
+| `v=$(if ; then echo a; fi)` | `` `;' unexpected `` | runs |
+| `v=$( ; )` | `` `;' unexpected `` | runs |
+| `v=${ echo a; ;}` | `` `;' unexpected `` | — |
+| `v=$(false \|\| ; echo b)` | runs, `b` | runs |
+| `v=$(echo a; )` | runs, `a` | runs |
+
+So the **two spellings of one construct part company**, exactly as they do
+for where a refusal is located and for whether a line continuation at the
+front is removed: the older one keeps the shell's ordinary answer and the
+two newer ones lose it. The last two rows are what keep the rule from
+being "the body refuses a `;`" — an and-or's missing operand still takes
+one, and a separator that *terminates* a statement was never this
+question.
+
+Grammar flag: `SubstitutionBodyRefusesASteppedOverSeparator` — core and
+every dialect but `ksh`: **off**. The interpreter reads it where the body
+is parsed, because only the caller knows it is reading a body and which
+spelling opened it, and it turns `SeparatorWhereACommandBelongs` into
+`SeparatorOnlyWhereAnAndOrWantsOne` for that parse. zsh takes every row,
+so the wider value is untouched, and the four columns that step over
+nothing have nothing to narrow.
+
+Before this the two dialects that step over a separator both **accepted**
+`v=$(echo hi; ;)` — an empty value at status 0 with nothing said, which
+is the silent wrong answer rather than a wrong sentence (#3333).
+
 **A skipped separator may be the whole of a body.** ksh93 alone, and it
 is the shape that says the step-over is not only about operators.
 Measured 2026-09-12 with `-n`, `env -i PATH=/usr/bin:/bin` and a scratch

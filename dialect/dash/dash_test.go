@@ -549,8 +549,9 @@ func TestAKilledCommandIsSaidWithNoLocation(t *testing.T) {
 }
 
 // This shell numbers a backquoted body from one and a `$( … )` body from the
-// file — two answers for the two spellings of one construct, and it is alone
-// in giving them.
+// file — two answers for the two spellings of one construct. BusyBox ash does
+// the same, measured 2026-09-18; the "alone in giving them" this comment used
+// to claim was true only of the shells on this machine's PATH (#2471).
 func TestABackquotedBodyIsNumberedFromOne(t *testing.T) {
 	if !dash.Diagnostics().BackquotedSubstitutionRestartsLines {
 		t.Error("a backquoted body is numbered from one here")

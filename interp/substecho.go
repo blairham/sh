@@ -101,7 +101,21 @@ func (r *Runner) textInForce() (string, int) {
 func (r *Runner) substFailureAtItsLine(span syntax.Span, failure error) func() {
 	d := r.diag()
 	line := d.ParseFailureLine(failure)
-	if span.Backquoted || d.ParseFailureNamesItsOwnLine || line < 1 || r.linePin != 0 {
+	// The older spelling is placed where the script's own line is, *unless*
+	// this dialect numbers that body from its own first line — where it does,
+	// the refusal's line is the body's and the prefix has to say so or the
+	// message contradicts the number inside it.
+	//
+	// Measured 2026-09-18 from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, `echo one` / ``echo `if; then :; fi` `` /
+	// `echo two`: dash 0.5.12 writes `<script>: 1: Syntax error: ";"
+	// unexpected` where the `$( … )` spelling of the same body writes `2:`,
+	// and BusyBox 1.37.0 writes `line 1` against `line 2` the same way. This
+	// wrote `2:` for both — so `Diagnostics.BackquotedSubstitutionRestartsLines`
+	// reached the runner's location and never the refusal's, which is the
+	// split #2471 identified.
+	if (span.Backquoted && !d.BackquotedSubstitutionRestartsLines) ||
+		d.ParseFailureNamesItsOwnLine || line < 1 || r.linePin != 0 {
 		return func() {}
 	}
 	saved := r.line

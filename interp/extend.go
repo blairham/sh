@@ -1507,6 +1507,50 @@ func (r *Runner) AddDefaultOnSetOptions(names ...string) {
 	}
 }
 
+// OptionMove is what a dialect's own `set -o` namespace answers about one
+// request to move one name — see [Runner.SetOptionTable].
+//
+// Four answers rather than two, and the fourth is what #3190 found missing.
+// Three of them leave the sentence to this package, which is the contract
+// that lets one refusal be worded three ways depending on whether a script,
+// an invocation or an inherited value asked. An entry whose state the
+// substrate refuses **out loud** cannot keep that contract — the complaint is
+// already on standard error by the time the entry can answer — so it says so
+// rather than drawing a second sentence about the same request.
+type OptionMove uint8
+
+const (
+	// OptionNotFound is a name this shell's namespace does not hold. Refused
+	// in the dialect's own words on whichever route asked, and that wording,
+	// its status and whether it ends the script are already Diagnostics and
+	// Semantics values.
+	OptionNotFound OptionMove = iota
+
+	// OptionMoved is the state left where it was asked to be. It is also the
+	// answer for a request already granted — a fixed name asked for the state
+	// it is already in is not a refusal in any shell in the panel.
+	OptionMoved
+
+	// OptionRefused is a name this shell has and will not move.
+	// Diagnostics.SetImmovableOptionName is the sentence, written by this
+	// package.
+	OptionRefused
+
+	// OptionRefusedAndSaid is OptionRefused by an entry that has already
+	// spoken, so this package words nothing. The status and the fatality are
+	// unchanged — only the sentence is the entry's.
+	//
+	// One entry in the panel is in this state and it is zsh's `monitor`: the
+	// name is job control, the state behind it is the substrate's, and the
+	// substrate refuses job control with no terminal in the dialect's own
+	// wording (Diagnostics.MonitorDenied) on the way through. Before this the
+	// entry answered OptionRefused and `set -o monitor` in a shell with no
+	// terminal wrote `can't change option: monitor` **twice** — once from the
+	// substrate and once from here — while `setopt monitor` beside it, which
+	// does not pass through this seam, said it once (#3190).
+	OptionRefusedAndSaid
+)
+
 // SetOptionTable installs the `set -o` namespace of a dialect that has one of
 // its own: the rows `set -o` and `set +o` write, and what moving one name
 // does.
@@ -1520,15 +1564,11 @@ func (r *Runner) AddDefaultOnSetOptions(names ...string) {
 // zsh with 23 options and said nothing about the 170 that decide what it does
 // (#1080).
 //
-// move reports two things and neither is a status. `known` false is a name
-// this shell does not have, which is refused in the dialect's own words on
-// whichever of the three routes asked — a script's `set -o`, an invocation's,
-// or an inherited value — and that wording, its status and whether it ends
-// the script are already Diagnostics and Semantics values. `moved` false with
-// `known` true is a name the shell has and will not move, which is
-// Diagnostics.SetImmovableOptionName. So the mover is **silent**: it decides,
-// and this package speaks, which is the only way one refusal can be worded
-// three ways by route.
+// move reports one of four things and none of them is a status — see
+// [OptionMove]. The mover is **silent** for three of them: it decides, and
+// this package speaks, which is the only way one refusal can be worded three
+// ways by route. The fourth exists for the entry that cannot be, because the
+// state it moves is one the substrate refuses out loud on the way through.
 //
 // It does not replace [Runner.ApplyNamedOption], which stays on the
 // substrate's own table on purpose: that is the seam a dialect's option
@@ -1541,7 +1581,7 @@ func (r *Runner) AddDefaultOnSetOptions(names ...string) {
 // runner would make `( set -o autocd )` set the option on the *parent* and
 // leave the subshell without it, which is a wrong report turning into an
 // escaped write (#1855).
-func (r *Runner) SetOptionTable(listed func(r *Runner) []ListedOption, move func(r *Runner, name string, on bool) (moved, known bool)) {
+func (r *Runner) SetOptionTable(listed func(r *Runner) []ListedOption, move func(r *Runner, name string, on bool) OptionMove) {
 	r.optionListing, r.optionMover = listed, move
 }
 

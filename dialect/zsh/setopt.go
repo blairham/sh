@@ -185,6 +185,11 @@ type zshOption struct {
 	// the name, and a `case` in the letter reader could only answer one of
 	// the three.
 	atInvocation func(*interp.Runner, bool) int
+	// speaksItsOwnRefusal marks the entry whose `set` has already complained
+	// by the time it answers, so the substrate words nothing further. See
+	// interp.OptionRefusedAndSaid, and monitorOption for the one name in the
+	// table that is in this state and why it cannot be got out of it.
+	speaksItsOwnRefusal bool
 }
 
 // zshOptions is the table, in listing order (sorted by base).
@@ -887,9 +892,20 @@ func zleOption() zshOption {
 // Granted and inert, which is neither the refusal a script gets nor a move —
 // the shape interp.Runner.AddInertSetOptions gives a whole name, here for one
 // route of one name.
+// It is also the one entry in this table that **speaks**, and it cannot be
+// made not to: the state behind the name is the substrate's job control, and
+// the substrate refuses job control with no terminal in this dialect's own
+// wording (Diagnostics.MonitorDenied) on the way through `ApplyNamedOption`.
+// So it says so rather than letting the caller write a second sentence about
+// the same request — before #3190, `set -o monitor` in a shell with no
+// terminal wrote `can't change option: monitor` twice, where `setopt monitor`
+// beside it, which does not pass through that seam, said it once. Every other
+// name in the table decides in silence and the substrate speaks, which is
+// what lets one refusal be worded three ways by route.
 func monitorOption() zshOption {
 	o := setOptBacked("monitor", false, "monitor", false)
 	o.atInvocation = func(*interp.Runner, bool) int { return 0 }
+	o.speaksItsOwnRefusal = true
 	return o
 }
 
@@ -1422,10 +1438,10 @@ func listedOptions(r *interp.Runner) []interp.ListedOption {
 // underscores ignored, one `no` prefix negating, the twelve compat spellings
 // included — because it is the same namespace and a shell with two answers
 // for `set -o Err_Exit` and `setopt Err_Exit` would have two namespaces.
-func moveOption(r *interp.Runner, name string, on bool) (moved, known bool) {
+func moveOption(r *interp.Runner, name string, on bool) interp.OptionMove {
 	o, inverted, ok := resolveOptionName(normalizeOption(name))
 	if !ok {
-		return false, false
+		return interp.OptionNotFound
 	}
 	want := on != inverted
 	if mover := invocationMover(r, o); mover != nil {
@@ -1435,18 +1451,32 @@ func moveOption(r *interp.Runner, name string, on bool) (moved, known bool) {
 		// is the whole point of the hook, since four of the five names that
 		// carry one are **refused** to a running script and granted at an
 		// invocation. See Semantics.ImmovableOptionsSetAtInvocation.
-		return mover(r, want) == 0, true
+		return moved(mover(r, want) == 0, o)
 	}
 	if o.immovable != nil && o.immovable(r) {
-		return o.get(r) == want, true
+		return moved(o.get(r) == want, o)
 	}
 	if o.set != nil {
-		return o.set(r, want) == 0, true
+		return moved(o.set(r, want) == 0, o)
 	}
 	// Fixed: granted where it is already where it is being asked to be, and
 	// refused otherwise — the same bargain setOption strikes, with the
 	// sentence left to the caller.
-	return o.get(r) == want, true
+	return moved(o.get(r) == want, o)
+}
+
+// moved turns one entry's answer into the substrate's, which is where the
+// contract at the top of moveOption is kept: an entry that has already
+// complained says so, and every other refusal is left for the substrate to
+// word.
+func moved(ok bool, o zshOption) interp.OptionMove {
+	switch {
+	case ok:
+		return interp.OptionMoved
+	case o.speaksItsOwnRefusal:
+		return interp.OptionRefusedAndSaid
+	}
+	return interp.OptionRefused
 }
 
 // setOption moves one option by name, reporting what `setopt` would. Shared

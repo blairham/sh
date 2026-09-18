@@ -1195,12 +1195,20 @@ func (r *Runner) setNamedOptionSpelled(name, spelled string, on bool) bool {
 		name, on = r.setOptionNamespaceName(name, on)
 		return r.setOptionSpelled(name, spelled, on)
 	}
-	moved, known := r.optionMover(r, name, on)
-	switch {
-	case !known:
+	switch r.optionMover(r, name, on) {
+	case OptionNotFound:
 		return r.badSetOptionName(spelled)
-	case moved:
+	case OptionMoved:
 		return true
+	case OptionRefusedAndSaid:
+		// A name the entry has already complained about, because the state
+		// behind it is one the substrate refuses out loud on the way
+		// through. The status and the fatality below are still this
+		// package's; only the sentence is not, and writing one here as well
+		// is what put `can't change option: monitor` on standard error twice
+		// (#3190).
+		return r.setRefusalStatus(refusedOptionName,
+			"a `set -o` name this shell will not move ending the script")
 	}
 	// A name this shell has and will not move. Spoken here rather than by the
 	// dialect so that the location, the status and whether it ends the script

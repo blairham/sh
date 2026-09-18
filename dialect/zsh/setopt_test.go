@@ -596,3 +596,53 @@ func TestPosixBuiltinsDecidesWhetherAPrefixOnASpecialBuiltinPersists(t *testing.
 		t.Errorf("round trip: out %q, want the transient reading back", out)
 	}
 }
+
+// And the refusal is written **once**, whichever route asked for it.
+//
+// `monitor` is the one entry in this table whose `set` reaches a substrate
+// option that refuses out loud: interp's own `setMonitor` writes
+// Diagnostics.MonitorDenied on the way through. `setopt` has always said it
+// once, because that builtin does not pass through the substrate's option
+// seam; `set -o monitor` did pass through it and wrote the same sentence
+// twice — once from the substrate, once from the seam wording a refusal the
+// entry had already worded (#3190).
+//
+// Measured 2026-09-18 on zsh 5.9.2 with the program on a pipe, one probe at a
+// time: `set -o monitor` and `set -m` are each one line at 1, `setopt
+// monitor` is one line with the builtin's own prefix, and `set +o monitor`
+// and `unsetopt monitor` are silent at 0. The sentences themselves were
+// already right; only the count was wrong.
+func TestARefusedMonitorIsWordedOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{"the name", "set -o monitor", "zsh:set:1: can't change option: monitor\n", 1},
+		{"the letter", "set -m", "zsh:set:1: can't change option: -m\n", 1},
+		{"the builtin", "setopt monitor", "zsh:setopt:1: can't change option: monitor\n", 1},
+		{"the plus sign", "set +o monitor", "", 0},
+		{"and unsetopt", "unsetopt monitor", "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src+"\n")
+			if out != tc.want || st != tc.status {
+				t.Errorf("%s = %q at %d, want %q at %d", tc.src, out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// A name this shell has and will not move is still worded by the substrate,
+// which is the contract the row above is the one exception to: four names are
+// refused to a running script here and none of them says so itself.
+func TestEveryOtherRefusedNameIsWordedByTheSubstrate(t *testing.T) {
+	for _, name := range []string{"interactive", "shinstdin", "zle", "singlecommand"} {
+		t.Run(name, func(t *testing.T) {
+			out, st := answersRun(t, "set -o "+name+"\n")
+			want := "zsh:set:1: can't change option: " + name + "\n"
+			if out != want || st != 1 {
+				t.Errorf("set -o %s = %q at %d, want %q at 1", name, out, st, want)
+			}
+		})
+	}
+}

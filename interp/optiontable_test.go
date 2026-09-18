@@ -63,19 +63,22 @@ func optionTableRunner(t *testing.T, src string, dg Diagnostics, sem *Semantics)
 			}
 			return rows
 		},
-		func(_ *Runner, name string, on bool) (moved, known bool) {
+		func(_ *Runner, name string, on bool) OptionMove {
 			o := find(name)
 			if o == nil {
-				return false, false
+				return OptionNotFound
 			}
 			if o.fixed {
 				// Granted where it is already where it is asked to be, and
 				// refused otherwise — with nothing said, because the sentence
 				// is the substrate's on all three routes.
-				return o.on == on, true
+				if o.on == on {
+					return OptionMoved
+				}
+				return OptionRefused
 			}
 			o.on = on
-			return true, true
+			return OptionMoved
 		},
 	)
 	f, err := syntax.Parse(src, syntax.Core())
@@ -219,7 +222,7 @@ func TestTheDialectsTableDoesNotSwallowTheSubstratesOwnSeam(t *testing.T) {
 	moves := 0
 	r.SetOptionTable(
 		func(*Runner) []ListedOption { return nil },
-		func(*Runner, string, bool) (bool, bool) { moves++; return false, false },
+		func(*Runner, string, bool) OptionMove { moves++; return OptionNotFound },
 	)
 	// A substrate name, through the seam a dialect's option builtin uses.
 	if code := r.ApplyNamedOption("errexit", true); code != 0 {

@@ -16158,6 +16158,29 @@ request arriving through Runner.ApplyNamedOption — the seam a dialect's
 own option builtin uses, and the one the environment's option list uses —
 never ends the script whatever this says.
 
+**The sentence is written once, and saying so needed a fourth answer**
+(#3190). A dialect with an option table of its own decides and does not
+speak: `interp.Runner.SetOptionTable`'s mover reports what happened and this
+package words it, which is the only way one refusal can be worded three ways
+depending on whether a script, an invocation or an inherited value asked.
+`monitor` is the one entry in the panel that cannot keep that contract. The
+state behind the name is the substrate's job control, and the substrate
+refuses job control with no terminal in the dialect's own wording
+(`Diagnostics.MonitorDenied`) on the way through `ApplyNamedOption` — so by
+the time the entry can answer, the complaint is already on standard error.
+It answered "refused" like any other, and `set -o monitor` in a shell with no
+terminal wrote the line **twice** while `setopt monitor` beside it, which
+does not pass through that seam, wrote it once.
+
+So the mover's two bools became `interp.OptionMove`, with four answers:
+`OptionNotFound`, `OptionMoved`, `OptionRefused`, and `OptionRefusedAndSaid`
+for the entry that has already spoken. Only the sentence moves — the status
+and the fatality stay this package's on all four. Measured 2026-09-18 on zsh
+5.9.2 with the program on a pipe, one probe at a time: `set -o monitor` and
+`set -m` are each one line at 1 and end the script, `setopt monitor` is one
+line at 1 and does not, and `set +o monitor` and `unsetopt monitor` are
+silent at 0. The wordings were already right; only the count was wrong.
+
 **`SetODeclinesADashWord`** — bash **yes** · dash no · ksh93 **yes** · zsh
 no · ash no
 

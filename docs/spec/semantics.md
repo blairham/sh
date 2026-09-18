@@ -12225,6 +12225,118 @@ mechanism rather than more of this one:
 - **`$((}))`** reaches our word lexer as `parse error near `}'` where
   `$(( } ))` reaches the reader and answers correctly.
 
+## Who a bad subscript's complaint is from, and how much it gives up
+
+Three things about an unevaluable subscript that are not about what it
+means: the location a builtin's route puts it at, the name that route
+puts in front of it, and — inside `(( ))` — whether the give-up belongs
+to the subscript or to the construct.
+
+### The location stays the builtin's in one column
+
+`unset 'a[b c]'`, `read 'a[b c]'` and `typeset 'a[b c]'=v` all report a
+complaint the **language** makes: the same sentence the same shell
+writes about the same text inside `$(( ))`. So all three put the
+builtin's name aside before reporting — and that is *two* claims, since
+clearing the speaker also swaps `BuiltinLocation` for `Location`. One
+column makes only the first.
+
+Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=$d`, stdin
+`/dev/null`, a script file, ksh93u+ (AT&T 2012), each line run on its own
+with `a=(1 2 3)` in front:
+
+    echo "$(( b c ))"     ./k.sh: line 2:  b c : arithmetic syntax error
+    unset 'a[b c]'        ./k.sh[2]: unset: b c: arithmetic syntax error
+    read 'a[b c]'         ./k.sh[2]: read: b c: arithmetic syntax error
+    typeset 'a[b c]'=v    ./k.sh[2]: typeset: b c: arithmetic syntax error
+    readonly 'a[b c]'=v   ./k.sh[2]: readonly: b c: arithmetic syntax error
+
+The first line is the control and it is what makes this a field rather
+than a style: the shell is not using one location everywhere, it is using
+the *builtin's* for the three that came through a builtin and the shell's
+for the bare expansion. `Diagnostics.BadSubscriptKeepsTheBuiltinsLocation`
+is the value, true in ksh93 alone — bash has no builtin in any location,
+and keeping the speaker in zsh would write `./f.sh:unset:2:` where that
+shell writes `./f.sh:2:`.
+
+The **name** is separate and lives in the sentence:
+`Diagnostics.UnsetBadSubscript` and `StoreOperandBadSubscript` already
+held it, and `DeclarationBadSubscript` is the third, which is why
+`typeset` lost its name here where the other two kept theirs. Its verb is
+the caller's name rather than a constant, since `readonly`, `export` and
+`local` reach the same site and `integer` calls itself `typeset` (#3496).
+
+### A subscript inside `(( ))` is not the construct's failure
+
+`$(( a[b c] ))` and `(( a[b c] ))` are the same subscript in the same
+arithmetic one construct apart, and they answered differently here. Two
+facts, and the first is unanimous.
+
+**The sentence names no construct.** Measured 2026-09-17, a script file
+and again as one `-c` string:
+
+    a=(1 2 3)
+    (( a[b c] )); echo "same=$?"
+    echo "next=$?"
+    echo end
+
+    bash 5.3.20  b c: arithmetic syntax error …, no `same=`, next=1, end, 0
+    bash 3.2.57  the same
+    zsh 5.9.2    bad math expression: …, same=2, next=0, end, 0
+    ksh93u+      b c: arithmetic syntax error, the input ends at 1
+    dash, ash    no `(( ))` grammar
+
+where the construct's **own** arithmetic keeps the prefix in the column
+that writes one: `(( b c ))` is `((: b c : arithmetic syntax error …` in
+bash, which this already matched. So the prefix is dropped whenever the
+failure was a subscript's, at the site, with no axis — no column words it
+the other way.
+
+**The give-up is the subscript's in one column.**
+`Semantics.BadSubscriptEscapesAnArithmeticCommand` is Yes in bash, where
+a bad subscript gives up the input line wherever one is written and gives
+a `-c` string up whole; No in zsh and ksh93, which let the construct catch
+it and answer with the status and fatality
+`ArithCommandErrorIsFatal`/`ArithCommandErrorStatusIsTwo` already give it.
+The two Noes are not one answer read twice — zsh reports 2 and carries on,
+ksh93 ends the input — which is why the field is about the escape rather
+than about the outcome.
+
+The **C-style `for` header** is the same measurement one construct over
+and goes through the same door: `for (( i=a[b c]; i<1; i++ ))` writes the
+bare sentence and gives up the line in bash, where `for (( i=b c; … ))` —
+the header's own arithmetic — keeps the `((: ` prefix (#3507).
+
+### Who made a write that could not aim a reference
+
+A value that cannot aim a name reference is refused, and the refusal
+names who made the write. Two routes reached it with no builtin running
+and neither was named.
+
+Measured 2026-09-17 on bash 5.3.20, a script file, `declare -n s` in
+front of each:
+
+    (( r = 1 ))            ((: `1': not a valid identifier          0
+    exec {s}>/dev/null     exec: `10': not a valid identifier
+                           s: cannot assign fd to variable          1
+    true {s}>/dev/null     true: `10': …  + the same second line    1
+    /bin/echo x {s}>…      /bin/echo: `10': …  + the same           1
+    { echo z; } {s}>…      `10': …  + the same, and no `z`          1
+    readonly s=1; exec …   s: readonly variable + the same          1
+
+Three readings come out of that. The arithmetic **construct** names
+itself, as it does for its own arithmetic. A `{name}>` store is reported
+under the **command word** the redirection belongs to, which a compound
+command does not have — so the group's refusal is unprefixed. And the
+second sentence, `Diagnostics.CannotAssignFdToVariable`, follows *any*
+refused descriptor store rather than this one: the frozen name gets it
+too.
+
+The last row is also behavior and not wording: a refused store is the
+**redirection** failing, so the command does not run. The brace group
+printed `z` at status 0 here, which is a `{name}>` aimed at a name the
+shell cannot write opening the file and carrying on as if it had (#3491).
+
 ## A subscript before the first element
 
 Issue #617. An assignment whose subscript lands before the array's first

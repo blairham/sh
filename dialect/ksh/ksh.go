@@ -2215,6 +2215,11 @@ func Semantics() interp.Semantics {
 	// expression handed to `unset` or to `read` two lines earlier left a
 	// failed builtin behind and ran the very next thing. `readonly` and
 	// `export` take a subscript here as well and answer the same (#3495).
+	// The construct catches it and this shell's `(( ))` failure ends the
+	// input, which is what it does for any other expression it cannot
+	// evaluate: measured 2026-09-17, `(( a[b c] ))` is `b c: arithmetic
+	// syntax error` and exit 1 with nothing after it, by both routes.
+	s.BadSubscriptEscapesAnArithmeticCommand = interp.No
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
 	// And this is the third answer to what a *valueless* subscripted operand
 	// does: the brackets are read and no element is written. Measured
@@ -2890,7 +2895,17 @@ func Diagnostics() interp.Diagnostics {
 		// that was handed the operand: `read 'r[1/0]'` is `read: 1/0: divide
 		// by zero` here, where bash and zsh write the sentence alone.
 		StoreOperandBadSubscript: "%[1]s: %[2]s",
-		SetInvalidOptionName:     "set: %[1]s: bad option(s)",
+		// And a declaration's operand names the builtin it was handed to:
+		// measured 2026-09-17, `a=(1 2 3); typeset 'a[b c]'=v` is
+		// `typeset: b c: arithmetic syntax error`, with `readonly` and
+		// `export` naming themselves and `integer` calling itself `typeset`.
+		DeclarationBadSubscript: "%[1]s: %[2]s",
+		// All three of those keep the *builtin's* location while the sentence
+		// stays the language's, which the bare `$(( b c ))` is the control
+		// for: it is `./k.sh: line 2:` where the three builtin routes are
+		// `./k.sh[2]:`. See the field for the measurement.
+		BadSubscriptKeepsTheBuiltinsLocation: true,
+		SetInvalidOptionName:                 "set: %[1]s: bad option(s)",
 		// The letter as the script spelled it: `set +q` is refused as `+q`
 		// here, as it is in bash.
 		SetInvalidOptionLetter: "set: %[1]s: unknown option",

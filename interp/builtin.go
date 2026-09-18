@@ -2254,8 +2254,14 @@ func (r *Runner) badSubscriptToUnset(sub string, err error) int {
 	// sentence the same shell writes about the same text inside `$(( ))` — so
 	// the location must not name `unset`. The one dialect that does name it
 	// puts it in the message, where it puts every other builtin's name.
+	//
+	// **The location is a separate claim** and one column keeps the builtin's
+	// there while the sentence stays the language's: see
+	// Diagnostics.BadSubscriptKeepsTheBuiltinsLocation, where the control
+	// line that tells the two apart is. Clearing the speaker outright made
+	// both claims at once (#3496).
 	outer := r.inBuiltin
-	r.inBuiltin = ""
+	r.inBuiltin = r.keptBuiltinLocation(outer)
 	defer func() { r.inBuiltin = outer }()
 	return r.badSubscriptGivesUp(r.sem().BadSubscriptToUnset,
 		"how much an `unset` operand's unevaluable subscript gives up",

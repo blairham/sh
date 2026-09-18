@@ -566,6 +566,9 @@ func Semantics() interp.Semantics {
 	// variable name` — a name refused, with no subscript read. `export` is
 	// the same complaint at the same status.
 	//
+	// unanswered BadSubscriptEscapesAnArithmeticCommand: no `(( ))`
+	// grammar here either, and no subscripts to fail inside one.
+	//
 	// unanswered ValuelessSubscriptedOperand: the same wall, one operand
 	// shape over. `readonly 'q[b c]'` with no value is the same refusal at
 	// the same status, so there is no subscripted operand here at all.

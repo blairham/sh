@@ -338,6 +338,40 @@ type Diagnostics struct {
 	// asked for — see Runner.runTest and #3035.
 	NamesBuiltinInLocation bool
 
+	// BadSubscriptKeepsTheBuiltinsLocation leaves a builtin's *location* in
+	// front of a complaint the **language** makes through it — a subscript
+	// that will not evaluate in an `unset`, a `read` or a declaration
+	// operand.
+	//
+	// The three sites put the speaker aside before they report, on a
+	// measurement taken in the dialect that names a builtin in the location:
+	// the sentence is the same one that shell writes about the same text
+	// inside `$(( ))`, so naming the builtin there would report a speaker no
+	// column names. Clearing the speaker does two things at once, though —
+	// it also swaps BuiltinLocation for Location — and one column makes only
+	// the first of those claims.
+	//
+	// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=$d`,
+	// stdin /dev/null, a script file, ksh93u+ (AT&T 2012), each line run on
+	// its own with `a=(1 2 3)` in front:
+	//
+	//	echo "$(( b c ))"       ./k.sh: line 2:  b c : arithmetic syntax error
+	//	unset 'a[b c]'          ./k.sh[2]: unset: b c: arithmetic syntax error
+	//	read 'a[b c]'           ./k.sh[2]: read: b c: arithmetic syntax error
+	//	typeset 'a[b c]'=v      ./k.sh[2]: typeset: b c: arithmetic syntax error
+	//
+	// The first line is the control and it is what makes this a field: the
+	// shell is not using one style everywhere, it is using the *builtin's*
+	// style for the three that came through a builtin and the shell's for the
+	// bare expansion. Meanwhile the name is in the sentence rather than in
+	// the location — UnsetBadSubscript, StoreOperandBadSubscript and
+	// DeclarationBadSubscript hold it — so the two halves stay separable.
+	//
+	// False in bash, which has no builtin in any location, and false in zsh,
+	// where keeping the speaker would write `./f.sh:unset:2:` and the shell
+	// writes `./f.sh:2:`. True in ksh93 (#3496).
+	BadSubscriptKeepsTheBuiltinsLocation bool
+
 	// UnsetReadonlyIsTheShellsOwn takes `unset` out of the location for the
 	// one refusal it makes about a name it may not remove, in a dialect that
 	// names the builtin there for everything else.
@@ -1325,6 +1359,45 @@ type Diagnostics struct {
 	// other complaints; only the first is worded here, because only the first
 	// is written at this call.
 	StoreOperandBadSubscript string
+
+	// DeclarationBadSubscript is that same wrapper at the third site: a
+	// *declaration* whose operand names an element and whose subscript will
+	// not evaluate. Two verbs: the builtin that was handed the operand, and
+	// the sentence ArithError has already worded.
+	//
+	// A third field rather than either neighbor read again, for the reason
+	// Semantics.BadSubscriptToADeclaration is a third field: the sites are
+	// reached by different builtins and the one column that names a speaker
+	// names the one it was given. Measured 2026-09-17, ksh93u+, a script
+	// file, `a=(1 2 3)`:
+	//
+	//	typeset 'a[b c]'=v      typeset: b c: arithmetic syntax error
+	//	readonly 'a[b c]'=v     readonly: b c: arithmetic syntax error
+	//	export 'a[b c]'=v       export: b c: arithmetic syntax error
+	//	integer 'a[b c]'=1      typeset: b c: arithmetic syntax error
+	//
+	// So the verb is the caller's name and not a constant — `integer` calls
+	// itself `typeset` there, which Runner.badNameWordedAs already arranges
+	// one refusal over. Empty leaves the sentence to stand alone, which is
+	// what bash and zsh do. `typeset` lost its name entirely here where
+	// `unset` and `read` kept theirs (#3496).
+	DeclarationBadSubscript string
+
+	// CannotAssignFdToVariable is the **second** sentence a `{name}>f` writes
+	// when the shell will not store the descriptor's number in that name. One
+	// verb: the operand as written.
+	//
+	// It follows whatever the store itself said and does not replace it:
+	// measured 2026-09-17 on bash 5.3.20, a script file, `declare -n s; exec
+	// {s}>/dev/null` is ``exec: `10': not a valid identifier`` and then `s:
+	// cannot assign fd to variable`, at 1; `readonly s=1; exec {s}>/dev/null`
+	// is `s: readonly variable` and then the same second line, also at 1. So
+	// it is written for any refused store rather than for one of them.
+	//
+	// Empty writes nothing, which is every dialect that has no such
+	// diagnostic — and the redirection still fails, because that half is not
+	// a wording: the command does not run in bash either way (#3491).
+	CannotAssignFdToVariable string
 
 	// ArithErrorNamesTheBuiltin puts the name of the builtin that raised an
 	// arithmetic complaint in front of the sentence.

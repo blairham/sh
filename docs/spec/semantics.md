@@ -18137,6 +18137,24 @@ on the same line in bash 5.3.20, bash 3.2.57, ksh93u+, dash 0.5.12 and
 BusyBox ash 1.37.0, where `readonly x=1; x=2; echo one` never prints
 `one` in any of them. zsh alone ends the script for both.
 
+**`let` is outside this axis, and outside `ArithCommandErrorIsFatal` too.**
+Measured 2026-09-18 over a script file under `env -i PATH=/usr/bin:/bin` with
+`readonly x=1; let x=2; echo after $?`:
+
+| column | written | `after` |
+| --- | --- | --- |
+| zsh 5.9.2 | `read-only variable: x` | `after 1` |
+| ksh93u+ | `let: x: is read only` | `after 1` |
+| bash 5.3.20, bash as `sh` | `x: readonly variable` | `after 1` |
+| bash 3.2.57 | `x: readonly variable` | `after 0` |
+
+Unanimous on the fatality and not on the status, so it is core rather than an
+axis — and it is neither neighbour's answer. zsh ends the script for a
+builtin's refused write and does not for this one; ksh93 ends it for
+`readonly x=1; (( x = 2 ))` and does not for the same write through `let`.
+`Runner.refuseReadonlyInACommand` answers it there (#3470). Ours took the
+builtin's answer, so the script was over in zsh.
+
 **`ReadRefusedWriteEndsTheBuiltin`** — bash yes · dash yes · ksh93 no ·
 zsh n/a
 

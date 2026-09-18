@@ -442,15 +442,70 @@ var arithLadderShiftsAndBitwiseFirst = []arithLevel{
 	{ops: []string{"<<", ">>"}},
 }
 
+// arithLaddersCWithXor is C's order in the one dialect that also has the
+// logical exclusive-or, which takes a rung of its own between `||` and `&&`
+// there. Measured 2026-09-18 on zsh 5.9.2 under `setopt c_precedences`:
+// `1 || 1 ^^ 1` is 1, so `^^` binds tighter than `||`, and `1 ^^ 0 && 0` is
+// 1, so `&&` binds tighter than `^^`.
+var arithLaddersCWithXor = withXorRung(arithLaddersC)
+
+// arithLadderShiftsAndBitwiseFirstWithXor is that dialect's own order, where
+// the operator shares the `||` rung instead. Measured the same day with no
+// option set: `1 ^^ 1 || 1` is 1, which is the left-associative reading of
+// one rung — a looser `^^` would give `1 ^^ (1 || 1)`, which is 0.
+var arithLadderShiftsAndBitwiseFirstWithXor = withXorOnTheLooseRung(arithLadderShiftsAndBitwiseFirst)
+
+// The assignment spelling is a rung op as well as an assignment operator, and
+// that is measured rather than belt-and-braces: it stores nothing, so what it
+// does to an expression whose left side cannot be a target is still to yield
+// the exclusive-or. `x=0; $(( 1 || x ^^= 1 ))` is 0 in zsh 5.9.2, which is
+// `(1 || x) ^^ 1`; the assignment reading is what `x ^^= 1 || 1` takes, and
+// that one goes through assignOps before the ladder is reached at all.
+//
+// withXorRung is the C ladder with `^^` inserted as its own rung below `||`.
+func withXorRung(base []arithLevel) []arithLevel {
+	out := make([]arithLevel, 0, len(base)+1)
+	out = append(out, base[0])
+	out = append(out, arithLevel{ops: []string{"^^=", "^^"}})
+	return append(out, base[1:]...)
+}
+
+// withXorOnTheLooseRung is the other ladder with `^^` added to the loosest
+// rung, which is `||`.
+func withXorOnTheLooseRung(base []arithLevel) []arithLevel {
+	out := make([]arithLevel, len(base))
+	copy(out, base)
+	out[0] = arithLevel{ops: []string{"||", "^^=", "^^"}}
+	return out
+}
+
 // arithLadder is the ladder this dialect reads binary operators with.
 func (a *arithParser) arithLadder() []arithLevel {
 	if a.dial.ArithPrecedence == ArithPrecedenceShiftsAndBitwiseBindTighter {
+		if a.dial.ArithLogicalXor {
+			return arithLadderShiftsAndBitwiseFirstWithXor
+		}
 		return arithLadderShiftsAndBitwiseFirst
+	}
+	if a.dial.ArithLogicalXor {
+		return arithLaddersCWithXor
 	}
 	return arithLaddersC
 }
 
 var assignOps = []string{"<<=", ">>=", "*=", "/=", "%=", "+=", "-=", "&=", "^=", "|=", "="}
+
+// assignOpsWithXor is the same list with the logical exclusive-or's
+// assignment spelling in front of `^=`, so the longer operator wins.
+var assignOpsWithXor = append([]string{"^^="}, assignOps...)
+
+// assignOps is the compound-assignment spellings this dialect has.
+func (a *arithParser) assignOps() []string {
+	if a.dial.ArithLogicalXor {
+		return assignOpsWithXor
+	}
+	return assignOps
+}
 
 // arithParser is a precedence-climbing parser over one expression's text.
 type arithParser struct {
@@ -897,7 +952,7 @@ func (a *arithParser) assign() ArithExpr {
 		// of an assignment that is not there, which is what it was.
 		sub := a.subscript(true)
 		a.space()
-		for _, op := range assignOps {
+		for _, op := range a.assignOps() {
 			// `==` is equality, not assignment, so it must not be taken here.
 			if op == "=" && a.has("==") {
 				break
@@ -1054,6 +1109,14 @@ func (a *arithParser) binary(level int) ArithExpr {
 // longerOperator reports whether a longer operator starts here, so a shorter
 // one at a looser level is not taken by mistake.
 func (a *arithParser) longerOperator(cand string) bool {
+	if cand == "^" && a.dial.ArithLogicalXor && a.has("^^") {
+		// The logical exclusive-or, where the dialect has it: the bitwise
+		// operator must not be taken out of the front of it. Where the flag
+		// is off there is no longer operator to take it out of, and `a ^^ b`
+		// is a bitwise xor whose right operand is missing — which is what
+		// every column without the operator reports.
+		return true
+	}
 	for _, longer := range []string{"<<=", ">>=", "&&", "||", "<<", ">>", "<=", ">=", "==", "!="} {
 		if len(longer) > len(cand) && a.has(longer) && strings.HasPrefix(longer, cand) {
 			return true

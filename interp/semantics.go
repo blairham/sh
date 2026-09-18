@@ -6807,6 +6807,15 @@ type Semantics struct {
 	// Asked by `getopts` only, so far. `read` has the same defect and is
 	// filed rather than fixed here, because its refusal reaches the shared
 	// assignment path through a different door.
+	//
+	// **`let` is outside it.** That builtin's refused write ends no script in
+	// any column that has the builtin — measured 2026-09-18 on
+	// `readonly x=1; let x=2; echo after $?`, which writes `after` in zsh
+	// 5.9.2, ksh93u+, bash 5.3.20, bash as `sh` and bash 3.2.57 alike. Nor is
+	// it the arithmetic command's answer: ksh93 ends the script for
+	// `readonly x=1; (( x = 2 ))` and does not for the same write through
+	// `let`. So it is unanimous rather than a third question, and
+	// Runner.refuseReadonlyInACommand answers it in core (#3470).
 	ReadonlyRefusalInABuiltinIsFatal Answer
 
 	// DeclarationMayShadowAReadonly lets a declaration inside a function

@@ -418,8 +418,8 @@ The last two rows are the ones a reading of the shift rows alone would miss.
 right-associative and everything else left-associative under both orders,
 and `2 ** 3 ** 2` is 512 in every column that has the operator.
 
-`^^` is zsh's logical XOR and shares a level with `||` in this order. It is
-not implemented here; see the note under "what this does not cover".
+`^^` is zsh's logical XOR and shares a level with `||` in this order — see
+the section below, which is where the operator itself is recorded.
 
 Grammar flag: `ArithPrecedence` — core, `posix`, `bash`, `ksh`, `dash` and
 `ash`: `ArithPrecedenceAsInC`; `zsh`: `ArithPrecedenceShiftsAndBitwiseBind‑
@@ -432,6 +432,58 @@ read before the option was touched — measured on zsh 5.9.2. So an
 expression is read again when it runs while the option is in charge, the
 same way one holding a `$` already is. `interp.Runner.SetArithPrecedence`
 is what the option moves.
+
+## `^^` — the logical exclusive-or, zsh alone
+
+`^^` is 1 where exactly one operand is true and 0 otherwise, the same 1-or-0
+result every other logical operator yields. Nobody writes one by accident and
+no script that runs under bash can contain one, but the spelling is already
+*taken*: `^` is bitwise xor, so `a ^^ b` in every other column is an xor whose
+right operand is missing.
+
+Measured 2026-09-18 on zsh 5.9.2, `env -i` with `LC_ALL=C`:
+
+| written | zsh | and the contrast |
+| --- | --- | --- |
+| `$(( 1 ^^ 1 ))` | 0 | |
+| `$(( 1 ^^ 0 ))` | 1 | |
+| `$(( 0 ^^ 1 ))` | 1 | |
+| `$(( 0 ^^ 0 ))` | 0 | |
+| `$(( 5 ^^ 3 ))` | **0** | `$(( 5 ^ 3 ))` is 6 — the truth, not the bits |
+| `$(( 2 ^^ 0 ))` | 1 | |
+| `$(( 1.5 ^^ 2.5 ))` | **0** | truth is the value's, not the kind's |
+| `$(( 0 ^^ (y=9) ))` | 1, and `y` is 9 | both operands evaluated |
+| `$(( 1 ^^ (y=9) ))` | 0, and `y` is 9 | nothing to short-circuit |
+
+**Where it sits takes four probes and not one.** Three readings survive the
+obvious `$(( 1 || 0 ^^ 1 ))`, which is 0 under all of them:
+
+| written | default | `c_precedences` | what it rules out |
+| --- | --- | --- | --- |
+| `$(( 1 || 0 ^^ 1 ))` | 0 | **1** | tighter than `\|\|` by default |
+| `$(( 1 ^^ 1 \|\| 1 ))` | 1 | 1 | looser than `\|\|` — that reading gives 0 |
+| `$(( 1 \|\| 1 ^^ 1 ))` | **0** | 1 | the two ladders, in one row |
+| `$(( 1 ^^ 0 && 0 ))` | 1 | 1 | sharing a rung with `&&` — that gives 0 |
+
+So by default it is **on the `||` rung, left-associative**, and under
+`setopt c_precedences` it takes a rung of its own **between `||` and `&&`**.
+
+There is an assignment spelling, `^^=`, and it is the one compound assignment
+here that **assigns nothing**:
+
+    x=5; echo $(( x ^^= 1 )); echo $x     0 then 5
+    x=5; echo $(( x ||= 0 )); echo $x     1 then 1
+    x=5; echo $(( x &&= 0 )); echo $x     0 then 0
+    x=5; echo $(( x ^= 1 ));  echo $x     4 then 4
+
+It binds as an assignment does — `x=1; $(( x ^^= 1 || 1 ))` is 0, which is
+`x ^^ (1 || 1)` — and where the left side cannot be a target it is still the
+exclusive-or of what precedes it: `x=0; $(( 1 || x ^^= 1 ))` is 0, which is
+`(1 || x) ^^ 1`.
+
+Grammar flag: `ArithLogicalXor` — `zsh` only. With it off, `a ^^ b` is the
+bitwise operator running out of operand, which is what every other column
+reports.
 
 ## Exponentiation
 
@@ -923,7 +975,6 @@ implementation and which the panel would answer differently on different
 machines. Anything depending on it is unportable by construction, so no
 core answer is recorded rather than an arbitrary one being invented.
 
-`^^`, zsh's logical XOR. It is a real operator there — `$(( 1 || 0 ^^ 1 ))`
-is 0, the two sharing a level and associating left — and this parser refuses
-it. The precedence table above records where it sits so that implementing it
-is a question about the operator and not about the ladder.
+`||=` and `&&=`, the two logical compound assignments zsh has beside `^^=`.
+Both of those **store** — `x=5; $(( x ||= 0 ))` leaves `x` at 1, measured
+2026-09-18 — which is the half `^^=` does not do, and neither is read here.

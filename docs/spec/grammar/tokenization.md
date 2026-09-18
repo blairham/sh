@@ -600,11 +600,73 @@ and `!$\⏎x` do not. Reading that would make the `$` depend on glob characters
 already passed, which is a question about the word rather than about this
 delimiter (#3523).
 
-Two further shapes at a construct's **delimiters** split the panel and are not
-this rule either: a continuation between the `$(` and the second `(` of the
-opener, or between the two `)` of the closer, decides whether the construct is
-arithmetic at all; and ksh93 alone refuses one directly behind the `((` of an
-arithmetic *command*.
+Two further shapes are at a construct's delimiters rather than in front of
+them, and they are the next two sections: the pair standing *between* the two
+characters of `$((` or of `))`, and the pair standing directly behind the `((`
+of an arithmetic command.
+
+### A continuation inside the delimiters themselves
+
+The pair can stand between the two characters of `$((` or of `))`, and there
+it decides **whether the construct is arithmetic at all** rather than what the
+expression says. The panel splits, and not the same way at the two ends.
+
+Measured 2026-09-16 from script files, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+stdin on /dev/null, fresh directory. BusyBox ash has no arithmetic expansion
+of this shape and was not measured.
+
+| probe | bash 5.3, 3.2 | dash | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- | --- |
+| `echo "[$(\⏎( 1 + 2 ))]"` | `[3]` | `[3]` | `[3]` | runs `1` |
+| `echo "[$(( 1 + 2 )\⏎)]"` | `[3]` | `[3]` | runs `1` | runs `1` |
+
+"runs `1`" is the command-substitution reading: the body is the subshell
+`( 1 + 2 )`, whose first word is a command nobody has, so the diagnostic names
+`1` and the expansion is empty.
+
+zsh joins the opener and parts the closer, so a single yes/no could not be
+given a value for it: `Dialect.ContinuationPartsTheArithmeticOpener` and
+`…Closer` are two fields.
+
+**A blank on either side takes the question away** and is the control:
+`$( \⏎( 1 + 2 ))` and `$(( 1 + 2 ) \⏎)` are a command substitution in every
+column, because the parentheses are no longer adjacent whatever becomes of the
+pair.
+
+The arithmetic **command**'s closer is not this question: `(( 1 + 2 )\⏎)` is
+two groupings running `1` in bash 5.3, zsh 5.9.2, ksh93u+ and dash alike
+(#3454).
+
+### A continuation directly behind an arithmetic command's `((`
+
+ksh93 alone opens nothing there. The two parentheses and the pair are
+consumed, no command is produced, and reading starts again from what follows —
+so the visible answer is usually a syntax error, and the error is at the
+**leftovers** rather than at the continuation.
+
+Measured 2026-09-16 on ksh93u+ 2012 from script files:
+
+    ((    x = 5 )); echo "[$x]"      `)' unexpected at line 2, status 3
+    if ((    1 )); then …               `)' unexpected
+    for ((    i=0; i<1; i++)); do …      `i' unexpected
+    ((    )); echo st=$?             `)' unexpected
+    echo pre⏎((\⏎echo hi⏎echo b   pre, hi and b, status 0
+    false⏎((\⏎echo "rc=$?"        rc=1 — not even the status moved
+
+The last two rows are the whole of the reading, and every refusal above them
+is the text that followed being read on its own. bash 5.3, bash 3.2 and zsh
+5.9.2 read all six as an ordinary arithmetic command; dash has no `((` and
+reads two groupings.
+
+A blank in front of the backslash takes the rule away — `(( \⏎x = 5 ))` is 5
+there — and so does anything at all: `((x\⏎ = 5 ))` is 5 too. It is the pair
+standing *directly* behind the second parenthesis
+(`Dialect.ContinuationEndsTheArithmeticCommandOpener`, #3455).
+
+Which token the refusal then names is that parser's own: `for ((\⏎i=0; …` is
+`` `i' unexpected `` there and `` `))' unexpected `` here, both at line 2 and
+both at status 3, because the two parsers give up at different points in the
+same leftover text.
 
 ## Aliases are expanded while the line is read
 

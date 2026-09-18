@@ -18823,26 +18823,26 @@ grades it and nothing drift-checks it either, for the same reason.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `trap/a-bare-exit-in-an-exit-trap` | `unreachable` | `unreachable` | `unreachable` | `unreachable` | `unreachable` | `unreachable` *(status 1)* | `unreachable` |
-| `trap/l-lists-the-signals` | **2>** `<shell>: 1: trap: Illegal option -l` *(status 2)* | `st=0` | `st=0` | `st=0` | **2>** `<shell>: trap: -l: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `st=0` | **2>** `<shell>: trap: line 0: illegal option -l` *(status 2)* |
-| `trap/capital-p-prints-the-action-alone` | **2>** `<shell>: 1: trap: Illegal option -P` *(status 2)* | `echo hi~st=0` | `echo hi~st=0` | `st=2` **2>** `<shell>: line 0: trap: -P: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]` | **2>** `<shell>: trap: -P: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `st=0` | **2>** `<shell>: trap: line 0: illegal option -P` *(status 2)* |
-| `trap/p-with-a-condition-named` | **2>** `<shell>: 1: trap: Illegal option -p` *(status 2)* | `trap -- 'echo hi' SIGUSR1~st=0` | `trap -- 'echo hi' USR1~st=0` | `trap -- 'echo hi' SIGUSR1~st=0` | `echo hi~st=0` | `st=0` | **2>** `<shell>: trap: line 0: illegal option -p` *(status 2)* |
+| `trap/l-lists-the-signals` | **2>** `<shell>: 1: trap: Illegal option -l` *(status 2)* | `st=0~--listing--` | `st=0~--listing--` | `st=0~--listing--` | **2>** `<shell>: trap: -l: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `st=0~--listing--~trap -- -l INT` | **2>** `<shell>: trap: line 0: illegal option -l` *(status 2)* |
+| `trap/capital-p-prints-the-action-alone` | **2>** `<shell>: 1: trap: Illegal option -P` *(status 2)* | `echo hi~st=0~--listing--~trap -- 'echo hi' SIGUSR1` | `echo hi~st=0~--listing--~trap -- 'echo hi' USR1` | `st=2~--listing--~trap -- 'echo hi' SIGUSR1` **2>** `<shell>: line 0: trap: -P: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]` | **2>** `<shell>: trap: -P: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `st=0~--listing--~trap -- -P USR1` | **2>** `<shell>: trap: line 0: illegal option -P` *(status 2)* |
+| `trap/p-with-a-condition-named` | **2>** `<shell>: 1: trap: Illegal option -p` *(status 2)* | `trap -- 'echo hi' SIGUSR1~st=0~--listing--~trap -- 'echo hi' SIGUSR1` | `trap -- 'echo hi' USR1~st=0~--listing--~trap -- 'echo hi' USR1` | `trap -- 'echo hi' SIGUSR1~st=0~--listing--~trap -- 'echo hi' SIGUSR1` | `echo hi~st=0~--listing--~trap -- 'echo hi' USR1` | `st=0~--listing--~trap -- -p USR1` | **2>** `<shell>: trap: line 0: illegal option -p` *(status 2)* |
 
 - `trap/a-bare-exit-in-an-exit-trap` — a bare `exit` in an EXIT trap reports the status the shell had when the trap began, not the trap's own last command — 0 in bash, dash and ksh93 and 1 in zsh. Found by `make wild-run`: /usr/bin/bzless traps `stty …; exit` and with no terminal the `stty` fails, so the script exited 1 where every shell exits 0, with identical output. Only a *run* comparison can see that
   ```sh
   trap "false; exit" 0; true
   echo unreachable
   ```
-- `trap/l-lists-the-signals` — whether `trap` has a `-l` at all. The listing itself is a platform's signal table and is not comparable, so it goes to /dev/null and what is graded is the status and the refusal: two columns take the letter, and ksh93 and dash each answer with their own complaint and usage line (#2057)
+- `trap/l-lists-the-signals` — whether `trap` has a `-l` at all. The signal table itself is the platform's and is not comparable, so it goes to /dev/null -- but the status alone cannot tell a shell that printed the table from a shell with no options that read the `-l` as an action, so the bare `trap` at the end is what grades it. The three bash columns take the letter, print the table and install nothing. ksh93, dash and BusyBox ash each refuse with their own complaint at 2. zsh parses no options here at all: `-l` is the action and `INT` the condition, so it succeeds and the listing afterwards holds `trap -- -l INT`, which is the cell that pins Semantics.TrapParsesOptions for that column (#2057, #3227)
   ```sh
-  trap -l >/dev/null; echo "st=$?"
+  trap -l INT >/dev/null; echo "st=$?"; echo "--listing--"; trap
   ```
-- `trap/capital-p-prints-the-action-alone` — `-P` writes the action with no `trap --` around it, in the one shell that has the letter; ksh93 and dash refuse it and the fourth prints nothing for a condition it has no `-P` for. The pair with the row below is the point -- one shell reaches this output through `-P` and another through `-p` with an operand (#2057)
+- `trap/capital-p-prints-the-action-alone` — `-P` writes the action with no `trap --` around it, in the two bash columns that have the letter, and the handler is still there afterwards. bash 3.2 predates it and says `invalid option` at 2 with the handler standing; ksh93, dash and BusyBox ash refuse the line outright. zsh prints nothing and its trailing listing says why: it reads no options, so `-P` is the **action** and USR1 the condition, and the `echo hi` handler has been replaced by `trap -- -P USR1`. A script that writes `trap -P USR1` to inspect a handler destroys it there, and the failure surfaces the next time USR1 arrives. The status alone recorded none of that. The pair with the row below is the point -- one shell reaches the action-alone output through `-P` and another through `-p` with an operand (#2057, #3227)
   ```sh
-  trap "echo hi" USR1; trap -P USR1; echo "st=$?"
+  trap "echo hi" USR1; trap -P USR1; echo "st=$?"; echo "--listing--"; trap
   ```
-- `trap/p-with-a-condition-named` — the same question through `-p`: one column writes the whole reissuable `trap -- action condition` line and another writes the action alone, which is why the bare form and the capital letter are two axes and not one (#2057)
+- `trap/p-with-a-condition-named` — the same question through `-p`: the bash columns write the whole reissuable `trap -- action condition` line, ksh93 writes the action alone, and dash and BusyBox ash refuse it -- which is why the bare form and the capital letter are two axes and not one. The two `sh` spellings differ from the others only in writing `USR1` where `SIGUSR1` is written. zsh again reads no options, so `-p` becomes the action and the listing afterwards is `trap -- -p USR1` with the handler gone; without that listing this row's zsh cell was `st=0` and could not tell that from a shell whose `-p` printed nothing (#2057, #3227)
   ```sh
-  trap "echo hi" USR1; trap -p USR1; echo "st=$?"
+  trap "echo hi" USR1; trap -p USR1; echo "st=$?"; echo "--listing--"; trap
   ```
 
 ## conditions

@@ -206746,21 +206746,21 @@
         "TimedOut": false
       },
       "bash": {
-        "Stdout": "echo hi~st=0",
+        "Stdout": "echo hi~st=0~--listing--~trap -- 'echo hi' SIGUSR1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "echo hi~st=0",
+        "Stdout": "echo hi~st=0~--listing--~trap -- 'echo hi' USR1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "st=2",
+        "Stdout": "st=2~--listing--~trap -- 'echo hi' SIGUSR1",
         "Stderr": "\u003cshell\u003e: line 0: trap: -P: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]",
         "Status": 0,
         "Signal": 0,
@@ -206781,7 +206781,7 @@
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "st=0",
+        "Stdout": "st=0~--listing--~trap -- -P USR1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -207824,21 +207824,21 @@
         "TimedOut": false
       },
       "bash": {
-        "Stdout": "st=0",
+        "Stdout": "st=0~--listing--",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=0",
+        "Stdout": "st=0~--listing--",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "st=0",
+        "Stdout": "st=0~--listing--",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -207859,7 +207859,7 @@
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "st=0",
+        "Stdout": "st=0~--listing--~trap -- -l INT",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -208232,21 +208232,21 @@
         "TimedOut": false
       },
       "bash": {
-        "Stdout": "trap -- 'echo hi' SIGUSR1~st=0",
+        "Stdout": "trap -- 'echo hi' SIGUSR1~st=0~--listing--~trap -- 'echo hi' SIGUSR1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "trap -- 'echo hi' USR1~st=0",
+        "Stdout": "trap -- 'echo hi' USR1~st=0~--listing--~trap -- 'echo hi' USR1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "trap -- 'echo hi' SIGUSR1~st=0",
+        "Stdout": "trap -- 'echo hi' SIGUSR1~st=0~--listing--~trap -- 'echo hi' SIGUSR1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -208260,14 +208260,14 @@
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "echo hi~st=0",
+        "Stdout": "echo hi~st=0~--listing--~trap -- 'echo hi' USR1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "st=0",
+        "Stdout": "st=0~--listing--~trap -- -p USR1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

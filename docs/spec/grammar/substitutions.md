@@ -436,6 +436,36 @@ still the parameter form, and still names the rest of the word —
 blamed token running *past* the brace that would have closed a
 substitution.
 
+**And that refusal is written when the word expands, not when the line is
+read.** Measured 2026-09-18 on ksh93u+ 2012-08-01, a script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null:
+
+    echo one; echo "${(f)x}"; echo two
+        one, then `syntax error at line 1: `x}]' unexpected`, status 3
+
+    echo one; if false; then echo "${(f)x}"; fi; echo two
+        one and two, status 0, nothing said
+
+    echo one; echo "${%%%}"; echo two
+        refused before `one` runs
+
+The second row is the control and the third is the discriminator. A group
+in a branch the shell never takes is never diagnosed, so the deferral
+reaches the *expansion* rather than the line; and `${%%%}`, `${~x}`,
+`${=x}` and `${+x}` in the same shell are all still refused where they
+are read, so it is the flag group's deferral and not the brace's. Grammar
+flag: `FlagGroupRefusedAtExpansion`, on for ksh alone.
+
+The failure itself does not move. The parser builds it exactly as it did,
+word tail and all, and hands it forward on
+`syntax.ParamExpr.RefusedAtExpansion` for whatever expands the word to
+write — so the sentence a reader sees is the parse's own sentence, one
+stage later, rather than a second wording of the same rule. Every route
+to the word reaches it: a subshell, a function body, a command
+substitution, either end of a pipeline, a background job and an `eval`
+all write it, and each contains the stop exactly as far as that construct
+contains any fatal error (#3013).
+
 `${((expr))}` is **not** this construct: two adjacent parentheses are
 ksh93's braced arithmetic, `${((1+2))}` is 3 there and `${((echo hi))}`
 an arithmetic syntax error, where one space apart `${( (1+2) )}` is a

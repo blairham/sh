@@ -673,6 +673,22 @@ type ParamExpr struct {
 	// Src is the raw text between the braces, kept for the diagnostic.
 	Src string
 
+	// RefusedAtExpansion is a *parse* failure this dialect raises when the
+	// word is expanded rather than while the word is read.
+	//
+	// Bad next door is the other deferral and a different one: that node is
+	// an expansion the grammar could not read, reported by the runner in the
+	// shell's own bad-substitution wording. This one is the failure the
+	// parser already built — kind, token, tail and all — carried past the
+	// parse so that the same sentence is written at the same shape, one
+	// stage later.
+	//
+	// Asked only of a flag group in the one dialect that defers it; see
+	// Dialect.FlagGroupRefusedAtExpansion for the measurement and for why
+	// every *other* unreadable expansion in that shell is refused while
+	// reading.
+	RefusedAtExpansion *Error
+
 	Start Pos
 	Stop  Pos
 }
@@ -753,6 +769,16 @@ func (p *Parser) parseParamExp(src string, start Pos, q Quoting, bare bool) *Par
 					// where the word ends — see Error.FlagGroupWordTail.
 					if n := flagGroupClose(src); n >= 0 {
 						p.flagTailFrom = start.Offset + int32(len("${")+n+1)
+					}
+					if p.dialect.FlagGroupRefusedAtExpansion {
+						// The same failure, carried past the parse instead
+						// of ending it: the shell that defers this one still
+						// refuses every other unreadable expansion where it
+						// stands, so the deferral is the group's and not the
+						// brace's. See
+						// Dialect.FlagGroupRefusedAtExpansion for the rows
+						// and for the branch-never-taken control.
+						e.RefusedAtExpansion, p.err = pe, nil
 					}
 				}
 				return e

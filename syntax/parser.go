@@ -2289,8 +2289,21 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 	// quotes back only what follows the group's `)`.
 	if from := p.flagTailFrom; from > 0 {
 		p.flagTailFrom = 0
+		tail := flagGroupTail(p.sourceBetween(Pos{Offset: from, Line: 1, Col: 1}, stop))
 		if pe, isErr := p.err.(*Error); isErr && pe.FlagGroupWordTail == "" {
-			pe.FlagGroupWordTail = flagGroupTail(p.sourceBetween(Pos{Offset: from, Line: 1, Col: 1}, stop))
+			pe.FlagGroupWordTail = tail
+		}
+		// And where the dialect carries the refusal to the run instead, the
+		// same text lands on the failure the node is holding: the word ends
+		// in the same place whether the sentence is written now or later,
+		// and reading it twice is how one rule becomes two.
+		for i := range out {
+			if out[i].Kind != ParamExp || out[i].Param == nil {
+				continue
+			}
+			if pe := out[i].Param.RefusedAtExpansion; pe != nil && pe.FlagGroupWordTail == "" {
+				pe.FlagGroupWordTail = tail
+			}
 		}
 	}
 	return &Word{Spans: out, Start: start, Stop: stop}

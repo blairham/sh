@@ -12,13 +12,49 @@ import (
 
 // refusal parses src under this dialect and words the failure the way the
 // shell would, so a row below is the line the binary prints.
+//
+// A flag group's refusal is carried on the node rather than raised, because
+// this shell writes it when the word expands — see
+// syntax.Dialect.FlagGroupRefusedAtExpansion. The sentence is the same
+// sentence either way, which is the whole point of carrying the failure
+// rather than rebuilding one, so the rows below are unchanged by the move.
 func refusal(t *testing.T, src string) string {
 	t.Helper()
-	_, err := syntax.Parse(src+"\n", ksh.Dialect())
+	f, err := syntax.Parse(src+"\n", ksh.Dialect())
+	if err == nil {
+		if carried := carriedRefusal(f); carried != nil {
+			err = carried
+		}
+	}
 	if err == nil {
 		return "parsed"
 	}
 	return ksh.Diagnostics().ParseFailure(err)
+}
+
+// carriedRefusal is the first deferred parse failure in a one-command file,
+// which is every row here.
+func carriedRefusal(f *syntax.File) error {
+	for _, st := range f.Stmts {
+		pipe, ok := st.Expr.(*syntax.Pipeline)
+		if !ok {
+			continue
+		}
+		for _, c := range pipe.Cmds {
+			cmd, ok := c.(*syntax.SimpleCmd)
+			if !ok {
+				continue
+			}
+			for _, w := range cmd.Args {
+				for _, sp := range w.Spans {
+					if sp.Param != nil && sp.Param.RefusedAtExpansion != nil {
+						return sp.Param.RefusedAtExpansion
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // This shell has no expansion flag groups, so `${(U)x}` is a parse-time
@@ -152,5 +188,30 @@ func TestARefusedFlagGroupsTailDoublesTheClosingQuote(t *testing.T) {
 		if got := refusal(t, c.src); got != c.want {
 			t.Errorf("%q:\n got %q\nwant %q", c.src, got, c.want)
 		}
+	}
+}
+
+// And *when* it is written: this shell refuses a flag group when the word
+// expands, where it refuses every other unreadable expansion while it reads
+// the line. Measured 2026-09-18 on ksh93u+ 2012-08-01 from a script file
+// under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on
+// /dev/null — `echo one; echo "${(f)x}"; echo two` writes `one` and then the
+// refusal at 3, and `echo one; if false; then echo "${(f)x}"; fi; echo two`
+// writes both and exits 0, where `${%%%}` in either line is refused before
+// `one` runs. See syntax.Dialect.FlagGroupRefusedAtExpansion (#3013).
+func TestAFlagGroupIsRefusedWhenTheWordExpands(t *testing.T) {
+	if !ksh.Dialect().FlagGroupRefusedAtExpansion {
+		t.Error("FlagGroupRefusedAtExpansion = false, want true")
+	}
+	f, err := syntax.Parse("echo one; echo \"${(f)x}\"; echo two\n", ksh.Dialect())
+	if err != nil {
+		t.Fatalf("parse: %v, want the line to stand so the commands in front of the word can run", err)
+	}
+	if carriedRefusal(f) == nil {
+		t.Error("nothing carried, want the refusal held for the expansion")
+	}
+	// Every other unreadable expansion still gives up while it is read.
+	if _, err := syntax.Parse("echo one; echo ${%%%}; echo two\n", ksh.Dialect()); err == nil {
+		t.Error("parsed, want a refusal that is not a flag group still raised at the read")
 	}
 }

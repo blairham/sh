@@ -1807,20 +1807,22 @@ func Semantics() interp.Semantics {
 	// `unset: bad option: -n` at 1 and `x` keeps its value (#932).
 	s.UnsetOptions = "vfm"
 	// `readonly` here is `typeset -r` under another name, so it takes far
-	// more than these four: measured 2026-09-12, `-i`, `-x`, `-g`, `-l`,
-	// `-u` and `-t` are all taken at status 0 as well, and only `-n` and
-	// `-r` are refused. The set stops at the letters this builtin does
-	// something with, because a letter accepted and then ignored hands a
-	// script a success it did not earn — see Semantics.ReadonlyOptions.
-	// Making `readonly` read DeclareOptions here is the honest fix and has
-	// its own measurements to make.
+	// more than these six: measured 2026-09-12, `-i`, `-x`, `-g`, `-l` and
+	// `-u` are all taken at status 0 as well, and only `-n` and `-r` are
+	// refused. The set stops at the letters this builtin does something
+	// with, because a letter accepted and then ignored hands a script a
+	// success it did not earn — see Semantics.ReadonlyOptions. `-t` joined
+	// it in #3101, when the trace attribute became something this builtin
+	// records: measured 2026-09-18, `readonly -t R=1` lists as `typeset -rt
+	// R=1` here. Making `readonly` read DeclareOptions is the honest fix for
+	// the rest and has its own measurements to make.
+	//
 	// unanswered ReadonlyReferenceLetter: `readonly -n` is refused here, so
 	// the letter never reaches the axis. Measured 2026-09-18 under
-	// `env -i PATH=/usr/bin:/bin LC_ALL=C`: `readonly -n zz` is `readonly: bad option: -n` at 1.
-	//
-	// ReadonlyOptions has no `n`, which is what keeps the question off
-	// this column rather than answered wrongly.
-	s.ReadonlyOptions = "paAf"
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`: `readonly -n zz` is
+	// `readonly: bad option: -n` at 1. ReadonlyOptions has no `n`, which is
+	// what keeps the question off this column rather than answered wrongly.
+	s.ReadonlyOptions = "paAft"
 	// And it is `typeset -r` in the other half too: a `readonly` written
 	// inside a function declares a **local**, where every other shell in
 	// the panel freezes the name the shell already has. Measured
@@ -3055,7 +3057,7 @@ func Semantics() interp.Semantics {
 	// 2026-09-10, `local -z`, `integer -z`, `float -z`, `export -z` and
 	// `readonly -z` are each `bad option: -z` in zsh 5.9.2, so the letter
 	// belongs to this table and to none of the other four (#1576).
-	s.DeclareOptions = "aAEfFgHhiLlmpRruUTxZz"
+	s.DeclareOptions = "aAEfFgHhiLlmpRrtuUTxZz"
 	// And what the `m` of that set *means*: the operands are patterns and
 	// every other letter on the line decides what a match is then used
 	// for. ksh93 spells the same letter and moves a parameter with it, so
@@ -3085,7 +3087,7 @@ func Semantics() interp.Semantics {
 	// `bad option` and `-f` is `invalid option(s)`, and every other letter
 	// above is read. See Semantics.ExportOptions for why the refused six are
 	// the six they are.
-	s.ExportOptions = "aFHhiLlpRruUTZ"
+	s.ExportOptions = "aFHhiLlpRrtuUTZ"
 	// `-z` and `+z` are taken and do nothing here, which is measured on both
 	// signs and on both sides of the builtin: `typeset -z p q` leaves `p`
 	// alone and declares an empty `q` exactly as a bare `typeset q` would,
@@ -3226,7 +3228,7 @@ func Semantics() interp.Semantics {
 	// them and this shell has not built them, `typeset -E` being `-E is not
 	// implemented yet` in the same run. Claiming them here would move the
 	// refusal from the letter to nowhere at all.
-	s.LocalOptions = "aAFHhiLlpRruUTxZ"
+	s.LocalOptions = "aAFHhiLlpRrtuUTxZ"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// `integer` here is `typeset` with the letter prepended rather than a
@@ -3236,14 +3238,14 @@ func Semantics() interp.Semantics {
 	// the set is its own field and not DeclareOptions over again — a shell
 	// that reused them would accept `integer -A m`, which is an associative
 	// array in no shell that has the word.
-	s.IntegerOptions = "gHhilprux"
+	s.IntegerOptions = "gHhilprtux"
 	// And `float` is the same word one letter along, with the same set
 	// narrowed the same way: measured 2026-09-16 under `-f`, a letter at a
 	// time against `float -X zz=1.5`, this shell's `float` refuses `-a`,
 	// `-A`, `-G`, `-i`, `-m`, `-T`, `-U` and `-z` and takes the rest. So it
 	// is `integer`'s letters with the integer one traded for the two float
 	// ones, which is what the two words are.
-	s.FloatOptions = "EFgHhlprux"
+	s.FloatOptions = "EFgHhlprtux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#FF` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -3688,6 +3690,20 @@ func Diagnostics() interp.Diagnostics {
 		HistorySubstitutionFailed:     "substitution failed",
 		HistoryBadWordSpecifier:       "no such word in event",
 		HistoryNoPreviousSubstitution: "no previous substitution",
+		// The trace attribute is a **variable** letter this engine records
+		// and lists (#3101) and a **function** mark it does not. This shell
+		// writes the mark inside the body — `f () {` then a `# traced`
+		// comment line then the statements — where the one other shell with
+		// the letter writes a `declare -ft f` row after the body, so the two
+		// are not one rendering and this column's half is not built. Named
+		// as missing on a `-f` line alone, which is the narrowest true
+		// statement: `typeset -t v=1` is a declaration here and only
+		// `typeset -ft f` and the bare `typeset -ft` are refused.
+		UnimplementedOptionLettersOnAFunctionLine: map[string]string{
+			"typeset": "t",
+			"declare": "t",
+			"local":   "t",
+		},
 		UnimplementedOptionLetters: map[string]string{
 			// **`set` has left this table entirely**, and the emptiness is
 			// the measurement. zsh gives a single letter to far more of its
@@ -3757,7 +3773,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-n` is the one that was load-bearing: #2553 built the name
 			// reference for bash and ksh93 on the premise that this shell
 			// spelled it too, and it does not.
-			"typeset": "kt",
+			"typeset": "k",
 			// `w` has left this list and joined TypeOptions above, in the same
 			// change: a letter in both is refused as missing while it works,
 			// and a letter in neither is `bad option` for something this
@@ -3768,7 +3784,7 @@ func Diagnostics() interp.Diagnostics {
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "kt",
+			"declare": "k",
 			// The same list as `typeset` and `declare`, which is the point:
 			// `-F` is one attribute and the three names declare it alike.
 			// It was here and in neither of theirs, which is the same split
@@ -3781,19 +3797,19 @@ func Diagnostics() interp.Diagnostics {
 			// nothing was coming. `L`, `R` and `Z` are the padding letters
 			// `local` really does spell and this engine does not.
 			//
-			// `-k` is gone for the same reason `-b`, `-c` and `-n` are:
+			// `-k` was gone for the same reason `-b`, `-c` and `-n` are:
 			// measured in the same run, `local -k v=1` inside a function is
 			// `bad option: -k` where `typeset -k` and `declare -k` are taken
-			// — so this list is one letter shorter than theirs and not the
-			// same list after all.
-			"local": "t",
+			// — so this list was one letter shorter than theirs and not the
+			// same list after all. `-t` was the last of it and left with
+			// #3101, so `local` has no row here at all now.
 			// `integer`'s own short list, and it is not typeset's: the
 			// letters typeset is missing that `integer` refuses outright —
 			// b, c, E and m — are bad options under this name and belong in
 			// neither field, while `-t`, `-L`, `-R` and `-Z` are letters
 			// this shell's `integer` really takes. `-h` was here too and is
 			// implemented now, in IntegerOptions above.
-			"integer": "LRZt",
+			"integer": "LRZ",
 			// `functions`' own letters, none of which is `typeset`'s: -u
 			// and -U mark a name for autoloading, -k and -z pick which
 			// shell the autoloaded file is read as, -t and -T trace, -x

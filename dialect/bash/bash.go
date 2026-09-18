@@ -2246,7 +2246,15 @@ func Semantics() interp.Semantics {
 	// ash each end the script over `readonly -f`. Measured 2026-09-16 on
 	// 5.3.20 and 3.2.57, which agree line for line (#3192). See
 	// Semantics.FunctionAttributeLetters for what the letters do.
-	s.FunctionAttributeLetters = "rx"
+	//
+	// `t` joined the two in #3051. It is the trace mark, measured on
+	// 5.3.20 the same day as the other two: `declare -ft a` is a silent 0,
+	// `declare -F` writes `declare -ft a`, `declare -Ft` narrows to the
+	// marked functions, and a function carrying all three lists as `declare
+	// -frtx a`. What a traced function *does* here — inherit the DEBUG and
+	// RETURN traps, which `set -o functrace` asks for wholesale — is not
+	// built, so the mark is recorded and listed and read by nothing.
+	s.FunctionAttributeLetters = "rtx"
 	// `export -n V` takes the attribute off and leaves V set: measured, the
 	// name keeps its value in the shell and stops reaching a child. bash is
 	// the only shell in the panel with the letter.
@@ -2463,10 +2471,10 @@ func Semantics() interp.Semantics {
 	// #2553: it is the **name reference**, a language feature rather than an
 	// attribute, and interp/nameref.go is the whole of it. `-I` joined them
 	// in #3434: it is the per-declaration spelling of `localvar_inherit`,
-	// and interp/localinherit.go is the whole of it. The trace letter this
-	// shell also has still rides in
-	// Diagnostics.UnimplementedOptionLetters.
-	s.DeclareOptions = "aAfFgiIlnprux"
+	// and interp/localinherit.go is the whole of it. `-t` joined them in
+	// #3101: it is the **trace attribute**, which this shell records and
+	// lists back and nothing else here reads — see Runner.traced.
+	s.DeclareOptions = "aAfFgiIlnprtux"
 	// unanswered FloatFormatLetterE: this shell has no `-E` on a declaration
 	// to give a rendering to. Measured 2026-09-15 on 5.3.15 and 3.2.57
 	// alike, `declare -E 3 a=1.5` is `declare: -E: invalid option` (#2559).
@@ -2506,7 +2514,7 @@ func Semantics() interp.Semantics {
 	// reason from the other side: it is what says the fresh binding is *not*
 	// the function's own but a copy of the caller's, so it belongs on the
 	// word that makes the binding (#3434).
-	s.LocalOptions = "aAgiIlnprux"
+	s.LocalOptions = "aAgiIlnprtux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// A lone `-` or `+` is a *name* here and not an option word, and not one
@@ -3202,16 +3210,15 @@ func Diagnostics() interp.Diagnostics {
 			// always, printed only to a terminal, which is the measured
 			// whole of it.
 			"read": "Ee",
-			// The trace attribute, under both of the builtin's names — and
-			// `local`'s extras: the function letters, which this shell takes
-			// and ignores where no operand is a function. `-n` left this
-			// list when name references landed (#2553) and `-I` when
-			// inheritance did (#3434); the two tables are one table, so a
-			// letter named here while DeclareOptions spells it would refuse
-			// what the attribute grants.
-			"declare": "t",
-			"typeset": "t",
-			"local":   "fFt",
+			// `local`'s function letters, which this shell takes and ignores
+			// where no operand is a function. `-n` left this list when name
+			// references landed (#2553), `-I` when inheritance did (#3434)
+			// and `-t` when the trace attribute did (#3101); the two tables
+			// are one table, so a letter named here while DeclareOptions
+			// spells it would refuse what the attribute grants. `declare`
+			// and `typeset` have left the table entirely with the last of
+			// them.
+			"local": "fF",
 		},
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall

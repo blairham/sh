@@ -46,17 +46,17 @@ func TestLocalTakesTheFloatAttribute(t *testing.T) {
 // honest — and they fail for two different reasons.
 //
 // `-f` and `-g` are refused because a local cannot be a function or a global;
-// zsh refuses them here too, in the same words. `-E` and `-t` are letters zsh
-// *does* take on `local` and this shell has not built the attribute for —
-// `typeset -E` is `-E is not implemented yet` in the same run — so they are
-// refused by name rather than claimed. Claiming them would move the refusal
-// from the letter to nowhere at all.
+// zsh refuses them here too, in the same words.
 //
-// `-L` and `-R` have left this list, with `-Z`: they are the width attributes
-// and are built now (#1461). `-E` has left it too — it is a *format* rather
-// than a width and the two shells that spell it do not share one, which is
-// what took it a separate axis and #2559 rather than a place in that change.
-// `-t` is what is left.
+// `-L`, `-R` and `-Z` have left this list: they are the width attributes and
+// are built now (#1461). `-E` has left it too — it is a *format* rather than
+// a width and the two shells that spell it do not share one, which is what
+// took it a separate axis and #2559 rather than a place in that change. `-t`
+// left it last (#3101): the **variable** attribute is built and listed, and
+// what is not built is the mark the same letter makes on a *function*, which
+// this shell writes inside the body where the one other shell with the letter
+// writes a row after it. So the refusal that is left is a `-f` line's, and
+// naming it here is what keeps the two halves of the letter apart.
 func TestLocalStillRefusesTheLettersItHasNoAttributeFor(t *testing.T) {
 	if s := zsh.Semantics(); strings.ContainsAny(s.LocalOptions, "fg") {
 		t.Errorf("LocalOptions %q claims -f or -g, which a local cannot be", s.LocalOptions)
@@ -68,12 +68,18 @@ func TestLocalStillRefusesTheLettersItHasNoAttributeFor(t *testing.T) {
 			t.Errorf("local -%s = %q (status %d), want %q and a failure", letter, out, st, want)
 		}
 	}
-	// Built under the other word is the test for `F`; not built at all is the
-	// test for this one, and the refusal names the letter.
-	for _, letter := range []string{"t"} {
-		out, _ := runZsh(t, dir, `typeset -`+letter+` x=1`)
-		if !strings.Contains(out, "-"+letter+" is not implemented yet") {
-			t.Errorf("typeset -%s = %q, want it still refused by name", letter, out)
+	// The variable half of `-t` is built: a silent declaration that lists
+	// back with the letter.
+	if out, st := runZsh(t, dir, `typeset -t x=1; typeset -p x`); out != "typeset -t x=1\n" || st != 0 {
+		t.Errorf("typeset -t x=1 = %q (status %d), want the declaration listed back at 0", out, st)
+	}
+	// The function half is not, and it is refused by name under every word
+	// that reaches it — with an operand and without one, since a letter that
+	// is really missing has no listing to write either.
+	for _, src := range []string{`f(){ :; }; typeset -ft f`, `f(){ :; }; typeset -ft`} {
+		out, st := runZsh(t, dir, src)
+		if !strings.Contains(out, "-t is not implemented yet") || st == 0 {
+			t.Errorf("%s = %q (status %d), want it refused by name", src, out, st)
 		}
 	}
 }

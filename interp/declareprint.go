@@ -166,6 +166,11 @@ type declaration struct {
 	// missing the rest. Clustered and BareAssignments are the shells with
 	// no such attribute.
 	unique bool
+	// traced is `typeset -t`, which every shell that spells the letter
+	// writes back and none of them lets change a value. Where it sits among
+	// the other letters is the one thing that differs, and each listing form
+	// spells its own order — see flagLetters and exportSpelledDeclaration.
+	traced bool
 	// base is the output base an integer name renders in — `typeset -i16`.
 	// Zero where none was named, which is every name in a dialect without
 	// the feature. The two forms that write it write it differently and one
@@ -238,6 +243,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		upper:       r.uppered[name],
 		hidden:      r.hidden[name],
 		unique:      r.unique[name],
+		traced:      r.traced[name],
 		base:        r.integerBase[name],
 		inAFunction: len(r.scopes) > 0,
 		localHere:   r.localInTheInnermostScope(name),
@@ -258,7 +264,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d.hidesTheValue = d.hidden &&
 		r.sem().DeclareHideValueLetter == DeclareHideValueLetterHidesTheValue
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
-		d.upper || d.hidden || d.unique || d.hasWidth
+		d.upper || d.hidden || d.unique || d.traced || d.hasWidth
 	if d.isNameref {
 		// A reference lists as itself — `declare -n r="v"` — and the tables
 		// below are the *target's*, not this name's. Ahead of every one of
@@ -453,6 +459,9 @@ func (r *Runner) declarableNames() []string {
 		seen[name] = true
 	}
 	for name := range r.unique {
+		seen[name] = true
+	}
+	for name := range r.traced {
 		seen[name] = true
 	}
 	for name := range r.declaredBare {
@@ -898,7 +907,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	// `typeset -L3 -r a=abcd` and `typeset -lL 4 d=ABCD` is
 	// `typeset -L4 -l d=ABCD`. A name carries one of the three, so their
 	// order among themselves decides nothing.
-	flags := d.letters("naAiEFLRZlurxUT")
+	flags := d.letters("naAiEFLRZlurtxUT")
 	numbered := 0
 	if d.base != 0 {
 		// The base rides on the letter here — `typeset -i16 h=255` — where
@@ -1149,6 +1158,15 @@ func bareAssignmentFlags(d declaration) []string {
 	if d.readonly {
 		flags = append(flags, "-r")
 	}
+	if d.traced {
+		// The trace attribute sits behind export and readonly and in front
+		// of everything else this form writes, which is measured a letter at
+		// a time on ksh93u+ 2012-08-01: `typeset -x -t`, `typeset -x -r -t
+		// -l -u -i` from a name carrying all of them, and `typeset -t -a`,
+		// `typeset -t -A`, `typeset -t -H`, `typeset -t -i` and `typeset -t
+		// -u` from a name carrying one beside it.
+		flags = append(flags, "-t")
+	}
 	// The kind letter comes next and the value letters after it — measured
 	// from a name declared with every one: `typeset -x -r -a -u q=(1)` and
 	// `typeset -x -A -i w=([k]=1)`.
@@ -1274,7 +1292,7 @@ func bareAssignmentHead(flags []string, name string) string {
 // cannot stand with `n` at all — a `-n` declaration over an array is refused,
 // see NamerefArrayRefusal — so their side of it is unexercised and they keep
 // the place the rest of the order gives them.
-func (d declaration) flagLetters() string { return d.letters("aAinrxlu") }
+func (d declaration) flagLetters() string { return d.letters("aAinrtxlu") }
 
 // letters spells the attributes present in the given order.
 func (d declaration) letters(order string) string {
@@ -1304,6 +1322,8 @@ func (d declaration) letters(order string) string {
 			on = d.upper
 		case 'U':
 			on = d.unique
+		case 't':
+			on = d.traced
 		case 'T':
 			on = d.hasTie
 		case 'n':

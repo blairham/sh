@@ -24,6 +24,13 @@ import "strings"
 const (
 	functionAttributeReadonly = 'r'
 	functionAttributeExported = 'x'
+	// The trace mark: `declare -ft f` in the one shell that spells it this
+	// way, which the listing writes back beside the other two. What a
+	// *traced* function then does — inherit the DEBUG and RETURN traps — is
+	// Runner.SetTracedFunctions' question and is not this table's; the
+	// dialect that has both keeps the mark here and reads it there. See
+	// Runner.tracedFuncs.
+	functionAttributeTraced = 't'
 )
 
 // functionAttributes is the letters one function holds, in the dialect's
@@ -53,6 +60,8 @@ func (r *Runner) functionHoldsAttribute(name string, letter rune) bool {
 		return r.readonlyFuncs[name]
 	case functionAttributeExported:
 		return r.exportedFuncs[name]
+	case functionAttributeTraced:
+		return r.tracedFuncs[name]
 	}
 	return false
 }
@@ -70,6 +79,11 @@ func (r *Runner) markFunctionAttribute(name string, letter rune) {
 			r.exportedFuncs = map[string]bool{}
 		}
 		r.exportedFuncs[name] = true
+	case functionAttributeTraced:
+		if r.tracedFuncs == nil {
+			r.tracedFuncs = map[string]bool{}
+		}
+		r.tracedFuncs[name] = true
 	}
 }
 
@@ -80,6 +94,8 @@ func (r *Runner) unmarkFunctionAttribute(name string, letter rune) {
 		delete(r.readonlyFuncs, name)
 	case functionAttributeExported:
 		delete(r.exportedFuncs, name)
+	case functionAttributeTraced:
+		delete(r.tracedFuncs, name)
 	}
 }
 

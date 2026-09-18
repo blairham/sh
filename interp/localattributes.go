@@ -72,6 +72,7 @@ type nameAttributes struct {
 	upper    bool
 	unique   bool
 	hidden   bool
+	traced   bool
 	// nameref and isNameref are the name-reference attribute, the same shape
 	// as the two above it: absent as often as present, and what it carries
 	// is a *name* rather than a flag.
@@ -101,6 +102,7 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 		upper:   r.uppered[name],
 		unique:  r.unique[name],
 		hidden:  r.hidden[name],
+		traced:  r.traced[name],
 
 		declaredBare: r.declaredBare[name],
 	}
@@ -135,6 +137,7 @@ func (r *Runner) dropNameAttributes(name string) {
 	delete(r.uppered, name)
 	delete(r.unique, name)
 	delete(r.hidden, name)
+	delete(r.traced, name)
 	delete(r.nameref, name)
 	delete(r.declaredBare, name)
 }
@@ -150,6 +153,7 @@ func (r *Runner) restoreAttributes(name string, a nameAttributes) {
 	setBool(&r.uppered, name, a.upper)
 	setBool(&r.unique, name, a.unique)
 	setBool(&r.hidden, name, a.hidden)
+	setBool(&r.traced, name, a.traced)
 	setBool(&r.declaredBare, name, a.declaredBare)
 	setInt(&r.integerBase, name, a.base, a.baseSet)
 	setInt(&r.floatPrecision, name, a.precision, a.isFloat)

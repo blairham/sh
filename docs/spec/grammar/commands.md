@@ -1001,6 +1001,58 @@ name rather than by an assignment prefix (`DeclarationUtilities`;
 measured: `decl/an-array-assignment-as-an-operand`,
 `decl/a-local-array-stays-local`, `decl/readonly-takes-its-array-first`).
 
+#### Only a declaration's operand, and only from the word as written
+
+Two things decide whether a `name=( … )` word is an array literal at all,
+and neither is in the word.
+
+**The position.** An *argument* of any other command is not an operand, and
+the `(` after the `=` there is whatever an ordinary parenthesis is. Measured
+2026-09-15 on zsh 5.9.2, each probe in a script file of its own with
+`nonomatch` set:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `print -r -- x=(a\|b)c` | `x=(a\|b)c` — one word, group and all |
+| `print -r -- x=(a)` | `number expected` — a glob qualifier |
+| `f() { local a=(x y); print -r ${#a}; }; f` | `2` |
+| `typeset -a b=(p q r); print -r ${#b}` | `3` |
+
+The last two are what the reading is *for*; the first two are what it must
+not reach. bash 5.3 has neither a pattern group nor a glob qualifier there,
+so the word ends at the `(` and a parenthesis behind a word is a syntax
+error — which is its answer to both of the first two lines. The parser
+therefore tells the lexer which position this is, because the command's
+name is the only thing that says so and the lexer cannot see it (#3087).
+
+**How the command word is written.** Measured 2026-09-16, each probe
+followed by `echo "[${a[1]}]"`:
+
+| probe | bash 5.3 | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- |
+| `typeset a=(x y)` | `[y]` | `[x]` | `[y]` |
+| `'typeset' a=(x y)` | syntax error | a glob qualifier | `[y]` |
+| `\typeset a=(x y)` | syntax error | a glob qualifier | `[y]` |
+| `type"set" a=(x y)` | syntax error | a glob qualifier | `[y]` |
+| `cmd=typeset; $cmd a=(x y)` | syntax error | a glob qualifier | `` `(' unexpected `` |
+
+"a glob qualifier" is `unknown file attribute:` at 1 with the next line
+still running: that shell reads the parenthesis as a qualifier on the word
+`a=`. dash and BusyBox ash have no array literal at all and the question
+does not reach them.
+
+So bash and zsh want one **unquoted literal** word and ksh93 wants a word
+that was **written** rather than produced — the same two readings
+`interp.Semantics.DeclarationCommandWord` records for expansion, asked here
+about the grammar (`Dialect.DeclarationArrayFromTheCommandWord`). They are
+two questions and not one: this decides where the *word ends*, and that
+decides how the operand expands (#3351).
+
+An **element** of such a literal is still inside the declaration, so a
+`name=( … )` written between the parentheses keeps the reading argument
+position would otherwise take away — which is what a compound variable's
+body is made of.
+
 #### A syntax error between the parentheses ends the line, not the file
 
 The parentheses of a compound assignment belong to a **word**, and what

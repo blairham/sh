@@ -324,6 +324,14 @@ func Dialect() syntax.Dialect {
 	// shell resumes after giving the reading up rather than about the scan.
 	// See the flag for the five rows.
 	d.ArithCommandScanIgnoresQuoting = true
+	// A `name=( … )` operand keeps the array reading through *quoting* of the
+	// command word here: `'typeset' a=(x y)`, `\typeset a=(x y)` and
+	// `type"set" a=(x y)` all set the array, where bash 5.3 refuses each as a
+	// syntax error and zsh 5.9.2 reads a glob qualifier on the word `a=`.
+	// Measured 2026-09-16 from script files. An *expansion* takes it away
+	// here too — `cmd=typeset; $cmd a=(x y)` is `` `(' unexpected `` — which
+	// is the line between this reading and the core's.
+	d.DeclarationArrayFromTheCommandWord = syntax.DeclarationArrayFromAWrittenWord
 	// A function body that is not compound may carry no redirection here:
 	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
 	// >out` are all a syntax error at the operator. A braced body is not

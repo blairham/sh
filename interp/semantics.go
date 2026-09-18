@@ -23100,11 +23100,30 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	o.whole = true
 	matched, report := matchPatternIn(pattern, s, s, 0, o)
 	if bad {
-		// zsh abandons the script rather than failing the match.
-		// Measured: zsh abandons the script here with status 0, and with 1
-		// when the same pattern fails against the filesystem. Both are
-		// zsh's, and neither is guessable from the other.
-		r.fatalPattern(pattern, 0)
+		// zsh gives up over the pattern rather than failing the match, and
+		// what that costs is the number this carries. Re-measured
+		// 2026-09-18 from a script file under `env -i HOME=…
+		// PATH=/usr/bin:/bin LC_ALL=C`, with `case '[a' in ([) echo one;;
+		// (*) echo two;; esac` and the `[[ ]]` spelling of the same:
+		//
+		//	case, at the top level    the script ends at 1
+		//	[[ '[a' == [ ]]           the script ends at 2
+		//	inside an `eval`          the eval reports 1, the script runs on
+		//	inside a `.`              the dot reports 126, the script runs on
+		//	inside a function         the script ends at 1
+		//	echo '[a'*                the script ends at 1
+		//
+		// This carried 0 for both of the first two, on a measurement that
+		// read the *`$?` after a subshell* rather than the script's own
+		// exit. So a script whose last act was a bad pattern reported
+		// success to whatever ran it, which is the shape that turns a broken
+		// script into a green build (#3398). The condition's own 2 still
+		// wins where there is one.
+		status := badStatus
+		if status == 0 {
+			status = r.fatalStatus()
+		}
+		r.fatalPattern(pattern, status)
 		return false
 	}
 	// The surfaces this function serves are the ones that report a match
@@ -23119,10 +23138,20 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 }
 
 // fatalPattern reports a pattern the dialect rejects outright.
+//
+// An **error** and not a request to stop, which is what a boundary that gives
+// up one file catches. Measured 2026-09-18 on zsh 5.9.2 from a script file:
+// `eval 'case "[a" in ([) echo one;; esac'` reports 1 and the script carries
+// on to the next command, `. file` holding the same reports 126 and the
+// script carries on, and the same pattern in a *function* body ends the
+// script — which is the boundary set FatalErrorEndsBorrowedTextOnly already
+// draws for every other fatal error. This raised an unannotated controlExit,
+// so an `eval` around a bad pattern abandoned the whole script and everything
+// after the first one was lost (#3398).
 func (r *Runner) fatalPattern(pattern string, status int) {
 	r.diagf("%s\n", Wording(r.diag().BadPattern, "bad pattern: %s", pattern))
 	r.status = status
-	r.stopTheShell()
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 }
 
 // OutsideLocaleEscapePolicy is what a `\u` or `\U` escape does when the code

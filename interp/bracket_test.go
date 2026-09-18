@@ -35,18 +35,33 @@ func TestUnterminatedBracketHasThreeAnswers(t *testing.T) {
 			t.Errorf("%v: got %q, want %q", tc.policy, got, tc.want)
 		}
 	}
-	// BracketBadPattern rejects the pattern and abandons the script — with
-	// status 0, where the same pattern against the filesystem gives 1. Both
-	// are measured; neither is guessable from the other.
-	out, st := run(t, src+`; echo after`, withSem(bracketSem(BracketBadPattern)))
-	if !strings.Contains(out, "bad pattern: [") {
-		t.Errorf("bad-pattern policy: got %q", out)
-	}
-	if strings.Contains(out, "after") || strings.Contains(out, "hit") || strings.Contains(out, "miss") {
-		t.Errorf("bad-pattern policy: the script should stop, got %q", out)
-	}
-	if st != 0 {
-		t.Errorf("bad-pattern policy: status = %d, want 0", st)
+	// BracketBadPattern rejects the pattern and abandons the script — at the
+	// dialect's own **fatal** status, which is the same number the pattern
+	// gives against the filesystem. This line used to want 0, and the
+	// measurement behind it read a *subshell's* `$?` rather than the script's
+	// own exit: re-measured 2026-09-18 from a script file, `case '[a' in ([)
+	// echo one;; (*) echo two;; esac` ends real zsh at 1, and the `[[ ]]`
+	// spelling of the same pattern ends it at 2 (#3398).
+	//
+	// Both answers to FatalErrorStatusIsOne, because the number is that
+	// axis's and not this one's: a test that pinned only the shell this was
+	// found on would read as a constant.
+	for _, tc := range []struct {
+		fatalIsOne Answer
+		want       int
+	}{{Yes, 1}, {No, 2}} {
+		sem := bracketSem(BracketBadPattern)
+		sem.FatalErrorStatusIsOne = tc.fatalIsOne
+		out, st := run(t, src+`; echo after`, withSem(sem))
+		if !strings.Contains(out, "bad pattern: [") {
+			t.Errorf("bad-pattern policy: got %q", out)
+		}
+		if strings.Contains(out, "after") || strings.Contains(out, "hit") || strings.Contains(out, "miss") {
+			t.Errorf("bad-pattern policy: the script should stop, got %q", out)
+		}
+		if st != tc.want {
+			t.Errorf("bad-pattern policy: status = %d, want %d", st, tc.want)
+		}
 	}
 	// The core has no answer and says so.
 	if _, st := run(t, src, withSem(CoreSemantics())); st != 2 {

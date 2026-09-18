@@ -110,6 +110,42 @@ yes. Unanswered in the core, and the `posix` preset says no, because in
 a shell pattern the standard has `!` *replace* `^` in the role it plays
 in regular expression notation (XCU §2.13.1), which leaves `^` ordinary.
 
+### What a refused pattern costs the script
+
+One column calls an unterminated bracket a bad pattern rather than a literal
+or a class that matches nothing — `Semantics.UnterminatedBracket` at
+`BracketBadPattern` — and what that refusal costs the script is two further
+questions. Measured 2026-09-18 on zsh 5.9.2 under `env -i HOME=…
+PATH=/usr/bin:/bin LC_ALL=C`, from a script file:
+
+| where the pattern is | what happens |
+| --- | --- |
+| `case '[a' in ([) …` at the top level | the script ends, exit **1** |
+| `[[ '[a' == [ ]]` | the script ends, exit **2** |
+| `echo '[a'*` | the script ends, exit **1** |
+| inside an `eval` | the `eval` reports 1, the **script carries on** |
+| inside a `.` | the dot reports 126, the script carries on |
+| inside a function body | the script ends, exit 1 |
+| inside `( … )` | the subshell ends, `$?` is **0**, the script carries on |
+
+**It is an error, not a request to stop.** That is what the fourth and fifth
+rows say, and it is the same boundary `FatalErrorEndsBorrowedTextOnly`
+already draws for every other fatal error: text a special builtin is running
+is a boundary in that column and a function body is not. This raised an
+unannotated stop, so an `eval` around a bad pattern abandoned the whole
+script and everything after the first one was lost (#3398).
+
+**The status is the dialect's fatal one**, except in a condition, which
+carries its own 2 — the same number `[[ x == (#Z)a ]]` already gives. It used
+to be 0 for both, on a measurement that read the *last* row's `$?` rather
+than the script's own exit, so a script whose last act was a bad pattern
+reported success to whatever ran it.
+
+The last row is measured and not matched: `$?` after `( case '[a' in ([) … )`
+is 0 in real zsh and 1 here, where the refusal writes the fatal status the
+five rows above it need. Separating the two would mean a number that only the
+boundaries read, and the shell exits on the rows that matter either way.
+
 ### A backslash inside a bracket expression
 
 Three readings, and `Semantics.BracketEscape` is the axis. Measured

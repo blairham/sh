@@ -9814,6 +9814,80 @@ type Semantics struct {
 	// half-answered here.
 	LongOptionNameIgnoresHyphens Answer
 
+	// OptionNamespaceIgnoresSeparators takes the hyphens and underscores out
+	// of an option name before it is looked up, on **every** route into the
+	// `set -o` namespace: the builtin's operand, the invocation's `-o` and
+	// the `--name` spelling alike.
+	//
+	// ksh93 alone, and the reach is what parts it from
+	// LongOptionNameIgnoresHyphens next door. Measured 2026-09-18 on ksh93u+
+	// 2012-08-01 under `env -i PATH=/usr/bin:/bin LC_ALL=C`, one probe at a
+	// time:
+	//
+	//	ksh --err-exit -c 'set -o'        errexit on
+	//	ksh --err_exit -c 'set -o'        errexit on
+	//	ksh --glob-star -c 'set -o'       globstar on
+	//	ksh -o err-exit -c 'set -o'       errexit on
+	//	ksh -c 'set -o err-exit; set -o'  errexit on
+	//	ksh -c 'set -o err_exit; set -o'  errexit on
+	//	ksh --ERREXIT -c :                ERREXIT: bad option(s)
+	//
+	// zsh is the shell the *other* axis fits, because there the hyphen means
+	// two things in one shell depending on which spelling asked. Here it
+	// means one thing everywhere, so it belongs to the namespace.
+	//
+	// **Case is not folded and that is the boundary**: `--ERREXIT` and
+	// `-o RC` are refused where `--err-exit` is taken, so this removes two
+	// characters rather than normalizing a word.
+	//
+	// The fold is tried *after* the name as written, which `login_shell`
+	// makes load-bearing rather than tidy: the roster holds a name with an
+	// underscore in it, and `--login_shell`, `--loginshell` and
+	// `--login-shell` are all that name there. So the comparison is between
+	// the written word and each roster name with the separators taken out of
+	// both, and a name that survives the fold is still found by it.
+	//
+	// bash 5.3.20 (`set: err-exit: invalid option name`), dash 0.5.12
+	// (`Illegal option -o err-exit`) and BusyBox ash 1.37.0 (`illegal option
+	// -o err-exit`) refuse the folded spelling, each measured. zsh has an
+	// option namespace of its own that answers before this is reached, and
+	// answers `no such option: err-exit` when it does.
+	OptionNamespaceIgnoresSeparators Answer
+
+	// OptionNamespaceTakesANoPrefix reads a `no` in front of **any** name in
+	// the `set -o` roster as that name's negative, on every route into the
+	// namespace, and the listing still names only the positive one.
+	//
+	// ksh93 alone. Measured 2026-09-18 on ksh93u+ 2012-08-01:
+	//
+	//	set -o noerrexit                 errexit off, status 0
+	//	set +o noerrexit                 errexit on, status 0
+	//	set -o noglobstar                globstar off, status 0
+	//	set -o noallexport               allexport off, status 0
+	//	set -o nokeyword                 keyword off, status 0
+	//	set -o no_err_exit               errexit off, status 0
+	//	set -o noxyzzy                   noxyzzy: bad option(s), status 2
+	//	set -o nonoclobber               nonoclobber: bad option(s), status 2
+	//
+	// The last two are the rule and not the exception to it. **The `no` is
+	// stripped once and the rest must be a name the shell lists**, and what
+	// this shell lists is `clobber` where the others list `noclobber` — so
+	// `nonoclobber` uncovers a word the roster does not hold and is refused,
+	// even though `noclobber` is a spelling the same shell takes. Resolving
+	// against the roster rather than against everything the table can find
+	// is what reproduces that.
+	//
+	// Separate from Runner.AddNegatedSetOptions, which is a **listing** fact:
+	// those five rows say which spelling `set -o` writes. This is a
+	// **lookup** fact and says which spellings it reads, and the two are
+	// independently falsifiable — a shell could list `clobber` and still
+	// refuse `noerrexit`.
+	//
+	// bash 5.3.20 (`set: noerrexit: invalid option name`), dash 0.5.12 and
+	// BusyBox ash 1.37.0 all refuse it, each measured. zsh takes it through
+	// its own namespace, which answers before this is reached.
+	OptionNamespaceTakesANoPrefix Answer
+
 	// LongOptionValueIsANumber reads the `=value` an AST long option may
 	// carry — `--noglob=1` — as a number, with the option on when it is
 	// nonzero and off for everything else.

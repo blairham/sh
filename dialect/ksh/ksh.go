@@ -2506,12 +2506,29 @@ func Semantics() interp.Semantics {
 	// `--default` (#3153).
 	s.SetHasTheStateAndDefaultWords = interp.Yes
 	s.LongOptionValueIsANumber = interp.Yes
-	// unanswered LongOptionNameIgnoresHyphens: this shell folds hyphens
-	// **and** underscores, and does it on every route to an option name
-	// rather than in the `--name` spelling alone — `-o err-exit`,
-	// `set -o err_exit` and `--glob-star` all name the option, measured
-	// 2026-09-16. So its fold is the namespace's and the axis, which asks
-	// about the spelling, is not the question to answer here.
+	// This shell folds hyphens **and** underscores, and does it on every
+	// route to an option name rather than in the `--name` spelling alone —
+	// `-o err-exit`, `set -o err_exit` and `--glob-star` all name the
+	// option, measured 2026-09-16. So its fold is the *namespace's*, and
+	// LongOptionNameIgnoresHyphens — which asks about the spelling, and is
+	// zsh's because there the hyphen means two things in one shell — is not
+	// the question to answer here. It stays unanswered and the two below
+	// carry this column instead (#3155, #3254).
+	//
+	// The fold reaches every roster name and the refusals bound it in both
+	// directions: case is not folded (`--ERREXIT`, `-o RC`), and a word the
+	// fold leaves unrecognizable is still refused (`--no_profile`). Measured
+	// 2026-09-18 on ksh93u+ 2012-08-01.
+	s.OptionNamespaceIgnoresSeparators = interp.Yes
+	// And `no` in front of any roster name is that name off, on every route:
+	// `set -o noerrexit` is 0 with `errexit off` listed, `set +o noerrexit`
+	// puts it back, and the listing never grows a `no` row. Measured
+	// 2026-09-18. The five rows AddNegatedSetOptions declares below are a
+	// separate, listing-shaped fact, and `set -o nonoclobber` is what parts
+	// them: the `no` comes off once and `noclobber` is not a name this
+	// shell's listing holds, so the word is refused even though `noclobber`
+	// alone is taken (#3254).
+	s.OptionNamespaceTakesANoPrefix = interp.Yes
 	// Where the `-o` does stand alone, the word behind it is taken only if
 	// it does not look like options: `set -o -e` lists and turns errexit
 	// on, which is bash's reading and not zsh's. What this column still

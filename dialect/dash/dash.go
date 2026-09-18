@@ -1182,6 +1182,11 @@ func Semantics() interp.Semantics {
 	// unanswered LongOptionNameIgnoresHyphens: the fold is a rule of the
 	// `--name` spelling, and the axis above says this shell has no such
 	// spelling. There is no site here to put the question to.
+	// An option name is read exactly as it is written here. Measured
+	// 2026-09-18 on dash 0.5.12: `set -o err-exit` and `set -o noerrexit` are
+	// each `set: Illegal option -o <word>` at 2 (#3155, #3254).
+	s.OptionNamespaceIgnoresSeparators = interp.No
+	s.OptionNamespaceTakesANoPrefix = interp.No
 	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
 	// `--name` option word, and the axis above says this shell has no such
 	// word. There is no site here to put the question to.

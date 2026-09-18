@@ -2271,6 +2271,13 @@ func Semantics() interp.Semantics {
 	// unanswered LongOptionValueIsANumber: the `=value` it reads rides on a
 	// `--name` option word, and the axis above says this shell has no such
 	// word. There is no site here to put the question to.
+	// An option name is read exactly as it is written here — no separators
+	// come out of it and no `no` goes in front of it. Measured 2026-09-18 on
+	// bash 5.3.20: `set -o err-exit` and `set -o noerrexit` are each
+	// `set: <word>: invalid option name` at 2, where `set -o errexit` beside
+	// them is 0 (#3155, #3254).
+	s.OptionNamespaceIgnoresSeparators = interp.No
+	s.OptionNamespaceTakesANoPrefix = interp.No
 	// And the next word is only taken when it does not look like options
 	// itself: `set -o -e` here writes the option table and turns errexit
 	// **on**, where the name that would have been refused is `-e`. Only at

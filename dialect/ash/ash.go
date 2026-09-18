@@ -877,6 +877,10 @@ func Semantics() interp.Semantics {
 	// `#` in an option string is another option letter here. Measured
 	// 2026-09-16, BusyBox ash 1.37.0 (#2947).
 	s.GetoptsOptionStringHasANumericType = interp.No
+	// OPTERR is an ordinary variable here: measured 2026-09-17 in the pinned
+	// alpine image on BusyBox v1.37.0, a bad option is one line on stderr with
+	// it set to 0 as with it set to 1.
+	s.GetoptsOptErrSilencesTheComplaint = interp.No
 	s.GetoptsClearsOptarg = interp.No
 	// But OPTARG is *emptied* rather than unset when the option that was read
 	// is one the string has and takes no argument, which `${OPTARG-…}` and

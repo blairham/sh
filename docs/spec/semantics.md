@@ -17717,6 +17717,54 @@ unbounded shape — can still be measured
 reaches the same wrong letter without looping, because its `OPTIND` has
 already counted past the word by the time the declaration is made.
 
+**`GetoptsOptErrSilencesTheComplaint`** — bash **yes** · dash no · ksh93 no ·
+zsh no · BusyBox ash no
+
+Lets a script turn the `getopts` diagnostic off by setting the parameter
+OPTERR to zero, without moving to the silent form. bash alone has the
+parameter; everywhere else OPTERR is a name like any other.
+
+It is not the silent form by another spelling, which is why it is worth
+having: a leading colon in the option string also changes what arrives in
+the name and in OPTARG, where this changes only whether the sentence is
+written. A script that wants to keep `?` and lose the noise has exactly
+one way to say so.
+
+Measured 2026-09-17 over a script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null, counting
+lines on stderr from `getopts a o -z` and from `getopts a: o -a`:
+
+| shell | `OPTERR=1` | `OPTERR=0` | unset |
+| --- | --- | --- | --- |
+| bash 5.3.20 | 1 | **0** | 1 |
+| bash as `sh` | 1 | **0** | 1 |
+| bash 3.2.57 | 1 | **0** | 1 |
+| ksh93u+ 2012-08-01 | 1 | 1 | 1 |
+| dash 0.5.12 | 1 | 1 | 1 |
+| BusyBox ash 1.37.0 | 1 | 1 | 1 |
+| zsh 5.9.2 | 1 | 1 | 1 |
+
+The same for a bad option and for a missing argument, and the name, the
+status and OPTARG are untouched either way — so only the sentence moves.
+What it does **not** reach is the usage complaint `getopts` writes when it
+was not given both operands: that is still one line at `OPTERR=0`.
+
+The **value** is read the way that shell reads a number out of a string
+that was never meant to hold one, rather than the way arithmetic does:
+blanks, an optional sign, then decimal digits, stopping at the first byte
+that is not one. So `x`, `0x0`, `0abc`, `-`, `+` and a lone blank are all
+zero and all silence it, where `08` is eight and `1abc` is one and neither
+does. All six of space, tab, newline, vertical tab, form feed and carriage
+return count as the leading blanks. The one value that is not read at all
+is the **empty string**: `OPTERR=` writes the sentence exactly as an unset
+OPTERR does, which is the spelling that separates this from an ordinary
+number read — zero is what an empty string would otherwise come to.
+Measured the same day over thirty-one spellings.
+
+Asked only where a script has set OPTERR to a value that reads as zero, so
+an ordinary `getopts` — and an ordinary bad option in any of the six shells
+without the parameter — reaches no question at all.
+
 **`GetoptsOptionStringHasANumericType`** — bash no · dash no · ksh93 yes ·
 zsh no · BusyBox ash no
 

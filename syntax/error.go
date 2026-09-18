@@ -155,6 +155,27 @@ const (
 	//
 	// Token is the group as written, brackets included.
 	ErrArithBadBaseSyntax
+	// ErrArithMissingCloseParen is a parenthesised sub-expression that read a
+	// complete value and then met something that could neither continue it
+	// nor close the group: `$(( (echo a) ))`, where `echo` is the value and
+	// `a` is neither an operator nor a `)`.
+	//
+	// It is an *arithmetic* failure and not a syntax error, which is the
+	// whole reason it is here: every shell in the panel reports it the way it
+	// reports a division by zero — the expression quoted, the ordinary
+	// arithmetic status — and one of them ends the script at that status
+	// rather than at a parse failure's.
+	//
+	// Its own kind because two dialects have a sentence for the unclosed
+	// group that they give no other leftover — `missing `)'` and
+	// `expecting ')'` — where the rest say what they say about any text an
+	// expression could not use. A dialect without one falls back to the
+	// leftover wording, which is what it would have said had the group
+	// closed.
+	//
+	// Token is the text from the leftover to the end of the expression, which
+	// is the same span the leftover kinds name.
+	ErrArithMissingCloseParen
 	// ErrUnexpected is a token where the grammar wanted something else. The
 	// panel names the token three ways and one of them names its *class*
 	// instead — dash says "word unexpected" for an ordinary word and quotes

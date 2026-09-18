@@ -5093,6 +5093,19 @@ type Diagnostics struct {
 	// Empty falls back to ArithBadOutputFormat, so a dialect that reached the
 	// construct without making the distinction would say one thing for both.
 	ArithBadBaseSyntax string
+	// ArithMissingCloseParen is the reason when a parenthesised group read a
+	// complete value and then met text that could neither continue it nor
+	// close it: `$(( (echo a) ))`. One verb: the text from the leftover to
+	// the end of the expression, the same span the leftover reasons name.
+	//
+	// Two of the panel have a sentence for it that they give no other
+	// leftover — measured 2026-09-17, bash 5.3.20 writes ``missing `)'`` and
+	// dash 0.5.12 `expecting ')'`, where each words plain leftover text
+	// `arithmetic syntax error in expression` and `expecting EOF`. zsh 5.9.2,
+	// ksh93u+ and BusyBox ash say for the unclosed group exactly what they
+	// say for any leftover, so empty falls back to ArithOperatorExpected and
+	// those three need no answer here.
+	ArithMissingCloseParen string
 	// ArithOperatorExpected is the reason when an expression has something
 	// left over: `$((1 2))`. Same verb, and one shell puts it inside the
 	// reason — "operator expected at `2'".
@@ -6239,6 +6252,14 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		if reason == "" {
 			reason = d.ArithBadOutputFormat
 		}
+	case syntax.ErrArithMissingCloseParen:
+		reason, fallback = d.ArithMissingCloseParen, "operator expected"
+		if reason == "" {
+			// A dialect with no sentence of its own for the unclosed group
+			// says what it says about any text an expression could not use,
+			// which is what it would have said had the group closed.
+			reason = d.ArithOperatorExpected
+		}
 	case syntax.ErrArithOperator:
 		reason, fallback = d.ArithOperatorExpected, "operator expected"
 	case syntax.ErrArithBadOperator:
@@ -6503,7 +6524,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
 		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
 		syntax.ErrArithIllegalByte, syntax.ErrArithBadOutputFormat,
-		syntax.ErrArithBadBaseSyntax, syntax.ErrArithConditionalThen,
+		syntax.ErrArithBadBaseSyntax, syntax.ErrArithMissingCloseParen,
+		syntax.ErrArithConditionalThen,
 		syntax.ErrArithConditionalColon, syntax.ErrArithConditionalElse,
 		syntax.ErrArithColonWithoutQuestion:
 		return d.arithParseFailure(se, se.Expr)
@@ -7296,7 +7318,7 @@ func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
 		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
 		syntax.ErrArithIllegalByte, syntax.ErrArithBadOutputFormat,
-		syntax.ErrArithBadBaseSyntax:
+		syntax.ErrArithBadBaseSyntax, syntax.ErrArithMissingCloseParen:
 		// A malformed expression is found while expanding in bash, so the
 		// command fails rather than the script failing to parse. The same
 		// three consequences follow as for `for` with a bad name, which is

@@ -1102,12 +1102,15 @@ func (a *arithParser) unary() ArithExpr {
 	a.space()
 	start := a.at
 	switch {
-	case a.has("++"), a.has("--"):
+	// A dialect without the operators does not read the doubled sign as a
+	// token it then refuses: the two characters are two unary signs, so
+	// `$(( --x ))` is `-(-x)` and comes to x's own value, and `$(( -- ))` is
+	// a sign with nothing behind it. Measured 2026-09-17 on dash 0.5.12, the
+	// one panel column without them: `x=5; echo $(( --x ))` is `5` there and
+	// `$(( -- ))` is `expecting primary`. Refusing the pair outright made
+	// both a sentence of ours instead (#3475).
+	case a.dial.ArithIncDec && (a.has("++") || a.has("--")):
 		op := a.src[a.off : a.off+2]
-		if !a.dial.ArithIncDec {
-			a.p.fail("%s is not available in this dialect", op)
-			return nil
-		}
 		at := a.off
 		a.off += 2
 		x := a.unary()
@@ -1163,7 +1166,15 @@ func (a *arithParser) primary() ArithExpr {
 		x := a.expr()
 		a.space()
 		if !a.take(")") {
-			a.p.fail("expected ) in arithmetic")
+			// A group that read a value and then met text it could use for
+			// neither an operator nor a close is an *arithmetic* failure and
+			// not a parse one. Every shell in the panel quotes the expression
+			// back and carries the ordinary arithmetic status; `expected ) in
+			// arithmetic` was this parser's prose about a production standing
+			// where a diagnostic about the script belonged, and it took one
+			// dialect down at a syntax error's status besides (#3071).
+			a.failArith(ErrArithMissingCloseParen, a.src[a.blame:])
+			return nil
 		}
 		return x
 	}

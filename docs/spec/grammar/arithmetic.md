@@ -372,6 +372,25 @@ detail.
 Grammar flags: `ArithIncDec` and `ArithComma` — core: on for both;
 `posix` and `dash`: off for both.
 
+**Off does not mean refused.** Where the increment operators are absent the
+doubled sign is not a token the reader then rejects: it is two unary signs,
+and the expression evaluates. Measured 2026-09-17 on dash 0.5.12, the one
+panel column without them, against BusyBox ash 1.37.0, which has them:
+
+| written, with `x=5` | dash 0.5.12 | BusyBox ash 1.37.0 |
+| --- | --- | --- |
+| `$(( --x ))` | `5` | `4` |
+| `$(( ++x ))` | `5` | `6` |
+| `$(( -- -x ))` | `-5` | — |
+| `$(( x++ ))` | `arithmetic expression: expecting primary: " x++ "` | `5` |
+| `$(( -- ))` | `arithmetic expression: expecting primary: " -- "` | `arithmetic syntax error` |
+
+So a dialect without the operators reaches the ordinary missing-operand
+failure through the sign it already has, and needs no refusal of its own. Ours
+had one — `-- is not available in this dialect` — which is a sentence about
+this parser rather than about the script, and it refused `--x`, which dash
+evaluates (#3475).
+
 ## zsh binds the shifts and the bitwise operators differently
 
 The ladder above is one of two, and zsh uses the other by default. Its own
@@ -684,6 +703,43 @@ both bash alone. zsh names no expression at all, so neither reaches it.
 end of the expression — `1/0 ` blames `0 `, `1/0 + 2 ` blames `0 + 2 ` — where
 a literal the reader refused blames itself alone (`8#9`). Ours names the
 operand without the tail, on every route equally.
+
+### A group that will not close is an arithmetic failure, not a parse one
+
+A parenthesised sub-expression that reads a complete value and then meets text
+it can use for neither an operator nor a close — `(echo a)`, where `echo` is
+the value and `a` is neither — is reported the way a division by zero is: the
+expression quoted back, the ordinary arithmetic status, and the script carrying
+on wherever a failed `(( ))` is not fatal. No shell in the panel calls it a
+syntax error.
+
+Measured 2026-09-17, `env -i` with `LC_ALL=C` over a script file, `echo B; echo
+$(( (echo a) )); echo A`:
+
+| column | written | status |
+| --- | --- | ---: |
+| bash 5.3.20 | ``(echo a) : missing `)' (error token is "a) ")`` | 1 |
+| zsh 5.9.2 | ``bad math expression: operator expected at `a) '`` | 1 |
+| ksh93u+ 2012-08-01 | `` (echo a) : arithmetic syntax error`` | 1 |
+| dash 0.5.12 | `arithmetic expression: expecting ')': " (echo a) "` | 2 |
+| BusyBox ash 1.37.0 | `arithmetic syntax error` | 2 |
+
+Two columns have a sentence for the unclosed group that they give no other
+leftover: the same shells write `arithmetic syntax error in expression` and
+`expecting EOF` for `$(( (1)x ))`, where the group *did* close. The other
+three say for both exactly what they say for any text an expression could not
+use.
+
+Diagnostics: `ArithMissingCloseParen`, worded in bash and dash; empty falls
+back to `ArithOperatorExpected`, which is what a dialect without a sentence of
+its own would have said had the group closed.
+
+The status is the half a caller can read. Ours wrote the parser's own prose —
+`expected ) in arithmetic`, a sentence about a production — and refused the
+text as a *parse* failure, which took the file down before anything ran: the
+dialect that ends a script over a failed `(( ))` ended it at a syntax error's
+3 where its reference ends it at the arithmetic 1, and a script trapping on 1
+could not tell this from an unmatched quote (#3071).
 
 ### A stray `:` is one shell's one reversal
 

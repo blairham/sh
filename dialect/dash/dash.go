@@ -1410,11 +1410,12 @@ func Diagnostics() interp.Diagnostics {
 		// `0778` and `0x1z` are all "expecting EOF" — the same sentence it
 		// gives $((1 2)). Ours calls it a digit too great for its base and
 		// dash words that as the leftovers it would have seen.
-		DigitTooGreatForBase:  "expecting EOF",
-		ArithOperandExpected:  "expecting primary",
-		ArithOperatorExpected: "expecting EOF",
-		SyntaxUnexpected:      "Syntax error: \"%[1]s\" unexpected",
-		SyntaxUnexpectedWord:  "Syntax error: word unexpected",
+		DigitTooGreatForBase:   "expecting EOF",
+		ArithOperandExpected:   "expecting primary",
+		ArithOperatorExpected:  "expecting EOF",
+		ArithMissingCloseParen: "expecting ')'",
+		SyntaxUnexpected:       "Syntax error: \"%[1]s\" unexpected",
+		SyntaxUnexpectedWord:   "Syntax error: word unexpected",
 		// And the newline is unquoted with it — `newline unexpected` beside
 		// `";;" unexpected` — and blamed on the line it ends (#1364).
 		// A line typed at a prompt is numbered by the session: the second

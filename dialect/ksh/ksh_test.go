@@ -245,15 +245,20 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := ksh.Diagnostics().BuiltinUsage["type"], "Usage: whence [-afpqv] name  ..."; got != want {
 		t.Errorf("BuiltinUsage[type] = %q, want %q", got, want)
 	}
-	// ksh93 lists a job that has already ended as "Running" — not a reaping
-	// race, it still says so after `wait`. The word ksh uses, rather than
-	// the word a shell ought to use.
-	if got, want := ksh.Diagnostics().JobDone, " Running"; got != want {
+	// An ended job is listed as `Done`, and `Done(N)` where it ended with a
+	// status. This used to assert " Running", on the reading that ksh93
+	// lists an ended job as running and says so even after a `wait`. That
+	// measurement was taken with the monitor off, where it holds — and it
+	// is the shell not having reaped the job rather than the word it
+	// writes. Measured 2026-09-18: `set -m; sh -c 'exit 7' &` then `jobs`
+	// is `[1] + Done(7)`. The blind spot is
+	// Semantics.EndedJobIsListedAsRunningWithoutTheMonitor now.
+	if got, want := ksh.Diagnostics().JobDone, " Done"; got != want {
 		t.Errorf("JobDone = %q, want %q", got, want)
 	}
-	// And says something else when it is the one reporting: ksh announces
-	// `Done` and then lists the same job as `Running`.
-	if got, want := ksh.Diagnostics().JobDoneNotice, " Done"; got != want {
+	// So there is no second word for the shell to announce: the notice and
+	// the listing are the same word once the job has actually been reaped.
+	if got, want := ksh.Diagnostics().JobDoneNotice, ""; got != want {
 		t.Errorf("JobDoneNotice = %q, want %q", got, want)
 	}
 	// The separator ksh puts between the job number and the pid is a tab.

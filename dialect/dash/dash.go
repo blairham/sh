@@ -974,6 +974,14 @@ func Semantics() interp.Semantics {
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.CommandRejectsUnknownOption = interp.Yes
+	// Whether `command -v` answers for every name it was given, and what
+	// decides the status when it found some of them. See
+	// interp.Semantics.CommandReportsEveryOperand for the split.
+	s.CommandReportsEveryOperand = interp.No
+	s.CommandCountsAMissingOperand = interp.No
+	// And whether a `command` reached through an expansion keeps the power
+	// to run what it names (#3369).
+	s.ExpandedCommandOnlyReports = interp.No
 	// And the word is a boundary around everything it runs: `eval 'export -q;
 	// echo INNER'` stops the script and `command eval '…'` reports 2 and
 	// carries on, with the same split on `${NOPE?bad}`, a readonly

@@ -91,22 +91,24 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	if len(args) == 0 {
 		return 0
 	}
-	if sentence {
-		// `type`'s sentence with `command`'s name on the complaint: the
-		// found wordings are shared and only the missing one is this
-		// builtin's own — see Diagnostics.CommandVNotFound.
-		defer r.searchingTheDefaultPath(defaultPath)()
-		return r.describeName(args[0], typeKindNone, false,
-			Wording(r.diag().CommandVNotFound, "command: %[1]s: not found", args[0]))
+	if !verbose && !sentence && r.expandedCommandOnlyReports() {
+		// The word `command` arrived through an expansion rather than being
+		// written, and one dialect gives it no power to run anything there:
+		// what it does instead is exactly what `-v` does. Asked after the
+		// letters are read, because a written `-V` still wins — measured,
+		// `c=command; $c -V echo` is the sentence at 0 while `$c echo hi`
+		// names `echo` and runs nothing. See
+		// Semantics.ExpandedCommandOnlyReports.
+		verbose = true
 	}
-	if verbose {
+	if sentence || verbose {
 		// `-p` asks the reporting letters the same question it asks the run:
 		// `command -pv sed` names what `command -p sed` would start, and a
 		// script that tested one and ran the other would be testing the
 		// wrong PATH. Measured — all four columns answer `/usr/bin/sed` here
 		// with a PATH that holds nothing.
 		defer r.searchingTheDefaultPath(defaultPath)()
-		return r.reportWhatRuns(args[0])
+		return r.reportEveryOperand(args, sentence)
 	}
 	// What the command reports is the *command's*, not this builtin's. The
 	// dialect that names a builtin in the location says
@@ -170,6 +172,104 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 	r.inBuiltin = args[0]
 	defer func() { r.inBuiltin = outer }()
 	return r.callBuiltin(ctx, args[0], fn, args[1:])
+}
+
+// reportEveryOperand is the reporting half of `command`, over however many
+// names were given.
+//
+// **How many of them are read at all** is the dialect's: bash 5.3.20, zsh
+// 5.9.2 and ksh93u+ answer for every operand, and dash 0.5.12 and BusyBox ash
+// 1.37.0 answer for the first and stop. Measured 2026-09-18 with `command -v
+// echo shift`, which is two lines in the first three and one in the last two,
+// and again with `-V`. This engine had dash's answer in every column, so a
+// portable `command -v a b` reported half of what three of the five shells
+// report — silently, since the missing line is the second one.
+//
+// **What the status is when the answers are mixed** is the dialect's too, and
+// it is a separate question: `command -v echo nosuch` is 0 in bash and 1 in
+// zsh and ksh93, from the identical single line of output. See
+// Semantics.CommandReportsEveryOperand and
+// Semantics.CommandCountsAMissingOperand.
+func (r *Runner) reportEveryOperand(names []string, sentence bool) int {
+	if len(names) > 1 {
+		// Asked where the columns disagree and nowhere else: one operand has
+		// no second answer to differ about, and a shell that never writes
+		// `command -v a b` should not have to answer for a shape it does not
+		// use.
+		if !r.ask(r.sem().CommandReportsEveryOperand, "`command -v` answering for more than one name") {
+			if r.unspecified {
+				return r.status
+			}
+			names = names[:1]
+		}
+	}
+	found, missing, status := false, false, 0
+	for _, name := range names {
+		var st int
+		if sentence {
+			// `type`'s sentence with `command`'s name on the complaint: the
+			// found wordings are shared and only the missing one is this
+			// builtin's own — see Diagnostics.CommandVNotFound.
+			st = r.describeName(name, typeKindNone, false,
+				Wording(r.diag().CommandVNotFound, "command: %[1]s: not found", name))
+		} else {
+			st = r.reportWhatRuns(name)
+		}
+		if st == 0 {
+			found = true
+			continue
+		}
+		missing = true
+		// The failing status is the one this dialect gives a name it could
+		// not find — 1 in three columns and 127 in the two that stop at the
+		// first operand — so it is kept from the answer rather than written
+		// here.
+		status = st
+	}
+	switch {
+	case !missing:
+		return 0
+	case !found:
+		return status
+	}
+	if r.ask(r.sem().CommandCountsAMissingOperand,
+		"a name `command -v` could not find deciding the status beside one it could") {
+		return status
+	}
+	if r.unspecified {
+		return r.status
+	}
+	return 0
+}
+
+// expandedCommandOnlyReports reports whether this call reached `command`
+// through an expansion in a dialect that gives such a call no power to run.
+//
+// Measured 2026-09-16 and again 2026-09-18 on ksh93u+ 2012-08-01, script
+// files under `env -i PATH=/usr/bin:/bin LC_ALL=C`, with `c=command`:
+//
+//	command echo hi     hi, 0            — written, and quoting does not matter
+//	"command" echo hi   hi, 0
+//	\command echo hi    hi, 0
+//	$c echo hi          echo, 1          — named, and `hi` was not found
+//	${c} echo hi        echo, 1
+//	"$c" echo hi        echo, 1
+//	$(echo command) …   echo, 1
+//	eval '$c echo hi'   echo, 1
+//	$c -v echo          echo, 0
+//	$c -V echo          echo is a shell builtin, 0
+//	$c shift            shift, 0
+//
+// So it is the **word** and not the text: a quoted or backslashed `command`
+// still runs, and one that arrived from a parameter, a substitution or an
+// `eval` does not. The sharp row is the fourth, where a script that reaches
+// `command` through a variable prints a word and runs nothing (#3369).
+func (r *Runner) expandedCommandOnlyReports() bool {
+	if r.commandWordWasWritten {
+		return false
+	}
+	return r.ask(r.sem().ExpandedCommandOnlyReports,
+		"an expanded `command` reporting rather than running")
 }
 
 // reportWhatRuns answers `command -v`.

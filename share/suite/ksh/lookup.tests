@@ -91,12 +91,42 @@ command -v ./bin1/../bin1/tool; printf 'dot-dot -> %s\n' "$?"
 # fix applied to `command -v` alone is visible here rather than nowhere.
 whence -p ./bin1/tool; printf 'whence -p -> %s\n' "$?"
 
-# Held out until #2953 lands: `command -V` and `type` get the path right and
-# the sentence wrong. ksh93 keeps `is a tracked alias for` for a name it
-# resolved through PATH and writes the plain sentence for a pathname operand,
-# where we write the tracked-alias one for both.
-#
-#   command -V ./bin1/tool
+# The sentence as well as the path, which was held out until #2953 landed:
+# this shell keeps `is a tracked alias for` for a name it resolved through
+# PATH and writes the plain sentence for a pathname operand, which was never
+# searched for. The control is one line down — a bare name, which keeps the
+# tracked-alias wording — so the row is about the slash and not about the
+# builtin.
+command -V ./bin1/tool
+type ./bin1/tool
+whence -v ./bin1/tool
+
+# `-a` says how many rows there are and `-p` says what a row is, and the two
+# compose: with both, the PATH walk is `-a`'s and the wording is decided by
+# whichever of `a`, `p` and `v` was written last. The fixtures are two copies
+# of one name in two directories (#3198).
+mkdir -p dupd1 dupd2
+printf '#!/bin/sh\nexit 0\n' > dupd1/dupcmd
+printf '#!/bin/sh\nexit 0\n' > dupd2/dupcmd
+chmod 755 dupd1/dupcmd dupd2/dupcmd
+dupsave=$PATH
+PATH=$PWD/dupd1:$PWD/dupd2:$PATH
+whence -a dupcmd | sed -e "s|$PWD|.|g"
+printf 'whence -a -> %s\n' "$?"
+whence -ap dupcmd | sed -e "s|$PWD|.|g"
+printf 'whence -ap -> %s\n' "$?"
+whence -pa dupcmd | sed -e "s|$PWD|.|g"
+printf 'whence -pa -> %s\n' "$?"
+whence -p dupcmd | sed -e "s|$PWD|.|g"
+printf 'whence -p -> %s\n' "$?"
+PATH=$dupsave
+
+# And a `command` reached through an expansion reports rather than runs here,
+# where a written one runs. The second line is the control (#3369).
+expc=command
+$expc echo expanded; printf 'expanded -> %s\n' "$?"
+command echo written; printf 'written -> %s\n' "$?"
+$expc -v echo; printf 'with a written -v -> %s\n' "$?"
 
 # A function may not be *named* after a special builtin here either, and the
 # stage is this shell's own: the definition parses and the complaint comes

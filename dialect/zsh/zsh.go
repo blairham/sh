@@ -1228,6 +1228,14 @@ func Semantics() interp.Semantics {
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.DisownRemovesTheJob = interp.Yes
 	s.CommandRejectsUnknownOption = interp.No
+	// Whether `command -v` answers for every name it was given, and what
+	// decides the status when it found some of them. See
+	// interp.Semantics.CommandReportsEveryOperand for the split.
+	s.CommandReportsEveryOperand = interp.Yes
+	s.CommandCountsAMissingOperand = interp.Yes
+	// And whether a `command` reached through an expansion keeps the power
+	// to run what it names (#3369).
+	s.ExpandedCommandOnlyReports = interp.No
 	// `command` here means an *external* program of that name and nothing
 	// else: `command set -o …` is `command not found: set` at 127, not the
 	// survivable spelling of a special builtin it is in the other four. The

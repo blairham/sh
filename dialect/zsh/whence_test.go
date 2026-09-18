@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -325,5 +326,46 @@ func TestWhichWithNoOperandIsASilentFailure(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), "which\n")
 	if out != "" || st != 1 {
 		t.Errorf("out %q status %d, want silence at 1", out, st)
+	}
+}
+
+// `-a` and `-p` compose here too: `-a` says how many rows there are and `-p`
+// says that a row is a PATH hit, so with both the walk is every hit.
+//
+// Measured 2026-09-18 on zsh 5.9.2 with two copies of one name on PATH:
+// `whence -ap` and `whence -pa` are both two lines where `whence -p` is one.
+// The same composition the ksh dialect was missing (#3198).
+func TestWhencePathTakesAllWithIt(t *testing.T) {
+	dir := t.TempDir()
+	var paths []string
+	for _, sub := range []string{"d1", "d2"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, sub, "dupcmd")
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, p)
+	}
+	both := paths[0] + "\n" + paths[1] + "\n"
+	for _, c := range []struct{ name, opts, want string }{
+		{"a alone walks every hit", "-a", both},
+		{"p after a keeps the walk", "-ap", both},
+		{"and p before a keeps it too", "-pa", both},
+		{"p alone is the first", "-p", paths[0] + "\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st, err := preset.Combined(t, dialecttest.Base{
+				Dir:  dir,
+				Vars: map[string]string{"PATH": filepath.Join(dir, "d1") + ":" + filepath.Join(dir, "d2")},
+			}, "whence "+c.opts+" dupcmd\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out != c.want || st != 0 {
+				t.Errorf("whence %s dupcmd =\n%q at %d\nwant\n%q at 0", c.opts, out, st, c.want)
+			}
+		})
 	}
 }

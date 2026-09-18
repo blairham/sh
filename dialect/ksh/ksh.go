@@ -877,6 +877,14 @@ func Semantics() interp.Semantics {
 	// probes used -x and -a, which are real ksh93 options, and recorded No
 	// off ksh93's own features.
 	s.CommandRejectsUnknownOption = interp.Yes
+	// Whether `command -v` answers for every name it was given, and what
+	// decides the status when it found some of them. See
+	// interp.Semantics.CommandReportsEveryOperand for the split.
+	s.CommandReportsEveryOperand = interp.Yes
+	s.CommandCountsAMissingOperand = interp.Yes
+	// And whether a `command` reached through an expansion keeps the power
+	// to run what it names (#3369).
+	s.ExpandedCommandOnlyReports = interp.Yes
 	// And the word is a boundary: `eval 'export -q; echo INNER'` stops the
 	// script here, and `command eval '…'` abandons the `eval`'s text, reports
 	// 2 and carries on. The special-builtin row is what answers for this
@@ -2944,7 +2952,13 @@ func Diagnostics() interp.Diagnostics {
 		TypeKeyword:               "%[1]s is a keyword",
 		// ksh93's `type` is `whence -v`, and the message says so.
 		TypeExternal: "%[1]s is a tracked alias for %[2]s",
-		TypeFunction: "%[1]s is a function",
+		// And the plain sentence for an operand that was written with a
+		// slash in it, which this shell never searched PATH for: `command -V
+		// ./bb/tool` is `./bb/tool is <dir>/./bb/tool` where `command -V ls`
+		// is the tracked alias. Measured 2026-09-14 and again 2026-09-18;
+		// the discriminator is the slash and not the hash table (#2953).
+		TypePathnameOperand: "%[1]s is %[2]s",
+		TypeFunction:        "%[1]s is a function",
 		// The body is quoted the way this shell's own listing quotes it, and
 		// `command -v` writes that body with no `alias name=` in front of it.
 		TypeAlias:               "%[1]s is an alias for %[2]s",

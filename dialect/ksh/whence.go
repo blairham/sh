@@ -120,16 +120,30 @@ func whenceOne(r *interp.Runner, ctx context.Context, name, opts string) int {
 	quiet := strings.ContainsRune(opts, 'q')
 	verbose := strings.ContainsRune(opts, 'v')
 	if lastP := strings.LastIndexByte(opts, 'p'); lastP >= 0 {
-		// `-p` always restricts the answer to the PATH search. What the
-		// *later* of the two letters decides is only the wording, and it
-		// decides it both ways: measured 2026-09-12 on ksh93u+ 2012-08-01,
-		// `whence -pv ls` is the tracked-alias sentence and `whence -vp ls`
-		// is the bare path, and on a name PATH does not hold `-pv` says
-		// `not found` where `-vp` says nothing at all. The comment this
-		// replaces had measured `-pv` alone and read it as "`-v` wins",
-		// which made `type -p`, an alias for `whence -v -p`, speak where
-		// this shell is silent (#2345).
-		return whencePath(r, name, strings.LastIndexByte(opts, 'v') > lastP, quiet)
+		// `-p` always restricts the answer to the PATH search: a builtin, a
+		// function and an alias are invisible with the letter written, in
+		// any order and with `-a` beside it.
+		//
+		// What is decided by *position* is the wording, and by the last of
+		// the three letters rather than by two of them. Measured 2026-09-12
+		// and again 2026-09-18 on ksh93u+ 2012-08-01 over eight orderings:
+		//
+		//	-p    path     -a    sentences   -ap   paths      -pa   sentences
+		//	-pv   sentence -vp   path        -apv  sentences  -avp  paths
+		//	                                 -pav  sentences  -vap  paths
+		//
+		// So the bare path is written when `p` is the last of `a`, `p` and
+		// `v` to appear, and the sentence otherwise — which is the same rule
+		// the two-letter rows already followed, with `a` joining it. The
+		// not-found report follows the wording: `-pv` and `-pa` say `not
+		// found` where `-p` and `-vp` say nothing at all.
+		//
+		// `-a` decides something else entirely: **how many rows there are**.
+		// With it the PATH walk is every hit rather than the first, which is
+		// what composes the two letters — `whence -ap dup` is both copies as
+		// paths where `whence -p dup` is the first as a path (#3198).
+		verbose := max(strings.LastIndexByte(opts, 'v'), strings.LastIndexByte(opts, 'a')) > lastP
+		return whencePath(r, name, verbose, quiet, strings.ContainsRune(opts, 'a'))
 	}
 	if strings.ContainsRune(opts, 'a') {
 		// `-a` speaks in the sentences whether or not `-v` was written:
@@ -202,8 +216,14 @@ func whenceAll(r *interp.Runner, name string, quiet bool) int {
 	paths := r.LookPathAll(name)
 	for _, path := range paths {
 		if len(lines) == 0 {
-			// The PATH hit standing alone keeps the sentence `-v` gives it.
-			lines = append(lines, fmt.Sprintf("%s is a tracked alias for %s", name, path))
+			// The PATH hit standing alone keeps the sentence `-v` gives it,
+			// asked through the core so that the *pathname operand* wording
+			// comes with it: a word already holding a slash was never
+			// searched for, and this shell writes the plain sentence for
+			// one. Written out here as a literal, it wrote `./bb/tool is a
+			// tracked alias for …` where the real shell writes `./bb/tool is
+			// …` (#2953).
+			lines = append(lines, r.TypeExternalSentence(name, path))
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("%s is %s", name, path))
@@ -229,9 +249,19 @@ func whenceAll(r *interp.Runner, name string, quiet bool) int {
 }
 
 // whencePath is `-p`: the PATH search with everything else invisible.
-func whencePath(r *interp.Runner, name string, verbose, quiet bool) int {
-	path, ok := r.LookPath(name)
-	if !ok {
+//
+// all is `-a` written beside it, which makes the walk every hit rather than
+// the first. The two letters compose rather than one winning: `-a` says how
+// many rows there are and the wording is decided by position — see whenceOne
+// for the eight orderings that were measured.
+func whencePath(r *interp.Runner, name string, verbose, quiet, all bool) int {
+	paths := []string{}
+	if all {
+		paths = r.LookPathAll(name)
+	} else if path, ok := r.LookPath(name); ok {
+		paths = append(paths, path)
+	}
+	if len(paths) == 0 {
 		if verbose && !quiet {
 			// The later letter's wording again: `whence -pv` on a name PATH
 			// does not hold says what `-v` says, where plain `-p` and
@@ -240,14 +270,25 @@ func whencePath(r *interp.Runner, name string, verbose, quiet bool) int {
 		}
 		return 1
 	}
-	switch {
-	case quiet:
-	case verbose:
-		// The wording a path gets from `-v`, measured on `whence -pv echo`:
-		// the sentence `type` uses for an external.
-		_, _ = fmt.Fprintf(r.Out(), "%s is a tracked alias for %s\n", name, path)
-	default:
-		_, _ = fmt.Fprintf(r.Out(), "%s\n", path)
+	if quiet {
+		return 0
+	}
+	for i, path := range paths {
+		if !verbose {
+			_, _ = fmt.Fprintf(r.Out(), "%s\n", path)
+			continue
+		}
+		if i == 0 {
+			// The wording a path gets from `-v`, measured on `whence -pv
+			// echo`: the sentence `type` uses for an external, and through
+			// the core so that a pathname operand gets the plain one.
+			_, _ = fmt.Fprintf(r.Out(), "%s\n", r.TypeExternalSentence(name, path))
+			continue
+		}
+		// And a later hit is the plain sentence, which is the same shape
+		// `whence -a` writes: the first is how the name resolves and the
+		// rest are what else is there.
+		_, _ = fmt.Fprintf(r.Out(), "%s is %s\n", name, path)
 	}
 	return 0
 }

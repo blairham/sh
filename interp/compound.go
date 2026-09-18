@@ -1413,6 +1413,9 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// not a sibling entered after it returned.
 	frameSerial := r.currentFrameSerial()
 	r.depth++
+	// And that a call has been made at all, which the depth cannot say once
+	// it comes back down. See Runner.HasEnteredAFunction.
+	r.enteredAFunction = true
 	// A scope the function's locals unwind into. Opened and closed by the
 	// pair above this function, because a call is not the only thing that
 	// opens one.

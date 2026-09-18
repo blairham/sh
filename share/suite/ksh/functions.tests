@@ -96,6 +96,39 @@ printf -- '--- the function running now, and how deep ---\n'
   printf 'at the top: fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"
 )
 
+# The depth after a call has returned, which is `0` and *set* — and is the
+# half of the starting-value question a file like this one can ask.
+(
+  function called { :; }
+  called
+  printf 'after a call has returned: [%s] [%s] [%s]\n' \
+    "${.sh.level}" "${.sh.level-UNSET}" "${.sh.level+SET}"
+)
+
+# **The other half cannot be asked here, and that is worth writing down.**
+# Before the *first* call the parameter is not there at all — `${.sh.level}`
+# is empty, `${.sh.level-UNSET}` takes its default, `${.sh.level+SET}` is
+# empty and `set -u` stops on the read — which is a third state beside `0` and
+# empty, and is what makes the `0` above a starting value rather than an
+# off-by-one. It needs a shell that has called nothing, and by this line this
+# one has called plenty: a subshell inherits the state, and a **discipline
+# function is a call**, so the `.get` in the first section of this file
+# already settled it. dialect/ksh's own Go tests ask it in a script of their
+# own. Measured 2026-09-18 (#3310).
+
+# **A sourced file is deliberately left out of this section**, and the absence
+# is the measurement. In ksh93u+ 2012-08-01 a dot script makes the depth read
+# `1` at the top of a script where nothing has been called and `0` after a
+# function has been called and returned — the *same source line*, in the same
+# script, with no enclosing construct either time — so the parameter there
+# carries a leftover from the last frame that wrote it rather than a depth.
+# Reordered and repeated, the answer follows what ran before it. This shell
+# counts function frames and nothing else, which agrees wherever the parameter
+# is a depth at all and answers `0` where that shell answers a leftover.
+# Copying the rows that look rule-shaped without the one that does not would
+# be a third behavior that is neither shell's. See #3117, and
+# docs/spec/semantics.md for the whole grid.
+
 printf -- '--- a dotted name is a discipline, not a namespace ---\n'
 (
   ( eval 'function ns.thing { printf "ran\n"; }' ) 2>&1 | sed 's/^.*: ns\./ns./'

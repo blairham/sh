@@ -17297,9 +17297,12 @@ type Semantics struct {
 	//	dash 0.5.12 / dash-16  local
 	//	BusyBox ash 1.37.0     source, local
 	//
-	// `newgrp` is ksh93's fifth and is not here: we have no such builtin, so
-	// there is no membership to declare for it, and adding the name to this
-	// roster would make a PATH hit answer as a shell builtin.
+	// `newgrp` is ksh93's fifth. It was left out of the ksh roster for as
+	// long as there was no builtin behind it — a name on this list with a
+	// PATH hit under it would answer as a shell builtin and be one nowhere —
+	// and `dialect/ksh/newgrp.go` supplies one now: that shell's `newgrp` is
+	// `exec newgrp` under a builtin's name, which is what lets the word be
+	// special at all (#3316).
 	//
 	// ksh93 is also the column that *drops* two — `times` and `source` are
 	// preset aliases there rather than builtins, which is already how this

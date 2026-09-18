@@ -582,6 +582,40 @@ func (r *Runner) SetDynamic(name string, value func(*Runner) string) {
 	r.Dynamic[name] = value
 }
 
+// SetDynamicPresence says when a produced parameter is *there* at all.
+//
+// A producer returns a string, so it can answer "empty" and cannot answer
+// "unset" — and the two are a difference a script can see: `${p-word}` takes
+// its default for one and not for the other, `${p+word}` is the mirror, and
+// `set -u` stops on the first. The predicate is registered beside the
+// producer and asked ahead of it; a name with no entry is present from the
+// moment it is registered, which is what every other produced parameter is.
+//
+// It exists for a parameter that is *written* by something the shell does
+// rather than computed from what the shell is. One dialect's call-depth
+// parameter is the worked case: it is unset until the first function call has
+// been made and reads `0` from then on, so the depth cannot answer it and no
+// producer could — see Runner.HasEnteredAFunction and #3310.
+func (r *Runner) SetDynamicPresence(name string, present func(*Runner) bool) {
+	if r.dynamicPresence == nil {
+		r.dynamicPresence = map[string]func(*Runner) bool{}
+	}
+	r.dynamicPresence[name] = present
+}
+
+// dynamicParameterIsThere asks the predicate a dialect registered beside a
+// producer, and answers yes where there is none.
+func (r *Runner) dynamicParameterIsThere(name string) bool {
+	present, ok := r.dynamicPresence[name]
+	return !ok || present(r)
+}
+
+// HasEnteredAFunction reports whether this shell has been inside a function
+// call at some point — which is not the same question as being inside one
+// now, and is not answerable from the call depth, since that is 0 both before
+// the first call and after the last one returns.
+func (r *Runner) HasEnteredAFunction() bool { return r.enteredAFunction }
+
 // SetDynamicWriter says what happens when a script assigns to a produced
 // scalar parameter.
 //

@@ -4,6 +4,7 @@
 package syntax_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/syntax"
@@ -153,6 +154,97 @@ func TestTheFieldsOfAListingArrangement(t *testing.T) {
 			off:    "{ \n    cat <<E\nbody\nE\n    echo after\n}",
 			why: "the delimiter's line is already ended, so the newline that opens the " +
 				"next one leaves a blank line the source never had",
+
+			roundTri: true,
+		},
+		{
+			name:   "the `do` of an arithmetic for",
+			src:    `f() { for ((i=0;i<2;i++)); do echo $i; done; }`,
+			layout: with(func(l *syntax.Layout) { l.DoAfterArithmeticOnItsOwnLine = true }),
+			on:     "{ \n    for ((i=0; i<2; i++))\n    do\n        echo $i;\n    done\n}",
+			off:    "{ \n    for ((i=0; i<2; i++)); do\n        echo $i;\n    done\n}",
+			why: "the third of the three `do` questions, and a third field because one " +
+				"engine answers it unlike the other two — with nothing ending the header, " +
+				"where a loop over words keeps its separator",
+
+			roundTri: true,
+		},
+		{
+			name:   "the `do` of a loop over words, beside it",
+			src:    `f() { for i in a b; do echo $i; done; }`,
+			layout: with(func(l *syntax.Layout) { l.DoAfterArithmeticOnItsOwnLine = true }),
+			on:     "{ \n    for i in a b; do\n        echo $i;\n    done\n}",
+			off:    "{ \n    for i in a b; do\n        echo $i;\n    done\n}",
+			why:    "the control: the arithmetic field reaches the arithmetic form alone",
+
+			roundTri: true,
+		},
+		{
+			name:   "an omitted expression of an arithmetic for",
+			src:    `f() { for ((;;)); do break; done; }`,
+			layout: with(func(l *syntax.Layout) { l.EmptyArithmeticForExpressionIsOne = true }),
+			on:     "{ \n    for ((1; 1; 1)); do\n        break;\n    done\n}",
+			off:    "{ \n    for ((; ; )); do\n        break;\n    done\n}",
+			why: "the `1` is the program an omitted expression is and is not in the tree, " +
+				"so writing it out is a normalization the caller asks for",
+		},
+		{
+			name:   "an arithmetic for with every expression written",
+			src:    `f() { for ((i=0;i<2;i++)); do break; done; }`,
+			layout: with(func(l *syntax.Layout) { l.EmptyArithmeticForExpressionIsOne = true }),
+			on:     "{ \n    for ((i=0; i<2; i++)); do\n        break;\n    done\n}",
+			off:    "{ \n    for ((i=0; i<2; i++)); do\n        break;\n    done\n}",
+			why:    "the control: nothing is missing, so there is nothing to stand in for",
+
+			roundTri: true,
+		},
+		{
+			name:   "a quoted here-document delimiter",
+			src:    "f() {\ncat <<\"E\"\nbody\nE\n}",
+			layout: with(func(l *syntax.Layout) { l.HereDocumentWordSingleQuoted = true }),
+			on:     "{ \n    cat <<'E'\nbody\nE\n}",
+			off:    "{ \n    cat <<\"E\"\nbody\nE\n}",
+			why: "a delimiter's quoting says one thing — the body is literal — so an " +
+				"arrangement that normalizes it loses nothing a reader needs",
+
+			roundTri: true,
+		},
+		{
+			name:   "an unquoted here-document delimiter",
+			src:    "f() {\ncat <<E\nbody\nE\n}",
+			layout: with(func(l *syntax.Layout) { l.HereDocumentWordSingleQuoted = true }),
+			on:     "{ \n    cat <<E\nbody\nE\n}",
+			off:    "{ \n    cat <<E\nbody\nE\n}",
+			why:    "the control: a bare delimiter has no quoting to respell, and gaining some would make the body literal",
+
+			roundTri: true,
+		},
+		{
+			name:   "an ANSI-C quoted word",
+			src:    `f() { echo $'a\tb'; }`,
+			layout: with(func(l *syntax.Layout) { l.AnsiCQuotedWordIsItsValue = testAnsiC }),
+			on:     "{ \n    echo 'a\tb'\n}",
+			off:    "{ \n    echo $'a\\tb'\n}",
+			why: "the decoding is the caller's because three of the escapes are semantics " +
+				"axes, so the field is the function and a nil one leaves the spelling alone",
+		},
+		{
+			name:   "an ANSI-C quoted word inside a parameter expansion",
+			src:    `f() { echo ${x-$'a\tb'}; }`,
+			layout: with(func(l *syntax.Layout) { l.AnsiCQuotedWordIsItsValue = testAnsiC }),
+			on:     "{ \n    echo ${x-'a\tb'}\n}",
+			off:    "{ \n    echo ${x-$'a\\tb'}\n}",
+			why: "the braces hold text rather than a tree, so the same rewrite has to be " +
+				"reached by a scan — the engine that decodes these decodes them anywhere",
+		},
+		{
+			name:   "a dollar and a quote inside double quotes",
+			src:    `f() { echo "x$'\t'"; }`,
+			layout: with(func(l *syntax.Layout) { l.AnsiCQuotedWordIsItsValue = testAnsiC }),
+			on:     "{ \n    echo \"x$'\\t'\"\n}",
+			off:    "{ \n    echo \"x$'\\t'\"\n}",
+			why: "the control that says this is the ANSI-C word and not the two characters: " +
+				"inside double quotes `$'` is ordinary text and comes back untouched",
 
 			roundTri: true,
 		},
@@ -394,4 +486,13 @@ func listedBody(t *testing.T, src string) syntax.Command {
 		t.Fatalf("%q is not a function declaration", src)
 	}
 	return fn.Body
+}
+
+// testAnsiC is a decoder for the rows above: enough of the escape table to
+// show the field being read, and deliberately not a dialect's — what an
+// escape comes to is measured in dialect/, and this package decides none of
+// it.
+func testAnsiC(text string) string {
+	r := strings.NewReplacer(`\t`, "\t", `\n`, "\n", `\\`, `\`)
+	return r.Replace(text)
 }

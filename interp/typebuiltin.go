@@ -129,6 +129,40 @@ type typeMode struct {
 	// noFuncs is `-f`: functions left out of the search — or, in the
 	// dialect where TypeFSaysTheFunctionBack answers yes, printed whole.
 	noFuncs bool
+	// kindWins says the `-t` was written *after* the last of `-p` and `-P`,
+	// which is what decides between them. See typeLetterOrder.
+	kindWins bool
+}
+
+// typeLetterOrder reports whether the kind letter was written after the last
+// path letter, which is how the one column that has both settles them.
+//
+// There is no precedence between `-t` and `-p`: the later letter decides, in
+// the same bundle or in separate words. Measured 2026-09-16 on bash 5.3.20 and
+// bash 3.2.57 with `cd`, a name that is both a builtin and a file, since
+// nothing with one resolution can tell the readings apart:
+//
+//	type -apt cd    builtin / file      the kind, of every resolution
+//	type -atp cd    /usr/bin/cd         the path
+//	type -pt cd     builtin             the kind, with no -a
+//	type -tp cd     (nothing)           the path, which a builtin has none of
+//	type -atP cd    /usr/bin/cd
+//	type -aPt cd    file                the kind, of the file rows alone
+//	type -Pt cd     file
+//	type -tP cd     /usr/bin/cd
+//
+// The `-P` rows are what say this is a *shape* and not a switch between two
+// modes: that letter forces the PATH search however the shape comes out, so a
+// `-t` after it writes the kind of the rows the search left rather than of
+// every resolution the name has. `-p` has no such half — `type -apt` is the
+// whole listing — which is why the narrowing below asks for `pathSearch`
+// separately.
+//
+// The letters arrive in the order they were written because builtinOptions
+// appends them as it reads; nothing else in the tree needs that and this is
+// the first thing that does.
+func typeLetterOrder(opts string) bool {
+	return strings.LastIndexByte(opts, 't') > strings.LastIndexAny(opts, "pP")
 }
 
 // typeOperands separates the options from the names.
@@ -165,9 +199,15 @@ func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code i
 		path:       strings.ContainsRune(opts, 'p'),
 		pathSearch: strings.ContainsRune(opts, 'P'),
 		noFuncs:    strings.ContainsRune(opts, 'f'),
+		kindWins:   typeLetterOrder(opts),
 	}
 	return rest, m, 0
 }
+
+// kindDecides reports whether a letter asking for the kind was written, and
+// written after the last of the path letters — which is the whole of what
+// parts `type -apt` from `type -atp`.
+func (m typeMode) kindDecides() bool { return m.kind && m.kindWins }
 
 // asked is the shape this mode's letters want a kind written in.
 func (m typeMode) asked() typeKind {
@@ -186,9 +226,11 @@ func (r *Runner) typeOneMode(name string, m typeMode) int {
 		return r.typeAll(name, m)
 	}
 	if m.pathSearch {
-		return r.typeBarePath(name, m.kind)
+		// The kind is written only where the letter asking for it came
+		// last; `type -tP` is the path and `type -Pt` is `file`.
+		return r.typeBarePath(name, m.kindDecides())
 	}
-	if m.path {
+	if m.path && !m.kindDecides() {
 		return r.typePath(name, m)
 	}
 	if m.noFuncs {
@@ -364,11 +406,13 @@ func (r *Runner) functionOrigin(name string) (string, bool) {
 // typeAll is `-a`: every resolution the name has — the shell's own answer
 // and then every PATH hit, in PATH order, duplicates and all.
 func (r *Runner) typeAll(name string, m typeMode) int {
-	// `-p` and `-P` narrow the listing to its file rows. A letter that asks
-	// for the *kind* wins over them, which is measured rather than chosen:
-	// `type -apt cd` is `builtin` then `file` in bash 5.3.20 and bash 3.2.57,
-	// where `-ap` is the path alone.
-	if (m.path || m.pathSearch) && !m.kind && !m.word {
+	// `-p` and `-P` narrow the listing to its file rows, and a letter asking
+	// for the *kind* takes it back — but only when it was written last, and
+	// only `-p` gives it back whole. `type -apt cd` is `builtin` then `file`
+	// and `type -aPt cd` is `file` alone, because the capital forces the
+	// PATH search whatever shape the answer comes out in. See
+	// typeLetterOrder, which carries the panel.
+	if (m.path || m.pathSearch) && !m.word && (m.pathSearch || !m.kindDecides()) {
 		return r.typeAllPaths(name, m)
 	}
 	dg := r.diag()
@@ -504,9 +548,14 @@ func (r *Runner) typeAllPaths(name string, m typeMode) int {
 			if r.unspecified {
 				return r.status
 			}
-			if sentence {
+			switch {
+			case m.kindDecides():
+				// A `-t` written after the path letters asks for the kind
+				// of the rows the search left, not for their paths.
+				r.printf("file\n")
+			case sentence:
 				r.printf("%s\n", r.TypeExternalSentence(name, path))
-			} else {
+			default:
 				r.printf("%s\n", path)
 			}
 		}

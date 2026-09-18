@@ -67,6 +67,19 @@ func common() syntax.Layout {
 		BackgroundKeepsTheLine:   true,
 		ElifWrittenAsANestedIf:   true,
 
+		// Three more normalizations this listing makes, measured the same
+		// way on bash 5.3.20 (#3196). The arithmetic `for` is the one loop
+		// whose `do` takes a line of its own here, and the `1` an omitted
+		// expression stands for is written out — `for ((;;))` comes back
+		// `for ((1; 1; 1))`. A here-document delimiter that carries any
+		// quoting is respelled with single quotes, `<<"EOT"` and `<<\EOT`
+		// alike. The decoder for the third is attached where the runner is,
+		// since what a `$'…'` escape comes to is this dialect's answer and
+		// not the printer's.
+		DoAfterArithmeticOnItsOwnLine:     true,
+		EmptyArithmeticForExpressionIsOne: true,
+		HereDocumentWordSingleQuoted:      true,
+
 		// A subshell stays on one line, and the line a here-document body
 		// ended is not written on again — so a body followed by anything at
 		// all, the closing `}` included, has a blank line between them. The

@@ -2821,10 +2821,15 @@ func Semantics() interp.Semantics {
 	// -Q` is the usage error that reaches the fatality, since `typeset
 	// -Z9Z` is accepted here.
 	//
-	// `newgrp` is ksh93's fourth and is left out: this dialect has no such
-	// builtin, so `type newgrp` is the PATH hit rather than a sentence, and
-	// putting the name here would claim a builtin that does not exist.
-	s.SpecialBuiltinsBeyondPosix = "alias unalias typeset"
+	// `newgrp` is ksh93's fourth, and it is here now that the builtin behind
+	// it exists — it is `exec newgrp` under a name, which is what lets the
+	// word be special at all. Two of the three consequences apply: the
+	// sentence `type` writes and a prefixed assignment persisting. The third
+	// is unreachable rather than absent, and that is a fact about `exec`:
+	// measured 2026-09-18, `newgrp -Z` there writes `newgrp: illegal option
+	// -- Z` and the program's own usage line, so no option ever reaches the
+	// shell to be fatal about. See newgrp.go (#3316).
+	s.SpecialBuiltinsBeyondPosix = "alias unalias typeset newgrp"
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
 	// whence -v's letters, and no `-t` among them: that letter is refused
@@ -4596,6 +4601,30 @@ func Apply(r *interp.Runner) {
 	r.SetDynamicWriter(".sh.level", func(rr *interp.Runner, value string) {
 		rr.SelectCallFrame(value)
 	})
+	// And it is not there at all until the first call has been made, which
+	// the depth cannot say: the `0` above is what a read answers *after* one
+	// has returned, and before one this shell has no such parameter.
+	// Measured 2026-09-18, a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with standard input from /dev/null:
+	//
+	//	echo "[${.sh.level}] [${.sh.level-U}] [${.sh.level+S}]"
+	//	    at the top of the script   []  [U]  []
+	//	function g { :; }; g; the same line
+	//	                           [0] [0]  [S]
+	//
+	// so the discriminating pair says unset and not empty, and the second
+	// row says the `0` really is a *starting* value rather than an
+	// off-by-one — after a call returns, both shells say 0. The parameter is
+	// written on the way out of the first call and was never written before
+	// it (#3310).
+	//
+	// A sourced file is the one shape this reading does not cover, and that
+	// is deliberate: a dot script makes the parameter set there, at a number
+	// that is a leftover rather than a depth. See #3117, where the
+	// measurement is written down and the divergence is taken on purpose.
+	r.SetDynamicPresence(".sh.level", func(rr *interp.Runner) bool {
+		return rr.HasEnteredAFunction()
+	})
 	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
 	// And an assignment seeds it, which is what makes a script that uses
 	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one
@@ -4646,6 +4675,9 @@ func Apply(r *interp.Runner) {
 	// to disagree about the header, the layout, or the status a name nobody
 	// defined leaves behind. See interp/functionsbuiltin.go.
 	r.Register("functions", interp.FunctionsBuiltin())
+	// `newgrp` is `exec newgrp` under a builtin's name, which is what lets it
+	// be a *special* builtin here. See newgrp.go.
+	registerNewgrp(r)
 	// And `nameref` is `typeset -n` under a second word, on the same terms
 	// and for the same reason. See interp/namerefbuiltin.go.
 	r.Register("nameref", interp.NamerefBuiltin())

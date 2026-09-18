@@ -17991,6 +17991,83 @@ hook is entered with and exist only while one is running; `${.sh.fun}` and
 disciplines at all. They are dialect names rather than an axis — see
 dialect/ksh.
 
+**`${.sh.level}` is not there at all until the first call has been made**,
+which is a third state beside "0" and "empty" and only the two operators
+that separate set from unset can see it. Measured 2026-09-18, a script
+file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input from
+`/dev/null`:
+
+| read | ksh93u+ 2012-08-01 |
+| --- | --- |
+| `"${.sh.level}"` at the top of a script | *(empty)* |
+| `"${.sh.level-UNSET}"` there | `UNSET` |
+| `"${.sh.level+SET}"` there | *(empty)* |
+| `set -u` and the bare read there | `.sh.level: parameter not set`, the script ends |
+| the same four after a call has returned | `0`, `0`, `SET`, and `0` |
+
+So the `0` is a **starting value** rather than an off-by-one: after a call
+returns both this shell and that one say `0`, which means the parameter is
+written on the way out of the first call and was never written before it.
+`Runner.SetDynamicPresence` is the seam — a producer returns a string and
+cannot say "unset" — and `Runner.HasEnteredAFunction` is the predicate,
+which the call depth cannot answer, since that is 0 on both sides of the
+first call. #3310.
+
+**A sourced file is where that parameter stops being a function of
+anything**, and this shell diverges from ksh93 there on purpose. Measured
+2026-09-18, one script file with every probe written inline so that no
+helper function adds a frame of its own, against ksh93u+ 2012-08-01:
+
+| written | ksh93u+ | ours |
+| --- | --- | --- |
+| the top of the script | *(unset)* | *(unset)* |
+| `. ./f` at the top, read inside `f` | `1` | `0` |
+| and read again at the top afterwards | `1` | `0` |
+| `. ./h`, where `h` sources `g` | `1` then `2` | `0` then `0` |
+| and read at the top afterwards | `2` | `0` |
+| `. ./nest3`, which defines `N3` and calls it | `1`, then `2` inside `N3` | `0`, then `1` |
+| and read at the top afterwards | `1` | `0` |
+| **the same `. ./f` line after a plain function has been called and returned** | **`0`** | `0` |
+
+The last row is the one that settles it. `. ./f` at the top of a script
+reads `1` when nothing has been called and `0` when a function has been
+called and returned — the *same source line*, in the same script, with no
+enclosing construct in either case. Reordered and repeated, the answer
+follows what ran before it, and the value the parent reads afterwards is
+whatever the innermost probe left rather than anything about the stack. So
+`${.sh.level}` there is **not a function of the stack for a sourced file**:
+it carries a leftover from the last frame that wrote it.
+
+That is state and not a rule, so it is not copied. This shell counts
+function frames and nothing else, which agrees with ksh93 wherever the
+parameter is a depth at all — the top of a script, inside a function at any
+nesting, and after a call returns — and answers `0` where ksh93 answers a
+leftover. Copying rows 1 to 3 without the last one would be a third
+behavior that is neither shell's, which is exactly what #3117 asked not to
+do. #3117.
+
+**Selecting a frame moves the naming and not the scope**, which is the one
+part of the pair still open. Measured 2026-09-18 on ksh93u+, a write to
+`.sh.level` moves the *variable scope* with it, and all four of #3115's
+open questions have answers:
+
+| probe | ksh93u+ | ours |
+| --- | --- | --- |
+| `function scope { typeset v=I; .sh.level=1; printf "$v"; }` called from a caller holding `v=O` | `O` | `I` |
+| the same with `v=WRITTEN` after the selection, read in the *caller* | `WRITTEN` | `O` |
+| `.sh.level=1` then `"$*"` and `$#`, called as `p1 A B C` from a `p1` that called `p2 x y` | `A B C`, `3` | `x y`, `2` |
+| `.sh.level=0` then a name a local shadows | the global | the local |
+| a name no frame has | unset in both | unset in both |
+| the selection after a nested call has returned | undone | — |
+| the selection after the selecting call returns | not leaked to the caller | — |
+
+So the selection moves reads, writes and the positional parameters, lasts
+for the rest of the body, is undone by a call and a return, and does not
+leak. It is a second mechanism rather than a second answer from the naming
+one: the scope stack and the frame stack are separate structures here, and
+an indexed read through the first is what #3115 needs and this shell has
+not got.
+
 **`ReadRequiresAVariableName`** — bash no · dash yes · ksh93 no · zsh no
 
 Refuses a bare `read`: dash's "arg count" at 2, where the other three

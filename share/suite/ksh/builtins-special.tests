@@ -98,3 +98,17 @@ set +x
 ( readonly V=0; V=1 alias; printf 'after alias\n' )
 ( readonly V=0; V=1 export; printf 'after export\n' )
 ( readonly W=0; W=1 cd .; printf 'after cd\n' )
+
+# `newgrp` is this shell's fourth special builtin beyond POSIX's fourteen, and
+# it is `exec newgrp` under a builtin's name — which is what lets the word be
+# special at all: a command that replaces the shell has no status to hand back
+# and nothing after it to run.
+#
+# Only the sentence is asked here. **Running it is deliberately left out**: the
+# program the word reaches changes a process's group, and a suite file that ran
+# it would be asking the operating system a question rather than the shell. The
+# `exec` road is graded in dialect/ksh's own Go tests, against a fixture on a
+# PATH of their own.
+type newgrp
+command -V newgrp
+whence -v newgrp

@@ -218,7 +218,14 @@ func TestTheRunningFunctionAndItsDepthAnswer(t *testing.T) {
 			`function a { b; }; b() { printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; }; a`,
 			"fun=[b] level=[2]\n",
 		},
-		{`printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"`, "fun=[] level=[0]\n"},
+		// The top level of a shell that has called **nothing**, where the
+		// depth is not there at all rather than `0`. Re-measured 2026-09-18:
+		// a bare read is empty in both readings, and the pair that separates
+		// them — `${.sh.level-word}` and `${.sh.level+word}` — says unset.
+		// The `0` this row used to want is what a read answers *after* a
+		// call has returned, and TestTheCallLevelIsUnsetUntilTheFirstCall
+		// asks both halves in one script (#3310).
+		{`printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"`, "fun=[] level=[]\n"},
 		// And inside a discipline, which is a function like any other.
 		{
 			`g=raw; function g.get { printf 'fun=[%s] level=[%s]\n' "${.sh.fun}" "${.sh.level}"; }; echo "[$g]"`,

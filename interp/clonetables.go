@@ -284,6 +284,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// The call-scoped parameters its doc comment describes are a line
 	// editor's, so a widget running in a subshell is the live path.
 	c.dynamicWriters = maps.Clone(r.dynamicWriters)
+	c.dynamicPresence = maps.Clone(r.dynamicPresence)
 	// How each produced parameter lists back travels with the producer it
 	// describes, for the same reason: a subshell that registers one of its
 	// own must not put a row into the parent's listings.

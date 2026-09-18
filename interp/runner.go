@@ -796,6 +796,22 @@ type Runner struct {
 	// SetDynamicWriter.
 	dynamicWriters map[string]func(*Runner, string)
 
+	// dynamicPresence answers whether a produced parameter is *there* at
+	// all, for the handful that are not from the start. A producer returns a
+	// string and has no way to say "unset"; this is the seam beside it, and
+	// a name with no entry is present whenever it is registered.
+	//
+	// It travels with Dynamic for dynamicWriters' reason: a clone owning the
+	// producer while sharing the predicate is a split nothing wants.
+	dynamicPresence map[string]func(*Runner) bool
+
+	// enteredAFunction records that this shell has been inside a function
+	// call at some point, which is not the same question as being inside one
+	// now. One dialect's call-depth parameter is *unset* until the first
+	// call has been made and reads `0` ever afterwards, so the depth alone
+	// cannot answer it. See Runner.HasEnteredAFunction.
+	enteredAFunction bool
+
 	// assigned holds what a script assigned to a *produced* parameter, which
 	// is a message to whatever produces it rather than a value of its own.
 	assigned map[string]string
@@ -8645,7 +8661,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 	if elems, ok := r.pipelineStatuses(name); ok {
 		return r.arrayScalar(elems), true
 	}
-	if f, ok := r.Dynamic[name]; ok {
+	if f, ok := r.Dynamic[name]; ok && r.dynamicParameterIsThere(name) {
 		// Ahead of the stored table, because a parameter that produces its
 		// value cannot be overwritten by assigning to it: `RANDOM=5` seeds
 		// the generator and the next read is still a new number. What was

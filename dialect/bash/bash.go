@@ -2792,6 +2792,7 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:    "arithmetic syntax error: operand expected",
 		ArithOperatorExpected:   "arithmetic syntax error in expression",
 		ArithBadOperator:        "arithmetic syntax error: invalid arithmetic operator",
+		ArithMissingCloseParen:  "missing `)'",
 		ArithFailureStatus:      1,
 		SyntaxUnexpected:        "syntax error near unexpected token `%[1]s'",
 		// A refused word is echoed as it was written: `"zzz"` keeps its

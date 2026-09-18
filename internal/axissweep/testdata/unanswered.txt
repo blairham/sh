@@ -173,6 +173,8 @@ ash   ReadPartialCountSucceeds
 ash   ReadonlyAttributeCanBeRemoved
 ash   ReadonlyElement
 ash   ReadonlyRecordsTheCompoundAttribute
+ash   RegexMatchOmitsGroupsThatDidNotMatch
+ash   RegexMatchSurvivesAFailedMatch
 ash   ReplacementEmptyMatchDeclined
 ash   ScalarAppendedToAnArrayBecomesANewElement
 ash   ScalarAssignedOverACompoundReplacesTheName
@@ -431,6 +433,8 @@ dash  ReadonlyAttributeCanBeRemoved
 dash  ReadonlyElement
 dash  ReadonlyRecordsTheCompoundAttribute
 dash  ReadonlyReferenceLetter
+dash  RegexMatchOmitsGroupsThatDidNotMatch
+dash  RegexMatchSurvivesAFailedMatch
 dash  ReplacementAnchors
 dash  ReplacementEmptyMatchDeclined
 dash  ReplacementOperandTakesTheEnclosingQuoting
@@ -552,6 +556,8 @@ zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
 zsh   ReadonlyReferenceLetter
+zsh   RegexMatchOmitsGroupsThatDidNotMatch
+zsh   RegexMatchSurvivesAFailedMatch
 zsh   ReportsAKilledCommandInACommandSubstitution
 zsh   SubstringRangeThirdColonIsABadSubstitution
 zsh   TableLetterReachesItsOwnOperandsSubscript

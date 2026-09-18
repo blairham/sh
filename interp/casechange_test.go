@@ -471,6 +471,10 @@ func TestTheNarrowedRegexFoldStillCapturesTheSubjectsOwnText(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	sem := permissive()
+	// A named record raises two questions of its own; this test is about
+	// the *text* the captures hold, so both are answered the dense way.
+	sem.RegexMatchSurvivesAFailedMatch = No
+	sem.RegexMatchOmitsGroupsThatDidNotMatch = No
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem,
 		Vars: map[string]string{"LC_ALL": "C"}, Env: []string{},

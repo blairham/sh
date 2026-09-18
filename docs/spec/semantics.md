@@ -7134,19 +7134,46 @@ variable name, and leaves the bash name unset too (all measured, oracle run
 2026-09-04: bash 5.3.15, zsh 5.9.2, ksh 93u+).
 
 So the core records and a dialect names, the same seam as the
-pipeline-status record. Only the bash-shaped array has a name here so far;
-the other two shapes are different enough — a scalar plus a groups-only
-array, a dotted name — that each would be its own seam when a dialect wants
-it, not a second caller of this one.
+pipeline-status record. Two of the three shapes are a name: bash's
+`BASH_REMATCH` and ksh93's `.sh.match`, whose dotted spelling reads and
+subscripts like any other since #2620 and #3347. zsh's is different enough —
+a scalar plus a groups-only array — that it is its own seam,
+`SetRegexCaptureReport`, rather than a second caller of this one.
 
-The rest is measured on bash and pinned by the corpus and the interp tests:
+What the record then holds is two questions the two named shapes answer
+differently, and both are asked only where a dialect named one:
 
-- **A failed match empties the record** rather than leaving the capture
-  before last — `declare -p` shows `BASH_REMATCH=()` after a miss, even a
-  first miss, so an unchecked status reads nothing instead of stale groups.
-- **An optional group that matched nothing is an empty element**, not a gap:
-  `[[ abcd =~ b(x)?(c) ]]` gives three dense elements with `[1]` empty, so
-  the group after it keeps its number.
+**`RegexMatchSurvivesAFailedMatch`** — bash no · ksh93 **yes** · zsh
+unspecified · dash unspecified · ash unspecified
+
+A failed match empties the record in bash — `declare -p` shows
+`BASH_REMATCH=()` after a miss, even a first miss, so an unchecked status
+reads nothing instead of stale groups — and leaves it alone in ksh93, where
+`.sh.match` still answers `bc b c` after a later `=~` that matched nothing.
+A failed match of any other kind does the same there, which is what says
+the record is written by a success rather than cleared by a failure.
+
+**`RegexMatchOmitsGroupsThatDidNotMatch`** — bash no · ksh93 **yes** · zsh
+unspecified · dash unspecified · ash unspecified
+
+An optional group that matched nothing is an empty element in bash, not a
+gap, so the group after it keeps its number; in ksh93 it is left out
+entirely and the groups after it move down a place. Measured 2026-09-18 on
+`abcd`:
+
+    [[ abcd =~ b(z)?c ]]       bash `bc` and an empty second element
+                               ksh93u+ `bc` alone, one element
+    [[ abcd =~ (b)(z)?(c) ]]   bash `bc`, `b`, empty, `c` — four
+                               ksh93u+ `bc`, `b`, `c` — three, so the
+                               third group reads back as the second
+
+The second row is what says this is not a trailing group being dropped. A
+group that matched the **empty string** took part and stays under either
+answer, which is what makes the axis about participation rather than about
+emptiness.
+
+The rest is the core's and is pinned by the corpus and the interp tests:
+
 - **The evaluation records, before `!` sees the result**: after
   `[[ ! ab =~ a ]]` the record holds `a` while `$?` is 1 — the same order
   the pipeline-status record follows.
@@ -7155,6 +7182,16 @@ The rest is measured on bash and pinned by the corpus and the interp tests:
   the next `=~` fills it again.
 - A quoted operand made literal still records: `[[ abcd =~ "b" ]]` leaves
   `b` at element 0.
+
+**One column fills the same record from matches that are not `=~` at all,
+and that half is measured and not implemented.** ksh93u+ writes `.sh.match`
+from every *successful pattern* match as well: `[[ abcd == a*d ]]` leaves
+`abcd`, `[[ abcd == a?(b)cd ]]` leaves `abcd b`, and `${v/@(l)(l)/X}`,
+`${v//l/L}`, `${v#he}` and `${v%lo}` each leave what they matched and its
+groups. A `case` arm does not, and a quoted — therefore literal —
+comparison does not. Reaching those needs a pattern match that reports its
+captures without a `(#b)` flag having asked for them, which is a capability
+the matcher does not have yet; #2916 holds the measurements.
 
 ## The names, rather than a value
 

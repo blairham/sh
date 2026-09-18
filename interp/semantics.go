@@ -5791,6 +5791,46 @@ type Semantics struct {
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
 	RegexQuotingMakesLiteral Answer
+	// RegexMatchSurvivesAFailedMatch leaves the record of the last `=~`
+	// alone when a later one fails, rather than emptying it.
+	//
+	// Asked only where a dialect named the record — SetRegexMatch — so the
+	// shells that keep their captures under another shape never reach it.
+	//
+	// Measured 2026-09-18, `[[ abcd =~ (b)(c) ]]` and then `[[ abcd =~ (x)(y)
+	// ]]`: bash 5.3.20 leaves `BASH_REMATCH` empty, and ksh93u+ 2012-08-01
+	// still answers `bc b c` from `.sh.match`. A failed match of any other
+	// kind does the same there — a glob comparison, a substitution that
+	// matched nothing — which is what says the record is written by a
+	// success rather than cleared by a failure.
+	//
+	// The cost of the wrong answer runs one way and quietly: a script that
+	// checks the status first cannot tell the readings apart, and one that
+	// does not reads the match before last instead of nothing.
+	RegexMatchSurvivesAFailedMatch Answer
+
+	// RegexMatchOmitsGroupsThatDidNotMatch leaves a group the match never
+	// reached out of the record entirely, so the groups after it move down a
+	// place.
+	//
+	// The other reading keeps a dense record whose element numbers are the
+	// pattern's group numbers, with an empty string standing for a group
+	// that took no part. Measured 2026-09-18 on the same subject:
+	//
+	//	[[ abcd =~ b(z)?c ]]       bash `bc` and an empty second element
+	//	                           ksh93u+ `bc` alone, one element
+	//	[[ abcd =~ (b)(z)?(c) ]]   bash `bc`, `b`, empty, `c` — four
+	//	                           ksh93u+ `bc`, `b`, `c` — three, so the
+	//	                           third group is read back as the second
+	//
+	// The second row is what says this is not merely a trailing group being
+	// dropped: the gap is closed wherever it falls, and a script reading
+	// element 3 in one column reads element 2 in the other.
+	//
+	// Asked only for a match that succeeded and only where a dialect named
+	// the record, so a failed match answers the axis above instead.
+	RegexMatchOmitsGroupsThatDidNotMatch Answer
+
 	// EmptyRegexOperandIsAnError refuses `[[ x =~ "" ]]` rather than
 	// matching with it. The four shells with the operator split two to two:
 	// bash refuses with `invalid regular expression \`\': empty
@@ -19601,7 +19641,11 @@ func PosixSemantics() Semantics {
 		// least one branch. So the base reads the text rather than taking
 		// a vote, and reads it the way bash and zsh do. dash and ash never
 		// reach it — neither has the operator.
-		EmptyRegexOperandIsAnError:     Yes,
+		EmptyRegexOperandIsAnError: Yes,
+		// POSIX has no `=~` at all, so what a failed one does to a record
+		// it does not describe is nobody's to infer — and neither is
+		// whether a group that took no part keeps its number. Both are
+		// unanswered here.
 		ProcessSubstitutionInCondition: No,
 		// POSIX has no process substitution, so there is no text to read
 		// here either: the base takes the answer every panel member but one

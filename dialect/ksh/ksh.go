@@ -582,6 +582,12 @@ func Semantics() interp.Semantics {
 	// and no match, so an unbalanced bracket does fail — the empty pattern
 	// simply is not one of the failures (#2043).
 	s.EmptyRegexOperandIsAnError = interp.No
+	// A failed `=~` leaves the record of the last match alone here, and a
+	// group that took no part is left out of it entirely, so the groups
+	// after it move down a place: `[[ abcd =~ (b)(z)?(c) ]]` is three
+	// elements here and four in bash (#2916). Both measured 2026-09-18.
+	s.RegexMatchSurvivesAFailedMatch = interp.Yes
+	s.RegexMatchOmitsGroupsThatDidNotMatch = interp.Yes
 	// An associative array's subscript is a quoting context here, as it is
 	// in bash: `m["k"]=W` stores under `k`.
 	s.SubscriptIsAQuotingContext = interp.Yes
@@ -4190,6 +4196,16 @@ func Apply(r *interp.Runner) {
 	// function's result. An embedder who applies this dialect to a Runner of
 	// their own never builds a Shell, and is the caller this is for.
 	r.SetPromptStyle(PromptStyle())
+	// What the last `=~` matched, under this shell's name for it. The
+	// captures are the only way to read what an ERE matched here — there is
+	// no second spelling — so without this the operator's whole point was
+	// out of reach in this dialect (#2916). The name is a dotted one, which
+	// reads and subscripts like any other since #2620 and #3347.
+	//
+	// The two questions the record raises beyond its name are axes on the
+	// vector rather than anything set here: a failed match leaves it alone,
+	// and a group that took no part is left out of it.
+	r.SetRegexMatch(".sh.match")
 	// The C math library under the names arithmetic calls it by, all
 	// sixty-nine of them. This shell has no `zmodload` and nothing to load:
 	// they are simply there, which is what `$(( sqrt(4) ))` needing no

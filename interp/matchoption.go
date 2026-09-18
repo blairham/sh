@@ -365,6 +365,45 @@ const (
 	// Consulted only where StarStarCrossesDirectories is already on.
 	StarStarPatternsReadLinkedDirectories
 
+	// PeriodPatternListsDotAndDotDot puts `.` and `..` among the names a
+	// pattern component may match, where **that component begins with a
+	// literal period**.
+	//
+	// The other half of the question Semantics.GlobListsDotAndDotDot asks,
+	// and the two are separate because the shells reach the same two names by
+	// different rules. The axis holds the shells whose directory listing
+	// simply contains them, where the leading-period rule is what keeps them
+	// out of an ordinary `*` — turn that rule off there and `echo *` lists
+	// them. This option's shell never has them in the listing at all, and
+	// turning the leading-period rule off does *not* bring them back: with
+	// both the dot-matching option on and this one on, `*` is still only the
+	// entries. So one rule cannot serve both, and a second reading of the
+	// axis would have made the wrong shell list `.` for `*`.
+	//
+	// Measured 2026-09-17 on bash 5.3.20 under `LC_ALL=C`, in a directory
+	// holding `.a`, `.b`, `vis` and a subdirectory `sub`, with the option on
+	// — which is the state `shopt -u globskipdots` puts that shell in:
+	//
+	//	.*                     . .. .a .b
+	//	*                      sub vis
+	//	dotglob on, then *     .a .b sub vis
+	//	*/.*                   sub/. sub/.. sub/.x
+	//	.*/                    ../ ./
+	//	globstar on, then **   sub sub/y vis
+	//
+	// Four things fall out of that table. It is the *component* and not the
+	// pattern, so `*/.*` sees them one level down. The listing is sorted with
+	// them in it. The trailing-slash form keeps only what is a directory,
+	// which is what leaves `.a` out of the fifth row. And a `**` descent does
+	// not list them at all, so the walk is untouched — the same gap
+	// globListingNames already records for the axis, and here it is the
+	// measured answer rather than a gap.
+	//
+	// Off is the reading every shell in the panel that has no such option
+	// gives, which is why the bit names the state a script has to ask for:
+	// the two names are absent until something says otherwise.
+	PeriodPatternListsDotAndDotDot
+
 	// lastMatchOption is the guard's subject and never a behavior. It has to
 	// stay last.
 	lastMatchOption

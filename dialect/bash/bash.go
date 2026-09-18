@@ -2461,9 +2461,28 @@ func Diagnostics() interp.Diagnostics {
 		// no terminal, so the failure it describes is always the same one.
 		// See Diagnostics.CannotSetTerminalProcessGroup (#1036).
 		CannotSetTerminalProcessGroup: "cannot set terminal process group (%[1]d): Inappropriate ioctl for device",
-		// Silent for a count above `$#` — there is no ShiftTooMany here —
-		// and a sentence for one below zero, naming the word as written.
-		ShiftNegativeCount: "shift: %[2]s: shift count out of range",
+		// One sentence for both ends of the range, naming the word as
+		// written. The difference between them is not the wording: a count
+		// below zero is always complained about, and a count above `$#` is
+		// silent until `shopt -s shift_verbose` — see
+		// Runner.ReportsShiftPastTheEnd, which Configure turns off here
+		// because this shell's default is the quiet one (#3465).
+		//
+		// Measured 2026-09-17 on bash 5.3.20 and 3.2.57 from a script file,
+		// with the option on: `set -- a; shift 3` is `shift: 3: shift count
+		// out of range` at 1 with `$#` untouched, and `shift` with nothing
+		// left drops the slot rather than filling it — hence the second
+		// wording. `shift 0` at `$#` of nought is 0 and silent, and so is a
+		// count that lands exactly on `$#`, so the complaint really is the
+		// range and not the emptiness.
+		//
+		// bash 3.2 names the marker where 5.3 names the count for
+		// `shift -- 5`, which is a change within bash and is the `bash32`
+		// column's to record rather than this preset's — the same age
+		// `break -- -1` already has in the corpus.
+		ShiftTooMany:            "shift: %[2]s: shift count out of range",
+		ShiftTooManyWithNoCount: "shift: shift count out of range",
+		ShiftNegativeCount:      "shift: %[2]s: shift count out of range",
 		// Measured from a terminal: `[1]+` then two spaces, the state in a
 		// 27-wide column, then the command — with the `&` back on it while
 		// the job runs and gone once it has ended.
@@ -3377,6 +3396,14 @@ func Apply(r *interp.Runner) {
 	// turns it off, so the default belongs here and the name belongs in
 	// shopt.go (#1862).
 	r.SetMatchOption(interp.ReplacementAmpersandIsTheMatch, true)
+	// And the other default this preset holds the other way round from the
+	// core: `shift` past the end is **silent** here, where dash, ksh93 and
+	// zsh each write their own sentence. The wording is in this dialect's
+	// Diagnostics all the same, because it is the wording
+	// `shopt -s shift_verbose` asks for — so the option turns a capability
+	// on rather than installing a sentence, and the listing reads the
+	// capability back (#3465).
+	r.SetReportsShiftPastTheEnd(false)
 	// `declare` is `typeset` under a second name rather than a second
 	// implementation. ksh93 has only the older name and dash has neither, so
 	// which names exist is a dialect's answer and not an axis.

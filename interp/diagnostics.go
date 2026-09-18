@@ -4719,9 +4719,27 @@ type Diagnostics struct {
 	// route. One field cannot hold both without one dialect's answer to one
 	// question being read as its answer to the other.
 	NumericArgument string
-	// ShiftTooMany is `shift` past the end. One verb: the count, as a
-	// number — which a format is free to ignore, and dash's does.
+	// ShiftTooMany is `shift` past the end. Two verbs, the pair
+	// ShiftNegativeCount is handed — %[1]d the count as a number and %[2]s
+	// the operand as written — and a format is free to ignore both, as
+	// dash's does.
+	//
+	// Empty means the dialect says nothing about this end of the range.
+	// Whether a dialect that *has* the sentence writes it is a further
+	// question in exactly one shell, and Runner.ReportsShiftPastTheEnd is it:
+	// bash holds the wording and withholds it until `shopt -s shift_verbose`.
 	ShiftTooMany string
+	// ShiftTooManyWithNoCount is the same complaint where **no count word was
+	// written**, so there is no operand for the format above to name.
+	//
+	// Empty means the dialect words the two alike and fills the placeholder,
+	// which is ksh93's answer — `shift` with nothing after it and no
+	// parameters left is `shift: (null): bad number` there. bash drops the
+	// slot instead: `shift: 3: shift count out of range` against a bare
+	// `shift: shift count out of range`, measured 2026-09-17 on 5.3.20 and
+	// 3.2.57 alike with `shift_verbose` on. One format cannot say both,
+	// because what changes is whether the verb is there at all.
+	ShiftTooManyWithNoCount string
 	// ShiftNegativeCount is the other end of the same range: a count below
 	// zero, where ShiftTooMany is one above `$#`. Two verbs, the same pair
 	// ShiftTooMany's format is handed — %[1]d the count as a number, %[2]s

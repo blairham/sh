@@ -187,6 +187,40 @@ them, which is how the rule came to be filed with ksh93's `FIGNORE`
 follows them — a `..` descended into climbs out of the tree and does not
 stop, and no column does that.
 
+### The second route to the same two names, and why it is not the axis
+
+bash 5.2 added `globskipdots`, which is **on** with nothing said — so the
+row above is its default and the option is how a script asks for the two
+names back. It is `PeriodPatternListsDotAndDotDot`, a `MatchOption` rather
+than an axis, because the one shell that has it switches it while it runs.
+
+What makes it a second mechanism rather than a second reading is that the
+two shells reach the names by different rules. Measured 2026-09-17 on
+bash 5.3.20 under `LC_ALL=C`, in a directory holding `.a`, `.b`, `vis` and
+a `sub/` holding `.x` and `y`, with the option **off**:
+
+| written | bash 5.3.20, `globskipdots` off |
+| --- | --- |
+| `.*` | `. .. .a .b` |
+| `*` | `sub vis` |
+| `shopt -s dotglob`, then `*` | `.a .b sub vis` |
+| `*/.*` | `sub/. sub/.. sub/.x` |
+| `.*/` | `../ ./` |
+| `shopt -s globstar`, then `**` | `sub sub/y vis` |
+
+The third row is the one that decides it. In the columns the axis holds,
+lifting the leading-period rule is exactly what brings the names into a
+`*` — ksh93's `FIGNORE=x; echo *` lists them. Here the rule is lifted,
+the names are asked for, and `*` still does not see them: what this option
+governs is the listing a component **the pattern wrote with a period** may
+match, and nothing else. One rule for both would have made the wrong shell
+answer `.` for `*`.
+
+Three smaller facts from the same table. It is the component and not the
+pattern, so `*/.*` sees them one level down. The listing is sorted with
+them in it. And the `**` descent does not list them, which is the gap the
+axis already has and here is the measured answer.
+
 ## 2. Tilde expansion
 
 Applies only to an **unquoted** `~` at the **start of a word**, and in

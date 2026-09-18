@@ -1674,6 +1674,26 @@ type Runner struct {
 	// has, which is on. A Runner that was never told about the switch
 	// searches PATH, which is what every shell here does.
 	dotSearchesPathOff bool
+	// shiftPastEndQuiet withholds the complaint `shift` makes for a count
+	// above `$#` — bash's `shift_verbose`, which is **off** by default there
+	// and is the only name any shell in the panel has for the question.
+	//
+	// Stored as the negative so the zero value reports, which is what every
+	// other column does: a dialect with nothing to say about the count says
+	// it through an empty Diagnostics.ShiftTooMany, and this field is for the
+	// one shell that has the sentence and withholds it. The other end of the
+	// range is not governed by it — bash names a negative count with the
+	// option off as well as on, measured.
+	shiftPastEndQuiet bool
+	// echoExpandsEscapes makes `echo` interpret its backslash escapes with no
+	// `-e` in front of them — bash's `xpg_echo`, and the only name in the
+	// panel for asking a shell to move to the other side of
+	// Semantics.EchoInterpretsEscapes while it runs.
+	//
+	// The positive direction, because it names a capability the shell turns
+	// *on*: a Runner that was never told follows its dialect's axis, which is
+	// what the zero value already did.
+	echoExpandsEscapes bool
 	// cdCorrectsSpelling is permission for `cd` to correct a misspelled
 	// operand rather than refuse it — bash's `cdspell`, and the only shell in
 	// the panel with a name for it. The correction itself is in

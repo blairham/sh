@@ -98,6 +98,42 @@ func (r *Runner) SearchesPathForSource() bool { return !r.dotSearchesPathOff }
 // SetSearchesPathForSource moves it.
 func (r *Runner) SetSearchesPathForSource(on bool) { r.dotSearchesPathOff = !on }
 
+// ReportsShiftPastTheEnd reports whether `shift` says anything when its count
+// is above `$#` — bash's `shift_verbose`, which is off there by default.
+//
+// One shell in the panel names the question and the other four simply answer
+// it: dash, ksh93 and zsh have a sentence for the count and always write it,
+// and this shell is silent because its Diagnostics carries no wording rather
+// than because anything withheld one. So the capability is the *withholding*,
+// which is why the field behind this stores the deviation and a Runner that
+// was never told reports.
+//
+// It governs the count above `$#` alone. The other end of the range —
+// Diagnostics.ShiftNegativeCount — is written whatever this says, measured:
+// the shell with the option names a negative count with it off as well as on.
+func (r *Runner) ReportsShiftPastTheEnd() bool { return !r.shiftPastEndQuiet }
+
+// SetReportsShiftPastTheEnd moves it.
+func (r *Runner) SetReportsShiftPastTheEnd(on bool) { r.shiftPastEndQuiet = !on }
+
+// EchoExpandsEscapes reports whether `echo` interprets its backslash escapes
+// with no `-e` in front of them — bash's `xpg_echo`.
+//
+// Semantics.EchoInterpretsEscapes is where a dialect stands on this, and this
+// is a script asking to stand on the other side of it while the shell runs.
+// One shell in the panel has a name for that: the two columns that expand by
+// default have no switch, and the one that agrees with this shell's default
+// has no `shopt` at all.
+//
+// It is an override in one direction only, which is measured: the option
+// turns expansion on and `echo -E` still turns it off for the one call. So a
+// dialect that already expands is unaffected by it, and `-E` is answered
+// ahead of it.
+func (r *Runner) EchoExpandsEscapes() bool { return r.echoExpandsEscapes }
+
+// SetEchoExpandsEscapes moves it.
+func (r *Runner) SetEchoExpandsEscapes(on bool) { r.echoExpandsEscapes = on }
+
 // CorrectsCdSpelling reports whether `cd` corrects a misspelled operand
 // instead of refusing it.
 //

@@ -12424,6 +12424,20 @@ print it as written.
 Expands backslash escapes in `echo` without -e. True in dash and zsh,
 false in bash and ksh93 — a grouping no other axis produces.
 
+**One shell lets a script cross it while it runs**, and that is
+`Runner.EchoExpandsEscapes` rather than a second answer here: bash's
+`shopt -s xpg_echo`, which is what a script written for a System V `echo`
+sets. The switch is read where the axis is read, so a shell that has
+asked is not also asking the dialect, and it is an override in one
+direction only — measured 2026-09-17 on bash 5.3.20, `echo -E` still
+suppresses for the one call with the option on, `-n` is untouched, and
+which escapes exist is each its own axis answering the same either way.
+
+Refusing the name was worse than one diagnostic, which is why it is filed
+as a defect rather than an absence: it is set in an rc file rather than
+per call, so a refusal left every later `echo` in the file answering the
+other way (#3059).
+
 **`EchoLastEscapeFlagWins`** — bash yes · dash unspecified · ksh93 unspecified · zsh no
 
 Decides `echo -e -E`: bash lets the last flag win and prints the
@@ -17994,6 +18008,35 @@ nothing else in all five dialects (#3208).
 
 Ends a non-interactive shell when `shift` runs off the end. True in dash
 and ksh93.
+
+**Whether anything is *said* is a separate question from both fatality and
+status**, and in one shell a script moves it. dash, ksh93 and zsh each
+have a sentence for a count above `$#` and always write it; bash has one
+and withholds it until `shopt -s shift_verbose`. So this shell's silence
+was not an absence of wording — it is `Runner.ReportsShiftPastTheEnd`, off
+in the bash preset and turned on by that name (#3465).
+
+Measured 2026-09-17 on bash 5.3.20 and 3.2.57 alike, from a script file,
+with the option on:
+
+    set -- a; shift 3         shift: 3: shift count out of range, 1
+    set -- a; shift; shift    shift: shift count out of range, 1
+    set -- a; shift -1        named with the option off as well as on
+    shift 0                   0, silent
+    set -- a b; shift 2       0, silent
+
+Three things there. The second row is why `Diagnostics` carries two
+wordings rather than one with a placeholder: a count word that was never
+written has no slot to name, and the shell that drops it says so —
+`ShiftTooManyWithNoCount`, empty in the column that fills the slot with
+`(null)` instead. The third is why the switch governs one end of the
+range and not the whole complaint. And the last two are why this is the
+range and not the emptiness: a count landing exactly on `$#`, and a nought
+over nothing, are both silent at 0 with the option on.
+
+The two bash builds part on one row only — `shift -- 5` names the marker
+in 3.2 and the count in 5.3 — which is a change within bash and the
+`bash32` column's to record, the same age `break -- -1` already has.
 
 **`ShiftOptionWords`** — bash none · dash none · ksh93 every dash word · zsh an option unless it is all digits
 

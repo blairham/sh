@@ -3461,7 +3461,7 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 	// What the complaint names differs from what the shift does: one dialect
 	// reports the operand *as written*, and an operand that was never given
 	// is reported as `(null)` rather than as the default it stood in for.
-	operand := "(null)"
+	operand := shiftAbsentOperand
 	// Whether the marker was taken, which decides more than where the count
 	// starts: past it a dash word is an operand rather than an option, so
 	// ksh93 reads `shift -- -1` as a count below zero where it refuses a
@@ -3550,7 +3550,7 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 		return r.shiftArrays(names, n, operand)
 	}
 	if n > len(r.Params) {
-		return r.shiftOutOfRange(r.diag().ShiftTooMany, n, operand)
+		return r.shiftOutOfRange(r.shiftTooManyWording(operand), n, operand)
 	}
 	r.Params = r.Params[n:]
 	return 0
@@ -3589,12 +3589,43 @@ func (r *Runner) shiftArrays(names []string, n int, operand string) int {
 			continue
 		}
 		if n > len(elems) {
-			status = r.shiftOutOfRange(r.diag().ShiftTooMany, n, operand)
+			status = r.shiftOutOfRange(r.shiftTooManyWording(operand), n, operand)
 			continue
 		}
 		r.setArray(name, elems[n:])
 	}
 	return status
+}
+
+// shiftAbsentOperand stands where a count word was never written, which is
+// what one dialect's complaint names and what another's leaves out.
+const shiftAbsentOperand = "(null)"
+
+// shiftTooManyWording is the complaint for a count above `$#`, or the empty
+// string where this shell has nothing to say about that end.
+//
+// Two things are decided here and they are not the same kind. Whether the
+// dialect *has* a sentence is Diagnostics.ShiftTooMany, which is empty in the
+// one column that never complains about this end at all. Whether a dialect
+// that has one *writes* it is Runner.ReportsShiftPastTheEnd, which is the
+// capability behind bash's `shift_verbose` — held by the shell rather than by
+// the dialect, because a script moves it while it runs and a listing reads it
+// back.
+//
+// The third thing is which of two sentences, and it is the dialect's again: a
+// format naming the operand has no operand to name where none was written, so
+// the shell that drops the slot says so with a second wording rather than
+// with a placeholder. See Diagnostics.ShiftTooManyWithNoCount.
+func (r *Runner) shiftTooManyWording(operand string) string {
+	if !r.ReportsShiftPastTheEnd() {
+		return ""
+	}
+	if operand == shiftAbsentOperand {
+		if w := r.diag().ShiftTooManyWithNoCount; w != "" {
+			return w
+		}
+	}
+	return r.diag().ShiftTooMany
 }
 
 // shiftOutOfRange reports a count outside `0..$#`, in whichever direction.
@@ -3724,6 +3755,11 @@ func (r *Runner) shiftBadNumber(operand string) (int, bool) {
 // only when a backslash appears, so `echo hi` needs no dialect. Which option
 // letters exist, which of `-e -E` wins, and the \x and \e set extensions are
 // each their own axis, read the same way.
+//
+// Runner.EchoExpandsEscapes is a script's way onto the other side of that
+// axis in the one shell with a name for it, and it is read where the axis is
+// read: behind `-e`, which already expands, and behind `-E`, which still
+// suppresses for the one call. Measured — see the switch.
 func biEcho(r *Runner, _ context.Context, args []string) int {
 	newline := true
 	letters := r.sem().EchoOptions
@@ -3766,8 +3802,16 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 	// dialect and `echo 'a\tb'` does.
 	expand := forced == 1
 	if forced == 0 {
+		// The session switch first, and it is an override rather than a
+		// second answer: one shell in the panel lets a script ask to stand on
+		// the other side of the axis while it runs, and a shell that has
+		// asked is not also asking the dialect. Reading it ahead of the axis
+		// is what keeps a dialect with no answer from being complained about
+		// in a shell that has already said which side it is on. See
+		// Runner.EchoExpandsEscapes.
 		expand = strings.ContainsRune(out, '\\') &&
-			r.ask(r.sem().EchoInterpretsEscapes, "echo interpreting backslash escapes")
+			(r.EchoExpandsEscapes() ||
+				r.ask(r.sem().EchoInterpretsEscapes, "echo interpreting backslash escapes"))
 	}
 	if expand && strings.ContainsRune(out, '\\') {
 		// The two set extensions are asked only when their escapes appear.

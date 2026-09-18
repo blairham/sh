@@ -1477,6 +1477,23 @@ func Semantics() interp.Semantics {
 	// the signal, the same as anywhere else.
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
+	// `time` changes nothing about the judging here: measured 2026-09-18,
+	// `set -e; time false; echo survived` stops and `trap 'printf E' ERR;
+	// time false` writes E, for a simple command, a pipeline, a group, a
+	// function call and a loop alike.
+	s.TimedCommandIsJudged = interp.Yes
+	// And a redirection that cannot be opened on a compound command is a
+	// failure both judges see, exactly as it is on a simple one.
+	s.CompoundRedirectionFailureIsJudged = interp.Yes
+	// A subshell written as the last element of a pipeline is judged twice:
+	// once inside the element's own process, where the trap is still set, and
+	// once for the pipeline. Measured 2026-09-18, `trap 'printf E' ERR; true
+	// | ( exit 3 )` writes `EE` — and that element has no failing command in
+	// it, so the second E is the subshell command itself and not its body. A
+	// group holding the same subshell writes one E, a function whose body is
+	// one writes one, and an element that is not the last does not fire at
+	// all.
+	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: a literal `[`, and the rest of the pattern behind it — `[[:alpha:]` takes `[` plus one of `:alpha`'s five characters, which is the same reading the axis above gives a bare `[`.

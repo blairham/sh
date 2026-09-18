@@ -63,3 +63,28 @@ case $PWD in
   *) printf 'cd in the last stage: the shell stayed\n' ;;
 esac
 cd "$d0"
+
+# And what the ERR trap counts over a pipeline whose last element is written
+# as a subshell: bash judges that subshell command inside the element's own
+# process, where the trap is still set, and then judges the pipeline in the
+# shell. `( exit 3 )` is the discriminating row — it has no failing command
+# inside it, so the second firing is the subshell command and not its body.
+( trap 'printf E' ERR; ( false ); printf ' plain subshell\n' )
+( trap 'printf E' ERR; true | ( false ); printf ' a failing body\n' )
+( trap 'printf E' ERR; true | ( exit 3 ); printf ' no failing command in it\n' )
+( trap 'printf E' ERR; true | ( ( false ) ); printf ' a nested subshell\n' )
+( trap 'printf E' ERR; false | ( false ); printf ' the first element failing too\n' )
+
+# The rows that fire once, each for its own reason: a group is not a subshell
+# command, a function whose body is one is not either, an element that is not
+# the last is not the one this is about, and an element that succeeded is not
+# judged at all.
+( trap 'printf E' ERR; true | { ( false ); }; printf ' a group holding it\n' )
+( trap 'printf E' ERR; sf() { ( false ); }; true | sf; printf ' a function whose body is one\n' )
+( trap 'printf E' ERR; ( false ) | true; printf ' not the last element\n' )
+( trap 'printf E' ERR; true | ( false; true ); printf ' an element that succeeded\n' )
+
+# And it is the last element alone, which needs the trap writing to standard
+# error to see: an element's standard output is the pipe to the element after
+# it, so a firing anywhere else writes into that pipe rather than out here.
+( trap 'printf E >&2' ERR; true | ( false ) | ( false ); printf ' two subshell elements\n' ) 2>&1

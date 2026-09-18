@@ -948,6 +948,19 @@ func Semantics() interp.Semantics {
 	// trap for it to fire. The question is only reached where a trap with a
 	// body exists, which is why the two axes above it are unanswered here
 	// too.
+	// unanswered ASubshellAsTheLastPipelineElementJudgesItself: the same
+	// absence from the other side — the axis is an extra firing of a trap
+	// this shell does not have, and its `set -e` half is already the ordinary
+	// pipeline judging.
+	// unanswered TimedCommandIsJudged: there is no `time` keyword here.
+	// Measured 2026-09-18, `set -e; time false; echo survived` reaches the
+	// *external* `/usr/bin/time` and the script stops on its status, which is
+	// an answer about a command and not about the construct.
+	// And a redirection this shell cannot open is a failure both judges would
+	// see, on a compound as on a simple command: measured the same day, `set
+	// -e; { echo b; } > /nonexistent/x; printf survived` stops, as it does in
+	// bash and zsh.
+	s.CompoundRedirectionFailureIsJudged = interp.Yes
 	s.TrapHasDebugCondition = interp.No
 	// No DEBUG condition, so no head to fire one at. Not an unanswered
 	// axis — DebugTrapHeads has no unspecified value, because a head

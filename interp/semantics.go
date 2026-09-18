@@ -16751,6 +16751,110 @@ type Semantics struct {
 	// stops all three, and this is only about the failure the option adds.
 	ErrexitSeesPipefailFailure Answer
 
+	// TimedCommandIsJudged lets `set -e` and the ERR trap judge what a `time`
+	// clause timed. ksh93 alone says no, and there the timing is a context in
+	// which nothing is judged at all — not the timed command, not the
+	// commands inside it, and not the clause itself — the way a condition is.
+	//
+	// Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, each row run as `( set -e; <row>; printf ' survived' )` and
+	// again as `( trap 'printf E' ERR; <row>; printf ' .' )`:
+	//
+	//	row                              ksh93u+   bash 5.3   zsh 5.9   ash
+	//	time false                       survived  stops      stops     stops
+	//	time /usr/bin/false              survived  stops      stops     stops
+	//	time true | false                survived  stops      stops     —
+	//	time { false; echo in; }         in, surv  stops      stops     —
+	//	f() { false; }; time f           survived  stops      stops     —
+	//	time for i in 1; do false; done  survived  stops      stops     —
+	//	the ERR rows                     no E      E          E         E
+	//
+	// The suspension is *dynamic* and it ends with the clause: `time f` where
+	// `f` fails and then prints runs the print, `g() { time false; echo in; }`
+	// under `set -e` prints and returns, and a plain `false` after the clause
+	// still ends the script. The status is untouched — `time false` leaves 1
+	// in `$?` there as everywhere, and `time false || echo ran` runs the
+	// right-hand side — so it is the judging alone that is suspended.
+	//
+	// Read without asking. A `time` clause is an ordinary line and unanswered
+	// judges it, which is what bash, zsh and BusyBox ash do.
+	// dash has no `time` keyword at all, so it is entered as unanswered.
+	TimedCommandIsJudged Answer
+
+	// CompoundRedirectionFailureIsJudged lets `set -e` and the ERR trap see a
+	// redirection this shell could not open on a **compound** command — a
+	// group, a loop, an `if`, a `case`, a subshell. ksh93 alone says no: the
+	// diagnostic is written, the body does not run, status 1 is left behind,
+	// and neither judge is called. On a *simple* command it is a failure
+	// there as it is everywhere, which is the control that says this is about
+	// the compound and not about redirection.
+	//
+	// Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, with `> /nonexistent/x`:
+	//
+	//	row                                 ksh93u+   bash   zsh   dash
+	//	{ echo b; } > …                     survived  stops  stops stops
+	//	for i in 1; do :; done > …          survived  stops  stops stops
+	//	while false; do :; done > …         survived  stops  stops stops
+	//	if :; then :; fi > …                survived  stops  stops stops
+	//	case x in x) :;; esac > …           survived  stops  stops stops
+	//	( echo x ) > …                      survived  stops  stops stops
+	//	{ echo b; } < /nonexistent/x        survived  stops  stops stops
+	//	echo x > …                          stops     stops  stops stops
+	//	the ERR rows, compound              no E      E      E     —
+	//	the ERR row, simple                 E         E      E     —
+	//
+	// and `$?` is 1 in every column and every row, so the status is not what
+	// differs.
+	//
+	// Read without asking, for TimedCommandIsJudged's reason. BusyBox ash is
+	// entered as unanswered: measured row by row it survives for a group, an
+	// `if` and a `case` and stops for a `for`, a `while` and a subshell, which
+	// is not an answer but the absence of one, and a shell cannot be given a
+	// rule its reference does not follow.
+	CompoundRedirectionFailureIsJudged Answer
+
+	// ASubshellAsTheLastPipelineElementJudgesItself fires the ERR trap inside
+	// the last element of a pipeline when that element is written as a
+	// subshell, as well as judging the pipeline in the shell itself. bash
+	// alone.
+	//
+	// Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, each row as `( trap 'printf E' ERR; <row>; printf ' .' )`:
+	//
+	//	row                            bash 5.3   zsh 5.9   ksh93u+
+	//	( false )                      E          EE        E
+	//	true | ( false )               EE         EE        E
+	//	true | ( exit 3 )              EE         E         E
+	//	true | ( true; false )         EE         EE        E
+	//	true | ( ( false ) )           EE         EEE       E
+	//	false | ( false )              EE         EE        E
+	//	true | ( false ) | ( false )   EE         EE        E
+	//	true | ( false; true )         none       E         none
+	//	true | { ( false ); }          E          EE        E
+	//	f() { ( false ); }; true | f   E          EE        EEE
+	//	( false ) | true               none       none      none
+	//
+	// `( exit 3 )` has no failing command in it, so the second E is not the
+	// body firing: the *subshell command* is judged inside the element's
+	// process, where the trap is still set, and then the pipeline is judged
+	// in the shell. A group holding the same subshell does not do it, nor
+	// does a function whose body is one, and an element that is not the last
+	// does not either — `true | ( false ) | ( false )` is two E and not
+	// three. So it is the element being written as `( … )` that decides, and
+	// the tree is what answers it.
+	//
+	// zsh's second E is a different mechanism — its ERR trap runs inside
+	// subshells at all, which is why `( false )` alone is already EE there —
+	// and it is not this axis reached by another route.
+	//
+	// Read without asking. Unanswered fires once, which is what the other
+	// columns do. With `lastpipe` on, the element runs in this shell instead
+	// and FailingPipelineWhoseLastElementRanHere is what answers; the two
+	// cannot both apply, because one is about an element in a process of its
+	// own and the other about one that is not.
+	ASubshellAsTheLastPipelineElementJudgesItself Answer
+
 	// PipefailSubstitutesTheBareSignal reports an element pipefail chose over
 	// the pipeline's last one, and which died of a signal, as the signal's
 	// *number* rather than as the status a command killed by that signal

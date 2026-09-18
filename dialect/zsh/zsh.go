@@ -2083,6 +2083,19 @@ func Semantics() interp.Semantics {
 	// the signal, the same as anywhere else.
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
+	// `time` changes nothing about the judging here either: `set -e; time
+	// false` stops and the ERR trap fires, over every shape measured.
+	s.TimedCommandIsJudged = interp.Yes
+	// And a redirection that cannot be opened on a compound command is a
+	// failure both judges see.
+	s.CompoundRedirectionFailureIsJudged = interp.Yes
+	// This shell writes two E for `true | ( false )` as well, and for a
+	// different reason: its ERR trap runs inside subshells at all, so
+	// `( false )` on its own is already two. Measured 2026-09-18, `true |
+	// ( exit 3 )` — the row with no failing command inside the element —
+	// writes one E here and two in bash, which is what separates the two
+	// mechanisms.
+	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.No
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern

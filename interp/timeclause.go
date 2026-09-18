@@ -128,6 +128,21 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 		r.tested++
 		defer func() { r.tested-- }()
 	}
+	if r.timeSuspendsTheJudgement() {
+		// One column times a command in a context where nothing is judged —
+		// see Semantics.TimedCommandIsJudged. The same counter as the
+		// negation's, because the suspension is the same shape: it is
+		// inherited, so it covers the commands inside whatever is timed and
+		// inside whatever that calls, and it ends with the clause.
+		r.tested++
+		defer func() {
+			r.tested--
+			// And the clause itself, which the counter cannot cover: it is
+			// dropped here and the statement is judged after that. See
+			// Runner.unjudged.
+			r.unjudged = true
+		}()
+	}
 
 	selfBefore, childrenBefore, okBefore := processTimes()
 	var timing *pipelineTiming

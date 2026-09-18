@@ -2710,6 +2710,19 @@ type Runner struct {
 	// failing subshell command with its own flag still clear — which is
 	// what keeps zsh's two E lines for `(false)`.
 	errTrapFired bool
+
+	// unjudged marks the statement that has just finished as one `set -e`
+	// and the ERR trap do not judge, whatever it left in the status.
+	//
+	// Runner.tested is the mechanism for a context that is *running*, and it
+	// is a counter because such a context nests and is inherited. This is the
+	// other half: a construct that has already returned, whose failure is
+	// nobody's to judge. The counter is back to zero by then, so the two
+	// cannot be one field. Cleared at the head of every statement, beside
+	// errTrapFired, so a mark nothing consumed cannot reach the next one.
+	//
+	// See unjudged.go for the two answers that set it.
+	unjudged bool
 	// arithZeroLeft says the command that just finished was an `(( ))` whose
 	// value was zero, which one dialect does not count as a failure. Cleared
 	// on the way into every command and on the way out of a simple one, so a
@@ -3384,6 +3397,15 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 		return err
 	}
 	if r.redirErr {
+		if !r.compoundRedirectionIsJudged() {
+			// One column writes the diagnostic, leaves 1 behind and calls
+			// neither judge — see
+			// Semantics.CompoundRedirectionFailureIsJudged. Marked rather
+			// than counted, because the failure is already over: the body
+			// never ran and there is nothing left for an inherited
+			// suspension to cover.
+			r.unjudged = true
+		}
 		return nil
 	}
 	return body()
@@ -4575,6 +4597,12 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	// at the head of a statement, so that a compound clears it before its
 	// body runs and still sees the body's firing when it is judged itself.
 	r.errTrapFired = false
+	// And the mark the statement before it may have left — see
+	// Runner.unjudged. Cleared here rather than where it is read, so a
+	// construct that sets it and is then not judged at all (a `time` clause
+	// inside an `if` condition, say) leaves nothing behind for the statement
+	// after it.
+	r.unjudged = false
 	// Counted before the handlers run, so the compound this statement may be
 	// can tell afterwards whether its body ran a statement of its own. See
 	// Runner.stmtSerial.
@@ -4687,7 +4715,7 @@ func lastIsNegated(e syntax.Expr) bool {
 // measured and unanimous among the shells that have the condition. When both
 // apply, the trap runs first and the script then stops, in that order.
 func (r *Runner) checkErrExit(ctx context.Context) {
-	if r.tested != 0 || r.status == 0 || r.ctl != controlNone {
+	if r.tested != 0 || r.status == 0 || r.ctl != controlNone || r.unjudged {
 		return
 	}
 	if r.arithZeroLeft && (r.errexit || r.errTrapIsSet()) &&

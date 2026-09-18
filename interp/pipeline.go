@@ -470,6 +470,17 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			}
 			start := time.Now()
 			errs[i] = subs[i].command(ctx, cmd)
+			if i == n-1 && subs[i].subshellElementJudgesItself(cmd) {
+				// One column judges a subshell written as the last element
+				// of a pipeline *inside* the element's own process, where
+				// the trap is still set, and then judges the pipeline in the
+				// shell — see
+				// Semantics.ASubshellAsTheLastPipelineElementJudgesItself.
+				// On the clone, because that is the process the firing
+				// belongs to; the parent's own flag is untouched and the
+				// pipeline is judged again for itself.
+				subs[i].judgeAsTheLastPipelineElement(ctx)
+			}
 			// A pipeline element is a subshell, so it ends like one — here,
 			// while its end of the pipe is still open, because that is where
 			// the handler writes. See Runner.endSubshell.

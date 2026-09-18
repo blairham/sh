@@ -1524,6 +1524,21 @@ func Semantics() interp.Semantics {
 	// where a plain `set -e; false | true` reaches the echo. ksh93 is the
 	// column that runs on (#2272).
 	s.ErrexitSeesPipefailFailure = interp.Yes
+	// `time` changes nothing about the judging here: measured 2026-09-18 in
+	// the pinned image, `set -e; time false; printf survived` stops and
+	// `trap 'printf E' ERR; time false` writes E.
+	s.TimedCommandIsJudged = interp.Yes
+	// unanswered CompoundRedirectionFailureIsJudged: BusyBox ash 1.37.0 gives
+	// no rule to record. Measured 2026-09-18 in the pinned image, one script
+	// file per row with `> /nonexistent/x`, it survives for a group, an `if`
+	// and a `case` and stops for a `for`, a `while` and a subshell, and its
+	// ERR rows do not agree with its `set -e` rows either. That is the
+	// absence of an answer rather than a third one, and a dialect must not be
+	// given a rule its reference does not follow. Unanswered judges, which is
+	// what the other three columns with the construct do.
+	// A subshell as the last element of a pipeline is judged once, as it is
+	// everywhere but bash.
+	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.No
 	// The status pipefail hands back for an element a signal killed is the
 	// ordinary 128-plus-the-signal and not the bare number: a `{ echo "$v";
 	// } | true` over a value grown past the pipe buffer is 141, and so is

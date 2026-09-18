@@ -1438,6 +1438,12 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 					return nil, true
 				}
 				elems = r.substringOfTheJoinedList(e, elems, s.Quoting != syntax.Unquoted)
+			} else if out, isMods := r.modifiedElements(
+				modifierSubjects(elems, e, s.Quoting != syntax.Unquoted, r), e); isMods {
+				// A range whose segment is a modifier list applies to each
+				// element rather than slicing the list — see
+				// Runner.modifiedElements for the measurement.
+				elems = out
 			} else {
 				elems = r.positionalSliceElems(e, elems)
 				elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
@@ -7029,4 +7035,33 @@ func (r *Runner) heldSubscript(e *syntax.ParamExpr) (elems []string, ok, held bo
 	}
 	h := r.subscriptHeld
 	return h.elems, h.ok, true
+}
+
+// modifierSubjects is what a modifier list is applied to: the fields the
+// expansion has where it stands.
+//
+// Measured on zsh 5.9.2, 2026-09-18 with `b=(/a/x.c /b/y.c 'p q')`, and the
+// rule is the ordinary one about fields rather than anything a modifier
+// decides:
+//
+//	${b:t}       x.c y.c 'p q'    three words, a tail each
+//	"${b[@]:t}"  x.c y.c 'p q'    three still, because `[@]` keeps its fields
+//	"${b:t}"     y.c p q          one word: the array joined, then one tail
+//	"${b[*]:t}"  y.c p q          the same, which is what `[*]` is for
+//
+// So the third and fourth rows are not the modifier joining anything. The
+// expansion is one field by the time it is asked, and the tail of
+// `/a/x.c /b/y.c p q` is everything after its last slash.
+func modifierSubjects(elems []string, e *syntax.ParamExpr, quoted bool, r *Runner) []string {
+	if !quoted || wholeArrayFieldsSurvive(e, r) {
+		return elems
+	}
+	return []string{strings.Join(elems, ifsFirst(r.ifs()))}
+}
+
+// wholeArrayFieldsSurvive reports whether a quoted expansion still has one
+// field per element, which is `[@]` and nothing else.
+func wholeArrayFieldsSurvive(e *syntax.ParamExpr, r *Runner) bool {
+	return e.Index != nil && e.IndexFlags == nil &&
+		r.subscriptAsWritten(e.Subscript()) == "@"
 }

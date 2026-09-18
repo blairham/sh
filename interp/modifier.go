@@ -33,46 +33,10 @@ import (
 // string: the substring came back where the shell refuses at 1, so a script
 // that shell would have stopped ran on with a plausible value.
 
-// modifierLetters is what the shell that has them accepts, measured a letter
-// at a time. Fourteen, and the fourteenth is not a letter: `:&` repeats the
-// last substitution.
-//
-// The value is what may follow the letter inside the same segment, because
-// that is the only thing about a segment this table cannot say twice. Most
-// take nothing at all; `h` and `t` take a count; `s` takes a whole
-// substitution and `&` takes the one before it.
-var modifierLetters = map[byte]modifierArg{
-	'h': modifierCount,   // head — everything before the last slash
-	't': modifierCount,   // tail — everything after it
-	'r': modifierNothing, // root — the value with its suffix taken off
-	'e': modifierNothing, // extension — the suffix, without its dot
-	'l': modifierNothing, // lowercase
-	'u': modifierNothing, // uppercase
-	'a': modifierNothing, // an absolute path, against the working directory
-	'A': modifierNothing, // and the same with the links resolved
-	'P': modifierNothing, // the real path, which applies `..` after resolving
-	'c': modifierNothing, // a command's path, from the command search
-	'q': modifierNothing, // quoted, in this shell's own quoting
-	'Q': modifierNothing, // and unquoted, read back
-	's': modifierSubst,   // substitution, which takes a delimited pair
-	'&': modifierNothing, // the substitution before it, again
-}
-
-// modifierArg is what a letter may carry after it inside its own segment.
-type modifierArg int
-
-const (
-	// modifierNothing: the letter is the whole segment, and anything after it
-	// is the complaint that names nothing.
-	modifierNothing modifierArg = iota
-	// modifierCount: an optional decimal count, which `h` and `t` alone take.
-	// `${x:h2}` is the head twice over and `${x:h:2}` is a `2` that names no
-	// modifier — the digit belongs to the letter or to nothing.
-	modifierCount
-	// modifierSubst: a delimited pattern and replacement, `s/l/r/`, whose
-	// delimiter is whatever byte follows the letter.
-	modifierSubst
-)
+// The letters and what each may carry are syntax.ModifierLetters, which is
+// where they have to live: one shell writes a modifier list without braces,
+// and the letter set then decides where the *word* ends. This file is what
+// they do once the parser has cut them out. See syntax/modifier.go.
 
 // rangeSegmentIsAModifier reports whether a range segment is read as a
 // modifier rather than as an expression.
@@ -266,9 +230,9 @@ func (r *Runner) applyModifierSegment(value, seg string, e *syntax.ParamExpr) (s
 	if len(seg) > 1 && seg[0] == 'g' {
 		global, seg = true, seg[1:]
 	}
-	arg, known := modifierArg(0), false
+	arg, known := syntax.ModifierArg(0), false
 	if seg != "" {
-		arg, known = modifierLetters[seg[0]]
+		arg, known = syntax.ModifierLetters[seg[0]]
 	}
 	if !known {
 		// Unrecognized, and *one byte* is named — `${x:zz}` names `z`, not
@@ -284,7 +248,7 @@ func (r *Runner) applyModifierSegment(value, seg string, e *syntax.ParamExpr) (s
 	}
 	letter, rest := seg[0], seg[1:]
 	switch arg {
-	case modifierNothing:
+	case syntax.ModifierNothing:
 		if rest != "" {
 			// The letter was a modifier and what follows it is not, which is
 			// the same complaint with nothing named.
@@ -295,7 +259,7 @@ func (r *Runner) applyModifierSegment(value, seg string, e *syntax.ParamExpr) (s
 			return r.repeatSubstitution(value, global, e)
 		}
 		return r.applyModifier(value, letter, e)
-	case modifierCount:
+	case syntax.ModifierCount:
 		n, ok := modifierCountOf(rest)
 		if !ok {
 			r.refuseModifier(e, "")

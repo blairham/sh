@@ -288,10 +288,12 @@ half and the bare one — which is what `gzip -c` is two blocks of.
 
 **And what a shipped completion reaches is not decided here alone.**
 Several completions stop short somewhere outside `zsh/computil` — `_nl`
-and `_od` on the `(R)` expansion flag, `_file_modes` on the
-`zsh/complete` conditions, and `git checkout <branch>` on a `:q`
-modifier written after a bare parameter expansion (#3127), which leaves
-a literal `:q` for `compadd` to stop reading options at.
+and `_od` on the `(R)` expansion flag, and `_file_modes` on the
+`zsh/complete` conditions. `git checkout <branch>` was a third and is
+not: a `:q` modifier written after a bare parameter expansion left a
+literal `:q` for `compadd` to stop reading options at, and the unbraced
+spelling of a modifier list is read now (#3127). See
+`docs/spec/semantics.md`.
 
 **Descriptions are carried.** `compadd -d` replaces the drawn text of a
 match, `-X` heads the block it is in and `-x` says something about a

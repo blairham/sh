@@ -77,13 +77,13 @@ func (r *Runner) applyGlobModifier(value, seg string) (result string, applied, o
 	if seg == "" {
 		return value, false, true
 	}
-	arg, known := modifierLetters[seg[0]]
+	arg, known := syntax.ModifierLetters[seg[0]]
 	if !known {
 		return value, false, true
 	}
 	letter, rest := seg[0], seg[1:]
 	switch arg {
-	case modifierNothing:
+	case syntax.ModifierNothing:
 		if letter == '&' {
 			out, ok := r.repeatSubstitution(value, global, nil)
 			return out, true, ok
@@ -92,7 +92,7 @@ func (r *Runner) applyGlobModifier(value, seg string) (result string, applied, o
 		// simply not read here; see the measurements above.
 		out, ok := r.applyModifier(value, letter, nil)
 		return out, true, ok
-	case modifierCount:
+	case syntax.ModifierCount:
 		n, ok := modifierCountOf(rest)
 		if !ok {
 			// `:tX` is the tail: what follows the letter is not a count and

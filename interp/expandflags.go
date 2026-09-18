@@ -1331,6 +1331,16 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		}
 	case syntax.ParamSubstring:
 		if isList {
+			// A range whose segment is a modifier list applies to **each
+			// element** rather than slicing the list. Measured on zsh 5.9.2,
+			// 2026-09-18 with `b=(/a/x.c /b/y.c 'p q')`: `${b:t}` is three
+			// words `x.c y.c 'p q'`, `${b:q}` is three with the last one
+			// escaped, and `${b:1}` is still the two elements from index one.
+			// So which of the two a range is decides before the elements are
+			// touched, exactly as it does for a scalar.
+			if out, ok := r.modifiedElements(words, e); ok {
+				return out, true, true, false
+			}
 			return sliceElems(words, r.numOf(e.Arg, e, e.Arg2), e, r), true, true, false
 		}
 		words[0] = r.substringRange(words[0], e)
@@ -1655,4 +1665,69 @@ func controlEscape(c byte) string {
 // no third call site rather than an oversight.
 func matchingFlag(e *syntax.ParamExpr) bool {
 	return e != nil && strings.ContainsRune(e.Flags, 'M')
+}
+
+// modifiedElements is a `${a:…}` range read as a modifier list over a list of
+// values, and false where the range is not one.
+//
+// The three shapes are substringRange's three, which is why this reads them
+// rather than restating them: a list of modifiers, an offset and then a list,
+// and an offset, a length and then a list. What differs is only what the list
+// is applied *to* — every element, one at a time, rather than one value.
+//
+// Measured, and it is the elements and not the joined string: `${b:1:t}` on
+// `(/a/x.c /b/y.c 'p q')` is `y.c` and `p q`, so the offset slices the list
+// and the tail is taken of each of what is left. Inside double quotes the
+// list has already become one word by the time anything asks, which is why
+// `"${b:t}"` is the tail of the whole joined string and goes the other way.
+func (r *Runner) modifiedElements(words []string, e *syntax.ParamExpr) ([]string, bool) {
+	segs, sliced, ok := r.rangeModifiers(words, e)
+	if !ok {
+		return nil, false
+	}
+	out := make([]string, 0, len(sliced))
+	for _, w := range sliced {
+		got, applied := r.applyModifiers(w, segs, e)
+		if !applied {
+			// The list is refused as a whole, the way it is for a scalar:
+			// a modifier that names nothing is the same complaint whichever
+			// element reached it first.
+			return nil, true
+		}
+		out = append(out, got)
+	}
+	return out, true
+}
+
+// rangeModifiers reads a range as a modifier list: the segments, and the
+// elements they apply to once any offset and length have taken their part.
+func (r *Runner) rangeModifiers(
+	words []string, e *syntax.ParamExpr,
+) (segs []string, sliced []string, ok bool) {
+	reads := func() bool {
+		return r.ask(r.sem().SubstringRangeReadsModifiers,
+			"a substring range beginning with a letter being a modifier list")
+	}
+	switch {
+	case rangeSegmentIsAModifier(e.Arg):
+		if !reads() {
+			return nil, nil, false
+		}
+		return modifierSegments(
+			modifierSource(e.ArgText, e.Arg),
+			modifierSource(e.Arg2Text, e.Arg2), e.Arg2 != nil), words, true
+	case e.Arg2 != nil && rangeSegmentIsAModifier(e.Arg2):
+		if !reads() {
+			return nil, nil, false
+		}
+		from := &syntax.ParamExpr{Name: e.Name, Op: e.Op, Arg: e.Arg}
+		return modifierSegments(modifierSource(e.Arg2Text, e.Arg2), "", false),
+			sliceElems(words, r.numOf(e.Arg, e, nil), from, r), true
+	}
+	lenWord, mods, split := splitLengthFromModifiers(e.Arg2)
+	if !split || !reads() {
+		return nil, nil, false
+	}
+	from := &syntax.ParamExpr{Name: e.Name, Op: e.Op, Arg: e.Arg, Arg2: lenWord}
+	return mods, sliceElems(words, r.numOf(e.Arg, e, lenWord), from, r), true
 }

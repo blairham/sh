@@ -13395,6 +13395,67 @@ there was no previous substitution (#1198). The byte was never lost from
 the tree, only from the joined text: a protected character is a span of
 its own, so the backslash is written back in front of it.
 
+#### The unbraced spelling, and what a list applies to
+
+Issue #3127. The same list is written straight after an unbraced
+expansion, with no braces at all: `$p:t` is the tail of `$p`, and `$b:q`
+is each element of `$b` quoted. `Dialect.BareParamModifiers` is the
+grammar flag, because the letters decide where the **word** ends — `$p:t`
+is one expansion where it is on and an expansion plus two characters of
+text where it is off, and nothing downstream can tell them apart once the
+spans are cut.
+
+Measured 2026-09-18 from a script file against zsh 5.9.2, and against
+bash 5.3.20, bash 3.2.57, bash as `sh`, ksh93u+, dash and BusyBox ash:
+`$s:q` on `p q` is `p\ q` in zsh and the six characters `p q:q` in every
+one of the other six. So this is one shell's construct and not an axis —
+there is no disagreement to record.
+
+**The braced spelling is a different question, and it is the one above.**
+`${b}:q` leaves the `:q` as text in that shell too, so the flag is about
+the bare form alone and a grammar with `${x:h}` and without `$x:h` is
+coherent.
+
+**The bare form takes the letter and nothing after it**, which is the one
+place the two spellings disagree about the same characters:
+
+    p=/a/bb/c.txt
+    ${p:h2}   /a        the head twice — the count above
+    $p:h2     /a/bb2    the head once, and a literal `2`
+    $p:t2     c.txt2    the same
+    $s:qX     p\ qX     `q`, and a literal `X`
+
+`:s` is the exception and carries its whole substitution: `$p:s/a/Z/x` is
+`/Z/bb/c.txtx`, and a closing delimiter left off takes the rest of the
+**word** rather than the rest of the line.
+
+**A colon that begins no modifier is given back, with no complaint.**
+`$s:zz` is `p q:zz` and `$s:` is `p q:`, where the braced `${s:zz}` is
+refused, named. That is what lets every other use of a colon after an
+expansion go on meaning what it meant.
+
+**A list applies to the fields the expansion has where it stands**, which
+is the ordinary rule about fields and not something a modifier decides.
+Measured with `b=(/a/x.c /b/y.c 'p q')`:
+
+    ${b:t}       x.c y.c 'p q'   three words, a tail each
+    $b:t         x.c y.c 'p q'   the same unbraced
+    "${b[@]:t}"  x.c y.c 'p q'   three still — `[@]` keeps its fields
+    "${b:t}"     y.c p q         one word: joined, then one tail
+    "${b[*]:t}"  y.c p q         the same, which is what `[*]` is for
+
+An offset is still an offset over the list, and a length after it still a
+length: `${b:1}` is the two elements from index one and `${b:1:t}` is the
+tail of each of those, so which reading a range is settles before any
+element is touched.
+
+Why it was worth doing: the shipped `__git_commits` writes
+`sopts+=( $ropt:q )` with `$ropt` empty on the ordinary path. A literal
+`:q` there travels into a `compadd` argument list, and `compadd` stops
+reading options at the first word that is not one — so `-a` was never
+seen and eight words including `-J`, `-default-` and `tags` were offered
+as branch names.
+
 **Quotes inside `${ }` are not a quoting either**, and the same is true of
 a `$`. That shell reads the brace's text raw, so every byte between the
 delimiters is an ordinary character of the pattern. Measured on zsh 5.9.2,

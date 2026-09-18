@@ -26,6 +26,11 @@ func dollarSingleSem(c DollarSingleControlPolicy, u DollarSingleUnknownPolicy, n
 	// that are *about* those two set them themselves and assert both sides.
 	s.DollarSingleHexReadsEveryDigit = No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = No
+	// And the one the octal escape asks, for the same reason: `$'a\400b'`
+	// is a row about the NUL, so it takes the low byte here — three of the
+	// four columns that have `$'…'` do. The test that is *about* this axis
+	// sets it itself and asserts both sides.
+	s.DollarSingleOctalPastAByteDropsTheLastDigit = No
 	// And the three the escape table gave up in #3270, for the same
 	// reason: a row about the NUL reaches `\u0000` on the way to it.
 	s.DollarSingleEscEscape = Yes

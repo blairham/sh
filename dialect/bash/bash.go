@@ -1103,6 +1103,10 @@ func Semantics() interp.Semantics {
 	// moves the loop's, which is the bash-as-`sh` column.
 	s.FunctionNameWhenTheDefinitionRuns = interp.FuncNameFailsTheDefinition
 	s.ArithNameValueRecurses = interp.Yes
+	// And a fixed depth is what stops it: a chain of sixty distinct names
+	// ending in a number is `expression recursion level exceeded` rather
+	// than the number. Measured 2026-09-18 (#3416).
+	s.ArithRecursionBound = interp.ArithRecursionBoundedByDepth
 	// And an unset name found that way is a zero like any other unset name:
 	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
@@ -1763,6 +1767,9 @@ func Semantics() interp.Semantics {
 	// two characters it was written as: `$'\xzz'` is `\xzz` here.
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
+	// An octal escape past 255 keeps the low byte: `$'\401'` is 01 and
+	// `$'\777'` is ff. Measured 2026-09-18 by `od` (#3415).
+	s.DollarSingleOctalPastAByteDropsTheLastDigit = interp.No
 	// And neither `\C` nor `\M` is an escape here: `$'\C-A'` and `$'\M-x'`
 	// are kept as written, where zsh reads them as one byte apiece and ksh93
 	// reads a different escape out of the same spelling (#2345).

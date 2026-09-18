@@ -373,13 +373,14 @@ func Semantics() interp.Semantics {
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
-	// unanswered DollarSingleEscEscape, DollarSingleQuestionEscape and
-	// DollarSingleUnicodeEscapes: dash has no `$'…'` at all, so the `$` is an
-	// ordinary character and what follows it is an ordinary quoted string —
-	// measured 2026-09-16, `printf '%s' $'\e'` writes `$` then `\e`, three
-	// bytes, where every other column writes one. The five other axes of that
-	// construct are unanswered here for the same reason and have been since
-	// the dialect was written (#3270).
+	// unanswered DollarSingleEscEscape, DollarSingleQuestionEscape,
+	// DollarSingleUnicodeEscapes and
+	// DollarSingleOctalPastAByteDropsTheLastDigit: dash has no `$'…'` at all,
+	// so the `$` is an ordinary character and what follows it is an ordinary
+	// quoted string — measured 2026-09-16, `printf '%s' $'\e'` writes `$` then
+	// `\e`, three bytes, where every other column writes one. The six other
+	// axes of that construct are unanswered here for the same reason and have
+	// been since the dialect was written (#3270, #3415).
 	// unanswered ReplacementAnchors: dash has no span replacement at all, so
 	// there is no `/` for an anchor to stand after. Measured 2026-09-16 from
 	// a script file, `v=abcabc; printf '%s' "${v/b/X}"` is `Bad
@@ -404,6 +405,12 @@ func Semantics() interp.Semantics {
 	// unanswered TraceElementSubscriptIsEvaluated: nor a subscript. `a[1]=v`
 	// is an ordinary word here, assigned to a variable literally named
 	// `a[1]`, so there is nothing for the trace to resolve.
+	// unanswered ArithRecursionBound: nothing here is ever bounded, because
+	// nothing here recurses. ArithNameValueRecurses is No, so a value that is
+	// no numeral is refused where the other columns read it again as an
+	// expression — measured 2026-09-18, `x=x; echo $(( x ))` is `Illegal
+	// number: x` at 2 and the chain the axis is about cannot be built at all
+	// (#3416).
 	// unanswered ArithFloatOverflowIsZero: dash has no floats, so `1e400` is
 	// not a number out of range but a word its arithmetic cannot read at
 	// all. Measured 2026-09-14, `$((1e400))` is `arithmetic expression:

@@ -277,6 +277,7 @@ dash  ArithIntegerOperatorRefusesFloat
 dash  ArithNegativeExponentIsError
 dash  ArithNounsetRefusalIsFatal
 dash  ArithRecursedNameMustBeSet
+dash  ArithRecursionBound
 dash  ArithSubscriptNameMustBeSet
 dash  ArithSubscriptSkippedWhenNameUnset
 dash  ArithWholeArraySubscriptIsReportedAsBad
@@ -344,6 +345,7 @@ dash  DollarSingleDigitlessEscapeIsAZeroByte
 dash  DollarSingleEscEscape
 dash  DollarSingleHexReadsEveryDigit
 dash  DollarSingleNul
+dash  DollarSingleOctalPastAByteDropsTheLastDigit
 dash  DollarSingleQuestionEscape
 dash  DollarSingleUnicodeEscapes
 dash  DollarSingleUnknownEscape

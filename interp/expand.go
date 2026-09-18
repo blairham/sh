@@ -6047,7 +6047,7 @@ func (r *Runner) expandDollarSingle(s string) string {
 			i += 2 + used
 		case c >= '0' && c <= '7':
 			n, used := scanBase(s[i+1:], 8, 3)
-			if !r.writeDecodedByte(&b, byte(n)) {
+			if !r.writeDecodedByte(&b, r.octalEscapeByte(n)) {
 				return b.String()
 			}
 			i += 1 + used
@@ -6371,6 +6371,28 @@ func (r *Runner) writeDecodedByte(b *strings.Builder, c byte) bool {
 	}
 	b.WriteByte(c)
 	return true
+}
+
+// octalEscapeByte is the byte a `$'\NNN'` comes to, where the two readings
+// of an escape whose value is past 255 part — see
+// Semantics.DollarSingleOctalPastAByteDropsTheLastDigit.
+//
+// The digits are already scanned when this is reached, so nothing here moves
+// where the escape ends: the question is only which byte the value it read
+// stands for. Dividing by eight is the first two digits' value, since the
+// third contributed the low three bits and nothing else.
+func (r *Runner) octalEscapeByte(n int) byte {
+	if n <= 0xff {
+		// Every column agrees on a value that fits, so a `$'\101'` puts no
+		// question to the dialect and an unanswered one is never refused
+		// for an escape that could not have split the panel.
+		return byte(n)
+	}
+	if r.ask(r.sem().DollarSingleOctalPastAByteDropsTheLastDigit,
+		`$'\NNN': an octal escape whose value is past a byte`) {
+		return byte(n / 8)
+	}
+	return byte(n)
 }
 
 // dollarSingleHexEveryDigit is whether a `\x` inside `$'…'` takes every

@@ -1127,6 +1127,10 @@ func Semantics() interp.Semantics {
 	// rather than about the preset; see #1629 and the next line, which is
 	// the difference it was describing.
 	s.ArithNameValueRecurses = interp.Yes
+	// And a fixed depth is what stops it, as in bash: a chain of sixty
+	// distinct names ending in a number is `recursion too deep`. Measured
+	// 2026-09-18 (#3416).
+	s.ArithRecursionBound = interp.ArithRecursionBoundedByDepth
 	// And an unset name reached that way is a refusal rather than a zero:
 	// `x=abc; $((x+1))` is `abc: parameter not set` at status 1 and the
 	// script stops, with nounset off. A name written in the expression
@@ -2100,6 +2104,9 @@ func Semantics() interp.Semantics {
 	// a zero byte, which this shell's truncation then makes into nothing.
 	s.DollarSingleHexReadsEveryDigit = interp.Yes
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
+	// An octal escape past 255 keeps the low byte, as in bash: `$'\401'` is
+	// 01. Measured 2026-09-18 by `od` (#3415).
+	s.DollarSingleOctalPastAByteDropsTheLastDigit = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No

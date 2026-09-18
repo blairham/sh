@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -1757,6 +1758,12 @@ func (r *Runner) arithValueOf(name string) (arithNum, error) {
 		// was reached.
 		r.arithValueTopName = name
 	}
+	// The chain the cycle reading walks. Pushed for every name and not only
+	// for one that recurses, because a name is not known to be on a chain
+	// until something below it names it again — and popped on every way out,
+	// so a sibling operand starts from where this one did.
+	r.arithValueNames = append(r.arithValueNames, name)
+	defer func() { r.arithValueNames = r.arithValueNames[:len(r.arithValueNames)-1] }()
 	value, ok := r.getVar(name)
 	if v, iset, element := r.namerefReadsAnElement(name); element {
 		// A reference aimed at an **element** — `typeset -n b="a[0]"` — is
@@ -1874,8 +1881,46 @@ func (r *Runner) arithNounsetRefusal(name string) (arithNum, error, bool) {
 // ksh93 name the one it stopped on and zsh the one the expression was written
 // with, which are the same name only when the value points at itself. See
 // Diagnostics.ArithRecursionBlamesTheWrittenName.
+//
+// **What the bound counts is itself a divergence**, which is why there are two
+// conditions below and not one. Three columns count frames; one follows the
+// chain and looks for a name that has come back on itself, so a chain of three
+// hundred distinct names is a value there and a fatal error in the other three.
+// See Semantics.ArithRecursionBound.
 func (r *Runner) arithRecursionExceeded(blamed string) (arithNum, error, bool) {
-	if r.arithValueDepth <= 32 {
+	// A name already on the chain is a loop; a chain past the frame count is
+	// deep. Neither puts a question to the dialect, so an ordinary `$(( a+b ))`
+	// — where every name is looked at and none recurses — never asks.
+	loop := r.arithValueDepth > 0 && slices.Contains(r.arithValueNames, blamed)
+	deep := r.arithValueDepth > 32
+	if !loop && !deep {
+		return intNum(0), nil, false
+	}
+	if r.arithRecursionBound() == ArithRecursionBoundedByACycle {
+		if !loop {
+			// Deep and going somewhere. The chain is followed, which is the
+			// whole of the other reading.
+			return intNum(0), nil, false
+		}
+		// The sentence names nothing in this column, so nothing is blamed:
+		// `expression recursion loop detected` and no token, measured
+		// 2026-09-18 against every one of the four loop shapes.
+		return intNum(0), arithError{
+			// The empty name is passed rather than left out: a dialect whose
+			// sentence carries a verb must produce an empty subject rather
+			// than fmt's own complaint about a missing argument.
+			msg: Wording(r.diag().ArithRecursionLimit, "expression nested too deeply", ""),
+		}, true
+	}
+	if !deep && r.sem().ArithRecursionBound == ArithRecursionBoundedByDepth {
+		// A loop that has not yet reached the frame count. The shells that
+		// count frames reach it a few frames later and blame the name they
+		// stopped on, so nothing is refused here — which is what keeps
+		// `a=b; b=a` blaming `b` rather than the name the cycle closed on.
+		//
+		// An axis with **no answer** does not take this road: it stops at the
+		// first sign of either bound, so the complaint arithRecursionBound has
+		// just written is written once rather than once per frame.
 		return intNum(0), nil, false
 	}
 	if r.diag().ArithRecursionBlamesTheWrittenName && r.arithValueTopName != "" {

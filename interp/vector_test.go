@@ -79,6 +79,13 @@ func testSemantics() Semantics {
 	s.TraceArrayLiteralShowsTheExpandedElements = No
 	s.TraceElementSubscriptIsEvaluated = No
 
+	// What stops a name resolved through its own value: a frame count, which
+	// is three of the four columns that recurse at all. A suite that writes
+	// `a=b; b=a` on its way to something else needs an answer rather than a
+	// refusal; the suite that is *about* the bound sets both values and
+	// asserts on each — see interp/arithrecursionbound_test.go (#3416).
+	s.ArithRecursionBound = ArithRecursionBoundedByDepth
+
 	// The hexadecimal escape's two readings. `$'a\x1bb'` has three digits
 	// after the `\x`, so a snippet writing a control character that way
 	// reaches the first of them on the way to something else — the

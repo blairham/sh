@@ -3268,6 +3268,16 @@ type Runner struct {
 	// itself, as against the ones reached through its value. Only the
 	// recursion bound reads it, and only one dialect blames that name.
 	arithValueTopName string
+	// arithValueNames is the chain of names being resolved through their own
+	// values right now, innermost last, for the dialect whose bound is a
+	// *cycle* rather than a depth — see Semantics.ArithRecursionBound. A name
+	// already in it is a loop; a name that is not is followed however long
+	// the chain has grown.
+	//
+	// A slice rather than a set because the chains this reaches are a handful
+	// of names deep in every case a script writes, and a slice needs no
+	// allocation at all for the overwhelmingly common one: no recursion.
+	arithValueNames []string
 	// indirection counts how many levels of *text being read again* this
 	// runner is inside — an `eval`, a sourced file, a command substitution,
 	// or a trap body other than EXIT's. One dialect repeats its trace

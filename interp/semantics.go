@@ -1157,6 +1157,44 @@ type Semantics struct {
 	// character under one reading and a truncated word under the other,
 	// with nothing said about it.
 	DollarSingleHexReadsEveryDigit Answer
+	// DollarSingleOctalPastAByteDropsTheLastDigit is what a three-digit octal
+	// escape inside `$'…'` comes to when its value is past 255: the *first
+	// two digits'* byte, with the third read and thrown away, rather than the
+	// low byte of the whole. BusyBox ash alone.
+	//
+	// The third digit is consumed either way, which is what makes the two
+	// readings a conflict rather than a difference in how far the escape
+	// runs: `$'\4001'` is `20 31` under one and `31` under the other — a
+	// space and a `1`, or a `1` alone — and the text after the escape starts
+	// in the same place in both.
+	//
+	// Measured 2026-09-18 by `od -An -tx1` of `printf '%s' $'…'`, under `env
+	// -i PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`, a script file.
+	// BusyBox v1.37.0 in the digest-pinned Alpine image internal/oracle
+	// reaches; bash 5.3.20, ksh93u+ and zsh 5.9.2 on macOS arm64:
+	//
+	//	            BusyBox ash   bash 5.3   ksh93   zsh 5.9.2
+	//	$'\377'     ff            ff         ff      ff
+	//	$'\400'     20            —          —       00
+	//	$'\401'     20            01         01      01
+	//	$'\477'     27            3f         3f      3f
+	//	$'\600'     30            80         80      80
+	//	$'\777'     3f            ff         ff      ff
+	//	$'\4001'    20 31         31         31      00 31
+	//	$'\1234'    53 34         53 34      53 34   53 34
+	//
+	// The first row and the last are the controls: an escape whose value fits
+	// in a byte, and one whose fourth digit is text, are the same everywhere,
+	// so this is the overflow and not the scan. What `\400` itself writes in
+	// the three columns that keep the low byte is a zero byte, so what is
+	// printed there is DollarSingleNul's answer and not this one — which is
+	// why `\401` rather than `\400` is the row that parts them.
+	//
+	// dash has no `$'…'` at all to ask it of.
+	//
+	// Asked only where a three-digit octal escape's value is past 255, so
+	// `$'\377'` and every shorter run put no question to the dialect.
+	DollarSingleOctalPastAByteDropsTheLastDigit Answer
 	// DollarSingleDigitlessEscapeIsAZeroByte makes `\x`, `\u` and `\U`
 	// with no hexadecimal digit after them a zero byte, rather than the two
 	// characters they were written as.
@@ -1867,6 +1905,42 @@ type Semantics struct {
 	// whose variable held a stale name got a plausible number where the real
 	// shell had stopped.
 	ArithRecursedNameMustBeSet Answer
+	// ArithRecursionBound is what stops a name being resolved through its own
+	// value, and the panel gives it two readings that are not degrees of one
+	// another: a **depth**, which refuses a long chain of distinct names
+	// whether or not it ends, and a **cycle**, which follows a chain as far
+	// as it goes and refuses only a name that comes back on itself.
+	//
+	// Asked only where ArithNameValueRecurses says the lookup happens at all,
+	// so dash never reaches it.
+	//
+	// Measured 2026-09-18 — BusyBox v1.37.0 in the digest-pinned Alpine image
+	// internal/oracle reaches, under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// with stdin `/dev/null`, a script file; bash 5.3.20, ksh93u+ and zsh
+	// 5.9.2 on macOS arm64 — with a chain built by
+	// `eval "v$i=v$((i+1))"` and terminated at `v60=7`:
+	//
+	//	row                   depth columns        BusyBox ash
+	//	a chain of 60         refused, status 2    7, status 0
+	//	a chain of 300        refused, status 2    7, status 0
+	//	x=x; $(( x ))         refused, status 2    refused, status 2
+	//	a=b; b=a; $(( a+1 ))  refused, status 2    refused, status 2
+	//
+	// The first two rows are what part them: a chain that *ends* is a value
+	// in the shell that looks for a cycle and a fatal error in the three that
+	// count frames. The last two are the control — both readings refuse a
+	// real loop, and only the sentence differs there, which is
+	// Diagnostics.ArithRecursionLimit's.
+	//
+	// The cycle reading names nothing: `expression recursion loop detected`
+	// carries no name where the depth columns each blame one, so
+	// ArithRecursionBlamesTheWrittenName has nothing to choose between.
+	//
+	// Wrong in the quiet direction when it is answered wrongly: a chain a
+	// script builds out of indirect names is a number under one reading and a
+	// command that stops the script under the other, with no shared answer
+	// in between (#3416).
+	ArithRecursionBound ArithRecursionBoundPolicy
 
 	// ArithSubscriptNameMustBeSet refuses an unset name written **inside an
 	// array subscript** in arithmetic, where the same name written outside
@@ -22303,6 +22377,48 @@ func (r *Runner) dollarSingleControl() DollarSingleControlPolicy {
 	if p == DollarSingleControlUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered(`$'\c'`)))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// ArithRecursionBoundPolicy is what stops a name being resolved through its
+// own value — see Semantics.ArithRecursionBound for the two measured columns.
+type ArithRecursionBoundPolicy int
+
+const (
+	// ArithRecursionBoundUnspecified is no answer, and is refused like any
+	// other.
+	ArithRecursionBoundUnspecified ArithRecursionBoundPolicy = iota
+	// ArithRecursionBoundedByDepth counts the frames and refuses past a
+	// fixed one, so a chain of distinct names that does end is refused too.
+	// bash, ksh93 and zsh.
+	ArithRecursionBoundedByDepth
+	// ArithRecursionBoundedByACycle follows a chain as far as it leads and
+	// refuses only a name that is already being resolved. BusyBox ash, where
+	// a chain of three hundred names is a value and `x=x` is
+	// `expression recursion loop detected`.
+	ArithRecursionBoundedByACycle
+)
+
+func (p ArithRecursionBoundPolicy) String() string {
+	switch p {
+	case ArithRecursionBoundedByDepth:
+		return "a depth"
+	case ArithRecursionBoundedByACycle:
+		return "a cycle"
+	}
+	return "unspecified"
+}
+
+// arithRecursionBound resolves the axis, and only where a value is really
+// being read again as an expression.
+func (r *Runner) arithRecursionBound() ArithRecursionBoundPolicy {
+	p := r.sem().ArithRecursionBound
+	if p == ArithRecursionBoundUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a name resolved through its own value")))
 		r.status = 2
 		r.unspecified = true
 	}

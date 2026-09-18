@@ -78,9 +78,17 @@ func Dialect() syntax.Dialect {
 	// written still reaches the delimiter, as in dash; one that joined after
 	// text does not (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterAfterALeadingContinuation
-	// `time echo hi` prints the three-row summary this shell words its own
-	// way, so the keyword is here rather than the external.
-	d.TimeKeyword = true
+	// There is no `time` keyword here, and the thing that made it look like
+	// one is a program. `time echo hi` prints a three-row summary because
+	// `/usr/bin/time` is a BusyBox applet on this image, so that line runs an
+	// ordinary command — and `type time` says so, answering `time is
+	// /usr/bin/time` rather than naming a keyword. The discriminator is a
+	// compound command, which only a keyword can take: measured 2026-09-18 in
+	// the pinned image, `time for i in 1; do :; done` is `syntax error:
+	// unexpected "do"` and `time ( : )` is `syntax error: unexpected word
+	// (expecting ")")`, both at 2. This preset had the flag set from the
+	// start, inherited rather than measured (#2982).
+	d.TimeKeyword = false
 	// A name followed by `(` is a function definition, whatever comes next:
 	// `f(x) { :; }` is refused for the word rather than for the parenthesis,
 	// which is what decides the token a malformed definition is blamed on.
@@ -1625,6 +1633,12 @@ func Semantics() interp.Semantics {
 	// (#3248's class). Measured 2026-09-16 in the pinned alpine image,
 	// BusyBox v1.37.0, both depths.
 	s.ArithNameValueRecurses = interp.Yes
+	// And what stops it is a *cycle* rather than a depth: a chain of sixty
+	// names ending in a number is that number here, and a chain of three
+	// hundred is too, where the other three columns refuse both. Only a name
+	// that comes back on itself is refused, and the sentence names nothing.
+	// Measured 2026-09-18 in the pinned image (#3416).
+	s.ArithRecursionBound = interp.ArithRecursionBoundedByACycle
 	// And a name reached that way which is unset is a zero, as it is in bash
 	// and zsh; ksh93 refuses it with the `set -u` sentence. Left unanswered
 	// when the recursion above was answered, so every such expansion was
@@ -1728,6 +1742,11 @@ func Semantics() interp.Semantics {
 	// (#554).
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
+	// A three-digit octal escape past 255 is the first two digits' byte here
+	// and the third digit is dropped: `$'\401'` is a space rather than 01,
+	// and `$'\4001'` is a space then a `1`. Measured 2026-09-18 by `od`
+	// (#3415).
+	s.DollarSingleOctalPastAByteDropsTheLastDigit = interp.Yes
 
 	// The ones the sweep reached and this file deliberately leaves unanswered,
 	// each with what BusyBox answered and what stands in the way of writing
@@ -1955,6 +1974,15 @@ func Diagnostics() interp.Diagnostics {
 		// alike: `/t.sh: line 1: divide by zero`, and the script ends at 2
 		// (#2801).
 		DivisionByZero: "divide by zero",
+		// And the second reason that is not `arithmetic syntax error`. A name
+		// resolved through its own value is refused only where the chain comes
+		// back on itself — Semantics.ArithRecursionBound — and the sentence
+		// names nothing, where the three columns that count frames each blame
+		// a name. Measured 2026-09-18 in the pinned image, `x=x; echo $((x))`,
+		// `a=b; b=a; echo $((a+1))` and `x=x; echo $((0 && x))` alike:
+		// `/t.sh: line 1: expression recursion loop detected`, and the script
+		// ends at 2 (#3416).
+		ArithRecursionLimit: "expression recursion loop detected",
 
 		// The command-resolution family. Neither a name nor a line in front
 		// of the `not found`, which is the shape ksh93 uses too.

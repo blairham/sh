@@ -1911,6 +1911,10 @@ func Semantics() interp.Semantics {
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
+	// And a fixed depth is what stops it: a chain of sixty distinct names
+	// ending in a number is `math recursion limit exceeded`. Measured
+	// 2026-09-18 (#3416).
+	s.ArithRecursionBound = interp.ArithRecursionBoundedByDepth
 	// And an unset name found that way is a zero like any other unset name:
 	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
@@ -2364,6 +2368,10 @@ func Semantics() interp.Semantics {
 	// bytes.
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
+	// An octal escape past 255 keeps the low byte: `$'\401'` is 01, and
+	// `$'\400'` is the zero byte this shell holds as a character of the
+	// text. Measured 2026-09-18 by `od` (#3415).
+	s.DollarSingleOctalPastAByteDropsTheLastDigit = interp.No
 	// `\C-X` is a control character and `\M-X` the same byte with the high
 	// bit set, the dash optional in both and either able to take the other as
 	// its argument. ksh93 writes `\C-A` too and means `m` then `A` by it, so

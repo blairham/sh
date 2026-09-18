@@ -6,6 +6,7 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -375,5 +376,43 @@ func TestWithoutTheLetterTheWordIsAnInvalidOption(t *testing.T) {
 	if bytes.Contains([]byte(errs), []byte("`set -A")) {
 		t.Errorf("a shell without the letter was asked one of the letter's own "+
 			"axes: %q", errs)
+	}
+}
+
+// The letter welds its name out of the rest of its word where there is any,
+// and falls back to the next word where there is not. It was read as the
+// *final* letter of a bundle alone, so `set -As a z y` — the array `s` — went
+// to the letter table and came back an unknown option, taking the line with
+// it (#3412).
+//
+// Core rather than an axis: both columns that have the letter at all answer
+// every spelling of it alike, so there is no disagreement to record.
+func TestTheArrayLetterWeldsItsNameFromTheRestOfTheWord(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`set -As a z y; echo "a=[${a[*]}] s=[${s[*]}] [$*]"`, "a=[] s=[a z y] []"},
+		{`set -Aarr p q; echo "[${arr[*]}] [$*]"`, "[p q] []"},
+		{`set +As a z y; echo "[${a[*]}] [${s[*]}] [$*]"`, "[] [a z y] []"},
+		// The letters in front of the `A` still apply, and the ones behind
+		// it are the name rather than letters.
+		{`set -eA b q; echo "[${b[*]}] [$*]"`, "[q] []"},
+		// The spaced spelling, which is the control: unchanged by the weld.
+		{`set -A a p q; echo "[${a[*]}] [$*]"`, "[p q] []"},
+	} {
+		out, errs, st := setArrayRun(t, c.src, nil, Diagnostics{})
+		if errs != "" {
+			t.Errorf("%s: stderr %q, want none", c.src, errs)
+		}
+		if strings.TrimSpace(out) != c.want || st != 0 {
+			t.Errorf("%s: got %q (status %d), want %q", c.src, out, st, c.want)
+		}
+	}
+}
+
+// A bad letter in front of the welded one is still a bad letter, which is
+// what says the weld starts at the `A` and not at the dash.
+func TestABadLetterInFrontOfTheWeldedArrayLetterIsStillRefused(t *testing.T) {
+	_, errs, _ := setArrayRun(t, `set -ZAb q; echo "[${b[*]}]"`, nil, Diagnostics{})
+	if !strings.Contains(errs, "Z") {
+		t.Errorf("stderr %q, want the unknown letter in front of the weld refused", errs)
 	}
 }

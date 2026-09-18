@@ -2435,6 +2435,9 @@ func Semantics() interp.Semantics {
 	// A negative subscript past the first element is refused here too, and
 	// the refusal ends the script.
 	s.NegativeSubscriptPastTheStartInserts = interp.No
+	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartEndsTheScript
+	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.Yes
+	s.OperandSubscriptQuoting = interp.OperandSubscriptBackslashQuotes
 	// `a[1]=(p q)` makes the element an array of its own — the array keeps
 	// its length and the element stops being a string. The one dialect that
 	// does; bash refuses the line and zsh splices the words in.
@@ -3122,8 +3125,9 @@ func Diagnostics() interp.Diagnostics {
 		KilledCommandNotice: "%[1]d: %[2]s",
 		ParamNull:           "parameter null",
 		// The array alone is named, not the subscript that was written.
-		BadArraySubscript:         "%[1]s: subscript out of range",
-		CannotConvertTableToArray: "%[2]s: cannot change associative array %[1]s to index array",
+		BadArraySubscript:                  "%[1]s: subscript out of range",
+		SubscriptBeforeTheFirstElementRead: "%[1]s: subscript out of range",
+		CannotConvertTableToArray:          "%[2]s: cannot change associative array %[1]s to index array",
 		// The subscript is the verb, not the name — see
 		// Semantics.WholeArraySubscriptAssigningAnArray.
 		InvalidSubscriptInAssignment: "%s: invalid subscript in assignment",

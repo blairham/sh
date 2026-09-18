@@ -438,6 +438,18 @@ func Semantics() interp.Semantics {
 	// and from a script file alike — the parenthesis is refused before any
 	// subscript is read, which is the same wall #2250 records for the
 	// neighboring array axes (#1770).
+	// unanswered OperandSubscriptQuoting: there are no arrays, so no operand
+	// of this shell's carries a subscript for a quote to be written inside.
+	// Measured 2026-09-18, `unset "a[x]"` is `unset: a[x]: bad variable name`
+	// at 2 — the brackets are part of a name and are refused as one, quoted
+	// or not (#3049).
+	// unanswered SubscriptBeforeTheFirstElementRead and
+	// unanswered SubscriptBeforeTheFirstElementNeedsAnElement: there is no
+	// array to count back through, and no subscript on the right of a name
+	// either. Measured 2026-09-18, `a=(x y z)` is `Syntax error: "("
+	// unexpected` at 2 and `a=x; echo "${a[-1]}"` is `Bad substitution` at 2,
+	// so the brackets are refused before anything asks where they reach
+	// (#3406).
 	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: there is no
 	// declaration utility and no array literal to be one's operand. Measured
 	// 2026-09-12, `readonly q=1; typeset -g q=(b)` is `Syntax error: "("

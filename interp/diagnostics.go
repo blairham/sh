@@ -2453,6 +2453,20 @@ type Diagnostics struct {
 	// to, where ksh93 and zsh name the array alone.
 	BadArraySubscript string
 
+	// SubscriptBeforeTheFirstElementRead is what a *read* says about the same
+	// reach — `${a[-4]}` on three elements — in the two columns that say
+	// anything. Two verbs: the name, and the subscript as it evaluated.
+	//
+	// A field of its own rather than BadArraySubscript read a second time,
+	// because one of the two columns words the read and the write
+	// differently: bash's store is `a[-4]: bad array subscript` and its read
+	// is `a: bad array subscript`, the brackets gone. ksh93 writes `a:
+	// subscript out of range` at both.
+	//
+	// Only a dialect whose Semantics.SubscriptBeforeTheFirstElementRead says
+	// something has anything to put here.
+	SubscriptBeforeTheFirstElementRead string
+
 	// EmptyAssociativeKeyRead is what a *read* of a keyed table says when the
 	// key came out empty. One verb: the name, without the subscript — bash
 	// writes `m: bad array subscript` here, where the same column's *store*

@@ -944,19 +944,35 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 			}
 			continue
 		}
-		// The array letter, which takes the *next word* as a name — the
-		// same shape `-o` has, and the only other one in this builtin. The
-		// letters in front of it still apply: `set -eA nn 1 2` is errexit as
-		// well as an assignment, measured in both shells that have it.
-		if letters, ok := strings.CutSuffix(a[1:], "A"); ok && r.setArrayLetter() {
+		// The array letter, which welds its name out of the rest of its word
+		// and falls back to the *next word* — the same shape `-o` has, and
+		// the only other one in this builtin. The letters in front of it
+		// still apply: `set -eA nn 1 2` is errexit as well as an assignment,
+		// and `set -xAv p q` turns tracing on and fills `v`, measured in both
+		// shells that have the letter.
+		//
+		// The weld is core rather than an axis because the two columns that
+		// have `-A` at all agree on every spelling of it: measured
+		// 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin`,
+		// ksh93u+ 2012-08-01 and zsh 5.9.2 both read `set -As a z y` as the
+		// array `s` holding `a z y`, `set -Aarr p q` as `arr` holding `p q`,
+		// `set -Ae c q` as `e` and not errexit, and `set +As a z y` as the
+		// plus form of the same. Reading only the *final* `A` of a bundle
+		// sent every welded spelling to the letter table, where it was
+		// refused as an unknown option and took the line with it (#3412).
+		if idx := strings.IndexByte(a[1:], 'A'); idx >= 0 && r.setArrayLetter() {
+			letters, welded := a[1:1+idx], a[2+idx:]
 			if !r.setLetters(letters, on) {
 				return r.setOptionFailure()
 			}
-			if i+1 >= len(args) {
-				return r.setArrayWithoutAName(on)
+			if welded == "" {
+				if i+1 >= len(args) {
+					return r.setArrayWithoutAName(on)
+				}
+				i++
+				welded = args[i]
 			}
-			i++
-			arrayName, arrayFront, haveArray = args[i], !on, true
+			arrayName, arrayFront, haveArray = welded, !on, true
 			cont := r.ask(r.sem().SetArrayOptionsContinuePastTheName,
 				"the words after `set -A name` read as options rather than as values")
 			if r.unspecified {
@@ -1233,8 +1249,14 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 					return
 				}
 			}
-		} else if cut, ok := strings.CutSuffix(letters, "A"); ok && r.setArrayLetter() {
-			letters, stop = cut, true
+		} else if idx := strings.IndexByte(letters, 'A'); idx >= 0 && r.setArrayLetter() {
+			// Cut the way the applying loop cuts it, which is this pass's
+			// whole rule: the letter welds its name out of the rest of its
+			// word, so nothing behind the `A` is a letter to refuse. Reading
+			// only a trailing `A` made every welded spelling a bundle of
+			// unknown letters here, and `set -As a z y` was refused before
+			// the applying loop ever saw it (#3412).
+			letters, stop = letters[:idx], true
 		}
 		for _, opt := range letters {
 			if !r.hasSetLetter(opt) {
@@ -3324,11 +3346,11 @@ func firstOptionLetter(operand string) string {
 // syntax error`, which is nobody's (#1380).
 func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 	open := strings.IndexByte(operand, '[')
-	if open <= 0 || !subscriptBracketsBalance(operand[open:]) {
+	if open <= 0 || !r.operandBracketsBalance(operand[open:]) {
 		return "", "", false
 	}
 	base := operand[:open]
-	sub := subscriptOperandText(operand[open+1 : len(operand)-1])
+	sub := subscriptOperandText(r.operandSubscriptUnquoted(operand[open+1 : len(operand)-1]))
 	return base, r.operandSubscriptTilde(base, sub), true
 }
 

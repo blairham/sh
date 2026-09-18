@@ -2211,6 +2211,9 @@ func Semantics() interp.Semantics {
 	// refused rather than placed in front of it, and the refusal ends the
 	// script. Measured in both bash builds.
 	s.NegativeSubscriptPastTheStartInserts = interp.No
+	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartIsReported
+	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.No
+	s.OperandSubscriptQuoting = interp.OperandSubscriptEveryQuote
 	// `declare a=1; declare a+=2` is `12`: a declaration's operand carries
 	// the append operator here, where the other three refuse the name `a+`.
 	s.DeclarationTakesAnAppendOperand = interp.Yes
@@ -2884,9 +2887,10 @@ func Diagnostics() interp.Diagnostics {
 		NumericArgument:               "%[1]s: %[2]s: numeric argument required",
 		// A subscript before the first element, named as it was written:
 		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
-		BadArraySubscript:         "%[1]s[%[2]s]: bad array subscript",
-		CannotConvertTableToArray: "%[2]s: %[1]s: cannot convert associative to indexed array",
-		CannotConvertArrayToTable: "%[2]s: %[1]s: cannot convert indexed to associative array",
+		BadArraySubscript:                  "%[1]s[%[2]s]: bad array subscript",
+		SubscriptBeforeTheFirstElementRead: "%[1]s: bad array subscript",
+		CannotConvertTableToArray:          "%[2]s: %[1]s: cannot convert associative to indexed array",
+		CannotConvertArrayToTable:          "%[2]s: %[1]s: cannot convert indexed to associative array",
 		// One verb rather than two: the literal form's complaint comes from
 		// the assignment and names no builtin. See
 		// Semantics.TableUnderAnArrayLiteralDeclaration.

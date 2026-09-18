@@ -2778,6 +2778,9 @@ func Semantics() interp.Semantics {
 	// shell refuses is `a[0]`, which is below its first element rather than
 	// counting back from the last.
 	s.NegativeSubscriptPastTheStartInserts = interp.Yes
+	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartIsNothing
+	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.No
+	s.OperandSubscriptQuoting = interp.OperandSubscriptQuotesNothing
 	// `not valid in this context: a+` — the append operator is not a
 	// declaration operand here.
 	s.DeclarationTakesAnAppendOperand = interp.No

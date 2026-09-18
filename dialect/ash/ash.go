@@ -440,6 +440,18 @@ func Semantics() interp.Semantics {
 	// never happens. `export` over a `readonly` name — the only attribute
 	// this shell does have — is taken at 0, which is a different question
 	// and not this one (#2561).
+	// unanswered OperandSubscriptQuoting: there are no arrays, so no operand
+	// of this shell's carries a subscript for a quote to be written inside.
+	// Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image, `unset
+	// "a[x]"` is `unset: line 1: a[x]: bad variable name` at 2 — the brackets
+	// are part of a name and are refused as one, quoted or not (#3049).
+	// unanswered SubscriptBeforeTheFirstElementRead and
+	// unanswered SubscriptBeforeTheFirstElementNeedsAnElement: there is no
+	// array to count back through, and no subscript on the right of a name
+	// either. Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image,
+	// `a=(x y z)` is `syntax error: unexpected "("` at 2 and `a=x; echo
+	// "${a[-1]}"` is `syntax error: bad substitution` at 2, so the brackets
+	// are refused before anything asks where they reach (#3406).
 	// unanswered ArrayLiteralOperandRetypesAFrozenScalar: there is no array
 	// literal to be the operand. Measured 2026-09-13 in the pinned image,
 	// `q=(a b)` is `syntax error: unexpected "("`, so the shell refuses the

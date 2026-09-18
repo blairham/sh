@@ -66,6 +66,13 @@ func permissive() Semantics {
 	// see exportedcompound_test.go (#1380).
 	s.ExportedCompoundReachesAChildAsItsFirstValue = No
 	s.SubscriptedOperandCarriesTheAttributes = Yes
+	// The reach a negative subscript makes past an array's first element, at
+	// the silent reading — which is what every suite here counting off the
+	// end of an array on the way to something else was written against. The
+	// suite that is *about* the reach answers all three itself; see
+	// interp/subscriptbeforestart_test.go (#3406).
+	s.SubscriptBeforeTheFirstElementRead = SubscriptBeforeStartIsNothing
+	s.SubscriptBeforeTheFirstElementNeedsAnElement = No
 	// What a traced assignment shows of its own elements and its subscript,
 	// at bash's answers — the words as written, which is what every suite
 	// here that merely traces an array on its way to something else expects.

@@ -1525,6 +1525,23 @@ func scanParamName(s string, dot bool) (name, rest string) {
 // An unterminated quote returns -1, the same as an unclosed bracket: there is
 // no closing `]` in what is left, and the caller's answer to that is already
 // to leave the brackets alone.
+// SubscriptClosingBracket is where the `]` that closes a subscript stands, counting from
+// the `[` the text starts with, or -1 where there is none.
+//
+// Exported for the same reason SubscriptComma and SubscriptExpressionEnd are:
+// the question is asked in the parser, over source, and at the run, over the
+// **string** a builtin's operand carries — `unset "a['x]y']"`, where the
+// quotes reached the builtin because the shell's own quoting had already been
+// taken off. Two copies of the scan is two answers to one question, and this
+// family has grown a second helper that omitted the first one's fix before.
+//
+// Which quoting holds a `]` back is the caller's to supply: the parser reads
+// Dialect.SubscriptQuoteProtectsTheClosingBracket, and the builtin's operand
+// reads an answer of its own, because the panel does not answer the two alike.
+func SubscriptClosingBracket(s string, quoting SubscriptQuoting) int {
+	return closingBracket(s, quoting)
+}
+
 func closingBracket(s string, quoting SubscriptQuoting) int {
 	depth := 0
 	for i := 0; i < len(s); i++ {

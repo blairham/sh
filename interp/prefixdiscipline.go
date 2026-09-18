@@ -42,6 +42,97 @@ import (
 // Semantics.DisciplineFunctionIsAVariableHook — so a dialect without one has
 // no hook to fire and every line below is inert in it.
 
+// prefixChildForTheDisciplines is the throwaway shell an **external**
+// command's assignment prefix stores into, or nil where there is nothing for
+// one to be about.
+//
+// The rule interp/prefixdiscipline.go records — the hook fires where the
+// value is actually stored — leaves one row unexplained: an external command's
+// prefix fires a hook in ksh93u+ and fired none here, because this shell hands
+// the child an environment entry rather than making a store at all. The reason
+// it fires there is that the store **is** made, in the process that has just
+// forked. Measured 2026-09-18 from a script file under `env -i` with a scratch
+// HOME:
+//
+//	s=5 /usr/bin/env             SET[5], and the child is shown s=5
+//	s=5 /bin/nosuchfile          SET[5], then `not found`
+//	s=5 nosuchcmd99              SET[5], then `not found`
+//	s+=5 /usr/bin/env            APP[5], and the child is shown s=base5
+//	function s.set { .sh.value=REPLACED; }
+//	                             the child is shown s=REPLACED
+//	function s.set { t=HOOKRAN; }
+//	                             the parent's `t` is empty afterwards
+//	function s.set { return 7; } the command's status is the command's
+//	export E=parent
+//	function s.set { E=child; }  the child is shown E=child
+//	a=1 b=2 /usr/bin/env         b's hook sees what a's hook wrote
+//
+// The last two are what decide the shape. One fork serves the whole prefix
+// list, so the hooks share a state; and that state is what the child's
+// environment is built from, so a hook's write to a *second* exported name
+// reaches the child. A per-name save-and-restore cannot say either, because a
+// hook may write any name at all — so this is a copy of the variable tables,
+// made with the same ownTables a subshell is made with and thrown away when
+// the command has been started.
+//
+// It is nil unless a hook is really watching one of the names, which is what
+// keeps an ordinary `PATH=/x cmd` from copying every table in the shell. The
+// copy is otherwise invisible: with no hook the stores in it and the entries
+// they produce are what prefixValue already computed.
+//
+// Not an axis. A discipline is one shell's alone — see
+// Semantics.DisciplineFunctionIsAVariableHook — so nothing here is reachable
+// in a dialect that has none.
+func (r *Runner) prefixChildForTheDisciplines(assigns []*syntax.Assign) *Runner {
+	if r.disciplined == nil {
+		return nil
+	}
+	watching := false
+	for _, a := range assigns {
+		if a.Operand || prefixIsSubscripted(a) {
+			continue
+		}
+		if r.disciplineIsWatching(a.Name, disciplineSet) ||
+			(a.Append && r.disciplineIsWatching(a.Name, disciplineAppend)) {
+			watching = true
+			break
+		}
+	}
+	if !watching {
+		return nil
+	}
+	child := *r
+	child.ownTables(r)
+	return &child
+}
+
+// prefixStoredForAChild is one prefix's store inside that child, and answers
+// what the child should be handed for the name.
+//
+// The value is read back from the store rather than returned from the join,
+// because a `.set` hook may replace it: `function s.set { .sh.value=REPLACED;
+// }; s=5 /usr/bin/env` shows the child `s=REPLACED`. Read without the `.get`
+// hook, which is a read of the store and not of the value's producer.
+//
+// The status the hook returned is left where it is. Measured: `function s.set
+// { return 7; }; s=5 /usr/bin/env` reports the command's status and not 7,
+// where the same hook in front of a *special builtin* does leave 7 — so the
+// store's status belongs to the shell that made the store, and this one is
+// about to be thrown away.
+func (r *Runner) prefixStoredForAChild(a *syntax.Assign, part string) string {
+	if a.Append {
+		// The hook is given the part being appended and may rewrite it,
+		// exactly as it is for the spellings that store in this shell.
+		if v, ran := r.disciplineWrite(a.Name, disciplineAppend, "", part); ran {
+			part = v
+		}
+		defer r.suppressDiscipline(a.Name, disciplineSet)()
+	}
+	r.setVar(a.Name, r.prefixJoined(a, part))
+	stored, _ := r.storedValue(a.Name, true)
+	return stored
+}
+
 // prefixStore performs one assignment prefix's store, firing the discipline
 // the store deserves.
 //

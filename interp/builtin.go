@@ -1280,7 +1280,19 @@ func (r *Runner) hasSetOptionName(name string) bool {
 		// The one name with an axis of its own, and setOption asks it there.
 		return r.sem().PipefailOption != No
 	}
-	_, ok := r.lookupSetOption(name)
+	if _, ok := r.lookupSetOption(name); ok {
+		return ok
+	}
+	// And the spellings this shell's namespace reads that its roster does not
+	// publish — a name written with separators it has not got, and a `no` in
+	// front of one. Asked here as well as at the applying seam because this
+	// pass reports first: a word it called unknown never reaches the loop
+	// that would have taken it. See Runner.setOptionNamespaceName.
+	resolved, _ := r.setOptionNamespaceName(name, true)
+	if resolved == name {
+		return false
+	}
+	_, ok := r.lookupSetOption(resolved)
 	return ok
 }
 
@@ -1989,6 +2001,19 @@ func (r *Runner) applyLongSetOption(word string) bool {
 }
 
 func (r *Runner) setOption(name string, on bool) bool {
+	return r.setOptionSpelled(name, name, on)
+}
+
+// setOptionSpelled is setOption for a caller whose script wrote the name some
+// other way — a spelling this shell's namespace reads and its roster does not
+// publish, resolved by Runner.setOptionNamespaceName on the way in.
+//
+// The refusals echo the spelling and the judgements read the name, and the
+// split is measured rather than tidy: `set -o login-shell` in the shell that
+// folds separators is `set: login-shell: bad option(s)` — the word as it was
+// written — and it is refused at all because `login_shell`, the name it
+// resolved to, is one a script may not move.
+func (r *Runner) setOptionSpelled(name, spelled string, on bool) bool {
 	if name == "pipefail" {
 		// The one name with an axis of its own, because whether the shell
 		// has it was settled before this table existed and the answer is
@@ -2002,11 +2027,11 @@ func (r *Runner) setOption(name string, on bool) bool {
 			// same word would only obscure it.
 			return true
 		}
-		return r.badSetOptionName(name)
+		return r.badSetOptionName(spelled)
 	}
 	o, ok := r.lookupSetOption(name)
 	if !ok {
-		return r.badSetOptionName(name)
+		return r.badSetOptionName(spelled)
 	}
 	if r.immovableName(name) {
 		// A name this shell lists and will not take, in either direction —
@@ -2034,7 +2059,7 @@ func (r *Runner) setOption(name string, on bool) bool {
 		// had. Granting it here would trade `bad option(s)` for a
 		// `not implemented` those shells never say.
 		if !r.atInvocation || r.sem().ImmovableOptionsSetAtInvocation != Yes || o.apply == nil {
-			return r.badSetOptionName(name)
+			return r.badSetOptionName(spelled)
 		}
 	}
 	if r.inertOptions[name] {
@@ -2063,7 +2088,7 @@ func (r *Runner) setOption(name string, on bool) bool {
 	// A name this shell has and does not do. Refused out loud rather than
 	// accepted quietly, because accepting would be promising to behave
 	// differently afterwards.
-	r.diagf("set: %s: not implemented\n", name)
+	r.diagf("set: %s: not implemented\n", spelled)
 	return false
 }
 

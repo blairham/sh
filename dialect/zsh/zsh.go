@@ -2854,6 +2854,12 @@ func Semantics() interp.Semantics {
 	// `noglob` and `-o no-glob`, `setopt no-glob` and `set -o no-glob` are
 	// all `no such option: no-glob`, in one shell in one run.
 	s.LongOptionNameIgnoresHyphens = interp.Yes
+	// unanswered OptionNamespaceIgnoresSeparators, OptionNamespaceTakesANoPrefix:
+	// this shell installs an option namespace of its own (Runner.SetOptionTable),
+	// which answers every spelling before the substrate's roster is reached —
+	// including both of these, since `setopt no_glob` and `setopt noglob` are
+	// one name there. So the two axes govern a table this column never asks,
+	// and there is no site here to put the question to (#3155, #3254).
 	// unanswered LongOptionValueIsANumber: measured 2026-09-16, `--xtrace=1`
 	// here is `no such option: xtrace=1` at 1 — the whole word including the
 	// `=1` is looked up and refused, so this column reads no value at all and

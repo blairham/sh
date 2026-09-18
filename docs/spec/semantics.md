@@ -5898,6 +5898,77 @@ the table it is resetting. The reset reaches behavior and not only the
 listing: `set --default; echo {a,b}` prints `{a,b}`. See
 `interp.Semantics.SetHasTheStateAndDefaultWords`.
 
+### The namespace reads more spellings than the roster publishes
+
+ksh93 is the one column where the name a script writes is not the name the
+table holds, and the divergence is a property of the **namespace** rather
+than of one spelling — so it reaches the `set` builtin's operand, the
+invocation's `-o` and the `--name` word alike. Measured 2026-09-18 on
+ksh93u+ 2012-08-01 under `env -i PATH=/usr/bin:/bin LC_ALL=C`, with `HOME`
+and `ENV` pointed at an empty directory:
+
+| written | reaches | the other columns |
+| --- | --- | --- |
+| `set -o err-exit`, `-o err_exit`, `--err-exit` | `errexit` on | refused |
+| `--glob-star`, `set -o glob-star` | `globstar` on | no such name |
+| `set -o noerrexit`, `-o noerrexit`, `--noerrexit` | `errexit` off | refused |
+| `set +o noerrexit` | `errexit` **on** | refused |
+| `set -o no_err_exit` | `errexit` off | refused |
+| `set -o ERREXIT`, `-o RC` | `bad option(s)` | refused |
+| `set -o no_profile` | `bad option(s)` | refused |
+| `set -o nonoclobber` | `bad option(s)` | refused |
+
+Two axes, because the two halves are independently falsifiable and a shell
+could have had either alone: `interp.Semantics.OptionNamespaceIgnoresSeparators`
+takes hyphens and underscores out of a name, and
+`interp.Semantics.OptionNamespaceTakesANoPrefix` reads a `no` in front of a
+roster name as that name off. They **compose**, which is what `no_err_exit`
+says, and each is `No` in bash, dash and BusyBox ash — each measured, and
+each refusing the folded spelling in its own words.
+
+Three boundaries are what make this a fold rather than a normalization, and
+each is a measured refusal rather than an inference:
+
+- **Case is untouched.** `--ERREXIT` and `-o RC` are refused where
+  `--err-exit` and `-o rc` are taken, so exactly two characters come out.
+- **A word the fold leaves unrecognizable is still refused.** `--no_profile`
+  folds to `noprofile`, uncovers `profile`, and there is no such name — so
+  the refusal names `no_profile`, the word as it was written.
+- **The `no` comes off once, and against the roster.** This shell lists
+  `clobber` where the rest of the panel lists `noclobber`, so `nonoclobber`
+  uncovers a word the *listing* does not hold and is refused — even though
+  `noclobber` alone is a spelling the same shell takes, through the
+  substrate's own table. Resolving the strip against everything the table can
+  find rather than against the roster is what would have granted it.
+
+The fold is tried **after** the name as written, and `login_shell` is the row
+that makes that load-bearing rather than tidy: a roster name may itself hold
+a separator, so the comparison is between the written word and each roster
+name with the separators taken out of **both** — which is how
+`--login_shell`, `--loginshell` and `--login-shell` are one name there.
+
+This is separate from `interp.Semantics.LongOptionNameIgnoresHyphens`, which
+is zsh's and is the `--name` **spelling's** rule: there `zsh --no-glob` is
+`noglob` while `zsh -o no-glob`, `setopt no-glob` and `set -o no-glob` are
+all `no such option: no-glob`, so one shell means two things by a hyphen
+depending on which spelling asked. Here it means one thing everywhere. zsh
+answers neither of the two axes above: it installs an option namespace of
+its own, which resolves every spelling before the substrate's roster is
+reached.
+
+It is also separate from `interp.Runner.AddNegatedSetOptions` above, and the
+two are a **listing** fact and a **lookup** fact. Those five rows say which
+spelling `set -o` writes; this says which spellings it reads, and
+`nonoclobber` is the case that proves a shell could have one without the
+other.
+
+A refusal echoes the word as it was written and not the name the fold
+arrived at, which is the same rule the `--name` spelling already followed:
+`set -o login-shell` is `set: login-shell: bad option(s)`, refused because
+`login_shell` — the roster name it resolved to — is one a script may not
+move. So the judgement reads the name and the sentence reads the spelling
+(#3155, #3254).
+
 ### `braceexpand`, and the letter `set -B`
 
 `braceexpand` was in the recorded set until #1856, and it is the case that

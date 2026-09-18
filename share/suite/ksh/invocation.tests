@@ -185,3 +185,41 @@ printf 'set --DEFAULT -> %s\n' "$?"
   printf 'after the reset [%s]\n' "$-"
   eval "$saved"
   printf 'and after the restore [%s]\n' "$-" )
+
+printf -- '=== the namespace reads more spellings than the roster publishes ===\n'
+
+# Two rules of this shell's option **namespace** rather than of one spelling,
+# which is what the three routes below are here to show: the same word reaches
+# the same row through `--name`, through `-o` and through the builtin. The
+# separators come out of a name, and a `no` in front of a roster name is that
+# name off (#3155, #3254).
+
+row 'a hyphen in the name'   --err-exit -c 'set -o | grep -w errexit'
+row 'an underscore'          --err_exit -c 'set -o | grep -w errexit'
+row 'a longer name'          --glob-star -c 'set -o | grep -w globstar'
+row 'and at the -o'          -o err-exit -c 'set -o | grep -w errexit'
+row 'no over any name'       -o noerrexit -c 'set -o | grep -w errexit'
+row 'the two compose'        -o no_err_exit -c 'set -o | grep -w errexit'
+
+# And where the fold stops. Case is untouched, a word the fold leaves
+# unrecognizable is still refused, and the `no` comes off once against the
+# roster — this shell lists `clobber`, so `nonoclobber` uncovers a word the
+# listing does not hold even though `noclobber` alone is taken.
+row 'case is not folded'     -o ERREXIT -c 'echo unreachable'
+row 'nor at the --name'      --ERREXIT -c 'echo unreachable'
+row 'the fold leaves no name' -o no_profile -c 'echo unreachable'
+
+# The same two rules at the builtin, each in a subshell of its own for the
+# reason the rows above give.
+( set -o err-exit; set -o | grep -w errexit )
+( set -o err_exit; set -o | grep -w errexit )
+( set -o glob-star; set -o | grep -w globstar )
+( set -o noerrexit; set -o | grep -w errexit )
+( set -e; set +o noerrexit; set -o | grep -w errexit )
+( set -o no_err_exit; set -o | grep -w errexit )
+( set -o noclobber; set -o | grep -w clobber )
+( set -o nokeyword; set -o | grep -w keyword )
+( set -o nonoclobber ) 2>&1 | sed -e 's#^\([^/ ]*\)ksh: #<base>: #'
+printf 'set -o nonoclobber -> %s\n' "$?"
+( set -o login-shell ) 2>&1 | sed -e 's#^\([^/ ]*\)ksh: #<base>: #'
+printf 'set -o login-shell -> %s\n' "$?"

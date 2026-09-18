@@ -525,6 +525,8 @@ zsh   NamerefTargetResolvedWhenAimed
 zsh   NamerefCycleIsRefused
 zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   OperatorAfterTheSubscriptListingIsBad
+zsh   OptionNamespaceIgnoresSeparators
+zsh   OptionNamespaceTakesANoPrefix
 zsh   PrefixListingNamesADeclaredOnlyCompound
 zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfHexFloatZeroFillPrecedesThePrefix

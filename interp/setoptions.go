@@ -1186,7 +1186,14 @@ func (r *Runner) setNamedOption(name string, on bool) bool {
 // in it.
 func (r *Runner) setNamedOptionSpelled(name, spelled string, on bool) bool {
 	if r.optionMover == nil {
-		return r.setOption(name, on)
+		// Here rather than inside lookupSetOption, because what the fold
+		// resolves has to be the name the *rest* of setOption then judges:
+		// `set -o login-shell` is refused to a script because `login_shell`
+		// is immovable, and a guard reading the word as it was written would
+		// have seen a name it had never heard of. See
+		// setOptionNamespaceName.
+		name, on = r.setOptionNamespaceName(name, on)
+		return r.setOptionSpelled(name, spelled, on)
 	}
 	moved, known := r.optionMover(r, name, on)
 	switch {
@@ -1295,6 +1302,86 @@ func (r *Runner) lookupSetOption(name string) (setOption, bool) {
 		o = extraSetOptions[name]
 	}
 	return o, true
+}
+
+// setOptionNamespaceName resolves a word written in this shell's `set -o`
+// namespace to the name the roster holds and the direction it asks for.
+//
+// Two shells' worth of spelling and one shell answers both. A name may be
+// written with hyphens and underscores it does not have
+// (Semantics.OptionNamespaceIgnoresSeparators), and a `no` in front of any
+// name in the roster is that name off
+// (Semantics.OptionNamespaceTakesANoPrefix) — and the two compose, so
+// `no_err_exit` is `errexit` off.
+//
+// The name as written is tried first, and it is the `login_shell` row that
+// makes that load-bearing rather than tidy: a roster name may itself hold a
+// separator, so the fold has to find it rather than destroy it. That is why
+// the comparison below takes the separators out of **both** sides.
+//
+// A word none of the readings resolves comes back unchanged and in the
+// direction it was asked, so whoever refuses it names what was written.
+func (r *Runner) setOptionNamespaceName(name string, on bool) (string, bool) {
+	if _, known := r.lookupSetOption(name); known {
+		return name, on
+	}
+	s := r.sem()
+	folds := s.OptionNamespaceIgnoresSeparators == Yes
+	if folds {
+		if canonical, ok := r.rosterSetOptionName(name); ok {
+			return canonical, on
+		}
+	}
+	if s.OptionNamespaceTakesANoPrefix != Yes {
+		return name, on
+	}
+	rest, ok := strings.CutPrefix(name, "no")
+	if !ok || rest == "" {
+		// `--no` on its own uncovers no name, which is a refusal and not the
+		// whole roster turned off.
+		return name, on
+	}
+	if canonical, ok := r.rosterSetOptionName(rest); ok {
+		return canonical, !on
+	}
+	return name, on
+}
+
+// rosterSetOptionName finds the roster name a word asks for, folding
+// separators out of both sides where the dialect folds them.
+//
+// The roster and not everything lookupSetOption can find, which is what makes
+// `nonoclobber` a refusal in the shell that takes `noclobber`: this shell
+// lists `clobber`, so one `no` stripped off leaves a word its listing does
+// not hold, and the second strip that would rescue it never happens.
+func (r *Runner) rosterSetOptionName(word string) (string, bool) {
+	folds := r.sem().OptionNamespaceIgnoresSeparators == Yes
+	if !folds {
+		for _, n := range r.listedOptionNames() {
+			if n == word {
+				return n, true
+			}
+		}
+		return "", false
+	}
+	folded := foldOptionNameSeparators(word)
+	for _, n := range r.listedOptionNames() {
+		if foldOptionNameSeparators(n) == folded {
+			return n, true
+		}
+	}
+	return "", false
+}
+
+// foldOptionNameSeparators takes the two characters the fold above removes out
+// of one name. Case is deliberately untouched: `--ERREXIT` is refused where
+// `--err-exit` is taken, so this removes characters rather than normalizing a
+// word.
+func foldOptionNameSeparators(name string) string {
+	if !strings.ContainsAny(name, "-_") {
+		return name
+	}
+	return strings.NewReplacer("-", "", "_", "").Replace(name)
 }
 
 // negativeInteractiveSpelling reports the name a dialect's

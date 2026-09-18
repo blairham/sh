@@ -1253,6 +1253,30 @@ func atoi(s string) (int, bool) {
 // record it rather than resolve it. A quoted delimiter makes the whole body
 // literal; an unquoted one leaves it subject to expansion.
 func (r *Runner) heredocBody(rd *syntax.Redirect) string {
+	if rd.Op != syntax.TokTLess {
+		// A here-document body is text one dialect reads at *expansion*
+		// time rather than with the script's line, and it names a refusal
+		// inside it after the construct for that reason. A here-**string**
+		// is not: measured 2026-09-17 on bash 5.3.20, `cat <<<"$(echo hi;
+		// for)"` is located plainly where the same substitution in a body is
+		// `command substitution:`, whatever command the redirection is for —
+		// an external one, a builtin, and a function all agree. See
+		// Runner.substFailureRoute.
+		was, wasLine := r.inBodyReadAtExpansion, r.expansionBodyLine
+		r.inBodyReadAtExpansion, r.expansionBodyLine = true, 0
+		if rd.Heredoc != nil && rd.Heredoc.Start.Line > 0 {
+			// And where the body sits in the file. The body is lexed again
+			// from its own text — see Runner.rawSpans — so everything in it
+			// is numbered from the body's first line, and a refusal inside a
+			// substitution written there was reported at line 1 of a file
+			// whose here-document began on line 4. Measured 2026-09-17 on
+			// bash 5.3.20: `command substitution: line 4:` for the line the
+			// body holds it on, and line 4 again for a two-line body's second
+			// line, which is the file's numbering throughout.
+			r.expansionBodyLine = int(rd.Heredoc.Start.Line)
+		}
+		defer func() { r.inBodyReadAtExpansion, r.expansionBodyLine = was, wasLine }()
+	}
 	if !r.redirForOwnProcess {
 		return r.heredocText(rd)
 	}

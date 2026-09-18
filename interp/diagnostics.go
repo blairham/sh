@@ -4131,6 +4131,35 @@ type Diagnostics struct {
 	// valid. One verb: that word. Empty means the dialect never says.
 	SyntaxExpecting string
 
+	// SubstitutionBodyExpecting is appended to a token the grammar did not
+	// want inside a `$( … )` body, naming the parenthesis that would have
+	// closed it. One verb: %[1]s that closer. Empty means the dialect says
+	// nothing extra there.
+	//
+	// bash alone. Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// over a script file on bash 5.3.20, each row a body of its own:
+	//
+	//	v=$(echo hi; ;)            `;' while looking for matching `)'
+	//	v=$(for z in 1 2 3; done)  `done' while looking for matching `)'
+	//	v=$(} )                    `}' while looking for matching `)'
+	//	v=$(esac)                  `esac' while looking for matching `)'
+	//	v=$(echo hi; for)          `)' and nothing after it
+	//	v=`echo hi; ;`             `;' and nothing after it
+	//
+	// Two things it is not. It is **not every refusal**: the row where the
+	// unexpected token is the closing parenthesis itself writes nothing,
+	// because that is the very thing the shell was looking for and it found
+	// it. And it is **not both spellings**: the older one is refused with no
+	// such clause, which is the same split
+	// SubstitutionParseFailureNamesTheConstruct turns on one message over —
+	// that spelling's body is read as text and this one's is read while the
+	// closer is still being looked for.
+	//
+	// Its own field rather than SyntaxExpecting, which would have reached
+	// every unexpected token the parser knows a follower for and is empty in
+	// this dialect for that reason.
+	SubstitutionBodyExpecting string
+
 	// ForName is a `for` whose variable is not one. Two verbs: %[1]s the word
 	// as written and %[2]d the line, for the dialect that carries its own.
 	ForName string

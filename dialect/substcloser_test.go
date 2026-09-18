@@ -142,9 +142,15 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			// hi; ;` in both — real zsh accepts it too and ksh93 refuses it
 			// at 3, which is a gap of its own and filed. What the row pins is
 			// that this change did not move any of the six.
+			//
+			// The bash row carries the clause that dialect adds while it is
+			// still looking for the closer, which is exactly the shape this
+			// control is: a token refused *before* the `)` was reached. The
+			// rows above name the closer itself and so carry none — see
+			// Diagnostics.SubstitutionBodyExpecting (#3467).
 			body: ";",
 			want: map[string]string{
-				"bash":  "bash: line 2: syntax error near unexpected token `;'\n",
+				"bash":  "bash: line 2: syntax error near unexpected token `;' while looking for matching `)'\n",
 				"zsh":   "",
 				"ksh":   "",
 				"dash":  "dash: 2: Syntax error: \";\" unexpected\n",
@@ -274,15 +280,19 @@ func TestABodyTheCloserWouldHealKeepsItsOwnRefusal(t *testing.T) {
 // 2012-08-01 writes “ syntax error at line 2: `;' unexpected “ and bash
 // 5.3.20 “ syntax error near unexpected token `;' while looking for matching
 // `}' “ above its echoed line, so both name the `;` — which is what this
-// shell already writes for the two columns that have the spelling. The other
-// three have no such form and refuse the substitution itself, each in its own
+// shell writes for the two columns that have the spelling. The other three
+// have no such form and refuse the substitution itself, each in its own
 // words, and they are the control: a change that reached this construct at
 // all would have to move one of the five.
+//
+// The bash row's clause names the `}` and not the `)`, which is the whole of
+// why Runner.substBodyExpecting reads the span rather than writing one
+// character out: the closer is the construct's (#3467).
 func TestACurrentShellSubstitutionIsClosedBySomethingElse(t *testing.T) {
 	const src = "printf 'start\\n'\nv=${ echo hi; for ;}\nprintf 'after st=%s\\n' \"$?\"\n"
 	for preset, want := range map[string]string{
 		"ksh":   "ksh: line 2: syntax error at line 2: `;' unexpected\n",
-		"bash":  "bash: line 2: syntax error near unexpected token `;'\n",
+		"bash":  "bash: line 2: syntax error near unexpected token `;' while looking for matching `}'\n",
 		"zsh":   "zsh:2: bad substitution\n",
 		"dash":  "dash: 2: Bad substitution\n",
 		"ash":   "ash: syntax error: bad substitution\n",

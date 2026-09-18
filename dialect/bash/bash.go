@@ -2852,6 +2852,10 @@ func Diagnostics() interp.Diagnostics {
 		ArithMissingCloseParen:  "missing `)'",
 		ArithFailureStatus:      1,
 		SyntaxUnexpected:        "syntax error near unexpected token `%[1]s'",
+		// And, inside a `$( … )` body, what the shell was still looking
+		// for. See Diagnostics.SubstitutionBodyExpecting for the six rows
+		// and for the two shapes that get nothing (#3467).
+		SubstitutionBodyExpecting: " while looking for matching `%[1]s'",
 		// A refused word is echoed as it was written: `"zzz"` keeps its
 		// quotes and `$x` is not the name `x`. See UnexpectedWordNaming.
 		UnexpectedWordNaming: interp.UnexpectedWordIsSourceText,

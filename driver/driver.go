@@ -1602,6 +1602,16 @@ func (sh Shell) unanswered(what string) string {
 	return msg
 }
 
+// inputLabelFor is what a location calls a route, which is a label for `-c`
+// alone: a script file is named by its path where the dialect names one, and
+// standard input has nothing to be called.
+func inputLabelFor(route interp.Route) string {
+	if route == interp.RouteCommandString {
+		return commandStringLabel
+	}
+	return ""
+}
+
 // commandSource is the source for `-c`, whose operands are named differently
 // from every other route: the first is `$0` and only the rest are parameters,
 // so `sh -c 'echo $0' name a` prints `name`. With no operands at all the shell
@@ -1632,7 +1642,14 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// Where the program came from. Three things read it: the status one
 		// dialect gives a failed expansion, the fatality another gives a
 		// readonly reassignment, and the route letters in `$-`.
-		Route:       route,
+		Route: route,
+		// And what this front end calls that route, which the same dialect
+		// writes into the location of a parse failure. The front end's to
+		// say, and it is the same string the parse path hands
+		// Diagnostics.ParseDiagnostic — carried on the runner so a body
+		// parsed at *run* time can name the route a failure the front end
+		// saw itself would have named. See Runner.InputName.
+		InputName:   inputLabelFor(route),
 		Dialect:     &sh.Dialect,
 		Semantics:   &sh.Semantics,
 		Diagnostics: &dg,

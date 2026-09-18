@@ -472,6 +472,9 @@ func Semantics() interp.Semantics {
 	// lower-case `h` cannot be put to this shell under either reading.
 	// unanswered NumericTypeLettersAreExclusive: nor a pair of numeric
 	// letters to write together.
+	// unanswered PrefixToAKeywordFunctionIsScopedToTheCall: the same wall —
+	// BusyBox ash has no `function` keyword, so there is only one function
+	// spelling and the prefix axis beside this one answers for it (#3161).
 	// unanswered NamerefCycleIsRefused: there are no name references to make
 	// a cycle of. Measured 2026-09-15 on BusyBox v1.37.0, `typeset` is not a
 	// command here at all — `typeset: not found` at 127 — so neither

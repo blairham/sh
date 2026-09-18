@@ -2842,8 +2842,19 @@ func (r *Runner) unsetName(name string) {
 	// generator for a number it then throws away is a side effect nobody
 	// asked for. Nothing here has a discipline until something defines one.
 	if r.disciplined != nil {
-		if _, set := r.storedValue(name, false); set {
+		// The tables as well as the scalar, which is what declaredNameHolds
+		// adds over the store read this used to make: measured 2026-09-18,
+		// `typeset -A m=([k]=1); function m.unset { … }; unset m` runs the
+		// hook in ksh93u+ and ran nothing here, because a table keeps
+		// nothing in Vars for a scalar read to find.
+		if r.declaredNameHolds(name) {
 			r.disciplineUnsetName(name)
+			// And the hooks go with the variable, which is what the same
+			// guard says twice: a binding made to a variable is broken when
+			// the variable is removed, and a name nothing has set has no
+			// variable for either half of this to be about. See
+			// Runner.unsetDiscardsTheDisciplines (#3162).
+			r.unsetDiscardsTheDisciplines(name)
 		}
 	}
 	if name == "PATH" {

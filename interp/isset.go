@@ -61,6 +61,10 @@ func (r *Runner) elementIsSet(base, sub string, subscripted bool) bool {
 	if subscripted {
 		e.Index = literalWord(sub)
 	}
+	// A set-ness test and nothing else, so a value's producer is not run for
+	// it — measured, `[[ -v x ]]` fires no `.get` where `${x}` fires one.
+	// See Runner.askTheStoreOnly (#3121).
+	defer r.askTheStoreOnly()()
 	_, set, _ := r.paramSource(e)
 	return set
 }

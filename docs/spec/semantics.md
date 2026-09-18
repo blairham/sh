@@ -22851,6 +22851,97 @@ chose, which is worth stating because it bounds the fix. Measured:
 - `||` does not — the loop is not a command whose failure the operator can catch;
 - a **sourced file** catches it: the rest of that file is abandoned and the caller's next line runs, exactly as it does for `(( ))`.
 
+## How far a variable's hooks reach
+
+One shell in the panel runs a function because something happened to a
+variable rather than because a command named it. Three questions about
+how far that reaches were answered wrongly here, and none of them is
+about what a hook does.
+
+### A set-ness test asks the store
+
+Measured 2026-09-18 against ksh93u+ 2012-08-01 from a script file under
+`env -i` with a scratch HOME, with `function x.get { print -u2 GET; }`
+and `x=V`:
+
+    ${x}      one GET        ${x+S}      no GET at all
+    ${x-D}    one GET        ${x+}       no GET at all
+    ${x:-D}   one GET        [[ -v x ]]  no GET at all
+    ${#x}     one GET        ${x:+S}     one GET
+    ${x#V}    one GET        ${x=Z}      one GET
+
+The right column is the rule and the left is what keeps it narrow. A
+colon-less `+` answers its operand when the parameter is unset and the
+empty string when it is set, so the value is in neither the result nor
+the test. The **colon** form runs the hook, because "unset or empty" is a
+question about the value. And a **length** runs it, which is the row that
+says this is not "the value is not returned": `${#x}` asks the producer
+for a value only to count it.
+
+So it is a mark on the read rather than a list of operators judged by
+what they return. It has to be, because the expansion's two readers —
+the joined path and the split path — share one held read, and a mark on
+whichever of them goes first would decide it for the other (#3121).
+
+### An `unset` takes the hooks with the variable
+
+The binding is to the variable, not to the name. With `s=1` and
+`function s.set { … }` standing, measured the same day:
+
+    unset s; typeset +f                 lists nothing — an ordinary
+                                        function beside it survives
+    unset s; s.set                      `s.set: not found`
+    unset s; whence -v s.set            `not found`
+    unset s; s=2                        no hook
+    unset -v s                          the same, by the other spelling
+    typeset -A m=(…); unset m           the same for a table
+    unset s; function s.set { … }; s=3  fires again — the definition
+                                        rebinds
+
+A name **nothing has set** is the control that says this is the variable
+going rather than the `unset` word: `function s.set { … }; unset s; s=1`
+still fires. It is the same guard the `.unset` hook itself is behind —
+and that guard was reading the scalar store, so a table's removal ran no
+hook at all until this widened it.
+
+#3162 filed this the other way round, as a hook *detached* from a
+function that stays listed and callable, on the strength of a `typeset -f
+| grep -c` that answered 1. The three direct probes above answer the
+question that count was standing in for, and all three say the function
+is gone.
+
+One row is measured and not matched: an **indexed array** whose `.unset`
+hook ran keeps its hooks there — `a=(p q); function a.unset { … }; unset
+a` leaves `a.unset` listed, and leaves `${#a[@]}` as 1 with element 0
+unset and `${a+S}` empty. A table with the same hook discards, and an
+array with only a `.set` hook discards. A state where the count and the
+elements disagree is not a rule worth copying.
+
+### A prefix in front of a `function`-form function
+
+One shell spells functions two ways and scopes an assignment prefix
+differently for each. With `s=base`, `pf() { print "[$s]"; }` and
+`function kf { print "[$s]"; }`:
+
+                       s=5 pf   after   s+=5 kf   after
+    bash 5.3.20        [5]      base    [base5]   base
+    zsh 5.9.2          [5]      base    [base5]   base
+    ksh93u+ 2012       [5]      5       [5]       base
+
+The `after` column of the POSIX form is
+`AssignmentPrefixPersistsAfterAFunction`.
+`PrefixToAKeywordFunctionIsScopedToTheCall` is the other one, and the
+**append** is what makes it visible in the two columns whose prefix never
+persists: the body sees `base5` where the cell is the shell's, and `5`
+where the call has just made a fresh one. That is the rule
+`appendedScalar` already writes down for `local a+=2`, arrived at from
+the prefix's side.
+
+A hook watching the name goes with the cell. A discipline fires where the
+value is stored, so `s=5 kf` fires nothing in the column that scopes the
+prefix: the store lands in a cell the call just made and nothing was
+watching it (#3161).
+
 ## An axis nothing objects to is not a measurement
 
 Every field above claims a fact about real shells: they were run, they

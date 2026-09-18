@@ -153,6 +153,7 @@ ash   OneCommandStopsACommandString
 ash   OperatorAfterTheSubscriptListingIsBad
 ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
+ash   PrefixToAKeywordFunctionIsScopedToTheCall
 ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfHexFloatDefaultIsTwelveDigits
 ash   PrintfOutputPrecedesComplaint
@@ -395,6 +396,7 @@ dash  OperatorAfterTheSubscriptListingIsBad
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixListingNamesADeclaredOnlyCompound
 dash  PrefixRefusalCostsTheCommand
+dash  PrefixToAKeywordFunctionIsScopedToTheCall
 dash  PrintfFloatOperandIsEvaluatedTwice
 dash  PrintfOutputPrecedesComplaint
 dash  PrintfRefusedOperandKeepsItsLeadingNumber

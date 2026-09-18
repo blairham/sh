@@ -261,7 +261,7 @@ func (r *Runner) enterDisciplineParams(variable, subscript, value string, valueG
 //     of a scalar or of a keyed table carries the empty subscript.
 //   - `${#a[@]}` and `${!a[@]}` fire nothing: neither is a read of a value.
 func (r *Runner) disciplineElementRead(variable, subscript string) (string, bool) {
-	if !r.disciplineIsWatching(variable, disciplineGet) {
+	if r.askingTheStoreOnly || !r.disciplineIsWatching(variable, disciplineGet) {
 		return "", false
 	}
 	status, ctl := r.status, r.ctl
@@ -357,6 +357,81 @@ func (r *Runner) disciplineWrite(variable, event, subscript, value string) (stri
 		return value, true
 	}
 	return v, true
+}
+
+// askTheStoreOnly marks the read that follows as one about **set-ness**, so
+// the value's producer is not asked to produce a value nothing will look at.
+//
+// `${x+S}` is the shape: it answers the operand's word when the name is set
+// and the empty string when it is not, and either way the parameter's value
+// never reaches the result. Measured 2026-09-18 against ksh93u+ 2012-08-01
+// from a script file under `env -i` with a scratch HOME, with `function x.get
+// { print -u2 GET; }` and `x=V`:
+//
+//	${x}     one GET      ${x+S}    no GET at all
+//	${x-D}   one GET      ${x+}     no GET at all
+//	${x:-D}  one GET      [[ -v x ]]        no GET at all
+//	${#x}    one GET      ${x:+S}   one GET
+//	${x#V}   one GET      ${x=Z}    one GET
+//
+// The right column is the whole of the rule and the left is what keeps it
+// narrow. A length needs a value, so `${#x}` runs the hook even though the
+// value never reaches the result either — so this is not "the value is not
+// returned". And the **colon** form runs it, because "unset or empty" is a
+// question about the value and only the colon-less test is a question about
+// the store. That pair is why it is a mark on the read rather than a list of
+// operators judged by what they return.
+//
+// The note in Runner.varValue is the other half of the same rule and was
+// already right — *"set-ness stays the store's either way"* — except that the
+// hook ran in front of it (#3121).
+//
+// Not an axis: a discipline is one shell's alone, so there is one column and
+// it is the one being matched. Every other dialect has no hook to skip.
+func (r *Runner) askTheStoreOnly() func() {
+	was := r.askingTheStoreOnly
+	r.askingTheStoreOnly = true
+	return func() { r.askingTheStoreOnly = was }
+}
+
+// unsetDiscardsTheDisciplines takes a variable's hooks away with the variable.
+//
+// **The binding is to the variable and not to the name**, so removing the
+// variable removes the functions that were watching it. Measured 2026-09-18
+// against ksh93u+ 2012-08-01 from a script file under `env -i` with a scratch
+// HOME, with `s=1` and `function s.set { … }` standing:
+//
+//	unset s; typeset +f                  lists nothing — an ordinary
+//	                                     function beside it survives
+//	unset s; s.set                       `s.set: not found`
+//	unset s; whence -v s.set             `not found`
+//	unset s; s=2                         no hook
+//	unset -v s                           the same, by the other spelling
+//	typeset -A m=(…); unset m            the same for a table
+//	unset s; function s.set { … }; s=3   fires again — the definition rebinds
+//
+// A name **nothing has set** is the row that says this is the variable going
+// and not the `unset` word: `function s.set { … }; unset s; s=1` still fires,
+// because there was no variable for the removal to be about. It is the same
+// guard the `.unset` hook itself is behind.
+//
+// #3162 filed this the other way round — that `unset` merely detaches a
+// function which stays listed and callable — on the strength of a `typeset -f
+// | grep -c` that answered 1. The three direct probes above answer the
+// question that count was standing in for, and all three say the function is
+// gone.
+//
+// Not an axis: a discipline is one shell's alone, so the shell that has them
+// is the one being matched and every other dialect reaches this with an empty
+// table.
+func (r *Runner) unsetDiscardsTheDisciplines(variable string) {
+	if !r.disciplined[variable] {
+		return
+	}
+	for event := range disciplineEvents {
+		r.removeFunctionQuietly(variable + "." + event)
+	}
+	delete(r.disciplined, variable)
 }
 
 // suppressDiscipline marks an event as already being handled, so that a store

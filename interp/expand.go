@@ -876,9 +876,35 @@ func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript 
 	if v, st, sub, ok := r.heldSource(e); ok {
 		return v, st, sub
 	}
+	if readsTheStoreOnly(e) {
+		// The one read this node gets is a question about the **store**, so
+		// the value's producer is not run for it. Here rather than at either
+		// caller because the hold above is what makes the two callers one
+		// read: a mark on the reader that happens to go first would decide
+		// it for the reader that comes second. See Runner.askTheStoreOnly
+		// (#3121).
+		defer r.askTheStoreOnly()()
+	}
 	value, set, subscript = r.readParamSource(e)
 	r.holdSource(e, value, set, subscript)
 	return value, set, subscript
+}
+
+// readsTheStoreOnly reports whether every question this expansion will put to
+// its parameter is answered by the store alone.
+//
+// One shape: the colon-less `+`. It answers its operand when the parameter is
+// unset and the empty string when it is set, so the value is never in the
+// result and never in the test either — where the colon form's test is
+// "unset **or empty**", which is a question about the value. See
+// Runner.askTheStoreOnly for the panel the pair was measured against.
+//
+// A length is deliberately not here, and that is the row that keeps this from
+// being "the value is not returned": `${#x}` runs the hook in the shell being
+// matched, having asked the producer for a value only to count it.
+func readsTheStoreOnly(e *syntax.ParamExpr) bool {
+	return e.Op == syntax.ParamAlternate && !e.Colon && !e.Length &&
+		e.Inner == nil && !e.Indirect
 }
 
 // readParamSource is paramSource with the hold off: the read itself.

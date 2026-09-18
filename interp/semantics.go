@@ -714,6 +714,40 @@ type Semantics struct {
 	// what says so (#2407).
 	PrefixToAFunctionIsExported Answer
 
+	// PrefixToAKeywordFunctionIsScopedToTheCall gives an assignment prefix in
+	// front of a `function`-form function a cell belonging to the **call**
+	// rather than the shell's own.
+	//
+	// One shell spells functions two ways and scopes a prefix differently for
+	// each, which is the same split it already makes for a `typeset` inside
+	// the body. Measured 2026-09-18 from a script file under `env -i` with a
+	// scratch HOME, with `s=base`, `pf() { print "[$s]"; }` and
+	// `function kf { print "[$s]"; }`:
+	//
+	//	                   s=5 pf   after   s+=5 kf   after
+	//	bash 5.3.20        [5]      base    [base5]   base
+	//	zsh 5.9.2          [5]      base    [base5]   base
+	//	ksh93u+ 2012       [5]      5       [5]       base
+	//
+	// The `after` column of the POSIX form is
+	// PrefixToAFunctionIsExported's neighbor
+	// AssignmentPrefixPersistsAfterAFunction. This is the other one, and the
+	// **append** is what makes it visible in the two columns whose prefix
+	// never persists: the body sees `base5` where the cell is the shell's,
+	// and `5` where the call has just made a fresh one. So it is a real
+	// disagreement in all three columns rather than a restatement of the
+	// persistence axis.
+	//
+	// A hook watching the name goes with the cell. A discipline fires where
+	// the value is stored, and `s=5 kf` fires nothing in the column that
+	// scopes the prefix — the store lands in a cell the call just made and
+	// nothing was watching it.
+	//
+	// Asked only where a `function`-form function is really called with a
+	// named prefix in front of it, so a dialect without the keyword is never
+	// asked.
+	PrefixToAKeywordFunctionIsScopedToTheCall Answer
+
 	// PrefixExportAtABuiltin is what an assignment prefix does to the export
 	// attribute of the name it stands in front of, for the length of a
 	// *builtin* — so it decides what a builtin that reads the attribute back

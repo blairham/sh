@@ -798,6 +798,10 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.Yes
+	// And a freeze on the **name** ends the builtin at 2 either way without
+	// ending the script: measured 2026-09-17 on 0.5.12, `readonly N` over
+	// `set -- -a v` and over `set -- x`.
+	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
 	// And so does `read`, on the same reading and with the same status: 2
 	// wherever the frozen name stood, where bash answers 1 for the last one
 	// (#3208).

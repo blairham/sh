@@ -1597,6 +1597,10 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearingOptargIsARealUnset = interp.Yes
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// A freeze on the **name** is reported and the script runs on, wherever
+	// the scan was: measured 2026-09-17 on 5.3.20 and 3.2.57, `readonly N`
+	// over `set -- -a v` and over `set -- x` alike.
+	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
 	// `read` stops at the first name a freeze refuses and leaves the names
 	// after it alone, which is the other answer from `getopts` above and is
 	// why the two are separate axes: `readonly a; printf 'x y\n' | { read a

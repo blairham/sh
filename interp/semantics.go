@@ -3191,6 +3191,46 @@ type Semantics struct {
 	// than an axis — see getoptsRefusedStatus.
 	GetoptsRefusedWriteEndsTheBuiltin Answer
 
+	// GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal gives up the rest of the
+	// script when a freeze refuses the **name operand** on the run that
+	// reports "no more options", where the same freeze on a letter the scan
+	// *found* only reports and returns.
+	//
+	// One builtin, one name, one freeze, and two answers separated by nothing
+	// but which path inside `getopts` reached it:
+	//
+	//	set -- -a v; N=kept; readonly N; getopts a: N; echo "letter st=$?"
+	//	set -- x;    N=kept; readonly N; getopts a: N; echo "end    st=$?"
+	//
+	// Measured 2026-09-17 over a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with stdin on /dev/null, and again through `-c` and through
+	// standard input, with a further `echo done` after both:
+	//
+	//	bash 5.3.20   reports, st=2   reports, st=1   both echoes run
+	//	bash 3.2.57   reports, st=1   reports, st=1   both echoes run
+	//	dash 0.5.12   reports, st=2   reports, st=2   both echoes run
+	//	BusyBox ash   reports, st=2   reports, st=2   both echoes run
+	//	ksh93u+       reports, st=2   reports, the script is over at 2
+	//
+	// So it is one column, and it is one column on the *second* row only —
+	// which is why this is a question of its own rather than a reading of
+	// ReadonlyRefusalInABuiltinIsFatal, which that shell answers No and which
+	// is right for every other refusal it makes: a frozen name under `read`
+	// there is a warning the script runs on from.
+	//
+	// All three ways of running out give the same answer — a non-option word,
+	// a `--` and no words at all — and so does the silent form, so the axis is
+	// about the path and not about the shape that ended the scan. The status a
+	// script never sees is the shell's own fatal status, which is
+	// FatalErrorStatusIsOne.
+	//
+	// zsh never reaches it: GetoptsEndOfOptionsNamesIt is No there, so there
+	// is no write for the freeze to refuse. The rest answer No.
+	//
+	// Asked only after a freeze has refused that one write, so an ordinary
+	// `getopts` loop reaches no question at all.
+	GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal Answer
+
 	// ReadRefusedWriteEndsTheBuiltin stops `read` at the first name a freeze
 	// refuses, leaving the names after it alone. bash 5.3, dash and BusyBox
 	// ash yes; ksh93 no — it reports every frozen name and fills the rest.

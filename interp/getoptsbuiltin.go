@@ -486,14 +486,33 @@ func (r *Runner) getoptsMayWrite(name string) bool {
 			"`getopts` writing OPTARG and OPTIND through a freeze") {
 		return true
 	}
-	fatal := r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,
-		"a builtin's refused write to its own output parameter ending the script")
 	// assignedByBuiltin, which is neither of the two shapes the refusal was
 	// written for: the builtin names itself where the dialect names one —
 	// `getopts: OPTARG: is read only` in dash and BusyBox ash — and the rest
 	// of the line is not given up, which is what #3147 was.
-	r.reportReadonlyRefusal(name, assignedByBuiltin, fatal)
+	r.reportReadonlyRefusal(name, assignedByBuiltin, r.getoptsRefusalIsFatal())
 	return false
+}
+
+// getoptsRefusalIsFatal is what a freeze this builtin could not write through
+// costs the script.
+//
+// Two questions rather than one, because a dialect splits the answer by which
+// path inside `getopts` reached the freeze: the name operand written on the
+// run that reports "no more options" ends the script there, while every other
+// refused write the same builtin makes over the same name only reports. See
+// Semantics.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal for the panel.
+//
+// The narrower question is put first and only where the narrower path is the
+// one in flight, so a dialect answering the broad one Yes keeps that answer
+// everywhere and no shell is asked the narrow one off that path.
+func (r *Runner) getoptsRefusalIsFatal() bool {
+	if r.optRanOut && r.ask(r.sem().GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal,
+		"a freeze on the `getopts` name ending the script where the scan had run out") {
+		return true
+	}
+	return r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,
+		"a builtin's refused write to its own output parameter ending the script")
 }
 
 // getoptsSetName writes the name operand, returning ok where the write
@@ -580,8 +599,27 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 		// as the last letter again to anyone whose probe scanned first.
 		return 1
 	}
-	if r.getoptsWrite(name, "?") {
+	// The one write whose freeze a dialect answers apart from every other
+	// write this builtin makes, and nothing in the name or the value it is
+	// given says so — see
+	// Semantics.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal, which
+	// getoptsRefusalIsFatal reads through this.
+	r.optRanOut = true
+	wrote := r.getoptsWrite(name, "?")
+	r.optRanOut = false
+	if wrote {
 		return 1
+	}
+	// The one column whose refusal here ends the script carries the builtin's
+	// **own** refused status out of it rather than the shell's fatal status:
+	// measured 2026-09-17, ksh93u+ exits 2 from this line where a readonly
+	// reassignment, a division by zero, a `shift` past the end and `${x?}`
+	// all exit 1 — which is FatalErrorStatusIsOne, and it is Yes there. Read
+	// rather than asked, for the reason getoptsBad reads the fatality of a
+	// freeze directly: the question was already put at the write, and asking
+	// it twice would record two answers for one disagreement.
+	if r.sem().GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal == Yes {
+		return getoptsRefusedStatus
 	}
 	// The one refused name that does not carry the status with it. There is
 	// no letter the builtin failed to report here, so the 1 that says "no
@@ -592,10 +630,11 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 	// 1.37.0 answer 2 here as they do everywhere else, which is the same
 	// question they answer for OPTARG, so it is asked through the same axis.
 	//
-	// ksh93u+ is a third answer, recorded rather than modeled: this one
-	// refusal ends the script there, while the same freeze over a letter the
-	// scan found only reports and returns 2. No axis this shell has splits a
-	// fatality by which path inside one builtin reached it.
+	// ksh93u+ is a third answer and is the axis above: this one refusal ends
+	// the script there, while the same freeze over a letter the scan found
+	// only reports and returns 2. getoptsRefusalIsFatal is where the two are
+	// told apart, and the flag is set around the write because nothing in the
+	// name or the value distinguishes the paths (#3183).
 	if r.getoptsRefusalEndsTheBuiltin() {
 		return getoptsRefusedStatus
 	}

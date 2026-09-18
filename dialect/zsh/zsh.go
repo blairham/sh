@@ -2198,6 +2198,12 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearingOptargIsARealUnset = interp.No
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.Yes
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
+	// Unreachable while GetoptsEndOfOptionsNamesIt is no: there is no write
+	// at the end of the options for a freeze to refuse, so `N=kept; readonly
+	// N; set -- x; getopts ab N` is silent at 1 — measured 2026-09-17 on
+	// 5.9.2. Answered so that nothing reports an axis this shell cannot be
+	// asked.
+	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
 	// Neither `read` axis is reachable here: this is the one column whose
 	// refused write inside a builtin ends the script, and that is asked
 	// first. Answered so that nothing reports an axis this shell cannot be

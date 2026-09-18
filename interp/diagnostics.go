@@ -484,7 +484,16 @@ type Diagnostics struct {
 	// Semantics.GetoptsOptionStringHasANumericType yes ever reaches it.
 	GetoptsNumericArgument string
 	// GetoptsNamesNoLine prints those with the shell's name and no line,
-	// where this dialect gives a line to everything else. bash alone.
+	// where this dialect gives a line to everything else.
+	//
+	// bash and ksh93, which is the whole of the third shape a location takes
+	// here — dash prints no prefix at all (GetoptsUnprefixed) and zsh gives
+	// `getopts` the same `file:line:` it gives everything. Measured
+	// 2026-09-17 over a script file, through `-c` and through standard input
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C`, for all three wordings the
+	// builtin has: `loc.sh: -a: argument expected`, `loc.sh: -x: unknown
+	// option` and `loc.sh: -n: numeric argument expected` in ksh93u+, against
+	// `loc.sh: line 2:` in front of each here (#3438).
 	GetoptsNamesNoLine bool
 	// GetoptsUsageStatus is what `getopts` reports when it was not given
 	// both the optstring and the name to write into. Zero means 2, which is

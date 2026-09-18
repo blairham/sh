@@ -1126,6 +1126,43 @@ onto a second line quotes that line whole, `` `for) y' ``. The older
 spelling does not take that cut: a `$( … )` refused inside a backquoted
 body is quoted `` `echo $(for)' ``, the enclosing line entire.
 
+### A control character in the text it quotes
+
+The quote is a line of the script, so a shell that writes it through hands
+the terminal whatever the script held: a tab moves the caret and an escape
+character starts a sequence, on the very screen the complaint is being read
+on. zsh escapes instead.
+
+Measured 2026-09-17 on zsh 5.9.2, one byte at a time inside
+`v=$(echo<byte>a; for)` and again inside the unterminated `v=$(echo<byte>a`:
+
+| byte | written as |
+| --- | --- |
+| `0x09` | `\t` |
+| `0x0a` | `\n` |
+| `0x00`–`0x1f` otherwise | `^@` … `^_` — the byte with `0x40` added |
+| `0x7f` | `^?` |
+| `0x80`–`0x9f` | `\M-` and then that rule over the low seven bits, so `0x80` is `\M-^@`, `0x89` is `\M-\t` and `0x9f` is `\M-^_` |
+| `0xa0` and above | the byte, as written |
+
+Two of the C0 characters have a letter and the rest are caret notation; the
+high half is the same rule behind a meta prefix until `0xa0`, where it
+stops. `0xff` is written through, which is the row that says the boundary
+is `0xa0` and not "the top bit set".
+
+Both messages that quote text take it, measured rather than assumed: a
+construct the input ran out inside and a substitution body that would not
+parse each render a tab as `\t`.
+
+The cut comes first and the rendering after it, so the twenty bytes are
+counted in the script and not in the rendering:
+`v=$(echo<TAB>aaaaaaaaaaaaaaaaaaaaaa; for)` is
+`` `v=$(echo\taaaaaaaaaaa...' `` — eleven `a`s past an escape two
+characters wide.
+
+Diagnostics value: `NearTextEscapesControlCharacters` — zsh alone, and the
+other four columns never quote text back this way.
+
 ### The closer it was still looking for
 
 A token the grammar did not want *inside* a `$( … )` body names the

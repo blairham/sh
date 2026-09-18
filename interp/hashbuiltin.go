@@ -44,7 +44,7 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 	if r.unspecified {
 		return r.status
 	}
-	args, opts, optArg, code := r.builtinOptionsArg("hash", args, known)
+	args, opts, optArg, _, code := r.builtinOptionsArg("hash", args, known)
 	if code != 0 {
 		return code
 	}

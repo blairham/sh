@@ -11,23 +11,21 @@
 # front of it is a *syntax error*: the word expands to a brace group before
 # the grammar sees it, and an assignment prefix has nothing to attach to.
 #
-# The syntax error itself is held out until #2888 lands. Both shells refuse
-# the line at the same place with the same status; ksh93 quotes the opening
-# brace of the expanded alias and we quote the closing one, which is about
-# the alias route rather than about `times`:
-#
-#   ( eval 'v=x times > /dev/null' ) 2>&1
-#   printf 'an assignment in front of it -> %s\n' "$?"
-#
-# What is asked instead is that the assignment prefix fails at all, which is
-# the half that follows from the alias and is this shell's alone. The status
-# is read from a subshell so the file survives it.
+# The complaint is asked for as well as the status, which it was not until
+# #2888 landed: both shells refuse the line at the same place with the same
+# status, and ksh93 quotes the *opening* brace of the expanded alias where
+# this one used to quote the closing one. That is about the alias route
+# rather than about `times` — a reserved word an alias supplied keeps the
+# reading behind an assignment prefix, where one written out loses it — and
+# the `times` line is where a stock shell reaches it with nobody having
+# written an alias. The status is read from a subshell so the file survives
+# it.
 
 printf 'command -v times -> [%s]\n' "$(command -v times 2> /dev/null)"
 alias times > /dev/null 2>&1
 printf 'and it is an alias -> %s\n' "$?"
 
-( eval 'v=x times > /dev/null' ) 2> /dev/null
+( eval 'v=x times > /dev/null' ) 2>&1
 printf 'an assignment in front of it -> %s\n' "$?"
 
 # Called as a word of its own it still reports four times, whichever thing it

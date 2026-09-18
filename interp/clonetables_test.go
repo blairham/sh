@@ -267,6 +267,7 @@ func seedTables(r *Runner) {
 	r.aliases = map[string]aliasDef{"seed": {value: "v"}}
 	r.suffixAliases = map[string]string{"seed": "v"}
 	r.namedAliases = map[string]bool{"seed": true}
+	r.markedAliases = map[string]bool{"seed": true}
 	r.cmdHash = map[string]hashedCommand{"seed": {path: "/bin/seed", hits: 1}}
 	r.namedDirs = map[string]string{"seed": "/seed"}
 	r.assigned = map[string]string{"seed": "v"}

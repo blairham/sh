@@ -2955,6 +2955,20 @@ func (p *Parser) parseSimple() Command {
 					c.Assigns = append(c.Assigns, p.parseAssign(h))
 					continue
 				}
+				if len(c.Assigns) > 0 && p.aliasSpliced > 0 && !p.tok.IsQuoted() &&
+					p.dialect.AliasedReservedWordStandsBehindAnAssignmentPrefix &&
+					p.tok.Kind == TokWord && p.reservedInDialect(p.tok.Literal()) {
+					// The value put a *reserved word* where the command word
+					// was, and one dialect keeps the reading there where a
+					// written-out word loses it. A compound command has
+					// nowhere to stand behind an assignment prefix, so the
+					// complaint is at the word itself rather than at the
+					// token that closes what it opened — `alias g="{ :; }";
+					// v=x g` quotes the `{` and not the `}`. See
+					// Dialect.AliasedReservedWordStandsBehindAnAssignmentPrefix.
+					p.failUnexpected("")
+					return c
+				}
 				// Otherwise the word stands as the command word, expanded or
 				// not, and the readings below are the ones it would have had.
 				// Falling through rather than looping is what keeps a word

@@ -90,7 +90,7 @@ func TestBuiltinOptionsTakesArguments(t *testing.T) {
 		// `--` still ends the options, and an argument-less run still works.
 		{[]string{"-v", "--", "-d"}, []string{"-d"}, "v", ""},
 	} {
-		rest, opts, optArg, code := r.builtinOptionsArg("test", c.args, "vfd:")
+		rest, opts, optArg, _, code := r.builtinOptionsArg("test", c.args, "vfd:")
 		if code != 0 {
 			t.Errorf("%q: status %d, want it accepted", c.args, code)
 			continue
@@ -126,7 +126,7 @@ func TestBuiltinOptionsRefusesAMissingArgument(t *testing.T) {
 		{"-d"},
 		{"-vd"},
 	} {
-		_, _, _, code := r.builtinOptionsArg("test", args, "vfd:")
+		_, _, _, _, code := r.builtinOptionsArg("test", args, "vfd:")
 		if code != 2 {
 			t.Errorf("%q: status %d, want 2", args, code)
 		}

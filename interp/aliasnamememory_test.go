@@ -84,6 +84,43 @@ func TestUnaliasCountsANameAliasHasNamed(t *testing.T) {
 			`( alias z; unalias z; echo $? )`,
 			"1\n",
 		},
+		// And the other half of the same boundary, which is the one the
+		// axis's doc comment used to record as left undone: what a `( … )`
+		// or a `$( … )` *named* is remembered out here afterwards, where
+		// what it defined is not. See Runner.adoptAliasNames.
+		{
+			"a name the parentheses looked up counts in the parent",
+			`( alias z ); unalias z; echo $?`,
+			"0\n",
+		},
+		{
+			"a name a command substitution looked up counts too",
+			`x=$(alias z); unalias z; echo $?`,
+			"0\n",
+		},
+		{
+			"a name the parentheses defined counts, and the value does not",
+			`( alias z=1 ); alias z; echo $?; unalias z; echo $?`,
+			"1\n0\n",
+		},
+		{
+			"nested parentheses reach the top",
+			`( ( alias z ) ); unalias z; echo $?`,
+			"0\n",
+		},
+		// The carry-over is the two of them and not every subshell. A
+		// pipeline element is one and does not carry, which is what says
+		// this is a boundary rather than "a subshell".
+		{
+			"a pipeline element's name does not",
+			`alias z | :; unalias z; echo $?`,
+			"1\n",
+		},
+		{
+			"and the parent's still does not count inside one",
+			`( alias z ); ( unalias z; echo $? )`,
+			"1\n",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got, _ := aliasRun(t, rememberedNames(Yes), Diagnostics{}, c.src)
@@ -112,6 +149,14 @@ func TestUnaliasForgetsANameEverywhereElse(t *testing.T) {
 		{
 			"removing everything is the same either way",
 			`alias h=1; unalias h; unalias -a; unalias h; echo $?`,
+			"1\n",
+		},
+		// And nothing crosses the boundary where nothing is remembered in
+		// the first place, which is what keeps adoptAliasNames behind the
+		// axis rather than on the common path.
+		{
+			"a name the parentheses looked up is gone with them",
+			`( alias z ); unalias z; echo $?`,
 			"1\n",
 		},
 	} {

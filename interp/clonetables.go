@@ -223,6 +223,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// reproduced is that no remembered name counts inside a subshell, which
 	// is asked at the `unalias` rather than here.
 	c.namedAliases = maps.Clone(r.namedAliases)
+	c.markedAliases = maps.Clone(r.markedAliases)
 	// And the command hash, which is the same kind of table under a third
 	// name: what PATH last resolved a name to. A subshell owns its entries —
 	// measured, `(ls >/dev/null); hash` leaves the parent's table empty in

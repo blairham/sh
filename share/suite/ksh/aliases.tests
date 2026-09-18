@@ -24,8 +24,8 @@
 # `z: alias not found`, status 1 — leaves the name behind, and so does a
 # lookup inside `eval`, inside a function or behind `command`. `unalias -a`
 # clears the remembered names along with the table. The name is not an alias
-# afterwards: no listing has it and `alias z` still fails. See #2926, and
-# #3429 for what a subshell does with one.
+# afterwards: no listing has it and `alias z` still fails. See #2926 and
+# #3429, the second of which is what the subshell rows at the end are.
 #
 # The option cases are written inside a subshell. An option `alias` does not
 # have is a fatal usage error in ksh93 and would leave the rest of the file
@@ -61,3 +61,20 @@ done
 # is free.
 unalias float 2>/dev/null; printf 'unalias a preset -> %s\n' "$?"
 alias float > /dev/null 2>&1; printf 'preset after removal -> %s\n' "$?"
+
+# What a subshell's `alias` named outlives the subshell, and what it defined
+# does not: a `( … )` and a `$( … )` both leave the name behind in the shell
+# that made them, where a pipeline element does not. The removals are
+# silenced because the columns without the memory report them (#3429).
+( alias z1 2>/dev/null ) ; unalias z1 2>/dev/null; printf 'named in parens -> %s\n' "$?"
+q=$(alias z2 2>/dev/null) ; unalias z2 2>/dev/null; printf 'named in a substitution -> %s\n' "$?"
+( alias z3=1 ) ; alias z3 > /dev/null 2>&1; printf 'the value it defined -> %s\n' "$?"
+( alias z3=1 ) ; unalias z3 2>/dev/null; printf 'but the name it named -> %s\n' "$?"
+alias z4 2>/dev/null | cat > /dev/null; unalias z4 2>/dev/null; printf 'a pipeline element -> %s\n' "$?"
+
+# `--` ends the lookup here and not only the options: a bare name behind it is
+# named and nothing is printed for it, whether the table holds it or not. The
+# control is the same two lookups written without the separator (#3063).
+alias -- r > /dev/null 2>&1; printf 'a preset behind the separator -> %s\n' "$?"
+alias -- nosuch_zz > /dev/null 2>&1; printf 'and a name that is not one -> %s\n' "$?"
+alias nosuch_zz > /dev/null 2>&1; printf 'the same name without it -> %s\n' "$?"

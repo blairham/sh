@@ -10349,15 +10349,50 @@ type Semantics struct {
 	// `unalias` can see it, and `unalias -a` clears it along with the table
 	// — after that, a preset's name fails like any other.
 	//
-	// Narrower than the whole of ksh93's behavior in one place, measured and
-	// left undone: a remembered name never counts *inside* a subshell — `(
-	// alias z; unalias z )` is 1 there, and so is `alias z; ( unalias z )` —
-	// while a name a `( … )` or `$( … )` looks up or defines is remembered in
-	// the **parent** afterwards, where a pipeline element's is not. That is
-	// its non-forking subshell sharing the table it adds entries to, and it
-	// needs a set the two share; here the set is cloned like every other
-	// table and the inside half is what this answer reproduces (#3429).
+	// A remembered name never counts *inside* a subshell — `( alias z;
+	// unalias z )` is 1 there, and so is `alias z; ( unalias z )` — while a
+	// name a `( … )` or `$( … )` looks up or defines is remembered in the
+	// **parent** afterwards, where a pipeline element's and a background
+	// job's are not. That is its non-forking subshell adding entries to the
+	// table the parent holds while rolling the *values* back: `( alias z=1
+	// ); alias z` is `not found` there and `( alias z=1 ); unalias z` is 0.
+	//
+	// So the carry-over is names alone, and it is taken at the boundary
+	// rather than through a shared set — see Runner.adoptAliasNames. A `( )`
+	// and a `$( )` are run to completion by the shell that made them, so the
+	// parent merges what the child named when the child is already finished;
+	// nothing is shared while two shells are running, which is what keeps a
+	// process substitution's goroutine off the table (#3429).
 	AliasRemembersTheNamesItNames Answer
+
+	// AliasSeparatorEndsTheLookup makes `--` end the *lookup* and not only
+	// the options: a bare name after it is named, as `alias -x name` names
+	// one, and nothing is printed for it whether the table holds it or not.
+	//
+	// ksh93 alone, measured 2026-09-18 on 93u+ 2012-08-01 as script files
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`, and
+	// the same over `-c` and stdin:
+	//
+	//	alias r          r='hist -s'                the preset's line, 0
+	//	alias -- r       silent, 0
+	//	alias nosuch     nosuch: alias not found, 1
+	//	alias -- nosuch  silent, 0
+	//	alias -p -- r    silent, 0
+	//	alias -- z=1     defines z, 0
+	//
+	// The second row is what says it is not a quieter report: `r` is an
+	// alias and its line does not appear either. A definition after the
+	// separator still defines, so what the separator ends is the reading of
+	// an operand as a *question*, leaving only the naming behind it —
+	// which is the shape `alias -t --` already has in this shell, and that
+	// spelling is what `hash` is here.
+	//
+	// The panel does not follow it. bash 5.3.20 reports through the
+	// separator, `alias: nosuch: not found` at 1; zsh 5.9.2 answers 1 and
+	// says nothing, as it does without the separator; dash reads no options
+	// at all, so `--` is a name there and `alias: -- not found` is the
+	// answer.
+	AliasSeparatorEndsTheLookup Answer
 
 	// UnaliasAllRefusesOperands makes `unalias -a name` an error that clears
 	// nothing. zsh alone: "-a: too many arguments", status 1, table intact.

@@ -20,8 +20,10 @@ func exportOption(yes Answer) func(*Semantics) {
 	return func(s *Semantics) {
 		s.AliasHasExportOption = yes
 		// The lookup rows are about what `-x` prints, and `alias` speaking
-		// or not about a missing name is a different axis.
+		// or not about a missing name is a different axis. So is `unalias`
+		// speaking, which the mark rows reach on their way to a listing.
 		s.AliasReportsNotFound = No
+		s.UnaliasReportsNotFound = No
 	}
 }
 
@@ -115,5 +117,79 @@ func TestABareExportOperandLeavesTheNameBehind(t *testing.T) {
 	got, _ := aliasRun(t, both, Diagnostics{}, `alias -x zz; unalias zz; echo $?`)
 	if want := "0\n"; got != want {
 		t.Errorf("alias -x zz; unalias zz = %q, want %q", got, want)
+	}
+}
+
+// A mark put on a name the table has not got is a state of its own: no alias
+// is defined, nothing is looked up, and the only reader is the **prefixed**
+// listing, which writes the prefix for it and then nothing at all — no name,
+// no `=` and no newline, so the entry after it glues onto the same line. See
+// Runner.markedAliasNames for the measurement this reproduces.
+//
+// Written as one suite rather than a row in the two above because it is the
+// listing's bytes that are the answer here, and the rows that print *nothing*
+// are as load-bearing as the one that prints the glue: a mark with no value
+// is in the plain listing and in the narrowed one alike is not there.
+func TestAMarkWithNoValueBehindItIsOnlyInThePrefixedListing(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"the prefixed listing writes the prefix and glues",
+			`alias a=1; alias -x b; alias c=3; alias -p`,
+			"alias a='1'\nalias alias c='3'\n",
+		},
+		{
+			"and it sorts where the name would have sorted",
+			`alias a=1; alias -x zz; alias -p`,
+			"alias a='1'\nalias ",
+		},
+		{
+			"the narrowed prefixed listing has it too",
+			`alias a=1; alias -x mm; alias -px`,
+			"alias ",
+		},
+		{
+			"the plain listing has not",
+			`alias a=1; alias -x mm; alias`,
+			"a='1'\n",
+		},
+		{
+			"nor has the narrowed one",
+			`alias a=1; alias -x mm; alias -x`,
+			"",
+		},
+		{
+			"nor is the name an alias",
+			`alias -x mm; alias mm; echo $?`,
+			"1\n",
+		},
+		// The two ways the mark goes, both measured: a definition takes it
+		// over and a removal drops it, and the listing is whole afterwards.
+		{
+			"a definition takes the mark over",
+			`alias -x mm; alias mm=2; alias -p`,
+			"alias mm='2'\n",
+		},
+		{
+			"and it is an exported entry afterwards",
+			`alias -x mm; alias mm=2; alias -x`,
+			"mm='2'\n",
+		},
+		{
+			"a removal drops it",
+			`alias a=1; alias -x mm; unalias mm; alias -p`,
+			"alias a='1'\n",
+		},
+		{
+			"and so does removing everything",
+			`alias -x mm; unalias -a; alias -p`,
+			"",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got, _ := aliasRun(t, exportOption(Yes), Diagnostics{}, c.src)
+			if got != c.want {
+				t.Errorf("%s =\n%q\nwant\n%q", c.src, got, c.want)
+			}
+		})
 	}
 }

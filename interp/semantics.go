@@ -11497,6 +11497,52 @@ type Semantics struct {
 	// the reading and the rows each of its steps is pinned by, and #2959.
 	TestReadsOneExpressionOffTheOperands Answer
 
+	// TestTrailingConnectiveTakesAMissingOperand reads a `-a` or a `-o` that
+	// ends the operand list as the connective it is, with a right operand
+	// that is missing and therefore false — rather than as a word where an
+	// operator or an operand belonged.
+	//
+	// Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, the whole panel over nine shapes:
+	//
+	//	                  dash 0.5.12  zsh 5.9.2  bash 5.3.20  ksh93u+  ash
+	//	[ x -a ]          1            1          refuses      refuses  refuses
+	//	[ x -o ]          0            0          refuses      refuses  refuses
+	//	[ "" -o ]         1            1          refuses      refuses  refuses
+	//	[ -z a -a ]       1            1          refuses      1        refuses
+	//	[ a = b -a ]      1            1          refuses      refuses  refuses
+	//	[ ( x ) -a ]      1            1          refuses      refuses  refuses
+	//	[ 1 -eq 1 -a ]    1            1          refuses      refuses  refuses
+	//	[ 1 -eq 1 -o ]    0            0          refuses      refuses  refuses
+	//	[ x -a x -a ]     1            1          refuses      refuses  refuses
+	//
+	// So it is two columns against four, and it reaches every length rather
+	// than only the two-word form POSIX gives its own rule — which is what
+	// makes it an axis about the *connective* and not about the count. The
+	// statuses are what say the operand is false and not merely absent:
+	// `-a` answers 1 where `-o` answers 0 over the same left side, and a
+	// left side that is itself false answers 1 under both.
+	//
+	// It is asked only where the evaluation would otherwise complain. The
+	// count rules win first, which is measured and not a shortcut: `[ a -a
+	// -a ]` is three words and is the both-set guard over the strings `a`
+	// and `-a`, so it is 0 in every column including these two, and a rule
+	// that read the last word as a connective first would make it 1.
+	//
+	// ksh93's `[ -z a -a ]` row is that shell reading one expression off the
+	// front of the operands and dropping the rest — see
+	// TestReadsOneExpressionOffTheOperands — and not this.
+	//
+	// One shape is measured and not modeled, because the two columns that
+	// hold this axis disagree about it: `[ ! x -a ]` is 0 in dash and 1 in
+	// zsh. Three words beginning with `!` are POSIX's own count rule, so
+	// dash negates the two-word `x -a` this axis has already answered false,
+	// while zsh reads the negation as the connective's left side. Both
+	// follow from where the rule is asked rather than from the rule, and
+	// this shell asks it where the count rule has finished — which is dash's
+	// answer (#2917).
+	TestTrailingConnectiveTakesAMissingOperand Answer
+
 	// TestHasTheModifiedSinceReadOperator gives `test` a unary `-N`: the
 	// file has been written since it was last read.
 	//
@@ -19951,7 +19997,12 @@ func PosixSemantics() Semantics {
 		// behind it is not an expression, which is what six of the seven
 		// columns answer and what the count above is for.
 		TestReadsOneExpressionOffTheOperands: No,
-		TestStringOrder:                      TestStringOrderNeither,
+		// And a connective that ends the operand list is a word where an
+		// operator or an operand belonged, rather than a connective whose
+		// right side is missing: POSIX gives the two-word form its own rule
+		// and the rule has no arm for this.
+		TestTrailingConnectiveTakesAMissingOperand: No,
+		TestStringOrder: TestStringOrderNeither,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several
 		// operators in a clause are allowed, an omitted who means all three,

@@ -454,9 +454,9 @@ type Diagnostics struct {
 	// bool. See the constants.
 	TestUnknownLongOperator TestUnknownOperatorReport
 
-	// TestTwoWordUnknownOperatorLeavesAnOperand gives the *two-word* form the
-	// same reading, which is a separate question and splits the panel the
-	// other way.
+	// TestNamesTheWordTheParseStoppedAt names, in every form, the first word
+	// the expression did **not** consume — because one column parses the
+	// operand list rather than dispatching on its length.
 	//
 	// Two words go straight to the unary evaluation in six of the seven
 	// columns, so the word in front is the operator and is what gets named:
@@ -469,10 +469,32 @@ type Diagnostics struct {
 	// `[ n -eq 5 ]` beside them as the control that says a complaint really
 	// about the operand names the operand in both (#3278).
 	//
+	// The same parse answers the longer forms, which is what widened this
+	// from the two-word rule it started as. Measured 2026-09-18 in the same
+	// image, one word further along each time:
+	//
+	//	[ a b c ]      b: unknown operand   `a` is the expression
+	//	[ -z a b ]     b: unknown operand   `-z a` is
+	//	[ ! a b ]      b: unknown operand   `! a` is
+	//	[ -Q x y ]     x: unknown operand   `-Q` is, being no operator here
+	//	[ -z a b c ]   b: unknown operand   the first leftover, not the last
+	//
+	// The fourth row is what says this is a parse and not a count, and the
+	// last is what separates the first leftover word from the last word
+	// taken — which is the other column's answer, see TestNamesFirstOperand.
+	//
+	// It also decides what a **connective** with nothing behind it is called
+	// there. It is not a word the parse stopped at but an operator missing
+	// its right operand, so the sentence is TestOperandExpected with nothing
+	// named: `[ x -a ]`, `[ -z a -a ]` and `[ 1 -eq 1 -a ]` are all a bare
+	// `argument expected` in that column, where a trailing *binary* operator
+	// names itself — see TestTrailingBinaryOperandExpected (#3550).
+	//
 	// A field of its own rather than TestUnknownLongOperator reaching further
-	// down: dash holds that value and names the *operator* here, so one field
-	// for both would move a column that was measured the other way.
-	TestTwoWordUnknownOperatorLeavesAnOperand bool
+	// down: dash holds that value and names the *operator* in the two-word
+	// form, so one field for both would move a column that was measured the
+	// other way.
+	TestNamesTheWordTheParseStoppedAt bool
 
 	// TestUnaryExpected is what `test` says about a word where a unary
 	// operator belonged. One verb: the word.
@@ -488,6 +510,26 @@ type Diagnostics struct {
 	TestIntegerExpected string
 	// TestOperandExpected is an operator with nothing after it. No verbs.
 	TestOperandExpected string
+	// TestTrailingBinaryOperandExpected is the same complaint with the
+	// **operator named**, for the two-word form whose second word is a
+	// binary operator this shell has. One verb: the operator.
+	//
+	// Two columns parse the two words rather than reading the first as a
+	// unary operator, so what is missing is the operator's right operand and
+	// the operator is what gets named. Measured 2026-09-18, `[ a = ]`,
+	// `[ a -eq ]`, `[ a -nt ]` and eight more: dash 0.5.12 writes `[: =:
+	// argument expected` and BusyBox ash 1.37.0 writes `sh: =: argument
+	// expected`, while bash 5.3.20 writes `x: unary operator expected` about
+	// the word in *front* and ksh93u+ names nothing at all.
+	//
+	// The set is exactly the operators the shell has, which is what makes it
+	// a reading of the form and not a list: dash names `<` and `>` and falls
+	// back to its unary complaint for `==`, which it has not got, and
+	// BusyBox names `==` and falls back for `=~`.
+	//
+	// Empty leaves the two words to the unary reading, which is what the
+	// other four columns give (#2917, #3550).
+	TestTrailingBinaryOperandExpected string
 	// ProcessSubstitutionNotInCondition is a `<(cmd)` standing as a
 	// condition's operand in a dialect that does not allow one there. One
 	// verb: the substitution as it was written, `<(cmd)` and not its inside.

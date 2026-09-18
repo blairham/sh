@@ -2074,6 +2074,14 @@ func Semantics() interp.Semantics {
 	// reading this shell shares with ksh93: `[ -t ] >/dev/null` is 1 here
 	// and 0 in dash and bash.
 	s.BareTerminalTestIsDescriptorOne = interp.Yes
+	// And a connective with nothing behind it is the connective still, over
+	// a right operand that is missing and therefore false — the reading this
+	// shell shares with dash and with no other column. Measured 2026-09-18:
+	// `[ x -a ]` is 1 here, `[ x -o ]` is 0, and `[ 1 -eq 1 -a ]` is 1,
+	// silently in each case. The one shape the two columns split on is
+	// `[ ! x -a ]`, 1 here and 0 in dash, which is where the rule is asked
+	// rather than the rule; the axis records it (#2917).
+	s.TestTrailingConnectiveTakesAMissingOperand = interp.Yes
 	s.PipefailOption = interp.Yes
 	// A substituted element keeps the status its death produced, 128 plus
 	// the signal, the same as anywhere else.

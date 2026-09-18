@@ -2240,13 +2240,27 @@ func Diagnostics() interp.Diagnostics {
 		// one operand too many. `[ n -eq 5 ]` beside it is the control that
 		// says a complaint really about the operand names the operand in
 		// both (#3278).
-		TestTwoWordUnknownOperatorLeavesAnOperand: true,
-		TestUnaryExpected:                         "%[1]s: unknown operand",
-		TestBinaryExpected:                        "%[1]s: unknown operand",
-		TestIntegerExpected:                       "%[1]s: out of range",
-		TestTooManyArguments:                      "unknown operand",
-		TestOperandExpected:                       "argument expected",
-		TestMissingBracket:                        "missing %[1]s",
+		TestNamesTheWordTheParseStoppedAt: true,
+		TestUnaryExpected:                 "%[1]s: unknown operand",
+		TestBinaryExpected:                "%[1]s: unknown operand",
+		TestIntegerExpected:               "%[1]s: out of range",
+		// The word the parse stopped at is named here too, which the bare
+		// sentence could not say: `[ -z a b c ]` is `b: unknown operand`,
+		// the first word past `-z a`, where dash names the last word its own
+		// parse took (#3550).
+		TestTooManyArguments: "%[1]s: unknown operand",
+		TestOperandExpected:  "argument expected",
+		// And the same sentence with the operator named, which is the other
+		// half of that parse: a binary operator this shell has, standing in
+		// the trailing position, is missing its right operand rather than
+		// leaving an operand behind. Measured 2026-09-18, `[ 1 -eq ]` is
+		// `ash: -eq: argument expected` and `[ g.f -ot ]` names `-ot`, while
+		// `[ 1 -eq 1 -a ]` keeps the bare sentence above — a connective is
+		// not one of the operators this names. `==` is in the set here and
+		// `=~` is not, which is the same rule read at this shell's own
+		// roster (#3550).
+		TestTrailingBinaryOperandExpected: "%[1]s: argument expected",
+		TestMissingBracket:                "missing %[1]s",
 
 		// The remarks a shell with no terminal makes about job control, both
 		// spellings of the same sentence.

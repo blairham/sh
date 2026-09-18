@@ -570,20 +570,53 @@ operator for is a *string* and the word after it is one operand too many.
 Six of the seven columns send it straight there and name the word in
 front — bash `-Q: unary operator expected`, dash `-Q: unexpected
 operator`, zsh `unknown condition: -Q` — which is why
-`Diagnostics.TestTwoWordUnknownOperatorLeavesAnOperand` is a field of its
+`Diagnostics.TestNamesTheWordTheParseStoppedAt` is a field of its
 own rather than `TestUnknownLongOperator` reaching one word further down.
 
-**Three rows of the same class are measured and not modeled**, and they
-are the rest of the same fact: that shell's `test` is an expression parser
-over the words rather than the argument-count table POSIX describes, so
-its complaint is about the word the parse stopped at.
+### The parse reaches every form, not only two words
 
-    [ 1 -eq ]      BusyBox `-eq: argument expected`   ours `-eq: unknown operand`
-    [ g.f -ot ]    BusyBox `-ot: argument expected`   ours `-ot: unknown operand`
-    [ -z a b ]     BusyBox `b: unknown operand`       ours `a: unknown operand`
+That shell's `test` is an expression parser over the words rather than the
+argument-count table POSIX describes, and the field above is now named for
+that rather than for the form it was first measured in. Measured 2026-09-18
+in the same image, one word further along each time:
 
-The word named is already right in the first two and the sentence is not;
-the third is the leftover-word rule one form further on. #3550 holds them.
+| case | BusyBox 1.37.0 | what the parse took |
+| --- | --- | --- |
+| `[ a b c ]` | `ash: b: unknown operand` | `a` |
+| `[ -z a b ]` | `ash: b: unknown operand` | `-z a` |
+| `[ ! a b ]` | `ash: b: unknown operand` | `! a` |
+| `[ -Q x y ]` | `ash: x: unknown operand` | `-Q`, being no operator here |
+| `[ -z a b c ]` | `ash: b: unknown operand` | `-z a` |
+| `[ a = b = c ]` | `ash: =: unknown operand` | `a = b` |
+
+The fourth row is what says this is a parse and not a count, and the last
+two are what separate the **first leftover** word from the last word taken
+— which is dash's answer to the same position, `Diagnostics.TestNamesFirst-
+Operand`. `[ -z a b c ]` names `b` here and `a` there, over the same words.
+
+### An operator with nothing behind it is missing an argument
+
+The other half, and it is a different sentence rather than the same one
+about a different word. A binary operator **this shell has**, standing in
+the trailing position, is missing its right operand and names itself; a
+connective there is missing its right operand too and names nothing.
+
+| case | BusyBox 1.37.0 |
+| --- | --- |
+| `[ 1 -eq ]` | `ash: -eq: argument expected` |
+| `[ g.f -ot ]` | `ash: -ot: argument expected` |
+| `[ a == ]` | `ash: ==: argument expected` |
+| `[ a =~ ]` | `ash: =~: unknown operand` |
+| `[ x -a ]` | `ash: argument expected` |
+| `[ -z a -a ]` | `ash: argument expected` |
+| `[ 1 -eq 1 -a ]` | `ash: argument expected` |
+
+The `==` and `=~` rows are the pair that says the set is exactly the
+operators the shell has: the first is one of them and names itself, the
+second is not and falls back to the word the parse stopped at. dash draws
+the same line one operator over — it has `<` and `>` and not `==` — which
+is why `Diagnostics.TestTrailingBinaryOperandExpected` is a wording both
+columns hold rather than a list either of them carries (#3550).
 
 ## `read`'s complaints are its own, and one of them is the applet's
 

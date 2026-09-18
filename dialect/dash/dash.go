@@ -1061,6 +1061,14 @@ func Semantics() interp.Semantics {
 	// unary additions past the three-word rules it does not: `test -a f`,
 	// `test -o errexit` and `test -N f` are all `unexpected operator` here.
 	s.TestStringOrder = interp.TestStringOrderBoth
+	// A connective with nothing behind it is the connective still, over a
+	// right operand that is missing and therefore false. Measured
+	// 2026-09-18: `[ x -a ]` is 1 here and `[ x -o ]` is 0, silently and at
+	// every length — `[ -z a -a ]`, `[ a = b -a ]` and `[ 1 -eq 1 -a ]` are
+	// all 1 — where bash and BusyBox ash refuse all of them. zsh is the only
+	// other column that answers, and it answers identically on every shape
+	// but one (#2917).
+	s.TestTrailingConnectiveTakesAMissingOperand = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
@@ -1810,7 +1818,17 @@ func Diagnostics() interp.Diagnostics {
 		// Apple's dash-16 and Debian's dash 0.5.12, which agree.
 		TestTooManyArguments: "%[2]s: %[1]s: unexpected operator",
 		TestOperandExpected:  "%[2]s: argument expected",
-		TestMissingBracket:   "[: missing ]",
+		// And with the operator named, for the two-word form whose second
+		// word is a binary operator this shell has: what is missing there is
+		// the operator's right operand rather than the first word being in
+		// the wrong place. Measured 2026-09-18, `[ a = ]` is `[: =: argument
+		// expected` and `[ a -eq ]` names `-eq`, where bash names the word
+		// in front. The set is exactly the operators this shell has, which
+		// is what makes it a reading rather than a list: `<` and `>` name
+		// themselves and `==`, which this shell has not got, falls back to
+		// `a: unexpected operator` (#2917).
+		TestTrailingBinaryOperandExpected: "%[2]s: %[1]s: argument expected",
+		TestMissingBracket:                "[: missing ]",
 		// Six decimal places, the most of any shell in the panel.
 		TimesDecimals: 6,
 		// dash hands the path to execve rather than checking first, so a

@@ -17637,6 +17637,48 @@ type Semantics struct {
 	// one reason above. It pins in the other four (#2583).
 	BadOptionToSpecialBuiltinFatalInPosixMode Answer
 
+	// SpecialBuiltinNameIsNotAFunctionName refuses a function whose name is
+	// one of the special builtins, at the **definition** rather than at the
+	// parse — so a script may enter and leave the state while it runs.
+	//
+	// Measured 2026-09-18 on bash 5.3.20, script files under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, with `printf` on either side of the
+	// definition:
+	//
+	//	                        export() { :; }
+	//	bash 5.3.20             defines, 0
+	//	bash 3.2.57             defines, 0
+	//	zsh 5.9.2               defines, 0
+	//	BusyBox ash 1.37.0      defines, 0
+	//	bash 5.3 `set -o posix` `export': is a special builtin, 2, and the
+	//	                        script ends
+	//	bash as `sh`            the same, word for word
+	//
+	// The set is the roster this shell already holds for every other
+	// consequence of specialness — see [Runner.IsSpecialBuiltinHere]. Swept
+	// a name at a time against that column: all sixteen are refused, `.`,
+	// `:` and `source` included, while `local`, `true`, `read`, `cd`, `echo`,
+	// `alias` and `pwd` all define at 0. So it is the list and not a table of
+	// its own, unlike ksh93's and dash's, which each differ from POSIX's in
+	// their own way and are refused by the **parser** — see
+	// syntax.Dialect.FunctionNamesRefused, which is where the other two
+	// columns answer this (#2932).
+	//
+	// The stage is what keeps it here and not there. `printf 'a\n'` in front
+	// of the definition runs, and `if false; then export() { :; }; fi` prints
+	// `after` at 0, so the check happens where the definition runs. That also
+	// makes the mode reachable from inside the same input: `bash -c 'set -o
+	// posix; export() { :; }; printf b'` is the refusal, the mode being on by
+	// the time the definition is reached — which is why this is an axis
+	// SetPosixMode moves rather than a line in a dialect's vector (#2987).
+	SpecialBuiltinNameIsNotAFunctionName Answer
+
+	// SpecialBuiltinNameIsNotAFunctionNameInPosixMode is the axis above as
+	// POSIX mode leaves it, the way BadOptionToSpecialBuiltinFatalInPosixMode
+	// is: the mode moves an answer and does not invent one, so a dialect that
+	// leaves this Unspecified refuses a script that reaches it by name.
+	SpecialBuiltinNameIsNotAFunctionNameInPosixMode Answer
+
 	// AliasBadOptionFatal ends the script over `unalias` **with no operand
 	// at all**, which is a usage error rather than a bad option. True in
 	// ksh93 alone.
@@ -20223,6 +20265,11 @@ func PosixSemantics() Semantics {
 		// its mode is entered by either door. zsh is the departure and
 		// overrides it.
 		BadOptionToSpecialBuiltinFatalInPosixMode: Yes,
+		// A function named after a special builtin: the standard leaves it
+		// unspecified, so neither the plain reading nor the mode's asserts a
+		// refusal here and the one column that makes one says so itself.
+		SpecialBuiltinNameIsNotAFunctionName:            No,
+		SpecialBuiltinNameIsNotAFunctionNameInPosixMode: No,
 		// `alias` is not one of the fifteen the standard marks special, so
 		// the refusal is an ordinary one and the script goes on.
 		AliasBadOptionFatal: No,

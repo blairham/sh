@@ -3331,6 +3331,40 @@ keyword spelling alone: the `name()` route already takes the same
 characters there, since the parentheses are the announcement and no name
 test stands in front of them.
 
+### A name that is a special builtin's
+
+A name the grammar takes and a shell still declines to bind, and the panel
+splits by **stage** here as it does above. ksh93 and dash refuse a short list
+while parsing — `syntax.Dialect.FunctionNamesRefused`, each list differing
+from POSIX's in its own way — and bash refuses the special builtins where the
+definition **runs**, in POSIX mode only. Measured 2026-09-18, script files
+under `env -i PATH=/usr/bin:/bin LC_ALL=C`, over `export() { :; }` with a
+`printf` on either side:
+
+| column | result |
+| --- | --- |
+| bash 5.3.20, bash 3.2.57 under their own name | defined, 0 |
+| zsh 5.9.2, BusyBox ash 1.37.0 | defined, 0 |
+| bash 5.3 `set -o posix` | ``export': is a special builtin``, 2, the script ends |
+| bash as `sh` | the same, word for word |
+
+**The stage is why this is `Semantics.SpecialBuiltinNameIsNotAFunctionName`
+and not a second entry in the grammar's list.** `printf 'a\n'` in front of the
+definition runs; `if false; then export() { :; }; fi` prints `after` at 0; and
+the mode can be entered from inside the same input, so `bash -c 'set -o posix;
+export() { :; }; printf b'` is the refusal over a line that was parsed before
+any of it ran. A table fixed at build time cannot answer that.
+
+**The set is that shell's roster of special builtins and not a list of its
+own.** Swept a name at a time: all sixteen refuse — the fifteen POSIX marks
+special, `.` and `:` included, plus `source` — while `local`, `true`, `read`,
+`cd`, `echo`, `alias`, `pwd` and `typeset` all define at 0. `local` is the
+sharpest of those, since that shell has it and does not make it special.
+
+The status is **2** and not the 1 that column gives an ordinary fatal error,
+which is the same split `unknown condition` records; zsh's own POSIX mode does
+not move the axis at all (#2987).
+
 ### One body, several names
 
     function clipcopy clippaste { … }

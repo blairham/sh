@@ -1937,6 +1937,11 @@ type Runner struct {
 	posixSavedForName       ForNameRunForm
 	posixSavedFuncName      FuncNameRunForm
 	posixSavedBadOption     Answer
+	// And whether a special builtin's name may be a function's, which the
+	// mode moves at the definition rather than at the parse — so a script
+	// may enter the mode, define nothing, and leave it, and the dialect's
+	// own answer has to be the one that comes back.
+	posixSavedFuncSpecial Answer
 	// The two `set` refusals, saved separately from each other and from the
 	// bad-option axis above because the panel does not answer them alike:
 	// BusyBox ash is fatal on the letter and not on the name, so one

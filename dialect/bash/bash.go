@@ -2442,6 +2442,17 @@ func Semantics() interp.Semantics {
 	// and under the `sh` name alike. This preset claims 5.3 and says so
 	// here, because a reader arriving from macOS's /bin/bash would otherwise
 	// read this as a claim about their shell.
+	// A function named after a special builtin is refused in POSIX mode and
+	// defined outside it — and the check is at the **definition**, so a
+	// script may enter the mode from inside the same input and be refused by
+	// it: `bash -c 'set -o posix; export() { :; }; printf b'` writes
+	// ``export': is a special builtin`` and prints nothing. Measured
+	// 2026-09-18 a name at a time against the roster: all sixteen refuse,
+	// `.`, `:` and `source` included, while `local`, `true`, `read`, `cd`,
+	// `echo`, `alias` and `pwd` define at 0 — so it is this shell's list of
+	// special builtins and not a table of its own, unlike ksh93's and
+	// dash's, which are the parser's (#2987).
+	s.SpecialBuiltinNameIsNotAFunctionNameInPosixMode = interp.Yes
 	s.BadSetOptionNameFatalInPosixMode = interp.Yes
 	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// `-o` takes the next word and never the rest of its own: measured,
@@ -3177,6 +3188,20 @@ func Diagnostics() interp.Diagnostics {
 		// where zsh calls it a match that did not happen and leaves 1.
 		// Measured 2026-09-18, `[[ abc =~ "" ]]` in a script file (#3279).
 		EmptyRegexOperand: "[[: invalid regular expression `': empty (sub)expression",
+		// A function named after a special builtin, quoted the way this
+		// shell quotes a reserved word. See
+		// Semantics.SpecialBuiltinNameIsNotAFunctionName, which is the state
+		// it is written in (#2987).
+		FunctionNameIsASpecialBuiltin: "`%[1]s': is a special builtin",
+		// A word this shell's POSIX mode divided one way and the run divides
+		// the other, where the `${` no longer closes. It blames the **brace**
+		// here and names the word as it was written — a different sentence
+		// from the parse-time failure the same text gets under the protecting
+		// reading alone, which blames the quote. Measured 2026-09-18 on bash
+		// 5.3.20 as `sh`: `"${v-'a}"` expanded after `set +o posix` is
+		// ``bad substitution: no closing `}' in "${v-'a}"`` at 1, with the
+		// words beside it on the same line expanding normally (#2969).
+		SecondReadingBadSubstitution: "bad substitution: no closing `}' in %[1]s",
 		// `kill` puts the process in parentheses and the reason after a dash,
 		// which is the only wording in the panel a script could not confuse
 		// with a message about a signal name.

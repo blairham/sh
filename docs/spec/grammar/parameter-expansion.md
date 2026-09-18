@@ -406,6 +406,32 @@ one already-cut word's internal division belongs to the run. Recorded by
 `core/a-quoted-brace-in-a-word-operand-does-not-move-a-statement-boundary`
 (#2604).
 
+### A second reading that runs off the end blames the brace
+
+The re-read can want a division that does not exist: a word the parse
+accepted under one reading may hold a `${` that never closes under the
+other. That is a **run-time** failure belonging to the word — the words
+beside it on the same line expand normally — and the one column that
+reaches it words it against the **brace**. Measured 2026-09-18 on bash
+5.3.20 invoked as `sh`:
+
+    v=V; f(){ printf '[%s]' "${v-'a}"; echo; }; set +o posix; f
+      bad substitution: no closing `}' in "${v-'a}"        status 1
+
+The same shell words the *parse-time* case against the **quote**, which is
+what makes these two sentences and not one: the same text under this
+shell's own name, with only the protecting reading to read it with, is
+``unexpected EOF while looking for matching `'`` at 2, while it is reading
+the input. Identical text, one binary, two readings, and the failure
+landing in a different phase under each.
+
+`Diagnostics.SecondReadingBadSubstitution` carries it, with the word named
+as it was written — enclosing quotes and all, so `"x${v-'a}y"` comes back
+whole. It is a wording and not a flag: the failure is the same failure
+either way and only the sentence differs, which is why this tree wrote the
+lexer's own complaint here and blamed the quote for a word that has no
+unmatched quote in it (#2969).
+
 The two doors nothing here reaches are `--posix` and `POSIXLY_CORRECT`,
 which the front end does not have at all; the rows below record what they
 would answer.

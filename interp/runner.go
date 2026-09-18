@@ -7006,12 +7006,17 @@ func (r *Runner) failedSubscript(format string, args ...any) {
 // Both facts were invisible while only dash, ksh93 and BusyBox ash could reach
 // it — all three answer 2 to both questions — and bash reaching the same path
 // through POSIX mode is what told them apart (#2583).
-func (r *Runner) setFatalStatus() {
+func (r *Runner) setFatalStatus() { r.status = r.fatalStatus() }
+
+// fatalStatus is that number without setting it, for the one caller that has
+// to choose between it and another number before either is written. Split
+// out rather than copied, because a second reading of the axis is a second
+// place for it to be answered differently.
+func (r *Runner) fatalStatus() int {
 	if r.ask(r.sem().FatalErrorStatusIsOne, "the exit status of a fatal error") {
-		r.status = 1
-	} else {
-		r.status = 2
+		return 1
 	}
+	return 2
 }
 
 func (r *Runner) setVar(name, value string) { r.setVarAs(name, value, assignedAnyhow) }

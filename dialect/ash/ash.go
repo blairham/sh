@@ -977,6 +977,12 @@ func Semantics() interp.Semantics {
 	// and 2, measured in the container rather than assumed from the preset,
 	// which is #3248's shape (#3274).
 	s.SubstitutionParseErrorEscapesASubshell = interp.Yes
+	// And from a here-document body, measured 2026-09-17 in the pinned Alpine
+	// image rather than inherited from the preset: BusyBox ash 1.37.0 prints
+	// `start` and exits 2 there, as dash does (#3318).
+	s.SubstitutionParseFailureInAHeredocBodyEndsTheShell = interp.Yes
+	// And the status is the refusal's own, measured the same way (#3319).
+	s.SubstitutionParseFailureCarriesTheFatalStatus = interp.No
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	// And it draws the *membership* as dash does too, `local` included:
 	// measured 2026-09-16 in the digest-pinned Alpine image under `--init`,

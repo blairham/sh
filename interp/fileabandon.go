@@ -76,10 +76,10 @@ const (
 	// ksh93 — which carry on at 1 and at 3 — and costs the *script* in zsh
 	// 5.9.2 and dash, while the target of a redirection, `cat < "$(echo
 	// hi; for)"`, costs the script in bash as well and only ksh93 carries
-	// on. Two shapes, three answers and an axis nobody has written; taking
-	// the catch here would have moved four rows right and four rows wrong
-	// on one throw. So the redirection boundary keeps the answer it has,
-	// and the question is filed rather than guessed.
+	// on. Two shapes and two different splits, which is why the boundary
+	// asks the here-document body alone —
+	// Semantics.SubstitutionParseFailureInAHeredocBodyEndsTheShell — and
+	// the target keeps the stop standing in every dialect.
 	abandonSubstParse
 )
 

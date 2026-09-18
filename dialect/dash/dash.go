@@ -1217,6 +1217,16 @@ func Semantics() interp.Semantics {
 	// same way and this says so out loud, because an answer inherited in
 	// silence is how six axes came to hold dash's value for another shell.
 	s.SubstitutionParseErrorEscapesASubshell = interp.Yes
+	// And from a here-document body: measured 2026-09-17 on dash 0.5.12,
+	// `cat <<END` over a body holding `$(echo hi; for)` prints `start` and
+	// exits 2, where bash 5.3.20 and ksh93u+ carry the script on (#3318).
+	s.SubstitutionParseFailureInAHeredocBodyEndsTheShell = interp.Yes
+	// The status is the refusal's own here. Measured 2026-09-17, the
+	// substitution at the top level of a script, inside a file `.` read and
+	// inside an `eval` argument all exit 2 — the column that says bash's 1 is
+	// the borrowed route's doing rather than a different reading of the
+	// failure (#3319).
+	s.SubstitutionParseFailureCarriesTheFatalStatus = interp.No
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	// And `local` is on that side here, which POSIX's list does not have at
 	// all. Measured 2026-09-16 against both builds — Apple's dash-16 and

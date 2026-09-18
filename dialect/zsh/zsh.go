@@ -2851,6 +2851,15 @@ func Semantics() interp.Semantics {
 	// zsh 5.9.2 ends the script from inside a subshell too, at its own
 	// syntax status of 1 (#3274).
 	s.SubstitutionParseErrorEscapesASubshell = interp.Yes
+	// And from a here-document body as well: measured 2026-09-17, `cat <<END`
+	// over a body holding `$(echo hi; for)` prints `start` and exits 1 here,
+	// where bash 5.3.20 and ksh93u+ carry the script on (#3318).
+	s.SubstitutionParseFailureInAHeredocBodyEndsTheShell = interp.Yes
+	// Never reached: this column catches the failure at a `.` and at an
+	// `eval` — Semantics.FatalErrorEndsBorrowedTextOnly — and it has no
+	// here-document row to carry on from. Answered anyway, because an
+	// unanswered axis is a refusal in front of a reader (#3319).
+	s.SubstitutionParseFailureCarriesTheFatalStatus = interp.No
 	s.TypeDistinguishesSpecialBuiltins = interp.No
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes

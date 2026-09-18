@@ -182,12 +182,20 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		// Asked only from inside one, which is where the columns differ: at
 		// the top level there is nothing to escape and every column already
 		// agrees, so a script without subshells never reaches the axis.
+		// The number the refusal leaves behind. Read before the stop is
+		// recorded, so the box a subshell's failure travels in and the
+		// status this shell reports are the same number rather than two
+		// readings of one rule — see Runner.substParseFailureStatus for the
+		// column that moves and for what says the failing text is not the
+		// script's own line.
+		_, offTheScriptsLine := r.borrowedAtLocation()
+		status := r.substParseFailureStatus(offTheScriptsLine)
 		if r.inSubshell &&
 			r.ask(r.sem().SubstitutionParseErrorEscapesASubshell,
 				"a substitution body that does not parse ending the script from inside a subshell") {
-			r.recordScriptStop(r.diag().SyntaxStatus())
+			r.recordScriptStop(status)
 		}
-		r.status = r.diag().SyntaxStatus()
+		r.status = status
 		// **An error the shell reported, not a request to stop**, which is
 		// what every boundary in fileabandon.go splits on. It was raised
 		// through stopTheShell and so arrived at those boundaries as

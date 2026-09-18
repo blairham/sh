@@ -5104,6 +5104,83 @@ type Semantics struct {
 	// differ: the top-level row is unanimous and pays nothing.
 	SubstitutionParseErrorEscapesASubshell Answer
 
+	// SubstitutionParseFailureInAHeredocBodyEndsTheShell keeps that
+	// abandonment standing when the body that would not parse was written in
+	// a **here-document body**, so the script ends there rather than only
+	// losing the command the redirection belonged to.
+	//
+	// Nobody runs the command: that half is settled and is what
+	// Runner.giveUpTheCommand does at every one of its boundaries. What
+	// splits is how far the stop then reaches, and it is a question about
+	// the here-document body and not about redirections as a class.
+	//
+	// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell>
+	// case.sh` with stdin from /dev/null, over
+	//
+	//	printf 'start\n'
+	//	cat <<END
+	//	before $(echo hi; for) after
+	//	END
+	//	printf 'after st=%s\n' "$?"
+	//
+	//	                     output                 shell status  carried on
+	//	bash 5.3.20          start, after st=1      0             yes
+	//	zsh 5.9.2            start                  1             no
+	//	ksh93u+ 2012-08-01   start, after st=3      0             yes
+	//	dash 0.5.12          start                  2             no
+	//	BusyBox ash 1.37.0   start                  2             no
+	//
+	// The **redirection target** is a third answer rather than the other end
+	// of this one, which is why the question is asked of the body alone:
+	// `cat < "$(echo hi; for)"` in the same panel ends the script in bash,
+	// zsh, dash and BusyBox ash and is carried on only by ksh93. bash costs
+	// the command in a here-document body and the script from a target, so
+	// an axis asked of redirections as a class would take one row and lose
+	// the other.
+	//
+	// The status the two carrying columns leave behind is
+	// SubstitutionParseFailureCarriesTheFatalStatus's and not this one's:
+	// ksh93 keeps the 3 the refusal already had where bash reports 1, and
+	// bash's 1 is the number every fatal error carries there.
+	SubstitutionParseFailureInAHeredocBodyEndsTheShell Answer
+
+	// SubstitutionParseFailureCarriesTheFatalStatus reports a substitution
+	// body that would not parse with the number a **fatal error** carries —
+	// FatalErrorStatusIsOne's — rather than with the shell's syntax status,
+	// wherever the failure is not the script's own line being read.
+	//
+	// Two sites, and the shells discriminate at a different one each, which
+	// is what says it is one question rather than two numbers.
+	//
+	// **Text the script borrowed**, measured 2026-09-17 with the same
+	// invocation, the sourced file and the `eval` argument each holding
+	// `printf 'inner-start\n'` and then `v=$(echo hi; for)`:
+	//
+	//	                                  bash 5.3.20  dash 0.5.12
+	//	the substitution at the top level  2            2
+	//	inside a file `.` read             1            2
+	//	inside an `eval` argument          1            2
+	//
+	// The top-level row is the control: the two shells agree about the
+	// status of the failure itself, so bash's 1 is what the borrowed route
+	// does to it and not a different reading of the failure. A **plain**
+	// syntax error in the same sourced file is the second control and is a
+	// different shape entirely — bash leaves `.` reporting 2 and runs the
+	// rest of the script — so this is not the sourced-syntax status either.
+	// zsh and ksh93 do not reach it: both catch the failure at the borrowed
+	// text, which is Semantics.FatalErrorEndsBorrowedTextOnly.
+	//
+	// **A here-document body the shell carried on from**, where
+	// SubstitutionParseFailureInAHeredocBodyEndsTheShell is No: bash leaves
+	// 1 and ksh93 leaves the 3 its refusal already carried. That is the
+	// column bash cannot discriminate on its own, because 1 is also what a
+	// failed redirection leaves there — and ksh93's plain failed redirection
+	// is 1 as well, so the 3 is the refusal's own number surviving.
+	//
+	// Never asked where the script's own line is what failed, which is the
+	// row every column agrees on and the one this must not move.
+	SubstitutionParseFailureCarriesTheFatalStatus Answer
+
 	// ConditionArithmeticErrorIsFatal abandons the input when an operand of a
 	// word-spelled comparison — `[[ 1+ -eq 0 ]]` — is not an expression the
 	// arithmetic parser can read.
@@ -18093,6 +18170,16 @@ func PosixSemantics() Semantics {
 		// dash and BusyBox ash each print `start` and exit 2 for a failure
 		// inside `( … )`. ksh93 is the departure (#3274).
 		SubstitutionParseErrorEscapesASubshell: Yes,
+		// And it ends the shell from a here-document body too, for the same
+		// reading of 2.11: the shell reads its input and executes commands
+		// as it goes, so a body that will not parse stops the reading. The
+		// two shells written to this text agree — dash and BusyBox ash each
+		// print `start` and exit 2 — and bash and ksh93 are the departure.
+		SubstitutionParseFailureInAHeredocBodyEndsTheShell: Yes,
+		// POSIX gives a syntax error its own status and says nothing about
+		// a second number for one found away from the script's own line, so
+		// the floor is the status the refusal already carries.
+		SubstitutionParseFailureCarriesTheFatalStatus: No,
 		// POSIX has no `[[ ]]` to fail in, so this is the substrate's floor
 		// rather than a reading of the text: an error is diagnosed and the
 		// shell goes on, which is what POSIX asks of every failure that is

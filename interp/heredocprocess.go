@@ -190,9 +190,29 @@ func (r *Runner) confineToTheProcess(expand func() string) string {
 			return body
 		}
 	}
-	r.giveUpTheCommand()
+	r.giveUpTheCommand(heredocBodyBoundary)
 	return body
 }
+
+// redirBoundary says which half of a redirection a give-up is for.
+//
+// One question reads it, and only because the panel answers that one
+// question differently at the two halves: a substitution body that will not
+// parse ends the script from a here-document body in three columns and from
+// a redirection target in four, and the two sets are not the same columns.
+// See Semantics.SubstitutionParseFailureInAHeredocBodyEndsTheShell.
+//
+// A parameter rather than a flag on the runner, for the reason the construct
+// a diagnostic names is one: it is true of the boundary being crossed and
+// not of a stretch of the run.
+type redirBoundary int
+
+const (
+	// redirTargetBoundary is the word a redirection was aimed at.
+	redirTargetBoundary redirBoundary = iota
+	// heredocBodyBoundary is a here-document body.
+	heredocBodyBoundary
+)
 
 // giveUpTheCommand is the abandonment boundary for a redirection that could
 // not be expanded — a here-document body, or the target of a redirection:
@@ -210,7 +230,7 @@ func (r *Runner) confineToTheProcess(expand func() string) string {
 // `cat <<END` with `$(exit 3)` in its body is a substitution's own exit and
 // has never reached here, and a request to stop that did would be a request
 // to stop.
-func (r *Runner) giveUpTheCommand() {
+func (r *Runner) giveUpTheCommand(at redirBoundary) {
 	if r.expandErr && r.ctl == controlNone {
 		// A failure that reported itself and set no control flow — a bad
 		// substitution in the dialects that word it that way. It still has
@@ -238,14 +258,29 @@ func (r *Runner) giveUpTheCommand() {
 	case r.abandon == abandonSubstParse && r.ctl == controlExit:
 		// A substitution body that will not parse costs the command the
 		// same way — no column runs `cat` with a here-document whose body
-		// holds one — and the stop is deliberately **not** taken. How far
-		// it reaches from a redirection is a second question and the
-		// columns split on it: measured, `cat <<END` with such a body
-		// leaves bash 5.3.20 and ksh93 carrying on at 1 and at 3 where zsh
-		// 5.9.2 and dash end the script. Leaving the stop standing is the
-		// half both sides agree on at a prompt, where the line boundary
-		// catches it and every column draws the next prompt. See
+		// holds one — and how far the stop then reaches is a second
+		// question the columns split on. A **here-document body** is where
+		// they split: bash 5.3.20 and ksh93 carry the script on at 1 and at
+		// 3 where zsh 5.9.2, dash and BusyBox ash end it. From a
+		// redirection **target** the split is a different four-to-one and
+		// the stop always stands here, which is why the axis is asked of
+		// the body alone. See
+		// Semantics.SubstitutionParseFailureInAHeredocBodyEndsTheShell.
+		//
+		// Asked at this boundary and nowhere else: at a prompt the line
+		// boundary catches the stop and every column draws the next prompt,
+		// and the target row has no disagreement to carry. See
 		// abandonSubstParse.
+		if at == heredocBodyBoundary &&
+			!r.ask(r.sem().SubstitutionParseFailureInAHeredocBodyEndsTheShell,
+				"a substitution body that does not parse in a here-document ending the shell") {
+			// The stop is taken away and the number the refusal leaves
+			// behind is the dialect's — the fatal one where the column
+			// that carries on reports a fatal error's number, and the
+			// syntax status the refusal already set where it does not.
+			r.ctl, r.abandon = controlNone, abandonRequested
+			r.status = r.substParseFailureStatus(true)
+		}
 	case r.pendingFileError():
 		r.takeFileError()
 	default:

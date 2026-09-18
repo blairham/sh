@@ -2532,6 +2532,16 @@ func Semantics() interp.Semantics {
 	// runs on, where the other five end it; and it contains it however deep,
 	// so a pipeline element and an enclosing `$( … )` answer the same (#3274).
 	s.SubstitutionParseErrorEscapesASubshell = interp.No
+	// It carries on from a here-document body too, and it is one of the two
+	// columns that does: measured 2026-09-17, `cat <<END` over a body holding
+	// `$(echo hi; for)` prints `start`, never runs `cat`, and reaches the
+	// next command with `after st=3` (#3318).
+	s.SubstitutionParseFailureInAHeredocBodyEndsTheShell = interp.No
+	// The 3 it leaves there is the refusal's own syntax status surviving and
+	// not a fatal error's number, which is 1 here — a plain failed
+	// redirection leaves 1 in this column, so the two are told apart by the
+	// measurement rather than by their arithmetic (#3319).
+	s.SubstitutionParseFailureCarriesTheFatalStatus = interp.No
 	s.TypeDistinguishesSpecialBuiltins = interp.Yes
 	// And this shell's special side is three names longer than POSIX's.
 	// Measured 2026-09-16 on ksh93u+ 2012-08-01, each probe with its

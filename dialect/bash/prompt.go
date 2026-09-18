@@ -93,5 +93,8 @@ func PromptStyle() interp.PromptStyle {
 		// which is this.
 		Default:          `\s-\v\$ `,
 		DefaultContinued: "> ",
+		// PS4, which this shell has set in every invocation — see
+		// interp.PromptStyle.DefaultTrace.
+		DefaultTrace: "+ ",
 	}
 }

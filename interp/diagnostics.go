@@ -5527,6 +5527,22 @@ type Diagnostics struct {
 	// `[ … ]` test is printed without quotes even though the same character
 	// is quoted everywhere else.
 	TraceBareBracket TraceBareBracket
+	// TraceEmptyAssignmentValueIsBare writes an assignment whose value is
+	// empty as the name, the operator and nothing — `A=` rather than `A=''`.
+	//
+	// One column, and it is the *position* that decides it rather than the
+	// quoting: measured 2026-09-17 over a script file with LC_ALL=C, bash
+	// 5.3.20 writes `+ : ''` for an empty **argument** and `+ A=` for an
+	// empty **value**, in every shape the value can take — a bare
+	// assignment, an append, an element write, and a prefix. ksh93u+ and zsh
+	// 5.9.2 write the two quotes in both positions, and dash and BusyBox ash
+	// quote neither.
+	//
+	// So it cannot be read off TraceQuoting, which is one value for the whole
+	// command: bash shares QuoteShell with the column that writes `''` here,
+	// and the same bash still writes `+ B='a b'` for a value with a space in
+	// it, which is that quoting doing exactly the right thing (#3158).
+	TraceEmptyAssignmentValueIsBare bool
 	// TraceForHeader is what a `for` loop prints at each iteration. Zero is
 	// TraceForNone, which is dash's and ksh93's answer and the substrate's
 	// own.

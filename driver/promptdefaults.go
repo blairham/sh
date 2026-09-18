@@ -56,10 +56,29 @@ func (sh Shell) promptDefaults(r *interp.Runner, in source, afterTheFiles bool) 
 		ps1, ps2, say = st.DefaultWithNobodyToPrompt, st.DefaultContinuedWithNobodyToPrompt,
 			st.AssignsWithNobodyToPrompt
 	}
-	if !say {
+	// PS4 is the third prompt parameter and the one that does not turn on
+	// any of this: every column assigns it whether or not there is anybody
+	// to prompt, so it is written before the `say` gate rather than behind
+	// it. See PromptStyle.DefaultTrace.
+	if st.DefaultTrace != "" {
+		if _, ok := r.GetVar("PS4"); !ok {
+			r.SetVar("PS4", st.DefaultTrace)
+		}
+	}
+	// The one column that splits the pair assigns PS2 with nobody to prompt
+	// and leaves PS1 unset, so the gate is not `say` alone.
+	continuedOnly := st.ContinuedAssignedWithNobodyToPrompt && !in.interactive
+	if !say && !continuedOnly {
 		return
 	}
 	for _, p := range [...]struct{ name, value string }{{"PS1", ps1}, {"PS2", ps2}} {
+		if !say && p.name == "PS1" {
+			// The one column that splits the pair: PS2 is assigned with
+			// nobody to prompt and PS1 is not, and a startup file there
+			// guards on an unset PS1. See
+			// PromptStyle.ContinuedAssignedWithNobodyToPrompt.
+			continue
+		}
 		if st.Default == "" {
 			// The dialect has not said anything about prompts at all, so
 			// nothing is invented. A core without a dialect assigns none:

@@ -117,15 +117,11 @@ func (r *Runner) tracesItsPrefix(assigns []*syntax.Assign, argv []string) bool {
 			// `typeset x=1` is traced as the command it is.
 			continue
 		}
-		if _, ok := positionalAssignIndex(a.Name); ok {
-			// `1=X f`, which only zsh reads as an assignment at all and
-			// which is deliberately not traced here: the store expands it
-			// for itself — see Runner.prefixAssignsPositional — so a value
-			// rendered for the trace would be a second expansion of it, and
-			// `1=$(seq 1) f` would run the substitution twice. That is the
-			// double run #1915 fixed for a scalar's value and it is not
-			// worth reopening for a construct one column has. Tracked as
-			// #3157.
+		if _, ok := positionalAssignIndex(a.Name); ok && a.IsArray {
+			// `1=(p q)`, which splices the parameter list rather than
+			// writing one parameter. The splice reads the words for itself
+			// and there is no single value to render, so the line this
+			// dialect would write for it is unmeasured and none is written.
 			continue
 		}
 		return true
@@ -215,7 +211,9 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 		if a.Operand {
 			continue
 		}
-		if _, ok := positionalAssignIndex(a.Name); ok {
+		if _, ok := positionalAssignIndex(a.Name); ok && a.IsArray {
+			// The splice form, which has no one value to expand. See
+			// Runner.tracesItsPrefix.
 			continue
 		}
 		if r.readonly[a.Name] {

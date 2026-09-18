@@ -261,3 +261,75 @@ func TestPromptingAScriptDoesNotChangeWhatAPersonGets(t *testing.T) {
 		t.Errorf("PS2 = %q, want the interactive %q", got, "P2> ")
 	}
 }
+
+// PS4 is the third prompt parameter, and it is the one that does not turn on
+// whether there is anybody to prompt: measured 2026-09-17 with nothing
+// inherited, on `-c` and under `-i` alike, every column in the panel has it
+// set — `+ ` in four of them and a location in the fifth — where PS1 is unset
+// in two and PS2 in one. Ours had it unset everywhere, which lost the `+ ` out
+// of the ordinary `PS4="$PS4"'[$LINENO] '` idiom (#2928).
+func TestTheTraceParameterIsAssignedWithNobodyToPrompt(t *testing.T) {
+	st := promptTable()
+	st.DefaultTrace = "P4> "
+	for _, c := range []struct {
+		name string
+		in   source
+	}{
+		{"with nobody to prompt", source{}},
+		{"interactive", source{interactive: true}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sh, r := promptShell(t, st, nil)
+			if code := sh.startup(r, c.in); code != 0 {
+				t.Fatalf("startup reported %d", code)
+			}
+			if got, ok := r.GetVar("PS4"); !ok || got != "P4> " {
+				t.Errorf("PS4 = %q (set %v), want %q", got, ok, "P4> ")
+			}
+		})
+	}
+}
+
+// An inherited one wins, the way an inherited PS1 does, and a table that has
+// not named one gets nothing invented for it — which is what leaves a core
+// with no dialect falling back to the tracer's own prefix rather than to a
+// value somebody wrote into the shell.
+func TestTheTraceParameterYieldsAndIsNotInvented(t *testing.T) {
+	st := promptTable()
+	st.DefaultTrace = "P4> "
+	sh, r := promptShell(t, st, map[string]string{"PS4": "INH4> "})
+	if code := sh.startup(r, source{}); code != 0 {
+		t.Fatalf("startup reported %d", code)
+	}
+	if got, _ := r.GetVar("PS4"); got != "INH4> " {
+		t.Errorf("PS4 = %q, want the inherited %q", got, "INH4> ")
+	}
+	sh, r = promptShell(t, promptTable(), nil)
+	if code := sh.startup(r, source{interactive: true}); code != 0 {
+		t.Fatalf("startup reported %d", code)
+	}
+	if got, ok := r.GetVar("PS4"); ok {
+		t.Errorf("PS4 = %q, want nothing invented for a table that did not say", got)
+	}
+}
+
+// One column splits the pair a shell with nobody to prompt is assigned:
+// measured 2026-09-17, ksh93u+ on `-c` and on a script file leaves PS1 unset
+// and has PS2 `> `. The table used to assign the two together, so the answer
+// taken was PS1's — because PS1 is what a startup file guards on — and that
+// shell's `printf '%s' "$PS2"` was empty where the real one writes `> `.
+func TestTheContinuationIsAssignedWhereTheFirstPromptIsNot(t *testing.T) {
+	st := promptTable()
+	st.ContinuedAssignedWithNobodyToPrompt = true
+	st.DefaultContinuedWithNobodyToPrompt = "N2> "
+	sh, r := promptShell(t, st, nil)
+	if code := sh.startup(r, source{}); code != 0 {
+		t.Fatalf("startup reported %d", code)
+	}
+	if got, ok := r.GetVar("PS1"); ok {
+		t.Errorf("PS1 = %q, want it still unset — the split is what the field is for", got)
+	}
+	if got, ok := r.GetVar("PS2"); !ok || got != "N2> " {
+		t.Errorf("PS2 = %q (set %v), want %q", got, ok, "N2> ")
+	}
+}

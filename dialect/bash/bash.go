@@ -1398,6 +1398,8 @@ func Semantics() interp.Semantics {
 	// says so too — `a=($(echo x))` is traced and *then* the substitution
 	// runs. Both builds agree.
 	s.TraceArrayLiteralShowsTheExpandedElements = interp.No
+	// And a subscripted literal is one line here too, the words as written.
+	s.TraceSubscriptedArrayLiteralIsElementAssignments = interp.No
 	// And the subscript is the text as written: `i=2; a[$i]=v` is
 	// `a[$i]=v`, and so is `a[i]=v`.
 	s.TraceElementSubscriptIsEvaluated = interp.No
@@ -2772,6 +2774,9 @@ func Diagnostics() interp.Diagnostics {
 		// came from: `set -x; eval :` traces `+ eval :` and then `++ :`.
 		// Measured 2026-09-11 on 5.3.15 and 3.2.57 alike.
 		TracePrefixRepeatsAtIndirection: true,
+		// An empty *value* is written bare here where an empty argument is
+		// written as two quotes — see TraceEmptyAssignmentValueIsBare.
+		TraceEmptyAssignmentValueIsBare: true,
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
 		EvalNaming:       interp.SourceBeforeLocation,

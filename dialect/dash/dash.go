@@ -378,6 +378,8 @@ func Semantics() interp.Semantics {
 	// array literal to trace. Measured 2026-09-14, `a=(1 2)` is `Syntax
 	// error: "(" unexpected` at 2 — the parenthesis, not the assignment — so
 	// no line of this shape ever reaches a trace (#1959).
+	// unanswered TraceSubscriptedArrayLiteralIsElementAssignments: and the
+	// subscripted shape is the same literal, so it does not parse either.
 	// unanswered TraceElementSubscriptIsEvaluated: nor a subscript. `a[1]=v`
 	// is an ordinary word here, assigned to a variable literally named
 	// `a[1]`, so there is nothing for the trace to resolve.

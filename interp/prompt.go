@@ -345,6 +345,32 @@ type PromptStyle struct {
 	// screen.
 	Default, DefaultContinued string
 
+	// DefaultTrace is what this dialect puts in PS4, the prefix `set -x`
+	// writes in front of a traced line. Empty means the dialect has not said,
+	// and the substrate's own prefix stands as the thing the tracer falls
+	// back to rather than a value it wrote down.
+	//
+	// It is assigned whether or not there is anybody to prompt, which is the
+	// whole reason it is a field of its own rather than a third column of the
+	// two above: measured 2026-09-17 with nothing inherited, on `-c` and
+	// under `-i` alike, every column in the panel has it set — `+ ` in bash
+	// 5.3.20, ksh93u+, dash 0.5.12 and BusyBox ash 1.37.0, and `+%N:%i> ` in
+	// zsh 5.9.2 — where PS1 is unset in two of them and PS2 in one.
+	//
+	// The value is read the same way an assigned one is, so it may hold
+	// codes, and the one column whose prefix is a location spells that
+	// location in its own prompt language. That is what makes the ordinary
+	// idiom work:
+	//
+	//	PS4="$PS4"'[$LINENO] '
+	//
+	// which extends the prefix rather than replacing it, and which lost the
+	// `+ ` entirely while the parameter was unset (#2928).
+	//
+	// Not exported: measured, a child of any column in the panel has no PS4
+	// in its environment unless one was inherited.
+	DefaultTrace string
+
 	// DefaultsFollowTheStartupFiles says this dialect assigns Default and
 	// DefaultContinued *after* its startup files rather than before them.
 	//
@@ -383,6 +409,21 @@ type PromptStyle struct {
 	// have the value right and would stop the guard ever firing, which is the
 	// same bug as an empty PS1 seen from the other side.
 	AssignsWithNobodyToPrompt bool
+
+	// ContinuedAssignedWithNobodyToPrompt says this dialect puts PS2 in a
+	// non-interactive shell even though it leaves PS1 unset there, which is
+	// one column and is why the two parameters need two answers.
+	//
+	// Measured 2026-09-17 on `-c` and on a script file with nothing
+	// inherited: ksh93u+ has PS1 *unset* and PS2 `> `. Every other column
+	// answers the pair alike, so AssignsWithNobodyToPrompt covers both for
+	// them and this is read as well, never instead.
+	//
+	// The split used to be unrepresentable, and the answer taken was the one
+	// PS1 gives — because PS1 is what a startup file guards on — which left
+	// that shell's `printf '%s' "$PS2"` empty where the real one writes `> `
+	// (#2928).
+	ContinuedAssignedWithNobodyToPrompt bool
 
 	// The values for that case. See AssignsWithNobodyToPrompt.
 	DefaultWithNobodyToPrompt, DefaultContinuedWithNobodyToPrompt string
@@ -532,6 +573,20 @@ const (
 	// into a silently dropped code.
 	FieldSourceFile
 	FieldUnitName
+	// FieldLineNumber is the line being read, counted from the start of the
+	// function, sourced file or script the reader is in — the same number a
+	// diagnostic from that line carries, and the same number the trace
+	// prefix that names a location writes.
+	//
+	// It is a row of this table because one dialect's *default* trace prefix
+	// spells it: `+%N:%i> ` is what that shell's PS4 holds, so a prefix
+	// drawn from the parameter and a prefix drawn from a built-in string are
+	// the same text only if the code is here. Measured 2026-09-17, zsh
+	// 5.9.2 over a script file: `print -P '%i'` on the first line draws `1`,
+	// and on the first line of a function body draws `0` — which is the
+	// offset [Runner.locationNameAndLine] already computes for the prefix
+	// (#2928).
+	FieldLineNumber
 	// FieldEscape is the escape character itself, for the table row that
 	// spells it doubled.
 	FieldEscape
@@ -1535,6 +1590,16 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		return r.name(), true
 	case FieldUnitName:
 		return r.promptUnitName(), true
+	case FieldLineNumber:
+		// The same reader the location-naming trace prefix uses, so a PS4
+		// holding this code draws what the built-in prefix draws. A function
+		// counts, which is what the true is: the number is an offset into
+		// the body there.
+		_, line, _ := r.locationNameAndLine(true)
+		if line < 0 {
+			line = 0
+		}
+		return itoa(line), true
 	case FieldOpenState:
 		// Nothing is open: a script that reached an expansion has parsed.
 		return "", true

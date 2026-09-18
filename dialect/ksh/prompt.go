@@ -24,13 +24,16 @@ func PromptStyle() interp.PromptStyle {
 		// left empty so the dialect describes itself.
 		Default:          "$ ",
 		DefaultContinued: "> ",
+		DefaultTrace:     "+ ",
 		// Not AssignsWithNobodyToPrompt, and the reason is measured rather
 		// than a simplification: ksh93 with nobody to prompt leaves PS1
-		// *unset* and has PS2 set to `> `. That is a split between the two
-		// parameters, which this table has no way to say — it assigns them
-		// together — so the answer taken is the one PS1 gives, because PS1
-		// is what a startup file guards on. The standing difference is
-		// ksh93's non-interactive PS2, recorded in docs/spec/prompt.md.
+		// *unset* and has PS2 set to `> `. The table used to assign the two
+		// together and the answer taken was the one PS1 gives, because PS1
+		// is what a startup file guards on — which left this shell's PS2
+		// empty where the real one writes `> `. The pair has two answers
+		// now; see interp.PromptStyle.ContinuedAssignedWithNobodyToPrompt.
+		ContinuedAssignedWithNobodyToPrompt: true,
+		DefaultContinuedWithNobodyToPrompt:  "> ",
 		//
 		// And the one column that assigns PS1 late. Measured through a pty
 		// with `$ENV` naming a file that prints `${PS1+set}`: ksh93 has PS2

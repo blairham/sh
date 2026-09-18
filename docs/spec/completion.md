@@ -272,14 +272,19 @@ functions, with Tab left where `compinit` put it, `cmd/zsh` beside
 So the names and their order are zsh's, and the rest of an option stack
 is offered. What zsh draws *beside* a name is not: see below.
 
-**Two of the eight are smaller than zsh's, and it is the same seam
-twice.** `compgroups` creates groups, and `compdescribe` splits its
-answer into one group per listing arrangement, and this editor has one
-listing arrangement — a block of replacement words with nowhere to put a
-description. The matches and their order are zsh's either way. A third,
-`compfiles`, builds no glob pattern and prunes nothing: that one is an
-optimisation `_path_files` can do without, and the conservative answers
-it gives are correct rather than approximate.
+**One of the eight is smaller than zsh's.** `compfiles` builds no glob
+pattern and prunes nothing: that one is an optimisation `_path_files`
+can do without, and the conservative answers it gives are correct rather
+than approximate.
+
+Two others were, until the editor's seam grew somewhere to put a row.
+`compgroups` created groups nothing could order and `compdescribe`
+collapsed its answer to one group per definition, because a completion
+was a replacement word and nothing else. A completion now carries the
+row a listing draws for it and the block it is drawn in (#3041, #3232),
+so `compgroups` is the order the blocks come out in and `compdescribe`
+splits a definition whose rows are not all described into the described
+half and the bare one — which is what `gzip -c` is two blocks of.
 
 **And what a shipped completion reaches is not decided here alone.**
 Several completions stop short somewhere outside `zsh/computil` — `_nl`
@@ -288,8 +293,19 @@ and `_od` on the `(R)` expansion flag, `_file_modes` on the
 modifier written after a bare parameter expansion (#3127), which leaves
 a literal `:q` for `compadd` to stop reading options at.
 
-**Descriptions are not carried either.** `compadd -d`, `-X` and `-x`
-are read and their argument consumed, and the listing this editor draws
-is names only — there is nowhere in a replacement word to put a
-description. That is the visible difference between a listing here and
-zsh's `checkout  -- checkout branch or paths to working tree`.
+**Descriptions are carried.** `compadd -d` replaces the drawn text of a
+match, `-X` heads the block it is in and `-x` says something about a
+block whether or not it has anything in it. Measured 2026-09-18 through
+a pseudo-terminal, this shell and zsh 5.9.2 against the same widget
+function, the same two-row prompt and the same line — one block of
+described options a row each, one block of bare ones packed under it:
+
+    options
+    -d  -- decompress
+    -f  -- force overwrite
+    -1  -2
+
+drawn identically by both. What a *shipped* completion draws as
+`name  -- sentence` is a display string `compdescribe` built and padded
+before `compadd` ever saw it, which is why the row and not a description
+beside a name is the thing the seam carries.

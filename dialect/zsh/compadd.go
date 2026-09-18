@@ -5,10 +5,12 @@ package zsh
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
 )
 
 // `compadd`: the builtin a completion function offers a candidate with.
@@ -49,21 +51,46 @@ import (
 //  4. **A match is quoted for the line unless `-Q`**, which is why `'a b'`
 //     would have gone in as `a\ b` had it matched at all.
 //
-// # What this does not do
+// # What is drawn, measured
 //
-// **Descriptions are dropped.** `-d`, `-X` and `-x` are read and their
-// argument consumed, and the listing this editor draws is names only — repl's
-// completion seam is answered with replacement words and has nowhere to put a
-// description. That is the visible difference between a listing here and
-// zsh's `checkout -- checkout branch or paths to working tree`, and it is
-// #3041 rather than this file.
+// The listing options were consumed and dropped until #3041 and #3232, on the
+// reasoning that repl's completion seam is answered with replacement words and
+// a replacement word has nowhere to put a row. The seam carries a row now —
+// see repl.Candidate — so what follows is what each of them means, measured on
+// zsh 5.9.2, 2026-09-18 through a pseudo-terminal with a widget of my own, so
+// that what is being read is this builtin and not a shipped function:
 //
-// **Grouping, menus and match specifications are read and ignored.** `-J`,
-// `-V`, `-1`, `-2`, `-o` and `-M` name behavior this editor has not got —
-// there is no menu completion here and no second sort order — so they are
-// consumed rather than refused, for compctl.go's reason: a builtin that
-// refused every call naming one would stop functions that are otherwise
-// entirely servable.
+//	compadd -d '(one two)' -- checkout cherry        lists `one  two`
+//	compadd -d disp -- alpha beta   disp=(DA DB)     lists `DA  DB`
+//	compadd -J g1 -X 'first group' -- delta alpha    a heading, then the block
+//	compadd -V g2 -- zulu bravo yankee               that order, unsorted
+//	compadd -l … -d '(delta:D alpha:A charlie:C)'    one row per line, sorted
+//	compadd -J g -x 'a message'                      the message, no matches
+//	compadd -J g -X 'no matches here'                nothing at all
+//
+// Five rules, and the last two are the pair a reading of the manual gets
+// backwards:
+//
+//  1. **`-d` replaces the drawn text outright**, and takes either an array's
+//     name or a literal `(…)`. It is not a description appended to a name:
+//     `checkout` drawn as `one` is what the first row above says. What the
+//     shipped completions draw as `name  -- sentence` is a display string
+//     `compdescribe` built and padded before it got here.
+//  2. **A display string goes where its match goes.** The `-l` row sorts to
+//     `alpha:A charlie:C delta:D`, which is the *matches* in order carrying
+//     their own rows.
+//  3. **`-J` sorts the block and `-V` keeps the order it was given.** That is
+//     the whole of the difference between the two letters.
+//  4. **`-x` is drawn even when the group has no matches, and `-X` is not.**
+//     A message is a completion system saying something; an explanation heads
+//     a block and there is nothing to head.
+//  5. **`-x` wins over `-X`** where a call carries both.
+//
+// **Menus and match specifications are still read and ignored.** `-1`, `-2`,
+// `-o` and `-M` name behavior this editor has not got — there is no menu
+// completion here and no second sort order — so they are consumed rather than
+// refused, for compctl.go's reason: a builtin that refused every call naming
+// one would stop functions that are otherwise entirely servable.
 
 func registerCompadd(r *interp.Runner) { r.Register("compadd", compaddBuiltin) }
 
@@ -74,6 +101,31 @@ const compaddArgumentOptions = "PSpsiIWdJVXxrRDOAFMEy"
 
 // compaddFlagOptions are the letters that stand alone and may cluster.
 const compaddFlagOptions = "akqQfenUl12CTuzo"
+
+// compaddArray reads `-d`'s argument, which is an array's **name** or a
+// literal list in parentheses.
+//
+// Both spellings, because both are written: `compdescribe`'s caller hands the
+// name of the array it filled, and a completion function writing two rows
+// inline writes `-d '(one two)'`. Measured, both draw the strings — see the
+// file comment.
+//
+// Split on blanks and nothing cleverer. A display string with a blank in it —
+// which is every `name  -- sentence` row — reaches here through the array
+// name, where no splitting happens; the literal form is what a function writes
+// for short words, and this is what that function means by it.
+func compaddArray(r *interp.Runner, value string) []string {
+	if strings.HasPrefix(value, "(") && strings.HasSuffix(value, ")") {
+		return strings.Fields(value[1 : len(value)-1])
+	}
+	if values, ok := r.GetArray(value); ok {
+		return values
+	}
+	if one, ok := r.GetVar(value); ok && one != "" {
+		return []string{one}
+	}
+	return nil
+}
 
 // compaddOrders are the words `-o` takes as its argument, and the whole of
 // how that letter is told from a candidate.
@@ -111,6 +163,17 @@ type compaddOptions struct {
 	into                 []string // -O or -A: store rather than offer
 	filter               []string // -D: strike the non-matching out, in place
 	withhold             bool     // -O, -A or -D: add nothing
+
+	// What the listing draws. display is `-d`, unresolved: the argument as
+	// written, since an array named there is read when the call runs and not
+	// when the letter is seen.
+	display    string // -d: the rows, an array's name or a literal list
+	group      string // -J or -V: the block these matches are drawn in
+	unsorted   bool   // -V: keep the order rather than sorting the block
+	onePerLine bool   // -l: a row each rather than packed into columns
+	heading    string // -X: the row drawn above the block
+	message    string // -x: the same, and drawn with no matches under it
+	hasMessage bool   // -x was given, which an empty message still is
 }
 
 func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -123,8 +186,23 @@ func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if !ok {
 		return 1
 	}
+	// Once, because the call's explanation is recorded against the block as
+	// the group is made and a second making would record it twice.
+	group := cs.group(opts)
 	candidates := compaddCandidates(r, opts, rest)
-	return boolStatus(cs.add(r, opts, candidates) > 0)
+	offered := cs.add(r, opts, group, candidates)
+	if opts.hasMessage && offered == 0 {
+		// A message is drawn whether or not the block has matches, so a call
+		// that offered none of its own still leaves the block behind. A
+		// candidate with neither a word nor a row is exactly that: the block
+		// exists, and nothing is drawn under the heading.
+		//
+		// Only where nothing was offered, because a block with a match in it
+		// is already there and a second empty candidate would be a row this
+		// editor has to know to skip rather than one it never sees.
+		cs.matches = append(cs.matches, repl.Candidate{Group: group})
+	}
+	return boolStatus(offered > 0)
 }
 
 // compaddParse reads the letters off the front, stopping at `--`, at a word
@@ -193,6 +271,8 @@ func compaddFlag(o *compaddOptions, letter byte) {
 		o.unfiltered = true
 	case 'Q':
 		o.raw = true
+	case 'l':
+		o.onePerLine = true
 	}
 }
 
@@ -212,6 +292,18 @@ func compaddArgument(o *compaddOptions, letter byte, value string) {
 		// More than once is allowed and is what `_arguments` writes: each
 		// named array is struck through in parallel with the candidates.
 		o.filter, o.withhold = append(o.filter, value), true
+	case 'd':
+		o.display = value
+	case 'J':
+		o.group = value
+	case 'V':
+		// The same field: a block is named once and the letter that named it
+		// says whether it sorts. Measured — see the file comment.
+		o.group, o.unsorted = value, true
+	case 'X':
+		o.heading = value
+	case 'x':
+		o.message, o.hasMessage = value, true
 	}
 }
 
@@ -270,10 +362,15 @@ func compaddCandidates(r *interp.Runner, o compaddOptions, words []string) []str
 // nth element goes when the nth candidate does not match, and an element past
 // the end of the candidate list is left alone. Measured with a two-element
 // array against three candidates, above.
-func (cs *completionState) add(r *interp.Runner, o compaddOptions, candidates []string) int {
+func (cs *completionState) add(
+	r *interp.Runner, o compaddOptions, group repl.Group, candidates []string,
+) int {
 	var matched []string
 	kept := make([]bool, len(candidates))
 	offered := 0
+	// The rows, read now rather than when `-d` was seen: the array a caller
+	// names is filled between the two.
+	displays := compaddArray(r, o.display)
 	for i, candidate := range candidates {
 		// What is matched is the hidden prefix and suffix around the
 		// candidate; what `-P` and `-S` add is not part of it. Measured —
@@ -285,7 +382,11 @@ func (cs *completionState) add(r *interp.Runner, o compaddOptions, candidates []
 		kept[i] = true
 		matched = append(matched, subject)
 		if !o.withhold {
-			cs.offer(subject, o.prefix, o.suffix, o.raw)
+			// The nth candidate's row, by position and not by match: a `-d`
+			// array is as long as the candidate list the caller passed, so a
+			// candidate the prefix struck out still costs its own row. That
+			// is the same by-position rule `-D` is measured to follow.
+			cs.offer(subject, o, display(displays, i), group)
 			offered++
 		}
 	}
@@ -297,8 +398,24 @@ func (cs *completionState) add(r *interp.Runner, o compaddOptions, candidates []
 			r.SetArray(from, strikeUnmatched(values, kept))
 		}
 	}
-	cs.state["nmatches"] = strconv.Itoa(len(cs.matches))
+	// The matches and not the rows: a block's message is a candidate here so
+	// that the block exists with nothing in it, and `$compstate[nmatches]` is
+	// what a completion function tests to decide whether anything was
+	// offered.
+	cs.state["nmatches"] = strconv.Itoa(len(insertableWords(cs.matches)))
 	return offered
+}
+
+// insertableWords are the candidates that are matches: a listing-only row is
+// drawn and never inserted, and never counted.
+func insertableWords(candidates []repl.Candidate) []repl.Candidate {
+	out := candidates[:0:0]
+	for _, c := range candidates {
+		if c.Word != "" {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // strikeUnmatched is `-D`'s array, with the elements whose candidate did not
@@ -329,16 +446,108 @@ func strikeUnmatched(values []string, kept []bool) []string {
 // Duplicates are dropped rather than offered twice, which is what a listing
 // with one entry per name needs and what makes a second Tab fill in from a
 // set rather than from a bag.
-func (cs *completionState) offer(subject, pre, suf string, raw bool) {
-	body := cs.iprefix + pre + subject
-	word := cs.c.Escape(body) + suf
-	if raw {
-		word = cs.qiprefix + body + suf
+func (cs *completionState) offer(subject string, o compaddOptions, row string, group repl.Group) {
+	body := cs.iprefix + o.prefix + subject
+	word := cs.c.Escape(body) + o.suffix
+	if o.raw {
+		word = cs.qiprefix + body + o.suffix
 	}
 	for _, have := range cs.matches {
-		if have == word {
+		if have.Word == word {
 			return
 		}
 	}
-	cs.matches = append(cs.matches, word)
+	cs.matches = append(cs.matches, repl.Candidate{Word: word, Display: row, Group: group})
+}
+
+// display is the nth row of a `-d` list, or none where the caller gave no
+// list or a shorter one than its candidates.
+//
+// Empty rather than an error for a short list, because the editor reads an
+// empty row as "draw the word", which is what a candidate past the end of a
+// display array has to be: there is nothing else to draw it as.
+func display(rows []string, i int) string {
+	if i >= len(rows) {
+		return ""
+	}
+	return rows[i]
+}
+
+// group is the block this call's matches are drawn in, and it records the
+// call's explanation against that block.
+//
+// The identity of a block is its name and its arrangement, and not its
+// heading. Both halves are measured, on zsh 5.9.2, 2026-09-18:
+//
+//   - **Two calls naming one group are one block, and both explanations are
+//     drawn.** `-J gx -X 'first heading'` and `-J gx -X 'second heading'`
+//     draw two heading rows and then `delta  gamma` — one sorted block under
+//     two headings, not two blocks.
+//   - **Two calls naming no group are one block too**, and the explanation
+//     the first of them gave heads it: `-X 'unnamed heading' -- alpha` then a
+//     plain `compadd -- beta` draws the heading once over `alpha  beta`.
+//   - **An arrangement splits a name.** The `gzip -c` measurement in
+//     compdescribe.go is one `-default-` definition drawn as two blocks,
+//     because the described half carries `-l` and the bare half does not.
+//
+// So the heading cannot be part of what identifies a block — a second call
+// with a second explanation would make a second block — and it cannot be
+// settled when the call runs either, since a later call may add to it. It is
+// stamped on at the end instead; see completionState.groupedMatches.
+func (cs *completionState) group(o compaddOptions) repl.Group {
+	key := repl.Group{Name: o.group, Unsorted: o.unsorted, OnePerLine: o.onePerLine}
+	heading := o.heading
+	if o.hasMessage {
+		// Measured: a call carrying both draws the message. See the file
+		// comment's fifth rule.
+		heading = o.message
+	}
+	if heading != "" {
+		cs.groups[key] = append(cs.groups[key], heading)
+	} else if _, seen := cs.groups[key]; !seen {
+		cs.groups[key] = nil
+	}
+	return key
+}
+
+// groupedMatches is what `compadd` collected with each block's headings
+// stamped on, which is the answer repl's seam is given.
+//
+// The last step of a completion rather than something offer() could do,
+// because a block's headings are not all known until the last `compadd` has
+// run — see group() for the two measurements that say so.
+func (cs *completionState) groupedMatches() []repl.Candidate {
+	out := make([]repl.Candidate, len(cs.matches))
+	for i, c := range cs.matches {
+		if headings := cs.groups[c.Group]; len(headings) > 0 {
+			c.Group.Heading = strings.Join(headings, "\n")
+		}
+		out[i] = c
+	}
+	// And into the order `compgroups` asked for, where it was called. A
+	// stable sort, so that a block nobody named keeps the place it was added
+	// in and the candidates inside every block keep theirs — the listing
+	// sorts within a block itself, and a block asked to stay unsorted must
+	// come out of here in the order it went in.
+	if len(cs.groupOrder) > 0 {
+		sort.SliceStable(out, func(i, j int) bool {
+			return cs.groupRank(out[i].Group.Name) < cs.groupRank(out[j].Group.Name)
+		})
+	}
+	return out
+}
+
+// groupRank is where `compgroups` put a block, or the end for one it did not
+// name.
+//
+// Measured on zsh 5.9.2, 2026-09-18: `compgroups second first` followed by a
+// `compadd -J first` and a `compadd -J second` draws `SECOND beta` above
+// `FIRST alpha`, so the declaration and not the order of the calls decides.
+func (cs *completionState) groupRank(name string) int {
+	for i, declared := range cs.groupOrder {
+		if declared == name {
+			return i
+		}
+	}
+	return len(cs.groupOrder)
 }

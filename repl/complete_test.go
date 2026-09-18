@@ -14,11 +14,11 @@ import (
 // without a filesystem or a PATH.
 type fakeCompleter struct{ cmds, paths []string }
 
-func (f fakeCompleter) Complete(c Completion) []string {
+func (f fakeCompleter) Complete(c Completion) []Candidate {
 	if c.Command {
-		return withPrefix(f.cmds, c.Word)
+		return Words(withPrefix(f.cmds, c.Word)...)
 	}
-	return withPrefix(f.paths, c.Word)
+	return Words(withPrefix(f.paths, c.Word)...)
 }
 
 func withPrefix(all []string, prefix string) []string {
@@ -109,7 +109,7 @@ func TestCompleting(t *testing.T) {
 			t.Errorf("%s: line is %q, want %q", tc.name, string(e.line), tc.want)
 		}
 		if len(got) != len(tc.listed) {
-			t.Errorf("%s: listed %q, want %q", tc.name, got, tc.listed)
+			t.Errorf("%s: listed %v, want %q", tc.name, got, tc.listed)
 		}
 	}
 }

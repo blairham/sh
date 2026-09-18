@@ -32,10 +32,10 @@ func TestAnEmptyCommandWordCanBeWithheld(t *testing.T) {
 	empty := Completion{Command: true}
 	got := offered.Complete(empty)
 	if len(got) != 3 {
-		t.Errorf("an empty command word offered %q, want all three names", got)
+		t.Errorf("an empty command word offered %v, want all three names", got)
 	}
 	if got := withheld.Complete(empty); got != nil {
-		t.Errorf("withheld, an empty command word offered %q, want nothing", got)
+		t.Errorf("withheld, an empty command word offered %v, want nothing", got)
 	}
 
 	// Only the empty word. A word with a letter in it is completed either
@@ -43,7 +43,7 @@ func TestAnEmptyCommandWordCanBeWithheld(t *testing.T) {
 	// than an option that turns command completion off.
 	word := Completion{Command: true, Word: "e"}
 	if got := withheld.Complete(word); len(got) != 2 {
-		t.Errorf("withheld, `e` offered %q, want echo and export", got)
+		t.Errorf("withheld, `e` offered %v, want echo and export", got)
 	}
 
 	// And a filename is never withheld: the option is about command
@@ -73,7 +73,7 @@ func TestTheEmptyWordAnswerFollowsTheRunner(t *testing.T) {
 	}
 	r.SetCompletesEmptyCommandWord(false)
 	if got := c.Complete(empty); got != nil {
-		t.Errorf("after the shell said no, an empty command word offered %q", got)
+		t.Errorf("after the shell said no, an empty command word offered %v", got)
 	}
 	r.SetCompletesEmptyCommandWord(true)
 	if got := c.Complete(empty); len(got) == 0 {

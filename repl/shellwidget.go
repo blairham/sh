@@ -161,12 +161,12 @@ func (s Shell) runElapsed(ctx context.Context) {
 // it runs on a keystroke, and a panic in it must cost a Tab rather than the
 // session. A guarded panic answers with no matches, which this editor reads as
 // "nothing to say about this word" and completes its own way.
-func (s Shell) shellCompletion(ctx context.Context) func(string, Completion) []string {
+func (s Shell) shellCompletion(ctx context.Context) func(string, Completion) []Candidate {
 	if s.RunCompletion == nil {
 		return nil
 	}
 	guard := s.guard()
-	return func(name string, c Completion) (matches []string) {
+	return func(name string, c Completion) (matches []Candidate) {
 		if guard.Do(func() { matches = s.RunCompletion(ctx, name, c) }) {
 			return nil
 		}

@@ -63,7 +63,7 @@ type editor struct {
 	// become, by the name of the action a key's binding named — see
 	// Binding.Candidates. Nil is a session whose front end gave it no such
 	// way, which is every dialect but one and every key but a completion one.
-	shellComplete func(name string, c Completion) []string
+	shellComplete func(name string, c Completion) []Candidate
 
 	// workingDir is the shell's own directory, asked when a completion is
 	// built rather than held, because `cd` moves it under the editor. Nil is
@@ -946,9 +946,12 @@ func place(promptWidth int, line []rune, pos, cols int) (curRow, curCol, endRow,
 // Measured, bash and zsh lay them out the same way — as many columns as fit,
 // each as wide as the longest match plus two, filled down one column before
 // starting the next, so that reading in sorted order means reading downwards.
-func (e *editor) list(matches []string, prompt drawnPrompt) {
+func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 	e.endLine(prompt, "")
-	for _, row := range columns(matches, e.cols()) {
+	// Through listingRows rather than straight to columns: a listing is one
+	// block or several, and which rows share an arrangement is the
+	// completer's answer rather than this editor's. See completelist.go.
+	for _, row := range listingRows(matches, e.cols()) {
 		e.write(row)
 		e.write("\r\n")
 	}

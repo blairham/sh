@@ -127,10 +127,15 @@ func queryEditor(keys, query string, echo, strict bool) (*editor, *strings.Build
 }
 
 // names makes n matches of a fixed width, so the rows they take are known.
-func names(n int) []string {
-	out := make([]string, n)
+//
+// As candidates carrying nothing but a word, with the row a listing draws for
+// each filled in: the question counts the rows, and a candidate whose Display
+// is empty draws none of them.
+func names(n int) []Candidate {
+	out := make([]Candidate, n)
 	for i := range out {
-		out[i] = fmt.Sprintf("name%04d", i)
+		name := fmt.Sprintf("name%04d", i)
+		out[i] = Candidate{Word: name, Display: name}
 	}
 	return out
 }

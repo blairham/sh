@@ -65,25 +65,18 @@ import (
 //
 // The eight all answer, and the shipped system runs on them: `git che<TAB>`
 // offers the same eight sub-commands `/bin/zsh` offers on the same rc, and
-// `uname -a<TAB>` completes the rest of the stack the same way. Three things
-// are still smaller than zsh's, and they are three different kinds of smaller
-// — worth keeping apart, because only one of them is work anybody could do
-// inside these files.
+// `uname -a<TAB>` completes the rest of the stack the same way.
 //
-// **Descriptions are not shown — a seam this editor has not got.**
-// `compdescribe` builds them and hands them back, `compadd -d` takes them,
-// and this editor's listing is names only: repl's completion seam is answered
-// with replacement words and has nowhere to put a description. That is #3041
-// and it is the visible difference between a listing here and zsh's.
-//
-// **Match groups are not a thing here — the same seam, from the other side.**
-// `compgroups`, `compdescribe`'s per-arrangement splitting, and `compadd`'s
-// `-J` and `-V` all name an ordering and a listing arrangement this editor
-// has not got. They are read and ignored rather than refused, which is
-// compctl.go's rule and for its reason: refusing would stop every completion
-// whose context sets `group-order`, and those completions are otherwise
-// entirely servable. The matches and their order are zsh's either way — see
-// compdescribe.go for the measurement that says so.
+// **Two of the three things that used to be smaller than zsh's here were one
+// missing seam**, and it is worth writing down which, because both read as
+// work inside these files and neither was. `compdescribe` built descriptions
+// and handed them back, `compadd -d` took them, and the listing was names
+// only; `compgroups`, `compdescribe`'s per-arrangement splitting and
+// `compadd`'s `-J` and `-V` all named an arrangement that was thrown away.
+// Neither was a builtin that answered wrongly: the *editor* was answered with
+// replacement words and had nowhere to put a row or a block. It has both now
+// — see repl.Candidate and repl.Group — so those builtins say what they
+// measured all along, and #3041 and #3232 are what the widening cost.
 //
 // **`compfiles` does no globbing optimisation — work, not a boundary.** It is
 // the one of the eight that is entirely an optimisation, and the conservative

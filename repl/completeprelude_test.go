@@ -44,7 +44,7 @@ func TestTabStillOffersAFunctionTheDialectDefined(t *testing.T) {
 	got := runnerCompleter{r: r}.Complete(Completion{
 		Line: "pus", Point: 3, Start: 0, Word: "pus", Command: true,
 	})
-	if len(got) != 1 || got[0] != "pushd" {
-		t.Errorf("Complete(%q) = %q, want just %q", "pus", got, "pushd")
+	if len(got) != 1 || got[0].Word != "pushd" {
+		t.Errorf("Complete(%q) = %v, want just %q", "pus", got, "pushd")
 	}
 }

@@ -219,7 +219,7 @@ type Shell struct {
 	// Its answer is asked before the editor's own completion and never
 	// instead of it — see repl.Binding.Candidates, which is where the name
 	// comes from and why the ordering is the only safe one.
-	RunCompletion func(*interp.Runner, context.Context, string, repl.Completion) []string
+	RunCompletion func(*interp.Runner, context.Context, string, repl.Completion) []repl.Candidate
 
 	// RunScheduled runs whatever this dialect had set aside for a time that
 	// has now passed. It is called at every prompt, before the prompt is

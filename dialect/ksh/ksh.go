@@ -260,6 +260,16 @@ func Dialect() syntax.Dialect {
 	// runs, a definition in a branch nothing takes is never refused, and one
 	// inside a subshell ends the subshell alone. Measured 2026-09-15 on all
 	// three routes; see syntax.Dialect.FunctionNamesRefused (#2932).
+	// A `]]` standing where a condition **term** belongs is an ordinary
+	// word here, so the closer is only a closer once the condition has
+	// something to close over. Measured 2026-09-18: `[[ ]] ]]` is 0, the
+	// two-character word being non-empty; `[[ ]] == x ]]` is 1, comparing it
+	// with `x`; and `[[ ]]` alone is `` `[[' unmatched `` at the end of the
+	// input, the condition never having closed. bash and zsh refuse the
+	// token in every one of those. An **operand**'s position is a separate
+	// question and this shell answers it the way they do — `[[ -n ]]` and
+	// `[[ x == ]]` are `` `]]' unexpected `` here too (#2964).
+	d.ConditionCloserIsAWordWhereATermBegins = true
 	d.FunctionNamesRefused = map[string]bool{
 		"alias": true, "break": true, "continue": true, "enum": true,
 		"eval": true, "exec": true, "exit": true, "export": true,

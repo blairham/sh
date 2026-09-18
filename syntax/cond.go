@@ -248,8 +248,18 @@ func (p *Parser) parseTestClause() Command {
 // asks, because every reserved word in this grammar stops being one when it
 // is quoted. A second check beside it was written and a mutant that deleted
 // it passed everything, which is what said the question was already answered.
-func (p *Parser) condWord() *Word {
-	if p.atWord("]]") {
+func (p *Parser) condWord() *Word { return p.condWordAt(false) }
+
+// condTermWord is condWord at the one position where a `]]` may be an
+// ordinary word rather than the closer — see
+// [Dialect.ConditionCloserIsAWordWhereATermBegins], which is where the
+// measurement is. Every other call is an operand's and takes the closer as
+// the closer in every column.
+func (p *Parser) condTermWord() *Word { return p.condWordAt(true) }
+
+func (p *Parser) condWordAt(term bool) *Word {
+	if p.atWord("]]") &&
+		(!term || !p.dialect.ConditionCloserIsAWordWhereATermBegins) {
 		return nil
 	}
 	w := p.word()
@@ -340,10 +350,43 @@ func (p *Parser) failCondTerm() {
 		// by the outermost frame's, and every nesting reported one.
 		return
 	}
+	after := p.dialect.ConditionTermMissingBlamesTheTokenAfterTheCloser && p.atWord("]]")
+	if after {
+		// The closer is consumed and the complaint falls on whatever stands
+		// behind it, at that token's own line — see
+		// [Dialect.ConditionTermMissingBlamesTheTokenAfterTheCloser]. Where
+		// nothing does, the `]]` is still the last token read and is what
+		// gets named, which is the same sentence this shell would have
+		// written anyway.
+		p.lex.inCondition = false
+		p.next()
+		if p.at(TokNewline) {
+			// Blank lines are passed over, so the complaint lands on the
+			// next real token rather than on the first newline — measured,
+			// three blank lines before an `echo` put it on the `echo`'s
+			// line. The first newline is kept and put back where the input
+			// holds nothing else, which is the shape a file ending in one
+			// has and is what that route's row is about.
+			newline := p.tok
+			p.skipNewlines()
+			if p.at(TokEOF) {
+				p.tok = newline
+			}
+		}
+	}
 	p.failUnexpected("]]")
 	var se *Error
 	if errors.As(p.err, &se) {
 		se.CondTermMissing, se.CondGroupsOpen = true, p.condGroups
+		if after {
+			// And the words of the group are **not** collected, because in
+			// that reading there is no group: the refusal is about the one
+			// token the parse stopped on, and the words behind it were never
+			// read as a condition's. An empty list rather than a nil one is
+			// what says so, recordCondGroup leaving a list that is already
+			// set alone.
+			se.CondWords = []string{}
+		}
 	}
 	p.blameCondition(p.condStart)
 }
@@ -500,7 +543,7 @@ func (p *Parser) condPrimary() CondExpr {
 		return &CondUnary{Op: op, X: x, Start: start}
 	}
 
-	left := p.condWord()
+	left := p.condTermWord()
 	if left == nil {
 		return nil
 	}

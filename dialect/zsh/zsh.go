@@ -350,6 +350,16 @@ func Dialect() syntax.Dialect {
 	// `[[ -prefix 1 (f|ht)tp:// ]]` is the completion system's own spelling.
 	// See syntax.Dialect.ConditionOperandMayOpenWithAGroup.
 	d.ConditionOperandMayOpenWithAGroup = true
+	// A condition with no term in it is reported at the token **behind** the
+	// `]]` rather than at the `]]`: the closer is consumed and whatever
+	// stands after it is what the complaint names, at that token's own line.
+	// Measured 2026-09-18 over `[[ ]]`, where bash names the `]]` at line 1
+	// on every route and this shell names a newline at line 2 in a file that
+	// has one, `echo` at its own line where a command follows, `;` where one
+	// stands, and the `]]` itself where the input simply ends. It is not the
+	// word reading ksh93 has — `[[ ]] ]]` and `[[ ]] == x ]]` are refusals
+	// here and run there — only where the refusal lands (#2964).
+	d.ConditionTermMissingBlamesTheTokenAfterTheCloser = true
 	// A `{ … }` written immediately after `$$` is a run of characters: a
 	// blank, a newline or an operator inside is text, and the braces are a
 	// brace list nowhere — though a range written straight into them still

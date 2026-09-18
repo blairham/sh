@@ -125,6 +125,10 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	changedOnly, code := r.jobsChangedFilter(opts)
+	if code != 0 {
+		return code
+	}
 
 	// Operands name jobs, and every shell in the panel lists them in the
 	// order they were written rather than in the listing's own order — so
@@ -148,6 +152,15 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 			jobs = append(jobs, j)
 		}
 	}
+	if changedOnly {
+		jobs = r.jobsThatChangedSinceTheyWereReported(jobs)
+	}
+	// Whatever a listing showed, it has now said it — which is what the next
+	// `-n` listing is measured against. Over the jobs that were *looked at*
+	// rather than the ones printed, the rule the forgetting below follows and
+	// for the same reason: a filter the dialect applied is still the shell
+	// having looked.
+	r.markJobsReported(jobs)
 	if code := r.printJobs(jobs, form, wanted, explicit); code != 0 {
 		return code
 	}
@@ -290,6 +303,64 @@ func (w jobState) holds(j *Job) bool {
 		return j.Stopped
 	}
 	return true
+}
+
+// jobsChangedFilter reads `-n`, which is not a state filter but a filter on
+// what the shell has already said.
+//
+// The letter reaches this only where the dialect has it — `JobsOptions` is
+// what lets it through builtinOptions at all — and the axis is asked there
+// rather than at the letter set, because a second dialect could take the
+// letter and mean something else by it. bash does exactly that.
+func (r *Runner) jobsChangedFilter(opts string) (bool, int) {
+	if !strings.ContainsRune(opts, 'n') {
+		return false, 0
+	}
+	if r.ask(r.sem().JobsListsWhatChangedSinceTheLastReport,
+		"`jobs -n` listing only what changed since the shell last said so") {
+		return true, 0
+	}
+	if r.unspecified {
+		return false, 2
+	}
+	return false, 0
+}
+
+// jobsThatChangedSinceTheyWereReported keeps the jobs whose state has moved
+// since the shell last said anything about them.
+//
+// The monitor is the gate and that is measured rather than tidy. A shell with
+// nobody to tell does not notice a job end: ksh93's bare `jobs` in a script
+// calls a job that has already exited `Running`, so by the time `jobs -n` is
+// asked nothing has changed as far as that shell knows, and it prints nothing
+// at status 0. This engine reaps on every listing and so would have the ending
+// in hand, which is exactly why the noticing has to be modeled here instead of
+// falling out of the table.
+//
+// A job that is still running is not a change however new it is. That is the
+// same measurement from the other side: the first `jobs -n` after two jobs
+// were started prints only the one that ended. bash's letter of the same name
+// counts a job that has only just started, which is why the two readings are
+// not one implementation.
+func (r *Runner) jobsThatChangedSinceTheyWereReported(jobs []*Job) []*Job {
+	if !r.monitor {
+		return nil
+	}
+	changed := make([]*Job, 0, len(jobs))
+	for _, j := range jobs {
+		if j.reportedState != j.reportState() {
+			changed = append(changed, j)
+		}
+	}
+	return changed
+}
+
+// markJobsReported records what the shell has just said about each job, which
+// is what the next `-n` listing is measured against.
+func (r *Runner) markJobsReported(jobs []*Job) {
+	for _, j := range jobs {
+		j.reportedState = j.reportState()
+	}
 }
 
 // jobStateFilter reads `-r` and `-s`.

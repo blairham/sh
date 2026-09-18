@@ -227,6 +227,15 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		return ""
 	}
 
+	if v, answered := r.arithmeticBodySubstitution(f, span); answered {
+		// A body that is nothing but `(( … ))` is read as the arithmetic
+		// expansion in the one dialect that reads it that way — before the
+		// two forms below, because it is not a substitution at all there and
+		// neither of them should see it. See
+		// Runner.arithmeticBodySubstitution for the three rows that say the
+		// text is never run as a command.
+		return v
+	}
 	if span.CurrentShell {
 		// Here rather than on a copy, which is the whole of why this
 		// spelling exists: `${ x=1;}` leaves x set where `$(x=1)` does not.
@@ -359,6 +368,12 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	// spelling. See Runner.hasSomethingToReturnFrom.
 	r.currentShellSubstDepth++
 	defer func() { r.currentShellSubstDepth-- }()
+	// And an execution unit of its own, which is the shape #3184 filed: a
+	// bare `exit` in the body reports what the body has run and 0 where it
+	// has run nothing, while `$?` in the same body still reads the value the
+	// shell came in with. See interp/unitstatus.go for the rows and for the
+	// controls that put the other five units beside this one.
+	defer r.enterExecutionUnit()()
 	putBackReply := func() {}
 	if span.ReplyValue {
 		putBackReply = r.localizeReply()

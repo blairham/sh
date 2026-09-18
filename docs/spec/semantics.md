@@ -18222,6 +18222,72 @@ control: with one element at 5 the two columns agree exactly where the
 boundary is, so this is about the empty name and not about how either
 counts.
 
+**`ArithmeticOnlyBodyIsAnArithmeticExpansion`** — bash no · dash no · ksh93 yes · zsh no
+
+Reads a command substitution whose **whole** body is one `(( … ))` as the
+arithmetic expansion `$(( … ))` rather than as a substitution with a
+command in it. Measured 2026-09-18, a script file under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null:
+
+                                      ksh93u+   bash 5.3, zsh 5.9.2
+    echo "[$( (( 1+1 )) )]"           [2]       []
+    n=0; $( (( n+=5 )) ); echo $n     5         0
+    echo "[${ (( 1+1 )); }]"          [2]       no such spelling
+    echo "[`(( 1+1 ))`]"              []        []
+    echo "[$( (( 1+1 )); echo hi )]"  [hi]      [hi]
+    echo "[$( echo hi; (( 1+1 )) )]"  [hi]      [hi]
+    echo "[$( (( 1+1 )) >/dev/null)]" refused   []
+    echo "[$( (( 1+1 )) & )]"         []        []
+
+Three rows are the discriminators, and each rules out a different way of
+reading the first one as a substitution. The value is the **expression's**,
+where `(( … ))` prints nothing at all. An assignment in it reaches the
+shell that wrote it, where a subshell's could not. And a redirection
+written after it is a *syntax error* rather than a redirection, which is
+what says the text was never read as a command.
+
+dash and BusyBox ash have no arithmetic command, so a body of theirs is a
+nested subshell running a command named after the expression: `1+1: not
+found` and `[]` in both, which is what the No already gives them.
+
+#3364 filed the consequence — `set -e; x=$( (( 0 )) )` not stopping there
+— as #3348's rule reaching through a substitution's own copy of the shell.
+It is neither a copy nor a command: an expansion has no status for `set -e`
+to judge, which is why `x=$( ( (( 0 )) ) )` and `x=$(f() { (( 0 )); }; f)`
+*do* stop in the same shell.
+
+**`BareExitReportsTheUnitsOwnStatus`** — bash no · dash no · ksh93 yes · zsh no
+
+Makes an operand-less `exit` or `return` report the last status the
+**execution unit** it stands in produced — 0 where the unit has run nothing
+— rather than `$?`. A unit is started by a subshell, a command
+substitution, a `${ …;}` body, a function call, an `eval` and a sourced
+file. Measured 2026-09-18, the same way:
+
+                                            ksh93u+  bash 5.3  dash
+    false; a=$( exit );        echo $?      0        1         1
+    false; a=$( false; exit ); echo $?      1        1         1
+    false; ( exit );           echo $?      0        1         1
+    g() { exit; };   false; g               0        1         1
+    g() { return; }; false; g; echo $?      0        1         1
+    false; eval exit                        0        1         1
+    false; . f   (f holds `return`)         0        1         1
+    false; { exit; }                        1        1         1
+    false; exit                             1        1         1
+
+The last two rows are the controls, and they are what make it a *unit*
+rather than a nesting depth: a brace group starts none, and neither does
+the top of the script.
+
+**It is a second register and not a reading of `$?`**, which is the row
+#3184 filed the axis on: `(exit 3); j=${ echo "saw=$?"; }` is `saw=3` in
+the same shell, so the body reads the inherited value out of `$?` while a
+bare `exit` on the next word reports 0.
+
+Asked only where no operand was written — `exit 7` is 7 in every column —
+and answered `No` by the standard's own preset, since XCU words both
+utilities as reporting `$?`.
+
 **`ArrayLiteralSubscriptIsAKey`** — bash no · dash unspecified · ksh93 yes · zsh no
 
 Reads a subscript written inside an array literal as the text between

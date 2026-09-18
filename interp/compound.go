@@ -1360,6 +1360,12 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		defer r.popCallArguments()
 	}
 	r.Params, r.inFunc = args, fn.Name
+	// A call is an execution unit, so a bare `exit` or `return` in the body
+	// reports what the *body* has run rather than what the caller left
+	// behind. Measured: `g() { return; }; false; g` reports 0 in the one
+	// column that keeps the register and 1 in the rest. See
+	// interp/unitstatus.go.
+	defer r.enterExecutionUnit()()
 	// Where the loops were when the call was made, for the dialects that do
 	// not let a `break` in the body reach them — see Runner.loopControlFloor.
 	savedFloor := r.callLoopFloor

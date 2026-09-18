@@ -2461,6 +2461,8 @@ func Semantics() interp.Semantics {
 	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartEndsTheScript
 	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.Yes
 	s.OperandSubscriptQuoting = interp.OperandSubscriptBackslashQuotes
+	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.Yes
+	s.BareExitReportsTheUnitsOwnStatus = interp.Yes
 	// `a[1]=(p q)` makes the element an array of its own — the array keeps
 	// its length and the element stops being a string. The one dialect that
 	// does; bash refuses the line and zsh splices the words in.

@@ -481,7 +481,13 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 	if haveOperand {
 		return operand
 	}
-	return r.status
+	// The same reading `exit` takes one builtin over: a bare `return` hands
+	// back what the last command did, and one column reads that as this
+	// execution unit's last command rather than the shell's. One helper for
+	// both, because the panel reads the two spellings identically — the
+	// function row and the `${ …;}` row are the same shell answering 0 to
+	// both.
+	return r.operandLessStatus()
 }
 
 // refusedReturnOperand reports a status operand `return` will not take.
@@ -6538,6 +6544,13 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 		default:
 			return r.badStatusArg("exit", args[0])
 		}
+	}
+	if len(args) == 0 {
+		// A bare `exit` reports what the last command did, and one column
+		// reads "the last command" as this execution unit's rather than the
+		// shell's. Ahead of the trap question below, which is a narrower
+		// reading of the same word and wins where it applies.
+		r.status = r.operandLessStatus()
 	}
 	if len(args) == 0 && r.inExitTrap &&
 		r.ask(r.sem().ExitInTrapReportsEarlierStatus, "a bare `exit` in an EXIT trap") {

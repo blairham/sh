@@ -674,10 +674,45 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 	r.blockALaterPlus(&f)
 	r.rankTheNumericLetters(&f)
 	rest = args[i:]
+	if code := r.refuseTheReferenceLetterInCompany(name, f); code != 0 {
+		return nil, f, code
+	}
 	if code := r.refuseAFunctionLineLetter(name, f, rest); code != 0 {
 		return nil, f, code
 	}
 	return rest, f, 0
+}
+
+// refuseTheReferenceLetterInCompany refuses a declaration that wrote the `n`
+// letter beside another one, where the dialect will not read the pair at all.
+//
+// See Semantics.NamerefLetterStandsAlone for the panel. The complaint is the
+// **bare** usage block: none of the sentence an option the builtin does not
+// have gets in front of it, which is the control that says the refusal is
+// about the combination rather than about a letter. The status is the one a
+// bad option leaves, and it travels the same road out of the parse — so it
+// ends the script exactly where a bad option does, which is what the dialect
+// that answers Yes measures.
+//
+// Asked only where an `n` letter really stood beside another, so a dialect
+// with no reference at all is never asked. The sign is not read: `+n -i` is
+// refused there as squarely as `-ni`, which is what says the parser is
+// looking at the letters and not at what they would have done.
+func (r *Runner) refuseTheReferenceLetterInCompany(name string, f declareFlags) int {
+	if !f.nameref && !f.namerefOff {
+		return 0
+	}
+	if strings.IndexFunc(f.letters, func(c rune) bool { return c != 'n' }) < 0 {
+		return 0
+	}
+	if !r.ask(r.sem().NamerefLetterStandsAlone, "the reference letter refusing company") {
+		if r.unspecified {
+			return r.status
+		}
+		return 0
+	}
+	r.builtinUsageLine(name)
+	return orDefault(r.diag().BuiltinBadOptionStatus, 2)
 }
 
 // refuseAFunctionLineLetter refuses a letter this shell has on a variable
@@ -1565,7 +1600,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// its order against the other two refusals is measured and the
 			// bad target goes first. See there.
 			frozen := r.readonly[name] && !df.readonlyOff
-			if code := r.declareNameref(complaintName, name, value, hasValue, frozen, !fresh); code != 0 {
+			if code := r.declareNameref(complaintName, name, value, df, hasValue, frozen, !fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status

@@ -893,6 +893,15 @@ func Semantics() interp.Semantics {
 	// sentence instead. ksh93 answers both halves the other way round
 	// (#3103).
 	s.NamerefArrayRefusal = interp.NamerefArrayCheckedLastOnTheAttribute
+	// The `n` letter is read beside every other one here and each pair is
+	// decided on its own. Measured 2026-09-18 on 5.3.20, `env -i` with a
+	// scratch HOME, from a file, with `v=1`: `declare -nx r=v` and
+	// `declare -nr r=v` make an exported and a frozen reference, `declare
+	// -nu r=v` aims one at `V`, `declare -na r=v` makes a plain array, and
+	// only `declare -ni r=v` is refused — at 1, silently, for a reason
+	// about the *value* rather than about the pair. So there is no bundle
+	// this shell will not read.
+	s.NamerefLetterStandsAlone = interp.No
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes

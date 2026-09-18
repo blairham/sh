@@ -23006,6 +23006,82 @@ value is stored, so `s=5 kf` fires nothing in the column that scopes the
 prefix: the store lands in a cell the call just made and nothing was
 watching it (#3161).
 
+## The `n` letter beside another one
+
+A declaration may write the reference letter next to an ordinary
+attribute letter, and the two shells that spell a reference at all answer
+that in opposite shapes: one decides each pair, and the other will not
+read the bundle.
+
+Measured 2026-09-18 from a script file under `env -i` with a scratch
+HOME, with `v=1` and `V=BIGV`:
+
+                       bash 5.3.20                     ksh93u+ 2012-08-01
+    typeset -n r=v     the reference, 0                the reference, 0
+    typeset -nx r=v    declare -nx r="v", 0            usage block, 2, fatal
+    typeset -nr r=v    declare -nr r="v", 0            usage block, 2, fatal
+    typeset -nu r=v    declare -nu r="V", 0            usage block, 2, fatal
+    typeset -nl r=V    declare -nl r="v", 0            usage block, 2, fatal
+    typeset -na r=v    declare -a r=([0]="v"), 0       usage block, 2, fatal
+    typeset -ni r=v    nothing said, 1, nothing made   usage block, 2, fatal
+    typeset -n -i r=v  the same 1                      usage block, 2, fatal
+    typeset +n -i r    the array letter's own row      usage block, 2, fatal
+
+`Semantics.NamerefLetterStandsAlone` is the split. The refusing column
+needs neither a bundle nor a sign: `-i -n` and `+n -i` are refused as
+squarely as `-ni`, so it is the option parser looking at the letters
+rather than a sentence about references. The complaint is the builtin's
+**bare** usage block, and the control that says so is `typeset -Q r=v` —
+a letter that shell has not got writes `typeset: -Q: unknown option` in
+front of the same block, and the pair writes no such line (#3171).
+
+### What decides a pair, where a pair is decided
+
+One rule covers every row of the left column: **a reference's own cell
+holds the target's name**, so a letter that shapes a value shapes that
+name. `-u` upper-cases what the reference is aimed at — `declare -nu r=v`
+points at `V` and reads `BIGV` — `-l` lower-cases it, and the fold
+reaches a whole subscripted word, so `declare -nu r=a[1]` is the element
+of `A`.
+
+The integer letter is that same rule reaching its end: what the cell
+holds becomes a **number**, and a number is not a name, so the
+declaration has nowhere to aim and is refused. At 1, and **in silence**,
+which is the one thing here that is not simply the letter doing its job.
+The word as *written* still gets the ordinary complaint — `declare -ni
+r=1` is ``declare: `1': invalid variable name for name reference`` — so
+the check on the written word and the check on what the letters made of
+it are two checks with two voices (#3137, #3170).
+
+Three things keep that from being the whole story, and each is measured:
+
+- **A letter from an earlier line shapes nothing.** `typeset -u r;
+  typeset -n r=v` lists as `declare -n r="v"`, unfolded, where the same
+  letter on the `-n` line itself gives `declare -nu r="V"`. The `-n`
+  declaration discards the value-shaping attributes it finds standing and
+  keeps the ones it wrote, which is why the declaration's own letters are
+  read rather than the name's.
+- **A second `-n` takes the letter off again** and leaves the folded name
+  where it is: after `declare -nu r=v`, a bare `declare -n r` lists
+  `declare -n r="V"`. So the discard belongs to the letter rather than to
+  the emptying of the cell.
+- **The fold runs in front of the self-reference check, and the written
+  word is still tested too.** `declare -nl r=R` is `nameref variable self
+  references not allowed` — the fold is what made it one — and `declare
+  -nu r=r` is the same refusal, where the fold alone would have aimed it
+  at `R` and let it through. `declare -nu r=R` is taken at 0, which is
+  the control that says the comparison is not merely case-blind.
+
+Core rather than an axis: one column reads the two letters together at
+all, and the other refuses the bundle before any of this is reached.
+
+One row is measured and not matched. A refused `-n` declaration leaves
+nothing behind in bash — `declare -ni r=v` then `declare -p r` is `r: not
+found` there — where a letter this shell applied before the refusal
+leaves the name listed as `declare -i r`. That is not about the `n`
+letter: `declare -nx r=1x` leaves `declare -x r` the same way, and so
+does every other refused declaration carrying an attribute.
+
 ## An axis nothing objects to is not a measurement
 
 Every field above claims a fact about real shells: they were run, they

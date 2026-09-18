@@ -1742,6 +1742,10 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-15 on zsh 5.9.2, `env -i` with a scratch HOME, inside
 	// a function so all three words are reachable: `typeset -n v=1`,
 	// `declare -n v=1` and `local -n v=1` are each `bad option: -n`.
+	// unanswered NamerefLetterStandsAlone: there is no `n` letter to write
+	// beside another one. Measured 2026-09-18 on zsh 5.9.2, `typeset -ni
+	// r=v` is `typeset: bad option: -n` at 1 — the complaint names the
+	// missing letter and never reaches a question about the pair (#3171).
 	// unanswered NamerefArrayRefusal: the letter is the same missing one, so
 	// there is no declaration for an array to be refused under. Measured
 	// 2026-09-16, `r=(a b); typeset -n r=v` is `typeset: bad option: -n` at 1

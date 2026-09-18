@@ -479,6 +479,8 @@ func Semantics() interp.Semantics {
 	// a cycle of. Measured 2026-09-15 on BusyBox v1.37.0, `typeset` is not a
 	// command here at all — `typeset: not found` at 127 — so neither
 	// spelling of the declaration can be put to this shell (#2553).
+	// unanswered NamerefLetterStandsAlone: the same wall — there is no
+	// `typeset` to write the letters on (#3171).
 	// unanswered NamerefArrayRefusal: the same wall, and there are no arrays
 	// here either for a reference to be refused over (#3103).
 	// unanswered UnsetReferenceLetterRemovesANonReference: no `-n` on `unset`

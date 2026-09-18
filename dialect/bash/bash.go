@@ -1969,6 +1969,14 @@ func Semantics() interp.Semantics {
 	// refused one complaint earlier as ``readonly: `a[b c]': not a valid
 	// identifier`` at 1, with the rest of the line still running.
 	s.BadSubscriptToADeclaration = interp.BadSubscriptAbandonsTheCommand
+	// And with no value the brackets are never read at all, which is why the
+	// axis above is reachable here only through an operand carrying one:
+	// measured 2026-09-17, `a=(1 2 3); declare 'a[b c]'` is silent at 0 and
+	// the array is untouched, `declare 'a[9]'` leaves it three long, and
+	// `i=0; declare 'a[i++]'` leaves i at 0. The brackets say the *name* is
+	// an array and nothing more — `declare a[3]` is `declare -a a` with
+	// `${#a[@]}` at 0 (#1380).
+	s.ValuelessSubscriptedOperand = interp.ValuelessSubscriptedOperandDeclaresTheName
 	// But a name it has never heard of takes its brackets with it: `unset a
 	// "a[x+]"` is silent at 0 here as in zsh, and `i=0; unset "nodecl[i++]"`
 	// leaves i at 0. bash 3.2 agrees, so this is not a version split.

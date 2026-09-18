@@ -2739,7 +2739,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				// on the script and the other two leave a failed builtin
 				// behind — but nobody says nothing.
 				status = r.badSubscriptToUnset(sub, err)
-				if r.ctl == controlExit {
+				if r.operandGaveUpTheBuiltin() {
 					return status
 				}
 				continue
@@ -3086,17 +3086,31 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			// which values are exportable.
 			return r.status
 		}
-		if base, subs, subscripted := r.operandSubscripts("export", name); subscripted && hasValue {
-			// `export a[1]=v` in the two dialects that take the operand:
-			// measured, ksh93u+ and zsh 5.9.2 both write the element, and
-			// neither puts the array in the environment. See
-			// declareelement.go.
-			r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, declareFlags{}, false)
-			if r.unspecified || r.ctl == controlExit {
+		if base, subs, subscripted := r.operandSubscripts("export", name); subscripted {
+			if hasValue {
+				// `export a[1]=v` in the two dialects that take the operand:
+				// measured, ksh93u+ and zsh 5.9.2 both write the element, and
+				// neither puts the array in the environment. See
+				// declareelement.go.
+				r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, declareFlags{}, false)
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
+					return r.status
+				}
+				r.declarationExports(base, !strings.ContainsRune(opts, 'n'))
+				continue
+			}
+			// And with no value the brackets are still the dialect's to
+			// read, which is the whole of #3501 at this spelling.
+			if r.valuelessSubscriptedOperand(base, subs, declareFlags{export: true}, false) {
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
+					return r.status
+				}
+				r.declarationExports(base, !strings.ContainsRune(opts, 'n'))
+				continue
+			}
+			if r.unspecified {
 				return r.status
 			}
-			r.declarationExports(base, !strings.ContainsRune(opts, 'n'))
-			continue
 		}
 		// The export attribute goes to what a reference points at, and this
 		// loop takes no scope, so there is never a fresh binding for it to be
@@ -5688,14 +5702,27 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		if base, subs, subscripted := r.operandSubscripts("local", name); subscripted && hasValue {
-			// `local a[1]=v` is `typeset a[1]=v` under the other word, and
-			// the scope is the whole of what it adds — see declareelement.go.
-			r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, f, true)
-			if r.unspecified || r.ctl == controlExit {
+		if base, subs, subscripted := r.operandSubscripts("local", name); subscripted {
+			if hasValue {
+				// `local a[1]=v` is `typeset a[1]=v` under the other word, and
+				// the scope is the whole of what it adds — see declareelement.go.
+				r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, f, true)
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
+					return r.status
+				}
+				continue
+			}
+			// And with no value the brackets are still read where the
+			// dialect reads them (#3501).
+			if r.valuelessSubscriptedOperand(base, subs, f, true) {
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
+					return r.status
+				}
+				continue
+			}
+			if r.unspecified {
 				return r.status
 			}
-			continue
 		}
 		// Before the attributes, for the reason biTypeset gives: `-x` here
 		// must not answer for the name this declaration shadows.
@@ -5978,10 +6005,19 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			// form, which falls through to the path it always took.
 			if hasValue {
 				r.declareElement(base, subs[:len(subs)-1], sub, value, declareFlags{readonly: true}, false)
-				if r.unspecified || r.ctl == controlExit {
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
 				continue
+			}
+			if r.valuelessSubscriptedOperand(base, subs, declareFlags{readonly: true}, false) {
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
+					return r.status
+				}
+				continue
+			}
+			if r.unspecified {
+				return r.status
 			}
 			if r.elementDeclarationRefused(base, sub, declareFlags{readonly: true}, false) {
 				return r.status

@@ -16297,6 +16297,49 @@ type Semantics struct {
 	//     subscript, so neither can be asked.
 	BadSubscriptToADeclaration BadSubscriptPolicy
 
+	// ValuelessSubscriptedOperand is what a declaration does with an operand
+	// that names an element and carries **no value** — `typeset 'a[1]'`,
+	// `declare`, `local`, and `readonly`/`export` where those take a
+	// subscript at all.
+	//
+	// Three answers, and the split is not the one the site next door takes
+	// with a value. Measured 2026-09-17, `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C HOME=$d`, stdin /dev/null, a fresh directory, a script file:
+	//
+	//	a=(1 2 3) then                bash 5.3/3.2  zsh 5.9      ksh93
+	//	typeset 'a[1]'; typeset -p a  (1 2 3)       ( '' 2 3 )   (1 2 3)
+	//	typeset 'a[1]='               [1]=""        ( '' 2 3 )   (1 '' 3)
+	//	typeset 'a[9]'                (1 2 3)       nine long    a[9] made
+	//	typeset 'a[0]'                silent, 0     invalid …    silent, 0
+	//	typeset 'a[b c]'              silent, 0     script ends  script ends
+	//	i=0; typeset 'a[i++]'; $i     0             invalid …    2
+	//
+	// bash never reads the brackets at all: they say the *name* is an array
+	// and nothing else, which is why `typeset a[3]` leaves `declare -a a`
+	// there with `${#a[@]}` at 0 (#1380). zsh reads them and the operand is
+	// **identical to the empty-value form** — row two is byte for byte row
+	// one — so it writes an empty element, extends the array to reach it,
+	// and refuses the subscripts an assignment refuses. ksh93 reads them and
+	// then declares the name, writing no element: row one leaves the array
+	// exactly as it found it where row two replaces an element.
+	//
+	// So bash's answer and ksh93's differ only where the expression fails or
+	// has a side effect, which is precisely where a script notices: a
+	// subscript that came out blank or held a space ends the script in two
+	// columns and is silent in the third. How much is then given up is
+	// BadSubscriptToADeclaration, one question over — this one is only
+	// whether the arithmetic is reached (#3501).
+	//
+	// **A table's brackets are not an expression** in any column, so the
+	// question is asked of an indexed array: `typeset -A m; typeset 'm[b c]'`
+	// is silent at 0 in bash and writes the key with an empty value in zsh
+	// and ksh93, with no arithmetic anywhere. See
+	// Runner.valuelessSubscriptedOperand, which leaves a table to the answer
+	// that writes the element.
+	//
+	// dash and BusyBox ash have no declaration utility taking a subscript.
+	ValuelessSubscriptedOperand ValuelessSubscriptedOperandPolicy
+
 	// UnsetSubscriptSkippedWhenNameUnset looks the operand's *name* up before
 	// it reads the brackets, and leaves the whole operand alone — quietly, at
 	// 0 — where the shell has never heard of that name. The sibling of
@@ -21577,6 +21620,49 @@ const (
 	// zsh, for a store through an operand and there alone.
 	BadSubscriptEndsTheScript
 )
+
+// ValuelessSubscriptedOperandPolicy is what a declaration does with a
+// subscripted operand carrying no value: leave the brackets unread, read them
+// and then declare the name, or write the element the way an empty value
+// would.
+//
+// Three and not a bool because the panel needs three — see
+// Semantics.ValuelessSubscriptedOperand for the rows. Reading the brackets and
+// writing the element are separate answers on purpose: ksh93 reads them and
+// leaves the array exactly as it found it, where zsh reads them and replaces
+// an element.
+type ValuelessSubscriptedOperandPolicy uint8
+
+const (
+	// ValuelessSubscriptedOperandUnspecified is no answer, and is refused
+	// like any other.
+	ValuelessSubscriptedOperandUnspecified ValuelessSubscriptedOperandPolicy = iota
+	// ValuelessSubscriptedOperandDeclaresTheName leaves the subscript unread
+	// and takes the brackets as saying the name is an array: bash, where
+	// `typeset 'a[b c]'` is silent at 0 and `i=0; typeset 'a[i++]'` leaves i
+	// at 0.
+	ValuelessSubscriptedOperandDeclaresTheName
+	// ValuelessSubscriptedOperandReadsTheSubscript evaluates the expression
+	// — so a failure gives up as much as BadSubscriptToADeclaration says —
+	// and then declares the name, writing no element: ksh93.
+	ValuelessSubscriptedOperandReadsTheSubscript
+	// ValuelessSubscriptedOperandWritesTheElement is the empty-value form
+	// under another spelling: zsh, where `typeset 'a[1]'` and `typeset
+	// 'a[1]='` are byte-identical.
+	ValuelessSubscriptedOperandWritesTheElement
+)
+
+func (p ValuelessSubscriptedOperandPolicy) String() string {
+	switch p {
+	case ValuelessSubscriptedOperandDeclaresTheName:
+		return "the subscript is not read and the name is declared an array"
+	case ValuelessSubscriptedOperandReadsTheSubscript:
+		return "the subscript is read and the name is declared an array"
+	case ValuelessSubscriptedOperandWritesTheElement:
+		return "the element is written as an empty value would write it"
+	}
+	return "unspecified"
+}
 
 func (p BadSubscriptPolicy) String() string {
 	switch p {

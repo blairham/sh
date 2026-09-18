@@ -332,6 +332,11 @@ func TestASubscriptedOperandIsAskedPerBuiltin(t *testing.T) {
 			s.UnsetTakesASubscript = unset
 			s.BadNameToDeclarationFatal = No
 			s.BadNameToUnsetFatal = No
+			// The operand below carries no value, so what a declaration
+			// does with its brackets is a second question — answered flat
+			// here, since this test is about which builtin takes a
+			// subscript at all and not about what it then does with one.
+			s.ValuelessSubscriptedOperand = ValuelessSubscriptedOperandDeclaresTheName
 		}
 	}
 

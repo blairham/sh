@@ -2545,6 +2545,15 @@ func Semantics() interp.Semantics {
 	// top level, a function, an `&&` list, an `if` condition and a loop body
 	// alike (#3495).
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
+	// And a valueless subscripted operand is the empty-value form under
+	// another spelling, which is measured and not inferred: `a=(1 2 3);
+	// typeset 'a[1]'` and `typeset 'a[1]='` both leave `( '' 2 3 )`,
+	// `typeset 'a[9]'` grows the array to nine, `typeset 'a[0]'` is
+	// `assignment to invalid subscript range`, and `typeset -A m; typeset
+	// 'm[b c]'` puts the key in with an empty value. So the brackets are
+	// read here, and a subscript that will not evaluate ends the script
+	// through the axis above (#3501).
+	s.ValuelessSubscriptedOperand = interp.ValuelessSubscriptedOperandWritesTheElement
 	// And a name it has never heard of is left alone with its brackets
 	// unread: `unset a "a[x+]"` is silent at 0, and `i=0; unset
 	// "nodecl[i++]"` leaves i at 0. What counts as heard of is set-ness and

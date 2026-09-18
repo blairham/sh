@@ -1347,10 +1347,24 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				// store made the whole line a no-op at status 0 — see
 				// declareelement.go.
 				r.declareElement(base, subs[:len(subs)-1], sub, value, df, true)
-				if r.unspecified || r.ctl == controlExit {
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
 				continue
+			}
+			if r.valuelessSubscriptedOperand(base, subs, df, true) {
+				// The dialect read the brackets, and either wrote the
+				// element they name or gave the declaration up over them.
+				// See valuelessSubscriptedOperand: one door for all four
+				// spellings, and the comment below is the answer that is
+				// left once it says the operand is not finished.
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
+					return r.status
+				}
+				continue
+			}
+			if r.unspecified {
+				return r.status
 			}
 			// A subscripted operand carrying no value declares the *name*
 			// as an array and writes no element: measured 2026-09-12,
@@ -1363,8 +1377,16 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// The name and not the operand, and the array letter whether or
 			// not one was written: the brackets are what say the name is an
 			// array.
+			//
+			// **Unless the name is already a table**, where the brackets say
+			// nothing of the kind and the letter would ask for a conversion
+			// no shell performs here: measured 2026-09-17, `typeset -A m;
+			// typeset 'm[b c]'` is silent at 0 in bash and puts the key in
+			// with an empty value in zsh and ksh93, while this refused it as
+			// `cannot convert associative to indexed array` at 1 — and ended
+			// the script for it in the ksh column.
 			name = base
-			df.array = df.array || !df.assoc
+			df.array = df.array || (!df.assoc && !r.assocDeclared(base))
 		}
 		if r.exportRefusesACompound(name, df) {
 			// The export letter over a compound, which one shell will not

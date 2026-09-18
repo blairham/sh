@@ -190,10 +190,15 @@ func TestAReadonlyElementIsWrittenAndTheArrayFrozenOverIt(t *testing.T) {
 
 // Refused is the other, and it is refused without a value as well: the
 // refusal is about the attribute rather than about the assignment.
+//
+// The valueless half needs a column that reads the brackets, which is what
+// Semantics.ValuelessSubscriptedOperand says — the column that never reads
+// them declares the name instead and has no element to refuse.
 func TestARefusedReadonlyElementIsRefusedWithoutAValueToo(t *testing.T) {
 	for _, src := range []string{`readonly a[1]=v; echo after`, `readonly "a[1]"; echo after`} {
 		out, status := runDeclareElement(t, src, func(s *Semantics) {
 			s.ReadonlyElement = ReadonlyElementRefused
+			s.ValuelessSubscriptedOperand = ValuelessSubscriptedOperandWritesTheElement
 		})
 		if want := "sh: a[1]: cannot declare an array element\n"; out != want || status == 0 {
 			t.Errorf("%s = %q (status %d), want %q and a failure", src, out, status, want)

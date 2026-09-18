@@ -207,6 +207,7 @@ ash   UnsetReferenceLetterRemovesANonReference
 ash   UnsetStatusIsTheLastSubscripts
 ash   UnsetSubscriptSkippedWhenNameUnset
 ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
+ash   ValuelessSubscriptedOperand
 ash   WholeArraySubscriptAssigningATable
 ash   WholeArraySubscriptAssigningAnArray
 ash   WritingSubstitutionIsWaitedForAtTheCommand
@@ -445,6 +446,7 @@ dash  UnsetStatusIsTheLastSubscripts
 dash  UnsetSubscriptSkippedWhenNameUnset
 dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessDeclarationOfAHeldNameListsIt
+dash  ValuelessSubscriptedOperand
 dash  WholeArraySubscriptAssigningATable
 dash  WholeArraySubscriptAssigningAnArray
 dash  WritingSubstitutionIsWaitedForAtTheCommand

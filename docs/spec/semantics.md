@@ -11756,7 +11756,10 @@ ending the script where it did not for `unset`, and a *declaration* —
 ending it where bash still gives up the command alone. Three sites, three
 splits, three fields: `BadSubscriptToUnset`,
 `BadSubscriptToAnOutputOperand` and `BadSubscriptToADeclaration` in the
-catalog below.
+catalog below. Whether the declaration reaches the arithmetic at all is a
+question in front of that one — `ValuelessSubscriptedOperand`, also in the
+catalog — since bash reads no subscript from an operand carrying no
+value.
 
 ### What a substring's range is blamed on
 
@@ -18347,16 +18350,63 @@ child anyway, which is the column that answers no.
 Asked only where the declaration names a letter at all: `typeset a[1]=v`
 raises no question between the columns.
 
-**A subscripted operand carrying no value is not an axis** and is core:
+**`ValuelessSubscriptedOperand`** — bash the name · dash unspecified · ksh93 the subscript is read · zsh the element is written
+
+What a declaration does with a subscripted operand carrying **no value**.
 `typeset a[3]` declares the *name* as an array and writes no element —
 `${#a[@]}` is 0 in bash and ksh93 alike, and an array already standing is
-left as it is. zsh reaches none of it, a declaration operand holding no
-`=` being a glob there. This shell declared a variable literally named
-`a[3]`, invisible to `${a[3]}` and to `typeset -p a`, at status 0.
+left as it is. This shell declared a variable literally named `a[3]`,
+invisible to `${a[3]}` and to `typeset -p a`, at status 0 (#1380).
+
+That much was recorded as **not an axis**, on the reading that zsh reaches
+none of it — a declaration operand holding no `=` being a glob there. The
+glob is real and is the *unquoted* spelling alone: `typeset a[1]` is `no
+matches found: a[1]` in zsh, and `typeset 'a[1]'` is a declaration in all
+three columns, which is where the panel splits three ways (#3501).
+Measured 2026-09-17, a script file, `a=(1 2 3)` in front of each:
+
+                                  bash 5.3/3.2  zsh 5.9      ksh93
+    typeset 'a[1]'; typeset -p a  (1 2 3)       ( '' 2 3 )   (1 2 3)
+    typeset 'a[1]='               [1]=""        ( '' 2 3 )   (1 '' 3)
+    typeset 'a[9]'                (1 2 3)       nine long    a[9] made
+    typeset 'a[0]'                silent, 0     invalid …    silent, 0
+    typeset 'a[b c]'              silent, 0     script ends  script ends
+    i=0; typeset 'a[i++]'; $i     0             invalid …    2
+
+bash never reads the brackets: they say the name is an array and nothing
+else. zsh reads them and the operand is **byte for byte the empty-value
+form** — row two is row one — so it writes an empty element, grows the
+array to reach it, and refuses the subscripts an assignment refuses.
+ksh93 reads them and then declares the name, writing no element: row one
+leaves the array as it found it where row two replaces an element.
+
+So bash's answer and ksh93's part only where the expression fails or has a
+side effect, which is exactly where a script notices: `typeset "m[$k]"`
+with a blank `$k` ends the script in two columns and is silent in the
+third. How much is then given up is `BadSubscriptToADeclaration`, one
+question over.
+
+**A table's brackets are not an expression** in any column, so the axis is
+about an indexed array: `typeset -A m; typeset 'm[b c]'` is silent at 0 in
+bash and puts the key in with an empty value in zsh and ksh93 alike, with
+no arithmetic anywhere. This refused it as `cannot convert associative to
+indexed array` in all three and ended the script for it in the ksh column,
+because the valueless path put the array letter on a name that was already
+a table.
 
 Pinned by `decl/an-exported-array-in-a-child-environment`,
 `decl/an-exported-array-with-nothing-in-it` and
-`decl/a-subscripted-operand-with-no-value` (#1380).
+`decl/a-subscripted-operand-with-no-value`, and by
+`TestAValuelessSubscriptedOperandIsReadWhereTheDialectReadsIt` and its
+neighbors in `interp/`.
+
+**A give-up at one operand stops the builtin there.** The operands before
+the bad one stand and the ones after it are never reached: `declare
+'a[b c]'=v x=1 y=2` leaves x and y unset in bash, and `unset x 'a[b c]' y`
+removes x and leaves y at 2. `read 'r[1/0]' b` already followed that rule
+and the other two sites did not, so a command bash abandons still did work
+bash never does — every operand loop watched for the shell ending and not
+for the *command* being given up (#3506).
 
 **`TableUnderAnArrayDeclaration`** — bash refused · dash unspecified · ksh93 refused, and the script ends · zsh empties the name
 

@@ -639,6 +639,12 @@ func Semantics() interp.Semantics {
 	// measure a preference from.
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// `-n` is not an option here, so `kill -n 99` is the dash-word `n` read
+	// as option letters: `kill: Illegal option -n` at 2, measured
+	// 2026-09-17 on dash 0.5.12. And `-s` with nothing after it is its own
+	// complaint, `No arg for -s option`, rather than the signal `s`.
+	s.KillReadsTheNumberOption = interp.No
+	s.KillOptionWithNoArgumentIsASignalName = interp.No
 	s.KillListAcceptsName = interp.No
 	// One subtraction, and everything else is refused — including 0, which
 	// is the one column with no EXIT and no number printed back.

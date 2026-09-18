@@ -13363,6 +13363,50 @@ type Semantics struct {
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
 
+	// KillReadsTheNumberOption is whether `-n` is an option of `kill` at
+	// all, taking a signal *number* after it.
+	//
+	// bash, ksh93 and zsh have it. dash and BusyBox ash do not, and each
+	// refuses the word its own way because each reads a dash-word its own
+	// way. Measured 2026-09-17, each reference under a matching `argv[0]`:
+	//
+	//	kill -n 99 <pid>
+	//	    bash   kill: 99: invalid signal specification    1
+	//	    ksh93  kill: <pid>: no such process              1
+	//	    zsh    kill <pid> failed: invalid argument       1
+	//	    dash   kill: Illegal option -n                   2
+	//	    ash    bad signal name 'n'                       1
+	//
+	// The last two rows are the axis: in both, `-n` is not an option, so the
+	// word falls through to the bare `-SPEC` reading and `n` is the spec —
+	// which dash calls an illegal option letter and BusyBox calls a bad
+	// signal name, exactly as each calls `-Q`. So nothing here has to know
+	// about `-n` beyond whether it exists; the wording is the one each
+	// already has.
+	//
+	// No in the base, because POSIX gives `kill` `-s` and `-l` and no `-n`.
+	// The header of interp/killbuiltin.go used to record dash's refusal as
+	// deliberately not built; two columns want it, and the reason it was
+	// left was that only one did (#3165).
+	KillReadsTheNumberOption Answer
+
+	// KillOptionWithNoArgumentIsASignalName reads `kill -s` with nothing
+	// after it as the signal named `s`, rather than as an option missing its
+	// argument.
+	//
+	// BusyBox ash alone: `kill -s` there is `bad signal name 's'` at 1,
+	// which is the sentence it gives any word that names no signal —
+	// measured 2026-09-17 against BusyBox v1.37.0 in the panel's Alpine
+	// image. The other columns have a complaint about the *option*: `kill:
+	// -s: option requires an argument` in bash, `-s: argument expected` in
+	// zsh, `kill: -s: signame argument expected` with the usage block in
+	// ksh93, `kill: No arg for -s option` in dash.
+	//
+	// It is a reading and not a wording, which is what makes it an axis: the
+	// shell that answers Yes never reaches Diagnostics.KillMissingSignalArgument
+	// at all, because as far as it is concerned nothing is missing.
+	KillOptionWithNoArgumentIsASignalName Answer
+
 	// KillSendsASignalNumberItCannotName hands a numeric signal to the
 	// kernel without checking it against the shell's own table first, so
 	// `kill -99 $$` is a `kill(2)` that failed rather than a word the shell
@@ -18127,6 +18171,12 @@ func PosixSemantics() Semantics {
 		KillListReducesRepeatedly:         No,
 		KillListPrintsANumberItCannotName: No,
 		KillListNamesZeroAsExit:           No,
+		// `kill` has `-s` and `-l` in the standard and no `-n`, so a
+		// dash-word of digits is not a numeric option here, and `-s` with
+		// nothing after it is an option missing its argument rather than the
+		// signal `s`.
+		KillReadsTheNumberOption:              No,
+		KillOptionWithNoArgumentIsASignalName: No,
 		// And a signal the kernel has that the table cannot name is written
 		// back as its number, which is what four of the five columns do and
 		// what a standard saying nothing about names past its own list
@@ -18987,6 +19037,12 @@ func CoreSemantics() Semantics {
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,
+		// `kill -n signum` is taken, which is three of the five columns and
+		// what the substrate has always had — dash and BusyBox ash are the
+		// two without it and each says so itself. `-s` with nothing after it
+		// is an option missing its argument, which is four of the five.
+		KillReadsTheNumberOption:              Yes,
+		KillOptionWithNoArgumentIsASignalName: No,
 		// And `kill -l` writes the number back for a signal the kernel has
 		// and the table cannot name, which is four of the five columns.
 		// Answered here rather than left to refuse for the reason the

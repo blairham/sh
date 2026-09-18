@@ -1417,6 +1417,10 @@ func Semantics() interp.Semantics {
 	s.QuitResetRestoresTheDefault = interp.No
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// `kill -n signum` is an option here, and `-s` with nothing after it is
+	// an option missing its argument rather than a signal named `s`.
+	s.KillReadsTheNumberOption = interp.Yes
+	s.KillOptionWithNoArgumentIsASignalName = interp.No
 	s.KillListAcceptsName = interp.Yes
 	// `kill -l 129` is HUP and `kill -l 0` is EXIT; one subtraction, and a
 	// number that still names nothing is refused.

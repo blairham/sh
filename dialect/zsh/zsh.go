@@ -709,6 +709,10 @@ func Semantics() interp.Semantics {
 	// `kill <pid> failed: invalid argument` at 1 — the errno, printed —
 	// rather than a word refused. Measured 2026-09-16; `kill -s 99` is still
 	// `unknown signal: SIG99`, since `-s` takes a name.
+	// `kill -n signum` is an option here, and `-s` with nothing after it is
+	// an option missing its argument rather than a signal named `s`.
+	s.KillReadsTheNumberOption = interp.Yes
+	s.KillOptionWithNoArgumentIsASignalName = interp.No
 	s.KillSendsASignalNumberItCannotName = interp.Yes
 	// Neither editing mode is selected on its own. Measured 2026-09-11 in a
 	// session at a real terminal: `[[ -o emacs ]]` and `[[ -o vi ]]` both
@@ -4069,7 +4073,15 @@ func Diagnostics() interp.Diagnostics {
 		KillIllegalOption:         "unknown signal: %[3]s",
 		KillNotAPid:               "illegal pid: %[1]s",
 		KillMissingSignalArgument: "%[1]s: argument expected",
-		KillUsage:                 "not enough arguments",
+		// The third route a signal spec takes here, and it is a wording of
+		// its own rather than a spelling of either other one: a word written
+		// where a number goes and that is not one. Verb 5 is the operand as
+		// the script wrote it, which is what carries the dash for `kill -9x`
+		// and leaves it off for `kill -n 9x`. Measured 2026-09-17 on zsh
+		// 5.9.2 — and the listing hint does *not* follow this one, where it
+		// follows both of the others (#3167).
+		KillInvalidSignalNumber: "invalid signal number: %[5]s",
+		KillUsage:               "not enough arguments",
 		// -L, capitalized, and measured against the zsh the panel resolves:
 		// 5.9.2 from Homebrew says -L where Apple's /bin/zsh 5.9 says -l.
 		// Probing whichever zsh came first on PATH is how the lowercase one

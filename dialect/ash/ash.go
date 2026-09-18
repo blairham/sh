@@ -1069,6 +1069,14 @@ func Semantics() interp.Semantics {
 	s.QuitResetRestoresTheDefault = interp.No
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// `-n` is not an option here either, and this shell reads what is left
+	// as a signal rather than as an option: `kill -n 99 <pid>` is `bad
+	// signal name 'n'` at 1, the same sentence `kill -Q` draws. `kill -s`
+	// with nothing after it is `bad signal name 's'` for the same reason —
+	// nothing is missing as far as this applet is concerned, the letter is
+	// the spec. Measured 2026-09-17 against BusyBox v1.37.0 (#3165).
+	s.KillReadsTheNumberOption = interp.No
+	s.KillOptionWithNoArgumentIsASignalName = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	// ksh93's reading of the number, measured in the container: `kill -l
 	// 256` is EXIT, `257` is HUP, `300` is 44 and `160` is 32.
@@ -1910,9 +1918,13 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJob:       "wait: Illegal number: %[1]s",
 		WaitBadJobStatus: 2,
 
-		// `kill`. The applet-level messages carry neither a line nor a
-		// builtin, which the unprefixed flags say.
-		KillNoSuchProcess: "can't kill pid %[1]s: No such process\n",
+		// `kill`. The shell's name and nothing else in front of every one of
+		// these — BuiltinNamesTheShellAlone above is where that is said,
+		// rather than the unprefixed flags, which write no name at all.
+		//
+		// One newline and not two: this string ended in one and killFailed
+		// adds another, so every failed send was followed by a blank line.
+		KillNoSuchProcess: "can't kill pid %[1]s: No such process",
 		KillInvalidSignal: "bad signal name '%[1]s'",
 		// **There is no option complaint here.** Everything after the dash
 		// is a signal to this shell, so `kill -Q`, `kill -NOPE`, `kill -9x`
@@ -1922,8 +1934,20 @@ func Diagnostics() interp.Diagnostics {
 		// the status follows: this shell has no route to 2 for a signal it
 		// did not recognize (#3139).
 		KillIllegalOption: "bad signal name '%[1]s'",
-		KillNotAPid:       "Illegal number: %[1]s",
-		KillUsageStatus:   2,
+		// The number reader's own sentence, and it is `invalid number` here
+		// rather than the `Illegal number` the ash family's other builtins
+		// write — measured: `kill notapid` is `ash: invalid number
+		// 'notapid'` at 1 where `wait abc` is `Illegal number: abc` at 2.
+		KillNotAPid: "invalid number '%[1]s'",
+		// `kill -l` distinguishes its own refusal from the signal spec's,
+		// which is the one place this shell has two sentences for one shape:
+		// `kill -l nope` is `unknown signal 'nope'` where `kill -s nope` is
+		// `bad signal name 'nope'`.
+		KillListBadNumber: "unknown signal '%[1]s'",
+		KillUsage:         "you need to specify whom to kill",
+		// 1, not 2. There is no route to 2 in this applet at all — every
+		// `kill` failure is 1, the bare `kill` included.
+		KillUsageStatus: 1,
 		// 1, not 2: a spec this shell will not take is an argument
 		// complaint however it was written. `kill -99`, `kill -Q` and
 		// `kill -s` with nothing after it are all 1, measured.
@@ -2044,7 +2068,13 @@ func Diagnostics() interp.Diagnostics {
 		// else, on every route. See BuiltinNamesTheShellAlone for the rows
 		// and for the `shift` control that says the rest of this shell's
 		// builtins still name the script and the line (#2913).
-		BuiltinNamesTheShellAlone: map[string]bool{"printf": true},
+		// `kill` joins it: **every** message that applet writes carries the
+		// shell's name and nothing else — `ash: can't kill pid 999999: No
+		// such process`, `ash: invalid number 'notapid'`, `ash: you need to
+		// specify whom to kill` — where its own `not found` carries
+		// `<file>: line N:`. Measured 2026-09-17 against BusyBox v1.37.0 in
+		// the pinned alpine image (#3165).
+		BuiltinNamesTheShellAlone: map[string]bool{"printf": true, "kill": true},
 		PrintfBadVerb:             "%[2]s: invalid format",
 		PrintfMissingVerb:         "%[1]s: invalid format",
 	}

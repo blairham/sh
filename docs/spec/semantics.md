@@ -1580,6 +1580,120 @@ can produce a status above 255, so nothing but a signal death lands above the
 256 base. A dialect encoding with 128 would be ambiguous, and none of those has
 a wording here.
 
+## How `kill` reads the word in front of its targets
+
+Measured 2026-09-17, each reference under a matching `argv[0]` from a script
+file under `env -i PATH=/usr/bin:/bin`: bash 5.3.20, zsh 5.9.2, ksh93u+
+2012-08-01 and Apple's dash on macOS arm64, and BusyBox v1.37.0 in the panel's
+pinned Alpine image.
+
+Three separate questions, and this engine had one answer for all of them.
+
+### Is `-n` an option at all
+
+    kill -n 99 <pid>
+
+| column | what it says | status |
+| --- | --- | --- |
+| bash 5.3 | `kill: 99: invalid signal specification` | 1 |
+| ksh93 | `kill: <pid>: no such process` | 1 |
+| zsh | `kill <pid> failed: invalid argument` | 1 |
+| dash | `kill: Illegal option -n` | 2 |
+| BusyBox ash | `bad signal name 'n'` | 1 |
+
+The last two rows are `Semantics.KillReadsTheNumberOption`. In both, `-n` is
+not an option, so the word falls through to the bare `-SPEC` reading and `n`
+is the spec — which dash calls an illegal option letter and BusyBox calls a
+bad signal name, exactly as each calls `-Q`. Nothing here has to know about
+`-n` beyond whether it exists; the wording is the one each column already has.
+`interp/killbuiltin.go`'s header recorded dash's refusal as deliberately not
+built, on the reasoning that only one column wanted it (#3165).
+
+### An option with nothing after it
+
+`kill -s` is an option missing its argument in four columns — `option requires
+an argument`, `argument expected`, `signame argument expected`, `No arg for -s
+option` — and in BusyBox it is `bad signal name 's'`. Nothing is missing as far
+as that applet is concerned: the letter is the spec.
+`Semantics.KillOptionWithNoArgumentIsASignalName` is that reading, and it is a
+reading rather than a wording, which is why the shell answering Yes never
+reaches `Diagnostics.KillMissingSignalArgument` at all.
+
+### A word written where a number goes and that is not one
+
+zsh reads a dash-word **three** ways and this engine had two.
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `kill -9 <gone>` | sent — `kill <pid> failed: no such process` |
+| `kill -9x <pid>` | `invalid signal number: -9x` |
+| `kill -n 9x <pid>` | `invalid signal number: 9x` |
+| `kill -x9 <pid>` | `unknown signal: SIGX9` and the `kill -L` hint |
+| `kill -s 9x <pid>` | `unknown signal: SIG9X` and the hint |
+
+`Diagnostics.KillInvalidSignalNumber` is the middle wording, and three things
+in those rows are measured rather than assumed. The **dash** is printed for the
+flag form and not after `-n`, so it belongs to the form — the wording's fifth
+verb is the operand as the script wrote it. The listing **hint** does not
+follow this one where it follows both of the others. And the discriminator is
+the *shape* of the word and not the failure, which `-x9` is what says: a word
+starting with a letter is the unknown-signal route however badly it fails.
+
+Every other column falls back to the wording the form already had — an unknown
+option for `-9x`, an unknown signal for `-n 9x` — which is why `killError`
+carries the form rather than the kind being chosen by whether a dialect has the
+new string: dash answers `-9x` with `Illegal option -9` at 2 and `-n 9x` with
+its argument complaint at 2, and those are two different fields (#3167).
+
+### ksh93 complains about a dash-word one letter at a time
+
+    kill -NOPE <pid>      kill: -N:  kill: -O:  kill: -P:  kill: -E:  + usage, 2
+    kill -99x <pid>       kill: -9:  kill: -9:  kill: -x:             + usage, 2
+    kill -Q <pid>         kill: -Q: unknown option                    + usage, 2
+
+That is the shell's option parser rather than anything about `kill`. A repeat
+is repeated, the case is kept, and the usage block is written **once** however
+many complaints came before it — which is what took the block out of the
+wording, where it had been concatenated.
+`Diagnostics.KillIllegalOptionPerLetter` and `KillIllegalOptionUsage` are the
+pair. The block carries no location, exactly as the block a bare `kill` writes
+does.
+
+### BusyBox `kill` writes the shell's name and nothing else
+
+Every failure in that applet is status **1** — there is no route to 2 in it at
+all — and every message is `ash: <sentence>` with no file and no line, where
+the same shell's `not found` carries `<file>: line N:`. That is
+`Diagnostics.BuiltinNamesTheShellAlone` rather than the unprefixed flags, which
+write no name at all.
+
+Four of its wordings were wrong beside the status, and each is its own
+question: the usage is a sentence and not a usage line (`you need to specify
+whom to kill`); the not-a-pid sentence is `invalid number` where the ash
+family's other builtins write `Illegal number`, and `wait abc` still does;
+`kill -l` has its own refusal, `unknown signal 'nope'`, distinct from the
+signal spec's `bad signal name 'nope'` — `Diagnostics.KillListBadNumber` exists
+for exactly that and was unset; and `-n` is the axis above.
+
+A failed send was also followed by a **blank line**, because the wording ended
+in a newline and `killFailed` adds another. dash's entry has the same trailing
+newline and dash really does print the blank line — measured, `dash -c 'kill -0
+999999'` ends `process\n\n` — so the fix is that one string and not the caller
+(#3165).
+
+### Three shapes measured and left
+
+None is what either issue asked for, and each is recorded rather than
+discovered later:
+
+- `kill -s 9` is a **number after `-s`**, which zsh refuses as `unknown signal:
+  SIG9` where bash, ksh93 and dash send it.
+- `kill -n 9x` in ksh93 writes the usage block and **nothing else**, at 2,
+  where this engine writes its unknown-signal sentence at 1.
+- `kill -n` with nothing after it is `numeric signum argument expected` in
+  ksh93 where `kill -s` is `signame argument expected`; this engine has one
+  field for both options.
+
 ## Handing the death to the driver is not the same as dying
 
 Measured 2026-09-05 against bash 5.3, bash 3.2, dash, ksh93 and zsh, and

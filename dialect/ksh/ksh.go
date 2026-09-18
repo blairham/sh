@@ -1674,6 +1674,10 @@ func Semantics() interp.Semantics {
 	// measure a preference from.
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// `kill -n signum` is an option here, and `-s` with nothing after it is
+	// an option missing its argument rather than a signal named `s`.
+	s.KillReadsTheNumberOption = interp.Yes
+	s.KillOptionWithNoArgumentIsASignalName = interp.No
 	s.KillListAcceptsName = interp.Yes
 	// Subtracts while the number is still 128 or more, so `kill -l 257` is
 	// HUP and `kill -l 300` is 44, and prints back what it cannot name.
@@ -3753,12 +3757,21 @@ func Diagnostics() interp.Diagnostics {
 		// An unknown option is a usage error to ksh93 in both senses: it prints
 		// the usage after the complaint, and it reports the usage status where
 		// an unknown signal *name* reports 1.
-		KillIllegalOption:         "kill: -%[1]s: unknown option\n" + kshKillUsage,
-		KillMissingSignalArgument: "kill: %[1]s: signame argument expected\n" + kshKillUsage,
-		KillUsageStatus:           2,
-		KillBadOptionStatus:       2,
-		KillUsageUnprefixed:       true,
-		KillTargetUnprefixed:      true,
+		// One complaint per *character* of the word, then the usage block
+		// once. That is this shell's option parser rather than anything
+		// about `kill`: `kill -NOPE` is `-N`, `-O`, `-P`, `-E` and then the
+		// block, at 2, and `kill -99x` repeats the `-9`. Measured
+		// 2026-09-17 on ksh93u+ 2012-08-01 (#3167). The block left the
+		// wording because it is written once however many lines came
+		// before it.
+		KillIllegalOption:          "kill: -%[1]s: unknown option",
+		KillIllegalOptionPerLetter: true,
+		KillIllegalOptionUsage:     kshKillUsage,
+		KillMissingSignalArgument:  "kill: %[1]s: signame argument expected\n" + kshKillUsage,
+		KillUsageStatus:            2,
+		KillBadOptionStatus:        2,
+		KillUsageUnprefixed:        true,
+		KillTargetUnprefixed:       true,
 		// `[ -Q x -a -n x ]` is `[: x: unknown operator` here: the dash word
 		// is an operand like any other, and the complaint names the second of
 		// the two the primary is left with (#1290).

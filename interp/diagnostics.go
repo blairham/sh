@@ -3117,6 +3117,33 @@ type Diagnostics struct {
 	// (#3053).
 	KillListBadNumber string
 
+	// KillInvalidSignalNumber is a word written where a signal *number* goes
+	// and that is not one: `kill -n 9x`, and `kill -9x`, which is
+	// number-shaped by starting with a digit where `-NOPE` is not.
+	//
+	// zsh alone has a wording of its own here, and it is a third route
+	// rather than a spelling of either of its other two. Measured 2026-09-17
+	// on zsh 5.9.2 under a matching `argv[0]`:
+	//
+	//	kill -9x <pid>    invalid signal number: -9x        1
+	//	kill -n 9x <pid>  invalid signal number: 9x         1
+	//	kill -s 9x <pid>  unknown signal: SIG9X             1
+	//	                  type kill -L for a list of signals
+	//	kill -x9 <pid>    unknown signal: SIGX9 + the hint  1
+	//	kill -99 <pid>    kill <pid> failed: invalid argument  1
+	//
+	// Three things are measured into that and none is decoration. The
+	// **dash** is printed for the flag form and not after `-n`, so it
+	// belongs to the form — verb 5 is the operand as the script wrote it.
+	// The listing **hint** does not follow this one, where it follows both
+	// of the others. And a word starting with a *letter* is not this route,
+	// which is what says the shape is the discriminator and not the failure.
+	//
+	// Empty means the wording the form already had: KillIllegalOption for
+	// `-9x` and KillInvalidSignal for `-n 9x`, which is what the other four
+	// columns say (#3167).
+	KillInvalidSignalNumber string
+
 	// KillNotAPid is an operand that is not a number. One verb: the operand.
 	KillNotAPid string
 
@@ -3141,6 +3168,23 @@ type Diagnostics struct {
 	// KillMissingSignalArgument is `-s` with nothing after it. One verb: the
 	// option, since two dialects name it and two do not.
 	KillMissingSignalArgument string
+	// KillIllegalOptionPerLetter writes the unknown-option complaint once
+	// per *character* of the word rather than once for the word.
+	//
+	// ksh93 alone, and it is that shell's option parser rather than
+	// anything about `kill`. Measured 2026-09-17 on ksh93u+ 2012-08-01:
+	// `kill -NOPE <pid>` is four lines — `-N`, `-O`, `-P`, `-E` — then the
+	// usage block, at 2; `kill -9x` is `-9` then `-x`; `kill -99x` is `-9`,
+	// `-9`, `-x`, so a repeat is repeated; `kill -SIGNOPE` is all seven
+	// letters. Case is kept as written.
+	//
+	// KillIllegalOptionUsage is the block after them, printed once however
+	// many complaints came first — which is why it is a field rather than
+	// part of the wording, as it was.
+	KillIllegalOptionPerLetter bool
+	// KillIllegalOptionUsage follows the unknown-option complaints, once.
+	// Empty means none. No verbs.
+	KillIllegalOptionUsage string
 	// KillUnknownSignalHint is a second line after an unrecognized signal,
 	// pointing at `kill -l`. zsh alone; empty means no second line.
 	KillUnknownSignalHint string

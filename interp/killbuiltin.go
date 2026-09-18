@@ -205,11 +205,26 @@ func (r *Runner) killSignal(args []string) (string, syscall.Signal, []string, er
 	switch a := args[0]; {
 	case a == "--":
 		args = args[1:]
-	case a == "-s" || a == "-n":
+	case a == "-s" || (a == "-n" && r.ask(r.sem().KillReadsTheNumberOption, "`kill -n signum`")):
 		if len(args) < 2 {
+			if r.ask(r.sem().KillOptionWithNoArgumentIsASignalName,
+				"`kill -s` with nothing after it read as the signal `s`") {
+				// Not a missing argument at all in that reading: the letter
+				// is the spec, and it meets the same refusal any other word
+				// that names no signal meets.
+				spec, form, args = a[1:], killSpecOption, args[1:]
+				break
+			}
+			if r.unspecified {
+				return "", 0, nil, nil
+			}
 			return "", 0, nil, &killError{kind: killMissingSignalArgument, operand: a}
 		}
 		spec, form, args = args[1], killSpecOptionFor(a), args[2:]
+	case a == "-n" && r.unspecified:
+		// The axis above went unanswered on the very word it is about, so
+		// this shell has already said so.
+		return "", 0, nil, nil
 	case isJoined && r.ask(r.sem().KillReadsASignalJoinedToItsOption,
 		"a signal written onto `kill -n` or `kill -s` with no space"):
 		spec, form, args = joined, killSpecOptionFor(args[0][:2]), args[1:]
@@ -260,6 +275,13 @@ func joinedKillSignal(word string) (string, bool) {
 	return "", false
 }
 
+// startsWithDigit reports whether a signal spec is number-shaped — which is a
+// different question from being a number, and is what separates `-9x` from
+// `-NOPE` in the one column that words the two differently.
+func startsWithDigit(spec string) bool {
+	return spec != "" && spec[0] >= '0' && spec[0] <= '9'
+}
+
 // killSpecForm is how the signal was spelled, which two dialects report
 // differently: dash and ksh93 call an unrecognized `-Q` an unknown *option*
 // and an unrecognized `-s Q` an unknown *signal*, where bash and zsh use one
@@ -297,7 +319,28 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 		if form == killSpecFlag {
 			kind = killIllegalOption
 		}
-		return "", 0, &killError{kind: kind, operand: spec}
+		return "", 0, &killError{kind: kind, operand: spec, fromFlag: form == killSpecFlag}
+	}
+	// A word written where a *number* goes and not one. `-n 9x` is that by
+	// position; `-9x` is that by shape, because a dash-word starting with a
+	// digit is a number to the shells that read one there where `-NOPE` is
+	// not. One column has a third wording for it — measured 2026-09-17 on
+	// zsh 5.9.2, where `kill -9x` is `invalid signal number: -9x`, `kill -n
+	// 9x` is `invalid signal number: 9x` and `kill -s 9x` is `unknown
+	// signal: SIG9X` with the listing hint after it. Note which of the three
+	// carries the dash: the flag form's operand is the whole word (#3167).
+	//
+	// Every other column falls back to the wording it already has for the
+	// form the word arrived in, which is why fromFlag is carried rather than
+	// the kind being chosen by whether a dialect has the new string: dash
+	// answers `-9x` with `Illegal option -9` at 2 and `-n 9x` with its
+	// argument complaint, and those are two different statuses.
+	badNumber := func() (string, syscall.Signal, error) {
+		return "", 0, &killError{
+			kind:     killInvalidSignalNumber,
+			operand:  spec,
+			fromFlag: form == killSpecFlag,
+		}
 	}
 	if n, err := strconv.Atoi(spec); err == nil {
 		if n == 0 {
@@ -343,6 +386,17 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 			return "", syscall.Signal(n), nil
 		}
 		return bad()
+	}
+	if form == killSpecNumberOption || (form == killSpecFlag && startsWithDigit(spec)) {
+		// Number-shaped and not a number, so it never reaches the name
+		// table: `SIG9X` names nothing in any column, and the one shell with
+		// a wording for this says so without the prefix.
+		//
+		// `-s` is excluded and that is measured rather than symmetry: it
+		// takes a *name*, so `kill -s 9x` is `unknown signal: SIG9X` with
+		// the listing hint in the very column that writes `invalid signal
+		// number: -9x` for the flag form.
+		return badNumber()
 	}
 	up := strings.ToUpper(spec)
 	if trimmed, had := strings.CutPrefix(up, "SIG"); had && r.knownSignal(trimmed) {
@@ -956,7 +1010,12 @@ func (r *Runner) killList(args []string) int {
 		}
 		name, sig, err := r.signalSpec(a, killSpecOption)
 		if err != nil || name == "" {
-			return r.killReport(killInvalidSignal, a)
+			// The listing form's own complaint rather than the signal
+			// spec's, which is measured: BusyBox ash says `unknown signal
+			// 'nope'` for `kill -l nope` and `bad signal name 'nope'` for
+			// `kill -s nope`, where the other columns word both alike and
+			// so are unmoved by the kind (#3165).
+			return r.killReport(killListNumberNotASignal, a)
 		}
 		_, _ = fmt.Fprintln(r.stdout(), int(sig))
 	}
@@ -1089,6 +1148,10 @@ type killError struct {
 	// errno is what `kill(2)` said, for the one wording that prints it. Nil
 	// for every failure the shell decided on its own.
 	errno error
+	// fromFlag says the spec was written as `-SPEC` rather than after `-s`
+	// or `-n`, which two things read: the status a number-shaped refusal
+	// carries, and whether the operand is printed with its dash.
+	fromFlag bool
 }
 
 type killErrorKind int
@@ -1105,6 +1168,13 @@ const (
 	// status there and a signal name everywhere else, which is the whole
 	// point of the listing form: the number it is given is a `$?`.
 	killListNumberNotASignal
+	// killInvalidSignalNumber is a word written where a *number* goes and
+	// not one: `-n 9x`, and `-9x`, which is number-shaped by starting with a
+	// digit. One dialect has a third wording for it, distinct from both the
+	// unknown-signal one and the unknown-option one; every other column
+	// falls back to whichever of those two the form it arrived in already
+	// draws, which is what killError.fromFlag decides.
+	killInvalidSignalNumber
 	// killIllegalOption is the same thing spelled as a flag, which two
 	// dialects report as an unknown option instead.
 	killIllegalOption
@@ -1146,14 +1216,22 @@ func (e *killError) verbs() []any {
 	if e.errno != nil {
 		reason = e.errno.Error()
 	}
-	return []any{e.operand, first, prefixed, reason}
+	// And the operand as the script wrote it, dash and all, which is the one
+	// verb the flag form needs: zsh prints `invalid signal number: -9x` for
+	// the flag and `: 9x` for `-n 9x`, so the dash belongs to the *form* and
+	// not to the wording.
+	written := e.operand
+	if e.fromFlag {
+		written = "-" + written
+	}
+	return []any{e.operand, first, prefixed, reason, written}
 }
 
 func (e *killError) fallback() string {
 	switch e.kind {
 	case killMissingSignalArgument:
 		return "kill: %[1]s: option requires an argument"
-	case killInvalidSignal, killIllegalOption, killListNumberNotASignal:
+	case killInvalidSignal, killIllegalOption, killListNumberNotASignal, killInvalidSignalNumber:
 		return "kill: %[1]s: invalid signal specification"
 	case killNotAPid:
 		return "kill: %[1]s: not a pid"
@@ -1175,6 +1253,14 @@ func (e *killError) format(d Diagnostics) string {
 		return d.KillInvalidSignal
 	case killListNumberNotASignal:
 		return orElse(d.KillListBadNumber, d.KillInvalidSignal)
+	case killInvalidSignalNumber:
+		// The form the word arrived in picks the fallback, so a dialect with
+		// no wording of its own answers exactly as it did before there was
+		// one: an unknown option for `-9x`, an unknown signal for `-n 9x`.
+		if e.fromFlag {
+			return orElse(d.KillInvalidSignalNumber, d.KillIllegalOption)
+		}
+		return orElse(d.KillInvalidSignalNumber, d.KillInvalidSignal)
 	case killIllegalOption:
 		return d.KillIllegalOption
 	case killNotAPid:
@@ -1200,6 +1286,14 @@ func (e *killError) status(d Diagnostics) int {
 		return orDefault(d.KillUsageStatus, 2)
 	case killIllegalOption, killMissingSignalArgument:
 		return orDefault(d.KillBadOptionStatus, 1)
+	case killInvalidSignalNumber:
+		// The same split the wording takes, and for the same reason: dash
+		// answers 2 for an illegal option and its argument complaints
+		// elsewhere, so a shared status here would move one of them.
+		if e.fromFlag {
+			return orDefault(d.KillBadOptionStatus, 1)
+		}
+		return orDefault(d.KillArgumentStatus, 1)
 	}
 	return orDefault(d.KillArgumentStatus, 1)
 }
@@ -1209,6 +1303,35 @@ func orDefault(v, fallback int) int {
 		return fallback
 	}
 	return v
+}
+
+// usesTheOptionWording reports whether this failure is written with the
+// unknown-option wording, which two kinds reach: the option complaint itself,
+// and a number-shaped word in the flag form, whose fallback is that wording.
+func usesTheOptionWording(e *killError, d Diagnostics) bool {
+	if e.kind == killIllegalOption {
+		return true
+	}
+	return e.kind == killInvalidSignalNumber && e.fromFlag && d.KillInvalidSignalNumber == ""
+}
+
+// lines is the complaint, which is one line in every dialect but one.
+//
+// ksh93 splits a dash-word into its characters and says `kill: -N: unknown
+// option` for each, in order and repeats included — its option parser's doing
+// rather than `kill`'s, and measured as such: `kill -NOPE` is four lines there
+// and `kill -Q` is one. The word itself is never printed.
+func (e *killError) lines(d Diagnostics) []string {
+	w, fallback := e.format(d), e.fallback()
+	if !usesTheOptionWording(e, d) || !d.KillIllegalOptionPerLetter {
+		return []string{Wording(w, fallback, e.verbs()...)}
+	}
+	out := make([]string, 0, len(e.operand))
+	for _, c := range e.operand {
+		per := &killError{kind: e.kind, operand: string(c), fromFlag: e.fromFlag}
+		out = append(out, Wording(w, fallback, per.verbs()...))
+	}
+	return out
 }
 
 // killReport prints one failure and returns the status it carries.
@@ -1224,12 +1347,31 @@ func (r *Runner) killFailed(err error) int {
 	}
 	d := r.diag()
 	target := ke.kind == killNoSuchProcess || ke.kind == killNotPermitted || ke.kind == killSendFailed
-	if (ke.kind == killUsage && d.KillUsageUnprefixed) || (target && d.KillTargetUnprefixed) {
-		// One dialect prints these with no location and no shell name in
-		// front, which is not how it prints a complaint about an argument.
-		r.errf("%s\n", Wording(ke.format(d), ke.fallback(), ke.verbs()...))
-	} else {
-		r.diagf("%s\n", Wording(ke.format(d), ke.fallback(), ke.verbs()...))
+	// One dialect prints the usage and a failed target with no location and
+	// no shell name at all. The one that writes its *own name* in front of
+	// every `kill` message says so through Diagnostics.BuiltinNamesTheShellAlone
+	// instead, which the ordinary prefix path already reads.
+	bare := (ke.kind == killUsage && d.KillUsageUnprefixed) ||
+		(target && d.KillTargetUnprefixed)
+	say := r.diagf
+	if bare {
+		say = r.errf
+	}
+	for _, line := range ke.lines(d) {
+		say("%s\n", line)
+	}
+	if usesTheOptionWording(ke, d) && d.KillIllegalOptionUsage != "" {
+		// Printed once however many complaints came before it, which is what
+		// took it out of the wording: one shell splits a dash-word into its
+		// letters and complains about each, and the block follows the lot.
+		//
+		// It is the same block a bare `kill` writes, so it is prefixed the
+		// same way — which in the one shell that has it is not at all.
+		usage := r.diagf
+		if d.KillUsageUnprefixed {
+			usage = r.errf
+		}
+		usage("%s\n", d.KillIllegalOptionUsage)
 	}
 	if (ke.kind == killInvalidSignal || ke.kind == killIllegalOption) && d.KillUnknownSignalHint != "" {
 		r.diagf("%s\n", d.KillUnknownSignalHint)

@@ -804,20 +804,18 @@ func Semantics() interp.Semantics {
 	// XCU 2.9.3 specifies the majority; this is the divergence, and it is
 	// this shell's to keep.
 	s.BackgroundJobInput = interp.BackgroundJobInputIsTheShells
-	// `$!` before any background command is `0` here and empty in the other
+	// `$!` before any background command is `0` here and nothing in the other
 	// five columns — a number nothing ever had. Measured,
-	// `sh -c 'echo "[$!]"'` writes `[0]`.
-	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.Yes
-	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
-	// And that zero is *set*, so `set -u` carries on: measured,
-	// `set -u; echo "[$!]"; echo "st=$?"` writes `[0]` then `st=0`. It is the
-	// same side of that split as ksh93 and for a different reason — ksh93 has
-	// nothing there and does not mind, zsh has a value.
+	// `sh -c 'echo "[$!]"'` writes `[0]`, and that zero is *set*: `${!-unset}`
+	// is `0` and `${!+set}` is `set`, so `set -u; echo "[$!]"; echo "st=$?"`
+	// writes `[0]` then `st=0`.
 	//
-	// Stated even though it is the unanswered default, because zsh refuses an
-	// unset `$1` and does not refuse `$!`, and a reader checking that pair
-	// needs to see the second answer written down.
-	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.No
+	// It is the quiet side of the `set -u` split with ksh93 and for a
+	// different reason — ksh93 has nothing there and does not mind, zsh has a
+	// value — and it is worth writing down beside this shell refusing an
+	// unset `$1`, which it does.
+	s.LastBackgroundPid = interp.LastBackgroundPidZero
+	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	// Measured: `echo $-` reports `569X` under -c, a script file and
 	// standard input alike — letters from zsh's own single-letter option
 	// namespace, which shares almost nothing with the other shells'. The

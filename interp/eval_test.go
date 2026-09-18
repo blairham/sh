@@ -191,12 +191,6 @@ func TestSemanticsAxesHaveTwoSides(t *testing.T) {
 			"[a][b]", "[a b]",
 		},
 		{
-			"`$!` before any job is zero",
-			`echo "[$!]"`,
-			func(s *Semantics, a Answer) { s.LastBackgroundPidIsZeroBeforeAnyJob = a },
-			"[0]\n", "[]\n",
-		},
-		{
 			"a here-document body's write reaches the shell that fed it",
 			"n=1\ncat <<END >/dev/null\n$(( n++ ))\nEND\nprintf 'after=%s' \"$n\"",
 			func(s *Semantics, a Answer) { s.HeredocExpandsInTheCommandsProcess = a },

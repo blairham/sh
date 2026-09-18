@@ -15828,70 +15828,70 @@ bash reports success if it signaled anything at all, and zsh reports the
 number that failed — which is a status carrying a count rather than a
 verdict, and the reason this is a policy rather than a bool.
 
-**`LastBackgroundPidIsZeroBeforeAnyJob`** — bash no · dash no · ksh93 no · zsh yes
+**`LastBackgroundPid`** — bash unset · dash unset · ksh93 unset but not
+refused · zsh zero
 
-Makes `$!` read `0` before a background command has been started. zsh
-alone, and it is a number nothing ever had: `sh -c 'echo "[$!]"'` writes
-`[0]` there and `[]` in bash 5.3.15, bash 3.2.57, bash 3.2 run as `sh`,
-dash and ksh93u+.
+What `$!` reads before a background command has been started. Two
+questions look like one here, and the panel answers them in three
+combinations, which is why this is a form rather than the pair of flags
+it used to be.
 
-Zero is not the same answer as nothing, which is why this is a switch
-and not a rendering: a background builtin runs in this process and its
-job carries no pid, so a shell really can hold a *recorded* zero, and a
-script could not tell that apart from zsh's if the two were spelled
+The first is what the parameter *reads*: nothing, or a number nothing
+ever had. The second is whether it is *set*, which `${!-word}`,
+`${!+word}` and `set -u` can each tell apart and a bare `$!` cannot.
+Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with standard input from `/dev/null`, before any `&` has run:
+
+| shell | `${!-unset}` | `${!+set}` | `set -u; echo "[$!]"` |
+| --- | --- | --- | --- |
+| bash 5.3.20 | `unset` | *(empty)* | `$!: unbound variable`, 127 |
+| dash 0.5.12 | `unset` | *(empty)* | `!: parameter not set`, 2 |
+| BusyBox ash 1.37.0 | `unset` | *(empty)* | `!: parameter not set`, 2 |
+| ksh93u+ | `unset` | *(empty)* | `[]` then `st=0` |
+| zsh 5.9.2 | `0` | `set` | `[0]` then `st=0` |
+
+So ksh93 is the combination two flags could not hold: the parameter is
+unset to every operator that can see the difference, and `set -u` still
+has nothing to say about it. The fields were
+`LastBackgroundPidIsZeroBeforeAnyJob` and
+`LastBackgroundPidIsUnsetBeforeAnyJob`, and their four combinations
+spelled one state no shell has — set and empty, quiet — while leaving
+ksh93's with no spelling at all. ksh93 was therefore recorded as the
+empty-and-set column and `${!-unset}` answered `[]` there (#3011).
+
+Nor is ksh93's quiet `UnsetPositionalIsAllowed` reached by another route.
+That axis is ksh93 letting an argument it was not given be empty; zsh
+refuses `$1` and does not refuse `$!`, so the pair splits the panel
+differently and neither predicts the other.
+
+Zero is not the same answer as nothing, which is why the zsh value is a
+switch and not a rendering: a background builtin runs in this process and
+its job carries no pid, so a shell really can hold a *recorded* zero, and
+a script could not tell that apart from zsh's if the two were spelled
 alike.
 
-Read without asking. A preset that has not chosen answers with nothing,
-which is what five of the six columns do; refusing a `$!` expansion over
-an unanswered field would break the `p=$!` of every script running under
-it, including before its first job, where the read is the ordinary one.
-
-**`LastBackgroundPidIsUnsetBeforeAnyJob`** — bash yes · dash yes · ksh93 no · zsh no
-
-Makes `$!` an *unset* parameter before a background command has been
-started, so `set -u` is fatal about it.
-
-A different split from the field above and the more useful one — two
-against two, and `set -u` is what scripts actually rely on:
-
-| shell | `set -u; echo "[$!]"; echo "st=$?"` |
-| --- | --- |
-| bash 5.3.15 | `$!: unbound variable`, status 127 |
-| bash 3.2.57 | `$!: unbound variable`, status 127 |
-| bash 3.2 as `sh` | `$!: unbound variable`, status 127 |
-| dash | `!: parameter not set`, status 2 |
-| ksh93u+ | `[]` then `st=0` — set, and empty |
-| zsh 5.9.2 | `[0]` then `st=0` — set, and zero |
-
-Neither field predicts the other. zsh's zero is a value and ksh93's
-empty is a set parameter, so the two quiet columns are quiet for
-different reasons, and a single field could say only one of those
-things. `TestTheTwoLastBackgroundPidAxesAreIndependent` runs all four
-combinations, the one no shell in the panel is included.
-
-Nor is it `UnsetPositionalIsAllowed` reached from another route. ksh93
-lets an unset `$1` be empty and lets `$!` be empty too, but zsh refuses
-`$1` and does not refuse `$!`, so the pair splits the panel differently.
-
-The wording and the status are the same two Diagnostics fields an unset
-positional reads, because measured they are the same two lines: bash
-writes the `$` back for `$!` exactly as it does for `$1`, which is
+The refusal's wording and status are the same two `Diagnostics` fields an
+unset positional reads, because measured they are the same two lines:
+bash writes the `$` back for `$!` exactly as it does for `$1`, which is
 `Diagnostics.UnboundPositional`, and dash's is its ordinary `parameter
 not set`. A third field would have held a copy of one of those in all
 four presets.
 
-Read without asking, for the reason above. Unanswered means the
-parameter is set and empty, which is what this shell did before the axis
-existed and what the two shells that carry on do.
+Read without asking. Unanswered means the parameter is set and empty,
+which is what this shell did before the question was asked and what no
+column in the panel does; refusing a `$!` expansion over an unanswered
+field would break the `p=$!` of every script running under a preset that
+has chosen nothing, including the read before its first job, where
+nothing is in dispute.
 
-The **spelling** chooses between those two fields, and it is not a third
-one. bash writes the `$` back for `$!` and `$7` and drops it for `${!}`
-and `${7}` — measured 2026-09-18 from a two-line script file, `set -u`
-and then the expansion: `${7}` is `7: unbound variable` where `$7` is
-`$7: unbound variable`, `${!}` is `!: unbound variable` where `$!` is
-`$!: unbound variable`, and `$x` and `${x}` are `x: unbound variable`
-either way. This shell wrote the sigil for both spellings, which is two
-lines of the `errors` row of #2298 (#3466).
+The **spelling** chooses between those two wording fields, and it is not
+a third one. bash writes the `$` back for `$!` and `$7` and drops it for
+`${!}` and `${7}` — measured 2026-09-18 from a two-line script file,
+`set -u` and then the expansion: `${7}` is `7: unbound variable` where
+`$7` is `$7: unbound variable`, `${!}` is `!: unbound variable` where
+`$!` is `$!: unbound variable`, and `$x` and `${x}` are
+`x: unbound variable` either way. This shell wrote the sigil for both
+spellings, which is two lines of the `errors` row of #2298 (#3466).
 
 So it is a rule on one wording rather than an axis: bash is the only
 column with a sigil at all — zsh, ksh93 and dash say `parameter not set`
@@ -15912,7 +15912,10 @@ control that says the refusal is about nothing having been started
 rather than about `$!` — with one job behind it the parameter is set in
 all six columns. These are the whole `$!` grid's only recordable rows:
 everything else about the parameter carries a pid, which is not the same
-twice.
+twice. The third state is not among them, since `${!-unset}` and
+`${!+set}` split the panel without carrying one; it is pinned by
+`TestWhatTheLastBackgroundPidReadsBeforeAnyJob` and by each dialect's
+own `TestAnswersTheInterpAxisTestsRelyOn`.
 
 **`MonitorNeedsATerminal`** — bash no · dash yes · ksh93 no · zsh yes
 
@@ -22064,6 +22067,40 @@ the name: a shadow a function's declaration takes is a new cell however
 much the caller held, and a second declaration in the same scope is
 writing over its own. A name that already holds a value keeps it — see
 "an attribute added to a name that already holds a value", above.
+
+**Every word that declares asks it, including the two that are only
+attributes.** `export name` and `readonly name` are declarations with no
+value, so what they leave behind is this answer and not a rule of their
+own — and they were the two spellings that did not ask. `export` called
+only the standing-empty half and `readonly` called `declareEmpty` only
+where it had just taken a scope, so in the yes column a top-level
+`export name` and `readonly name` left the name *unset*: the attribute
+and the freeze landing on a name that did not exist, with `${name-word}`
+taking its default there and nowhere else (#2887, #3345). Measured
+2026-09-18, zsh 5.9.2, a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`:
+
+| written | `${v-UNSET}` | `${(t)v}` |
+| --- | --- | --- |
+| `export v` | *(empty)* | `scalar-export` |
+| `readonly v` | *(empty)* | `scalar-readonly` |
+| `typeset v` | *(empty)* | `scalar` |
+
+and `UNSET` for all three in bash 5.3.20, ksh93u+ and dash. The empty is
+the *declaration's* and not an assignment's, which only a child can see:
+`export v` alone puts nothing in a child's environment, and a second
+attribute word over the same name — `export v; export v`, or
+`export v; readonly v` — hands it over as `v=`. That is
+`Runner.declaredEmpty` and it was already right for `typeset -x`.
+
+**The word decides what an unanswered vector does.** `export name` and
+`readonly name` are POSIX's own spellings, in 2.14, and every shell in
+the panel runs both, so a vector that has chosen nothing reads them the
+way four of the five columns do rather than refusing a line the standard
+mandates — the bargain `BackgroundJobInput` strikes for `&` and
+`CoreSemantics` strikes for `getopts`. `typeset`, `declare` and `local`
+are nobody's standard and ask, so a dialect that means to spell a
+declaration still has to say what its declarations leave behind.
 
 **`ExportCarriesFunctions`** — bash yes · dash no · ksh93 no · zsh no
 

@@ -1732,7 +1732,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			if !r.declarationCarriesAnArrayLiteral(name) {
 				r.declareEmpty(name, fresh, df.export || df.readonly,
 					withoutMatching(df) != (declareFlags{}),
-					df.inherit || r.LocalInheritsTheOuterValue())
+					df.inherit || r.LocalInheritsTheOuterValue(), false)
 			}
 		}
 		if df.readonly && !df.readonlyOff {
@@ -3469,6 +3469,30 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 	return v, true
 }
 
+// declaredNameWithoutValueIsEmpty answers whether a declaration with no value
+// sets the name, and decides what an unanswered vector does about it.
+//
+// The disagreement is one question — see
+// Semantics.DeclaredNameWithoutValueIsEmpty — and the *word* it is written on
+// decides whether a vector that has not answered refuses or reads. `export
+// name` and `readonly name` are POSIX's own spellings, in 2.14, and a script
+// that says either is asking for an attribute rather than for a value; every
+// shell in the panel runs both. So an unanswered vector reads them the way
+// four of the five columns do rather than refusing a line the standard
+// mandates, which is the bargain BackgroundJobInput and the `getopts` answers
+// in CoreSemantics already strike.
+//
+// `typeset`, `declare` and `local` are nobody's standard, and they ask: a
+// dialect that means to spell a declaration has to say what its declarations
+// leave behind.
+func (r *Runner) declaredNameWithoutValueIsEmpty(standardWord bool) bool {
+	if standardWord {
+		return r.sem().DeclaredNameWithoutValueIsEmpty == Yes
+	}
+	return r.ask(r.sem().DeclaredNameWithoutValueIsEmpty,
+		"a declaration without a value setting the name")
+}
+
 // declarationOwnsTheStandingEmpty is what a declaration naming an attribute
 // does to a name a *previous* declaration left with no value of its own: the
 // name now holds the empty string in its own right, and a child is told about
@@ -3625,7 +3649,7 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 // The name is now local, or attributed, or both — but whether it also *exists*
 // is a dialect's answer, so this is the one place that decides it and both
 // `local` and `typeset` come through here.
-func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, namesAnAttribute, inherits bool) {
+func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, namesAnAttribute, inherits, standardWord bool) {
 	// A name that already holds a value is not one this declaration is
 	// bringing into being, and nothing about being declared empties it:
 	// `typeset -x v` on a `v=abc` leaves `abc` alone in all four shells that
@@ -3671,7 +3695,7 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 			}
 		}
 	}
-	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
+	if r.declaredNameWithoutValueIsEmpty(standardWord) {
 		// The array half of a tie is set empty in its own kind — no elements,
 		// not an empty string — and the mirror carries that to the scalar. See
 		// tielocal.go.

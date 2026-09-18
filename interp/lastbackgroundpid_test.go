@@ -11,90 +11,96 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// `$!` before a background command has been started splits the panel twice,
-// on two questions that look like one (#937).
+// `$!` before a background command has been started answers two questions at
+// once, and the panel puts three combinations on them (#937, #3011).
 //
-// The first is what it *reads*: nothing in bash 5.3.15, bash 3.2.57, bash 3.2
-// run as `sh`, dash and ksh93u+, and `0` in zsh 5.9.2 — a number nothing ever
-// had. That one is pinned as a row of TestSemanticsAxesHaveTwoSides, because
-// it is a value and nothing more.
+// The first is what it *reads*: nothing in bash, dash, BusyBox ash and ksh93,
+// and `0` in zsh — a number nothing ever had. The second is whether it is
+// *set*, which `${!-word}`, `${!+word}` and `set -u` can each see and a bare
+// `$!` cannot.
 //
-// The second is whether it is *set*, which is a different split and the more
-// useful one: `set -u` exists to stop exactly this read. bash and dash stop;
-// ksh93 and zsh carry on. Neither answer predicts the other — zsh's zero is a
-// value and ksh93's empty is a set parameter, so the two quiet shells are
-// quiet for different reasons — which is why they are two fields.
-func TestTheLastBackgroundPidIsUnsetBeforeAnyJobIsAnAxis(t *testing.T) {
-	const src = `set -u; echo "[$!]"; echo after`
-
-	unset := permissive()
-	unset.LastBackgroundPidIsUnsetBeforeAnyJob = Yes
-	got, st := run(t, src, withSem(unset))
-	if strings.Contains(got, "after") || st == 0 {
-		t.Errorf("Yes: the script should have stopped, got %q/%d", got, st)
-	}
-	if !strings.Contains(got, "!") {
-		t.Errorf("Yes: the refusal should name the parameter, got %q", got)
-	}
-
-	quiet := permissive()
-	quiet.LastBackgroundPidIsUnsetBeforeAnyJob = No
-	if got, st := run(t, src, withSem(quiet)); got != "[]\nafter\n" || st != 0 {
-		t.Errorf("No: got %q/%d, want %q/0", got, st, "[]\nafter\n")
-	}
-}
-
-// And once a job has been started the parameter is set on both sides, which is
-// what says the refusal is about nothing having run rather than about `$!`.
-//
-// Measured that way too: with one job behind it, `set -u` has nothing to say
-// about `$!` in any of the six columns.
-func TestTheLastBackgroundPidIsSetOnceAJobHasRun(t *testing.T) {
+// This was a pair of Answer fields, and the pair had a spelling for a state no
+// shell is in — set and empty, quiet — and none at all for ksh93's, which is
+// unset to the operators and quiet under `set -u`. A form is what holds all
+// three; see LastBackgroundPidPolicy.
+func TestWhatTheLastBackgroundPidReadsBeforeAnyJob(t *testing.T) {
 	for _, w := range []struct {
 		name   string
-		answer Answer
-	}{{"where an unstarted one would be unset", Yes}, {"and where it would not", No}} {
+		policy LastBackgroundPidPolicy
+		want   string
+	}{
+		{"unspecified is set and empty", LastBackgroundPidUnspecified, "[]\n[]\n[set]\n"},
+		{"a recorded zero, which is zsh", LastBackgroundPidZero, "[0]\n[0]\n[set]\n"},
+		{"unset, which is bash, dash and ash", LastBackgroundPidUnset, "[]\n[unset]\n[]\n"},
+		{"unset and quiet, which is ksh93", LastBackgroundPidUnsetButNotRefused, "[]\n[unset]\n[]\n"},
+	} {
 		t.Run(w.name, func(t *testing.T) {
 			sem := permissive()
-			sem.LastBackgroundPidIsUnsetBeforeAnyJob = w.answer
-			src := `set -u; /bin/sleep 0 & wait; x=$!; echo "[${x:+yes}] after"`
-			if got, st := run(t, src, withSem(sem)); got != "[yes] after\n" || st != 0 {
-				t.Errorf("got %q/%d, want %q/0", got, st, "[yes] after\n")
+			sem.LastBackgroundPid = w.policy
+			const src = `printf '[%s]\n' "$!" "${!-unset}" "${!+set}"`
+			if got, st := run(t, src, withSem(sem)); got != w.want || st != 0 {
+				t.Errorf("got %q/%d, want %q/0", got, st, w.want)
 			}
 		})
 	}
 }
 
-// The two axes are independent, and zsh is the combination that proves it: a
-// zero that `set -u` is content with.
+// And whether `set -u` stops the script over it, which is the second question
+// and the one the two unset answers part on.
 //
-// Asserting one side of each in isolation would not catch a reading that made
-// the zero imply the setness, which is the reading a single field would force.
-func TestTheTwoLastBackgroundPidAxesAreIndependent(t *testing.T) {
+// A bare `$!` cannot tell those two apart — both expand to nothing — so the
+// only case that separates them is this one.
+func TestWhetherNounsetRefusesTheLastBackgroundPidBeforeAnyJob(t *testing.T) {
+	const src = `set -u; echo "[$!]"; echo after`
+
+	refuses := permissive()
+	refuses.LastBackgroundPid = LastBackgroundPidUnset
+	got, st := run(t, src, withSem(refuses))
+	if strings.Contains(got, "after") || st == 0 {
+		t.Errorf("the refusing answer should have stopped the script, got %q/%d", got, st)
+	}
+	if !strings.Contains(got, "!") {
+		t.Errorf("the refusal should name the parameter, got %q", got)
+	}
+
 	for _, w := range []struct {
-		name        string
-		zero, unset Answer
-		want        string
-		stops       bool
+		name   string
+		policy LastBackgroundPidPolicy
+		want   string
 	}{
-		{"zero and content, which is zsh", Yes, No, "[0]\nafter\n", false},
-		{"empty and content, which is ksh93", No, No, "[]\nafter\n", false},
-		{"empty and unset, which is bash and dash", No, Yes, "", true},
-		{"zero and unset, which no shell in the panel is", Yes, Yes, "", true},
+		{"unset and quiet", LastBackgroundPidUnsetButNotRefused, "[]\nafter\n"},
+		{"a set zero", LastBackgroundPidZero, "[0]\nafter\n"},
+		{"set and empty", LastBackgroundPidUnspecified, "[]\nafter\n"},
 	} {
 		t.Run(w.name, func(t *testing.T) {
 			sem := permissive()
-			sem.LastBackgroundPidIsZeroBeforeAnyJob = w.zero
-			sem.LastBackgroundPidIsUnsetBeforeAnyJob = w.unset
-			got, st := run(t, `set -u; echo "[$!]"; echo after`, withSem(sem))
-			if w.stops {
-				if strings.Contains(got, "after") || st == 0 {
-					t.Errorf("should have stopped, got %q/%d", got, st)
-				}
-				return
-			}
-			if got != w.want || st != 0 {
+			sem.LastBackgroundPid = w.policy
+			if got, st := run(t, src, withSem(sem)); got != w.want || st != 0 {
 				t.Errorf("got %q/%d, want %q/0", got, st, w.want)
+			}
+		})
+	}
+}
+
+// And once a job has been started the parameter is set under every answer,
+// which is what says the whole question is about nothing having run rather
+// than about `$!`.
+//
+// Measured that way too: with one job behind it, `set -u` has nothing to say
+// about `$!` in any of the six columns.
+func TestTheLastBackgroundPidIsSetOnceAJobHasRun(t *testing.T) {
+	for _, policy := range []LastBackgroundPidPolicy{
+		LastBackgroundPidUnspecified,
+		LastBackgroundPidZero,
+		LastBackgroundPidUnset,
+		LastBackgroundPidUnsetButNotRefused,
+	} {
+		t.Run(policy.String(), func(t *testing.T) {
+			sem := permissive()
+			sem.LastBackgroundPid = policy
+			src := `set -u; /bin/sleep 0 & wait; x=$!; echo "[${x:+yes}] after"`
+			if got, st := run(t, src, withSem(sem)); got != "[yes] after\n" || st != 0 {
+				t.Errorf("got %q/%d, want %q/0", got, st, "[yes] after\n")
 			}
 		})
 	}
@@ -112,7 +118,7 @@ func TestTheLastBackgroundPidRefusalIsWordedByTheDialect(t *testing.T) {
 		return func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &diag }
 	}
 	sem := permissive()
-	sem.LastBackgroundPidIsUnsetBeforeAnyJob = Yes
+	sem.LastBackgroundPid = LastBackgroundPidUnset
 
 	sigil := Diagnostics{UnboundPositional: "$%[1]s: measured sigil wording"}
 	if got, _ := run(t, `set -u; echo "$!"`, withDialect(sem, sigil)); !strings.Contains(got, "$!: measured sigil wording") {
@@ -138,7 +144,7 @@ func TestTheLastBackgroundPidRefusalIsWordedByTheDialect(t *testing.T) {
 // regression guard for the construct, not for that clause.
 func TestTheAxisDoesNotReachAnIndirection(t *testing.T) {
 	sem := permissive()
-	sem.LastBackgroundPidIsUnsetBeforeAnyJob = Yes
+	sem.LastBackgroundPid = LastBackgroundPidUnset
 	sem.IndirectionYieldsName = No
 	enable := func(d *syntax.Dialect) { d.ParamIndirection = true }
 	if got, st := runGrammar(t, `y=hello; x=y; echo "[${!x}]"`, enable, withSem(sem)); got != "[hello]\n" || st != 0 {

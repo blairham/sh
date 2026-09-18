@@ -72,8 +72,6 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.No},
 		{"ProcessSubstitutionBodyReadsTheShellsInput", s.ProcessSubstitutionBodyReadsTheShellsInput, interp.No},
 		{"UnsetPositionalIsAllowed", s.UnsetPositionalIsAllowed, interp.No},
-		{"LastBackgroundPidIsUnsetBeforeAnyJob", s.LastBackgroundPidIsUnsetBeforeAnyJob, interp.Yes},
-		{"LastBackgroundPidIsZeroBeforeAnyJob", s.LastBackgroundPidIsZeroBeforeAnyJob, interp.No},
 		{"ExitTrapIsFunctionLocal", s.ExitTrapIsFunctionLocal, interp.No},
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.No},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.Yes},
@@ -154,6 +152,12 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	}
 	if got, want := s.SubshellJobTable, interp.SubshellJobsCleared; got != want {
 		t.Errorf("SubshellJobTable = %v, want %v", got, want)
+	}
+	// `$!` before any background command, which is a form rather than a pair
+	// of flags because the panel answers two questions there in three
+	// combinations — see interp.LastBackgroundPidPolicy.
+	if got, want := s.LastBackgroundPid, interp.LastBackgroundPidUnset; got != want {
+		t.Errorf("LastBackgroundPid = %v, want %v", got, want)
 	}
 }
 

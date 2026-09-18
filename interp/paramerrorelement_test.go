@@ -279,7 +279,7 @@ func TestABracedPositionalIsNamedWithoutItsSigil(t *testing.T) {
 			}, func(r *Runner) {
 				sem := *r.Semantics
 				sem.UnsetPositionalIsAllowed = No
-				sem.LastBackgroundPidIsUnsetBeforeAnyJob = Yes
+				sem.LastBackgroundPid = LastBackgroundPidUnset
 				r.Semantics = &sem
 				r.Diagnostics = &Diagnostics{
 					UnboundVariable:   "%s: unbound variable",

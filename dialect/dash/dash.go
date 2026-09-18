@@ -225,16 +225,14 @@ func Semantics() interp.Semantics {
 	// prompt at all.
 	s.FinishedJobNoticeNeedsAPrompt = interp.No
 	// And `$!` before any background command is unset here as it is in bash,
-	// in its own words and with its own status: measured,
-	// `set -u; echo "[$!]"` writes `!: parameter not set` — the name without
-	// its `$` — and stops at 2.
-	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
+	// in its own words and with its own status: measured, `${!-unset}` takes
+	// its default and `set -u; echo "[$!]"` writes `!: parameter not set` —
+	// the name without its `$` — and stops at 2.
+	s.LastBackgroundPid = interp.LastBackgroundPidUnset
 	// A job started with `&` reads an empty standard input, not the shell's:
 	// measured 2026-09-07, `dash -c '/bin/cat & wait; echo ---; /bin/cat' < f`
 	// writes `---` and then the file's line. POSIX XCU 2.9.3.
 	s.BackgroundJobInput = interp.BackgroundJobInputEmpty
-	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`.
-	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the `s` of the

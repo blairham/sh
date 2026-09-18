@@ -1473,7 +1473,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	o.chars = r.patternCountsCharacters(append(entryNames(entries), pattern)...)
 
 	var out []string
-	for _, name := range r.globListingNames(entries) {
+	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group)) {
 		// Only a *leading* period is special, and only in pathname
 		// expansion: `*.b` matches `a.b`, and `.hid` needs `.*id`.
 		if strings.HasPrefix(name, ".") && !hidden {
@@ -1536,6 +1536,14 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 // of the tree and never stop, and no column does that — ksh93's `**` lists
 // the tree below and nothing above it.
 //
+// The second route to the same two names is PeriodPatternListsDotAndDotDot,
+// and it is an option rather than an axis because the one shell that has it
+// switches it while it runs. It is asked only of a component the pattern
+// wrote with a leading period, which the axis is not: the shells the axis
+// holds have the names in the listing whatever the pattern says, and the
+// leading-period rule is what keeps them out of an ordinary `*` there. See
+// the option for the table that separates the two.
+//
 // Whether the descent also *lists* the two names beside the entries it finds
 // is now reachable and is **not** done: that dialect's `set -o globstar` was
 // wired to the walk in #3152, so the question stopped being hypothetical, and
@@ -1547,9 +1555,10 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 // globListingNames, which the component match consults and appendDescendants
 // does not — and filed as its own row rather than folded in here, because a
 // descent that lists `..` has to say what it then does with it.
-func (r *Runner) globListingNames(entries []os.DirEntry) []string {
+func (r *Runner) globListingNames(entries []os.DirEntry, periodPattern bool) []string {
 	names := make([]string, 0, len(entries)+2)
-	if r.sem().GlobListsDotAndDotDot == Yes {
+	if r.sem().GlobListsDotAndDotDot == Yes ||
+		(periodPattern && r.MatchOption(PeriodPatternListsDotAndDotDot)) {
 		names = append(names, ".", "..")
 	}
 	for _, e := range entries {

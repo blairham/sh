@@ -362,6 +362,103 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).ErrExitEntersACommandSubstitution,
 		set: (*interp.Runner).SetErrExitEntersACommandSubstitution,
 	},
+	// The second inverted entry here, and it is inverted for the same reason
+	// `no_empty_cmd_completion` is: bash names the *suppression*, so the
+	// option being on is the capability being off. `shopt -u globskipdots`
+	// is what asks for `.` and `..` back in a `.*` expansion, and the core
+	// bit names the listing rather than the skipping — which is what keeps
+	// the zero value of a Runner the state every shell without the option is
+	// in.
+	//
+	// It sat in shoptStates reading **on**, which made `shopt -s` a silent
+	// grant and `shopt -u` the refusal, so there was no way to ask for the
+	// two names at all (#3386).
+	//
+	// Measured 2026-09-17 on bash 5.3.20 under `LC_ALL=C`, in a directory
+	// holding `.a`, `.b`, `vis` and `sub/`, with the option off:
+	//
+	//	.*                     . .. .a .b
+	//	*                      sub vis
+	//	shopt -s dotglob; *    .a .b sub vis
+	//	*/.*                   sub/. sub/.. sub/.x
+	//	.*/                    ../ ./
+	//	shopt -s globstar; **  sub sub/y vis
+	//
+	// The third row is what makes this a question of its own rather than the
+	// hidden-name rule again: with the leading-period rule lifted **and** the
+	// two names asked for, `*` still does not see them. So the option is
+	// about the *listing* a component with a written period may match, which
+	// is interp.PeriodPatternListsDotAndDotDot, and not about
+	// interp.PatternsMatchHidden.
+	//
+	// bash 5.2 is where the name arrived and its default is on, so the
+	// default behavior here was already right; what was missing was the way
+	// back.
+	// The name that turns a *diagnostic* on, and the only one here whose
+	// whole effect is that the shell starts saying something it was already
+	// doing. `shift` past the end is 1 with `$#` untouched in this shell
+	// either way; what the option buys is the sentence, which is why the
+	// wording sits in this dialect's Diagnostics and the *withholding* is
+	// the capability — interp.Runner.ReportsShiftPastTheEnd, turned off by
+	// Configure because this shell's default is the quiet one.
+	//
+	// Measured 2026-09-17 on bash 5.3.20 and 3.2.57 alike, from a script
+	// file, with the option on:
+	//
+	//	set -- a; shift 3         shift: 3: shift count out of range, 1
+	//	set -- a; shift; shift    shift: shift count out of range, 1
+	//	shift 0                   0, silent
+	//	set -- a b; shift 2       0, silent
+	//	shift -1                  named with the option off as well as on
+	//
+	// The second row is why there are two wordings rather than a
+	// placeholder, and the last is why the option governs one end of the
+	// range and not both. It was in shoptStates refusing the write, which
+	// was honest while nothing carried the sentence and stopped being so the
+	// moment the sentence existed (#3465).
+	// The name a script written for a System V `echo` sets, and the third in
+	// this table that moves the shell to the other side of an answer rather
+	// than turning a capability up: whether `echo` interprets its escapes
+	// with no `-e` is interp.Semantics.EchoInterpretsEscapes, answered `Yes`
+	// by dash and zsh and `No` by this preset and by ksh93 — and this is the
+	// only shell in the panel that lets a script move it.
+	//
+	// It is set in an rc file rather than per call, which is why refusing it
+	// was worse than it looks: every later `echo` in the file answered the
+	// other way, so one diagnostic was followed by any number of wrong lines
+	// (#3059).
+	//
+	// Measured 2026-09-17 on bash 5.3.20 with the option on, `$(…)` around
+	// each call so the bytes are visible:
+	//
+	//	echo 'a\tb'       a<TAB>b
+	//	echo -E 'a\tb'    a\tb        — the letter still wins, for one call
+	//	echo -e 'a\tb'    a<TAB>b
+	//	echo -n x         no newline  — the option is not about the letters
+	//	echo 'a\x41b'     aAb
+	//	echo 'a\0101b'    aAb
+	//	echo 'a\cb'       a           — output stops, newline included
+	//
+	// So it moves the default and nothing else: which escapes exist, which
+	// letters are read and which of `-e -E` wins are each their own axis and
+	// each answers the same with the option on. bash 3.2 agrees on every row
+	// but `\e`, which is that build's own age rather than this option's.
+	"xpg_echo": {
+		get: (*interp.Runner).EchoExpandsEscapes,
+		set: (*interp.Runner).SetEchoExpandsEscapes,
+	},
+	"shift_verbose": {
+		get: (*interp.Runner).ReportsShiftPastTheEnd,
+		set: (*interp.Runner).SetReportsShiftPastTheEnd,
+	},
+	"globskipdots": {
+		get: func(r *interp.Runner) bool {
+			return !r.MatchOption(interp.PeriodPatternListsDotAndDotDot)
+		},
+		set: func(r *interp.Runner, on bool) {
+			r.SetMatchOption(interp.PeriodPatternListsDotAndDotDot, !on)
+		},
+	},
 }
 
 // shoptReadOnly are the two names that are indicators rather than switches:
@@ -575,7 +672,6 @@ var shoptStates = map[string]bool{
 	"execfail":             false,
 	"extquote":             true,
 	"globasciiranges":      true,
-	"globskipdots":         true,
 	"gnu_errfmt":           false,
 	"histappend":           true,
 	"histreedit":           false,
@@ -588,9 +684,7 @@ var shoptStates = map[string]bool{
 	"noexpand_translation": false,
 	"progcomp_alias":       false,
 	"promptvars":           true,
-	"shift_verbose":        false,
 	"varredir_close":       false,
-	"xpg_echo":             false,
 }
 
 const shoptUsage = "shopt: usage: shopt [-pqsu] [-o] [optname ...]"

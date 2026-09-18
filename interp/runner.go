@@ -5215,6 +5215,18 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 	}
 
+	// A command word that came out of expansion as exactly `-` is thrown
+	// away in one dialect and the rest of the command runs. Here rather than
+	// with the null command above, and that order is measured: `>f` alone
+	// runs the null command there, while `- >f` is `redirection with no
+	// command` — so a word that was written and discarded is not the same
+	// state as no word at all. See Runner.discardLoneDashCommandWords.
+	if r.discardLoneDashCommandWords(&argv) && len(argv) == 0 && len(c.Redirs) > 0 {
+		r.fatal("%s\n", Wording(r.diag().RedirectionWithNoCommand,
+			"redirection with no command"))
+		return nil
+	}
+
 	// `$_` moves to this command's last expanded argument before it runs,
 	// so the command's own expansion saw the previous one's — and a bare
 	// assignment moves it to empty. Tracked unconditionally and cheaply;
@@ -5694,7 +5706,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				continue
 			}
 			if (!r.IsSpecialBuiltinHere(argv[0]) || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting")) &&
+				!r.builtinKeepsAnAssignmentPrefix(argv[0]) &&
 				r.subscriptedPrefixTakenBack(a) {
+				// The second reason a prefix is not taken back, and it is a
+				// *different* one: one dialect keeps what stands in front of
+				// `alias` and `hash` while answering no to the specialness
+				// question above, for `:` and `shift` included. See
+				// Semantics.BuiltinsKeepingAnAssignmentPrefix.
 				undo = append(undo, r.saveVar(a.Name))
 			}
 			// Whether a discipline hears about it is whether there is a

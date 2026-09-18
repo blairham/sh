@@ -1043,6 +1043,10 @@ func Semantics() interp.Semantics {
 	// h` is 0 then 1, and a name only looked up is not remembered either.
 	s.AliasRemembersTheNamesItNames = interp.No
 	s.AliasSeparatorEndsTheLookup = interp.No
+	// A command word that is exactly `-` is a command name here and is
+	// reported as one: `- echo hi` is `command not found` at 127 and the
+	// script carries on. zsh is the column that throws the word away (#3236).
+	s.LoneDashInCommandPositionIsDiscarded = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	// `type -- cd` reads the `--` as a name rather than as the end of
 	// options, so no letter of its own is reachable — `-t` included.

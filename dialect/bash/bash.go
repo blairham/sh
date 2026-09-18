@@ -602,6 +602,10 @@ func Semantics() interp.Semantics {
 	// unalias h` is 0 then 1 here, as it is in zsh, dash and BusyBox ash.
 	s.AliasRemembersTheNamesItNames = interp.No
 	s.AliasSeparatorEndsTheLookup = interp.No
+	// A command word that is exactly `-` is a command name here and is
+	// reported as one: `- echo hi` is `command not found` at 127 and the
+	// script carries on. zsh is the column that throws the word away (#3236).
+	s.LoneDashInCommandPositionIsDiscarded = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysEscaped
 	s.AliasListingQuotesTheName = interp.No

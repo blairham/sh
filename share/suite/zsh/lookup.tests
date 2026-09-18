@@ -90,3 +90,30 @@ echo "command -v in st=$?"
 float c=1.5; typeset -p c
 float -F 2 d=1.5; typeset -p d
 float -x g=2.5; typeset -p g
+
+# `rehash` and `unhash` are this shell's own names for the two halves of the
+# command hash. They are builtins here and nothing at all in the rest of the
+# panel, so a name a script actually types was a PATH search and a 127 until
+# #3109. The refusals are asked for as well as the classification, because
+# each has to refuse under *its own* name rather than under `hash`'s.
+whence -w rehash
+whence -w unhash
+rehash; echo "rehash st=$?"
+rehash -f; echo "rehash -f st=$?"
+rehash foo 2>&1; echo "rehash with an operand st=$?"
+rehash -x 2>&1; echo "rehash with a letter it has not got st=$?"
+unhash 2>&1; echo "unhash with nothing st=$?"
+unhash nosuch_zz 2>&1; echo "unhash a name no table holds st=$?"
+alias unhash_aa=1; unhash -a unhash_aa; echo "unhash -a st=$?"
+alias unhash_aa 2>/dev/null; echo "and the alias is gone st=$?"
+unhash -m 'nosuch_zz*'; echo "unhash -m matching nothing st=$?"
+
+# A command word that is exactly `-` is thrown away here and the rest of the
+# command runs, where every other column looks it up and reports 127. `--` is
+# the control and is an ordinary command name in all seven (#3236).
+- echo lone dash; echo "lone dash st=$?"
+- - echo two dashes; echo "two words st=$?"
+'-' echo quoted; echo "quoted st=$?"
+-- echo double 2>/dev/null; echo "double dash st=$?"
+-; echo "nothing after it st=$?"
+lonedash_v=1 -; echo "and the assignment st=$? [${lonedash_v-UNSET}]"

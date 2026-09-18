@@ -391,3 +391,69 @@ func TestAPrefixThroughCommandLeavesAnExportedNameAsItWas(t *testing.T) {
 		t.Errorf("got %q status %d, want v=9 to the command and v=1 after", out, st)
 	}
 }
+
+// A dialect may keep a prefix in front of a builtin it does **not** call
+// special, which is a second roster and not a widening of the first — see
+// Semantics.BuiltinsKeepingAnAssignmentPrefix.
+//
+// The two are asked over the same snippet in the same run, which is the whole
+// of what the axis is: the column this models answers the specialness
+// question No, for POSIX's own `:` and `shift` included, and keeps this one
+// anyway.
+func TestAPrefixOnABuiltinNamedInTheKeepingRoster(t *testing.T) {
+	for _, tc := range []struct {
+		name, roster, src, want string
+	}{
+		{
+			"a name on the roster keeps it",
+			"alias",
+			`x=1; x=2 alias >/dev/null; echo "[$x]"`,
+			"[2]\n",
+		},
+		{
+			"a name that is not does not",
+			"hash",
+			`x=1; x=2 alias >/dev/null; echo "[$x]"`,
+			"[1]\n",
+		},
+		{
+			"an empty roster keeps nothing",
+			"",
+			`x=1; x=2 alias >/dev/null; echo "[$x]"`,
+			"[1]\n",
+		},
+		{
+			"and the roster takes more than one name",
+			"alias hash",
+			`x=1; x=2 hash >/dev/null; echo "[$x]"`,
+			"[2]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := permissive()
+			// The other reason a prefix survives, turned off throughout, so
+			// every row here is this roster's doing and not specialness.
+			sem.AssignmentPrefixPersistsOnSpecialBuiltin = No
+			sem.BuiltinsKeepingAnAssignmentPrefix = tc.roster
+			if got := prefixAssignRun(t, tc.src, sem); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// And the name kept is the shell's own rather than the environment's: the
+// column this models leaves the value set and **unexported**, so a child does
+// not see it.
+func TestAKeptPrefixIsNotExported(t *testing.T) {
+	sem := permissive()
+	sem.AssignmentPrefixPersistsOnSpecialBuiltin = No
+	sem.BuiltinsKeepingAnAssignmentPrefix = "alias"
+	const src = `x=2 alias >/dev/null
+case "$(export -p)" in *x=*) echo EXPORTED;; *) echo PLAIN;; esac
+echo "[$x]"`
+	got := prefixAssignRun(t, src, sem)
+	if want := "PLAIN\n[2]\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

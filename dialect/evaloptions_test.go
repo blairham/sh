@@ -50,32 +50,40 @@ func evalOptionPresets() []struct {
 	// refuses is whether `eval -q echo hi` is a usage error rather than a
 	// command that was not there.
 	refuses bool
+	// eatsALoneDash is whether a command word that is exactly `-` is thrown
+	// away by this dialect, which is a fact about the *command word* and not
+	// about `eval` — see Semantics.LoneDashInCommandPositionIsDiscarded. It
+	// is a column of this table because the two rows it changes are rows
+	// this suite already asks, and reading either of them as `eval`'s doing
+	// is exactly the mistake #3236 exists to record.
+	eatsALoneDash bool
 } {
 	return []struct {
 		dialecttest.Preset
-		marker  bool
-		refuses bool
+		marker        bool
+		refuses       bool
+		eatsALoneDash bool
 	}{
 		{dialecttest.Preset{
 			Name: "bash", Dialect: bash.Dialect, Semantics: bash.Semantics,
 			Diagnostics: bash.Diagnostics, Apply: bash.Apply,
-		}, true, true},
+		}, true, true, false},
 		{dialecttest.Preset{
 			Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics,
 			Diagnostics: ksh.Diagnostics, Apply: ksh.Apply,
-		}, true, true},
+		}, true, true, false},
 		{dialecttest.Preset{
 			Name: "zsh", Dialect: zsh.Dialect, Semantics: zsh.Semantics,
 			Diagnostics: zsh.Diagnostics, Apply: zsh.Apply,
-		}, true, false},
+		}, true, false, true},
 		{dialecttest.Preset{
 			Name: "dash", Dialect: dash.Dialect, Semantics: dash.Semantics,
 			Diagnostics: dash.Diagnostics, Apply: dash.Apply,
-		}, false, false},
+		}, false, false, false},
 		{dialecttest.Preset{
 			Name: "ash", Dialect: ash.Dialect, Semantics: ash.Semantics,
 			Diagnostics: ash.Diagnostics, Apply: ash.Apply,
-		}, false, false},
+		}, false, false, false},
 	}
 }
 
@@ -138,16 +146,21 @@ func TestEachDialectReadsEvalsOptionsItsOwnWay(t *testing.T) {
 			// every column: it is the first word of the text, and the text
 			// runs it as a command. Measured on bash 5.3.20, ksh93u+, dash
 			// 0.5.12 and BusyBox ash 1.37.0 — 127 in all four. zsh answers
-			// 0 there, and not because `eval` ate the dash: a bare `-` in
-			// command position is discarded by that shell wherever it
-			// appears, which is issue #3236 and not this axis. Asserted
-			// here as our own answer, which is the four-column one in all
-			// five presets until that lands.
+			// 0 there, and **not** because `eval` ate the dash: a bare `-`
+			// in command position is discarded by that shell wherever it
+			// appears, which is Semantics.LoneDashInCommandPositionIsDiscarded
+			// and not this axis (#3236). eatsALoneDash is that column, and
+			// it is deliberately not p.refuses: the shell that discards the
+			// word is the one that reads no options at all.
 			out, st, err = p.Combined(t, dialecttest.Base{}, "eval - echo hi\n")
 			if err != nil {
 				t.Fatalf("err %v: %s", err, out)
 			}
-			if strings.Contains(out, "hi\n") || st != 127 {
+			if p.eatsALoneDash {
+				if out != "hi\n" || st != 0 {
+					t.Errorf("eval - echo hi = %q (status %d), want the dash discarded and %q at 0", out, st, "hi\n")
+				}
+			} else if strings.Contains(out, "hi\n") || st != 127 {
 				t.Errorf("eval - echo hi = %q (status %d), want the dash run as a command at 127", out, st)
 			}
 
@@ -165,6 +178,18 @@ func TestEachDialectReadsEvalsOptionsItsOwnWay(t *testing.T) {
 			out, st, err = p.Combined(t, dialecttest.Base{}, "eval '- echo hi'\n")
 			if err != nil {
 				t.Fatalf("err %v: %s", err, out)
+			}
+			// And this is the row that proves the reading. In the column
+			// that discards the word, one argument behaves exactly as two
+			// did — `hi` at 0 — which no option reading can produce: an
+			// option bundle here is the whole word `- echo hi`. So the dash
+			// is being dropped from the *text*, and `eval` never saw an
+			// option at all.
+			if p.eatsALoneDash {
+				if out != "hi\n" || st != 0 {
+					t.Errorf("eval '- echo hi' = %q (status %d), want the dash discarded and %q at 0", out, st, "hi\n")
+				}
+				return
 			}
 			if strings.Contains(out, "hi\n") {
 				t.Errorf("eval '- echo hi' = %q, want the text never run", out)

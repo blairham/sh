@@ -621,6 +621,22 @@ type Diagnostics struct {
 	// back — one holding a `/`, which is where a `~name` stops. One verb:
 	// the name as it was written, assignment and all.
 	HashNamedDirBadName string
+	// RehashTooManyArguments is `rehash` given a word of its own. The
+	// builtin takes none — its whole job is the table — so any operand is a
+	// count error rather than a name it could not find. One verb: the
+	// builtin's name. Empty means the dialect has no `rehash`.
+	RehashTooManyArguments string
+	// UnhashNoOperands is `unhash` with nothing to remove, which is a count
+	// error and not a removal of everything: the builtin has no spelling for
+	// that. One verb: the builtin's name.
+	UnhashNoOperands string
+	// UnhashElementNotFound is `unhash` naming something the chosen table
+	// has not got. **One sentence for all five tables**, which is measured
+	// rather than shared for convenience: the commands, the aliases, the
+	// suffix aliases, the functions and the named directories all answer
+	// with the identical words in the dialect that has the builtin. Two
+	// verbs: the builtin's name and the operand.
+	UnhashElementNotFound string
 
 	// CompleteNoSpec is `complete -p` or `-r` on a name nothing was
 	// registered for — and `compopt` on one, which is why the builtin's own

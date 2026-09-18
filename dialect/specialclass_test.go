@@ -155,10 +155,19 @@ func TestSpecialBuiltinMembershipIsPerDialect(t *testing.T) {
 // it, a preset that had turned that axis off would look like one whose roster
 // was empty.
 //
-// Measured 2026-09-16: `V=1 alias` leaves V at 1 in ksh93u+ and unset
-// everywhere else that has the builtin, and `LV=1 local x` inside a function
-// leaves LV at 1 in dash and BusyBox ash, where `CV=1 command true` leaves CV
-// unset in all seven.
+// Measured 2026-09-16: `V=1 alias` leaves V at 1 in ksh93u+ and in zsh 5.9.2,
+// and unset everywhere else that has the builtin; `LV=1 local x` inside a
+// function leaves LV at 1 in dash and BusyBox ash, where `CV=1 command true`
+// leaves CV unset in all seven.
+//
+// **zsh's `alias` row is not this roster's**, which is the trap this suite has
+// to keep out of: that shell answers
+// AssignmentPrefixPersistsOnSpecialBuiltin **no** — its `export` cell below is
+// UNSET, and `:` and `shift 0` are unset there too — and keeps the prefix in
+// front of `alias` and `hash` anyway, which is
+// Semantics.BuiltinsKeepingAnAssignmentPrefix (#3313). So the cell is 1 for a
+// reason the membership does not explain, and the `export` cell one column
+// along is what says so.
 func TestSpecialBuiltinPrefixPersistsByMembership(t *testing.T) {
 	const src = `f() { LV=1 local x >/dev/null 2>&1; }
 f
@@ -173,9 +182,12 @@ printf 'local=[%s] alias=[%s] unalias=[%s] cd=[%s] export=[%s]\n' \
 		preset string
 		want   string
 	}{
-		// bash and zsh keep no prefix at all, POSIX name included.
+		// bash keeps no prefix at all, POSIX name included.
 		{"bash", "local=[UNSET] alias=[UNSET] unalias=[UNSET] cd=[UNSET] export=[UNSET]\n"},
-		{"zsh", "local=[UNSET] alias=[UNSET] unalias=[UNSET] cd=[UNSET] export=[UNSET]\n"},
+		// zsh keeps none of them *as special builtins* — its `export` cell
+		// is the one that says so — and keeps `alias`'s through the other
+		// roster. See the note above.
+		{"zsh", "local=[UNSET] alias=[1] unalias=[UNSET] cd=[UNSET] export=[UNSET]\n"},
 		// ksh93's three, and not `local`, which that shell has no builtin for.
 		{"ksh", "local=[UNSET] alias=[1] unalias=[1] cd=[UNSET] export=[1]\n"},
 		// dash and BusyBox ash keep `local`'s and no other beyond POSIX's.

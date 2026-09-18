@@ -2379,7 +2379,7 @@ type Runner struct {
 	// three of the four presets. Installed together through SetOptionTable;
 	// see extend.go.
 	optionListing func(r *Runner) []ListedOption
-	optionMover   func(r *Runner, name string, on bool) (moved, known bool)
+	optionMover   func(r *Runner, name string, on bool) OptionMove
 	// shellOptionMover and shellOptionListing are a *second* option
 	// namespace, the one a dialect keeps beside `set -o` rather than inside
 	// it: bash's `shopt` names, which overlap `set -o`'s in nothing. Nil in

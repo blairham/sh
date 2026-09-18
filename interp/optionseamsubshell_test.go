@@ -52,13 +52,13 @@ func (s *seamShell) register(r *Runner) {
 		func(r *Runner) []ListedOption {
 			return []ListedOption{{Name: "gamma", On: s.get(r)}}
 		},
-		func(r *Runner, name string, on bool) (moved, known bool) {
+		func(r *Runner, name string, on bool) OptionMove {
 			if name != "gamma" {
-				return false, false
+				return OptionNotFound
 			}
 			s.asked = append(s.asked, r)
 			s.state[r] = on
-			return true, true
+			return OptionMoved
 		},
 	)
 }

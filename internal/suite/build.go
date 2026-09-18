@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
@@ -99,14 +98,23 @@ func (b Build) String() string {
 
 // Version asks a reference shell what build it is.
 //
-// The spellings are internal/oracle's, called rather than copied. A second
-// list of ways to ask a shell its version is what let this package go without
-// the ksh one for as long as it did, and the repair for a helper that has
-// drifted from the one it was copied from is to fold it back, not to patch
-// both. What is added here is the gate — see [looksLikeABuild].
+// The spellings are internal/oracle's, called rather than copied, and as of
+// #3148 so is the gate: [oracle.LooksLikeABuild]. A second list of ways to
+// ask a shell its version is what let this package go without the ksh one for
+// as long as it did, and a second copy of the rule that says which answers
+// count would have been the same mistake one layer up — the repair for a
+// helper that has drifted from the one it was copied from is to fold it back,
+// not to patch both.
+//
+// The rule is now applied on both sides of that call and that is not a
+// duplicate, because it is one definition read twice: the probe asks whether
+// a line identifies the binary, and this asks whether a report may print the
+// line as a build. The probe's `unknown` for a shell that answered no
+// spelling fails the same rule, carrying no build number, so there is no
+// second sentinel to keep in step either.
 func Version(ctx context.Context, shell string) Build {
 	line := firstLine(oracle.Version(ctx, shell))
-	if !looksLikeABuild(line) {
+	if !oracle.LooksLikeABuild(line) {
 		return Build{}
 	}
 	return Build{Version: line, Known: true}
@@ -149,7 +157,7 @@ func Version(ctx context.Context, shell string) Build {
 // the way #3135's usage line was: the probe is scored on what the shell
 // *did*, and a shell that refuses it prints no fingerprint at all.
 //
-// The rule from [looksLikeABuild] carries over in the same form. An answer
+// The rule from [oracle.LooksLikeABuild] carries over in the same form. An answer
 // has to look like an answer: a non-zero status, an empty line, or anything
 // on standard error instead of standard output is not an identification, and
 // the column says it could not tell rather than printing a refusal where a
@@ -192,34 +200,6 @@ func fingerprint(ctx context.Context, shell, script string) (string, bool) {
 	}
 	line := strings.TrimSpace(firstLine(out.String()))
 	return line, line != ""
-}
-
-// buildNumber is the mark of an answer: a build string names a build, so it
-// carries a release number or the date of one. Every build string any column
-// here has ever reported does — `5.3.20`, `5.9.2`, `93u+ 2012-08-01`,
-// `v1.37.0` — and no refusal any of them prints does.
-var buildNumber = regexp.MustCompile(`[0-9]+\.[0-9]+|[0-9]{4}-[0-9]{2}-[0-9]{2}`)
-
-// looksLikeABuild is the gate: is this line an identification, or is it the
-// shell declining to give one?
-//
-// Deliberately a rule about what an answer has rather than a list of the
-// refusals seen so far. A blocklist is beaten by the first refusal nobody has
-// met yet, and this rule can only ever be too strict — too strict is a column
-// printing that it could not tell, which is the honest failure and the one a
-// reader acts on correctly. Too loose is #3135.
-func looksLikeABuild(line string) bool {
-	line = strings.TrimSpace(line)
-	if line == "" || !buildNumber.MatchString(line) {
-		return false
-	}
-	// A usage line carrying a number anyway — a path with a version in it, a
-	// bracketed option that takes one — is still a refusal. This is the
-	// shape #3135 was: ksh's `--help` exits zero and its first line is
-	// usage. Folding the probe onto the oracle's means ksh no longer reaches
-	// `--help` at all, and this stays because the next shell to answer only
-	// `--help` will reach it.
-	return !strings.HasPrefix(strings.ToLower(line), "usage:")
 }
 
 // Lineage is what the report must say about the build a column was actually

@@ -14698,6 +14698,11 @@ type Semantics struct {
 	// about it would have to hold every dialect's at once.
 	VersionOption VersionOption
 
+	// HelpOption is how this shell answers an invocation option asking it to
+	// describe itself — `--help`. See [HelpOption], and VersionOption above,
+	// whose shape it borrows and whose question it is not.
+	HelpOption HelpOption
+
 	// ShellOptionInvocationLetter is the option letter whose next word names
 	// an option in this shell's *second* option namespace — the table it
 	// keeps beside `set -o` rather than inside it. Written without its sign,
@@ -18677,6 +18682,69 @@ type VersionOption struct {
 
 	// Status is what the shell exits after answering. Zero for the three
 	// that treat the option as a request; ksh93 exits 2.
+	Status int
+}
+
+// HelpOption is what a shell does when its invocation asks it to describe
+// itself. It is VersionOption's shape and a different question, and one column
+// in the panel answers it.
+//
+// Measured 2026-09-18 with `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> --help`
+// and standard input on /dev/null:
+//
+//	bash 5.3.20   a version line, the usage block, and a six-line trailer,
+//	              on stdout, at 0
+//	bash 3.2.57   the same shape with a shorter trailer
+//	zsh 5.9.2     its own usage block, on stdout, at 0 — a different block
+//	ksh93u+       answered by its generic option reader
+//	dash 0.5.12   refused
+//	BusyBox ash   refused
+//
+// The block between Text and Trailer is Diagnostics.InvocationUsage — the same
+// block the shell writes under a refused option, which is measured and not
+// assumed: `bash --help` and `bash --badopt` were diffed line by line on
+// 2026-09-18 and the twenty-two lines between them are byte-identical. So this
+// is a version line, a trailer and a status, and not a second copy of a block
+// that would then have two places to drift.
+//
+// Text is its own string rather than VersionOption's, because the two differ:
+// bash's `--version` writes `5.3.20(1)-release (aarch64-…)` and its `--help`
+// writes `5.3.20(1)-release-(aarch64-…)`, a space against a hyphen, in one
+// binary in one run.
+//
+// The answer ends the invocation: `bash --help -c 'echo hi'` writes the help
+// and runs nothing.
+//
+// Two rows measured and **not** modeled, both about *where* the word may
+// stand. bash reads its GNU long options only in a run at the front, so
+// `bash -x --help` is `--: invalid option` where `bash --norc --help` is the
+// help — this shell answers the word wherever a long word is read, which is
+// how VersionOption has always been answered here and is the same divergence
+// that option already has (`bash -x --version`). And bash reads the whole run
+// before answering any of it, so `--version --help` is the **help** there and
+// the version here; a refusal anywhere in the run still wins in both.
+type HelpOption struct {
+	// Spellings names the option, whitespace-separated and written exactly
+	// as a command line writes it. Empty means the shell has no such option,
+	// and the word is then refused like any other it does not know.
+	Spellings string
+
+	// Text is the line written before the usage block, without its newline.
+	// Empty writes no line at all, which is the shape a shell with no
+	// version line in its help would take.
+	Text string
+
+	// Trailer is what follows the block, without a trailing newline. One
+	// verb, read as Diagnostics.InvocationUsage reads its first: the name
+	// the shell was invoked by.
+	Trailer string
+
+	// ToStandardError writes the answer on standard error rather than
+	// standard output. No column measured does, and it is here because
+	// VersionOption needed it and the same question is asked of both.
+	ToStandardError bool
+
+	// Status is what the shell exits after answering.
 	Status int
 }
 

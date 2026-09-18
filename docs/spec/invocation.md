@@ -162,13 +162,100 @@ shell prints under a refused option carried bash's own line, `-ilrsD or -c
 command or -O shopt_option (invocation only)` — advertising an option the
 front end did not have.
 
-One thing is still not this letter's and is not fixed with it: **when** a
-refused invocation option is reported relative to opening the script operand.
-bash reads every option before it looks at an operand, so `bash -O nosuchopt
-/nope/x.sh` complains about the name at status 2; this front end resolves the
-source first and answers `No such file or directory` at 127. `-o nosuchname`
-divides the same way and always has, because a `set` option cannot be applied
-until there is a runner to apply it to.
+### Every option word is judged before the operand behind it
+
+This was held out of `-O`'s work and is closed by #3284, and it is not that
+letter's: **when** a refused invocation option is reported relative to opening
+the script operand.
+
+Measured 2026-09-18 against a path that is not there, with standard input on
+`/dev/null`:
+
+| written | bash 5.3.20 | zsh 5.9.2 | ksh93u+ | dash 0.5.12 | BusyBox ash |
+| --- | --- | --- | --- | --- | --- |
+| `-o nosuchoption /nope/x.sh` | the option, 2 | the option, 1 | the option, 2 | the option, 2 | the option, 1 |
+| `-q /nope/x.sh` | the letter, 2 | the letter, 1 | the letter, 2 | the letter, 2 | the letter, 1 |
+| `/nope/x.sh` | the file, 127 | the file, 127 | the file, 127 | the file, 2 | the file, 2 |
+
+**Unanimous, so it is a rule and not an axis.** Ours named the file in every
+one of those, because this front end resolves the source *before* it builds
+the runner — and a `set` option is applied by the machinery `set` uses, which
+needs one. So the operand is resolved lazily now: a script that will not open
+is carried on the source and raised once the options have been applied. What
+it reports and what it exits are unchanged; only where in the sequence it
+happens moved.
+
+**After the environment's option list as well.** Measured on bash 5.3.20,
+`SHELLOPTS=nosuchoption bash /nope/x.sh` writes the option's complaint *and*
+then the file's, and exits 127 — so an inherited bad name is a remark the
+shell carries on from, and the operand is answered after it. The carried error
+is raised at exactly that point.
+
+**The shell names itself and not the operand.** Nothing has been read when a
+refused option speaks, so there is no `$0` and no script line to count
+against: `bash -o nosuchname /nope/x.sh` is `bash: line 0: bash: nosuchname:
+invalid option name`, word for word what the same option draws with no operand
+at all.
+
+**One namespace is judged last**, and that is bash's alone because only bash
+has a second one. Measured in the same run, each with `-c :` behind it:
+
+    -O nosuchopt -q              -q: invalid option
+    -q -O nosuchopt              -q: invalid option
+    -O nosuchopt -o nosuchname   nosuchname: invalid option name
+    -o nosuchname -O nosuchopt   nosuchname: invalid option name
+    -O nosuchopt -Z              -Z: invalid option
+    -x -O nosuchopt              nosuchopt: invalid shell option name
+
+So every `set` letter and every `set -o` name is judged before any `shopt`
+name, whichever order the words were written in, and the front end applies the
+second namespace last for that reason. The two tables share no name, so
+nothing can be observed to move in the wrong order by it. The `set -o` names
+are **not** reordered, which was measured in the same run and in every column:
+`-o nosuchoption -q` names the option and `-q -o nosuchoption` names the
+letter.
+
+Measured and not modeled: `bash -e /nope/x.sh` exits **1** where the same
+invocation without the letter exits 127, so errexit renumbers a script that
+would not open.
+
+### `--help`
+
+bash is the one column in the panel whose `--help` this front end had to
+learn. Measured 2026-09-18 with standard input on `/dev/null`:
+
+| column | writes | on | status |
+| --- | --- | --- | --- |
+| bash 5.3.20 | a version line, its usage block, a six-line trailer | stdout | 0 |
+| bash 3.2.57 | the same shape, shorter trailer | stdout | 0 |
+| zsh 5.9.2 | a usage block of its own | stdout | 0 |
+| ksh93u+ | answered by its generic option reader | stderr | 2 |
+| dash 0.5.12 | refused | stderr | 2 |
+| BusyBox ash | refused | stderr | 2 |
+
+**The block is the one already there.** `bash --help` and `bash --badopt` were
+diffed line by line: the twenty-two lines between the version line and the
+trailer are byte-identical to the block this shell already prints under a
+refused option. So `Semantics.HelpOption` carries a version line, a trailer
+and a status, and `Diagnostics.InvocationHelpBlock` hands over the middle —
+one copy, which is what keeps the help and the refusal from drifting.
+
+The version line is *not* `--version`'s: bash writes
+`5.3.20(1)-release (aarch64-…)` for one and `5.3.20(1)-release-(aarch64-…)`
+for the other, a space against a hyphen, in one binary in one run.
+
+The word is **recorded and not answered where it stands**, because the column
+that has it reads the whole run of long options before answering any of it:
+`bash --help --badopt` and `bash --badopt --help` are both the refusal.
+
+Two rows measured and not modeled, both about *where* the word may stand. bash
+reads its GNU long options only in a run at the front, so `bash -x --help` is
+`--: invalid option` where `bash --norc --help` is the help — this shell
+answers the word wherever a long word is read, which is how `--version` has
+always been answered here and is the same divergence that option already has.
+And bash reads the whole run before answering any of it, so `--version --help`
+is the **help** there and the version here; a refusal anywhere in the run still
+wins in both.
 
 ## Interactive, and `$-`
 

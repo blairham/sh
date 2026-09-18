@@ -343,6 +343,16 @@ func versionLine() string {
 	return fmt.Sprintf("GNU bash, version %s(%d)-%s (%s)", version, patch, tag, machine())
 }
 
+// helpVersionLine is the same line under `--help`, and the hyphen before the
+// parenthesis is not a typo: bash writes `5.3.20(1)-release (aarch64-…)` for
+// `--version` and `5.3.20(1)-release-(aarch64-…)` for `--help`, in one binary
+// in one run. Measured 2026-09-18 on bash 5.3.20 and again on 3.2.57, which
+// writes the same shape. So the two lines are two strings rather than one
+// said twice (#3268).
+func helpVersionLine() string {
+	return fmt.Sprintf("GNU bash, version %s(%d)-%s-(%s)", version, patch, tag, machine())
+}
+
 // machine is the triple bash puts last in BASH_VERSINFO. Ours is the build's,
 // which is the honest answer to "what was this compiled for".
 func machine() string { return runtime.GOARCH + "-" + runtime.GOOS }

@@ -7180,6 +7180,17 @@ func (d Diagnostics) InvocationOptionDiagnostic(shell, word string) string {
 // spelling — see InvocationLongOptionUsage. One helper rather than two
 // renderings, because the two callers are the same refusal reached by two
 // routes: the runner's, for a word that got as far as the option table, and
+// InvocationHelpBlock is the usage block a shell writes when its invocation
+// asks it to describe itself, which is the *same* block a refused option gets
+// — measured, and the reason this hands the caller the block rather than
+// letting Semantics.HelpOption carry a second copy of it.
+//
+// The version line above it and the trailer under it are the dialect's, on
+// that value; this is the middle. Empty where the dialect writes no block.
+func (d Diagnostics) InvocationHelpBlock(shell string) string {
+	return d.invocationUsageBlock(shell, true)
+}
+
 // InvocationOptionDiagnostic's, for one the front end stopped.
 func (d Diagnostics) invocationUsageBlock(shell string, long bool) string {
 	u := d.InvocationUsage

@@ -516,6 +516,14 @@ func MainArgs(sh Shell, argv []string) int {
 		sh.errf("%s: %v\n", sh.Name, err)
 		return usageStatus
 	}
+	if in.help {
+		// Before the version, which is the order measured: `bash --version
+		// --help` and `bash --help --version` both write the help, so the
+		// two are read and the help wins rather than the first one standing.
+		// (What this front end cannot reproduce is the first of those, since
+		// the version ends its own reading here — see Semantics.HelpOption.)
+		return sh.announceHelp()
+	}
 	if in.version {
 		// Before the prompt and before any route: the invocation asked the
 		// shell to name itself and there is nothing to run.
@@ -660,6 +668,32 @@ func (sh Shell) announceVersion() int {
 	return v.Status
 }
 
+// announceHelp writes what this dialect says when asked to describe itself,
+// and answers with the status it exits.
+//
+// Three pieces and the middle one is not this value's: a version line, the
+// usage block Diagnostics already holds — the same block a refused option
+// gets, measured byte-for-byte — and a trailer. Drawing the block from the
+// one place keeps the help and the refusal from drifting, which is exactly
+// what a second copy of twenty-two lines would do.
+func (sh Shell) announceHelp() int {
+	h := sh.Semantics.HelpOption
+	w := sh.Stdout
+	if h.ToStandardError {
+		w = sh.Stderr
+	}
+	if h.Text != "" {
+		_, _ = fmt.Fprintln(w, h.Text)
+	}
+	if block := sh.Diagnostics.InvocationHelpBlock(sh.Name); block != "" {
+		_, _ = fmt.Fprintln(w, block)
+	}
+	if h.Trailer != "" {
+		_, _ = fmt.Fprintln(w, interp.Wording(h.Trailer, h.Trailer, sh.Name))
+	}
+	return h.Status
+}
+
 func (sh Shell) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(sh.Stderr, format, args...)
 }
@@ -763,6 +797,15 @@ type source struct {
 	// loop is where it was read and because it beats every route: see
 	// Semantics.VersionOption.
 	version bool
+	// scriptErr is a script operand that would not open, held until the
+	// invocation's own options have been applied — which is the order every
+	// shell in the panel has. See route, where it is carried instead of
+	// returned, and runInput, where it is raised.
+	scriptErr *scriptError
+	// help says the invocation asked this shell to describe itself and there
+	// is nothing to run. Beside version and for its reasons, and it beats it
+	// where both were written: see Semantics.HelpOption.
+	help bool
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
@@ -971,6 +1014,13 @@ type invocation struct {
 	// that have one print their version for `--version -c 'echo hi'` and
 	// never run the command.
 	version bool
+	// help is the dialect's `--help`, and it is recorded rather than
+	// answered where it stands. The column that has one reads the whole run
+	// of long options before answering any of it: `bash --help --badopt` is
+	// the refusal and not the help, measured 2026-09-18, so a word that
+	// ended the reading would answer what the reference refuses. See
+	// Semantics.HelpOption.
+	help bool
 	// policy names a policy file and audit names where the event stream goes
 	// — `--policy FILE`, `--audit FILE`, long form only. They are the one
 	// pair of options here that no real shell has, and they are here anyway
@@ -1061,11 +1111,11 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 	if err != nil {
 		return sh, source{}, nil, err
 	}
-	if inv.version {
+	if inv.version || inv.help {
 		// Nothing after it is read and nothing before it runs, so no gate is
 		// installed either: the route the rest of the vector would have
 		// chosen is never decided.
-		return sh, source{version: true}, nil, nil
+		return sh, source{version: inv.version, help: inv.help}, nil, nil
 	}
 	sh, closer, err := sh.installSandbox(inv)
 	if err != nil {
@@ -1184,6 +1234,16 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 		if spelt(sh.Semantics.VersionOption.Spellings, a) {
 			inv.version = true
 			return nil, nil
+		}
+		// And the option that asks the shell to describe itself, recorded
+		// and not answered: the reading goes on, so a refused word behind it
+		// still wins. Before the startup-file options for the reason the
+		// version is — a dialect naming the same spelling for something of
+		// its own would be a collision to notice rather than to arbitrate,
+		// and none does.
+		if spelt(sh.Semantics.HelpOption.Spellings, a) {
+			inv.help = true
+			return args, nil
 		}
 		rest, matched, err := sh.startupOption(a, args, inv)
 		if matched {
@@ -1547,7 +1607,35 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// being invoked wrongly, and three of the four tell the two ways it
 		// fails apart from each other as well — so the error is wrapped
 		// rather than returned bare, and the dialect words it and numbers it.
-		return source{}, &scriptError{path: path, err: err}
+		//
+		// Carried on the source rather than returned, because **every shell
+		// in the panel judges its option words before it looks at the
+		// operand behind them** and a returned error ends the invocation
+		// here — which is before a runner exists, and so before any option
+		// has been applied. Measured 2026-09-18 against a path that is not
+		// there, with standard input on /dev/null: `-o nosuchoption
+		// /nope/x.sh` names the option in bash 5.3.20, zsh 5.9.2, ksh93u+,
+		// dash 0.5.12 and BusyBox ash 1.37.0 alike, and `-q /nope/x.sh`
+		// names the letter in all five. Ours named the file, at 127, in
+		// every one of them.
+		//
+		// Unanimous, so it is a rule and not an axis — there is nothing for
+		// a dialect to disagree about. What it costs is resolving the
+		// operand lazily: this front end applies a `set` option through the
+		// machinery `set` uses, which needs a runner, and the runner is
+		// built after the source has been resolved. See runInput for where
+		// the carried error is raised instead (#3284).
+		// Named after the *shell* and reported in the plain form, not the
+		// script's: nothing has been read, so there is no `$0` and no line
+		// of a script for a location to count against. Measured — `bash -o
+		// nosuchname /nope/x.sh` is `bash: line 0: bash: nosuchname:
+		// invalid option name`, word for word what the same option draws
+		// with no operand at all.
+		return source{
+			scriptErr: &scriptError{path: path, err: err},
+			name:      sh.Name, dg: sh.Diagnostics,
+			params: args[1:], opts: inv.opts,
+		}, nil
 	}
 	// A shell running a script names the *script* in `$0` and in every
 	// diagnostic, not itself, and reports in the script form — ksh93 also
@@ -2051,6 +2139,16 @@ func (sh Shell) runInput(in source) int {
 	// own `+x`, so the environment is read second; and the startup files below
 	// are traced by it, so it is read before them.
 	r.ApplyInheritedShellOptions()
+	if in.scriptErr != nil {
+		// The operand, now that every option word has been judged. After the
+		// environment's list as well as the argument vector's, which is
+		// measured: `SHELLOPTS=nosuchoption bash /nope/x.sh` writes the
+		// option's complaint *and* the file's, in that order, and exits 127.
+		// Reported with the shell's own name and not `$0`, exactly as it was
+		// when this was answered in the front end.
+		sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, in.scriptErr.path, in.scriptErr.err))
+		return sh.Diagnostics.ScriptStatus(in.scriptErr.err)
+	}
 	// The startup files, before the script. After the options, which is where
 	// the panel has them: `-x` given to the invocation traces the profile's
 	// own lines in dash, ksh93 and zsh alike. After the runner is built rather
@@ -2121,7 +2219,35 @@ func (sh Shell) runInput(in source) int {
 // answered two ways because only one of the paths could carry an answer
 // (#483).
 func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
+	// The *second* namespace last, whatever order the words were written in.
+	// The one shell with that letter judges every `set` letter and every
+	// `set -o` name before it looks at a `shopt` name, and the two tables
+	// share no name — so nothing can be observed to move in the wrong order
+	// by it. Measured 2026-09-18 on bash 5.3.20 with `-c :` behind each:
+	//
+	//	-O nosuchopt -q              -q: invalid option
+	//	-q -O nosuchopt              -q: invalid option
+	//	-O nosuchopt -o nosuchname   nosuchname: invalid option name
+	//	-o nosuchname -O nosuchopt   nosuchname: invalid option name
+	//	-O nosuchopt -Z              -Z: invalid option
+	//	-x -O nosuchopt              nosuchopt: invalid shell option name
+	//
+	// Four of those six are the row `cmd/bash/shoptinvocation_test.go` held
+	// out: written either way round the letter is named, where this front
+	// end named whichever word came first (#3284). The `set -o` names are
+	// **not** reordered, and that is measured in the same run: `-o
+	// nosuchoption -q` names the option and `-q -o nosuchoption` names the
+	// letter, in every column.
+	ordered := make([]optionSpec, 0, len(opts))
+	var shell []optionSpec
 	for _, o := range opts {
+		if o.shell || o.shellListing {
+			shell = append(shell, o)
+			continue
+		}
+		ordered = append(ordered, o)
+	}
+	for _, o := range append(ordered, shell...) {
 		apply := r.SetOptionLetters
 		switch {
 		case o.shellListing:

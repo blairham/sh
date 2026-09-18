@@ -1834,6 +1834,44 @@ type Dialect struct {
 	// test [Dialect.FunctionNameExpands] already makes and this shares it.
 	FunctionNameIsAnyWord bool
 
+	// FunctionKeywordNameIsAnyBareWord makes the word after the `function`
+	// keyword a name whenever it was written **bare**, whatever its
+	// characters — and leaves a word carrying quoting or an expansion
+	// refused, by the dialect's own route and in its own words.
+	//
+	// The keyword form alone, and narrower than both flags around it. It is
+	// not [Dialect.FunctionKeywordNameIsAnyWord], which takes a quoted word
+	// too and then has to except the three characters that shell matches
+	// against the filesystem; and it is not
+	// [Dialect.FunctionNameIsAnyBareWord], which answers the `name()`
+	// spelling by the same rule *and* makes the refused word define nothing
+	// in silence. The column this is for refuses a quoted word out loud and
+	// carries on.
+	//
+	// Measured 2026-09-16 on bash 5.3.20 and bash 3.2.57, `eval "function $n
+	// { echo r; }"` a name at a time from a script file. Every one of these
+	// defines, at status 0:
+	//
+	//	a=2   f=    [     a~b   a?b   a*b   a{b   a}b   x[y
+	//
+	// and `a!b`, `a#b`, `a-b`, `a.b`, `a@b`, `a]b`, `a^b`, `a%b`, `a,b`,
+	// `a:b`, `a/b` and `a+b` define there as they already did here. The
+	// refusals are the words that were not written bare — `x$y`, `x${y}`,
+	// `x$(y)`, `$x`, `'f'`, `"f"`, `\f`, `a\*b`, `a"b"c` — each `` `…': not
+	// a valid identifier `` at 1 with the script carrying on, which is what
+	// the source-text reading already writes. `a;b`, `a&b`, `a|b`, `a<b`,
+	// `a>b`, `a(b`, `a)b` and `a b` are 2 in both shells and are not about
+	// names at all: the word ended at the operator.
+	//
+	// `a*b` is the row that says the filesystem is never consulted — it
+	// defines, and calling `a*b` runs it — which is where the shell this is
+	// for parts from the one [Dialect.FunctionKeywordNameIsAnyWord] is for.
+	//
+	// The `name()` spelling is not this flag's and does not need one here:
+	// that route already takes the same characters, since the parentheses
+	// are the announcement and no name test stands in front of them.
+	FunctionKeywordNameIsAnyBareWord bool
+
 	// FunctionNameIsAnyBareWord is the third answer to the same question, and
 	// the one that turns on **how the word was written** rather than on what
 	// it says: a name written bare is a name whatever its characters, and a

@@ -3292,6 +3292,45 @@ the same answer. What happens when the definition is reached is
 value, `FuncNameDefinesNothing`: no wording, nothing bound, status 0
 (#2590).
 
+### A bare word after the keyword
+
+    function a=2 { :; }
+    function [ { :; }
+    function a*b { :; }
+
+**One shell takes any word written bare after the `function` keyword**,
+whatever its characters, and refuses a word carrying quoting or an
+expansion in its own words. It is neither of the two readings above: it
+is not `FunctionKeywordNameIsAnyWord`, which takes a quoted word as well
+and then has to except the three characters its shell matches against
+the filesystem; and it is not `FunctionNameIsAnyBareWord`, which answers
+the `name()` spelling by the same rule *and* leaves the refused word
+defining nothing in silence.
+
+Measured 2026-09-16 on bash 5.3.20 and bash 3.2.57, `eval "function $n {
+echo r; }"` a name at a time from a script file. Every one of these
+defines, at status 0, and is callable by that name:
+
+| written | answer |
+| --- | --- |
+| `a=2`, `f=` | defines — the `=` is not read as an assignment here |
+| `[`, `x[y`, `a{b`, `a}b` | defines |
+| `a~b`, `a?b`, `a*b` | defines, and `a*b` runs when it is called, so the name is never matched against the filesystem |
+| `a!b`, `a#b`, `a-b`, `a.b`, `a@b`, `a]b`, `a^b`, `a%b`, `a,b`, `a:b`, `a/b`, `a+b` | defines, which the punctuation flag already had |
+| `x$y`, `x${y}`, `x$(y)`, `$x` | `` `…': not a valid identifier `` at 1, the script carrying on |
+| `'f'`, `"f"`, `\f`, `a\*b`, `a"b"c` | the same refusal, naming the word as it was written |
+| `a;b`, `a&b`, `a\|b`, `a<b`, `a>b`, `a(b`, `a)b`, `a b` | status 2 in both shells, and not about names at all: the word ended at the operator |
+
+The accepted set here had been the identifier rule plus
+`FunctionNamePunctuation`, which is narrower than that shell by `= [ { }
+~ ? *` at least — so `function [ { … }` was refused where bash defines
+it (#3193).
+
+Grammar flag: `FunctionKeywordNameIsAnyBareWord`, bash alone, and the
+keyword spelling alone: the `name()` route already takes the same
+characters there, since the parentheses are the announcement and no name
+test stands in front of them.
+
 ### One body, several names
 
     function clipcopy clippaste { … }

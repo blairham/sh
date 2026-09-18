@@ -2766,6 +2766,14 @@ func (p *Parser) keywordFuncName(t Token) bool {
 		// an expansion, which is the other half of "written bare".
 		return tokenIsWrittenBare(t)
 	}
+	if p.dialect.FunctionKeywordNameIsAnyBareWord {
+		// The fourth reading, and the keyword form's alone: a bare word is a
+		// name whatever its characters, and a word carrying quoting or an
+		// expansion is not one — which leaves it to be refused where this
+		// dialect already refuses it, in its own words and at its own
+		// status. See [Dialect.FunctionKeywordNameIsAnyBareWord].
+		return tokenIsWrittenBare(t)
+	}
 	if !p.dialect.FunctionKeywordNameIsAnyWord {
 		return isFuncName(p.funcNameText(t), p.dialect.FunctionNamePunctuation)
 	}

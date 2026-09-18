@@ -184,6 +184,14 @@ func Dialect() syntax.Dialect {
 	// the two shells that remove the quotes define `f`. See
 	// syntax.Dialect.FunctionNameIsSourceText for the six columns (#1566).
 	d.FunctionNameIsSourceText = true
+	// And the `function` keyword's name is any word *written bare*, whatever
+	// its characters: `function a=2 { :; }`, `function [ { :; }` and
+	// `function a*b { :; }` all define here and are called by those names,
+	// where a word carrying quoting or an expansion is refused above. The
+	// accepted set was the identifier rule plus punctuation, which is
+	// narrower than this shell by `= [ { } ~ ? *` at least (#3193). See
+	// syntax.Dialect.FunctionKeywordNameIsAnyBareWord for the rows.
+	d.FunctionKeywordNameIsAnyBareWord = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
 	// `[[ -v name ]]`, which asks whether a parameter is set. Not core: bash
@@ -3514,7 +3522,13 @@ func Apply(r *interp.Runner) {
 	r.SetFunctionExport("BASH_FUNC_", "%%")
 	// And how they are laid out, which is this shell's taste rather than
 	// anything the printer should know.
-	r.SetFunctionLayout(FunctionLayout(), ExportedFunctionLayout())
+	shown, exported := FunctionLayout(), ExportedFunctionLayout()
+	// The one part of the arrangement that needs the runner: a `$'…'` is
+	// written back as the characters it stands for, and what an escape comes
+	// to is this shell's answer rather than the printer's (#3196).
+	shown.AnsiCQuotedWordIsItsValue = r.AnsiCValue
+	exported.AnsiCQuotedWordIsItsValue = r.AnsiCValue
+	r.SetFunctionLayout(shown, exported)
 	// The command the shell is running, which a DEBUG action reads to find
 	// out which one it fired for. See bashcommand.go.
 	registerRunningCommand(r)

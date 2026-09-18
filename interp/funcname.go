@@ -142,3 +142,16 @@ func (r *Runner) refuseFuncName(word string) {
 		r.status = 1
 	}
 }
+
+// AnsiCValue is what a `$'…'` word stands for, for a caller that has to write
+// the *value* where the source wrote the escapes.
+//
+// Exported for exactly one caller and named for the thing rather than for it:
+// a function listing in one dialect writes the characters back, which is
+// syntax.Layout.AnsiCQuotedWordIsItsValue, and the decoder cannot live in the
+// printer because three of the escapes are semantics axes and nothing under
+// `syntax` may hold one. The argument is the text between the quotes, as the
+// lexer kept it.
+func (r *Runner) AnsiCValue(text string) string {
+	return r.expandDollarSingle(text)
+}

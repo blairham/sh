@@ -228,6 +228,64 @@ type Layout struct {
 	// why it is asked for rather than assumed.
 	BodyIsAlwaysBraced bool
 
+	// DoAfterArithmeticOnItsOwnLine is the third of the three `do` questions
+	// above, for the arithmetic `for`.
+	//
+	// A third field and not a reuse of either, because one engine answers it
+	// differently from both: it keeps `do` on the line of a `while` and of a
+	// `for x in …` and gives the arithmetic form's `do` a line of its own.
+	// Measured 2026-09-16 on bash 5.3.20, `declare -f` over `f() { for
+	// ((i=0;i<2;i++)); do echo $i; done; }` — `for ((i=0; i<2; i++))` then
+	// `do` on the next line, where a `for i in a b` in the same listing is
+	// `for i in a b` then `do` and a `while` is `while …; do`.
+	DoAfterArithmeticOnItsOwnLine bool
+
+	// EmptyArithmeticForExpressionIsOne writes the `1` that a missing
+	// expression of an arithmetic `for` stands for, instead of the nothing
+	// the source wrote.
+	//
+	// All three places, and the value is the same in each: `for ((;;))`
+	// comes back `for ((1; 1; 1))` and `for ((i=0;;i++))` comes back
+	// `for ((i=0; 1; i++))`. Measured 2026-09-16 on bash 5.3.20 through
+	// `declare -f`; the engine that lists a body as source text writes the
+	// text back and the third writes the empty expressions as they stood.
+	//
+	// A normalization rather than a round trip — the `1` is not in the tree
+	// — which is why it is asked for and not assumed. It is also the
+	// program: an omitted condition is true, and `1` is how that is spelled.
+	EmptyArithmeticForExpressionIsOne bool
+
+	// HereDocumentWordSingleQuoted writes a delimiter that carries any
+	// quoting as its literal text inside one pair of single quotes,
+	// whichever quoting the source used.
+	//
+	// The quoting of a delimiter means one thing — the body is literal — so
+	// a listing that normalizes it loses nothing a reader needs, and the one
+	// engine that does it normalizes every spelling: `<<"EOT"`, `<<\EOT`
+	// and `<<E"O"T` all come back `<<'EOT'`, and `<<"E T"` comes back
+	// `<<'E T'`. An unquoted delimiter stays bare. Measured 2026-09-16 on
+	// bash 5.3.20 through `declare -f`.
+	HereDocumentWordSingleQuoted bool
+
+	// AnsiCQuotedWordIsItsValue writes a `$'…'` as an ordinary single-quoted
+	// string holding the characters it stands for, decoded by this function.
+	//
+	// A function and not a flag, because **what an escape comes to is the
+	// dialect's answer** and nothing under syntax may hold one: `\e`, `\E`,
+	// `\cX`, `\u` and an unknown escape are each a semantics axis, so the
+	// only correct decoder is the caller's. Nil leaves the word spelled as
+	// it was written, which is what every caller but one wants — a formatter
+	// that rewrote `$'\t'` into a literal tab would be changing the
+	// program's text.
+	//
+	// Measured 2026-09-16 on bash 5.3.20 through `declare -f`: `echo
+	// $'a\tb'` comes back as `echo` and the two characters in single
+	// quotes, `x=$'\t'` the same, and so do `echo ${x-$'\t'}`, a `case`
+	// subject and a `[[ ]]` operand. A quote in the value comes back as the
+	// closed-escaped-reopened spelling every shell writes. ksh93 and zsh
+	// write the word back as it was written and leave this nil.
+	AnsiCQuotedWordIsItsValue func(string) string
+
 	// FunctionHeader is how a function declaration's header is spelled: the
 	// `function` keyword, the `()`, or both.
 	FunctionHeader FunctionHeader
@@ -650,9 +708,13 @@ func (p *printer) command(c Command) {
 	case *CaseClause:
 		p.caseClause(x)
 	case *ForArithClause:
-		p.str("for ((" + x.InitText + "; " + x.CondText + "; " + x.PostText + "))")
+		init, cond, post := x.InitText, x.CondText, x.PostText
+		if p.layout.EmptyArithmeticForExpressionIsOne {
+			init, cond, post = arithForOne(init), arithForOne(cond), arithForOne(post)
+		}
+		p.str("for ((" + init + "; " + cond + "; " + post + "))")
 		if len(x.Body) > 0 {
-			p.str("; do")
+			p.arithDoKeyword()
 			p.body(x.Body, true)
 			p.keyword("done")
 		}
@@ -875,6 +937,22 @@ func (p *printer) cond(e CondExpr) {
 // a word list and of the other a command, and the arrangement follows that
 // rather than being uniform.
 func (p *printer) doKeyword() { p.opener("do", p.layout.DoAfterWordsOnItsOwnLine) }
+
+// arithDoKeyword is the `do` of an arithmetic `for`, which one arrangement
+// spells unlike every other loop: on a line of its own **and** with nothing
+// ending the header. `for i in a b;` keeps its semicolon there and
+// `for ((i=0; i<2; i++))` has none, so this cannot go through opener.
+func (p *printer) arithDoKeyword() {
+	if !p.layout.Lines || !p.layout.DoAfterArithmeticOnItsOwnLine {
+		p.opener("do", false)
+		return
+	}
+	if p.atLineStart() {
+		p.str(p.pad() + "do")
+		return
+	}
+	p.str("\n" + p.pad() + "do")
+}
 
 // opener writes the keyword that introduces a body — `then`, `do` — either on
 // the header's line or on one of its own, which the arrangement decides.
@@ -1330,7 +1408,12 @@ func (p *printer) redirs(rs []*Redirect) {
 		// heredocDelimiterNeedsABlank for the two delimiters that still take
 		// the space.
 		delim := p.printedWord(rd.Word)
-		if rd.Op.IsHeredoc() && !rd.Word.IsQuoted() {
+		if rd.Op.IsHeredoc() && rd.Word.IsQuoted() && p.layout.HereDocumentWordSingleQuoted {
+			// A quoted delimiter says one thing — the body is literal — so
+			// the arrangement that normalizes it writes every spelling the
+			// same way. See [Layout.HereDocumentWordSingleQuoted].
+			delim = singleQuotedWord(rd.Word.Literal())
+		} else if rd.Op.IsHeredoc() && !rd.Word.IsQuoted() {
 			// A delimiter is subject to quote removal and to nothing else,
 			// so the general word printer's escaping changes what it means:
 			// `<<$d` came back as `<<\$d`, which is the same delimiter and a
@@ -1599,6 +1682,14 @@ func (p *printer) quoted(q Quoting, spans []Span) {
 		}
 		p.str("'")
 	case DollarSingleQuoted:
+		if decode := p.layout.AnsiCQuotedWordIsItsValue; decode != nil {
+			var b strings.Builder
+			for _, s := range spans {
+				b.WriteString(s.Value)
+			}
+			p.str(singleQuotedWord(decode(b.String())))
+			return
+		}
 		p.str("$'")
 		for _, s := range spans {
 			p.str(s.Value)
@@ -1692,7 +1783,7 @@ func (p *printer) span(s Span) {
 			p.str("$" + bare)
 			return
 		}
-		p.str("${" + s.Value + "}")
+		p.str("${" + p.ansiCInText(s.Value) + "}")
 	case ProcSubstIn:
 		p.str("<(" + s.Value + ")")
 	case ProcSubstOut:
@@ -1743,6 +1834,126 @@ func plainParamName(v string) bool {
 	return true
 }
 
+// arithForOne is the `1` an omitted expression of an arithmetic `for` stands
+// for, written out — see [Layout.EmptyArithmeticForExpressionIsOne].
+func arithForOne(text string) string {
+	if strings.TrimSpace(text) == "" {
+		return "1"
+	}
+	return text
+}
+
+// singleQuotedWord is a value written as a shell word that reads back as that
+// exact value: single quotes around it, with each quote in it closed, escaped
+// and reopened, which is the one spelling every shell in the panel writes.
+func singleQuotedWord(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+// escapeInDoubleQuotes protects the characters that still mean something
+// inside double quotes, and only where they do.
+//
+// next is what follows the span, so the decision about its last character is
+// made on the text that will really be beside it.
+func escapeInDoubleQuotes(value, next string) string {
+	var b strings.Builder
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		following := next
+		if i+1 < len(value) {
+			following = value[i+1:]
+		}
+		switch c {
+		case '"', '`':
+			b.WriteByte('\\')
+		case '$':
+			if dollarOpensAnExpansion(following) {
+				b.WriteByte('\\')
+			}
+		case '\\':
+			if following != "" && strings.IndexByte("\"\\$`\n", following[0]) >= 0 {
+				b.WriteByte('\\')
+			}
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// dollarOpensAnExpansion reports whether a `$` with this text after it would
+// be read as one. Nothing after it is read as one too, since the next thing
+// written is not this printer's to know.
+func dollarOpensAnExpansion(following string) bool {
+	if following == "" {
+		return true
+	}
+	c := following[0]
+	return c == '{' || c == '(' || continuesName(c) ||
+		strings.IndexByte("@*#?-!$", c) >= 0
+}
+
+// ansiCInText rewrites the `$'…'` runs of a piece of text this printer keeps
+// as source rather than as spans — a parameter expansion's body — under
+// [Layout.AnsiCQuotedWordIsItsValue].
+//
+// The one engine that decodes these decodes them wherever they are written,
+// `${x-$'\t'}` included, because its lexer reads the word before anything
+// else looks at it. A scan is what reaches them here, since the braces hold
+// text and not a tree.
+//
+// Three states, because `$'` is only an ANSI-C quote where quoting has not
+// already claimed it: ordinary text, inside single quotes, and inside double
+// quotes — where `$'` is a dollar sign and a quote in every shell measured.
+func (p *printer) ansiCInText(text string) string {
+	decode := p.layout.AnsiCQuotedWordIsItsValue
+	if decode == nil || !strings.Contains(text, "$'") {
+		return text
+	}
+	var b strings.Builder
+	for i := 0; i < len(text); {
+		switch c := text[i]; {
+		case c == '\\' && i+1 < len(text):
+			b.WriteString(text[i : i+2])
+			i += 2
+		case c == '\'' || c == '"':
+			end := strings.IndexByte(text[i+1:], c)
+			if end < 0 {
+				b.WriteString(text[i:])
+				return b.String()
+			}
+			b.WriteString(text[i : i+2+end])
+			i += 2 + end
+		case c == '$' && i+1 < len(text) && text[i+1] == '\'':
+			body, end, ok := ansiCBody(text, i+2)
+			if !ok {
+				b.WriteString(text[i:])
+				return b.String()
+			}
+			b.WriteString(singleQuotedWord(decode(body)))
+			i = end
+		default:
+			b.WriteByte(c)
+			i++
+		}
+	}
+	return b.String()
+}
+
+// ansiCBody reads the text of a `$'…'` that starts at from, reporting where
+// the closing quote left off. A backslash takes the character after it,
+// which is what keeps `$'a\'b'` one word.
+func ansiCBody(text string, from int) (body string, end int, ok bool) {
+	for i := from; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '\'':
+			return text[from:i], i + 1, true
+		}
+	}
+	return "", 0, false
+}
+
 func continuesName(c byte) bool {
 	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
@@ -1756,11 +1967,26 @@ func (p *printer) literal(s Span) {
 	case SingleQuoted:
 		p.str("'" + s.Value + "'")
 	case DollarSingleQuoted:
+		if decode := p.layout.AnsiCQuotedWordIsItsValue; decode != nil {
+			p.str(singleQuotedWord(decode(s.Value)))
+			return
+		}
 		p.str("$'" + s.Value + "'")
 	case DoubleQuoted:
-		// Inside double quotes, only the four characters that still mean
-		// something need protecting.
-		p.str(escapeIn(s.Value, "\"\\$`"))
+		// Inside double quotes only four characters still mean anything,
+		// and two of them mean it only in front of something. A `$` is an
+		// expansion when a name, a brace or a parenthesis follows it and
+		// is a dollar sign otherwise, and a backslash protects only the
+		// four and a newline — so escaping either one unconditionally
+		// writes back text the source never had. `"x$'\\t'"` came back
+		// `"x\\$'\\\\t'"`, which is the same value spelled three
+		// characters longer, where every shell in the panel writes it
+		// exactly as it was written.
+		//
+		// What follows the last character of the span is the *next*
+		// span, which is why this needs p.after: a `$` at the end of a
+		// literal with a `$x` after it is two dollars run together.
+		p.str(escapeInDoubleQuotes(s.Value, p.after))
 	default:
 		// A pattern group's text goes back as it came, for the reason
 		// `rawWord` above gives for a condition's operands: its `(`, `|`
@@ -1795,18 +2021,6 @@ func escapeBackquoted(s string) string {
 		default:
 			b.WriteByte(c)
 		}
-	}
-	return b.String()
-}
-
-// escapeIn backslashes each of chars wherever it appears.
-func escapeIn(s, chars string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if strings.IndexByte(chars, s[i]) >= 0 {
-			b.WriteByte('\\')
-		}
-		b.WriteByte(s[i])
 	}
 	return b.String()
 }

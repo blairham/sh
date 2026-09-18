@@ -895,6 +895,10 @@ func Semantics() interp.Semantics {
 	// under `env -i` and exports it, which puts ash on bash's side of this
 	// and leaves dash alone on the other. See interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelCounted
+	// And a shell that replaces this process counts one deeper, as ksh93
+	// does: measured 2026-09-18 in the pinned image, `exec /bin/busybox ash
+	// -c 'echo $SHLVL'` reads 2 where this shell holds 1.
+	s.ShellLevelExec = interp.ShellLevelExecCounted
 	// A handed-in `PWD` names the starting directory here too, but only where
 	// it really is that directory: measured 2026-09-13 in the pinned image,
 	// `PWD=/link/d` under a symbolic link survives and `PWD=/usr` in a

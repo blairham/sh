@@ -4,6 +4,8 @@
 package interp_test
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -162,5 +164,130 @@ func TestTheCeilingRefusesADepthAndSaysSo(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// What a shell hands over when it replaces its own process, which is a second
+// question over the same parameter and splits the panel the other way.
+//
+// Two columns take this shell back out of the count before the execve, so the
+// program that stands in its place reads the number this shell held rather
+// than one more; two leave the environment alone. Neither answer follows from
+// the counting policy — one column with a ceiling and one without are on each
+// side of it — which is why it is a field beside ShellLevel rather than a
+// value of it (#3118).
+//
+// The environment handed to the replacement is what the case reads, because
+// that is the whole of what a script can see: the far side is another process
+// and it is that entry, plus its own reading rules, that settles the number.
+func replacedEnv(t *testing.T, sem Semantics, env []string, src string) []string {
+	t.Helper()
+	var handed []string
+	out := &strings.Builder{}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+		Env: env, Stdout: out, Stderr: out,
+		ReplaceProcess: func(_ string, _, env []string, _ []*os.File) error {
+			handed = env
+			return errors.New("measured rather than replaced")
+		},
+	})
+	runCd(t, r, src)
+	return handed
+}
+
+func handedLevel(t *testing.T, handed []string) (string, bool) {
+	t.Helper()
+	for _, entry := range handed {
+		if name, value, found := strings.Cut(entry, "="); found && name == ShellLevelName {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+func TestWhatAReplacedShellIsHandedForItsDepth(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		policy    ShellLevelPolicy
+		exec      ShellLevelExec
+		inherited string
+		want      string
+	}{
+		// The count is kept: the replacement is one deeper, exactly as a
+		// command this shell merely started would be.
+		{"counted", ShellLevelCounted, ShellLevelExecCounted, "", "1"},
+		{"counted, from a depth", ShellLevelCounted, ShellLevelExecCounted, "5", "6"},
+		// The count is not: this shell takes itself out, and the far side
+		// puts it back.
+		{"not counted", ShellLevelCounted, ShellLevelExecNotCounted, "", "0"},
+		{"not counted, from a depth", ShellLevelCounted, ShellLevelExecNotCounted, "5", "5"},
+		// An unanswered field keeps the count, which is the reading that
+		// changes nothing for a vector that has not chosen.
+		{"unanswered", ShellLevelCounted, ShellLevelExecUnspecified, "", "1"},
+		// The floor belongs to the counting policy and applies on this side
+		// too: a shell holding 0 hands over 0 where there is a floor and -1
+		// where there is none, and that is the one input the two
+		// not-counting columns disagree on.
+		{"a floor under the subtraction", ShellLevelCountedToACeiling, ShellLevelExecNotCounted, "-1", "0"},
+		{"and none where there is none", ShellLevelCounted, ShellLevelExecNotCounted, "-1", "-1"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := PosixSemantics()
+			sem.ShellLevel, sem.ShellLevelExec = c.policy, c.exec
+			handed := replacedEnv(t, sem, []string{"SHLVL=" + c.inherited}, `exec /bin/echo x`)
+			got, found := handedLevel(t, handed)
+			if !found {
+				t.Fatalf("no %s in the environment handed over: %q", ShellLevelName, handed)
+			}
+			if got != c.want {
+				t.Errorf("handed %s=%s, want %s", ShellLevelName, got, c.want)
+			}
+		})
+	}
+}
+
+// A shell with no depth of its own hands over nothing of its own, whichever
+// way the second field is set: there is no count to take this shell out of,
+// and an entry a script made and exported is the script's.
+func TestAShellThatCountsNoDepthRewritesNothing(t *testing.T) {
+	for _, exec := range []ShellLevelExec{ShellLevelExecCounted, ShellLevelExecNotCounted} {
+		t.Run(exec.String(), func(t *testing.T) {
+			sem := PosixSemantics()
+			sem.ShellLevel, sem.ShellLevelExec = ShellLevelNotCounted, exec
+			handed := replacedEnv(t, sem, nil, `export SHLVL=7; exec /bin/echo x`)
+			if got, found := handedLevel(t, handed); !found || got != "7" {
+				t.Errorf("handed %s=%q found=%v, want 7", ShellLevelName, got, found)
+			}
+		})
+	}
+}
+
+// And `exec` in a subshell is not a replacement at all, here or on the panel,
+// so the count crosses untouched however the field is set.
+//
+// It cannot reach the hook — a subshell is a cloned Runner and an execve in one
+// would take the parent shell with it — so this is the guard that says the
+// rewrite is on the replacement road rather than on `exec`.
+func TestExecInASubshellHandsOverNoLoweredDepth(t *testing.T) {
+	sem := PosixSemantics()
+	sem.ShellLevel, sem.ShellLevelExec = ShellLevelCounted, ShellLevelExecNotCounted
+	handed := replacedEnv(t, sem, []string{"SHLVL=5"}, `( exec /bin/echo x ); echo after`)
+	if handed != nil {
+		t.Errorf("a subshell reached the replacement hook: %q", handed)
+	}
+
+	// And the child it runs instead is handed the depth this shell holds,
+	// which is the half the hook cannot see: the rewrite is on the
+	// replacement road and not on the builtin, so the ordinary command keeps
+	// the count.
+	out := &strings.Builder{}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+		Env: []string{"SHLVL=5"}, Stdout: out, Stderr: out,
+	})
+	runCd(t, r, `( exec /usr/bin/env ); echo after`)
+	if !strings.Contains(out.String(), ShellLevelName+"=6\n") {
+		t.Errorf("the child of a subshell should be handed the depth this shell holds, got %q", out.String())
 	}
 }

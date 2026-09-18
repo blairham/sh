@@ -145,7 +145,12 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// which is only reached when the replacement failed. See
 		// umaskscope.go.
 		releaseMask := r.holdMaskForFork()
-		err := r.ReplaceProcess(path, r.execArgv(argv, flags), r.execEnviron(flags), r.replacementFiles())
+		// replacementEnviron rather than execEnviron: two columns take this
+		// shell back out of the depth count on the way over, so the program
+		// that stands in its place is not one deeper than it was. See
+		// Semantics.ShellLevelExec — the fallback below is a child and keeps
+		// the count, which is measured and not an omission.
+		err := r.ReplaceProcess(path, r.execArgv(argv, flags), r.replacementEnviron(flags), r.replacementFiles())
 		releaseMask()
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.

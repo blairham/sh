@@ -186,3 +186,120 @@ func readShellLevel(value string) int {
 	}
 	return n
 }
+
+// ShellLevelCountsAReplacedShell is whether a shell that **replaces** this
+// process counts one deeper than this one, rather than standing in its place.
+//
+// A field beside ShellLevelPolicy rather than a value of it: the ceiling and
+// the counting are one question and this is another, and bash is the only
+// column that is unusual on both.
+//
+// `exec cmd` is the whole of what this reaches, and it is the shape the
+// difference is written in — a login wrapper, a `tmux` or `screen` wrapper and
+// a terminal emulator's command line are all `exec <shell>`, and a `.profile`
+// guard written as `[ "$SHLVL" = 1 ]` fires or does not fire on this answer at
+// status 0 with nothing on standard error (#3118).
+//
+// Measured 2026-09-18, `env -i PATH=/usr/bin:/bin LC_ALL=C`, script files with
+// standard input from /dev/null. `exec /usr/bin/env` says what is handed over
+// and the shell's own `$SHLVL` says what it holds:
+//
+//	                    holds   hands over   a shell it execs reads
+//	bash 5.3.20         1       SHLVL=0      1
+//	zsh 5.9.2           1       SHLVL=0      1
+//	ksh93u+ 2012-08-01  1       SHLVL=1      2
+//	BusyBox ash 1.37.0  1       SHLVL=1      2
+//
+// So the two that say no hand the child one less than they hold and the child
+// puts it back, which is what makes the depth the same number on both sides of
+// the replacement. The floor is the counting policy's and not this field's:
+// with an inherited `-1` bash holds 0, hands over -1, and the shell it starts
+// floors that and reads 1, where zsh reads 0 (#3118).
+//
+// It reaches the replacement and nothing else. `exec` inside a subshell is
+// **not** a replacement here or there — measured, `( exec "$SHELL" -c … )`
+// reads 2 in all four columns — and this shell already runs that as a child
+// because a subshell is a cloned Runner and an execve in one would take the
+// parent with it. So the same guard serves both.
+//
+// **Not modeled: bash's wider reach**, which is measured and is a property of
+// an optimisation this shell does not have. bash forks a subshell and then
+// `exec`s the last command of it into that forked process rather than forking
+// a second time, so the child sees the same lowered count. Measured on the
+// same day: `( "$SHELL" -c … )`, `$( "$SHELL" -c … )`, the backquoted
+// spelling, `( "$SHELL" -c … ) &`, a plain `"$SHELL" -c … &` and
+// `( : ; "$SHELL" -c … )` all read 1 in bash and 2 in zsh, ksh93 and BusyBox
+// ash; a command written *after* the shell in the group, a pipeline element
+// and a brace group all read 2 in every column, which is the control that
+// says it is the exec and not the subshell. Here a subshell is a cloned
+// Runner in one process and a command it runs is an ordinary child, so there
+// is no shell process for that child to replace and the rows are not
+// reachable — copying the number would be mimicking a process arrangement
+// this shell does not have.
+type ShellLevelExec int
+
+const (
+	// ShellLevelExecUnspecified is no answer, and counts the replacement —
+	// which is what this package did before the question was asked and what
+	// two of the four columns that count do.
+	ShellLevelExecUnspecified ShellLevelExec = iota
+	// ShellLevelExecCounted is ksh93 and BusyBox ash: the environment goes
+	// over untouched, so the shell that replaces this one reads one deeper.
+	ShellLevelExecCounted
+	// ShellLevelExecNotCounted is bash and zsh: this shell takes itself back
+	// out of the count before handing it over, so the replacement stands in
+	// its place rather than under it.
+	ShellLevelExecNotCounted
+)
+
+func (e ShellLevelExec) String() string {
+	switch e {
+	case ShellLevelExecCounted:
+		return "counted"
+	case ShellLevelExecNotCounted:
+		return "not counted"
+	}
+	return "unspecified"
+}
+
+// replacedShellLevel is the `SHLVL` entry this shell hands to the program that
+// replaces it, and the second result is whether there is one to rewrite.
+//
+// The floor is read off the counting policy rather than kept here, so the one
+// column with a floor has it on both sides of the replacement — see
+// ShellLevelExec.
+func (r *Runner) replacedShellLevel(entry string) (string, bool) {
+	policy := r.sem().ShellLevel
+	if policy == ShellLevelUnspecified || policy == ShellLevelNotCounted {
+		// A shell with no such parameter has nothing to take itself out of,
+		// and the entry — if a script made one — is the script's own.
+		return "", false
+	}
+	if r.sem().ShellLevelExec != ShellLevelExecNotCounted {
+		return "", false
+	}
+	level := readShellLevel(entry) - 1
+	if policy == ShellLevelCountedToACeiling && level < 0 {
+		level = 0
+	}
+	return strconv.Itoa(level), true
+}
+
+// replacementEnviron is execEnviron for the road that really replaces this
+// process. Only that road: `exec` in a subshell runs the command as a child
+// here, which is what a subshell of a real shell looks like from outside, and
+// the columns that lower the count do not lower it there either.
+func (r *Runner) replacementEnviron(flags execFlags) []string {
+	env := r.execEnviron(flags)
+	for i, entry := range env {
+		name, value, found := strings.Cut(entry, "=")
+		if !found || name != ShellLevelName {
+			continue
+		}
+		if lowered, rewrite := r.replacedShellLevel(value); rewrite {
+			env[i] = ShellLevelName + "=" + lowered
+		}
+		break
+	}
+	return env
+}

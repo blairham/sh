@@ -14195,6 +14195,86 @@ entire value, blanks allowed on either end, sign and decimal digits and
 nothing else — because it is the only one of the four that is a rule, and
 no shell's own startup writes a value the four disagree about. #3097.
 
+**`ShellLevelExec`** — bash not counted · dash *unanswered* · ksh93
+counted · zsh not counted · ash counted
+
+Whether a shell that **replaces** this process counts one deeper than
+this one, rather than standing in its place. A field beside `ShellLevel`
+and not a value of it: the ceiling and the counting are one question and
+this is another, and bash is the only column that is unusual on both.
+
+`exec cmd` is the shape the difference is written in. A login wrapper, a
+`tmux` or `screen` wrapper and a terminal emulator's command line are all
+`exec <shell>`, and a `.profile` guard written as `[ "$SHLVL" = 1 ]`
+fires or does not fire on this answer, at status 0, with nothing on
+standard error.
+
+Measured 2026-09-18, script files under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input from
+`/dev/null`. `exec /usr/bin/env` says what is handed over and the shell's
+own `$SHLVL` says what it holds:
+
+| shell | holds | hands over | a shell it `exec`s reads |
+| --- | --- | --- | --- |
+| bash 5.3.20 | `1` | `SHLVL=0` | `1` |
+| zsh 5.9.2 | `1` | `SHLVL=0` | `1` |
+| ksh93u+ 2012-08-01 | `1` | `SHLVL=1` | `2` |
+| BusyBox ash 1.37.0 | `1` | `SHLVL=1` | `2` |
+
+So the two that say no hand the child one less than they hold and the
+child puts it back, which is what makes the depth the same number on both
+sides of the replacement. The floor belongs to the counting policy rather
+than to this field: with an inherited `-1` bash holds 0, hands over `-1`,
+and the shell it starts floors that and reads 1, where zsh — no ceiling,
+no floor — reads 0. That is the one input on which the two not-counting
+columns disagree, and it is why the subtraction reads the policy instead
+of keeping a floor of its own.
+
+dash is **unanswered** and the entry is in
+`internal/axissweep/testdata/unanswered.txt`: it has no depth to hand
+over, so the question cannot be put to it. Measured anyway, for the
+record — `exec /usr/bin/env` from dash 0.5.12 writes no `SHLVL` at all,
+and an `SHLVL` a script assigned and exported crosses exactly as the
+script wrote it.
+
+Read without asking, and unanswered counts the replacement. A refusal
+here would be a refusal of `exec`, which is POSIX 2.14 and ordinary.
+
+**The reach is the replacement and nothing else.** `exec` inside a
+subshell is not a replacement here or on the panel — measured,
+`( exec "$SHELL" -c … )` reads 2 in bash, zsh and ksh93 alike — and this
+shell already runs that as a child, because a subshell here is a cloned
+Runner and an execve in one would take the parent shell with it. So one
+guard serves both, and `interp/execbuiltin.go` rewrites the entry on the
+replacement road only.
+
+**bash's wider reach is measured and deliberately not modeled.** bash
+forks a subshell and then `exec`s the last command of it into that forked
+process rather than forking a second time, so such a child sees the same
+lowered count. Measured the same day, each row its own script file:
+
+| written | bash 5.3.20 | zsh 5.9.2 | ksh93u+ | ours |
+| --- | --- | --- | --- | --- |
+| `exec "$SHELL" -c …` | `1` | `1` | `2` | matches |
+| `( exec "$SHELL" -c … )` | `2` | `2` | `2` | matches |
+| `( "$SHELL" -c … )` | `1` | `2` | `2` | `2` |
+| `$( "$SHELL" -c … )` | `1` | `2` | `2` | `2` |
+| `` `"$SHELL" -c …` `` | `1` | `2` | `2` | `2` |
+| `( "$SHELL" -c … ) &` | `1` | `2` | `2` | `2` |
+| `"$SHELL" -c … &` | `1` | `2` | `2` | `2` |
+| `( : ; "$SHELL" -c … )` | `1` | `2` | `2` | `2` |
+| `( "$SHELL" -c … ; : )` | `2` | `2` | `2` | `2` |
+| `{ "$SHELL" -c …; }` | `2` | `2` | `2` | `2` |
+| `"$SHELL" -c … \| cat` | `2` | `2` | `2` | `2` |
+
+The last three are the control that says it is the `exec` and not the
+subshell: a command written *after* the shell in the group makes bash
+fork instead, and so do a brace group and a pipeline element. Here a
+subshell is a cloned Runner in one process and a command it runs is an
+ordinary child, so there is no shell process for that child to replace
+and those rows are not reachable at all. Copying the number would be
+mimicking a process arrangement this shell does not have. #3118.
+
 **`KeywordAssignments`** — bash yes · dash no · ksh93 yes · zsh no · ash
 no
 

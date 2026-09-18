@@ -3652,6 +3652,12 @@ type Semantics struct {
 	// exporting half is the one that matters.
 	ShellLevel ShellLevelPolicy
 
+	// ShellLevelExec is whether a shell that *replaces* this process counts
+	// one deeper than this one. A question beside ShellLevel rather than a
+	// value of it — see ShellLevelExec, which carries the panel, the reach
+	// and the rows that are measured and deliberately not modeled.
+	ShellLevelExec ShellLevelExec
+
 	// StartupPwdName is the name a shell gives the directory it starts in —
 	// one it was handed in its environment, or the one the kernel reports.
 	// See StartupPwdNamePolicy.

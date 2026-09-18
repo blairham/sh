@@ -2383,6 +2383,12 @@ func Semantics() interp.Semantics {
 	// 2026-09-16, zsh 5.9.2 takes an inherited 9999 to 10000 and says
 	// nothing. See interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelCounted
+	// And a shell that replaces this process stands in its place: measured
+	// 2026-09-18, `exec /usr/bin/env` hands over `SHLVL=0` where this shell
+	// holds 1. With no floor, so an inherited `-1` reaches the replacement as
+	// `-1` and it reads 0 — which is where this column parts from bash's
+	// answer to the same question.
+	s.ShellLevelExec = interp.ShellLevelExecNotCounted
 	// And the starting directory is named by what the kernel reports, however
 	// the parent spelled it.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel

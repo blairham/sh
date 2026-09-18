@@ -37,7 +37,13 @@ func keywordOptionsSem() Semantics {
 func keywordOptionsRun(t *testing.T, src string) (string, int) {
 	t.Helper()
 	s := keywordOptionsSem()
-	return run(t, src, withSem(s))
+	return run(t, src, func(r *Runner) {
+		withSem(s)(r)
+		// `emacs` is a declared name since #3366 rather than one of the
+		// substrate's own: BusyBox ash has no such option, so a shell that
+		// wants the row says so.
+		r.AddSetOptions("emacs")
+	})
 }
 
 // reportNoglob writes whether `set -f` is on, through the one reading every

@@ -325,7 +325,10 @@ func TestAllexportMarksAssignmentsForTheEnvironment(t *testing.T) {
 // withExtras gives the runner the names one shell in the panel has beyond the
 // common ones, which is what a dialect does.
 func withExtras(r *Runner) {
-	r.AddSetOptions("braceexpand", "hashall", "posix", "privileged")
+	// `emacs` and `nolog` are declared here since #3366 took them out of the
+	// substrate's unanimous table: BusyBox ash has neither, so a shell that
+	// wants them says so, the way a dialect does.
+	r.AddSetOptions("braceexpand", "emacs", "hashall", "nolog", "posix", "privileged")
 }
 
 // The wording, the status and the usage line that follows are the dialect's,

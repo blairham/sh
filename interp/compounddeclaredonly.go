@@ -23,11 +23,27 @@ package interp
 // re-declares where `declare -A m=()` empties, and those differ when the name
 // already holds something.
 //
-// Only bash's listing has the distinction. Measured the same day: ksh93u+
-// writes `typeset -A m=()` for an empty table however it got there and
-// `typeset -a q` for an empty indexed array however it got there, and zsh
-// 5.9.2 writes `typeset -A m=( )` and `typeset -a q=(  )` for both. So the
-// record is kept for every dialect and read by the one form that asks.
+// bash's listing has that distinction and ksh93's has a **different** one,
+// which is why there are three states here and not two. Measured 2026-09-18,
+// ksh93u+ 2012-08-01 writes `typeset -A m=()` for an empty table however it
+// got there — the sentence this note used to make about its indexed arrays
+// too — and for an empty *indexed* array it answers from what the array has
+// held:
+//
+//	typeset -a q;                  typeset -p q   typeset -a q
+//	typeset -a q=();               typeset -p q   typeset -a q
+//	typeset -a q; q[0]=x; unset 'q[0]'            typeset -a q=([0]=)
+//
+// Row two is the one that makes it a third state: an assignment that puts
+// nothing in takes the name out of the declared-only set — which is right,
+// because bash writes `declare -a q=()` there — and never puts an element in
+// it. So the two sets draw different lines and neither is the other's
+// complement. Runner.compoundHeldAnElement is the second record, and
+// Runner.bareAssignmentValue is the listing that reads it (#3407).
+//
+// zsh 5.9.2 writes `typeset -A m=( )` and `typeset -a q=(  )` for every one
+// of them, which is the column that asks neither question. So both records
+// are kept for every dialect and each is read by the form that asks.
 //
 // **There is a second reader now, and it is not a listing.** The *length* of
 // a table's element under an empty key is refused in the same column — see

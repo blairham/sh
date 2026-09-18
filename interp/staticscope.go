@@ -45,21 +45,22 @@ package interp
 // nothing". Installing a zero for one would take the export attribute off a
 // name the seal was only meant to read past.
 type staticBinding struct {
-	value        string
-	array        Array
-	assoc        AssocArray
-	attrs        nameAttributes
-	assignedTo   string
-	valueExists  bool
-	arrayExists  bool
-	assocExists  bool
-	removed      bool
-	readonly     bool
-	hideInScope  bool
-	exported     bool
-	assignedSaid bool
-	exportedSaid bool
-	declaredOnly bool
+	value         string
+	array         Array
+	assoc         AssocArray
+	attrs         nameAttributes
+	assignedTo    string
+	valueExists   bool
+	arrayExists   bool
+	assocExists   bool
+	removed       bool
+	readonly      bool
+	hideInScope   bool
+	exported      bool
+	assignedSaid  bool
+	exportedSaid  bool
+	declaredOnly  bool
+	heldAnElement bool
 
 	hasValue    bool
 	hasArray    bool
@@ -116,6 +117,7 @@ func (r *Runner) captureBinding(name string) staticBinding {
 	b.assignedTo, b.assignedSaid = r.assigned[name]
 	b.exported, b.exportedSaid = r.exported[name]
 	b.declaredOnly = r.declaredOnlyCompound[name]
+	b.heldAnElement = r.compoundHeldAnElement[name]
 	return b
 }
 
@@ -148,6 +150,7 @@ func bindingFromScope(sc *scope, name string) staticBinding {
 		b.exportedSaid = sc.exportedSpoken[name]
 	}
 	b.declaredOnly, b.hasCompound = sc.declaredOnlyBefore[name]
+	b.heldAnElement = sc.heldAnElementBefore[name]
 	return b
 }
 
@@ -182,6 +185,7 @@ func (r *Runner) installBinding(name string, b staticBinding) {
 		} else {
 			r.compoundWasAssigned(name)
 		}
+		setBool(&r.compoundHeldAnElement, name, b.heldAnElement)
 	}
 	if b.hasRemoved {
 		setBool(&r.removed, name, b.removed)
@@ -252,6 +256,7 @@ func writeBindingToScope(sc *scope, name string, b staticBinding) {
 	}
 	if _, ok := sc.declaredOnlyBefore[name]; ok {
 		sc.declaredOnlyBefore[name] = b.declaredOnly
+		setBool(&sc.heldAnElementBefore, name, b.heldAnElement)
 	}
 }
 

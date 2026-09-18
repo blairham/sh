@@ -170,6 +170,7 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 	}
 	if sc.declaredOnlyBefore != nil {
 		setBool(&r.declaredOnlyCompound, name, sc.declaredOnlyBefore[name])
+		setBool(&r.compoundHeldAnElement, name, sc.heldAnElementBefore[name])
 	}
 	// And the attributes, added to the ones this declaration's own letters
 	// have already written rather than replacing them — which is measured:

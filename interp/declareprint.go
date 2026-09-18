@@ -1112,6 +1112,40 @@ func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
 		pairs, _ := r.bareAssignmentElements(d)
 		return "(" + strings.Join(pairs, " ") + nestTrailingSpace(d.assoc.lastElement()) + ")", true
 	case d.isArr:
+		if len(d.arr) == 0 {
+			// An indexed array with nothing in it, which this form answers
+			// from the array's *history* rather than from its emptiness —
+			// the one place the three compound states are told apart.
+			// Measured 2026-09-18 on ksh93u+ 2012-08-01, a script file under
+			// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on
+			// /dev/null:
+			//
+			//	typeset -a a;                 typeset -p a   typeset -a a
+			//	typeset -a b=();              typeset -p b   typeset -a b
+			//	typeset -ia n;                typeset -p n   typeset -a -i n
+			//	typeset -a d; d[0]=x; unset 'd[0]'           typeset -a d=([0]=)
+			//	typeset -a d; d[2]=x; unset 'd[2]'           typeset -a d=([0]=)
+			//	e[5]=q; unset 'e[5]'                         typeset -a e=([0]=)
+			//	e=(x y z); unset 'e[0]' 'e[1]' 'e[2]'        typeset -a e=([0]=)
+			//
+			// So it is always the *first* subscript and never the one the
+			// element that went was at, which is what says this is about the
+			// array being empty rather than about how a removal is recorded.
+			// The control is a hole that is not the whole array: `e=(x y z);
+			// unset 'e[1]'` is `([0]=x [2]=z)` there, a skipped subscript and
+			// not an empty element, and `e=(x); unset 'e[0]'; e[3]=z` is
+			// `([3]=z)` — a real element clears it again.
+			//
+			// A **table** is `=()` however it got there, which is the branch
+			// above and is why the two kinds are answered apart:
+			// `typeset -A m; m[k]=1; unset 'm[k]'` is `typeset -A m=()`.
+			//
+			// This wrote `=()` for every one of these (#3407).
+			if !r.compoundHeldAnElement[d.name] {
+				return "", false
+			}
+			return fmt.Sprintf("([%d]=)", r.arrayBase()), true
+		}
 		elems, _ := r.bareAssignmentElements(d)
 		return "(" + strings.Join(elems, " ") + nestTrailingSpace(d.arr.lastElement()) + ")", true
 	case d.hasValue && d.base != 0:

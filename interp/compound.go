@@ -1228,6 +1228,11 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 			r.compoundWasAssigned(name)
 		}
 		delete(sc.declaredOnlyBefore, name)
+		// And the third state with it, for the reason the note above gives:
+		// a local array emptied inside the call must not leave the caller's
+		// name reading as one that has lost its elements.
+		setBool(&r.compoundHeldAnElement, name, sc.heldAnElementBefore[name])
+		delete(sc.heldAnElementBefore, name)
 	}
 	// And the frozen attribute, which goes both ways: a name the declaration
 	// shadowed is frozen again, so a function cannot thaw one for good, and

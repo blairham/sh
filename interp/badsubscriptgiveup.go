@@ -66,7 +66,7 @@ func (r *Runner) badSubscriptGivesUp(p BadSubscriptPolicy, what, sentence string
 // common path: bash gives up the command it is running and carries on at the
 // next top-level one, so a script bash runs to the end stopped here. See
 // Semantics.BadSubscriptToADeclaration for the rows and for why this is a
-// field of its own rather than either neighbour read a third time.
+// field of its own rather than either neighbor read a third time.
 //
 // The sentence is the language's and names no builtin, which is bash's and
 // zsh's wording and is what the two sites next door already write. ksh93 puts

@@ -16,7 +16,7 @@ import (
 //
 // Two lines on purpose. On one line "gave up the rest of the line" and "ended
 // the script" print the same nothing, which is how bash was recorded as
-// ending a script it runs to the end at the two neighbouring sites (#3485),
+// ending a script it runs to the end at the two neighboring sites (#3485),
 // and this site was left ending the script for everybody on the same reading.
 const declSubSrc = "a=(1 2 3)\n" +
 	`typeset 'a[b c]'=v; echo "same=$?"` + "\n" +

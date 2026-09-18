@@ -16270,14 +16270,14 @@ type Semantics struct {
 	//
 	// An em dash is a column that never reaches a second command: zsh and
 	// ksh93 both end the script here. That is what makes this the third
-	// answer rather than a copy of a neighbour's — at `unset` those two carry
+	// answer rather than a copy of a neighbor's — at `unset` those two carry
 	// on, and at a store through an operand zsh ends and ksh93 carries on.
 	// Three sites, three splits, so no existing field's vector fits.
 	//
 	// Nor is it Semantics.FailedExpansionAbandonsTheLine, whose two values
 	// happen to coincide with this site's two: that axis is about a word the
 	// shell could not expand and has no third value for the outcome a
-	// *builtin* can leave behind, which is the one the two neighbouring
+	// *builtin* can leave behind, which is the one the two neighboring
 	// fields spend most of their time reporting. It also carries none of the
 	// `-c` rule BadSubscriptAbandonsTheCommand carries, and bash does give
 	// the whole `-c` string up here.

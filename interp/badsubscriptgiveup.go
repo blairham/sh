@@ -114,8 +114,18 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 	letters.array = letters.array || (!letters.assoc && !r.assocDeclared(base))
 	switch r.sem().ValuelessSubscriptedOperand {
 	case ValuelessSubscriptedOperandDeclaresTheName:
+		// Even the column that reads no subscript refuses an **empty** one,
+		// and by the whole operand: measured, bash's `declare 'a[]'` is
+		// ``declare: `a[]': not a valid identifier`` at 1 where `declare
+		// 'a[3]'` is silent (#3509).
+		if r.emptyDeclarationSubscript(base, sub, false) {
+			return "", letters, true
+		}
 		return base, letters, false
 	case ValuelessSubscriptedOperandReadsTheSubscript:
+		if r.emptyDeclarationSubscript(base, sub, false) {
+			return "", letters, true
+		}
 		if r.assocDeclared(base) {
 			// A table's brackets hold a key rather than an expression, in
 			// every column: measured 2026-09-17, `typeset -A m; typeset
@@ -145,4 +155,72 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 		"what a declaration does with a subscripted operand that carries no value"))
 	r.status, r.unspecified = 2, true
 	return "", letters, true
+}
+
+// emptyDeclarationSubscript is a declaration operand whose subscript is
+// **empty** — `typeset 'a[]'=v`, which is what `typeset "a[$i]"=v` is once a
+// blank `$i` has gone in, the parameters going in before the brackets are
+// read. It reports whether the operand was refused here.
+//
+// Semantics.EmptyArithSubscript is the axis, read rather than a fourth field
+// of its own: every shell that reaches a declaration gives it the disposition
+// it gives the same brackets in an expression, which is the same reading
+// Diagnostics.ArithEmptySubscriptTarget records for `(( a[] = 4 ))`. ksh93
+// takes the brackets as the empty expression, which is element zero, and
+// writes it; bash reports and writes nothing; zsh refuses and the script ends.
+//
+// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin /dev/null,
+// a script file, `a=(1 2 3)` in front of each:
+//
+//	                     typeset 'a[]'=v            typeset 'a[]'
+//	bash 5.3.20          reported at 1, no write    reported at 1
+//	bash 3.2.57          the same sentence at 0     silent at 0
+//	zsh 5.9.2            the script ends at 1       the script ends at 1
+//	ksh93u+              element zero is written    silent at 0
+//
+// Here it wrote element zero in **every** dialect and said nothing, so
+// `typeset "a[$i]"=v` with a blank `$i` quietly replaced the array's first
+// element at status 0 (#3509). bash 3.2's status is the one row not matched;
+// the preset is 5.3's.
+//
+// Behind elementDeclarationRefused rather than in front of it, which is
+// measured: zsh's `readonly 'a[]'=v` is `can't create readonly array
+// elements` and not this sentence, so the attribute refusals answer first.
+func (r *Runner) emptyDeclarationSubscript(base, sub string, hasValue bool) bool {
+	if sub != "" {
+		return false
+	}
+	if r.sem().EmptyArithSubscript == EmptyArithSubscriptIsTheEmptyExpression {
+		// The brackets hold an expression that happens to be empty, which is
+		// zero — so the operand is element zero and there is nothing to
+		// refuse. The caller carries on.
+		return false
+	}
+	// The sentence names no builtin in its *location*, which is the rule the
+	// store's complaints in declareElement follow one refusal over: measured,
+	// zsh writes `./f.sh:2: not an identifier: a[]` where its own bad-name
+	// refusal writes `./f.sh:typeset:1: not an identifier: 1x`. bash names
+	// the builtin inside the sentence instead, where it names one at all.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	wording, fallback := r.diag().DeclarationEmptySubscript, "%[1]s[]: bad array subscript"
+	if !hasValue {
+		wording, fallback = r.diag().ValuelessDeclarationEmptySubscript,
+			"%[2]s: `%[1]s[]': not a valid identifier"
+	}
+	switch r.sem().EmptyArithSubscript {
+	case EmptyArithSubscriptIsReported:
+		// Reported, and the element is not written: the operand costs the
+		// builtin's status and the rest of the line still runs.
+		r.diagf("%s\n", Wording(wording, fallback, base, outer))
+		r.status, r.assignFailed = 1, true
+		return true
+	case EmptyArithSubscriptIsInvalid:
+		r.fatal("%s\n", Wording(wording, fallback, base, outer))
+		return true
+	}
+	r.diagf("%s\n", r.unanswered("a subscript written with nothing in it"))
+	r.status, r.unspecified = 2, true
+	return true
 }

@@ -40,6 +40,13 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 	if r.elementDeclarationRefused(base, sub, f, shadows) {
 		return
 	}
+	// Behind the attribute refusals, which is measured — zsh's `readonly
+	// 'a[]'=v` is the readonly sentence and not this one — and in front of
+	// everything the operand does, since a refused operand writes no element
+	// and takes no attribute. See emptyDeclarationSubscript.
+	if r.emptyDeclarationSubscript(base, sub, true) {
+		return
+	}
 	// Before the attributes land, because whether the table letter on *this*
 	// command reaches *this* command's subscript is a dialect's answer and
 	// not an ordering the engine may pick — see

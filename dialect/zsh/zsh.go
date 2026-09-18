@@ -3231,6 +3231,14 @@ func Diagnostics() interp.Diagnostics {
 		BadArraySubscript:         "%[1]s: assignment to invalid subscript range",
 		ArithEmptySubscript:       "invalid subscript",
 		ArithEmptySubscriptTarget: "not an identifier: %[1]s[]",
+		// One sentence either way, which is the measurement rather than a
+		// copy: 2026-09-17, a script file, `typeset 'a[]'=v` and `typeset
+		// 'a[]'` both write `./f.sh:2: not an identifier: a[]` and the script
+		// ends at 1 — the same words the write of an empty subscript gets in
+		// an expression, and no builtin in the location, where zsh's own
+		// bad-name refusal writes one.
+		DeclarationEmptySubscript:          "not an identifier: %[1]s[]",
+		ValuelessDeclarationEmptySubscript: "not an identifier: %[1]s[]",
 		// The same sentence at the parameter site, and its own field because
 		// the two coincide here and do not in bash — see the field.
 		EmptyParamSubscript: "invalid subscript",

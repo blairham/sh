@@ -16681,6 +16681,57 @@ here targets that build, so it is a corpus row
 fourth value — and it is the evidence that a second axis would be
 measurable if a preset ever needed one.
 
+**And it answers a declaration's operand as well**, which is the third
+construct and a third wording. `typeset 'a[]'=v` is what `typeset
+"a[$i]"=v` is once a blank `$i` has gone in, the parameters going in
+before the brackets are read — the same shape as the expansion, one
+builtin over. Measured 2026-09-17, a script file, `a=(1 2 3)`, with the
+second command on a *later line*:
+
+    typeset 'a[]'=v            typeset 'a[]'
+    bash 5.3.20  a[]: bad array subscript at 1, no write
+                               `a[]': not a valid identifier at 1,
+                               with the builtin in front
+    bash 3.2.57  the same sentence at 0   silent at 0
+    zsh 5.9.2    not an identifier: a[]   the same, and the script ends
+    ksh93u+      element zero is written  silent at 0
+
+Each column gives the declaration the disposition it gives the
+expression, so the axis is read here rather than duplicated: bash
+reports and writes nothing, ksh93 takes the brackets as the empty
+expression and writes element zero, zsh refuses and a refused
+declaration store ends the script. The **wording** does not carry over,
+so `Diagnostics.DeclarationEmptySubscript` and
+`ValuelessDeclarationEmptySubscript` are two more fields beside
+`ArithEmptySubscriptTarget` — bash writes the *read's* sentence for an
+operand with a value and refuses the whole operand as a name without
+one, where zsh writes the *write's* sentence for both.
+
+It wrote element zero in every dialect and said nothing before this, so
+a computed subscript that came out blank quietly replaced the array's
+first element at status 0 (#3509). bash 3.2's status is the one row not
+matched; the preset is 5.3's.
+
+The refusal stands **behind** the attribute refusals, which is measured:
+zsh's `readonly 'a[]'=v` is `can't create readonly array elements` and
+not this sentence.
+
+**A blank subscript is not an empty one, and an operand could not tell.**
+`a[ ]` holds whitespace and reaches
+`BlankArithSubscriptIsTheEmptyExpression` instead — but a builtin
+operand's subscript was trimmed outright, so `a[ ]` arrived as `a[]` and
+every operand route answered one for the other. Measured 2026-09-17,
+`a=(1 2 3)`: bash's `unset 'a[]'` removes nothing and `unset 'a[ ]'`
+removes element 0, and its `typeset 'a[ ]'=v` writes element 0 silently
+where `typeset 'a[]'=v` reports and writes nothing. zsh writes `invalid
+subscript` of the first and `operand expected at end of string` of the
+second. The trimming now stops short of turning the one into the other,
+which is what makes the second axis reachable through an operand at all.
+
+The `unset` operand is the one route still answering the empty
+subscript as the blank one — it removes element zero where bash removes
+nothing — and is filed separately.
+
 The grammar refused an empty subscript in this one position until #1764,
 which made all four dialects answer with a sentence — `operand
 expected` — that is nobody's. One thing measured is still not

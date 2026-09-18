@@ -2622,9 +2622,18 @@ func Diagnostics() interp.Diagnostics {
 		EmptyAssociativeKeyLength:                "[%[1]s]: bad array subscript",
 		ArithEmptySubscript:                      "%[1]s[]: bad array subscript",
 		ArithEmptySubscriptTarget:                "`%[1]s[]': not a valid identifier",
-		SubscriptedPrefixIsNotAName:              "`%[1]s': not a valid identifier",
-		ArithWholeArraySubscript:                 "%[1]s[%[2]s]: bad array subscript",
-		ArrayLiteralThroughASubscript:            "%[1]s[%[2]s]: cannot assign list to array member",
+		// A declaration's operand with a value complains about the
+		// *subscript*, in the words the read of one gets; with no value the
+		// whole operand is refused as a name, builtin and all. Measured
+		// 2026-09-17 on bash 5.3.20, a script file: `typeset 'a[]'=v` is
+		// `a[]: bad array subscript` and `typeset 'a[]'` is ``typeset:
+		// `a[]': not a valid identifier``, both at 1 with the rest of the
+		// line still running.
+		DeclarationEmptySubscript:          "%[1]s[]: bad array subscript",
+		ValuelessDeclarationEmptySubscript: "%[2]s: `%[1]s[]': not a valid identifier",
+		SubscriptedPrefixIsNotAName:        "`%[1]s': not a valid identifier",
+		ArithWholeArraySubscript:           "%[1]s[%[2]s]: bad array subscript",
+		ArrayLiteralThroughASubscript:      "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the
 		// parentheses, with no array name in front of it. bash 3.2 says the
 		// same and does not end the script, which is the one place the two

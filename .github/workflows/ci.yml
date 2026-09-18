@@ -222,9 +222,24 @@ jobs:
     # delivered differently — and every one of them is still exercised. What
     # moves to Ubuntu alone is the detector, which had no platform-specific
     # finding to its name.
+    #
+    # The uninstrumented leg skips the dialect-combination sweep, and that is
+    # not a coverage decision: `Dialect sweep` is two jobs that run exactly
+    # that test over exactly that corpus, sharded in halves, and they run
+    # beside this one rather than behind it. Measured on run 35320633395, the
+    # whole of `syntax` was 237.5s on the macOS leg and 0.75s of that is the
+    # rest of the package — so this leg was paying 236s on the critical path
+    # for an answer two other jobs had already finished producing. The Linux
+    # leg keeps it, because under -race it is the *other* property — whether
+    # concurrent parses share state -- over a window of the corpus rather than
+    # the sweep, and that costs 43s rather than 237s.
+    #
+    # TestTheSweepIsProvedWhereThisLegStopsPayingForIt is what keeps the skip
+    # honest: it reads this file, and fails if the shards that answer for the
+    # whole of it stop covering the whole of it.
     - name: Run the tests, with the race detector on the Linux leg
       if: needs.changes.outputs.code == 'true'
-      run: go test ${{ matrix.os == 'ubuntu-latest' && '-race' || '' }} ./...
+      run: go test ${{ matrix.os == 'ubuntu-latest' && '-race' || '-skip=^TestNoDialectCombinationPanics$' }} ./...
     # Deliberately a step of an already-required job rather than a job of its
     # own. A new job would have to be added to branch protection to gate
     # anything, and until every open branch carried this workflow the new

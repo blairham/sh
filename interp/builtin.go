@@ -3246,8 +3246,35 @@ func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 		return "", "", false
 	}
 	base := operand[:open]
-	sub := strings.TrimSpace(operand[open+1 : len(operand)-1])
+	sub := subscriptOperandText(operand[open+1 : len(operand)-1])
 	return base, r.operandSubscriptTilde(base, sub), true
+}
+
+// subscriptOperandText is the space-trimming an operand's subscript gets, and
+// it stops short of turning a **blank** subscript into an **empty** one.
+//
+// Trimming outright collapsed `a[ ]` into `a[]`, which the panel distinguishes
+// at every operand route: measured 2026-09-17, a script file, `a=(1 2 3)`,
+//
+//	                  a[]                        a[ ]
+//	bash 5.3.20       unset removes nothing      unset removes element 0
+//	                  typeset writes nothing     typeset writes element 0
+//	zsh 5.9.2         invalid subscript          operand expected at end
+//	ksh93u+           element 0 either way       element 0 either way
+//
+// — which is Semantics.EmptyArithSubscript on the left and
+// Semantics.BlankArithSubscriptIsTheEmptyExpression on the right, two axes
+// whose whole reason for being apart is that one shell answers them
+// differently (see their doc comments). With the text collapsed, only the
+// first was ever reachable through an operand, and it was reached for both.
+func subscriptOperandText(sub string) string {
+	if trimmed := strings.TrimSpace(sub); trimmed != "" || sub == "" {
+		return trimmed
+	}
+	// All whitespace and not nothing: left as one space, which is what the
+	// blank axis is about and is the shortest text that cannot be mistaken
+	// for the empty one.
+	return " "
 }
 
 // operandSubscriptTilde is Semantics.SubscriptKeyExpandsALeadingTilde reached

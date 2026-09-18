@@ -5075,6 +5075,42 @@ type Diagnostics struct {
 	// gives the read. This is only the wording (#1764).
 	ArithEmptySubscriptTarget string
 
+	// DeclarationEmptySubscript is the same emptiness in a **declaration's**
+	// operand — `typeset 'a[]'=v`, which is what `typeset "a[$i]"=v` is once
+	// a blank `$i` has gone in. One verb, the base name.
+	//
+	// A third field rather than either of the two above, because the two
+	// columns that complain reach across them: bash writes the sentence it
+	// writes for the *read*, and zsh writes the one it writes for the
+	// *write*. Measured 2026-09-17, a script file, `a=(1 2 3)`:
+	//
+	//	                 $(( a[] ))                (( a[] = 4 ))
+	//	bash 5.3.20      a[]: bad array subscript  `a[]': not a valid identifier
+	//	zsh 5.9.2        invalid subscript         not an identifier: a[]
+	//
+	//	                 typeset 'a[]'=v           typeset 'a[]'
+	//	bash 5.3.20      a[]: bad array subscript  `a[]': not a valid identifier
+	//	                                           with the builtin in front
+	//	zsh 5.9.2        not an identifier: a[]    not an identifier: a[]
+	//
+	// ksh93 writes nothing at any of the four and takes the brackets as the
+	// empty expression, which is element zero. Which of them a dialect
+	// writes, and whether the declaration survives it, is
+	// Semantics.EmptyArithSubscript — one axis for all of these, because
+	// every shell that reaches them gives the declaration the disposition it
+	// gives the expression. This is only the wording.
+	DeclarationEmptySubscript string
+	// ValuelessDeclarationEmptySubscript is the same emptiness in an operand
+	// carrying **no value** — `typeset 'a[]'`. Two verbs: the base name and
+	// the builtin.
+	//
+	// A field of its own because one column words the two apart: bash refuses
+	// the whole operand as a *name* here, builtin and all, where with a value
+	// it complains about the subscript alone. zsh writes the one sentence
+	// either way, so its two fields hold the same text and that is the
+	// measurement rather than a copy.
+	ValuelessDeclarationEmptySubscript string
+
 	// SubscriptedPrefixIsNotAName is the complaint about a subscripted
 	// assignment written as a command *prefix* — `a[1]=v cmd` — in the
 	// dialect that refuses one. Two verbs: the name, and the subscript as

@@ -246,6 +246,10 @@ func Dialect() syntax.Dialect {
 	// See syntax.ArithPrecedenceShiftsAndBitwiseBindTighter for the whole
 	// ladder.
 	d.ArithPrecedence = syntax.ArithPrecedenceShiftsAndBitwiseBindTighter
+	// `^^`, the logical exclusive-or, and the `^^=` beside it. This shell's
+	// alone; see syntax.Dialect.ArithLogicalXor for where each sits and
+	// docs/spec/grammar/arithmetic.md for the ladders.
+	d.ArithLogicalXor = true
 	// A double quote inside an arithmetic expression is stepped over
 	// wherever a token may begin. Measured 2026-09-10 on zsh 5.9.2: with
 	// `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and

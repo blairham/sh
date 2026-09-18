@@ -1271,6 +1271,15 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 			return intNum(0), err
 		}
 	}
+	if x.Op == "^^=" {
+		// The one compound assignment that assigns nothing. Measured
+		// 2026-09-18 on zsh 5.9.2, the only shell with the operator:
+		// `x=5; echo $(( x ^^= 1 ))` writes 0 and leaves `x` at 5, where
+		// `||=` and `&&=` beside it in the same manual both store — `x ||= 0`
+		// leaves 1. So the value is the exclusive-or and the place is not
+		// touched, which also means a frozen name is no refusal here.
+		return v, nil
+	}
 	// The side effect that outlives the expression.
 	if err := r.writePlace(place, v, x.Value); err != nil {
 		return intNum(0), err
@@ -1432,6 +1441,16 @@ func (r *Runner) evalBinary(x *syntax.ArithBinary) (arithNum, error) {
 func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 	if v, ok, err := sh.compare(op, l, r); ok {
 		return v, err
+	}
+	if op == "^^" || op == "^^=" {
+		// The logical exclusive-or: 1 where exactly one operand is true, the
+		// same 1-or-0 every other logical operator yields. Ahead of the
+		// floating branch because truth is a property of the value and not of
+		// its kind — measured, `$(( 1.5 ^^ 2.5 ))` is 0 and `$(( 1.5 ^^ 0 ))`
+		// is 1 in the shell that has the operator. Both operands are
+		// evaluated by the caller, since neither side can decide the answer
+		// alone and there is nothing to short-circuit.
+		return intNum(boolInt(l.isZero() != r.isZero())), nil
 	}
 	if l.floatKind() || r.floatKind() {
 		return sh.applyFloat(op, l, r)

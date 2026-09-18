@@ -7937,6 +7937,24 @@ func (r *Runner) refuseReadonlyInACommand(name string) bool {
 		r.reportReadonlyRefusal(name, assignedAnyhow, false)
 		return true
 	}
+	if r.inBuiltin == "let" {
+		// `let` is the one builtin the axis below does not reach, and it is
+		// unanimous rather than a fourth answer: measured 2026-09-18 over a
+		// script file under `env -i PATH=/usr/bin:/bin` with
+		// `readonly x=1; let x=2; echo after $?`, every column that has the
+		// builtin reports and runs the next line — zsh 5.9.2 at 1, ksh93u+
+		// at 1, bash 5.3.20 at 1, bash under argv[0] `sh` at 1, bash 3.2.57
+		// at 0.
+		//
+		// It is not the arithmetic command's answer either, which is what
+		// made this worth a branch rather than a reuse: ksh93 ends the script
+		// for `readonly x=1; (( x = 2 ))` and does not for the same write
+		// through `let`. So the builtin's own reading is neither axis's, and
+		// the one thing the panel agrees on is that it is not fatal (#3470).
+		r.reportReadonlyRefusal(name, assignedAnyhow, false)
+		r.status = 1
+		return true
+	}
 	fatal := r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,
 		"a builtin's refused write to its own output parameter ending the script")
 	r.reportReadonlyRefusal(name, assignedAnyhow, fatal)

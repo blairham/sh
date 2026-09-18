@@ -3449,6 +3449,22 @@ type Dialect struct {
 	// the shells that parse it disagree, and the semantics vector answers.
 	ArithExponent bool
 
+	// ArithLogicalXor enables `^^`, the logical exclusive-or of an arithmetic
+	// expression, and its assignment spelling `^^=`. One shell in the panel
+	// has them and no script that runs under bash can contain one.
+	//
+	// It yields 1 or 0 like every other logical operator there, evaluates
+	// both operands — there is nothing to short-circuit, since neither side
+	// can decide the answer alone — and sits on the `||` rung of that
+	// shell's own ladder, left-associative, while [ArithPrecedence]'s C order
+	// gives it a rung of its own between `||` and `&&`. Both are measured;
+	// see docs/spec/grammar/arithmetic.md.
+	//
+	// The spelling is already *taken* where the flag is off: `^` is bitwise
+	// xor, so `a ^^ b` there is an xor whose right operand is missing, which
+	// is what every column without the operator reports (#2991).
+	ArithLogicalXor bool
+
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 

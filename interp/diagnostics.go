@@ -3056,14 +3056,28 @@ type Diagnostics struct {
 	// BackquotedSubstitutionRestartsLines counts a backquoted substitution's
 	// body from line one rather than from where it was written.
 	//
-	// dash alone, and only for backticks — its `$( … )` is numbered from the
-	// file like everyone else's, so this is not a shell that fails to track
-	// the offset but one that keeps two different answers for the two
-	// spellings of one construct:
+	// dash and BusyBox ash, and only for backticks — their `$( … )` is
+	// numbered from the file like everyone else's, so this is not a shell
+	// that fails to track the offset but one that keeps two different
+	// answers for the two spellings of one construct:
 	//
-	//	                          bash  dash  ksh93  zsh
-	//	x=$(nosuchcmd) on line 4     4     4      4    4
-	//	x=`nosuchcmd`  on line 4     4     1      4    4
+	//	                          bash  dash  ksh93  zsh  ash
+	//	x=$(nosuchcmd) on line 4     4     4      4    4    4
+	//	x=`nosuchcmd`  on line 4     4     1      4    4    1
+	//
+	// The ash column was measured 2026-09-18 on BusyBox 1.37.0 in the pinned
+	// image and the field had been left false for it, which is the shape
+	// docs/spec/semantics.md's own four-shell warning is about — the
+	// measurement was written for the shells on one machine's PATH and the
+	// sixth column inherited a default (#2471).
+	//
+	// **It governs the refusal as well as the run**, which it did not:
+	// `` x=`if; then :; fi` `` on line 4 is placed at line 1 in both columns
+	// that restart, and the shifted failure reached the *sentence* while the
+	// prefix in front of it still came from the runner's location. So a
+	// dialect whose wording writes the line inside the message — `syntax
+	// error at line N:` — contradicted its own prefix. See
+	// Runner.substFailureAtItsLine, which is the one place that decides it.
 	//
 	// Here rather than in Semantics because it is a question about where a
 	// message says something happened, which is what Location and

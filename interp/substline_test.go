@@ -108,3 +108,34 @@ func substLine(t *testing.T, src string, dg Diagnostics) string {
 	}
 	return errs.String()
 }
+
+// The **refusal**'s prefix honors the same answer, which it did not.
+//
+// The runner's location shifted a backquoted body's runtime complaints and
+// the parse failure's prefix did not, so a body that would not parse was
+// placed at the script's line while the number *inside* the same sentence —
+// where a dialect writes one — counted from the body. One answer, two
+// readings of it, and only one row of any corpus could see the difference
+// (#2471).
+func TestABackquotedBodysRefusalIsPlacedWhereItsFailuresAre(t *testing.T) {
+	dg := Diagnostics{
+		Location:                            LocationTightLine,
+		BackquotedSubstitutionRestartsLines: true,
+		SyntaxError:                         "syntax error: unexpected %[1]s",
+	}
+	src := "true\ntrue\ntrue\nx=`if; then :; fi`\n"
+	if got := substLine(t, src, dg); !strings.Contains(got, ":1:") {
+		t.Errorf("restarting: reported %q, want the refusal at the body's own line", got)
+	}
+	// The other spelling is untouched, which is what keeps the answer about
+	// backquotes rather than about substitution.
+	if got := substLine(t, "true\ntrue\ntrue\nx=$(if; then :; fi)\n", dg); !strings.Contains(got, ":4:") {
+		t.Errorf("the other spelling: reported %q, want :4:", got)
+	}
+	// And a dialect that does not restart them places the refusal in the
+	// script, exactly as it always did.
+	plain := Diagnostics{Location: LocationTightLine, SyntaxError: "syntax error: unexpected %[1]s"}
+	if got := substLine(t, src, plain); !strings.Contains(got, ":4:") {
+		t.Errorf("not restarting: reported %q, want :4:", got)
+	}
+}

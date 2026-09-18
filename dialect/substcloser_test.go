@@ -202,9 +202,16 @@ func TestABackquotedRefusalIsLeftAtItsOwnToken(t *testing.T) {
 	for preset, want := range map[string]string{
 		"bash": "bash: command substitution: line 2: syntax error near unexpected token `newline'\n" +
 			"bash: command substitution: line 2: `echo hi; for'\n",
-		"zsh":   "zsh:2: parse error near `for'\n",
-		"ksh":   "ksh: line 2: syntax error at line 2: `for' unmatched\n",
-		"dash":  "dash: 2: Syntax error: Bad for loop variable\n",
+		"zsh": "zsh:2: parse error near `for'\n",
+		"ksh": "ksh: line 2: syntax error at line 2: `for' unmatched\n",
+		// The **body's** line and not the script's, which is this shell's own
+		// pair of answers for the two spellings: measured 2026-09-18 from a
+		// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`, dash 0.5.12
+		// writes `1:` here and `2:` for `v=$(echo hi; for)`. This row read
+		// `2:` until the refusal's prefix honored
+		// Diagnostics.BackquotedSubstitutionRestartsLines, which the runner's
+		// location had honored all along (#2471).
+		"dash":  "dash: 1: Syntax error: Bad for loop variable\n",
 		"ash":   "ash: syntax error: bad for loop variable\n",
 		"posix": "sh: syntax error: unterminated for\n",
 	} {

@@ -1892,9 +1892,18 @@ func Diagnostics() interp.Diagnostics {
 		UnmatchedQuote:           "syntax error: unterminated quoted string",
 		UnmatchedBackquote:       "syntax error: unterminated quoted string",
 		UnmatchedCmdSubst:        `syntax error: unexpected end of file (expecting ")")`,
-		UnmatchedBraceSubst:      "syntax error: missing '}'",
-		UnmatchedArithSubst:      "syntax error: missing '))'",
-		BadSubstitution:          "syntax error: bad substitution",
+		// Backticks alone, exactly as dash does it: this shell numbers a
+		// `$( … )` body from the file and a backquoted one from one.
+		// Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image, both
+		// routes to the body and a script file each time —
+		// `echo one` / ``echo `if; then :; fi` `` / `echo two` is
+		// `line 1: syntax error: unexpected ";"` against `line 2` for the
+		// `$( … )` spelling, and `x=`nosuchcmd`` is `line 1: nosuchcmd: not
+		// found` against `line 2`. Both were `line 2` here (#2471).
+		BackquotedSubstitutionRestartsLines: true,
+		UnmatchedBraceSubst:                 "syntax error: missing '}'",
+		UnmatchedArithSubst:                 "syntax error: missing '))'",
+		BadSubstitution:                     "syntax error: bad substitution",
 
 		// Arithmetic says one thing about every way an expression can be
 		// wrong: `$((1 2))`, `$((1+))`, `$((08))`, `$(('a'))` and `$((0b101))`

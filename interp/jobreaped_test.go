@@ -217,8 +217,33 @@ wait %1 >/dev/null 2>&1; echo "spec=$?"
 // against and is right at the instant a script actually asks.
 //
 // The gate is there for what a mutant would do, for the reason
-// runGatedJobScript gives: nothing is signaled on the passing path, so a gate
-// that refuses everything changes nothing about it.
+// runGatedJobScript gives, and it lets signal **0** through where a refusal
+// of everything would do.
+//
+// That was the shape until #3007 and it made the test depend on something it
+// never meant to assert. Measured 2026-09-18, the same script over a job that
+// *does* have a process of its own — `/bin/sh -c 'exit 0' &` — under a gate
+// that refuses signal 0 as well:
+//
+//	( exit 0 ) &               byid=0 byspec=0 after=1
+//	/bin/sh -c 'exit 0' &      byid=1 byspec=1 after=1, and the line the
+//	                           shell printed is `kill: (99364) - Operation
+//	                           not permitted`, which is the gate and not
+//	                           the shell
+//
+// So the passing path was passing because the job here has no process, and
+// `kill -0` on a job that has one reaches the kernel and meets the refusal.
+// Nothing in what this test asserts says the job may not have a process; that
+// is a property of how a subshell of builtins happens to run, and a test that
+// turns red when it changes is reporting the wrong thing.
+//
+// Letting signal 0 through is the same allowance
+// TestARunningJobAnswersKillWhileItsOwnRedirectionIsStillOpening makes and
+// for the same reason: 0 is defined to send nothing, and the hazard that
+// function names is a *real* signal reaching pid 0 — every process in this
+// binary's group — which is still refused. It also makes `after` assert what
+// this comment already claimed: the invented number goes to the kernel, where
+// it is out above every process id one can issue and finds nothing.
 func TestAnEndedJobStillAnswersKillUntilItIsWaitedFor(t *testing.T) {
 	const src = `( exit 0 ) & p=$!
 kill -0 "$p" 2>/dev/null; echo "byid=$?"
@@ -227,7 +252,7 @@ wait
 kill -0 "$p" 2>/dev/null; echo "after=$(( $? != 0 ))"
 `
 	out, errOut := runGatedJobScript(t, src, nil, GateFunc(func(_ context.Context, a Action) Decision {
-		if a.Kind == ActionSignal {
+		if a.Kind == ActionSignal && a.Signal != 0 {
 			return Deny
 		}
 		return Allow

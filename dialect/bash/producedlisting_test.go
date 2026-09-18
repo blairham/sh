@@ -83,7 +83,11 @@ func TestABareListingWritesTheProducedNamesWithNoReading(t *testing.T) {
 	}
 	// The control, and the reason the rows above are anchored: a listing
 	// that had simply stopped writing values would pass all three.
-	if want := regexp.MustCompile(`(?m)^declare -- OPTIND="1"$`); !want.MatchString(out) {
+	//
+	// It used to be `OPTIND`, which is no longer ordinary: this shell gives
+	// its own parameters the integer attribute and that one carries it —
+	// `declare -i OPTIND="1"`, measured 2026-09-18 (#3099).
+	if want := regexp.MustCompile(`(?m)^declare -- PWD="`); !want.MatchString(out) {
 		t.Errorf("declare -p = %q, want an ordinary name to keep its value", out)
 	}
 	// And a produced name asked for by hand still carries one, from the same

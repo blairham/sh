@@ -21,14 +21,22 @@ import (
 // construction.
 func Prelude() string { return identity() + functions }
 
-// The directory stack, as shell — the prelude seam's whole point. DIRSTACK
-// holds the pushed entries, newest first; the real engine's DIRSTACK also
-// mirrors the current directory as its first element, which is deliberately
-// not modeled — `dirs` reads $PWD at print time instead, so a plain `cd`
-// never leaves the listing stale.
+// The directory stack, as shell — the prelude seam's whole point.
+// `__dirstack` holds the pushed entries, newest first, and `$DIRSTACK` is the
+// *view* onto it that a script reads: the current directory, then those
+// entries. See shellparameters.go, which registers the view and its writer.
 //
-// Every read of the stack is written `${DIRSTACK[@]+"${DIRSTACK[@]}"}` and
-// not `"${DIRSTACK[@]}"`. This shell answers no to
+// The storage used to be `DIRSTACK` itself, and the deviation that arrangement
+// recorded here is what #3098 was about: the real engine's `$DIRSTACK[0]` is
+// wherever the shell is standing **now**, so a plain `cd` moves it — measured
+// 2026-09-18, `pushd /usr; cd /etc` leaves `${DIRSTACK[0]}` as `/etc`. A
+// stored array cannot say that, and the name a script reads cannot be the name
+// this text writes, so the two are separated and the view does the joining.
+// `dirs` still reads `$PWD` at print time, which is the same fact from the
+// other side and is why this text does not consult the view at all.
+//
+// Every read of the stack is written `${__dirstack[@]+"${__dirstack[@]}"}` and
+// not `"${__dirstack[@]}"`. This shell answers no to
 // Semantics.UnsetNameAtIsOneEmptyField, so the plain spelling is safe here —
 // but it is not in the zsh prelude, whose shell reads an undeclared name
 // through a subscript as a scalar and stored an empty entry on the first
@@ -95,10 +103,10 @@ dirs() {
 		shift
 	done
 	if [ -n "$__clear" ]; then
-		DIRSTACK=()
+		__dirstack=()
 		return 0
 	fi
-	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
+	set -- "$PWD" ${__dirstack[@]+"${__dirstack[@]}"}
 	if [ -n "$__n" ]; then
 		case $__n in
 		+*) __i=${__n#+} ;;
@@ -137,7 +145,7 @@ dirs() {
 }
 __dirs_rotate() {
 	local __spec=$1 __nocd=$2 __i __new
-	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
+	set -- "$PWD" ${__dirstack[@]+"${__dirstack[@]}"}
 	case $__spec in
 	+*) __i=${__spec#+} ;;
 	*)  __i=$(( $# - 1 - ${__spec#-} )) ;;
@@ -164,13 +172,13 @@ __dirs_rotate() {
 		# nowhere to go — which is why pushd -n +2 on a four-deep stack
 		# lists the current directory twice rather than once.
 		shift
-		DIRSTACK=("$@")
+		__dirstack=("$@")
 		return 0
 	fi
 	__new=$1
 	shift
 	cd "$__new" || return 1
-	DIRSTACK=("$@")
+	__dirstack=("$@")
 }
 pushd() {
 	local __old=$PWD __spec= __nocd=
@@ -206,20 +214,20 @@ pushd() {
 			# for this to do, and bash says nothing rather than refusing.
 			return 0
 		fi
-		if [ ${#DIRSTACK[@]} -eq 0 ]; then
+		if [ ${#__dirstack[@]} -eq 0 ]; then
 			diagnose "no other directory"
 			return 1
 		fi
-		cd "${DIRSTACK[0]}" || return 1
-		DIRSTACK[0]=$__old
+		cd "${__dirstack[0]}" || return 1
+		__dirstack[0]=$__old
 	elif [ -n "$__nocd" ]; then
 		# Stored as written. Nothing goes there, so nothing resolves it:
 		# a relative word stays relative and a directory that does not
 		# exist is pushed without complaint.
-		DIRSTACK=("$1" ${DIRSTACK[@]+"${DIRSTACK[@]}"})
+		__dirstack=("$1" ${__dirstack[@]+"${__dirstack[@]}"})
 	else
 		cd "$1" || return 1
-		DIRSTACK=("$__old" ${DIRSTACK[@]+"${DIRSTACK[@]}"})
+		__dirstack=("$__old" ${__dirstack[@]+"${__dirstack[@]}"})
 	fi
 	dirs
 }
@@ -244,11 +252,11 @@ popd() {
 			;;
 		esac
 	done
-	if [ ${#DIRSTACK[@]} -eq 0 ]; then
+	if [ ${#__dirstack[@]} -eq 0 ]; then
 		diagnose "directory stack empty"
 		return 1
 	fi
-	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
+	set -- "$PWD" ${__dirstack[@]+"${__dirstack[@]}"}
 	__i=0
 	if [ -n "$__spec" ]; then
 		case $__spec in
@@ -270,8 +278,8 @@ popd() {
 	if [ "$__i" -eq 0 ]; then
 		# The entry you are standing in: the shell moves to the next one
 		# down, which is what a bare popd does.
-		cd "${DIRSTACK[0]}" || return 1
-		DIRSTACK=("${DIRSTACK[@]:1}")
+		cd "${__dirstack[0]}" || return 1
+		__dirstack=("${__dirstack[@]:1}")
 		dirs
 		return 0
 	fi
@@ -289,7 +297,7 @@ popd() {
 		__k=$(( __k + 1 ))
 	done
 	shift
-	DIRSTACK=("$@")
+	__dirstack=("$@")
 	dirs
 }
 `
@@ -307,6 +315,14 @@ popd() {
 // the string sees at once that it is not upstream. Both are true at the same
 // time, which is what bash's version string has a tag for.
 //
+// `BASH_VERSINFO` is frozen on the line after it is written, which is where
+// the freeze has to be: the array is this text's to fill in, so a mark made
+// from Go before the prelude ran would refuse the very assignment that fills
+// it. Measured 2026-09-18 — `declare -p BASH_VERSINFO` in bash 5.3.20 is
+// `declare -ar …`, and this shell wrote `declare -a …` (#3099). The `-i` half
+// of that listing is the *elements* being numbers rather than an attribute on
+// the array, so there is no integer mark to make.
+//
 // Fixed rather than read from whatever bash is installed. A binary whose
 // behavior depends on the machine it runs on is what the conformance harness
 // exists to keep separate — and the one part that *is* about this machine,
@@ -315,6 +331,7 @@ func identity() string {
 	return fmt.Sprintf(`
 BASH_VERSION='%[1]s(%[2]d)-%[3]s'
 BASH_VERSINFO=(%[4]d %[5]d %[6]d %[2]d %[3]s %[7]s)
+readonly BASH_VERSINFO
 BASH=$0
 `, version, patch, tag, major, minor, build, machine())
 }

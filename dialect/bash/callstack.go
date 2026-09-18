@@ -76,7 +76,15 @@ func registerCallStack(r *interp.Runner) {
 	})
 
 	r.SetDynamicArray("BASH_ARGV", func(r *interp.Runner) []string {
-		return r.CallArgumentsFlat()
+		// Never nil: the parameter **exists** with no calls recorded, where
+		// FUNCNAME does not, and a listing tells the two apart by exactly
+		// that. Measured 2026-09-18 on bash 5.3.20 at the top level,
+		// `declare -a BASH_ARGV=()` against `declare -a FUNCNAME` with no
+		// `=`. See declarationOf's produced-array branch.
+		if flat := r.CallArgumentsFlat(); flat != nil {
+			return flat
+		}
+		return []string{}
 	})
 
 	// The other two, which are a *record* rather than a view of the stack:
@@ -101,13 +109,38 @@ func registerCallStack(r *interp.Runner) {
 	})
 
 	r.SetDynamicArray("BASH_ARGV", func(r *interp.Runner) []string {
-		return r.CallArgumentsFlat()
+		// Never nil: the parameter **exists** with no calls recorded, where
+		// FUNCNAME does not, and a listing tells the two apart by exactly
+		// that. Measured 2026-09-18 on bash 5.3.20 at the top level,
+		// `declare -a BASH_ARGV=()` against `declare -a FUNCNAME` with no
+		// `=`. See declarationOf's produced-array branch.
+		if flat := r.CallArgumentsFlat(); flat != nil {
+			return flat
+		}
+		return []string{}
 	})
 
 	// Four of the five refuse `unset`, and FUNCNAME is the one that does not
 	// — see Runner.RefuseUnset for the measurement.
 	for _, name := range []string{"BASH_SOURCE", "BASH_LINENO", "BASH_ARGV", "BASH_ARGC"} {
 		r.RefuseUnset(name)
+	}
+
+	// And how the five list back, which a produced parameter has to be told:
+	// `declare -p FUNCNAME` was `FUNCNAME: not found` at 1 from a name the
+	// same shell answers `${FUNCNAME[0]}` for, so the listing and the
+	// expansion disagreed about whether the name existed (#3099).
+	//
+	// No letters to state — the `-a` a listing writes comes from the elements
+	// being an array — so the declaration is empty and its whole job is to
+	// put the name into a listing at all. Measured 2026-09-18 on bash 5.3.20:
+	// `declare -a BASH_SOURCE=([0]="p3.sh")` from a script, `declare -a
+	// FUNCNAME` with no `=` at the top level where the parameter is absent
+	// rather than empty, and `declare -a BASH_ARGV=()` for one that is empty.
+	for _, name := range []string{
+		"BASH_SOURCE", "FUNCNAME", "BASH_LINENO", "BASH_ARGC", "BASH_ARGV",
+	} {
+		r.SetDynamicDeclaration(name, interp.ProducedDeclaration{Array: true})
 	}
 
 	r.SetDynamicArray("BASH_LINENO", func(r *interp.Runner) []string {

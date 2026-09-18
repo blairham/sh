@@ -66,7 +66,75 @@ func (r *Runner) elementIsSet(base, sub string, subscripted bool) bool {
 	// See Runner.askTheStoreOnly (#3121).
 	defer r.askTheStoreOnly()()
 	_, set, _ := r.paramSource(e)
+	if subscripted && wholeArraySubscript(sub) {
+		// `a[@]` and `a[*]`, which is the one shape where this operator does
+		// **not** answer what `${a[@]+s}` answers — see
+		// wholeArraySubscriptIsSet.
+		return r.wholeArraySubscriptIsSet(base, sub, e, set)
+	}
 	return set
+}
+
+// wholeArraySubscriptIsSet answers `[[ -v a[@] ]]` and `[[ -v a[*] ]]`, which
+// is the one operand shape where the operator parts company with the
+// conditional expansion that otherwise decides it.
+//
+// Measured 2026-09-18, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch
+// HOME, over a script file (#3436):
+//
+//	                      bash 5.3.20  zsh 5.9.2   ksh93u+
+//	e=(); -v e[@]         no           no          `@: arithmetic syntax error`
+//	f=(x); -v f[@]        yes          no          the same
+//	typeset -A n; n[k]=v
+//	  -v n[@]             no           no          no
+//	  -v n[k]             yes          yes         yes
+//	s=plain; -v s[@]      yes          yes         —
+//	${e[@]+S}             unset        —           —
+//	${n[@]+S}             **set**      —           —
+//
+// The last two rows are what say this cannot be `${a[@]+s}` read through
+// another operator: in bash the expansion calls a one-key table set and the
+// operator calls it unset, measured on the same line of the same script.
+//
+// So the two readings are about what the subscript **names**. One reads it as
+// the array itself, and the answer is then the parameter's own set-ness —
+// which for an array with no elements is Semantics.EmptyArrayIsSet's, which
+// is why `e` and `f` part there and not here. The other reads it as an
+// *element*, and no array has one called `@` or `*`, so a name holding an
+// array is never set through it while a scalar — which has no elements to
+// name — answers for itself.
+//
+// **A table is the exception under the first reading**, and it is measured
+// rather than carved out: a table's subscript is a string, so `@` is the key
+// `@`. `typeset -A n; n[@]=x; [[ -v n[@] ]]` is *yes* in bash, which is the
+// row that says the operand is being looked up and not refused.
+//
+// ksh93's indexed rows are not modeled: that shell evaluates the subscript
+// arithmetically and `@` is a syntax error there, which ends the script. Its
+// table row is the one this reading is set from.
+func (r *Runner) wholeArraySubscriptIsSet(base, sub string, e *syntax.ParamExpr, set bool) bool {
+	table, isTable := r.assocFor(base)
+	switch r.sem().ConditionWholeArraySubscript {
+	case ConditionWholeArraySubscriptNamesTheParameter:
+		if !isTable {
+			return r.emptyWholeArrayIsSet(e, set)
+		}
+	case ConditionWholeArraySubscriptNamesAnElement:
+		if _, isArray := r.Arrays[base]; !isArray && !isTable {
+			// No elements to name, so the subscript names the parameter by
+			// default and its own set-ness stands.
+			return set
+		}
+	default:
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a whole-array subscript in `[[ -v … ]]`")))
+		r.status, r.unspecified = 2, true
+		return false
+	}
+	// The key lookup both readings end at: a table holding the literal `@`
+	// or `*` answers yes, and an array has no such element.
+	_, held := table[sub]
+	return held
 }
 
 // condParameterIsSet answers `[[ -v w ]]`, where the operand is still a word

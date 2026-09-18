@@ -77,6 +77,7 @@ ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
 ash   CoprocEndsInAnArray
+ash   ConditionWholeArraySubscript
 ash   DebugTrapRefiresOnEnteringAFunction
 ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
@@ -309,6 +310,7 @@ dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute
 dash  CompoundPipelineStatusRecord
 dash  CoprocEndsInAnArray
+dash  ConditionWholeArraySubscript
 dash  DebugTrapRefiresOnEnteringAFunction
 dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls

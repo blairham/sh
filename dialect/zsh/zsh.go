@@ -1406,6 +1406,14 @@ func Semantics() interp.Semantics {
 	// all read it as unset. Measured 2026-09-16 on zsh 5.9.2 under
 	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, from a file (#2298).
 	s.EmptyArrayIsSet = interp.Yes
+	// And `[[ -v a[@] ]]`, which is a different question: the subscript names
+	// an **element** here, and no array has one called `@` or `*`. Measured
+	// 2026-09-18 from a script file — `f=(x); [[ -v f[@] ]]` is false with an
+	// element in the array, `typeset -A n; n[k]=v; [[ -v n[@] ]]` is false
+	// with a key in the table, and `s=plain; [[ -v s[@] ]]` is *true*,
+	// because a scalar has no elements to name and answers for itself
+	// (#3436).
+	s.ConditionWholeArraySubscript = interp.ConditionWholeArraySubscriptNamesAnElement
 	// `set -u` reaches two subscripted shapes here that it reaches in no
 	// other column. The length of an element that is not there is a refusal
 	// — `a=(x y z); echo "${#a[9]}"` is `a[9]: parameter not set` where bash

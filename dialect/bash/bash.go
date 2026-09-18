@@ -1193,6 +1193,13 @@ func Semantics() interp.Semantics {
 	// bash 3.2.57 both, 2026-09-16, from a file. zsh is the column that
 	// parts (#2298).
 	s.EmptyArrayIsSet = interp.No
+	// And `[[ -v a[@] ]]`, which is not that question asked through another
+	// operator: measured 2026-09-18, `${n[@]+S}` is `S` for a one-key table
+	// here and `[[ -v n[@] ]]` is false on the same line. The subscript names
+	// the array itself — `f=(x)` is set through it, `e=()` is not, following
+	// EmptyArrayIsSet above — and a table falls through to the key lookup,
+	// which `n[@]=x` then answers yes (#3436).
+	s.ConditionWholeArraySubscript = interp.ConditionWholeArraySubscriptNamesTheParameter
 	// The export letter says nothing about scope here: `declare -x v=1`
 	// inside a function is an ordinary local.
 	s.ExportLetterDeclaresAGlobal = interp.No
@@ -3433,6 +3440,10 @@ func Apply(r *interp.Runner) {
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("PIPESTATUS")
+	// And the listing for it, on the same terms the call-stack arrays are on:
+	// `declare -p PIPESTATUS` is `declare -a PIPESTATUS=([0]="0")` in bash
+	// 5.3.20 and was `PIPESTATUS: not found` here (#3099).
+	r.SetDynamicDeclaration("PIPESTATUS", interp.ProducedDeclaration{Array: true, ListsItsElements: true})
 	// What the last `=~` captured — the whole match, then the groups. The
 	// core keeps the record and this names it; ksh93 and zsh keep their
 	// captures under names and shapes of their own, never this one.
@@ -3460,6 +3471,10 @@ func Apply(r *interp.Runner) {
 	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
+	// And the attributes this shell's own parameters carry, which were
+	// missing from every one of them — see markOwnParameterAttributes, and
+	// note that the readonly half changes an answer rather than a listing.
+	markOwnParameterAttributes(r)
 	// The login name for that same uid, for the `\u` prompt escape, and the
 	// machine's name for `\h` and `\H`. Asked here for the reason the uid
 	// above is, and asked through interp.LoginName rather than through a
@@ -3577,6 +3592,12 @@ func Apply(r *interp.Runner) {
 	// exactly this: the letters are the dialect's fact and the producer is
 	// not (#2451).
 	r.SetDynamicDeclaration("LINENO", interp.ProducedDeclaration{})
+	// The four parameters of this shell's own that were simply absent, and
+	// which are not the core's to supply — see shellparameters.go (#3098).
+	registerShellParameters(r)
+	// And the directory stack as a parameter, which is a view onto what the
+	// prelude's `pushd` keeps rather than a store of its own.
+	registerDirectoryStack(r)
 	// The clock, as this shell reads it since 5.0. In a file of its own
 	// because it is not the `zsh/datetime` registration under another name —
 	// see epoch.go for the row-by-row measurement (#1158).

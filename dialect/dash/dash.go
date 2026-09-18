@@ -624,6 +624,11 @@ func Semantics() interp.Semantics {
 	// An empty positional list is a set parameter here, with zsh: measured
 	// 2026-09-12, `set --; "${@-word}"` is empty and `"${@+word}"` is
 	// `word`, where bash and ksh93 answer the other way round (#1941).
+	// unanswered ConditionWholeArraySubscript: this shell has no `-v` operator
+	// for a subscript to be read by. Measured 2026-09-18, `test -v x` is
+	// ``test: -v: unexpected operator`` at 2, and there is no `[[ … ]]` here
+	// either — so the axis is unreachable in this column rather than
+	// unanswered.
 	s.PositionalListWithNoneIsSet = interp.Yes
 	// The value is expanded and the redirection opened before the prefix is
 	// checked, so a failure in either is what gets reported and the frozen

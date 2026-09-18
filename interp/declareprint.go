@@ -265,6 +265,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		r.sem().DeclareHideValueLetter == DeclareHideValueLetterHidesTheValue
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
 		d.upper || d.hidden || d.unique || d.traced || d.hasWidth
+	producedIsAnArray, producedListsElements := false, false
 	if d.isNameref {
 		// A reference lists as itself — `declare -n r="v"` — and the tables
 		// below are the *target's*, not this name's. Ahead of every one of
@@ -287,6 +288,11 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		// answer to "how does this name list" cannot come from two places.
 		d.integer, d.base, d.float = pd.Integer, pd.Base, pd.Float
 		d.silent = pd.Silent
+		// See ProducedDeclaration.Array: the operand-less listing withholds a
+		// *reading* and an array's elements are not one, so the two produced
+		// branches below take this rather than the withholding on its own.
+		producedIsAnArray = pd.Array
+		producedListsElements = pd.ListsItsElements
 		attributed = true
 	}
 	if r.removed[name] {
@@ -343,8 +349,44 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// declarableNames walks, so a listing reaches one only through an
 	// attribute — and a produced array with no attributes must stay
 	// undeclared, which is the answer `$funcstack` gives and had before this.
-	if produce, ok := r.DynamicArrays[name]; ok && attributed && !r.listingDrawsNoReading {
+	if produce, ok := r.DynamicArrays[name]; ok && attributed &&
+		(!r.listingDrawsNoReading || producedIsAnArray) {
 		elems := produce(r)
+		if elems == nil {
+			// **Nil is absent and empty is empty**, which is the contract a
+			// producer already answers an expansion under — bash's FUNCNAME
+			// returns nil outside a call because the parameter does not exist
+			// there, and returns no elements for a call with none. A listing
+			// has to say the same two things, and it has the shapes for it:
+			// `declare -a FUNCNAME` with no `=` against `declare -a
+			// BASH_ARGV=()`, measured 2026-09-18 on bash 5.3.20 (#3099).
+			d.isArr, d.unset = true, true
+			return d, true
+		}
+		if r.listingDrawsNoReading && !producedListsElements {
+			// The kind and no elements, which is what the operand-less
+			// listing writes for a produced array it withholds: the name
+			// exists — so there is an `=` — and what it holds is not written.
+			// See ProducedDeclaration.ListsItsElements for the one that is.
+			d.isArr = true
+			return d, true
+		}
+		a := make(Array, len(elems))
+		for i, v := range elems {
+			a[i] = Scalar(v)
+		}
+		d.arr, d.isArr = a, true
+		return d, true
+	}
+	// The pipeline record, which is produced by a path of its own rather than
+	// through DynamicArrays — the core keeps it and the dialect only names it
+	// (see interp/pipestatus.go). The listing has to reach it separately for
+	// that reason, and on the same `attributed` terms as the two branches
+	// above: `declare -p PIPESTATUS` is `declare -a PIPESTATUS=([0]="0")` in
+	// bash 5.3.20 and was `PIPESTATUS: not found` here, from a name the same
+	// shell had just expanded an element of (#3099).
+	if elems, produced := r.pipelineStatuses(name); produced && attributed &&
+		(!r.listingDrawsNoReading || producedIsAnArray) {
 		a := make(Array, len(elems))
 		for i, v := range elems {
 			a[i] = Scalar(v)

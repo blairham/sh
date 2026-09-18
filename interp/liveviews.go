@@ -275,6 +275,27 @@ func (r *Runner) CommandsOnPath() map[string]string {
 // where this refuses with the sentence the dialect already has for the case.
 func (r *Runner) MarkReadonly(name string) { r.markReadonly(name) }
 
+// MarkInteger puts the integer attribute on a name, which is what
+// `typeset -i` does.
+//
+// For a dialect whose *own* parameters carry it. `$EUID`, `$UID`, `$PPID` and
+// `$OPTIND` are ordinary stored names here — nothing produces them, so
+// [Runner.SetDynamicDeclaration] has no producer to attach a letter to — and
+// the shell being modeled lists all four with `-i` and three of them with `-r`
+// besides. Measured 2026-09-18: `declare -p EUID` is `declare -ir EUID="501"`
+// there and was `declare -- EUID="501"` here, and the readonly half is not
+// cosmetic — that shell *refuses* `EUID=0` where this one took it (#3099).
+//
+// It is the attribute table and not a listing's letters, deliberately: the
+// letter on one of these names really does change what an assignment to it
+// means, which is the difference between this and ProducedDeclaration.
+func (r *Runner) MarkInteger(name string) {
+	if r.integer == nil {
+		r.integer = map[string]bool{}
+	}
+	r.integer[name] = true
+}
+
 // MarkHidden keeps a name's *value* out of the listings, which is what
 // `typeset -H` does.
 //

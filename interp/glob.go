@@ -1008,14 +1008,24 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// directory.
 			//
 			// A `**` component answers this itself, because the set it hands
-			// on is not the set it matched: it walked without following a
-			// symbolic link, and a link it listed is not a level the next
-			// component may look inside. Only where nothing real follows —
-			// `**/`, where this filter is producing the answer rather than
-			// choosing where to look next — does a link get through, and
-			// only where the dialect says it is one of the levels.
+			// on need not be the set it matched: it walked without following
+			// a symbolic link, and whether a link it listed is a level the
+			// next component may look inside is the dialect's to say. Two
+			// questions, not one, because the panel answers them with
+			// different columns. Where nothing real follows — `**/`, where
+			// this filter is producing the answer rather than choosing where
+			// to look next — StarStarSeesLinkedDirectories decides. Where a
+			// component does follow, ComponentBehindStarStarSeesLinkedLevels
+			// does — except of a `**` that both begins the word and has one
+			// separator behind it, which is measured rather than chosen and
+			// is written out at the option. `i` is the component's own index
+			// because the run of `**` has already collapsed to one.
+			behind := !lastComponent(parts, i) &&
+				(i > 0 || parts[i+1] == "") &&
+				r.MatchOption(ComponentBehindStarStarSeesLinkedLevels)
 			sees := onward == nil ||
-				(lastComponent(parts, i) && r.MatchOption(StarStarSeesLinkedDirectories))
+				(lastComponent(parts, i) && r.MatchOption(StarStarSeesLinkedDirectories)) ||
+				behind
 			var kept []string
 			for _, d := range dirs {
 				if !sees && !onward[d] {
@@ -1306,10 +1316,27 @@ func lastComponent(parts []string, i int) bool {
 // A method so each directory read passes the gate — `echo /**` enumerates
 // whatever it can reach, which is exactly the walk a policy wants to see. A
 // denied directory reads as empty and the walk goes no deeper there.
+//
+// `.` and `..` are two of the names the listing holds where the dialect says
+// it holds them, and the descent produces them at every level it reads — the
+// same answer Semantics.GlobListsDotAndDotDot gives a component match, asked
+// at the second place a listing is read. They are produced and never
+// followed, which is a rule of its own rather than the same one: a walk that
+// descended into `..` would climb out of the tree it was given and never
+// stop, and no column does that. So neither name reaches onward and neither
+// is recursed into, and what a component behind the `**` may look inside is
+// unchanged by them.
 func (r *Runner) appendDescendants(out []string, dir string, seeHidden bool, onward map[string]bool) []string {
 	entries, err := r.readDir(dir)
 	if err != nil {
 		return out
+	}
+	// The leading-period rule is what keeps both names out of an ordinary
+	// descent, exactly as it keeps them out of an ordinary `*`: they are
+	// visible only once something has turned that rule off, which is the
+	// ignore parameter or the option that matches a leading period.
+	if seeHidden && r.sem().GlobListsDotAndDotDot == Yes {
+		out = append(out, globJoin(dir, "."), globJoin(dir, ".."))
 	}
 	for _, e := range entries {
 		name := e.Name()
@@ -1544,17 +1571,20 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 // leading-period rule is what keeps them out of an ordinary `*` there. See
 // the option for the table that separates the two.
 //
-// Whether the descent also *lists* the two names beside the entries it finds
-// is now reachable and is **not** done: that dialect's `set -o globstar` was
-// wired to the walk in #3152, so the question stopped being hypothetical, and
-// the sentence standing here until then said it could not be reached at all.
-// Measured 2026-09-16, with `FIGNORE` set so that the leading-period rule is
-// off and the names are visible at all: ksh93's `set -o globstar; FIGNORE=zz;
-// printf '[%s]' **` writes `[.][..][p][p/.][p/..][p/pf]…` and this walk
-// writes `[p][p/pf]…`. A gap rather than a decision — the two names come from
-// globListingNames, which the component match consults and appendDescendants
-// does not — and filed as its own row rather than folded in here, because a
-// descent that lists `..` has to say what it then does with it.
+// The descent lists them too, at every level it reads, and that is the same
+// answer rather than a second one: a listing is a listing, and the axis says
+// what one holds. Measured 2026-09-18, with the ignore parameter set so the
+// leading-period rule is off and the names are visible at all, in a tree
+// holding `topf`, `p/pf`, `p/q/qf`, `p/q/w/leaf` and `p/q/w/q/deepq`, the
+// column that lists them and crosses levels writes
+//
+//	[.][..][p][p/.][p/..][p/pf][p/q][p/q/.][p/q/..][p/q/qf]…[topf]
+//
+// where this walk wrote `[p][p/pf]…` until #3175. The trailing-slash form
+// keeps them, since both are directories — `**/` is `[../][./][p/][p/../]…`
+// — and a component *behind* the `**` never sees them, because neither name
+// is a level the walk entered: `**/qf` is `[p/q/qf]` with the parameter set
+// and without it. appendDescendants is where that half lives.
 func (r *Runner) globListingNames(entries []os.DirEntry, periodPattern bool) []string {
 	names := make([]string, 0, len(entries)+2)
 	if r.sem().GlobListsDotAndDotDot == Yes ||

@@ -5173,15 +5173,20 @@ printf "[alive]\n"`,
 		ID: "shopt/globstar-enters-a-link-when-it-does-not-lead-the-pattern", Category: "shell options",
 		Snippet: `mkdir -p g/r && cd g && : > r/x && ln -s r s && ` +
 			`shopt -s globstar 2>/dev/null; echo ./**/x`,
-		Why: "bash alone, and **recorded rather than implemented**. The same " +
-			"pattern with one directory component in front of the `**` answers " +
-			"`./r/x ./s/x` in bash 5.3 where `**/x` answers `r/x`, so the shell " +
-			"disagrees with its own leading form; zsh answers `./r/x` either way, " +
-			"and so does ksh93 once `set -o globstar` reaches it. Following it would mean reproducing a walk that is " +
-			"unbounded on a tree holding a link to its own ancestor — measured, " +
-			"`w/**/y` under `ln -s . w/up` is `w/up/y w/y` there — so this walk " +
-			"answers what the other two answer and what bash itself answers where " +
-			"the component leads. The row is the evidence for that choice (#2360)",
+		Why: "bash alone, and it is the component **behind** the `**` rather " +
+			"than the walk. The same pattern with nothing in front of the " +
+			"`**` answers `r/x` in bash 5.3 where this one answers `./r/x " +
+			"./s/x`, so the shell disagrees with its own leading form; zsh " +
+			"answers `./r/x` either way, and so does ksh93 once `set -o " +
+			"globstar` reaches it — while ksh93 names that same link for " +
+			"`**/`, which is what makes the two separate questions. Nothing " +
+			"is followed either way: what widens is the set the next " +
+			"component is offered and never the set the walk enters, so a " +
+			"tree holding a link to its own ancestor is as bounded as it was " +
+			"— measured, `w/**/y` under `ln -s . w/up` is `w/up/y w/y` there " +
+			"and is finite. ComponentBehindStarStarSeesLinkedLevels is the " +
+			"option, and the leading form is the shape it is not asked of " +
+			"(#3176)",
 	},
 	{
 		ID: "shopt/globstar-zero-level-keeps-a-separator-it-was-given", Category: "shell options",

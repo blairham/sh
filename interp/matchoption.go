@@ -155,11 +155,56 @@ const (
 	// question here, because nothing in the panel holds one without the
 	// other and a probe that cannot separate them is evidence for neither.
 	//
-	// It is asked only where a `**` component is the last real one, since
-	// that is the only place the answer is visible: with a component behind
-	// it the set is a set of directories to descend, and a link is not
-	// descended whatever this says.
+	// It is asked only where a `**` component is the last real one. With a
+	// component behind it the question is a different one, because the set
+	// the next component looks in need not be the set the walk entered —
+	// see ComponentBehindStarStarSeesLinkedLevels, which one column answers
+	// the other way round from this.
 	StarStarSeesLinkedDirectories
+
+	// ComponentBehindStarStarSeesLinkedLevels lets the component after a
+	// `**` look inside a level the walk **listed and did not enter**, which
+	// a symbolic link to a directory always is.
+	//
+	// The walk itself is unchanged and stays bounded: nothing descends
+	// through such a link, so a tree holding a link to its own ancestor is
+	// still finite. What moves is only the set the next component is offered
+	// — everything the `**` matched, rather than the directories it read.
+	//
+	// It is the other half of StarStarSeesLinkedDirectories rather than the
+	// same answer, and the panel proves they are two questions: the column
+	// that names a linked level for `**/` and the column that looks inside
+	// one behind a `**` are not the same column.
+	//
+	// Measured 2026-09-18 in a tree holding `r/x`, a symlink `s` to `r`, and
+	// `a/b/sl` where `sl` is a second symlink to `r`:
+	//
+	//	            **/       a/**/x      ./**/x        a/**/[x]
+	//	bash 5.3.20 r/ s/ …   [a/b/sl/x]  [./a/b/sl/x]  [a/b/sl/x]
+	//	                                  [./r/x]
+	//	                                  [./s/x]
+	//	ksh93u+     r/ s/ …   no match    [./r/x]       no match
+	//	zsh 5.9.2   r/ …      no match    [./r/x]       no match
+	//
+	// So ksh93 names a linked level and never looks inside one, which is the
+	// pair that made the older option's scope note wrong: it said a link is
+	// not descended whatever the option says, which is true, and concluded
+	// that nothing behind a `**` could see one, which is not.
+	//
+	// **It is not asked of a `**` that begins the word.** That is measured
+	// rather than chosen, and it is why the same tree answers two ways in
+	// the one column that has this on: `**/x` is `[r/x]` there and `./**/x`
+	// is `[./r/x][./s/x][./a/b/sl/x]`, over the same files, with the leading
+	// `.` the only difference between the patterns. An absolute spelling of
+	// the same walk looks inside, `**//x` looks inside, and `a/**/**/x`
+	// looks inside — the run of `**` having collapsed to one component that
+	// is no longer the first. The carve-out is that narrow: the word's very
+	// first component, with one separator and a real component behind it.
+	// Modeling the shell's answer means modeling that too, since a pattern
+	// written either way is a pattern scripts write.
+	//
+	// Consulted only where StarStarCrossesDirectories is already on.
+	ComponentBehindStarStarSeesLinkedLevels
 
 	// RepeatedStarStarIsOneComponent reads a run of `**` components with
 	// nothing but separators between them as a single one, so `**/**` is

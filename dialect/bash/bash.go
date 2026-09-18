@@ -3626,6 +3626,18 @@ func Apply(r *interp.Runner) {
 	// 2026-09-16 with `s` a symlink to `r` and `r/x` under it: `s/**` is
 	// `[s/][s/x]` here and in zsh, and no match at all in ksh93 (#3152).
 	r.SetMatchOption(interp.StarStarPatternsReadLinkedDirectories, true)
+	// And a component behind a `**` looks inside a level the walk listed and
+	// never entered, which the two other columns with the construct do not:
+	// the walk stays bounded and only the set handed to the next component
+	// is wider. Measured 2026-09-18 with `r/x`, a symlink `s` to `r` and a
+	// second symlink `a/b/sl` to `r`: `./**/x` is `[./a/b/sl/x][./r/x][./s/x]`
+	// here, `[./r/x]` in ksh93 and in zsh — and this shell names the linked
+	// level for `**/` exactly as ksh93 does, which is what makes the two
+	// separate questions. The walk that begins the word is this shell's own
+	// exemption and the option records it: `**/x` is `[r/x]` here while the
+	// same pattern with a `.` or an absolute root in front of it is not
+	// (#3176).
+	r.SetMatchOption(interp.ComponentBehindStarStarSeesLinkedLevels, true)
 	// An `&` in a `${v/pat/rep}` replacement is the text the pattern
 	// matched, which is this shell alone in the panel — bash 3.2, ksh93 and
 	// zsh all answer `a[&]c` for `v=abc; ${v/b/[&]}` where this one answers

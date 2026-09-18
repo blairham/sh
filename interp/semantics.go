@@ -11074,6 +11074,100 @@ type Semantics struct {
 	// which is what makes `umask 022; umask -S g=u` give `g=rwx`.
 	SymbolicMaskTakesAPermissionCopy Answer
 
+	// UmaskPermissionCopyBesideLetters is what a permission copy written in
+	// the same clause as permission letters comes to.
+	//
+	// Asked only where SymbolicMaskTakesAPermissionCopy has already said yes
+	// and the clause holds both, which POSIX's grammar does not describe at
+	// all: it makes a copy an **alternative** to a list of permission
+	// characters rather than one of them, so `g=wu` is not a portable
+	// operand and the shells that read it anyway had nothing to agree with.
+	//
+	// Three readings, measured 2026-09-18 from `umask 222` — so `allowed` is
+	// 555 — under `LC_ALL=C` from a script file:
+	//
+	//	umask -S g=uw   bash 5.3.20 g=rwx   dash g=rwx   BusyBox ash refused
+	//	umask -S g=wu   bash 5.3.20 g=rx    dash g=rwx   BusyBox ash refused
+	//
+	// `g=uw` is the non-discriminating spelling — bash and dash agree on it
+	// by arriving from opposite directions — so the case that parts them is
+	// the one with the copy **last**. bash 3.2, zsh 5.9.2 and ksh93u+ take
+	// no copy at all and never reach this.
+	UmaskPermissionCopyBesideLetters UmaskPermissionCopyPolicy
+
+	// UlimitEmptyOperandIsZero reads an empty operand as a limit of nought
+	// rather than refusing it.
+	//
+	// Nought, and not "a line that changes nothing": `ulimit -n ""` leaves
+	// `ulimit -n` answering `0` afterwards in every column that takes it,
+	// measured 2026-09-18 from a script file under `LC_ALL=C` against a
+	// starting limit of 1048576. So the cost of the wrong answer runs both
+	// ways — a shell that refuses ends a `set -e` script where the shell
+	// being modeled carries on, and one that accepts where the reference
+	// refuses closes the script's descriptors.
+	//
+	// bash 3.2.57, zsh 5.9.2, ksh93u+ 2012-08-01 and dash 0.5.12 take it;
+	// bash 5.3.20, the same binary under argv[0] `sh`, and BusyBox ash
+	// 1.37.0 refuse it. So this is a 5.x change in that column and the bash
+	// preset takes the newer answer, in the shape
+	// SymbolicMaskTakesAPermissionCopy above already has.
+	UlimitEmptyOperandIsZero Answer
+
+	// DisownAlwaysFails answers 1 for every `disown` and says nothing, found
+	// or not.
+	//
+	// One column, and it is not a report about whether the job was there.
+	// Measured 2026-09-18 against ksh93u+ 2012-08-01 from a script file
+	// under `env -i`: six spellings, six silent 1s — with a live job, with a
+	// finished one, with a jobspec that never existed, with a process id and
+	// with no operand at all, and `set -m` changes none of them. The job it
+	// can list is still listed afterwards, which is what says the status is
+	// not the lookup.
+	//
+	// bash 5.3.20 answers 0 for a job it disowned and 1 with `no such job`
+	// for one it did not, which is the reading every other column has and
+	// the one the common path keeps.
+	//
+	// Asked after the option words are read, so `disown -a` is still that
+	// shell's `unknown option` and its usage line at 2.
+	DisownAlwaysFails Answer
+
+	// CdpathReplacesTheRelativeLookup makes a CDPATH search that **misses** a
+	// failure, rather than falling back to the operand as it stands.
+	//
+	// POSIX has the fallback: when the search fails the operand is used
+	// relative to the current directory. One column does not, so a relative
+	// `cd` into a directory that is right there fails while `CDPATH` is set
+	// and names somewhere else. Measured 2026-09-18 from a script file under
+	// `env -i`, with `elsewhere` and `target` side by side and `CDPATH`
+	// naming `elsewhere`:
+	//
+	//	cd target      ksh93u+ `cd: target: [No such file or directory]`, 1
+	//	               bash 5.3.20, zsh 5.9.2, dash 0.5.12 all arrive, 0
+	//	cd target/     refused there too, by the same rule
+	//	cd .           refused there — and here, since a bare dot is not a
+	//	               `./` prefix and is searched like any other operand
+	//	cd ../x/target arrives everywhere: a dot component is not a search
+	//	cd /abs/path   arrives everywhere: nor is an absolute operand
+	//	CDPATH= ; cd target   arrives everywhere: an empty CDPATH is no search
+	//
+	// Asked only where CDPATH is set and not empty, which is what keeps an
+	// ordinary relative `cd` in that shell out of the question entirely.
+	//
+	// **Two rows of that column are written down and not modeled**, because
+	// both are that shell contradicting itself rather than a reading:
+	//
+	// `cd ./target` is refused there with the directory in front of it — the
+	// dot does not exempt the operand — and with a CDPATH naming a directory
+	// that does not exist, the same line *prints the current directory and
+	// stays where it was*, at status 0, having dropped the `target`
+	// component. There is no rule that produces both.
+	//
+	// And the refusal **survives `unset CDPATH`** once a search has
+	// succeeded, while `CDPATH=` clears it and an `unset` with no prior hit
+	// clears it too. That is a variable's state rather than `cd`'s reading.
+	CdpathReplacesTheRelativeLookup Answer
+
 	// SymbolicMaskTakesTheConditionalExecuteLetter accepts `X` in a clause.
 	//
 	// True in bash 5.3, ksh93, dash and BusyBox ash; false in zsh and in
@@ -19601,6 +19695,24 @@ func PosixSemantics() Semantics {
 		// characters, so the standard answers both with a yes.
 		SymbolicMaskTakesAPermissionCopy:             Yes,
 		SymbolicMaskTakesTheConditionalExecuteLetter: Yes,
+		// UmaskPermissionCopyBesideLetters is deliberately absent: the
+		// standard makes a copy an *alternative* to the permission
+		// characters rather than one of them, so a clause holding both is
+		// outside its grammar entirely and the three shells that read it
+		// read it three different ways. There is nothing here to defer to,
+		// and a fourth reading invented here would look exactly like a
+		// measured one.
+		//
+		// DisownAlwaysFails is absent for the plainer reason: POSIX has no
+		// `disown`.
+		//
+		// XCU's `ulimit` takes a blocks operand that is a number, and an
+		// empty word is not one — so the standard's answer is the refusal,
+		// and bash 3.2, zsh, ksh93 and dash are the departure from it.
+		UlimitEmptyOperandIsZero: No,
+		// And XCU's `cd` uses the operand as it stands when the CDPATH
+		// search fails.
+		CdpathReplacesTheRelativeLookup: No,
 		// POSIX gives all three a *name*, and neither a special parameter
 		// nor a positional one is a name — a positional has `shift` to
 		// remove it.
@@ -20723,6 +20835,55 @@ func (r *Runner) floatHalf() PrintfFloatHalfPolicy {
 	if p == PrintfFloatHalfUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered("printf: a floating conversion's exact half")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// UmaskPermissionCopyPolicy is what a permission copy written beside
+// permission letters in one `umask` clause comes to.
+//
+// Three readings and not a bool, because the panel really does split three
+// ways over a spelling POSIX does not describe. See
+// [Semantics.UmaskPermissionCopyBesideLetters] for the measurements.
+type UmaskPermissionCopyPolicy uint8
+
+const (
+	// UmaskPermissionCopyUnspecified is no answer, and is refused like any
+	// other.
+	UmaskPermissionCopyUnspecified UmaskPermissionCopyPolicy = iota
+	// UmaskPermissionCopyReplaces throws away what the letters before it
+	// accumulated and leaves the copy alone: bash.
+	UmaskPermissionCopyReplaces
+	// UmaskPermissionCopyContributes ORs the copy in like any other
+	// permission: dash.
+	UmaskPermissionCopyContributes
+	// UmaskPermissionCopyRefusesTheMixture takes a copy only when it is the
+	// whole of the clause's permissions and refuses it beside a letter, in
+	// either order: BusyBox ash.
+	UmaskPermissionCopyRefusesTheMixture
+)
+
+func (p UmaskPermissionCopyPolicy) String() string {
+	switch p {
+	case UmaskPermissionCopyReplaces:
+		return "replaces the letters"
+	case UmaskPermissionCopyContributes:
+		return "contributes like a letter"
+	case UmaskPermissionCopyRefusesTheMixture:
+		return "refuses the mixture"
+	}
+	return "unspecified"
+}
+
+// permissionCopy resolves the axis, and only for a clause that really holds a
+// copy beside a letter.
+func (r *Runner) permissionCopy() UmaskPermissionCopyPolicy {
+	p := r.sem().UmaskPermissionCopyBesideLetters
+	if p == UmaskPermissionCopyUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("umask: a permission copy beside permission letters")))
 		r.status = 2
 		r.unspecified = true
 	}

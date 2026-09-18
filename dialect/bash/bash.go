@@ -727,6 +727,11 @@ func Semantics() interp.Semantics {
 	// Both are 5.x additions: bash 3.2 calls the `u` of `g=u` and the `X`
 	// of `u=X` invalid symbolic mode characters, and this preset is 5.3.
 	s.SymbolicMaskTakesAPermissionCopy = interp.Yes
+	// And a copy written beside permission letters replaces what they
+	// accumulated rather than joining them: from `umask 222`, `umask -S
+	// g=uw` is `g=rwx` and `g=wu` is `g=rx`, which is the spelling that
+	// parts this from dash (#3074). Measured 2026-09-18.
+	s.UmaskPermissionCopyBesideLetters = interp.UmaskPermissionCopyReplaces
 	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	// No dash word is an option: `shift -x` complains about a number and
@@ -766,6 +771,9 @@ func Semantics() interp.Semantics {
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.DisownRemovesTheJob = interp.Yes
+	// And it reports what it did: 0 for a job it disowned, 1 with `no such
+	// job` for one it could not find (#3187).
+	s.DisownAlwaysFails = interp.No
 	s.CommandRejectsUnknownOption = interp.Yes
 	// Whether `command -v` answers for every name it was given, and what
 	// decides the status when it found some of them. See
@@ -1850,6 +1858,15 @@ func Semantics() interp.Semantics {
 	s.BackgroundJobKeepsTrapListing = interp.Yes
 	s.KeptTrapListingIncludesExit = interp.Yes
 	s.UlimitBlockIsKilobyte = interp.Yes
+	// An empty operand is refused here — `ulimit -n ""` is `: invalid
+	// number` at 1 — where bash 3.2.57 reads it as nought and lowers the
+	// limit to 0. A 5.x change, so the newer answer stands, as it does for
+	// the permission copy above (#3064). Measured 2026-09-18.
+	s.UlimitEmptyOperandIsZero = interp.No
+	// And CDPATH is a search *beside* the ordinary relative lookup: a miss
+	// falls back to the operand as it stands, and a `./` operand is not
+	// searched at all (#2896).
+	s.CdpathReplacesTheRelativeLookup = interp.No
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes

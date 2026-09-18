@@ -44,6 +44,16 @@ func biDisown(r *Runner, _ context.Context, args []string) int {
 			return r.refuseOption("disown", args[0], "")
 		}
 	}
+	if r.ask(r.sem().DisownAlwaysFails, "`disown` answering 1 for every call and saying nothing") {
+		// One column's whole answer, and it is not a report about the
+		// lookup: the job it can list is still listed afterwards. Asked
+		// after the option words so that a bad letter is still that shell's
+		// `unknown option`. See Semantics.DisownAlwaysFails.
+		return 1
+	}
+	if r.unspecified {
+		return r.status
+	}
 	var jobs []*Job
 	if len(args) == 0 {
 		// The current job, and with none the complaint is the dialect's —

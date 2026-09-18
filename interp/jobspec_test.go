@@ -108,11 +108,18 @@ func TestDisownLetsGoOrOnlyShields(t *testing.T) {
 	sem := func(remove Answer) func(*Semantics) {
 		return func(s *Semantics) {
 			s.DisownRemovesTheJob = remove
+			// The column that answers 1 for every call never reaches the
+			// question this test is about, so it is answered the other way
+			// here rather than left to refuse the builtin.
+			s.DisownAlwaysFails = No
 			s.JobsListFinishedJobs = Yes
 			s.JobsListNewestFirst = No
 			s.JobsShowBackgroundCommand = No
 		}
 	}
+	// The two rows below give no vector of their own, so the axis is
+	// answered on its own for them.
+	silent := func(s *Semantics) { s.DisownAlwaysFails = No }
 	src := "{ exit 0; } &\ndisown\njobs\necho st=$?"
 	out, _, _ := declRun(t, src, sem(Yes), Diagnostics{})
 	if strings.Contains(out, "[1]") {
@@ -123,11 +130,11 @@ func TestDisownLetsGoOrOnlyShields(t *testing.T) {
 		t.Errorf("stdout = %q, want the job still listed", out)
 	}
 
-	out, errs, _ := declRun(t, "disown\necho st=$?", nil, Diagnostics{})
+	out, errs, _ := declRun(t, "disown\necho st=$?", silent, Diagnostics{})
 	if errs != "" || !strings.Contains(out, "st=1") {
 		t.Errorf("stdout %q stderr %q, want a silent 1 with no wording given", out, errs)
 	}
-	_, errs, _ = declRun(t, "disown", nil, Diagnostics{DisownNoCurrentJob: "disown: nothing held"})
+	_, errs, _ = declRun(t, "disown", silent, Diagnostics{DisownNoCurrentJob: "disown: nothing held"})
 	if !strings.Contains(errs, "disown: nothing held") {
 		t.Errorf("stderr = %q, want the dialect's wording", errs)
 	}

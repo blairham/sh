@@ -842,6 +842,10 @@ func Semantics() interp.Semantics {
 	// The letter but not the copy, which is why the two are two axes:
 	// `umask g=u` is `bad format` here and `umask u=X` is taken.
 	s.SymbolicMaskTakesAPermissionCopy = interp.No
+	// unanswered UmaskPermissionCopyBesideLetters: a copy is `bad format`
+	// here whatever is beside it — the line above is that refusal — so a
+	// clause holding a copy and a letter never reaches the question.
+	// TestUmaskRefusesAPermissionCopy pins the refusal.
 	s.SymbolicMaskTakesTheConditionalExecuteLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	// Every dash word is an option here, digits and all: `shift -1` and
@@ -877,6 +881,10 @@ func Semantics() interp.Semantics {
 	// or `wait %1` — reports a plain 1 instead.
 	s.WaitForAJobFailsWhenInterrupted = interp.Yes
 	s.DisownRemovesTheJob = interp.No
+	// And every call answers 1 and says nothing, found or not: six
+	// spellings, six silent 1s, with and without job control, and the job
+	// it can list is still listed afterwards (#3187). Measured 2026-09-18.
+	s.DisownAlwaysFails = interp.Yes
 	// Both Yes, re-measured with a letter ksh93 does not own (-q): the first
 	// probes used -x and -a, which are real ksh93 options, and recorded No
 	// off ksh93's own features.
@@ -2140,6 +2148,14 @@ func Semantics() interp.Semantics {
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No
+	// An empty operand is a limit of nought, silently, and leaves the limit
+	// at 0 afterwards (#3064). Measured 2026-09-18.
+	s.UlimitEmptyOperandIsZero = interp.Yes
+	// CDPATH is the **whole** of how a relative operand is resolved here: a
+	// search that misses is `cd: target: [No such file or directory]` at 1
+	// with the directory right there, and a `./` operand is searched too
+	// rather than exempted (#2896). Measured 2026-09-18.
+	s.CdpathReplacesTheRelativeLookup = interp.Yes
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes

@@ -80,3 +80,29 @@ dq='"q"'
 (( r = val[$sq] )); printf 'a value brings its own single quotes %s\n' "$r"
 (( r = val[$dq] )); printf 'and its own double quotes %s\n' "$r"
 (( r = val['q'] )); printf 'where the script writing them means the bare key %s\n' "$r"
+
+# The `set -u` refusal an expression raises is this shell's own and stops it
+# wherever it was written, which is what parts it from an ordinary arithmetic
+# failure here. Measured 2026-09-18 against bash 5.3.20 with `b` unset: the
+# arithmetic command and `let` both end the shell, where the identical two
+# constructs failing to read an expression leave a status and run on (#3574).
+( set -u; (( b )); printf 'ran on\n' ) 2>/dev/null
+printf 'an arithmetic command: %s\n' "$?"
+( set -u; (( b )) || printf 'caught\n'; printf 'ran on\n' ) 2>/dev/null
+printf 'and an || does not catch it: %s\n' "$?"
+( set -u; let "x = b"; printf 'ran on\n' ) 2>/dev/null
+printf 'a let operand: %s\n' "$?"
+( set -u; typeset -i n; n=b; printf 'ran on\n' ) 2>/dev/null
+printf 'an integer declaration: %s\n' "$?"
+
+# The controls: the same two constructs failing as constructs are a status.
+( set -u; (( 1 + )); printf 'ran on: %s\n' "$?" ) 2>/dev/null
+( set -u; let "x = 1 +"; printf 'ran on: %s\n' "$?" ) 2>/dev/null
+
+# And the refusal names the subscript a reference was aimed at, not the
+# reference — the one name in the line that is perfectly well defined. The
+# literal subscript is the control, since it holds no name to be unset.
+( set -u; declare -n r=a[b]; : "$r" ) 2>/dev/null
+printf 'a reference to an element: %s\n' "$?"
+( set -u; declare -n r=a[1]; : "$r" ) 2>/dev/null
+printf 'a reference with a literal subscript: %s\n' "$?"

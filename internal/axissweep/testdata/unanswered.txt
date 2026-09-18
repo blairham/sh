@@ -33,6 +33,7 @@ ash   AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 ash   ArithDivisionByZeroYieldsAValue
 ash   ArithFloatOverflowIsZero
 ash   ArithIntegerOperatorRefusesFloat
+ash   ArithNounsetRefusalIsFatal
 ash   ArithSubscriptNameMustBeSet
 ash   ArithSubscriptSkippedWhenNameUnset
 ash   ArithWholeArraySubscriptIsReportedAsBad
@@ -274,6 +275,7 @@ dash  ArithDivisionByZeroYieldsAValue
 dash  ArithFloatOverflowIsZero
 dash  ArithIntegerOperatorRefusesFloat
 dash  ArithNegativeExponentIsError
+dash  ArithNounsetRefusalIsFatal
 dash  ArithRecursedNameMustBeSet
 dash  ArithSubscriptNameMustBeSet
 dash  ArithSubscriptSkippedWhenNameUnset

@@ -269,3 +269,16 @@ run 'trap "echo ERRFIRED" ERR; (( 0 )); printf "after\n"' 'a zero result under a
 run 'set -e; let 0; printf "after\n"' 'the same value through let'
 run 'set -e; f() { (( 0 )); }; f; printf "after\n"' 'a call whose body ended in one'
 run 'set -e; ( (( 0 )) ); printf "after\n"' 'a subshell of one'
+
+# `set -u` reaching an expression is refused here, and the refusal is the
+# expression's failure rather than the shell's — which is what parts this
+# shell's two arithmetic constructs, since a failed `(( ))` ends the input here
+# and a failed `let` does not. Measured 2026-09-18 against ksh93u+
+# 2012-08-01 with `b` unset (#3574).
+( set -u; (( b )); printf 'ran on\n' ) 2>/dev/null
+printf 'an arithmetic command: %s\n' "$?"
+( set -u; let "x = b"; printf 'a let operand: %s\n' "$?" ) 2>/dev/null
+
+# The wider refusal is the option's: with it off, a name at the top of an
+# expression is still zero here, where one inside a subscript is not.
+( printf 'the option off: %s\n' "$(( b ))" ) 2>/dev/null

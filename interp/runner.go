@@ -1405,6 +1405,20 @@ type Runner struct {
 	// door this routes to (#3502). Cleared with expandErr, everywhere
 	// expandErr is cleared.
 	badSubscript bool
+	// arithNounsetNamedTheParameter records that the expression which failed
+	// was stopped by `set -u` reaching a name it read, in a dialect that
+	// calls that refusal the shell's own rather than the expression's — see
+	// Runner.arithNounsetRefusal and Semantics.ArithNounsetRefusalIsFatal.
+	//
+	// A third flag beside the two above and for the same reason the second
+	// one is there: what it changes is who the failure belongs to. The
+	// sentence is written bare instead of being worded as the construct's —
+	// `set -u; (( b ))` is `b: unbound variable` in bash and not `((: b:
+	// unbound variable`, which is what that shell writes for `(( 1+ ))` — and
+	// the shell is already stopping with a status of its own, so nothing
+	// downstream decides either again. Cleared with expandErr, everywhere
+	// expandErr is cleared.
+	arithNounsetNamedTheParameter bool
 
 	// refusalSpokenAs is the name a refusal this declaration reaches through
 	// a name reference should say, which is the operand as written rather
@@ -5130,6 +5144,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 	}
 	r.unspecified, r.expandErr, r.badSubscript, r.assignFailed = false, false, false, false
+	r.arithNounsetNamedTheParameter = false
 	// Whatever this command's process substitutions opened is closed when the
 	// command is done, whether it turned out to be a builtin, a function or
 	// something on PATH.
@@ -7236,6 +7251,7 @@ func (r *Runner) fatalUsage(format string, args ...any) {
 // clearing it first would abandon itself over the previous line's failure.
 func (r *Runner) beginHeading() {
 	r.unspecified, r.expandErr, r.badSubscript = false, false, false
+	r.arithNounsetNamedTheParameter = false
 }
 
 // failedHeading reports whether expanding a compound command's heading
@@ -7312,6 +7328,15 @@ func (r *Runner) failedHeading() bool {
 // second complaint on this path in a run with no dialect, since fatalQuiet
 // asks FatalErrorStatusIsOne and the core does not answer that either.
 func (r *Runner) failedExpansion() {
+	if r.arithNounsetNamedTheParameter {
+		// `set -u` reaching a name an expression read, in the dialect that
+		// calls that the shell's own refusal: it has already written the
+		// sentence and already stopped, with the status that route gives a
+		// failed expansion — 127 from a `-c` string in bash, where the
+		// general give-up below would put its own 1 there. See
+		// Runner.arithNounsetRefusal.
+		return
+	}
 	if r.sem().FailedExpansionAbandonsTheLine != Yes {
 		r.fatalQuiet()
 		return

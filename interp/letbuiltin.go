@@ -87,6 +87,23 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 			return 1
 		}
 		if err != nil {
+			if r.arithNounsetNamedTheParameter {
+				// Not this builtin's failure where `set -u` calls the
+				// refusal the shell's own: measured 2026-09-18, bash 5.3.20
+				// writes a bare `b: unbound variable` for `set -u; let
+				// "x=b"` and names itself — `let: x=1+: …` — for the same
+				// builtin failing to read an expression. ksh93u+ keeps its
+				// `let:` here and is the column that says this belongs to
+				// the fatality and not to the refusal: there the refusal is
+				// the expression's failure, the builtin reports it, and the
+				// script runs on at 1 (#3574).
+				r.diagf("%s\n", r.arithFailure(text, err))
+				// The status is the shell's own — 1 from a script file and
+				// 127 from a `-c` string in bash — and not the 1 a failed
+				// `let` would leave, which is the same number on one route
+				// and not on the other.
+				return r.status
+			}
 			// Named with its expression, the way the expansion route names
 			// one: `let: 1/0: division by 0` and not `let: division by 0`
 			// (#1985). The text is the expanded one the tree was built from,

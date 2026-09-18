@@ -93,3 +93,15 @@ printf '%s\n' "out of a variable:        $( n=10000000000000000000; printf '%s' 
 # lines above are read as the size of the numeral rather than as this shell
 # complaining about arithmetic in general.
 ( printf '%s\n' "the largest that fits: $(( 9223372036854775807 ))" ) 2>&1
+
+# `set -u` reaching an expression is refused here as it is in bash and ksh93,
+# but the refusal is the *expression's* failure rather than the shell's — so
+# the construct holding it answers. Measured 2026-09-18 against zsh 5.9.2 with
+# `b` unset: the arithmetic command leaves 2 and the line runs on, an `||`
+# catches it, `let` leaves 1 and runs on, and the same refusal inside a word
+# expansion stops the shell as any failed expression there does (#3574).
+( set -u; (( b )); printf 'an arithmetic command: %s\n' "$?" ) 2>/dev/null
+( set -u; (( b )) || printf 'and an || catches it\n' ) 2>/dev/null
+( set -u; let "x = b"; printf 'a let operand: %s\n' "$?" ) 2>/dev/null
+( set -u; x=$(( b )); printf 'ran on\n' ) 2>/dev/null
+printf 'a word expansion: %s\n' "$?"

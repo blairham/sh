@@ -1122,6 +1122,14 @@ func Semantics() interp.Semantics {
 	// A name inside a subscript is a *parameter* here and an unset one is
 	// refused, where the same name outside the brackets is zero (#2817).
 	s.ArithSubscriptNameMustBeSet = interp.Yes
+	// And with nounset on the same refusal reaches every name an expression
+	// reads, subscript or not: `set -u; : $((b))` is `b: parameter not set`.
+	// Not fatal of itself — it is the expression's failure, and the
+	// construct holding it answers, which is why `(( b ))` ends the input
+	// here (ArithCommandErrorIsFatal) and `let "x=b"` reports and returns 1
+	// (#3574).
+	s.ArithUnsetNameUnderNounsetIsRefused = interp.Yes
+	s.ArithNounsetRefusalIsFatal = interp.No
 	// This shell has no `local`, and it answers all the same: `typeset` in a
 	// *keyword*-defined function is a local here — see
 	// TypesetLocalNeedsKeywordFunction — and the shadow it declares over a

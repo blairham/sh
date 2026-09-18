@@ -592,6 +592,14 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 			}
 			return 0, false
 		}
+		if r.arithNounsetNamedTheParameter {
+			// Not the header's failure, for the reason Runner.arithCmd gives
+			// for the construct beside it: the sentence is the shell's own
+			// `set -u` refusal, written bare in every column, and the shell
+			// is already stopping (#3574).
+			r.diagf("%s\n", r.arithFailure(expanded, err))
+			return 0, false
+		}
 		// The part is named, the way the construct it is part of names one:
 		// `((: i<1/0: division by 0` and not a bare `division by 0`, which
 		// said nothing about which of the three parts had failed (#1985).

@@ -1633,6 +1633,12 @@ func Semantics() interp.Semantics {
 	// 2026-09-16 in the pinned alpine image, BusyBox v1.37.0: `$((x))` 0,
 	// `$((x + 1))` 1, `$(((x) * 2))` 0, and two names deep 0.
 	s.ArithRecursedNameMustBeSet = interp.No
+	// And `set -u` does not reach arithmetic at all: `set -u; : $((b))` with
+	// `b` unset is zero and the script runs on, where the four big shells
+	// refuse it. Measured 2026-09-18 in the pinned alpine image, BusyBox
+	// v1.37.0 — `$((b))` prints 0 at status 0 with the option on. dash is
+	// the other column that reads it this way (#3574).
+	s.ArithUnsetNameUnderNounsetIsRefused = interp.No
 	s.ArithNegativeExponentIsError = interp.Yes
 
 	// unanswered TraceArrayLiteralShowsTheExpandedElements: no array literal

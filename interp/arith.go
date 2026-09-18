@@ -1780,6 +1780,9 @@ func (r *Runner) arithValueOf(name string) (arithNum, error) {
 		value, ok = v, iset
 	}
 	if !ok {
+		if n, err, refused := r.arithNounsetRefusal(name); refused {
+			return n, err
+		}
 		if r.arithSubscriptDepth > 0 &&
 			r.ask(r.sem().ArithSubscriptNameMustBeSet, "an unset name inside an array subscript") {
 			// The same refusal, from the other place one dialect reads a
@@ -1805,6 +1808,54 @@ func (r *Runner) arithValueOf(name string) (arithNum, error) {
 		return intNum(0), nil
 	}
 	return r.arithNumOfStored(value)
+}
+
+// arithNounsetRefusal is `set -u` reaching the expression: a name an
+// expression read and nothing ever set, where the dialect calls that the
+// option's refusal rather than the zero arithmetic otherwise gives it.
+//
+// Asked here rather than beside the two nounset-off refusals below it, and in
+// front of them, because it is the more general rule: those two are one shell
+// reading a name as a parameter in two particular places and this is every
+// name in the expression once the option is on. In front, so that a shell
+// answering both writes one sentence about the name rather than two — and the
+// sentence is the same either way, which is what made the order invisible
+// until the fatality parted them.
+//
+// One place rather than one per construct, and that is the whole point of the
+// fix: `$(( ))`, `(( ))`, a C-style `for` header, an array subscript, `let`
+// and an assignment to an integer-declared name all read their names through
+// arithValueOf, so all six refuse together. See
+// Semantics.ArithUnsetNameUnderNounsetIsRefused for the panel.
+//
+// The refusal is returned as an ordinary arithmetic failure — the sentence is
+// complete, so it is printed bare wherever the expression was written, which
+// is what all three refusing columns do — and the shell is stopped separately
+// where the dialect says the refusal is fatal of itself. Stopping through
+// fatalExpansionQuiet rather than writing the sentence here keeps one printer
+// for the failure: it is the door every `set -u` refusal already uses, which
+// is also where the command-string route's own status comes from, so
+// `sh -c 'set -u; : $((b))'` ends at 127 as bash does while the same script
+// in a file ends at 1.
+func (r *Runner) arithNounsetRefusal(name string) (arithNum, error, bool) {
+	if !r.nounset {
+		return intNum(0), nil, false
+	}
+	if !r.ask(r.sem().ArithUnsetNameUnderNounsetIsRefused, "an unset name read by an expression under `set -u`") {
+		return intNum(0), nil, false
+	}
+	if r.ask(r.sem().ArithNounsetRefusalIsFatal, "`set -u` in an expression stopping the shell wherever it is written") {
+		// Through the door every other `set -u` refusal uses, which is what
+		// decides the status: 1 from a script file and 127 from a `-c`
+		// string in bash. Quiet, because the sentence below is written by
+		// whichever site the expression was evaluated from — one printer for
+		// the failure, and the site is what knows the location to write in
+		// front of it.
+		r.fatalExpansionQuiet()
+		r.arithNounsetNamedTheParameter = true
+	}
+	text := Wording(r.diag().UnboundVariable, "%s: parameter not set", name)
+	return intNum(0), arithError{msg: text, token: name, complete: true}, true
 }
 
 // arithRecursionExceeded is the bound on reading a stored value as an
@@ -2695,6 +2746,18 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 				// Semantics.BadSubscriptEscapesAnArithmeticCommand, where
 				// `(( b c ))` is the control that keeps the prefix.
 				r.status = r.arithCommandBadSubscript(r.arithFailure(text, err))
+				return nil
+			}
+			if r.arithNounsetNamedTheParameter {
+				// `set -u` naming a name the expression read is not the
+				// construct's failure and no column words it as one:
+				// measured 2026-09-18, `set -u; (( b ))` is `b: unbound
+				// variable` in bash 5.3.20 where `(( 1+ ))` is `((: 1+: …`.
+				// The shell is already stopping with a status of its own, so
+				// arithCmdFailed is not consulted either — its answer for
+				// bash is the non-fatal 1, which is what a `-c` string's 127
+				// would have been overwritten with (#3574).
+				r.diagf("%s\n", r.arithFailure(text, err))
 				return nil
 			}
 			// The expression is named here as it is everywhere else an

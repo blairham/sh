@@ -1105,6 +1105,15 @@ func Semantics() interp.Semantics {
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
 	s.ArithRecursedNameMustBeSet = interp.No
 	s.ArithSubscriptNameMustBeSet = interp.No
+	// With nounset *on*, though, every arithmetic read of a name is the
+	// option's business: `set -u; : $((b))` is `b: unbound variable` here
+	// where the two fields above leave it zero. And it is fatal wherever it
+	// is written — this is an expansion failure, and under `set -u` those
+	// end the shell — so `(( b ))` and `let "x=b"` stop the script too,
+	// where the same two constructs failing for an ordinary reason do not
+	// (#3574).
+	s.ArithUnsetNameUnderNounsetIsRefused = interp.Yes
+	s.ArithNounsetRefusalIsFatal = interp.Yes
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.
 	s.ArithNegativeExponentIsError = interp.Yes

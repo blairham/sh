@@ -17666,7 +17666,6 @@ func PosixSemantics() Semantics {
 		GetoptsEndOfOptionsNamesIt: Yes,
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
-		KillJobSpecAimsAtTheGroup: No,
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
 		// over the whole list once and say so themselves.
 		OperatorDistributesOverTheFieldList: Yes,
@@ -18576,6 +18575,14 @@ func CoreSemantics() Semantics {
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,
+		// And `kill -l` writes the number back for a signal the kernel has
+		// and the table cannot name, which is four of the five columns.
+		// Answered here rather than left to refuse for the reason the
+		// `getopts` answers above are: the substrate is a shell somebody
+		// runs, and on Linux this is every number from 32 up — so a refusal
+		// would make `kill -l "$?"` for a real-time death a complaint about
+		// the vector.
+		KillListLeavesAnUnnamedSignalBlank: No,
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
 		// over the whole list once and say so themselves.
 		OperatorDistributesOverTheFieldList: Yes,

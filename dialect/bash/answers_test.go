@@ -163,9 +163,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnknownCharacterClass, interp.UnknownClassIsInert; got != want {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}
-	// `[[.a.]]` is the collating element `a`.
-	if got, want := s.CollatingSymbols, interp.Yes; got != want {
-		t.Errorf("CollatingSymbols = %v, want %v", got, want)
+	// `[[.a.]]` is the collating element `a`, and a longer body is a name:
+	// `[[.hyphen.]]` matches `-` here and in no other column.
+	if got, want := s.CollatingElements, interp.ACollatingElementMayBeNamed; got != want {
+		t.Errorf("CollatingElements = %v, want %v", got, want)
 	}
 	// And the `[:` that nothing closes, which is the axis beside it
 	// rather than a corner of it — see #1431.

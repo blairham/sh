@@ -745,14 +745,14 @@ type patternOpts struct {
 	// Nil leaves the question to bracket above, which is every caller that
 	// has not been given the dialect to ask.
 	askBracketAfterSub func() BracketPolicy
-	// collating reads `[.x.]` and `[=x=]` inside a bracket expression as one
-	// collating element and one equivalence class — see
-	// Semantics.CollatingSymbols. Off, the delimiters are ordinary members,
-	// which is the one column that has neither.
+	// collating is what `[.x.]` and `[=x=]` inside a bracket expression are
+	// — see Semantics.CollatingElements. NoCollatingElements leaves the
+	// delimiters as ordinary members, which is the one column that has
+	// neither construct.
 	//
-	// Set only where the pattern really opens one, so a shell without the
-	// construct is asked nothing by a bracket that never spells it.
-	collating bool
+	// Resolved only where the pattern really opens one, so a shell without
+	// an answer is asked nothing by a bracket that never spells it.
+	collating CollatingElementPolicy
 	// bracketMember says a backslash *inside* a bracket expression escapes
 	// nothing and is an ordinary member of the set — the third reading of
 	// [Semantics.BracketEscape], which BusyBox ash holds. The escape rule
@@ -1919,7 +1919,7 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		// ASCII, so none of them can be mistaken for the `-` of a range or
 		// the `]` that ends the expression, and the scan above stays a byte
 		// scan.
-		if o.collating && i+1 < len(p) && p[i] == '[' && (p[i+1] == '.' || p[i+1] == '=') {
+		if o.readsCollating() && i+1 < len(p) && p[i] == '[' && (p[i+1] == '.' || p[i+1] == '=') {
 			sub = true
 		}
 		lo, next, read := bracketMember(p, i, o)
@@ -2034,7 +2034,7 @@ func unterminatedBracket(p, c string, o *patternOpts, sub bool) (rest string, ok
 // not this function's; where nothing closed the delimiter, next comes back
 // unmoved, which is how the caller tells the two apart.
 func bracketMember(p string, i int, o *patternOpts) (unit string, next int, read bool) {
-	if o.collating && i+1 < len(p) && p[i] == '[' && (p[i+1] == '.' || p[i+1] == '=') {
+	if o.readsCollating() && i+1 < len(p) && p[i] == '[' && (p[i+1] == '.' || p[i+1] == '=') {
 		// The closer is looked for **after** the opening delimiter, exactly
 		// as a class name's `:]` is, so the `.` that opens one cannot also
 		// be the `.` that closes it and `[[..]]` is a body of nothing rather
@@ -2045,17 +2045,36 @@ func bracketMember(p string, i int, o *patternOpts) (unit string, next int, read
 			return "", i, false
 		}
 		body, after := p[i+2:i+2+end], i+2+end+2
-		// One collating element is one character in the C locale, and a
-		// locale that had a two-character one would name it in a table this
-		// shell does not carry. So a longer body is a body this shell cannot
-		// read — which is also where bash's names for the portable character
-		// set would go.
-		if body != "" && o.unitWidth(body) == len(body) {
-			return body, after, true
+		// One collating element is one character in the C locale, which is
+		// every element the column that reads one has. A longer body is a
+		// **name** where the dialect reads names and is a body that is not an
+		// element everywhere else; the column that finds an element in no
+		// body at all takes neither arm.
+		switch o.collating {
+		case ACollatingElementMayBeNamed:
+			if named, ok := collatingElementNamed(body); ok {
+				return named, after, true
+			}
+			fallthrough
+		case OneCharacterIsACollatingElement:
+			if body != "" && o.unitWidth(body) == len(body) {
+				return body, after, true
+			}
 		}
 		return "", after, false
 	}
 	return plainBracketMember(p, i, o)
+}
+
+// readsCollating reports whether the delimiters of a `[.` or a `[=` are read
+// as a sub-expression at all, which is what decides whether the `]` inside
+// one ends the bracket. True of every reading but the column that has neither
+// construct — including the one that reads them and finds an element in no
+// body, where the difference from an ordinary bracket is visible without any
+// element ever being a member.
+func (o *patternOpts) readsCollating() bool {
+	return o.collating != NoCollatingElements &&
+		o.collating != CollatingElementsUnspecified
 }
 
 // plainBracketMember is one ordinary member: the unit at i, or the unit a
@@ -2448,7 +2467,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		escapes:           r.sem().PatternEscapeReaches,
 		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),
-		collating:         r.readsCollatingSymbols(pattern),
+		collating:         r.collatingElements(pattern),
 		// The bracket axis above is deliberately not resolved on this path
 		// and this one is, because the two are not the same question here.
 		// A bare `[` reaching pathname expansion or a trim is literal in
@@ -2458,18 +2477,6 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		// `${w#[}` takes the `[` in bash and in ksh93 alike.
 		askBracketAfterSub: r.bracketAfterSubPolicy,
 	}, pattern, 1), pattern)
-}
-
-// readsCollatingSymbols resolves [Semantics.CollatingSymbols] for the
-// matcher, and only for a pattern that really opens a `[.` or a `[=` inside a
-// bracket expression — the shape bracketEscapeIsOnlyAMember uses, and for the
-// same reason: a shell that has no answer must not be asked a question the
-// pattern never poses.
-func (r *Runner) readsCollatingSymbols(pattern string) bool {
-	if !hasCollatingDelimiter(pattern) {
-		return false
-	}
-	return r.ask(r.sem().CollatingSymbols, "`[.x.]` and `[=x=]` inside a bracket expression")
 }
 
 // hasCollatingDelimiter reports whether a pattern opens a `[.` or a `[=`

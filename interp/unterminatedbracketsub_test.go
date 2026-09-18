@@ -23,7 +23,7 @@ func subBracketSem(plain, sub BracketPolicy) Semantics {
 	s := permissive()
 	s.UnterminatedBracket = plain
 	s.UnterminatedBracketAfterASubExpression = sub
-	s.CollatingSymbols = Yes
+	s.CollatingElements = OneCharacterIsACollatingElement
 	s.UnterminatedCharacterClass = UnterminatedClassIsOrdinaryCharacters
 	return s
 }

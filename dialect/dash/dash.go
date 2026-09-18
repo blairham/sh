@@ -610,10 +610,12 @@ func Semantics() interp.Semantics {
 	// unanswered IgnoredNamesFollowTheParameter: see above.
 	s.UnknownCharacterClass = interp.UnknownClassEndsTheScan
 	// `[[.a.]]` and `[[=a=]]` are the collating element and the equivalence
-	// class, matching `a`. A body this shell cannot read ends the scan the
-	// way an unknown class name does: measured 2026-09-16,
+	// class, matching `a`. One character is the whole of an element here:
+	// measured 2026-09-18 under `LC_ALL=C`, `[[.hyphen.]]` matches no `-`,
+	// where bash reads that body as a name. A body this shell cannot read
+	// ends the scan the way an unknown class name does: measured 2026-09-16,
 	// `[a[.nosuch.]b]` matches a and not b.
-	s.CollatingSymbols = interp.Yes
+	s.CollatingElements = interp.OneCharacterIsACollatingElement
 	// `[[:]` stops the bracket where the `[:` stands: a member written before it still matches and nothing after it does — the same shape this shell gives a class name it has not got.
 	// See interp.Semantics.UnterminatedCharacterClass (#1431).
 	s.UnterminatedCharacterClass = interp.UnterminatedClassEndsTheScan

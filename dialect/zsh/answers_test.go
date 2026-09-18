@@ -141,8 +141,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		t.Errorf("UnknownCharacterClass = %v, want %v", got, want)
 	}
 	// the one column with neither construct: `[[.a.]]` matches `a]`.
-	if got, want := s.CollatingSymbols, interp.No; got != want {
-		t.Errorf("CollatingSymbols = %v, want %v", got, want)
+	if got, want := s.CollatingElements, interp.NoCollatingElements; got != want {
+		t.Errorf("CollatingElements = %v, want %v", got, want)
 	}
 	// And the `[:` that nothing closes, which is the axis beside it
 	// rather than a corner of it — see #1431.

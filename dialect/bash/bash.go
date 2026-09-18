@@ -1452,11 +1452,18 @@ func Semantics() interp.Semantics {
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
 	// `[[.a.]]` is the collating element `a` and `[[=a=]]` its equivalence
 	// class, so both match `a`; zsh is the one column where they are the
-	// ordinary characters they spell. A body of more than one character is
-	// not an element in the C locale, and what that does to the bracket is
-	// the axis above — here, nothing: `[a[.nosuch.]b]` matches a and b and
-	// no letter of the body (#3378 is the names bash reads such a body as).
-	s.CollatingSymbols = interp.Yes
+	// ordinary characters they spell, and BusyBox ash the one that reads the
+	// delimiters and finds an element in no body at all.
+	//
+	// A body of more than one character is a **name** from the portable
+	// character set here and nowhere else in the panel: measured 2026-09-18
+	// under `LC_ALL=C`, `[[.hyphen.]]` matches `-`, `[[.period.]]` matches
+	// `.` and `[[=space=]]` matches a space, where ksh93 and dash match none
+	// of the three. A name outside the roster is a body that is not an
+	// element like any other, and the axis above says what that does to the
+	// bracket — here, nothing: `[a[.nosuch.]b]` matches a and b and no
+	// letter of the body (#3378).
+	s.CollatingElements = interp.ACollatingElementMayBeNamed
 	// `[[:]` is a bracket holding `[` and `:`: nothing closes the name, so there is no name and the two characters are ordinary members.
 	// See interp.Semantics.UnterminatedCharacterClass (#1431).
 	s.UnterminatedCharacterClass = interp.UnterminatedClassIsOrdinaryCharacters

@@ -282,11 +282,20 @@ func Semantics() interp.Semantics {
 	// unanswered IgnoredNamesMatchTheLastComponent: see above.
 	// unanswered IgnoredNamesFollowTheParameter: see above.
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
-	// Unmeasured: no BusyBox was reachable on the machine this axis was
-	// taken on, so this keeps the reading the shell already had rather than
-	// borrowing dash's — #3368 is what borrowing that column costs. #3379
-	// holds the measurement.
-	s.CollatingSymbols = interp.No
+	// The delimiters are read as a sub-expression and no body is ever an
+	// element, which is this column alone and is neither of the two readings
+	// the axis had while it was a boolean. Measured 2026-09-18 in BusyBox
+	// v1.37.0 in the pinned image, `LC_ALL=C`: `[[.a.]]` matches nothing at
+	// all — not `a`, which is what the four columns that read an element
+	// answer, and not `a]`, which is what the column with no construct
+	// answers — while `[[.a.]x]` matches `x`, so the `]` inside the
+	// delimiters did not end the bracket. Every body is then the unknown
+	// body, and the axis above answers it inert here exactly as it answers
+	// an unknown `[:name:]`: `[a[.nosuch.]b]` matches a and b (#3379).
+	//
+	// Borrowing dash's value would have been wrong in a way nothing would
+	// have caught, which is what #3368 cost the neighboring axes.
+	s.CollatingElements = interp.CollatingElementsHoldNothing
 	// `[[:]` takes the `]` as part of the name it is still looking for, so the bracket never ends and UnterminatedBracket decides: `${w#[[:]}` on `[:y` is `y` here, a literal `[` and then `[:]` matching the colon, where every other column matches nothing.
 	// See interp.Semantics.UnterminatedCharacterClass (#1431).
 	s.UnterminatedCharacterClass = interp.UnterminatedClassSwallowsTheClosingBracket

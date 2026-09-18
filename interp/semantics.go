@@ -17666,6 +17666,7 @@ func PosixSemantics() Semantics {
 		GetoptsEndOfOptionsNamesIt: Yes,
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
+		KillJobSpecAimsAtTheGroup: No,
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
 		// over the whole list once and say so themselves.
 		OperatorDistributesOverTheFieldList: Yes,

@@ -208,3 +208,23 @@ func TestTheListingLeavesOutANameTheVectorLacks(t *testing.T) {
 		t.Fatalf("kill -l wrote %q, want the rest of the table still in it", out)
 	}
 }
+
+// unnamedSignalNumber is a number this kernel has no signal for, below 128 so
+// that `kill -l`'s reduction leaves it alone.
+//
+// It is the platform's and not a constant, which is the whole of #3168 in one
+// helper: 32 is past the last signal on macOS and is a perfectly good one on
+// Linux, so a case written around 32 asks a different question on the two
+// machines — and several did, and passed on one of them.
+func unnamedSignalNumber() int {
+	switch runtime.GOOS {
+	case "linux":
+		// Past 64, which is the last one there.
+		return 100
+	default:
+		// macOS stops at 31, and everything else has no measured range at
+		// all — so the shared table's own highest, 31, is the last number
+		// anything here can name.
+		return 32
+	}
+}

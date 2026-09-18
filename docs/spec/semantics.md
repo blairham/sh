@@ -5650,12 +5650,16 @@ than the one that failed, as in `line 2: syntax error at line 3`. When it does
 so is not derived here — six inputs did not settle it — and we do not track
 "the line reached" to print it with. Recorded rather than guessed at.
 
-## A leniency measured and deliberately not built
+## A leniency measured, and read by looking ahead rather than by falling back
 
-zsh accepts a `case` arm the other three reject:
+zsh accepts a `case` arm the other six reject. Measured 2026-09-18,
+`env -i PATH=/usr/bin:/bin LC_ALL=C <shell> case.sh` over a script file, with
+BusyBox in the pinned Alpine image:
 
-    case a in (a)) echo y;; esac      zsh prints y; bash, ksh93 and dash
-                                      all call it a syntax error
+    case a in (a)) echo y;; esac      zsh 5.9.2 prints y at 0. bash 5.3.20,
+                                      bash-as-`sh`, bash 3.2.57, ksh93u+,
+                                      dash 0.5.12 and BusyBox ash 1.37.0 all
+                                      call it a syntax error.
 
 It looks like tolerance of a redundant `)`, and it is not. The leading `(`
 is a *pattern group* — the same alternation described above — rather than the
@@ -5674,21 +5678,54 @@ But the ordinary form still works there too:
 
 and under the group reading that arm never closes — the `(a)` is the whole
 pattern and the `)` that would end the arm has been used up. So zsh accepts
-*both* readings of a leading `(`, which needs the parser to try one and fall
-back to the other.
+*both* readings of a leading `(`.
 
-**Not built.** Backtracking a case arm would mean re-reading tokens whose
-lexing has side effects — a here-document body is consumed at the newline,
-not at the operator — and it buys a form nobody writes: `(a))` is a typo that
-one shell happens to forgive. The half that scripts do use, a group inside a
-pattern, is implemented and tested.
+**Built.** This section said *Not built* for as long as it existed, on the
+grounds that telling the two readings apart would need the parser to try one
+and re-read tokens whose lexing has side effects — a here-document body is
+consumed at the newline, not at the operator. That is a correct objection to
+*backtracking*, and backtracking is not what settles it. What settles it is a
+**lookahead**: `Lexer.caseArmParenOpensAGroup` reads the pattern list the
+leading `(` would open with a throwaway lexer over a copy of the remaining
+source, driven as an argument, and then asks what token stands after that
+list.
 
-A second thing shows here and is worth writing down beside it. `((` at the
-start of a `case` arm is read as an arithmetic command, because that is what
-`((` means wherever a command may begin. zsh reads `case a in ((a))` as the
-arm's paren followed by the group `(a)`, so it prints y where we report an
-arithmetic error. Telling the two apart needs the lexer to know it is in a
-case arm, which is the same lookahead problem in a different place.
+    `)` follows      the arm still has a paren to close it, so the one this
+                     started at was the pattern's.
+    `|` follows      also the pattern's, and it settles the question rather
+                     than leaving it open: were the leading `(` the arm's
+                     own, everything up to the matching `)` would already be
+                     inside its pattern list and that `)` would have closed
+                     the arm — so a `|` standing after it could only begin a
+                     body, and no body begins with one.
+    anything else    the arm's own paren, read as it always was.
+
+Nothing is re-lexed, which is the whole of the difference: the probe's own
+diagnostics are discarded and its lexer is thrown away, while the real scan
+still reads every byte exactly once, so the here-document hazard that ruled
+backtracking out never arises. A probe that fails to read a list at all
+answers no, which leaves the arm's paren where it was. The group reading is
+reached only where `opensPatternGroup` already says yes, so it is the
+dialect's `PatternAlternation` that admits it and not the lookahead.
+
+The second half of this section used to record `((` as the case we still get
+wrong. It is not, and for a different reason: `((` at the start of a `case`
+arm is **not** an arithmetic command, because no command may begin there. The
+arithmetic-command opener is suspended while the token beginning an arm is
+read — the same suspension `[[ … ]]` and an expansion's operand get, and for
+the same reason — so `case a in ((a))` is the arm's own paren followed by the
+group `(a)`, which is what zsh reads too.
+
+The four rows, `cmd/zsh` against zsh 5.9.2 `-f`, measured 2026-09-18 on
+`main`. The last is the discriminating one: it is the row this document named
+as the one we answered with an arithmetic error.
+
+| snippet | ours | zsh 5.9.2 |
+| --- | --- | --- |
+| `case a in (a)) echo y;; esac` | `y` | `y` |
+| `case ab in (a\|b)b) echo y;; esac` | `y` | `y` |
+| `case a in (a\|b)\|c) echo y;; esac` | `y` | `y` |
+| `case a in ((a)) echo y;; esac` | `y` | `y` |
 
 ## A here-document body is not a word
 

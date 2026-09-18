@@ -799,6 +799,21 @@ func (r *Runner) unsetArrayElem(name string, idx int, sub string) int {
 	blanks := r.unsetBlanksInPlace()
 	a, isArray := r.Arrays[name]
 	if !isArray {
+		if _, produced := r.DynamicArrays[name]; produced {
+			// A **produced** array has no stored element for this to take
+			// away: the producer answers ahead of anything here, so a removal
+			// would be accepted and then read back as whatever the producer
+			// says. The same argument storeArray's produced branch makes
+			// about a write, and the measured answer where it can be asked —
+			// 2026-09-18, bash 5.3.20's `unset 'DIRSTACK[2]'` is silent at 0
+			// with the stack whole, where this reached the scalar path and
+			// refused the name as not an array.
+			//
+			// Silent and 0, which is what the name *not* being a scalar
+			// means: the refusal below is about a name holding a value that
+			// has no elements, and a produced array has elements.
+			return 0
+		}
 		return r.unsetScalarElem(name, idx, sub)
 	}
 	if r.unsetEmptiesAnUnwrittenArray(name) {

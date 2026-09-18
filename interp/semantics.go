@@ -14981,6 +14981,19 @@ type Semantics struct {
 	// empty array and no field, while a name nothing declared is one field.
 	UnsetNameAtIsOneEmptyField Answer
 
+	// ConditionWholeArraySubscript is what `[[ -v a[@] ]]` and `[[ -v a[*] ]]`
+	// — and `test -v` written the same way — read the subscript as.
+	//
+	// The one operand shape where this operator parts company with the
+	// conditional expansion that otherwise decides it: measured 2026-09-18,
+	// bash 5.3.20 answers `${n[@]+S}` with `S` for a one-key table and
+	// `[[ -v n[@] ]]` with *false* on the same line of the same script. So
+	// it cannot be derived from EmptyArrayIsSet or from paramSource, and
+	// Runner.wholeArraySubscriptIsSet holds the whole panel.
+	//
+	// Unspecified is right for a dialect with no such operator at all, where
+	// it is unreachable rather than unanswered.
+	ConditionWholeArraySubscript ConditionWholeArraySubscriptPolicy
 	// EmptyArrayIsSet calls an array that exists and holds **no elements** a
 	// set parameter, so `${a[@]+S}` substitutes and `${a[@]-D}` does not.
 	//
@@ -23530,6 +23543,38 @@ func (p ReadonlyReferenceLetterPolicy) String() string {
 		return "the letter declares an unfrozen name"
 	case ReadonlyReferenceLetterIsInert:
 		return "the letter is taken and the name frozen anyway"
+	}
+	return "unspecified"
+}
+
+// ConditionWholeArraySubscriptPolicy is what `[[ -v a[@] ]]` reads its
+// subscript as — see Semantics.ConditionWholeArraySubscript for the panel and
+// Runner.wholeArraySubscriptIsSet for the rows each value is set from.
+type ConditionWholeArraySubscriptPolicy uint8
+
+const (
+	// ConditionWholeArraySubscriptUnspecified is no answer, and is refused
+	// like any other — unreachable in a dialect with no `-v` operator.
+	ConditionWholeArraySubscriptUnspecified ConditionWholeArraySubscriptPolicy = iota
+	// ConditionWholeArraySubscriptNamesTheParameter reads the subscript as
+	// the array itself, so the answer is the parameter's own set-ness and an
+	// array with no elements follows EmptyArrayIsSet: bash, where `f=(x)` is
+	// set through it and `e=()` is not. A *table* is the exception, because
+	// a table's subscript is a string and `@` is then the key `@`.
+	ConditionWholeArraySubscriptNamesTheParameter
+	// ConditionWholeArraySubscriptNamesAnElement reads it as an element, and
+	// no array has one called `@` or `*` — so a name holding either kind of
+	// array is never set through it, however many elements it has: zsh and
+	// ksh93. A scalar has no elements to name and answers for itself.
+	ConditionWholeArraySubscriptNamesAnElement
+)
+
+func (p ConditionWholeArraySubscriptPolicy) String() string {
+	switch p {
+	case ConditionWholeArraySubscriptNamesTheParameter:
+		return "a whole-array subscript names the parameter"
+	case ConditionWholeArraySubscriptNamesAnElement:
+		return "a whole-array subscript names an element"
 	}
 	return "unspecified"
 }

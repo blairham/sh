@@ -1210,6 +1210,14 @@ func Semantics() interp.Semantics {
 	// Semantics.UnsetNameAtIsOneEmptyField records. 2026-09-16 on ksh93u+
 	// (#2298).
 	s.EmptyArrayIsSet = interp.No
+	// And `[[ -v a[@] ]]`, set from this shell's *table* row: measured
+	// 2026-09-18, `typeset -A n; n[k]=v; [[ -v n[@] ]]` is false, so the
+	// subscript names an element and the key `@` is not one. The indexed rows
+	// are not modeled — this shell evaluates an array subscript
+	// arithmetically and `[[ -v e[@] ]]` is `@: arithmetic syntax error`,
+	// which ends the script — so what is answered here is the half that can
+	// be asked (#3436).
+	s.ConditionWholeArraySubscript = interp.ConditionWholeArraySubscriptNamesAnElement
 	// The colon-less `${a[i]?word}` reaches only the element a bare read of
 	// the name means here: with `a=(x y z)`, `${a[9]?m}`, `${nope[1]?m}` and
 	// `${m[q]?m}` on a declared table are all `[]` at 0, where bash 5.3.20

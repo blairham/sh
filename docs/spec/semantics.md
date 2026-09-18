@@ -4638,6 +4638,129 @@ already promised.
 Corpus: `special/unset-then-assign-a-produced-parameter` and
 `special/unset-then-assign-lineno`.
 
+## `[[ -v a[@] ]]` is not `${a[@]+s}` under another operator
+
+Measured 2026-09-18, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME,
+over a script file.
+
+|  | bash 5.3.20 | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- |
+| `e=(); [[ -v e[@] ]]` | false | false | `@: arithmetic syntax error`, fatal |
+| `f=(x); [[ -v f[@] ]]` | **true** | **false** | the same |
+| `typeset -A n; n[k]=v; [[ -v n[@] ]]` | false | false | false |
+| `[[ -v n[k] ]]` | true | true | true |
+| `s=plain; [[ -v s[@] ]]` | true | true | — |
+| `${e[@]+S}` | unset | — | — |
+| `${n[@]+S}` | **set** | — | — |
+
+The last two rows are the ones that matter, and they are the same shell on the
+same line of the same script: bash's conditional expansion calls a one-key
+table set and bash's `-v` calls it unset. So this cannot be `${a[@]+s}` read
+through another operator, which is what every *other* operand shape of `-v`
+already is — an element, a key, and the base an index counts from are all
+decided in `paramSource`, which is why `[[ -v 'a[2]' ]]` cannot disagree with
+`${a[2]+s}`.
+
+`Semantics.ConditionWholeArraySubscript` is the axis and the two readings are
+about what the subscript **names**.
+
+**It names the parameter** (bash): the answer is the parameter's own set-ness,
+so an array with elements is set and an empty one follows
+`Semantics.EmptyArrayIsSet` — which is where `e` and `f` part, and not here. A
+*table* is the exception and falls through to an ordinary key lookup, because a
+table's subscript is a string; `typeset -A n; n[@]=x; [[ -v n[@] ]]` is **true**
+there, which is the row that says the operand is looked up rather than carved
+out.
+
+**It names an element** (zsh, ksh93): no array has one called `@` or `*`, so a
+name holding either kind of array is never set through it however many elements
+it has. A scalar has no elements to name and answers for itself.
+
+ksh93's indexed rows are not modeled. That shell evaluates an array subscript
+arithmetically and `@` is a syntax error there, which ends the script; its
+table row is the one its reading is set from. dash and BusyBox ash have no `-v`
+operator at all — `test -v x` is `unexpected operator` and `unknown operand` —
+so the axis is unreachable in those two columns rather than unanswered.
+
+## The shell's own parameters, and the attributes they carry
+
+Measured 2026-09-18 the same way, against bash 5.3.20.
+
+Five parameters one column supplies were simply absent here, and four of them
+are ordinary producers:
+
+    BASHPID   declare -i BASHPID="68901"      the pid of *this* shell
+    SRANDOM   declare -i SRANDOM="631212817"  32 bits of system entropy, new per read
+    HISTCMD   declare -i HISTCMD="0"          the history number of the command being read
+    GROUPS    declare -a GROUPS=([0]="20" …)  the user's group ids
+    DIRSTACK  declare -a DIRSTACK=([0]="…")   the directory stack
+
+All five take an assignment at status 0 and **discard** it, and `unset` takes
+each away for good.
+
+`$BASHPID` in a subshell is the deviation this substrate cannot close: there a
+subshell is a fork and `$$` keeps the parent's number, which is the whole
+reason the parameter exists, and here a subshell is a cloned Runner in one
+process. The answer follows `$sysparams[pid]`'s exactly — the subshell's
+process group where it has one, and empty otherwise — because answering `$$`
+invites the failure that one invited: a body that believes it has a process of
+its own will `kill` it.
+
+**`$DIRSTACK` is a view and not a store**, which is what the prelude's storage
+being a name of its own is for:
+
+    cd /tmp; pushd /usr; cd /etc      ${DIRSTACK[0]} is /etc — $PWD *now*
+    pushd /usr; pushd /etc            dirs: /etc /usr /tmp
+      DIRSTACK[1]=/var                dirs: /etc /var /tmp
+      DIRSTACK[0]=/zzz                unchanged, and $PWD unchanged
+      DIRSTACK=5                      unchanged
+      DIRSTACK=(/a /b)                dirs: /etc /b /tmp
+      DIRSTACK+=(/c)                  unchanged
+      unset 'DIRSTACK[2]'             unchanged, silent at 0
+
+Slot zero is `$PWD` and is not storage; a write to slot N replaces entry N-1
+where there is one and is dropped where there is not; and the stack never grows
+or shrinks through the parameter. A stored array can say none of that.
+
+### The attributes, and why the freeze is not cosmetic
+
+    EUID   declare -ir      UID   declare -ir      PPID  declare -ir
+    OPTIND declare -i       BASH_VERSINFO declare -ar
+
+Every one of them listed with no letters at all here, and `EUID=0`, `UID=0` and
+`PPID=1` were each **taken** at status 0 where that shell refuses them — so a
+script assigning to one to find out whether it is allowed got the opposite
+answer. `OPTIND` is the one of the four that is not frozen, which is measured:
+`getopts` writes it and a script resets it between scans.
+
+`BASH_VERSINFO` is frozen by the prelude on the line after it fills the array
+in, which is where the freeze has to be — a mark made before the prelude ran
+would refuse the assignment that fills it.
+
+### The produced parameters were in no listing at all
+
+`FUNCNAME`, `BASH_SOURCE`, `BASH_LINENO`, `BASH_ARGC`, `BASH_ARGV` and
+`PIPESTATUS` all expanded correctly and answered `NAME: not found` at 1 to
+`declare -p NAME`, so the listing and the expansion disagreed about whether the
+name existed. `SetDynamicDeclaration` is what puts a producer into a listing,
+and two facts had to join `ProducedDeclaration` for these:
+
+**`Array`** — the producer answers with elements. The operand-less listing
+withholds a produced *reading*, and an array's elements are not one: one bare
+`declare -p` writes `declare -i BASHPID` with no number and `declare -a
+GROUPS=()` with the kind letter in the same listing.
+
+**`ListsItsElements`** — and one array writes them in full there: `declare -a
+PIPESTATUS=([0]="0" [1]="1")` beside `declare -a DIRSTACK=()` in that same
+listing. It is a fact about each name rather than a rule about views, so there
+is nothing to derive it from.
+
+**Nil is absent and empty is empty.** A producer answering nothing at all is a
+parameter that does not exist — `declare -a FUNCNAME` with no `=` outside a
+call — where one answering no elements is an empty array, `declare -a
+BASH_ARGV=()`. That is the contract a producer already answers an expansion
+under, and the listing now says the same two things.
+
 ## Listing a parameter that is produced rather than stored
 
 A produced parameter — `RANDOM`, `SECONDS`, `LINENO`, a clock — is in none

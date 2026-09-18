@@ -64,6 +64,44 @@ type ProducedDeclaration struct {
 	// `typeset -F SECONDS=0.001` would be closer than `not found` and still
 	// not right, and a corpus row cannot tell "closer" from "right".
 	Float bool
+	// Array says the producer answers with **elements** rather than a value,
+	// which a listing needs to know for a reason a scalar's letters do not
+	// raise: the operand-less listing withholds a produced *reading* — see
+	// ProducedListing — and an array's elements are not one.
+	//
+	// Measured 2026-09-18 on bash 5.3.20, one bare `declare -p` in a shell
+	// that has read nothing: `declare -i BASHPID` and `declare -i SRANDOM`
+	// carry their letter and no value, while `declare -a GROUPS=()`,
+	// `declare -a BASH_SOURCE=()` and `declare -a DIRSTACK=()` carry the kind
+	// letter *and* their elements. So the withholding is about a number the
+	// producer would draw and not about producers, and the panel's produced
+	// arrays are all views over state the shell already holds rather than
+	// generators.
+	//
+	// It is a statement about the producer and not a letter the listing
+	// writes: the `-a` in those rows comes from the elements, the way it does
+	// for a stored array.
+	//
+	// What the operand-less listing writes for one is the **kind and an empty
+	// element list** — `declare -a GROUPS=()` from a shell whose `${GROUPS[0]}`
+	// is a group id — with `declare -a FUNCNAME` and no `=` for a producer
+	// that answers nothing at all, which is the absent-against-empty
+	// distinction the named listing makes too. See ListsItsElements for the
+	// one produced array in the panel that writes them here.
+	Array bool
+	// ListsItsElements says the operand-less listing writes this array's
+	// elements rather than withholding them.
+	//
+	// Per parameter and measured, because the panel draws the line per
+	// parameter: 2026-09-18, one bare `declare -p` in bash 5.3.20 after
+	// `true|false` writes `declare -a PIPESTATUS=([0]="0" [1]="1")` and, in
+	// the same listing, `declare -a GROUPS=()`, `declare -a DIRSTACK=()` and
+	// `declare -a BASH_ARGC=()` from a shell whose named `declare -p` writes
+	// all three in full. So the withholding is not a rule about views and
+	// there is nothing to derive it from — it is a fact about each name.
+	//
+	// Meaningless without Array.
+	ListsItsElements bool
 	// Silent is zsh's answer for `LINENO`: the name is known to a listing,
 	// which writes nothing for it and reports 0. Without it the choice is
 	// between a row no shell writes and the `not found` this issue is about.

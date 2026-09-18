@@ -200,6 +200,11 @@ func Semantics() interp.Semantics {
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
 	// An empty positional list is a set parameter: `set --; "${@-word}"` is
 	// empty and `"${@+word}"` is `word`.
+	// unanswered ConditionWholeArraySubscript: this applet has no `-v`
+	// operator for a subscript to be read by. Measured 2026-09-18 in the
+	// digest-pinned image, `test -v x` is `x: unknown operand` at 2, and
+	// there is no `[[ … ]]` here either — so the axis is unreachable in this
+	// column rather than unanswered.
 	s.PositionalListWithNoneIsSet = interp.Yes
 	// `${#@}` with three parameters is 5 — the width of `a b c` — rather than
 	// the count.

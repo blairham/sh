@@ -526,6 +526,12 @@ func Semantics() interp.Semantics {
 	// the same way. Stated rather than left to the inherited value, since
 	// the interpreter used to fix the set at `paAf` and this column
 	// accepted three letters its shell has never had (#2277).
+	// unanswered ReadonlyReferenceLetter: `readonly -n` is refused here, so
+	// the letter never reaches the axis. Measured 2026-09-18 under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`: `readonly -n zz` is `Illegal option -n` and ends the script.
+	//
+	// ReadonlyOptions has no `n`, which is what keeps the question off
+	// this column rather than answered wrongly.
 	s.ReadonlyOptions = "p"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord

@@ -4136,6 +4136,43 @@ the section above gives — that axis is asked over a declaration, where its
 two answers are observable, and asking it again here would refuse a call
 whose body may never declare anything.
 
+### The `n` letter of `readonly`, which is not `export -n`
+
+Measured 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with a scratch HOME, and in the digest-pinned image for the ash
+column.
+
+    v=1; readonly -n r=v; declare -p r; r=5
+
+| shell | `readonly -n r=v` | `declare -p r` | `r=5` |
+| --- | --- | --- | --- |
+| bash 5.3.20 | 0 | `declare -- r="v"` | 0, and `r` is `5` |
+| bash 3.2.57 | 0 | the same | the same |
+| BusyBox ash 1.37.0 | 0 | — no `typeset` to ask | **`r: is read only`** |
+| dash 0.5.12 | `Illegal option -n`, fatal | — | — |
+| ksh93u+ 2012-08-01 | `-n: unknown option` | — | — |
+| zsh 5.9.2 | `bad option: -n` at 1 | — | — |
+
+So the letter exists in three columns and means opposite things in two of
+them. bash **suppresses the freeze this call would have made** and does
+nothing else; BusyBox ash takes the letter and freezes anyway, so all a
+script gets from it there is the status. `Semantics.ReadonlyReferenceLetter`
+is the axis, and Unspecified is the right answer for the three columns whose
+`readonly` has no `n` at all — a bool would have had to call those "no",
+which reads as a measured answer to a question the shell refuses to be
+asked.
+
+Under bash's reading, nothing is taken **off**, which is where the letter
+parts company with `export -n`:
+
+    readonly q=1; readonly -n q      q stays frozen, at status 0
+    readonly z=1; readonly -n z=2    `z: readonly variable` at 1
+
+and everything else the line would have done still happens: `readonly -na
+arr=1` still records the array attribute, `readonly -n w+=b` still joins
+onto what `w` holds, and a bare `readonly -n` with no operand is the same
+listing a bare `readonly` writes rather than a declaration of nothing.
+
 ## And an axis that is only about `readonly`
 
 The neighboring question, and it divides the panel somewhere else again:

@@ -275,7 +275,7 @@ would refuse the first.
 | shell | what happens |
 | --- | --- |
 | bash 3.2, 5.3 | the command runs and the operand is the path; the test is false |
-| zsh 5.9 | `process substitution <(:) cannot be used here`, status 2, and the rest of the input does not run |
+| zsh 5.9 | `process substitution <(:) cannot be used here`, and the rest of the input does not run |
 | ksh93 | ``syntax error … `<(' unexpected``, while reading |
 | dash | no `[[ ]]` at all |
 
@@ -289,6 +289,44 @@ The axis is asked **before** the word is expanded. A shell that refuses
 the operand must not have started the command first, and that is
 observable: the command has side effects, and a refusal that came after
 the expansion would leave them behind.
+
+### Every operand, and a status that belongs to the expression
+
+It is asked at **every operand of every operator**, not only at the one a
+comparison holds. Measured 2026-09-18 on zsh 5.9.2, script files under
+`env -i PATH=/usr/bin:/bin LC_ALL=C`, with a `printf` in front of the
+condition and another behind it:
+
+| written | named | status |
+| --- | --- | --- |
+| `[[ -e <(echo x) ]]` | `<(echo x)` | 1 |
+| `[[ -n <(echo x) ]]` | `<(echo x)` | 1 |
+| `[[ <(echo x) == x ]]` | `<(echo x)` | 1 |
+| `[[ x -nt <(echo x) ]]` | `<(echo x)` | 1 |
+| `[[ a =~ <(echo x) ]]` | `<(echo x)` | 1 |
+| `[[ ! -e <(echo x) ]]` | `<(echo x)` | 1 |
+| `[[ ( -e <(echo x) ) ]]` | `<(echo x)` | 1 |
+| `[[ x == <(echo x) ]]` | `<(echo x)` | **2** |
+| `[[ x != <(echo x) ]]` | `<(echo x)` | **2** |
+| `[[ x == >(echo x) ]]` | `>(echo x)` | 1 |
+| `[[ x == =(echo x) ]]` | `=(echo x)` | 1 |
+| `[[ <(echo x) == <(echo y) ]]` | `<(echo x)` | **2** |
+| `[[ <(echo x) == >(echo y) ]]` | `<(echo x)` | 1 |
+
+The first `printf` runs and the second does not in all thirteen, so the
+sentence and the abandoning are one answer; what moves is the number.
+**One is the answer and 2 is the exception**: it comes back only where the
+**right** operand of a pattern comparison is the **input** spelling. The
+last two rows are what say the status belongs to the expression rather
+than to the word the sentence names — both refuse the *left* substitution
+by name and differ only in what stands behind the operator.
+
+It is also **lazy**, because the condition is: `[[ x == y && -e <(echo x) ]]`
+starts no command and answers 1.
+
+This tree asked the axis at the pattern comparison's right operand alone,
+so a file test ran the command and answered true, and `>(` left 2 where
+the shell leaves 1 (#3280).
 
 ksh93's refusal is the parser's, and it is **not about conditions**.
 Re-measured 2026-09-13 under `env -i PATH=/usr/bin:/bin` with a scratch
@@ -398,6 +436,28 @@ Corpus: `test/comparison-operands-are-arithmetic`,
 `test/a-comparison-operand-that-will-not-read`,
 `test/a-comparison-operands-leading-zeros`,
 `arith/a-values-leading-zeros-in-front-of-a-name`.
+
+### An empty `=~` operand is refused two ways
+
+POSIX ERE has no empty expression, and the two columns built on one say so
+— in different words and at different statuses. Measured 2026-09-18,
+`[[ abc =~ "" ]]` in a script file:
+
+| shell | says | status |
+| --- | --- | --- |
+| bash 5.3.20 | ``[[: invalid regular expression `': empty (sub)expression`` | 2 |
+| zsh 5.9.2 | `failed to compile regex: empty (sub)expression` | **1** |
+| ksh93u+, BusyBox ash | nothing — the empty pattern matches | 0 |
+
+`Semantics.EmptyRegexOperandIsAnError` says *whether*, and it has to,
+because the engine this shell is built on has the third opinion: Go's
+regexp compiles the empty pattern and matches the empty string at every
+position. `Diagnostics.EmptyRegexOperand` carries the sentence and
+`Diagnostics.EmptyRegexOperandStatus` the number — 2 where the construct
+**failed** and 1 where it is a match that did not happen, which is the
+same number a condition that simply did not hold gives. `[[ abc =~ b ]]`
+at 0 and `[[ abc =~ x ]]` at 1 are the controls that say the operator
+works in both (#3279).
 
 ## `=~` matches a regular expression
 

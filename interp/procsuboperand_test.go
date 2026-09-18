@@ -175,3 +175,84 @@ func tellTheRunner(enable func(*syntax.Dialect)) func(*Runner) {
 		r.Dialect = &d
 	}
 }
+
+// TestTheConditionRefusalReachesEveryOperand is #3280. The axis is asked at
+// every operand of every operator and not only at the one a comparison holds:
+// a shell that refuses a process substitution in a condition refuses it in a
+// file test, in a bare word and on either side of any operator, and the
+// command is never started in any of them.
+//
+// The status it leaves is a property of the **expression** rather than of the
+// word the sentence names, which is the second half and is what the last two
+// rows pin: the same refusal, the same word named, and a different number
+// behind it because of what stands on the other side of the operator.
+func TestTheConditionRefusalReachesEveryOperand(t *testing.T) {
+	refusing := func(rr *Runner) {
+		sem := testSemantics()
+		sem.ProcessSubstitutionInCondition = No
+		sem.FatalErrorStatusIsOne = No
+		d := Diagnostics{ProcessSubstitutionNotInCondition: "no substitution here: %[1]s"}
+		rr.Semantics, rr.Diagnostics = &sem, &d
+	}
+	for _, tc := range []struct {
+		src    string
+		named  string
+		status int
+		why    string
+	}{
+		// Every operand, and the command started in none of them.
+		{`[[ -e <(:) ]]`, "<(:)", 1, "a file test's operand"},
+		{`[[ -n <(:) ]]`, "<(:)", 1, "a string test's"},
+		{`[[ <(:) ]]`, "<(:)", 1, "a bare word, which is the same test written short"},
+		{`[[ <(:) == x ]]`, "<(:)", 1, "the left side of a comparison"},
+		{`[[ x -nt <(:) ]]`, "<(:)", 1, "the right side of one that is not a pattern"},
+		{`[[ ! -e <(:) ]]`, "<(:)", 1, "under a negation"},
+		{`[[ ( -e <(:) ) ]]`, "<(:)", 1, "inside a group"},
+		// The pattern comparison's right side, which is the one shape whose
+		// status differs — and only for the input spelling.
+		{`[[ x == <(:) ]]`, "<(:)", 2, "the right side of a pattern comparison"},
+		{`[[ x != <(:) ]]`, "<(:)", 2, "which the negated spelling is too"},
+		{`[[ x == >(:) ]]`, ">(:)", 1, "where the output spelling is not"},
+		// The file spelling is one grammar's alone and is asserted in that
+		// dialect rather than here, the grammar this test runs on having
+		// only the two.
+		// And the pair that says the status belongs to the expression: both
+		// refuse the **left** word by name and differ only in what stands
+		// behind the operator.
+		{`[[ <(:) == <(:) ]]`, "<(:)", 2, "an input substitution behind the operator"},
+		{`[[ <(:) == >(:) ]]`, "<(:)", 1, "and one of the other spelling there"},
+	} {
+		var r *Runner
+		out, st := runGrammar(t, tc.src+`; printf "[after]"`, procsubPlain, func(rr *Runner) {
+			r = rr
+			refusing(rr)
+		})
+		want := "sh: no substitution here: " + tc.named + "\n"
+		if out != want {
+			t.Errorf("%s: output = %q, want %q — %s", tc.src, out, want, tc.why)
+		}
+		if st != tc.status {
+			t.Errorf("%s: status %d, want %d — %s", tc.src, st, tc.status, tc.why)
+		}
+		pipesMade(t, r, 0)
+	}
+}
+
+// And the refusal is lazy, because the condition is: a short-circuit that
+// never reaches the operand never refuses it either.
+func TestAShortCircuitStillHidesARefusedSubstitution(t *testing.T) {
+	var r *Runner
+	out, st := runGrammar(t, `[[ x == y && -e <(:) ]]; printf "[st=%d]" "$?"`,
+		procsubPlain, func(rr *Runner) {
+			r = rr
+			sem := testSemantics()
+			sem.ProcessSubstitutionInCondition = No
+			sem.FatalErrorStatusIsOne = No
+			d := Diagnostics{ProcessSubstitutionNotInCondition: "no substitution here: %[1]s"}
+			rr.Semantics, rr.Diagnostics = &sem, &d
+		})
+	if want := "[st=1]"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+	pipesMade(t, r, 0)
+}

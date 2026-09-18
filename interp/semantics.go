@@ -5328,6 +5328,12 @@ type Semantics struct {
 	// It is asked *before* the substitution is performed. A shell that
 	// refuses the word must not have started the command first, and that is
 	// observable: the command has side effects.
+	//
+	// It reaches **every operand of every operator** and not only the one a
+	// comparison holds — measured 2026-09-18 over fourteen shapes, `[[ -e
+	// <(x) ]]`, `[[ -n <(x) ]]`, `[[ <(x) == a ]]`, `[[ b -nt <(x) ]]`,
+	// `[[ a =~ <(x) ]]`, a negation and a group among them. It is lazy, so a
+	// short-circuit still hides one (#3280).
 	ProcessSubstitutionInCondition Answer
 
 	// ProcessSubstitutionBodyReadsTheShellsInput hands a process
@@ -5824,6 +5830,13 @@ type Semantics struct {
 	//
 	// Asked only for an operand that is actually empty, and only in a
 	// dialect that has `=~` at all.
+	//
+	// It says *whether* and not with what sentence or at what status, and
+	// the two columns that refuse it agree about neither:
+	// [Diagnostics.EmptyRegexOperand] carries the wording and
+	// [Diagnostics.EmptyRegexOperandStatus] the number, which is 2 where the
+	// construct failed and 1 where it is a match that did not happen
+	// (#3279).
 	EmptyRegexOperandIsAnError Answer
 
 	// LastPipelineElementInCurrentShell runs the last command of a pipeline

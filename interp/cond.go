@@ -162,6 +162,13 @@ func (r *Runner) condWrongArity(x *syntax.CondArity) (bool, error) {
 }
 
 func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
+	// Before the word is expanded, so the command a refused process
+	// substitution holds is never started. The bare-word form arrives here
+	// too, as `-n` over the word, which is what puts every operand of every
+	// operator behind the one question.
+	if err := r.condProcSubAllowed(x.X, false); err != nil {
+		return false, err
+	}
 	// Nothing inside `[[ ]]` is split or globbed, so a word yields exactly
 	// one operand however it was written — which is why `[[ -z $u ]]` needs
 	// no quoting where the `[` builtin does.
@@ -241,17 +248,28 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 }
 
 func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
+	// Both operands, and the question is asked before either word is
+	// expanded: a shell that refuses a process substitution must not have
+	// started the command first, which is observable because the command has
+	// side effects. The left is asked first for the same reason — the
+	// operands are read left to right, so the sentence names the first of
+	// them where a condition holds two.
+	pattern := x.Op == "==" || x.Op == "=" || x.Op == "!="
+	// The status the refusal leaves is a property of the **expression** and
+	// not of the word the sentence names, which is measured: `[[ <(x) ==
+	// <(y) ]]` and `[[ <(x) == >(y) ]]` both refuse the left one by name and
+	// leave 2 and 1, differing only in what stands behind the operator.
+	rightIsInput := pattern && wordOpensAnInputProcSubst(x.Y)
+	if err := r.condProcSubAllowed(x.X, rightIsInput); err != nil {
+		return false, err
+	}
+	if err := r.condProcSubAllowed(x.Y, rightIsInput); err != nil {
+		return false, err
+	}
 	leftMarked := r.condOperand(x.X)
 	left := syntax.UnmarkArithValue(leftMarked)
 
-	if x.Op == "==" || x.Op == "=" || x.Op == "!=" {
-		// A process substitution in this position is one shell's alone, and
-		// the question is asked before the word is expanded: a shell that
-		// refuses it must not have started the command first, which is
-		// observable because the command has side effects.
-		if err := r.condProcSubAllowed(x.Y); err != nil {
-			return false, err
-		}
+	if pattern {
 		// Unquoted, the right operand is a pattern; quoted, a literal. Only
 		// the spans still know which, which is why the tree keeps a word.
 		pat := r.patternOf(x.Y)
@@ -518,11 +536,24 @@ func (r *Runner) condArithFailed(msg string) error {
 //
 // Measured: bash performs it and matches against the path, which never
 // matches anything a script would write down; zsh reads the word and then
-// refuses it — `process substitution <(x) cannot be used here`, status 2;
-// ksh93 refuses while reading and dash has no `[[ ]]` at all. Three shells
-// say no and only the moment and the wording differ, which is the line
-// between the axis and the Diagnostics vector.
-func (r *Runner) condProcSubAllowed(w *syntax.Word) error {
+// refuses it — `process substitution <(x) cannot be used here`; ksh93 refuses
+// while reading and dash has no `[[ ]]` at all. Three shells say no and only
+// the moment and the wording differ, which is the line between the axis and
+// the Diagnostics vector.
+//
+// **Every operand, not only the one a comparison holds.** Measured 2026-09-18
+// on zsh 5.9.2 over eight shapes — `[[ -e <(echo x) ]]`, `[[ -n <(echo x) ]]`,
+// `[[ <(echo x) == x ]]`, `[[ b -nt <(echo x) ]]`, `[[ a =~ <(echo x) ]]`,
+// `[[ ! -e <(echo x) ]]`, `[[ ( -e <(echo x) ) ]]` and the comparison this
+// used to be asked at — and the refusal reaches all of them. It is lazy, so a
+// short-circuit still hides one: `[[ x == y && -e <(echo x) ]]` runs the
+// command in neither shell and answers 1 (#3280).
+//
+// rightIsInput says the right operand of a pattern comparison holds a `<(`,
+// which is the one shape whose status differs — see condProcSubRefusal, where
+// the measurement is. It is a property of the expression and not of the word
+// this call is about.
+func (r *Runner) condProcSubAllowed(w *syntax.Word, rightIsInput bool) error {
 	if w == nil {
 		return nil
 	}
@@ -544,12 +575,12 @@ func (r *Runner) condProcSubAllowed(w *syntax.Word) error {
 		r.diagf("%s\n", Wording(r.diag().ProcessSubstitutionNotInCondition,
 			"process substitution %[1]s cannot be used here", procSubSource(s)))
 		// And the input is abandoned, not merely this condition. Measured:
-		// the rest of the command string does not run, and the status is 2
-		// — which is neither the 1 a condition that simply did not hold
-		// gives nor the status this dialect gives an ordinary fatal error,
-		// so it is written here rather than routed through either.
+		// the rest of the command string does not run, and the status is
+		// neither the 1 a condition that simply did not hold gives nor the
+		// status this dialect gives an ordinary fatal error, so it is
+		// written here rather than routed through either.
 		r.stopTheShell()
-		return condStatus{code: condProcSubRefusal(s.Kind)}
+		return condStatus{code: condProcSubRefusal(s.Kind, rightIsInput)}
 	}
 	return nil
 }
@@ -557,22 +588,48 @@ func (r *Runner) condProcSubAllowed(w *syntax.Word) error {
 // condProcSubRefusal is the status a refused process substitution leaves
 // behind in a condition.
 //
-// Two answers for one refusal, which is measured rather than a slip.
-// 2026-09-11 on zsh 5.9.2, the only shell that reaches this wording:
+// **One is the answer and 2 is the exception**, which is measured rather than
+// a slip. 2026-09-18 on zsh 5.9.2, the only shell that reaches this wording,
+// over fourteen shapes: every operand of every operator leaves 1 — `[[ -e
+// <(x) ]]`, `[[ <(x) == a ]]`, `[[ b -nt <(x) ]]`, `[[ a =~ <(x) ]]`,
+// `[[ a == >(x) ]]`, `[[ a == =(x) ]]` — and 2 comes back only where the
+// **right** operand of a pattern comparison is the **input** spelling:
 //
-//	[[ a == <(echo hi) ]]   process substitution <(echo hi) cannot be used here, status 2
-//	[[ a == =(echo hi) ]]   process substitution =(echo hi) cannot be used here, status 1
+//	[[ a == <(echo hi) ]]        2       [[ a == >(echo hi) ]]   1
+//	[[ a != <(echo hi) ]]        2       [[ a == =(echo hi) ]]   1
+//	[[ <(x) == <(y) ]]           2       [[ <(x) == >(y) ]]      1
+//	[[ <(x) == a ]]              1       [[ b -nt <(x) ]]        1
 //
-// Same sentence, same abandoned input — `echo after` runs in neither — and a
-// different status. It is a fact about the spelling rather than about the
-// shell, since no second shell has the file form to disagree about, which is
-// why it is written here beside the wording instead of becoming an axis
-// nobody could answer twice.
-func condProcSubRefusal(kind syntax.SpanKind) int {
-	if kind == syntax.ProcSubstFile {
-		return 1
+// The third pair on the left is what says the status belongs to the *right*
+// operand and not to the word the sentence names: both of those refuse the
+// left one by name and differ only in what stands behind the operator. The
+// earlier reading of this had the direction wrong — `>(` was 2 and only the
+// file spelling was 1 — which the six rows on the right now pin. Same
+// sentence and the same abandoned input in all fourteen; `echo after` runs in
+// none of them. It is a fact about one shell's word handling rather than
+// about the panel, since no second shell reaches the wording at all, which is
+// why it is written here beside it instead of becoming an axis nobody could
+// answer twice.
+func condProcSubRefusal(kind syntax.SpanKind, rightIsInput bool) int {
+	if rightIsInput {
+		return 2
 	}
-	return 2
+	return 1
+}
+
+// wordOpensAnInputProcSubst reports whether a word holds a `<(cmd)`, which is
+// the one spelling the status above turns on. `>(cmd)` and `=(cmd)` are the
+// other two and neither moves it.
+func wordOpensAnInputProcSubst(w *syntax.Word) bool {
+	if w == nil {
+		return false
+	}
+	for _, s := range w.Spans {
+		if s.Kind == syntax.ProcSubstIn {
+			return true
+		}
+	}
+	return false
 }
 
 // procSubSource is a process substitution as it was written. The span keeps
@@ -602,7 +659,14 @@ func (r *Runner) regexMatch(pat, left string) (bool, error) {
 	// emptiness is asked about before the compile rather than by it.
 	if pat == "" && r.ask(r.sem().EmptyRegexOperandIsAnError,
 		"an empty =~ right operand being an error") {
-		return false, arithError{msg: "invalid regular expression: empty (sub)expression"}
+		// The sentence and the status are both the dialect's, and they do
+		// not move together: one column calls it a failure of the construct
+		// and the other a match that did not happen. See
+		// Diagnostics.EmptyRegexOperand.
+		d := r.diag()
+		r.diagf("%s\n", Wording(d.EmptyRegexOperand,
+			"invalid regular expression: empty (sub)expression"))
+		return false, condStatus{code: orDefault(d.EmptyRegexOperandStatus, 2)}
 	}
 	// The expression and the subject as the *engine* must see them,
 	// which is not always as the script wrote them: the case fold is

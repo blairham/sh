@@ -3037,6 +3037,28 @@ type Diagnostics struct {
 	// answers — and it is not that shell's generic fatal status, which is 1.
 	UnknownConditionStatus int
 
+	// EmptyRegexOperand is `[[ x =~ "" ]]` in a dialect that refuses one —
+	// see [Semantics.EmptyRegexOperandIsAnError], which says whether. No
+	// verbs: the operand is empty by definition, so there is nothing to
+	// name, and the two columns that refuse it write the emptiness into the
+	// sentence instead.
+	//
+	// Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`: bash 5.3.20 writes ``[[: invalid regular expression `':
+	// empty (sub)expression`` and zsh 5.9.2 writes `failed to compile regex:
+	// empty (sub)expression`. The first names the construct and quotes the
+	// operand back; the second names neither and says what its engine said.
+	//
+	// Empty leaves the substrate's own sentence, which is what the two
+	// columns that accept the operand never reach.
+	EmptyRegexOperand string
+	// EmptyRegexOperandStatus is what the condition answers when that
+	// refusal is written, and the panel splits on it: 2 in bash, where the
+	// condition **failed**, and 1 in zsh, where it is a match that did not
+	// happen. Zero means 2, which is the value the construct's ordinary
+	// failure leaves (#3279).
+	EmptyRegexOperandStatus int
+
 	// CompletionConditionOutsideCompletion is `[[ -prefix … ]]` or
 	// `[[ -suffix … ]]` reached anywhere but a completion function, for the
 	// one dialect whose grammar has them (syntax.Dialect.CompletionConditions).

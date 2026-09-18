@@ -17586,7 +17586,8 @@ LC_ALL=C`, storing the key under each spelling and naming it back to
 
 This is **not** `syntax.Dialect.SubscriptQuoteProtectsTheClosingBracket`,
 which is the same question put to the parser over source text: there
-ksh93 quotes with all four constructs and zsh with the backslash alone,
+ksh93 quotes with each of the four constructs and zsh with the backslash
+alone,
 so neither column's two scans agree with each other and one field could
 not hold both.
 

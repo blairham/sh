@@ -50,6 +50,15 @@ func testSemantics() Semantics {
 	// on the way to something else need an answer rather than a refusal.
 	s.RedirectsUseEveryTarget = No
 
+	// The reach a negative subscript makes past an array's first element, at
+	// the silent reading — no complaint, and no end to count back from where
+	// the name holds nothing. That is what every suite here that counts off
+	// the end of an array on the way to something else was written against,
+	// and the one that is *about* the reach answers all three itself; see
+	// interp/subscriptbeforestart_test.go (#3406).
+	s.SubscriptBeforeTheFirstElementRead = SubscriptBeforeStartIsNothing
+	s.SubscriptBeforeTheFirstElementNeedsAnElement = No
+
 	// What an assignment prefix does to the export attribute of the name it
 	// stands in front of at a *builtin*, and whether a declaration keeps the
 	// value its own prefix set. The leave-alone reading and No: four of the

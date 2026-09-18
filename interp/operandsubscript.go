@@ -24,8 +24,8 @@ import (
 //	ksh93u+ 2012-08-01     removed           refused      refused
 //	zsh 5.9.2              left standing     refused      refused
 //
-// where the *read* side has ksh93 quoting with all four constructs and zsh
-// with the backslash alone.
+// where the *read* side has ksh93 quoting with each of the four constructs
+// and zsh with the backslash alone.
 func (r *Runner) operandSubscriptQuoting() syntax.SubscriptQuoting {
 	switch r.sem().OperandSubscriptQuoting {
 	case OperandSubscriptEveryQuote:

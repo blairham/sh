@@ -12849,7 +12849,8 @@ type Semantics struct {
 	//	ksh93u+ 2012-08-01     removed     refused     refused
 	//	zsh 5.9.2              left        refused     refused
 	//
-	// where the read side has ksh93 quoting with all four constructs and zsh
+	// where the read side has ksh93 quoting with each of the four constructs
+	// and zsh
 	// with the backslash alone — so neither column's two scans agree with
 	// each other, and a single field would have had to pick one of them.
 	//

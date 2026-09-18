@@ -18400,6 +18400,14 @@ Pinned by `decl/an-exported-array-in-a-child-environment`,
 `TestAValuelessSubscriptedOperandIsReadWhereTheDialectReadsIt` and its
 neighbors in `interp/`.
 
+**The name a declaration then declares is the base**, with the array
+letter on it, at every spelling. That was the `typeset`/`declare` route's
+own rule and the other three did not have it, so `local 'a[1]'` made a
+local literally named `a[1]`, `readonly 'a[1]'` froze that instead of the
+array, and `export 'a[1]'` exported a name no environment can carry —
+where bash leaves `declare -a a`, a fresh local array, and ksh93 leaves
+`typeset -r -a a` and `typeset -x -a a`. #1380 fixed one spelling of four.
+
 **A give-up at one operand stops the builtin there.** The operands before
 the bad one stand and the ones after it are never reached: `declare
 'a[b c]'=v x=1 y=2` leaves x and y unset in bash, and `unset x 'a[b c]' y`

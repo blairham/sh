@@ -3100,8 +3100,13 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 				continue
 			}
 			// And with no value the brackets are still the dialect's to
-			// read, which is the whole of #3501 at this spelling.
-			if r.valuelessSubscriptedOperand(base, subs, declareFlags{export: true}, false) {
+			// read, which is the whole of #3501 at this spelling — and the
+			// name to export is the *base*, which this spelling did not do
+			// either: `export 'a[1]'` exported a variable literally named
+			// `a[1]`, which no environment can carry, where ksh93 exports
+			// `a` (#1380 at the fourth spelling).
+			n, _, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{export: true}, false)
+			if done {
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
@@ -3111,6 +3116,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified {
 				return r.status
 			}
+			name = n
 		}
 		// The export attribute goes to what a reference points at, and this
 		// loop takes no scope, so there is never a fresh binding for it to be
@@ -5713,8 +5719,12 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 				continue
 			}
 			// And with no value the brackets are still read where the
-			// dialect reads them (#3501).
-			if r.valuelessSubscriptedOperand(base, subs, f, true) {
+			// dialect reads them, and the name declared is the *base* with
+			// the array letter on it — measured, bash's `local 'a[1]'`
+			// leaves `declare -a a`, a fresh local array, where this
+			// declared a local literally named `a[1]` (#3501, #1380).
+			n, letters, done := r.valuelessSubscriptedOperand(base, subs, f, true)
+			if done {
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
@@ -5723,6 +5733,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified {
 				return r.status
 			}
+			name, f = n, letters
 		}
 		// Before the attributes, for the reason biTypeset gives: `-x` here
 		// must not answer for the name this declaration shadows.
@@ -6010,7 +6021,8 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				}
 				continue
 			}
-			if r.valuelessSubscriptedOperand(base, subs, declareFlags{readonly: true}, false) {
+			n, _, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{readonly: true}, false)
+			if done {
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
@@ -6022,6 +6034,10 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			if r.elementDeclarationRefused(base, sub, declareFlags{readonly: true}, false) {
 				return r.status
 			}
+			// And the name this freezes is the *base*: `readonly 'a[1]'`
+			// froze a variable literally named `a[1]` and left `a` writable,
+			// where ksh93 leaves `typeset -r -a a` (#3501, #1380).
+			name = n
 		}
 		// The scope, where this dialect reads `readonly` as its own
 		// `typeset -r` — see Semantics.ReadonlyDeclaresALocal. Ahead of

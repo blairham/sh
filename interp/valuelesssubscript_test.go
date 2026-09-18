@@ -167,6 +167,50 @@ func TestEverySpellingOfAValuelessSubscriptedOperandReadsIt(t *testing.T) {
 	}
 }
 
+// Where the operand is not finished, the name declared is the **base** with
+// the array letter on it — at every spelling, which is what #1380 fixed for
+// `typeset` alone.
+//
+// The three others declared a variable literally named `a[1]`: invisible to
+// `${a[1]}` and to a listing, frozen instead of the array, and exported under
+// a name no environment can carry. Measured 2026-09-17 — bash's `local
+// 'a[1]'` leaves `declare -a a`, a fresh local array, and ksh93's `readonly
+// 'a[1]'` and `export 'a[1]'` leave `typeset -r -a a` and `typeset -x -a a`.
+func TestAValuelessSubscriptedOperandDeclaresTheBaseAtEverySpelling(t *testing.T) {
+	// A listing of the *base*, and the status of asking for one: with the
+	// brackets left on the name there is no `a` to list at all.
+	const LISTING = `typeset -p a; echo "listed=$?"`
+	for _, c := range []struct{ name, src string }{
+		{"typeset", "typeset 'a[1]'\n" + LISTING},
+		// The listing goes *inside* the function, the local being gone by
+		// the time it returns.
+		{"local in a function", "f() { local 'a[1]'\n" + LISTING + "\n}\nf"},
+		{"readonly", "readonly 'a[1]'\n" + LISTING},
+		{"export", "export 'a[1]'\n" + LISTING},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// No array standing in front of it, so the *name* the
+			// declaration brought into being is the whole of what a listing
+			// can show.
+			src := c.src
+			out, st := valuelessSubRunWith(t, ValuelessSubscriptedOperandDeclaresTheName,
+				// A listing has to be answered to be read back; which form
+				// is not what this row is about.
+				func(s *Semantics) { s.DeclareListing = DeclareListingClustered },
+				src)
+			if !strings.Contains(out, "listed=0") {
+				t.Errorf("out %q does not declare the base name", out)
+			}
+			if strings.Contains(out, "a[1]") {
+				t.Errorf("out %q declared a name with the brackets in it", out)
+			}
+			if st != 0 {
+				t.Errorf("status %d, want 0", st)
+			}
+		})
+	}
+}
+
 // An axis nobody answered is refused by name rather than guessed.
 func TestAValuelessSubscriptedOperandRefusesAnUnspecifiedAxis(t *testing.T) {
 	out, _ := valuelessSubRun(t, ValuelessSubscriptedOperandUnspecified,

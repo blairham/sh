@@ -79,25 +79,42 @@ func (r *Runner) badSubscriptToADeclaration(sub string, err error) {
 }
 
 // valuelessSubscriptedOperand is what a declaration does with an operand that
-// names an element and carries no value, and it reports whether the operand is
-// **finished** — so a caller that gets false carries on declaring the name
-// exactly as it always did.
+// names an element and carries no value.
 //
-// One door for all four spellings — `typeset`/`declare`, `local`, `readonly`
-// and `export` — because the answer is about the declaration and not about
-// which word spells it, and because a second copy that omitted a case is the
-// failure this repository keeps making.
+// It reports whether the operand is **finished**, and where it is not, the
+// name and the letters the caller should declare instead — which is the base
+// name with the array letter added, because the brackets are what say the name
+// is an array. That was the `typeset`/`declare` site's own code and the other
+// three spellings did not have it, so each of them declared a variable
+// literally named `a[1]` — invisible to `${a[1]}` and to `typeset -p a`, frozen
+// instead of the array, and exported under a name no environment can carry.
+// #1380 fixed one spelling of four.
+//
+// One door for all four — `typeset`/`declare`, `local`, `readonly` and
+// `export` — because the answer is about the declaration and not about which
+// word spells it, and because a second copy that omitted a case is the failure
+// this repository keeps making.
 //
 // See Semantics.ValuelessSubscriptedOperand for the three answers and where
 // each was measured. Before this the brackets were never read in any dialect:
 // `typeset 'a[b c]'` was silent at 0 where zsh and ksh93 both end the script,
 // and in the zsh column the operand reached the valueless-declaration listing
 // and printed the whole array on its way past (#3501).
-func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f declareFlags, shadows bool) bool {
+func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f declareFlags, shadows bool,
+) (name string, letters declareFlags, done bool) {
 	sub := subs[len(subs)-1]
+	// The array letter whether or not one was written — **unless the name is
+	// already a table**, where the brackets say nothing of the kind and the
+	// letter would ask for a conversion no shell performs here: measured
+	// 2026-09-17, `typeset -A m; typeset 'm[b c]'` is silent at 0 in bash and
+	// puts the key in with an empty value in zsh and ksh93, while this
+	// refused it as `cannot convert associative to indexed array` at 1 — and
+	// ended the script for it in the ksh column.
+	letters = f
+	letters.array = letters.array || (!letters.assoc && !r.assocDeclared(base))
 	switch r.sem().ValuelessSubscriptedOperand {
 	case ValuelessSubscriptedOperandDeclaresTheName:
-		return false
+		return base, letters, false
 	case ValuelessSubscriptedOperandReadsTheSubscript:
 		if r.assocDeclared(base) {
 			// A table's brackets hold a key rather than an expression, in
@@ -109,22 +126,23 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 			// the reason the constant's name is about the *subscript* rather
 			// than about never writing anything.
 			r.setAssocElem(base, sub, "")
-			return true
+			return "", letters, true
 		}
 		if _, err := r.subscriptValue(sub); err != nil {
 			r.badSubscriptToADeclaration(sub, err)
-			return true
+			return "", letters, true
 		}
-		return false
+		return base, letters, false
 	case ValuelessSubscriptedOperandWritesTheElement:
 		// The empty-value form under another spelling, which is measured
 		// rather than inferred — so it goes through the one path a value
-		// goes through, refusals, table keys, array growth and all.
+		// goes through, refusals, table keys, array growth and all. The
+		// letters there are the *element* declaration's, not the name's.
 		r.declareElement(base, subs[:len(subs)-1], sub, "", f, shadows)
-		return true
+		return "", letters, true
 	}
 	r.diagf("%s\n", r.unanswered(
 		"what a declaration does with a subscripted operand that carries no value"))
 	r.status, r.unspecified = 2, true
-	return true
+	return "", letters, true
 }

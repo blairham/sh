@@ -1352,12 +1352,18 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				}
 				continue
 			}
-			if r.valuelessSubscriptedOperand(base, subs, df, true) {
-				// The dialect read the brackets, and either wrote the
-				// element they name or gave the declaration up over them.
-				// See valuelessSubscriptedOperand: one door for all four
-				// spellings, and the comment below is the answer that is
-				// left once it says the operand is not finished.
+			// A subscripted operand carrying no value declares the *name*
+			// as an array and writes no element in one column, reads the
+			// brackets first in another, and writes the element in the
+			// third: see valuelessSubscriptedOperand, which owns all three
+			// and hands back the name and the letters to declare. Measured
+			// 2026-09-12, `typeset a[3]` leaves `declare -a a` in bash and
+			// `${#a[@]}` is 0 in bash and ksh93 alike, and an array already
+			// standing is left as it is. It used to declare a variable
+			// literally named `a[3]` — invisible to `${a[3]}` and to
+			// `typeset -p a`, at status 0 (#1380).
+			n, letters, done := r.valuelessSubscriptedOperand(base, subs, df, true)
+			if done {
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
@@ -1366,27 +1372,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			if r.unspecified {
 				return r.status
 			}
-			// A subscripted operand carrying no value declares the *name*
-			// as an array and writes no element: measured 2026-09-12,
-			// `typeset a[3]` leaves `declare -a a` in bash and `${#a[@]}`
-			// is 0 in bash and ksh93 alike, and an array already standing
-			// is left as it is. It used to declare a variable literally
-			// named `a[3]` — invisible to `${a[3]}` and to `typeset -p a`,
-			// at status 0 (#1380).
-			//
-			// The name and not the operand, and the array letter whether or
-			// not one was written: the brackets are what say the name is an
-			// array.
-			//
-			// **Unless the name is already a table**, where the brackets say
-			// nothing of the kind and the letter would ask for a conversion
-			// no shell performs here: measured 2026-09-17, `typeset -A m;
-			// typeset 'm[b c]'` is silent at 0 in bash and puts the key in
-			// with an empty value in zsh and ksh93, while this refused it as
-			// `cannot convert associative to indexed array` at 1 — and ended
-			// the script for it in the ksh column.
-			name = base
-			df.array = df.array || (!df.assoc && !r.assocDeclared(base))
+			name, df = n, letters
 		}
 		if r.exportRefusesACompound(name, df) {
 			// The export letter over a compound, which one shell will not

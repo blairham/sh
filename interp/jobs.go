@@ -616,6 +616,13 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 
 	sub := r.clone()
 	sub.inheritJobs(jobBoundaryBackground)
+	// The fork a background job is, which a `( … )` standing as its body does
+	// not fork again: measured 2026-09-17, ksh93u+'s `a=(1 2 3); ( unset
+	// "a[1]"; echo "[${a[*]}]" ) &` prints `[1 3]` where the same subshell in
+	// the foreground prints `[]`, and `{ ( … ); } &` agrees. So the
+	// parentheses there are the fork itself and their arrays are its own
+	// copy. See Runner.unsetEmptiesAnUnwrittenArray.
+	sub.forkedForABackgroundJob = true
 	// A background job outlives the shell that started it, so where that
 	// shell is the body of a process substitution the job keeps the
 	// substitution's end of the pipe open — the copy of the descriptor a

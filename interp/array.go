@@ -252,6 +252,15 @@ func (r *Runner) storeArray(name string, a Array) {
 	if r.Arrays == nil {
 		r.Arrays = map[string]Array{}
 	}
+	if r.arraysAreAView {
+		// This shell has written to the name, so it is no longer only looking
+		// at what it inherited — which is what one column's element unset
+		// turns on. See Runner.unsetEmptiesAnUnwrittenArray.
+		if r.subshellWroteArrays == nil {
+			r.subshellWroteArrays = map[string]bool{}
+		}
+		r.subshellWroteArrays[name] = true
+	}
 	// A compound variable is not a thing an array write shares a name with:
 	// the elements replace the whole tree. See compoundVariableRetyped.
 	r.compoundVariableRetyped(name)
@@ -791,6 +800,9 @@ func (r *Runner) unsetArrayElem(name string, idx int, sub string) int {
 	a, isArray := r.Arrays[name]
 	if !isArray {
 		return r.unsetScalarElem(name, idx, sub)
+	}
+	if r.unsetEmptiesAnUnwrittenArray(name) {
+		return 0
 	}
 	pos, within := r.elemPos(a, idx)
 	if blanks {
@@ -3378,4 +3390,60 @@ func (r *Runner) unsetFlaggedSubscript(base, operand, sub string) (handled bool,
 		return true, 1
 	}
 	return true, r.unsetArrayElem(base, idx, sub)
+}
+
+// unsetEmptiesAnUnwrittenArray is what removing one element does, in a
+// subshell, to an array the subshell has only been *looking at*.
+//
+// One column empties it: the rest of that subshell sees nothing of the array
+// at all, and the parent's copy is untouched. Measured 2026-09-17,
+// `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=$d`, stdin /dev/null, a fresh
+// directory, ksh93u+ (AT&T 2012), a script file and again under `-c`:
+//
+//	a=(1 2 3)
+//	( unset "a[1]"; echo "in=[${a[*]}] n=${#a[@]}" )   in=[] n=0
+//	echo "after=[${a[*]}]"                             after=[1 2 3]
+//
+// Four rows say what it is about, and each of them removes a candidate:
+//
+//	( echo "[${a[*]}]" )                    [1 2 3]  — the copy is fine
+//	( a[0]=9; echo "[${a[*]}]" )            [9 2 3]  — a write is fine
+//	( a[0]=9; unset "a[1]"; echo … )        [9 3]    — a write first, and the
+//	                                                   unset is ordinary
+//	( b=(1 2 3); unset "b[1]"; echo … )     [1 3]    — an array the subshell
+//	                                                   made is its own
+//
+// So it is an element unset of an array this subshell has not written to, and
+// it is indexed arrays only: `typeset -A m; m[k]=v; m[j]=w; ( unset "m[k]";
+// echo "[${m[@]}]" )` leaves the other key standing there, and a plain
+// `unset a` and a scalar's `unset v` are ordinary everywhere. A nested
+// subshell answers for itself — the inner one empties its own view and the
+// outer one still has all three.
+//
+// **And it is those two contexts and not every subshell**, which is measured
+// rather than assumed: the array is left alone in a background job — `( … ) &`
+// and `{ …; } &` alike — at either end of a pipeline, and in a process
+// substitution, all of which are contexts that shell forks. An explicit
+// `( … )` and a `$( … )` are the two it does not, and they are the two that
+// empty. So the flag is set at those two sites rather than read off
+// r.inSubshell, which every clone sets.
+//
+// bash 5.3.20 and zsh 5.9.2 both remove the one element and leave the
+// parent's array whole, which is what this did in every dialect (#3517).
+//
+// Measured on the only ksh93 on this machine, which is AT&T's 2012 build —
+// the same binary the oracle panel's ksh column is, so the preset matches the
+// column it is graded against.
+func (r *Runner) unsetEmptiesAnUnwrittenArray(name string) bool {
+	if !r.arraysAreAView || r.subshellWroteArrays[name] {
+		return false
+	}
+	if !r.ask(r.sem().UnsetElementEmptiesAnUnwrittenArrayInASubshell,
+		"an element unset emptying an array a subshell has only inherited") {
+		return false
+	}
+	// Emptied rather than removed: the name is still an array, and
+	// `${#a[@]}` reads 0 rather than the name being gone.
+	r.storeArray(name, Array{})
+	return true
 }

@@ -240,6 +240,11 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	defer sub.collectBodies()()
 	sub.inheritJobs(jobBoundarySubstitution)
 	sub.inCommandSubst = true
+	// Its arrays are a view of the caller's rather than a fork's copy, which
+	// is the reading an explicit `( … )` gets too — see
+	// Runner.unsetEmptiesAnUnwrittenArray, where the contexts that do not
+	// get it are measured.
+	sub.arraysAreAView = true
 	// **Whether the body's shell holds `set -e`** — the one option a
 	// substitution does not simply inherit, and a disagreement rather than a
 	// gap. See Semantics.ErrExitEntersACommandSubstitution for the panel.

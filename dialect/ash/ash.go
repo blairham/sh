@@ -541,6 +541,8 @@ func Semantics() interp.Semantics {
 	// arrays and no subscripted operand, so nothing reaches it.
 	s.DeclarationTakesASubscript = interp.No
 	s.TypesetTakesASubscript = interp.No
+	// unanswered UnsetElementEmptiesAnUnwrittenArrayInASubshell: no
+	// arrays, so no element for a subshell to remove.
 	s.UnsetTakesASubscript = interp.No
 	// No arrays here either, so the same rule: a bracketed `read` operand
 	// is a bad variable name and not a subscript. See dash, whose sentence

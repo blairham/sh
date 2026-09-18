@@ -2072,6 +2072,13 @@ func Semantics() interp.Semantics {
 	// splits them.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// And an element removed from an array a subshell has only inherited
+	// takes the whole array with it, for the rest of that subshell:
+	// measured 2026-09-17, `a=(1 2 3); ( unset "a[1]"; echo "[${a[*]}]" )`
+	// prints `[]` here and `[1 3]` in the other two columns, with the
+	// parent's array whole in all three. A write in front of it makes the
+	// unset ordinary, and an array the subshell made itself is ordinary.
+	s.UnsetElementEmptiesAnUnwrittenArrayInASubshell = interp.Yes
 	// `read 'a[2]'` fills the element, measured 2026-09-10 on `a=(x y z)`.
 	s.StoreOperandTakesASubscript = interp.Yes
 	// This column really does evaluate the brackets, and `@` is not an

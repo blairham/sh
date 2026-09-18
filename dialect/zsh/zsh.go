@@ -2470,6 +2470,8 @@ func Semantics() interp.Semantics {
 	// and reports success, measured.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// The same here: one element removed, the rest standing.
+	s.UnsetElementEmptiesAnUnwrittenArrayInASubshell = interp.No
 	// `read 'a[2]'` fills the element, measured 2026-09-10 on `a=(x y z)`.
 	s.StoreOperandTakesASubscript = interp.Yes
 	// The brackets name the whole array and the operand fills it, silently

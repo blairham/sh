@@ -1822,6 +1822,9 @@ func Semantics() interp.Semantics {
 	// identifier` and `typeset a[1]=v` creates the element, measured.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// The one element goes and the rest of the array stands, inside a
+	// subshell as at the top level.
+	s.UnsetElementEmptiesAnUnwrittenArrayInASubshell = interp.No
 	// `read 'a[2]'` and `printf -v 'a[2]'` fill the element, measured
 	// 2026-09-10 on `a=(x y z)` — `x Q z`, in 3.2 as well as 5.3.
 	s.StoreOperandTakesASubscript = interp.Yes

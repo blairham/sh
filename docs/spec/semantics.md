@@ -23082,6 +23082,75 @@ leaves the name listed as `declare -i r`. That is not about the `n`
 letter: `declare -nx r=1x` leaves `declare -x r` the same way, and so
 does every other refused declaration carrying an attribute.
 
+## What a name reference is aimed at, and who its refusals name
+
+Where the *name* a reference stands for is resolved is not in question:
+`typeset -n r=v; v=5; echo "$r"` is 5 in both shells that spell one, so a
+reference is a redirect and never a copy. What they disagree about is
+what the redirect is aimed **at**, and who a refusal reached through one
+is about.
+
+### The target is settled at the declaration, or looked up at every read
+
+Measured 2026-09-18 from a script file under `env -i` with a scratch
+HOME, against ksh93u+ 2012-08-01 and bash 5.3.20:
+
+                                          ksh93u+          bash 5.3.20
+    a=(x y z); i=2; typeset -n r=a[i]     'a[2]'           "a[i]"
+      then i=0; echo "$r"                 z                x
+    a=(x y z); typeset -n r=a[1+1]        'a[2]'           "a[1+1]"
+    a=(x y z); typeset -n r=a[-1]         'a[2]'           "a[-1]"
+    u=1; typeset -n s=u; typeset -n s2=s  s2=u             s2="s"
+      then typeset -n s=w; echo "$s2"     1 — still u      9 — follows
+    a=(x y); typeset -n r=a[@]            arithmetic       the whole
+                                          syntax error,    array
+                                          script ends
+
+`NamerefTargetResolvedWhenAimed` is the split. One shell evaluates the
+subscript and follows the chain once, here; the other keeps the text and
+looks it up again at every use.
+
+The last row is why it is an axis rather than a wording. `@` and `*` are
+not arithmetic, so the shell that evaluates the subscript at the
+declaration has no whole-array target at all, while the shell that keeps
+the text reads it as the expansion it spells. Both are complete and
+neither is a subset of the other.
+
+Two things bound it, and both are measured. A **keyed table's** subscript
+is a key and is not evaluated in either column — `typeset -A m=([k]=1);
+typeset -n r=m[k]` lists `m[k]` in ksh93 too — so what is settled is the
+array subscript's arithmetic and not the brackets. And a **negative**
+subscript is resolved against the array as it stands, to the position the
+element store would have used (#3124, #3172).
+
+### A refusal through a reference, and whose name it says
+
+With `u=1; readonly u; declare -n s=u`, measured the same day on bash
+5.3.20:
+
+    declare -i s      declare: u: readonly variable   the target
+    declare s=9       declare: s: readonly variable   the reference
+    declare -i s=9    declare: s: readonly variable   the reference
+    declare -a s=9    declare: s: readonly variable   the reference
+    declare s+=9      declare: s: readonly variable   the reference
+    u=9               u: readonly variable            the target
+    s=9               u: readonly variable            the target
+    export s=9        u: readonly variable            the target
+    readonly s=9      u: readonly variable            the target
+    local s=9         local: u: readonly variable     the target
+
+Every row is status 1 and no write happens in any of them, so the name is
+the whole of the difference — and the first row is what says this is not
+simply "a declaration names its operand".
+
+`DeclarationThroughAReferenceNamesTheOperand` is the field, and the
+redirect itself is not what it moves. The row that says so is the one
+where the **reference** is the frozen one: `u=1; declare -rn s=u; declare
+s=9` writes 9 into `u` at status 0 there, so a frozen reference is walked
+straight past and the freeze that refuses is always the target's. Only
+the name in the sentence moves. ksh93 answers No — `typeset s=9` through
+a reference to a frozen `u` is `u: is read only` there (#3173).
+
 ## An axis nothing objects to is not a measurement
 
 Every field above claims a fact about real shells: they were run, they

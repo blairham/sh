@@ -481,6 +481,11 @@ func Semantics() interp.Semantics {
 	// spelling of the declaration can be put to this shell (#2553).
 	// unanswered NamerefLetterStandsAlone: the same wall — there is no
 	// `typeset` to write the letters on (#3171).
+	// unanswered DeclarationThroughAReferenceNamesTheOperand: the same wall
+	// again — no references and no `typeset` (#3173).
+	// unanswered NamerefTargetResolvedWhenAimed: the same wall — no
+	// `typeset`, so there is no declaration for a target to be settled at
+	// (#3124).
 	// unanswered NamerefArrayRefusal: the same wall, and there are no arrays
 	// here either for a reference to be refused over (#3103).
 	// unanswered UnsetReferenceLetterRemovesANonReference: no `-n` on `unset`

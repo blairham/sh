@@ -1405,6 +1405,85 @@ type Semantics struct {
 	// Asked only where an `n` letter really stood beside another, so a
 	// dialect that has no reference at all is never asked.
 	NamerefLetterStandsAlone Answer
+
+	// NamerefTargetResolvedWhenAimed settles a reference's target **at the
+	// declaration** rather than at every read through it: a subscript is
+	// evaluated then, and a target that is itself a reference is followed to
+	// the end of the chain then.
+	//
+	// Not the same question as where the *name* is resolved, which both
+	// shells answer alike: `typeset -n r=v; v=5; echo "$r"` is 5 in both, so
+	// a reference is a redirect and never a copy. What this decides is what
+	// the redirect is aimed at, and that is settled once here and looked up
+	// again every time there.
+	//
+	// Measured 2026-09-18 from a script file under `env -i` with a scratch
+	// HOME, against ksh93u+ 2012-08-01 and bash 5.3.20:
+	//
+	//	a=(x y z); i=2; typeset -n r=a[i]; typeset -p r
+	//	    ksh93  typeset -n r='a[2]'    bash  declare -n r="a[i]"
+	//	then i=0; echo "$r"
+	//	    ksh93  z                      bash  x
+	//	a=(x y z); typeset -n r=a[1+1]    ksh93 'a[2]'   bash "a[1+1]"
+	//	a=(x y z); typeset -n r=a[-1]     ksh93 'a[2]'   bash "a[-1]"
+	//	u=1; typeset -n s=u; typeset -n s2=s; typeset -p s2
+	//	    ksh93  typeset -n s2=u        bash  declare -n s2="s"
+	//	then typeset -n s=w; echo "$s2"
+	//	    ksh93  1 — still u            bash  9 — follows to w
+	//	a=(x y); typeset -n r=a[@]
+	//	    ksh93  `@: arithmetic syntax error`, and the script ends
+	//	    bash   taken, and `$r` is the whole array
+	//
+	// The last row is why this is an axis and not a wording: `@` and `*` are
+	// not arithmetic, so the shell that evaluates the subscript here has no
+	// whole-array target at all, while the shell that keeps the text reads it
+	// as the expansion it spells. Both are complete answers and neither is a
+	// subset of the other.
+	//
+	// **A keyed table's subscript is a key and is not evaluated** in either
+	// column: `typeset -A m=([k]=1); typeset -n r=m[k]` lists `m[k]` in ksh93
+	// too. So the resolution is the array subscript's arithmetic and not the
+	// brackets.
+	//
+	// Asked only where the target really carries a subscript or is really
+	// another reference — a plain `typeset -n r=v` is the same declaration
+	// under either answer and asks nothing.
+	NamerefTargetResolvedWhenAimed Answer
+
+	// DeclarationThroughAReferenceNamesTheOperand speaks a refusal a
+	// declaration reaches **through a name reference** under the name the
+	// script wrote, rather than under the cell the redirect led to.
+	//
+	// The redirect itself is not in question. The freeze that refuses is the
+	// *target's*, and the row that says so is the one where the **reference**
+	// is the frozen one: `u=1; declare -rn s=u; declare s=9` writes 9 into
+	// `u` at 0 in bash 5.3.20, so a frozen reference is walked straight past.
+	// Only the name in the sentence moves.
+	//
+	// And only for a declaration carrying a **value**. Measured 2026-09-18,
+	// `env -i` with a scratch HOME, from a file, with `u=1; readonly u;
+	// declare -n s=u`:
+	//
+	//	declare -i s      declare: u: readonly variable   the target
+	//	declare s=9       declare: s: readonly variable   the reference
+	//	declare -i s=9    declare: s: readonly variable   the reference
+	//	u=9               u: readonly variable            the target
+	//	s=9               u: readonly variable            the target
+	//	export s=9        u: readonly variable            the target
+	//	readonly s=9      u: readonly variable            the target
+	//	local s=9         local: u: readonly variable     the target
+	//
+	// So it is the `declare`/`typeset` word and the value together, and every
+	// neighbor names the cell the write would have landed in. Every row is
+	// status 1 in both shells and no write happens in either, so the name is
+	// the whole of the difference — which is what makes the third row above
+	// the one that says this is not simply "a declaration names its operand".
+	//
+	// Asked only where a declaration carrying a value really redirected
+	// through a reference. The other shell that spells one answers No:
+	// `typeset s=9` through a reference to a frozen `u` is `u: is read only`
+	// in ksh93u+.
+	DeclarationThroughAReferenceNamesTheOperand Answer
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other

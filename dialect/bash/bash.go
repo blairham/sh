@@ -902,6 +902,20 @@ func Semantics() interp.Semantics {
 	// about the *value* rather than about the pair. So there is no bundle
 	// this shell will not read.
 	s.NamerefLetterStandsAlone = interp.No
+	// The target is the **text** the declaration was written with, looked up
+	// again at every read: measured 2026-09-18 on 5.3.20, `a=(x y z); i=2;
+	// declare -n r=a[i]` lists `declare -n r="a[i]"` and reads `x` after
+	// `i=0`, and `declare -n s=u; declare -n s2=s` lists `s2="s"` and follows
+	// `s` wherever it is re-aimed. Which is what lets `declare -n r=a[@]`
+	// stand at all — `@` is not arithmetic, and here it never has to be
+	// (#3124, #3172).
+	s.NamerefTargetResolvedWhenAimed = interp.No
+	// And a refusal an assigning declaration reaches through a reference is
+	// spoken of under the operand: measured 2026-09-18 on 5.3.20, with `u=1;
+	// readonly u; declare -n s=u`, `declare s=9` is `declare: s: readonly
+	// variable` where the valueless `declare -i s` beside it is `declare: u:
+	// readonly variable` (#3173).
+	s.DeclarationThroughAReferenceNamesTheOperand = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes

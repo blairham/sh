@@ -1828,9 +1828,19 @@ func Diagnostics() interp.Diagnostics {
 			"local":    "%[2]s: bad variable name",
 			"read":     "read: '%[2]s': bad variable name",
 		},
-		BuiltinBadNameStatus:          2,
-		ReadonlyVariable:              "%s: is read only",
-		ReadonlyVariableInDeclaration: "%[1]s: is read only",
+		BuiltinBadNameStatus: 2,
+		// `read` is the exception on both counts. Measured 2026-09-17 in the
+		// pinned image: `read 1bad` is `ash: read: '1bad': bad variable
+		// name` at **1**, where `unset 'a[0]'`, `export 'e[0]=x'`,
+		// `readonly`, `local` and `getopts` each write `<file>: <builtin>:
+		// line N: a[0]: bad variable name` at 2. So this one complaint is
+		// the applet's — the shell's own name and nothing else, with the
+		// builtin kept in the sentence — and it counts differently as well
+		// (#3367).
+		BuiltinBadNameNamesTheShellAlone: map[string]bool{"read": true},
+		BuiltinBadNameStatusFor:          map[string]int{"read": 1},
+		ReadonlyVariable:                 "%s: is read only",
+		ReadonlyVariableInDeclaration:    "%[1]s: is read only",
 		// `getopts` names itself for a refused write to one of the three
 		// names it fills in: measured 2026-09-16 in the pinned image,
 		// `readonly OPTARG; getopts a: o` is `ash: getopts: line 4: OPTARG:
@@ -1862,8 +1872,14 @@ func Diagnostics() interp.Diagnostics {
 		SetInvalidOptionNameStatus:   1,
 		SetInvalidOptionLetterStatus: 2,
 		BuiltinBadOption:             "illegal option %[2]s",
-		OptionNeedsArgument:          "%[1]s: No arg for -%[2]s option",
-		UlimitBadOption:              "ulimit: unrecognized option: %[1]s",
+		// Lower case, which is this shell's and not dash's: measured
+		// 2026-09-17 in the pinned image, `read -d` is `no arg for -d
+		// option` and so are `-p`, `-n`, `-t` and `-u`. `read` is the only
+		// builtin here that reaches the sentence at all — every other
+		// option-taking letter in the panel's own builtins answers something
+		// else — so the whole of the measurement is those five (#3367).
+		OptionNeedsArgument: "%[1]s: no arg for -%[2]s option",
+		UlimitBadOption:     "ulimit: unrecognized option: %[1]s",
 		// Written bare — no script, no line — and reported 1,
 		// where `unset -Z`, `read -Z` and `trap -Z` in this same shell each
 		// carry the script and the line and report 2. So it is this
@@ -2036,6 +2052,18 @@ func Diagnostics() interp.Diagnostics {
 			"getopts": "getopts: usage: getopts optstring var [arg]",
 		},
 
+		// A number `read` could not read, worded by the letter it was for
+		// rather than by one sentence with the operand in it. Measured
+		// 2026-09-17 in the pinned image: `read -u x v` is `invalid file
+		// descriptor`, `-n x v` is `invalid count` and `-t x v` is `invalid
+		// timeout`, each the whole message with the operand nowhere in it,
+		// and all three at 2 where ours answered one generic sentence at 1
+		// (#3367).
+		ReadBadDescriptorSpec: "read: invalid file descriptor",
+		ReadBadCount:          "read: invalid count",
+		ReadBadTimeout:        "read: invalid timeout",
+		ReadBadNumberStatus:   2,
+
 		// `cd`, with the OS's reason where dash gives none.
 		CdCannotChange: "can't cd to %[1]s: %[2]s",
 		CdStatus:       2,
@@ -2045,12 +2073,20 @@ func Diagnostics() interp.Diagnostics {
 		// operand behind, so the same wording names the word after it.
 		TestNamesFirstOperand:   false,
 		TestUnknownLongOperator: interp.TestUnknownOperatorLeavesAnOperand,
-		TestUnaryExpected:       "%[1]s: unknown operand",
-		TestBinaryExpected:      "%[1]s: unknown operand",
-		TestIntegerExpected:     "%[1]s: out of range",
-		TestTooManyArguments:    "unknown operand",
-		TestOperandExpected:     "argument expected",
-		TestMissingBracket:      "missing %[1]s",
+		// And the two-word form is parsed here as well, where six of the
+		// seven columns send it straight to the unary evaluation: `[ -Q g.f
+		// ]` is `g.f: unknown operand` rather than `-Q`, because the word
+		// this shell has no operator for is a string and the one after it is
+		// one operand too many. `[ n -eq 5 ]` beside it is the control that
+		// says a complaint really about the operand names the operand in
+		// both (#3278).
+		TestTwoWordUnknownOperatorLeavesAnOperand: true,
+		TestUnaryExpected:                         "%[1]s: unknown operand",
+		TestBinaryExpected:                        "%[1]s: unknown operand",
+		TestIntegerExpected:                       "%[1]s: out of range",
+		TestTooManyArguments:                      "unknown operand",
+		TestOperandExpected:                       "argument expected",
+		TestMissingBracket:                        "missing %[1]s",
 
 		// The remarks a shell with no terminal makes about job control, both
 		// spellings of the same sentence.
@@ -2144,9 +2180,19 @@ func Diagnostics() interp.Diagnostics {
 		// specify whom to kill` — where its own `not found` carries
 		// `<file>: line N:`. Measured 2026-09-17 against BusyBox v1.37.0 in
 		// the pinned alpine image (#3165).
-		BuiltinNamesTheShellAlone: map[string]bool{"printf": true, "kill": true},
-		PrintfBadVerb:             "%[2]s: invalid format",
-		PrintfMissingVerb:         "%[1]s: invalid format",
+		//
+		// And `test` with its two bracket spellings: every complaint any of
+		// the three makes opens `ash:` and nothing else — measured
+		// 2026-09-17 in the pinned image, `[ n -eq 5 ]` is `ash: n: out of
+		// range`, `[ -Q g.f ]` is `ash: g.f: unknown operand`, `[ 1 -eq 2`
+		// is `ash: missing ]`, and `test -Q g.f` under the other spelling is
+		// the same again. Every other complaint from this shell opens
+		// `<file>: <builtin>: line N:`, which is the control (#3278).
+		BuiltinNamesTheShellAlone: map[string]bool{
+			"printf": true, "kill": true, "test": true, "[": true, "[[": true,
+		},
+		PrintfBadVerb:     "%[2]s: invalid format",
+		PrintfMissingVerb: "%[1]s: invalid format",
 		// And the directive it names is written without the length
 		// modifiers it just read past: `printf '%z' x` is
 		// `ash: %: invalid format` where every other column names what was

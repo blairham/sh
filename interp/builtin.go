@@ -4898,14 +4898,14 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if word, ok := optArg['n']; ok {
 		n, numeric := atoi(word)
 		if !numeric || n < 0 {
-			return r.readBadNumber(word)
+			return r.readBadNumberFor(r.diag().ReadBadCount, word)
 		}
 		count = n
 	}
 	if word, ok := optArg['N']; ok {
 		n, numeric := atoi(word)
 		if !numeric || n < 0 {
-			return r.readBadNumber(word)
+			return r.readBadNumberFor(r.diag().ReadBadCount, word)
 		}
 		count, exact = n, true
 	}
@@ -5504,22 +5504,22 @@ func (r *Runner) readLastFieldValue(field, ifs string) string {
 	return field
 }
 
-// readBadNumber is a count, timeout or descriptor argument that is not a
-// number. The panel words this per shell per letter; one substrate wording
-// carries the fact until a dialect measures its own.
-func (r *Runner) readBadNumber(word string) int {
-	return r.readBadNumberFor("", word)
-}
-
-// readBadNumberFor is readBadNumber for a letter whose dialect words the
-// refusal after what the number was *for* — see Diagnostics.ReadBadTimeout.
-// An empty wording is the shared sentence.
+// readBadNumberFor is a count, timeout or descriptor argument that is not a
+// number, worded after what the number was *for* — see
+// Diagnostics.ReadBadTimeout and its two siblings. An empty wording is the
+// shared sentence, which is what a dialect that words all three alike leaves
+// behind.
+//
+// Every letter that reaches it passes one now: `-u`, `-n`, `-N` and `-t` each
+// have a field, since the one column that words all three separately needed
+// the third (#3367). The wrapper that passed no wording went with it — four
+// call sites and none of them wanted the fallback.
 func (r *Runner) readBadNumberFor(wording, word string) int {
 	if wording == "" {
 		wording = r.diag().ReadBadNumber
 	}
 	r.diagf("%s\n", Wording(wording, "read: %[1]s: invalid number", word))
-	return 1
+	return orDefault(r.diag().ReadBadNumberStatus, 1)
 }
 
 // readerForFd is the stream `read -u` names: standard input by its number,

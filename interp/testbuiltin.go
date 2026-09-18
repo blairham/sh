@@ -129,7 +129,8 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 			if r.unspecified {
 				return 2
 			}
-			if te.kind == errBinaryExpected && r.diag().NamesBuiltinInLocation {
+			if te.kind == errBinaryExpected && r.diag().NamesBuiltinInLocation &&
+				!r.diag().BuiltinNamesTheShellAlone[name] {
 				// An expression that never parsed is not the builtin's
 				// complaint, *in the dialects that write the builtin's name
 				// into the location*. Those are what the measurement is
@@ -138,6 +139,12 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 				// builtin at all — while `test -Q x` and `test 1 -eq a`,
 				// which failed *evaluating* an expression that did parse, are
 				// `zsh:test:1:`. Same wordings, two speakers.
+				//
+				// And not where this builtin reports as the shell itself,
+				// which is a third location and the one a dialect that
+				// answers BuiltinNamesTheShellAlone for `test` writes for
+				// every complaint it makes. Clearing the speaker there loses
+				// the only prefix that column has (#3278).
 				//
 				// Gated on NamesBuiltinInLocation because clearing the
 				// speaker does a second thing nothing measured asked for: it
@@ -708,6 +715,13 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 			// with a word left over rather than as an operator nobody has.
 			// See Diagnostics.TestConnectiveIsALeftoverWord.
 			return false, &testError{kind: errTooManyArguments}
+		}
+		if r.diag().TestTwoWordUnknownOperatorLeavesAnOperand {
+			// One column parses the two words rather than reading the first
+			// as the operator, so the word it has no operator for is the
+			// *second* one. See
+			// Diagnostics.TestTwoWordUnknownOperatorLeavesAnOperand.
+			return false, &testError{kind: errBinaryExpected, operand: operand}
 		}
 		return false, &testError{kind: errUnaryExpected, operand: op}
 	}

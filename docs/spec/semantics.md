@@ -12952,17 +12952,28 @@ Re-measured for this catalog, bash 3.2 is on zsh's side —
 `` umask: `-': invalid symbolic mode character `` — so the multi-operator
 form is a bash 4 addition. Dating rather than vetoing, per `core.md`.
 
-**`SymbolicMaskTakesTheSetuidLetter`** — bash yes · dash yes · ksh93 yes · zsh no
+**`SymbolicMaskTakesTheSetuidLetter`** — bash yes · dash yes · ksh93 yes · zsh no · ash **no**
 
 Accepts `s` in a clause, which changes no bits — a umask has no setuid
 bit to deny — and is accepted by three of the four all the same. zsh
-refuses it.
+refuses it, and so does BusyBox ash: measured 2026-09-17 in the pinned
+image, `umask u+s` is `umask: illegal mode: u+s` at status 2, where zsh's
+is `bad symbolic mode permission: s` at 1. bash 3.2 refuses it too, which
+is the version line rather than a fifth answer.
 
-**`SymbolicMaskTakesTheStickyLetter`** — bash yes · dash no · ksh93 yes · zsh no
+The refusal takes the whole clause with it — `umask u=rwXs` is refused
+where `umask u+X` is taken — and `umask u+r` beside each is the control
+that says the shape of the clause is fine and the letter is what is
+refused.
 
-Is the same question about `t`, and a different set of shells: bash and
-ksh93 take it, dash and zsh do not. Two fields because the two letters
-are not answered together.
+**`SymbolicMaskTakesTheStickyLetter`** — bash yes · dash no · ksh93 yes · zsh no · ash **yes**
+
+Is the same question about `t`, and a different set of shells: bash,
+ksh93 and BusyBox ash take it, dash and zsh do not. Two fields because
+the two letters are not answered together, and the ash column is the
+proof rather than an assertion: it takes the letter dash refuses and
+refuses the letter dash takes. Measured 2026-09-17 — `umask u+t` and
+`umask o+t` are both 0 there.
 
 **`SymbolicMaskWhoAloneSetsIt`** — bash no · dash no · ksh93 yes · zsh no
 
@@ -20859,7 +20870,12 @@ field of its own rather than the same one read from the other end. How many
 digits may stand *before* the operator is the grammar's — bash alone reads
 `exec 10>f` as a redirection where the other three run a command called `10`
 (`Dialect.MultiDigitFdNumber`). One shell adds a width there; a different one
-takes one away here.
+takes one away here — and BusyBox ash joins bash on the grammar side while
+staying with the majority on this one, which is what keeps the two from being
+read off a single flag. Measured 2026-09-17 in the pinned image: `exec
+10>f10` is 0 and puts the file on descriptor ten, `exec 100>f100` is 0 as
+well so the width is not two, and a bare `10` on a line of its own is still
+`10: not found` at 127 (#3238).
 
 **Reading the file is what settles the panel.** bash 3.2 prints `hi` for `echo
 hi >&10` and reports success, which looks like a fifth answer and is not: that

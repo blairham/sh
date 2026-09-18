@@ -244,6 +244,31 @@ func (r *Runner) RefuseBuiltinUsagef(builtin, format string, args ...any) {
 	r.fatalUsageQuiet()
 }
 
+// BuiltinOptions reads the option words at the front of a registered
+// builtin's arguments, and reports what is left.
+//
+// `known` is the letters the builtin has, each optionally followed by `:` for
+// one that takes an argument or `#` for one that takes a number — the shape
+// `getopts` uses, which is the shape the substrate's own builtins are written
+// against. `letters` comes back holding every letter that was written and
+// `optionArguments` maps a letter to the word it took. A nonzero `code` is a
+// refusal that has already reported itself in this dialect's own words, with
+// this dialect's usage block under it and this dialect's fatality applied, and
+// the builtin should return it untouched.
+//
+// Exported because a dialect's own builtin has to read options the same way
+// the substrate's do, and the reading is not a `getopts` loop: it is where
+// `--`, a lone `-`, `--help`, a bundle, the wording of a refusal and whether
+// that refusal ends the script are all the dialect's answers. A builtin that
+// rolled its own got a different answer to every one of those — measured
+// against ksh93's `builtin`, which reads `-dls` and `-f lib` and refuses
+// everything else with `unknown option` and its usage line, where ours read
+// no options at all and looked `-q` up as a name (#3473).
+func (r *Runner) BuiltinOptions(name string, args []string, known string) (rest []string, letters string, optionArguments map[byte]string, code int) {
+	rest, letters, optionArguments, _, code = r.builtinOptionsArg(name, args, known)
+	return rest, letters, optionArguments, code
+}
+
 // DiagnoseAsTheShellf is Diagnosef for a complaint that is not the running
 // builtin's own.
 //

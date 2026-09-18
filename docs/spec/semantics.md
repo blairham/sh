@@ -18931,6 +18931,42 @@ four ways on `.` alone — dash 0, bash 2 surviving, ksh93 2 fatal, zsh 1
 surviving — and one field with four answers would have to invent a type
 to hold what is really three independent questions.
 
+**`DotWithNoOperandIsFatal`** — bash no · dash unanswered · ksh93 **yes** ·
+zsh no · ash no
+
+The cost of that error, and **not** the cost of a `.` on a file it cannot
+open, which is `DotMissingFileFatal` and which the panel answers
+differently. Measured 2026-09-18, one probe at a time, each from a script
+file with a line after it: ksh93u+ writes its usage line, leaves 2, and
+nothing after it runs; bash 5.3.20 writes `filename argument required` and
+its usage at 2 and runs on; zsh 5.9.2 writes `not enough arguments` at 1 and
+runs on; BusyBox ash 1.37.0 writes **nothing** at 2 and runs on; dash is not
+asked, because a missing operand is not an error there at all.
+
+**BusyBox ash is what parted the two axes.** A `.` on a missing file *does*
+end the script there — `. ./nope.sh` writes `can't open './nope.sh'` and the
+next line never runs — while a `.` with no operand does not. One axis for
+both had to be wrong about one of them, and it was: this site read
+`DotMissingFileFatal`, so that column ended its script over a missing operand
+it should have carried on from (#3277).
+
+The silence is a `Diagnostics` value beside it, `DotNoOperandSilent`, and it
+is the one place in that file where "there is an error here" and "there is a
+sentence for it" come apart. An empty `DotNoOperand` cannot say it, because
+empty means the substrate's own wording.
+
+**ksh93 reaches the fatality by one spelling only**, and that is the second
+spelling's whole story there: `source` is an alias for `command .` —
+`whence -v source` says so in that shell — so it arrives under the word that
+takes a special builtin's failure, and the script runs on. Nothing about the
+axis says so. What the fatality needed was to be raised through the **usage
+door** rather than by setting the control word directly: `abandonRequested`
+is the zero value on purpose, so a `controlExit` nobody annotated is a
+*request* to stop and `command` lets one through, where an annotated error it
+catches. `command . /nonexistent` and `command . -Z f` were already going
+through it; a missing operand was the one route into this builtin that was
+not (#3473).
+
 **`ExecFailureRunsExitTrap`** — bash yes · dash yes · ksh93 no · zsh no
 
 Runs a `trap … EXIT` handler when `exec` could not run the command it

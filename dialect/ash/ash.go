@@ -1302,6 +1302,14 @@ func Semantics() interp.Semantics {
 	// `. ` with no operand is refused at 2, where dash does nothing and
 	// reports success. A directory operand is no error in either.
 	s.DotWithNoOperandIsAnError = interp.Yes
+	// And it costs the builtin 2 and the script nothing. Measured 2026-09-18
+	// in the digest-pinned alpine image, BusyBox v1.37.0, from a script file
+	// with a line after it: `.` and `source` with no operand each leave 2
+	// behind, write nothing at all, and the next line runs — where the same
+	// shell's `.` on a file it cannot open does end the script. So the two
+	// fatalities are two questions in this column, and this site was reading
+	// the other one (#3277).
+	s.DotWithNoOperandIsFatal = interp.No
 	s.DotReadsOptions = interp.Yes
 	// `eval` reads none, unlike `.` above — measured against BusyBox
 	// 1.37.0, where `eval -- echo hi` is `eval: --: not found` at 127.
@@ -1856,8 +1864,27 @@ func Diagnostics() interp.Diagnostics {
 		// shell's and are not decoration: `. nosuchfile` is `ash: .: line 0:
 		// can't open 'nosuchfile': No such file or directory`, with the OS's
 		// own text after the colon rather than dash's truncation of it.
-		DotCannotOpen: ".: can't open '%[1]s': %[2]s",
-		DotNotFound:   ".: %[1]s: not found",
+		// No verb in either sentence: this shell puts the word the builtin
+		// was invoked by in the *location* — `case.sh: source: line 1:` —
+		// and writes nothing in front of the message. The `.` these two
+		// opened with used to be taken back out again by
+		// NamesBuiltinInLocation's strip, which matches the name the builtin
+		// was invoked by, so it came off for `.` and stayed for `source`:
+		// `source ./nope.sh` wrote `case.sh: source: line 1: .: can't open
+		// …`. Measured 2026-09-18 in the digest-pinned alpine image, BusyBox
+		// v1.37.0, under both spellings (#3277).
+		//
+		// DotNotFound is reached here and in that shell never is: BusyBox
+		// does no PATH search for an operand with no slash — `. nosuchzz`
+		// there is `can't open 'nosuchzz'` — where this shell searches and
+		// then says the name was not found. That is a separate row and is
+		// not this change.
+		DotCannotOpen: "can't open '%[1]s': %[2]s",
+		DotNotFound:   "%[1]s: not found",
+		// And a missing operand is an error with no sentence for it, which
+		// is the one place these two questions come apart in the panel. See
+		// Diagnostics.DotNoOperandSilent.
+		DotNoOperandSilent: true,
 
 		// Redirection. One verb each way, and the OS's reason reworded: an
 		// open that finds nothing is `no such file`, a create that cannot

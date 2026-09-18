@@ -1014,9 +1014,15 @@ func (r *Runner) dotNoOperand() int {
 	// source …` for the first (#3217). A wording with no verb ignores it.
 	invoked := orElse(r.inBuiltin, ".")
 	usage := Wording(r.diag().DotNoOperand, ".: filename argument required", invoked)
-	if r.diag().DotNoOperandUnprefixed {
+	switch {
+	case r.diag().DotNoOperandSilent:
+		// An error with no sentence, which one column really does write —
+		// see Diagnostics.DotNoOperandSilent. Written as a case of the same
+		// switch rather than a guard before it, so the status below is
+		// reached on this route exactly as it is on the other two.
+	case r.diag().DotNoOperandUnprefixed:
 		r.errf("%s\n", usage)
-	} else {
+	default:
 		r.diagf("%s\n", usage)
 	}
 	// The status is the measured one either way, rather than the generic
@@ -1024,9 +1030,26 @@ func (r *Runner) dotNoOperand() int {
 	// fatal status it uses everywhere else is 1. Getting that from
 	// fatalQuiet gave 1 and was wrong by one.
 	status := r.diag().dotNoOperandStatus()
-	if r.ask(r.sem().DotMissingFileFatal, "`.` with no operand being fatal") {
+	if r.ask(r.sem().DotWithNoOperandIsFatal, "`.` with no operand being fatal") {
+		// Through the usage door and not stopTheShell, which is what makes
+		// the fatality survivable in front of `command`. abandonRequested is
+		// the zero value on purpose — a controlExit nobody annotated is a
+		// request to stop — so a site that sets the control word and nothing
+		// else has said "end the shell" rather than "this builtin failed",
+		// and Runner.takeSpecialBuiltinFailure lets a request through.
+		//
+		// It is a complaint about how the builtin was *called*, which is
+		// abandonUsage's own description, and it is the one route into this
+		// builtin that was not going through it: `command . /nonexistent`
+		// and `command . -Z f` both reported and carried on while `command .`
+		// alone ended the script. Measured 2026-09-18 on ksh93u+ 2012-08-01,
+		// where the second spelling is an alias for exactly that — `whence -v
+		// source` is `source is an alias for 'command .'` — so `source` with
+		// no operand writes the usage line, leaves 2 behind, and the script
+		// runs on (#3473).
 		r.status = status
-		r.stopTheShell()
+		r.fatalUsageQuiet()
+		r.status = status
 	}
 	return status
 }

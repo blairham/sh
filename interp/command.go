@@ -126,6 +126,26 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 // same name that does something else entirely — it *registers* builtins — so
 // this is registered per dialect rather than being part of the substrate.
 func biBuiltin(r *Runner, ctx context.Context, args []string) int {
+	for len(args) > 0 && args[0] == "-" &&
+		r.ask(r.sem().LoneDashIsAnOption, "a lone `-` given to `builtin` being eaten") {
+		// A lone dash, which the dialect that eats one everywhere eats here
+		// too. Before the dash-word reading below rather than inside it,
+		// because that reading is off in exactly the shell this is on: `zsh`
+		// answers BuiltinReadsOptions no and still consumes the dash.
+		//
+		// Measured 2026-09-18 on zsh 5.9.2 from a script file: `builtin -
+		// echo x` prints `x` at 0, `builtin -` alone is silent at 0, and
+		// `builtin - -` is silent at 0 too — so the eating repeats while the
+		// word is a lone dash rather than happening once. `builtin -q` and
+		// `builtin -- echo hi` are each `no such builtin:` the word, so
+		// neither the bundle nor the terminator is read here. bash eats
+		// nothing: `builtin -` there is `-: not a shell builtin` at 1, which
+		// is the same answer this shell already gave and keeps (#3472).
+		args = args[1:]
+	}
+	if r.unspecified {
+		return r.status
+	}
 	if len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' {
 		// A dash-word where a builtin's name goes, which only the dialect
 		// can say is an option. See Semantics.BuiltinReadsOptions.

@@ -1977,6 +1977,9 @@ func Semantics() interp.Semantics {
 	// lines away is caught. So it is a request to stop rather than an error.
 	s.ParamErrorIsAnExitRequest = interp.Yes
 	s.DotMissingFileFatal = interp.No
+	// And a missing operand is `not enough arguments` at 1 with the script
+	// running on, measured 2026-09-18 on zsh 5.9.2 under both spellings.
+	s.DotWithNoOperandIsFatal = interp.No
 	s.DotPassesArguments = interp.Yes
 	// A leading dash-word is the file here, so `. -p dir f` is a complaint
 	// about a file called `-p` and not about an option.

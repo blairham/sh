@@ -1524,6 +1524,9 @@ func Semantics() interp.Semantics {
 	// the off-panel reading that keeps the two questions apart (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// The same answer as bash, measured the same day on 5.9.2: `s+=5 kf` in
+	// front of a `function`-form function shows the body `base5` (#3161).
+	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.No
 	// A prefix to a *builtin* is the other question and this shell answers it
 	// the other way: the attribute is left exactly where it was. `export z=1;
 	// z=2 typeset -p z` lists `export z=2` and `c=1; c=2 typeset -p c` lists a

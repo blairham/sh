@@ -780,6 +780,12 @@ func Semantics() interp.Semantics {
 	// that moves under it, which is what macOS `/bin/sh` is (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// A prefix in front of a `function`-form function writes this shell's
+	// own cell, exactly as it does in front of a POSIX-form one: measured
+	// 2026-09-18 on 5.3.20, `s=base; function kf { echo "[$s]"; }; s+=5 kf`
+	// shows the body `base5`, which is the append reading the shell's value
+	// (#3161).
+	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.No
 	// And a prefix to a *builtin* is exported too, which is the reading that
 	// makes it the command's environment rather than a value this shell holds
 	// for one line: `v=1; v=9 eval 'env | grep "^v="'` hands the child `v=9`

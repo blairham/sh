@@ -3040,6 +3040,12 @@ type Runner struct {
 	// `b=1 a=2` reports a's. A scalar, so a subshell gets its own copy.
 	disciplineStatus    int
 	disciplineStatusSet bool
+	// askingTheStoreOnly marks a read that is a **set-ness test** rather
+	// than a read of a value, so the value's producer is not run for it.
+	// See Runner.askTheStoreOnly, where the measurement is. A scalar, and
+	// restored by the closure that set it rather than cleared, because a
+	// set-ness test can be written inside one — `${x+${y+S}}`.
+	askingTheStoreOnly bool
 	// The frame a script has pointed the shell's location parameters at, the
 	// depth it did so from, and a name written over the top of it. See
 	// interp/callstack.go, where all four are documented together.
@@ -5464,6 +5470,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// told about it, are the two axes taken back below.
 		var undo []savedVar
 		var callHeld []string
+		// Whether the cell the prefix writes belongs to the **call** rather
+		// than to the shell. Asked once for the command and not once per
+		// name, because it is a fact about the function being called — see
+		// Runner.prefixScopedToTheCall, where the panel is.
+		scoped := r.prefixScopedToTheCall(fn, c.Assigns)
+		if r.unspecified {
+			return nil
+		}
 		for _, a := range c.Assigns {
 			if a.Operand {
 				continue
@@ -5486,14 +5500,24 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// here evaluates the subscript or the right-hand side.
 				continue
 			}
-			if r.subscriptedPrefixTakenBack(a) {
+			if r.subscriptedPrefixTakenBack(a) || scoped {
 				undo = append(undo, r.saveVar(a.Name))
+			}
+			if scoped {
+				// The cell is the call's own, so it starts from **nothing**
+				// and not from what the shell holds — which is the whole of
+				// why `s+=5` in front of one shows the body `5` and not
+				// `base5`. Emptied after the name has been saved, so the
+				// take-back below puts the shell's own back.
+				r.hideVar(a.Name)
 			}
 			// A prefix to a function persists here, so it is a store and
 			// fires the discipline a store fires — with `.append` for `+=`,
 			// which is the event the operator names. See
-			// interp/prefixdiscipline.go.
-			r.prefixStore(ctx, a, true)
+			// interp/prefixdiscipline.go. A scoped prefix stores into a cell
+			// the call just made, which no hook is watching — see
+			// Runner.prefixScopedToTheCall.
+			r.prefixStore(ctx, a, !scoped)
 			callHeld = append(callHeld, a.Name)
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
@@ -5535,7 +5559,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		defer func() {
 			bodyLine := r.line
 			r.line = callLine
-			r.takeBackFunctionPrefix(undo)
+			r.takeBackFunctionPrefix(undo, scoped)
 			r.line = bodyLine
 		}()
 		// `$_` belongs to the *call* and not to the body: whatever the last
@@ -7339,17 +7363,67 @@ func (r *Runner) restoreVar(u savedVar) {
 // anything. The comparison is of the whole state rather than the scalar,
 // because the prefix is taken back whole or not at all — the array a name held
 // and the export attribute it carried are as much a difference as the value.
-func (r *Runner) takeBackFunctionPrefix(undo []savedVar) {
+func (r *Runner) takeBackFunctionPrefix(undo []savedVar, scoped bool) {
 	for i := len(undo) - 1; i >= 0; i-- {
 		if r.matchesSavedVar(undo[i]) {
 			continue
 		}
-		if r.ask(r.sem().AssignmentPrefixPersistsAfterAFunction,
+		if !scoped && r.ask(r.sem().AssignmentPrefixPersistsAfterAFunction,
 			"an assignment before a function persisting after the call") {
+			// The persisting answer, which a *scoped* prefix never reaches:
+			// what the call was given goes with the call, so there is
+			// nothing left for the question to be about. See
+			// Runner.prefixScopedToTheCall.
 			continue
 		}
 		r.restoreVars(undo[i : i+1])
 	}
+}
+
+// prefixScopedToTheCall reports whether an assignment prefix in front of this
+// function writes a cell belonging to the **call** rather than to the shell.
+//
+// One shell spells functions two ways and scopes a prefix differently for
+// each. Measured 2026-09-18 from a script file under `env -i` with a scratch
+// HOME, with `s=base`, `pf() { print "[$s]"; }` and
+// `function kf { print "[$s]"; }`:
+//
+//	                   s=5 pf   after   s+=5 kf   after
+//	bash 5.3.20        [5]      base    [base5]   base
+//	zsh 5.9.2          [5]      base    [base5]   base
+//	ksh93u+ 2012       [5]      5       [5]       base
+//
+// The `after` column of the POSIX form is the axis
+// AssignmentPrefixPersistsAfterAFunction already records. This is the other
+// one, and the **append** is what makes it visible in the two columns whose
+// prefix never persists: the body sees `base5` where the cell is the
+// shell's, and `5` where the call has just made a fresh one. Which is the
+// rule appendedScalar already writes down for `local a+=2`, arrived at from
+// the prefix's side.
+//
+// The hook that follows the store goes with it. A discipline fires where the
+// value is stored — see interp/prefixdiscipline.go — and `s=5 kf` fires
+// nothing at all in the column that scopes it, because the cell the store
+// lands in is one the call just made and nothing was watching it.
+//
+// Asked only where a `function`-form function is really being called with a
+// prefix in front of it, so a dialect without the keyword is never asked.
+func (r *Runner) prefixScopedToTheCall(fn *syntax.FuncDecl, assigns []*syntax.Assign) bool {
+	if fn == nil || !fn.Keyword {
+		return false
+	}
+	named := false
+	for _, a := range assigns {
+		if !a.Operand {
+			named = true
+			break
+		}
+	}
+	if !named {
+		return false
+	}
+	return r.ask(r.sem().PrefixToAKeywordFunctionIsScopedToTheCall,
+		"an assignment before a `function`-form function belonging to the call")
 }
 
 // matchesSavedVar reports whether a name is in exactly the state that was

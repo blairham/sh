@@ -1120,6 +1120,13 @@ func Semantics() interp.Semantics {
 	// during the call and none after it either (#2407).
 	s.AssignmentPrefixPersistsAfterAFunction = interp.Yes
 	s.PrefixToAFunctionIsExported = interp.No
+	// And a prefix in front of a `function`-form function belongs to the
+	// call: measured 2026-09-18, `s=base; function kf { print "[$s]"; };
+	// s+=5 kf` shows the body `5` — a fresh cell with nothing to append to
+	// — and leaves `base` behind, where the POSIX-form `pf` above keeps the
+	// 5. The same split this shell makes for a `typeset` inside the body,
+	// read from the prefix's side (#3161).
+	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.Yes
 	// The same direction at a builtin, and the same reading: a prefix is an
 	// ordinary assignment to this shell, so a name that had the export
 	// attribute *loses* it for the length of the command. `export z=1; z=2

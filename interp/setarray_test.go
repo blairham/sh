@@ -34,6 +34,11 @@ func setArrayRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics)
 	sem.BadSetOptionNameFatal = No
 	// And the letter's, which `set -A` with no name asks: `-A` is a letter.
 	sem.BadSetOptionLetterFatal = No
+	// What number a fatal refusal leaves behind is its own axis with its own
+	// test, and it is asked wherever the refusal ends the shell rather than
+	// only from `-c` (#3504) — answered flat so these rows see the refusal
+	// and not a question about its status.
+	sem.SetArrayBadNameLeavesZero = No
 	if set != nil {
 		set(&sem)
 	}

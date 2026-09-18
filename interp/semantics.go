@@ -6628,9 +6628,9 @@ type Semantics struct {
 	// both, so there is no listing after it.
 	AttributeOverAFrozenNameIsRefused Answer
 
-	// SetArrayBadNameLeavesZeroFromCommandString makes `set -A` refuse a
-	// name that is not one and leave the shell exiting **0**, where the same
-	// refusal from a script file leaves 1.
+	// SetArrayBadNameLeavesZero makes `set -A` refuse a name that is not one
+	// and leave **0** behind, where every other refusal that shell makes
+	// leaves 1.
 	//
 	// True in zsh, false in ksh93, and unreachable in the two shells without
 	// the letter — SetArrayLetter is read rather than asked, so a dialect
@@ -6653,11 +6653,21 @@ type Semantics struct {
 	//
 	// And it is a flat 0 rather than the previous command's status:
 	// `-c 'false; set -A 1bad v'` exits 0 too.
-	SetArrayBadNameLeavesZeroFromCommandString Answer
+	//
+	// **The route is not the rule here either.** This field also used to be
+	// named for `-c` and to be read only there, on the same 2026-09-06
+	// measurement of two top-level rows. Measured again 2026-09-17 with the
+	// refusal wrapped so its number is readable: `( set -A 1bad v; echo x );
+	// echo "next=$?"` is `next=0` in a script file as well as under `-c`, and
+	// `set -A 1bad v && echo yes` exits 1 under `-c` as well as in a file. It
+	// answers every row Runner.refusalZeroIsRaisedBackToOne was measured over
+	// the same way its neighbor below does, so the two read one function
+	// rather than two copies of a rule (#3504).
+	SetArrayBadNameLeavesZero Answer
 
-	// StoreRefusalOfADeclaredElementLeavesZeroFromCommandString makes a
-	// declaration whose *store* refuses the element end the shell at **0**
-	// where the same refusal from a script file leaves 1.
+	// StoreRefusalOfADeclaredElementLeavesZero makes a declaration whose
+	// *store* refuses the element leave **0** behind, where every other
+	// refusal that shell makes leaves 1.
 	//
 	// True in zsh, false in bash, and unreachable in the shells with no
 	// arrays. Measured 2026-09-14, `-f` and a scratch `HOME`, each line run
@@ -6702,9 +6712,19 @@ type Semantics struct {
 	// The bare assignment is a separate route and does not move: `a=(x y);
 	// a[0]=v` is 1 by both routes, as are `a[0]+=v` and `a[0,0]=v`. That is
 	// what #1770 recorded as the divergence — "a declaration, where the bare
-	// assignment agrees" — and what it did not have is the route, having
-	// measured `-c` alone: from a script file zsh answers 1 and this engine
-	// already agreed.
+	// assignment agrees".
+	//
+	// **The route is not the rule, and this field used to say it was.** The
+	// `-c`/file column above is a real difference and it is not a difference
+	// about the refusal: a script file's top level reports 1 whatever the
+	// refusal left, which is the shell's own exit. The 0 is there on both
+	// routes and is readable on both — measured 2026-09-17, `a=(1 2 3); (
+	// typeset "a[b c]"=v; echo x ); echo "next=$?"` is `next=0` in a file as
+	// well as under `-c`, where this engine answered 1 — and it is raised
+	// back to 1 in three places that have nothing to do with how the program
+	// reached the shell. Runner.refusalZeroIsRaisedBackToOne holds them, with
+	// the sixteen rows they were measured over (#3504). The field's name lost
+	// `FromCommandString` with the condition.
 	//
 	// bash is the No that makes the field worth having rather than an
 	// implicit zsh-ism: `a=(x y); declare "a[1+]"=v` ends bash at 1 by both
@@ -6714,8 +6734,9 @@ type Semantics struct {
 	//
 	// unpinned dash, ash: neither has arrays, so no declaration of theirs
 	// reaches a store that could refuse an element. See
-	// TestAStoreRefusalOfADeclaredElementFollowsTheRoute for the axis itself.
-	StoreRefusalOfADeclaredElementLeavesZeroFromCommandString Answer
+	// TestAStoreRefusalOfADeclaredElementLeavesZeroAtTheTopLevel for the axis
+	// itself and TestWhereARefusalsZeroIsRaisedBackToOne for the raisers.
+	StoreRefusalOfADeclaredElementLeavesZero Answer
 
 	// FailedExpansionAbandonsTheLine ends the *line* a failed expansion
 	// happened on and carries on at the next one, rather than ending the
@@ -16543,6 +16564,66 @@ type Semantics struct {
 	// that column a refusal it does not make — measured, and the reason this
 	// pair exists at all is that the two constructs were assumed to agree.
 	StoreOperandWholeArraySubscriptOverATable WholeArraySubscriptAssignPolicy
+
+	// StoreRefusalThroughPrintfLeavesZero makes a refused store through
+	// `printf -v`'s operand leave **0** behind where the identical refusal
+	// through `read`'s leaves 1.
+	//
+	// Only reachable where the refusal is fatal, since that is the one branch
+	// whose number a caller can still read — through a subshell's status, or
+	// through the shell's own exit from a `-c` string.
+	//
+	// Measured 2026-09-17, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=$d`,
+	// stdin /dev/null, a fresh directory, zsh 5.9.2, `a=(1 2 3)` in front and
+	// `printf 'Y\n' > in.txt` for the `read` rows:
+	//
+	//	                                            file   -c
+	//	( printf -v "a[1/0]" X ); echo $?             0     0
+	//	( read "a[1/0]" < in.txt ); echo $?           1     1
+	//	printf -v "a[1/0]" X          (exit status)   1     0
+	//	read "a[1/0]" < in.txt        (exit status)   1     1
+	//
+	// The empty subscript answers the same way — `( printf -v 'a[]' X )` is
+	// 0 and `( read 'a[]' )` is 1 — so it is the *builtin* and not which
+	// subscript refused, which is what makes this one field rather than one
+	// per refusal (#3497, #3518).
+	//
+	// The file/`-c` split on the third row is not this field: the shell is
+	// ending either way and a script file's top level reports 1 whatever the
+	// refusal left, which Runner.refusalZeroIsRaisedBackToOne holds along
+	// with the other two raisers. That is the same rule
+	// StoreRefusalOfADeclaredElementLeavesZero reads one builtin over.
+	//
+	// True in zsh. False in bash and ksh93, where the refusal is not fatal at
+	// all and the builtin's own status is what a script reads. Unreachable in
+	// dash and BusyBox ash, whose `printf` has no `-v`.
+	StoreRefusalThroughPrintfLeavesZero Answer
+
+	// ExportThroughASubscriptedOperandRecordsTheLetter puts the export
+	// attribute on the **array** when `export` is given an operand that names
+	// one of its elements.
+	//
+	// Nothing reaches the environment in either column, so what this decides
+	// is the attribute and the listing behind it. Measured 2026-09-17,
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=$d`, stdin /dev/null, a fresh
+	// directory, a script file, with `a=(1 2 3)` in front and `typeset -p a`
+	// and a child's environment read back after:
+	//
+	//	                      zsh 5.9.2                ksh93u+
+	//	export 'a[1]'=v       typeset -a a=( v 2 3 )   typeset -x -a a
+	//	export 'a[1]'         typeset -a a=( '' 2 3 )  typeset -x -a a
+	//	in a child's env      nothing                  a=1
+	//
+	// So the column that records the letter is the one whose child carries
+	// the value, which is what makes this a field rather than a line to
+	// delete: dropping the call would have taken ksh93's `a=1` with it.
+	//
+	// bash cannot be asked — it refuses the bracketed operand one complaint
+	// earlier, as ``export: `a[1]': not a valid identifier`` at 1 with the
+	// rest of the line still running, which DeclarationTakesASubscript
+	// already records. Both operand shapes reach this through one call, so
+	// the valueless spelling and the one with a value move together (#3510).
+	ExportThroughASubscriptedOperandRecordsTheLetter Answer
 
 	// BadSubscriptToADeclaration is the same question at the third site: how
 	// much a *declaration* gives up when the subscript in an operand it is

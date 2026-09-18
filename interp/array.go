@@ -1545,10 +1545,11 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 		// The one refusal in here a builtin has to fold into its own status:
 		// the others end the script, so nothing reads what they left. See
 		// Semantics.BadSubscriptToAnOutputOperand.
-		return r.badSubscriptGivesUp(r.sem().BadSubscriptToAnOutputOperand,
+		return r.storeRefusalStatus(builtin, r.badSubscriptGivesUp(
+			r.sem().BadSubscriptToAnOutputOperand,
 			"how much a store through a builtin's operand gives up for an unevaluable subscript",
 			Wording(r.diag().StoreOperandBadSubscript, "%[2]s",
-				builtin, r.subscriptFailure(sub, err))), true
+				builtin, r.subscriptFailure(sub, err)))), true
 	}
 	r.setArrayElem(base, idx, sub, value)
 	return 0, false

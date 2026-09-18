@@ -178,7 +178,7 @@ func TestSemantics(t *testing.T) {
 		// The other shell with the array letter, and it leaves 1 on both
 		// routes — which is what makes the zero that shell's quirk rather
 		// than the letter's rule (#1172).
-		{"SetArrayBadNameLeavesZeroFromCommandString", s.SetArrayBadNameLeavesZeroFromCommandString, interp.No},
+		{"SetArrayBadNameLeavesZero", s.SetArrayBadNameLeavesZero, interp.No},
 		// A failed expansion ends the shell here too (#1171).
 		{"FailedExpansionAbandonsTheLine", s.FailedExpansionAbandonsTheLine, interp.No},
 		{"ReadonlyReassignmentByDeclarationFatal", s.ReadonlyReassignmentByDeclarationFatal, interp.Yes},

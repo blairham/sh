@@ -1778,8 +1778,14 @@ func Semantics() interp.Semantics {
 	// Except for one refusal, which leaves 0 behind when the program came
 	// from an argument rather than from a file. Measured on every
 	// neighboring refusal too, and they all leave 1 — see the axis.
-	s.SetArrayBadNameLeavesZeroFromCommandString = interp.Yes
-	s.StoreRefusalOfADeclaredElementLeavesZeroFromCommandString = interp.Yes
+	s.SetArrayBadNameLeavesZero = interp.Yes
+	s.StoreRefusalOfADeclaredElementLeavesZero = interp.Yes
+	// And a refused store through `printf -v`'s operand, which parts from
+	// the identical refusal through `read`'s here: measured 2026-09-17,
+	// `a=(1 2 3); ( printf -v "a[1/0]" X ); echo $?` is 0 and
+	// `( read "a[1/0]" < in.txt )` is 1, by both routes, and the empty
+	// subscript answers the same way at each.
+	s.StoreRefusalThroughPrintfLeavesZero = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
@@ -2455,6 +2461,11 @@ func Semantics() interp.Semantics {
 	// glob-matched before the builtin saw it and the line died as
 	// `no matches found` (#1203).
 	s.DeclarationTakesASubscript = interp.Yes
+	// The element is written and the array's own attributes are left
+	// alone: measured 2026-09-17, `a=(1 2 3); export 'a[1]'=v` leaves
+	// `typeset -a a=( v 2 3 )` with no `x` on it and nothing in a child's
+	// environment, and `export 'a[1]'` with no value agrees.
+	s.ExportThroughASubscriptedOperandRecordsTheLetter = interp.No
 	// The declaration builtins take one: `typeset a[1]=v` sets the element
 	// and reports success, measured.
 	s.TypesetTakesASubscript = interp.Yes

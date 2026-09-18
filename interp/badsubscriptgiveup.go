@@ -386,11 +386,12 @@ func (r *Runner) storeOperandEmptySubscript(base, operand, sub, builtin string) 
 		// the axis below instead.
 		return r.badBuiltinName(builtin, operand, operand, No), true
 	case EmptyArithSubscriptIsInvalid:
-		return r.badSubscriptGivesUp(r.sem().BadSubscriptToAnOutputOperand,
+		return r.storeRefusalStatus(builtin, r.badSubscriptGivesUp(
+			r.sem().BadSubscriptToAnOutputOperand,
 			"how much a store through a builtin's operand gives up for an unevaluable subscript",
 			Wording(r.diag().StoreOperandBadSubscript, "%[2]s", builtin,
 				Wording(r.diag().ArithEmptySubscriptTarget,
-					"not an identifier: %[1]s[]", base))), true
+					"not an identifier: %[1]s[]", base)))), true
 	}
 	r.diagf("%s\n", r.unanswered("a subscript written with nothing in it"))
 	r.status, r.unspecified = 2, true

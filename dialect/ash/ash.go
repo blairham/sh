@@ -537,6 +537,8 @@ func Semantics() interp.Semantics {
 	s.LocalOutsideAFunctionIsFatal = interp.Yes
 	// No `typeset` and no `declare` — both are `not found` — so neither can
 	// be asked about a subscript or a readonly.
+	// unanswered ExportThroughASubscriptedOperandRecordsTheLetter: no
+	// arrays and no subscripted operand, so nothing reaches it.
 	s.DeclarationTakesASubscript = interp.No
 	s.TypesetTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.No
@@ -1506,7 +1508,10 @@ func Semantics() interp.Semantics {
 	// one word, and the nine `BraceRange…` and `BraceCharRange…` axes are
 	// unanswered beside it for the same reason.
 	//
-	// unanswered StoreRefusalOfADeclaredElementLeavesZeroFromCommandString:
+	// unanswered StoreRefusalThroughPrintfLeavesZero: this shell's
+	// `printf` has no `-v`, so no store is reached through it.
+	//
+	// unanswered StoreRefusalOfADeclaredElementLeavesZero:
 	// no declaration utility and no array literal here either, so neither
 	// route reaches a store that could refuse an element. Measured
 	// 2026-09-14 in the pinned image, `a=(x y); typeset "a[0]"=v` is `syntax

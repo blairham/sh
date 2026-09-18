@@ -3125,7 +3125,10 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
-				r.declarationExports(base, !strings.ContainsRune(opts, 'n'))
+				r.exportTheArrayOfAnElement(base, !strings.ContainsRune(opts, 'n'))
+				if r.unspecified {
+					return r.status
+				}
 				continue
 			}
 			// And with no value the brackets are still the dialect's to
@@ -3134,12 +3137,19 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			// either: `export 'a[1]'` exported a variable literally named
 			// `a[1]`, which no environment can carry, where ksh93 exports
 			// `a` (#1380 at the fourth spelling).
-			n, _, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{export: true}, false)
+			// No export letter in the element declaration's own flags: the
+			// letter lands on the *array* or nowhere, and which of those it
+			// is comes from the one call below, so a dialect cannot record
+			// it by two routes and answer them differently (#3510).
+			n, _, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{}, false)
 			if done {
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
-				r.declarationExports(base, !strings.ContainsRune(opts, 'n'))
+				r.exportTheArrayOfAnElement(base, !strings.ContainsRune(opts, 'n'))
+				if r.unspecified {
+					return r.status
+				}
 				continue
 			}
 			if r.unspecified {

@@ -1156,6 +1156,16 @@ func Semantics() interp.Semantics {
 	// f(){ typeset -p v; }; v=9 f` prints a plain `v=9` here against bash's
 	// `declare -x v="9"`, so a name the script had exported reaches no child
 	// during the call and none after it either (#2407).
+	// And `command` in front of a special builtin does **not** take that
+	// persistence away here, which is where this shell parts from the other
+	// two that persist anything. Measured 2026-09-18 from a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`: `s=base; s=C command :` leaves
+	// `C`, `s=E command eval :` leaves `E`, and the subscripted spelling
+	// `arr=(x y z); arr[1]=A command :` leaves `A`. `s=Q command true` is
+	// `base`, which is the control: a regular builtin's prefix never
+	// persisted, so the word is being looked through rather than ignored
+	// (#3448).
+	s.CommandKeepsASpecialBuiltinsPrefix = interp.Yes
 	s.AssignmentPrefixPersistsAfterAFunction = interp.Yes
 	s.PrefixToAFunctionIsExported = interp.No
 	// And a prefix in front of a `function`-form function belongs to the
@@ -1172,6 +1182,13 @@ func Semantics() interp.Semantics {
 	// and the child of `z=2 eval env` is told nothing. Measured 2026-09-16 in
 	// 93u+ 2012-08-01 (#3437).
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOff
+	// And a listing with no operand walks the **environment** the command
+	// was handed, so the prefix's entry is in it and counts as exported
+	// whatever that row just did to the attribute: `m=1; m=9 export -p`
+	// writes `export m=9` for a name nothing ever exported, on the same line
+	// whose `m=9 typeset -p m` writes the unexported `m=9`. Measured
+	// 2026-09-18 (#3446).
+	s.PrefixInAWholeTableListing = interp.PrefixInAWholeTableListingIsTheCommandsEnvironment
 	// Nothing to keep: a prefix persists on a special builtin here by the
 	// axis above, and `typeset` keeps it too — `x=1; x=2 typeset x` reads `2`
 	// and so does `i=2 typeset -i i`, whatever letters are written. So every

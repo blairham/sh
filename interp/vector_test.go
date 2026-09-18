@@ -57,6 +57,10 @@ func testSemantics() Semantics {
 	// about a suite writing `x=1 true` on the way to something else. The
 	// suite that is about them sets them itself (#3437).
 	s.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
+	// A whole-table listing sees the prefix as an ordinary entry, which is
+	// what this engine did before the axis existed — so a test that is not
+	// about it reads the listing it always read. See interp/prefixlisting.go.
+	s.PrefixInAWholeTableListing = PrefixInAWholeTableListingIsAnOrdinaryEntry
 	s.DeclarationPromotesThePrefixEntry = No
 
 	// What a traced assignment shows of its own elements and of its

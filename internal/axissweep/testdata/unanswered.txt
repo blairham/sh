@@ -154,6 +154,7 @@ ash   NumericTypeLettersAreExclusive
 ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
 ash   OperatorAfterTheSubscriptListingIsBad
+ash   PrefixInAWholeTableListing
 ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
 ash   PrefixToAKeywordFunctionIsScopedToTheCall
@@ -408,6 +409,7 @@ dash  PrefixToAKeywordFunctionIsScopedToTheCall
 dash  PrintfFloatOperandIsEvaluatedTwice
 dash  PrintfOutputPrecedesComplaint
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
+dash  PrefixInAWholeTableListing
 dash  PrintfReportsAMissingHexDigit
 dash  ProducedParameterListing
 dash  QuitResetRestoresTheDefault

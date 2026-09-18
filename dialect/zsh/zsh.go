@@ -1573,6 +1573,12 @@ func Semantics() interp.Semantics {
 	// identifier` — so it is the positional alone that parts (#1541).
 	s.AssignThroughExpansionMayNameAPositional = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
+	// And `command` in front of one takes the persistence away where the
+	// option puts it there. Reachable only under `setopt posixbuiltins`,
+	// which is where the row above turns yes, and measured there:
+	// 2026-09-18, `setopt posixbuiltins; s=base; s=C command :` leaves
+	// `base` while the bare `s=P :` leaves `P` (#3448).
+	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	// And a prefix to a function is transient here too, and exported while
 	// the call runs: `f(){ echo "[$v]"; }; v=1; v=9 f` prints `[9]` with
 	// `v=9` in a child's environment, and leaves `1` behind. Measured
@@ -1589,6 +1595,11 @@ func Semantics() interp.Semantics {
 	// plain `typeset c=2`, so nothing is gained and nothing taken off.
 	// Measured 2026-09-16 in 5.9.2 (#3437).
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
+	// And a listing with no operand sees the prefix's entry as an ordinary
+	// one: its value is written and the attribute tables say the rest, so
+	// `m=1; m=9 export -p` writes nothing and `m=9 typeset -p` writes
+	// `typeset m=9`. Measured 2026-09-18 (#3446).
+	s.PrefixInAWholeTableListing = interp.PrefixInAWholeTableListingIsAnOrdinaryEntry
 	// And a declaration keeps nothing: `b=7; b=8 readonly b` reads `7` back
 	// and unfrozen, `d=8 export d` reads `7`, `y=2 typeset -r y` reads `1`.
 	// The temporary the prefix made is what the attribute went on, and it

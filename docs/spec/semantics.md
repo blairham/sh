@@ -361,6 +361,80 @@ variable the construct turned out to depend on — including the control,
 an ordinary prefix to a name nothing froze, which complains about nothing
 in all six columns.
 
+## `command` in front of a special builtin, and its prefix
+
+Measured 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with a scratch HOME.
+
+|  | `s=C command :` | `s=E command eval :` | `s=P :` | `s=Q command true` |
+| --- | --- | --- | --- | --- |
+| ksh93u+ 2012-08-01 | **C** | **E** | P | base |
+| dash 0.5.12 | base | base | P | base |
+| BusyBox ash 1.37.0 | base | base | P | base |
+| bash 5.3.20, zsh 5.9.2 | base | base | base | base |
+
+The third column is the control and it is what makes this a question about
+`command` rather than about the builtin: the same prefix on a bare `:`
+persists in all three of the shells that persist anything, and only the
+`command` spelling of it splits them. The fourth is the other control: a
+*regular* builtin's prefix never persisted, so `command true` is `base`
+everywhere and the word is being looked through rather than ignored.
+
+`Semantics.CommandKeepsASpecialBuiltinsPrefix` is the axis, and it is asked
+only where `AssignmentPrefixPersistsOnSpecialBuiltin` is yes and `command` was
+really written in front of a special builtin. bash and zsh reach it under
+`set -o posix` and `setopt posixbuiltins`, which is where their persistence
+turns on, and both answer no there.
+
+It reaches the subscripted spelling with everything else: `arr=(x y z);
+arr[1]=A command :` leaves `A` in ksh93u+ and does not in dash.
+
+## A whole-table listing and the command's own prefix
+
+A listing that **names** a variable sees the running command's prefix in every
+column — `k=9 typeset -p k` is the prefix's value wherever it can be asked. A
+listing with **no operand** is a different question and the panel splits three
+ways. Measured 2026-09-18 the same way, three names at a time: `k` exported
+before the command, `m` set and not exported, `z` never assigned.
+
+|  | `k=9 export -p` | `k=9 typeset -p` | `k=9 typeset -p k` | `k=9 set` |
+| --- | --- | --- | --- | --- |
+| bash 5.3.20 | `declare -x k="1"` | `declare -x k="1"` | `declare -x k="9"` | `k=1` |
+| ksh93u+ | `export k=9` | `k=9` | `k=9` | `k=9` |
+| zsh 5.9.2 | `export k=9` | `export k=9` | `export k=9` | `k=9` |
+
+|  | `m=9 export -p` | `m=9 typeset -p` | `z=9 export -p` | `z=9 typeset -p` |
+| --- | --- | --- | --- | --- |
+| bash 5.3.20 | nothing | `declare -- m="1"` | nothing | nothing |
+| ksh93u+ | `export m=9` | `m=9` | `export z=9` | `z=9` |
+| zsh 5.9.2 | nothing | `typeset m=9` | nothing | `typeset z=9` |
+
+Three answers, and the `m` and `z` rows are what need the third.
+
+**The prefix is not there** (bash): the listing answers from the shell's own
+variables — value, attributes and existence — so a name the prefix *created*
+is in no whole-table listing at all, and the row for one it shadowed is the
+row from before. The same shell's named `typeset -p k` writes `declare -x
+k="9"` on the line above, which is what says this is about the operand-less
+shape and not about the prefix.
+
+**The prefix is an ordinary entry** (zsh): its value is written and the
+attribute tables say the rest, so `m=9 export -p` writes nothing because `m`
+is not exported.
+
+**The prefix is the command's environment** (ksh93): its value is written and
+the entry counts as **exported** whatever the tables hold — for a name nothing
+ever exported, and on the very line whose `typeset -p m` writes the unexported
+form. That is a statement about which names a *filtered* listing admits rather
+than about the name's attributes, and the row that proves it is `m=9 readonly
+-p`, which writes nothing: the admission belongs to the export filter alone.
+
+`Semantics.PrefixInAWholeTableListing` is the axis. dash and BusyBox ash are
+unreachable rather than unanswered: neither has a `typeset`, `export -p` is
+their only whole-table declaration listing, and `export` is a special builtin
+there whose prefix has *persisted* by the time the listing runs — so there is
+no second table to tell apart from the first.
+
 ## An assignment kept in front of a builtin that is not special
 
 Measured 2026-09-16 over the whole panel and the four columns on this machine

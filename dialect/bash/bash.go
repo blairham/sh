@@ -825,6 +825,12 @@ func Semantics() interp.Semantics {
 	s.SelectTakesUnterminatedReply = interp.No
 	s.SelectEofPrintsNewline = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
+	// And `command` in front of one takes the persistence away where the
+	// option puts it there. Reachable only under `set -o posix`, which is
+	// where the row above turns yes, and measured there: 2026-09-18,
+	// `set -o posix; s=base; s=C command :` leaves `base` while the bare
+	// `s=P :` leaves `P` (#3448).
+	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	// A prefix to a *function* is the command's environment for the length
 	// of the call and nothing afterwards: `f(){ echo "[$v]"; }; v=1; v=9 f`
 	// prints `[9]`, a command the body starts is told `v=9`, and `$v` is `1`
@@ -846,6 +852,12 @@ func Semantics() interp.Semantics {
 	// exported. Measured 2026-09-16 in 5.3.20 and in 3.2.57, and bash is the
 	// only column that does either (#3437).
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOn
+	// And a listing with **no operand** does not see that prefix at all: it
+	// answers from the shell's own variables, so `export k=1; k=9 export -p`
+	// writes `declare -x k="1"` on the same line whose `k=9 typeset -p k`
+	// writes `declare -x k="9"`. A name the prefix created is in no
+	// whole-table listing here. Measured 2026-09-18 (#3446).
+	s.PrefixInAWholeTableListing = interp.PrefixInAWholeTableListingIsNotThere
 	// A declaration naming `-x` or `-r` over the name its own prefix is
 	// standing in front of keeps the prefix's value: `b=7; b=8 readonly b`
 	// leaves `declare -rx b="8"`, and so do `export` and `typeset -r`. Not

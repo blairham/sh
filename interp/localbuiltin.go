@@ -423,6 +423,7 @@ func (r *Runner) bareDeclarationListing() int {
 		if r.unspecified {
 			return r.status
 		}
+		defer r.walkingTheWholeTable()()
 		for _, name := range names {
 			// The dialect's answer, exactly as under `-p`. It changes nothing
 			// this form writes — no value at all appears on these lines, so a
@@ -503,6 +504,7 @@ func (r *Runner) everyParameterListing() int {
 	if r.unspecified {
 		return r.status
 	}
+	defer r.walkingTheWholeTable()()
 	for _, name := range names {
 		d, _ := r.listedDeclarationOf(name, produced[name], listing)
 		r.printf("%s\n", r.attributeWordDeclaration(d, locals[name]))

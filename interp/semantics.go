@@ -10769,6 +10769,57 @@ type Semantics struct {
 	// ksh93 as tolerant off ksh93's own feature.
 	CommandRejectsUnknownOption Answer
 
+	// CommandReportsEveryOperand makes `command -v` and `command -V` answer
+	// for every name they were given rather than for the first alone.
+	//
+	// Measured 2026-09-18, `command -v echo shift` from `-c` and from a
+	// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`: two lines in
+	// bash 5.3.20, zsh 5.9.2 and ksh93u+ 2012-08-01, and one in dash 0.5.12
+	// and BusyBox ash 1.37.0, which read the first operand and stop. The
+	// same split under `-V`.
+	//
+	// The status of the two that stop is the first operand's alone, which
+	// `command -v nosuch echo` shows from the other side: 127 there against
+	// a reported `echo` in the three that read on.
+	CommandReportsEveryOperand Answer
+
+	// CommandCountsAMissingOperand decides the status when `command -v` was
+	// given several names and found some of them.
+	//
+	// A separate question from the one above and measured separately, since
+	// the output is identical either way: `command -v echo nosuch` writes
+	// the one line `echo` in bash, zsh and ksh93 alike, and reports **0** in
+	// bash and **1** in the other two. So bash lets a name it found decide
+	// and the other two let a name it missed decide. With every name missing
+	// all three report 1, and with every name found all three report 0 —
+	// which is what makes this the mixed case alone.
+	//
+	// Unasked where CommandReportsEveryOperand says No, because there is
+	// only ever one answer there to take a status from.
+	CommandCountsAMissingOperand Answer
+
+	// ExpandedCommandOnlyReports takes the running away from a `command`
+	// that was reached through an expansion, leaving it what `-v` does.
+	//
+	// ksh93u+ 2012-08-01 alone, measured 2026-09-18 from script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with `c=command`: `command echo
+	// hi` prints `hi` at 0, and `$c echo hi` prints `echo` and reports 1 —
+	// the 1 being `hi`, which is not a command. `${c}`, `"$c"`, `$(echo
+	// command)` and an `eval` of the same text all behave as `$c` does,
+	// while `"command"` and `\command` run like the written word. So it is
+	// the word rather than the text: quoting does not take the power away
+	// and an expansion does.
+	//
+	// A written `-V` still wins — `$c -V echo` is the sentence at 0 — so
+	// this is a *default* for the reporting letters rather than a refusal of
+	// the run.
+	//
+	// The other three columns run what an expanded `command` names, which is
+	// also what a reader expects, so a script that reaches `command` through
+	// a variable prints a word and runs nothing in that one shell and
+	// nowhere else (#3369).
+	ExpandedCommandOnlyReports Answer
+
 	// UmaskHasTheReusableLetter gives `umask` a `-p`, which prints the mask
 	// as a command that would set it again: `umask 0022` rather than `0022`,
 	// and `umask -S u=rwx,g=rx,o=rx` with `-S` beside it.
@@ -18704,6 +18755,17 @@ func PosixSemantics() Semantics {
 		// the second.
 		CommandRejectsUnknownOption: Yes,
 		GetoptsRejectsUnknownOption: No,
+		// POSIX gives `command -v` one operand — `command -v
+		// command_name` — so the substrate answers for the first and stops,
+		// which is dash's and BusyBox ash's answer too. The three shells
+		// that read on say so for themselves, and the status question under
+		// it is unasked while this is No.
+		CommandReportsEveryOperand:   No,
+		CommandCountsAMissingOperand: No,
+		// And POSIX gives the word its meaning wherever it stands, so an
+		// expanded `command` runs what it names here. One shell takes the
+		// running away from it; that shell says so.
+		ExpandedCommandOnlyReports: No,
 		// And POSIX gives `command` a builtin to run: bypassing the function
 		// table is what the utility is for, not bypassing the builtins too.
 		CommandReachesABuiltin: Yes,

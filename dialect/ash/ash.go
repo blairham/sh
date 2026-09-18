@@ -915,6 +915,14 @@ func Semantics() interp.Semantics {
 	s.ShiftPastEndFatal = interp.No
 	// `command -Z true` is `illegal option -Z` at 2.
 	s.CommandRejectsUnknownOption = interp.Yes
+	// Whether `command -v` answers for every name it was given, and what
+	// decides the status when it found some of them. See
+	// interp.Semantics.CommandReportsEveryOperand for the split.
+	s.CommandReportsEveryOperand = interp.No
+	s.CommandCountsAMissingOperand = interp.No
+	// And whether a `command` reached through an expansion keeps the power
+	// to run what it names (#3369).
+	s.ExpandedCommandOnlyReports = interp.No
 	// And the word is a boundary around everything it runs. Measured
 	// 2026-09-13 inside the pinned alpine image: `eval 'export -q; echo
 	// INNER'` stops the script, `command eval '…'` reports 1 and carries on,

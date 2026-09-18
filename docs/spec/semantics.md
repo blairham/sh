@@ -7790,6 +7790,124 @@ the two halves, so teaching this shell a locale that groups fails a test
 that names `printf` rather than quietly writing a number with the flag
 thrown away.
 
+## What `command` and `whence` answer, and for how many names
+
+Measured 2026-09-18 from `-c` and from script files under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`: bash 5.3.20, zsh 5.9.2,
+ksh93u+ 2012-08-01 and Apple's dash 0.5.12, with BusyBox v1.37.0 reached
+through the pinned Alpine image.
+
+Four questions, and this engine had one answer where the panel has two or
+three.
+
+### A name that was never searched for
+
+ksh93's `is a tracked alias for` is the sentence for a name **PATH
+resolved**. A word that already held a slash was never searched, and it gets
+the plain sentence instead.
+
+| | `command -V ls` | `command -V ./bb/tool` |
+| --- | --- | --- |
+| ksh93u+ | `ls is a tracked alias for /bin/ls` | `./bb/tool is <dir>/./bb/tool` |
+| this engine, before | the same | `./bb/tool is a tracked alias for …` |
+
+`Diagnostics.TypePathnameOperand` is the second wording, and it is **empty in
+four of the five columns**, whose PATH wording and plain wording are the same
+string — so an empty field means "one sentence serves both" rather than "no
+sentence". `Runner.TypeExternalSentence` is where the choice is made, and it
+is exported because the dialect that needs it has a `whence` of its own: the
+tracked-alias line was written out as a literal in two places there and the
+pathname operand was wrong in both.
+
+The discriminator is the slash and not the hash table. `command -V zzc` says
+`tracked alias` on a name's *first* lookup, and clearing the table with
+`unalias -a` or turning tracking off with `set +h` changes nothing (#2953).
+
+### `-a` and `-p` are different questions
+
+`-a` says how many rows there are; `-p` says what a row is. Measured on
+ksh93u+ with two copies of one name on PATH, over eight orderings:
+
+| letters | rows | wording |
+| --- | --- | --- |
+| `-a` | both | sentences |
+| `-p` | the first | bare path |
+| `-ap` | both | bare paths |
+| `-pa` | both | sentences |
+| `-apv` | both | sentences |
+| `-avp` | both | bare paths |
+| `-pav` | both | sentences |
+| `-vap` | both | bare paths |
+
+So the wording is the bare path when `p` is the **last of `a`, `p` and `v`**
+to appear, and the sentence otherwise — which is the rule the two-letter rows
+already followed, with `a` joining it. The not-found report follows the
+wording: `-pv` and `-pa` say `whence: NAME: not found` where `-p` and `-vp`
+say nothing at all. And `-p` restricts the answer to PATH however it is
+written, so a builtin is invisible under `-ap` and under `-pa` alike.
+
+`whenceOne` checked `-p` before `-a` and handed the whole call to the
+single-hit search, so `whence -ap dup` was one line where the real shell
+writes two. zsh's own `whence` had the identical defect from the identical
+shape and is fixed in the same change (#3198).
+
+### How many names `command -v` answers for
+
+| probe | bash 5.3.20 | zsh 5.9.2 | ksh93u+ | dash 0.5.12 | BusyBox ash |
+| --- | --- | --- | --- | --- | --- |
+| `command -v echo shift` | both, 0 | both, 0 | both, 0 | `echo`, 0 | `echo`, 0 |
+| `command -v echo nosuch` | `echo`, **0** | `echo`, **1** | `echo`, **1** | `echo`, 0 | `echo`, 0 |
+| `command -v nosuch echo` | `echo`, 0 | `echo`, 1 | `echo`, 1 | —, 127 | —, 127 |
+| `command -v nosuch1 nosuch2` | 1 | 1 | 1 | 127 | 127 |
+
+Two axes, because the second row's **output** is identical in three columns
+and its status is not. `Semantics.CommandReportsEveryOperand` is how many
+names are read — dash and BusyBox read the first and stop, which is POSIX's
+`command -v command_name` and so is the substrate's answer.
+`Semantics.CommandCountsAMissingOperand` is what decides the status when the
+answers are mixed: bash lets a name it found decide and zsh and ksh93 let a
+name it missed decide. With every name missing or every name found all three
+agree, which is what makes this the mixed case alone — and why the second axis
+is asked there and nowhere else.
+
+This engine had dash's answer in every column, so a portable `command -v a b`
+reported half of what three of the five shells report, silently, the missing
+line being the second one.
+
+### A `command` that arrived through an expansion
+
+In ksh93 the written word runs the utility and an expanded one looks it up.
+
+| line, with `c=command` | ksh93u+ | the other four |
+| --- | --- | --- |
+| `command echo hi` | `hi`, 0 | `hi`, 0 |
+| `"command" echo hi` | `hi`, 0 | `hi`, 0 |
+| `\command echo hi` | `hi`, 0 | `hi`, 0 |
+| `$c echo hi` | **`echo`, 1** | `hi`, 0 |
+| `${c} echo hi` | **`echo`, 1** | `hi`, 0 |
+| `"$c" echo hi` | **`echo`, 1** | `hi`, 0 |
+| `$(echo command) echo hi` | **`echo`, 1** | `hi`, 0 |
+| `eval '$c echo hi'` | **`echo`, 1** | `hi`, 0 |
+| `$c -v echo` | `echo`, 0 | `echo`, 0 |
+| `$c -V echo` | `echo is a shell builtin`, 0 | the same |
+| `$c typeset v=1` | `typeset`, 1, and `v` unset | `v` is 1 |
+
+So it is the **word** and not the text: quoting and a backslash leave it
+written, and a parameter, a substitution or an `eval` take the running away.
+What is left is exactly what `-v` does, and a written `-V` still wins — which
+is why `Semantics.ExpandedCommandOnlyReports` sets a *default* for the
+reporting letters rather than refusing the run.
+
+The 1 in those rows is the second operand: `$c echo hi` is `command -v echo
+hi`, which names `echo` and cannot find `hi`. Reproducing it needs the
+multi-operand answer above, which is why the two landed together — with one
+operand read, the same line would have come back at 0.
+
+`commandWordWasWritten` is the test, and it is "no substitution span in the
+first word" rather than a test on the source spelling: the quoted and
+backslashed rows are written words, and a spelling test would have called them
+expanded and been wrong in two rows of eleven (#3369).
+
 ## Where a one-shell builtin's code lives: register in the core, take it away
 
 Two placements are available for a builtin only some shells have, and the

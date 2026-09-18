@@ -1752,6 +1752,28 @@ type Diagnostics struct {
 	TypeFunctionFrom string
 	TypeExternal     string
 
+	// TypePathnameOperand is that same line for an operand that was written
+	// with a slash in it — a name the shell never searched PATH for, because
+	// there was nothing to search.
+	//
+	// Empty is the usual answer and means TypeExternal serves both, which is
+	// true of four of the five columns: their PATH wording and their plain
+	// wording are the same string, so there is nothing for a second field to
+	// say. ksh93 is the fifth, and it is the reason the field exists —
+	// `tracked alias` is what it calls a name **PATH resolved**, and an
+	// operand that was never searched for gets the plain sentence instead:
+	//
+	//	command -V ls           ls is a tracked alias for /bin/ls
+	//	command -V ./bb/tool    ./bb/tool is <dir>/./bb/tool
+	//
+	// Measured 2026-09-14 and again 2026-09-18. The discriminator is the
+	// slash and not the hash table: `command -V zzc` says `tracked alias` on
+	// a name's *first* lookup, and clearing the table with `unalias -a` or
+	// turning tracking off with `set +h` does not change it (#2953).
+	//
+	// Two verbs, the same two TypeExternal takes: the name and the path.
+	TypePathnameOperand string
+
 	// TypeUndefinedFunction is that line again for a function whose body has
 	// not been read yet, in the two shells that have such a thing. One verb,
 	// the name, and empty in a shell where a function is a function:

@@ -279,7 +279,7 @@ func (r *Runner) typePath(name string, m typeMode) int {
 		return r.status
 	}
 	if sentence {
-		r.printf("%s\n", Wording(r.diag().TypeExternal, "%[1]s is %[2]s", name, path))
+		r.printf("%s\n", r.TypeExternalSentence(name, path))
 	} else {
 		r.printf("%s\n", path)
 	}
@@ -505,7 +505,7 @@ func (r *Runner) typeAllPaths(name string, m typeMode) int {
 				return r.status
 			}
 			if sentence {
-				r.printf("%s\n", Wording(r.diag().TypeExternal, "%[1]s is %[2]s", name, path))
+				r.printf("%s\n", r.TypeExternalSentence(name, path))
 			} else {
 				r.printf("%s\n", path)
 			}
@@ -632,7 +632,7 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 			if r.unspecified {
 				return r.status
 			}
-			r.printf("%s\n", Wording(dg.TypeExternal, "%[1]s is %[2]s", name, path))
+			r.printf("%s\n", r.TypeExternalSentence(name, path))
 			return 0
 		}
 	}

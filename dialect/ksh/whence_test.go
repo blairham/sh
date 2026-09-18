@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/internal/dialecttest"
 )
 
 // toolOnPath drops an executable named `tool` into dir, which runKsh already
@@ -219,5 +221,148 @@ func TestWhenceAQIsQuiet(t *testing.T) {
 	out, st = runKsh(t, t.TempDir(), `whence -aq nosuchzz`)
 	if out != "" || st != 1 {
 		t.Errorf("out %q status %d, want silence at 1", out, st)
+	}
+}
+
+// twoOnPath drops two executables of the same name into two directories and
+// gives back the PATH that finds them in order, which is the shape `-a` and
+// `-ap` are about.
+func twoOnPath(t *testing.T) (dir, first, second string) {
+	t.Helper()
+	dir = t.TempDir()
+	for _, sub := range []string{"d1", "d2"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, sub, "dup"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir, filepath.Join(dir, "d1", "dup"), filepath.Join(dir, "d2", "dup")
+}
+
+// `-a` and `-p` compose: the letter that says *how many rows* and the letter
+// that says *what a row is* are different questions, and this shell answers
+// both at once.
+//
+// Measured 2026-09-16 and again 2026-09-18 on ksh93u+ 2012-08-01 over eight
+// orderings, with two copies of one name on PATH. The wording is the bare
+// path when `p` is the last of `a`, `p` and `v` to appear and the sentence
+// otherwise, and the not-found report follows the wording (#3198).
+func TestWhenceComposesAllAndPath(t *testing.T) {
+	for _, c := range []struct{ name, opts, want string }{
+		{"a alone is the sentences", "-a", "dup is a tracked alias for D1\ndup is D2\n"},
+		{"p alone is the first path", "-p", "D1\n"},
+		{"p after a is every path", "-ap", "D1\nD2\n"},
+		{"p before a is every sentence", "-pa", "dup is a tracked alias for D1\ndup is D2\n"},
+		{"v last wins over p", "-apv", "dup is a tracked alias for D1\ndup is D2\n"},
+		{"p last wins over v", "-avp", "D1\nD2\n"},
+		{"and the same from the other orders", "-pav", "dup is a tracked alias for D1\ndup is D2\n"},
+		{"p last again", "-vap", "D1\nD2\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir, first, second := twoOnPath(t)
+			src := "PATH=" + dir + "/d1:" + dir + "/d2\nwhence " + c.opts + " dup\n"
+			out, st, err := preset.Combined(t, dialecttest.Base{Dir: dir}, src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := strings.ReplaceAll(strings.ReplaceAll(c.want, "D1", first), "D2", second)
+			if out != want || st != 0 {
+				t.Errorf("whence %s dup =\n%q at %d\nwant\n%q at 0", c.opts, out, st, want)
+			}
+		})
+	}
+}
+
+// And the letter that restricts the answer to PATH restricts it however it is
+// written: a builtin is invisible under `-ap` and under `-pa` alike, and the
+// *report* of the miss is the one the wording asks for.
+func TestWhencePathHidesWhatIsNotOnThePath(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		{"a builtin under -ap is silence", "whence -ap shift", ""},
+		{"and under -pa it is the sentence's miss", "whence -pa shift", "ksh: whence: shift: not found\n"},
+		{"a missing name under -ap", "whence -ap nosuchthing_zz", ""},
+		{"and under -apv", "whence -apv nosuchthing_zz", "ksh: whence: nosuchthing_zz: not found\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runKsh(t, t.TempDir(), c.src+" 2>&1")
+			if out != c.want || st != 1 {
+				t.Errorf("%s =\n%q at %d\nwant\n%q at 1", c.src, out, st, c.want)
+			}
+		})
+	}
+}
+
+// A pathname operand was never searched for, so this shell's own sentence —
+// which says *how* the name was found — does not apply to it, and the plain
+// one does. Measured 2026-09-14 and again 2026-09-18; the discriminator is
+// the slash and not the hash table (#2953).
+func TestAPathnameOperandIsNotATrackedAlias(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "bb"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bb", "tool"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	const plain = "./bb/tool is DIR/./bb/tool\n"
+	for _, c := range []struct{ name, src, want string }{
+		{"command -V", "command -V ./bb/tool", plain},
+		{"type", "type ./bb/tool", plain},
+		{"whence -v", "whence -v ./bb/tool", plain},
+		{"whence -a", "whence -a ./bb/tool", plain},
+		{"whence -pv", "whence -pv ./bb/tool", plain},
+		// The control: a name that really was searched for keeps this
+		// shell's own sentence, so the second wording is the operand's and
+		// not a widening.
+		{"a searched name keeps the tracked alias", "command -V tool", "tool is a tracked alias for DIR/tool\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			toolOnPath(t, dir)
+			out, st, err := preset.Combined(t, dialecttest.Base{
+				Dir: dir, Vars: map[string]string{"PATH": dir},
+			}, c.src+"\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := strings.ReplaceAll(c.want, "DIR", dir); out != want || st != 0 {
+				t.Errorf("%s =\n%q at %d\nwant\n%q at 0", c.src, out, st, want)
+			}
+		})
+	}
+}
+
+// A `command` reached through an expansion reports rather than runs here, and
+// a written one runs. Measured 2026-09-16 and again 2026-09-18 (#3369).
+func TestAnExpandedCommandReportsInsteadOfRunning(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{"a written command runs", "command echo hi", "hi\n", 0},
+		{"a quoted one is still written", `"command" echo hi`, "hi\n", 0},
+		{"a backslashed one too", `\command echo hi`, "hi\n", 0},
+		{"an expanded one names and does not run", "c=command\n$c echo hi", "echo\n", 1},
+		{"through braces", "c=command\n${c} echo hi", "echo\n", 1},
+		{"through quotes", `c=command` + "\n" + `"$c" echo hi`, "echo\n", 1},
+		{"through a substitution", "$(echo command) echo hi", "echo\n", 1},
+		{"through eval", "c=command\neval '$c echo hi'", "echo\n", 1},
+		// A written reporting letter wins, so the expansion sets a default
+		// rather than refusing the run outright.
+		{"a written -v is unchanged", "c=command\n$c -v echo", "echo\n", 0},
+		{"and so is a written -V", "c=command\n$c -V echo", "echo is a shell builtin\n", 0},
+		// And a declaration behind it is not made, which is the row the
+		// issue leads with.
+		{"a declaration is named, not made", "c=command\n$c typeset v=1\nprint \"v=[${v-UNSET}]\"", "typeset\nv=[UNSET]\n", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runKsh(t, t.TempDir(), c.src+"\n")
+			if out != c.want || (c.status != 0 && st != c.status) {
+				t.Errorf("%s =\n%q at %d\nwant\n%q at %d", c.src, out, st, c.want, c.status)
+			}
+		})
 	}
 }

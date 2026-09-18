@@ -1175,6 +1175,13 @@ type Runner struct {
 	// deliberately cleared by `.` and `eval` while they run borrowed text:
 	// what a sourced script reports is the script's, not the builtin's.
 	inBuiltin string
+	// commandWordWasWritten says the word that reached the builtin now
+	// running was written out rather than produced by an expansion. Quoting
+	// does not take the writing away — `"command"` and `\command` are
+	// written words — so this is "no substitution span", which is what the
+	// one dialect that asks it measures. Read by `command` alone; see
+	// Semantics.ExpandedCommandOnlyReports.
+	commandWordWasWritten bool
 	// dotCurrentDirectoryFirst makes the next `.` resolve a bare operand
 	// against the current directory before PATH. Set by
 	// DotLooksInCurrentDirectoryFirst for the length of one call, and taken
@@ -5759,7 +5766,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// own value, and `declare -Ar M=([k]=v)` with it.
 			r.freezing = operandNames(c)
 		}
+		// Whether the word that reached this builtin was written or came
+		// out of an expansion, which one dialect's `command` is the only
+		// reader of. Saved and put back for the reason r.inBuiltin is: a
+		// builtin runs builtins.
+		outerWritten := r.commandWordWasWritten
+		r.commandWordWasWritten = commandWordWasWritten(c)
 		st := r.callBuiltin(ctx, argv[0], fn, argv[1:])
+		r.commandWordWasWritten = outerWritten
 		r.inBuiltin = outer
 		fatal := false
 		if st == 0 && !locks {

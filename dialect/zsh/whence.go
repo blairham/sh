@@ -253,7 +253,24 @@ func whenceAll(r *interp.Runner, ctx context.Context, name string, m whenceMode)
 // whencePath is `-p`: the PATH search with everything else invisible. A
 // function, a builtin and a reserved word are all nobody here, and so is a
 // name PATH does not hold — silence and 1, except under `-v`, which says so.
+//
+// `-a` beside it widens the walk to **every** hit rather than the first, in
+// either order: measured 2026-09-18 on zsh 5.9.2 with two copies of one name
+// on PATH, `whence -ap` and `whence -pa` both write two lines where `whence
+// -p` writes one. The two letters compose — `-a` says how many rows there
+// are and `-p` says that a row is a PATH hit — which is the same composition
+// the ksh dialect's `whence` was missing (#3198).
 func whencePath(r *interp.Runner, name string, m whenceMode) int {
+	if m.all {
+		paths := r.LookPathAll(name)
+		if len(paths) == 0 {
+			return whenceMissing(r, name, m)
+		}
+		for _, path := range paths {
+			writeLine(r, resolvedAnswer(r, name, interp.NameFile, path, m))
+		}
+		return 0
+	}
 	path, ok := r.LookPath(name)
 	if !ok {
 		return whenceMissing(r, name, m)

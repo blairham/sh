@@ -225,3 +225,49 @@ func (r *Runner) giveUpTheHook() bool {
 	}
 	return r.GiveUpTheLine()
 }
+
+// exitTrapSkippedByAFatalError reports whether this shell is ending over an
+// error it reported, with `set -e` on, in the dialect that runs no EXIT trap
+// there.
+//
+// The discriminator is measured and it is neither the error nor the option
+// alone. Measured 2026-09-18 on zsh 5.9.2, script files under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C`, each row written under
+// `trap 'echo TRAP_RAN' EXIT` and run twice — once plain and once with
+// `set -e` in front:
+//
+//	row                          plain              under set -e
+//	set -Z                       ends, TRAP_RAN     ends, **no** TRAP_RAN
+//	readonly r=1; readonly r=2   ends, TRAP_RAN     ends, **no** TRAP_RAN
+//	break                        ends, TRAP_RAN     ends, **no** TRAP_RAN
+//	set -u; echo "$nosuch"       ends, TRAP_RAN     ends, **no** TRAP_RAN
+//	echo $((1/0))                ends, TRAP_RAN     ends, **no** TRAP_RAN
+//	false                        runs on, TRAP_RAN  ends, TRAP_RAN
+//	exit 3                       ends, TRAP_RAN     ends, TRAP_RAN
+//	echo "${nosuch?word}"        ends, TRAP_RAN     ends, TRAP_RAN
+//	shift 5                      runs on, TRAP_RAN  ends, TRAP_RAN
+//	unset -Z                     runs on, TRAP_RAN  ends, TRAP_RAN
+//	cd /nonexistent              runs on, TRAP_RAN  ends, TRAP_RAN
+//	: > /nonexistent/x           runs on, TRAP_RAN  ends, TRAP_RAN
+//
+// So the rows that lose the trap are exactly the ones the shell *reported and
+// gave up over* — abandonError and abandonUsage — and never the ones it was
+// asked to make. `false` and `exit 3` keep it, which is what says the option
+// is not enough on its own; the same rows keep it with the option off, which
+// is what says the error is not either. `${x?word}` keeps it in this column
+// because that operator is a request to stop here rather than an error — see
+// Semantics.ParamErrorIsAnExitRequest — which is a classification this shell
+// already had and did not have to be told again.
+//
+// bash, dash, ksh93 and BusyBox ash run the trap on every row of that table.
+func (r *Runner) exitTrapSkippedByAFatalError() bool {
+	if !r.errexit {
+		return false
+	}
+	switch r.abandon {
+	case abandonError, abandonUsage:
+	default:
+		return false
+	}
+	return r.sem().FatalErrorUnderErrexitSkipsTheExitTrap == Yes
+}

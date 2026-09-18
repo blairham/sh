@@ -2703,6 +2703,26 @@ type Semantics struct {
 	// trap set at the top level behaves the same everywhere.
 	ExitTrapIsFunctionLocal Answer
 
+	// FatalErrorUnderErrexitSkipsTheExitTrap runs no EXIT trap when the shell
+	// ends over an error it reported *and* `set -e` is on. zsh alone, and the
+	// discriminator is the pair rather than either half — see
+	// Runner.exitTrapSkippedByAFatalError for the twelve-row table this was
+	// measured from.
+	//
+	// It reaches further than the case it was filed on. #2744 recorded it as
+	// a refused `set` option, and the same rows hold for a readonly
+	// reassignment, a `break` outside a loop, an unset parameter under
+	// `set -u` and a division by zero — every one of them an error the shell
+	// reported and gave up over. A stop the script *asked* for keeps the
+	// trap: `exit 3` and errexit's own firing on a plain `false` both run it,
+	// and so does `${x?word}`, which is a request to stop in this column
+	// rather than an error.
+	//
+	// Read without asking. A shell that has chosen nothing runs the trap,
+	// which is what the other four columns do and what a cleanup handler is
+	// written expecting.
+	FatalErrorUnderErrexitSkipsTheExitTrap Answer
+
 	// FunctionLocalTraps is whether a trap a function *sets* is undone when
 	// that function returns — the displaced disposition coming back, and the
 	// signal going back to its default where nothing was displaced. See
@@ -6942,6 +6962,39 @@ type Semantics struct {
 	// folds the whole of the rest of argv into a `-o` complaint — so it
 	// keeps stopping at the first until those are settled.
 	SetReportsEveryBadOption Answer
+
+	// SetAppliesTheWordsAfterARefusedOption keeps the option loop *applying*
+	// past a word it refused. zsh alone, and it is a third thing rather than
+	// a reading of the field above: that one is about how many words are
+	// **reported**, and this is about how many are **done**.
+	//
+	// The two split the panel differently and neither predicts the other.
+	// Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, reading the option table `-o` writes:
+	//
+	//	written            zsh 5.9.2          ksh93u+          bash 5.3.20
+	//	set -Z -x -o       one refusal, the   one refusal, a   one refusal, a
+	//	                   table, xtrace on   usage line       usage line
+	//	set -Z -Y -x -o    one refusal, the   *two* refusals,  one refusal, a
+	//	                   table, xtrace on   a usage line     usage line
+	//	set -e -Z -o       one refusal, the   one refusal, a   one refusal, a
+	//	                   table, errexit on  usage line       usage line
+	//
+	// so zsh reports one bad word and applies everything, ksh93 reports every
+	// bad word and applies nothing, and bash, dash and BusyBox ash stop at the
+	// first word in both senses. The `-o` table is what makes "applies" and
+	// "reports" separable at all: it is written by the applying loop, so a
+	// shell that never reaches it never prints one.
+	//
+	// The refusal is still the builtin's failure and still as fatal as the
+	// dialect says: what carries on is the loop, not the script. zsh's `set`
+	// ends a script over this, and it does so *after* the table has been
+	// written — which is the whole reason the row is visible.
+	//
+	// Read without asking, for SetReportsEveryBadOption's reason: an
+	// unanswered axis would put a complaint about a missing dialect in front
+	// of a refusal that is already right for whoever stops at the first word.
+	SetAppliesTheWordsAfterARefusedOption Answer
 
 	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off
 	// the end. True in dash and ksh93, and false in bash — under either
@@ -19660,7 +19713,11 @@ func PosixSemantics() Semantics {
 		BraceExpansion:          No,
 		BracketCaretNegates:     No,
 		ExitTrapIsFunctionLocal: No,
-		FunctionLocalTraps:      TrapsSurviveTheFunction,
+		// And the EXIT trap runs whatever ended the shell: nothing in XCU 2.14
+		// makes a reported error skip it, and four of the five columns agree.
+		// See FatalErrorUnderErrexitSkipsTheExitTrap.
+		FatalErrorUnderErrexitSkipsTheExitTrap: No,
+		FunctionLocalTraps:                     TrapsSurviveTheFunction,
 		// The standard has no `function` keyword, so it has no second
 		// definition form to scope anything to: the preset takes the
 		// majority's answer, which is also every panel member's but one.
@@ -19909,6 +19966,12 @@ func PosixSemantics() Semantics {
 		// second, so the preset stops at the first the way three of the
 		// panel do.
 		SetReportsEveryBadOption: No,
+		// And it stops *applying* there too: XCU 2.14 has `set` end on an
+		// invalid option, and nothing in it describes a loop that carries on
+		// past a word it refused. dash, the shell in the panel that targets
+		// this text, complies, and so do bash, BusyBox ash and ksh93; zsh is
+		// the departure. See SetAppliesTheWordsAfterARefusedOption.
+		SetAppliesTheWordsAfterARefusedOption: No,
 		// The same sentence covers a bundle handed to any other builtin:
 		// one refusal, and the standard says nothing about a second.
 		BuiltinReportsEveryBadOption: No,

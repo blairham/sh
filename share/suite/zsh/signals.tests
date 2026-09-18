@@ -51,3 +51,43 @@ kill -s USR1 $$
 ( exit 6 )
 kill -s USR1 $$
 trap - USR1
+
+# A `return` written inside a function-local EXIT trap. The frame whose trap
+# it is has already been left when the handler runs, so the `return` acts on
+# the frame the shell is returning *into* — one frame out and not "the
+# shell". Every row runs in a subshell so the file survives the one that has
+# no frame to return from.
+p() { trap 'return 9' EXIT; return 3; }
+q() { p; printf 'in q\n'; }
+r() { q; printf 'in r\n'; }
+( p; printf 'NOT REACHED\n' ) ; printf 'no caller -> %s\n' "$?"
+( q; printf 'after q -> %s\n' "$?" )
+( r; printf 'after r -> %s\n' "$?" )
+
+# `exit` in the same body is the shell's last word wherever it is written,
+# and a body that runs to its end hands the call's own status back.
+e() { trap 'exit 4' EXIT; return 3; }
+( e; printf 'NOT REACHED\n' ); printf 'exit in the body -> %s\n' "$?"
+g() { trap ':' EXIT; return 2; }
+g; printf 'a quiet handler -> %s\n' "$?"
+
+# And what an error the shell *reported* does to the EXIT trap when `set -e`
+# is on: nothing runs. A stop the script asked for keeps the handler, and so
+# does the same error with the option off — the pair is the discriminator and
+# neither half is.
+( trap 'printf "TRAP_RAN\n"' EXIT; set -e; readonly ro=1; readonly ro=2
+	printf 'NOT REACHED\n' ) 2> /dev/null
+printf 'a reported error under set -e ran no handler\n'
+( trap 'printf "TRAP_RAN\n"' EXIT; set -e; false; printf 'NOT REACHED\n' )
+( trap 'printf "TRAP_RAN\n"' EXIT; set -e; exit 3 )
+printf 'and a request to stop kept it\n'
+
+# Two rows are held out of the pair above, and the reason is a **second**
+# answer this shell has that nothing here models yet: inside a subshell the
+# handler is skipped for a reported error whether or not `set -e` is on.
+# Measured 2026-09-18 — `( trap … EXIT; readonly r=1; readonly r=2 )` runs no
+# handler here and does run one at the top level of the same script, and so
+# does `( trap … EXIT; set -e; printf "${nosuch?word}" )`, which keeps its
+# handler at the top level because that operator is a request to stop rather
+# than an error. Writing either row as it stands would pin a divergence
+# instead of a behavior. See #3612.

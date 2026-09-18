@@ -1522,6 +1522,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// returns, and then forgets it; the other three keep it for the end of
 	// the script. Only a trap this call installed counts, which is what the
 	// depth records — an inherited one is the caller's business.
+	var exitTrapReturned bool
 	if sc.trapTableWasTaken {
 		// The call had a table of its own, so anything standing under EXIT
 		// now is this call's: it fires here, and the caller's comes back
@@ -1529,13 +1530,13 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		body := r.exitTrap
 		r.exitTrap, r.trapDepth = outerTrap, outerDepth
 		if body != nil {
-			r.runFunctionExitTrap(ctx, *body)
+			exitTrapReturned = r.runFunctionExitTrap(ctx, *body)
 		}
 	} else if r.exitTrap != nil && r.exitTrap != outerTrap && r.trapDepth == r.depth+1 &&
 		r.ask(r.sem().ExitTrapIsFunctionLocal, "an EXIT trap set in a function firing when it returns") {
 		body := *r.exitTrap
 		r.exitTrap, r.trapDepth = outerTrap, outerDepth
-		r.runFunctionExitTrap(ctx, body)
+		exitTrapReturned = r.runFunctionExitTrap(ctx, body)
 	}
 	r.Params, r.inFunc, r.funcLine = saved, savedIn, savedLine
 	// The RETURN trap, if this call's own body set one. After the locals
@@ -1556,7 +1557,11 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	}
 	r.runReturnTrap(ctx, frameSerial)
 	r.line = returnedAt
-	if r.ctl == controlReturn {
+	if r.ctl == controlReturn && !exitTrapReturned {
+		// Not a `return` the *trap* wrote. That one belongs to the frame
+		// this call is returning into — see runFunctionExitTrap — so it is
+		// left standing for the caller to consume, or for the script to end
+		// on where there is no caller.
 		r.ctl = controlNone
 	}
 	return err
@@ -1579,11 +1584,42 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 // body reading `$?` sees the call's status rather than the trap's. So the
 // trap's own result is discarded in both directions, which is what makes this
 // a restore rather than a "keep the worse of the two".
-func (r *Runner) runFunctionExitTrap(ctx context.Context, body string) {
+//
+// # A `return` written in the body
+//
+// The second result says the body ended on one, and it is the caller's rather
+// than this call's: the frame whose trap it is has already been left by the
+// time the handler runs, so the `return` acts on the frame the shell is
+// returning *into*. Measured 2026-09-18 over script files under `env -i`, in
+// both columns that fire a function-local EXIT trap at all:
+//
+//	p() { trap 'return 9' EXIT; return 3; }; p; printf 'after'
+//	    zsh 5.9.2: nothing, exit 9      ksh93u+ (`function p`): the same
+//	q() { p; printf 'in q'; }; q; printf 'after -> %s' "$?"
+//	    both: `after -> 9`, with `in q` never printed
+//	r() { q; printf 'in r'; }; r; printf 'after'
+//	    both: `in r` and `after`, with `in q` never printed
+//
+// so it is exactly one frame and not "the shell": with a caller, the caller
+// returns and its own caller carries on; with none, the script ends. A
+// subshell is the same boundary — `( p; printf 'in sub' )` prints nothing.
+//
+// Unanimous rather than an axis. bash and dash never fire a function-local
+// EXIT trap, so the question cannot be put to them at all, and the two
+// columns that can be asked agree — which makes it the core's answer. This
+// shell consumed the `return` as the call's own, so the script carried on
+// into the next line at the status the trap named (#2990).
+//
+// `exit` in the same body needs none of this and never did: it ends the
+// script wherever it is written, which is what controlExit already means.
+func (r *Runner) runFunctionExitTrap(ctx context.Context, body string) (returnedFromTheCaller bool) {
 	ctl := r.ctl
 	r.ctl = controlNone
 	returned := r.status
 	r.runTrapBody(ctx, "EXIT", body)
+	if r.ctl == controlReturn {
+		return true
+	}
 	if r.ctl == controlNone {
 		r.ctl = ctl
 		// Only where the body ran to its end. A body that says `exit 4` or
@@ -1592,4 +1628,5 @@ func (r *Runner) runFunctionExitTrap(ctx context.Context, body string) {
 		// ends the script at 4.
 		r.status = returned
 	}
+	return false
 }

@@ -10,22 +10,22 @@ A shell parser and interpreter in Go.
 **Status: early — these are `0.x` tags and they mean it.** The core parser
 and interpreter are in place, and all five dialect binaries grade against a
 panel of the real shells they model. Measured on macOS with
-`make conformance-dialects`, 2026-09-14, 4106 cases each:
+`make conformance-dialects`, 2026-09-18, 4379 cases each:
 
 | our binary | graded against | exact | behavioral |
 | --- | --- | --- | --- |
-| `bash` | bash 5.3.15 | 96% | **100%** |
+| `bash` | bash 5.3.20 | 97% | **100%** |
 | `zsh` | zsh 5.9.2 | 98% | 99% |
 | `dash` | dash | 98% | **100%** |
-| `ksh` | ksh93 AJM 93u+ | 94% | 98% |
-| `ash` | BusyBox 1.37 ash | 80% | 98% |
+| `ksh` | ksh93 AJM 93u+ | 96% | 99% |
+| `ash` | BusyBox 1.37 ash | 92% | 99% |
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
 lets a diagnostic be worded differently so long as the status and the output
-agree. The distance between the two columns is a mix of wording and behavior
-rather than mostly wording: the one column anybody has actually counted is
-`ksh`, re-counted on 2026-09-15, where the non-exact cases split **93 wording
-to 126 behavioral**. Behavior lands spec-first, per `CLEANROOM.md`.
+agree. The distance between the two columns is now mostly wording, which it
+was not when this paragraph last said otherwise: in `ksh`, the column that has
+been counted, the 180 non-exact cases split **144 wording to 36 behavioral**,
+against 93 to 126 on 2026-09-15. Behavior lands spec-first, per `CLEANROOM.md`.
 
 ## What makes this different
 

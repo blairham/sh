@@ -119,17 +119,46 @@ func TestCommandDashPDoesNotReachInsideTheBuiltinItRan(t *testing.T) {
 	}
 }
 
-// What a default-path search found is not remembered, because the hash is a
-// memo of the *caller's* PATH and this search deliberately did not use it.
-// Remembering it would let a later bare name run a program the script's own
-// PATH cannot reach.
+// What a default-path search found is not remembered in four of the five
+// columns, because the hash is a memo of the *caller's* PATH and this search
+// deliberately did not use it. Remembering it lets a later bare name run a
+// program the script's own PATH cannot reach, which is bash's answer and is
+// Semantics.DefaultPathSearchIsRemembered.
 func TestADefaultPathSearchIsNotRemembered(t *testing.T) {
-	empty := func(r *Runner) { r.Env = []string{"PATH="} }
+	empty := func(r *Runner) {
+		r.Env = []string{"PATH="}
+		sem := *r.Semantics
+		sem.DefaultPathSearchIsRemembered = No
+		r.Semantics = &sem
+	}
 	out, st := run(t, `command -pv sh >/dev/null; command -v sh; echo "st=$?"`, empty)
 	if st != 0 {
 		t.Fatalf("the script itself failed: %q status %d", out, st)
 	}
 	if strings.TrimSpace(out) != "st=1" && strings.TrimSpace(out) != "st=127" {
 		t.Errorf("after `command -pv sh` a plain lookup said %q, want it still not found", out)
+	}
+}
+
+// And the other answer, which is bash's: the path the default search resolved
+// goes into the hash, so a later bare name finds it even though the caller's
+// PATH never held it.
+//
+// The two suites are the same snippet under the two answers, which is the
+// whole of what the axis is — a table that answered the same either way would
+// be a field nothing reads.
+func TestADefaultPathSearchIsRememberedWhereTheAxisSaysSo(t *testing.T) {
+	setup := func(r *Runner) {
+		r.Env = []string{"PATH="}
+		sem := *r.Semantics
+		sem.DefaultPathSearchIsRemembered = Yes
+		r.Semantics = &sem
+	}
+	out, st := run(t, `command -pv sh >/dev/null; command -v sh >/dev/null; echo "st=$?"`, setup)
+	if st != 0 {
+		t.Fatalf("the script itself failed: %q status %d", out, st)
+	}
+	if strings.TrimSpace(out) != "st=0" {
+		t.Errorf("after `command -pv sh` a plain lookup said %q, want it remembered at 0", out)
 	}
 }

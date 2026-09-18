@@ -138,6 +138,15 @@ func (r *Runner) lookPath(name string) (string, error) {
 	// it, because whether a directory counts as a candidate at all is the
 	// one part of this search the panel disagrees on.
 	var denied, dirDenied *pathError
+	// The other reading of the same walk, in the one column that has it: the
+	// failure reported is the **last** entry searched rather than the first
+	// interesting one. kept is what that entry left, and skipped is the run
+	// of entries behind it whose candidate was simply not there — resolved
+	// at the end, because only the last of them can matter and each costs a
+	// stat of the directory. See Semantics.PathCandidateReported.
+	last := r.sem().PathCandidateReported == LastSearchedEntry
+	var kept *pathError
+	var skipped []string
 	for _, dir := range r.pathElements(r.commandSearchPath()) {
 		if dir == "" {
 			dir = "."
@@ -147,8 +156,9 @@ func (r *Runner) lookPath(name string) (string, error) {
 		if err == nil {
 			return candidate, nil
 		}
+		isDir := errors.Is(err, errIsDirectory)
 		switch {
-		case errors.Is(err, errIsDirectory):
+		case isDir:
 			if dirDenied == nil {
 				dirDenied = &pathError{
 					name: name, resolved: candidate,
@@ -158,6 +168,43 @@ func (r *Runner) lookPath(name string) (string, error) {
 		case !errors.Is(err, os.ErrNotExist) && denied == nil:
 			denied = &pathError{name: name, resolved: candidate, err: err}
 		}
+		if !last {
+			continue
+		}
+		// A candidate that is not there says nothing about this entry until
+		// the entry itself is looked at — `/nonexistent/zzcmd` and
+		// `$emptydir/zzcmd` both fail with the same errno and the column
+		// this is for treats them oppositely. Held and answered below.
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
+			skipped = append(skipped, dir)
+			continue
+		}
+		if isDir && !r.ask(r.sem().DirectoryOnPathIsACandidate,
+			"a directory found on PATH standing as the failed candidate") {
+			// This column does not keep a directory at all, so the entry
+			// leaves nothing behind and what stood before it still holds.
+			skipped = append(skipped, dir)
+			continue
+		}
+		kept, skipped = &pathError{
+			name: name, resolved: candidate,
+			onPathDirectory: isDir, err: err,
+		}, nil
+	}
+	if last {
+		// The last entry that was really searched decides. Walking the held
+		// run backwards is what finds it: the first of them that is an
+		// existing directory was searched and found nothing, and if none of
+		// them was then the entry before them is still the last searched.
+		for i := len(skipped) - 1; i >= 0; i-- {
+			if r.pathEntryIsADirectory(skipped[i]) {
+				return "", &pathError{name: name, missing: true, err: errNotFound}
+			}
+		}
+		if kept != nil {
+			return "", kept
+		}
+		return "", &pathError{name: name, missing: true, err: errNotFound}
 	}
 	if denied != nil {
 		return "", denied
@@ -167,6 +214,19 @@ func (r *Runner) lookPath(name string) (string, error) {
 		return "", dirDenied
 	}
 	return "", &pathError{name: name, missing: true, err: errNotFound}
+}
+
+// pathEntryIsADirectory reports whether a PATH entry is a directory that
+// exists, which is what makes it an entry the search really *looked in*.
+//
+// Asked only where Semantics.PathCandidateReported is LastSearchedEntry, and
+// there only for the run of entries at the end of the walk whose candidate
+// was not there — so a successful lookup pays nothing and a failed one pays
+// one stat per trailing miss, on a path that is already ending in a
+// diagnostic.
+func (r *Runner) pathEntryIsADirectory(dir string) bool {
+	st, err := r.stat(r.absolute(dir))
+	return err == nil && st.IsDir()
 }
 
 // executableBeforeTheHashedPath is the first thing PATH holds by this name in

@@ -885,6 +885,11 @@ func Semantics() interp.Semantics {
 	// And whether a `command` reached through an expansion keeps the power
 	// to run what it names (#3369).
 	s.ExpandedCommandOnlyReports = interp.Yes
+	// What a `command -p` search resolved is **not** remembered here: with
+	// an unusable PATH, a `command -p ls` and a plain `ls` after it, the
+	// second is 127 in this column and 0 in bash. See
+	// interp.Semantics.DefaultPathSearchIsRemembered (#2975).
+	s.DefaultPathSearchIsRemembered = interp.No
 	// And the word is a boundary: `eval 'export -q; echo INNER'` stops the
 	// script here, and `command eval '…'` abandons the `eval`'s text, reports
 	// 2 and carries on. The special-builtin row is what answers for this
@@ -971,6 +976,13 @@ func Semantics() interp.Semantics {
 	// measured 2026-09-15 and ksh93's alone in a panel of six. See
 	// [interp.Semantics.HashedPathShadowsAnEarlierDirectory] (#2936).
 	s.HashedPathShadowsAnEarlierDirectory = interp.No
+	// Which failed candidate a PATH search names, which a probe with one PATH
+	// entry could not see: this shell keeps the failure of the **last entry it
+	// really searched** rather than the first interesting one, so the same two
+	// entries in the two orders answer differently — `$dir:$empty` is `zzcmd:
+	// not found` at 127 and `$empty:$dir` is `cannot execute [Is a directory]`
+	// at 126. See [interp.PathCandidateReport] for the seven rows (#3249).
+	s.PathCandidateReported = interp.LastSearchedEntry
 	s.TildePlusMinusExpands = interp.Yes
 	// This shell has `$_`, and the row that said it did not was measured
 	// through a `;`-list — the one shape where a shell with the parameter

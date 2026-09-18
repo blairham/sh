@@ -6795,6 +6795,94 @@ those are builtins this shell does not have, and most are interactive. The
 error moves from "builtin: command not found" to naming the one that is
 missing, which is a better answer to the same unfinished question.
 
+## Which failed PATH candidate the report names
+
+Measured 2026-09-16 and again 2026-09-18, script files under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`, in a fresh directory.
+`$d` holds a **directory** named `zzcmd`, `$g` holds a non-executable file
+named `zzcmd`, `$e` is an empty directory, and `$n` is a path that does not
+exist.
+
+| PATH | bash 5.3.20 | zsh 5.9.2 | dash / BusyBox ash | ksh93u+ |
+| --- | --- | --- | --- | --- |
+| `$d` | not found, 127 | the directory, 126 | permission, 127 | the directory, 126 |
+| `$e:$d` | not found, 127 | the directory, 126 | permission, 127 | the directory, 126 |
+| `$d:$e` | not found, 127 | the directory, 126 | permission, 127 | **not found, 127** |
+| `$d:$g` | not found, 127 | permission, 126 | permission, 126 | **permission, 126** |
+| `$g:$d` | permission, 126 | permission, 126 | permission, 126 | **the directory, 126** |
+| `$g:$e` | permission, 126 | permission, 126 | permission, 126 | permission, 126 |
+| `$e:$g` | permission, 126 | permission, 126 | permission, 126 | permission, 126 |
+
+Rows four and five are the whole of it: the same two entries in the two
+orders, and ksh93 answers them differently. No "first interesting candidate"
+reading can produce that, and `Semantics.DirectoryOnPathIsACandidate` — a bool
+— cannot say it either. `Semantics.PathCandidateReported` is the companion
+field, and `LastSearchedEntry` is ksh93's answer: **the failure reported is
+the last PATH entry the search really looked in**, whatever it was, including
+a plain "not there".
+
+### The probe that could not see it
+
+The axis doc for `DirectoryOnPathIsACandidate` put the directory alone on
+PATH. In that shape ksh93 and zsh are byte for byte the same decision — both
+report the directory — so the observation cannot tell "keeps the directory as
+the failed candidate" from "reports whatever the last candidate was". A second
+PATH entry is what parts them. It is the same non-discriminating shape
+`BracketCaretNegates` and `wait -n` were filed under.
+
+### Searched is narrower than written
+
+| PATH | ksh93u+ |
+| --- | --- |
+| `$d:$e` | not found, 127 |
+| `$d:.` | not found, 127 |
+| `$d:/nonexistent` | the directory, 126 |
+| `$d:relnope` | the directory, 126 |
+| `$d:<a regular file>` | the directory, 126 |
+
+An entry that is not an existing directory is skipped entirely and does not
+overwrite what an earlier one left. That distinction is **not visible in the
+candidate's errno**: `/nonexistent/zzcmd` and `$emptydir/zzcmd` both fail with
+ENOENT, and only a look at the entry itself tells them apart. So the
+implementation holds the run of trailing "not there" entries and resolves them
+at the end, walking backwards until one is an existing directory — one stat
+per trailing miss, on a path that is already ending in a diagnostic, and none
+at all on a search that succeeds.
+
+## Whether a `command -p` search goes into the hash
+
+`command -p` searches a default PATH rather than the caller's, so what it
+found was never on the caller's PATH. Whether the shell then *remembers* it
+splits the panel one to four, and the one is the surprising direction:
+
+```sh
+PATH=/nonexistent_zz
+command -p ls /dev/null >/dev/null 2>&1; echo "p-run=$?"
+ls /dev/null >/dev/null 2>&1; echo "plain-after=$?"
+```
+
+| column | `p-run` | `plain-after` |
+| --- | --- | --- |
+| bash 5.3.20 | 0 | **0** |
+| zsh 5.9.2 | 0 | 127 |
+| dash 0.5.12 | 0 | 127 |
+| ksh93u+ | — | 127 |
+| BusyBox ash 1.37.0 | 0 | 127 |
+
+Measured 2026-09-15 on the `-c` route and again 2026-09-18 from script files
+under `env -i`, BusyBox through the pinned Alpine image. ksh93's first cell is
+that build's own quirk — `command -p ls` is 127 at the top level of a script
+there and 0 inside `( … )`, which interp/defaultpath.go records — and its
+second cell is 127 from either form, so its row is on the majority side.
+
+bash hashes what the default-path search resolved, so a later bare `ls` runs a
+program the script's own PATH cannot reach with nothing in the script saying
+so. `Semantics.DefaultPathSearchIsRemembered` is the axis, Yes in the bash
+preset alone. #2972 implemented the majority answer as core while fixing the
+search itself and left the reading it deferred here; the majority is also the
+safe direction, so a script got "not found" where bash would have run
+something and nothing was ever silently widened.
+
 ## The command hash
 
 Every shell in the panel remembers where PATH found a command, and every one

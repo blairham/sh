@@ -93,9 +93,33 @@ func (r *Runner) searchingTheDefaultPath(on bool) func() {
 // would let a later bare `ls` run a program the script's own PATH cannot
 // reach, with nothing in the script saying so.
 //
-// Measured 2026-09-15 with `PATH=/nonexistent_zz`, a `command -p ls` and a
-// plain `ls` after it: zsh, dash and ksh93 answer 127 for the second, and
-// bash alone answers 0. Three of four, and the fourth is the surprising one,
-// so this is core rather than an axis — bash's reading is #2975, filed with
-// its table rather than guessed at here while the search was being fixed.
-func (r *Runner) rememberingLookups() bool { return !r.defaultPathSearch }
+// Measured 2026-09-15 and again 2026-09-18 with `PATH=/nonexistent_zz`, a
+// `command -p ls` and a plain `ls` after it, from `-c` and from a script file
+// under `env -i`:
+//
+//	column          command -p ls   the plain ls after it
+//	bash 5.3.20     0               **0**
+//	zsh 5.9.2       0               127
+//	dash 0.5.12     0               127
+//	ksh93u+         —               127
+//	BusyBox ash     0               127
+//
+// Four columns to one, and the one is the surprising direction: bash hashes
+// what the default-path search resolved, so a later bare `ls` runs a program
+// the script's own PATH cannot reach with nothing in the script saying so.
+// ksh93's first cell is 127 for the reason the header of this file records —
+// that build answers `command -p ls` at the top level of a script with 127
+// and the same words inside `( … )` with 0 — and its second cell is 127 from
+// the subshell form too, so its row is on the majority side either way.
+//
+// Semantics.DefaultPathSearchIsRemembered is the axis, answered Yes in the
+// bash preset alone. The direction that bites is bash's and ours was the safe
+// one, so nothing was silently widened by the answer this had before it was
+// asked at all (#2975).
+func (r *Runner) rememberingLookups() bool {
+	if !r.defaultPathSearch {
+		return true
+	}
+	return r.ask(r.sem().DefaultPathSearchIsRemembered,
+		"what a `command -p` search found going into the command hash")
+}

@@ -15695,6 +15695,48 @@ type Semantics struct {
 	// because the two observations are identical there.
 	DirectoryOnPathIsACandidate Answer
 
+	// PathCandidateReported is *which* failed candidate the report names when
+	// the search found nothing it could run.
+	//
+	// A companion to the axis above rather than a widening of it, because
+	// they answer different halves: that one says whether a directory counts
+	// as a candidate at all, and this one says which of the candidates the
+	// search kept is the one reported. A bool could not have said ksh93's
+	// answer, and a probe with one PATH entry could not have seen it — see
+	// [PathCandidateReport] for the rows (#3249).
+	PathCandidateReported PathCandidateReport
+
+	// DefaultPathSearchIsRemembered puts what a `command -p` search resolved
+	// into the command hash, so a later bare name runs it.
+	//
+	// `command -p` searches a default PATH rather than the caller's, so what
+	// it found was never on the caller's PATH at all. Whether the shell then
+	// remembers it splits the panel one to four, and the one is the
+	// surprising direction:
+	//
+	//	PATH=/nonexistent_zz
+	//	command -p ls /dev/null >/dev/null 2>&1; echo "p-run=$?"
+	//	ls /dev/null >/dev/null 2>&1; echo "plain-after=$?"
+	//
+	//	column          p-run   plain-after
+	//	bash 5.3.20     0       **0**
+	//	zsh 5.9.2       0       127
+	//	dash 0.5.12     0       127
+	//	ksh93u+         —       127
+	//	BusyBox ash     0       127
+	//
+	// Measured 2026-09-15 on the `-c` route and again 2026-09-18 from script
+	// files under `env -i`; BusyBox through the pinned Alpine image. ksh93's
+	// first cell is that build's own quirk — `command -p ls` is 127 at the
+	// top level of a script there and 0 inside `( … )` — and its second cell
+	// is 127 either way, so its row is on the majority side.
+	//
+	// The majority is also the safe direction: a script gets "not found"
+	// where bash would have run something, so nothing is silently widened by
+	// answering No. It is an axis rather than a bug because bash really does
+	// it and a script written for bash can be relying on it (#2975).
+	DefaultPathSearchIsRemembered Answer
+
 	// BinaryContentIsNotRunAsAScript stops a file the kernel refused with
 	// ENOEXEC from being read as a shell script when its first line holds a
 	// NUL byte — the shell looking before it leaps, so that a binary for
@@ -19023,6 +19065,11 @@ func PosixSemantics() Semantics {
 		// expanded `command` runs what it names here. One shell takes the
 		// running away from it; that shell says so.
 		ExpandedCommandOnlyReports: No,
+		// And what `command -p` resolved is not remembered: the hash is a
+		// memo of what the *caller's* PATH found, and a `-p` search
+		// deliberately did not use it. Four of the five columns agree, and
+		// this is the safe direction of the two.
+		DefaultPathSearchIsRemembered: No,
 		// And POSIX gives `command` a builtin to run: bypassing the function
 		// table is what the utility is for, not bypassing the builtins too.
 		CommandReachesABuiltin: Yes,

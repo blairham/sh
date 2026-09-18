@@ -932,6 +932,14 @@ func Semantics() interp.Semantics {
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No
+	// And what a `command -p` search resolved goes into the command hash here,
+	// where it does not in the other four: with `PATH=/nonexistent_zz`, a
+	// `command -p ls` and a plain `ls` after it, the second is 0 in this
+	// column and 127 in zsh, dash, ksh93 and BusyBox ash. So a later bare name
+	// runs a program the script's own PATH cannot reach, with nothing in the
+	// script saying so. See interp.Semantics.DefaultPathSearchIsRemembered
+	// (#2975).
+	s.DefaultPathSearchIsRemembered = interp.Yes
 	// set -E and -T carry the traps set -Eeuo pipefail scripts rely on.
 	s.SetHasTheErrtraceLetter = interp.Yes
 	s.SetHasTheFunctraceLetter = interp.Yes

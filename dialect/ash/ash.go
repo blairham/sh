@@ -935,6 +935,11 @@ func Semantics() interp.Semantics {
 	// And whether a `command` reached through an expansion keeps the power
 	// to run what it names (#3369).
 	s.ExpandedCommandOnlyReports = interp.No
+	// What a `command -p` search resolved is **not** remembered here: with
+	// an unusable PATH, a `command -p ls` and a plain `ls` after it, the
+	// second is 127 in this column and 0 in bash. See
+	// interp.Semantics.DefaultPathSearchIsRemembered (#2975).
+	s.DefaultPathSearchIsRemembered = interp.No
 	// And the word is a boundary around everything it runs. Measured
 	// 2026-09-13 inside the pinned alpine image: `eval 'export -q; echo
 	// INNER'` stops the script, `command eval '…'` reports 1 and carries on,

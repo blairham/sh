@@ -1236,6 +1236,11 @@ func Semantics() interp.Semantics {
 	// And whether a `command` reached through an expansion keeps the power
 	// to run what it names (#3369).
 	s.ExpandedCommandOnlyReports = interp.No
+	// What a `command -p` search resolved is **not** remembered here: with
+	// an unusable PATH, a `command -p ls` and a plain `ls` after it, the
+	// second is 127 in this column and 0 in bash. See
+	// interp.Semantics.DefaultPathSearchIsRemembered (#2975).
+	s.DefaultPathSearchIsRemembered = interp.No
 	// `command` here means an *external* program of that name and nothing
 	// else: `command set -o …` is `command not found: set` at 127, not the
 	// survivable spelling of a special builtin it is in the other four. The

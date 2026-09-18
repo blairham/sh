@@ -170,3 +170,54 @@ func TestTheGeneralReadingMovesForAllOfThem(t *testing.T) {
 		}
 	}
 }
+
+// A **write** to `$_`, which is a value a script may read back where the name
+// is stamped between the commands the shell reads rather than before every
+// command. Every write to it was lost: the parameter is produced, so the
+// assignment is recorded as a message to the producer and the producer never
+// looked. See Runner.underscoreWrittenValue.
+func TestAWriteToUnderscoreStandsUntilTheNextInputCommand(t *testing.T) {
+	sem := tracks()
+	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
+	const src = ": alpha\n" +
+		"_=TOP\n" +
+		"printf 'write [%s] ' \"$_\"\n" +
+		": beta\n" +
+		"printf 'stamped [%s] ' \"$_\"\n" +
+		"_=SECOND; printf 'same line [%s]\\n' \"$_\"\n"
+	want := "write [TOP] stamped [beta] same line [SECOND]\n"
+	if got := underscoreOut(t, src, sem); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// And under the other answer the stamp runs before every command, so a write
+// is overwritten before anything can read it — which is what makes this the
+// same axis rather than a second one.
+func TestAWriteToUnderscoreIsLostWhereEveryCommandStampsIt(t *testing.T) {
+	sem := tracks()
+	sem.UnderscoreMovesOnlyBetweenInputCommands = No
+	const src = ": alpha\n_=TOP\nprintf 'write [%s]\\n' \"$_\"\n"
+	if got := underscoreOut(t, src, sem); got != "write []\n" {
+		t.Errorf("got %q, want %q", got, "write []\n")
+	}
+}
+
+// The two shapes a script actually writes the name in — throwing a field away
+// and looping a fixed number of times — both leave a value the script may then
+// read.
+func TestTheWaysAScriptWritesUnderscore(t *testing.T) {
+	sem := tracks()
+	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
+	for _, row := range []struct{ src, want string }{
+		{
+			"echo \"a b\" | { read _ rest; printf 'read [%s] rest [%s]\\n' \"$_\" \"$rest\"; }",
+			"read [a] rest [b]\n",
+		},
+		{"for _ in loopval; do :; done\nprintf 'loop [%s]\\n' \"$_\"\n", "loop [loopval]\n"},
+	} {
+		if got := underscoreOut(t, row.src, sem); got != row.want {
+			t.Errorf("%s\n got %q\nwant %q", row.src, got, row.want)
+		}
+	}
+}

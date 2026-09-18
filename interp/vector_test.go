@@ -195,7 +195,7 @@ func testSemantics() Semantics {
 	s.TestAndArithmeticUpdatePipelineStatus = Yes
 	s.CoprocEndsInAnArray = Yes
 	s.JobsShowBackgroundCommand = Yes
-	s.WaitNWaitsForTheNextJob = Yes
+	s.WaitNextJob = WaitNextJobFirstToFinish
 
 	// `select`, which is a prompt loop and therefore four questions about
 	// what happens at end of input.

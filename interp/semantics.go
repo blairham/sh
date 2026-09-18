@@ -9922,18 +9922,12 @@ type Semantics struct {
 	//
 	// Bounded rather than kept forever — see reapedJobsKept.
 	WaitRemembersAReapedJob Answer
-	// WaitNWaitsForTheNextJob gives `wait` a `-n`: block until whichever
-	// job finishes first and report its status, 127 with no jobs at all.
-	// bash's letter alone; the other four refuse or misread it.
+	// WaitNextJob is what `wait` does with a `-n`, and the panel gives three
+	// answers rather than two — see the constants.
 	//
-	// BusyBox ash is in the misreading half and needs the second half of the
-	// question to show it, which is why the letter alone is not the probe.
-	// Measured 2026-09-16: it refuses nothing and blocks, but with `sh -c
-	// 'sleep 1; exit 7' &` and `sh -c 'sleep 5; exit 9' &` behind it, `wait
-	// -n` there returns after five seconds at 129 where bash returns after
-	// one at 7 — a plain `wait` with the letter swallowed, not this. Ours
-	// refuses the letter outright, which is a third answer and neither
-	// shell's (#3245).
+	// It was an Answer and had no room for the third, which is #3245: one
+	// column neither has bash's letter nor refuses it. Ours refused it
+	// outright, which is a fourth thing and is what no shell does.
 	//
 	// **The operands narrow it.** `wait -n` with job specs or process ids
 	// after it waits for the first of *those* to finish and not for the
@@ -9942,7 +9936,7 @@ type Semantics struct {
 	// the two-second job's status and `wait -n` reports the one-second
 	// job's. An operand naming nothing is the same complaint and the same
 	// 127 a plain `wait` gives it.
-	WaitNWaitsForTheNextJob Answer
+	WaitNextJob WaitNextJobReading
 	// WaitPNamesTheFinishedJob gives `wait` a `-p var`: the process id of
 	// the job whose status is being reported is stored in var, through the
 	// same store an assignment uses — so `wait -p A[$key] -n %2` writes into
@@ -18676,7 +18670,7 @@ func PosixSemantics() Semantics {
 		JobSpecsByName:            Yes,
 		AmbiguousJobNameIsRefused: Yes,
 		WaitReportsAMissingJob:    Yes,
-		WaitNWaitsForTheNextJob:   No,
+		WaitNextJob:               WaitNextJobAbsent,
 		// And no `wait -p` either, for the same reason: the standard's
 		// `wait` takes no options at all.
 		WaitPNamesTheFinishedJob: No,
@@ -22552,4 +22546,67 @@ func (b BareOptionWordReading) clearsTraceAndVerbose(minus bool) bool {
 		return true
 	}
 	return false
+}
+
+// WaitNextJobReading is what `wait -n` means, which the panel answers three
+// ways. See Semantics.WaitNextJob.
+//
+// Measured 2026-09-17 in the digest-pinned alpine image, BusyBox v1.37.0, and
+// on bash 5.3.15 the same day, with jobs whose exit statuses are what part the
+// readings — a probe using bare `sleep` jobs reads the two as one, which is
+// the blind probe #3226 is about.
+type WaitNextJobReading int
+
+const (
+	// WaitNextJobUnspecified is no answer, and is refused like any other.
+	WaitNextJobUnspecified WaitNextJobReading = iota
+	// WaitNextJobAbsent is a shell with no such letter: `-n` is an ordinary
+	// word there, read as a job spec or refused as an option nobody has.
+	// dash, ksh93 and zsh.
+	WaitNextJobAbsent
+	// WaitNextJobFirstToFinish blocks until whichever job finishes first and
+	// reports *its* status, 127 with no jobs at all. bash's letter.
+	WaitNextJobFirstToFinish
+	// WaitNextJobFirstToSucceed takes the letter and does something else
+	// with it: the jobs are waited out in order and the first one that
+	// exited **0** ends the wait at 0, while a run that reaches the end
+	// without one reports 129. BusyBox ash.
+	//
+	// Measured with four arrangements, which is what it takes to tell this
+	// from the reading above and from a plain `wait`:
+	//
+	//	jobs 0 then 7     0 after 1s   — the first to finish, and it succeeded
+	//	jobs 7 then 0     0 after 2s   — the first to finish did not end it
+	//	one job, 7        129 after 1s — no job succeeded
+	//	jobs 0, 0, 7      0 after 1s
+	//
+	// The second row is the discriminating one: bash's reading answers 7
+	// after one second there. A plain `wait` answers 0 after two seconds for
+	// every row, so the third is what parts this from doing nothing at all.
+	//
+	// 129 is a constant rather than a job's status — the same number for a
+	// job that exited 1, 7, 126, 128 or 254, and for one killed by a signal.
+	//
+	// **Operands turn it back into a plain `wait`**: `wait -n p1 p2` waits
+	// both out and reports the last one's status, exactly as `wait p1 p2`
+	// does, and `wait -n p1` reports p1's own status rather than 0 or 129.
+	// So the reading above is the no-operand form's alone.
+	WaitNextJobFirstToSucceed
+)
+
+// waitNextJobNoneSucceeded is what the reading above reports when it runs out
+// of jobs without one of them exiting 0. Measured and constant; see
+// WaitNextJobFirstToSucceed.
+const waitNextJobNoneSucceeded = 129
+
+func (w WaitNextJobReading) String() string {
+	switch w {
+	case WaitNextJobAbsent:
+		return "WaitNextJobAbsent"
+	case WaitNextJobFirstToFinish:
+		return "WaitNextJobFirstToFinish"
+	case WaitNextJobFirstToSucceed:
+		return "WaitNextJobFirstToSucceed"
+	}
+	return "WaitNextJobUnspecified"
 }

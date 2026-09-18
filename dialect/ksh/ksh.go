@@ -850,7 +850,7 @@ func Semantics() interp.Semantics {
 	// `wait %1; wait "$p"` is 127 there where it is the job's status in
 	// every other column measured.
 	s.WaitRemembersAReapedJob = interp.No
-	s.WaitNWaitsForTheNextJob = interp.No
+	s.WaitNextJob = interp.WaitNextJobAbsent
 	// `wait -p` is not ksh93's either: `wait: -p: unknown option`, beside
 	// its own usage line. Measured 2026-09-13.
 	s.WaitPNamesTheFinishedJob = interp.No

@@ -1163,9 +1163,24 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// And a job it has already reported stays waitable by its process id.
 	s.WaitRemembersAReapedJob = interp.Yes
-	// `wait -n` is 127 rather than a wait, so the letter is not an option
-	// here.
-	s.WaitNWaitsForTheNextJob = interp.No
+	// `wait -n` is taken here and is not bash's `-n`. Measured 2026-09-17 in
+	// the pinned image, BusyBox v1.37.0, with the jobs' exit statuses as the
+	// discriminator — a probe using bare `sleep` jobs cannot tell the two
+	// readings apart, which is the blind probe #3226 is about:
+	//
+	//	jobs 0 then 7    0 after 1s     bash: 0 after 1s
+	//	jobs 7 then 0    0 after 2s     bash: 7 after 1s
+	//	one job, 7       129 after 1s   bash: 7 after 1s
+	//	jobs 0, 0, 7     0 after 1s
+	//	no jobs at all   0              bash: 127
+	//
+	// So the jobs are waited out in order and the first to exit **0** ends
+	// the wait; running out without one is 129, a constant rather than any
+	// job's status. With operands the letter changes nothing: `wait -n p1
+	// p2` waits both out at the last one's status, exactly as `wait p1 p2`
+	// does. `-n` is also the only letter this `wait` takes — `-q` and `-zz`
+	// are `illegal option` at 2, and so is a bare word (#3245).
+	s.WaitNextJob = interp.WaitNextJobFirstToSucceed
 	// Nor `-p`: `wait: illegal option -p`, BusyBox v1.37.0 in the pinned
 	// image. Measured 2026-09-13.
 	s.WaitPNamesTheFinishedJob = interp.No

@@ -86,12 +86,12 @@ func TestWaitReportsAMissingJob(t *testing.T) {
 	}
 }
 
-// TestWaitNWaitsForTheNextJob: the first finisher's status, the job
+// TestWaitNextJobIsTheFirstToFinish: the first finisher's status, the job
 // forgotten, and 127 in silence with nothing to wait for.
-func TestWaitNWaitsForTheNextJob(t *testing.T) {
+func TestWaitNextJobIsTheFirstToFinish(t *testing.T) {
 	src := "{ exit 3; } &\nwait -n\necho st=$?\nwait -n\necho again=$?"
 	out, errs, _ := declRun(t, src, func(s *Semantics) {
-		s.WaitNWaitsForTheNextJob = Yes
+		s.WaitNextJob = WaitNextJobFirstToFinish
 	}, Diagnostics{})
 	if !strings.Contains(out, "st=3") {
 		t.Errorf("stdout = %q, want the finished job's status", out)
@@ -160,5 +160,53 @@ func TestTheStatusForAJobSpecThatNamesNothing(t *testing.T) {
 				t.Errorf("out = %q, want %q", out, tc.want)
 			}
 		})
+	}
+}
+
+// The other reading of the same letter, and the four arrangements it takes to
+// tell it from the one above and from a plain `wait`. See
+// interp.WaitNextJobFirstToSucceed for the measurement behind each (#3245).
+func TestWaitNextJobIsTheFirstToSucceed(t *testing.T) {
+	succeeds := func(s *Semantics) { s.WaitNextJob = WaitNextJobFirstToSucceed }
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+		why  string
+	}{
+		{
+			"the first job succeeded", "{ /bin/sleep 1; exit 0; } &\n{ /bin/sleep 2; exit 7; } &\nwait -n\necho st=$?",
+			"st=0", "a job that exited 0 ends the wait at 0",
+		},
+		{
+			"the first job did not", "{ /bin/sleep 1; exit 7; } &\n{ /bin/sleep 2; exit 0; } &\nwait -n\necho st=$?",
+			"st=0", "and the wait goes on until one does, where the other reading stops at 7",
+		},
+		{
+			"no job did", "{ /bin/sleep 1; exit 7; } &\nwait -n\necho st=$?",
+			"st=129", "running out without one is a constant, not any job's status",
+		},
+		{
+			"a different failing status", "{ /bin/sleep 1; exit 254; } &\nwait -n\necho st=$?",
+			"st=129", "the same constant, which is what says it is not the job's",
+		},
+		{
+			"nothing to wait for", "wait -n\necho st=$?",
+			"st=0", "where the other reading answers 127",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, _ := declRun(t, tc.src, succeeds, Diagnostics{})
+			if !strings.Contains(out, tc.want) || errs != "" {
+				t.Errorf("stdout %q stderr %q, want %q — %s", out, errs, tc.want, tc.why)
+			}
+		})
+	}
+	// Operands turn it back into a plain `wait`: both are waited out and the
+	// last one's status is reported, which is the half that says the reading
+	// above belongs to the no-operand form alone.
+	out, _, _ := declRun(t, "{ /bin/sleep 1; exit 7; } &\np=$!\nwait -n $p\necho st=$?", succeeds, Diagnostics{})
+	if !strings.Contains(out, "st=7") {
+		t.Errorf("stdout = %q, want the job's own status for an operand", out)
 	}
 }

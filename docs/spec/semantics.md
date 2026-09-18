@@ -10845,10 +10845,43 @@ question. Corpus:
 `jobs/a-background-jobs-standard-input` and
 `jobs/a-background-jobs-standard-input-when-the-script-closed-it`.
 
-**`wait -n`** is bash's: block until whichever job finishes first, report
-its status, 127 in silence with no jobs at all
-(`WaitNWaitsForTheNextJob`). dash refuses the option, ksh93 refuses it
-with its usage line, and zsh reads it as a job named `-n`.
+**`wait -n`** is three readings rather than two (`WaitNextJob`). In bash
+it blocks until whichever job finishes first, reports its status, and is
+127 in silence with no jobs at all. dash refuses the option, ksh93
+refuses it with its usage line, and zsh reads it as a job named `-n` —
+one answer for the three, since none of them has the letter.
+
+**BusyBox ash has the letter and does something else with it**, which is
+why this is an enumeration. Measured 2026-09-17 in the digest-pinned
+alpine image, with the jobs' **exit statuses** as the discriminator — a
+probe using bare `sleep` jobs reads this and bash's as one reading:
+
+| the jobs | BusyBox 1.37.0 | bash 5.3 |
+| --- | --- | --- |
+| 0 at 1s, then 7 at 2s | 0 after 1s | 0 after 1s |
+| 7 at 1s, then 0 at 2s | **0 after 2s** | 7 after 1s |
+| one job, 7 at 1s | **129 after 1s** | 7 after 1s |
+| 0, 0, then 7 | 0 after 1s | 0 after 1s |
+| no jobs at all | **0** | 127 |
+| one job that already ended | **0** | its status |
+
+So the still-running jobs are waited out in order and the first to exit
+**0** ends the wait at 0; a run that reaches the end without one reports
+129, a constant rather than any job's status — the same number for 1, 7,
+126, 128, 254 and for a job killed by a signal. A job that had already
+ended when the wait began does not count, which is what makes the last
+two rows 0 rather than 129.
+
+**Operands turn it back into a plain `wait`**: `wait -n p1 p2` waits both
+out and reports the last one's status exactly as `wait p1 p2` does, and
+`wait -n p1` reports p1's own status rather than 0 or 129. So the reading
+above belongs to the no-operand form alone.
+
+`-n` is also the only letter that `wait` takes there — `-q`, `-p` and a
+bare word are each `illegal option` at 2 — and `wait -zz` names the
+letter rather than the word, as ours does. One row is measured and not
+modeled: `wait -n -n` is 2 there and `wait -nn` is 129, so a second `-n`
+word is refused where a second `-n` letter in the same word is not.
 
 **`disown`** exists in three shells and splits on what letting go means:
 bash and zsh take the job out of the table, ksh93 only shields it from a

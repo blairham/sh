@@ -948,7 +948,7 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// And a job it has already reported stays waitable by its process id.
 	s.WaitRemembersAReapedJob = interp.Yes
-	s.WaitNWaitsForTheNextJob = interp.No
+	s.WaitNextJob = interp.WaitNextJobAbsent
 	// Nor `-p`: `wait: Illegal option -p`. Measured 2026-09-13.
 	s.WaitPNamesTheFinishedJob = interp.No
 	// A trapped signal cuts a `wait` short with 128 plus the signal, and the

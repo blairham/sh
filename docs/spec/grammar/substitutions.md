@@ -103,6 +103,49 @@ The older form. It nests only with backslash escaping, which is why the
 `$( )` form exists and why this one is worth supporting but never
 recommending. Its delimiter is a backtick that is not backslash-escaped.
 
+### A line continuation is removed before the text is parsed
+
+A backslash-newline inside the backquotes is taken out — both characters,
+before the command text is read — and it is taken out **whatever quoting
+it stands in inside that text**. This is the one rule where the two
+spellings of a command substitution part company, and it is the reason
+`tokenization.md`'s "a continuation does not apply inside single quotes"
+has an exception.
+
+Measured 2026-09-16 from script files, `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, and unanimous in bash 5.3, bash 3.2, zsh 5.9.2, ksh93u+ and
+dash:
+
+    "`printf %s 'a\
+    b'`"                    →  [ab]    inside single quotes
+    "`printf %s "a\
+    b"`"                    →  [ab]    inside double quotes
+    "`printf %s a\
+    b`"                     →  [ab]    unquoted in the text
+    "`cat <<'E'
+    a\
+    b
+    E
+    `"                      →  [ab]    inside a *quoted* here-document body
+
+The last row is what says this is not a continuation the inner parse
+removes for itself: nothing inside a quoted here-document removes one.
+The pair is gone before that parse begins.
+
+`$( )` is the control and keeps the pair in all five columns:
+
+    "$(printf %s 'a\
+    b')"                    →  a, a backslash, a newline, b
+
+An escaped backslash is not this. `'a\\⏎b'` is `a\⏎b` in all five: the
+`\\` is unescaped to one backslash and the newline behind it is an
+ordinary character — which falls out of doing the removal in the same
+pass that unescapes the rest.
+
+It reaches arithmetic, because the substitution's value is what the
+expression is read from: `$(( `printf %s 'a\⏎b' | wc -c` ))` is 2 on the
+whole panel (#3453).
+
 ### One shell says so, and only when it is not going to run
 
 ksh93 remarks on every backquote substitution it reads:

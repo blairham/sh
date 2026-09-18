@@ -464,6 +464,42 @@ const (
 	BraceProgramBodyEndsAtATokenStart
 )
 
+// DollarForms is a set of the forms a `$` introduces — what the character
+// behind it says the construct is.
+//
+// A set rather than a count, because the two shells that narrow it narrow it
+// to sets neither of which contains the other: see
+// [Dialect.ContinuationStopsADollarAt], which is the one question that asks
+// it.
+type DollarForms uint8
+
+const (
+	// DollarBareParameter is `$x`, `$1`, `$#`, `$@` — a name, a positional
+	// or a special parameter written with no delimiter of its own.
+	DollarBareParameter DollarForms = 1 << iota
+	// DollarBraces is `${…}`, every operator inside it included.
+	DollarBraces
+	// DollarParens is `$(…)` and `$((…))`, which the character after the
+	// first parenthesis tells apart long after this question is settled.
+	DollarParens
+	// DollarBrackets is `$[…]`, the older arithmetic spelling, where
+	// [Dialect.DollarBracketArith] gives the dialect the form at all.
+	DollarBrackets
+	// DollarQuotes is `$'…'` and `$"…"`, which are quoting rather than
+	// expansion but are introduced by the same character.
+	DollarQuotes
+
+	// NoDollarForm is the empty set, spelled so a dialect can say it
+	// deliberately rather than by leaving a field out.
+	NoDollarForm DollarForms = 0
+	// EveryDollarForm is all five.
+	EveryDollarForm = DollarBareParameter | DollarBraces | DollarParens | DollarBrackets | DollarQuotes
+)
+
+// Has reports whether form is in the set. A caller asks with exactly one
+// form, which is what it knows.
+func (f DollarForms) Has(form DollarForms) bool { return f&form != 0 }
+
 // Dialect says which constructs the lexer accepts.
 //
 // Fields are named for the construct rather than for the shell that wants it,
@@ -2969,6 +3005,58 @@ type Dialect struct {
 	// continuations are gone before the expansion is scanned: `${\⏎x}` is
 	// the value there.
 	ParamContinuationNeedsAName bool
+
+	// ContinuationStopsADollarAt names the forms a `$` does **not** reach
+	// across a line continuation written directly behind it, outside quotes,
+	// and ContinuationStopsADollarAtInDoubleQuotes asks the same inside `"`.
+	// The empty set is the core answer: the pair goes and the `$` introduces
+	// whatever stands behind it, which is what every shape in bash 5.3, bash
+	// 3.2 and dash does.
+	//
+	// This is the construct's *delimiter* and not its inside, so it is not
+	// ParamContinuationNeedsAName's question nor the arithmetic one: the pair
+	// stands between the `$` and the character that says which construct this
+	// is. Measured 2026-09-16 from script files, `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, stdin on /dev/null, fresh directory, with `x=5` and
+	// `set -- a b`:
+	//
+	//	probe            bash 5.3/3.2  dash       zsh 5.9.2  ksh93u+
+	//	$\⏎x             5             5          5          $x
+	//	$\⏎{x}           5             5          5          5
+	//	$\⏎(echo hi)     hi            hi         hi         `(' unexpected
+	//	$\⏎[1+2]         3             —          3          —
+	//	$\⏎'a\tb'        a<tab>b       —          a<tab>b    a<tab>b
+	//	"$\⏎x"           5             5          5          $x
+	//	"$\⏎{x}"         5             5          {x}        ${x}
+	//	"$\⏎(echo hi)"   hi            hi         $(echo hi) $(echo hi)
+	//	"$\⏎[1+2]"       3             —          $[1+2]     —
+	//	"$\⏎1"           a             a          a          $1
+	//
+	// A `—` is a shell that has no such form at all, so nothing there is a
+	// measurement of this question. BusyBox ash was not measured. `$\⏎` with
+	// a blank or the end of the word behind it is a literal `$` in bash 5.3,
+	// bash 3.2, dash, zsh 5.9.2 and ksh93u+ alike, which is the row that says
+	// the `$` reaches a *form* rather than the pair being removed and
+	// forgotten.
+	//
+	// So zsh stops at everything but a bare parameter inside double quotes
+	// and at nothing outside them, and ksh93 stops at a bare parameter and a
+	// parenthesis outside quotes and at everything inside them. Neither is a
+	// subset of the other, which is why this is a named set per quoting
+	// rather than a count (#3457).
+	ContinuationStopsADollarAt               DollarForms
+	ContinuationStopsADollarAtInDoubleQuotes DollarForms
+
+	// DollarGoesWhenAContinuationStopsItAtABrace drops the `$` where the set
+	// above stopped it at a `${`, instead of leaving it as text.
+	//
+	// zsh's alone, and only where it stops at one: `"$\⏎{x}"` is `{x}` there
+	// and `${x}` in ksh93, which is the same stop with the two opposite
+	// answers about the character that was already read. It is asked at the
+	// brace and nowhere else, because zsh keeps the `$` at every other form
+	// it stops at — `"$\⏎(echo hi)"` is `$(echo hi)` and `"$\⏎[1+2]"` is
+	// `$[1+2]` there.
+	DollarGoesWhenAContinuationStopsItAtABrace bool
 
 	// BareBraceNestsInExpansion makes an unquoted `{` inside `${…}` open a
 	// nesting level, so the expansion ends at the brace that *balances* it

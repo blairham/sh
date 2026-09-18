@@ -2673,6 +2673,11 @@ func (l *Lexer) scanDelimiterSubstitution(q Quoting) Span {
 
 func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 	c := l.peek()
+	// How far the `$` reaches over a line continuation written directly
+	// behind it, and the form it was stopped at where it does not. Zero in
+	// every dialect for text with no such pair in it, so every case below
+	// reads as it did before the question existed.
+	skip, stopped := l.continuationAfterADollar(l.off+1, Unquoted)
 	switch {
 	case c == '\'':
 		flush()
@@ -2685,14 +2690,14 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		flush()
 		return l.scanDouble(), true
 
-	case c == '$' && l.peekAt(1) == '\'' && l.dialect.DollarSingleQuote:
+	case c == '$' && l.peekAt(1+skip) == '\'' && l.dialect.DollarSingleQuote:
 		flush()
 		if s, ok := l.scanDollarSingle(); ok {
 			return []Span{s}, true
 		}
 		return nil, true
 
-	case c == '$' && l.peekAt(1) == '"' && l.dialect.DollarDoubleQuote:
+	case c == '$' && l.peekAt(1+skip) == '"' && l.dialect.DollarDoubleQuote:
 		// `$"..."` marks the string for locale translation. With no message
 		// catalog every shell that has the form reads it as a plain
 		// double-quoted string — same escapes, same expansions — so the `$`
@@ -2704,6 +2709,7 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		// what dash and zsh do with it.
 		flush()
 		l.advance() // $
+		l.takeContinuationAfterADollar(Unquoted)
 		return l.scanDouble(), true
 
 	case l.inHeredocDelimiter && l.startsDelimiterSubstitution():
@@ -2712,7 +2718,7 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		flush()
 		return []Span{l.scanDelimiterSubstitution(Unquoted)}, true
 
-	case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
+	case c == '$' && l.peekAt(1+skip) == '(' && l.peekAt(2+skip) == '(':
 		// `$((` is arithmetic, unless the parentheses say otherwise: a
 		// command substitution whose first command is a subshell may be
 		// written with the two touching, and doubleParenKind is where the two
@@ -2721,22 +2727,30 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		flush()
 		return []Span{l.scanParens(l.doubleParenKind(), Unquoted)}, true
 
-	case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+	case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 		// The older spelling of the case above. Where the flag is off this
 		// falls through to the literal path, which leaves a `$` and a bracket
 		// expression — what ksh93 and dash do with it.
 		flush()
 		return []Span{l.scanBracket(Unquoted)}, true
 
-	case c == '$' && l.peekAt(1) == '(':
+	case c == '$' && l.peekAt(1+skip) == '(':
 		flush()
 		return []Span{l.scanParens(CommandSubst, Unquoted)}, true
 
-	case c == '$' && l.peekAt(1) == '{':
+	case c == '$' && l.peekAt(1+skip) == '{':
 		flush()
 		return []Span{l.scanBraces(Unquoted)}, true
 
-	case c == '$' && l.startsBareParam():
+	case c == '$' && stopped == DollarBraces && l.dialect.DollarGoesWhenAContinuationStopsItAtABrace:
+		// Stopped at a `${`, and this dialect drops the `$` rather than
+		// leaving it as text. Nothing is flushed and no span is made: the
+		// character is simply not part of the word, and the pair behind it is
+		// removed by whatever removes one.
+		l.advance() // $
+		return nil, true
+
+	case c == '$' && l.startsBareParamAt(1+skip):
 		flush()
 		return l.scanBareParam(Unquoted), true
 
@@ -2851,28 +2865,32 @@ func (l *Lexer) heredocSpans() []Span {
 	}
 	for !l.eof() {
 		c := l.peek()
+		// An unquoted body reaches across a line continuation behind a `$` in
+		// every dialect — see [Lexer.continuationAfterADollar], which reads
+		// inRawBody and stops at nothing here.
+		skip, _ := l.continuationAfterADollar(l.off+1, DoubleQuoted)
 		switch {
 		// The substitutions, which are the whole reason an unquoted body is
 		// treated differently from a quoted one. Marked as double-quoted
 		// because that is what stops the result being split: a body is one
 		// blob of input, not a list of fields.
-		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
+		case c == '$' && l.peekAt(1+skip) == '(' && l.peekAt(2+skip) == '(':
 			flush()
 			out = append(out, l.scanParens(l.doubleParenKind(), DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+		case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 			flush()
 			out = append(out, l.scanBracket(DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && l.peekAt(1) == '(':
+		case c == '$' && l.peekAt(1+skip) == '(':
 			flush()
 			out = append(out, l.scanParens(CommandSubst, DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && l.peekAt(1) == '{':
+		case c == '$' && l.peekAt(1+skip) == '{':
 			flush()
 			out = append(out, l.scanBraces(DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && l.startsBareParam():
+		case c == '$' && l.startsBareParamAt(1+skip):
 			flush()
 			out = append(out, l.scanBareParam(DoubleQuoted)...)
 			litPos = l.pos()
@@ -2981,6 +2999,10 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Spa
 			return out
 		}
 		c := l.peek()
+		// The same lookahead substitutionSpans does, asked of the quoting
+		// this run is: the panel splits widest here, and a `$` that reaches
+		// nothing across the pair is read as text exactly as it was before.
+		skip, stopped := l.continuationAfterADollar(l.off+1, DoubleQuoted)
 		switch {
 		// A `"` written inside an operand opens a run of its own rather than
 		// standing for a character, which is the half of this that is *not*
@@ -3013,23 +3035,29 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Spa
 		// scripts spell a substitution — so they are spans of their own here
 		// too. The quoting is carried on them because it decides whether the
 		// result is split afterwards, which is the only thing it changes.
-		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
+		case c == '$' && l.peekAt(1+skip) == '(' && l.peekAt(2+skip) == '(':
 			flush()
 			out = append(out, l.scanParens(l.doubleParenKind(), DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+		case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 			flush()
 			out = append(out, l.scanBracket(DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && l.peekAt(1) == '(':
+		case c == '$' && l.peekAt(1+skip) == '(':
 			flush()
 			out = append(out, l.scanParens(CommandSubst, DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && l.peekAt(1) == '{':
+		case c == '$' && l.peekAt(1+skip) == '{':
 			flush()
 			out = append(out, l.scanBraces(DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && l.startsBareParam():
+		case c == '$' && stopped == DollarBraces && l.dialect.DollarGoesWhenAContinuationStopsItAtABrace:
+			// Stopped at a `${`, and this dialect drops the `$` rather than
+			// leaving it as text. Nothing is flushed and no span is made: the
+			// character is not part of the run, and the pair behind it is
+			// taken out by the continuation case below.
+			l.advance() // $
+		case c == '$' && l.startsBareParamAt(1+skip):
 			flush()
 			out = append(out, l.scanBareParam(DoubleQuoted)...)
 			litPos = l.pos()
@@ -3067,6 +3095,7 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Spa
 func (l *Lexer) scanDollarSingle() (Span, bool) {
 	open := l.pos()
 	l.advance() // $
+	l.takeContinuationAfterADollar(Unquoted)
 	l.advance() // '
 	var b strings.Builder
 	for {
@@ -3254,6 +3283,7 @@ func skipQuotedFrom(src string, i int) int {
 func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	open := l.pos()
 	l.advance() // $
+	l.takeContinuationAfterADollar(q)
 	l.advance() // (
 	depth := 1
 	if kind == ArithSubst {
@@ -3534,6 +3564,102 @@ func (l *Lexer) collectContinuations() func(from, to int) string {
 	}
 }
 
+// byteAt is peekAt by absolute offset, for the lookahead that has to reach
+// past the cursor's own idea of where it is.
+func (l *Lexer) byteAt(i int) byte {
+	if i < 0 || i >= len(l.src) {
+		return 0
+	}
+	return l.src[i]
+}
+
+// dollarFormAt classifies the form a `$` introduces, read at i — the offset of
+// the character behind the `$`. The empty set is "no form at all": a blank, a
+// letter of no construct, the end of the word.
+func (l *Lexer) dollarFormAt(i int) DollarForms {
+	switch l.byteAt(i) {
+	case '{':
+		return DollarBraces
+	case '(':
+		return DollarParens
+	case '[':
+		if l.dialect.DollarBracketArith {
+			return DollarBrackets
+		}
+	case '\'':
+		if l.dialect.DollarSingleQuote {
+			return DollarQuotes
+		}
+	case '"':
+		if l.dialect.DollarDoubleQuote {
+			return DollarQuotes
+		}
+	}
+	if isBareParam(l.byteAt(i)) ||
+		(l.dialect.BareParamFlags && bareFlagApplies(l.byteAt(i), l.byteAt(i+1))) {
+		return DollarBareParameter
+	}
+	return NoDollarForm
+}
+
+// continuationAfterADollar reports how many bytes of line continuation a `$`
+// reaches across, read at i — the offset of the character behind the `$` — and
+// which form it reached. Zero where none is written, and zero where
+// [Dialect.ContinuationStopsADollarAt] stops the `$` at the form behind the
+// pair, in which case the `$` is read exactly as it was before this question
+// existed: as text, with the pair removed afterwards by whatever removes one.
+//
+// A here-document's delimiter is left out. A continuation written in one is
+// that document's question — see [Dialect.HeredocDelimiterAcrossAContinuation]
+// — and nothing in a delimiter expands, so the form behind the pair is not a
+// construct there at all.
+func (l *Lexer) continuationAfterADollar(i int, q Quoting) (skip int, stoppedAt DollarForms) {
+	if l.inHeredocDelimiter {
+		return 0, NoDollarForm
+	}
+	n := 0
+	for l.byteAt(i+n) == '\\' && l.byteAt(i+n+1) == '\n' {
+		n += 2
+	}
+	if n == 0 {
+		return 0, NoDollarForm
+	}
+	stops := l.dialect.ContinuationStopsADollarAt
+	if q == DoubleQuoted {
+		stops = l.dialect.ContinuationStopsADollarAtInDoubleQuotes
+	}
+	if l.inRawBody {
+		// An unquoted here-document body stops nothing, in any dialect. Its
+		// continuations are gone before an expansion in it is scanned —
+		// measured 2026-09-16, `[$\⏎x][$\⏎{x}]` in a body delimited by an
+		// unquoted `E` is `[5][5]` in bash 5.3, zsh 5.9.2, ksh93u+ and dash —
+		// which is the same exemption [Lexer.continuationWaitsForAName]
+		// records for that shell's refusal inside `${ }`.
+		stops = NoDollarForm
+	}
+	if form := l.dollarFormAt(i + n); stops.Has(form) {
+		return 0, form
+	}
+	return n, NoDollarForm
+}
+
+// takeContinuationAfterADollar steps a scanner's cursor over the line
+// continuations its `$` reached across.
+//
+// Asked again from one byte on rather than handed in, so the scanner and the
+// dispatcher that routed to it cannot disagree about what was skipped. It
+// moves nothing unless a `$` is what was just read, which is what keeps it off
+// `<( )` and `>( )` — [Lexer.scanParens] reads those through the same door.
+func (l *Lexer) takeContinuationAfterADollar(q Quoting) {
+	if l.byteAt(l.off-1) != '$' {
+		return
+	}
+	skip, _ := l.continuationAfterADollar(l.off, q)
+	for range skip {
+		l.advance()
+	}
+}
+
 // noteContinuation records the backslash at the cursor if it begins a line
 // continuation and an expression is collecting them.
 func (l *Lexer) noteContinuation() {
@@ -3557,6 +3683,7 @@ func (l *Lexer) noteContinuation() {
 func (l *Lexer) scanBracket(q Quoting) Span {
 	open := l.pos()
 	l.advance() // $
+	l.takeContinuationAfterADollar(q)
 	l.advance() // [
 	depth := 1
 	start := l.off
@@ -3869,6 +3996,7 @@ func (l *Lexer) scanSubshellSubstitution(open Pos, start int, q Quoting) (Span, 
 func (l *Lexer) scanBraces(q Quoting) Span {
 	open := l.pos()
 	l.advance() // $
+	l.takeContinuationAfterADollar(q)
 	l.advance() // {
 	start := l.off
 	// Whether this is `${ cmd;}` or `${x}` is settled by the character after
@@ -4330,6 +4458,21 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 // and so does a backquote written outside double quotes. The rule is not the
 // backslash meeting a quote, it is the two quotings meeting — which is why
 // this takes the position as a parameter rather than growing a case.
+//
+// A backslash-newline is the one pair that is taken *out* rather than
+// unescaped, and it is taken out whatever quoting it stands in inside the
+// text. That is the whole difference between this form and `$( )`: the pair
+// is removed here before the command text is parsed, so a single-quoted
+// `'a\⏎b'` inside backquotes is the two-character string `ab`, where the
+// same text inside `$( )` keeps the backslash and the newline. Measured
+// 2026-09-16 from script files and unanimous in bash 5.3, bash 3.2,
+// zsh 5.9.2, ksh93u+ and dash: a backquoted `printf %s 'a\⏎b'` is `ab`, and
+// so are the double-quoted and the bare spelling of it, and so is a body read from a
+// *quoted* here-document inside the substitution — which is the shape that
+// says this is not a continuation the inner parse removes for itself, because
+// nothing inside a quoted here-document removes one. `'a\\⏎b'` is `a\⏎b` in
+// all five and falls out of the same pass: the `\\` is unescaped first and
+// the newline it leaves behind is an ordinary character (#3453).
 func unescapeBackquoted(s string, q Quoting) string {
 	if !strings.ContainsRune(s, '\\') {
 		return s
@@ -4341,6 +4484,11 @@ func unescapeBackquoted(s string, q Quoting) string {
 			switch s[i+1] {
 			case '$', '`', '\\':
 				i++
+			case '\n':
+				// Removed, not unescaped: neither character reaches the
+				// command text.
+				i++
+				continue
 			case '"':
 				if q == DoubleQuoted {
 					i++
@@ -5099,6 +5247,7 @@ func isBareParam(c byte) bool {
 func (l *Lexer) scanBareParam(q Quoting) []Span {
 	open := l.pos()
 	l.advance() // $
+	l.takeContinuationAfterADollar(q)
 	begin := l.off
 	if l.dialect.BareSubscript && l.peek() == '#' && isBareLengthTarget(l.peekAt(1)) {
 		// `$#name` is that parameter's length, so the `#` is an operator here
@@ -5164,11 +5313,16 @@ func (l *Lexer) scanBareParam(q Quoting) []Span {
 // So the gate has to ask the dialect as well, and it has to ask *here* rather
 // than inside scanBareParam — a `$` that is not the start of an expansion
 // never reaches that function at all.
-func (l *Lexer) startsBareParam() bool {
-	if isBareParam(l.peekAt(1)) {
+func (l *Lexer) startsBareParam() bool { return l.startsBareParamAt(1) }
+
+// startsBareParamAt is [Lexer.startsBareParam] with the character the `$`
+// introduces read n bytes on, for the caller that has to look past a line
+// continuation standing between the two.
+func (l *Lexer) startsBareParamAt(n int) bool {
+	if isBareParam(l.peekAt(n)) {
 		return true
 	}
-	return l.dialect.BareParamFlags && bareFlagApplies(l.peekAt(1), l.peekAt(2))
+	return l.dialect.BareParamFlags && bareFlagApplies(l.peekAt(n), l.peekAt(n+1))
 }
 
 // bareFlagApplies reports whether a `$` is followed by one of zsh's unbraced

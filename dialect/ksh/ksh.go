@@ -281,6 +281,26 @@ func Dialect() syntax.Dialect {
 	// `${@\⏎}` are ``syntax error at line 1: `\' unexpected`` here, where the
 	// other four read them all. See the flag for the rows.
 	d.ParamContinuationNeedsAName = true
+	// A line continuation written between a `$` and what it introduces stops
+	// the `$` at a bare parameter and at a parenthesis outside quotes, and at
+	// everything inside double quotes. Measured 2026-09-16 from script files
+	// with `x=5` and `set -- a b`: `$\⏎x` is the text `$x` here where the
+	// other four expand it, `$\⏎(echo hi)` is `` `(' unexpected `` because
+	// the `$` stayed behind as text and a `(` cannot begin a word, and
+	// `"$\⏎{x}"` and `"$\⏎1"` are `${x}` and `$1`. The two it does not stop
+	// at outside quotes are the brace and `$'…'`: `$\⏎{x}` is 5 and
+	// `$\⏎'a\tb'` decodes, both as in the rest of the panel. `$[…]` is not
+	// a form this shell has, so nothing here is a measurement of it.
+	//
+	// One shape is measured and deliberately not modeled: outside quotes a
+	// *pattern* character standing earlier in the same word takes the stop
+	// away, so `[$\⏎x]`, `{$\⏎x`, `*$\⏎x` and `?$\⏎x` all expand here
+	// while `a$\⏎x` and `!$\⏎x` do not. Reading it would make the lexer's
+	// `$` depend on glob characters it has already passed, which is a
+	// question about the *word* and not about the delimiter this field is
+	// for. See #3523.
+	d.ContinuationStopsADollarAt = syntax.DollarBareParameter | syntax.DollarParens
+	d.ContinuationStopsADollarAtInDoubleQuotes = syntax.EveryDollarForm
 	// A function body that is not compound may carry no redirection here:
 	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
 	// >out` are all a syntax error at the operator. A braced body is not

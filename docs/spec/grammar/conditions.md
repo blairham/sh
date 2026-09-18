@@ -48,6 +48,63 @@ That one position is left refused, because it is what the two agree on
 and accepting it would let a genuinely truncated condition through
 silently.
 
+## A `]]` where a condition would begin
+
+The closer is a closer where the condition has something to close over, and
+the panel splits three ways about what it is where the condition has nothing.
+Measured 2026-09-18, `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+
+| written | bash 5.3.20 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `[[ ]] ]]` | refuses | **0** | refuses |
+| `[[ ]] == x ]]` | refuses | **1** | refuses |
+| `[[ ]] && x ]]` | refuses | **0** | refuses |
+| `[[ -n ]]` | refuses | refuses | refuses |
+| `[[ x == ]]` | refuses | refuses | refuses |
+
+**ksh93 reads it as an ordinary word** where a condition *term* belongs — the
+two characters are a word, true for being non-empty, comparable as a string,
+joinable by a connective — and takes it as the closer everywhere else.
+`ConditionCloserIsAWordWhereATermBegins` is the flag, and the two rows at the
+bottom are its scope: an **operand**'s position is a separate question and
+every column answers it alike.
+
+The five places a term may begin are the `[[`, a `!`, a `&&`, a `||` and a
+group's `(`.
+
+### zsh refuses it too, and names something else
+
+It looks like the same reading from a `-c` probe and is not. zsh refuses the
+token; what it does differently is report the refusal at the token **behind**
+the closer, at that token's own line. The routes are what say so, and this is
+why the row could not be settled from `-c` alone:
+
+| route | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- |
+| `-c '[[ ]]'` | ``near `]]'``, line 1 | ``near `]]'``, line 1 |
+| a file with a final newline | ``near `]]'``, line 1 | a newline, line 2 |
+| a file without one | ``near `]]'``, line 1 | ``near `]]'``, line 1 |
+| standard input | ``near `]]'``, line 1 | a newline |
+| `[[ ]]` then `echo after` | ``near `]]'``, line 1 | ``near `echo'``, line 2 |
+| `[[ ]]; echo after` | ``near `]]'``, line 1 | ``near `;'``, line 1 |
+| `[[ ]] echo after` | ``near `]]'``, line 1 | ``near `echo'``, line 1 |
+| `[[ ]] ]]` | ``near `]]'``, line 1 | ``near `]]'``, line 1 |
+| `[[ ]] == x ]]` | ``near `]]'``, line 1 | ``near `=='``, line 1 |
+
+`ConditionTermMissingBlamesTheTokenAfterTheCloser` carries it. Blank lines
+between are skipped, so three of them before an `echo` put the complaint on
+the `echo`'s line; where nothing follows at all the `]]` is still the last
+token read and is what gets named, which is why the first, third and eighth
+rows agree in both columns.
+
+**One shape of each is measured and not modeled.** `[[ ]] && x ]]` is
+`condition expected: x` in zsh — a run-time complaint about a word, the `&&`
+there being read as the list operator it also is — where this reading names
+the `&&`. And where a newline follows the word ksh93 names the **newline**
+rather than what stands behind it, which is #3627: the same divergence is
+there for a condition that never closed at all, so it is that shell's scanner
+state and not this reading (#2964).
+
 ## The right side of `==` is a pattern
 
     [[ abc == a*   ]]   →  matches

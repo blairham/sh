@@ -4023,6 +4023,76 @@ type Dialect struct {
 	// the run-time complaint in bash, which is a different split again.
 	FunctionNameCheckedWhenTheDefinitionRuns bool
 
+	// ConditionCloserIsAWordWhereATermBegins reads a `]]` standing where a
+	// condition **term** belongs as an ordinary word, so the closer is only a
+	// closer once the condition has something to close over.
+	//
+	// The five places a term may begin are the `[[` itself, a `!`, a `&&`, a
+	// `||` and a group's `(`. Measured 2026-09-18, `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, `-c` and script files:
+	//
+	//	                   [[ ]] ]]   [[ ]] == x ]]   [[ ]] && x ]]
+	//	ksh93u+ 2012-08-01  0          1               0
+	//	bash 5.3.20         refuses    refuses         refuses
+	//	zsh 5.9.2           refuses    refuses         refuses
+	//
+	// So one column takes the text as the two-character word `]]` and runs
+	// the condition over it — true for being non-empty, compared with `x` as
+	// a string, joined by the connective — and the other two refuse the token
+	// wherever it stands. That is the whole of the flag, and the reason it is
+	// the grammar's rather than a wording: what the parser **consumes** moves.
+	//
+	// It reaches a term's position only. An operand is a separate question
+	// and every column answers it the same way: `[[ -n ]]` and `[[ x == ]]`
+	// are refusals in that column too — ``]]' unexpected`` — so the closer is
+	// still a closer behind an operator.
+	//
+	// zsh is **not** this, which is worth writing down because it looks like
+	// it from one probe. That shell refuses the token as well; what it does
+	// differently is report the refusal at the token *after* the closer, and
+	// [Dialect.ConditionTermMissingBlamesTheTokenAfterTheCloser] is that.
+	//
+	// One row of the same input is measured and **not** modeled, and it
+	// predates this flag: where a newline follows the word, that column names
+	// the **newline** rather than what stands behind it —
+	// ``line 2: `newline' unexpected`` for `[[ ]]` and an `echo` on the next
+	// line, where this reading names the `echo`. The same divergence is there
+	// for a condition that never closed at all, `[[ x` over two lines, so it
+	// is that shell's scanner state and not this reading. #3627 has the panel
+	// and the two rows that stop it being a rule about newlines (#2964).
+	ConditionCloserIsAWordWhereATermBegins bool
+
+	// ConditionTermMissingBlamesTheTokenAfterTheCloser reports a condition
+	// with no term in it at the token **behind** the `]]` rather than at the
+	// `]]` itself — the closer is consumed and whatever stands after it is
+	// what the complaint names, at that token's own line.
+	//
+	// Measured 2026-09-18 over `[[ ]]` in every route, with `env -i`:
+	//
+	//	route                  bash 5.3.20         zsh 5.9.2
+	//	-c                     `]]', line 1        `]]', line 1
+	//	a file with a last NL  `]]', line 1        a newline, line 2
+	//	a file without one     `]]', line 1        `]]', line 1
+	//	standard input         `]]', line 1        a newline
+	//	`[[ ]]` then `echo`    `]]', line 1        `echo', line 2
+	//	`[[ ]]; echo after`    `]]', line 1        `;', line 1
+	//	`[[ ]] echo after`     `]]', line 1        `echo', line 1
+	//	`[[ ]] ]]`             `]]', line 1        `]]', line 1
+	//	`[[ ]] == x ]]`        `]]', line 1        `==', line 1
+	//
+	// One column refuses the `]]` **as a token**, at the same place on every
+	// route; the other consumes it and blames what follows, which is a
+	// newline where there is one, the next word where there is one, and the
+	// `]]` itself where the input simply ends. Blank lines between are
+	// skipped: three of them before an `echo` put the complaint on the
+	// `echo`'s line.
+	//
+	// One shape it does not cover, and it is measured rather than forgotten:
+	// `[[ ]] && x ]]` is `condition expected: x` in that column — a run-time
+	// complaint about a word, not a parse failure at a token — so the `&&`
+	// there is read as the list operator it also is (#2964).
+	ConditionTermMissingBlamesTheTokenAfterTheCloser bool
+
 	// FunctionNamesRefused are the words this dialect will not let a function
 	// definition bind, whatever else is true of them. Every one of them is a
 	// perfectly good name, so nothing about the *spelling* is what refuses

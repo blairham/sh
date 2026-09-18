@@ -879,7 +879,8 @@ func Semantics() interp.Semantics {
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No
 	// set -E and -T carry the traps set -Eeuo pipefail scripts rely on.
-	s.SetHasTraceLetters = interp.Yes
+	s.SetHasTheErrtraceLetter = interp.Yes
+	s.SetHasTheFunctraceLetter = interp.Yes
 	// `set -t`, which this shell also spells `set -o onecmd`: the line that
 	// set it finishes and nothing more is read. Measured on a script file, on
 	// standard input and at the invocation — `bash -t script.sh` runs the
@@ -3210,7 +3211,12 @@ func Apply(r *interp.Runner) {
 	// has the most, and five of them belong to it alone.
 	r.AddSetOptions(
 		"braceexpand",
+		// `emacs` and `nolog` moved out of the substrate's common table when
+		// the ash column was asked for them and had neither (#3366). Both
+		// are in this shell's own `set -o` listing, measured on bash 5.3.20.
+		"emacs",
 		"errtrace",
+		"nolog",
 		"functrace",
 		"hashall",
 		"histexpand",

@@ -70,6 +70,12 @@ type setOption struct {
 
 // commonSetOptions are the names every shell in the panel has. They are the
 // core's, and no dialect has to declare them.
+//
+// "Every shell in the panel" is a measurement and it has moved: `emacs` and
+// `nolog` sat here until the ash column was asked for them, and BusyBox has
+// neither (#3366). A name here is one the *seventh* column answers too, and a
+// name that turns out not to be belongs in extraSetOptions with each dialect
+// that has it declaring it.
 var commonSetOptions = map[string]setOption{
 	"errexit":   {apply: func(r *Runner, on bool) { r.errexit = on }, get: func(r *Runner) bool { return r.errexit }},
 	"nounset":   {apply: func(r *Runner, on bool) { r.nounset = on }, get: func(r *Runner) bool { return r.nounset }},
@@ -96,23 +102,22 @@ var commonSetOptions = map[string]setOption{
 	// is why it is a try rather than an apply.
 	"monitor": {try: (*Runner).setMonitor, get: func(r *Runner) bool { return r.monitor }},
 
-	// The rest of the unanimous names, none of which this shell has yet:
-	// we do not defer a job notice, do not hold the session open at
-	// end-of-file, and keep no history for `nolog` to leave a function
-	// definition out of. All three are recorded rather than refused, which
-	// is measured — every shell in the panel that has the name takes it in
-	// both directions at 0, and the three were `set: notify: not
-	// implemented` here under five of our six dialects (#3128). See
-	// recordedOption.
+	// Two more of the unanimous names, neither of which this shell has yet:
+	// we do not defer a job notice and do not hold the session open at
+	// end-of-file. Both are recorded rather than refused, which is measured —
+	// every shell in the panel that has the name takes it in both directions
+	// at 0, and they were `set: notify: not implemented` here under five of
+	// our six dialects (#3128). See recordedOption.
 	"notify":    recordedOption("notify", false),
 	"ignoreeof": recordedOption("ignoreeof", false),
-	"nolog":     recordedOption("nolog", false),
 
-	// The two editing modes, and they are one state under two names — see
-	// Runner.editingMode and EditingMode. Neither starts selected, because a
-	// shell with no line to edit has no keymap to be in; asking for `vi`
-	// selects the other keymap, which is as much as this editor can promise
-	// and exactly what the zsh dialect's `bindkey -v` already promises.
+	// One of the two editing modes. They are one state under two names — see
+	// Runner.editingMode and EditingMode — and the other one is not here,
+	// because `emacs` is not unanimous: see extraSetOptions. Neither starts
+	// selected, because a shell with no line to edit has no keymap to be in;
+	// asking for `vi` selects the other keymap, which is as much as this
+	// editor can promise and exactly what the zsh dialect's `bindkey -v`
+	// already promises.
 	//
 	// Turning either *off* leaves neither on rather than swapping to the
 	// other, measured in bash 5.3 and ksh93 both: `set -o vi; set +o vi`
@@ -120,10 +125,6 @@ var commonSetOptions = map[string]setOption{
 	"vi": {
 		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeVi, on) },
 		get:   func(r *Runner) bool { return r.EditingMode() == EditingModeVi },
-	},
-	"emacs": {
-		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeEmacs, on) },
-		get:   func(r *Runner) bool { return r.EditingMode() == EditingModeEmacs },
 	},
 }
 
@@ -213,6 +214,25 @@ func (r *Runner) setEditingMode(mode EditingMode, on bool) {
 // imitated: `braceexpand` is on here for the same reason in all three shells
 // that have the name.
 var extraSetOptions = map[string]setOption{
+	// The two names the panel is *not* unanimous on, and both were in the
+	// common table until the seventh column was asked. Measured 2026-09-17 in
+	// the digest-pinned alpine image, BusyBox v1.37.0: `set -o emacs` and
+	// `set -o nolog` are each `illegal option -o emacs` at 1 there, and
+	// neither appears in that shell's own `set -o` listing — which is the
+	// half a script can see, since a listing is what `eval "$(set +o)"`
+	// feeds back. bash, dash and ksh93 have both and declare them; zsh has
+	// an option namespace of its own and reaches none of this (#3366).
+	//
+	// `emacs` is the other half of `vi` next door: one state under two
+	// names, so it applies through the same method and a dialect that has
+	// only one of the pair still cannot make them disagree.
+	"emacs": {
+		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeEmacs, on) },
+		get:   func(r *Runner) bool { return r.EditingMode() == EditingModeEmacs },
+	},
+	// And no history for `nolog` to leave a function definition out of, so
+	// it is recorded the way `notify` and `ignoreeof` are.
+	"nolog": recordedOption("nolog", false),
 	// Brace expansion, which really moves: `set +o braceexpand` leaves
 	// `{a,b}` the word it was written as, and setting it again puts the
 	// expansion back — unlike `noexec`, which is one-way in every shell that

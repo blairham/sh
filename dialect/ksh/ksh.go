@@ -3928,6 +3928,12 @@ func Apply(r *interp.Runner) {
 	r.AddSetOptions(
 		"bgnice",
 		"braceexpand",
+		// `emacs` and `nolog` are declared here since #3366, when BusyBox ash
+		// was asked for them and had neither and they left the substrate's
+		// common table. This shell lists `emacs` as itself and `nolog` as the
+		// positive `log`, which is the negated map below reading this name.
+		"emacs",
+		"nolog",
 		"globstar",
 		"gmacs",
 		"histexpand",

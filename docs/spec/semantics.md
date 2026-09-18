@@ -5354,14 +5354,23 @@ exist is not a state anything is already in — every shell in the panel
 agrees, in four wordings and at two statuses, and three of them end the
 script over it (`opt/an-unknown-long-name-is-refused`).
 
-**Fourteen names are unanimous** and belong to the core, needing no
-dialect to declare them: `errexit`, `nounset`, `xtrace`, `noclobber`,
-`noglob`, `allexport`, `noexec`, `verbose`, `monitor`, `notify`,
-`ignoreeof`, `nolog`, `vi`, `emacs`. Measured by asking each shell to turn
-each one off; all four accept all fourteen. (ksh93's own `set -o` listing
-prints the *positive* spellings — `unset`, `glob`, `clobber`, `exec`,
-`log` — which is why the membership was established by asking rather than
-by reading the listing.)
+**Twelve names are unanimous** and belong to the core, needing no dialect
+to declare them: `errexit`, `nounset`, `xtrace`, `noclobber`, `noglob`,
+`allexport`, `noexec`, `verbose`, `monitor`, `notify`, `ignoreeof`, `vi`.
+Measured by asking each shell to turn each one off. (ksh93's own `set -o`
+listing prints the *positive* spellings — `unset`, `glob`, `clobber`,
+`exec`, `log` — which is why the membership was established by asking
+rather than by reading the listing.)
+
+It was fourteen, and `emacs` and `nolog` were the two that left. "Every
+shell in the panel" is a measurement rather than a definition, and it
+moved when the seventh column was asked: measured 2026-09-17 in the
+digest-pinned alpine image, BusyBox v1.37.0 answers `set -o emacs` and
+`set -o nolog` with `illegal option -o …` at 1, and its own listing names
+neither (#3366). Both are declared now by bash, dash and ksh93, and
+`emacs` by zsh as well — that shell has an option namespace of its own
+and still reads this state through `Runner.NamedOption`, which is the
+same reason it declares `stdin`.
 
 The rest are declared by each dialect that has them:
 
@@ -15199,13 +15208,33 @@ mean quite the same thing by it — which option it abbreviates is
 SetHLetterTracksCommands — while dash refuses the letter outright,
 fatally, the way it refuses any letter it does not have.
 
-**`SetHasTraceLetters`** — bash yes · dash no · ksh93 no · zsh no
+**`SetHasTheErrtraceLetter`** — bash yes · dash no · ksh93 no · zsh no ·
+ash **yes**
 
-Gives `set` the -E and -T letters, which carry the ERR trap (and DEBUG
-with RETURN) into functions and subshells the dialect otherwise bounds
-them out of. bash alone: dash and ksh93 refuse the letters, and zsh
-spells different options with them, so only a refusal is honest
-elsewhere. Recorded as `opt/set-e-carries-the-err-trap`.
+Gives `set` the -E letter, which carries the ERR trap into functions and
+subshells the dialect otherwise bounds it out of. bash and BusyBox ash:
+dash and ksh93 refuse the letter, and zsh spells a different option with
+it, so only a refusal is honest there. Recorded as
+`opt/set-e-carries-the-err-trap`.
+
+**`SetHasTheFunctraceLetter`** — bash yes · dash no · ksh93 no · zsh no ·
+ash **no**
+
+The same question about -T, which carries the DEBUG and RETURN traps the
+same way. bash alone.
+
+**These are two fields because the pair is not answered together**, which
+is a measurement and was not always known. They were one field reading
+"bash alone", and the seventh column disproved it in both directions at
+once: measured 2026-09-17 in the digest-pinned alpine image, BusyBox
+v1.37.0 takes `set -E` and `set -o errtrace` at 0 and refuses `set -T` as
+`illegal option -T` at 2 and `set -o functrace` as `illegal option -o
+functrace` at 1. One answer could only have given that column both
+letters or neither (#3366).
+
+There is no ERR trap in that shell for the carriage to be about, so what
+the option moves there is nothing; what a script can see is the letter,
+the name, and the listing row.
 
 **`SetSLetterSortsTheOperands`** — ksh93 yes · bash no · zsh no · dash no ·
 ash no

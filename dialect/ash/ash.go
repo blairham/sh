@@ -306,6 +306,16 @@ func Semantics() interp.Semantics {
 	s.SetBTurnsOffBraceExpansion = interp.No
 	// Nor the `-h` POSIX names: `set -h` is refused the same way.
 	s.SetHasTheHLetter = interp.No
+	// `set -E` is taken here and `set -T` is not, which is why those two are
+	// separate fields since #3366 — one answer could only have given this
+	// column both letters or neither. Measured 2026-09-17 in the pinned
+	// alpine image, BusyBox v1.37.0: `set -E` and `set -o errtrace` are 0,
+	// `set -T` is `set: illegal option -T` at 2, and `set -o functrace` is
+	// `set: illegal option -o functrace` at 1. There is no ERR trap in this
+	// shell for the carriage to be about, so what the option moves is
+	// nothing and what a script can see is the letter, the name and the
+	// listing row.
+	s.SetHasTheErrtraceLetter = interp.Yes
 	// And no keyword option either. Measured 2026-09-16 in the pinned
 	// alpine image, BusyBox v1.37.0: `set -k` is `set: illegal option -k`
 	// at 2 and the file ends there. The refusal is this shell's answer
@@ -339,6 +349,20 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
+	// And the order the letters come out in, which is this shell's own and
+	// not a sort and not the order they were set in (#3256). Measured
+	// 2026-09-17 in the pinned image, BusyBox v1.37.0, one letter at a time
+	// and then every settable letter at once: `set -EubaCvxIfe` is
+	// `EubaCvxcIfe` under `-c`, the same run with `-i` is `EubaCvxciIfe`,
+	// and the same again on a terminal with `-m` is `EubaCvxcmiIfe`. The
+	// `-s` route puts its letter where `c` stands on the other one —
+	// `set -Eubax` over a pipe is `Eubaxs`.
+	//
+	// `n` is the one letter nothing can observe: `set -n` stops the `echo`
+	// that would read `$-`, on every route including an interactive one, so
+	// its place here is dash's and is a guess about a letter no script can
+	// see. Every other letter in the string was run.
+	s.DollarDashLetterOrder = "EubaCvxsncmiIfe"
 	// Both spellings of the login option are taken — `ash -l -c cmd` and
 	// `ash --login -c cmd` each run the command — where dash refuses the long
 	// one outright.
@@ -1953,6 +1977,20 @@ func Diagnostics() interp.Diagnostics {
 		// `set -o` prints a name and its state in two columns and no header,
 		// where dash writes `Current option settings` over its own.
 		OptionListingWidth: 16,
+		// The order of the listing, which is this shell's own table rather
+		// than a sort — and it was dash's names sorted until #3366, so every
+		// row was in the wrong place and two of them named options this
+		// shell has not got. Measured 2026-09-17 in the pinned image,
+		// BusyBox v1.37.0: `set -o` and `set +o` write these fourteen in
+		// this order, and the order does not move with the states.
+		//
+		// There is no header line above it, which is the other thing that
+		// parts this listing from dash's.
+		OptionListingOrder: []string{
+			"errexit", "noglob", "ignoreeof", "monitor", "noexec", "xtrace",
+			"verbose", "noclobber", "allexport", "notify", "nounset",
+			"errtrace", "vi", "pipefail",
+		},
 
 		// `set -x`. This shell **quotes**, which is the one place it parts
 		// from its sibling on a question dash answers with a flat no: dash
@@ -2030,6 +2068,23 @@ func Apply(r *interp.Runner) {
 	// it is the dialect's answer, and "nothing but expansion" is an answer
 	// rather than an absence.
 	r.SetPromptStyle(PromptStyle())
+	// The two `set -o` names this shell has beyond the ones the panel shares.
+	// `pipefail` was already *taken* here and not listed, so `set -o
+	// pipefail; set +o` did not say the shell was in it and a script saving
+	// state with that output lost the option (#3366). `errtrace` was refused
+	// outright.
+	//
+	// The names this shell has **not** got are the other half of the same
+	// measurement and are not declared anywhere, because they left the
+	// substrate's common table instead: `set -o emacs` and `set -o nolog`
+	// are each `illegal option -o …` at 1 here.
+	r.AddSetOptions("errtrace", "pipefail")
+	// Two letters this shell spells its own way. `-b` is `notify` and `-I`
+	// is `ignoreeof` — measured at 0 in the pinned image, with `$-` gaining
+	// the letter each time, which is the half that says the letter reached
+	// the state and not merely the parser. Neither is in the substrate's
+	// shared letter table, because no other column in the panel has either.
+	r.SetOptionLetterNames(map[rune]string{'b': "notify", 'I': "ignoreeof"})
 	// `source` is `.` under a second name here, as it is in bash, zsh and
 	// ksh93 — and not as it is in dash, which has no such command. Measured
 	// 2026-09-16 in the pinned alpine image, BusyBox v1.37.0: `type source`

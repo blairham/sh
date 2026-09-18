@@ -418,11 +418,15 @@ func TestSetNReadsAndNeverRuns(t *testing.T) {
 }
 
 // TestSetTraceLettersAreAnAxis — -E carries the ERR trap into functions and
-// -T carries DEBUG and RETURN; only the dialect with the letters takes them.
+// -T carries DEBUG and RETURN; only a dialect with the letter takes it.
+//
+// The two letters are two axes, so the last case here is the one that could
+// not be written while they were one field: a dialect holding `E` and refusing
+// `T` (#3366).
 func TestSetTraceLettersAreAnAxis(t *testing.T) {
 	withE := func(r *Runner) {
 		sem := CoreSemantics()
-		sem.SetHasTraceLetters = Yes
+		sem.SetHasTheErrtraceLetter = Yes
 		sem.TrapHasErrCondition = Yes
 		sem.ErrTrapRunsInsideFunctions = No
 		sem.TrapBodyRunsWhatParsed = Yes
@@ -438,11 +442,23 @@ func TestSetTraceLettersAreAnAxis(t *testing.T) {
 	}
 	out, _ = run(t, `set -T; echo "st=$?"`, func(r *Runner) {
 		sem := CoreSemantics()
-		sem.SetHasTraceLetters = No
+		sem.SetHasTheErrtraceLetter = No
+		sem.SetHasTheFunctraceLetter = No
 		r.Semantics = &sem
 	})
 	if !strings.Contains(out, "set: -T: invalid option") || !strings.Contains(out, "st=2") {
 		t.Errorf("out=%q, want the dialect without the letters to refuse at 2", out)
+	}
+	// One letter and not the other, which is the shape a single field could
+	// not hold: `set -E` is taken and `set -T` refused on the same runner.
+	out, _ = run(t, `set -E; echo "e=$?"; set -T; echo "t=$?"`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.SetHasTheErrtraceLetter = Yes
+		sem.SetHasTheFunctraceLetter = No
+		r.Semantics = &sem
+	})
+	if !strings.Contains(out, "e=0") || !strings.Contains(out, "set: -T: invalid option") {
+		t.Errorf("out=%q, want -E taken and -T refused on one runner", out)
 	}
 }
 

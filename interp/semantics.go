@@ -14549,13 +14549,26 @@ type Semantics struct {
 	// of its own this runner does not keep — recorded, not reproduced.
 	TildePlusMinusExpands Answer
 
-	// SetHasTraceLetters gives `set` the -E and -T letters, which carry
-	// the ERR trap (and DEBUG with RETURN) into functions and subshells the
-	// dialect otherwise bounds them out of. bash alone: dash and ksh93
-	// refuse the letters, and zsh spells different options with them, so
-	// only a refusal is honest elsewhere. Recorded as
-	// `opt/set-e-carries-the-err-trap`.
-	SetHasTraceLetters Answer
+	// SetHasTheErrtraceLetter gives `set` the -E letter, which carries the
+	// ERR trap into functions and subshells the dialect otherwise bounds it
+	// out of. bash and BusyBox ash: dash and ksh93 refuse the letter, and zsh
+	// spells a different option with it, so only a refusal is honest there.
+	// Recorded as `opt/set-e-carries-the-err-trap`.
+	//
+	// Two fields rather than one since #3366, because the pair is not
+	// answered together. It was `SetHasTraceLetters` and read "bash alone",
+	// which the seventh column disproved in both directions at once:
+	// measured 2026-09-17 in the digest-pinned alpine image, BusyBox v1.37.0
+	// takes `set -E` and `set -o errtrace` at 0 and refuses `set -T` as
+	// `illegal option -T` and `set -o functrace` as `illegal option -o
+	// functrace`. A single answer could only have given that column both
+	// letters or neither.
+	SetHasTheErrtraceLetter Answer
+
+	// SetHasTheFunctraceLetter is the same question about -T, which carries
+	// the DEBUG and RETURN traps the same way. bash alone — see the field
+	// above for why the two are separate.
+	SetHasTheFunctraceLetter Answer
 
 	// SetHasTheTLetter gives `set` the -t letter: the shell reads and runs
 	// one more line and then stops, which is what bash lists as `onecmd` and
@@ -18472,7 +18485,8 @@ func PosixSemantics() Semantics {
 		// columns define an ordinary function and never fire it for a
 		// variable, so the preset is the one that claims nothing.
 		DisciplineFunctionIsAVariableHook: No,
-		SetHasTraceLetters:                No,
+		SetHasTheErrtraceLetter:           No,
+		SetHasTheFunctraceLetter:          No,
 		// The standard's `set` has no -t and neither does its `sh`, so the
 		// preset follows the text; the two shells that grew the letter
 		// override. dash — the closest reading of the standard here — is the

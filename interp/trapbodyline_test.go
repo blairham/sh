@@ -84,7 +84,7 @@ func returnAndDebugSem(s *Semantics) {
 	s.ErrTrapRunsInSubshells = No
 	// `set -T` is what carries either trap into a call, and the letters are
 	// bash's — the dialect this behavior was measured on.
-	s.SetHasTraceLetters = Yes
+	s.SetHasTheErrtraceLetter = Yes
 }
 
 // `act` does not set the trap itself, so the only thing that could reach it
@@ -160,7 +160,7 @@ func returnLineSem(s *Semantics) {
 	// The carriage, so a trap set at the top level reaches a call whose body
 	// did not set one. bash's letters, which is the dialect this was
 	// measured on.
-	s.SetHasTraceLetters = Yes
+	s.SetHasTheErrtraceLetter = Yes
 }
 
 func returnLines(t *testing.T, src string) string {

@@ -4239,39 +4239,54 @@ func Diagnostics() interp.Diagnostics {
 			"fg":       "Usage: fg [ options ] [job ...]",
 			"disown":   "Usage: disown [ options ] [job ...]",
 		},
-		// `ulimit -a`, row for row as the engine writes it. The rows this
-		// platform's engine calls unsupported, and the constant pipe and
-		// socket buffers, are fixed text rather than resource limits.
-		// Measured on ksh93u+ 2012-08-01, which is the panel's, and on macOS
-		// alone: no image carries that build for a second kernel, and the
-		// ksh93u+m 1.0.4 that Debian ships is a different table — a wider
-		// label column and four rows this one has never had. So this is the
-		// one column of the five whose Linux table is unmeasured, and the
-		// rows it calls unsupported are the shell's own sentence rather than
-		// the kernel's silence: every one of them is read on macOS, where
-		// the other four refuse the letter outright (#2806).
+		// `ulimit -a`, row for row as the engine writes it. Measured on
+		// ksh93u+ 2012-08-01, the panel's build, on **both** kernels: macOS
+		// arm64, and Debian bullseye's linux/arm64 package, which carries
+		// that same version string where the ksh93u+m 1.0.4 of later Debians
+		// is a different table. The layout is identical across the two — the
+		// same twenty rows, the same order, the same labels, the same column
+		// widths — so one table answers both and the rows below are where
+		// the two kernels part.
 		//
-		// A row that is a sentence cannot be set, and this shell says so in
-		// its own words with the row's short name — `ulimit: msgqueue: is
-		// read only` at 1, for a row labeled `message queue size (Kibytes)`,
-		// which is why the name is written down beside the label.
+		// **`not supported` is this engine's sentence for a limit the kernel
+		// lacks, not a row it does not have.** Five rows — locks, msgqueue,
+		// nice, rtprio, sigpend — print the kernel's own number on Linux and
+		// the sentence on macOS, which is what UlimitListingRow.Absent says
+		// and what Fixed could not: the letter is read on both kernels,
+		// where the other four columns drop the row and refuse the letter
+		// outright (#2806, #3693). `swap` and `threads` are the two that
+		// really are the engine's own answer — `not supported` on both
+		// kernels — and stay Fixed.
+		//
+		// The pipe and socket buffers are the platform's pipe buffer rather
+		// than a limit, and both print it: 512 on macOS and 4096 on Linux.
+		// Neither can be written on either kernel, which is ReadOnly — the
+		// number follows the platform and the refusal does not.
+		//
+		// A row that cannot be set is refused in this shell's own words with
+		// the row's short name — `ulimit: msgqueue: is read only` at 1, for
+		// a row labeled `message queue size (Kibytes)`, which is why the
+		// name is written down beside the label. Where Linux has the limit,
+		// the same letter sets it: `ulimit -x 100` is silent at 0 there, and
+		// `ulimit -e 100` is the kernel's own refusal through
+		// UlimitCannotChange rather than this one.
 		UlimitListing: []interp.UlimitListingRow{
 			{Prefix: "address space limit (Kibytes)  (-M)  ", Letter: 'M', Res: interp.ResourceAddressSpace, Scale: 1024},
 			{Prefix: "core file size (blocks)        (-c)  ", Letter: 'c', Res: interp.ResourceCore},
 			{Prefix: "cpu time (seconds)             (-t)  ", Letter: 't', Res: interp.ResourceCPUTime, Scale: 1},
 			{Prefix: "data size (Kibytes)            (-d)  ", Letter: 'd', Res: interp.ResourceData, Scale: 1024},
 			{Prefix: "file size (blocks)             (-f)  ", Letter: 'f', Res: interp.ResourceFileSize},
-			{Prefix: "locks                          (-x)  ", Letter: 'x', Fixed: "not supported", Name: "locks"},
+			{Prefix: "locks                          (-x)  ", Letter: 'x', Res: interp.ResourceFileLocks, Scale: 1, Absent: "not supported", Name: "locks"},
 			{Prefix: "locked address space (Kibytes) (-l)  ", Letter: 'l', Res: interp.ResourceLockedMemory, Scale: 1024},
-			{Prefix: "message queue size (Kibytes)   (-q)  ", Letter: 'q', Fixed: "not supported", Name: "msgqueue"},
-			{Prefix: "nice                           (-e)  ", Letter: 'e', Fixed: "not supported", Name: "nice"},
+			{Prefix: "message queue size (Kibytes)   (-q)  ", Letter: 'q', Res: interp.ResourceMessageQueues, Scale: 1024, Absent: "not supported", Name: "msgqueue"},
+			{Prefix: "nice                           (-e)  ", Letter: 'e', Res: interp.ResourceSchedulingPriority, Scale: 1, Absent: "not supported", Name: "nice"},
 			{Prefix: "nofile                         (-n)  ", Letter: 'n', Res: interp.ResourceOpenFiles, Scale: 1},
 			{Prefix: "nproc                          (-u)  ", Letter: 'u', Res: interp.ResourceProcesses, Scale: 1},
-			{Prefix: "pipe buffer size (bytes)       (-p)  ", Letter: 'p', Fixed: "512", Name: "pipe"},
+			{Prefix: "pipe buffer size (bytes)       (-p)  ", Letter: 'p', Res: interp.ResourcePipeBuffer, Scale: 1, ReadOnly: true, Name: "pipe"},
 			{Prefix: "max memory size (Kibytes)      (-m)  ", Letter: 'm', Res: interp.ResourceResidentSet, Scale: 1024},
-			{Prefix: "rtprio                         (-r)  ", Letter: 'r', Fixed: "not supported", Name: "rtprio"},
-			{Prefix: "socket buffer size (bytes)     (-b)  ", Letter: 'b', Fixed: "512", Name: "sbsize"},
-			{Prefix: "sigpend                        (-i)  ", Letter: 'i', Fixed: "undefined", Name: "sigpend"},
+			{Prefix: "rtprio                         (-r)  ", Letter: 'r', Res: interp.ResourceRealtimePriority, Scale: 1, Absent: "not supported", Name: "rtprio"},
+			{Prefix: "socket buffer size (bytes)     (-b)  ", Letter: 'b', Res: interp.ResourcePipeBuffer, Scale: 1, ReadOnly: true, Name: "sbsize"},
+			{Prefix: "sigpend                        (-i)  ", Letter: 'i', Res: interp.ResourcePendingSignals, Scale: 1, Absent: "undefined", Name: "sigpend"},
 			{Prefix: "stack size (Kibytes)           (-s)  ", Letter: 's', Res: interp.ResourceStack, Scale: 1024},
 			{Prefix: "swap size (Kibytes)            (-w)  ", Letter: 'w', Fixed: "not supported", Name: "swap"},
 			{Prefix: "threads                        (-T)  ", Letter: 'T', Fixed: "not supported", Name: "threads"},

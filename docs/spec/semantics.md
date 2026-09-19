@@ -12783,8 +12783,9 @@ letters (-a, -h, -r) are unimplemented and refused by name.
 **`ulimit -a`** is five tables that share nothing — labels, order, row
 sets, units — so each is the dialect's data
 (`Diagnostics.UlimitListing`): a row is a literal prefix and a value,
-live from the limit or fixed where the row is not a resource limit at
-all (socket buffers, the rows one engine lists as `not supported`). The
+live from the limit, fixed where the row is not a resource limit at all
+on any kernel, or a live limit carrying the sentence to print where
+*this* kernel has no number for it. The
 `-n` row reports what the Go runtime raised the soft limit to, not what
 a child will get — driver/rlimit.go records why that is not fixable.
 The locked-memory, resident-set and process-count limits joined the
@@ -12824,14 +12825,27 @@ Three shapes follow, each measured rather than reasoned:
   itself — and it cannot be set: `ulimit -p 8` is the kernel's own
   `cannot modify limit: Invalid argument` at 1, for every operand
   including the one the row already holds.
-- **A row that is a sentence is read everywhere and set nowhere.**
-  ksh93's `not supported` and `undefined` rows are the shell's own
-  answer rather than the kernel's, so it reads `-e`, `-i`, `-q`, `-r`
-  and `-x` on a machine where the other four refuse the letters
-  outright, and refuses to set one under the row's short name:
-  `ulimit: msgqueue: is read only` at 1 for a row labeled `message queue
-  size (Kibytes)` (`Diagnostics.UlimitReadOnly`,
-  `UlimitListingRow.Name`).
+- **A row that is a sentence keeps its letter, and the sentence is what
+  a missing limit prints rather than what the row is.** ksh93 reads
+  `-e`, `-i`, `-q`, `-r` and `-x` on a machine where the other four
+  refuse the letters outright, and refuses to set one under the row's
+  short name: `ulimit: msgqueue: is read only` at 1 for a row labeled
+  `message queue size (Kibytes)` (`Diagnostics.UlimitReadOnly`,
+  `UlimitListingRow.Name`). What those five print is the **kernel's**:
+  `not supported` and `undefined` on macOS, and this kernel's own number
+  on Linux — `unlimited`, `800`, `0`, `0` and `192129` from one build in
+  one container — so the sentence belongs to the absence rather than to
+  the row (`UlimitListingRow.Absent`). Where Linux has the limit the
+  same letter sets it: `ulimit -x 100` is silent at 0 there and the
+  read-only refusal on macOS.
+
+  Two rows of that table really are the engine's own answer on both
+  kernels and stay fixed: `swap size (-w)` and `threads (-T)`. Two more
+  read the platform and still refuse a write — the pipe and socket
+  buffers, 512 and 4096 — which is `UlimitListingRow.ReadOnly`, and is
+  not the same refusal as the bullet above: bash's pipe row is turned
+  down by the attempt with the kernel's own words, ksh93's by the shell
+  with its own.
 
 - **One column has a row with no letter, and an option that takes a
   *number*.** zsh prints `-N 15: rt cpu time (microseconds)` and reaches it
@@ -12867,10 +12881,14 @@ Three shapes follow, each measured rather than reasoned:
   one *defined* out-of-range answer is macOS's for 15, on a kernel that
   numbers nine limits, and that is what the refusal writes (#3667).
 
-ksh93 is the one column whose Linux table is unmeasured: no image
-carries 93u+ 2012-08-01, and the 93u+m 1.0.4 Debian ships is a different
-table — a wider label column and four rows this one never had. Its
-sentences are recorded as measured on macOS.
+**ksh93's Linux table was the one column nobody had**, on the reasoning
+that no image carries 93u+ 2012-08-01 and that the 93u+m 1.0.4 later
+Debians ship is a different table. Debian **bullseye**'s `ksh` package is
+that build, and the table it prints is row for row the macOS one: the
+same twenty rows, the same order, the same labels, the same column
+widths. Seven values differ and six of them are the kernel's — the five
+above and the two buffers (#3664, #3693). The seventh is `nofile`, which
+is the Go-runtime row driver/rlimit.go documents and is ours.
 
 **The directory stack** stays in the prelude — shell over `cd`, the
 extension seam working as designed — and became a real stack: `pushd`

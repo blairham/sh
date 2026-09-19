@@ -386,9 +386,14 @@ func TestLet(t *testing.T) {
 // the limits in a map — nothing here touches the process's own.
 func TestUlimit(t *testing.T) {
 	held := map[interp.Resource][2]int64{
-		interp.ResourceFileSize: {2048, interp.RlimitInfinity},
-		interp.ResourceCPUTime:  {100, interp.RlimitInfinity},
+		interp.ResourceFileSize:   {2048, interp.RlimitInfinity},
+		interp.ResourceCPUTime:    {100, interp.RlimitInfinity},
+		interp.ResourcePipeBuffer: {512, 512},
 	}
+	// Which limits the pretend kernel has, which several of the rows below
+	// are answers about rather than answers about this dialect. Nil is every
+	// limit, which is what the letters above are asked under.
+	var has func(interp.Resource) bool
 	run := func(src string) (string, int) {
 		t.Helper()
 		f, err := syntax.Parse(src, ksh.Dialect())
@@ -400,6 +405,7 @@ func TestUlimit(t *testing.T) {
 		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "ksh", Dialect: presetDialect()}
 		r.GetRlimit = func(res interp.Resource) (int64, int64, error) { p := held[res]; return p[0], p[1], nil }
 		r.SetRlimit = func(res interp.Resource, soft, hard int64) error { held[res] = [2]int64{soft, hard}; return nil }
+		r.HasRlimit = has
 		ksh.Apply(r)
 		st, rerr := r.Run(context.Background(), f)
 		if rerr != nil {
@@ -418,11 +424,16 @@ func TestUlimit(t *testing.T) {
 	if _, st := run("ulimit -u"); st != 0 {
 		t.Errorf("-u: status %d, want present=yes", st)
 	}
-	// And the rows that are a sentence rather than a limit: this shell reads
-	// those letters where the other four refuse them outright, because
-	// nothing behind them is the kernel's — and refuses to set one in its
-	// own words, under the row's own short name (#2805, measured 2026-09-18
-	// on ksh93u+ 2012-08-01).
+	// And the rows a kernel without these limits answers with a sentence:
+	// this shell reads those letters where the other four refuse them
+	// outright, and refuses to set one in its own words under the row's own
+	// short name (#2805, measured 2026-09-18 on ksh93u+ 2012-08-01).
+	//
+	// **On a kernel that has them the same five rows are ordinary limits**,
+	// which is #3693 and which is why the kernel is named here rather than
+	// left to the machine the test runs on. The two readings are held
+	// against each other in TestTheSevenKernelRowsOfThisTableAreNotTheEnginesOwnSentence.
+	has = kshDarwinHas
 	for _, tc := range []struct{ letter, sentence, name string }{
 		{"x", "not supported", "locks"},
 		{"q", "not supported", "msgqueue"},

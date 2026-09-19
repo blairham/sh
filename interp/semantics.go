@@ -962,6 +962,40 @@ type Semantics struct {
 	// where bash is fatal nowhere and skips nothing. See #1219.
 	PrefixRefusalCostsTheCommand Answer
 
+	// PosixModeSharpensAPrefixRefusal moves both answers above while the
+	// shell is in POSIX mode: a refusal in front of a **special builtin**
+	// ends the script, and one in front of anything else gives up the rest of
+	// the command list instead of running the command.
+	//
+	// The second half is the fourth outcome PrefixRefusalFatalityPolicy's
+	// doc comment records as having no value: a shell that reports, drops the
+	// rest of the line and reaches the next one. It was bash-as-`sh`'s alone
+	// and so belonged to no preset; `set -o posix` reaches it under bash's
+	// own name, which is what gives it one (#3471).
+	//
+	// Measured 2026-09-18 on bash 5.3.20 from a script file, `set -o posix;
+	// readonly v=1` in front of each line, with `; echo pre=$?` behind the
+	// command and `echo b=$?` on the line after it:
+	//
+	//	v=3 true            no `pre=`, then `b=1`     a regular builtin
+	//	v=3 /usr/bin/true   no `pre=`, then `b=1`     an external command
+	//	v=3 f               no `pre=`, then `b=1`     a function
+	//	v=3 :               the script ends at 1      a special builtin
+	//	v=3 export x=1      the script ends at 1
+	//
+	// A function body, an `if`, a `for` and a `||` all unwind the same way
+	// and a subshell contains it, which is the give-up shape the core already
+	// had; from a command string the shell ends at 1 instead. Without the
+	// mode the same lines print the complaint, run the command and report 0,
+	// which is what PrefixRefusalCostsTheCommand records.
+	//
+	// Asked only in POSIX mode and only once a name in the prefix is really
+	// frozen, so it is two questions deep off the common path. Answered by
+	// the one dialect measured in the mode: the other three reach it as `sh`
+	// and what they do there is unmeasured, so the preset declines the move
+	// rather than asserting the standard's reading for a shell nobody asked.
+	PosixModeSharpensAPrefixRefusal Answer
+
 	// PrefixToAFrozenNameIsCheckedFirst refuses the prefix **before** the
 	// command's values are expanded and before its redirections are opened.
 	// FrozenPrefixCheckedWithTheCommand does the other things first, so a
@@ -20567,6 +20601,12 @@ func PosixSemantics() Semantics {
 		// exception for an error the shell reported, so the standard's own
 		// answer is the one three of the five columns give.
 		SubshellExitTrapAfterAGiveUp: SubshellExitTrapAlwaysRuns,
+		// And the mode moves nothing, for the reason the axis gives: a
+		// shell that ends the script at a prefix refusal under every name
+		// has nothing for POSIX mode to sharpen, and zsh, ksh93, dash and
+		// BusyBox ash reach the mode only as `sh`, where they were not
+		// measured.
+		PosixModeSharpensAPrefixRefusal: No,
 		// XCU makes an expansion error fatal to a non-interactive shell, so
 		// the standard's preset does not survive one.
 		FailedExpansionAbandonsTheLine:         No,

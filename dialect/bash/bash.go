@@ -1402,6 +1402,12 @@ func Semantics() interp.Semantics {
 	s.PrefixToARegularBuiltinIsRefused = interp.Yes
 	s.PrefixRefusalFatality = interp.PrefixRefusalNeverFatal
 	s.PrefixRefusalCostsTheCommand = interp.No
+	// And POSIX mode moves both of those: measured 2026-09-18 from a script
+	// file with `set -o posix; readonly v=1` in front of it, `v=3 true;
+	// echo pre=$?` writes the complaint, never the `pre=`, and reports 1 on
+	// the next line, while `v=3 :` ends the script at 1. See
+	// Semantics.PosixModeSharpensAPrefixRefusal.
+	s.PosixModeSharpensAPrefixRefusal = interp.Yes
 	// A failed expansion gives up the line here and the shell carries on at
 	// the next one, which is this shell alone among the four. Measured over
 	// both routes and both separators — see the axis for the 2x2 — on a bad

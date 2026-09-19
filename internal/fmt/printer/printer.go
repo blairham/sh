@@ -564,6 +564,14 @@ func (p *printer) repeatClause(x *syntax.RepeatClause) {
 // come from the fields, in source order.
 func (p *printer) anonFunc(x *syntax.AnonFunc) {
 	end := x.End().Offset
+	// No headerComments here, unlike funcDecl: nothing can stand in this
+	// header for one to be written in. An anonymous function's header is the
+	// keyword alone, so a comment after it would have to be on the keyword's
+	// own line with the body on a later one — and the dialect that has
+	// anonymous functions also reads a keyword alone as a *bare* one, so that
+	// spelling is a bare declaration and a separate group rather than this
+	// node. Measured 2026-09-19 by formatting it: the text comes back
+	// unchanged either way.
 	p.b.WriteString(p.headerText(int(x.Pos().Offset), int(x.Body.Pos().Offset)))
 	if x.Bare {
 		// No body was written, so there is none to lay out and no separator
@@ -600,10 +608,60 @@ func (p *printer) anonFunc(x *syntax.AnonFunc) {
 	}
 }
 
+// headerComments writes the comments standing inside a declaration's header
+// on their own lines in front of the declaration, in the order they were
+// written.
+//
+// The header is squeezed onto one line by headerText, so a comment inside it
+// has nowhere to stay. It used to be left queued, and the next thing to flush
+// queued comments is whatever follows the *whole declaration* — so a comment
+// that described a function came out describing the line after it, with a
+// blank line where it had stood (#3759).
+//
+// **In front of the declaration rather than at the top of its body**, which
+// is the other place it could go and is where a `for` or `if` header's
+// comment goes. Two reasons, and the second is the one that decides it: the
+// comment was written outside the braces, so it describes the declaration and
+// not the body's first statement; and not every body has braces to put it in
+// — a declaration whose body is a `for` loop has none, and one written on a
+// single line would have to be broken open to hold a comment the author did
+// not write inside it.
+//
+// The output is a fixed point: the comment is then outside the header span,
+// so a second pass leaves it where this one put it.
+func (p *printer) headerComments(from, to int) {
+	if !p.atIndent() {
+		// Mid-line, which a declaration is when the author wrote it after a
+		// `;` on a line with other statements. A comment written here would
+		// comment out the rest of the line, so it stays queued and lands
+		// where it landed before.
+		return
+	}
+	for p.ci < len(p.comments) {
+		c := p.comments[p.ci]
+		if off := int(c.Pos.Offset); off < from || off >= to {
+			break
+		}
+		p.b.WriteString(c.Text)
+		p.lastLine = int(c.Pos.Line)
+		p.newline()
+		p.pad()
+		p.ci++
+	}
+}
+
+// atIndent says nothing but indentation stands on the output line now being
+// written, so a line of the printer's own may be put here without commenting
+// out or displacing anything already on it.
+func (p *printer) atIndent() bool {
+	s := p.b.String()
+	return strings.TrimLeft(s[strings.LastIndexByte(s, '\n')+1:], " \t") == ""
+}
+
 // headerText is a declaration's header — the source between a node's start
 // and its body — squeezed to one spaced line. A comment can sit in that span;
-// it stays queued for whoever flushes next, so it must not be squashed into
-// the header here.
+// headerComments has already written it out, so what is left here is to keep
+// it from being squashed into the header.
 //
 // cut is source ranges inside the span that belong to something the caller
 // prints itself, and they are blanked rather than removed so the words either
@@ -620,8 +678,12 @@ func (p *printer) headerText(from, to int, cut ...[2]int) string {
 		}
 	}
 	text := string(header)
-	for i := p.ci; i < len(p.comments); i++ {
-		c := p.comments[i]
+	// From the start of the list rather than from p.ci, because the ones
+	// this has to remove are exactly the ones headerComments has just
+	// written and stepped over. Reading from p.ci found none of them and put
+	// every comment in the header twice — once on its own line and once
+	// welded into the header, where the second copy comments the body out.
+	for _, c := range p.comments {
 		if int(c.Pos.Offset) >= to {
 			break
 		}
@@ -1343,6 +1405,7 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 	// body writes it again afterwards, so the header has to leave it out:
 	// printed twice the file is redirected twice, which is not a fixed point
 	// and is a formatted file that does something the source did not (#1838).
+	p.headerComments(from, to)
 	p.b.WriteString(p.headerText(from, to, insideTheHeader(redirsOf(x.Body), from, to)...))
 	// A line break where the `function` keyword's name list would otherwise
 	// swallow the body — see [syntax.FunctionKeywordBodyNeedsItsOwnLine],

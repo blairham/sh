@@ -1583,6 +1583,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				continue
 			}
 		}
+		// What this name carries before the letters land, for the operand
+		// to put back if it is refused: a refusal bash reports leaves the
+		// name exactly as it found it. Read here rather than at the top of
+		// the operand because `name` is the redirected one by now — the cell
+		// the attributes are about to reach is the cell that has to go back.
+		// See declarationtakenback.go.
+		held := r.holdTheDeclaration(name)
 		r.applyAttributes(name, df)
 		if !df.global {
 			r.localExportAttribute(name, df.export)
@@ -1648,7 +1655,8 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// its order against the other two refusals is measured and the
 			// bad target goes first. See there.
 			frozen := r.readonly[name] && !df.readonlyOff
-			if code := r.declareNameref(complaintName, name, value, df, hasValue, frozen, !fresh); code != 0 {
+			if code := r.declareNameref(complaintName, name, value, df,
+				hasValue, frozen, !fresh, held, fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status

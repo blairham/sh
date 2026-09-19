@@ -493,7 +493,19 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 // declare -n outer; }` leave `declare -n outer` unaimed, where `f(){ declare
 // -gn outer; }` — no new cell — aims at `good`, and `f(){ local x=good;
 // local -n x; }` aims at it too.
-func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, hasValue, frozen, adopts bool) int {
+func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
+	hasValue, frozen, adopts bool, held declarationHeld, fresh bool,
+) int {
+	// A refusal this declaration **reports** leaves the name the way the
+	// operand found it, letters and all — see declarationtakenback.go, where
+	// the rows are. Through one door because there are eight of them and they
+	// are the same answer: a `refuse(…)` that forgot the take-back would be a
+	// letter left standing under one wording alone.
+	refuse := func(wording string) int {
+		code := r.refuseNameref(builtin, wording)
+		r.takeTheDeclarationBack(name, held, fresh)
+		return code
+	}
 	// The readonly refusal a **frozen reference** makes, in the one place its
 	// order against the other two is measured. bash 5.3.20 puts the bad
 	// target ahead of it and nothing else: `v=1; declare -rn r=v` then
@@ -526,7 +538,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 			// target here to be a bad name or a self reference. See
 			// [NamerefArrayRefusal].
 			if r.namerefArrayAttribute(name) {
-				return r.refuseNameref(builtin, Wording(r.diag().NamerefCannotBeAnArray,
+				return refuse(Wording(r.diag().NamerefCannotBeAnArray,
 					"%[1]s: reference variable cannot be an array", name))
 			}
 			if refuseFrozen() {
@@ -559,7 +571,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 			// else.
 			if held, set := r.getVar(name); set && adopts {
 				if !r.namerefTargetIsAName(held) {
-					return r.refuseNameref(builtin, Wording(r.diag().NamerefBadTarget,
+					return refuse(Wording(r.diag().NamerefBadTarget,
 						"%[1]s: invalid variable name for name reference", held))
 				}
 				r.namerefEmptiesTheCell(name, df)
@@ -593,7 +605,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 			return r.status
 		}
 		if shape == NamerefArrayCheckedFirstOnTheContents && r.namerefArrayContents(name) {
-			return r.refuseNameref(builtin, Wording(d.NamerefCannotBeAnArray,
+			return refuse(Wording(d.NamerefCannotBeAnArray,
 				"%[1]s: reference variable cannot be an array", name))
 		}
 	}
@@ -602,7 +614,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 	// it either.
 	refusedLate := arrayed && shape == NamerefArrayCheckedLastOnTheAttribute
 	if !r.namerefTargetIsAName(target) {
-		return r.refuseNameref(builtin, Wording(d.NamerefBadTarget,
+		return refuse(Wording(d.NamerefBadTarget,
 			"%[1]s: invalid variable name for name reference", target))
 	}
 	aim, aimIsAName := r.namerefAim(target, df)
@@ -612,6 +624,12 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 		// and not folded into it, because the two are worded differently and
 		// the difference is measured: the word as written gets the sentence,
 		// what the letters made of it gets nothing at all.
+		//
+		// And it leaves behind what the reported refusals do not: the letters
+		// stand on a binding that was already there or that this call made
+		// local, and only a name brought into being at the top level goes.
+		// See takeBackTheNameItMade.
+		r.takeBackTheNameItMade(name, held, fresh)
 		return 1
 	}
 	// And what the letters made of it is what a dialect that settles the
@@ -653,7 +671,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 		// given a second field of its own (#3048).
 		if len(r.scopes) == 0 ||
 			r.ask(r.sem().NamerefCycleIsRefused, "a name reference that reaches itself") {
-			return r.refuseNameref(builtin, Wording(d.NamerefSelfReference,
+			return refuse(Wording(d.NamerefSelfReference,
 				"%[1]s: invalid self reference", name))
 		}
 		if r.unspecified {
@@ -667,7 +685,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 		// than before or after it.
 		r.warnAboutASelfReferenceOnTheBuiltin(builtin, name)
 		if refusedLate {
-			return r.refuseNameref(builtin, Wording(d.NamerefCannotBeAnArray,
+			return refuse(Wording(d.NamerefCannotBeAnArray,
 				"%[1]s: reference variable cannot be an array", name))
 		}
 		r.warnAboutACycle(name)
@@ -682,7 +700,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 	}
 	if r.namerefSelfReference(name, aim) {
 		if r.ask(r.sem().NamerefCycleIsRefused, "a name reference that reaches itself") {
-			return r.refuseNameref(builtin, Wording(d.NamerefSelfReference,
+			return refuse(Wording(d.NamerefSelfReference,
 				"%[1]s: invalid self reference", name))
 		}
 		if r.unspecified {
@@ -696,7 +714,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags, h
 		// which is the read's half.
 	}
 	if refusedLate {
-		return r.refuseNameref(builtin, Wording(d.NamerefCannotBeAnArray,
+		return refuse(Wording(d.NamerefCannotBeAnArray,
 			"%[1]s: reference variable cannot be an array", name))
 	}
 	r.namerefEmptiesTheCell(name, df)

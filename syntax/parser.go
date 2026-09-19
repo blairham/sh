@@ -2168,6 +2168,21 @@ func (p *Parser) withRedirs(c Command) Command {
 
 func (r *redirs) addRedir(x *Redirect) { r.Redirs = append(r.Redirs, x) }
 
+// prependRedirs puts redirections written *in front* of a compound command at
+// the head of its list, which is the order they were written in and the order
+// they are applied in. See [Dialect.RedirectionBeforeACompound].
+func (r *redirs) prependRedirs(xs []*Redirect) {
+	r.Redirs = append(append(make([]*Redirect, 0, len(xs)+len(r.Redirs)), xs...), r.Redirs...)
+}
+
+// prependRedirs on a definition reaches its body, as addRedir does and for the
+// same reason: the definition itself has no list to hold one.
+func (c *FuncDecl) prependRedirs(xs []*Redirect) {
+	if h, ok := c.Body.(interface{ prependRedirs([]*Redirect) }); ok {
+		h.prependRedirs(xs)
+	}
+}
+
 func (c *SimpleCmd) addRedir(x *Redirect) { c.Redirs = append(c.Redirs, x) }
 
 // addRedir on a definition reaches its body, which is where the parser
@@ -2931,6 +2946,20 @@ func (p *Parser) parseSimple() Command {
 			p.lex.inArgument = true
 			c.Args = append(c.Args, p.newWord([]Span{{Value: text, Pos: p.tok.Pos}}, p.tok.Pos, p.tok.End))
 			p.next()
+		case len(c.Args) == 0 && len(c.Assigns) == 0 && len(c.Precommands) == 0 &&
+			len(c.Redirs) > 0 && p.redirectionMayPrecedeThisCompound():
+			// Two dialects take a compound command's redirections in front
+			// of it as well as after it. Only where nothing but redirections
+			// has been read: an assignment prefix takes the reading away in
+			// both of them. See Dialect.RedirectionBeforeACompound.
+			return p.compoundBehindRedirections(c.Redirs)
+		case len(c.Args) == 0 && len(c.Assigns) == 0 && len(c.Precommands) == 0 &&
+			len(c.Redirs) > 0 && p.reservedBehindARedirection():
+			// The same column keeps a reserved word's reading behind a
+			// redirection, and a word that is not a command has nowhere to
+			// stand there. See Parser.reservedBehindARedirection.
+			p.failUnexpected("")
+			return c
 		case p.at(TokWord):
 			// A function definition announces itself only at the paren —
 			// which is why the words before it are read as arguments first
@@ -2966,6 +2995,16 @@ func (p *Parser) parseSimple() Command {
 			if h, ok := p.isAssign(p.tok); ok && !seenArg {
 				c.Assigns = append(c.Assigns, p.parseAssign(h))
 				continue
+			}
+			if len(c.Assigns) > 0 && !seenArg && p.reservedBehindAnAssignmentPrefix() {
+				// One dialect keeps a reserved word's reading here where the
+				// rest drop it and read the word as an ordinary command name.
+				// A compound command has nowhere to stand behind an
+				// assignment prefix, so the complaint is at the word itself
+				// rather than at the token that closes what it opened. See
+				// Dialect.ReservedWordStandsBehindAnAssignmentPrefix.
+				p.failUnexpected("")
+				return c
 			}
 			// The command word is where an alias is expanded, and nothing a
 			// command may begin with moves it. An assignment prefix does
@@ -3136,6 +3175,109 @@ func (p *Parser) parseSimple() Command {
 	}
 	c.Stop = p.tok.Pos
 	return c
+}
+
+// reservedBehindAnAssignmentPrefix reports whether the current token is a word
+// this dialect still reads as reserved although an assignment prefix stands in
+// front of it.
+//
+// Quoting removes the reservation here as it does everywhere else: `v=x "if"`
+// is a command called `if` in that column too.
+func (p *Parser) reservedBehindAnAssignmentPrefix() bool {
+	if !p.dialect.ReservedWordStandsBehindAnAssignmentPrefix ||
+		p.tok.Kind != TokWord || p.tok.IsQuoted() {
+		return false
+	}
+	if p.dialect.CloseBraceAlwaysReserved && p.atWord("}") {
+		// A `}` there *ends* the command rather than standing behind the
+		// prefix — `{ a+=( $p ) }` is a brace body in this column and the
+		// assignment is the last statement in it. The stray `}` at a command
+		// start is refused one level out, which is where it always was and
+		// which is the same sentence: `v=x }` names the `}` either way.
+		return false
+	}
+	return p.dialect.reservedAtACommandStart(p.tok.Literal())
+}
+
+// redirectionMayPrecedeThisCompound reports whether the compound command the
+// current token opens may stand behind the redirections already read.
+//
+// The two columns that take one take it before different things: see
+// [RedirectionBeforeACompoundPolicy] for the rows. `function` and `time` are
+// left out and it is measured rather than forgotten — a redirection in front
+// of either runs in that column, and neither is a compound command reached
+// through this production: `time` is a pipeline and a definition holds its
+// redirections on its body, so both would need the leading ones written back
+// somewhere other than where they belong.
+func (p *Parser) redirectionMayPrecedeThisCompound() bool {
+	switch p.dialect.RedirectionBeforeACompound {
+	case RedirectionMayPrecedeAParenthesizedCommand:
+		return p.at(TokLeftParen) || p.at(TokArithCmd)
+	case RedirectionMayPrecedeAnyCompoundCommand:
+		if p.startsCompoundCommand() {
+			return true
+		}
+		if p.tok.Kind != TokWord || p.tok.IsQuoted() {
+			return false
+		}
+		switch p.tok.Literal() {
+		case "repeat":
+			return p.dialect.Repeat
+		case "foreach":
+			return p.dialect.Foreach
+		}
+	}
+	return false
+}
+
+// reservedBehindARedirection reports whether the current token is a reserved
+// word that cannot stand behind the redirections already read, in the column
+// that keeps a reserved word's reading there.
+//
+// The compound commands are taken by redirectionMayPrecedeThisCompound above
+// and never reach this, so what is left is the words that end a construct and
+// the two that open one a redirection cannot precede. Measured 2026-09-18 on
+// zsh 5.9.2, a leading `>/dev/null` in front of each:
+//
+//	then, do, done, fi, esac, else, elif, end   parse error naming the word
+//	!, coproc                                   parse error naming the word
+//	time                                        runs, and is timed
+//	{ … }, if, while, for, case, ( ), (( )),
+//	  select, repeat, foreach, function, [[     run
+//
+// bash, ksh93 and dash read every one of those as a command name behind the
+// redirection, which is what this shell did for all of them (#3560).
+func (p *Parser) reservedBehindARedirection() bool {
+	if p.dialect.RedirectionBeforeACompound != RedirectionMayPrecedeAnyCompoundCommand ||
+		p.tok.Kind != TokWord || p.tok.IsQuoted() {
+		return false
+	}
+	switch p.tok.Literal() {
+	case "time", "function":
+		// Both run there, measured. Neither is taken by the branch above —
+		// see redirectionMayPrecedeThisCompound for why — so they are named
+		// here rather than refused.
+		return false
+	}
+	return p.dialect.reservedAtACommandStart(p.tok.Literal())
+}
+
+// compoundBehindRedirections reads the compound command standing behind
+// redirections already read, and gives it those redirections in front of any
+// it carries of its own — the order they were written in, which is the order
+// they are applied in.
+func (p *Parser) compoundBehindRedirections(leading []*Redirect) Command {
+	cmd := p.parseCommand()
+	if cmd == nil {
+		if p.err == nil {
+			p.failUnexpected("")
+		}
+		return nil
+	}
+	if h, ok := cmd.(interface{ prependRedirs([]*Redirect) }); ok {
+		h.prependRedirs(leading)
+	}
+	return cmd
 }
 
 // touchesPrevious reports whether the current token was written with nothing

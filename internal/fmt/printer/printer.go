@@ -91,6 +91,16 @@ type printer struct {
 	lastLine int
 	heredocs []*syntax.Redirect
 	rawTail  bool
+	// commandStart is where the command now being printed begins, which is
+	// what tells a redirection written in front of it from one written after
+	// it. See Printer.command.
+	commandStart syntax.Pos
+	// bodyOfADeclaration says the next command printed is a definition's
+	// body, where a redirection standing before it was written between the
+	// names and the parentheses and belongs after the body rather than in
+	// front of it. One-shot: read and cleared on entry to Printer.command,
+	// so nothing nested inside the body inherits it. See Printer.funcDecl.
+	bodyOfADeclaration bool
 }
 
 // alignMark stands where a trailing comment's separating space belongs. The
@@ -386,6 +396,28 @@ func redirsOf(c syntax.Command) []*syntax.Redirect {
 }
 
 func (p *printer) command(c syntax.Command) {
+	// Redirections written in **front** of a compound command go back in
+	// front of it: two dialects take them there, and this pass owns only the
+	// space between tokens. The command's own start is what tells them from
+	// the ones written after it, and it is kept for suffixRedirs to skip the
+	// same ones. See syntax.Dialect.RedirectionBeforeACompound.
+	leading := !p.bodyOfADeclaration
+	p.bodyOfADeclaration = false
+	outer := p.commandStart
+	p.commandStart = syntax.Pos{}
+	if leading {
+		p.commandStart = c.Pos()
+	}
+	defer func() { p.commandStart = outer }()
+	if leading {
+		for _, r := range redirsOf(c) {
+			if r.PipeBoth || r.Pos().Offset >= c.Pos().Offset {
+				continue
+			}
+			p.redirect(r)
+			p.b.WriteByte(' ')
+		}
+	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
 		p.simple(x)
@@ -765,7 +797,9 @@ func (p *printer) redirect(r *syntax.Redirect) {
 
 func (p *printer) suffixRedirs(rs []*syntax.Redirect) {
 	for _, r := range rs {
-		if r.PipeBoth {
+		// A redirection written in front of the command was already written
+		// back there — see Printer.command.
+		if r.PipeBoth || r.Pos().Offset < p.commandStart.Offset {
 			continue
 		}
 		p.b.WriteByte(' ')
@@ -1289,6 +1323,10 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 	// and is a formatted file that does something the source did not (#1838).
 	p.b.WriteString(p.headerText(from, to, insideTheHeader(redirsOf(x.Body), from, to)...))
 	p.b.WriteByte(' ')
+	// The redirection the header left out is the body's and is written after
+	// it, not in front of it — which is the one place a redirection standing
+	// before a command does not belong there. See Printer.command.
+	p.bodyOfADeclaration = true
 	p.command(x.Body)
 }
 

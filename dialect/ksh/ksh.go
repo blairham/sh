@@ -270,6 +270,12 @@ func Dialect() syntax.Dialect {
 	// question and this shell answers it the way they do — `[[ -n ]]` and
 	// `[[ x == ]]` are `` `]]' unexpected `` here too (#2964).
 	d.ConditionCloserIsAWordWhereATermBegins = true
+	// A redirection written in front of a *parenthesized* command belongs to
+	// it here — `>/dev/null ( echo hi )` and `>/dev/null (( 1 ))` both run —
+	// and in front of nothing else: the brace group, the loops, the `if`,
+	// the `case` and the `[[` are all refused. zsh takes one before every
+	// compound it has. See syntax.RedirectionBeforeACompoundPolicy (#3560).
+	d.RedirectionBeforeACompound = syntax.RedirectionMayPrecedeAParenthesizedCommand
 	d.FunctionNamesRefused = map[string]bool{
 		"alias": true, "break": true, "continue": true, "enum": true,
 		"eval": true, "exec": true, "exit": true, "export": true,

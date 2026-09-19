@@ -269,6 +269,14 @@ print -r -- "X=$?"`)
 // A module this shell has *no part of* rather than one short of a feature,
 // which is the other half of what a script sees. Both are one status and one
 // silenced line to the caller, and the branch it takes is the same.
+//
+// **This is the answer that keeps that plugin working**, which is worth
+// saying where somebody would otherwise reach for the table entry: both real
+// callers on this machine guard with `|| return`, so a `zmodload` that
+// answered 0 without the builtin would send them past their own guard. See
+// zmodloadFeatures for why `zsh/zpty` stays out of the table and
+// docs/spec/pty.md for the measured contract the builtin will be written
+// from (#3748).
 func TestZmodloadRefusalReachesTheScriptsOwnBranch(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		`zmodload zsh/zpty 2>/dev/null || { print -r -- "aborting"; }

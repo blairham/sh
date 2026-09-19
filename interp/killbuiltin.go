@@ -1081,20 +1081,62 @@ type signalCell struct {
 // Diagnostics.KillListingUnnamedPosition, whose empty value is the third
 // answer: leave the position out, which is what a shell whose table is the
 // platform's never has to decide.
+//
+// The walk runs to platformSignalMax and not to the last name, because those
+// are the two separate questions signalEntry's own comment names — what the
+// shell can name against what the kernel will take — and a position past the
+// last name is the same gap as a position the dialect is short of, reached
+// from the other side. Where the kernel's range runs past the table, the
+// listing said the position did not exist while the translating form
+// answered for it: `kill -l 40` writes `40` (#3287) on a machine whose bare
+// listing skipped 40 entirely, so one shell gave two answers to what 40 is
+// called (#3792). A dialect whose rendering is empty still leaves it out,
+// which is what makes that the third answer rather than a missing one.
 func (r *Runner) signalListing() []signalCell {
+	return r.signalListingUpTo(platformSignalMax)
+}
+
+// signalListingUpTo is that walk with the kernel's bound handed to it rather
+// than read out of the build, which is the only way to ask it the question the
+// issue is about on every machine that runs the tests.
+//
+// The gap it fills exists exactly where a kernel takes more numbers than this
+// table has names for, and that is one of the two platforms: macOS names every
+// number its `kill(2)` accepts, so a test reaching this through
+// platformSignalMax asserts the fix on Linux and asserts nothing at all here —
+// and a probe that cannot fail on the machine it is written on is the one that
+// gets believed. See TestTheListingFillsEveryPositionTheKernelTakes, which
+// hands it a bound past the table and fails on the walk this replaced.
+func (r *Runner) signalListingUpTo(maxSig int) []signalCell {
 	byNumber := append([]signalEntry{}, knownSignals...)
 	sort.Slice(byNumber, func(i, j int) bool { return byNumber[i].Sig < byNumber[j].Sig })
 	unnamed := r.diag().KillListingUnnamedPosition
 	cells := make([]signalCell, 0, len(byNumber))
-	for _, k := range byNumber {
-		if r.knownSignal(k.Name) {
-			cells = append(cells, signalCell{int(k.Sig), r.signalSpelling(r.signalListingName(k.Name))})
-			continue
+	// next is the lowest position nothing has been written for yet, so the
+	// positions the table has no entry at all for are filled in around the
+	// entries rather than after them — a gap below the last name is the same
+	// question as the range above it.
+	next := 1
+	fill := func(upto int) {
+		if unnamed == "" {
+			next = max(next, upto)
+			return
 		}
-		if unnamed != "" {
-			cells = append(cells, signalCell{int(k.Sig), fmt.Sprintf(unnamed, int(k.Sig))})
+		for ; next < upto; next++ {
+			cells = append(cells, signalCell{next, fmt.Sprintf(unnamed, next)})
 		}
 	}
+	for _, k := range byNumber {
+		fill(int(k.Sig))
+		switch {
+		case r.knownSignal(k.Name):
+			cells = append(cells, signalCell{int(k.Sig), r.signalSpelling(r.signalListingName(k.Name))})
+		case unnamed != "":
+			cells = append(cells, signalCell{int(k.Sig), fmt.Sprintf(unnamed, int(k.Sig))})
+		}
+		next = max(next, int(k.Sig)+1)
+	}
+	fill(maxSig + 1)
 	return cells
 }
 

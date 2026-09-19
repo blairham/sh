@@ -144,6 +144,18 @@ const zmodloadAlwaysLoaded = "zsh/main"
 // zsh/system` writes `+f:systell`, and `systell` is called from arithmetic
 // rather than as a command, so `f` is the math functions and there is no
 // separate letter for them.
+//
+// **`zsh/zpty` is deliberately not in this table**, and putting it in would
+// be the wrong kind of quick win. Its one feature is a builtin, a missing
+// builtin never holds a module shut — see zmodloadHolds — so an entry would
+// make `zmodload zsh/zpty` answer 0 while `zpty` itself is `command not
+// found`. The two real callers on this machine are both written as
+// `zmodload zsh/zpty 2>/dev/null || return`, so that 0 is exactly the answer
+// that walks them past their own guard and into a call that cannot work. The
+// module stays absent until the builtin exists; docs/spec/pty.md is the
+// measured contract it will be written from, and #3748 is the issue (#3042
+// is the companion case where the answer was to implement the features
+// instead).
 var zmodloadFeatures = map[string][]string{
 	zmodloadAlwaysLoaded: nil,
 	"zsh/zutil":          {"b:zformat", "b:zparseopts", "b:zregexparse", "b:zstyle"},

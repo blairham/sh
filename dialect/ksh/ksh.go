@@ -3557,6 +3557,13 @@ func Diagnostics() interp.Diagnostics {
 		// Measured 2026-09-19 on 93u+ 2012-08-01. See
 		// interp/xtracedeclaration.go.
 		TraceDeclarationOperand: interp.TraceOperandSplitBefore,
+		// And so is one whose value is a parenthesized list: `typeset b=(3 4)`
+		// is `+ b=( 3 4 )` then `+ typeset b`, and `typeset -A m=([k]=v)` is
+		// `+ m[k]=v` then `+ typeset -A m` — the element writes this column
+		// already spells a subscripted literal as. Two fields rather than one
+		// because bash answers them differently. Measured 2026-09-19 on 93u+
+		// 2012-08-01. See interp/xtracearrayoperand.go.
+		TraceDeclarationArrayOperand: interp.TraceOperandSplitBefore,
 		// The assignment written in front of a command is traced *after* the
 		// command's own line — `+ /bin/echo c` then `+ C=3` — except in front
 		// of a special builtin or a function, where it comes first. See

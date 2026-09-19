@@ -354,6 +354,12 @@ func (r *Runner) traceCommand(words []string) {
 		// interp/xtracedeclaration.go.
 		r.traceLine(line, d)
 	}
+	for _, line := range r.traceArrayOperandsBefore(d) {
+		// And an operand whose value is a parenthesized list is a question
+		// of its own, because one column moves it and leaves a scalar where
+		// it was written. See interp/xtracearrayoperand.go.
+		r.traceLine(line, d)
+	}
 	r.errf("%s%s\n", r.tracePrefix(), strings.Join(r.traceCommandWords(words, d), " "))
 	for _, line := range r.traceOperandsAfter(words, d) {
 		// And the column that leaves them where they were writes them again
@@ -372,6 +378,15 @@ func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
 	for i, w := range words {
 		if traceBracketIsBare(d.TraceBareBracket, words, i) {
 			quoted[i] = w
+			continue
+		}
+		if word, ok := r.traceArrayOperandWord(i, d); ok {
+			// An array-literal operand reaches the utility as the bare name,
+			// so this position holds a word the script did not write. What
+			// stands here instead is the dialect's — the name alone where
+			// the assignment was written in front, and the whole assignment
+			// where it was not.
+			quoted[i] = word
 			continue
 		}
 		if i > 0 && split && r.declarationOperandIndex(i) {
@@ -622,7 +637,14 @@ func traceArrayLiteral(elems []*syntax.Word, parsed []literalElem, style TraceAr
 			words = append(words, traceQuote(f, d.TraceQuoting, d.TraceMetacharacters))
 		}
 	}
-	joined := strings.Join(words, " ")
+	return wrapArrayLiteral(strings.Join(words, " "), style)
+}
+
+// wrapArrayLiteral puts the parentheses around an element list, in the two
+// shapes the panel writes them. Its own function because a declaration's
+// operand renders the list a second way and wraps it the same way — see
+// interp/xtracearrayoperand.go.
+func wrapArrayLiteral(joined string, style TraceArrayLiteral) string {
 	if style != TraceArraySpaced {
 		return "(" + joined + ")"
 	}

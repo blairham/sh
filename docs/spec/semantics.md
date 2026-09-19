@@ -24146,6 +24146,34 @@ the axis, and the refusal itself is the core's. `read` took such a word
 as a variable name in silence, at status 0, until #1440. What splits the
 panel is only how far the set reaches past a plain name.
 
+**Accepting the operand is half the answer; the other half is where the
+value goes.** Taking an all-digit operand and then storing under a
+parameter *named* `1` is the same silence one layer further in: status 0,
+nothing said, and no expansion in that dialect reads it back. One store
+serves `read`, `printf -v` and `getopts`, so it is the store that knows
+the rule and not any of the three (#3656).
+
+Measured 2026-09-18, zsh 5.9.2, each probe a script file under `env -i
+PATH=/usr/bin:/bin LC_ALL=C`:
+
+    set -- P Q;   printf 'x\n' | read 5     $# 5, $* `P Q   x`
+    set -- P Q;   getopts x 5 -x            $# 5, $* `P Q   x`
+    set -- P Q;   printf -v 5 %s ZZ         $# 5, $* `P Q   ZZ`
+    set -- P Q R; printf 'x\n' | read 2     $# 3, $* `P x R`
+    set -- P Q;   printf 'x\n' | read 007   $# 7, $7 `x`
+
+So a position past the end **widens** the list to it and pads with empty
+words. That is the opposite of what the same operand does at a `{name}`
+redirection, where an out-of-range position writes nothing at all, and
+the two are measured apart rather than shared.
+
+Position 0 is `$0` there — `printf -v 0 %s W0; echo "$0"` writes `W0` —
+and is deliberately not taken: a write to it inside a function is visible
+there and gone when the call returns, which is a per-frame value this
+runner does not keep, since `$0` is derived from the call stack. Measured
+the same day: `f() { printf 'x\n' | read 0; echo "[$0]"; }; f; echo
+"[$0]"` is `[x]` then the script's own name. Filed as #3672.
+
 **`UnsetPositionalIsAllowed`** — bash no · dash no · ksh93 yes · zsh no
 
 Lets `$1` expand to nothing under `set -u` rather than being an error.

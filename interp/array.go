@@ -1514,7 +1514,7 @@ func (r *Runner) storeOperandWholeArraySubscript(base, sub, value string) (statu
 func (r *Runner) storeThroughOperand(name, value string) (status int, refused bool) {
 	base, sub, ok := r.subscriptOperand(name)
 	if !ok || !isPlainName(base) {
-		r.setVar(name, value)
+		r.setOperandValue(name, value)
 		return 0, false
 	}
 	// The *store* is speaking from here on, not the builtin that reached it,
@@ -1588,6 +1588,67 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 	}
 	r.setArrayElem(base, idx, sub, value)
 	return 0, false
+}
+
+// setOperandValue is the store behind a builtin's plain output operand: the
+// positional list where the operand is a position, and an ordinary parameter
+// otherwise.
+//
+// One dialect takes an all-digit operand where a builtin wants a name —
+// `read 1`, `getopts x 1` and `printf -v 1` alike, all three gated on
+// Semantics.ReadNameOperands — and until this the store walked past it into
+// setVar, so the value landed on a parameter *named* `1` that no expansion in
+// that dialect reads back: status 0, nothing said, nothing stored. That is the
+// same silence a subscripted operand had before #3555, one layer further in.
+//
+// The gate is ReadNameOperands read a fourth time, and it is the right one
+// rather than a convenience: the three builtins that reach here judge their
+// operand with it, so a dialect that refuses an all-digit operand never
+// arrives with one and a dialect that takes it means the position.
+//
+// Measured 2026-09-18, zsh 5.9.2, each probe a script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	set -- P Q; printf 'x\n' | read 5; echo "$# [$*]"    5 [P Q   x]
+//	set -- P Q; getopts x 5 -x;         echo "$# [$*]"    5 [P Q   x]
+//	set -- P Q; printf -v 5 %s ZZ;      echo "$# [$*]"    5 [P Q   ZZ]
+//	set -- P Q R; printf 'x\n' | read 2; echo "$# [$*]"  3 [P x R]
+//	set -- P Q; printf 'x\n' | read 007; echo "$# [$7]"  7 [x]
+//
+// So a position past the end **widens** the list to it and pads with empty
+// words rather than writing nothing — which is the opposite of what the same
+// operand does at a `{name}` redirection, where an out-of-range position
+// writes nothing at all (see positionalFdVar). The two are measured apart and
+// stay apart.
+//
+// Position 0 is `$0` in that shell and is deliberately not taken here: a write
+// to it is visible inside the function that made it and gone when the call
+// returns, which is a per-frame value this runner does not have — `$0` is
+// derived from the call stack rather than stored. Measured the same day,
+// `f() { printf 'x\n' | read 0; echo "[$0]"; }; f; echo "[$0]"` is `[x]` then
+// the script's own name. Filed as #3672 rather than half-modeled here.
+func (r *Runner) setOperandValue(name, value string) {
+	if r.storeThroughPositional(name, value) {
+		return
+	}
+	r.setVar(name, value)
+}
+
+// storeThroughPositional is the half of setOperandValue that knows the rule,
+// and it reports whether it took the operand.
+func (r *Runner) storeThroughPositional(name, value string) bool {
+	if r.sem().ReadNameOperands != NamesAndPositionals {
+		return false
+	}
+	n, ok := positionalFdVar(name)
+	if !ok || n < 1 {
+		return false
+	}
+	for len(r.Params) < n {
+		r.Params = append(r.Params, "")
+	}
+	r.Params[n-1] = value
+	return true
 }
 
 // spanReplacesElements reports whether a range on the left of a *scalar*

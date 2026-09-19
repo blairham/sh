@@ -542,3 +542,76 @@ func TestWhetherAReadArrayIsFilledBehindABadNameRidesTheLetter(t *testing.T) {
 		t.Errorf("said %q, want st=0 arr=[XYZ] b=[keep]", out)
 	}
 }
+
+// A builtin's output operand that is a *position* fills the positional list,
+// which is the other half of the set above: the operand is accepted where
+// ReadNameOperands takes an all-digit word, and until #3656 the store walked
+// past it into an ordinary parameter named `1` that no expansion reads back —
+// status 0, nothing said, nothing stored.
+//
+// One store serves all three builtins, so all three are asserted here: a fix
+// in `read` alone is the shape where the next reader of `getopts` finds the
+// same silence.
+//
+// The list *widens* to a position past its end, padded with empty words. That
+// is measured and is not the same answer the identical operand gets at a
+// `{name}` redirection, which writes nothing at all when the position is not
+// there.
+func TestAPositionalOutputOperandFillsThePositionalList(t *testing.T) {
+	positional := func(s *Semantics) {
+		s.ReadNameOperands = NamesAndPositionals
+		s.PrintfAssignsWithV = Yes
+	}
+	namesOnly := func(s *Semantics) { s.PrintfAssignsWithV = Yes }
+	for _, c := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"read fills the position", `printf 'x\n' | { read 2; echo "[$*] n=$#"; }`, "[P x] n=2"},
+		{"getopts fills the position", `getopts x 2 -x; echo "[$*] n=$#"`, "[P x] n=2"},
+		{"printf -v fills the position", `printf -v 2 %s ZZ; echo "[$*] n=$#"`, "[P ZZ] n=2"},
+		{"a position past the end widens the list", `printf 'x\n' | { read 4; echo "[$*] n=$#"; }`, "[P Q  x] n=4"},
+		{"leading zeros are the same position", `printf 'x\n' | { read 002; echo "[$*] n=$#"; }`, "[P x] n=2"},
+	} {
+		out, _ := readRun(t, positional, Diagnostics{}, `set -- P Q; `+c.src)
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%s: said %q, want %q", c.name, out, c.want)
+		}
+		// The same source under the set that refuses an all-digit operand
+		// must not reach the store at all, which is what says the gate is
+		// the axis rather than the spelling.
+		out, _ = readRun(t, namesOnly, Diagnostics{}, `set -- P Q; `+c.src)
+		if strings.Contains(out, "[P x]") || strings.Contains(out, "[P ZZ]") {
+			t.Errorf("%s under PlainNamesOnly: said %q, want the list untouched", c.name, out)
+		}
+	}
+}
+
+// The gate on that store is the axis and not the spelling, and this is the
+// probe that can tell the two apart: `wait -p` writes through the same store
+// and judges no name at all, so it is the one route that reaches it with an
+// all-digit operand under either set.
+//
+// Left gated deliberately. Where an all-digit operand is not a name, nothing
+// has been measured about what a position means to a builtin that never has
+// one handed to it, so the store keeps the answer it had rather than growing
+// a reading no shell was asked for.
+func TestThePositionalStoreIsGatedOnTheNameSet(t *testing.T) {
+	for _, c := range []struct {
+		takes NameOperands
+		want  string
+	}{
+		{NamesAndPositionals, "[ Q]"},
+		{PlainNamesOnly, "[P Q]"},
+	} {
+		out, _ := readRun(t, func(s *Semantics) {
+			s.ReadNameOperands = c.takes
+			s.WaitReadsOptions = Yes
+			s.WaitPNamesTheFinishedJob = Yes
+		}, Diagnostics{}, `set -- P Q; wait -p 1; echo "[$*]"`)
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%v: said %q, want %q", c.takes, out, c.want)
+		}
+	}
+}

@@ -4164,6 +4164,15 @@ func Diagnostics() interp.Diagnostics {
 		// bash 5.3.15; the two shared a value until #2695 because the corpus
 		// row used `it's`, the one shape they agree on.
 		TraceQuoting: interp.QuoteShellLazy,
+		// The path inside a `type`, `command -V` or `whence -v` sentence is
+		// written back the way this shell writes a word — the same spelling,
+		// against the same alphabet below — while `command -v`, `whence`,
+		// `where` and `which` write the resolved path plain. Measured
+		// 2026-09-19 with a directory on PATH holding an executable called
+		// `a b`: `type 'a b'` is `a b is '/…/bb/a b'` and `command -v 'a b'`
+		// is `/…/bb/a b`. The *name* is bare in both, which is what keeps
+		// this apart from NameReportQuoting (#3702).
+		TypeSentencePathQuoting: interp.QuoteShellLazy,
 		// No position rule at all: every character it quotes it quotes
 		// anywhere, which is what makes the *shape* of this field necessary
 		// rather than a longer string in one shared set. It is the only one

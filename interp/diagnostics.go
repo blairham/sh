@@ -2022,6 +2022,50 @@ type Diagnostics struct {
 	// at 127. See #3666.
 	NameReportQuoting TraceQuoting
 
+	// TypeSentencePathQuoting spells the **path** inside a `type`-family
+	// sentence, where the bare-path forms write the same path as it is.
+	//
+	// The second field about quoting a path, and it exists because one
+	// column needs the two routes to *disagree*. ksh93u+ writes the path the
+	// same way whether or not a sentence is around it, which is why
+	// NameReportQuoting is applied in Runner.reportedPath — the one place
+	// every builtin asked where a command is passes through. zsh 5.9.2 does
+	// not: it quotes in the sentence and writes the bare path plain, so the
+	// question is asked a second time, where the sentence is built.
+	//
+	// Measured 2026-09-19 on zsh 5.9.2, each probe a script file under
+	// `env -i PATH=<dir>:/usr/bin:/bin LC_ALL=C` with a directory on PATH
+	// holding an executable called `a b`:
+	//
+	//	type 'a b'          a b is '/…/bb/a b'
+	//	command -V 'a b'    a b is '/…/bb/a b'
+	//	whence -v 'a b'     a b is '/…/bb/a b'
+	//	type './bb/a b'     ./bb/a b is './bb/a b'
+	//	command -v 'a b'    /…/bb/a b
+	//	whence 'a b'        /…/bb/a b
+	//	where 'a b'         /…/bb/a b
+	//	which 'a b'         /…/bb/a b
+	//	type ls             ls is /bin/ls
+	//
+	// The **name** is not quoted either way — `a b is …` and not
+	// `'a b' is …` — which is what separates this from NameReportQuoting,
+	// the field ksh93 answers, where the name is quoted too.
+	//
+	// Read against TraceMetacharacters beside it, for the reason
+	// NameReportQuoting is: the alphabet is that shell's own word-writing
+	// function rather than a set of its own. Measured character for
+	// character 2026-09-19 over 32 names differing by one byte —
+	// `a<X>b` for each of a space and 31 punctuation marks — where every
+	// path this sentence writes is byte for byte what the same shell's
+	// `set -x` writes for the same word, the `'…'''…'` spelling of an
+	// embedded quote included.
+	//
+	// Zero is QuoteNever: the path is written exactly as it was resolved,
+	// which is what bash 5.3.20, ksh93u+, dash 0.5.12 and BusyBox ash all
+	// do — and ksh93's quoting is NameReportQuoting's, applied to both
+	// routes rather than to this one (#3702).
+	TypeSentencePathQuoting TraceQuoting
+
 	// TypeNotFoundOnStdout writes that line to standard output rather than
 	// to standard error, which is half the panel:
 	//

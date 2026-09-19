@@ -385,7 +385,13 @@ func verboseSentence(r *interp.Runner, name string, kind interp.NameKind, path s
 	case interp.NameReserved:
 		return interp.Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name)
 	case interp.NameFile:
-		return interp.Wording(dg.TypeExternal, "%[1]s is %[2]s", name, path)
+		// From the core too, for the reason the two lines above are: `type`
+		// writes the identical sentence and a second spelling of it is how
+		// the two drift. This line had its own copy of the wording, which
+		// was the same string until the path inside the sentence learned to
+		// be quoted — see Diagnostics.TypeSentencePathQuoting, which
+		// `whence -v 'a b'` answers and this copy did not (#3702).
+		return r.TypeExternalSentence(name, path)
 	case interp.NameNotFound:
 	}
 	return name

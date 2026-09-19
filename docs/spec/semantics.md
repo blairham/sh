@@ -9143,11 +9143,53 @@ through the same function in `Runner.reportedPath`, which is the one place
 every builtin asked *where* a command is passes through — so the sentence
 forms and the bare-path forms cannot part company (#3678).
 
-zsh quotes the path in its **sentence** and not in its bare-path form —
-`type 'a b'` is `a b is '/…/bb/a b'` there and `command -v 'a b'` is the bare
-path — which this engine does not reproduce and which the shape above cannot
-express, since it quotes the path once for both. That is a third question and
-its own issue.
+### The path inside the sentence, where the two routes disagree
+
+The shape above quotes the path once, for the sentence forms and the
+bare-path forms together, because in ksh93 they agree. zsh needs exactly the
+disagreement: it quotes the path **inside** a sentence and writes the same
+path plain where there is no sentence around it.
+`Diagnostics.TypeSentencePathQuoting` is the second field, read where the
+sentence is built rather than where the path is resolved.
+
+Measured 2026-09-19 on zsh 5.9.2, each probe a script file under `env -i
+PATH=<dir>:/usr/bin:/bin LC_ALL=C` with a directory on `PATH` holding an
+executable file literally called `a b`:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `type 'a b'` | `a b is '/…/bb/a b'` |
+| `command -V 'a b'` | the same sentence |
+| `whence -v 'a b'` | the same sentence |
+| `type -a 'a b'` | the same line |
+| `type './bb/a b'` | `./bb/a b is './bb/a b'` |
+| `command -v 'a b'` | `/…/bb/a b` |
+| `whence 'a b'` | the same bare path |
+| `where 'a b'`, `which 'a b'` | the same |
+| `type ls` | `ls is /bin/ls` |
+
+The **name** is not quoted either way — `a b is …` and not `'a b' is …` —
+which is what separates this from `NameReportQuoting`, where the name is
+quoted too.
+
+The alphabet is that shell's own word-writing function, exactly as
+`NameReportQuoting`'s is, and it was measured rather than assumed: 32 names
+differing by one byte — `a<X>b` for a space and 31 punctuation marks —
+written through this sentence and through the same shell's `set -x` for the
+same word. Every one agrees, the `'…'\''…'` spelling of an embedded quote
+included, and the eight it leaves bare (`!`, `%`, `+`, `,`, `-`, `.`, `:`,
+`@`) are the eight `set -x` leaves bare. So the field is read against
+`TraceMetacharacters` beside it rather than carrying a set of its own.
+
+Zero is `QuoteNever`, which bash, ksh93, dash and BusyBox ash all answer —
+ksh93's quoting is `NameReportQuoting`'s, applied to both routes rather than
+to this one.
+
+**One sentence had its own copy of the wording and would have missed this.**
+The zsh dialect's `whence -v` wrote `Wording(TypeExternal, …)` itself instead
+of calling `Runner.TypeExternalSentence`, which was the same string until the
+path learned to be quoted. It is folded into the core call with this, for the
+reason the function and builtin lines beside it already were (#3702).
 
 
 Measured 2026-09-18 from `-c` and from script files under `env -i

@@ -37,6 +37,14 @@ package interp
 // `a[1][2]=v` spelling reaches by the other route; the two have to agree,
 // since ksh93 answers them identically.
 func (r *Runner) declareElement(base string, leading []string, sub, value string, f declareFlags, shadows bool) {
+	// In front of everything, because what the subscript *is* decides which
+	// element the refusals below are about: a text that a second round turns
+	// into `x y` names that key everywhere after this line, the store's
+	// complaints included. See declarationSubscriptText.
+	sub = r.declarationSubscriptText(base, sub)
+	if r.unspecified {
+		return
+	}
 	if r.elementDeclarationRefused(base, sub, f, shadows) {
 		return
 	}
@@ -249,6 +257,38 @@ func (r *Runner) elementDeclarationRefused(base, sub string, f declareFlags, sha
 		return true
 	}
 	return false
+}
+
+// declarationSubscriptText is the subscript a declaration's operand names,
+// after the round of expansion Semantics.DeclarationOperandExpandsItsSubscript
+// records.
+//
+// The operand arrives as one string — `typeset 'a[$k]'=v`, or the same word
+// produced by a value — so the brackets were never lexed and the `$k` between
+// them is three characters. Two columns expand them here and one reads them as
+// the key; the axis is where that is written down, together with the rows.
+//
+// The cheap test comes first and runs nothing, so the ordinary `typeset
+// a[1]=v` and `typeset 'a[k]'=v` never put the question. The axis then comes
+// before the expansion rather than after it, which is the order that matters:
+// a subscript holding `$(cmd)` must not run cmd in a dialect whose answer is
+// that the text stands as written.
+func (r *Runner) declarationSubscriptText(base, sub string) string {
+	if !subscriptTextCouldExpand(sub) {
+		return sub
+	}
+	if !r.ask(r.sem().DeclarationOperandExpandsItsSubscript,
+		"a declaration's operand expanding a subscript that reached it as text") {
+		return sub
+	}
+	// Reassembled rather than expanded on its own, because
+	// expandedSubscriptText reads a whole `name[sub]`: that is the one route
+	// from text to the parameter expansion it spells, and it is what makes
+	// the two sites' second round the same round.
+	if key, again := r.expandedSubscriptText(base + "[" + sub + "]"); again {
+		return key
+	}
+	return sub
 }
 
 // subscriptedOperandKey is the key a subscripted operand's element goes under,

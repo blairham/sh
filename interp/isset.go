@@ -152,7 +152,7 @@ func (r *Runner) wholeArraySubscriptIsSet(base, sub string, e *syntax.ParamExpr,
 func (r *Runner) condParameterIsSet(w *syntax.Word, s string) (bool, error) {
 	base, sub, ok := writtenSubscript(w)
 	if !ok {
-		return r.parameterIsSet(s)
+		return r.flatConditionIsSet(w, s)
 	}
 	name := strings.Join(r.expandWordNoSplit(base), "")
 	key := strings.Join(r.expandWordNoSplit(sub), "")
@@ -161,14 +161,94 @@ func (r *Runner) condParameterIsSet(w *syntax.Word, s string) (bool, error) {
 	// reading, and the overwhelming majority of them do — so the axis is not
 	// consulted for `[[ -v a[1] ]]`, and a dialect that has never been
 	// measured on a bracketed key is not recorded as having an answer.
-	if flat, fkey, fok := r.subscriptOperand(s); fok && flat == name && fkey == key {
-		return r.parameterIsSet(s)
+	//
+	// The second half of the guard is the *flat* reading's own round, which
+	// is what keeps "the two readings agree" true: with a key that another
+	// expansion would move, they no longer reach the same element even when
+	// the two spellings of it match here. Read off the characters rather
+	// than performed, so deciding which reading applies runs no substitution
+	// — see subscriptTextCouldExpand.
+	if flat, fkey, fok := r.subscriptOperand(s); fok && flat == name && fkey == key &&
+		!subscriptTextCouldExpand(fkey) {
+		return r.elementIsSet(name, key, true), nil
 	}
 	if !r.ask(r.sem().ConditionIsSetReadsTheWrittenSubscript,
 		"`[[ -v a[k] ]]` reading the subscript the script wrote rather than the one left after expansion") {
-		return r.parameterIsSet(s)
+		return r.flatConditionIsSet(w, s)
 	}
 	return r.elementIsSet(name, key, true), nil
+}
+
+// flatConditionIsSet is `[[ -v ]]` over an operand read as text: the brackets
+// were quoted, or they came out of a value, so what stands between them has
+// not been expanded by anything yet.
+//
+// Semantics.ConditionIsSetExpandsAFlatSubscript is whether this shell expands
+// it now. Where it does not — and where there is nothing in the text for a
+// round to do, which is nearly every operand — the answer is the plain
+// lookup the builtin's route makes, under the key as it stands.
+//
+// Not shared with `test -v`, which takes the same text and reaches
+// parameterIsSet directly. bash expands there too by default, but that
+// surface moves with `shopt -s assoc_expand_once` and this one does not, so
+// routing the builtin through here would pin an option's state as a
+// dialect's answer. See #3298.
+func (r *Runner) flatConditionIsSet(w *syntax.Word, s string) (bool, error) {
+	base, sub, subscripted := r.subscriptOperand(s)
+	if !subscripted || !subscriptTextCouldExpand(sub) {
+		return r.parameterIsSet(s)
+	}
+	// A bracket written inside double quotes was still *written*, in the
+	// column that reads written brackets — so there is no second round to
+	// make, the one expansion the operand already had is the subscript's,
+	// and this is the same axis answering a spelling writtenSubscript cannot
+	// read. Measured 2026-09-19 with `k='x y'`, `kk='$k'` and the key `x y`
+	// in the table: `[[ -v "m[$kk]" ]]` and `[[ -v m"[$kk]" ]]` are unset on
+	// bash 5.3.20 where `[[ -v 'm[$k]' ]]` and the same operand out of a
+	// value are set, and all four are set on zsh 5.9.2, which reads no
+	// written bracket anywhere.
+	if doubleQuotedBracketWritten(w) &&
+		r.ask(r.sem().ConditionIsSetReadsTheWrittenSubscript,
+			"`[[ -v a[k] ]]` reading the subscript the script wrote rather than the one left after expansion") {
+		return r.parameterIsSet(s)
+	}
+	if r.unspecified {
+		return false, nil
+	}
+	if !r.ask(r.sem().ConditionIsSetExpandsAFlatSubscript,
+		"`[[ -v ]]` expanding a subscript that reached it as text") {
+		return r.parameterIsSet(s)
+	}
+	key, again := r.expandedSubscriptText(s)
+	if !again {
+		return r.parameterIsSet(s)
+	}
+	return r.elementIsSet(base, key, true), nil
+}
+
+// doubleQuotedBracketWritten reports whether the operand wrote a `[` inside
+// double quotes, which is the one spelling writtenSubscript declines and the
+// column that reads written brackets still reads.
+//
+// Single quotes and a backslash are deliberately not here, and that is the
+// measurement rather than a simplification: `[[ -v 'm[$k]' ]]` finds the key
+// `x y` on bash 5.3.20 and `[[ -v "m[$kk]" ]]` does not, for the same operand
+// text and the same table.
+//
+// An unquoted bracket is not here either, because a word holding one has
+// already been through writtenSubscript — either it read the subscript, or
+// the brackets did not balance and nothing downstream will find one.
+func doubleQuotedBracketWritten(w *syntax.Word) bool {
+	if w == nil {
+		return false
+	}
+	for _, sp := range w.Spans {
+		if sp.Kind == syntax.Literal && sp.Quoting == syntax.DoubleQuoted &&
+			strings.ContainsRune(sp.Value, '[') {
+			return true
+		}
+	}
+	return false
 }
 
 // writtenSubscript splits a condition operand into its base and its subscript

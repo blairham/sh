@@ -13679,6 +13679,92 @@ type Semantics struct {
 	// subscript that survives expansion unchanged never reaches the question.
 	ConditionIsSetReadsTheWrittenSubscript Answer
 
+	// ConditionIsSetExpandsAFlatSubscript decides whether `[[ -v ]]` expands
+	// a subscript that reached it as **text** — the shape the operand takes
+	// once its brackets were quoted, or once it arrived out of a value, so
+	// that a `$k` between them is three characters nothing has expanded yet.
+	//
+	// It is the other half of ConditionIsSetReadsTheWrittenSubscript above
+	// and not a restatement of it. That axis decides *where the subscript
+	// ends* when the script wrote the brackets; this one decides what
+	// happens to the characters between them when it did not.
+	//
+	// Measured 2026-09-19, each probe from a script file with standard input
+	// on /dev/null, over a table holding one element under the key `x y`
+	// with `k='x y'` and `kk='$k'`:
+	//
+	//	                               bash 5.3.20  zsh 5.9.2  ksh93u+
+	//	[[ -v 'm[$k]' ]]               set          set        unset
+	//	w='m[$k]'; [[ -v $w ]]         set          set         unset
+	//	[[ -v m[$kk] ]]                unset        set        unset
+	//	[[ -v "m[$kk]" ]]              unset        set        unset
+	//
+	// The last two rows are what say the two axes are separate questions and
+	// that this shell needs both to answer either. bash reads the written
+	// subscript, expands `$kk` once, and stops with the key `$k`; zsh has no
+	// written reading, so the same operand reaches this one as the text
+	// `m[$k]` and is expanded again to `x y`; ksh93 has neither and answers
+	// the literal key. One dialect answers yes to each axis, one to this
+	// alone, one to neither — and the first two rows, where nothing wrote a
+	// bracket, are the ones that separate this axis from a plain lookup.
+	//
+	// bash 3.2.57 has no associative array to ask about, and dash 0.5.12 and
+	// BusyBox ash 1.37.0 have neither arrays nor `[[`, so three of the seven
+	// columns cannot be put the question at all.
+	//
+	// `test -v` is deliberately not this. The same text reaches it and bash
+	// expands it there too by default, but that surface moves with an option
+	// — `shopt -s assoc_expand_once` turns it off and leaves `[[ -v ]]`
+	// alone — so it is a switch rather than a dialect's answer. See #3298.
+	//
+	// Asked only where a second round could change the text at all, which
+	// subscriptTextCouldExpand reads off the characters without running
+	// anything: `[[ -v a[1] ]]` and `[[ -v a[k] ]]` never reach the
+	// question.
+	ConditionIsSetExpandsAFlatSubscript Answer
+
+	// DeclarationOperandExpandsItsSubscript is the same second round at a
+	// declaration utility — `typeset 'a[$k]'=v`, and `declare`, `local`,
+	// `export` and `readonly` under the same reading — whose operand arrives
+	// as one string with the brackets unlexed.
+	//
+	// A separate field from the condition above because it is a separate
+	// measurement over a separate construct, and because this one reaches an
+	// **indexed** array as well: the text is expanded first and evaluated as
+	// an expression afterwards, so the round decides whether the expression
+	// is readable at all rather than only which key it names.
+	//
+	// Measured 2026-09-19 from a script file with standard input on
+	// /dev/null, `k='x y'`, `kk='$k'`, `i=3`:
+	//
+	//	                                bash 5.3.20  zsh 5.9.2  ksh93u+
+	//	typeset -A d; typeset 'd[$k]'=Q key `x y`    key `x y`  key `$k`
+	//	typeset "d[$kk]"=Q              key `x y`    key `x y`  key `$k`
+	//	typeset 'p[k]'=Q                key `k`      key `k`    key `k`
+	//	arr=(z z z z); typeset 'arr[$i]'=Q
+	//	                                element 3    element 3  refused
+	//
+	// The last row is where the round is not about tables: ksh93 answers
+	// `typeset: $i: arithmetic syntax error`, which is what an unexpanded
+	// `$` is to an expression that has already been expanded once. Row three
+	// is the control that says this is about the expansion and not about the
+	// quotes — a subscript with nothing in it to expand names the same key
+	// in every column.
+	//
+	// The operand written **unquoted** is not this question and is the
+	// second control: `typeset d[$k]=Q` has its brackets lexed, so the
+	// subscript arrives as a word that was expanded before any builtin saw
+	// it, and every column names the key `x y`.
+	//
+	// bash 3.2.57 has no associative array; dash 0.5.12 and BusyBox ash
+	// 1.37.0 have no arrays and no declaration utility that takes a
+	// subscripted operand, so three of the seven columns cannot be asked.
+	//
+	// Asked only where a second round could change the text, and not asked
+	// at all where it empties the subscript — see expandedSubscriptText for
+	// that row, which the two columns that expand answer differently.
+	DeclarationOperandExpandsItsSubscript Answer
+
 	// ConditionArithmeticReadsTheWrittenSubscript is the same question at
 	// the word-spelled comparisons — `[[ a[k] -eq 5 ]]` — where the operand
 	// is read as an arithmetic *expression* rather than asked about.
@@ -21252,6 +21338,17 @@ func PosixSemantics() Semantics {
 		// preset follows that and the two panel members that can be asked
 		// and say no.
 		ConditionIsSetReadsTheWrittenSubscript: No,
+		// And the standard has no subscript that survives a round of
+		// expansion as text either, since it has no array at all. The
+		// preset follows the one panel member that can be asked and does
+		// not expand: ksh93 answers the literal key. bash and zsh are the
+		// columns that override it.
+		ConditionIsSetExpandsAFlatSubscript: No,
+		// The same for a declaration's operand, and for the same reason:
+		// the standard has no `typeset` and no subscripted operand for one
+		// to take, and the panel member that has both reads the text as it
+		// stands.
+		DeclarationOperandExpandsItsSubscript: No,
 		// And the same for the comparisons, where the two columns that can
 		// be asked both read the operand as it stands after expansion. bash
 		// is the column that overrides it.

@@ -2826,6 +2826,23 @@ func Semantics() interp.Semantics {
 	// refuses it here. See
 	// interp.Semantics.ConditionArithmeticReadsTheWrittenSubscript (#3302).
 	s.ConditionArithmeticReadsTheWrittenSubscript = interp.Yes
+
+	// A subscript that reaches the condition as *text* is expanded once more
+	// before it is looked up, so `k='x y'; [[ -v 'm[$k]' ]]` asks about the
+	// key `x y` and not about the two characters `$k`. Only where no bracket
+	// was written: the axis above has already answered `[[ -v m[$kk] ]]`,
+	// where bash stops at the one expansion the written subscript gets. See
+	// interp.Semantics.ConditionIsSetExpandsAFlatSubscript (#3298).
+	s.ConditionIsSetExpandsAFlatSubscript = interp.Yes
+
+	// And a declaration's operand expands its subscript the same way, in
+	// every spelling of the utility: `declare 'd[$k]'=Q` writes the key
+	// `x y`, and `declare 'arr[$i]'=Q` writes the element `$i` counts to.
+	// This one does not move with `shopt -s assoc_expand_once` — measured
+	// 2026-09-19, the key is `x y` with the option set and unset alike — so
+	// it is the dialect's answer rather than a switch. See
+	// interp.Semantics.DeclarationOperandExpandsItsSubscript (#3298).
+	s.DeclarationOperandExpandsItsSubscript = interp.Yes
 	return s
 }
 

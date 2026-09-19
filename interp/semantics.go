@@ -264,23 +264,29 @@ type Semantics struct {
 	// mask reaches it.
 	//
 	// Measured 2026-09-12 from a script file, default IFS, each row a `read`
-	// of its own over one printed line:
+	// of its own over one printed line; re-measured 2026-09-19 across all
+	// seven columns, which is what added the last two rows and the third
+	// bash cell. A closing `_` is a kept escaped space:
 	//
-	//	          `a b c\ `   `a b\ `   `a\ `    `a b\ c\ `
-	//	          read x y    read x y  read x   read x y
-	//	          the last name's value
-	//	dash      b c         b         a        b c
-	//	                      ^ keeps          all four keep the space
-	//	bash      b c         b         a        b c
-	//	ksh93     b c         b         a        b c
+	//	              `a b c\ `   `a b\ `   `a\ `    `a b\ c\ `
+	//	              read x y    read x y  read x   read x y
+	//	              the last name's value
+	//	dash          b c_        b_        a_       b c_
+	//	bash, x3      b c         b_        a_       b c_
+	//	ksh93         b c         b         a        b c
+	//	zsh           b c         b         a        b c
+	//	BusyBox ash   b c         b         a        b c
 	//
-	// — with the trailing space shown by the brackets in the corpus row
-	// rather than here. Three columns and three answers:
+	// — with the space shown by the brackets in the corpus row rather than
+	// by an underscore there. Seven columns and three answers:
 	//
 	//	dash    keeps the escaped space everywhere: the mask reaches the trim
-	//	bash    trims it, but only from a value that took a *remainder*
+	//	bash    trims it, but only from a value that took a *remainder* —
+	//	        the same in all three bash columns, `sh` included
 	//	ksh93   trims it from the last name's value however it was reached
 	//	zsh     ksh93's answer
+	//	ash     ksh93's answer, which is why the fifth dialect is Trimmed
+	//	        rather than dash's Kept — the two /bin/sh shells split here
 	//
 	// The bash column is the one that needs the third value, and the row
 	// that says so is `a b\ c\ `: the escaped space in the middle joins `b`
@@ -2240,10 +2246,16 @@ type Semantics struct {
 	//
 	// unexhibited No: bash 5.3.15, bash-as-`sh`, bash 3.2.57 and ksh93u+,
 	// re-measured 2026-09-12: `unset nodecl; $(( nodecl[1/0] ))` is a
-	// division by zero in all four and a quiet 0 in zsh 5.9.2, and `i=0;
-	// $(( nodecl2[i++] ))` leaves i at 1 in the four and 0 in zsh. dash
-	// has no subscript in arithmetic, so the question does not arise
-	// there. No preset writes it because the axis is read (`== Yes`) and
+	// division by zero in those four columns and a quiet 0 in zsh 5.9.2,
+	// and `i=0; $(( nodecl2[i++] ))` leaves i at 1 in them and 0 in zsh.
+	//
+	// **Two columns cannot be asked, not one.** Re-measured 2026-09-19
+	// across all seven: dash refuses the brackets outright — `arithmetic
+	// expression: expecting EOF: " nodecl[1/0] "`, status 2 — and BusyBox
+	// ash refuses them too, `arithmetic syntax error` at 2. Neither has a
+	// subscript in arithmetic, so the question does not arise in either,
+	// and the fifth dialect is on dash's side of this rather than absent
+	// from the sentence. No preset writes it because the axis is read (`== Yes`) and
 	// not asked — silence and `No` reach the same code, so writing it down
 	// would add a line and no fact (#2060).
 	ArithSubscriptSkippedWhenNameUnset Answer
@@ -14562,9 +14574,25 @@ type Semantics struct {
 	// true in bash, ksh93 and zsh.
 	//
 	// Separate from the status and from the fatality because the panel splits
-	// four ways on `.` alone — dash 0, bash 2 surviving, ksh93 2 fatal, zsh 1
-	// surviving — and one field with four answers would have to invent a type
-	// to hold what is really three independent questions.
+	// six ways on `.` alone. Re-measured 2026-09-19 across all seven columns,
+	// which found two more splits than the four this used to name:
+	//
+	//	dash          not an error: silent, 0, runs on
+	//	bash, bash32  a message and a usage line, 2, runs on
+	//	bash as `sh`  the same two lines, 2, and **the script ends**
+	//	ksh93         a usage line alone, 2, and the script ends
+	//	zsh           `not enough arguments`, 1, runs on
+	//	BusyBox ash   nothing at all, 2, runs on
+	//
+	// One field with six answers would have to invent a type to hold what is
+	// really three independent questions.
+	//
+	// The third row is the column a four-shell sentence leaves out here, and
+	// it is a bash one rather than ash. It is POSIX mode and not the name:
+	// `set -o posix` in front of the bare `.` ends plain bash's script too,
+	// at the same 2, with a control row — `false` then a line after it —
+	// showing bash-as-`sh` running on from an ordinary failure. This shell
+	// does not move with it (#3818).
 	DotWithNoOperandIsAnError Answer
 
 	// DotWithNoOperandIsFatal decides what that error costs, and it is a
@@ -14577,9 +14605,19 @@ type Semantics struct {
 	//
 	//	ksh93u+       the usage line, 2, and nothing after it runs
 	//	bash 5.3.20   `filename argument required` and its usage, 2, runs on
+	//	bash 3.2.57   the same, with 3.2's shorter usage line
+	//	bash as `sh`  the same two lines, 2, and nothing after it runs
 	//	zsh 5.9.2     `not enough arguments`, 1, runs on
 	//	BusyBox ash   nothing at all, 2, runs on
 	//	dash 0.5.12   not an error — the axis above is No and this is not asked
+	//
+	// The `sh` row is new on 2026-09-19 and is a **second** shell that ends
+	// the script here, which is what takes this from "ksh93 alone" to two of
+	// seven. It is bash's POSIX mode reaching the POSIX rule about a special
+	// builtin's usage error, not the invocation name: `set -o posix` then a
+	// bare `.` ends plain bash's script at 2 as well. This shell carries on
+	// under both, which is the defect #3818 owns — the axis has no POSIX-mode
+	// companion, where BadOptionToSpecialBuiltinFatal has one.
 	//
 	// BusyBox ash is what parted this from DotMissingFileFatal: there a `.`
 	// on a missing file **does** end the script (measured in the same run,
@@ -15890,11 +15928,15 @@ type Semantics struct {
 	// the first operand is `$0` and only the rest are parameters, so `$0` is
 	// `name` and `$#` is 1.
 	//
-	// Yes in ksh93 and zsh, no in bash and dash — measured with `-sc`, `-s
-	// -c` and `-c -s` alike, since order and bundling change nothing.
+	// Yes in ksh93 and zsh; no in bash — all three columns — in dash and in
+	// BusyBox ash. Measured with `-sc`, `-s -c` and `-c -s` alike, since
+	// order and bundling change nothing, and re-measured 2026-09-19 across
+	// all seven columns to add the fifth dialect: `ash -s -c CMD name a`
+	// leaves `$0` as `name` and `$#` at 1, which is the command string's
+	// rule and bash's side of this.
 	//
 	// Asked only when both are given, which is the only place the panel
-	// disagrees. Where the program comes from is not this question: all four
+	// disagrees. Where the program comes from is not this question: all seven
 	// run the command string, and the corpus pins that separately. Either
 	// option alone is unanimous too — the command string names the first
 	// operand `$0`, and standard input leaves `$0` as the shell — and with
@@ -15957,10 +15999,12 @@ type Semantics struct {
 	// operand a positional parameter, where the minus spelling would have
 	// made `name` `$0` and only `a` a parameter.
 	//
-	// True in ksh93 alone. bash, dash and zsh read `+c` as `-c` in every
-	// respect, and all four *run* the command string either way — the sign
-	// changes nothing about where the program comes from, which the corpus
-	// pins separately.
+	// True in ksh93 alone. bash — all three columns — dash, zsh and BusyBox
+	// ash read `+c` as `-c` in every respect, and all seven *run* the command
+	// string either way: the sign changes nothing about where the program
+	// comes from, which the corpus pins separately. Re-measured 2026-09-19
+	// across all seven to put the fifth dialect in the sentence — `ash +c
+	// CMD name a` is `$0` of `name` and `$#` of 1, which is `-c`'s answer.
 	//
 	// A bool rather than an Answer, for the reason
 	// StdinProgramReadInBlocks is one: the panel is three to one, so a
@@ -19826,8 +19870,15 @@ type Semantics struct {
 	// element at the base, so `unset "a[0]"` where the base is 0 takes the
 	// whole name away in both shells and asks nothing; and a name holding
 	// nothing at all has no element for any subscript to name and is left
-	// alone everywhere, which is why `unset "b[0]"` on an unset `b` is quiet
-	// in all four.
+	// alone, which is why `unset "b[0]"` on an unset `b` is quiet.
+	//
+	// "Everywhere" is the five columns that can be asked, and re-measuring
+	// 2026-09-19 across all seven is what bounded it: quiet at status 0 in
+	// bash, bash-as-`sh`, bash 3.2, ksh93 and zsh, while **dash and BusyBox
+	// ash refuse the brackets as part of the name** — `unset: b[0]: bad
+	// variable name`, and the script ends at 2 in both. Those two have no
+	// subscripted name for this axis to be about, which the sibling axis
+	// above already records from the other side.
 	//
 	// Nor is it about arrays with a gap: `a=(x y z); unset "a[9]"` is silent
 	// and succeeds in every shell measured. What the refusing shell objects
@@ -20521,8 +20572,18 @@ type StartupFileOptions struct {
 	SuppressAll string
 
 	// Login names the options that make this a login shell whatever argv[0]
-	// said. `-l` in all four, and `--login` in three of them — dash refuses
-	// the long spelling outright, with `Illegal option --` at status 2.
+	// said. `-l` in every one of the five dialects, and `--login` in four of
+	// them — dash alone refuses the long spelling, with `Illegal option --`
+	// at status 2.
+	//
+	// Re-measured 2026-09-19 across all seven columns, which added the
+	// dialect the earlier count left out: BusyBox ash takes **both**
+	// spellings, and takes them as a login shell rather than as a letter it
+	// ignores — with a scratch `/etc/profile` and `$HOME/.profile` in place,
+	// `ash -l -c 'echo body'` and `ash --login -c 'echo body'` each read both
+	// files before the command string, and plain `ash -c` reads neither. The
+	// preset in dialect/ash already held `-l --login`; what was one short
+	// was the sentence.
 	//
 	// It is not simply a second way to set the same bit, and that is why it
 	// belongs here rather than beside LoginShell: the option reads the
@@ -21742,8 +21803,18 @@ func PosixSemantics() Semantics {
 		// one either.
 		UnsetReadonlyFatal: Yes,
 		// `local` needs a function to be local to, and saying so is what
-		// three of the four do — the substrate keeps the answer it had
-		// before the question was one.
+		// three of the dialects that **have** `local` do, out of four — the
+		// substrate keeps the answer it had before the question was one.
+		//
+		// The count was right and the membership a reader would guess is
+		// not. Measured 2026-09-19 across all seven columns, `local zz=1`
+		// at the top of a script: bash, bash-as-`sh` and bash 3.2 say `local:
+		// can only be used in a function` at 1 and run on; dash says `local:
+		// not in a function` and ends the script at 2; BusyBox ash says the
+		// same and ends it at 2; zsh takes it silently at 0. So the three are
+		// bash, dash and ash, and zsh is the dissenter — while **ksh93 has no
+		// `local` at all** and answers `local: not found` at 127, which is a
+		// column with nothing to say here rather than a fourth agreeing one.
 		LocalOutsideAFunctionIsAnError: Yes,
 		// The standard has no `local`; dash is the closest reading, and it
 		// leaves the outer value visible until the first assignment.

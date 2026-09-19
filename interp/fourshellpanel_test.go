@@ -104,11 +104,44 @@ import (
 // bash-as-`sh` from bash cannot see any of these, and it looks exactly like a
 // probe that can.
 //
+// # The pass that found a live defect rather than a corrected record
+//
+// A third pass, 2026-09-19, is the first against semantics.go rather than
+// diagnostics.go, and takes that file's budget from 41 to 33. Seven of the
+// eight were the usual shape, a missing fifth dialect in a sentence whose
+// dialect values were all right: `ReadTrailingEscapedSeparator` gained ash
+// and zsh rows and a
+// third bash cell, `ArithSubscriptSkippedWhenNameUnset` found that **two**
+// columns have no subscript in arithmetic rather than one, `unset "b[0]"` on
+// an unset name is quiet in five columns and fatal in the two that read the
+// brackets as part of the name, `StdinOptionNamesTheOperands` and
+// `PlusSignedCommandStringIsDollarZero` each gained ash on bash's side, and
+// `StartupFileOptions.Login` was one dialect short in both of its counts —
+// BusyBox ash takes `-l` *and* `--login`, and takes them as a login shell,
+// measured with a scratch `/etc/profile` and `$HOME/.profile` it then reads.
+//
+// `LocalOutsideAFunctionIsAnError` is this pass's count-right-by-accident, the
+// same shape as `UnboundPositional` above: "three of the four" is true of the
+// four dialects that **have** `local` — bash, dash and ash say so and zsh does
+// not — while ksh93, the column a reader would put fourth, has no `local` at
+// all and answers `not found` at 127.
+//
+// The eighth is why this comment has a section. `DotWithNoOperandIsAnError`
+// said the panel "splits four ways on `.` alone". It splits **six** ways, and
+// the row that was missing is a **bash** one: bash-as-`sh` writes bash's two
+// lines, exits 2 and **ends the script**, where bash and bash 3.2 run on.
+// `set -o posix` does the same to plain bash, so it is the POSIX rule about a
+// special builtin's usage error rather than anything about `argv[0]` — and
+// this shell carries on under both, which is #3818. Every previous pass on
+// this budget produced a corrected record and no defect; this one produced a
+// defect precisely where the count was smallest, in the column the phrase set
+// was written to find.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
-	"semantics.go":   41,
+	"semantics.go":   33,
 	"diagnostics.go": 37,
 	filepath.Join("..", "syntax", "dialect.go"): 11,
 }

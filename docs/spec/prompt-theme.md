@@ -876,6 +876,25 @@ rich one that needs a file. With no elements configured the engine draws
 a bare prompt character and a continuation, and that path must not be
 slower than the prompt it replaces.
 
+### But a wired theme is not a configured one
+
+Those are two different questions and conflating them would take a prompt
+away from somebody who set one. A front end wires a theme into every
+interactive session — it is a capability of the substrate, so every
+dialect binary carries one — and **the theme draws only when a
+configuration asks for it**: at least one element named on one side,
+whether by a variable, a file or a preset. Otherwise it reports that it is
+not drawing and the prompt is the person's own parameter, exactly as it
+would be with no theme wired at all.
+
+So the engine's bare prompt is for *a configuration that names no
+elements*, not for *a session that named no configuration*. The second is
+somebody's `PS1`, and a theme that drew a bare `$` over it would be the
+silent-wrong-answer class applied to the most visible line on the screen.
+
+It is also what makes the wiring free: a session that never configures a
+prompt costs one variable lookup per prompt and nothing else.
+
 ## Budget and measurement
 
 - The budget is **per prompt**, not per keystroke. #1323 says the prompt

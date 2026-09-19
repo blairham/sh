@@ -58,6 +58,17 @@ type drawnPrompt struct {
 	// calculation needs; counting the upper rows would put the wrap, the
 	// cursor column and the search's arithmetic out by the width of them.
 	cells int
+
+	// right is the prompt drawn against the right-hand edge of the row being
+	// typed on, and rightCells is how wide it is. Both zero for every prompt
+	// that has no right half, which is every prompt this shell drew before
+	// rightprompt.go existed.
+	//
+	// Measured and counted here for the reason text and cells are: once the
+	// markers are gone the width is unknowable, and while they are there the
+	// string cannot be written.
+	right      string
+	rightCells int
 }
 
 // drawPrompt takes the markers out and counts what is left.

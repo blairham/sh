@@ -151,6 +151,19 @@ type ThemedPrompt struct {
 
 	// Cont is the prompt for the rest of an unfinished construct.
 	Cont string
+
+	// Right is the prompt drawn against the right-hand edge of the row the
+	// line is typed on.
+	//
+	// Separate from Text rather than part of it, because the editor hides it
+	// when the typed line grows into it and draws it again when the line
+	// shrinks back. Baked into Text it would be text that wrapped instead,
+	// and a wrapped prompt smears on every repaint after it.
+	//
+	// Empty is the ordinary case and costs nothing. No dialect here has ever
+	// drawn one — see repl/rightprompt.go for what it does and what was
+	// measured to decide it.
+	Right string
 }
 
 // PromptTheme draws the whole prompt from a configuration, instead of the

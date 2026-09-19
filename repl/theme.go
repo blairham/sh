@@ -105,7 +105,7 @@ func (t *Theme) DrawPrompt(info PromptInfo) (ThemedPrompt, bool) {
 	t.engine.Bare = t.Char + " "
 	t.engine.Continued = t.Continued
 	drawn := t.engine.Render(t.context(info))
-	return ThemedPrompt{Text: drawn.Text, Cont: drawn.Cont}, true
+	return ThemedPrompt{Text: drawn.Text, Cont: drawn.Cont, Right: drawn.Right}, true
 }
 
 // Settings is what the theme currently resolves, for something that reports a

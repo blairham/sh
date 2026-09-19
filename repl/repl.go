@@ -926,11 +926,20 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 	// is a column" have to be taken out of both and the count has to cover
 	// both. Two drawnPrompts added together would be a text of two halves and
 	// a width of one.
-	if themed, drawing := s.themed(continuing, cols); drawing {
+	if themed, right, drawing := s.themed(continuing, cols); drawing {
 		// The whole prompt, so neither the parameter nor a contribution is
 		// consulted. One drawPrompt all the same: the markers still have to
 		// come out and the width still has to be counted.
-		return drawPrompt(themed)
+		drawn := drawPrompt(themed)
+		if right != "" {
+			// The same treatment and for the same reason — a right prompt is
+			// mostly escapes, and the editor places it by its *cells*. It has
+			// no rows of its own: it is drawn on the row being typed on or it
+			// is not drawn.
+			measured := drawPrompt(right)
+			drawn.right, drawn.rightCells = measured.text, measured.cells
+		}
+		return drawn
 	}
 	if continuing {
 		return drawPrompt(s.contributed(true, cols) + s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
@@ -945,26 +954,27 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 // would end a session that has been open for hours over a segment somebody
 // wanted for decoration. A guarded panic leaves the theme not drawing, so the
 // parameter is what appears and the session keeps its prompt.
-func (s Shell) themed(continuing bool, cols int) (string, bool) {
+func (s Shell) themed(continuing bool, cols int) (text, right string, drawing bool) {
 	if s.Theme == nil {
-		return "", false
+		return "", "", false
 	}
-	var (
-		prompt  ThemedPrompt
-		drawing bool
-	)
+	var prompt ThemedPrompt
 	if s.guard().Do(func() { prompt, drawing = s.Theme.DrawPrompt(s.promptInfo(continuing, cols)) }) {
 		// It panicked. The report has already been written, and the prompt
 		// falls back to the parameter rather than to nothing.
-		return "", false
+		return "", "", false
 	}
 	if !drawing {
-		return "", false
+		return "", "", false
 	}
 	if continuing {
-		return prompt.Cont, true
+		// No right prompt on a continuation line. What is being typed there
+		// is the middle of a construct, and a right half beside it would be
+		// decoration next to something half-finished — which is the same
+		// reasoning a segment uses to decline on a continued prompt.
+		return prompt.Cont, "", true
 	}
-	return prompt.Text, true
+	return prompt.Text, prompt.Right, true
 }
 
 // trackWindowSize puts the terminal's size in $LINES and $COLUMNS, where the

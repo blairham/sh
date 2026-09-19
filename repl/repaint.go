@@ -84,6 +84,13 @@ type drawnLine struct {
 	// was counted against it.
 	cols int
 
+	// right says a right prompt is on the row. It is not a position, because
+	// a right prompt does not have one that can change: it is pinned to the
+	// edge and only its *presence* moves. So this is the whole of what an
+	// incremental repaint has to check — see repaint, which declines rather
+	// than trying to put one on or take one off.
+	right bool
+
 	// row and col are where the draw left the cursor, and endRow and endCol
 	// are where the drawn content ends. Rows are counted from the row the
 	// prompt starts on, the way [place] counts them.
@@ -104,6 +111,14 @@ type drawnLine struct {
 func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	d := e.drawn
 	if !d.valid || d.cols != cols || d.cells != prompt.cells || d.prompt != prompt.text {
+		return false
+	}
+	if rightFits(prompt.cells, cells(e.line), prompt.rightCells, cols) != d.right {
+		// The line has just grown into the right prompt, or shrunk back off
+		// it. An incremental repaint writes what changed and erases nothing,
+		// so it cannot take one off; the whole-line draw clears to the end of
+		// the screen before it writes, so it can do both. Declining here is
+		// the whole of the interaction between the two.
 		return false
 	}
 
@@ -182,6 +197,7 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		prompt: prompt.text,
 		cells:  prompt.cells,
 		cols:   cols,
+		right:  d.right,
 		row:    curRow, col: curCol,
 		endRow: endRow, endCol: endCol,
 	}
@@ -211,7 +227,10 @@ func (e *editor) promptDrawn(prompt drawnPrompt) {
 		prompt: prompt.text,
 		cells:  prompt.cells,
 		cols:   cols,
-		row:    0, col: prompt.cells,
+		// A fresh prompt has an empty line under it, so whether a right
+		// prompt was drawn is decided by the prompt's own width alone.
+		right: rightFits(prompt.cells, 0, prompt.rightCells, cols),
+		row:   0, col: prompt.cells,
 		endRow: 0, endCol: prompt.cells,
 	}
 }

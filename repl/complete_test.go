@@ -104,7 +104,7 @@ func TestCompleting(t *testing.T) {
 		{"the common prefix is filled in", "echo appl", "echo apple", nil},
 	} {
 		e := &editor{line: []rune(tc.typed), pos: len([]rune(tc.typed)), out: &strings.Builder{}}
-		got := e.complete(c)
+		got, _ := e.complete(c)
 		if string(e.line) != tc.want {
 			t.Errorf("%s: line is %q, want %q", tc.name, string(e.line), tc.want)
 		}

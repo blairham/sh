@@ -162,7 +162,7 @@ func TestARowThatIsNotAMatchIsNeverInserted(t *testing.T) {
 		}
 	})
 	e := &editor{line: []rune("echo ban"), pos: 8, out: &strings.Builder{}}
-	if listed := e.complete(c); listed != nil {
+	if listed, _ := e.complete(c); listed != nil {
 		t.Errorf("listed %v, want the lone match filled in instead", listed)
 	}
 	if got := string(e.line); got != "echo banana.txt " {

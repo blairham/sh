@@ -615,3 +615,93 @@ func TestThePositionalStoreIsGatedOnTheNameSet(t *testing.T) {
 		}
 	}
 }
+
+// And position **0** is not in that list at all: it is `$0`, and what a write
+// to it produces is a value the *frame* carries (#3672).
+//
+// Measured 2026-09-18, zsh 5.9.2 — the one column whose builtins take an
+// all-digit output operand — each probe a script file under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null:
+//
+//	printf 'x\n' | read 0; echo "[$0]"                       [x]
+//	printf -v 0 %s W0; echo "[$0]"                           [W0]
+//	getopts x 0 -x; echo "[$0]"                              [x]
+//	f() { read 0; echo "[$0]"; }; f; echo "[$0]"             [x] then the script
+//	read 0; f() { echo "[$0]"; }; f                          [x] then [f]
+//	set -- A B; read 0; echo "[$0] [$#]"                     [x] [2]
+//
+// The third and fourth rows are the ones that say what kind of value it is. A
+// write made inside a call is visible **inside that call** and gone when it
+// returns, and a call made *after* a top-level write still reports its own
+// name — so it is saved and restored across a call exactly as the positional
+// list is, rather than being a shell-wide name. The fifth says it is not in
+// the list: the count does not move.
+//
+// The same three builtins as the set above, because the store is the same one
+// and a fix in `read` alone leaves the next reader of `getopts` with the old
+// silence — which was a parameter literally named `0` that no expansion in
+// that dialect reads back.
+func TestAZeroOutputOperandNamesTheFramesDollarZero(t *testing.T) {
+	positional := func(s *Semantics) {
+		s.ReadNameOperands = NamesAndPositionals
+		s.PrintfAssignsWithV = Yes
+		// What `$0` says where nothing was written, which the rows that
+		// assert a call reporting its own name need answered.
+		s.DollarZeroNames = DollarZeroIsTheInnermostCall
+	}
+	namesOnly := func(s *Semantics) {
+		s.PrintfAssignsWithV = Yes
+		s.DollarZeroNames = DollarZeroIsTheInnermostCall
+	}
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		{
+			"read names it", `printf 'x\n' | { read 0; echo "[$0]"; }`, "[x]",
+		},
+		{"getopts names it", `getopts x 0 -x; echo "[$0]"`, "[x]"},
+		{"printf -v names it", `printf -v 0 %s ZZ; echo "[$0]"`, "[ZZ]"},
+		{
+			// Written inside a call, and gone when the call returns.
+			"a write inside a call ends with it",
+			`f() { printf -v 0 %s W; echo "in[$0]"; }; f; echo "out[$0]"`,
+			"in[W]\nout[testsh]",
+		},
+		{
+			// And a call made after a top-level write reports its own name,
+			// which is what says the value is the frame's and not the
+			// shell's.
+			"a later call still names itself",
+			`printf -v 0 %s W; f() { echo "in[$0]"; }; f; echo "out[$0]"`,
+			"in[f]\nout[W]",
+		},
+		{
+			// The positional list does not move: position 0 was never in it.
+			"the positional list is untouched",
+			`set -- P Q; printf -v 0 %s W; echo "[$*] n=$# [$0]"`,
+			"[P Q] n=2 [W]",
+		},
+		{
+			// Every spelling of the same position, the way `${00}` is `$0`
+			// in every column of the panel.
+			"leading zeros are the same position",
+			`printf -v 000 %s W; echo "[$0]"`,
+			"[W]",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := readRun(t, positional, Diagnostics{}, c.src)
+			if !strings.Contains(out, c.want) {
+				t.Errorf("said %q, want %q", out, c.want)
+			}
+			// Under the set that refuses an all-digit operand the store is
+			// never reached, so `$0` keeps the name it derives — which is
+			// what says the gate is the axis and not the spelling.
+			out, _ = readRun(t, namesOnly, Diagnostics{}, c.src)
+			if strings.Contains(out, "[W]") || strings.Contains(out, "[x]") ||
+				strings.Contains(out, "[ZZ]") {
+				t.Errorf("under PlainNamesOnly: said %q, want `$0` underived", out)
+			}
+		})
+	}
+}

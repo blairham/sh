@@ -2810,6 +2810,15 @@ type Runner struct {
 	// frameSerial numbers every frame ever pushed, so two frames at the
 	// same depth are still two frames.
 	frameSerial int
+	// zeroName and zeroNameHeld are the script's own level's `$0`, where a
+	// builtin's output operand has named position 0 there. The per-call
+	// halves live on Frame, which the script's own level does not have —
+	// it is the shell and not a call — so this is where that one goes. A
+	// plain pair rather than a stack: it is written and read through
+	// Runner.storeDollarZero and Runner.heldDollarZero, and a subshell gets
+	// its own copy from the shallow copy every clone starts as.
+	zeroName     string
+	zeroNameHeld bool
 	// inErrTrap, inDebugTrap and inReturnTrap guard each trap against
 	// running itself: a failing command inside the ERR action fires
 	// nothing, which is measured, and a DEBUG action that fired DEBUG

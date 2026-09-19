@@ -24399,12 +24399,34 @@ words. That is the opposite of what the same operand does at a `{name}`
 redirection, where an out-of-range position writes nothing at all, and
 the two are measured apart rather than shared.
 
-Position 0 is `$0` there — `printf -v 0 %s W0; echo "$0"` writes `W0` —
-and is deliberately not taken: a write to it inside a function is visible
-there and gone when the call returns, which is a per-frame value this
-runner does not keep, since `$0` is derived from the call stack. Measured
-the same day: `f() { printf 'x\n' | read 0; echo "[$0]"; }; f; echo
-"[$0]"` is `[x]` then the script's own name. Filed as #3672.
+Position **0** is not in that list at all: it is `$0`, and a write to it
+produces a value the *frame* carries rather than a parameter. Measured
+the same day in the same shell:
+
+    printf 'x\n' | read 0; echo "[$0]"                     [x]
+    printf -v 0 %s W0; echo "[$0]"                         [W0]
+    getopts x 0 -x; echo "[$0]"                            [x]
+    f() { read 0; echo "[$0]"; }; f; echo "[$0]"           [x] then the script
+    read 0; f() { echo "[$0]"; }; f                        [x] then [f]
+    read 0; . ./inc.sh                                     the sourced file's own name
+    f() { read 0; g() { echo "[$0]"; }; g; echo "[$0]"; }  [g] then [x]
+    set -- A B; read 0; echo "[$0] [$#]"                   [x] [2]
+    read 0; unset 0; echo "[$0]"                           still [x]
+
+The fourth and fifth rows are what say which kind of value it is. A write
+made inside a call answers **inside that call** and is gone when the call
+returns, and a call made after a top-level write still reports its own
+name — so it is saved and restored across a call exactly as the
+positional list is, and is not a shell-wide name. A sourced file is a
+frame too and answers with its own operand; the frame under it keeps what
+it was given. The count does not move, so it is not in the list; and
+`unset 0` does not clear it, so it is not an ordinary parameter either.
+
+`Runner.storeDollarZero` is where a write goes and `Runner.heldDollarZero`
+is what `$0` reads before any of `DollarZeroNames`' three readings — a
+name that was written down is not a question about where a name comes
+from. The per-call halves are fields on `interp.Frame`; the script's own
+level is not a frame, so the runner carries that one (#3672).
 
 **`UnsetPositionalIsAllowed`** — bash no · dash no · ksh93 yes · zsh no
 

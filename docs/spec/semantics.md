@@ -27943,6 +27943,70 @@ whether anything can tell `Yes` from `No`. Only a flip between two answers
 asks the question that found the four, so that is what the sweep counts;
 the reachability flips are behind `-unspecified`.
 
+## A local declaration shadows the names under it, not only the name
+
+ksh93's compound variable stores its members as **ordinary names spelled
+with a dot** — `c=(a=1)` puts `c.a` in the same table `c` would go in. A
+declaration that makes `c` local therefore has a second job: everything
+under `c.` is part of what it displaces, and the fresh binding starts with
+none of it.
+
+Measured on ksh93u+ 2012-08-01, 2026-09-19, each row its own script file
+under `env -i PATH=/usr/bin:/bin LC_ALL=C /bin/ksh x.sh` with standard
+input on `/dev/null`:
+
+| written | ksh93u+ |
+| --- | --- |
+| `c=(z=9); function f { typeset c=(a=1); }; f` | `${c.a}` empty, `${c.z}` is `9` |
+| `function f { typeset c=(a=1); }; f` | `${c.a}` empty **and** `${c+yes}` empty |
+| `c=(z=9); function f { typeset c; c.a=1; }; f` | `${c.a}` empty, `${c.z}` is `9` |
+| `c=(z=9); function f { typeset -C c; … }` | `${c.z}` empty **inside**, `9` after |
+| `a=1; a.b=2; function f { typeset a=5; … }` | `${a.b}` empty inside, `2` after |
+| `c=(z=(q=7)); function f { typeset c=(a=1); }; f` | `${c.z.q}` is `7` after |
+| `c=(z=9); function f { typeset c=(a=1); }; f; typeset -p c` | `typeset -C c=(z=9)` |
+
+Three facts are in those rows.
+
+- **It is the prefix and not the compound mark.** Row five is a plain
+  scalar with a child and is shadowed exactly like the compound above it,
+  so what a declaration displaces is the name *and the namespace under
+  it*.
+
+- **The local binding starts empty.** Row four is the control that says so
+  on its own: the declaration writes nothing, and the body still reads the
+  member as unset while the caller keeps it.
+
+- **The mark is part of the binding.** Row two is the one that needs it:
+  the caller had no `c` at all, and a restore that put back three empty
+  value tables without taking the compound mark off left `typeset -C c=()`
+  standing where ksh93 has nothing.
+
+The controls, each of which is a shape that must **not** move:
+
+| written | ksh93u+ |
+| --- | --- |
+| `c=(z=9); function f { c.a=1; }; f` | `${c.a}` is `1` — no declaration |
+| `c=(z=9); f() { typeset c=(a=1); }; f` | `${c.a}` is `1` — POSIX-style body |
+| `a=(9 9 9); function f { typeset a=(1 2); }; f` | `9 9 9` — an array literal |
+| `s=keep; function f { typeset s=new; }; f` | `keep` — a scalar |
+
+The second is the load-bearing one. `typeset` in a `f() { … }` body is not
+local in this shell at all — `TypesetLocalNeedsKeywordFunction` — so a
+namespace shadow that did not hang off the ordinary shadow would have made
+it local by a side door. It hangs off `Runner.shadow`, which that axis
+already turns away.
+
+This is **not an axis**: no other column in the panel has a spelling that
+can put the question, and bash, zsh, dash and BusyBox ash never reach the
+code because no name in them can hold a member separator. It is recorded
+here because it is a store rule with measured rows, and the gate that keeps
+it inert elsewhere is `Runner.memberNamesInUse` (#3824).
+
+**One member shape is a divergence and is not this rule.** `c=(z=9);
+function f { typeset c.z=5; }; f` leaves `${c.z}` at `5` in ksh93u+ — a
+declaration that *names* a member writes the caller's — and at `9` here,
+before this rule and after it. Pinned by a control rather than fixed.
+
 ## A namespace is a name-resolution region over a compound
 
 `namespace NAME { … }` is one column's construct — the grammar is in

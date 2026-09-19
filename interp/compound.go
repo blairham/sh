@@ -1188,6 +1188,12 @@ func (sc *scope) shadowedNames() []string {
 	for name := range sc.removedBefore {
 		names[name] = true
 	}
+	for name := range sc.memberNamespaces {
+		names[name] = true
+	}
+	for name := range sc.compoundMarkBefore {
+		names[name] = true
+	}
 	list := make([]string, 0, len(names))
 	for name := range names {
 		list = append(list, name)
@@ -1260,6 +1266,13 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 		}
 		delete(sc.savedAssoc, name)
 		delete(sc.assocExisted, name)
+	}
+	// And the member namespace, before the records below: what the call left
+	// under the prefix goes, and the compound mark the caller's name carried
+	// comes back. The members themselves are names of their own in this same
+	// list. See compoundlocal.go.
+	if r.memberNamesInUse {
+		r.restoreCompoundNamespace(sc, name)
 	}
 	// And how the caller's compound value had come to be, which is restored
 	// with the tables rather than left as the local declaration set it. See

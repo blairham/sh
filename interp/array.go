@@ -264,6 +264,7 @@ func (r *Runner) storeArray(name string, a Array) {
 	}
 	// A compound variable is not a thing an array write shares a name with:
 	// the elements replace the whole tree. See compoundVariableRetyped.
+	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
 	// The unique attribute is applied here rather than at each of the
 	// half-dozen callers, because it is a property of the name that holds
@@ -408,6 +409,7 @@ func (r *Runner) markIndexed(name string) {
 	}
 	// The letter retypes a compound variable as surely as a literal does:
 	// `c=(a=1); typeset -a c` lists `typeset -a c` with no members left.
+	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
 	r.Arrays[name] = Array{}
 	// Declared and not assigned — see compounddeclaredonly.go.

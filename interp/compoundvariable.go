@@ -79,6 +79,16 @@ func (r *Runner) isCompoundVariable(name string) bool {
 // and not as an array with a compound inside it — so the old value goes rather
 // than being left where a reader might still find it.
 func (r *Runner) markCompoundVariable(name string) {
+	// The mark is what makes a namespace, so it is also what turns the
+	// namespace half of a shadow on — a compound with no members yet still
+	// has a kind for a declaration to displace. See compoundlocal.go.
+	r.memberNamesInUse = true
+	// Before the mark goes on, so that the scope records the caller's answer
+	// rather than the one this line is about to write. A name a declaration
+	// in this scope shadowed owns its namespace from here, which is what a
+	// member the body creates needs. See compoundlocal.go.
+	r.claimNamespaceHere(name)
+	r.localizeMemberWrite(name)
 	r.compoundVariables()[name] = true
 	delete(r.Vars, name)
 	delete(r.Arrays, name)
@@ -116,6 +126,10 @@ func (r *Runner) markCompoundVariable(name string) {
 // a value before the store is reached, so by the time this runs the name is no
 // longer reading as a compound and the members stay.
 func (r *Runner) compoundVariableRetyped(name string) {
+	// Every one of the five stores arrives here with the name it is about to
+	// write, which makes this the one place a member name can be recognized
+	// without a sixth list to keep in step. See Runner.noteMemberName.
+	r.noteMemberName(name)
 	if !r.isCompoundVariable(name) {
 		return
 	}

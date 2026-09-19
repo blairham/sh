@@ -117,6 +117,7 @@ func (r *Runner) markAssoc(name string) {
 	}
 	// As for the indexed letter: `c=(a=1); typeset -A c` is `typeset -A c=()`
 	// there, with the compound's members gone. See compoundVariableRetyped.
+	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
 	r.AssocArrays[name] = AssocArray{}
 	// Declared and not assigned, which is the state one listing writes
@@ -154,6 +155,7 @@ func (r *Runner) setAssocElem(name, key, value string) {
 		}
 		// A keyed write over a compound variable replaces it, the same way
 		// an indexed one does in storeArray. See compoundVariableRetyped.
+		r.localizeMemberWrite(name)
 		r.compoundVariableRetyped(name)
 		r.AssocArrays[name] = a
 	}

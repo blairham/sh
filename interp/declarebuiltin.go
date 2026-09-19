@@ -4648,6 +4648,15 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			// the number is — see shadowGetoptsCursor.
 			r.shadowGetoptsCursor(sc)
 		}
+		if r.memberNamesInUse {
+			// And the names *under* this one, which a declaration displaces
+			// with it: a compound variable's members are ordinary names
+			// spelled with a dot, so shadowing the bare name alone left them
+			// in the caller's scope for the body to write. See
+			// compoundlocal.go, and the gate that keeps it inert in the four
+			// dialects with no such spelling.
+			r.shadowCompoundNamespace(sc, name)
+		}
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

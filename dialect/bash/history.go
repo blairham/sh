@@ -120,6 +120,14 @@ func registerHistory(r *interp.Runner) {
 	r.SetHistoryStore(historyEntries, historyRecord)
 	r.SetHistoryFile(historyStartFile, historyFinishFile)
 	r.SetHistoryNumbering(historyFirst)
+	// And the parameter whose assignment truncates the file where it
+	// stands, which is the moment nothing else could reach: see
+	// historyTruncateFile for the nine shapes it was measured over, and
+	// interp.Runner.SetAssignmentAction for why a stored name needs a seam
+	// of its own rather than a producer's.
+	r.SetAssignmentAction("HISTFILESIZE", func(rr *interp.Runner, _ string) {
+		historyTruncateFile(rr)
+	})
 }
 
 // historyFlags is the letters one call carried.
@@ -258,6 +266,34 @@ func historyWriteUsage(r *interp.Runner) {
 	_, _ = fmt.Fprintf(r.Err(), "%s\n", historyUsage)
 }
 
+// historyTooManyOperands is the refusal for a second operand, which reads one
+// count and has nowhere to put another. It was silent at 0 here (#3468).
+//
+// Measured 2026-09-18 on bash 5.3.20 from a script file, `; echo a=$?` behind
+// the call and `echo b=$?` on the line after it:
+//
+//	history 1 2       history: too many arguments   no a=, then b=2
+//	history 1 x       history: too many arguments   no a=, then b=2
+//	history -- 1 2    history: too many arguments   no a=, then b=2
+//	history x 1       history: x: numeric …         a=2, then b=0
+//	history -c 1 2    nothing at all, 0
+//
+// So the count is checked **after** the first operand has been read as a
+// number, and only where no letter took the operands for itself — `-c`, `-d`,
+// `-p`, `-s` and the file letters each ignore what is left, which was already
+// measured and is why this is in historyList rather than in the builtin.
+//
+// It is the one refusal in this builtin that costs the rest of the command:
+// the `; echo a=$?` never runs and the next line reports 2. Every other
+// refusal here — the invalid option, the missing `-d` argument, the operand
+// that is not a number — leaves the line to finish. See
+// interp.Runner.GiveUpTheCommandAt, which is the door this and the core's own
+// give-ups share, and where the `-c` route's answer of 1 is written down.
+func historyTooManyOperands(r *interp.Runner) int {
+	r.Diagnosef("history: too many arguments\n")
+	return r.GiveUpTheCommandAt(2)
+}
+
 // historyLetterValue is the argument of `-d`: the rest of the word it is in,
 // or the word after it.
 func historyLetterValue(word string, rest *[]string, i int) (string, bool) {
@@ -282,14 +318,21 @@ func historyList(r *interp.Runner, rest []string) int {
 	entries := historyEntries(r)
 	from := 0
 	if len(rest) > 0 {
-		n, err := strconv.Atoi(rest[0])
+		count, err := strconv.Atoi(rest[0])
 		if err != nil {
+			// No usage block under this one, which is the difference
+			// between a complaint about an *operand* and a complaint about
+			// how the builtin was called. Measured 2026-09-18: `history x`
+			// is the sentence alone at 2, where `history -q` and
+			// `history -d` each print the usage line under theirs.
 			r.Diagnosef("history: %s: numeric argument required\n", rest[0])
-			historyWriteUsage(r)
 			return 2
 		}
-		if n < len(entries) {
-			from = len(entries) - n
+		if len(rest) > 1 {
+			return historyTooManyOperands(r)
+		}
+		if count < len(entries) {
+			from = len(entries) - count
 		}
 	}
 	for i := from; i < len(entries); i++ {

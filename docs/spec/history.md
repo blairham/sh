@@ -639,8 +639,40 @@ builtin's own line that `-p` and `-s` drop each take one off; `-c` puts the
 count back to nothing; `-w` does not touch it. Nothing is written by a shell
 that turned the list off again, unset HISTFILE, was replaced by `exec`, was
 killed by a signal, or is a subshell or command substitution ending. The file
-is **not** then truncated to HISTFILESIZE here, which bash does in some shapes
-and not others; that is left open.
+is truncated to HISTFILESIZE afterwards, but **only when something was
+appended** — see below.
+
+**HISTFILESIZE truncates the file at two moments, and neither alone accounts
+for a row.** Measured 2026-09-18 over a file holding `alpha`, `beta`, `gamma`,
+one shape at a time (#3423):
+
+| script, after `HISTFILE=f; set -o history` | the file afterwards |
+| --- | --- |
+| `HISTFILESIZE=1` | `HISTFILESIZE=1` |
+| `HISTFILESIZE=2` | `gamma`, `HISTFILESIZE=2` |
+| `HISTFILESIZE=0` | empty |
+| `HISTFILESIZE=1; history -c` | `gamma` |
+| `HISTFILESIZE=1; history -a; history -c` | `gamma` and the two entries |
+| `HISTFILESIZE=1; history -w; history -c` | all five, untouched |
+| `HISTFILESIZE=1; history -a; echo x` | `echo x` |
+| `HISTFILESIZE=1; HISTFILESIZE=10` | `gamma` and the two entries |
+| `HISTFILESIZE=abc`, and `-1` | nothing is truncated |
+
+**An assignment truncates where it stands.** `HISTFILESIZE=1; history -c` has
+no write anywhere near it and ends at one line, which only the assignment can
+have done — and it happens whether or not the list is on, so `HISTFILESIZE=1`
+in front of `set -o history` cuts the file before it is read.
+
+**The ending truncates after it has appended, and only when it appended.** The
+`-a; -c` row ends three lines over a size of one, so a shell that truncated
+unconditionally at the end would have left one. The same rule says a HISTFILE
+that does not exist is not created by an ending with nothing to write.
+
+`-w` is the row that says those two are the whole of it: it writes the list,
+truncates nothing, and does not mark what it wrote as written — which is why
+`HISTFILESIZE=1; history -w` ends at one line, the ending having appended the
+same entries again and then truncated, and the same pair with a `history -c`
+after it ends at five. `-r` and `-n` truncate nothing either.
 
 **HISTCONTROL and HISTIGNORE reach a script's list** exactly as they reach a
 prompt's (see the knobs above), with three more readings of bash's measured
@@ -656,6 +688,28 @@ value keeps everything. Every entry pushed off a full list moves the numbering
 on by one; a list already longer than a newly assigned size loses the excess at
 once and moves on by one fewer than it lost; an entry read from a file moves
 nothing. `!n` and `history -d n` both take the number as it is listed.
+
+**The builtin's three refusals are three different costs**, measured
+2026-09-18 with `; echo a=$?` behind the call and `echo b=$?` on the next line
+(#3468):
+
+| written | said | `a=` | `b=` |
+| --- | --- | --- | --- |
+| `history 1 2` | `history: too many arguments` | *never runs* | 2 |
+| `history x` | `history: x: numeric argument required` | 2 | 0 |
+| `history -q` | `history: -q: invalid option` **and the usage line** | 2 | 0 |
+
+So a second operand gives up the rest of the command — a function body, an
+`if`, a `for` and a `||` all unwind, and a subshell contains it — where the
+other two leave the line to finish; and the operand complaints carry no usage
+block where the option complaints do. From a command string the give-up ends
+the shell instead, at the dialect's fatal status of 1 rather than at the
+builtin's 2.
+
+The count is checked **after** the first operand has been read as a number, so
+`history x 1` is the numeric complaint and `history 1 x` is the operand-count
+one. A letter that takes the operands for itself ignores what is left:
+`history -c 1 2` is silent at 0.
 
 ### Words, ranges and substitutions
 

@@ -796,6 +796,12 @@ type Runner struct {
 	// SetDynamicWriter.
 	dynamicWriters map[string]func(*Runner, string)
 
+	// assignmentActions is the same seam for an **ordinary** variable whose
+	// assignment does something outside the variable table. The value is
+	// stored the way any other name's is; this is the message that it
+	// happened. See SetAssignmentAction.
+	assignmentActions map[string]func(*Runner, string)
+
 	// dynamicPresence answers whether a produced parameter is *there* at
 	// all, for the handful that are not from the start. A producer returns a
 	// string and has no way to say "unset"; this is the seam beside it, and
@@ -8543,6 +8549,11 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// And the other half of a tie, if this name is one. After the store, so
 	// that the mirror's own read of this name sees the new value.
 	r.mirrorScalarToArray(name, value)
+	// And the message for a name whose assignment does something. After the
+	// store, so that an action reading the name back sees what was written.
+	if act, ok := r.assignmentActions[name]; ok {
+		act(r, value)
+	}
 }
 
 // producerEndedByUnset reports whether `unset` has ended a produced parameter,

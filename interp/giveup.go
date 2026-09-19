@@ -145,3 +145,40 @@ func (r *Runner) giveUpForABadSubscript() {
 	// statement loop, which is precisely the shape measured.
 	r.abandonTheCommand()
 }
+
+// GiveUpTheCommandAt is that same give-up for a **registered builtin** whose
+// refusal costs the rest of the command rather than the shell, at a status the
+// caller measured.
+//
+// Exported for the reason RefuseBuiltinUsagef is: a dialect's own builtin can
+// already write the sentence, and had no way to say what the sentence costs.
+// The two are different costs — RefuseBuiltinUsagef ends the script the way a
+// usage error ends it, and this gives up the command and lets the next line
+// run — so a builtin picks the one it was measured taking.
+//
+// Measured 2026-09-18 on bash 5.3.20, `history 1 2` as the refusal and
+// `; echo a=$?` behind it, in a script file: the rest of the line never runs,
+// and `$?` on the **next** line is the status handed in. A function body, an
+// `if`, a `for` and a `||` all unwind the same way, and a subshell contains it
+// — which is the shape giveUpForABadSubscript already had, so this is that
+// door with the status opened up rather than a second mechanism.
+//
+// The command-string route is the other half and is not the caller's to
+// choose: `bash -c 'history 1 2; echo a'` exits **1**, the dialect's fatal
+// status, and never reaches the `echo`. So the status handed in is the one a
+// *script* leaves behind, and the `-c` answer comes from the axis, exactly as
+// it does for a bad subscript.
+//
+// It answers the status the builtin must **return**, which is the half a
+// caller cannot work out for itself: the route decides it, and a builtin that
+// returned the number it handed in reported 2 out of a `-c` where the shell
+// had already ended at 1. Write it as `return r.GiveUpTheCommandAt(2)`.
+func (r *Runner) GiveUpTheCommandAt(status int) int {
+	if r.Route == RouteCommandString {
+		r.fatalQuiet()
+		return r.status
+	}
+	r.status = status
+	r.abandonTheCommand()
+	return status
+}

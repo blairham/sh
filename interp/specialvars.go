@@ -638,6 +638,35 @@ func (r *Runner) SetDynamicWriter(name string, write func(r *Runner, value strin
 	r.dynamicWriters[name] = write
 }
 
+// SetAssignmentAction says what else happens when a script assigns to an
+// **ordinary** variable — one the shell stores rather than produces.
+//
+// The sibling of SetDynamicWriter, and the difference is which half of the
+// assignment the dialect owns. A produced parameter has no stored value, so
+// its writer *is* the assignment; a name registered here keeps every ordinary
+// property it had — `unset` takes it away, `declare -p` lists it, `${v-word}`
+// asks whether it is there — and the action is a message that the value moved.
+//
+// It exists because one of them changes something outside the shell. Measured
+// 2026-09-18 on bash 5.3.20 from a script file with no terminal: assigning
+// HISTFILESIZE **truncates the history file where it stands**, so
+// `HISTFILESIZE=1` over a three-line file leaves one line on disk before the
+// next command runs, and the shell's ending is not the only moment the file
+// is written. Nothing a producer could express: the value is an ordinary
+// variable that reads back, and a lazy reading — truncating only when the
+// file is next written — answers a three-line file to a script that looks
+// (#3423).
+//
+// Registered per name rather than as one callback over every assignment,
+// because a hook on every store is a cost every script pays for a question
+// about two names.
+func (r *Runner) SetAssignmentAction(name string, act func(r *Runner, value string)) {
+	if r.assignmentActions == nil {
+		r.assignmentActions = map[string]func(*Runner, string){}
+	}
+	r.assignmentActions[name] = act
+}
+
 // RefuseUnset marks a name `unset` refuses without its being readonly.
 //
 // A third state beside readonly and writable, and measured as one rather

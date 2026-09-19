@@ -87,9 +87,68 @@ func historyFinishFile(r *interp.Runner) {
 	if !ok || name == "" {
 		return
 	}
-	if historyWriteFile(r, name, historyNewest(r), true, true) == 0 {
-		historySetUnwritten(r, 0)
+	entries := historyNewest(r)
+	if len(entries) == 0 {
+		// Nothing to append, and the ending then does nothing at all:
+		// measured 2026-09-18, `HISTFILE=missing; set -o history` leaves no
+		// file behind, where an unconditional append had created an empty
+		// one. The truncation below goes with it — see historyTruncateFile,
+		// where a three-line file over HISTFILESIZE=1 keeps its three lines
+		// when the shell ends with nothing to write.
+		return
 	}
+	if historyWriteFile(r, name, entries, true, true) == 0 {
+		historySetUnwritten(r, 0)
+		historyTruncateFile(r)
+	}
+}
+
+// historyTruncateFile keeps only the newest HISTFILESIZE lines of the file
+// HISTFILE names, which is the second thing a script's history file meets and
+// was missing entirely (#3423).
+//
+// Two moments, measured 2026-09-18 on bash 5.3.20 from script files with a
+// three-line file and no terminal, one shape at a time:
+//
+//	HISTFILESIZE=1                              the file is `HISTFILESIZE=1`
+//	HISTFILESIZE=2                              `gamma`, `HISTFILESIZE=2`
+//	HISTFILESIZE=0                              empty
+//	HISTFILESIZE=1; history -c                  `gamma`
+//	HISTFILESIZE=1; history -a; history -c      `gamma` and the two entries
+//	HISTFILESIZE=1; history -w; history -c      all five, untouched
+//	HISTFILESIZE=1; history -a; echo x          `echo x`
+//	HISTFILESIZE=1; HISTFILESIZE=10             `gamma` and the two entries
+//	HISTFILESIZE=abc, and -1                    nothing is truncated
+//
+// Two rules account for every row and neither alone accounts for any of them.
+// **An assignment truncates where it stands** — `HISTFILESIZE=1; history -c`
+// leaves `gamma` with no write anywhere near it, which only an assignment can
+// have done — and **the ending truncates after it has appended**, but only
+// when it appended: the `-a` row ends three lines over a size of one, and the
+// `-c` row would be one line if the ending truncated unconditionally.
+//
+// `-w` is the row that says the two are the whole of it. It writes the list
+// and truncates nothing, and it does not mark what it wrote as written
+// either — which is why `HISTFILESIZE=1; history -w` ends at one line (the
+// ending appended the same entries again and then truncated) while the same
+// pair with a `history -c` after it ends at five.
+//
+// A value that is not a count truncates nothing, which historyFileSize
+// already answers for the read at startup.
+func historyTruncateFile(r *interp.Runner) {
+	keep, ok := historyFileSize(r)
+	if !ok {
+		return
+	}
+	name, ok := r.GetVar("HISTFILE")
+	if !ok || name == "" {
+		return
+	}
+	lines, ok := historyReadFile(r, name, true)
+	if !ok || len(lines) <= keep {
+		return
+	}
+	_ = historyWriteFile(r, name, lines[len(lines)-keep:], false, true)
 }
 
 // historyFileSize is HISTFILESIZE as a count of lines to keep, or false where

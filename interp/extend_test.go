@@ -231,3 +231,39 @@ func TestReadFileGatedResolvesAgainstTheRunnersDirectory(t *testing.T) {
 		t.Errorf("got %q, want %q", out.String(), "contents\n")
 	}
 }
+
+// A name whose assignment does something, which is the fourth seam beside the
+// three above and is not a producer.
+//
+// The distinction is what the test is for: the value is stored and reads back
+// like any other variable, `unset` takes it away and a default expansion knows
+// the difference — and the dialect is still told, where it stands, that the
+// value moved. A producer can do the second half and not the first.
+func TestAnAssignmentActionIsToldWhereItStands(t *testing.T) {
+	var out bytes.Buffer
+	r := newDialect(t, &out)
+	var seen []string
+	r.SetAssignmentAction("WATCHED", func(_ *interp.Runner, value string) {
+		seen = append(seen, value)
+	})
+
+	// The action runs at the assignment rather than at the end of the
+	// script, which is the whole point: the observable effect is ordered
+	// against what the script does next.
+	if got := runDialect(t, r, &out, `WATCHED=one; printf '%s' "[$WATCHED]"; WATCHED=two`); got != "[one]" {
+		t.Errorf("the stored value read back as %q, want [one]", got)
+	}
+	if strings.Join(seen, ",") != "one,two" {
+		t.Errorf("the action saw %v, want one then two", seen)
+	}
+
+	// And the name is an ordinary variable throughout: `unset` ends it and
+	// a default expansion can tell it apart from an empty one.
+	seen = nil
+	if got := runDialect(t, r, &out, `unset WATCHED; printf '%s' "[${WATCHED-gone}]"`); got != "[gone]" {
+		t.Errorf("after unset the name read back as %q, want [gone]", got)
+	}
+	if len(seen) != 0 {
+		t.Errorf("an unset told the action %v, want nothing — it is an assignment's message", seen)
+	}
+}

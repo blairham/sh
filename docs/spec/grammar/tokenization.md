@@ -1499,53 +1499,79 @@ Grammar flag: `Herestring` — core: on; `posix` and `dash`: off. dash is
 the only panel member without it, and refuses at the operator
 (`Syntax error: redirection unexpected`) rather than at the word.
 
-## `<&`'s operand is a file number in one column
+## `<&`'s operand is a file number, and it is read at run time
 
-`<&` duplicates a descriptor, and four of the panel read its operand as an
-ordinary word and open whatever it expands to. zsh reads it while **parsing**
-and refuses anything that is not a file number. Measured 2026-09-18 on zsh
-5.9.2 under `-f`, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+`<&` duplicates a descriptor, and **every** column in the panel requires what
+its operand comes to be a file number. None of them opens a file there. What
+they differ about is the wording, and what becomes of the shell. Measured
+2026-09-19, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C <shell>
+t.sh` with stdin on `/dev/null`, `v=5`, `w=5` and fd 5 open on a two-line
+file:
 
-| written | zsh 5.9.2 | bash · ksh93 · dash · ash |
-| --- | --- | --- |
-| `cat <&5`, `<&55`, `<&-`, `<&p`, `3<&4` | runs | runs |
-| `cat <&"5"`, `<&$'5'` | runs | runs |
-| `cat <&5$v`, `<&${v}5`, `<&"5""$v"` | runs | runs |
-| `cat <&$(echo 5)5`, `<&5$(echo x)` | runs | runs |
-| `cat <&$v`, `<&"$v"`, `<&${v}`, `<&$(echo 5)` | `file number expected` | runs |
-| `cat <&x`, `<&5x`, `<&{fd}`, ``<&`echo 5` `` | `file number expected` | runs |
-| `cat <&$v5`, `<&$v$w`, `<&x$v`, `<&"x"$v` | `file number expected` | runs |
-| `cat <&${v}x`, `<&""$v`, `exec {fd}<&$v` | `file number expected` | runs |
-| `cat >&$v`, `>&x`, `>&p`, `2>&$v` | runs | runs |
+| written | zsh 5.9.2 | bash 5.3.20 | ksh93u+ | dash 0.5.12 | BusyBox ash |
+| --- | --- | --- | --- | --- | --- |
+| `head -1 <&5`, `<&"5"` | the first line | the same | the same | the same | the same |
+| `head -1 <&$v`, `<&"$v"`, `<&${v}` | the first line | the same | the same | the same | the same |
+| `head -1 <&$(echo 5)`, ``<&`echo 5` ``, `<&""$v` | the first line | the same | the same | the same | the same |
+| `head -1 <&5$v`, `<&${v}5`, `<&$(echo 5)5`, `<&$v$w` | `55: bad file descriptor` | `5$v: Bad file descriptor` | `55: cannot open` | `Syntax error: Bad fd number` | `dup2(55,0): Bad file descriptor` |
+| `head -1 <&x`, `<&5x`, `<&${v}x`, `<&x$v`, `<&"x"$v` | `file number expected` | `x: ambiguous redirect` | `x: bad file unit number` | `Syntax error: Bad fd number` | `redir error` |
+| `head -1 <&5$(echo q)` | `file number expected` | `5$(echo q): ambiguous redirect` | `5q: bad file unit number` | `Syntax error: Bad fd number` | `redir error` |
+| `head -1 <&$v5` (the parameter `v5`, unset) | `file number expected` | `$v5: ambiguous redirect` | `: cannot open` | `Syntax error: Bad fd number` | `redir error` |
 
-It is the **literal text the parser already holds** rather than what the word
-would come to: the spans an expansion fills are passed over, and what is left
-has to be a non-empty run of digits — or the whole operand is the `-` that
-closes the descriptor or the `p` that names the coprocess's.
+**The rule is one line: expand the word, and what it comes to has to be a
+non-empty run of digits** — or the whole of it is the `-` that closes the
+descriptor or, where a shell has one, the `p` that names the coprocess's.
 
-Two pairs say that twice over. `5$v` against `$v5`: a digit the parser can see
-is enough and the expansion beside it is not looked into, and `$v5` is the
-*parameter* `v5`, one span with no literal text at all. `5x` against `5$v`:
-literal text that is not a digit refuses whatever stands beside it.
+The `5$v` row is what says the check is on the **expansion** and not on text
+the parser can see: with `v=5` the word comes to `55`, which *is* a file number
+and simply is not open, so every column says something about a descriptor
+rather than about a word. `$v5` is the parameter `v5`, unset, so it comes to
+nothing and is refused — the same rule, not a second one. And `5$(echo q)`
+comes to `5q`, refused, where a reading of the literal text would have taken
+it.
 
-The last row is the control and is why this is not "a duplicating
-redirection's operand": `>&` also spells *send both streams to this file*, so
-a word there is a path.
+Two rows are the control that the *word* is read in every column, and that a
+parameter is as good as a digit on both sides of the pair:
 
-The refusal gives up the **line** and not the file — the line before it runs,
-the line after it runs, and `$?` is 1 — which is the shape
-`syntax.File.Refused` already carries for a syntax error inside a compound
-assignment's parentheses. `zsh -n` reports it with the script never run, which
-is how it was found: one of zsh's own shipped functions, `tcp_point`,
-redirects from a descriptor held in a parameter and real `zsh -n` refuses the
-file where this parser accepted it (#3144).
+| written | every column |
+| --- | --- |
+| `exec {fd}<&$v` | status 0 |
+| `exec 6>out; v=6; echo hi >&$v` | `hi` in `out`, status 0 |
 
-One row is measured and not modeled: on a line holding more than one command,
-`cat <&$v; echo hi` runs the `echo` there and gives up only the command.
-Giving up the line is as far as `File.Refused` reaches.
+`>&` is not the same question and never was: that operator also spells *send
+both streams to this file* in the columns that kept the csh spelling, so a word
+there may be a path — `print hi >&x` writes a file called `x` in zsh and in
+bash alike. What zsh does with each of them is `GreatAmpTarget`'s question.
+Only `print hi >&p` is zsh's own, at `coprocess: bad file descriptor` and 1.
 
-Grammar flag: `InputDuplicateOperandIsAFileNumber` — `zsh`: on; everything
-else: off.
+**This section used to say the refusal was a *parse* refusal, and it was
+wrong.** The measurement behind that reading was taken with the parameters
+**unset**, under `zsh -n`, where a command substitution does not run either —
+so every row expanded to nothing and every row read as a refusal. Three probes
+separate the two hypotheses, and none of them had been run:
+
+    zsh -c 'if false; then cat <&foo; fi; echo done'   → `done`, nothing else
+    zsh -c 'f(){ cat <&foo; }; echo done'              → `done`, nothing else
+    zsh -c 'for i in 1 2; do cat <&foo; done'          → the sentence twice
+
+A parse refusal fires once, and fires whether or not the command is ever
+reached. This one fires once per **execution** and not at all when the command
+is not reached, which is a run-time refusal and nothing else.
+
+`zsh -n` reporting it is that same artifact rather than evidence against this:
+under `NO_EXEC` nothing has set the parameter, so the operand is empty and the
+sentence is an honest answer to the question zsh asked. `zsh -n -c 'r=3; cat
+<&$r'` says `file number expected` while the same line without `-n` runs, which
+is the whole of it. That is also what #3144 saw in zsh's own shipped
+`tcp_point`: a `zsh -n` refusal of a line the shell runs.
+
+So there is **no grammar flag here**. The operand is read where the redirection
+is set up, and the refusal is
+`interp.Diagnostics.DuplicationTargetIsNotADescriptor` with
+`interp.Semantics.DuplicationTargetError` for what becomes of the shell — zsh
+ends it on a builtin and carries on for an external command, dash and BusyBox
+ash end it either way, bash and ksh93 carry on either way. `semantics.md` holds
+that axis and its panel (#3144, #3826).
 
 ## `&>` is the dangerous one
 

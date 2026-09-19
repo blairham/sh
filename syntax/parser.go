@@ -2581,9 +2581,6 @@ func (p *Parser) parseRedirect() *Redirect {
 	// rebuilt from the spans: `$e` and `${e}` are the same word and not the
 	// same text, and it is the text that goes in the message.
 	r.Text = p.textBetween(p.tok.Pos, p.tok.End)
-	if p.refuseANonFileNumber(r) {
-		return nil
-	}
 	if r.Op == TokTLess && p.refuseProcSubstOutOfPlace(r.Word) {
 		// A here-string's operand is text to be fed in rather than a file to
 		// be opened, and the dialect that admits `cat < <(:)` refuses
@@ -2611,81 +2608,6 @@ func (p *Parser) parseRedirect() *Redirect {
 	}
 	p.next()
 	return r
-}
-
-// refuseANonFileNumber refuses a `<&` whose operand is not one, for the
-// dialect that will not read a word there.
-//
-// The **literal text** of the word rather than what it would come to: the
-// spans an expansion fills are passed over, and what the parser already holds
-// has to be a run of digits. Measured 2026-09-18 on zsh 5.9.2 under `-f`,
-// which is the only column that refuses anything here:
-//
-//	cat <&5     cat <&55    cat <&-     cat <&p     cat 3<&4    accepted
-//	cat <&"5"   cat <&$'5'                                      accepted
-//	cat <&5$v   cat <&${v}5   cat <&"5""$v"   cat <&$(echo 5)5  accepted
-//	cat <&5$(echo x)                                            accepted
-//	cat <&$v    cat <&"$v"  cat <&${v}  cat <&$(echo 5)         refused
-//	cat <&x     cat <&5x    cat <&{fd}  cat <&`echo 5`          refused
-//	cat <&$v5   cat <&$v$w  cat <&x$v   cat <&"x"$v             refused
-//	cat <&${v}x cat <&""$v                                      refused
-//
-// The two halves of that are each measured twice over. `5$v` against `$v5`
-// is the first: a digit the parser can see is enough, and an expansion beside
-// it is not looked into — and `$v5` is the *parameter* `v5`, one span with no
-// literal text at all, which is why it goes the other way. `5x` against `5$v`
-// is the second: literal text that is not a digit refuses whatever stands
-// beside it.
-//
-// `p` is the coprocess's descriptor and `-` closes the input; both are the
-// whole operand where they are taken at all. See
-// [Dialect.InputDuplicateOperandIsAFileNumber].
-func (p *Parser) refuseANonFileNumber(r *Redirect) bool {
-	if !p.dialect.InputDuplicateOperandIsAFileNumber || r.Op != TokLessAmp {
-		return false
-	}
-	if isAFileNumberWord(r.Word) {
-		return false
-	}
-	p.refused = &Error{
-		Pos: r.Word.Pos(), Kind: ErrFileNumber,
-		Token: r.Text, Expected: "a file number",
-		Msg: "file number expected",
-	}
-	// The line rather than the file, which is measured: the line before it
-	// runs, the line after it runs, and `$?` is 1. What is left of this one
-	// is read and thrown away, so only reaching the end of it matters — see
-	// [File.Refused], which is where the driver picks it up. Reading the
-	// whole file at once has no next line to go on to and carries it into the
-	// parser's own error instead, which is what `-n` reports.
-	for !p.at(TokNewline) && !p.at(TokEOF) && p.err == nil {
-		p.next()
-	}
-	return true
-}
-
-// isAFileNumberWord reports whether the word may stand as a `<&` operand: the
-// literal text it holds is a non-empty run of digits, or the whole of it is
-// the `-` that closes the descriptor or the `p` that names the coprocess's.
-func isAFileNumberWord(w *Word) bool {
-	if w == nil {
-		return false
-	}
-	digits := false
-	for _, sp := range w.Spans {
-		if sp.Kind != Literal {
-			// What an expansion produces is not the parser's to read, and
-			// the column that refuses this does not look into it.
-			continue
-		}
-		for i := 0; i < len(sp.Value); i++ {
-			if c := sp.Value[i]; c < '0' || c > '9' {
-				return w.Literal() == "-" || w.Literal() == "p"
-			}
-			digits = true
-		}
-	}
-	return digits
 }
 
 // assignHead is the name half of an assignment, already taken apart: the name,

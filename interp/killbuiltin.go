@@ -84,11 +84,12 @@ type signalEntry struct {
 	// no handler for: the script stops there rather than running one more
 	// command in a process the kernel has already been told to end.
 	//
-	// The stopping signals are deliberately not fatal and neither is IO,
-	// whose default is to end the process on Linux and to be ignored on a
-	// BSD. Getting that one wrong in the safe direction costs an ordering;
-	// getting it wrong in the other direction would stop a script that was
-	// not going to die.
+	// The stopping signals are deliberately not fatal. IO is neither value
+	// in the shared table, because it is not one fact: its default action
+	// ends the process on Linux and is to discard the signal on a BSD. Two
+	// kernels having a signal is a different question from what the signal
+	// does, so the *name* stays shared and the answer comes from
+	// platformSignalDefaults below.
 	Fatal bool
 }
 
@@ -114,6 +115,9 @@ var sharedSignals = []signalEntry{
 	{"CHLD", syscall.SIGCHLD, false},
 	{"TTIN", syscall.SIGTTIN, false},
 	{"TTOU", syscall.SIGTTOU, false},
+	// IO's Fatal is the BSD's here and platformSignalDefaults holds the
+	// other kernel's, which is the one entry of this table where the two
+	// disagree — measured a signal at a time, below.
 	{"IO", syscall.SIGIO, false},
 	{"XCPU", syscall.SIGXCPU, true},
 	{"XFSZ", syscall.SIGXFSZ, true},
@@ -124,7 +128,25 @@ var sharedSignals = []signalEntry{
 	{"USR2", syscall.SIGUSR2, true},
 }
 
-var knownSignals = append(append([]signalEntry{}, sharedSignals...), platformSignals...)
+// knownSignals is the shared table plus this platform's own names, with the
+// shared table's default actions corrected where this kernel's differ.
+//
+// The correction is a third thing the platform file carries and it is not the
+// same question as the other two. platformSignals is which signals *exist*
+// here; platformSignalMax is how far `kill(2)` will take a number; and
+// platformSignalDefaults is what a signal both kernels have *does* when
+// nothing has arranged for it. A signal can be shared and still end the
+// process on one machine and be discarded on the other, which is exactly what
+// SIGIO is, and a shared table has to pick one of the two answers (#3703).
+var knownSignals = func() []signalEntry {
+	all := append(append([]signalEntry{}, sharedSignals...), platformSignals...)
+	for i, k := range all {
+		if fatal, ok := platformSignalDefaults[k.Name]; ok {
+			all[i].Fatal = fatal
+		}
+	}
+	return all
+}()
 
 // signalInPlatformRange reports whether a number is a signal on this kernel,
 // whether or not the table above has a name for it.

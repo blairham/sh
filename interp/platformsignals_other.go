@@ -14,3 +14,8 @@ package interp
 var platformSignals []signalEntry
 
 const platformSignalMax = 0
+
+// And no corrections to the shared table's default actions, for the same
+// reason: a kernel nobody ran is a kernel nobody measured SIGIO on. The
+// shared value stands, which is the BSD's (#3703).
+var platformSignalDefaults map[string]bool

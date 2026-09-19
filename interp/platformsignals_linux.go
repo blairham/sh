@@ -28,3 +28,24 @@ var platformSignals = []signalEntry{
 }
 
 const platformSignalMax = 64
+
+// platformSignalDefaults are the shared table's entries whose default action
+// on this kernel is not the value that table carries.
+//
+// SIGIO is the one. Its default action here is to **terminate** the process,
+// where on the BSD the shared value was written against it is discarded, so
+// a shell that sends itself one with nothing trapped stops there.
+//
+// Measured 2026-09-19, BusyBox v1.37.0 in the digest-pinned alpine image with
+// `cmd/ash` cross-compiled for linux/arm64 and run in the same container, each
+// probe a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+// `kill -s IO $$` writes `I/O possible` and ends the shell at 157, which is
+// 128 + 29, while `trap 'echo hit' IO; kill -s IO $$` prints `hit` and is 0.
+//
+// It is the only one, and that is measured rather than read off the two
+// manuals: every other entry of the shared table whose default action could
+// split was sent to the shell in the same container, and URG, CHLD, CONT,
+// WINCH, TSTP, TTIN and TTOU are all silent at 0 there while ABRT, SYS, XCPU,
+// XFSZ, VTALRM and PROF all end it at 128 + their number — the shared table's
+// values for every one of them.
+var platformSignalDefaults = map[string]bool{"IO": true}

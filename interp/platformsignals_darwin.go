@@ -29,3 +29,9 @@ var platformSignals = []signalEntry{
 }
 
 const platformSignalMax = 31
+
+// Nothing splits here: the shared table's default actions were written
+// against this kernel, SIGIO's discard included, so there is nothing for this
+// map to correct. The other platform's copy is where the difference is
+// recorded (#3703).
+var platformSignalDefaults map[string]bool

@@ -29,14 +29,25 @@ func init() {
 }
 
 func biEnable(r *Runner, _ context.Context, args []string) int {
-	rest, opts, code := r.builtinOptions("enable", args, "anps")
+	known := "anps"
+	if r.ask(r.sem().EnableUnloadsABuiltin, "`enable -d` naming the operand rather than the letter") {
+		known = "adnps"
+	}
+	rest, opts, code := r.builtinOptions("enable", args, known)
 	if code != 0 {
 		return code
 	}
 	off := containsByte(opts, 'n')
 	if len(rest) == 0 {
+		// `-d` with no name adds nothing to the listing: measured
+		// 2026-09-18, the shell with the letter writes byte for byte what a
+		// bare `enable` writes. So it is read and then falls through here
+		// like any other letter that named nothing.
 		r.listBuiltins(off, containsByte(opts, 's'))
 		return 0
+	}
+	if containsByte(opts, 'd') {
+		return r.unloadBuiltins(rest)
 	}
 	status := 0
 	for _, name := range rest {
@@ -112,4 +123,39 @@ func containsByte(s string, c byte) bool {
 		}
 	}
 	return false
+}
+
+// unloadBuiltins is `enable -d`: take away a builtin that was loaded from a
+// file, of which this shell has none and can have none.
+//
+// The letter is read rather than refused, and that is the whole of what this
+// answers. Nothing here is loadable — there is no `enable -f`, and a shared
+// object is not a thing a Go program opens — so every name reaches one of two
+// refusals and neither is ever wrong for the shell it is asked of:
+//
+//	a name that is not a builtin at all   `enable: NAME: not a shell builtin`
+//	a builtin that came from nowhere      `enable: NAME: not dynamically loaded`
+//
+// Both at status 1, which is the builtin's own and not the 2 a refused option
+// carries. Measured 2026-09-18, and the discriminator between the two rows is
+// that they exist at all: a shell that read the letter and then answered
+// `not a shell builtin` for `echo` would be saying something false about its
+// own command.
+//
+// The sentences are written here rather than in Diagnostics because the
+// letter is one dialect's and so is the wording — see
+// Semantics.EnableUnloadsABuiltin, which is what a shell without the letter
+// answers, and `enable: NAME: not a shell builtin` above, which is spelled
+// the same way for the same reason.
+func (r *Runner) unloadBuiltins(names []string) int {
+	status := 0
+	for _, name := range names {
+		if !r.isBuiltin(name) {
+			r.diagf("enable: %s: not a shell builtin\n", name)
+		} else {
+			r.diagf("enable: %s: not dynamically loaded\n", name)
+		}
+		status = 1
+	}
+	return status
 }

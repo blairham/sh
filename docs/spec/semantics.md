@@ -8983,6 +8983,20 @@ the Unregister lists were checked rather than assumed:
 command of that name that does something else entirely, so ksh does not
 unregister it but replaces it.
 
+**The two shells that have it disagree about one letter**, and the letter is
+`Semantics.EnableUnloadsABuiltin`. `-d` takes away a builtin loaded from a
+shared object, which neither this shell nor any Go program can load — so what
+the axis really decides is which refusal a script probing for the feature
+meets. Measured 2026-09-18, `enable -d notbuiltin`: bash 5.3.20 and 3.2.57
+both answer about the **operand** (`enable: notbuiltin: not a shell builtin`,
+1), and zsh 5.9.2 about the **letter** (`enable: bad option: -d`, 1). So the
+letter parses where the axis says yes and every name reaches one of two
+sentences — `not a shell builtin` for a name that is not one, and `enable:
+NAME: not dynamically loaded` for one that is, because nothing loaded it.
+Accepting the letter is not a claim that `enable -f` works. With no operand
+the letter adds nothing: the listing it writes is byte for byte a bare
+`enable`'s.
+
 **This is not a hole in `core.md`'s boundary.** That boundary is about the
 *language* — what parses, and what identical syntax means. Which builtins
 a shell has is neither: ksh93 simply lacks `local` and reports a command
@@ -9048,15 +9062,35 @@ What was built, all through the extension seam — registered builtins in each
   anything matched (`help -s '*pt'` is `compopt` and `shopt` and **not**
   `getopts`, and `help -s 'z*'` writes the header and then complains).
 
-  Two topics the real shell lists are absent and neither is an oversight.
-  `logout` is a builtin this shell does not have, and documenting it would be
-  documenting a shell this is not. `variables` is the one topic whose
-  "synopsis" is a sentence about what the topic contains rather than a shape a
-  script can act on, so it is description under a name and falls the same side
-  of the line as the paragraphs. A bare `help` writes one topic per line
-  rather than the real shell's version banner and two truncated columns: the
-  banner is a claim this shell must not make, and what is left is the same
-  information its own `help -s ''` writes.
+  One topic the real shell lists is absent and it is not an oversight.
+  `variables` is the one whose "synopsis" is a sentence about what the topic
+  contains rather than a shape a script can act on, so it is description under
+  a name and falls the same side of the line as the paragraphs. `logout` was
+  absent beside it, on the stated ground that this shell does not have the
+  builtin — which it does, and has since `dialect/bash/logout.go`; it is a
+  topic now (#3055).
+
+  **A bare `help` writes the two-column listing** and stops short of the
+  header above it, which is where the line really falls. The header is eight
+  lines: a version banner this shell must not claim, and four sentences of
+  another project's prose. The *layout* is neither — how many columns a
+  listing has, how wide a cell is and what marks a cut one are measurements
+  about a program's output. Read out of the real shell's own bytes on
+  2026-09-18 at COLUMNS 8, 10, 12, 40, 60, 80, 100 and 200: a column is
+  `COLUMNS / 2` wide rounding down, each line opens with one space, the left
+  cell is cut to `COLUMNS/2 - 2` and padded to it, then two spaces, then the
+  right cell cut to `COLUMNS/2 - 3`; a cut cell's last character is `>`; a row
+  with no right cell is not padded; and the order is column-major, so with 77
+  topics and 39 rows the left column is the first 39 in sorted order. An
+  unusable `COLUMNS` — unset, not a number, negative, or anything below 8 —
+  lays out as 80.
+
+  This was one topic per line for a while, on the reasoning that the banner
+  ruled the whole listing out. The header and the layout are different kinds
+  of thing and treating them as one cost 28 lines a call. The one-per-line
+  form is still what `help -s ''` writes, and that is a **different answer**
+  from no operand rather than the same one: measured the same day, the empty
+  operand writes 77 lines of `name: synopsis` where no operand writes 47.
 
 - **ksh93 `whence`** (dialect/ksh/whence.go): bare, `-v`, `-p`, `-q`, `-a` —
   the bare mode delegating to the same lookup `command -v` uses, `-v` to the

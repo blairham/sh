@@ -39,6 +39,26 @@ command -v true > /dev/null 2>&1; printf 'command -v a builtin -> %s\n' "$?"
 ( hash -t prog ) > /dev/null 2>&1; printf 'hash -t -> %s\n' "$?"
 ( hash -l ) > /dev/null 2>&1; printf 'hash -l -> %s\n' "$?"
 
+# And the listing itself is dash's alone: bare absolute paths, one per line,
+# where bash prints a `hits command` table and ksh93 and zsh print
+# `name=/path`.
+#
+# It is asked **through `sort`**, which is the whole of the case. dash lists
+# in the order of its own hash table and this shell lists in the order the
+# names were first run, so the two share no prefix once there are three names
+# — `sed ls cat` run in that order is `cat`, `sed`, `ls` there and `sed`,
+# `ls`, `cat` here. That order is a permutation of whatever a script happened
+# to run, decided by a hash function and a table size that no manual states
+# and nothing a script can depend on; reproducing it would mean fitting an
+# implementation's internals, which is out of reach here by rule. Sorting
+# grades the set and the format and leaves the bucket walk alone, which is
+# the part of the row that is a fact about dash rather than about its table
+# (#2897).
+hash -r
+for n in sed ls cat; do $n < /dev/null > /dev/null 2>&1; done
+hash | sort
+printf 'the sorted listing -> %s\n' "$?"
+
 # `command -v` answers for the grammar *this* shell has. `select`, `function`,
 # `[[` and `]]` are constructs dash does not have, so they are ordinary names
 # it cannot find; `time` is a keyword in the other three and is the program of

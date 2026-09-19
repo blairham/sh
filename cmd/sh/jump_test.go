@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,7 +62,13 @@ func jumpTree(t *testing.T, root string, parts ...string) string {
 // jump runs the builtin the way a prompt would.
 func jump(t *testing.T, r *interp.Runner, args ...string) int {
 	t.Helper()
-	return jumpBuiltin(boundary.Boundary{}, "SESSION")(r, t.Context(), args)
+	return jumpGated(t, boundary.Boundary{}, r, args...)
+}
+
+// jumpGated is the same with a policy in front of it.
+func jumpGated(t *testing.T, b boundary.Boundary, r *interp.Runner, args ...string) int {
+	t.Helper()
+	return jumpBuiltin(b, "SESSION")(r, t.Context(), args)
 }
 
 // A word names the highest-ranked directory holding it, and the shell is
@@ -310,5 +317,42 @@ func TestTheJumpKeepsTheDialectsOwnStartLine(t *testing.T) {
 	sh.StartLine(&interp.Runner{})
 	if called != 1 {
 		t.Fatalf("the dialect's StartLine ran %d times, want 1", called)
+	}
+}
+
+// A directory the policy hides is skipped exactly as a deleted one is, and the
+// jump lands on the next match instead.
+//
+// internal/boundary's own guard is what asked for this: a ranking is built out
+// of paths a person's earlier sessions chose, so every one of them is a path
+// the policy is about, and a probe is an oracle. A jump that could stat what
+// the policy hides would answer "that directory is there" about a tree nothing
+// else in this shell will admit to.
+func TestAHiddenDirectoryIsSkippedLikeADeletedOne(t *testing.T) {
+	root := t.TempDir()
+	hidden := jumpTree(t, root, "projhidden")
+	open := jumpTree(t, root, "projopen")
+	store, _ := seedStore(t,
+		blocks.Record{Command: "ls", Cwd: open, Start: minutesAgo(50)},
+		blocks.Record{Command: "ls", Cwd: hidden, Start: minutesAgo(20)},
+		blocks.Record{Command: "ls", Cwd: hidden, Start: minutesAgo(10)},
+	)
+	b := boundary.Boundary{Gate: interp.GateFunc(func(_ context.Context, a interp.Action) interp.Decision {
+		if a.Path == hidden {
+			return interp.Deny
+		}
+		return interp.Allow
+	})}
+	r, _, errs := jumpShell(t, store, root)
+	if code := jumpGated(t, b, r, "proj"); code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs.String())
+	}
+	if r.Dir != open {
+		t.Fatalf("landed in %q, want %q — the hidden directory was not skipped", r.Dir, open)
+	}
+	// And the refusal says nothing about the hidden path, which is the half a
+	// probe's silence is for.
+	if strings.Contains(errs.String(), hidden) {
+		t.Fatalf("stderr %q names the hidden directory", errs.String())
 	}
 }

@@ -123,7 +123,7 @@ func jumpBuiltin(b boundary.Boundary, session string) interp.Builtin {
 		if list {
 			return jumpList(r, ranked, words)
 		}
-		return jumpTo(r, ctx, ranked, words)
+		return jumpTo(r, ctx, b, ranked, words)
 	}
 }
 
@@ -184,7 +184,20 @@ func jumpList(r *interp.Runner, ranked []blocks.DirRank, words []string) int {
 // silently, and it must not be a hang" — and the two refusals below are the
 // difference between *nothing matched* and *everything that matched is gone*,
 // which are different things to have to fix.
-func jumpTo(r *interp.Runner, ctx context.Context, ranked []blocks.DirRank, words []string) int {
+//
+// **Through the boundary and not through os.Stat**, which
+// internal/boundary's own guard caught on the first run of this and was right
+// to. A ranking is built out of paths a *person's earlier sessions* chose, so
+// every one of them is a path the policy is about; and a probe is an oracle,
+// so a jump that could stat what the policy hides would answer "that
+// directory is there" about a tree nothing else in this shell will admit to.
+// Boundary.Stat answers a refusal exactly as it answers an absent path, which
+// is the behavior this loop already wanted: a directory it may not look at is
+// skipped like one that is gone.
+func jumpTo(
+	r *interp.Runner, ctx context.Context, b boundary.Boundary,
+	ranked []blocks.DirRank, words []string,
+) int {
 	matched := jumpMatches(ranked, words)
 	for _, d := range matched {
 		if d.Dir == r.Dir {
@@ -194,7 +207,7 @@ func jumpTo(r *interp.Runner, ctx context.Context, ranked []blocks.DirRank, word
 			// the match they meant behind a jump that does nothing.
 			continue
 		}
-		if info, err := os.Stat(d.Dir); err != nil || !info.IsDir() {
+		if info, err := b.Stat(ctx, d.Dir); err != nil || !info.IsDir() {
 			continue
 		}
 		cd, ok := r.Builtin("cd")

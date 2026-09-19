@@ -85,12 +85,19 @@ func NewTheme(get func(name string) (string, bool)) *Theme {
 // DrawPrompt draws one prompt, or reports that no configuration asked for one.
 func (t *Theme) DrawPrompt(info PromptInfo) (ThemedPrompt, bool) {
 	settings := t.resolve()
-	if len(settings.List("LEFT_ELEMENTS")) == 0 && len(settings.List("RIGHT_ELEMENTS")) == 0 {
+	if !settings.Has("LEFT_ELEMENTS") && !settings.Has("RIGHT_ELEMENTS") {
 		// Nothing asked for a theme. Answering "not drawing" rather than
 		// drawing a bare character is what keeps a wired theme from
 		// overriding a prompt somebody set: the engine's own bare prompt is
 		// for a configuration that names no elements, not for a session that
 		// named no configuration.
+		//
+		// Whether the setting is *there*, not whether it has anything in it.
+		// Set-to-empty is an answer everywhere else in this namespace and it
+		// is one here: emptying the elements is a themed prompt with no
+		// segments in it, and unsetting them is no theme at all. Reading the
+		// two the same way would leave no way to say the first, and would
+		// make a preset that empties a side turn the whole theme off.
 		return ThemedPrompt{}, false
 	}
 

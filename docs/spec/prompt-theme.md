@@ -882,10 +882,16 @@ Those are two different questions and conflating them would take a prompt
 away from somebody who set one. A front end wires a theme into every
 interactive session — it is a capability of the substrate, so every
 dialect binary carries one — and **the theme draws only when a
-configuration asks for it**: at least one element named on one side,
-whether by a variable, a file or a preset. Otherwise it reports that it is
-not drawing and the prompt is the person's own parameter, exactly as it
+configuration asks for it**: an elements setting *present* on one side,
+whether from a variable, a file or a preset. Otherwise it reports that it
+is not drawing and the prompt is the person's own parameter, exactly as it
 would be with no theme wired at all.
+
+Present, not non-empty. **Set-to-empty is an answer here as everywhere
+else in this namespace**: emptying the elements is a themed prompt with no
+segments in it, and unsetting them is no theme at all. Reading the two the
+same way would leave no way to say the first, and would make a preset that
+empties one side turn the whole theme off.
 
 So the engine's bare prompt is for *a configuration that names no
 elements*, not for *a session that named no configuration*. The second is

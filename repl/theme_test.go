@@ -338,3 +338,22 @@ func writeThemeFile(t *testing.T, path, text string, mtime time.Time) {
 		t.Fatal(err)
 	}
 }
+
+// Emptying the elements and never naming them are different answers, which is
+// the rule the whole namespace is built on. Emptied is a themed prompt with
+// no segments; unset is no theme, and the person's own parameter.
+func TestAnEmptiedElementsListIsAThemeAndAnAbsentOneIsNot(t *testing.T) {
+	emptied := NewTheme(newTestRunner(map[string]string{"SH_PROMPT_LEFT_ELEMENTS": ""}).GetVar)
+	drawn, drawing := emptied.DrawPrompt(PromptInfo{})
+	if !drawing {
+		t.Error("emptying the elements turned the theme off, where it should draw a bare prompt")
+	}
+	if drawn.Text != "$ " {
+		t.Errorf("the emptied theme drew %q, want the bare prompt", drawn.Text)
+	}
+
+	absent := NewTheme(newTestRunner(map[string]string{}).GetVar)
+	if _, drawing := absent.DrawPrompt(PromptInfo{}); drawing {
+		t.Error("a session that named no elements at all drew a theme")
+	}
+}

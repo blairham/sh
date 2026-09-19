@@ -332,7 +332,7 @@ func mathAbs(_ *interp.Runner, call interp.MathCall) (interp.MathValue, error) {
 		// `$(( abs(-9223372036854775808) ))` are both 9223372036854775807
 		// there, and the first of those is already the most negative value
 		// by the time abs sees it. See
-		// Semantics.ArithValuesAreCarriedInADouble.
+		// Semantics.ArithValuesAreCarriedInAFloat.
 		if n == math.MinInt {
 			return interp.MathInt(math.MaxInt), nil
 		}

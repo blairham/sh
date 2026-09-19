@@ -72,7 +72,7 @@ type arithError struct {
 	// word holds. Every reference shell answers *something* for one and the
 	// six answers are six different readings; the only one this shell has is
 	// ksh93's, where the numeral simply becomes the double its arithmetic is
-	// carried in. See Semantics.ArithValuesAreCarriedInADouble, and #3202
+	// carried in. See Semantics.ArithValuesAreCarriedInAFloat, and #3202
 	// for the other columns.
 	pastTheWord bool
 	// complete says the message is the whole diagnostic and must not be
@@ -186,7 +186,7 @@ type arithNum struct {
 	// wide says the value is an *integer* one the machine word cannot hold,
 	// so it is carried in f with the floats. Only the shell whose arithmetic
 	// is a C double throughout can produce one — see
-	// Semantics.ArithValuesAreCarriedInADouble — and the distinction is not
+	// Semantics.ArithValuesAreCarriedInAFloat — and the distinction is not
 	// cosmetic: `$(( 2**64 / 3 ))` there is an integer division of the
 	// saturated value, 3074457345618258432, and not 6.14891469123652e+18.
 	// So the *kind* is integer while the *representation* is the double,
@@ -1577,7 +1577,7 @@ func (sh *Runner) carriedInADouble(dbl float64, exact int) arithNum {
 	if fits && i == exact {
 		return intNum(exact)
 	}
-	if !sh.ask(sh.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+	if !sh.ask(sh.sem().ArithValuesAreCarriedInAFloat, "arithmetic carried in a float rather than the machine word") {
 		return intNum(exact)
 	}
 	if fits {
@@ -2198,7 +2198,7 @@ func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 			var ae arithError
 			if errors.As(err, &ae) && ae.pastTheWord {
 				if r.dialect().ArithFloat &&
-					r.ask(r.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+					r.ask(r.sem().ArithValuesAreCarriedInAFloat, "arithmetic carried in a float rather than the machine word") {
 					// A numeral with an explicit radix is read in the
 					// **unsigned** word first, and only becomes the double
 					// when that overflows. `$(( 0xffffffffffffffff ))` is -1
@@ -2498,7 +2498,7 @@ func (r *Runner) formatNum(n arithNum) string {
 	}
 	out := strconv.FormatFloat(n.f, 'g', digits, 64)
 	if i, fits := intFromDouble(n.f); fits && itoa(i) != out &&
-		r.ask(r.sem().ArithValuesAreCarriedInADouble, "arithmetic carried in a C double") {
+		r.ask(r.sem().ArithValuesAreCarriedInAFloat, "arithmetic carried in a float rather than the machine word") {
 		// The shell whose every arithmetic value is a C double writes one as
 		// an **integer** whenever a saturating `(intmax_t)` cast of it
 		// converts back to the same double, and in floating notation when it

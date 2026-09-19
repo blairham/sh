@@ -26,7 +26,7 @@ import (
 //
 // Every column answers, and every column reports status 0 — refusing the
 // numeral is a reading nobody has. ksh93's is not one of these:
-// [Semantics.ArithValuesAreCarriedInADouble] is asked before this axis and
+// [Semantics.ArithValuesAreCarriedInAFloat] is asked before this axis and
 // answers the question there instead.
 //
 // Not by going straight to the double, which the `-1` in the table above has

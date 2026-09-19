@@ -16814,9 +16814,18 @@ type Semantics struct {
 	// separate row the panel answers differently again (bash 5.3 refuses it
 	// where bash 3.2 answers zero), and is not this axis.
 	ArithEmptyRadixDigitsAreZero Answer
-	// ArithValuesAreCarriedInADouble keeps every arithmetic value in a C
-	// double rather than in the machine word, which ksh93 does and no other
-	// column on the panel does.
+	// ArithValuesAreCarriedInAFloat keeps every arithmetic value in a
+	// floating-point carrier rather than in the machine word, which ksh93
+	// does and no other column on the panel does.
+	//
+	// **The carrier is a float and the width is the platform's**, which is
+	// why this is not named for a double any more. It was
+	// `ArithValuesAreCarriedInADouble` until #3695, and that name stated a
+	// fact about a C type that holds on exactly one of the three platforms
+	// the same build runs on — the measurement is below and it is a `long
+	// double`, which is a `double` only where the ABI says so. What the axis
+	// really draws is float carriage against integer-word carriage, and that
+	// line is in the same place whatever the float's width.
 	//
 	// This replaced ArithOverflowSaturates, which recorded the wrong model
 	// from a probe that could not tell the two apart. That axis was measured
@@ -16855,10 +16864,33 @@ type Semantics struct {
 	// 64-bit integer path, which `$(( 2**64 + 1 ))` then rules out by coming
 	// back exact on Linux.
 	//
-	// This axis holds the macOS reading on either kernel, because the panel
-	// the record is measured from is the macOS one. Whether a dialect binary
-	// on Linux should answer its own kernel's way is open, and is a decision
-	// about what the panel means rather than a measurement.
+	// Three platforms, three widths, one source. Measured again 2026-09-19 on
+	// the same pinned Debian bullseye digest built for both architectures,
+	// with `$(( 2**n + 1 - 2**n ))`, which is `1` while the significand still
+	// holds `2^n + 1` and `0` once it cannot:
+	//
+	//	first n answering 0     53        64            113
+	//	significant digits      15        18            33
+	//	overflow at             ~1e308    ~1.19e4932    ~1.19e4932
+	//	                        macOS     Linux amd64   Linux arm64
+	//	                        arm64
+	//
+	// Those are binary64, the x87 80-bit extended format and IEEE binary128 —
+	// the C `long double` of each target, since arm64 macOS is the one ABI
+	// where that type *is* a double. So there is no per-platform behavior in
+	// the shell to model: the shell asks its C library for the widest float it
+	// has, and three toolchains answer three ways.
+	//
+	// **This shell carries the macOS reading on every kernel, and that is a
+	// decision rather than a gap.** Two reasons. The panel the record is
+	// measured from is the macOS one, so a value chosen from a container would
+	// make this the single axis graded against a different column. And Go has
+	// no 80-bit or 128-bit float: matching either Linux column means a
+	// software float — `math/big.Float` at 64 or 113 bits, with its own
+	// rounding, printing and infinity rules — behind every `$(( ))`, for a
+	// difference that appears only past 2^53. The cost is that `cmd/ksh` on
+	// Linux is measurably not the ksh93 beside it for values past that point,
+	// and it is stated here rather than glossed.
 	//
 	// A written numeral rounds as an evaluated one does, and `/`, `%` and the
 	// bitwise operators still do their work on the word — the value goes back
@@ -16870,7 +16902,7 @@ type Semantics struct {
 	// Asked only where the two readings disagree — it is on the path of every
 	// integer operation, and an axis asked unconditionally would report itself
 	// unanswered on `$(( 1 + 1 ))` in a run with no dialect.
-	ArithValuesAreCarriedInADouble Answer
+	ArithValuesAreCarriedInAFloat Answer
 	// ArithNumeralPastTheWord is what a well-formed integer numeral larger
 	// than the machine word comes to: the panel gives it three readings and
 	// this shell had a fourth, which was to refuse it.
@@ -16882,7 +16914,7 @@ type Semantics struct {
 	//
 	// ksh93 is not one of them and is not asked: it has no word to overflow,
 	// and the numeral becomes the double its arithmetic is carried in —
-	// ArithValuesAreCarriedInADouble above, which is asked first and returns.
+	// ArithValuesAreCarriedInAFloat above, which is asked first and returns.
 	// The value left unspecified here for that column is the measurement, not
 	// a gap.
 	ArithNumeralPastTheWord NumeralPastTheWord
@@ -21937,7 +21969,7 @@ func PosixSemantics() Semantics {
 		ArithBaseIsAtMostTwoDigits:           No,
 		ArithBaseZeroReadsTheDigitsAsWritten: No,
 		ArithEmptyRadixDigitsAreZero:         No,
-		ArithValuesAreCarriedInADouble:       No,
+		ArithValuesAreCarriedInAFloat:        No,
 		// The standard says the shell evaluates in signed long arithmetic and
 		// says nothing about a numeral too large for one, so this follows the
 		// POSIX columns: bash as `sh` and BusyBox ash both let the unsigned

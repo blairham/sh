@@ -1120,7 +1120,7 @@ func Semantics() interp.Semantics {
 	// This was `ArithOverflowSaturates`, recorded from `$(( big + 1 ))` alone.
 	// That row is the maximum under either reading, so it could not tell a
 	// clamp from a double; `$(( big * 2 ))` can, and it is not a clamp.
-	s.ArithValuesAreCarriedInADouble = interp.Yes
+	s.ArithValuesAreCarriedInAFloat = interp.Yes
 	// A negative substring length is nothing at all here.
 	//
 	// A quoted `"${a[@]}"` is not next to it any more. This shell was the

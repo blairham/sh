@@ -14,7 +14,7 @@ import (
 // The shell that carries every arithmetic value in a C double writes one as an
 // integer whenever a saturating `(intmax_t)` cast of it converts back to the
 // same double. Whether a float is written that way is therefore
-// Semantics.ArithValuesAreCarriedInADouble's to answer — and it must be asked
+// Semantics.ArithValuesAreCarriedInAFloat's to answer — and it must be asked
 // **only where the two readings disagree**.
 //
 // That guard is not decoration. A shell with floats and no answer for the axis
@@ -31,7 +31,7 @@ func TestTheIntegerRenderingIsAskedOnlyWhereTheReadingsDisagree(t *testing.T) {
 	floats := func(d *syntax.Dialect) { d.ArithFloat = true }
 	unanswered := func(r *Runner) {
 		sem := CoreSemantics()
-		sem.ArithValuesAreCarriedInADouble = Unspecified
+		sem.ArithValuesAreCarriedInAFloat = Unspecified
 		dg := Diagnostics{ArithFloatDigits: 15}
 		r.Semantics, r.Diagnostics = &sem, &dg
 	}
@@ -50,7 +50,7 @@ func TestTheIntegerRenderingIsAskedOnlyWhereTheReadingsDisagree(t *testing.T) {
 	// produced its text, and what a shell with no dialect then exits is a
 	// question of its own and not this one's.
 	out, _ = runGrammar(t, "echo $((1e19/3))\n", floats, unanswered)
-	if !strings.Contains(out, "arithmetic carried in a C double") {
+	if !strings.Contains(out, "arithmetic carried in a float rather than the machine word") {
 		t.Errorf("a float the two readings write differently: out=%q, want the unanswered axis named", out)
 	}
 }

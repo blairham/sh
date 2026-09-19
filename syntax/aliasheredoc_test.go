@@ -130,3 +130,99 @@ func TestTheSeamIsABlankWhereABackslashDoesNotJoin(t *testing.T) {
 		})
 	}
 }
+
+// A body that runs out at the end of the input, which is the shape the value
+// route used to hand back: the delimiter written as the value's last line is
+// followed on that line by the rest of the alias word's line, so it is body,
+// and nothing below it ever closes the document.
+//
+// Measured 2026-09-19 from script files, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+// standard input on the null device, with `shopt -s expand_aliases` where bash
+// needs it: bash 5.3.20, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash
+// 1.37.0 all run `cat` with the three body lines `in alias`, `EOF; echo same`
+// and `echo after`, and zsh 5.9.2 does the same with its seam blank. Only bash
+// says anything on the way past, and what it says is the remark below.
+func TestAHereDocumentBodyRunsOutAtTheEndOfTheInput(t *testing.T) {
+	t.Parallel()
+	d := syntax.Core()
+	d.AliasBodyBackslashJoinsTheNextLine = true
+	const want = "cat <<EOF\nin alias\nEOF; echo same\necho after\nEOF"
+	for _, counts := range []bool{false, true} {
+		d.AliasBodyCountsLines = counts
+		got := parsedWith(t, d, table("hd", "cat <<EOF\nin alias\nEOF"),
+			"hd; echo same\necho after\n")
+		if got != want {
+			t.Errorf("counting %v: read as\n%s\nwant\n%s", counts, got, want)
+		}
+	}
+}
+
+// And the remark the probe made about it is re-sited onto the input, because
+// the two lines it carries are lines of the input and the text it was read
+// from was not.
+//
+// `At` is where the document began, which is where the alias word stands: the
+// operator is text of the value and has no line of its own. `Pos` is where the
+// input ran out, and it moves with Dialect.AliasBodyCountsLines exactly as
+// every other position in a substituted body does — the value's two newlines
+// are two lines of the input where that axis is on and none where it is off.
+func TestTheRemarkForABodyThatRanOutIsSitedOnTheInput(t *testing.T) {
+	t.Parallel()
+	d := syntax.Core()
+	d.AliasBodyBackslashJoinsTheNextLine = true
+	for _, c := range []struct {
+		counts  bool
+		wantPos int32
+	}{
+		{false, 2},
+		{true, 4},
+	} {
+		d.AliasBodyCountsLines = c.counts
+		rs := remarksWith(t, d, table("hd", "cat <<EOF\nin alias\nEOF"),
+			"hd; echo same\necho after\n")
+		if len(rs) != 1 {
+			t.Fatalf("counting %v: got %d remarks, want 1: %+v", c.counts, len(rs), rs)
+		}
+		if rs[0].Kind != syntax.RemarkHeredocAtEOF {
+			t.Errorf("counting %v: kind = %v, want RemarkHeredocAtEOF", c.counts, rs[0].Kind)
+		}
+		if rs[0].At.Line != 1 {
+			t.Errorf("counting %v: At.Line = %d, want the alias word's line", c.counts, rs[0].At.Line)
+		}
+		if rs[0].Pos.Line != c.wantPos {
+			t.Errorf("counting %v: Pos.Line = %d, want %d", c.counts, rs[0].Pos.Line, c.wantPos)
+		}
+		if rs[0].Token != "EOF" {
+			t.Errorf("counting %v: Token = %q, want the delimiter that never arrived", c.counts, rs[0].Token)
+		}
+	}
+}
+
+// The control, and it is the row that says the remark is about the input
+// running out rather than about a body read from a value: the same value with
+// a later `EOF` in the input closes the document and nothing is remarked on.
+func TestABodyFromAValueThatIsClosedIsNotRemarkedOn(t *testing.T) {
+	t.Parallel()
+	d := syntax.Core()
+	d.AliasBodyBackslashJoinsTheNextLine = true
+	for _, counts := range []bool{false, true} {
+		d.AliasBodyCountsLines = counts
+		if rs := remarksWith(t, d, table("hd", "cat <<EOF\nin alias\nEOF"),
+			"hd; echo same\necho after\nEOF\necho end\n"); len(rs) != 0 {
+			t.Errorf("counting %v: got %d remarks, want none: %+v", counts, len(rs), rs)
+		}
+	}
+}
+
+// remarksWith parses as parsedWith does and hands back what the parser had to
+// say rather than what it read.
+func remarksWith(t *testing.T, d syntax.Dialect, a syntax.Aliases, src string) []syntax.Remark {
+	t.Helper()
+	p := syntax.NewParser(src, d)
+	p.Aliases = a
+	p.Parse()
+	if err := p.Err(); err != nil {
+		t.Fatalf("%q: %v", src, err)
+	}
+	return p.Remarks()
+}

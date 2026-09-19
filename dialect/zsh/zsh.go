@@ -3630,6 +3630,21 @@ func Semantics() interp.Semantics {
 	// Measured on zsh 5.9.2.
 	s.ParameterIsSetSeesPositionals = true
 	s.ParameterIsSetSeesSpecials = true
+
+	// A subscript the condition receives as *text* is expanded again before
+	// it is looked up, and this shell writes no bracket of its own into that
+	// text: it has no written-subscript reading, so `k='x y'; kk='$k'` makes
+	// `[[ -v m[$kk] ]]` set here where bash stops at the key `$k`. Measured
+	// 2026-09-19 on zsh 5.9.2, and the same answer for the quoted operand
+	// and for one that arrives out of a value. See
+	// interp.Semantics.ConditionIsSetExpandsAFlatSubscript (#3298).
+	s.ConditionIsSetExpandsAFlatSubscript = interp.Yes
+
+	// And a declaration's operand expands its subscript: `typeset 'd[$k]'=Q`
+	// writes the key `x y`, and `typeset 'arr[$i]'=Q` the element `$i`
+	// counts to. See
+	// interp.Semantics.DeclarationOperandExpandsItsSubscript (#3298).
+	s.DeclarationOperandExpandsItsSubscript = interp.Yes
 	return s
 }
 

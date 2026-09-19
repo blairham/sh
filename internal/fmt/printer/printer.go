@@ -565,6 +565,14 @@ func (p *printer) repeatClause(x *syntax.RepeatClause) {
 func (p *printer) anonFunc(x *syntax.AnonFunc) {
 	end := x.End().Offset
 	p.b.WriteString(p.headerText(int(x.Pos().Offset), int(x.Body.Pos().Offset)))
+	if x.Bare {
+		// No body was written, so there is none to lay out and no separator
+		// to write in front of one. Printing the group that stands in for it
+		// would hand back `function { }`, which is a command with a
+		// different status. See syntax.AnonFunc.Bare.
+		p.suffixRedirs(x.Redirs)
+		return
+	}
 	p.b.WriteByte(' ')
 	p.command(x.Body)
 	type piece struct {

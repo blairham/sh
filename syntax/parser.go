@@ -673,6 +673,31 @@ func (p *Parser) bareNegationStandsHere() bool {
 	return false
 }
 
+// bareFunctionKeywordStandsHere reports whether the `function` keyword that
+// has just been read is the whole of the command.
+//
+// The set is measured on [Dialect.BareFunctionKeyword], and it is a set
+// rather than "anything that is not a name" in both directions. A
+// redirection counts, because the form takes one and applies it to a body
+// that runs nothing. The background operators do not, in any spelling, which
+// is the same boundary [Dialect.BareNegationReach] draws at
+// [BareNegationWhereAListEnds]. And of the reserved words only `}` counts:
+// every other one is read as the name this form does not have, so a keyword
+// written before `fi`, `done` or `esac` is a refusal there and must stay one
+// here.
+func (p *Parser) bareFunctionKeywordStandsHere() bool {
+	switch p.tok.Kind {
+	case TokSemi, TokNewline, TokEOF, TokRightParen,
+		TokPipe, TokPipeAmp, TokAndAnd, TokOrOr,
+		TokDSemi, TokSemiAmp, TokDSemiAmp, TokSemiPipe:
+		return true
+	}
+	if p.tok.Kind.IsRedirect() || p.at(TokIONumber) {
+		return true
+	}
+	return p.atWord("}")
+}
+
 // tokenText names a token the way a diagnostic should: the word itself when
 // there is one, and the operator's spelling otherwise.
 func tokenText(tok Token) string {
@@ -4438,10 +4463,41 @@ func (p *Parser) funcKeywordName() (FuncName, bool) {
 }
 
 func (p *Parser) parseFuncKeyword() Command {
+	keyword := p.tok
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
+	if p.dialect.BareFunctionKeyword && p.bareFunctionKeywordStandsHere() {
+		// The keyword and nothing else: an anonymous function whose body is
+		// empty, which runs where it stands. The body is an empty group
+		// rather than a nil one for the reason the optional-body branch
+		// below gives — nothing downstream reads a missing body as a
+		// refusal — and it is placed at the keyword's own end, which is
+		// where an absent body was written.
+		//
+		// The redirections are taken here rather than by the caller because
+		// [Parser.parseCommand] hands a keyword declaration straight back:
+		// a definition's redirections belong to its body and are read with
+		// it, and this form has no body to read them with.
+		anon := &AnonFunc{Keyword: true, Bare: true, Start: keyword.Pos}
+		anon.Body = &Group{Start: keyword.End, Stop: keyword.End}
+		return p.withRedirs(anon)
+	}
 	if p.tok.Kind != TokWord {
-		p.fail("expected a name after `function`")
+		// The token, rather than a sentence of our own about what was
+		// wanted. Every column that refuses this quotes what it found in
+		// its ordinary unexpected-token wording, and that wording is
+		// already what this parser produces everywhere else — see
+		// [Dialect.BareFunctionKeyword] for the panel (#3732).
+		//
+		// A name takes no newline, so the input running out here is the
+		// newline one dialect appends to what it reads, exactly as it is in
+		// a loop's variable position — see
+		// [Dialect.EndOfInputIsANewlineWhereNoneCouldStand].
+		if p.tok.Kind == TokEOF && p.dialect.EndOfInputIsANewlineWhereNoneCouldStand {
+			p.failUnexpectedAt(Token{Kind: TokNewline, Pos: p.tok.Pos}, "", false)
+			return fn
+		}
+		p.failUnexpected("")
 		return fn
 	}
 	first, ok := p.funcKeywordName()
@@ -5654,7 +5710,7 @@ func (p *Parser) forName(word string) (name, refused string, ok bool) {
 		// newline it appended, at the position the text ran out. Built here
 		// rather than lexed, because nothing else in the grammar could see it
 		// — every other position takes a newline and would consume this one.
-		if p.tok.Kind == TokEOF && p.dialect.ForNameEndOfInputIsANewline {
+		if p.tok.Kind == TokEOF && p.dialect.EndOfInputIsANewlineWhereNoneCouldStand {
 			p.failUnexpectedAt(Token{Kind: TokNewline, Pos: p.tok.Pos}, "do", false)
 			return "", "", false
 		}

@@ -178,6 +178,7 @@ func Dialect() syntax.Dialect {
 	// (#1216).
 	d.TryAlways = true
 	d.AnonymousFunction = true
+	d.BareFunctionKeyword = true
 	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
 	// cond; do done`, and a condition too. Every shape, and this shell alone.
 	d.EmptyCompoundBody = true

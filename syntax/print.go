@@ -680,6 +680,16 @@ func (p *printer) command(c Command) {
 		// Printed as it was written: there is no long spelling, because a
 		// function with no name cannot be defined in one place and called in
 		// another.
+		//
+		// The keyword standing alone is the whole of the command, and the
+		// empty group standing in for the body it was not given is not
+		// printed — `function { }` is a different command from `function`,
+		// and one that answers differently. See [AnonFunc.Bare].
+		if x.Bare {
+			p.str("function")
+			p.redirs(x.Redirs)
+			break
+		}
 		if x.Keyword {
 			p.str("function ")
 		} else {

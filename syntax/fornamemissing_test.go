@@ -94,13 +94,13 @@ func TestTheNameErrorFlagKeepsEveryTokenOnTheNameCheck(t *testing.T) {
 	}
 }
 
-// ForNameEndOfInputIsANewline is the other dialect's answer, and it moves
+// EndOfInputIsANewlineWhereNoneCouldStand is the other dialect's answer, and it moves
 // only the end-of-input row: a newline is what that shell has left over,
 // because it is what it terminates its input with.
 func TestTheEndOfInputIsANewlineUnderThatFlag(t *testing.T) {
 	t.Parallel()
 	d := loops()
-	d.ForNameEndOfInputIsANewline = true
+	d.EndOfInputIsANewlineWhereNoneCouldStand = true
 	e := missingNameError(t, "for", d)
 	if e.Kind != syntax.ErrUnexpected || e.Token != "newline" {
 		t.Errorf("Kind %v Token %q, want an unexpected `newline'", e.Kind, e.Token)
@@ -123,7 +123,7 @@ func TestTheNameErrorFlagIsAskedFirst(t *testing.T) {
 	t.Parallel()
 	d := loops()
 	d.ForNonWordIsANameError = true
-	d.ForNameEndOfInputIsANewline = true
+	d.EndOfInputIsANewlineWhereNoneCouldStand = true
 	if e := missingNameError(t, "for", d); e.Kind != syntax.ErrForName {
 		t.Errorf("Kind = %v, want ErrForName", e.Kind)
 	}
@@ -140,9 +140,9 @@ func TestAPresentWordThatIsNoNameStaysOnTheNameCheck(t *testing.T) {
 		case "name error":
 			d.ForNonWordIsANameError = true
 		case "end of input newline":
-			d.ForNameEndOfInputIsANewline = true
+			d.EndOfInputIsANewlineWhereNoneCouldStand = true
 		case "both":
-			d.ForNonWordIsANameError, d.ForNameEndOfInputIsANewline = true, true
+			d.ForNonWordIsANameError, d.EndOfInputIsANewlineWhereNoneCouldStand = true, true
 		}
 		e := missingNameError(t, "for 1x in a b; do :; done\n", d)
 		if e.Kind != syntax.ErrForName {
@@ -159,7 +159,7 @@ func TestAPresentWordThatIsNoNameStaysOnTheNameCheck(t *testing.T) {
 func TestAnUnfinishedConstructWithNoNameInItIsUnchanged(t *testing.T) {
 	t.Parallel()
 	d := loops()
-	d.ForNameEndOfInputIsANewline = true
+	d.EndOfInputIsANewlineWhereNoneCouldStand = true
 	for _, src := range []string{"while", "if", "until"} {
 		e := missingNameError(t, src, d)
 		if e.Kind != syntax.ErrUnterminated {

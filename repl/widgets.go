@@ -106,6 +106,59 @@ const (
 	WidgetDeleteChar
 	WidgetBackwardDeleteChar
 	WidgetComplete
+
+	// The listing on its own key, and the completion that cycles.
+	//
+	// All four are actions a shell with a line editor names and this editor did
+	// not have, so a key bound to one did nothing at all (#3043). What makes
+	// them four constants rather than one is that each answers a different
+	// question about the same matches: whether to insert, whether to draw, and
+	// which way round.
+	//
+	// Measured 2026-09-18 through a pseudo-terminal against zsh 5.9.2 under
+	// `-i` with a scratch rc, in a directory holding `uniq_alpha`, `uniq_beta`,
+	// `uniq_gamma` and `zzsolo`, with the widget on a key of its own so that
+	// nothing about Tab's own two-keystroke rule could be mistaken for the
+	// action:
+	//
+	//	typed       pressed              what happened
+	//	cat uniq    list-choices         the three names listed, the line untouched
+	//	cat uniq    list-choices again   listed again — no second-keystroke rule
+	//	cat zzs     list-choices         `zzsolo` listed, and still not inserted
+	//	cat uniq    menu-complete        `cat uniq_alpha`
+	//	            again                `cat uniq_beta`, then gamma, then alpha
+	//	cat uniq    reverse-menu-complete `cat uniq_gamma`, then beta
+	//	cat zzs     menu-complete        `cat zzsolo ` — one match is an ordinary
+	//	                                 completion, trailing space and all
+	//
+	// The listing a menu draws on the first press is **not** the menu's: with
+	// `unsetopt autolist` the same keystroke inserts `uniq_alpha` and draws
+	// nothing, while `list-choices` still lists. That is the probe that keeps a
+	// menu from being implemented as a completion that also lists.
+	WidgetListChoices
+
+	// Deleting the character under the cursor, or listing where there is none —
+	// which is one action rather than two keys, and the cursor decides.
+	//
+	// The empty line is the case worth measuring rather than assuming. This is
+	// what a `^D` is bound to in one of the two shells with an editor, and `^D`
+	// on an empty line ends the session — so the obvious reading is that the
+	// action ends it. It does not: bound to a key that is not `^D`, on an empty
+	// line, it listed all 1064 commands (after asking). Ending input is the
+	// *key's*, which is why this editor's `^D` is not a binding to this action
+	// and why nothing here can end a session.
+	WidgetDeleteCharOrList
+
+	// Menu completion: the matches walked one keystroke at a time, in the line.
+	//
+	// Two constants because the direction is the whole of the difference, and a
+	// run of them is one walk — the state is the editor's for as long as the
+	// keystrokes are adjacent, exactly as a run of Tabs is. Anything else
+	// pressed between them ends it, measured, and the next press starts a fresh
+	// completion.
+	WidgetMenuComplete
+	WidgetMenuCompleteBackward
+
 	WidgetUndo
 	WidgetInsertLastWord
 
@@ -145,6 +198,25 @@ const (
 	WidgetViInsertMode
 	WidgetViAppendMode
 )
+
+// UsesCandidates reports whether an action asks a completer what the word
+// under the cursor could become.
+//
+// The five that do are the completion widgets, and the question is the core's
+// rather than a dialect's: a dialect knows that `zle -C w menu-complete f`
+// named a source of candidates, and it has to ask somebody whether the action
+// it resolved that to is one that will use them. Without this it asked
+// `== WidgetComplete`, which was right while WidgetComplete was the only
+// completion this editor had and silently dropped a completion function the
+// moment there were four more (#3043).
+func (w Widget) UsesCandidates() bool {
+	switch w {
+	case WidgetComplete, WidgetListChoices, WidgetDeleteCharOrList,
+		WidgetMenuComplete, WidgetMenuCompleteBackward:
+		return true
+	}
+	return false
+}
 
 // Keymap is which table of bindings the editor reads.
 //
@@ -210,7 +282,7 @@ type Binding struct {
 	// Candidates is the name of a shell action that supplies what this
 	// editor's completion offers, where the key names a completion the shell
 	// has configured. Empty is the ordinary case, and every key whose Widget
-	// is not WidgetComplete.
+	// does not answer [Widget.UsesCandidates].
 	//
 	// Asked **before** this editor's own completion and never instead of it:
 	// an action that offers nothing leaves the editor completing exactly what
@@ -296,8 +368,20 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.deleteBackward()
 		e.redraw(prompt)
 	case WidgetComplete:
-		e.complete(e.completerFor(b.Candidates))
-		e.redraw(prompt)
+		// Through completeKey, which is the whole of what a completion key
+		// does including the part that takes two keystrokes. It used to be
+		// e.complete alone here, which dropped the matches on the floor and
+		// could never list — the bug the key loop worked around with a case
+		// of its own, and which this editor's own seam still had (#3043).
+		e.completeKey(e.completerFor(b.Candidates), e.completedBefore, prompt)
+	case WidgetListChoices:
+		e.listChoices(e.completerFor(b.Candidates), prompt)
+	case WidgetDeleteCharOrList:
+		e.deleteCharOrList(e.completerFor(b.Candidates), prompt)
+	case WidgetMenuComplete:
+		e.menuComplete(e.completerFor(b.Candidates), +1, prompt)
+	case WidgetMenuCompleteBackward:
+		e.menuComplete(e.completerFor(b.Candidates), -1, prompt)
 	case WidgetUndo:
 		e.undoLine()
 		e.redraw(prompt)

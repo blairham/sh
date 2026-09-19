@@ -210,13 +210,62 @@ Above a hundred matches, both ask before printing. That threshold and
 the wording of the question are specified with the rest of the editor's
 style; see `EditorStyle.ListQuery`.
 
+## Completion on a key of its own
+
+Tab is one of several keys a completion can be on, and the rest do
+different things with the same matches. Measured 2026-09-18 through a
+pseudo-terminal against zsh 5.9.2 under `-i` with a scratch rc, in a
+directory holding `uniq_alpha`, `uniq_beta`, `uniq_gamma` and `zzsolo`,
+with each action on a key of its own so that Tab's own two-keystroke
+rule could not be mistaken for the action:
+
+| typed | pressed | what happened |
+| --- | --- | --- |
+| `cat uniq` | list only | the three names listed, the line untouched |
+| `cat uniq` | list only, again | listed again — there is no second-keystroke rule |
+| `cat zzs` | list only | `zzsolo` listed, and still not inserted |
+| `cat uniq` | menu | `cat uniq_alpha` |
+| | again, three times | `uniq_beta`, `uniq_gamma`, then round to `uniq_alpha` |
+| `cat uniq` | menu backwards | `cat uniq_gamma`, then `uniq_beta` |
+| `cat zzs` | menu | `cat zzsolo ` — one match is an ordinary completion |
+
+**The listing a menu draws on its first press is not the menu's.** With
+`autolist` turned off the same keystroke inserts `uniq_alpha` and draws
+nothing, while the listing key goes on listing. A menu implemented as
+"complete, and also list" passes the first observation and is not what
+the action is.
+
+**A menu lasts exactly as long as the keystrokes are adjacent.** Anything
+else pressed between two of them ends it, and the next press starts a
+fresh completion over whatever the line now says.
+
+**Deleting or listing, decided by the cursor.** Where the cursor has a
+character under it the character goes; where it has none the matches are
+listed, on an empty line included. The empty line is the case a guess
+gets wrong, because this is what `^D` is bound to in zsh and `^D` on an
+empty line ends the session — but on any other key the same action
+offered to list all 1064 commands. Ending input belongs to the key.
+
+**Completing the prefix.** zsh separates completing the whole word under
+the cursor from completing only the text before it. This editor only
+ever does the second: it completes `line[start:point]` and replaces
+exactly that, leaving whatever follows the cursor alone. Measured with
+the cursor put after `uniq` in `cat uniqXYZ`, the prefix spelling
+inserted the `_` the three matches agree on and left `XYZ` where it was,
+while the whole-word spelling found nothing and rang the bell.
+
+**No bell.** zsh rings one for a completion that matches nothing and for
+the ambiguous insertion a menu makes. This editor rings the bell nowhere,
+Tab included, so the difference is an editor-wide question rather than
+one about these keys.
+
 ## What is deliberately not here
 
-**Menu completion.** zsh's `AUTO_MENU` is on by default, so a third Tab
-in zsh starts cycling through the matches in the line rather than
-listing them again. bash does not do this without being asked. It is a
-distinct interaction with state of its own, and it is not specified
-here.
+**A menu drawn as a selection.** zsh's `zsh/complist` draws the match
+the menu stands on in inverse video inside the listing and lets the
+arrow keys move over it. The cycling itself is specified above; the
+*selection* — a listing with a cursor in it — is a distinct interaction
+with a screen of its own and is not specified here.
 
 **Programmable completion.** `complete -F`, `compdef` and the
 per-command rules built on them are a language rather than a behavior,

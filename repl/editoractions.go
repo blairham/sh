@@ -69,8 +69,8 @@ type Actions interface {
 	// the editor last saw. Passing it in on every call is also what keeps the
 	// two copies from drifting over a run of them.
 	//
-	// false is an action this editor will not perform from here. There are
-	// two of those and they are the two that read a key — see performable.
+	// false is an action this editor will not perform from here. There is one
+	// of those and it is the one that is a mode of its own — see performable.
 	// The line comes back untouched with it, so a caller that reports the
 	// refusal and carries on has not lost anything.
 	Perform(w Widget, in Line) (Line, bool)
@@ -92,21 +92,31 @@ type Actions interface {
 
 // performable reports whether an action can be run from outside the editor.
 //
-// Everything this editor does except the two that read a key of their own: a
-// reverse incremental search is a mode with its own loop, and a completion may
-// stop to ask whether to print a long listing. Running either from inside a
-// widget really would be re-entering the read loop mid-keystroke — the thing
-// the file comment above says cannot be done — and the difference from the
-// rest is not a matter of degree. The others never touch the input.
+// Everything this editor does except the one that is a mode of its own: a
+// reverse incremental search has its own read loop and its own drawing, and
+// running it from inside a widget really would be re-entering the read loop
+// mid-keystroke — the thing the file comment above says cannot be done.
+//
+// **A completion used to be the second, and the refusal was wrong.** The
+// reasoning was that a completion may stop to ask whether to print a long
+// listing, so it reads a key too. It does, and it reads it the same way the
+// editor reads every other key — through the editor's own buffer, with the
+// key loop waiting on this call rather than on the terminal — so there is no
+// second reader and nothing to re-enter. Measured 2026-09-18 through a
+// pseudo-terminal against zsh 5.9.2, with a widget of one line:
+//
+//	mywid() { zle complete-word }; zle -N mywid; bindkey '^O' mywid
+//
+// Pressing the key on `cat uniq` filled in `uniq_` and pressing it again
+// listed the three matches — which is Tab's own two-keystroke rule, reached by
+// name from inside a widget. A shell that refuses this has a plugin's
+// fallback to the standard completion print an error instead (#3043), and the
+// refusal cost more than the listing question ever did.
 //
 // A closed list rather than a flag on each action, because the question is
 // asked in exactly one place and a flag would be a field on nothing.
 func performable(w Widget) bool {
-	switch w {
-	case WidgetSearchHistoryBackward, WidgetComplete:
-		return false
-	}
-	return true
+	return w != WidgetSearchHistoryBackward
 }
 
 // editorActions is the handle: the editor, plus the prompt the line in front

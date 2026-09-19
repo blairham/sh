@@ -344,3 +344,30 @@ func fold(text, indent string) string {
 	}
 	return out.String()
 }
+
+// UngatedReason is why a column's reference is not pinned, wherever that is
+// recorded — and it is two places because they are two different claims.
+//
+// [Suite.Ungated] is about the **column**: what was measured when somebody
+// asked why this reference is not in an image. [UnclosableByConstruction] is
+// about the **cells**: no amount of correct work will ever close them. A
+// column can be the first without being the second — zsh and dash are both
+// waiting on an image somebody could build, so their cells stay open — and
+// ksh93 is the second, where the reason the cells cannot close is the same
+// sentence as the reason the column is not gated.
+//
+// One function so that the report and [TestAnUngatedColumnSaysWhy] read the
+// same answer. Writing ksh93's sentence out twice is how the two would drift,
+// and the one that went stale would be the one nobody printed.
+func (s Suite) UngatedReason() string {
+	if s.Contained() {
+		return ""
+	}
+	if s.Ungated != "" {
+		return s.Ungated
+	}
+	if u, ok := ledgered(s.Name, ""); ok {
+		return u.Measured
+	}
+	return ""
+}

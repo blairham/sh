@@ -249,3 +249,28 @@ func TestTheRollUpCountsTheWholeSpace(t *testing.T) {
 		t.Errorf("the roll-up does not print the ledger:\n%s", report)
 	}
 }
+
+// TestAnUngatedColumnSaysWhy. #3480 asks for "the column reported as gated",
+// and the half that rots is the other one: a gated column prints the image it
+// was reached through, so an ungated column that prints nothing differs from
+// it only by a line the gated one has — and a figure graded against whatever
+// build the machine happened to have reads exactly like one graded against a
+// pin.
+//
+// So the two states are exclusive and both are stated. A column is contained
+// and says which image, or it is not and says what was measured when somebody
+// asked why not. The length floor is the same one the ledger carries: "no
+// image yet" is a status a reader has to re-derive, and what belongs there is
+// the measurement.
+func TestAnUngatedColumnSaysWhy(t *testing.T) {
+	for _, s := range suite.OurColumns() {
+		why := s.UngatedReason()
+		switch {
+		case s.Contained() && why != "":
+			t.Errorf("%s is gated and also says why it is not", s.Name)
+		case !s.Contained() && s.NotYet == "" && len(why) < 60:
+			t.Errorf("%s is ungated and does not say why, or says it too briefly to be a "+
+				"measurement: %q", s.Name, why)
+		}
+	}
+}

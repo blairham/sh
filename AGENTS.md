@@ -1459,6 +1459,22 @@ nobody is reading the reason it was not. `TestTheLedgerIsCheckedAgainstTheColumn
 mutates each of the four on and requires the check to say so, with a control
 row proving the committed ledger stays quiet under the same function.
 
+**An ungated column now says so, with the measurement.** A gated column prints
+the image it was reached through; before this an ungated one printed nothing,
+so the two differed in the report only by a line the gated one had and a figure
+graded against whatever build the machine happened to have read exactly like
+one graded against a pin. `suite.Suite.Ungated` carries what was measured when
+somebody asked why, `UngatedReason` falls back to the ledger entry where one
+covers the column — one sentence, one place, so ksh93's cannot drift into two —
+and `TestAnUngatedColumnSaysWhy` makes the two states exclusive and both
+stated. The zsh and dash columns carry #3480's measurements: no public image
+reports `zsh 5.9.2` and the 5.9 images differ from it on two of that column's
+own files (`kill -L`, and `kill -l` of an out-of-range number), and no public
+image is an unpatched dash — every distribution answers `esc=3`, which is the
+whole of that column's gap on a runner (67/67 strict here against 64/67 there).
+Both stay **open** rather than ledgered, because building and publishing those
+images is work somebody can do.
+
 A second, smaller ledger holds the two files no area claims, and they are the
 finding rather than the leftovers: `boundary.tests` is about a **tier
 boundary** and `inherited.tests` about an **axis set**, which are not areas and

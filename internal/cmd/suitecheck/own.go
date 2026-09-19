@@ -257,6 +257,13 @@ func printOwnColumn(rep suite.Report) {
 		// than the other four make: both shells ran inside an image, so this
 		// pins the behavior of that image rather than of this machine.
 		fmt.Printf("  reached    %s — both shells ran in there, on one copy of the files\n", rep.Route)
+	} else if why := s.UngatedReason(); why != "" {
+		// The other half of the same sentence. A gated column says which
+		// image it was reached through; an ungated one has to say it was
+		// not, or the two differ in the report only by a line the gated one
+		// has — and the reader who notices is the one who already knew to
+		// look. The figure below is this machine's shell, whatever that is.
+		fmt.Printf("  UNGATED    %s\n", wrap(why, "             "))
 	}
 	fmt.Printf("  parsed     %-9s %5.1f%%   our parser read the whole file\n",
 		fmt.Sprintf("%d/%d", rep.Parsed, rep.Files), 100*rep.ParseRate())

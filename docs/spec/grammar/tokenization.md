@@ -965,13 +965,35 @@ finished by a newline is `in Y␠`. It is the same blank that keeps a backslash
 ending a value from joining the next line there, so
 `Dialect.AliasBodyBackslashJoinsTheNextLine` answers both.
 
-Not modeled: a body that the *input* runs out inside after crossing the seam,
-which is a remark about where the input ended and is left to the input's own
-route — so `hd; echo same` above, with no later `EOF`, still reads the value's
-body lines as commands here. And the seam blank is inserted only at the end
-of the value being expanded, not at the end of each value it was spliced
-into, so zsh's `EOF␠` for a delimiter the *outer* value ends in is not
-reproduced.
+A body that the *input* runs out inside after crossing the seam is read like
+any other: it took everything to the end of the joined text, which is the end
+of the input — the same thing it would have run to had it been written there.
+Measured 2026-09-19 from script files, with `hd='cat <<EOF⏎in alias⏎EOF'` used
+as `hd; echo same` and no later `EOF` anywhere:
+
+| column | writes |
+| --- | --- |
+| bash 5.3.20 | a warning that the document was delimited by end of file, then `in alias`, `EOF; echo same`, `echo after` |
+| ksh93u+, dash 0.5.12, BusyBox ash 1.37.0 | the same three body lines, no warning |
+| zsh 5.9.2 | the same, with its seam blank: `EOF ; echo same` |
+| bash 3.2.57 | a **fourth** answer: a syntax error naming the unexpected token `in`, at 2, with the value's lines quoted back |
+
+The warning is the one remark this parser has, and its two lines are lines of
+the *input*: bash locates it on the last line the input had and names the line
+the alias word stands on, because the operator is text of the value and has no
+line of its own. bash is also the column that does not count a substituted
+body's newlines as input lines, so the two line numbers are the file's own
+there; where `Dialect.AliasBodyCountsLines` is on, the run-out line shifts by
+the value's newlines exactly as every other position in a substituted body
+does.
+
+bash 3.2's refusal is recorded rather than modeled. It is the column that
+splices tokens rather than text and it does not reach a body here at all, and
+this parser follows the five that do.
+
+Not modeled: the seam blank is inserted only at the end of the value being
+expanded, not at the end of each value it was spliced into, so zsh's `EOF␠`
+for a delimiter the *outer* value ends in is not reproduced.
 
 ### The table reaches every text this shell reads, and the *option* is its only gate
 

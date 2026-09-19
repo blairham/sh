@@ -508,10 +508,15 @@ func (p *Parser) spliceAlias(name, value string) {
 // `hd; echo x` makes the line `EOF; echo x`, which is body, in bash 5.3,
 // ksh93 and dash alike.
 //
-// Nil where a body runs out at the end of the input, or where the bodies
-// begin in the input rather than in the alias text: a value holding such a
-// body is tokenized as it was before bodies were read from values at all.
-// All or nothing, because the bodies of one line are read in order.
+// A body whose delimiter never arrives runs to the end of that joined text,
+// which is the end of the input — the same thing it would have run to had it
+// been written there — so it is taken like any other, and what the probe
+// remarked about it is re-sited onto the input. See
+// adoptAliasHeredocRemarks.
+//
+// Nil where the bodies begin in the input rather than in the alias text: the
+// operator's line ends there and the input's own lexer reads them at its own
+// newline. All or nothing, because the bodies of one line are read in order.
 func (p *Parser) aliasHeredocBodies(value string) (bodies []*Redirect, from, took, skip int) {
 	if !strings.Contains(value, "<<") {
 		return nil, 0, 0, 0
@@ -569,20 +574,69 @@ func (p *Parser) aliasHeredocBodies(value string) (bodies []*Redirect, from, too
 	if len(bodies) == 0 || probe.err != nil || len(probe.pending) > 0 || begin > head+len(outer) {
 		return nil, 0, 0, 0
 	}
-	end := 0
+	end, ranOut := 0, false
 	for _, r := range bodies {
-		if r.Heredoc == nil || r.HeredocAtEOF {
-			// A body the input runs out inside is not modeled here: it
-			// carries a remark about where the input ended, and the text
-			// this was read from is not the input.
+		if r.Heredoc == nil {
 			return nil, 0, 0, 0
 		}
+		// A body whose delimiter never arrived took everything to the end
+		// of the joined text, which is the end of the input: the command
+		// runs with what it has, and one column says so on the way past.
+		ranOut = ranOut || r.HeredocAtEOF
 		end = max(end, int(r.Heredoc.Stop.Offset))
 	}
 	from = min(max(0, begin-head), len(outer))
 	took = min(max(0, end-head), len(outer))
 	skip = max(0, end-head-len(outer))
+	if ranOut {
+		p.adoptAliasHeredocRemarks(probe.remarks, value, head+len(outer))
+	}
 	return bodies, from, took, skip
+}
+
+// adoptAliasHeredocRemarks moves what the probe said about a here-document
+// that ran to the end of the joined text onto the input's own lexer, with
+// its two positions re-sited from that text to the input.
+//
+// The probe reads the value, the values it was spliced into, and then the
+// input as one text, so a body that runs out there is a body the *input* ran
+// out inside — which is exactly what the one column that remarks on this
+// says, and where it says it. Measured 2026-09-19 against bash 5.3.20 over
+// `alias hd='cat <<EOF` / `in alias` / `EOF'` used as `hd; echo same`: the
+// warning is located on the last line the input had and names the line the
+// alias word stands on, whether the body's last line came from the value or
+// from the input.
+//
+// alias is where the alias text ends in the joined text. An offset in front
+// of it is text that is not in the input at all and stands where the alias
+// word stands; one past it is the input's own, plus the lines every
+// expansion so far has inserted above it — and this value's own, where the
+// dialect counts them, because they are inserted at the alias word and this
+// runs before spliceAlias shifts the lexer over them.
+func (p *Parser) adoptAliasHeredocRemarks(remarks []Remark, value string, alias int) {
+	// The input really did run out with a document still open, which is a
+	// different question at a prompt than in a script: the front ends read
+	// this to ask for another line. See Lexer.ranOut.
+	p.lex.ranOut("<<")
+	shift := p.aliasLineShift
+	if p.dialect.AliasBodyCountsLines {
+		shift += strings.Count(value, "\n")
+	}
+	for _, r := range remarks {
+		if r.Kind != RemarkHeredocAtEOF {
+			continue
+		}
+		// The operator is text of the value, so the construct the remark is
+		// about began where the alias word did.
+		r.At = p.tok.Pos
+		if int(r.Pos.Offset) < alias {
+			r.Pos = p.tok.Pos
+		} else {
+			r.Pos = p.lex.posAt(p.lex.off + int(r.Pos.Offset) - alias)
+			r.Pos.Line += int32(shift)
+		}
+		p.lex.remarks = append(p.lex.remarks, r)
+	}
 }
 
 // queueAliasHeredoc registers a here-document on a lexer reading alias text,

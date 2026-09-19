@@ -130,11 +130,57 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 // the dialect carries it in the location instead — one door rather than two,
 // which is how every other builtin's complaint already works.
 func (r *Runner) mathDiagf(format string, args ...any) {
-	if !r.diag().ArithErrorNamesTheBuiltin {
-		r.arithDiagf(format+"\n", args...)
+	r.mathWrite(r.diagf, format, args...)
+}
+
+// mathFatalf is mathDiagf for a site that ends the script with the complaint.
+//
+// The naming rule is the message's and not the builtin's, so the two writers
+// share it rather than each spelling it out: a declaration whose *value* will
+// not evaluate is the same sentence `let` writes about the same text, and
+// every column words it the same way it words `let`'s. Measured 2026-09-18
+// over `typeset -i a=1+` in a script file:
+//
+//	bash 5.3.20	loc.sh: line 1: typeset: 1+: arithmetic syntax error: …
+//	ksh93u+    	loc.sh[1]: typeset: 1+: more tokens expected
+//	zsh 5.9.2  	loc.sh:1: bad math expression: operand expected …
+//
+// and `integer a=1+`, `float a=1+`, `local -i a=1+` and `a=1+; integer a`
+// are the same three answers in zsh, which is what says the rule is the
+// message's rather than any one spelling's (#3342).
+func (r *Runner) mathFatalf(format string, args ...any) {
+	r.mathWrite(r.fatal, format, args...)
+}
+
+// mathWrite is the naming rule itself, applied to whichever writer the site
+// uses. See mathDiagf for the two answers.
+func (r *Runner) mathWrite(write func(string, ...any), format string, args ...any) {
+	// Only where a builtin is speaking. The same evaluator is reached from a
+	// plain assignment to a name carrying the integer attribute — `typeset -i
+	// a=1; a+=2+` — and bash writes no name in front of that one, because
+	// there is no builtin to name.
+	if name := r.speaking(); name != "" && r.diag().ArithErrorNamesTheBuiltin {
+		write("%s: "+format+"\n", append([]any{name}, args...)...)
 		return
 	}
-	r.diagf("%s: "+format+"\n", append([]any{r.speaking()}, args...)...)
+	defer r.builtinAsideForAMathFailure()()
+	write(format+"\n", args...)
+}
+
+// builtinAsideForAMathFailure takes the builtin out of the *location* where
+// the dialect does not read a math failure as the builtin's, and returns what
+// puts it back.
+//
+// Cleared rather than trimmed afterwards, because the location is built from
+// this field. One door for the two writers below it, so a site cannot take
+// the name out of the sentence and leave it in the location.
+func (r *Runner) builtinAsideForAMathFailure() func() {
+	if r.diag().ArithErrorNamesTheBuiltin {
+		return func() {}
+	}
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	return func() { r.inBuiltin = outer }
 }
 
 // arithDiagf writes an arithmetic complaint raised from inside a builtin with
@@ -153,11 +199,7 @@ func (r *Runner) mathDiagf(format string, args ...any) {
 // Cleared rather than trimmed afterwards, because the location is built from
 // this field.
 func (r *Runner) arithDiagf(format string, args ...any) {
-	if !r.diag().ArithErrorNamesTheBuiltin {
-		outer := r.inBuiltin
-		r.inBuiltin = ""
-		defer func() { r.inBuiltin = outer }()
-	}
+	defer r.builtinAsideForAMathFailure()()
 	r.diagf(format, args...)
 }
 

@@ -844,6 +844,15 @@ func (r *Runner) dotFailed(name string, err error) int {
 		// Diagnostics.DotSearchPathMiss.
 		format = orElse(r.diag().DotSearchPathMiss, ".: %[1]s: file not found")
 	}
+	if r.dotFailureNamesItsOperand() {
+		// The location names the file that would not open, in place of the
+		// script's own name. Set around the one message rather than written
+		// into r.Name: `$0` does not move, measured on the line after. See
+		// Diagnostics.DotFailureNamesTheFileItCouldNotOpen.
+		outer := r.dotFailureFile
+		r.dotFailureFile = name
+		defer func() { r.dotFailureFile = outer }()
+	}
 	r.diagf("%s\n", Wording(format, ".: %[1]s: %[2]s", name, reason(err), r.inBuiltin))
 	// dash and ksh93 end the script here; bash and zsh report it and go on.
 	if r.ask(r.sem().DotMissingFileFatal, "`.` failing to open a file being fatal") {
@@ -851,6 +860,21 @@ func (r *Runner) dotFailed(name string, err error) int {
 		return r.status
 	}
 	return r.diag().dotCannotOpenStatus()
+}
+
+// dotFailureNamesItsOperand answers whether this failure is in the one place
+// the operand replaces the name: the top level of a script the shell was
+// given.
+//
+// A function, `eval` and a sourced file each name themselves in that slot and
+// keep it — measured in
+// Diagnostics.DotFailureNamesTheFileItCouldNotOpen — so the rename is asked
+// only where the *script's* name is what would be written, which is where the
+// call stack is empty. The `-c` and standard-input routes have no script name
+// to replace and are excluded by the route.
+func (r *Runner) dotFailureNamesItsOperand() bool {
+	return r.diag().DotFailureNamesTheFileItCouldNotOpen &&
+		r.Route == RouteScriptFile && len(r.frames) == 0
 }
 
 // reason is the part of an os error a shell prints, without the operation and

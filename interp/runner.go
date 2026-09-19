@@ -2837,6 +2837,12 @@ type Runner struct {
 	// a copy.
 	inSubshell bool
 
+	// dotFailureFile is the file `.` could not open, for the dialect that
+	// writes it where the script's own name goes. Set around the one message
+	// and empty everywhere else — see
+	// Diagnostics.DotFailureNamesTheFileItCouldNotOpen.
+	dotFailureFile string
+
 	// subshellWroteArrays names the arrays this shell has written to since it
 	// began — nil until one is written, and cleared by clone so a subshell
 	// starts having written nothing. Recorded at storeArray, which is the one
@@ -3698,6 +3704,12 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 		return r.inFunc, at - r.funcLine, true
 	}
 	name = r.name()
+	if r.dotFailureFile != "" {
+		// One message names the file it could not open where the script's own
+		// name would have gone, and it is asked only where that name is what
+		// would be written. See Runner.dotFailureNamesItsOperand.
+		return r.dotFailureFile, at, false
+	}
 	if d.LocationNamesTheCurrentFile {
 		// locationFile rather than currentFile: a message located at the call
 		// it came from is one frame further out than the shell is. At the top

@@ -3515,6 +3515,35 @@ type Diagnostics struct {
 	// bare name and ".: cannot open path: …" for a path, where bash, ksh93 and
 	// zsh use one message for both. Empty means "the same as DotCannotOpen".
 	DotNotFound string
+	// DotFailureNamesTheFileItCouldNotOpen puts the operand `.` was given in
+	// the location, where the script's own name would have gone.
+	//
+	// zsh alone, and only where a script name stands to be replaced.
+	// Measured 2026-09-18, zsh 5.9.2 under `-f`, `env -i`, with
+	// `./nosuchfile_zz` absent:
+	//
+	//	./s.sh does `. ./nosuchfile_zz`      ./nosuchfile_zz:.:1: no such file …
+	//	the same through `source`            ./nosuchfile_zz:source:1: …
+	//	`. nosuchfile_zz`, no slash          nosuchfile_zz:.:1: …
+	//	inside `( … )`, `$( … )`, a pipeline,
+	//	  a background job                   ./nosuchfile_zz:.:1: …
+	//	inside a function `f`                f:.: …
+	//	inside `eval`                        (eval):.:1: …
+	//	inside a file the script sourced     ./nest.sh:.:1: …
+	//	under `-c`                           zsh:.:1: …
+	//	on standard input                    .: no such file or directory: …
+	//
+	// So it is the operand **as written** — the display name, not a resolved
+	// path — and it replaces the *script's* name and nothing else: a
+	// function's name, `eval`'s, a sourced file's and the shell's own all
+	// stand. `$0` is untouched by it, measured on the line after.
+	//
+	// The half already modeled is the other one: `$0` inside a dot script
+	// that *does* open is the sourced file there, which
+	// Semantics.DollarZeroNames answers. This is the same rename on the
+	// failure path, where there is no file to have become (#2958).
+	DotFailureNamesTheFileItCouldNotOpen bool
+
 	// DotIsADirectory is what `.` says when the operand names a **directory**,
 	// for a dialect that answers DotDirectoryOperandIsAnError yes and does not
 	// reuse DotCannotOpen for it.

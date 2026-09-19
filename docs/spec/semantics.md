@@ -1106,6 +1106,65 @@ it in the location, which answered one dialect's question by discarding the
 fact a second dialect needs: that a builtin is speaking at all. It clears it
 only where `NamesBuiltinInLocation` says a dialect would write the name.
 
+#### A math failure raised through a declaration is named where `let`'s is
+
+A declaration whose **value** will not evaluate — `typeset -i a=1+`, `integer
+a=1/0`, `float a=1+` — writes the evaluator's own sentence, and every column
+names the builtin for it exactly where it names one for `let`. Measured
+2026-09-18, one-line script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+
+| written | bash 5.3.20 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `typeset -i a=1+` | `line 1: typeset: 1+: arithmetic syntax error: …` | `[1]: typeset: 1+: more tokens expected` | `:1: bad math expression: operand expected …` |
+| `let 1+` | `line 1: let: 1+: …` | `[1]: let: 1+: …` | `:1: bad math expression: …` |
+| `integer a=1+` | *(no such builtin)* | `[1]: typeset: 1+: …` | `:1: bad math expression: …` |
+| `float a=1/0` | *(no such builtin)* | `[1]: typeset: 1/0: divide by zero` | `:1: division by zero` |
+| `typeset -i a=1; a+=2+` | `line 1: 2+: …` | `line 1: 2+: …` | `:1: bad math expression: …` |
+
+So it is `Diagnostics.ArithErrorNamesTheBuiltin`'s question and not a second
+one: two columns put the name in front of the sentence, the third puts a
+builtin's name in the *location* as a rule and declines to here, and the last
+row is the control — the same evaluator reached from a plain assignment to a
+name that already carries the attribute names nobody, because no builtin ran.
+
+Both were wrong here in opposite directions and the pair is what says so: the
+two naming columns wrote no name where they write one, and the column that
+names none wrote `loc.sh:integer:1:` where zsh writes `loc.sh:1:`. The float
+letters had a writer of their own that also quoted no text, so `float a=1/0`
+was a bare `divide by zero` in the column that writes `typeset: 1/0: divide by
+zero` (#3342). `Runner.mathFatalf` is the one door now, beside the `mathDiagf`
+`let` already used.
+
+### A dot script that will not open is diagnosed under the name it could not open
+
+One column renames the location for it. Measured 2026-09-18, zsh 5.9.2 under
+`-f`, `env -i`, `./nosuchfile_zz` absent, against the other three, which all
+keep the running script's name:
+
+| where the `.` is written | zsh 5.9.2 |
+| --- | --- |
+| the top level of the script | `./nosuchfile_zz:.:1: no such file or directory: …` |
+| through `source` | `./nosuchfile_zz:source:1: …` |
+| `. nosuchfile_zz`, no slash | `nosuchfile_zz:.:1: …` |
+| inside `( … )`, `$( … )`, a pipeline, a background job | `./nosuchfile_zz:.:1: …` |
+| inside a function `f` | `f:.: …` |
+| inside `eval` | `(eval):.:1: …` |
+| inside a file the script sourced | `./nest.sh:.:1: …` |
+| under `-c` | `zsh:.:1: …` |
+| on standard input | `.: no such file or directory: …` |
+
+The operand goes in **as written** — a display name, not a resolved path — and
+it replaces the *script's* name and nothing else: a function's, `eval`'s and a
+sourced file's each stand, which is what makes this a rename rather than a rule
+about the message. `$0` does not move with it, measured on the next line. A
+subshell is not a frame, so the four middle rows are still the script's own
+line; the gate is an empty call stack.
+
+`Diagnostics.DotFailureNamesTheFileItCouldNotOpen` is the answer, and it is the
+same rename `Semantics.DollarZeroNames` already makes on the path where the file
+*does* open — `$0` inside a dot script is the sourced file there. What was
+missing was the failure path, where there is no file to have become (#2958).
+
 ### The lines of `eval`'s text
 
 Whether they continue the caller's or start at one, and it is not a wording:

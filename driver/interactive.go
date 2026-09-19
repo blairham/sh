@@ -112,6 +112,9 @@ func (sh Shell) session(argv []string, in source) int {
 	// where the panel has them: what `-x` traces includes what the rc file
 	// does. And a refused one ends the shell before it prompts — `sh -Q`
 	// with a terminal is an error, not a session.
+	// And the emulation before them, in the same order and for the same
+	// measured reason as on the script routes — see Shell.applyEmulation.
+	sh.applyEmulation(r, in)
 	if code, ok := sh.applyOptions(r, opts); !ok {
 		return code
 	}

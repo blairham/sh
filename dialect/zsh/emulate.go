@@ -165,7 +165,7 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if status >= 0 {
 		return status
 	}
-	if e.mode == "" {
+	if !e.hasMode {
 		_, _ = fmt.Fprintf(r.Out(), "%s\n", currentEmulation(r))
 		return 0
 	}
@@ -219,9 +219,38 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // emulateArguments reads the command line. A status of -1 means "carry on";
 // anything else is the answer, already reported.
 func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status int) {
+	// Whether any option *letter* has been read, which is a different
+	// question from whether an option word was written and is what the
+	// count check at the bottom asks. Measured 2026-09-18 on zsh 5.9.2:
+	// `emulate -L` is `not enough arguments` at 1, while `emulate --` and
+	// `emulate -` each print the current mode at 0 — so a word carrying no
+	// letters leaves the call a bare one.
+	sawFlags := false
+	// And whether the operands are over. `--` ends them, which this builtin
+	// refused outright until the invocation option needed it: `--emulate`
+	// takes its next word unconditionally, so the front end hands the word
+	// over behind a `--` rather than letting the builtin read `-c` or `--`
+	// as options of its own. Measured in the same run: `emulate -- sh` is
+	// sh, `emulate -- -L` and `emulate -- --` are the silence an unknown
+	// mode gets, and `emulate sh --` is sh.
+	endOfOptions := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		if len(a) > 1 && a[0] == '+' {
+		switch {
+		case endOfOptions:
+			// Every word after `--` is an operand, whatever it starts with.
+		case a == "--":
+			endOfOptions = true
+			continue
+		case a == "-":
+			// An option word with nothing in it. Not a mode — `emulate -`
+			// prints the current one and `emulate - sh` is sh — and not a
+			// flag either, which is why it does not set sawFlags. `+` alone
+			// is *not* this: measured, `emulate +` is silent and leaves the
+			// mode alone, which is an unknown mode rather than a flag word.
+			continue
+		}
+		if !endOfOptions && len(a) > 1 && a[0] == '+' {
 			// The `+` form. `+o name` is `-o name` the other way round and
 			// `+c` runs its string like `-c`; every other letter is
 			// *accepted and does nothing*, which is measured rather than
@@ -229,6 +258,7 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 			// is 0 where `emulate -X zsh` is `bad option: -X`, and a `+L`
 			// does not undo a `-L` — the emulation stays function-local.
 			for j := 1; j < len(a); j++ {
+				sawFlags = true
 				switch a[j] {
 				case 'o', 'c':
 					if i+1 >= len(args) {
@@ -245,8 +275,9 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 			}
 			continue
 		}
-		if len(a) > 1 && a[0] == '-' {
+		if !endOfOptions && len(a) > 1 && a[0] == '-' {
 			for _, letter := range a[1:] {
+				sawFlags = true
 				switch letter {
 				case 'R':
 					// The strict form, and it is not the no-op this said it
@@ -279,13 +310,19 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 			}
 			continue
 		}
-		if e.mode != "" {
+		if e.hasMode {
 			r.Diagnosef("unknown argument %s\n", a)
 			return e, 1
 		}
-		e.mode = a
+		// Written and empty is a mode like any other, which is measured
+		// rather than assumed: `emulate ""` is silent at 0 with the mode
+		// unchanged, and `emulate "" sh` is `unknown argument sh` — so the
+		// empty word occupied the operand a second one would have wanted.
+		// A pair rather than a non-empty string, because "no mode" and "the
+		// empty mode" are two states and only one of them prints.
+		e.mode, e.hasMode = a, true
 	}
-	if e.mode == "" && len(args) > 0 {
+	if !e.hasMode && sawFlags {
 		if len(e.options) > 0 {
 			// An option with no emulation to apply it to. Measured: real
 			// zsh answers `bad option: -o` here rather than complaining
@@ -303,7 +340,11 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 
 // emulateCall is one command line, read.
 type emulateCall struct {
-	mode    string
+	mode string
+	// hasMode says a mode word was written, which the mode alone cannot:
+	// `emulate ""` names the empty mode and `emulate` names none, and only
+	// the second prints the current one. Measured 2026-09-18 on zsh 5.9.2.
+	hasMode bool
 	code    string
 	hasCode bool
 	// local is `-L`: the emulation, and every option moved after it, last

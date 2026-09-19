@@ -15619,6 +15619,13 @@ type Semantics struct {
 	// whose shape it borrows and whose question it is not.
 	HelpOption HelpOption
 
+	// EmulationOption is how this shell's *invocation* asks it to start under
+	// another shell's semantics, before any line is read — zsh's
+	// `--emulate MODE`. See [EmulationOption]. The zero value is a shell with
+	// no such option, and the word is then refused like any other it does not
+	// know.
+	EmulationOption EmulationOption
+
 	// ShellOptionInvocationLetter is the option letter whose next word names
 	// an option in this shell's *second* option namespace — the table it
 	// keeps beside `set -o` rather than inside it. Written without its sign,
@@ -19960,6 +19967,90 @@ type HelpOption struct {
 	ToStandardError bool
 
 	// Status is what the shell exits after answering.
+	Status int
+}
+
+// EmulationOption is an invocation option that starts the shell under another
+// shell's semantics before anything is read. zsh alone on the panel: bash
+// 5.3.20, bash 3.2.57, dash 0.5.12, ksh93u+ 2012-08-01 and BusyBox ash 1.37.0
+// all refuse the word.
+//
+// It is not a spelling of an option *name*, which is what makes it a value of
+// its own rather than a row in a roster. Measured 2026-09-18 on zsh 5.9.2
+// under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	--emulate sh -c 'v="a b"; set -- $v; echo $#'   2, where a plain zsh says 1
+//	--emulate sh   -c emulate                       sh
+//	--emulate ksh  -c emulate                       ksh
+//	--emulate fish -c 'emulate; echo ran'           zsh, then ran — silent no-op
+//	--emulate ""   -c emulate                       zsh — the same silence
+//	--emulate -- sh -c emulate                      can't open input file: sh
+//	--emulate -c 'echo ran'                         can't open input file: echo ran
+//	--emulate=sh -c 'echo ran'                      no such option: emulate=sh
+//	--emulate                                       --emulate: argument required, 1
+//	-x --emulate sh -c :                            --emulate: must precede other options, 1
+//	--emulate sh -x -c :                            + :
+//	--emulate ksh --emulate sh -c emulate           sh
+//
+// Four facts, and each is a field below. The next word is taken
+// **unconditionally** — the `-- sh` and `-c` rows are what prove it, since
+// both are words a front end would otherwise claim — so this is a startup
+// option in StartupFileOptions.NameInteractive's sense rather than a name.
+// `=value` is not a spelling of it. A mode the shell does not know changes
+// nothing and says nothing, which is the *builtin's* own answer to the same
+// word, so the mode is handed to the builtin rather than judged here. And the
+// word must come **first**: any other option word before it is a refusal, at
+// a status this front end's usage status is not.
+//
+// Applying it is the dialect's, not this front end's: the mode is handed to
+// the builtin named below, before the invocation's own `set` options, which
+// is the order measured — `--emulate sh -x` traces and an emulation applied
+// after would have reset the letter it was given.
+type EmulationOption struct {
+	// Spellings names the option, whitespace-separated and written exactly
+	// as a command line writes it — `--emulate`. Empty means the shell has
+	// no such option.
+	//
+	// A string rather than a slice for the reason VersionOption.Spellings is
+	// one: a slice reached from Semantics makes the whole vector
+	// uncomparable.
+	Spellings string
+
+	// Builtin names the builtin the mode word is handed to. Empty reads the
+	// option and applies nothing, which is not a state any dialect should be
+	// in — it is the shape a Spellings set without a Builtin would take, and
+	// it fails loudly in a test rather than quietly at a prompt.
+	//
+	// A name rather than a function because a function on the vector makes
+	// Semantics uncomparable, and because the builtin is already registered:
+	// the front end asks the runner for it by name, exactly as `emulate -c`
+	// asks for `eval`.
+	Builtin string
+
+	// MissingArgument is what the shell says when the option is the last
+	// word. One verb: the spelling as it was written.
+	//
+	// Its own sentence rather than this front end's `%s requires an
+	// argument`, because the wording and the status are both the dialect's
+	// and neither matches: zsh writes `--emulate: argument required` and
+	// exits 1, where a front-end refusal is 2.
+	MissingArgument string
+
+	// OutOfOrder is what the shell says when another option word came first.
+	// One verb, read the same way.
+	//
+	// Empty grants the option in any position, which is what a dialect with
+	// no such rule wants; zsh has the rule and it is measured.
+	OutOfOrder string
+
+	// Status is what the shell exits under either refusal — 1 in the one
+	// column that has the option, where this front end's own usage status
+	// for a refused word is 2.
+	//
+	// Zero is a success and is wrong for a refusal, so a dialect that names
+	// Spellings names this too; dialect/zsh's own preset test asserts that
+	// the four fields travel together, because a half-filled value reads as
+	// a working option and answers 0 to a command line it rejected.
 	Status int
 }
 

@@ -438,6 +438,14 @@ func Semantics() interp.Semantics {
 		Spellings:          "--pretty-print",
 		ParseFailureStatus: 1,
 	}
+	// The options that ask for the strings the program marked for
+	// translation — `$"…"` — rather than a run of it. This shell's alone in
+	// the panel, and the only one of the five that reads the mark at all.
+	// Nothing here translates anything: see interp.StringCatalogOption.
+	s.StringCatalogOption = interp.StringCatalogOption{
+		Spellings:               "-D --dump-strings",
+		PortableObjectSpellings: "--dump-po-strings",
+	}
 	// `-O shopt_option`, which is this shell's alone: the letter whose next
 	// word is a name in the `shopt` table rather than a `set` option. The
 	// usage block above already advertises it — `-ilrsD or -c command or -O

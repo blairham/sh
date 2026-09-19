@@ -122,6 +122,14 @@ func common() syntax.Layout {
 		// rather than by the printer. Two spellings from one shell, which is
 		// why the outer one is Diagnostics.FunctionListingHeader and this
 		// one is here.
+		// And a `$"…"` comes back as an ordinary double-quoted string:
+		// measured 2026-09-19 on bash 5.3.20, `f() { echo $"hi"; }` lists as
+		// `echo "hi"` under `declare -f`, under `type`, through `export -f`
+		// and through the whole-script listing alike. The mark is read when
+		// the word is, so a body said back after the fact has nothing left
+		// to mark.
+		TranslatedWordWrittenPlain: true,
+
 		FunctionHeader:                        syntax.FunctionHeaderKeywordAndParens,
 		BraceAfterAFunctionHeaderOnItsOwnLine: true,
 	}

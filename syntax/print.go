@@ -52,6 +52,41 @@ func PrintFileWith(f *File, l Layout) string {
 	return p.b.String()
 }
 
+// TranslatedString is one `$"…"` the program was written with: the text
+// between its quotes, and the line it stands on.
+//
+// The text is what the printer would write back inside the quotes, which is
+// the same thing a reader of the script sees — escapes as written, expansions
+// as written, nothing performed. Nothing here translates it and no message
+// catalog is consulted; see [Span.Translated].
+type TranslatedString struct {
+	Text string
+	Line int32
+}
+
+// TranslatedStrings is every `$"…"` in a file, in the order it was written.
+//
+// It is the printer walking the tree rather than a walk of its own, and that
+// is the whole reason it is here instead of in the caller. A second traversal
+// would have to know every node kind, and the one that is missed is the one
+// nobody notices — where a printer that failed to reach a node would be
+// writing a program back with a piece of it missing, which nothing in this
+// tree could keep quiet about.
+//
+// What it does *not* reach is a substitution's interior: a `$(…)` span holds
+// its script as unparsed text, so a `$"…"` written inside one is text here
+// rather than a run. That is the same recursion a listing of the span would
+// need; see the printer's own note about it.
+func TranslatedStrings(f *File) []TranslatedString {
+	if f == nil {
+		return nil
+	}
+	var found []TranslatedString
+	p := printer{translated: &found}
+	p.lines(f.Stmts)
+	return found
+}
+
 // PrintCommand renders one command, which is what a function's body is.
 func PrintCommand(c Command) string { return PrintWith(c, Layout{}) }
 
@@ -351,6 +386,22 @@ type Layout struct {
 	// blank line at the end, where the same engine reaching the end of the
 	// input writes one.
 	TrailingBlankLine bool
+
+	// TranslatedWordWrittenPlain writes a `$"…"` back as an ordinary
+	// double-quoted string, dropping the mark — see [Span.Translated].
+	//
+	// Off by default, because the mark is in the tree and a round trip has
+	// to give it back: `$"x"` reprinted as `"x"` is a different tree, and
+	// the one option that lists these strings would not see it.
+	//
+	// On for a *listing*, which is measured and was not obvious: the engine
+	// that says a function body back drops the mark in all three of the
+	// places it says one — shown to a person, written into the environment
+	// for a child, and writing a whole script back — so a body reprinted out
+	// of a running shell holds plain quotes. The mark is an invocation-time
+	// fact there, and it has already been used by the time a body can be
+	// listed.
+	TranslatedWordWrittenPlain bool
 }
 
 // FunctionHeader is how a function declaration's header is spelled.
@@ -444,6 +495,10 @@ type printer struct {
 	// which is the one thing a statement's own End cannot say — see units,
 	// its only reader.
 	consumed int32
+	// translated collects the `$"…"` runs as they are written, for the one
+	// caller that wants them rather than the text — see TranslatedStrings.
+	// Nil for every ordinary print.
+	translated *[]TranslatedString
 }
 
 func (p *printer) str(s string) { p.b.WriteString(s) }
@@ -1619,7 +1674,12 @@ func (p *printer) redirs(rs []*Redirect) {
 // The sub-printer carries this one's arrangement and its two word-level
 // flags, so the text it produces is the text that would have been written.
 func (p *printer) printedWord(w *Word) string {
-	sub := printer{layout: p.layout, raw: p.raw, caseBlanks: p.caseBlanks}
+	// The collector travels with it, because a word written through here is
+	// still a word of the program: a redirection target and a here-document
+	// delimiter both arrive this way, and one written `$"…"` is a marked
+	// string wherever it stands. The lookahead printer in withNext
+	// deliberately does not take it — that one writes the same span twice.
+	sub := printer{layout: p.layout, raw: p.raw, caseBlanks: p.caseBlanks, translated: p.translated}
 	sub.word(w)
 	return sub.b.String()
 }
@@ -1875,9 +1935,28 @@ func (p *printer) quoted(q Quoting, spans []Span) {
 		}
 		p.str("'")
 	default:
+		// The `$` of a `$"…"`, which is the whole of what the mark changes
+		// about the writing: the run inside is an ordinary double-quoted one
+		// and goes back exactly as it would without the mark. Dropping it
+		// would hand back a program the one option that lists these strings
+		// could not see.
+		if spans[0].Translated && !p.layout.TranslatedWordWrittenPlain {
+			p.str("$")
+		}
 		p.str(`"`)
+		at := p.b.Len()
 		for i := range spans {
 			p.withNext(spans, i, func() { p.span(spans[i]) })
+		}
+		if spans[0].Translated && p.translated != nil {
+			// Taken from what was just written rather than from the spans,
+			// which is the point of collecting here: the text a listing shows
+			// is the text between the quotes, and this is the one place that
+			// text exists.
+			*p.translated = append(*p.translated, TranslatedString{
+				Text: p.b.String()[at:],
+				Line: spans[0].Pos.Line,
+			})
 		}
 		p.str(`"`)
 	}

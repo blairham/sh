@@ -4372,6 +4372,12 @@ func Diagnostics() interp.Diagnostics {
 		// was written: `$((#\))` says `after ##` as readily as `$((##))`.
 		ArithCharacterMissing: "bad math expression: character missing after ##",
 		SyntaxUnexpected:      "parse error near `%[1]s'",
+		// The operator that backgrounds a command and lets go of it is
+		// written two ways here and named by one of them — `&!` in a
+		// refusal comes back `&|`. It is the only pair this shell folds;
+		// see interp.Diagnostics.SyntaxUnexpectedNamesTheDisowningOperatorWithAPipe
+		// for the measurement and for the pairs that keep their spelling.
+		SyntaxUnexpectedNamesTheDisowningOperatorWithAPipe: true,
 		// The sentence this shell writes in front of that one when the
 		// function being defined is named by an alias. Two lines, and the
 		// second is the parse failure above located at the parentheses —

@@ -4616,6 +4616,39 @@ type Diagnostics struct {
 	// token, which is why [syntax.Error] carries both (#2013).
 	SyntaxUnexpectedNamesTheOpener bool
 
+	// SyntaxUnexpectedNamesTheDisowningOperatorWithAPipe writes `&|` where a
+	// refusal names the operator that backgrounds a command and lets go of
+	// it. One dialect has that operator and takes it written two ways —
+	// `&!` and `&|` — and names it by the second whichever was written.
+	//
+	// Measured 2026-09-19 on zsh 5.9.2 from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null device,
+	// the operator put where no command can begin:
+	//
+	//	; &!            parse error near `&|'
+	//	; &|            parse error near `&|'
+	//	for &!          parse error near `&|'
+	//	echo x | &!     parse error near `&|'
+	//	( &! )          parse error near `&|'
+	//
+	// **Only this pair folds**, which is what makes it a flag rather than a
+	// table of spellings. Every other operator this dialect has two ways of
+	// writing names itself: `;|` is `;|` and not `;;&`, `|&` is `|&`, and
+	// the clobbering redirections written with `!` are never named at all —
+	// a refusal there falls on the newline after them.
+	//
+	// And it folds the **operator** and not the characters. A word that
+	// happens to be spelled that way is echoed back as written, quotes and
+	// all: `for '&!'` is ``parse error near `'&!''`` and `for \&\!` is
+	// ``parse error near `\&\!'``. So the fold is gated on the token being
+	// an operator, and that pair is the control that says this is a rule
+	// about the token rather than about the two bytes.
+	//
+	// A flag rather than a wording because the sentence around it is
+	// SyntaxUnexpected's and only the token changes — the same shape
+	// SyntaxUnexpectedNamesTheOpener has (#3747).
+	SyntaxUnexpectedNamesTheDisowningOperatorWithAPipe bool
+
 	// FlagGroupNamesTheWordTail writes the rest of the word a refused
 	// expansion flag group stands in, rather than the `(` that opened it.
 	//
@@ -7384,6 +7417,19 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 	}
 	if d.SyntaxUnexpectedNamesTheOpener && se.TokenOpener != "" {
 		token = se.TokenOpener
+	}
+	if d.SyntaxUnexpectedNamesTheDisowningOperatorWithAPipe &&
+		se.Class == syntax.ClassOperator && se.Token == "&!" {
+		// The operator's other spelling, which is the one this dialect
+		// names it by.
+		//
+		// Gated on the class, because a refused *word* reaches this
+		// sentence carrying the same literal: `{ :; } '&!'` is a word whose
+		// se.Token is the bare `&!`, its quoting held elsewhere, and it
+		// must come back `'&!'`. The class is where the parser recorded
+		// which of the two it read, so it is the only thing parting them —
+		// dropping it folds the word too. See the field.
+		token = "&|"
 	}
 	form := d.SyntaxUnexpected
 	if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {

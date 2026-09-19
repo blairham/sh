@@ -4385,6 +4385,21 @@ type Diagnostics struct {
 	// Empty means no such line, which is every dialect but one.
 	CondSyntaxPreamble string
 
+	// CondTermUndecidedPreamble is that line again for the newline behind a
+	// condition term whose first word has been read and whose shape is not
+	// yet settled. The same dialect, and a sentence about the operator it
+	// was still waiting for rather than about the token it met: measured
+	// 2026-09-18 on bash 5.3.20 and 3.2, `[[ y` with the `]]` on the next
+	// line is
+	//
+	//	unexpected token `newline', conditional binary operator expected
+	//
+	// where `[[ -n x` over the same two lines runs. One verb: %[1]s the
+	// token, and %[2]d the line, as above. Empty means the dialect words the
+	// position the way it words any other refused token, which is what the
+	// column that quotes `` `newline' unexpected `` does (#3627).
+	CondTermUndecidedPreamble string
+
 	// CondCommandPreamble is that line again for a token refused where a
 	// condition was to **begin** — after the `[[`, after a `!`, after a
 	// connective, or just inside a group. One verb: the token, and %[2]d the
@@ -7602,6 +7617,11 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 		}
 	} else if se.Kind != syntax.ErrUnexpected {
 		return ""
+	} else if se.CondTermUndecided && d.CondTermUndecidedPreamble != "" {
+		// A newline behind a term whose shape is not yet settled, which this
+		// dialect words as a statement about the operator it was waiting for.
+		// See CondTermUndecidedPreamble.
+		form = d.CondTermUndecidedPreamble
 	} else if se.CondTermMissing {
 		// A token where the condition was to begin, which this dialect words
 		// differently — and for the closer itself does not word at all. See

@@ -97,13 +97,54 @@ the `echo`'s line; where nothing follows at all the `]]` is still the last
 token read and is what gets named, which is why the first, third and eighth
 rows agree in both columns.
 
-**One shape of each is measured and not modeled.** `[[ ]] && x ]]` is
+**One shape is measured and not modeled.** `[[ ]] && x ]]` is
 `condition expected: x` in zsh — a run-time complaint about a word, the `&&`
 there being read as the list operator it also is — where this reading names
-the `&&`. And where a newline follows the word ksh93 names the **newline**
-rather than what stands behind it, which is #3627: the same divergence is
-there for a condition that never closed at all, so it is that shell's scanner
-state and not this reading (#2964).
+the `&&` (#2964).
+
+Where a newline follows the word ksh93 names the **newline** rather than what
+stands behind it, and that is not this reading either: it is the section
+below, reached here because the closer *is* the word (#3627).
+
+## A term's first word at the end of its line
+
+A newline after a term whose first word has been read and whose shape is not
+yet settled — a binary operator may still follow it — is a **refusal** in two
+of the three columns, and the third takes it. Measured 2026-09-18, script
+files under `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin `/dev/null`:
+
+| written | zsh 5.9.2 | bash 5.3.20 and 3.2 | ksh93u+ |
+| --- | --- | --- | --- |
+| `[[ y` ⏎ `]]` | runs | ``token `newline', conditional binary operator expected`` | ``` `newline' unexpected ``` |
+| `[[ y` ⏎ `&& -n z ]]` | runs | the same | the same |
+| `[[ y` ⏎ `\|\| -n z ]]` | runs | the same | the same |
+| `[[ ( y` ⏎ `) ]]` | runs | the same | the same |
+| `[[ -n x && y` ⏎ `]]` | runs | the same | the same |
+| `[[ y` ⏎ `== z ]]` | refuses | the same | the same |
+| `[[ -n x` ⏎ `]]` | runs | runs | runs |
+| `[[ y == z` ⏎ `]]` | runs | runs | runs |
+| `[[ ( -n x )` ⏎ `]]` | runs | runs | runs |
+
+The last three rows are the control: a term that is **finished** takes a
+newline everywhere, which is what says this is a rule about one position and
+not about newlines inside a condition. The sixth is the other side of it —
+a binary operator with no operand is refused in every column, including the
+one that takes the rest, so the flag reaches a term with no verdict and not
+a newline anywhere in the construct.
+
+`ConditionNewlineMayFollowATermsFirstWord` is the flag, **off** in the core:
+two of the three refuse, and what moves is what the parser accepts rather
+than how a refusal is worded. Reading it as core-accepts is what made this
+shell run `[[ y` ⏎ `]]`, a line bash and ksh93 both reject.
+
+The refusal names the newline, located at the **last** of the blank lines
+rather than the first: three of them between `[[ y` and an `echo` put ksh93's
+complaint on the `echo`'s line with `newline` still the word quoted — the
+same skip `ConditionTermMissingBlamesTheTokenAfterTheCloser` takes one
+construct over. bash writes a sentence of its own about the operator it was
+waiting for, `Diagnostics.CondTermUndecidedPreamble`; the two lines it prints
+after that one still name the newline where bash names the word in front of
+it, which is the generic echo and is left as it stands.
 
 ## The right side of `==` is a pattern
 

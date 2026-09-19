@@ -4052,15 +4052,59 @@ type Dialect struct {
 	// differently is report the refusal at the token *after* the closer, and
 	// [Dialect.ConditionTermMissingBlamesTheTokenAfterTheCloser] is that.
 	//
-	// One row of the same input is measured and **not** modeled, and it
-	// predates this flag: where a newline follows the word, that column names
-	// the **newline** rather than what stands behind it —
-	// ``line 2: `newline' unexpected`` for `[[ ]]` and an `echo` on the next
-	// line, where this reading names the `echo`. The same divergence is there
-	// for a condition that never closed at all, `[[ x` over two lines, so it
-	// is that shell's scanner state and not this reading. #3627 has the panel
-	// and the two rows that stop it being a rule about newlines (#2964).
+	// Where a newline follows the word, the newline itself is what is named,
+	// and that is not this flag's — it is
+	// [Dialect.ConditionNewlineMayFollowATermsFirstWord], which every column
+	// but one answers the same way. `[[ ]]` reaches it here because the
+	// closer is *read as the word* and a word standing alone is where that
+	// question is asked (#2964, #3627).
 	ConditionCloserIsAWordWhereATermBegins bool
+
+	// ConditionNewlineMayFollowATermsFirstWord lets a condition term's first
+	// word be the last thing on its line, with whatever decides the term —
+	// a binary operator, the `]]`, a connective, a group's `)` — written on
+	// the next.
+	//
+	// Additive, and one column adds it. Measured 2026-09-18, script files
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin `/dev/null`:
+	//
+	//	written                zsh 5.9.2  bash 5.3.20 and 3.2      ksh93u+
+	//	[[ y \n ]]              runs       `newline', cond. binary  `newline'
+	//	[[ y \n && -n z ]]      runs       the same                 the same
+	//	[[ y \n || -n z ]]      runs       the same                 the same
+	//	[[ ( y \n ) ]]          runs       the same                 the same
+	//	[[ y \n == z ]]         runs       the same                 the same
+	//	[[ y \n echo after      refuses    the same                 the same
+	//	[[ -n x \n ]]           runs       runs                     runs
+	//	[[ y == z \n ]]         runs       runs                     runs
+	//	[[ ( -n x ) \n ]]       runs       runs                     runs
+	//
+	// So the question is asked at exactly one position — a term whose first
+	// word has been read and whose **shape is not yet decided**, since a
+	// binary operator may still follow it — and nowhere else. The last three
+	// rows are the control: a term that is *finished* takes a newline in
+	// every column, which is what says this is not a rule about newlines
+	// inside conditions.
+	//
+	// Off is the core's answer because two of the three columns refuse, and
+	// because what moves is what the parser **accepts**: on, `[[ y` and a
+	// `]]` on the next line is a condition; off, it is a refusal naming the
+	// newline. Reading it as core-accepts made this shell run a line bash
+	// and ksh93 both reject.
+	//
+	// The newline is named where the parser stands **after** the blank lines
+	// rather than at the first of them: three of them before an `echo` put
+	// ksh93's complaint on the `echo`'s line, with `newline` still the word
+	// quoted. That is the same skip
+	// [Dialect.ConditionTermMissingBlamesTheTokenAfterTheCloser] measured one
+	// construct over.
+	//
+	// Not the same question as a newline behind a *binary operator*, which
+	// every column refuses and which the core already refused — `[[ 1 ==`
+	// and a newline is `newline' unexpected` in ksh93 and `unexpected
+	// argument `newline'` in bash. That one is an operator with no operand;
+	// this one is a term with no verdict (#3627).
+	ConditionNewlineMayFollowATermsFirstWord bool
 
 	// ConditionTermMissingBlamesTheTokenAfterTheCloser reports a condition
 	// with no term in it at the token **behind** the `]]` rather than at the

@@ -315,6 +315,15 @@ type Error struct {
 	// One dialect words the two apart and one of its wordings is *nothing at
 	// all*. See Diagnostics.CondCommandPreamble for the measurement.
 	CondTermMissing bool
+
+	// CondTermUndecided says the refused token is the newline behind a
+	// condition term whose first word has been read and whose shape is not
+	// yet settled — a binary operator may still follow it. One dialect words
+	// that position as a statement about the operator it was still waiting
+	// for rather than as a token the grammar did not want:
+	// `unexpected token `newline', conditional binary operator expected`.
+	// See [Dialect.ConditionNewlineMayFollowATermsFirstWord].
+	CondTermUndecided bool
 	// CondGroupsOpen is how many `(` of the condition had been entered and
 	// not closed when it failed. The same dialect writes one line per open
 	// group in front of the rest.

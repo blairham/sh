@@ -552,6 +552,9 @@ func (p *Parser) condPrimary() CondExpr {
 	p.condWords = append(p.condWords, PrintWord(left))
 	op := p.condOperator()
 	if op == "" {
+		if p.condNewlineAfterATermsFirstWord() {
+			return nil
+		}
 		// A bare word is a test for non-emptiness.
 		return &CondUnary{Op: "-n", X: left, Start: left.Pos()}
 	}
@@ -563,6 +566,45 @@ func (p *Parser) condPrimary() CondExpr {
 	}
 	p.condWords = append(p.condWords, PrintWord(right))
 	return &CondBinary{Op: op, X: left, Y: right}
+}
+
+// condNewlineAfterATermsFirstWord refuses the newline standing behind a
+// condition term whose first word has been read and whose shape is not yet
+// decided — a binary operator may still follow it — for the dialects that
+// will not take one there.
+//
+// The position the parser is *at* rather than the first newline: blank lines
+// are passed over and the complaint lands where the next real token is, with
+// `newline` still the word quoted. Measured on ksh93u+, three blank lines
+// between `[[ y` and an `echo` putting the complaint on the `echo`'s line.
+// See [Dialect.ConditionNewlineMayFollowATermsFirstWord] for the nine rows
+// and for the three that say the question is asked at one position only.
+//
+// A synthetic token rather than a message of its own, so that every dialect
+// words this the way it words any other token the grammar did not want — and
+// so that the run-out case is a newline too, which is what the column that
+// names it does: `[[ y` and a final newline is `newline' unexpected` there
+// where the same text without one is “ `[[' unmatched “.
+func (p *Parser) condNewlineAfterATermsFirstWord() bool {
+	if p.dialect.ConditionNewlineMayFollowATermsFirstWord || !p.at(TokNewline) {
+		return false
+	}
+	nl := p.tok
+	for p.at(TokNewline) {
+		// The *last* of the blank lines rather than the token behind them:
+		// the complaint is located there, and a newline's own position is
+		// what numbers the line after it.
+		nl = p.tok
+		p.next()
+	}
+	p.failUnexpectedAt(nl, "]]", false)
+	var se *Error
+	if errors.As(p.err, &se) {
+		se.CondTermUndecided = true
+	}
+	p.recordCondGroup()
+	p.blameCondition(p.condStart)
+	return true
 }
 
 // recordCondGroup writes the words of the condition group onto the failure

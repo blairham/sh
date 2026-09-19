@@ -1311,6 +1311,13 @@ func Semantics() interp.Semantics {
 	// `f` and `eval :` write their letter, `/usr/bin/true`, `true` and
 	// `print` write none.
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsWhereItPersists
+	// And the prefix is worked through before a declaration utility's operand
+	// too, which is a separate measurement rather than the same one read
+	// again: measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo OP
+	// >&2)` writes `PRE` and then `OP`, and so does the same line with
+	// `typeset a=($(echo OP >&2))` — a utility this shell does not keep a
+	// prefix for, so the split above is not what decides it (#3814).
+	s.PrefixExpandedBeforeADeclarationsOperand = interp.Yes
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOff
 	// And a listing with no operand walks the **environment** the command
 	// was handed, so the prefix's entry is in it and counts as exported

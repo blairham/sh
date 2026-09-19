@@ -920,6 +920,12 @@ func Semantics() interp.Semantics {
 	// then the file complaint, where zsh, dash and BusyBox ash write the
 	// complaint alone (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsAlways
+	// And a declaration utility's operand is reached **before** that prefix,
+	// which is the opposite half of the same sequence: measured 2026-09-19,
+	// `PRE=$(echo PRE >&2) export s=$(echo OP >&2)` writes `OP` and then
+	// `PRE` here and in bash 3.2, where ksh93 and zsh write `PRE` first
+	// (#3814).
+	s.PrefixExpandedBeforeADeclarationsOperand = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOn
 	// And a listing with **no operand** does not see that prefix at all: it
 	// answers from the shell's own variables, so `export k=1; k=9 export -p`

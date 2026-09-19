@@ -5548,6 +5548,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				break
 			}
 			if declaring {
+				// The prefix first, in the two columns that work through it
+				// before they reach the operand. Here rather than anywhere
+				// earlier because *here* is where the word is known to be a
+				// declaration's operand at all, and an ordinary command's
+				// argument is expanded before its prefix everywhere. See
+				// interp/prefixoperandorder.go.
+				if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
+					break
+				}
 				operandAt = append(operandAt, len(argv))
 				argv = append(argv, r.expandAssignArg(w))
 				continue
@@ -5583,6 +5592,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.declarationCommand(c, argv)
 		if appendOperand && r.dialect().AppendAssign {
 			if r.unspecified {
+				break
+			}
+			// The appending spelling of the same operand, so the same
+			// ordering question with the same answer.
+			if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
 				break
 			}
 			operandAt = append(operandAt, len(argv))
@@ -5868,6 +5882,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// command's redirections, which is where the same two columns put it —
 	// `typeset a=($(echo hi >&2)) 2>/dev/null` writes `hi` there and wrote
 	// nothing here (#3806). The store takes this very list.
+	if len(r.arrayOperands) > 0 {
+		// And the prefix before *this* body too, where the dialect works
+		// through it first: the array literal is the other thing the operand's
+		// parentheses can hold and it answers the same way in every column.
+		// Asked only where there is an operand, so a command with none asks
+		// nothing. See interp/prefixoperandorder.go.
+		if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
+			r.status = 2
+			return nil
+		}
+	}
 	r.expandArrayOperands()
 
 	tracesPrefix := r.tracesItsPrefix(c.Assigns, argv)

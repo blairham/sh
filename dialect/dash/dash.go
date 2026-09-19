@@ -121,6 +121,10 @@ func Semantics() interp.Semantics {
 	// The redirections are opened first: measured 2026-09-18, `w=$(echo S
 	// >&2) f > /nope/x` writes the file complaint alone, at 2 (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
+	// And a declaration utility's operand is reached before that prefix:
+	// measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo OP >&2)`
+	// writes `OP` and then `PRE` (#3814).
+	s.PrefixExpandedBeforeADeclarationsOperand = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// This shell has no declaration word but `readonly` and `export`, both
 	// special builtins whose prefix persists here by the axis above — so the

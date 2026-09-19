@@ -1757,6 +1757,12 @@ func Semantics() interp.Semantics {
 	// never runs when one fails: measured 2026-09-18, `w=$(echo S >&2) f >
 	// /nope/x` writes the file complaint alone (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
+	// And yet the prefix is worked through **before** a declaration utility's
+	// operand, which is why the two are separate axes: this shell opens the
+	// redirections ahead of the prefix and still reaches the prefix ahead of
+	// the operand. Measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo
+	// OP >&2)` writes `PRE` and then `OP` (#3814).
+	s.PrefixExpandedBeforeADeclarationsOperand = interp.Yes
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// And a listing with no operand sees the prefix's entry as an ordinary
 	// one: its value is written and the attribute tables say the rest, so

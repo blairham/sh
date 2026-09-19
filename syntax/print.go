@@ -339,6 +339,55 @@ type Layout struct {
 	// write the word back as it was written and leave this nil.
 	AnsiCQuotedWordIsItsValue func(string) string
 
+	// KeywordBodiesTakeTheirOwnLines lays out every construct a reserved word
+	// closes — `fi`, `done`, `esac` — as Lines would, while a list's own
+	// statements follow the source's line breaks and a block the brackets
+	// close stays where it was written.
+	//
+	// It is the arrangement one engine reprints the **inside of a command
+	// substitution** with, and it is a third answer rather than either of the
+	// two above. Measured 2026-09-19 on bash 5.3.20 through `declare -f`:
+	// `$(a >/dev/null;b)` comes back `$(a > /dev/null; b)` on one line and
+	// `$(echo one` + newline + `echo two)` keeps its newline, which is what
+	// Lines cannot do; `$(if true; then echo x; fi)` comes back over three
+	// lines with `echo x` indented and `fi` at the margin, which is what
+	// leaving Lines off cannot do. A brace group and a subshell stay on the
+	// line either way — `$({ a; b; })` and `$( (a; b) )` come back
+	// `$({ a; b; })` and `$( ( a; b ))` — so the split is the closing token
+	// and not the construct's depth.
+	//
+	// Meaningless with Lines on, which already breaks everything.
+	KeywordBodiesTakeTheirOwnLines bool
+
+	// CommandSubstitutionIsReprinted writes the inside of a `$( … )` back
+	// through this function rather than as the source text the span holds.
+	//
+	// A [Span] of kind [CommandSubst] keeps its body unparsed, so a printer
+	// has nothing to lay out and writes the characters back; one engine
+	// re-reads the body and prints it through the same listing, so
+	// `$(a >/dev/null;b)` comes back `$(a > /dev/null; b)`. Doing that here
+	// would mean the printer re-entering the parser with a dialect it does
+	// not hold, so the caller supplies the whole step: parse with its own
+	// grammar, print with its own arrangement, hand back the text.
+	//
+	// `false` means the body was not re-read — it does not parse, which is
+	// reachable because a body is not read until the substitution runs — and
+	// the span is written back exactly as it stands. That is best effort by
+	// design: a listing that refused to print a program it can otherwise run
+	// would be a worse answer than a body written out as the author typed it.
+	//
+	// Asked of `$( … )` alone. A backquoted substitution is written back as
+	// written — measured on bash 5.3.20, `` `a >/dev/null;b` `` comes back
+	// unchanged where the `$( )` spelling beside it is reprinted — and so is
+	// a body whose first character is `(`, because the parentheses that come
+	// back decide whether the text re-reads as arithmetic: `$((a; b))` is
+	// written back as it stands there and `$( (a; b) )` becomes
+	// `$( ( a; b ))`.
+	//
+	// ksh93 and zsh write every substitution back as it was written and leave
+	// this nil, as does a formatter, which must not edit what it lays out.
+	CommandSubstitutionIsReprinted func(string) (string, bool)
+
 	// FunctionHeader is how a function declaration's header is spelled: the
 	// `function` keyword, the `()`, or both.
 	FunctionHeader FunctionHeader
@@ -537,6 +586,30 @@ func (p *printer) atLineStart() bool { return strings.HasSuffix(p.b.String(), "\
 // source never had, is Layout.BlankLineAfterAHereDocumentBody: the two
 // engines that list a body answer it differently, at the closing brace as
 // much as between two statements.
+// laidOut reports whether this arrangement lays a construct out rather than
+// writing it on the line it was written on.
+//
+// Lines says so for everything. KeywordBodiesTakeTheirOwnLines says so for
+// what a reserved word closes, and the three callers it does *not* reach —
+// how two statements of a list are separated, a brace group, and a subshell —
+// ask [Layout.Lines] directly for exactly that reason.
+func (p *printer) laidOut() bool {
+	return p.layout.Lines || p.layout.KeywordBodiesTakeTheirOwnLines
+}
+
+// laysOutStatements reports whether each statement of a list takes a line of
+// its own.
+//
+// Lines says so everywhere. Under KeywordBodiesTakeTheirOwnLines a list keeps
+// the source's own line breaks — that is the half of the arrangement Lines
+// cannot express — **except inside a declared body**, which comes back laid
+// out wherever it was written: measured, a function declared inside a command
+// substitution is listed with its statements one to a line while the
+// substitution's own list is not.
+func (p *printer) laysOutStatements() bool {
+	return p.layout.Lines || (p.laidOut() && p.inDeclaration)
+}
+
 func (p *printer) newLine() {
 	if p.atLineStart() && !p.layout.BlankLineAfterAHereDocumentBody {
 		p.str(p.pad())
@@ -624,7 +697,7 @@ func (p *printer) shareALine() bool {
 
 // separate writes what goes between two statements.
 func (p *printer) separate(prev, next *Stmt) {
-	if p.layout.Lines && p.shareALine() {
+	if p.laysOutStatements() && p.shareALine() {
 		// Joined, whatever the source did, which is the same disregard for
 		// the source's lines the branch below has — it differs only in
 		// writing the separator and a blank where that writes a newline.
@@ -641,7 +714,7 @@ func (p *printer) separate(prev, next *Stmt) {
 		}
 		return
 	}
-	if p.layout.Lines {
+	if p.laysOutStatements() {
 		if prev.Background && p.layout.BackgroundKeepsTheLine {
 			// The `&` is the terminator, so there is nothing to write
 			// between them but the blank that keeps them apart — and the
@@ -773,7 +846,12 @@ func (p *printer) expr(e Expr) {
 // both required — they are what make it a reserved word rather than the start
 // of a name.
 func (p *printer) braceGroup(list []*Stmt) {
-	if p.layout.Lines && !p.shareALine() {
+	// A brace group stays on the line it was written on where only what a
+	// keyword closes is laid out — measured, `$({ a; b; })` comes back as it
+	// was written where `$(if true; then echo x; fi)` is spread over three
+	// lines — and a *declared* body does not, since a declaration written
+	// inside a substitution comes back laid out there as well.
+	if p.laysOutStatements() && !p.shareALine() {
 		p.str("{" + p.layout.BraceOpenSuffix)
 		// The outermost brace — a function's own — is the one that differs; a
 		// brace inside one opens a line in every arrangement measured.
@@ -1186,7 +1264,7 @@ func (p *printer) doKeyword() { p.opener("do", p.layout.DoAfterWordsOnItsOwnLine
 // ending the header. `for i in a b;` keeps its semicolon there and
 // `for ((i=0; i<2; i++))` has none, so this cannot go through opener.
 func (p *printer) arithDoKeyword() {
-	if !p.layout.Lines || !p.layout.DoAfterArithmeticOnItsOwnLine {
+	if !p.laidOut() || !p.layout.DoAfterArithmeticOnItsOwnLine {
 		p.opener("do", false)
 		return
 	}
@@ -1200,7 +1278,7 @@ func (p *printer) arithDoKeyword() {
 // opener writes the keyword that introduces a body — `then`, `do` — either on
 // the header's line or on one of its own, which the arrangement decides.
 func (p *printer) opener(word string, ownLine bool) {
-	if !p.layout.Lines {
+	if !p.laidOut() {
 		p.str("; " + word)
 		return
 	}
@@ -1318,7 +1396,7 @@ func (p *printer) body(list []*Stmt, closedByKeyword bool) {
 // own. It does everywhere but at a brace in the flatter of the two
 // arrangements, where the body opens on the brace's line.
 func (p *printer) bodyAt(list []*Stmt, closedByKeyword, ownLine bool) {
-	if !p.layout.Lines {
+	if !p.laidOut() {
 		p.str(" ")
 		p.stmts(list)
 		return
@@ -1350,7 +1428,7 @@ func (p *printer) pad() string {
 
 // keyword writes the word that closes or continues a construct.
 func (p *printer) keyword(word string) {
-	if p.layout.Lines {
+	if p.laidOut() {
 		p.newLine()
 		p.str(word)
 		return
@@ -1385,7 +1463,7 @@ func (p *printer) terminate() {
 func (p *printer) caseClause(x *CaseClause) {
 	p.str("case ")
 	p.word(x.Word)
-	if p.layout.Lines {
+	if p.laidOut() {
 		p.str(" in" + p.layout.CaseHeaderSuffix)
 		p.caseArms(x)
 		return
@@ -1425,8 +1503,14 @@ func (p *printer) caseClause(x *CaseClause) {
 // so its last statement takes no `;`.
 func (p *printer) caseArms(x *CaseClause) {
 	p.depth++
-	for _, it := range x.Items {
-		p.str("\n" + p.pad())
+	for i, it := range x.Items {
+		// The first arm opens a line of its own where every statement does,
+		// and follows the `in` where only what a keyword closes is laid out:
+		// measured, `$(case x in a) b;; esac)` comes back `case x in a)` on
+		// one line with the arms after it each on their own.
+		if i > 0 || p.layout.Lines {
+			p.str("\n" + p.pad())
+		}
 		saved := p.caseBlanks
 		p.caseBlanks = patternsNeedTheParen(it)
 		if p.layout.CasePatternsParenthesised || p.caseBlanks {
@@ -2072,11 +2156,19 @@ func (p *printer) span(s Span) {
 		// because a `)` inside quotes closes nothing for it. See
 		// Dialect.ArithSubstScanIgnoresQuoting, which is the two columns
 		// whose scan is blind to it.
-		if strings.HasPrefix(s.Value, "(") && doubleParenIsArith("$("+s.Value+")", 3, false, false) {
-			p.str("$( " + s.Value + ")")
+		//
+		// Asked of the text that is about to be written and not of the text
+		// the span holds, because an arrangement that reprints the body
+		// decides those characters: `$( (a; b) )` holds a body beginning
+		// with a blank and comes back beginning with `(`, and writing it
+		// without the space would hand back `$(( a; b ))` — arithmetic, and
+		// a different program. Measured, bash 5.3.20 writes `$( ( a; b ))`.
+		body := p.commandSubstBody(s.Value)
+		if strings.HasPrefix(body, "(") && doubleParenIsArith("$("+body+")", 3, false, false) {
+			p.str("$( " + body + ")")
 			return
 		}
-		p.str("$(" + s.Value + ")")
+		p.str("$(" + body + ")")
 	case ArithSubst:
 		// The spelling that was read, for the reason Span.Bracketed gives:
 		// the two are one node and are not one syntax, and normalizing them
@@ -2111,6 +2203,28 @@ func (p *printer) span(s Span) {
 	default:
 		p.literal(s)
 	}
+}
+
+// commandSubstBody is what goes between the `$(` and the `)`.
+//
+// The characters the span holds, unless the arrangement has a reader for them
+// — see [Layout.CommandSubstitutionIsReprinted], which re-reads the body and
+// lays it out through the same listing, and which hands back `false` for a
+// body it could not read.
+//
+// Reached only past the arithmetic guard above, so a body beginning with `(`
+// is never re-read: what a reprint hands back decides whether the text comes
+// out as `$((` and so whether it re-reads as arithmetic, and the guard's
+// question was asked of the characters that are there.
+func (p *printer) commandSubstBody(body string) string {
+	reprint := p.layout.CommandSubstitutionIsReprinted
+	if reprint == nil {
+		return body
+	}
+	if out, ok := reprint(body); ok {
+		return out
+	}
+	return body
 }
 
 // bareParam reports whether a parameter can be written without its braces.

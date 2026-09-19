@@ -148,6 +148,19 @@ func TestTheScriptArrangementIsTheListingOneFourFieldsApart(t *testing.T) {
 	script.StatementsShareALineOutsideADeclaration = false
 	script.FileFollowsTheSourceUnits = false
 	script.TrailingBlankLine = false
+	// The function fields are asserted rather than differenced, because
+	// reflect.DeepEqual calls two non-nil functions unequal however they were
+	// built — so leaving them in would make this fail on the day one of them
+	// was set correctly in both. Whether each is answered is checked here and
+	// what it answers is checked by the listings themselves.
+	if script.CommandSubstitutionIsReprinted == nil || listing.CommandSubstitutionIsReprinted == nil {
+		t.Error("a substitution's body is reprinted in one arrangement and not the other")
+	}
+	script.CommandSubstitutionIsReprinted, listing.CommandSubstitutionIsReprinted = nil, nil
+	if (script.AnsiCQuotedWordIsItsValue == nil) != (listing.AnsiCQuotedWordIsItsValue == nil) {
+		t.Error("an ANSI-C word is decoded in one arrangement and not the other")
+	}
+	script.AnsiCQuotedWordIsItsValue, listing.AnsiCQuotedWordIsItsValue = nil, nil
 	if !reflect.DeepEqual(script, listing) {
 		t.Errorf("the two arrangements differ beyond the four fields:\n %+v\n %+v", script, listing)
 	}

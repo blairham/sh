@@ -12612,6 +12612,40 @@ Three shapes follow, each measured rather than reasoned:
   size (Kibytes)` (`Diagnostics.UlimitReadOnly`,
   `UlimitListingRow.Name`).
 
+- **One column has a row with no letter, and an option that takes a
+  *number*.** zsh prints `-N 15: rt cpu time (microseconds)` and reaches it
+  with `ulimit -N <number>`, which is the kernel's own resource number and
+  nothing else in the panel has a two-token option here.
+  `Diagnostics.UlimitNumberedOption` carries the letter and its three
+  complaints; the translation is `Runner.RlimitOrder`, the same numbering
+  the listing is laid out by.
+
+  Measured 2026-09-18 on zsh 5.9.2 (macOS arm64) and zsh 5.9 in the pinned
+  Alpine image (linux/arm64), script files under `env -i PATH=/usr/bin:/bin
+  LC_ALL=C`:
+
+  | probe | macOS | Linux |
+  | --- | --- | --- |
+  | `ulimit -N`, `ulimit -aN` | `number required after -N`, 1 | the same |
+  | `ulimit -N x`, `ulimit -Nx` | `invalid number: x`, 1 | the same |
+  | `ulimit -N 7` | `10666` — processes | `1024` — open files |
+  | `ulimit -N7` | the same, so attached is the same option | — |
+  | `ulimit -N 0`, `ulimit -N ""` | the limit numbered nought | — |
+  | `ulimit -N 08` | the limit numbered eight, not a refusal | — |
+  | `ulimit -N 7 2000` | sets it; reading gives `2000` | — |
+  | `ulimit -N 15` | `can't read limit: invalid argument`, 1 | `unlimited` |
+  | `ulimit -HN 15` | the same refusal | `unlimited` |
+
+  **`-N 7` is the discriminator**: seven is a different resource on the two
+  kernels and that shell prints each one's, so the operand is the platform's
+  number rather than an index into a table of the shell's.
+
+  **Two rows are a read past the end of the kernel's table and are not
+  modeled.** `ulimit -N 99` prints `8176` on macOS and `8192` on Linux, and
+  `ulimit -N -1` prints `unlimited` on both — numbers nothing put there. The
+  one *defined* out-of-range answer is macOS's for 15, on a kernel that
+  numbers nine limits, and that is what the refusal writes (#3667).
+
 ksh93 is the one column whose Linux table is unmeasured: no image
 carries 93u+ 2012-08-01, and the 93u+m 1.0.4 Debian ships is a different
 table — a wider label column and four rows this one never had. Its

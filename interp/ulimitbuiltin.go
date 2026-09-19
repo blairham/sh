@@ -112,6 +112,40 @@ func (r *Runner) ulimitRows() []UlimitListingRow {
 	return out
 }
 
+// ulimitRowForNumber is the row a *resource number* reads, for the one
+// dialect whose table has a row with no letter behind it.
+//
+// The number is the kernel's own, so the translation is Runner.RlimitOrder —
+// the limits this kernel has in the order it numbers them, which is already
+// what that shell's listing is laid out by. Measured 2026-09-18 on zsh 5.9.2
+// (macOS arm64) and zsh 5.9 in the pinned Alpine image (linux/arm64), each
+// probe a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	           -N 7                -N 15
+//	macOS      10666 (processes)   can't read limit: invalid argument, 1
+//	Linux      1024 (open files)   unlimited (the rt cpu row)
+//
+// Seven is a different resource on the two kernels and that shell prints each
+// one's, which is what says the operand is the platform's number rather than
+// an index into a table of the shell's.
+//
+// Out of range is a refusal here. That is the macOS answer for 15, where that
+// kernel numbers nine limits; both columns instead print a *number* for 99 and
+// for -1 — 8176 there and 8192 here — which is a read past the end of the
+// kernel's table rather than an answer, and is recorded rather than modeled.
+func (r *Runner) ulimitRowForNumber(n int) (UlimitListingRow, bool) {
+	if n < 0 || n >= len(r.RlimitOrder) {
+		return UlimitListingRow{}, false
+	}
+	res := r.RlimitOrder[n]
+	for _, row := range r.diag().UlimitListing {
+		if row.Fixed == "" && row.Res == res {
+			return row, true
+		}
+	}
+	return UlimitListingRow{}, false
+}
+
 // ulimitRow is the row a letter reads, and false where this shell has no such
 // letter.
 //
@@ -175,6 +209,14 @@ func (r *Runner) ulimitListing(hard bool) int {
 	return 0
 }
 
+// ulimitNumberedRefusal reports one of the numbered option's three
+// complaints, at the same status and through the same prefix the builtin's
+// other refusals take.
+func (r *Runner) ulimitNumberedRefusal(line string) int {
+	r.diagf("%s\n", line)
+	return orDefault(r.diag().UlimitBadOptionStatus, 2)
+}
+
 func biUlimit(r *Runner, _ context.Context, args []string) int {
 	// `-H` and `-S` choose which limit is read or written; without either,
 	// reading gives the soft one and writing sets both. Unanimous.
@@ -186,6 +228,7 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 	if !ok {
 		row = UlimitListingRow{Letter: 'f', Res: ResourceFileSize}
 	}
+	numbered := r.diag().UlimitNumberedOption
 	for len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' {
 		if args[0] == "--" {
 			args = args[1:]
@@ -193,7 +236,44 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 		}
 		letters := args[0][1:]
 		for i := 0; i < len(letters); i++ {
-			switch c := letters[i]; c {
+			c := letters[i]
+			if numbered.Letter != 0 && c == numbered.Letter {
+				// The one option in the panel whose *operand* names the
+				// resource, by the kernel's own number — see
+				// Diagnostics.UlimitNumberedOption. Attached or separate:
+				// `ulimit -N7` and `ulimit -N 7` are the same row.
+				//
+				// Ahead of the letter switch rather than a case in it,
+				// because the letter is the dialect's and a value switch
+				// cannot ask that.
+				text := letters[i+1:]
+				if text == "" {
+					if len(args) < 2 {
+						return r.ulimitNumberedRefusal(Wording(numbered.NeedsNumber,
+							"ulimit: number required after -%[1]s", string(c)))
+					}
+					text, args = args[1], args[1:]
+				}
+				// Decimal, and an empty operand is nought: `ulimit -N ""`
+				// and `ulimit -N 0` both read the limit numbered zero, and
+				// `ulimit -N 08` reads eight rather than being refused.
+				n := 0
+				if text != "" {
+					var ok bool
+					if n, ok = atoi(text); !ok {
+						return r.ulimitNumberedRefusal(Wording(numbered.BadNumber,
+							"ulimit: invalid number: %[1]s", text))
+					}
+				}
+				var found bool
+				if row, found = r.ulimitRowForNumber(n); !found {
+					return r.ulimitNumberedRefusal(Wording(numbered.OutOfRange,
+						"ulimit: no such limit"))
+				}
+				// The rest of the letter run was the number.
+				break
+			}
+			switch c {
 			case 'H':
 				hard = true
 			case 'S':

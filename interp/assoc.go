@@ -140,6 +140,17 @@ func (r *Runner) markAssoc(name string) {
 // association, still hold the right keys, and never say it had stopped
 // tracking. See SetDynamicAssocWriter.
 func (r *Runner) setAssocElem(name, key, value string) {
+	r.setAssocElemAs(name, key, value, ElementHoldsItsValue)
+}
+
+// setAssocElemAs is setAssocElem told what kind of element to leave behind,
+// which is the whole of what a valueless declaration needs of it — see
+// declareAssocKey. One body rather than two, because the guards above the
+// write (a produced table, a compound being retyped, the name's attribute
+// folding the value, the declared-only mark being lifted) are the same
+// whichever kind is being stored, and a second copy that omitted one of them
+// is the failure this file already warns about.
+func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 	name = r.namespaceWriteName(name)
 	name = r.throughNameref(name)
 	if write, ok := r.dynamicAssocWriters[name]; ok {
@@ -174,7 +185,7 @@ func (r *Runner) setAssocElem(name, key, value string) {
 			return
 		}
 	}
-	a[key] = Scalar(value)
+	a[key] = Element{Str: value, Kind: kind}
 	// Written to, so the name leaves the declared-only set — see
 	// compounddeclaredonly.go.
 	r.compoundWasAssigned(name)
@@ -182,6 +193,48 @@ func (r *Runner) setAssocElem(name, key, value string) {
 	// scalar view, so it is the one that has to lift the mark itself. An
 	// indexed array keeps `$a` answering through setVar and lifts it there.
 	r.nameIsBack(name)
+}
+
+// declareAssocKey is what a **valueless** subscripted declaration leaves under
+// a table's key: the key exists, and it holds nothing rather than the empty
+// string.
+//
+// The two states are one byte apart in a listing and identical everywhere
+// else, which is why the difference lives on the element rather than in a
+// second table. Measured on ksh93u+ 2012-08-01, 2026-09-19:
+//
+//	typeset -A m; typeset 'm[k]'            typeset -A m=([k]=)
+//	typeset -A m; m[k]=                     typeset -A m=([k]='')
+//	typeset -A m; m[k]=; typeset 'm[k]'     typeset -A m=([k]='')
+//	typeset -A m; typeset 'm[k]'; m[k]=     typeset -A m=([k]='')
+//	typeset -A m; typeset 'm[k]'; m[j]=v    typeset -A m=([j]=v [k]=)
+//
+// The third and fourth rows are why this declines to overwrite: the
+// declaration never takes a key that holds a value back down to holding none,
+// in either order, so it writes only where there is no key yet.
+//
+// No axis, for the reason nestTrailingSpace carries none: only the column
+// that reads a valueless operand's subscript without writing an element can
+// reach this at all — see Semantics.ValuelessSubscriptedOperand — so no other
+// dialect can produce the state to be asked about.
+//
+// A **produced** table is written through its hook with the empty string, as
+// every other write to one is: the hook takes a string and there is nowhere
+// in it to put a state. See setAssocElem for why a produced table is never
+// written into the stored one.
+func (r *Runner) declareAssocKey(name, key string) {
+	// The **stored** table rather than assocFor's, which answers a produced
+	// one first: a produced table is written through its hook by the call
+	// below whatever it already holds, exactly as every other write to one
+	// is, and a key this declined on its behalf would be a write it never
+	// heard about.
+	target := r.throughNameref(r.namespaceWriteName(name))
+	if _, held := r.AssocArrays[target][key]; held {
+		// Already holding something, so the declaration says nothing this
+		// table has not already been told.
+		return
+	}
+	r.setAssocElemAs(name, key, "", ElementDeclaredAndEmpty)
 }
 
 // unsetAssocElem removes one key, which is `unset m[k]` on a declared name.

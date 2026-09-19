@@ -1913,6 +1913,12 @@ func Semantics() interp.Semantics {
 	// failure, so `source` with no operand writes the same usage line and the
 	// script runs on (#3473).
 	s.DotWithNoOperandIsFatal = interp.Yes
+	// And the mode moves nothing: this shell has no `set -o posix`, so the
+	// only door is the name, and called `sh` it writes the same usage line
+	// and ends the same script. Written rather than left to refuse, because
+	// every dialect invoked as `sh` goes through the mode and an unanswered
+	// companion would refuse a line this shell answers (#3818).
+	s.DotWithNoOperandIsFatalInPosixMode = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	// `-a` and `-c`, and no `-l`: this shell reports the letter as an

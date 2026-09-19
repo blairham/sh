@@ -361,6 +361,7 @@ dash  DollarSingleQuestionEscape
 dash  DollarSingleUnicodeEscapes
 dash  DollarSingleUnknownEscape
 dash  DotWithNoOperandIsFatal
+dash  DotWithNoOperandIsFatalInPosixMode
 dash  EarlierDeclarationLetterBlocksALaterPlus
 dash  EchoLastEscapeFlagWins
 dash  EmptyArithSubscript

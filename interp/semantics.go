@@ -14774,6 +14774,41 @@ type Semantics struct {
 	// did (#3473).
 	DotWithNoOperandIsFatal Answer
 
+	// DotWithNoOperandIsFatalInPosixMode is the same question asked of a
+	// shell that is in POSIX mode, which is a state rather than a preset:
+	// [Runner.SetPosixMode] swaps this value in on the way in and puts the
+	// answer above back on the way out. The shape is
+	// BadOptionToSpecialBuiltinFatalInPosixMode's, and for the same reason —
+	// the shells disagree about what their own POSIX mode makes of this.
+	//
+	// Measured 2026-09-19, one probe at a time, each from a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null
+	// device, a bare `.` on one line and `echo after=$?` on the next:
+	//
+	//	                        default        POSIX mode
+	//	bash 5.3.20             2, runs on     2, **ends the script**
+	//	bash 3.2.57             2, runs on     2, ends the script
+	//	ksh93u+ 2012-08-01      2, ends it     2, ends it
+	//	zsh 5.9.2               1, runs on     1, runs on
+	//	BusyBox ash 1.37.0      2, runs on     no mode; 2, runs on
+	//	dash 0.5.12             not an error at all
+	//
+	// where the mode is reached through `set -o posix` for bash and through
+	// the `sh` name for the three shells that have no such option. The
+	// control is `false` on the line before, which runs on in every column
+	// under every name — so what ends the script above is this builtin's
+	// failure and not the mode being fatal about everything.
+	//
+	// **It is not BuiltinSyntaxErrorFatal's question**, which is the reading
+	// a bare `.` invites: a special builtin's misuse, and POSIX says a
+	// special builtin's error ends a non-interactive shell. Measured in the
+	// same run with `eval 'if'` as the misuse, two columns separate them.
+	// ksh93u+ ends the script on the bare `.` under every name and carries on
+	// from `eval 'if'` at status 3; bash 3.2.57 ends it on the bare `.` under
+	// `sh` and carries on from `eval 'if'` there at status 1. Two axes that
+	// disagree in two of six columns are two axes (#3818).
+	DotWithNoOperandIsFatalInPosixMode Answer
+
 	// DotDirectoryOperandIsAnError decides whether `.` naming a **directory**
 	// is a failure at all, which the panel is split down the middle on.
 	// Measured 2026-09-08, `. ./` from a script file in a scratch directory:

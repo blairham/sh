@@ -910,6 +910,10 @@ func Semantics() interp.Semantics {
 	s.KillJobSpecAimsAtTheGroup = interp.Yes
 	// dash 0.5.12 sends it: `kill -0 -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
+	// dash 0.5.12 reads it as a target behind `-0` (`Illegal number:
+	// -`). It does take it behind `-s 0`; that split is by the form the
+	// signal was written in and is recorded in the spec rather than here.
+	s.KillTakesEndOfOptionsAfterTheSignal = interp.No
 	// A trim on `$@` runs over the whole list once, not over each field:
 	// `set -- aa ab ba` makes `"${@#a}"` into `a ab ba` here and
 	// `a b ba` in bash, zsh and ksh93.

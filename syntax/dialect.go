@@ -1157,15 +1157,6 @@ type Dialect struct {
 	// So a grammar flag, and gated: a `cmd/bash` that took the `(` would
 	// accept what real bash refuses. See interp's tildeModifier for which
 	// letters are honored once the group has been read (#2621).
-	//
-	// **And the group turns the rest of its word raw.** Reading the group
-	// alone left `[[ abcd == ~(E)(ab)cd ]]` a syntax error at the second
-	// paren, which is a script that will not run on a route this tree ships:
-	// two of the three metacharacters that make an extended regular
-	// expression extended are also the shell's. From the end of the group to
-	// the end of the word, the characters that would otherwise end a word do
-	// not. See [Lexer.afterTildeGroup] for the measured set and the controls
-	// that tell a pattern character from a shell one (#3808).
 	TildeGroup bool
 
 	// CurrentShellSubstitution reads `${ cmd;}` as a command substitution

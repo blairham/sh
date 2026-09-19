@@ -2565,6 +2565,8 @@ func Semantics() interp.Semantics {
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// zsh 5.9.2 sends it: `kill -0 -- -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
+	// zsh 5.9.2 reaches the target behind either spelling.
+	s.KillTakesEndOfOptionsAfterTheSignal = interp.Yes
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// OPTIND names the word until its last letter has been read.

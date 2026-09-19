@@ -11488,6 +11488,47 @@ type Semantics struct {
 	// answer.
 	AliasOptionEndsTheLookup Answer
 
+	// AliasPrintOptionIgnoresItsOperands makes `alias -p` the whole listing
+	// and nothing else: every operand behind the letter is discarded, so a
+	// definition does not define, a name is neither looked up nor reported,
+	// and the status is 0.
+	//
+	// bash 5.3.20 alone, measured 2026-09-19 as script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`:
+	//
+	//	alias a=1 b=2; alias -p a        both lines, 0
+	//	alias a=1 b=2; alias a           a's line alone, 0
+	//	alias a=1 b=2; alias -p          both lines, 0
+	//	alias a=1 b=2; alias -- a        a's line alone, 0
+	//	alias -p nosuch                  silent, 0
+	//	alias nosuch                     alias: nosuch: not found, 1
+	//	alias -- nosuch                  alias: nosuch: not found, 1
+	//	alias -p a=1; alias              silent, 0 — nothing defined
+	//	alias a=1; alias -p a=2; alias   a='1' twice, 0 — nothing redefined
+	//	alias -p 'a b'=echo              silent, 0 — no name check either
+	//	alias -pp nosuch                 silent, 0
+	//
+	// The **first** row is the one that settles it, and the shape of the
+	// probe matters: with one alias defined, `alias -p a` cannot be told
+	// from a lookup of `a` that happened to be silent about a miss. With two
+	// defined it can, and it writes both.
+	//
+	// So this is not "the letter silences a complaint". A complaint is one
+	// of five things it swallows, and the definition row is the other end of
+	// the same fact: behind `-p` there are no operands to obey.
+	//
+	// The separator rows are the control that says it is the letter: `--`
+	// ends the options and leaves the operand exactly as a bare call does.
+	//
+	// The other four columns answer No, and three of them cannot be asked at
+	// all: zsh 5.9.2 has no `-p` and refuses it (`alias: bad option: -p`, 1),
+	// dash and BusyBox ash read no options for `alias` so `-p` is a *name*
+	// there, and ksh93u+ answers AliasOptionEndsTheLookup above, which is a
+	// different rule reaching the same silence for a *missing* name and a
+	// different answer for a held one — its `alias -p zz` writes nothing
+	// where this column writes the whole table (#3701).
+	AliasPrintOptionIgnoresItsOperands Answer
+
 	// UnaliasAllRefusesOperands makes `unalias -a name` an error that clears
 	// nothing. zsh alone: "-a: too many arguments", status 1, table intact.
 	// The other three take the `-a`, ignore the names and empty the table.

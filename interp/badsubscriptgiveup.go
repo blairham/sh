@@ -172,7 +172,7 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 		// rather than inferred — so it goes through the one path a value
 		// goes through, refusals, table keys, array growth and all. The
 		// letters there are the *element* declaration's, not the name's.
-		r.declareElement(base, subs[:len(subs)-1], sub, "", f, shadows)
+		r.declareElement(base, subs[:len(subs)-1], sub, "", false, f, shadows)
 		return "", letters, true
 	}
 	r.diagf("%s\n", r.unanswered(

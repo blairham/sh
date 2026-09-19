@@ -85,6 +85,9 @@ func Semantics() interp.Semantics {
 	// `export a+=2` is `a+: bad variable name` here, so the append operator
 	// is not an operand this shell's declarations take.
 	s.DeclarationTakesAnAppendOperand = interp.No
+	// `export 'a[1]+=q'` is `a[1]+: bad variable name` here as well — the
+	// brackets change nothing, since this shell has no arrays to subscript.
+	s.DeclarationTakesASubscriptedAppendOperand = interp.No
 	// A prefix to a function is the call's environment and nothing after it,
 	// which is the answer six of the seven columns give and the one POSIX
 	// leaves open. Measured 2026-09-12: `f(){ env | grep "^v="; }; v=1; v=9

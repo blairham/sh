@@ -36,7 +36,16 @@ package interp
 // operand in every other dialect. See interp/chainassign.go, which the plain
 // `a[1][2]=v` spelling reaches by the other route; the two have to agree,
 // since ksh93 answers them identically.
-func (r *Runner) declareElement(base string, leading []string, sub, value string, f declareFlags, shadows bool) {
+//
+// appends is the `+` of `typeset a[1]+=v`, and it joins what the element held
+// rather than replacing it — the same store the bare `a[1]+=v` statement
+// reaches, which is why this hands the work to the same two calls. Whether
+// the operand is read at all is
+// Semantics.DeclarationTakesASubscriptedAppendOperand, answered before the
+// operand became a name; by here it is a store and not a question. Nothing
+// arrives with it set unless it was written, so the columns that refuse the
+// operator never reach the join.
+func (r *Runner) declareElement(base string, leading []string, sub, value string, appends bool, f declareFlags, shadows bool) {
 	// In front of everything, because what the subscript *is* decides which
 	// element the refusals below are about: a text that a second round turns
 	// into `x y` names that key everywhere after this line, the store's
@@ -132,7 +141,7 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 		// under sub inside what the links before it named. The walk is
 		// interp/chainassign.go's, shared with the plain `a[1][2]=v`
 		// spelling that reaches it by the other route.
-		r.declareChainedElement(base, leading, sub, value, tableBefore)
+		r.declareChainedElement(base, leading, sub, value, appends, tableBefore)
 		if f.readonly && !f.readonlyOff {
 			r.markReadonly(base)
 		}
@@ -143,7 +152,7 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 	case r.unspecified:
 		return
 	case isKey && !evaluated:
-		r.setAssocElem(base, key, value)
+		r.setDeclaredAssocElem(base, key, value, appends)
 	case isKey:
 		// A table whose letter arrived too late to be read: the subscript was
 		// evaluated as an expression and the number it came to is the key.
@@ -152,14 +161,22 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 			r.badSubscriptToADeclaration(sub, err)
 			return
 		}
-		r.setAssocElem(base, itoa(idx), value)
+		r.setDeclaredAssocElem(base, itoa(idx), value, appends)
 	default:
 		idx, err := r.subscriptValue(sub)
 		if err != nil {
 			r.badSubscriptToADeclaration(sub, err)
 			return
 		}
-		r.setArrayElem(base, idx, sub, value)
+		if appends {
+			// The statement's own store: `typeset a[1]+=q` joins what the
+			// element holds exactly as `a[1]+=q` does, through the name's
+			// attributes — measured on the column that takes it, `typeset -i
+			// a; a[1]=2; typeset a[1]+=3` is 5.
+			r.appendArrayElem(base, idx, sub, value)
+		} else {
+			r.setArrayElem(base, idx, sub, value)
+		}
 		if r.unspecified || r.ctl == controlExit {
 			return
 		}
@@ -167,6 +184,24 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 	if f.readonly && !f.readonlyOff {
 		r.markReadonly(base)
 	}
+}
+
+// setDeclaredAssocElem stores a declaration's keyed element, joining what the
+// key held where the operand carried the append operator.
+//
+// Through appendedValue rather than with `+`, because the name's attributes
+// decide which join this is — the same route Runner.appendOverCompound takes
+// for the whole name. A refused join has already reported itself and leaves
+// the key as it was.
+func (r *Runner) setDeclaredAssocElem(base, key, value string, appends bool) {
+	if appends {
+		v, ok := r.appendedValue(base, r.AssocArrays[base][key].scalar(), value)
+		if !ok {
+			return
+		}
+		value = v
+	}
+	r.setAssocElem(base, key, value)
 }
 
 // storeRefusalEndedTheDeclaration is the status a declaration leaves behind

@@ -230,8 +230,7 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 			// what the shells that refuse it say: two of them otherwise
 			// quote a bad operand back in full, and for this one they do
 			// not. So the name and the operand are the same text here.
-			if r.ask(r.sem().DeclarationTakesAnAppendOperand,
-				"a declaration taking a `name+=value` operand") {
+			if r.ask(r.declarationAppendOperandAxis(builtin, base)) {
 				name = base
 			} else if r.unspecified {
 				return nil, 2, false
@@ -276,6 +275,26 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 	return rest, status, false
 }
 
+// declarationAppendOperandAxis is the axis that says whether this dialect
+// reads `name+=value` as an operand, and the sentence to name it by.
+//
+// Two fields and not one, because ksh93 answers them differently: it refuses
+// `typeset x+=q` and takes `typeset a[1]+=q`, joining the element at status
+// 0. See Semantics.DeclarationTakesASubscriptedAppendOperand for the rows.
+//
+// The subscript is read off the name the operator left — `a[1]` out of
+// `a[1]+=q` — and only where that name's base is a name, which is the same
+// line builtinNames draws below for a plain operand: `1x[0]+=v` is a bad name
+// rather than a subscripted anything.
+func (r *Runner) declarationAppendOperandAxis(builtin, base string) (Answer, string) {
+	if b, _, subscripted := r.operandSubscripts(builtin, base); subscripted && isPlainName(b) {
+		return r.sem().DeclarationTakesASubscriptedAppendOperand,
+			"a declaration taking a `name[i]+=value` operand"
+	}
+	return r.sem().DeclarationTakesAnAppendOperand,
+		"a declaration taking a `name+=value` operand"
+}
+
 // namesAfterARefusal puts the give-up aside and answers which operands the
 // caller still has to declare.
 //
@@ -315,7 +334,7 @@ func (r *Runner) namesAfterARefusal(builtin string, kept, remaining []string, ta
 			// The same reading the first pass gave this shape. The axis was
 			// answered there — it is the same dialect — so this asks
 			// nothing and only has to agree about which operands are names.
-			if r.sem().DeclarationTakesAnAppendOperand == Yes {
+			if axis, _ := r.declarationAppendOperandAxis(builtin, base); axis == Yes {
 				name = base
 			} else {
 				continue

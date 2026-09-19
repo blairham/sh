@@ -2390,6 +2390,11 @@ func Semantics() interp.Semantics {
 	// `declare a=1; declare a+=2` is `12`: a declaration's operand carries
 	// the append operator here, where the other three refuse the name `a+`.
 	s.DeclarationTakesAnAppendOperand = interp.Yes
+	// And with a subscript on the name too: `typeset -a a; a[1]=p;
+	// typeset a[1]+=q` leaves `pq` in the element. The one utility that
+	// does not reach it is `export`, which refuses the brackets
+	// themselves — see DeclarationTakesASubscript.
+	s.DeclarationTakesASubscriptedAppendOperand = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No

@@ -13919,6 +13919,43 @@ type Semantics struct {
 	// nothing well formed ever reaches the question.
 	DeclarationTakesAnAppendOperand Answer
 
+	// DeclarationTakesASubscriptedAppendOperand is the same question where
+	// the name carries a subscript — `typeset a[1]+=q` — and it is a field
+	// of its own because one column answers the two differently.
+	//
+	// Measured 2026-09-19, script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null
+	// device, over `typeset -a a; a[1]=p; typeset a[1]+=q; echo "[${a[1]}]"`
+	// beside the scalar `typeset x+=q` the field above records:
+	//
+	//	column      	`typeset x+=q`                	`typeset a[1]+=q`
+	//	bash 5.3.20 	takes it                      	`[pq]` at 0
+	//	ksh93u+     	`typeset: x+: invalid variable name`	`[pq]` at 0
+	//	zsh 5.9.2   	`not valid in this context: x+`	`not an identifier: a[1]+`
+	//	dash 0.5.12 	`export: x+: bad variable name`	`export: a[1]+: bad variable name`
+	//	BusyBox ash 	the same                      	the same
+	//
+	// So ksh93 is the split: it refuses the operator on a plain name and
+	// takes it on an element, at status 0, joining what the element held.
+	// Reading the two through one field gave that column a refusal it does
+	// not make — and the refusal was a *silent* wrong value in the other
+	// direction, since the engine that did take the operand replaced the
+	// element rather than joining it (#3789).
+	//
+	// The same answer under every utility that reaches an element there:
+	// `export a[1]+=q` and `readonly a[1]+=q` both leave `pq` on ksh93, and
+	// so does a chain — `typeset a[1][2]=p; typeset a[1][2]+=q` is `pq`.
+	// Which utilities *have* a subscripted operand at all is the older
+	// question TypesetTakesASubscript and DeclarationTakesASubscript answer,
+	// and it still decides bash's `export a[1]+=q`, which is refused there
+	// for the brackets rather than for the operator.
+	//
+	// Asked only where an operand's name ends in `+`, a value follows it and
+	// the text in front of the `+` carries a subscript. A plain name reaches
+	// DeclarationTakesAnAppendOperand as it always did, and an operand with
+	// neither reaches neither.
+	DeclarationTakesASubscriptedAppendOperand Answer
+
 	// NegativeSubscriptCountsOverAPromotedScalar resolves a negative
 	// subscript on the left of `=` against the array a held *scalar* is
 	// about to become, rather than against the elements the name already

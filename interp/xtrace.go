@@ -402,10 +402,33 @@ func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
 // as `typeset x+='a b'`. An empty value goes through the same
 // TraceEmptyAssignmentValueIsBare the shell's own assignment line asks, which
 // that column answers no — `typeset x=` is `typeset x=”` there.
+//
+// **The target is quoted too, and by the same rule the value is**, where the
+// dialect is the one that writes the two halves apart. "Bare up to the `=`"
+// was read off targets that are plain names and none of them needed quoting.
+// Measured 2026-09-19 under zsh 5.9.2, a script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null
+// device:
+//
+//	typeset a[1]=q   	`typeset 'a[1]'=q`
+//	typeset a[1]="p q"	`typeset 'a[1]'='p q'`
+//	typeset a[1]+=q  	`typeset 'a[1]+'=q`
+//	typeset x=1      	`typeset x=1`
+//
+// So the halves are quoted independently and the last row is why nothing
+// noticed: a target that needs no quoting comes out of traceQuote unchanged.
+// The column that writes the operand on a **line of its own** is a different
+// rendering again and keeps its target bare — ksh93 writes `+ a[1]=q` and
+// quotes inside the brackets, `+ m['a b']=v` — so the quoting is gated on the
+// field that says the halves are written apart rather than applied here for
+// everyone.
 func traceAssignmentOperand(w string, d Diagnostics) (string, bool) {
 	target, value, ok := strings.Cut(w, "=")
 	if !ok || target == "" {
 		return "", false
+	}
+	if d.TraceAssignmentOperand == TraceAssignmentOperandValue {
+		target = traceQuote(target, d.TraceQuoting, d.TraceMetacharacters)
 	}
 	if value == "" && d.TraceEmptyAssignmentValueIsBare {
 		return target + "=", true

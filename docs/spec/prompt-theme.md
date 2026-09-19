@@ -147,8 +147,15 @@ no hooks and no arrays.
 - Keys are stored **without** the `SH_PROMPT_` prefix and upper-cased:
   `DIR_FOREGROUND`, `LEFT_ELEMENTS`, `ICONS`.
 - A key holds **either** a scalar or a list, never both. Setting one
-  clears the other. A scalar read as a list is a one-element list, since
-  dash has no arrays and a list still has to be expressible there.
+  clears the other. Either can be read as the other, because dash has no
+  arrays and a list still has to be expressible in a session running one:
+  **a scalar read as a list is its words**, and a list read as a scalar is
+  its elements joined by a space, which is the spelling a list is written
+  in everywhere else in this namespace. *(This sentence used to say a
+  scalar read as a list is a one-element list. Only splitting makes the
+  reason it gave true — a one-element list does not let a dash session
+  name three elements — and the configuration file below already spells a
+  list that way.)*
 - **Set-to-empty is an answer**, distinct from absent: an empty prefix
   and a suppressed icon are both configured states, so the lookup offers
   "is this set at all" separately from "what is it".
@@ -200,10 +207,27 @@ vocabulary:
     TRANSIENT = always
 
 The `SH_PROMPT_` prefix is accepted on input and stripped, so a line
-copied out of a session works in the file and back again.
+copied out of a session works in the file and back again. A `#` begins a
+comment and a blank line is nothing.
+
+A value may be wrapped in matching quotes, and that is there for exactly
+one reason: a value whose whitespace matters. A separator of a single
+space and a suffix of two are both real settings, and unquoted the line
+that holds one is indistinguishable from a line that empties it.
+Everything else is written unquoted.
+
+A line that is not an assignment, and an assignment whose name is not
+spelled the way this namespace spells one, are **named rather than
+dropped**. The file is read on the way to drawing a prompt, and a prompt
+is not the place to report a typo by not drawing — but the silent half of
+that is the failure this repository treats as its worst, so what was read
+and not honored is reported.
 
 It is re-read when its mtime changes, so editing it takes effect on the
-next prompt and there is no reload command.
+next prompt and there is no reload command. The stat is once per prompt
+rather than once per lookup: that is the cost of an edit taking effect
+without a command, and per lookup it would be that cost times the size of
+the namespace.
 
 ### Colors
 

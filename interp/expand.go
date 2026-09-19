@@ -930,6 +930,9 @@ func (r *Runner) readParamSource(e *syntax.ParamExpr) (value string, set, subscr
 	// it. Ahead of the subscript branch because the rewrite is what puts the
 	// subscript there. See Runner.namerefAimedAtTheWholeArray.
 	if aimed, ok := r.namerefAimedAtTheWholeArray(e); ok {
+		if value, set, is := r.bracedWholeArrayReference(e, aimed); is {
+			return value, set, true
+		}
 		e = aimed
 	}
 	if e.Index != nil {
@@ -1351,9 +1354,10 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	}
 	// A name reference aimed at the whole of an array is that array's
 	// expansion, fields and all — the same rewrite the scalar path makes, and
-	// here for the half that decides the field count. See
-	// Runner.namerefAimedAtTheWholeArray.
-	if aimed, ok := r.namerefAimedAtTheWholeArray(e); ok {
+	// here for the half that decides the field count. Only for the **bare**
+	// spelling: `${r}` is a scalar read of the reference and `$r` is the
+	// splice. See Runner.namerefSplicesItsArray.
+	if aimed, ok := r.namerefSplicesItsArray(e); ok {
 		e = aimed
 	}
 	// A bare array name is the *array* in one dialect, so the node is given
@@ -1818,6 +1822,54 @@ func (r *Runner) starSpelled(e *syntax.ParamExpr) bool {
 // the node and the fields.
 func (r *Runner) joinUnsplit(e *syntax.ParamExpr, parts []string) string {
 	return strings.Join(parts, r.unsplitJoinSeparator(r.starSpelled(e), len(parts)))
+}
+
+// bracedWholeArrayReference is the scalar reading of `${r}` where `r` is a
+// reference aimed at the whole of an array — the half of the spelling split
+// Runner.namerefSplicesItsArray holds the other half of.
+//
+// Two things it decides and the splice does not, both measured 2026-09-19 on
+// bash 5.3.20 with `env -i PATH=/usr/bin:/bin LC_ALL=C`, under `-c`, a script
+// file and standard input alike:
+//
+//	IFS=-; a=(aa bb); "${r}"       aa-bb, where "${a[@]}" joins with a space
+//	a=(); set -u; "${r}"           r: unbound variable, where "$r" is silent
+//	a=(""); set -u; "${r}"         the empty element, silently
+//	a=(); "${r-D}"                 D
+//	a=(""); "${r+S}"               S
+//
+// So the join is the one `*` makes — the first character of `IFS` — and a
+// list with **no elements** reads as unset through the reference, where one
+// holding a single empty element reads as set. Neither follows from the
+// direct spelling: `${a[*]}` on an array assigned `()` is silent under
+// `set -u` in the same run, so this is a fact about reading a list through a
+// reference rather than about the subscript.
+//
+// **The separator is the target's own, and one row of it is measured and not
+// matched.** Through joinUnsplit, so a `a[*]` target joins on `IFS` and a
+// `a[@]` target rejoins on a space, exactly as the written spellings do. That
+// is right wherever the reference is read into an assignment and wrong for a
+// `a[@]` target read as a *word* under a non-default `IFS`: measured the same
+// day, `IFS=-; a=(aa bb)` with `typeset -n r=a[@]` is
+//
+//	v="${r}"                aa bb     the space, as `v="${a[@]}"` is
+//	printf '<%s>' "${r}"    <aa-bb>   IFS, as `"${a[*]}"` is
+//
+// so that shell's join is **context-dependent** and the two contexts read the
+// reference as two different targets. Nothing in this engine's scalar read
+// knows which context it is in, and the row is unchanged by this function
+// either way — it answers the space in both contexts here, as it did before
+// any of this. Written down rather than left to be rediscovered, because a
+// join that is right under the default `IFS` is the shape that hides.
+func (r *Runner) bracedWholeArrayReference(e, aimed *syntax.ParamExpr) (string, bool, bool) {
+	if e.Bare || e.Length {
+		return "", false, false
+	}
+	elems, ok := r.arraySubscript(aimed)
+	if !ok {
+		return "", false, false
+	}
+	return r.joinUnsplit(aimed, elems), len(elems) > 0, true
 }
 
 // listCouldJoinDifferently is whether joining the elements could reach a
@@ -2525,8 +2577,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	)
 	// The same rewrite paramSource makes, made before the length block:
 	// `${#r}` on a reference aimed at `a[@]` is the element *count*, and the
-	// subscript is what says so. See Runner.namerefAimedAtTheWholeArray.
-	if aimed, ok := r.namerefAimedAtTheWholeArray(e); ok {
+	// subscript is what says so. The count is the one braced spelling that
+	// still wants it — every other operator here applies to the join, which
+	// is what the scalar path below produces. See
+	// Runner.namerefSplicesItsArray.
+	if aimed, ok := r.namerefSplicesItsArray(e); ok {
 		e = aimed
 	}
 	if e.Index != nil && e.Inner == nil {

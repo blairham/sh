@@ -238,6 +238,49 @@ func (r *Runner) namerefAimedAtTheWholeArray(e *syntax.ParamExpr) (*syntax.Param
 	return &aimed, true
 }
 
+// namerefSplicesItsArray is namerefAimedAtTheWholeArray asked by the two
+// callers that decide **fields** rather than a value, and it is where the
+// spelling parts: only the bare `$r` splices the array, and `${r}` is a
+// scalar read of the reference whose value is the elements joined.
+//
+// Measured 2026-09-19 on bash 5.3.20, `a=(aa bb cc)` and `declare -n r=a[@]`,
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` under `-c`, a script file and standard
+// input alike:
+//
+//	printf "<%s>" "$r"     <aa><bb><cc>   the splice
+//	printf "<%s>" "${r}"   <aa bb cc>     one field
+//	IFS=-; "${r}"          <aa-bb-cc>     joined by IFS, not by a space
+//	${r:0:2}               aa             a substring of the join, where
+//	                                      ${a[*]:0:2} is `aa bb` — so the
+//	                                      braced spelling is not `[*]` either
+//	${r@Q}                 'aa bb cc'     one quoted string
+//	set -u, a never set    r: unbound variable, where `$r` is silent
+//
+// Four discriminators and no two of them are the same operator, which is what
+// says this is the *spelling* rather than a rule about any one of them. The
+// first three are wrong **values** at status 0, which is the shape the
+// earlier reading of this construct kept producing (#2299) and the reason it
+// is worth a line rather than a diagnostic.
+//
+// `${#r}` is the exception and it is measured, not conceded: it is the
+// element **count** in that shell — `a=(aaa bbb); ${#r}` is `2` where the
+// join is seven characters long — so the length block wants the splice under
+// either spelling and asks for it here.
+//
+// One caller-side test rather than two copies of the rewrite: this returns
+// what namerefAimedAtTheWholeArray returns and cannot come to a different
+// node than the scalar path does.
+//
+// bash 5.3 is the only column that can be asked — zsh has no `-n` letter at
+// all, bash 3.2 has none, and ksh93 refuses this target at the declaration
+// (#3124) — so this is the core's reading rather than an axis.
+func (r *Runner) namerefSplicesItsArray(e *syntax.ParamExpr) (*syntax.ParamExpr, bool) {
+	if e != nil && !e.Bare && !e.Length {
+		return nil, false
+	}
+	return r.namerefAimedAtTheWholeArray(e)
+}
+
 // readThroughNamerefElement reads the one element a reference to `a[2]` is
 // aimed at, through whichever of the two containers the base is.
 func (r *Runner) readThroughNamerefElement(base, sub string) (string, bool) {

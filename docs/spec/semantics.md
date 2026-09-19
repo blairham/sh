@@ -12118,6 +12118,65 @@ evidence there is that the feature exists: #3084 was a bug against what
 a declaration over a name that holds an array, which both shells refuse
 in the same words and disagreed only about the shape of.
 
+### A reference aimed at the whole of an array is read by its spelling
+
+`typeset -n r=a[@]` aims a reference at *all* of an array, and `$r` and
+`${r}` are then two different expansions. The bare spelling **splices**:
+one field per element, exactly as `"${a[@]}"` written out. The braced
+spelling is a **scalar read of the reference**, whose value is the
+elements joined.
+
+Measured 2026-09-19 against bash 5.3.20, `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with a scratch HOME, under `-c`, a script file and standard
+input alike, with `a=(aa bb cc)`:
+
+    printf '<%s>' "$r"        <aa><bb><cc>
+    printf '<%s>' "${r}"      <aa bb cc>
+    printf '<%s>' ${r}        <aa><bb><cc>   split back apart
+    ${r:0:2}                  aa             characters of the join
+    ${a[*]:0:2}               aa bb          elements, written out
+    ${r@Q}                    'aa bb cc'     one quoted string
+    ${#r}                     the element count, either spelling
+    set -u, a never set       ${r} is `r: unbound variable`; $r is silent
+    set -u, a=()              the same refusal
+    set -u, a=("")            silent
+
+Four discriminators and no two of them are the same operator, which is
+what says this is the **spelling** rather than a rule about any one of
+them. The range subscript is the sharpest: `${a[*]:0:2}` written out
+takes *elements* and `${r:0:2}` takes characters, so the braced reading
+is not `[*]` either — it is a scalar whose value happens to be that
+join. `${#r}` is the one exception and it is measured rather than
+conceded: the count under either spelling, where the join of `(aaa bbb)`
+is seven characters long.
+
+The set-ness is the reference's own rule and does not follow from the
+written spelling: a list with **no elements** is unset through the
+braced reference where one holding a single empty element is set, while
+`${a[*]}` on an array assigned `()` is silent under `set -u` in the same
+run. That last row is what #3125 was filed for, and it is the whole of
+what the `set -u` split turned out to be.
+
+This is one column's reading and not an axis. Only bash 5.3 has a letter
+that can aim a reference at `a[@]` at all — zsh has no `-n`, bash 3.2 has
+none, and ksh93 refuses this target at the declaration (#3124) — so the
+core holds it and `dialect/bash` holds the measurement.
+
+The AST already carried the question: `syntax.ParamExpr.Bare` records the
+spelling, for a diagnostic that turns on the same distinction, so nothing
+new had to be recorded to ask it.
+
+**One row is measured and not matched.** The separator is the target's
+own here — a `a[*]` target joins on IFS and a `a[@]` target follows
+`UnsplitAtListJoinsOnIFS` — where that shell's join is
+**context-dependent**: with `IFS=-` and `a=(aa bb)`, `v="${r}"` is
+`aa bb` and `printf '<%s>' "${r}"` is `<aa-bb>`, so the reference is read
+as `a[@]` in an assignment and as `a[*]` in a word. Nothing in this
+engine's scalar read knows which context it is in, and the row answers
+the space in both. Written down rather than left to be rediscovered,
+because a join that is right under the default `IFS` is the shape that
+hides.
+
 ### The trace letter, `-t`
 
 Measured 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin

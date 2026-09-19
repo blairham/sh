@@ -522,7 +522,14 @@ func (r *Runner) getoptsWrite(name, value string) bool {
 		delete(r.readonly, name)
 		defer func() { r.readonly[name] = true }()
 	}
-	r.setVar(name, value)
+	// setOperandValue rather than setVar, because this builtin's name
+	// operand is one of the three a dialect may spell as a *position* —
+	// see storeThroughPositional, which `read` and `printf -v` reach
+	// through storeThroughOperand. Writing it here with setVar is how one
+	// of the three would come to answer `getopts x 1` differently from
+	// `read 1`, which is the shape that has cost this tree a bug more than
+	// once.
+	r.setOperandValue(name, value)
 	return true
 }
 

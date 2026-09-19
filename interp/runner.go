@@ -5838,10 +5838,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// values have expanded, and neither answer may move in between: `x=1 set
 	// +x` is the command that would move the first, and a function defined
 	// by a redirection the second.
-	// And an array-literal operand's elements, expanded once here so the
-	// assignment the command performs can be written before the command's own
-	// line — which is where two of the three columns that have the construct
-	// write it. The store that runs after the utility takes this very list.
+	// An array-literal operand's elements, expanded once here rather than by
+	// the store that runs after the utility. Two things depend on the
+	// position: the assignment the command performs can be written before the
+	// command's own line, which is where two of the three columns that have
+	// the construct write it, and the expansion stands **outside** this
+	// command's redirections, which is where the same two columns put it —
+	// `typeset a=($(echo hi >&2)) 2>/dev/null` writes `hi` there and wrote
+	// nothing here (#3806). The store takes this very list.
 	r.expandArrayOperands()
 
 	tracesPrefix := r.tracesItsPrefix(c.Assigns, argv)

@@ -26,6 +26,15 @@ on:
   # merge traffic that would otherwise be competing for runners.
   schedule:
   - cron: '0 7 * * *'
+  # On demand, on any ref. The report-only jobs below are skipped on a pull
+  # request, so **the job that would exercise a change to one of them does not
+  # run on the pull request that makes it** -- which is the whole reason
+  # #3480's bash column and #3082's containment have both been described,
+  # measured and then not landed: the only instrument that could say whether
+  # the change worked first ran after the squash. This costs nothing on an
+  # ordinary pull request and turns "land it and watch main" into "push the
+  # branch, dispatch it against that branch, read the job".
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -42,7 +51,13 @@ concurrency:
   # group on the commit gives every merge a group of its own, so there is
   # nothing to cancel it and nothing for it to queue behind; a pull request
   # ref is already unique per pull request, so it keeps superseding itself.
-  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
+  #
+  # A dispatch is the same case as a merge for the same reason: it is a
+  # deliberate request for an answer about one ref, and two of them in a row
+  # are two samples rather than one superseding the other. Keyed on the run,
+  # so repeated dispatches of the same branch -- which is how an intermittent
+  # report-only job gets measured at all -- do not cancel each other.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'workflow_dispatch' && github.run_id || 'pr' }}
   cancel-in-progress: true
 
 jobs:

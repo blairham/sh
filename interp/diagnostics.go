@@ -1975,8 +1975,11 @@ type Diagnostics struct {
 	// CommandVNotFound beside it — where the word is not one a shell could
 	// write back bare.
 	//
-	// Zero is QuoteNever, which is what three of the four columns do: the
-	// operand is written exactly as it was given. One writes it back
+	// Zero is QuoteNever: the operand is written exactly as it was given,
+	// which is what bash 5.3.20, zsh 5.9.2, dash 0.5.12 and BusyBox ash
+	// 1.37.0 all do — measured 2026-09-18 on `type "a b"` and `command -V
+	// "a b"`, where the four write `a b: not found` bare at 1, 1, 127 and
+	// 127. ksh93u+ writes it back
 	// **shell-quoted**, and it is the same spelling that column's trace
 	// uses, measured character for character rather than assumed — which is
 	// why TraceMetacharacters is read beside this rather than a second

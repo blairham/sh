@@ -293,8 +293,14 @@ release:
     ### What is not there yet
 
     The README's "What is not there yet" is the current list, and it is real.
-    The sandbox contains the shell rather than the process tree; there is no
-    Windows target; and diagnostic wording is the largest remaining gap.
+    The sandbox contains the shell rather than the process tree, and there is
+    no Windows target. Diagnostic wording is a long tail rather than the
+    headline gap: a bounded sample of twenty everyday error situations — a
+    missing command, `cd` onto a file, a redirect that cannot open, an unknown
+    option to six builtins — comes back byte-identical on standard error *and*
+    exit status for `bash`, `zsh`, `ksh` and `dash`, 80 of 80 on 2026-09-19.
+    The probe is `internal/cmd/diagsample` and takes a few seconds a column,
+    so this line can be re-measured rather than inherited.
   # `.PreviousTag` is empty for a first tag, which would render this as a
   # `compare/...v0.0.0` link that goes nowhere.
   footer: |

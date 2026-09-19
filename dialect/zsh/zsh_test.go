@@ -192,6 +192,12 @@ func TestSemantics(t *testing.T) {
 		// pipeline `set -n` never ran still inverts the status the shell
 		// exits with, where the other six columns leave it alone (#3179).
 		{"UnrunNegationInvertsTheStatus", s.UnrunNegationInvertsTheStatus, interp.Yes},
+		// And the other `-n` answer it is alone in, one step earlier in the
+		// same route: the words of a simple command it will not run are
+		// still read, far enough to raise what reading them raises — `zsh
+		// -n -c 'echo =nosuchcmd'` writes `nosuchcmd not found` and exits 1
+		// where the other six columns are silent at 0 (#3823).
+		{"UnrunSimpleCommandReadsItsWords", s.UnrunSimpleCommandReadsItsWords, interp.Yes},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
 		// And the join this shell does perform: an unquoted `@` list
 		// reaching a context that keeps no fields joins on the first

@@ -5800,6 +5800,93 @@ answered 1 with **nothing on either stream**, so a pre-commit hook or a CI
 step failed a well-formed file and left its author no line number to look at,
 because there was no error to point at (#3179).
 
+## The words of a command `set -n` will not run
+
+The same route, and the same column departing from the same six, one step
+earlier: zsh reads the **words** of a simple command it is not going to run,
+far enough to raise the refusals a word's own reading makes. Measured
+2026-09-19, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> -f -n -c …`, one probe
+at a time. Three constructs reach it, each with the sentence, status and
+location it has at run time:
+
+| probe | zsh 5.9.2 under `-n` | the other six |
+| --- | --- | --- |
+| `echo =nosuchcmd` | `nosuchcmd not found`, 1 | 0, silent |
+| `: ${(P)::=y}` | `not an identifier: `, 1 | 0, silent |
+| `echo ${9nope}` | `bad substitution`, 1 | 0, silent |
+
+**It is not "`-n` expands the words", and the controls are what say so.** At
+the same position and under the same option, all of these are 0 and silent in
+every column, zsh included:
+
+    echo $(touch /tmp/marker)      the file is not created
+    echo ${nope:?boom}
+    echo $(( 1/0 ))
+    echo /nonexistentdir*/zzz
+    x=(1 2); echo $x[a]
+    typeset -r r=1; r=2
+    echo ~nosuchuser
+
+So no substitution runs, no arithmetic is evaluated, no pattern is matched, no
+value is fetched, nothing is stored, and the tilde — the *other* head rewrite,
+beside `=cmd` — is not made either. `setopt noequals; echo =nosuchcmd` is the
+sharpest row: under `-n` it still refuses, and at run time with the option in
+force it prints `=nosuchcmd`, so the option cannot have been read, nothing
+ran, and the refusal is raised anyway.
+
+**And it belongs to the position rather than to the construct.** The same word,
+moved:
+
+| probe | zsh `-n` |
+| --- | --- |
+| `echo =nosuchcmd` | 1, message |
+| `true; echo =nosuchcmd` | 1, message |
+| `true && echo =nosuchcmd` | 1, message |
+| `! echo =nosuchcmd` | 1, message |
+| `echo =nosuchcmd > /dev/null` | 1, message |
+| `echo =nosuchcmd \| cat` | **0**, message |
+| `echo =nosuchcmd &` | **0**, message |
+| `{ echo =nosuchcmd; }` | **0**, silent |
+| `( echo =nosuchcmd )` | **0**, silent |
+| `if true; then echo =nosuchcmd; fi` | **0**, silent |
+| `while false; do echo =nosuchcmd; done` | **0**, silent |
+| `for i in a; do echo =nosuchcmd; done` | **0**, silent |
+| `case a in a) echo =nosuchcmd;; esac` | **0**, silent |
+| `f() { echo =nosuchcmd; }` | **0**, silent |
+| `() { echo =nosuchcmd; }` | **0**, silent |
+| `time echo =nosuchcmd` | **0**, silent |
+| `v==nosuchcmd` | **0**, silent |
+
+Two facts sit under that table and neither is a rule about pipelines. The
+refusal is **fatal**, exactly as it is at run time — `echo =nosuchA; echo
+=nosuchB` writes only the first message, and `echo =nosuchA; true` exits 1, so
+nothing after it is read. And the rows that carry a message at status 0 are a
+**fork**: a pipeline element that is not the last, and a backgrounded
+statement, are each a shell of their own, so the refusal ends that shell and
+the one reporting a status never saw it. `echo =nosuchA | echo =nosuchB`
+settles it — **both** messages are written and the status is 1, because the
+last element is the one that runs in this shell — and `echo =nosuchA | cat |
+cat` is one message at 0.
+
+The chain's short-circuit is read from a status nothing set: `true || echo
+=nosuchcmd` is silent at 0 and `echo =nosuchcmd || true` is 1.
+
+This is `UnrunSimpleCommandReadsItsWords`, `Yes` in zsh and `No` in the other
+four presets and in `PosixSemantics`. It is asked only where one of the three
+shapes actually stands in a word, which keeps `sh -n file` working in a vector
+that has not chosen: a file with nothing to refuse asks nothing at all.
+
+**Two rows are measured and deliberately not reproduced.** `echo $[1/0]` is
+`division by zero` at 1 under `zsh -n` where `echo $(( 1/0 ))` is silent, and
+`echo $[nosuchfunc(1)]` is `unknown function` — so one spelling of arithmetic
+is evaluated there and the other is not. Evaluating an expression under a mode
+whose contract is that it does not act is a larger question than this one, and
+reproducing it would mean deciding what `$[x=5]` does there, which nothing
+measured answers. And the *order* of the two messages a pipeline writes is
+left-to-right in zsh and last-element-first here — a pre-existing property of
+this engine's pipeline, visible at run time on `main` before any of this
+(#3823).
+
 ## One rule, and the half of it that gives it away
 
 `{ echo hi }` runs in zsh and is a syntax error in the other three. The

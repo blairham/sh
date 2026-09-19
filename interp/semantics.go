@@ -12940,6 +12940,34 @@ type Semantics struct {
 	// formed, writes nothing to either stream, and leaves the author with no
 	// line number to look at because there is no error to point at (#3179).
 	UnrunNegationInvertsTheStatus Answer
+
+	// UnrunSimpleCommandReadsItsWords reads the words of a simple command
+	// `set -n` will not run, far enough to raise the refusals a word's own
+	// reading makes.
+	//
+	// Six of the seven panel columns read nothing: `sh -n file` answers
+	// whether the program parses and writes nothing else. zsh 5.9.2 raises
+	// three refusals there, with the same sentence, status and location they
+	// have at run time — `echo =nosuchcmd` is `nosuchcmd not found`, `:
+	// ${(P)::=y}` is `not an identifier: ` and `echo ${9nope}` is `bad
+	// substitution`, each at 1. Measured 2026-09-19, one probe at a time,
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> -f -n -c …`.
+	//
+	// It is **narrower than expanding the words**, which is what the
+	// controls say and is what makes it implementable from a mode that must
+	// not act: at the same position and under the same `-n`, `echo $(touch
+	// /tmp/marker)` creates no file, and `echo ${nope:?boom}`, `echo $((
+	// 1/0 ))`, `echo /nonexistentdir*/zzz`, `x=(1 2); echo $x[a]`, `typeset
+	// -r r=1; r=2` and `echo ~nosuchuser` are each silent at 0. So no
+	// substitution runs, no arithmetic is evaluated, no pattern is matched,
+	// no value is fetched and no store happens.
+	//
+	// And it is a property of the **position** rather than of the construct:
+	// the same word inside a group, a subshell, an `if`, a loop, a `case`, a
+	// function body or a `time` clause is silent. See
+	// interp/noexecwords.go for the seventeen rows and for the two the
+	// column carries that are deliberately not reproduced (#3823).
+	UnrunSimpleCommandReadsItsWords Answer
 	// PromptAsksAgainAfterARefusedToken draws the continuation prompt for a
 	// construct the parser has **refused**, rather than refusing it where it
 	// stands.
@@ -21389,6 +21417,11 @@ func PosixSemantics() Semantics {
 		// all comply; zsh is the departure, and sets this the other way
 		// (#3179).
 		UnrunNegationInvertsTheStatus: No,
+		// And the same section's reason for the words: `set -n` executes no
+		// command, so there is nothing for a word of one to be read for.
+		// bash, ksh93, dash and BusyBox ash all comply; zsh is the
+		// departure, and sets this the other way (#3823).
+		UnrunSimpleCommandReadsItsWords: No,
 		// POSIX makes an unquoted `$@` in a context that does not split
 		// behave as `$*` does, which is the join on IFS; dash, the shell in
 		// the panel that targets this text, complies. bash and ksh93 are the

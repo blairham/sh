@@ -1181,6 +1181,14 @@ func Semantics() interp.Semantics {
 	// stream and exits 1, on 5.9 and 5.9.2 alike, where bash, ksh93, dash and
 	// BusyBox ash all exit 0. Measured 2026-09-16 (#3179).
 	s.UnrunNegationInvertsTheStatus = interp.Yes
+	// And where the other six columns read nothing of a command `set -n`
+	// will not run, this shell reads its words far enough to raise the
+	// refusals a word's own reading makes: `zsh -n -c 'echo =nosuchcmd'`
+	// writes `nosuchcmd not found` and exits 1. Measured 2026-09-19, with
+	// the controls that say it is not an expansion — a command substitution
+	// in the same position creates no file. See interp/noexecwords.go
+	// (#3823).
+	s.UnrunSimpleCommandReadsItsWords = interp.Yes
 	// And whether a *compound* writes the record at all is decided by what
 	// its body holds rather than by what ran: `if [[ a = b ]]; then :; fi`
 	// replaces the record and `if [[ a = b ]]; then [[ b = b ]]; fi` leaves

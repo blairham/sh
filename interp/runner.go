@@ -1735,6 +1735,10 @@ type Runner struct {
 	underscoreWritten bool
 	atInputLevel      bool
 	pendingInputArg   underscorePending
+	// noexecUnread counts the commands `set -n` reaches and reads nothing
+	// of. One shape: a `time` clause's body, measured silent where a
+	// negation's is not.
+	noexecUnread int
 	// noexec is `set -n`: read, never run, never unset — even the `set +n`
 	// that would clear it is a command.
 	noexec bool
@@ -5250,6 +5254,22 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// `set -n` — commands are read and never executed, and nothing turns
 		// it back off: even `set +n` is a command. Syntax errors still
 		// surface, because they happen on the way in, not here.
+		//
+		// The words of a *simple* command are still read in one column, far
+		// enough to raise what reading them raises. Returning here is what
+		// keeps every compound silent without a rule of its own: a group, a
+		// subshell, an `if`, a loop, a `case` and a function body are all
+		// declined on this line, so nothing in a body is ever reached. See
+		// interp/noexecwords.go.
+		if x, simple := c.(*syntax.SimpleCmd); simple {
+			// The line first, because the refusal is located and the
+			// location is this command's own. Nothing else the block below
+			// records belongs to a command that is not going to run.
+			if c != nil {
+				r.prevLine, r.line = r.line, r.lineOf(c.Pos())
+			}
+			r.readWordsWithoutRunning(x)
+		}
 		return nil
 	}
 	// Where this command begins, not where the statement holding it did.

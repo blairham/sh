@@ -221,11 +221,19 @@ type Diagnostics struct {
 	// and there is no such file — as opposed to a bare name that was not on
 	// PATH. Same two verbs.
 	//
-	// The distinction is real in three of the four: bash says `exec: x: not
-	// found` for a bare name and `/p/x: No such file or directory` for a
-	// path, and zsh says `command not found: x` against `no such file or
-	// directory: /p/x`. It is the same split `.` has between DotNotFound and
-	// DotCannotOpen, arrived at from the other direction.
+	// The distinction is real in the bash columns and in zsh, and in no
+	// other: bash says `exec: x: not found` for a bare name and
+	// `/p/x: No such file or directory` for a path, and zsh says `command
+	// not found: x` against `no such file or directory: /p/x`. dash, ksh93
+	// and BusyBox ash write one sentence for both — `exec: /p/x: not found`
+	// — so the slash buys them nothing. It is the same split `.` has between
+	// DotNotFound and DotCannotOpen, arrived at from the other direction.
+	//
+	// Measured 2026-09-19 over a script file, all seven columns. bash 3.2 is
+	// the one that does not fit the pair it is usually in: it writes the 5.3
+	// sentence *and* a second line of its own, `exec: /p/x: cannot execute:
+	// No such file or directory`, and leaves 126 where every other column
+	// leaves 127.
 	//
 	// Empty means "the same as ExecNotFound".
 	PathNotFound string
@@ -433,8 +441,12 @@ type Diagnostics struct {
 
 	// TestNamesFirstOperand makes a malformed three-argument `test` blame the
 	// first word rather than the middle one: `test a b c` is "a: unexpected
-	// operator" in dash and names `b` — the word that should have been an
-	// operator — in the other three.
+	// operator" in dash, and every other column names `b` — the word that
+	// should have been an operator. Measured 2026-09-19, all seven: the three
+	// bash columns say `b: binary operator expected`, ksh93 `b: unknown
+	// operator`, zsh `condition expected: b`, and BusyBox ash `b: unknown
+	// operand`. dash is alone, which is what the field's single true value
+	// says.
 	TestNamesFirstOperand bool
 
 	// TestUnknownLongOperator is how `test` reads a word spelled like an
@@ -502,8 +514,15 @@ type Diagnostics struct {
 	// TestBinaryExpected is the same for a binary operator's place. One verb.
 	//
 	// Two fields because one dialect words them differently — "unary operator
-	// expected" against "binary operator expected" — where the other three use
-	// one message for both and simply set these to the same string.
+	// expected" against "binary operator expected" — where every other column
+	// uses one message for both and simply sets these to the same string.
+	//
+	// Measured 2026-09-19, `[ a -eq ]` against `[ a b ]` over a script file:
+	// only the bash columns part the two places. ksh93 writes `argument
+	// expected` for both, zsh `condition expected: a` for both, and dash and
+	// BusyBox ash split on a different seam again — the operator's missing
+	// operand against an unknown operand — which is TestOperandExpected's
+	// question rather than this one's.
 	TestBinaryExpected string
 	// TestIntegerExpected is a non-numeric operand to `-eq` and its siblings.
 	// One verb: the operand.
@@ -641,13 +660,16 @@ type Diagnostics struct {
 	//	dash   cd: can't cd to /nope
 	//	ksh93  cd: /nope: [No such file or directory]
 	//	zsh    no such file or directory: /nope
+	//	ash    cd: can't cd to /nope: No such file or directory
 	//
 	// dash gives no reason at all, so `cd` onto a file and `cd` onto nothing
 	// read identically there — the one shell where the message cannot tell
-	// you which it was.
+	// you which it was. BusyBox ash writes dash's verb and keeps the reason,
+	// which is why it is a row here rather than one of dash's: measured
+	// 2026-09-19, and it is the row the four-shell table left out.
 	CdCannotChange string
-	// CdStatus is what that reports. dash says 2 and the other three say 1.
-	// Zero means the substrate's own, 1.
+	// CdStatus is what that reports. dash and BusyBox ash say 2; the three
+	// bash columns, ksh93 and zsh say 1. Zero means the substrate's own, 1.
 	CdStatus int
 	// GlobNoMatch is a pathname expansion that matched no file, on the two
 	// routes that refuse one: Semantics.GlobNoMatchIsError and the
@@ -661,8 +683,14 @@ type Diagnostics struct {
 	// shell's spelling as everybody's.
 	GlobNoMatch string
 	// HashEmptyTable is what a bare `hash` says about the table this shell
-	// does not keep. bash announces it, on standard output; the other three
-	// print nothing, which the empty value means.
+	// does not keep. bash announces it, on standard output; dash, ksh93, zsh
+	// and BusyBox ash print nothing, which the empty value means.
+	//
+	// Measured 2026-09-19, all seven columns, and the bash columns do not
+	// answer alike: `hash table empty` is what bash 5.3 and bash 3.2 write
+	// and what the *same binary called sh* does not — the as-sh column is
+	// silent at 0 with the rest. The field is bash's, so the dialect is
+	// right; the sentence is a bash-as-bash one and not a bash one.
 	HashEmptyTable string
 	// HashNotFound is a hashed name that resolves to nothing. One verb: the
 	// name. Empty means the substrate's own wording.
@@ -1072,9 +1100,16 @@ type Diagnostics struct {
 	//
 	// One field rather than one per spelling because the panel answers it
 	// once: measured 2026-09-08, zsh 5.9.2 writes the same `not enough
-	// arguments` for all four, and bash 5.3, bash 3.2 and dash are silent at
-	// 0 for every one they have. Empty is therefore a real answer and not a
-	// gap — the dialect says nothing and the builtin succeeds.
+	// arguments` for every spelling it has, and bash 5.3, bash 3.2 and dash
+	// are silent at 0 for every one they have. Empty is therefore a real
+	// answer and not a gap — the dialect says nothing and the builtin
+	// succeeds.
+	//
+	// Re-measured 2026-09-19 across all seven columns: bash-as-sh and
+	// BusyBox ash are silent at 0 too, so the silent group is five of the
+	// seven and zsh is alone in complaining. Neither was named before, and
+	// the ash column is the one whose dialect value the sentence was also a
+	// claim about.
 	//
 	// ksh93 is the one member this does not cover: it answers with its usage
 	// line and ends the script, `unset` being one of its special builtins.
@@ -1128,7 +1163,14 @@ type Diagnostics struct {
 
 	// AliasListPrefix goes in front of every line of a listing. `alias ` in
 	// bash, which is what makes its output text that can be read back, and
-	// empty in the other three.
+	// empty in dash, ksh93, zsh and BusyBox ash.
+	//
+	// Measured 2026-09-19, all seven columns, and as with HashEmptyTable the
+	// bash columns split: bash 5.3 and bash 3.2 write `alias a='echo hi'` and
+	// the same binary called sh writes `a='echo hi'` with no prefix. So the
+	// prefix is what bash does as bash, and the column that answers a `sh`
+	// question about it is answering about POSIX mode rather than about the
+	// dialect this field belongs to.
 	AliasListPrefix string
 
 	// UmaskBadSymbolicOperator is that complaint where what was wanted was
@@ -2125,8 +2167,14 @@ type Diagnostics struct {
 	TypeNotFoundOnStdout bool
 
 	// TypeNotFoundStatus is what `type` reports when a name was not
-	// accounted for. Zero means 1, which is three of the four; dash answers
-	// with a missing command's 127.
+	// accounted for. Zero means 1, which is what the three bash columns,
+	// ksh93 and zsh answer; dash and BusyBox ash answer with a missing
+	// command's 127.
+	//
+	// Measured 2026-09-19 over a script file, all seven columns. ash is with
+	// dash here rather than with the group the sentence used to put it in,
+	// and dialect/ash already holds 127 — the value was right and the
+	// sentence was the claim that was not.
 	TypeNotFoundStatus int
 
 	// CommandVNotFound is what `command -V` says about a name that is
@@ -4360,7 +4408,12 @@ type Diagnostics struct {
 	// means "eval", which is three of the four; zsh calls it `(eval)`.
 	EvalSourceName string
 	// SourceFileIsTheBuiltin names the builtin that read a file rather than
-	// the file: ksh93 reports `.` where the other three report the path.
+	// the file: ksh93 reports `.` where every other column reports the path.
+	//
+	// Measured 2026-09-19, a sourced file holding a bad arithmetic
+	// expression: ksh93 writes `.: line 1:` and the three bash columns, dash,
+	// zsh and BusyBox ash all name the sourced file. ksh93 is alone, which is
+	// what the field's single true value says.
 	SourceFileIsTheBuiltin bool
 	// BorrowedTextIsNamedAtRunTime extends the two fields above from a parse
 	// failure to a failure while the text is *running*: `dash: 3: ./p.sh:

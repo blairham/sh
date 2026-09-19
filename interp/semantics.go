@@ -17128,6 +17128,30 @@ type Semantics struct {
 	// it is #3236 rather than an option.
 	EvalOptions EvalOptionReading
 
+	// EnableUnloadsABuiltin gives `enable` a `-d` letter, which takes away a
+	// builtin that was loaded from a shared object.
+	//
+	// The two shells with the builtin disagree about the letter's existence
+	// rather than about what it does, and neither can load one here, so what
+	// the axis really decides is which refusal a script probing for the
+	// feature meets. Measured 2026-09-18, `enable -d notbuiltin`:
+	//
+	//	bash 5.3.20, 3.2.57   `enable: notbuiltin: not a shell builtin`   1
+	//	zsh 5.9.2             `enable: bad option: -d`                    1
+	//	ksh93u+, dash         `enable: not found`                        127
+	//
+	// So one column answers about the **operand** and the other about the
+	// **letter**, which is two whole lines per call apart in a script that
+	// asks. The column with the letter answers about a builtin it does have
+	// too: `enable -d echo` is `enable: echo: not dynamically loaded`,
+	// because nothing loaded it. This shell can load nothing either, so the
+	// letter parses and every name reaches one of those two sentences — it
+	// is not a claim that `enable -f` works.
+	//
+	// The letter with no operand adds nothing: measured the same day, the
+	// listing it writes is byte for byte a bare `enable`'s.
+	EnableUnloadsABuiltin Answer
+
 	// TestAcceptsDoubleEqual makes `==` a synonym for `=` in `test` and `[`,
 	// so `test a == a` is a string comparison. True in bash, ksh93 and zsh.
 	//
@@ -20964,6 +20988,10 @@ func PosixSemantics() Semantics {
 		HistoryQuoteModifierInPlace: No,
 		// And one of them stops at a comment.
 		HistoryCommentStopsExpansion: No,
+		// The standard has no `enable` at all, so the preset claims the
+		// letter no more than it claims the builtin; the one shell with it
+		// overrides.
+		EnableUnloadsABuiltin: No,
 		// Two of the three take a quote after the event character as part
 		// of the name, read a second event character as an ordinary letter
 		// of it, and have no braced form; the third is zsh and overrides

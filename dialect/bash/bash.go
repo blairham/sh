@@ -507,6 +507,12 @@ func Semantics() interp.Semantics {
 	// And a comment is left as written. See
 	// Semantics.HistoryCommentStopsExpansion.
 	s.HistoryCommentStopsExpansion = interp.Yes
+	// `enable` has a `-d`, so a refusal names the operand rather than the
+	// letter: measured 2026-09-18, `enable -d notbuiltin` is `enable:
+	// notbuiltin: not a shell builtin` at 1 in 5.3.20 and in 3.2.57 alike,
+	// where zsh answers `bad option: -d`. See
+	// Semantics.EnableUnloadsABuiltin.
+	s.EnableUnloadsABuiltin = interp.Yes
 	// And a `G` in front of an `s` substitutes once per word. Measured
 	// 2026-09-18 after `echo foo boo`, `!!:Gs/o/0/` is `ech0 f0o b0o`,
 	// which zsh and ksh93 both refuse as a modifier they do not know. See

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -40,12 +41,18 @@ import (
 //     man-page layout built around it. A letter accepted and answered with a
 //     synopsis would hand a script a success it did not earn, which is the
 //     one thing a partial may not do.
-//   - A bare `help` writes every topic's synopsis, one per line. The real
-//     shell's own listing opens with its version and four lines about itself
-//     and then packs the synopses into two truncated columns; the version
-//     line is a claim we must not make, and what is left is the same
-//     information one topic per line — which is also what its own
-//     `help -s ''` writes.
+//   - A bare `help` writes every topic's synopsis in **two columns**, cut to
+//     the column with a `>` where they were cut, which is what the real
+//     shell's listing does and is measured rather than chosen — see
+//     writeHelpListing for the geometry. What is **not** reproduced is the
+//     eight-line header above it: a version line is a claim we must not make
+//     and the four sentences under it are another project's prose. This was
+//     one topic per line for a while, on the reasoning that the header ruled
+//     the whole listing out; the header and the layout are different kinds of
+//     thing, and treating them as one cost 28 lines a call (#3055).
+//   - `help -s ''` is the one-per-line form, and it is a **different answer**
+//     from no operand at all rather than the same one: measured, the empty
+//     operand writes 77 lines of `name: synopsis` where no operand writes 47.
 //
 // # Measured
 //
@@ -56,6 +63,7 @@ import (
 //	help -s 'sh*'                a `Shell commands matching keyword` header,
 //	                             a blank line, then shift and shopt
 //	help -s ''                   every topic, one per line, sorted
+//	help -s                      the two-column listing, as a bare `help`
 //	help nosuchthing             no help topics match `nosuchthing'. …    1
 //	help -q true                 help: -q: invalid option, then the usage  2
 //	help -s -- cd                the operand after `--`
@@ -123,6 +131,12 @@ func helpOtherSynopses() map[string]string {
 		"dirs": "dirs [-clpv] [+N] [-N]",
 		"history": "history [-c] [-d offset] [n] or history -anrw [filename] " +
 			"or history -ps arg [arg...]",
+		// `logout` had no topic at all, which is one of the two names the
+		// real shell lists and this one did not — measured 2026-09-18,
+		// `help -s logout` is `logout: logout [n]` there and `no help
+		// topics match` here. The other is `variables`, deliberately absent
+		// for the reason above.
+		"logout":  "logout [n]",
 		"popd":    "popd [-n] [+N | -N]",
 		"pushd":   "pushd [-n] [+N | -N | dir]",
 		"suspend": "suspend [-f]",
@@ -203,7 +217,12 @@ func biHelp(r *interp.Runner, _ context.Context, args []string) int {
 	topics := helpTopics(r)
 	patterns := args[i:]
 	if len(patterns) == 0 {
-		patterns = []string{""}
+		// No operand at all is the **listing**, which is a different answer
+		// from the one an empty operand gives. Measured 2026-09-18 on bash
+		// 5.3.20: `help -s ''` writes 77 lines of `name: synopsis` and
+		// `help -s` writes 47, the same two columns a bare `help` writes.
+		writeHelpListing(r, topics)
+		return 0
 	}
 	status := 0
 	for _, p := range patterns {
@@ -273,4 +292,91 @@ func writeHelpTopic(r *interp.Runner, topics map[string]string, pattern string) 
 		_, _ = fmt.Fprintf(r.Out(), "%s: %s\n", name, topics[name])
 	}
 	return true
+}
+
+// helpListingWidth is the terminal width the listing is laid out in.
+//
+// `COLUMNS`, where the script has set it to something usable, and 80
+// otherwise. Measured 2026-09-18 on bash 5.3.20 with the shell on a pipe and
+// no terminal anywhere: an unset `COLUMNS`, a value that is not a number, a
+// negative one, `0`, `1`, `3` and every value up to `7` all lay out exactly as
+// `80` does, and `8` is the first that is used — two columns of four. `81`
+// lays out as `80`, which is the halving rounding down rather than a second
+// fallback.
+//
+// The shell's own parameter rather than the terminal's size, for the reason
+// interp/prompt.go gives about the same name: a script may have assigned it,
+// and what it assigned is what the layout is being asked about.
+func helpListingWidth(r *interp.Runner) int {
+	const fallback = 80
+	value, ok := r.GetVar("COLUMNS")
+	if !ok {
+		return fallback
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || n < 8 {
+		return fallback
+	}
+	return n
+}
+
+// writeHelpListing writes every topic's synopsis in two columns, which is what
+// a bare `help` answers.
+//
+// It was one topic per line here, on the reasoning that the real shell's
+// listing opens with a version line and four sentences about itself — both of
+// which this shell must not reproduce, the first being a claim we cannot make
+// and the second being another project's prose. That reasoning still holds for
+// the **header**, and it never applied to the **layout**: how many columns a
+// listing has, how wide a cell is and what marks a truncated one are
+// measurements about a program's output rather than sentences somebody wrote,
+// and they are what made this shell's listing 75 lines against 47 (#3055).
+//
+// The geometry, measured 2026-09-18 at COLUMNS 8, 10, 12, 40, 60, 80, 100 and
+// 200, reading the character positions out of the bytes:
+//
+//   - a column is `COLUMNS / 2` wide, rounding down;
+//   - each line opens with one space;
+//   - the left cell is cut to `COLUMNS/2 - 2` characters and padded to that
+//     width, then two spaces;
+//   - the right cell is cut to `COLUMNS/2 - 3` characters and the line ends
+//     where it ends, so the longest line is `COLUMNS - 2`;
+//   - a cut cell's last character is `>`;
+//   - a row with no right cell is not padded, which is the last row when the
+//     count is odd.
+//
+// The order is **column-major**: with 77 topics and 39 rows, the left column
+// is the first 39 in sorted order and the right column is the rest.
+func writeHelpListing(r *interp.Runner, topics map[string]string) {
+	names := make([]string, 0, len(topics))
+	for name := range topics {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	half := helpListingWidth(r) / 2
+	rows := (len(names) + 1) / 2
+	for row := 0; row < rows; row++ {
+		line := " " + helpCell(topics[names[row]], half-2)
+		if right := row + rows; right < len(names) {
+			line += strings.Repeat(" ", half-2-len(helpCell(topics[names[row]], half-2))) +
+				"  " + helpCell(topics[names[right]], half-3)
+		}
+		_, _ = fmt.Fprintf(r.Out(), "%s\n", line)
+	}
+}
+
+// helpCell is one synopsis cut to a column, with `>` where it was cut.
+//
+// A width with no room for the marker is the whole of the degenerate case,
+// and it is reachable: COLUMNS=8 makes the right column five characters and
+// the marker is then most of a cell.
+func helpCell(text string, width int) string {
+	if width < 1 {
+		width = 1
+	}
+	if len(text) <= width {
+		return text
+	}
+	return text[:width-1] + ">"
 }

@@ -95,22 +95,25 @@ func TestHelpRefusals(t *testing.T) {
 	}
 }
 
-// A bare `help` writes every topic, one per line and sorted, which is the
-// same set and the same lines its own `help -s ”` writes.
+// `help -s ”` writes every topic, one per line and sorted.
 //
-// The real shell's own bare listing opens with its version and four lines
-// about itself and then packs the synopses into two truncated columns. The
-// version line is a claim this shell must not make, so what is left is the
-// same information one topic per line. That is a deliberate divergence and
-// the one place `help` is not this shell answering as bash answers.
+// This used to assert that a **bare** `help` wrote the same lines, on the
+// reasoning that the real shell's listing opens with a version line this shell
+// must not claim and so the whole listing was ours to shape. Re-measured
+// 2026-09-18, the two are different answers in the real shell as well —
+// `help -s ”` is 77 lines of `name: synopsis` and a bare `help` is the
+// 47-line two-column listing — so the divergence was in the *layout*, which is
+// measurable, rather than in the header, which is the part that cannot be
+// reproduced (#3055). The bare listing's own rows are asserted in
+// helplisting_test.go; this is the one-per-line form it is not.
 func TestBareHelpListsEveryTopic(t *testing.T) {
-	bare, st := runBash(t, t.TempDir(), `help`)
+	bare, st := runBash(t, t.TempDir(), `help -s ''`)
 	if st != 0 {
 		t.Fatalf("help exited %d", st)
 	}
-	empty, _ := runBash(t, t.TempDir(), `help -s ''`)
-	if bare != empty {
-		t.Errorf("a bare help and `help -s \"\"` differ")
+	listing, _ := runBash(t, t.TempDir(), `help`)
+	if bare == listing {
+		t.Errorf("an empty operand and no operand wrote the same thing; they are two answers")
 	}
 	lines := strings.Split(strings.TrimRight(bare, "\n"), "\n")
 	if len(lines) < 60 {

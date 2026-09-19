@@ -2686,6 +2686,12 @@ type Diagnostics struct {
 	// under `-c` and `${(q)x}` — a bad substitution for a different reason,
 	// found while reading the word rather than while expanding it — exits 1
 	// from the same invocation.
+	//
+	// And it is the status of the shell that was *handed* the string, not
+	// of every runner under it: the same failure inside `( … )` or inside a
+	// command substitution leaves the ordinary fatal status, where the same
+	// failure inside a function — the same shell, a deeper frame — keeps
+	// this one. See Runner.fatalExpansionQuiet for the rows.
 	ExpansionFailureStatusFromCommandString int
 
 	// ParamErrorMessage is what `${x?word}` says. Two verbs: the parameter

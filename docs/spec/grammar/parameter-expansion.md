@@ -2058,6 +2058,24 @@ dialect gives and one as core behavior:
   unset-parameter route already used, on the strength of the measurement
   above: it is the same 127-under-`-c` rule, and every other unreadable
   operator keeps the ordinary fatal status.
+- **Whose status it is** is the shell that was handed the string, and not
+  every runner beneath it. Measured 2026-09-18 on bash 5.3.20 under
+  `-c`, with `x` and `y` unset:
+
+  | program | status |
+  | --- | --- |
+  | `set -u; : $x` | 127 |
+  | `set -u; f() { : $x; }; f` | 127 |
+  | `set -u; ( : $x ); echo $?` | 1 |
+  | `set -u; v=$( : $x ); echo $?` | 1 |
+  | `set -u; ( ( : $x ) ); echo $?` | 1 |
+  | `set -u; ( ${y?w} ); echo $?` | 1 |
+
+  So the discriminator is the **subshell boundary** and not the depth of
+  the frame: a function is the same shell and keeps the answer where a
+  copy of it does not, and both doors — `set -u` and `${x?}` — answer
+  alike. The route is carried across the copy, so asking it alone put
+  127 on all six (#3628).
 - **Abandoning at the first** is not an axis. Every column stops at the
   first expansion it cannot answer — for a bad substitution and for
   `set -u` alike — so the word stops at its first failing span and the

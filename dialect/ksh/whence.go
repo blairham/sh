@@ -150,7 +150,7 @@ func whenceOne(r *interp.Runner, ctx context.Context, name, opts string) int {
 		// `whence -a echo` and `whence -av echo` are the same three lines.
 		return whenceAll(r, name, quiet)
 	}
-	if value, ok := r.LookupAlias(name); ok {
+	if value, ok := r.ReportedAlias(name); ok {
 		// The one resolution the core's lookup cannot see: the table is the
 		// runner's, but whether a word expands is the parser's fact, so
 		// `type` never speaks for aliases and this dialect does.
@@ -191,7 +191,7 @@ func whenceOne(r *interp.Runner, ctx context.Context, name, opts string) int {
 func whenceAll(r *interp.Runner, name string, quiet bool) int {
 	var lines []string
 	shadowed := false
-	if value, ok := r.LookupAlias(name); ok {
+	if value, ok := r.ReportedAlias(name); ok {
 		lines = append(lines, fmt.Sprintf("%s is an alias for %s", name, quoteWhenNeeded(value)))
 	}
 	switch kind, _ := r.ResolveName(name); kind {
@@ -235,7 +235,7 @@ func whenceAll(r *interp.Runner, name string, quiet bool) int {
 	}
 	if len(lines) == 0 {
 		if !quiet {
-			r.Diagnosef("whence: %s: not found\n", name)
+			r.Diagnosef("whence: %s: not found\n", r.NameReportWord(name))
 		}
 		return 1
 	}
@@ -266,7 +266,7 @@ func whencePath(r *interp.Runner, name string, verbose, quiet, all bool) int {
 			// The later letter's wording again: `whence -pv` on a name PATH
 			// does not hold says what `-v` says, where plain `-p` and
 			// `whence -vp` say nothing.
-			r.Diagnosef("whence: %s: not found\n", name)
+			r.Diagnosef("whence: %s: not found\n", r.NameReportWord(name))
 		}
 		return 1
 	}

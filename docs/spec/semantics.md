@@ -8127,6 +8127,50 @@ an argument.
 dash's row is not a disagreement about the separator — it reads no options for
 `alias` at all, so `--` is a name there.
 
+### Four preset aliases one shell will not report
+
+ksh93 ships nineteen preset aliases and declines to speak for four of them
+when it is asked what a name is. They are exactly that shell's **declaration
+words** — the set beside `typeset`, `export` and `readonly`.
+
+Measured 2026-09-18, same route. `integer` stands for all four; `compound`,
+`float` and `nameref` behave identically, and `autoload`, `source`, `times`,
+`hash` and every other preset answers in full.
+
+| probe | ksh93u+ |
+| --- | --- |
+| `whence integer`, `whence -v integer`, `whence -a integer` | `whence: integer: not found`, 1 |
+| `command -v integer` | silent, 1 |
+| `command -V integer` | `command: integer: not found`, 1 |
+| `type integer` | `whence: integer: not found`, 1 — `type` is `whence -v` here |
+| `whence -q integer` | silent, 1 |
+| `alias integer` | `integer='typeset -li'`, 0 |
+| `integer zz=3; echo "$zz"` | `3`, 0 |
+
+So the alias is there, the word expands, and `alias` lists it. One family of
+builtins declines to speak for it.
+
+**It is a mark on the name, not a rule about the four spellings**, and two
+rows say so:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `alias integer='echo hi'; whence -v integer` | still `not found`, 1 |
+| `alias -p integer` | `integer='echo hi'` is *not* written; silent, 0 |
+| `unalias float; alias float=ls; whence -v float` | `float is an alias for ls`, 0 |
+| `alias myint='typeset -i'; whence -v myint` | `myint is an alias for 'typeset -i'`, 0 |
+
+A new value keeps the refusal and a removal clears it, so a set of four names
+checked at the report would get the third row wrong and a rule about the
+*value* would get the first and the fourth wrong. `Runner.SetAliasNotReported`
+is the mark, `Runner.ReportedAlias` is the lookup a reporting builtin uses,
+and `Runner.LookupAlias` — the parser's — is deliberately untouched, since the
+word still expands (#3642).
+
+The second row above is a **separate** divergence and is not modeled: `alias
+-p` with an operand writes nothing at all in that shell, for any name, hidden
+or not. See #3677.
+
 ### A name a subshell's `alias` names is remembered in the parent
 
 `Semantics.AliasRemembersTheNamesItNames` keeps a name after `alias` has
@@ -8993,6 +9037,42 @@ whose subject is a locale table records that machine's answer and not the
 shell's — the same caution the numeric data above earns.
 
 ## What `command` and `whence` answer, and for how many names
+
+### The name a report says back is written the way the shell would write it
+
+ksh93 spells the operand of its not-found sentence **shell-quoted** wherever
+the word is not one it could write bare, and the other three columns write it
+exactly as it was given. `Diagnostics.NameReportQuoting` is the answer.
+
+Measured 2026-09-18, a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+with stdin `/dev/null`. The third column is the same word handed to `echo`
+under `set -x` in the same shell:
+
+| written | `whence -v <word>` | `set -x` |
+| --- | --- | --- |
+| `nosuchcmd` | `whence: nosuchcmd: not found` | `nosuchcmd` |
+| `a b` | `whence: 'a b': not found` | `'a b'` |
+| `]]`, `x]`, `[x` | `whence: ']]': not found` | `']]'` |
+| `=ab` | `whence: '=ab': not found` | `'=ab'` |
+| `ab=` | `whence: ab=: not found` | `ab=` |
+| a tab in the word | `whence: $'a\tb': not found` | `$'a\tb'` |
+| `a!b`, `a%b`, `a^b`, `a=b`, `a,b`, `a@b`, `a.b`, `a/b`, `a-b` | bare | bare |
+
+Thirty-eight words were run through both, and the two agree on every one — so
+this is that shell's own word-writing function reached from a second place,
+not a second alphabet. The leading-only `=` and the `$'…'` spelling are the
+two rows that make the claim falsifiable: a looser "quote anything unusual"
+rule gets both wrong.
+
+`command -V` is the same sentence and the same quoting. The 127 a *command
+word* gets is not: `"a b"` as a command is `x.sh: line 6: a b: not found`
+there, bare (#3666).
+
+**The quoting reaches the answers too, and that half is not modeled.** With a
+file called `a b` on `PATH`, `whence -v "a b"` is `'a b' is a tracked alias
+for '/…/bb/a b'` in that shell and bare here — both the name *and the path*.
+See #3678.
+
 
 Measured 2026-09-18 from `-c` and from script files under `env -i
 PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`: bash 5.3.20, zsh 5.9.2,

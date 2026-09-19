@@ -96,6 +96,22 @@ func (r *Runner) LookupAlias(name string) (string, bool) {
 	return a.value, ok
 }
 
+// ReportedAlias is [Runner.LookupAlias] for a builtin that *reports* rather
+// than expands, and the two part company on one thing: a name the dialect
+// declines to speak for is absent here and present there.
+//
+// A dialect's own name-reporting builtin asks this one. The seam matters
+// because the word still expands — the four names one shell hides are its
+// declaration words, and `integer zz=3` declares there exactly as it always
+// did — so a reporting builtin reaching for the expansion's lookup reports an
+// alias the shell says it has not got. See [Runner.SetAliasNotReported].
+func (r *Runner) ReportedAlias(name string) (string, bool) {
+	if r.unreportedAliases[name] {
+		return "", false
+	}
+	return r.LookupAlias(name)
+}
+
 // AliasForName answers what a `type`-family builtin should say a name is,
 // which is not the same question [Runner.LookupAlias] answers.
 //
@@ -139,6 +155,12 @@ func (r *Runner) AliasForName(name string) (display, value string, kind AliasKin
 // aliasTableFor is the table half of the question above, with no axis in it.
 func (r *Runner) aliasTableFor(name string) (display, value string, kind AliasKind, ok bool) {
 	if a, found := r.aliases[name]; found {
+		if r.unreportedAliases[name] {
+			// The table holds it and this family does not speak for it —
+			// see [Runner.SetAliasNotReported]. Not a removal: the word
+			// still expands and `alias` still lists it.
+			return "", "", AliasAnyKind, false
+		}
 		if a.global {
 			return name, a.value, AliasGlobalKind, true
 		}
@@ -853,6 +875,12 @@ func (r *Runner) removeAlias(name string, kind AliasKind) bool {
 		return r.rememberedAliasName(name)
 	}
 	delete(r.aliases, name)
+	// And with the entry goes any refusal to report it: measured 2026-09-18
+	// on ksh93u+ 2012-08-01, `unalias float; alias float=ls; whence -v float`
+	// is `float is an alias for ls` at 0, where `alias integer='echo hi';
+	// whence -v integer` is still `not found` at 1. So a redefinition keeps
+	// the mark and a removal takes it off — see [Runner.SetAliasNotReported].
+	delete(r.unreportedAliases, name)
 	// The name stays remembered where names are remembered, which is what
 	// makes the second and the third `unalias` of it succeed too — measured,
 	// `alias h=1; unalias h; unalias h; unalias h` is 0 three times in

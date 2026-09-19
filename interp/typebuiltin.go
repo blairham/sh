@@ -266,7 +266,19 @@ func (r *Runner) typeOne(name string, kind typeKind) int {
 }
 
 func (r *Runner) typeNotFoundWording(name string) string {
-	return Wording(r.diag().TypeNotFound, "type: %[1]s: not found", name)
+	return Wording(r.diag().TypeNotFound, "type: %[1]s: not found", r.NameReportWord(name))
+}
+
+// NameReportWord is the name a `type`-family sentence says back, spelled the
+// way the dialect writes a word it could not otherwise write bare. See
+// Diagnostics.NameReportQuoting.
+//
+// One function and exported, because a dialect quoting `whence`'s operand and
+// not `command -V`'s is not a shell anybody measured, and a dialect that
+// brings its own `whence` writes some of those sentences itself.
+func (r *Runner) NameReportWord(name string) string {
+	d := r.diag()
+	return traceQuote(name, d.NameReportQuoting, d.TraceMetacharacters)
 }
 
 // typePath is `-p`: the path alone. Which names it answers for, and in what

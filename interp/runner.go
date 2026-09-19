@@ -1101,6 +1101,19 @@ type Runner struct {
 	// [Runner.markedAliasNames].
 	markedAliases map[string]bool
 
+	// unreportedAliases is every name the `type` family declines to speak
+	// for while the table holds an alias under it — see
+	// [Runner.SetAliasNotReported], which has the rows.
+	//
+	// A set beside the table rather than a field on the entry, because the
+	// dialect that has these installs them before its prelude defines the
+	// aliases themselves: a mark on an entry that does not exist yet has
+	// nowhere to live, and a mark applied on *creation* would come back the
+	// moment a removed name was defined again, which the panel says it does
+	// not. Removing the alias takes the name out of here, and redefining it
+	// leaves the set alone — which is exactly the pair that was measured.
+	unreportedAliases map[string]bool
+
 	// cmdHash is the command hash: a bare name PATH resolved, and where it
 	// resolved to. cmdHashOrder is the same names in the order they were
 	// first put there, which is the order a listing walks unless the dialect

@@ -3273,10 +3273,16 @@ func Diagnostics() interp.Diagnostics {
 		TypeFunction:        "%[1]s is a function",
 		// The body is quoted the way this shell's own listing quotes it, and
 		// `command -v` writes that body with no `alias name=` in front of it.
-		TypeAlias:               "%[1]s is an alias for %[2]s",
-		TypeAliasQuotesValue:    true,
-		CommandVAlias:           "%[2]s",
-		TypeNotFound:            "whence: %[1]s: not found",
+		TypeAlias:            "%[1]s is an alias for %[2]s",
+		TypeAliasQuotesValue: true,
+		CommandVAlias:        "%[2]s",
+		TypeNotFound:         "whence: %[1]s: not found",
+		// And the name in it is written back shell-quoted where it is not a
+		// word this shell could write bare — `whence: 'a b': not found`,
+		// `whence: ']]': not found`, `whence: $'a\tb': not found`. The same
+		// spelling as TraceQuoting below, measured character for character
+		// including the leading-only `=` and the `$'…'` form (#3666).
+		NameReportQuoting:       interp.QuoteDollar,
 		CommandVNotFound:        "command: %[1]s: not found",
 		JobStarted:              "[%[1]d]\t%[2]d",
 		JobNoticeShowsAmpersand: true,
@@ -4863,6 +4869,21 @@ func Apply(r *interp.Runner) {
 	// the substrate's `times` are already in the table by the time this runs.
 	r.Unregister("source")
 	r.Unregister("times")
+	// The four preset aliases this shell will not report, which are exactly
+	// its **declaration words** — the set syntax.Dialect.
+	// CompoundVariableDeclarators holds beside `typeset`, `export` and
+	// `readonly`. Measured 2026-09-18 on ksh93u+ 2012-08-01, a script file
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on
+	// /dev/null: `whence integer`, `whence -v integer`, `whence -a integer`,
+	// `command -v integer`, `command -V integer`, `type integer` and
+	// `whence -q integer` are all `not found` at 1, where the other fifteen
+	// preset aliases answer in full. `alias integer` still writes the line
+	// and `integer zz=3` still declares, so it is the report and nothing
+	// else. See interp.Runner.SetAliasNotReported for why it is a mark and
+	// not a rule about the four names (#3642).
+	for _, name := range []string{"compound", "float", "integer", "nameref"} {
+		r.SetAliasNotReported(name)
+	}
 	// ksh93's own spellings of "what would this run" and "write this out",
 	// both pervasive in real ksh scripts. See whence.go and print.go.
 	registerWhence(r)

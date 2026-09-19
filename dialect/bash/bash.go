@@ -149,6 +149,14 @@ func Dialect() syntax.Dialect {
 	// dash and zsh read the body from the whole input instead, so the `)`
 	// goes into it and the construct is never closed (#963).
 	d.HeredocEndsAtClosingParen = true
+	// And the looser half of it: at the end of a substitution's text a
+	// here-document that never saw its delimiter retries the last line as a
+	// prefix, consuming the delimiter and parsing the rest of the line as
+	// more of the substitution. bash 5.3 only — bash 3.2 takes the line as
+	// body, and ksh93 refuses the shape outright. See
+	// syntax.Dialect.HeredocLastLineIsADelimiterPrefix for the rows and for
+	// the control that keeps a well-formed document from ending early.
+	d.HeredocLastLineIsADelimiterPrefix = true
 	// A body line joined out of two physical ones is compared against the
 	// delimiter whole, so `A\` over `BC` ends an `ABC` document. dash and
 	// BusyBox ash take only a join that began at the start of a line and

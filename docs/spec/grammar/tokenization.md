@@ -1218,11 +1218,64 @@ The reading that only looked for the `)` once nothing further down could
 end the body was wrong in bash and ksh93 whenever the file went on to hold
 the delimiter again, which a file of several such documents always does.
 
-bash reads further than ksh93 here, and it is not modeled: `EOF )`, with a
-blank before the parenthesis, and `EOF X )` both end the body in bash and
-are body in ksh93, zsh and dash — bash appears to end it at a line that
-opens with the delimiter and holds a `)` anywhere, since `EOF "a)"` does
-too. `EOF X` with no parenthesis is body in all four.
+**bash reads further than ksh93 here, and the rule is a recovery at the
+end of the substitution's text.** `EOF )`, with a blank before the
+parenthesis, and `EOF X )` both end the body in bash and are body in
+ksh93, zsh and dash. This document used to record the reading as "a line
+that opens with the delimiter and holds a `)` anywhere", on the evidence
+that `EOF "a)"` ends it too — **and that is false.** Re-measured
+2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+bash 5.3.20:
+
+    v=$(cat <<E
+    w
+    E "a)"
+    echo "[$v]"
+
+is `unexpected EOF while looking for matching `)'` — the quoted `)` closes
+nothing, the substitution is never closed, and the file is refused. So the
+`)` is not what the rule is looking for at all.
+
+What it is looking for is the **delimiter, as a bare prefix, on the last
+line of the substitution's text**. The delimiter is consumed and the rest
+of that line is parsed as more of the substitution, which is where the `)`
+in `E )` comes from and equally where the command in `E x)` comes from:
+
+| tail of the substitution | bash 5.3 |
+| --- | --- |
+| `E )` | `[w]`, the remainder ` )` closing it |
+| `E x)` | `x: command not found`, then `[w]` |
+| `E x y)` | the same, with an argument |
+| `Ex)` | the same — **no blank is needed** |
+| `EE)` | `E: command not found`, `[w]` — the remainder may begin with the delimiter |
+| `E ; echo hi)` | a syntax error at `;`, echoing `` ` ; echo hi)' `` |
+| `E "a)"` | `unexpected EOF while looking for matching `)'` |
+
+**It cannot end a well-formed document early**, which is the control that
+decides the shape. With the document closed properly two lines down —
+
+    v=$(cat <<E
+    EXTRA
+    E
+    )
+
+— bash answers `[EXTRA]`: `EXTRA` begins with `E` and is body. Move the
+closer up onto the `E ` line and the answer is `[EXTRA]` again, the `E `
+line consumed and `EXTRA` still body. So the match is tried once, at the
+end, and not as the lines go by.
+
+**And it is `$( )` and nothing else.** The discriminating shape puts the
+prefix line last in a plain file — `cat <<E` / `w` / `E x` with nothing
+after it — and bash gives cat the body `w⏎E x`, so it is not a general
+here-document rule; the outside-a-substitution control this document gave
+before had `echo after` as its last line and could not have fired under
+either reading. The backquoted spelling of the same substitution answers
+`[w⏎E ]`, body, exactly as bash 3.2 has it.
+
+`syntax.Dialect.HeredocLastLineIsADelimiterPrefix` carries it, bash alone
+(#1021). ksh93 refuses the whole shape — `` syntax error at line 1: `('
+unmatched `` — which is a question about how the substitution's extent is
+found rather than about this rule, and is not modeled.
 
 bash 5.3 also *warns* there that the document was delimited by end of
 file, which is the same remark `<<-` with a space-indented delimiter

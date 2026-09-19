@@ -415,6 +415,22 @@ func (p *Parser) SetDialect(d Dialect) {
 	p.lex.dialect = d
 }
 
+// InsideProgramParentheses tells this parser that the text it is about to read
+// is the inside of parentheses holding a program — the body of a `$( )`,
+// already cut out of the script it came from.
+//
+// The parser sets this for itself where it reads such a body in place (see
+// [Lexer.parseToClose]); what it cannot know is that a *caller* has handed it
+// a body it cut earlier, which is what an interpreter does when it parses a
+// substitution's text at expansion time. Told nothing, that read has no
+// parentheses around it and a here-document in it runs to the end of the text
+// where the shell being modeled ends it at the delimiter (#785, #1021).
+//
+// The counterpart of [Parser.SetDialect]: a fact about the text this parser
+// was given, handed in by the only place that knows it, and read for what has
+// not been tokenized yet.
+func (p *Parser) InsideProgramParentheses() { p.lex.inProgramParens = true }
+
 // Incomplete reports whether the input ended part-way through a construct that
 // could still be finished. A prompt should ask for another line.
 func (p *Parser) Incomplete() bool { return p.incomplete || p.lex.Incomplete() }

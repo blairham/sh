@@ -4198,3 +4198,78 @@ racing diagnostic grades nothing. The waiting body is
 the operator's spelling of the same thing,
 `pipe/a-coprocess-operator-whose-body-reads-does-not-block-the-shell`;
 both feed the coprocess a line afterwards so it ends with the run.
+
+## `namespace NAME { … }`
+
+One column has the word: ksh93u+ 2012-08-01. Measured 2026-09-19, each
+row its own script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with
+standard input on `/dev/null`, against `namespace ns { x=1; }`.
+
+| column | output | status |
+| --- | --- | ---: |
+| ksh93u+ | — | 0 |
+| bash 5.3.20 | ``syntax error near unexpected token `}' `` | 2 |
+| zsh 5.9.2 | ``parse error near `}' `` | 1 |
+| dash 0.5.12 | `Syntax error: "}" unexpected` | 2 |
+| BusyBox ash 1.37.0 | `syntax error: unexpected "}"` | 2 |
+
+**The word is reserved where a command begins and nowhere else**, and that
+is what keeps it a dialect's word rather than a name taken away from the
+other five. `namespace=5` assigns, `echo namespace` prints the operand,
+and `v=namespace` stores the text — in ksh93 as in every other column. A
+report about what is *runnable* does claim it: `whence -v namespace` and
+`type namespace` are both `namespace is a keyword` there, and
+`command -v namespace` answers the bare word at 0.
+
+### The production
+
+The word, then one word standing where the name belongs, then a brace
+group.
+
+| written | ksh93u+ |
+| --- | --- |
+| `namespace ns { echo inside; }; echo after` | `inside`, `after`, 0 |
+| `namespace ns` ⏎ `{ echo hi; }` | `hi`, 0 — the brace may follow a newline |
+| `namespace ns; echo after` | ``syntax error at line 1: `;' unexpected``, 3 |
+| `namespace; echo two` | the same |
+| `namespace ns{ echo hi; }` | ``syntax error at line 1: `echo' unexpected``, 3 |
+| `"namespace" ns { echo hi; }` | ``syntax error at line 1: `}' unexpected``, 3 |
+| `namespace "ns" { echo hi; }` | `hi`, 0 — the quoting may be on the *name* |
+| `namespace ns {` | ``syntax error at line 1: `namespace' unmatched``, 3 |
+| `namespace ns extra { :; }` | ``syntax error at line 1: `extra' unexpected``, 3 |
+| `if true; then namespace ns { echo in; }; fi` | `in`, 0 |
+| `namespace ns { echo a; } > out.txt` | the block takes redirections |
+| `namespace ns { x=1; } \| cat` | it stands as a pipeline element |
+
+An unterminated block is named after the **construct** and not after its
+brace, which is the second production to want that — a function body is
+the first, and both are cases where the braces are the production's own
+punctuation rather than a group somebody wrote.
+
+### A name that is no name is refused when the clause runs
+
+A stage split and not a wording, which is the same one a loop's variable
+makes: the file reads either way, and the complaint arrives when the
+clause is reached. Measured on the same run, and the word is judged **as
+written** — nothing is expanded first.
+
+| written | ksh93u+ | status |
+| --- | --- | ---: |
+| `namespace .ns { x=1; }` | `.ns: is not an identifier` | 1 |
+| `namespace a.b { x=1; }` | `a.b: is not an identifier` | 1 |
+| `namespace a-b { x=1; }` | `.a-b: invalid variable name` | 1 |
+| `namespace 1x { x=1; }` | `.1x: invalid variable name` | 1 |
+| `namespace @ { x=1; }` | `.@: invalid variable name` | 1 |
+| `namespace "" { x=1; }` | `.: invalid variable name` | 1 |
+| `namespace a[1] { x=1; }` | `.a[1]: cannot be an array` | 1 |
+| `n=ns; namespace $n { x=1; }` | `.$n: invalid variable name` | 1 |
+
+Three sentences, and **the word picks which one**, not the dialect: a
+word with a dot in it is named as it stands, and anything else is named
+as the store name the shell was about to make — the word with a dot in
+front of it. In every row the `echo after` behind it never runs, where a
+*grammar* failure is 3 and no line of the file runs at all.
+
+What the block then does with the names inside it is not the grammar's,
+and is in `../semantics.md` under *A namespace is a name-resolution
+region over a compound*.

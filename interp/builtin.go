@@ -3039,6 +3039,17 @@ func (r *Runner) unsetOneName(name string) {
 		delete(r.compoundVariable, name)
 		r.unsetCompoundMembers(name)
 	}
+	// A namespace is the same shape one level up: the members are names
+	// under it, so `unset .ns` has to take them too. The namespace itself
+	// stops existing, which is what makes a later `${.ns.gv}` an ordinary
+	// unset dotted name rather than a read-through to the global. See
+	// interp/namespace.go.
+	if ns, ok := r.namespaceUnsetTarget(name); ok {
+		delete(r.namespaces, ns)
+		for _, m := range r.compoundDescendants(name) {
+			r.unsetOneName(m)
+		}
+	}
 	r.clearAttributes(name)
 	// Recorded as well as deleted: a name that came from the environment is
 	// not in Vars to begin with, and deleting nothing left it visible to

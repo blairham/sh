@@ -144,6 +144,8 @@ func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
 			"`(( … ))` counting as a command for the pipeline status")
 	case *syntax.Group:
 		return r.compoundCounts(x.Redirs, x.List)
+	case *syntax.NamespaceClause:
+		return r.compoundCounts(x.Redirs, x.List)
 	case *syntax.IfClause:
 		lists := [][]*syntax.Stmt{x.Cond, x.Then, x.Else}
 		for _, e := range x.Elifs {

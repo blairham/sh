@@ -132,6 +132,10 @@ func Dialect() syntax.Dialect {
 	// operator the way zsh does. Measured 2026-09-12 over all ten positions
 	// (#948).
 	d.BareNegationReach = syntax.BareNegationAtEitherPlace
+	// `namespace NAME { … }`, this shell's alone: the other five refuse the
+	// brace group outright. See [syntax.Dialect.NamespaceBlock] for the panel
+	// and for why the word stays an ordinary name everywhere else.
+	d.NamespaceBlock = true
 	// And a second `!` inverts the first, as in bash: `! ! true` answers 0.
 	d.RepeatedNegationToggles = true
 	// A process substitution stands only where a command takes a word — an
@@ -3687,6 +3691,9 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitutionNames:          interp.NamesTheWholeWord,
 		FunctionNameInvalid:           "%[1]s: invalid function name",
 		FunctionNameDiscipline:        "%[1]s: invalid discipline function",
+		NamespaceNameInvalid:          "%[1]s: is not an identifier",
+		NamespaceNameNotAVariable:     "%[1]s: invalid variable name",
+		NamespaceNameSubscripted:      "%[1]s: cannot be an array",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
 		ForNameStatus:     1,

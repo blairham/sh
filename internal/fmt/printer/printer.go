@@ -383,6 +383,8 @@ func redirsOf(c syntax.Command) []*syntax.Redirect {
 		return x.Redirs
 	case *syntax.Group:
 		return x.Redirs
+	case *syntax.NamespaceClause:
+		return x.Redirs
 	case *syntax.TryClause:
 		return x.Redirs
 	case *syntax.IfClause:
@@ -437,6 +439,9 @@ func (p *printer) command(c syntax.Command) {
 		p.simple(x)
 	case *syntax.Group:
 		p.group(x)
+		p.suffixRedirs(x.Redirs)
+	case *syntax.NamespaceClause:
+		p.namespaceClause(x)
 		p.suffixRedirs(x.Redirs)
 	case *syntax.Subshell:
 		p.subshell(x)
@@ -987,6 +992,16 @@ func armEnd(it *syntax.CaseItem) syntax.Pos {
 		return it.Body[n-1].End()
 	}
 	return it.Start
+}
+
+// namespaceClause lays out `namespace NAME { … }`. The body takes the brace
+// group's own layout, because it is one: the construct adds a word and a name
+// in front of a block this pass already knows how to write.
+func (p *printer) namespaceClause(x *syntax.NamespaceClause) {
+	p.b.WriteString("namespace ")
+	p.b.WriteString(x.Name)
+	p.b.WriteByte(' ')
+	p.group(&syntax.Group{List: x.List, Start: x.Start, Stop: x.Stop})
 }
 
 func (p *printer) group(x *syntax.Group) {

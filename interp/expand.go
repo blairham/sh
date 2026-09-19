@@ -6741,6 +6741,15 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 	for name := range r.nameref {
 		listed(name)
 	}
+	// And a namespace's keys, which are the names it reads through to as
+	// well as the members it holds. Measured: `gv=GLOBAL; namespace ns {
+	// x=1; }` then `${!.ns.@}` answers the shell's ordinary parameters and
+	// `gv` and `x`, all spelled `.ns.…`. That is the listing half of the
+	// fall-through the reads already make — see interp/namespace.go — and it
+	// is the one place a namespace is more than the members under it.
+	for _, name := range r.namespaceKeys(prefix) {
+		listed(name)
+	}
 	sort.Strings(out)
 	return out
 }

@@ -745,6 +745,38 @@ type Diagnostics struct {
 	// is a discipline function to the shell that says this.
 	FunctionNameDiscipline string
 
+	// NamespaceNameInvalid refuses a `namespace NAME { … }` whose word is not
+	// a name. One verb: the word, as it was written.
+	//
+	// A runtime refusal and not a parse one, in the one dialect with the
+	// construct: measured 2026-09-19 on ksh93u+ 2012-08-01, `namespace .ns {
+	// x=1; }; echo after` writes `.ns: is not an identifier`, exits 1 and
+	// never reaches the `echo`, where `namespace ns; echo after` is a syntax
+	// error at 3. See [syntax.Dialect.NamespaceBlock] for the stage split.
+	NamespaceNameInvalid string
+
+	// NamespaceNameNotAVariable is that refusal for a word with no dot in it,
+	// which the same shell words differently and blames differently. One
+	// verb: the **store name**, which is the word with a dot in front of it.
+	//
+	// Measured on the same run, one script file per row:
+	//
+	//	namespace .ns  .ns: is not an identifier      the word, no prefix
+	//	namespace a.b  a.b: is not an identifier      the same
+	//	namespace a-b  .a-b: invalid variable name    a dot in front
+	//	namespace 1x   .1x: invalid variable name
+	//	namespace @    .@: invalid variable name
+	//	namespace ""   .: invalid variable name
+	//	namespace a[1] .a[1]: cannot be an array
+	//
+	// So the dot in the word is what picks the sentence, and a word without
+	// one is reported as the name the shell was about to make.
+	NamespaceNameNotAVariable string
+
+	// NamespaceNameSubscripted is the third of those, for a word carrying a
+	// subscript. One verb: the store name, as above.
+	NamespaceNameSubscripted string
+
 	// DirectoryOnPathStatus is what a PATH search whose only match was a
 	// directory reports, in a dialect that keeps the directory as its
 	// answer. dash says 127 — the message names the candidate and the

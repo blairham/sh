@@ -2077,8 +2077,74 @@ func (p *Parser) parseCommand() Command {
 		return p.parseFuncKeyword()
 	case p.atWord("coproc") && p.dialect.Coproc:
 		return p.parseCoproc()
+	case p.atWord("namespace") && p.dialect.NamespaceBlock:
+		return p.withRedirs(p.parseNamespace())
 	}
 	return p.parseSimple()
+}
+
+// parseNamespace reads `namespace NAME { list }`, the one column's
+// name-resolution region. See [Dialect.NamespaceBlock] for the panel.
+//
+// The name is one word, taken **as written** and never expanded: measured
+// 2026-09-19 on ksh93u+ 2012-08-01, `n=ns; namespace $n { x=1; }` reports
+// `.$n: invalid variable name` and runs nothing, so what the shell judges is
+// the text. A word that is no name at all is carried to the interpreter and
+// refused there, which is the same stage split [Parser.forName] makes for a
+// loop's variable.
+//
+// The brace is a token of its own and may stand on the next line. `namespace
+// ns{ echo hi; }` is a syntax error naming `echo` in that column, which falls
+// out of reading the word greedily rather than being written down twice: the
+// name is `ns{`, and `echo` is then standing where the brace belongs.
+func (p *Parser) parseNamespace() Command {
+	c := &NamespaceClause{Start: p.tok.Pos}
+	defer p.opens("namespace")()
+	p.next()
+	if p.tok.Kind != TokWord {
+		// `namespace;` and `namespace` at the end of the input: nothing that
+		// could be a name stands here, and the grammar complains about the
+		// token before the construct gets to complain about the name. The
+		// column that has the word names the token it stopped on and names no
+		// expectation beside it — `` syntax error at line 1: `;' unexpected ``.
+		p.failUnexpected("")
+		return c
+	}
+	c.Name = p.namespaceName()
+	p.next()
+	// The brace may follow a newline, measured. Nothing else may: a separator
+	// there is the failure below, naming the token.
+	p.skipNewlines()
+	if !p.atWord("{") {
+		p.failUnexpected("")
+		return c
+	}
+	g, ok := p.parseGroupOpenedBy("namespace").(*Group)
+	if !ok {
+		return c
+	}
+	c.List, c.Stop = g.List, g.Stop
+	return c
+}
+
+// namespaceName is the word standing where a namespace's name belongs, as it
+// was written. [Parser.forNameAsWritten] with a name of its own, because the
+// two productions ask the same question of different tokens and a shared
+// helper named for the loop would read as one.
+func (p *Parser) namespaceName() string {
+	for _, sp := range p.tok.Spans {
+		if sp.Kind != Literal {
+			// A word with an expansion in it is judged as it was *written*:
+			// measured, `n=ns; namespace $n { x=1; }` reports `.$n: invalid
+			// variable name` and never expands it.
+			return p.forNameAsWritten()
+		}
+	}
+	// Quoting is removed, and that is measured rather than assumed:
+	// `namespace "ns" { echo hi; }` runs there, where `"namespace" ns { … }`
+	// is a syntax error. So the quotes may be on the name and not on the
+	// word that reserves the production.
+	return p.tok.Literal()
 }
 
 // parseCoproc reads `coproc [NAME] command`.
@@ -4678,11 +4744,23 @@ func (p *Parser) parseSubshell() Command {
 }
 
 func (p *Parser) parseGroup(funcBody bool) Command {
-	c := &Group{Start: p.tok.Pos}
 	word := "{"
 	if funcBody {
 		word = "function"
 	}
+	return p.parseGroupOpenedBy(word)
+}
+
+// parseGroupOpenedBy is parseGroup with the construct the braces belong to
+// named by the caller, which is what an unterminated one is reported as.
+//
+// The word was already the enclosing construct's for a function body — the
+// shells name `function` there and not `{` — and a `namespace` block is the
+// second construct whose braces are its own punctuation: measured 2026-09-19,
+// `namespace ns {` with nothing after it is “ syntax error at line 2:
+// `namespace' unmatched “ on ksh93u+ and not “ `{' unmatched “.
+func (p *Parser) parseGroupOpenedBy(word string) Command {
+	c := &Group{Start: p.tok.Pos}
 	defer p.opens(word)()
 	p.next()
 	c.List = p.parseBody()

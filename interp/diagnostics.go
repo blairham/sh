@@ -5015,18 +5015,6 @@ type Diagnostics struct {
 	// syntax-error status.
 	ForNameStatus int
 
-	// FileNumber is what a `<&` whose operand is not one says. One verb:
-	// %[1]s the operand as written, which the column that has the refusal
-	// does not use — `file number expected`, with nothing quoted. Empty
-	// leaves the dialect's ordinary unexpected-token sentence, which is what
-	// the four that read a word there would say if they ever raised this and
-	// they never do.
-	//
-	// No status beside it, unlike ForName one field up: the refusal gives up
-	// the **line** rather than the file, which syntax.File.Refused carries,
-	// and the status a given-up line leaves is already 1. See
-	// syntax.Dialect.InputDuplicateOperandIsAFileNumber.
-	FileNumber string
 	// HeredocOutsideSubstitution is what a here-document opened inside a
 	// `$( )` or `${ ; }` whose body is not inside it says. Two verbs: %[1]s
 	// the operator with its delimiter, quoting off, and %[2]d the line the
@@ -7798,8 +7786,6 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
-	case syntax.ErrFileNumber:
-		return Wording(d.FileNumber, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrHeredocOutsideSubstitution:
 		return Wording(d.HeredocOutsideSubstitution, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrForArithHeader:

@@ -35,3 +35,10 @@ const platformSignalMax = 31
 // map to correct. The other platform's copy is where the difference is
 // recorded (#3703).
 var platformSignalDefaults map[string]bool
+
+// Nothing here is unnamed. The bound is 31 and the table names every number
+// from 1 to 31, so the question this constant answers on the other platform —
+// what a number in range that has no name does by default — has no case to
+// answer here. False is the value that says "no such number", not a measured
+// default action (#3777).
+const platformUnnamedSignalsEndTheShell = false

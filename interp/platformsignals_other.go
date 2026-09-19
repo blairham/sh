@@ -19,3 +19,7 @@ const platformSignalMax = 0
 // reason: a kernel nobody ran is a kernel nobody measured SIGIO on. The
 // shared value stands, which is the BSD's (#3703).
 var platformSignalDefaults map[string]bool
+
+// And no unnamed numbers either, for the same reason the bound is zero: a
+// kernel nobody ran has no range past the table, so nothing reaches this.
+const platformUnnamedSignalsEndTheShell = false

@@ -342,7 +342,7 @@ func (r *Runner) setHistoryRecording(on bool) {
 // finishHistoryFile runs the dialect's finish, where the shell that is ending
 // is one the file is written for.
 func (r *Runner) finishHistoryFile() {
-	if r.histFinish == nil || !r.histStarted || !r.histRecord || r.inSubshell || r.Interactive || r.killedBy != "" {
+	if r.histFinish == nil || !r.histStarted || !r.histRecord || r.inSubshell || r.Interactive || r.diedOfItsOwnSignal() {
 		return
 	}
 	r.histFinish(r)

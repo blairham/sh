@@ -1221,6 +1221,10 @@ type Runner struct {
 	// killedBy is the signal this shell sent itself and had no handler for,
 	// with the number kept beside it so the death does not have to look the
 	// name up again.
+	//
+	// The *number* is what says there was a death — see diedOfItsOwnSignal.
+	// A platform can deliver a signal this shell has no name for, so the name
+	// can be empty where a death is real.
 	killedBy    string
 	killedBySig syscall.Signal
 
@@ -4487,7 +4491,7 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// this is about *is* the pipe a body is reading. See endHeldProcSubs.
 	r.endHeldProcSubs()
 	r.cleanUpAtEnd()
-	if r.killedBy != "" && !r.inSubshell && r.DieBySignal != nil {
+	if r.diedOfItsOwnSignal() && !r.inSubshell && r.DieBySignal != nil {
 		// Last, because a shell that is dying still runs its EXIT trap first
 		// where the dialect says so. This does not come back.
 		//
@@ -4553,11 +4557,32 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	if r.exitTrap == nil {
 		return false
 	}
-	// A shell that was killed rather than ended is a two-two split: bash and
-	// ksh93 treat dying as exiting and run the trap, dash and zsh do not.
-	// Asked only where there is a trap and a death to disagree about.
-	if r.killedBy != "" && !r.ask(r.sem().ExitTrapRunsOnSignalDeath, "the EXIT trap after a fatal signal") {
-		return false
+	if r.diedOfItsOwnSignal() {
+		// A shell killed by a signal it has no name for runs no EXIT trap,
+		// and that is core rather than the axis below: the two columns that
+		// do run it for a named signal do not run it here either.
+		//
+		// Measured 2026-09-19 with `trap 'echo EXITTRAP' EXIT; kill -N $$;
+		// echo survived`, N of 15 and then of 40, each a script file under
+		// `env -i PATH=/usr/bin:/bin LC_ALL=C`: bash 5.2.15 and ksh93 print
+		// EXITTRAP for 15 and print nothing at all for 40, and BusyBox ash
+		// 1.37.0, dash 0.5.12 and zsh 5.9 print nothing for either. Five
+		// columns, no disagreement — so nothing is asked (#3777).
+		//
+		// The discriminator is the name and not the number's size, because
+		// the name is what this shell can see. On the one platform where the
+		// two come apart at all they coincide exactly: Linux's range runs
+		// thirty-three numbers past its last name.
+		if r.killedBy == "" {
+			return false
+		}
+		// A shell that was killed rather than ended is a two-two split: bash
+		// and ksh93 treat dying as exiting and run the trap, dash and zsh do
+		// not. Asked only where there is a trap and a death to disagree
+		// about — and only where the signal has a name, per above.
+		if !r.ask(r.sem().ExitTrapRunsOnSignalDeath, "the EXIT trap after a fatal signal") {
+			return false
+		}
 	}
 	// And a shell ending over an error it reported, with `set -e` on, in the
 	// one column that runs no EXIT trap there — see
@@ -4628,7 +4653,7 @@ func (r *Runner) runExitHook(ctx context.Context) {
 // boundaries reached it.
 func (r *Runner) fireExitHook(ctx context.Context) {
 	name := r.sem().ExitHook
-	if name == "" || r.killedBy != "" {
+	if name == "" || r.diedOfItsOwnSignal() {
 		return
 	}
 	// The status the shell is leaving with. FireChain hands it to every item

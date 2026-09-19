@@ -2080,6 +2080,31 @@ all end it, which is the shared table's value for each of them. Nothing about
 a dialect: every column on that kernel ends the same way, which is why the
 one column that runs in a Linux container is where it was seen (#3703).
 
+**And a number the kernel takes that nothing can name still ends the
+shell.** The range and the table come apart on Linux, where `kill(2)` takes
+1 through 64 and the last name is at 31 — so thirty-three numbers are real
+signals with no entry to read a default action out of. Asking the *name*
+whether a signal is fatal gave every one of them the answer a signal nobody
+has, and a script that sent itself one carried on at status 0 where every
+reference dies. Measured 2026-09-19, every number from 32 to 64, each probe a
+script file holding `kill -N $$` then `echo survived`: BusyBox ash 1.37.0 in
+the pinned Alpine image and bash 5.2.15, dash 0.5.12, zsh 5.9 and ksh93 in
+Debian bookworm all print nothing and end at 128 + N, for all thirty-three
+numbers, on both C libraries. So `platformsignals_<goos>.go` carries a fourth
+thing: `platformUnnamedSignalsEndTheShell`, what a number inside the bound and
+outside the table does by default. The bound is still what makes it a signal —
+a number past it has no name either and is refused, which is the difference
+between a send the kernel would take and a word the shell will not (#3777).
+
+**A shell killed by a signal it cannot name runs no EXIT trap**, and that is
+core rather than `Semantics.ExitTrapRunsOnSignalDeath`. The two columns that
+run the trap for a named fatal signal do not run it for an unnamed number:
+measured 2026-09-19 with `trap 'echo EXITTRAP' EXIT; kill -N $$`, bash 5.2.15
+and ksh93 print EXITTRAP for 15 and nothing at all for 40, and BusyBox ash,
+dash and zsh print nothing for either. Five columns, no disagreement, so
+nothing is asked — the axis is consulted only once the signal has a name
+(#3777).
+
 **A shell's own table can be shorter than the platform's**, which is
 `Semantics.SignalNamesTheShellLacks`. ksh93 on macOS has no name for 29 and
 dash on Linux has none for 16, and each writes the number back where the rest

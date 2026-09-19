@@ -49,3 +49,29 @@ const platformSignalMax = 64
 // XFSZ, VTALRM and PROF all end it at 128 + their number — the shared table's
 // values for every one of them.
 var platformSignalDefaults = map[string]bool{"IO": true}
+
+// platformUnnamedSignalsEndTheShell is the default action of a number this
+// kernel takes that the table above cannot name — the whole of 32 through 64
+// here, since 1 through 31 all have names.
+//
+// It ends the process, and that is a separate fact from the range being real:
+// `signalInPlatformRange` made the send succeed (#3287) and the shell then
+// outlived it, because the fatality question is asked of a *name* and these
+// numbers have none, so every one of them read as survivable. A shell that
+// cannot be ended by the signal its supervisor sends it is a wrong answer at
+// status 0 (#3777).
+//
+// Measured 2026-09-19, every number from 32 to 64, each probe a script file
+// holding `kill -N $$` then `echo survived` under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C` with standard input on /dev/null: BusyBox ash 1.37.0 in the
+// digest-pinned alpine image, and bash 5.2.15, dash 0.5.12, zsh 5.9 and ksh93
+// in Debian bookworm. All five columns, on both libcs, end at 128 + N for all
+// thirty-three numbers and print nothing. Nothing disagrees, so this is core
+// rather than an axis — the same reason the range itself was.
+//
+// The libc split the naming issues turn on does not reach here. Which number
+// `RTMIN` is differs between glibc and musl, and a Go binary answers 35 on
+// both because the runtime reserves the union of the two reservations — but
+// what an *unnamed number* does when it arrives is the kernel's, and the two
+// columns above were measured separately and agree number for number.
+const platformUnnamedSignalsEndTheShell = true

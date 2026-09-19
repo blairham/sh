@@ -1344,7 +1344,23 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 	// printed twice the file is redirected twice, which is not a fixed point
 	// and is a formatted file that does something the source did not (#1838).
 	p.b.WriteString(p.headerText(from, to, insideTheHeader(redirsOf(x.Body), from, to)...))
-	p.b.WriteByte(' ')
+	// A line break where the `function` keyword's name list would otherwise
+	// swallow the body — see [syntax.FunctionKeywordBodyNeedsItsOwnLine],
+	// which holds the rule, the measurement, and why both printers in this
+	// tree ask it rather than each keeping a copy. This one kept no copy at
+	// all and wrote the blank whatever the body was, which is a formatted
+	// file that defines three functions where the source defined one, at
+	// status 0 either way (#3746).
+	//
+	// p.newline rather than a raw byte, because a here-document opened
+	// earlier on this line is read from the first newline after it and this
+	// is now that newline.
+	if x.Keyword && syntax.FunctionKeywordBodyNeedsItsOwnLine(x.Body) {
+		p.newline()
+		p.pad()
+	} else {
+		p.b.WriteByte(' ')
+	}
 	// The redirection the header left out is the body's and is written after
 	// it, not in front of it — which is the one place a redirection standing
 	// before a command does not belong there. See Printer.command.

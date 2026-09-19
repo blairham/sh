@@ -196,6 +196,16 @@ func (r *Runner) CodePointEscapeText(n int) (string, bool) {
 // this path's false branch and has the escape written back, which is a
 // measured gap rather than a hidden one. docs/spec/semantics.md counts them.
 //
+// The gap is the *only* honest shape for it, which needed the other platform
+// to say. Measured 2026-09-18 in a Debian container against bash 5.2.37: a
+// charset is what a system ships, and the two systems' Big5 differ in both
+// directions — glibc stands U+20AC in `a3 e1` where macOS has no room for it,
+// and macOS stands U+0439 in `c7 d2` where glibc has none. The same run has
+// glibc's bash writing the escape back for every code point its charset lacks,
+// where macOS's bash substitutes a near character — so there is no one answer
+// to match, and a byte taken from one machine's tables would be silently wrong
+// on the other (#3030, #555).
+//
 // The guard on the value is not defensive. `\U` reads up to eight digits and
 // the escape sites hand on whatever they read, including values past the last
 // code point, so a conversion to rune without it would wrap a large value

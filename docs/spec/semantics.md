@@ -12710,6 +12710,116 @@ the inner one's — where this writes the outer definition whole. Corpus:
 `declare/f-says-a-nested-keyword-declaration-back`.
 
 
+## Writing the whole program back instead of running it
+
+bash alone in the panel has an invocation option that asks the shell for the
+program rather than a run of it: `--pretty-print`. zsh 5.9.2, ksh93u+, dash
+0.5.12 and BusyBox ash 1.37.0 all refuse the word. `Semantics.ScriptListingOption`
+holds the answer and `interp.Runner.SetScriptListingLayout` holds the
+arrangement; measured 2026-09-19 on `/opt/homebrew/bin/bash` 5.3.20, every run
+`env -i PATH=/usr/bin:/bin LC_ALL=C bash --pretty-print f.sh </dev/null`, over
+33 probe scripts compared byte for byte.
+
+**It is a canonicalizer and not a formatter**, which is the finding the whole
+of this rests on. What it writes is the layout bash's own `declare -f` writes,
+applied to a file — not the author's text laid out again. The tell is the
+strongest single row: `#!/bin/bash⏎echo a` comes back as a **blank line** and
+`echo a`. Every comment and the shebang with it are gone, because the tree
+holds none. A formatter — `cmd/shfmt`, whose promise is `comments.Recover` —
+is the other printer entirely, and comparing the option against it is what put
+"a second layout engine" in #3266 for two rounds.
+
+So the arrangement is a `syntax.Layout` and not a `syntax.Style`, and it lives
+here rather than in `style.md` for that reason. `dialect/bash.ScriptListingLayout()`
+is `FunctionLayout()` with four answers changed.
+
+**The header spelling is the first.** A declaration nested inside a *listed
+body* is respelled `function inner () `; the same declaration written back as
+part of a script is `inner () `. One constant apart —
+`FunctionHeaderKeywordAndParens` against `FunctionHeaderParens`.
+
+**The other three are what a file has that a function body does not: a top
+level.**
+
+`Layout.StatementsShareALineOutsideADeclaration`. Outside a function
+declaration the statements of a block are joined with `; ` and a brace group
+or a subshell keeps the line it started; inside one each statement takes a
+line and the group is opened out. Measured:
+
+    { echo a; echo b; }                         { echo a; echo b; }
+    f() { { echo a; echo b; }; }                f () ⏎{ ⏎    { ⏎        echo a;⏎        echo b⏎    }⏎}
+
+It is not a depth rule and not a rule about the outermost command.
+`if true; then { echo a; echo b; }; fi` at file scope opens the `if` out and
+leaves the group on one line, and `if true; then f() { echo a; echo b; }; fi`
+opens the *declaration's* group out while joining the `if`'s own body. The
+declaration is the whole of the boundary, at any depth. What a keyword opens
+still takes lines of its own under both values, which is what makes this
+narrower than turning `Lines` off.
+
+`Layout.FileFollowsTheSourceUnits`. At the top level and nowhere else, the
+input's own line structure is kept: a statement beginning on a later line than
+the one before it ended begins a line, and a gap of any size between two of
+them becomes **exactly one** blank line. `echo a; echo b` comes back on one
+line, `echo a⏎echo b` on two, `echo a⏎⏎⏎echo b` with one blank between them,
+and `echo a &&⏎echo b` joined — the unit is what one input line's grammar
+produced. A gap before the *first* statement counts, which is where the blank
+a shebang leaves behind comes from. Inside a block the source's lines are not
+consulted at all: `if true; then⏎echo a⏎echo b⏎fi` comes back with its body
+joined on one line.
+
+A here-document body is part of its unit even though the statement's own end
+does not name those lines — otherwise the body's lines read as a gap and a
+blank line goes in that nobody wrote.
+
+`Layout.TrailingBlankLine`. The output ends with a blank line. Its own answer
+rather than part of the one above, and the route that parts them is the parse
+failure below.
+
+### The routes, and the one a command string wins
+
+Five measured rows about *where* the option applies, all encoded rather than
+tidied up:
+
+    --pretty-print f.sh              writes the script, runs nothing, status 0
+    --pretty-print -c 'echo hi'      writes `hi` — the command string wins outright
+    --pretty-print a.sh b.sh         only `a.sh`; the rest are the parameters
+    --pretty-print nosuch.sh         the ordinary 127, nothing written
+    --pretty-print < f.sh            standard input is listed, status 0
+
+`-n --pretty-print f.sh` is `bash: --: invalid option` at 2 — the long options
+are read only in a run at the front — which is the same divergence
+`Semantics.HelpOption` already records and is not modeled.
+
+### A parse failure is not silence
+
+`printf 'echo ok⏎for in⏎'` writes `echo ok` **to standard output**, then the
+ordinary parse diagnostic to standard error, and exits **1**. The sentence is
+byte-identical to the one a *run* of the same script writes, and that run exits
+**2** — so `ScriptListingOption.ParseFailureStatus` is its own answer and not
+a reuse of `Diagnostics.StatusForParseError`. Nothing is written for the line
+that failed; the shell writes unit by unit and everything read before the
+failure stands.
+
+The blank line at the end belongs to reaching the end of the input, which a
+failure did not: the same script lists with a trailing blank line when it
+parses and without one when it does not. That is the pair of routes that makes
+`TrailingBlankLine` a separate field.
+
+### What is not reproduced
+
+**bash reprints inside a command substitution and this writes the span back as
+it was written.** `echo $(a >/dev/null; b)` comes back `echo $(a > /dev/null;
+b)` there and unchanged here, and `echo "$(if true; then echo x; fi)"` opens
+the `if` out inside the substitution. The parser keeps a `$(…)` span as the
+text it held, so reproducing this means re-parsing the span and printing it
+through the same arrangement — the one recursion in the whole of it.
+
+It is **not** a fault of this option. `declare -f` reprints inside `$( )` in
+the same way, so it is a fidelity gap on a route already shipped, and it is
+filed on its own rather than folded in here.
+
+
 ## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack
 
 Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. Corpus rows

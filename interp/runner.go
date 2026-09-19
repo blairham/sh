@@ -519,7 +519,11 @@ type Runner struct {
 	// dialect carries functions that way, so the naming comes from it.
 	// functionLayout and exportedFunctionLayout are how this shell arranges
 	// a function it has to say back — see SetFunctionLayout.
-	functionLayout         syntax.Layout
+	functionLayout syntax.Layout
+	// scriptListingLayout is how this shell writes a whole script back when
+	// the invocation asked for the program rather than a run of it — see
+	// SetScriptListingLayout and Semantics.ScriptListingOption.
+	scriptListingLayout    syntax.Layout
 	exportedFunctionLayout syntax.Layout
 	exportedFuncs          map[string]bool
 	// readonlyFuncs are the functions a script has frozen, in the one dialect

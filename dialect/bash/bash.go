@@ -428,6 +428,16 @@ func Semantics() interp.Semantics {
 			"\nbash home page: <http://www.gnu.org/software/bash>\n" +
 			"General help using GNU software: <http://www.gnu.org/gethelp/>",
 	}
+	// The option that writes the program back instead of running it, which
+	// is this shell's alone in the panel. What it writes is the *listing*
+	// layout applied to a file and not a formatter's output — every comment
+	// and the shebang with it are gone — and the status a parse failure
+	// exits is 1 where a run of the same script exits 2, both measured.
+	// See interp.ScriptListingOption and ScriptListingLayout.
+	s.ScriptListingOption = interp.ScriptListingOption{
+		Spellings:          "--pretty-print",
+		ParseFailureStatus: 1,
+	}
 	// `-O shopt_option`, which is this shell's alone: the letter whose next
 	// word is a name in the `shopt` table rather than a `set` option. The
 	// usage block above already advertises it — `-ilrsD or -c command or -O
@@ -3869,6 +3879,12 @@ func Apply(r *interp.Runner) {
 	shown.AnsiCQuotedWordIsItsValue = r.AnsiCValue
 	exported.AnsiCQuotedWordIsItsValue = r.AnsiCValue
 	r.SetFunctionLayout(shown, exported)
+	// And how a whole script is written back, which is that same arrangement
+	// with a top level and one header spelling apart. The decoder is attached
+	// here for the reason it is above: the escapes are this shell's answer.
+	listed := ScriptListingLayout()
+	listed.AnsiCQuotedWordIsItsValue = r.AnsiCValue
+	r.SetScriptListingLayout(listed)
 	// The command the shell is running, which a DEBUG action reads to find
 	// out which one it fired for. See bashcommand.go.
 	registerRunningCommand(r)

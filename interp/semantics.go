@@ -16173,6 +16173,13 @@ type Semantics struct {
 	// whose shape it borrows and whose question it is not.
 	HelpOption HelpOption
 
+	// ScriptListingOption is how this shell answers an invocation option
+	// asking it to write the script back instead of running it — bash's
+	// `--pretty-print`. See [ScriptListingOption]. The zero value is a shell
+	// with no such option, and the word is then refused like any other it
+	// does not know.
+	ScriptListingOption ScriptListingOption
+
 	// EmulationOption is how this shell's *invocation* asks it to start under
 	// another shell's semantics, before any line is read — zsh's
 	// `--emulate MODE`. See [EmulationOption]. The zero value is a shell with
@@ -20648,6 +20655,60 @@ type HelpOption struct {
 
 	// Status is what the shell exits after answering.
 	Status int
+}
+
+// ScriptListingOption is what a shell does when its invocation asks it to
+// write the program back rather than run it.
+//
+// The *arrangement* is not here. It is a [syntax.Layout], one of whose fields
+// is a function, and this vector is compared with `==` — so the layout is set
+// on the runner instead, by [Runner.SetScriptListingLayout], exactly as a
+// function listing's already is.
+//
+// One column in the panel has such an option, and what it writes is a
+// *canonical* form rather than the author's text: the tree holds no comments,
+// so every comment and the shebang with it are gone from the output, and the
+// layout is the one that shell's own function listing uses. That is what makes
+// this a [syntax.Layout] and not a [syntax.Style] — a formatter promises the
+// text back and this promises the tree.
+//
+// Measured 2026-09-19 on bash 5.3.20, every run under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null:
+//
+//	bash 5.3.20   `--pretty-print`, writing the script to standard output at 0
+//	zsh 5.9.2     no such option
+//	ksh93u+       no such option
+//	dash 0.5.12   no such option
+//	BusyBox ash   no such option
+//
+// Four rows about *where* the option applies, all measured on the same build
+// and all of them encoded here rather than tidied up:
+//
+//   - A command string wins. `--pretty-print -c 'echo hi'` writes `hi` and
+//     lists nothing, so the option is answered only where a script — a file
+//     operand, or standard input — is what the shell was given.
+//   - A script operand is never executed, and only the first is listed: the
+//     operands after it are the positional parameters, as they are on every
+//     route.
+//   - A file that will not open is the ordinary 127, because the failure
+//     happens before there is anything to list.
+//   - A parse failure is not silence. Everything read before the failure is
+//     written, then the ordinary parse diagnostic in the ordinary wording —
+//     byte-identical to the one a run of the same script writes — and the
+//     status is ParseFailureStatus, which is *not* the status that run exits.
+type ScriptListingOption struct {
+	// Spellings names the option, whitespace-separated and written exactly
+	// as a command line writes it. Empty means the shell has no such option,
+	// and the word is then refused like any other it does not know.
+	Spellings string
+
+	// ParseFailureStatus is what the shell exits when the input would not
+	// parse, after writing what it read.
+	//
+	// Its own answer because it is not the status a *run* of the same script
+	// exits: measured, the file that exits 2 when bash runs it exits 1 when
+	// bash lists it, with the same sentence on standard error both times.
+	ParseFailureStatus int
 }
 
 // EmulationOption is an invocation option that starts the shell under another

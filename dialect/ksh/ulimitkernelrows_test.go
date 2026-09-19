@@ -48,7 +48,7 @@ func ulimitKernel(t *testing.T, has func(interp.Resource) bool, limits map[inter
 	sem, diag := ksh.Semantics(), ksh.Diagnostics()
 	r := &interp.Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Name: "ksh", Dir: t.TempDir(),
+		Name: "ksh", Dir: t.TempDir(), Dialect: presetDialect(),
 	}
 	r.HasRlimit = has
 	r.GetRlimit = func(res interp.Resource) (int64, int64, error) {

@@ -139,3 +139,104 @@ func TestRepeatedNegationToggles(t *testing.T) {
 		t.Errorf("class = %v, want ClassReserved — `!` is a reserved word", e.Class)
 	}
 }
+
+// A bare negation is the one expression whose extent is a keyword run rather
+// than a command, so Pos and End are read off the `!`s. Both used to index an
+// empty slice: every caller that asked a statement where it ended took the
+// shell down with it, and #3721 reached that from `eval "!"`, from a
+// substitution body and from a process substitution alike.
+func TestABareNegationsExtentIsItsKeywordRun(t *testing.T) {
+	t.Parallel()
+	d := reach(BareNegationAtEitherPlace)
+	d.RepeatedNegationToggles = true
+	for _, tc := range []struct {
+		src            string
+		startCol, stop int
+	}{
+		{"!", 1, 2},
+		{"! ;", 1, 2},
+		// The toggle is what makes the count matter: an even run leaves
+		// Negated false, so a guard written on that flag rather than on the
+		// commands answers the first of these and not the second.
+		{"! !", 1, 4},
+		{"! ! !", 1, 6},
+		// The extent reaches the last `!` and not the first, which is the
+		// half a position taken from Bang alone would get wrong.
+		{"echo a; ! !", 9, 12},
+	} {
+		f, err := Parse(tc.src, d)
+		if err != nil {
+			t.Errorf("%q: %v", tc.src, err)
+			continue
+		}
+		st := f.Stmts[len(f.Stmts)-1]
+		pl, ok := st.Expr.(*Pipeline)
+		if !ok {
+			t.Errorf("%q: %T, want *Pipeline", tc.src, st.Expr)
+			continue
+		}
+		if len(pl.Cmds) != 0 {
+			t.Errorf("%q: %d commands, want a pipeline with none", tc.src, len(pl.Cmds))
+			continue
+		}
+		if int(pl.Pos().Col) != tc.startCol {
+			t.Errorf("%q: Pos col = %d, want %d", tc.src, pl.Pos().Col, tc.startCol)
+		}
+		if int(pl.End().Col) != tc.stop {
+			t.Errorf("%q: End col = %d, want %d", tc.src, pl.End().Col, tc.stop)
+		}
+		if !pl.End().IsValid() {
+			t.Errorf("%q: End is the zero Pos, which reads as unset", tc.src)
+		}
+	}
+}
+
+// A condition that is a bare negation ends nothing, so the short form does
+// not begin: `if !; then echo T; else echo F; fi` is the long one. Asking the
+// empty pipeline for its last command refused nothing and panicked in the
+// parser instead (#3721).
+func TestABareNegationConditionDoesNotEndAHeader(t *testing.T) {
+	t.Parallel()
+	d := reach(BareNegationAtEitherPlace)
+	d.ShortForm = true
+	for _, src := range []string{
+		"if !; then echo T; else echo F; fi\n",
+		"if true; then :; elif !; then echo T; fi\n",
+	} {
+		if _, err := Parse(src, d); err != nil {
+			t.Errorf("%q: %v", src, err)
+		}
+	}
+}
+
+// And the canonical printer writes it back. An even run is a pipeline with no
+// negation and no commands, so a writer keyed on the flag alone wrote nothing
+// at all and the statement left the program — which is not a spelling, since
+// the pair exits 0 where a single `!` exits 1.
+func TestABareNegationIsPrintedBack(t *testing.T) {
+	t.Parallel()
+	d := reach(BareNegationAtEitherPlace)
+	d.RepeatedNegationToggles = true
+	for _, tc := range []struct{ src, want string }{
+		{"!\n", "!"},
+		{"! !\n", "! !"},
+		// A run of more than one is one flag by the time the tree has it,
+		// so the extra `!`s have nothing to be written from. Both of these
+		// exit what they were written to exit, which is what the tree keeps.
+		{"! ! !\n", "!"},
+		{"! ! true\n", "true"},
+	} {
+		f, err := Parse(tc.src, d)
+		if err != nil {
+			t.Errorf("%q: %v", tc.src, err)
+			continue
+		}
+		got := Print(f)
+		if got != tc.want {
+			t.Errorf("Print(%q) = %q, want %q", tc.src, got, tc.want)
+		}
+		if _, err := Parse(got+"\n", d); err != nil {
+			t.Errorf("%q: the output does not parse: %v", tc.src, err)
+		}
+	}
+}

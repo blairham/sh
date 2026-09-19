@@ -523,7 +523,8 @@ func (p *printer) expr(e Expr) {
 		p.str(" " + x.Op.String() + " ")
 		p.expr(x.Y)
 	case *Pipeline:
-		if x.Negated {
+		switch {
+		case x.Negated:
 			p.str("!")
 			if len(x.Cmds) > 0 {
 				// A negation with no pipeline after it is the whole
@@ -531,6 +532,17 @@ func (p *printer) expr(e Expr) {
 				// from and a trailing one would not reparse the same.
 				p.str(" ")
 			}
+		case len(x.Cmds) == 0:
+			// An *even* run of them, which negates nothing and is still a
+			// command: it exits 0 where a single `!` exits 1, and writing
+			// nothing at all left the line out of the script entirely. The
+			// count is not kept — one flag on the tree is the whole of the
+			// rule — and it does not need to be, since every even run
+			// behaves alike and two is the shortest.
+			//
+			// Only [Dialect.RepeatedNegationToggles] can produce this node,
+			// and that is the flag that reads the pair back.
+			p.str("! !")
 		}
 		for i, c := range x.Cmds {
 			if i > 0 {

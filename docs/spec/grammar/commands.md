@@ -444,6 +444,29 @@ The tree carries one flag rather than a count, which the toggle is what
 permits: an even number of them is no negation and an odd number is one,
 so `! ! !` and `!` are the same program and print back the same.
 
+An **even** run with nothing after it is the one place that costs
+something, and it is not a spelling: `! !` exits 0 where `!` exits 1, so
+a pipeline with no negation and no commands is a program a writer has to
+keep. It is written back as `! !` — any even run behaves alike, and two
+is the shortest.
+
+### A bare negation's extent is the keyword run
+
+A bare negation is the only expression made of nothing but reserved
+words, so where it begins and ends is read off the `!`s rather than off a
+command. That is the same shape a bare `time` has, and it is what every
+reader of the tree has to be told: a `!` written as a whole line of a
+script hides it, because the newline behind it is the statement's own
+terminator and answers first. Text the shell reads for *itself* — an
+`eval`, a `$( … )` body, a `` ` ` `` body, a process substitution — ends
+at the `!` with no terminator behind it, and there the extent is the only
+answer there is (#3721).
+
+For the same reason a bare negation ends no **header**: `if !; then echo
+T; else echo F; fi` prints `F` in bash 5.3.20, zsh 5.9.2 and ksh93u+
+alike, so the short form a condition that closed itself would begin does
+not begin here.
+
 `!` is a **reserved word**, which shows only where a refusal names it:
 dash says `` "!" unexpected `` for the second one, against `word
 unexpected` for a name.

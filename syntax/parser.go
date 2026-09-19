@@ -1880,13 +1880,14 @@ func (p *Parser) parsePipeline() Expr {
 	pl := &Pipeline{}
 	if p.atWord("!") {
 		pl.Negated = true
-		pl.Bang = p.tok.Pos
+		pl.Bang, pl.Stop = p.tok.Pos, p.tok.End
 		p.next()
 		// Each further `!` inverts the one before it where the dialect says
 		// so, which is why one flag on the tree is enough: an even count is
 		// no negation and an odd one is a single negation, measured.
 		for p.dialect.RepeatedNegationToggles && p.atWord("!") {
 			pl.Negated = !pl.Negated
+			pl.Stop = p.tok.End
 			p.next()
 		}
 		if p.dialect.TimeKeyword && p.atWord("time") {
@@ -5402,6 +5403,13 @@ func exprEndsItself(e Expr) bool {
 	case *BinaryExpr:
 		return exprEndsItself(x.Y)
 	case *Pipeline:
+		if len(x.Cmds) == 0 {
+			// A bare negation — a `!` the dialect lets stand with no
+			// pipeline after it. It ends nothing, and asking it for a last
+			// command took the parser down: `if !; then :; fi` is `F` in
+			// bash 5.3.20, zsh 5.9.2 and ksh93u+ alike (#3721).
+			return false
+		}
 		return commandEndsItself(x.Cmds[len(x.Cmds)-1])
 	}
 	return false

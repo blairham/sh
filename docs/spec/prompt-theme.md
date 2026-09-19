@@ -314,6 +314,51 @@ most important structural decision in the engine.
   routed through any whitespace setting, because a setting that empties
   it produces a prompt that cannot be read.
 
+### The settings the loop reads
+
+Written down because the loop is generic and the names are the whole of the
+configuration surface — a reader who knows these knows every look the engine
+can draw.
+
+| setting | what it decides |
+| --- | --- |
+| `LEFT_ELEMENTS`, `RIGHT_ELEMENTS` | the elements of each side, `newline` splitting the side into lines |
+| `LEFT_START_SYMBOL`, `RIGHT_START_SYMBOL` | what opens a side, in the first segment's background |
+| `LEFT_SEGMENT_SEPARATOR`, `RIGHT_SEGMENT_SEPARATOR` | what goes between two segments whose backgrounds differ, drawn from one into the other |
+| `LEFT_SUBSEGMENT_SEPARATOR`, `RIGHT_SUBSEGMENT_SEPARATOR` | what goes between two segments sharing a background, so the boundary is a hairline |
+| `LEFT_END_SYMBOL`, `RIGHT_END_SYMBOL` | what closes a side, trailing the last background into the terminal's own |
+| `FIRST_PREFIX`/`FIRST_SUFFIX`, `MIDDLE_*`, `LAST_*` | the frame around a line, differing for the first line, the last, and any between |
+| `GAP_CHAR`, `GAP_FOREGROUND` | what fills a banner line between its two halves |
+| `ADD_NEWLINE` | a blank line above the prompt |
+| `CONTINUATION` | the prompt for the rest of an unfinished construct |
+
+Every one of the separators and the frame settings also resolves through the
+three-step chain, so a single segment may carry its own separator without a
+preset having to give every other segment one.
+
+Per segment, through the chain: `FOREGROUND`, `BACKGROUND`, `BOLD`,
+`UNDERLINE`, `WHITESPACE`, `PREFIX`, `SUFFIX`, and `CONTENT`.
+
+### The content template is the configuration's, not the segment's
+
+`CONTENT` defaults to `${ICON}${CONTENT}` and is the **only** place a
+segment's output is composed. That is what keeps a segment's text *text*: the
+template is markup and is read as markup, and what the segment computed
+arrives through `${CONTENT}` and is never expanded. A directory holding a
+percent sign is drawn rather than read, and a segment does not have to know
+that a `%` means anything.
+
+It is also where an imported configuration's content expansion lands, which is
+why it is a setting rather than a property of the segment.
+
+### Markup inside a segment returns to the segment
+
+`%f` and `%k` mean *back to what this segment is drawn in*, not back to the
+terminal's own. Anything else knocks a background out from underneath a value
+that colored one word of itself, which is a framed prompt with a hole in it.
+Outside a segment — a frame prefix, say — the base is the terminal's own and
+the two readings coincide.
+
 ### The right prompt is new here
 
 Nothing in this tree draws a right prompt today. `RPROMPT`/`RPS1` appears

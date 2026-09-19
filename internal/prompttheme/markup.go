@@ -11,8 +11,8 @@ import "strings"
 // appearance — "╭─" in color 242 is one value, not two settings — so values
 // carry a small markup vocabulary, read here and by nothing else:
 //
-//	%F{c}   foreground on      %f      foreground off
-//	%K{c}   background on      %k      background off
+//	%F{c}   foreground on      %f      foreground back to the base
+//	%K{c}   background on      %k      background back to the base
 //	%B %b   bold on/off        %U %u   underline on/off
 //	%%      a literal %
 //
@@ -48,6 +48,17 @@ type Expander struct {
 	// the editor nor restates its markers, which are the interpreter's and
 	// would go stale here the moment they moved.
 	Mark func(escapes string) string
+
+	// Base is the appearance the value starts in and returns to, which is the
+	// segment's own when the layout is expanding a segment's content.
+	//
+	// It is what makes markup *inside* a segment composable: %f means the
+	// segment's foreground rather than the terminal's, so a value that colors
+	// one word of itself does not knock out the background the layout painted
+	// around it. The zero Base is the terminal's own, and then nothing is
+	// emitted until the value asks for something — which is what lets the
+	// layout tell a segment that rendered from one that declined.
+	Base Style
 }
 
 // Expand resolves markup into terminal bytes.
@@ -57,9 +68,13 @@ func (e Expander) Expand(s string) string {
 	}
 	var (
 		b       strings.Builder
-		style   Style
 		touched bool
 	)
+	style := e.Base
+	if !e.Base.Empty() {
+		b.WriteString(e.mark(e.Base.SGR()))
+		touched = true
+	}
 	runes := []rune(s)
 	for i := 0; i < len(runes); i++ {
 		switch {
@@ -74,7 +89,7 @@ func (e Expander) Expand(s string) string {
 				b.WriteString(e.Lookup(name))
 			}
 		case runes[i] == '%' && i+1 < len(runes):
-			last, changed, ok := escape(runes, i, &style, &b)
+			last, changed, ok := escape(runes, i, &style, e.Base, &b)
 			if !ok {
 				b.WriteRune(runes[i])
 				continue
@@ -89,11 +104,12 @@ func (e Expander) Expand(s string) string {
 		}
 	}
 	out := b.String()
-	// Leave the terminal as we found it, but only if we changed it. A value
-	// that painted nothing must not emit a reset, or the layout cannot tell a
-	// segment that rendered from one that declined.
-	if touched && !strings.HasSuffix(out, e.mark(Reset)) {
-		out += e.mark(Reset)
+	// Leave the appearance as we found it, but only if we changed it. A value
+	// that painted nothing must not emit anything, or the layout cannot tell
+	// a segment that rendered from one that declined.
+	back := e.mark(e.Base.SGR())
+	if touched && !strings.HasSuffix(out, back) {
+		out += back
 	}
 	return out
 }
@@ -112,28 +128,28 @@ func Expand(s string) string { return Expander{}.Expand(s) }
 // escape's last rune, whether the appearance changed, and whether this was an
 // escape at all — anything it does not know is not an escape, and its percent
 // sign is written out as itself.
-func escape(runes []rune, i int, style *Style, b *strings.Builder) (last int, changed, ok bool) {
+func escape(runes []rune, i int, style *Style, base Style, b *strings.Builder) (last int, changed, ok bool) {
 	switch runes[i+1] {
 	case '%':
 		b.WriteByte('%')
 		return i + 1, false, true
 	case 'f':
-		style.Fg = Color{}
+		style.Fg = base.Fg
 		return i + 1, true, true
 	case 'k':
-		style.Bg = Color{}
+		style.Bg = base.Bg
 		return i + 1, true, true
 	case 'B':
 		style.Bold = true
 		return i + 1, true, true
 	case 'b':
-		style.Bold = false
+		style.Bold = base.Bold
 		return i + 1, true, true
 	case 'U':
 		style.Underline = true
 		return i + 1, true, true
 	case 'u':
-		style.Underline = false
+		style.Underline = base.Underline
 		return i + 1, true, true
 	case 'F', 'K':
 		spec, end, found := braced(runes, i+1)

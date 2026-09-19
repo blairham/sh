@@ -6950,7 +6950,11 @@ direction. The gate is both answers together and is asked in that order —
 a dialect that takes no base from a value is never asked what a leading
 zero means, which is every column but this one, and two of them read the
 zero as octal while carrying no base at all: `typeset -i e=010` is a
-plain `8` in bash and a plain `10` in ksh93.
+plain `8` in bash and a plain `10` in ksh93. And the digits have to *be*
+octal before either is asked: `08` is a padded numeral that no reading
+makes a base, since the column that reads one refuses the numeral —
+`typeset -i x=08` is `bad math expression` there — and the rest have a
+decimal 8 with no base in it.
 
 Recorded is exactly the wrong answer for a name like this, and #2884 is the
 record of why: accepted, remembered and acted on by nothing is the shape that

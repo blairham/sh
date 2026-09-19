@@ -952,7 +952,7 @@ func radixWritten(e syntax.ArithExpr) (base int, padded bool) {
 	case nil:
 		return 0, false
 	case *syntax.ArithNum:
-		return integerBaseOfLiteral(x.Text), zeroPadded(x.Text)
+		return integerBaseOfLiteral(x.Text), octalNumeral(x.Text)
 	case *syntax.ArithUnary:
 		return radixWritten(x.X)
 	case *syntax.ArithCond:

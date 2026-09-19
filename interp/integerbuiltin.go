@@ -438,6 +438,20 @@ func (r *Runner) integerRenderedText(name, decimal string) string {
 	return r.integerRendered(name, v)
 }
 
+// octalNumeral is a zero-padded numeral whose digits are all octal ones,
+// which is the only shape a bare leading zero names a base in.
+func octalNumeral(text string) bool {
+	if !zeroPadded(text) {
+		return false
+	}
+	for i := 0; i < len(text); i++ {
+		if text[i] == '8' || text[i] == '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // learnIntegerBase takes a name's output base from the radix prefix of the
 // text being assigned to it, where the dialect learns one and the name has
 // none already.
@@ -476,7 +490,17 @@ func (r *Runner) learnIntegerBase(name, text string) {
 	// Trimmed the way integerBaseOfLiteral trims, and measured: `typeset -i
 	// s=" 010 "` is `8#10` on zsh 5.9.2, so the spaces around a literal are
 	// not what tells a number from an expression here.
-	padded := base == 0 && zeroPadded(strings.TrimSpace(text))
+	//
+	// And the digits have to *be* octal, which is not tidiness: `08` is a
+	// zero-padded numeral that no leading-zero reading makes a base, since
+	// the column that reads one refuses the numeral outright — `setopt
+	// octal_zeroes; typeset -i x=08` is `bad math expression` on zsh 5.9.2 —
+	// while the columns that do not read one have a decimal 8 with no base
+	// in it. Without the check this asked the learning question about every
+	// padded number there is, which is a question a dialect may not have
+	// answered: `a=08; typeset -i a` met a refusal in a suite that had
+	// nothing to do with bases.
+	padded := base == 0 && octalNumeral(strings.TrimSpace(text))
 	if base == 0 && !padded {
 		return
 	}

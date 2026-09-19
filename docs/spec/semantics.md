@@ -19757,6 +19757,81 @@ got wrong: bash fills the element for `printf -v 'r[1]'` and refuses
 `printf -v '1x'` in the same run. One function answers both builtins for
 that reason.
 
+**`BadNameToGetoptsFatal`** — bash no · ksh93 no · dash no · ash no ·
+zsh yes
+
+**`GetoptsOperandTakesASubscript`** — ksh93 yes · zsh yes · bash no ·
+dash no · ash no
+
+Whether `getopts` judges the name it writes into at all, and whether the
+brackets count there. It judged nothing: the builtin stored under
+whatever word it was handed, moved OPTIND and reported 0, so `getopts x
+1bad -x` left a parameter no expansion can read back and the loop that
+went on to read it saw an empty value beside a status that says an
+option was found. It is the shape `printf -v` had before #3515 and
+`read` before #1440, one builtin further along, and it is the last one:
+`read`, `printf -v`, `unset`, `export`, `readonly` and `local` all
+refuse the same operands today.
+
+Measured 2026-09-18, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin
+/dev/null, a script file, with `echo A` in front and `echo "B st=$?"`
+behind so the fatality is visible:
+
+    bash 5.3.20   getopts: `1bad': not a valid identifier   1, B runs
+    bash 3.2, sh  the same                                  1, B runs
+    ksh93u+       1bad: invalid variable name               1, B runs
+    dash 0.5.12   getopts: 1bad: bad variable name          2, B runs
+    ash 1.37.0    getopts: 1bad: bad variable name          2, B runs
+    zsh 5.9.2     not an identifier: 1bad                   the script ends
+
+All seven refuse, so **the judging is core** and only the wording, the
+status and the fatality are the dialect's. `a-b` draws the same sentence
+as `1bad` in every column, and the strictness is `ReadNameOperands` read
+a third time — measured rather than assumed: `set -- P Q; getopts x 1 -x`
+fills `$1` in zsh and is refused in bash, ksh93 and dash, which is the
+split `read 1` takes.
+
+**The subscript is its own axis, and that is the finding.** bash has
+arrays, fills `read 'a[1]'`, and still refuses `getopts x 'o[1]' -x` as a
+name — the same shell, the same brackets, two answers — so
+`StoreOperandTakesASubscript` is the wrong gate here and would take the
+operand in the one column that refuses it:
+
+    ksh93u+      getopts x 'o[1]' -x   0, and ${o[1]} holds the letter
+    zsh 5.9.2    the same              0, and $o holds the letter
+    bash 5.3.20  `o[1]': not a valid identifier          1
+    dash, ash    o[1]: bad variable name                 2
+
+The `o[1]` spelling is what makes that a measurement rather than a
+guess. zsh's `o[0]` is `o: assignment to invalid subscript range`, which
+is that shell's one-based arrays refusing the *position*; a probe asking
+only `o[0]` would have read the column as a refusal and set the axis the
+other way.
+
+Where the brackets are taken, the store is the one `read 'a[1]'` goes
+through, so the subscript is evaluated and refused in one place. Before
+this the builtin reached `setVar` with the whole word and made a
+parameter literally named `o[1]` that no expansion in either dialect can
+read back.
+
+Two location facts come with it, both ksh93's and both narrower than any
+rule already there. `Diagnostics.BadNameRefusalHidesTheBuiltin` — which
+zsh's `set -A` already reaches — takes `getopts` out of the location in
+both of those shells. And `Diagnostics.BadNameRefusalOmitsTheLine` drops
+the *count*: ksh93 writes `<file>: 1bad: invalid variable name` where
+`unset 1bad` on the next line is `<file>[N]: unset: 1bad: invalid
+variable name`, and under `-c` the pair is `/bin/ksh: 1bad:` against
+`/bin/ksh: unset: 1bad:`. So the file half is the ordinary location's,
+which is what parts it from `BuiltinBadNameNamesTheShellAlone` next
+door — that field writes the name the *shell* was invoked by, and this
+shell writes the script's.
+
+One row is measured and not matched, and it is not this builtin's: zsh
+takes an all-digit operand as a positional and fills `$1`, and this
+engine stores nothing there — for `read 1` as much as for `getopts x 1`,
+so the gap is in the store both of them share rather than in either
+builtin.
+
 **`EmptyParamSubscriptIsAnError`** — bash yes · dash unspecified · ksh93 no · zsh yes
 
 Refuses `${a[]}` — the same brackets one construct over, where a

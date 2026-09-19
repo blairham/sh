@@ -75,6 +75,14 @@ func biGetopts(r *Runner, _ context.Context, args []string) int {
 		return orDefault(r.diag().GetoptsUsageStatus, 2)
 	}
 	optstring, name := args[0], args[1]
+	if !r.isGetoptsName(name) {
+		// Judged before anything is scanned, which is where every column
+		// judges it: measured 2026-09-18, `echo A; getopts x 1bad -x; echo
+		// "B st=$?"` writes A, the refusal and then B in six of the seven,
+		// and the seventh ends the script at the refusal — so nothing is
+		// stored and OPTIND is not moved either way.
+		return r.badGetoptsName(name)
+	}
 	// The operands to scan are the ones given, or the shell's own parameters
 	// when none are — which is what every use of it in a script relies on.
 	words := args[2:]
@@ -572,6 +580,22 @@ func (r *Runner) getoptsRefusalIsFatal() bool {
 // dash and BusyBox ash all answer 2 and leave the name alone. See
 // getoptsRefusedStatus.
 func (r *Runner) getoptsSetName(name, value string, ok int) int {
+	if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
+		// The operand named an *element*, which the two columns that take it
+		// here really do fill: measured 2026-09-18, `getopts x 'o[1]' -x`
+		// leaves the letter in `${o[1]}` under ksh93u+ and in `$o` under zsh
+		// 5.9.2, where this shell made a parameter literally named `o[1]`
+		// that no expansion in either dialect can read back. The store is
+		// the one `read 'a[1]'` goes through, so the subscript is evaluated
+		// and refused in one place rather than two.
+		//
+		// Only ever reached where isGetoptsName let the brackets past, which
+		// is Semantics.GetoptsOperandTakesASubscript.
+		if st, refused := r.storeThroughOperand(name, value); refused {
+			return st
+		}
+		return ok
+	}
 	if r.getoptsWrite(name, value) {
 		return ok
 	}

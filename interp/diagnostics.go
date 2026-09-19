@@ -4571,6 +4571,24 @@ type Diagnostics struct {
 	// this builtin is where they part.
 	BadNameRefusalHidesTheBuiltin map[string]bool
 
+	// BadNameRefusalOmitsTheLine names the builtins whose bad-name refusal
+	// drops the *line number* from its location, in a dialect that writes
+	// one everywhere else.
+	//
+	// ksh93 and `getopts`: measured 2026-09-18, `getopts x 1bad -x` is
+	// `<file>: 1bad: invalid variable name` where `unset 1bad` two lines
+	// away is `<file>[N]: unset: 1bad: invalid variable name`, and the same
+	// pair under `-c` is `/bin/ksh: 1bad: …` against `/bin/ksh: unset: …`.
+	// So the file half is the ordinary one and the count is what goes,
+	// which is why this is not BuiltinBadNameNamesTheShellAlone — that
+	// writes the name the shell was invoked by, and this shell writes the
+	// script's (#3555).
+	//
+	// A set, like the two beside it, because the sentence, the builtin in
+	// the location and the line are three separate decisions and this
+	// builtin is where the third one parts.
+	BadNameRefusalOmitsTheLine map[string]bool
+
 	// InconsistentType is what a declaration says when the plain word it was
 	// given is assigned over a name whose cell is really holding an array or
 	// a keyed table. One verb: the name.

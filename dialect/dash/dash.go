@@ -1164,6 +1164,10 @@ func Semantics() interp.Semantics {
 	// output operand is ever judged — PrintfAssignsWithV is what stands in
 	// front of it, and the option is refused before a name is read.
 	s.BadNameToReadFatal = interp.No
+	// And `getopts`: measured 2026-09-18, `echo A; getopts x 1bad -x; echo
+	// "B st=$?"` writes all three lines here, so the refusal costs the
+	// script nothing beyond its own status (#3555).
+	s.BadNameToGetoptsFatal = interp.No
 	// And so is a readonly name it is asked to remove.
 	s.UnsetReadonlyFatal = interp.Yes
 	s.DeclarationNameOperands = interp.PlainNamesOnly
@@ -1207,6 +1211,9 @@ func Semantics() interp.Semantics {
 	// no tables either, so the keyed half of that question is one further
 	// out of reach again.
 	s.StoreOperandTakesASubscript = interp.No
+	// And `getopts` no more than `read` does: this shell has no arrays
+	// (#3555).
+	s.GetoptsOperandTakesASubscript = interp.No
 	// unanswered BadSubscriptToUnset: there is no subscript to evaluate here,
 	// so the arithmetic the axis is about is never reached. Measured
 	// 2026-09-17: `q=1; unset 'q[b c]'` is `unset: q[b c]: bad variable name`
@@ -1794,6 +1801,10 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "%[1]s: %[2]s: bad variable name",
 			"unset":    "%[1]s: %[2]s: bad variable name",
 			"local":    "%[1]s: %[2]s: bad variable name",
+			// And `getopts`, measured 2026-09-18: `getopts x 1bad -x` is
+			// `getopts: 1bad: bad variable name` at this shell's 2, and the
+			// line after it runs (#3555).
+			"getopts": "%[1]s: %[2]s: bad variable name",
 			// `read` says the same and carries dash's 2 with it, which is
 			// how a caller tells it from the 1 that means end of input.
 			"read": "%[1]s: %[2]s: bad variable name",

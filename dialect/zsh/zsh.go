@@ -2628,6 +2628,16 @@ func Semantics() interp.Semantics {
 	// it runs, the same as `read '1x'`. `a-b` gets that sentence as well,
 	// which is why there is no BuiltinBadNameNumeric row beside printf's.
 	s.BadNameToPrintfFatal = interp.Yes
+	// And at `getopts`, measured 2026-09-18: `echo A; getopts x 1bad -x;
+	// echo B` writes A and `not an identifier: 1bad` and never reaches B,
+	// where the other six columns all run it.
+	s.BadNameToGetoptsFatal = interp.Yes
+	// A subscripted operand is a name here, as it is at `read` — measured
+	// 2026-09-18, `getopts x 'o[1]' -x` is 0 with the letter in `$o`. The
+	// `o[0]` spelling is `o: assignment to invalid subscript range`, which
+	// is this shell's one-based arrays refusing the *position*; asking only
+	// that spelling would have read this column as a refusal (#3555).
+	s.GetoptsOperandTakesASubscript = interp.Yes
 	// Fatal here too, and unlike bash's this does not move: `emulate sh`,
 	// `emulate ksh` and `emulate zsh` all stop. It is the axis that keeps
 	// this question apart from RedirectErrorOnSpecialBuiltinFatal, which zsh
@@ -3787,7 +3797,13 @@ func Diagnostics() interp.Diagnostics {
 		// `printf` joins the two: measured 2026-09-17, its refusal is
 		// `./f.sh:1: not an identifier: 1x` with no builtin in the location,
 		// where `typeset 1x` is `./f.sh:typeset:1: …`.
-		BadNameRefusalHidesTheBuiltin: map[string]bool{"set": true, "read": true, "printf": true},
+		BadNameRefusalHidesTheBuiltin: map[string]bool{
+			"set": true, "read": true, "printf": true,
+			// And `getopts`, measured 2026-09-18: `getopts x 1bad -x` is
+			// `<file>:N: not an identifier: 1bad` with no `getopts` in the
+			// location (#3555).
+			"getopts": true,
+		},
 		// `set -t`, the one letter this shell has and refuses to move. It is
 		// `singlecommand` under a borrowed spelling, one of the five options
 		// about being interactive that this shell will not let a script
@@ -4293,6 +4309,10 @@ func Diagnostics() interp.Diagnostics {
 			// `printf -v 'a-b' %s Q` is `not an identifier: a-b`. So there
 			// is no BuiltinBadNameNumeric row beside this one either.
 			"printf": "not an identifier: %[2]s",
+			// And `getopts`, which says the same to `1bad` and to `a-b`
+			// alike — measured 2026-09-18, and the script ends on it, which
+			// is Semantics.BadNameToGetoptsFatal (#3555).
+			"getopts": "not an identifier: %[2]s",
 		},
 		// An operand that starts with a digit is a different complaint, for
 		// the two that have one. `unset` says the same to both.

@@ -18074,6 +18074,28 @@ type Semantics struct {
 	// leading-digit wording is not a split here.
 	BadNameToPrintfFatal Answer
 
+	// BadNameToGetoptsFatal is that same question at `getopts`, whose name
+	// operand is judged at all only since #3555: the builtin took any word it
+	// was handed, stored under it and reported 0, so `getopts x 1bad -x` made
+	// a parameter no expansion can read back and the loop that went on to
+	// read it saw nothing.
+	//
+	// All seven columns refuse the word and they part on the cost. Measured
+	// 2026-09-18, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin /dev/null, a
+	// script file, with `echo A` in front and `echo "B st=$?"` behind:
+	//
+	//	bash 5.3.20   getopts: `1bad': not a valid identifier   1, B runs
+	//	bash 3.2, sh  the same                                  1, B runs
+	//	ksh93u+       1bad: invalid variable name               1, B runs
+	//	dash 0.5.12   getopts: 1bad: bad variable name          2, B runs
+	//	ash 1.37.0    getopts: 1bad: bad variable name          2, B runs
+	//	zsh 5.9.2     not an identifier: 1bad                   the script ends
+	//
+	// So zsh is the one that stops, exactly as it does at `read` and at
+	// `printf -v`, and `a-b` draws the same sentence as `1bad` in every
+	// column.
+	BadNameToGetoptsFatal Answer
+
 	// UnsetReadonlyFatal ends a non-interactive shell when `unset` is asked
 	// to remove a readonly name. True in dash and zsh; bash and ksh93 report
 	// it, leave the value standing and carry on with a status of 1.
@@ -18226,6 +18248,35 @@ type Semantics struct {
 	// complain about — and complaining would put a second sentence under the
 	// bad-name refusal that is about to be written anyway.
 	StoreOperandTakesASubscript Answer
+
+	// GetoptsOperandTakesASubscript is that same question at `getopts`, and
+	// it is a fifth field because bash answers it the other way.
+	//
+	// `read 'a[0]'` fills the element in bash, and the same shell answers
+	// `getopts x 'o[0]' -x` with its not-a-valid-identifier refusal at 1 —
+	// the same brackets, two answers — so StoreOperandTakesASubscript is the
+	// wrong gate here and would take the operand in the one column that
+	// refuses it.
+	//
+	// Measured 2026-09-18, `env -i PATH=/usr/bin:/bin LC_ALL=C`, a script
+	// file, with `o[1]` as well as `o[0]` so that a refusal about the
+	// *position* is told apart from one about the brackets:
+	//
+	//	ksh93u+      getopts x 'o[1]' -x   0, and ${o[1]} is the letter
+	//	zsh 5.9.2    the same              0, and $o is the letter
+	//	bash 5.3.20  `o[1]': not a valid identifier          1
+	//	dash, ash    o[1]: bad variable name                 2
+	//
+	// zsh's `o[0]` is `o: assignment to invalid subscript range`, which is
+	// this shell's one-based arrays refusing the position rather than the
+	// brackets — the row that says the two questions are separate, and the
+	// probe that would have read zsh as a refusal if only `o[0]` had been
+	// asked.
+	//
+	// **Read** rather than asked, for StoreOperandTakesASubscript's reason:
+	// a dialect that answers nothing has arrays in the core, and the
+	// alternative is a second sentence under a bad-name refusal.
+	GetoptsOperandTakesASubscript Answer
 
 	// BadNameDeclaresTheOperandsAfterIt keeps declaring past an operand the
 	// builtin refused, where the refusal is fatal.

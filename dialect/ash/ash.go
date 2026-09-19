@@ -652,6 +652,9 @@ func Semantics() interp.Semantics {
 	// unanswered StoreOperandWholeArraySubscriptOverATable: no tables
 	// either, so the keyed half is one further out of reach again.
 	s.StoreOperandTakesASubscript = interp.No
+	// And `getopts` no more than `read` does: this shell has no arrays
+	// (#3555).
+	s.GetoptsOperandTakesASubscript = interp.No
 	// unanswered BadSubscriptToUnset: there is no subscript to evaluate here,
 	// so the arithmetic the axis is about is never reached. Measured
 	// 2026-09-17 in the pinned image, BusyBox v1.37.0: `q=1; unset 'q[b c]'`
@@ -764,6 +767,10 @@ func Semantics() interp.Semantics {
 	// unanswered BadNameToPrintfFatal: no `-v` here either, so no output
 	// operand is judged.
 	s.BadNameToReadFatal = interp.No
+	// And `getopts`: measured 2026-09-18, `echo A; getopts x 1bad -x; echo
+	// "B st=$?"` writes all three lines here, so the refusal costs the
+	// script nothing beyond its own status (#3555).
+	s.BadNameToGetoptsFatal = interp.No
 	// `echo` needs `-e` to interpret an escape, and has `-E` and `-n` beside
 	// it: `echo "a\tb"` writes the backslash, `echo -e "a\tb"` writes a tab,
 	// and `echo -E "a\tb"` writes the backslash again. dash is the shell that
@@ -2067,7 +2074,12 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "%[2]s: bad variable name",
 			"unset":    "%[2]s: bad variable name",
 			"local":    "%[2]s: bad variable name",
-			"read":     "read: '%[2]s': bad variable name",
+			// `getopts` takes the same sentence and the applet's own
+			// location: measured 2026-09-18 in the pinned image,
+			// `getopts x 1bad -x` is `<file>: getopts: line N: 1bad: bad
+			// variable name` at 2, and the line after it runs (#3555).
+			"getopts": "%[2]s: bad variable name",
+			"read":    "read: '%[2]s': bad variable name",
 		},
 		BuiltinBadNameStatus: 2,
 		// `read` is the exception on both counts. Measured 2026-09-17 in the

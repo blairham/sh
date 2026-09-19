@@ -714,6 +714,21 @@ cheap to reverse.
    reads the store — which is what the counter-argument below asks for
    anyway.
 
+   **And #1312 has made a start on the first.** `z` is a ranked directory
+   jump: a session with a store can name a piece of a directory it has
+   worked in and go there, ranked by decayed visit count over the `cwd`
+   and `start` of the records already written. It is a query and not a
+   second store — `Store.RankDirs` is a fold over `Store.Load`, bounded
+   the way naming a block is bounded — so it adds nothing to the path of
+   a command that runs.
+
+   It is not yet the whole of the first reason. Recall and re-run still
+   read nothing, and one command is a thin argument for collecting
+   everything by default. But it is the first thing inside a session that
+   reads the store rather than a flag that inspects one from outside, and
+   it is the first answer to "what would a person get for turning this
+   on".
+
    The counter-argument stands and was not enough: opt-in does risk a
    feature nobody meets. The answer is to turn it on **with** the
    interactive surface that reads it, and with the trimming in #2275,

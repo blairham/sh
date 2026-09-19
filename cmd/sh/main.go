@@ -247,6 +247,12 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			_ = closer.Close()
 		}
 	}
+	// And the ranked directory jump, at a prompt and in this binary alone.
+	// After the seams and the plugins, because it reads the block store
+	// through the same gate everything else here reads it through — installed
+	// earlier it would have closed over a nil one and been the one reader a
+	// policy could not hide the store from. See jump.go.
+	sh = withDirJump(sh)
 	if own.acpConnect {
 		// The other direction: this shell drives an agent rather than being
 		// one. The words after the flag are the command that starts it, so

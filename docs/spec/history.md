@@ -495,19 +495,40 @@ and names nothing at all for a substitution.
 ### When a `!` is not an expansion
 
 Measured one character at a time on bash 5.3.20, by asking
-`printf '%s\n' "T<c>|!<c>|"` after a seeded history. A `!` is ordinary text
-when:
+`printf '%s\n' "T<c>|!<c>|"` after a seeded history, and re-measured
+2026-09-18 in a script and at a prompt against zsh 5.9.2 and ksh93u+ as well.
+A `!` is ordinary text when:
 
 - it is the last character of the line, or what follows it is one of
-  `` \t\n\r=|&;()<>"' `` (a space included) — so `echo end!`, `echo hi ! there`,
+  `` \t\n\r=|&;()<>" `` (a space included) — so `echo end!`, `echo hi ! there`,
   `[[ ! -e x ]]`, `! false` and `$((3 != 4))` are all safe;
 - it stands **immediately** after `[`, so `[!a-z]` is still a glob. Only
   immediately: `[a!s]` *is* an event reference, and bash reads it as one;
 - it stands directly after `${`, so `${!v}` is still an indirect expansion.
   The two characters together, not the brace — `$ {!s}` is an event reference.
 
-Everything else after a `!` starts one, `,` `.` `/` `@` `+` `~` `` ` `` `[` `]`
+Everything else after a `!` starts one, `,` `.` `/` `@` `+` `~` `[` `]`
 `{` `}` and `\` included.
+
+The `'` and the `` ` `` used to be in that first list and are not: the probe
+above was read as saying so, and re-running it says the opposite. `echo T!'xE'`
+is `!'xE': event not found` in bash and ksh93 and `echo "T!\x E"` names `!\x`
+in bash, zsh and ksh93 alike, so the quote and the backslash are the first
+**letter of the event's name** rather than punctuation ending it (#3421). This
+shell read all three as punctuation, which made the name empty and left the
+`!` as text, so a line nobody could have meant literally ran anyway.
+
+Three of the characters split the panel, and each is an axis:
+
+| after a `!` | bash 5.3.20 | zsh 5.9.2 | ksh93u+ | axis |
+| --- | --- | --- | --- | --- |
+| `\` | part of the name | part of the name | part of the name | none — the engine's |
+| `'`, `` ` `` | part of the name | ordinary text | part of the name | `HistoryQuoteEndsAnEventReference` |
+| a second `!` | a letter of the name | closes it, itself included | a letter of the name | `HistoryEventCharClosesAnEventName` |
+| `{` | a letter of the name | opens `!{…}` | a letter of the name | `HistoryBracedEventReference` |
+
+So `X!ab!cdY` is `!ab!cdY: event not found` in bash and ksh93 and `event not
+found: ab!` in zsh, and `!{x}` is the event `x` in zsh alone.
 
 Quoting is the scanner's question and not the parser's, which is why the
 engine here is a pass over a string rather than a stage of lexing: text inside
@@ -515,6 +536,12 @@ single quotes is never expanded, text inside double quotes is, and a `'` inside
 double quotes opens nothing — `echo "it's !!"` expands where `echo '!!'` does
 not. Nothing that had already tokenized the line could tell those apart from a
 parameter expansion's rules.
+
+**The quoting state does not change which characters start a reference**, which
+is the half #3421 asserted and re-measurement disproved. `echo "!\x"` and
+`echo T!\xE` are refused alike, so the rule is one rule and this shell was
+applying a wrong one in both places rather than the outside-quotes rule in
+both.
 
 ## The script route
 
@@ -700,6 +727,44 @@ line (Semantics.HistoryCommentStopsExpansion); and in POSIX mode a
 double-quoted `!` is not expanded
 (Semantics.HistoryExpansionSparesDoubleQuotesInPosixMode).
 
+**Also bash alone: a `G` in front of an `s` or an `&`**, which substitutes once
+in **each word** rather than once in the text (a plain `s`) or everywhere (`g`).
+Measured 2026-09-18 after `echo foo boo`: `!!:Gs/o/0/` is `ech0 f0o b0o`, where
+`foo` keeps its second `o` and a `g` would not have left it. zsh says `illegal
+modifier: G` and ksh93 `G: unrecognized history modifier`.
+Semantics.HistoryWordwiseSubstitutionModifier.
+
+The letter stands alone: `!!:gGs/…` and `!!:aGs/…` are refused naming the `G`,
+and `!!:Ggs/…` naming the `g`. And a chain that ends on the `G` has nothing
+left to name, which is why `!^:G` is `: unrecognized history modifier` with an
+empty reference where `!!:Z` names the `Z`.
+
+**Two edges of a range split the panel two different ways**, measured
+2026-09-18 over `echo a b c d e`:
+
+| row | bash 5.3.20 | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- |
+| `!!:$-3` | `e-3` | `no such word in event` | `e-3` |
+| `!!:$-` | `e-` | `no such word in event` | `e-` |
+| `!!:$*` | `e*` | `e` | `e*` |
+| `!!:1-^` | `a` | `a` | `a b c d^` |
+| `!!:2-^` | `:2-^: bad word specifier` | `no such word in event` | `b c d^` |
+
+So a `$` **ends** the word designator in bash and ksh93 — what follows it is
+text rather than the start of a range — and does not in zsh
+(Semantics.HistoryLastWordEndsTheDesignator); and the quick-substitution
+character names word one where a range's **end** is written in bash and zsh,
+where ksh93 leaves it as text
+(Semantics.HistoryFirstWordEndsARange). Neither split is the other's, which is
+why they are two axes.
+
+**A failed modifier is named after the whole chain**, and that is unanimous
+among the two columns that name anything. bash and ksh93 both say
+`:t:gs/x/y/: substitution failed` and `:q:&: no previous substitution` — every
+modifier from the first colon through the one that failed, the `g` included —
+where zsh names nothing at all. A word designator in front of the chain stays
+out of it: `!!:1:s/x/y/` is `:s/x/y/`.
+
 **A here-document inside a substitution** is not expanded, as one outside is:
 `echo $(cat <<EOF` / `echo !!` / `EOF` / `)` writes `echo !!`. The entry ends
 with the `)` line and no blank line after it.
@@ -707,11 +772,12 @@ with the `)` line and no blank line after it.
 ### What is implemented, and what is not
 
 Implemented: every event designator (`!!`, `!n`, `!-n`, `!string`,
-`!?string?`, `!#`), every word designator (`^`, `$`, `*`, `%`, `n`, `x-y`,
-`x-`, `x*`), the modifiers `h t r e p q x s/// & g a`, quick substitution, the
-quoting rules above, `histchars`, the prompt route and the script route, and
-the `history` builtin's tie to the list the designators index — including the
-line `history -s` and `history -p` each drop from it, which is their own.
+`!?string?`, `!#`, and `!{…}` where the dialect has it), every word designator
+(`^`, `$`, `*`, `%`, `n`, `x-y`, `x-`, `x*`, `x-^`), the modifiers
+`h t r e p q x s/// & g a G`, quick substitution, the quoting rules above,
+`histchars`, the prompt route and the script route, and the `history`
+builtin's tie to the list the designators index — including the line
+`history -s` and `history -p` each drop from it, which is their own.
 
 Three of those modifiers were **wrong** until the script route made them easy
 to run against bash, and all three were wrong at a prompt as well. `:p` showed
@@ -722,12 +788,13 @@ the last `.` of the whole word — `/a.b/c` is the discriminator, where `:r` is
 where bash hands the word back whole. The eight words behind the corrected
 rule are in `internal/histexpand`'s own comment.
 
-`!{…}` is listed above as **not** implemented, and it used to be listed as
-implemented. It is expanded here and is `event not found` in bash 5.3.20, bash
-3.2.57 and bash-as-`sh` alike — the brace is not punctuation there, and even
-`!{1}` fails with event 1 in the list. Whether any shell in the panel has the
-form cannot be settled from a script, since the two that might do not expand
-in one; see #3220, which is where the pty measurement goes.
+`!{…}` was expanded in every dialect, and is `event not found` in bash 5.3.20,
+bash 3.2.57 and bash-as-`sh` alike — the brace is not punctuation there, and
+even `!{1}` fails with event 1 in the list. The pty measurement #3220 asked for
+was taken 2026-09-18: **zsh 5.9.2 has the form** (`!{x}` is the event `x`) and
+**ksh93u+ does not** (`!{x}` is `!{x}: event not found`, the brace a letter of
+the name). So it is a dialect's construct rather than the engine's, and the
+answer is Semantics.HistoryBracedEventReference rather than a deletion.
 
 **Not implemented: `shopt histverify`**, which puts the expansion back on the
 editing line instead of running it. It is the one remaining piece and it is a

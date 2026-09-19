@@ -73,6 +73,35 @@ type Chars struct {
 	// character that begins a word outside quotes. See
 	// Semantics.HistoryCommentStopsExpansion.
 	CommentStops bool
+
+	// QuoteIsText makes a single quote or a backquote against the event
+	// character ordinary text, where the two columns without it read the
+	// quote as the first letter of an event's name. See
+	// Semantics.HistoryQuoteEndsAnEventReference.
+	QuoteIsText bool
+
+	// EventCharClosesAnEventName ends an event name at an event character
+	// inside it, that character included. See
+	// Semantics.HistoryEventCharClosesAnEventName.
+	EventCharClosesAnEventName bool
+
+	// BracedEvent reads `!{…}` as an event reference in braces. See
+	// Semantics.HistoryBracedEventReference.
+	BracedEvent bool
+
+	// LastWordEndsTheDesignator ends a word designator at a `$`, so that
+	// nothing after it is read as a range. See
+	// Semantics.HistoryLastWordEndsTheDesignator.
+	LastWordEndsTheDesignator bool
+
+	// FirstWordEndsARange reads the Quick character as word one where a
+	// range's end is written. See Semantics.HistoryFirstWordEndsARange.
+	FirstWordEndsARange bool
+
+	// WordwiseSubstitution is the `G` before an `s` or an `&`, which
+	// substitutes once in each word. See
+	// Semantics.HistoryWordwiseSubstitutionModifier.
+	WordwiseSubstitution bool
 }
 
 // Default is what a shell starts with: `!^#`.
@@ -149,16 +178,18 @@ type NoPreviousSubstitution struct{ Ref string }
 
 func (e *NoPreviousSubstitution) Error() string { return e.Ref + ": no previous substitution" }
 
-// modifierRef is a substitution modifier as written, from the colon before
-// any `g` or `a` in front of it to end.
-func modifierRef(src []rune, start, end int) string {
-	for start > 0 && (src[start-1] == 'g' || src[start-1] == 'a') {
-		start--
-	}
-	if start > 0 && src[start-1] == ':' {
-		start--
-	}
-	return string(src[start:end])
+// chainRef is a failed modifier as the shells that name one name it: the
+// **whole chain** from its first colon up to and including the modifier that
+// failed.
+//
+// Measured 2026-09-18 after `echo one/two.one`, in a script on bash 5.3.20 and
+// at a prompt on ksh93u+ (#3422): `!!:t:gs/x/y/` is `:t:gs/x/y/: substitution
+// failed` in both, and `!!:q:&` names `:q:&` in both. Naming the failing
+// modifier alone — `:s/x/y/`, `:&` — was this engine's answer and is nobody's.
+// zsh 5.9.2 names nothing at all, which its wording handles by ignoring the
+// reference rather than by carrying a different one.
+func chainRef(src []rune, chain, end int) string {
+	return string(src[chain:min(end, len(src))])
 }
 
 // SubstFailed is an `s/old/new/` or `^old^new^` whose left side is not in the
@@ -325,10 +356,18 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 // these came back untouched and every other printable character was taken as
 // the start of an event reference.
 //
-// The quote characters are here for a reason of their own rather than for
-// bash's list: a `!` against a closing quote has an empty event name, and an
-// empty name expands to nothing in every shell that has the feature.
-const noExpandAfter = " \t\n\r=|&;()<>\"'"
+// The double quote is here for a reason of its own rather than for bash's
+// list: a `!` against a closing quote has an empty event name, and an empty
+// name expands to nothing in every shell that has the feature.
+//
+// The **single** quote and the backquote were here for that same reason and
+// are not, which is #3421. Re-measured 2026-09-18 over the same probe, inside
+// double quotes and outside them alike: `echo T!'xE'` is `!'xE': event not
+// found` in bash 5.3.20 and ksh93u+, and `echo T!` with a backquote after it
+// is a reference in both — so the empty-name reasoning was a guess that the
+// probe's own quoting had never disturbed. zsh 5.9.2 is the column that
+// leaves both alone, which is Chars.QuoteIsText.
+const noExpandAfter = " \t\n\r=|&;()<>\""
 
 // literal reports whether the event character at i is ordinary text.
 //
@@ -347,13 +386,15 @@ func literal(src []rune, i int, c Chars, double bool) bool {
 	if i+1 >= len(src) || strings.ContainsRune(noExpandAfter, src[i+1]) {
 		return true
 	}
+	if c.QuoteIsText && (src[i+1] == '\'' || src[i+1] == '`') {
+		return true
+	}
 	if i > 0 && src[i-1] == '[' {
 		return true
 	}
 	if i > 1 && src[i-1] == '{' && src[i-2] == '$' {
 		return true
 	}
-	_ = c
 	_ = double
 	return false
 }
@@ -365,8 +406,12 @@ func literal(src []rune, i int, c Chars, double bool) bool {
 func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string, int, bool, error) {
 	j := i + 1
 	// `!{...}` puts the whole reference in braces so that what follows it
-	// cannot be read as part of it.
-	if j < len(src) && src[j] == '{' {
+	// cannot be read as part of it — where a shell has the form at all.
+	// Measured 2026-09-18 (#3220): `X!{!!}Y` is `!{!!}Y: event not found`
+	// in bash 5.3.20 and 3.2.57 from a script and in ksh93u+ at a prompt,
+	// both of which take the whole run after the `!` as an event *name*,
+	// and `!{x}` is the event `x` in zsh 5.9.2 alone.
+	if c.BracedEvent && j < len(src) && src[j] == '{' {
 		end := j + 1
 		for end < len(src) && src[end] != '}' {
 			end++
@@ -466,10 +511,23 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			// the string; only a later one ends it.
 			k++
 		}
-		for k < len(src) && !strings.ContainsRune(eventEnd, src[k]) && src[k] != '-' && src[k] != c.Event {
+		for k < len(src) && !strings.ContainsRune(eventEnd, src[k]) && src[k] != '-' {
 			// A `-` ends the string because it begins a word range with
 			// no colon: measured 2026-09-16, `!ech-2` after `echo a b c d`
 			// is `echo a b` in bash 5.3.20, zsh 5.9.2 and ksh93u+ alike.
+			if src[k] == c.Event {
+				// An event character inside a name is part of it in two
+				// of the three columns, and closes the name — itself
+				// included — in the third. Measured 2026-09-18 with
+				// `X!ab!cdY`: `!ab!cdY: event not found` in bash 5.3.20
+				// from a script and in ksh93u+ at a prompt, `event not
+				// found: ab!` in zsh 5.9.2 at one. See
+				// Chars.EventCharClosesAnEventName.
+				if c.EventCharClosesAnEventName {
+					k++
+					break
+				}
+			}
 			k++
 		}
 		if k == j {
@@ -497,7 +555,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 	if ok {
 		text = strings.Join(chosen, " ")
 	}
-	text, j, print, err := modifiers(src, j, text, ref(j), st, c)
+	text, j, print, err := modifiers(src, j, text, st, c)
 	if err != nil {
 		return "", 0, false, err
 	}
@@ -508,7 +566,16 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 // and the word-designator separator, plus the operators a command line is
 // built out of — a `!vi` at the end of `foo && !vi` names `vi` and not
 // `vi` with the shell's own punctuation glued on.
-const eventEnd = " \t\n\r:^$*%=|&;()<>\"'`\\"
+//
+// A backslash is **not** one of them, which is #3421. Measured 2026-09-18 in
+// a script and again at a prompt, `echo T!\xE` is `!\xE: event not found` in
+// bash 5.3.20, zsh 5.9.2 and ksh93u+ alike, and `echo "T!\x E"` names `!\x`
+// in all three — so the character the panel agrees is ordinary text before a
+// `!` (`echo a\!b`, which the scanner still steps over) was being read as
+// punctuation after one. A single quote and a backquote are not here either,
+// for the reason noExpandAfter gives; see Chars.QuoteIsText for the column
+// that leaves a `!` against one alone instead.
+const eventEnd = " \t\n\r:^$*%=|&;()<>\""
 
 // isWordDesignator reports whether r is one of the designators that may follow
 // the event character with no event of its own — `!$` and `!^` and `!*` and
@@ -821,6 +888,16 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 	case r == '$':
 		start, end = last, last
 		j++
+		if c.LastWordEndsTheDesignator {
+			// The last word is the whole designator, so nothing after it
+			// is read: measured 2026-09-18 over `echo a b c d e`,
+			// `!!:$-3` is `e-3`, `!!:$-` is `e-` and `!!:$*` is `e*` in
+			// bash 5.3.20 from a script and in ksh93u+ at a prompt, where
+			// zsh 5.9.2 refuses the first two as `no such word in event`
+			// and answers the third `e`. See
+			// Chars.LastWordEndsTheDesignator.
+			ranged = false
+		}
 	case r == '*':
 		if last < 1 {
 			return nil, j + 1, true, nil
@@ -881,6 +958,18 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 				return nil, k + 1, false, bad(k + 1)
 			}
 			return pick(start, last), k + 1, true, nil
+		case c.FirstWordEndsARange && c.Quick != 0 && k < len(src) && src[k] == c.Quick:
+			// The Quick character names word one where a range's end is
+			// written, exactly as it does where its start is. Measured
+			// 2026-09-18 over `echo a b c d e`: `!!:1-^` is `a` in bash
+			// 5.3.20 from a script and in zsh 5.9.2 at a prompt, and
+			// `!!:2-^` is a backwards range both refuse; ksh93u+ leaves
+			// the character as text and answers `a b c d^`. See
+			// Chars.FirstWordEndsARange.
+			if start > last || start > 1 {
+				return nil, k + 1, false, bad(k + 1)
+			}
+			return pick(start, 1), k + 1, true, nil
 		}
 		if start > last {
 			return nil, j + 1, false, bad(j + 1)
@@ -904,8 +993,11 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 
 // modifiers applies the `:h`, `:t`, `:r`, `:e`, `:p`, `:q`, `:x`, `:s` and
 // `:&` chain, and reports whether `:p` was among them.
-func modifiers(src []rune, j int, text, ref string, st *state, c Chars) (string, int, bool, error) {
+func modifiers(src []rune, j int, text string, st *state, c Chars) (string, int, bool, error) {
 	print := false
+	// chain is where the whole chain began, which is what a failed modifier
+	// is named after. See chainRef.
+	chain := j
 	// quote is the `q` or `x` the chain asked for, applied once the rest of
 	// it has run where the shell quotes last. See Chars.QuoteInPlace. A
 	// second quoting modifier replaces the first.
@@ -915,9 +1007,20 @@ func modifiers(src []rune, j int, text, ref string, st *state, c Chars) (string,
 		if j >= len(src) {
 			return "", 0, false, &BadModifier{Mod: ""}
 		}
-		global := false
-		for j < len(src) && (src[j] == 'g' || src[j] == 'a') {
-			global = true
+		global, wordwise := false, false
+		for j < len(src) && (src[j] == 'g' || src[j] == 'a' || (c.WordwiseSubstitution && src[j] == 'G')) {
+			// A `G` stands alone. Measured 2026-09-18, `!!:gGs/o/0/` is
+			// `G: unrecognized history modifier` in bash 5.3.20 and
+			// `!!:Ggs/o/0/` is `g: unrecognized history modifier`, so the
+			// letter that arrives second is the one named.
+			if wordwise || (global && src[j] == 'G') {
+				return "", 0, false, &BadModifier{Mod: string(src[j])}
+			}
+			if src[j] == 'G' {
+				wordwise = true
+			} else {
+				global = true
+			}
 			j++
 		}
 		if j >= len(src) {
@@ -947,7 +1050,7 @@ func modifiers(src []rune, j int, text, ref string, st *state, c Chars) (string,
 			}
 		case 's', '&':
 			var err error
-			text, j, err = substitute(src, j, text, ref, global, st)
+			text, j, err = substitute(src, j, chain, text, global, wordwise, st)
 			if err != nil {
 				return "", 0, false, err
 			}
@@ -978,19 +1081,19 @@ func quoteText(text string, quote rune) string {
 //
 // The delimiter is whatever character follows the `s`, which is what makes
 // `:s,a,b,` work when the text is a path.
-func substitute(src []rune, j int, text, ref string, global bool, st *state) (string, int, error) {
-	start := j
+func substitute(src []rune, j, chain int, text string, global, wordwise bool, st *state) (string, int, error) {
 	if src[j] == '&' {
 		j++
 		if st.old == "" {
-			return "", 0, &NoPreviousSubstitution{Ref: modifierRef(src, start, j)}
+			return "", 0, &NoPreviousSubstitution{Ref: chainRef(src, chain, j)}
 		}
-		out, err := apply(text, st.old, st.new, global, ":"+string(src[start:j]))
+		out, err := apply(text, st.old, st.new, global, wordwise, chainRef(src, chain, j))
 		return out, j, err
 	}
 	j++ // past the `s`
 	if j >= len(src) {
-		return "", 0, &SubstFailed{Ref: ":" + string(src[start:])}
+		ref := chainRef(src, chain, len(src))
+		return "", 0, &SubstFailed{Ref: ref, Bare: ref}
 	}
 	delim := src[j]
 	j++
@@ -1017,11 +1120,11 @@ func substitute(src []rune, j int, text, ref string, global bool, st *state) (st
 		old = st.previousOld()
 	}
 	if old == "" {
-		return "", 0, &NoPreviousSubstitution{Ref: modifierRef(src, start, j)}
+		return "", 0, &NoPreviousSubstitution{Ref: chainRef(src, chain, j)}
 	}
 	repl = replacement(repl, old)
 	st.old, st.new = old, repl
-	out, err := apply(text, old, repl, global, ":"+string(src[start:j]))
+	out, err := apply(text, old, repl, global, wordwise, chainRef(src, chain, j))
 	return out, j, err
 }
 
@@ -1055,9 +1158,21 @@ func replacement(raw, old string) string {
 // apply is the substitution itself, which fails rather than doing nothing when
 // the left side is not there: measured, `^nosuch^x^` is `substitution failed`
 // in bash, zsh and ksh93 alike and the line does not run.
-func apply(text, old, repl string, global bool, ref string) (string, error) {
+//
+// wordwise is the `G` of Chars.WordwiseSubstitution: one substitution in each
+// blank-separated word rather than one in the whole text. Measured 2026-09-18
+// on bash 5.3.20 after `echo foo boo`, `!!:Gs/o/0/` is `ech0 f0o b0o` — every
+// word changed once, and `foo` keeps its second `o` where a `g` would not.
+func apply(text, old, repl string, global, wordwise bool, ref string) (string, error) {
 	if !strings.Contains(text, old) {
-		return "", &SubstFailed{Ref: ref, Bare: strings.TrimPrefix(ref, ":s")}
+		return "", &SubstFailed{Ref: ref, Bare: ref}
+	}
+	if wordwise {
+		words := strings.Split(text, " ")
+		for i, w := range words {
+			words[i] = strings.Replace(w, old, repl, 1)
+		}
+		return strings.Join(words, " "), nil
 	}
 	if global {
 		return strings.ReplaceAll(text, old, repl), nil
@@ -1109,7 +1224,7 @@ func quick(line string, hist List, c Chars, st *state) (Result, error) {
 	if i < len(src) {
 		var err error
 		var print bool
-		out, _, print, err = modifiers(src, i, out, line, st, c)
+		out, _, print, err = modifiers(src, i, out, st, c)
 		if err != nil {
 			return Result{}, err
 		}

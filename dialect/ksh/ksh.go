@@ -668,6 +668,12 @@ func Semantics() interp.Semantics {
 	// taken silently, and `echo !!` after it expands and echoes the expanded
 	// line. So the letter is not in InteractiveOptionLetters above either.
 	s.HistoryExpansion = interp.Yes
+	// And a `^` where a range's **end** is written stays ordinary text here
+	// rather than naming word one: measured 2026-09-18 at the same prompt
+	// over `echo a b c d e`, `!!:1-^` is `a b c d^` — the range `1-` and
+	// then a character nothing read — where bash and zsh both answer `a`.
+	// See Semantics.HistoryFirstWordEndsARange.
+	s.HistoryFirstWordEndsARange = interp.No
 	// `set -k` and `set -o keyword`, and this is the column that leaves a
 	// declaration's own operand where it stands: measured 2026-09-16, `set
 	// -k; export E1=e1` exports `E1` here where bash lists and exports

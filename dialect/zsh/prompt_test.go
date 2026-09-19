@@ -107,8 +107,8 @@ func TestPromptSequences(t *testing.T) {
 	if _, ok := st.Sequences['e']; ok {
 		t.Error("zsh has an entry for bash's \\e")
 	}
-	if st.Octal {
-		t.Error("zsh reads three octal digits, and only bash does")
+	if st.Octal != repl.NoOctalEscape {
+		t.Errorf("Octal = %v, want none: an octal run is bash's spelling and not this one's", st.Octal)
 	}
 }
 

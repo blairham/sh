@@ -208,7 +208,7 @@ func TestACodeThatDrawsWhatTheDialectSays(t *testing.T) {
 			Escape:    '\\',
 			Sequences: map[rune]string{'e': "\x1b", 'a': "\a"},
 			Colors:    map[rune]PromptColor{'F': Foreground, 'K': Background},
-			Octal:     true,
+			Octal:     OctalExactlyThree,
 			Unknown:   KeepBoth,
 		},
 	}

@@ -2528,9 +2528,18 @@ func Diagnostics() interp.Diagnostics {
 func Apply(r *interp.Runner) {
 	// The prompt table, installed for the same reason the other dialects
 	// install theirs: what a shell does to a prompt parameter before drawing
-	// it is the dialect's answer, and "nothing but expansion" is an answer
-	// rather than an absence.
+	// it is the dialect's answer.
 	r.SetPromptStyle(PromptStyle())
+	// And the two resolvers that table's `\u`, `\h` and `\H` ask. This
+	// shell's default `PS1` holds neither, but `\u@\h:\w\$ ` is what a
+	// person writes the moment they set one, and without these it draws
+	// `@:~$` — a prompt short of only its user and its machine still looks
+	// like a prompt, which is what #1446 cost in the sibling. Deferred rather
+	// than resolved here for #1423's reason: `user.Current` is about a
+	// millisecond on darwin and Apply runs on every invocation, so asking
+	// eagerly would spend it on every `ash -c ':'`.
+	r.SetPromptUserFunc(interp.LoginName)
+	r.SetPromptHostFunc(interp.MachineName)
 	// The two `set -o` names this shell has beyond the ones the panel shares.
 	// `pipefail` was already *taken* here and not listed, so `set -o
 	// pipefail; set +o` did not say the shell was in it and a script saving

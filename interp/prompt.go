@@ -105,6 +105,38 @@ type PromptStyle struct {
 	// read again — which is exactly what this shell drew.
 	ExpandBeforeEscapes bool
 
+	// ExpansionSkipsTheEscapes keeps the escape pairs out of the expansion
+	// that runs in front of the table, so that what the table reads is what
+	// was written.
+	//
+	// Only asked where [PromptStyle.ExpandBeforeEscapes] is set, and it is the
+	// difference between an expansion that *quotes* with the escape character
+	// and one that merely runs before it. Measured 2026-09-18 on BusyBox ash
+	// 1.37.0, where the escape is a backslash and the expansion is the pass
+	// that would otherwise eat it:
+	//
+	//	written        drawn            what it says
+	//	`\$`           `#` at uid 0     the pair reached the table, so the
+	//	                                expansion did not take the backslash
+	//	`\$HOME`       `#HOME`          …and the `$` it was in front of did
+	//	                                not expand either
+	//	`\\$HOME`      `/root`          a doubled escape collapses and the
+	//	                                `$` behind it *does* expand
+	//	`\\B`          `B`              one backslash reaches the table,
+	//	                                which has no field for it
+	//	`\\\\B`        `\B`             two do, and the first eats the second
+	//
+	// So a doubled escape collapses in the expansion and every other pair is
+	// handed to the table whole, which is what expandAroundTheEscapes does.
+	// Without it the shell's own default `PS1` of `\w \$ ` draws `$` for root,
+	// because the expansion had already turned `\$` into a literal dollar
+	// before the table could ask who is typing.
+	//
+	// The other dialect that expands first spells its escape `%`, so a
+	// backslash there is an ordinary character of the value and this question
+	// does not arise.
+	ExpansionSkipsTheEscapes bool
+
 	// FailedExpansionKeepsWhatItDrew hands back the text in front of the
 	// **first** substitution when the expansion pass gives up partway,
 	// instead of the text as it stood when the pass began.
@@ -223,13 +255,39 @@ type PromptStyle struct {
 	// arms, at status 0 and with nothing on standard error.
 	Conditions map[rune]PromptCondition
 
-	// Octal says three octal digits after the escape are the byte they name,
-	// which is how bash spells a character it has no letter for.
+	// Octal says octal digits after the escape are the byte they name, which
+	// is how a shell spells a character it has no letter for. The two
+	// dialects that have it disagree about how many digits that is, so it is
+	// a value rather than a flag — see [PromptOctal].
+	Octal PromptOctal
+
+	// Hex says an `x` after the escape introduces **one or two** hexadecimal
+	// digits naming a byte, the way the octal run names one.
 	//
-	// Exactly three, measured: `\007` drew the bell and `\101` drew `A`, while
-	// `\0`, `\1`, `\10`, `\00` and `\8` were all left as they were written.
-	// A value above 255 is taken low byte first — `\400` drew a NUL.
-	Octal bool
+	// BusyBox ash alone in this panel; bash and ksh93 have no hex spelling and
+	// draw `\x41` as `\x41` and `x41` respectively. Measured 2026-09-18 in the
+	// digest-pinned Alpine image, BusyBox v1.37.0, one probe per prompt:
+	// `\x41` drew `A`, `\x4` drew 04, `\xA1` drew the byte a1, and `\x411`
+	// drew `A` and then `1` — so two digits at most and one is enough.
+	Hex bool
+
+	// HexWithNoDigits is what an `x` with no hexadecimal digit after it draws.
+	//
+	// A string rather than a rule because the one shell that has the spelling
+	// substitutes a character of its own: `\xg` drew `?g` and `\x|` drew `?|`,
+	// measured the same way. Empty draws nothing, which is the zero value and
+	// what a dialect with no hex spelling never reaches.
+	HexWithNoDigits string
+
+	// CwdBaseAtRootIsEmpty draws nothing for the last component of the root
+	// directory, instead of the separator itself.
+	//
+	// Measured 2026-09-18: in `/`, bash 5.3.20 draws `\W` as `/` and BusyBox
+	// ash 1.37.0 draws nothing at all, while both draw `usr` in `/usr` and the
+	// home directory's `~` in `$HOME`. So it is the root alone, and it is what
+	// "the text after the last slash" produces where "the last component"
+	// produces the separator.
+	CwdBaseAtRootIsEmpty bool
 
 	// NumericArgument says a run of digits between the escape and the code is
 	// an argument to that code rather than a code of its own.
@@ -443,6 +501,39 @@ type OpenWord struct {
 	// So it is a property of the word and not a rule about clauses.
 	Replaces bool
 }
+
+// PromptOctal is how many octal digits after the escape name a byte.
+//
+// Two shells in this panel spell a byte that way and they read the run
+// differently, so a flag would have had to be one of them. Measured 2026-09-18
+// over the same eight probes, bash 5.3.20 through `${PS1@P}` and BusyBox ash
+// 1.37.0 in the digest-pinned Alpine image through an interactive shell on a
+// pipe:
+//
+//	written  bash 5.3.20       BusyBox ash 1.37.0
+//	`\007`    the bell          the bell
+//	`\101`    `A`               `A`
+//	`\1`      the two written   01
+//	`\10`     the two written   08
+//	`\0101`   `A` then `1`      08 then `1`
+//	`\400`    a NUL             a space then `0`
+//	`\8`      the two written   `8`
+type PromptOctal int
+
+const (
+	// NoOctalEscape is a dialect with no octal spelling, which is the zero
+	// value: a run of digits is then whatever the table says about the first
+	// of them.
+	NoOctalEscape PromptOctal = iota
+	// OctalExactlyThree reads three digits and nothing else — a shorter run is
+	// not a shorter number, it is not a number at all and falls through to the
+	// dialect's Unknown. The low byte is taken, so `\400` is a NUL.
+	OctalExactlyThree
+	// OctalUpToThree reads one, two or three digits, stopping before a fourth
+	// and before a digit that would carry the value past 255 — which is what
+	// makes `\400` a space followed by the character `0`.
+	OctalUpToThree
+)
 
 // UnknownCode is what becomes of an escape whose code is not in the table.
 //
@@ -850,6 +941,9 @@ func RenderPromptValue(st PromptStyle, r *Runner, text string, field PromptResol
 		return expandPromptStyle(st, v, field, quantity, visual)
 	}
 	if st.ExpandBeforeEscapes {
+		if st.ExpansionSkipsTheEscapes {
+			return escapes(expandAroundTheEscapes(st, text, expand))
+		}
 		return escapes(expand(text))
 	}
 	out, code, ok := escapes(text)
@@ -857,6 +951,179 @@ func RenderPromptValue(st PromptStyle, r *Runner, text string, field PromptResol
 		return text, code, false
 	}
 	return expand(out), "", true
+}
+
+// expandAroundTheEscapes expands a value while keeping its escape pairs out of
+// the expansion, collapsing a doubled escape as it goes.
+//
+// See [PromptStyle.ExpansionSkipsTheEscapes] for what was measured. The walk
+// has three cases and each of them is a row of that measurement:
+//
+//   - An **escape pair** at the top level is written through untouched, so the
+//     table reads what the value held; the escape **doubled** is written once,
+//     which is the one collapse and is why `\\$HOME` expands the parameter
+//     where `\$HOME` does not.
+//   - A **substitution** — `$( … )`, a backquoted body, `$(( … ))` or a plain
+//     `$name` — is handed to the expansion whole, because what a *command*
+//     inside it does with a backslash is that command's own business:
+//     measured, `$(echo \w)` draws `w` and “ `echo \w` “ draws `w`, where
+//     splitting at the escape would hand the expander half a substitution and
+//     refuse the value outright.
+//   - An **expansion's operand** — `${ … }` — is handed over whole as well,
+//     with the pairs the *expander* would otherwise read as quoting written
+//     twice: measured, `${x:-\w}` draws the directory, `${x-a\wb}` draws it
+//     between `a` and `b`, `${x:-\$}` draws the privilege character and
+//     `${x:-\\w}` draws the directory again — so an operand reads its
+//     backslashes exactly as the text around it does, and only the doubled
+//     escape collapses. See protectOperandEscapes.
+//
+// Expanding the ordinary runs separately rather than the value as a whole is
+// the point and not a shortcut: a `$` the value quoted must not be expanded,
+// and the only thing that says it was quoted is the escape in front of it.
+func expandAroundTheEscapes(st PromptStyle, text string, expand func(string) string) string {
+	var out, run strings.Builder
+	flush := func() {
+		if run.Len() > 0 {
+			out.WriteString(expand(run.String()))
+			run.Reset()
+		}
+	}
+	runes := []rune(text)
+	for i := 0; i < len(runes); i++ {
+		switch runes[i] {
+		case '$', '`':
+			n := promptSubstitutionRun(runes, i)
+			part := string(runes[i : i+n])
+			if runes[i] == '$' && i+1 < len(runes) && runes[i+1] == '{' {
+				part = protectOperandEscapes(st, part)
+			}
+			run.WriteString(part)
+			i += n - 1
+		case st.Escape:
+			flush()
+			out.WriteRune(st.Escape)
+			if i+1 < len(runes) && runes[i+1] != st.Escape {
+				// The code, written through so the table reads what the value
+				// held. A doubled escape falls through to the next iteration
+				// instead, having written one of the pair.
+				out.WriteRune(runes[i+1])
+			}
+			i++
+		default:
+			run.WriteRune(runes[i])
+		}
+	}
+	flush()
+	return out.String()
+}
+
+// promptSubstitutionRun is how many runes the construct beginning at i spans —
+// a backquoted body, a `$( … )`, a `$(( … ))`, a `${ … }` or a plain `$name`.
+//
+// Bracket depth rather than a parse: this is deciding which bytes to hand to
+// the expander unbroken, and the expander is the thing that reads them
+// properly. An unclosed construct runs to the end of the value, which hands
+// the expander the same unclosed text the value held and lets it say so.
+func promptSubstitutionRun(runes []rune, i int) int {
+	if runes[i] == '`' {
+		for n := i + 1; n < len(runes); n++ {
+			if runes[n] == '\\' {
+				n++
+				continue
+			}
+			if runes[n] == '`' {
+				return n - i + 1
+			}
+		}
+		return len(runes) - i
+	}
+	if i+1 >= len(runes) {
+		return 1
+	}
+	open, close := '(', ')'
+	if runes[i+1] == '{' {
+		open, close = '{', '}'
+	} else if runes[i+1] != '(' {
+		// `$name`, `$1`, `$?` and the rest: one rune of name at least, and
+		// a run of them where the name is a word. Nothing in here can hold
+		// an escape, so the length only has to be right enough not to eat
+		// one that follows.
+		n := i + 2
+		for n < len(runes) && (runes[n] == '_' || isPromptNameRune(runes[n])) {
+			n++
+		}
+		if n == i+2 {
+			return 2
+		}
+		return n - i
+	}
+	depth := 0
+	for n := i + 1; n < len(runes); n++ {
+		switch runes[n] {
+		case open:
+			depth++
+		case close:
+			depth--
+			if depth == 0 {
+				return n - i + 1
+			}
+		}
+	}
+	return len(runes) - i
+}
+
+// isPromptNameRune reports whether a rune may stand in a parameter's name.
+func isPromptNameRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+}
+
+// protectOperandEscapes writes an escape pair twice where the expander would
+// otherwise read it as quoting, so that the pair reaches the prompt's table.
+//
+// Only inside an expansion's operand, and only in front of a dollar, which is
+// where the two readers actually part. Measured on BusyBox ash 1.37.0, five
+// operands:
+//
+//	${x:-\w}        the directory        the escape is not consumed
+//	${x:-\$}        the privilege char   nor in front of a dollar
+//	${x:-\\w}       the directory        a doubled escape still collapses
+//	${x:-\\$HOME}   the home directory   …and the `$` behind it expands
+//	${x:-a`+"`"+`b}      a backtick between   in front of a backquote it **is**
+//
+// The expander here agrees about all of those but the second, which is the
+// whole of what this repairs — and the last row is why the backquote is not
+// repaired with it: escaping one for the expander would leave a bare backquote
+// opening a substitution that never closes.
+//
+// A command substitution gets none of this on purpose: what the command it
+// holds does with a backslash is the command's own, and `$(echo \w)` draws
+// `w` in the reference because the command printed `w`.
+func protectOperandEscapes(st PromptStyle, text string) string {
+	if !strings.ContainsRune(text, st.Escape) {
+		return text
+	}
+	var b strings.Builder
+	runes := []rune(text)
+	for i := 0; i < len(runes); i++ {
+		b.WriteRune(runes[i])
+		if runes[i] != st.Escape || i+1 >= len(runes) {
+			continue
+		}
+		switch runes[i+1] {
+		case st.Escape:
+			// The pair the expander already collapses the way this shell
+			// does. Written through, both characters.
+			b.WriteRune(runes[i+1])
+			i++
+		case '$':
+			// The pair the expander would eat. Escaped for it, so what comes
+			// back out is the pair the table has to read.
+			b.WriteRune(st.Escape)
+			b.WriteRune(runes[i+1])
+			i++
+		}
+	}
+	return b.String()
 }
 
 // promptWalk is the walker's state: what has been drawn, and where on the
@@ -1060,12 +1327,24 @@ func (w *promptWalk) walk(runes []rune) {
 			w.visual[attributeOf(layer)] = seq
 			continue
 		}
-		if v, ok := promptOctalByte(w.st.Octal, runes, i); ok {
+		if v, n, ok := promptOctalByte(w.st.Octal, runes, i); ok {
 			// The byte itself and not the rune it names: `\\377` is one byte
 			// on the wire, where writing it as a rune would be the two bytes
 			// its UTF-8 spelling takes.
 			w.b.WriteByte(v)
-			i += 2
+			i += n - 1
+			continue
+		}
+		if v, n, ok := promptHexByte(w.st, runes, i); ok {
+			if n > 1 {
+				w.b.WriteByte(v)
+			} else {
+				// An `x` with nothing readable after it, which is the one
+				// shell with the spelling substituting a character of its own
+				// rather than falling through to Unknown.
+				w.b.WriteString(w.st.HexWithNoDigits)
+			}
+			i += n - 1
 			continue
 		}
 		// In no part of the table. Handed to the resolver as FieldNone —
@@ -1167,31 +1446,67 @@ func promptArgument(runes []rune, i int) (string, int, bool) {
 	return string(runes[i+1:]), len(runes) - 1, true
 }
 
-// promptOctalByte reads three octal digits as the byte they name.
+// promptOctalByte reads a run of octal digits as the byte they name, and says
+// how many runes it consumed.
 //
 // Named apart from transform.go's octalByte, which goes the other way: that
-// one writes a byte as `\NNN` for a quoted listing, and this one reads three
+// one writes a byte as `\NNN` for a quoted listing, and this one reads the
 // digits a prompt was written with.
 //
-// Three exactly. Measured against bash: `\007` drew the bell and `\101` drew
-// `A`, while `\0`, `\1`, `\10`, `\00` and `\8` were each drawn as the two
-// characters written — so a shorter run is not a shorter number, it is not a
-// number at all and falls through to whatever the dialect does with a code it
-// does not know.
-//
-// The low byte of the value, so `\400` is a NUL, which is what bash drew.
-func promptOctalByte(enabled bool, runes []rune, i int) (byte, bool) {
-	if !enabled || i+2 >= len(runes) {
-		return 0, false
-	}
-	v := 0
-	for _, r := range runes[i : i+3] {
-		if r < '0' || r > '7' {
-			return 0, false
+// See [PromptOctal] for the two measured readings of "a run".
+func promptOctalByte(mode PromptOctal, runes []rune, i int) (byte, int, bool) {
+	switch mode {
+	case OctalExactlyThree:
+		if i+2 >= len(runes) {
+			return 0, 0, false
 		}
-		v = v*8 + int(r-'0')
+		acc := 0
+		for _, r := range runes[i : i+3] {
+			if r < '0' || r > '7' {
+				return 0, 0, false
+			}
+			acc = acc*8 + int(r-'0')
+		}
+		return byte(acc), 3, true
+	case OctalUpToThree:
+		acc, n := 0, 0
+		for n < 3 && i+n < len(runes) {
+			r := runes[i+n]
+			if r < '0' || r > '7' || acc*8+int(r-'0') > 255 {
+				break
+			}
+			acc = acc*8 + int(r-'0')
+			n++
+		}
+		if n == 0 {
+			return 0, 0, false
+		}
+		return byte(acc), n, true
 	}
-	return byte(v), true
+	return 0, 0, false
+}
+
+// promptHexByte reads `x` and one or two hexadecimal digits as the byte they
+// name, and says how many runes it consumed.
+//
+// A run of one is read, so `\x4` is 04. A run of *none* is consumed too — one
+// rune, the `x` — and reported with n == 1, because the shell that has the
+// spelling draws a substitute for it rather than leaving the escape to
+// Unknown. See [PromptStyle.HexWithNoDigits].
+func promptHexByte(st PromptStyle, runes []rune, i int) (byte, int, bool) {
+	if !st.Hex || i >= len(runes) || runes[i] != 'x' {
+		return 0, 0, false
+	}
+	acc, digits := 0, 0
+	for digits < 2 && i+1+digits < len(runes) {
+		r := runes[i+1+digits]
+		if r > 0x7f || !isHexDigit(byte(r)) {
+			break
+		}
+		acc = acc*16 + int(hexValue(byte(r)))
+		digits++
+	}
+	return byte(acc), digits + 1, true
 }
 
 // What a prompt's color code writes to the terminal.
@@ -1560,9 +1875,9 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 	case FieldCwdFull:
 		return countedComponents(r.promptVar("PWD"), arg, 0), true
 	case FieldCwdBase:
-		return lastPathComponent(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME"))), true
+		return lastPathComponent(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), st), true
 	case FieldCwdBaseFull:
-		return lastPathComponent(r.promptVar("PWD")), true
+		return lastPathComponent(r.promptVar("PWD"), st), true
 	case FieldCwdCounted:
 		return countedComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), arg, 1), true
 	case FieldCwdCountedFull:
@@ -1858,8 +2173,13 @@ func (r *Runner) promptVar(name string) string {
 // lastPathComponent is the final component of a path, and nothing at all for
 // no path — where path.Base answers `.`, which is a directory and not the
 // absence of one.
-func lastPathComponent(dir string) string {
+func lastPathComponent(dir string, st PromptStyle) string {
 	if dir == "" {
+		return ""
+	}
+	if st.CwdBaseAtRootIsEmpty && dir == "/" {
+		// The text after the last slash, which is nothing — see
+		// PromptStyle.CwdBaseAtRootIsEmpty for the pair this was measured on.
 		return ""
 	}
 	return path.Base(dir)

@@ -165,6 +165,116 @@ strftime's language to Go's layouts rather than a row in a table, and until
 it has one, `\D{%F}` is drawn as written, which is what an unknown code
 does.
 
+## BusyBox ash — the backslash language
+
+**This document, `dialect/ash` and its tests all used to say this shell had
+no escape language and a default `PS1` of `$ `**, which is the sibling's
+answer and not this applet's. Measured 2026-09-18 in the panel's own image,
+`alpine@sha256:28bd5f…`, BusyBox v1.37.0, `env -i PATH=/usr/bin:/bin
+LC_ALL=C HOME=/root TERM=dumb /bin/busybox ash -i`: with nothing assigned the
+prompt in `/` at uid 0 is `/ # `, so the default is `\w \$ ` and both codes
+are drawn (#3570).
+
+No pseudo-terminal is needed to read one. The applet draws its prompt on
+standard **error** and draws it on a pipe as readily as on a terminal, so a
+probe is one value assigned on the first line, `exit` on the second, and `od`
+on what came back. Every row below is one probe per prompt with a marker
+either side of it.
+
+| code | draws | measured |
+| --- | --- | --- |
+| `\u` | user name | `root` |
+| `\h` `\H` | host to the first dot, and all of it | `a`, `a.b.c` under `--hostname a.b.c` |
+| `\w` | directory, `$HOME` written `~` | `/`, `~`, `~/sub`, `/usr` |
+| `\W` | its last component — **nothing at all in `/`** | `~` at `$HOME`, `sub` below it, `usr` in `/usr`, empty in `/` |
+| `\$` | `#` for root and `$` otherwise | `#` at uid 0, `$` under `--user 1000` |
+| `\n` | a newline | `0a` |
+| `\t` `\A` `\T` `\@` | the clock, **all four alike** | `02:37` from each |
+| `\e` `\a` `\v` `\f` `\b` `\r` | the C escapes | `1b 07 0b 0c 08 0d` |
+| `\[` `\]` | non-printing markers, both dropped | `\[x\]` → `x` |
+| `\nnn` | the byte **one to three** octal digits name | `\1` → 01, `\10` → 08, `\101` → `A`, `\1011` → `A1`, `\400` → a space and then `0` |
+| `\xnn` | the byte **one or two** hexadecimal digits name | `\x41` → `A`, `\x4` → 04, `\xA1` → a1, `\x411` → `A` and then `1` |
+| `\x` with no digit | `?` | `\xg` → `?g`, `\x|` → `?|` |
+| a trailing `\` | **dropped, not drawn** | a value ending in a backslash drew nothing for it |
+| anything else | **the code alone, the escape dropped** | `\q` → `q`, `\s` `\d` `\j` `\l` `\V` likewise, `\#` → `#`, `\!` → `!`, `\8` → `8` |
+
+Five rows are **not** bash's, and each would read as a table copied across
+if it were not measured: `\t` is HH:MM rather than HH:MM:SS, `\#` and `\!`
+are the characters themselves rather than the command and history numbers
+(unchanged over three successive prompts), `\W` in `/` is empty rather than
+`/`, an unknown code loses its backslash rather than keeping it, and the
+hexadecimal spelling has no counterpart in bash at all — `\x41` is four
+characters there.
+
+The octal run is the same code as bash's and a different reading of it, so
+`PromptStyle.Octal` is a value rather than a flag. bash takes three digits or
+none; this takes one, two or three, stopping before a fourth and before a
+digit that would carry the value past 255 — which is what makes `\400` a
+space followed by the character `0` here and a NUL there.
+
+### The doubled escape is not a row of this table
+
+`\\B` drew `B` and `\\\\B` drew `\B`. A row mapping the escape to itself
+would make the first of those `\B`, so what happens is not in the table at
+all: the **expansion runs first** and a backslash pair collapses there, and
+what reaches the table is a single backslash — a code it has no field for,
+which the unknown rule then drops.
+
+That the expansion runs first is measured directly rather than inferred:
+`x='\w'; PS1='<<$x>>'` draws the directory, so a code arriving out of a
+parameter is decoded. It is the opposite of bash, where `\u` out of a
+parameter is drawn as the two characters — see *Three passes, in this order*
+above, and `PromptStyle.ExpandBeforeEscapes`.
+
+But the expansion that runs first does **not** quote with the escape, which
+is a second fact and is the one the default `PS1` depends on:
+
+| written | drawn | what it says |
+| --- | --- | --- |
+| `\$` | `#` at uid 0 | the pair reached the table, so the expansion did not take the backslash |
+| `\$HOME` | `#HOME` | …and the `$` it stood in front of did not expand either |
+| `\\$HOME` | `/root` | a doubled escape collapses, and the `$` behind it *does* expand |
+
+So the pairs are handed to the table whole and only the doubled escape
+collapses — `PromptStyle.ExpansionSkipsTheEscapes`. Without it the
+expansion turns `\$` into a literal dollar before anything can ask who is
+typing, and this shell's own default draws `$` for root.
+
+**A substitution is handed over whole, and that is the part a naive reading
+gets wrong.** Cutting the escape pairs out of the value wherever they appear
+would hand the expander half a `$( … )` and refuse the whole prompt. Measured:
+
+| written | drawn | what it says |
+| --- | --- | --- |
+| `$(echo \w)` | `w` | the command's own quote removal ran, and the table read `w` |
+| `` `echo \w` `` | `w` | the older spelling likewise |
+| `$(printf %s ABC\\w)` | `ABC` then the directory | so the substitution's **output** is read by the table afterwards |
+| `${x:-\w}` | the directory | an operand's escape reaches the table |
+| `${x-a\wb}` | `a`, the directory, `b` | …wherever in the operand it stands |
+| `${x:-\$}` | `#` at uid 0 | …and in front of a dollar too |
+| `${x:-\\w}` | the directory | a doubled escape in an operand still collapses |
+| `${x:-\\$HOME}` | `/root` | …and the `$` behind it expands |
+| ``${x:-a\`b}`` | ``a`b`` | in front of a **backquote** the escape *is* consumed |
+
+The last row is why the repair inside an operand is only ever in front of a
+dollar: escaping a backquote for the expander would leave a bare one opening a
+substitution that never closes. `interp.protectOperandEscapes` is the whole of
+it and its doc comment holds this table.
+
+### Two rows this implementation does not match, and neither is the table
+
+Measured against BusyBox with the whole table in place, the drawn prompts
+agree byte for byte except for these, and both are the **drawer** rather than
+the dialect — they are shared with bash and reproduce there:
+
+- `\n` is written `0d 0a` where BusyBox writes `0a`. On a terminal the two
+  are indistinguishable, since the line discipline makes the first out of the
+  second; on a pipe they differ.
+- `\1` draws nothing where BusyBox draws the byte `01`. The same value
+  reaches a bash prompt through `${PS1@P}` intact and is lost on the
+  interactive route, so it is the drawer eating an `01` and not the octal
+  run — which `\10` and `\101` show arriving correctly on the same line.
+
 ## zsh — the percent language
 
 | code | draws | measured |
@@ -549,10 +659,11 @@ Every column has a default and no two of them have the same one:
 | bash-as-sh | `\s-\v\$ ` | `> ` | `+ ` |
 | bash32 3.2.57 | `\s-\v\$ ` | `> ` | `+ ` |
 | dash | `$ ` | `> ` | `+ ` |
+| BusyBox ash 1.37.0 | `\w \$ ` | `> ` | `+ ` |
 | ksh93 | `$ ` | `> ` | `+ ` |
 | zsh 5.9.2 | `%m%# ` | `%_> ` | `+%N:%i> ` |
 
-Five values for one question, none of them empty, so this is a **table of
+Six values for one question, none of them empty, so this is a **table of
 values** rather than an axis: nothing disagrees about *whether* there is a
 default. The values live in `PromptStyle.Default` and `DefaultContinued`,
 and each dialect's own tests assert its strings whole.

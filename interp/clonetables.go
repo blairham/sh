@@ -138,6 +138,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// here on the stronger footing than the three above it.
 	c.indexedLetterHere = maps.Clone(r.indexedLetterHere)
 	c.tableLetterHere = maps.Clone(r.tableLetterHere)
+	c.globalLetterHere = maps.Clone(r.globalLetterHere)
 	c.declaring = maps.Clone(r.declaring)
 	c.precommands = maps.Clone(r.precommands)
 
@@ -351,6 +352,10 @@ func (c *Runner) ownTables(r *Runner) {
 	c.prefixHeldNames = slices.Clone(r.prefixHeldNames)
 	c.prefixKeptNames = slices.Clone(r.prefixKeptNames)
 	c.prefixShadowed = slices.Clone(r.prefixShadowed)
+	// And the names a `-g` declaration has lifted the running command's own
+	// prefix off, which is per-command scratch on the same footing: see
+	// Runner.globalUnderItsOwnPrefix.
+	c.globalUnderItsOwnPrefix = slices.Clone(r.globalUnderItsOwnPrefix)
 	c.prefixHeldUndo = slices.Clone(r.prefixHeldUndo)
 	c.functionPrefixNames = slices.Clone(r.functionPrefixNames)
 	// A frame at a time, because a subshell may take a name out of one and

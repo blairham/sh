@@ -34,11 +34,12 @@ import "slices"
 // `3` — and a `-g` two calls down from the prefix reaches it just the same.
 // ksh93 has no `-g` letter at all, so the panel is two columns wide.
 //
-// Two shapes of it are deliberately left out and measured in #3685: an array
-// literal, which reaches the shell as a command operand assigned after the
-// builtin has returned rather than as part of the declaration, and a prefix
-// in front of the declaration *itself*, which is the builtin's own entry and
-// the innermost binding rather than an enclosing call's.
+// Two further routes reach the same answer and are built beside this one:
+// interp/globaloperand.go is an array literal, which reaches the shell as a
+// command operand assigned after the builtin has returned rather than as part
+// of the declaration, and interp/globalunderitsownprefix.go is a prefix in
+// front of the declaration *itself*, which is the builtin's own entry and the
+// innermost binding rather than an enclosing call's (#3685).
 //
 // **This is `DeclareGlobalReachesPastALocal` reached through the other
 // mechanism, not a second axis.** The split is the same one and for the same

@@ -1442,10 +1442,31 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	if f.global {
 		var held []string
 		for _, a := range args {
-			if name, _, _, _ := declarationOperand(a); name != "" {
-				held = append(held, name)
+			name, _, _, _ := declarationOperand(a)
+			if name == "" {
+				continue
+			}
+			held = append(held, name)
+			if r.literalOperands[name] {
+				// And the same letter recorded for the operand assignment
+				// that runs after this builtin has returned, which is where
+				// an array literal is really written — the seam
+				// indexedLetterHere exists for, and for the same reason: the
+				// parser hands the utility a bare name and the assignment
+				// cannot see the letters. See interp/globaloperand.go.
+				if r.globalLetterHere == nil {
+					r.globalLetterHere = map[string]bool{}
+				}
+				r.globalLetterHere[name] = true
 			}
 		}
+		// The running command's own prefix first, because it is the
+		// innermost of the three stacks a `-g` write goes under: lifting it
+		// reveals whatever the *call's* prefix put there, which is what the
+		// lift below then has to see. The two undos run in the other order,
+		// which is what a pair of defers gives. See
+		// interp/globalunderitsownprefix.go.
+		defer r.globalDeclarationRunsUnderItsOwnPrefix(held)()
 		defer r.globalDeclarationRunsOnTheShellsOwnCell(held)()
 	}
 

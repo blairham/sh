@@ -113,6 +113,7 @@ func seedStacks(r *Runner) {
 	r.prefixHeldNames = append(make([]string, 0, 4), "seed")
 	r.prefixKeptNames = append(make([]string, 0, 4), "seed")
 	r.prefixShadowed = append(make([]string, 0, 4), "seed")
+	r.globalUnderItsOwnPrefix = append(make([]string, 0, 4), "seed")
 	r.prefixHeldUndo = append(make([]savedVar, 0, 4), savedVar{name: "seed"})
 	r.functionPrefixNames = append(make([]string, 0, 4), "seed")
 	r.callPrefixes = append(make([]callPrefixFrame, 0, 4),
@@ -309,6 +310,7 @@ func seedTables(r *Runner) {
 	r.compoundOperands = map[string]bool{"seed": true}
 	r.indexedLetterHere = map[string]bool{"seed": true}
 	r.tableLetterHere = map[string]bool{"seed": true}
+	r.globalLetterHere = map[string]bool{"seed": true}
 	r.funcOrigins = map[string]funcOrigin{"seed": {file: "v"}}
 	r.funcs = map[string]*syntax.FuncDecl{"seed": nil}
 	r.disciplined = map[string]bool{"seed": true}

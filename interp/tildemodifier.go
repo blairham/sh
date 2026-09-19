@@ -34,9 +34,22 @@ import (
 //	        three characters `a.c` and does not match `abc`
 //	L       a literal string as well, and no probe here separates it from F
 //	K       the ksh glob, which is what a pattern with no prefix is
-//	M N O S U a g m p s x   accepted, and no probe here makes any of them
-//	        change an answer; `~(g)` does not make `${v/p/r}` global, which
-//	        is the one surface a "global" letter could have shown in
+//	M O S U a m x   accepted, and no probe here makes any of them change an
+//	        answer
+//	p s     the shell glob, which is what a pattern with no prefix is —
+//	        re-measured 2026-09-19: `~(p)a?c` and `~(s)a?c` both match `abc`
+//	        while `~(p)a.c` and `~(s)a.c` do not, so the dot is an ordinary
+//	        character in each and neither is a regular expression
+//	g       the match takes as much subject as it can from where it begins:
+//	        `v=aXbXc; ${v#~(g)*X}` is `c` where `${v#*X}` is `bXc`. It is
+//	        **not** a global replacement — `${v//~(g)X/-}` and `${v/~(g)X/-}`
+//	        are what they were without it — and it leaves a suffix trim
+//	        alone, measured: `${v%~(g)X*}` is `aXb`, the same shortest suffix
+//	        `${v%X*}` takes, because that trim is pinned at the far end and
+//	        its greed has nowhere to go. See tildeGreedyTrim
+//	N       the word is deleted where the pattern names nothing, which is
+//	        the thing zsh spells `(N)` and bash needs an option for:
+//	        `printf "[%s]" ~(N)zz*` writes nothing. See Runner.tildeGlobPattern
 //	i       case-insensitive, and it folds a bracket and a character class
 //	        as well as a literal — `~(i)[abc][abc][abc]` and
 //	        `~(i)[[:lower:]][[:lower:]][[:lower:]]` both match `ABC`
@@ -54,17 +67,26 @@ import (
 //
 // # What this shell honors
 //
-// `E`, `F`, `L`, `K`, `i`, `l`, `r`, the `+`/`-` toggles and the empty group.
-// The regular-expression flavors go to Go's `regexp`, which is the engine this
-// shell already compiles `=~` with.
+// `E`, `F`, `L`, `K`, `N`, `g`, `i`, `l`, `p`, `r`, `s`, the `+`/`-` toggles
+// and the empty group. The regular-expression flavors go to Go's `regexp`,
+// which is the engine this shell already compiles `=~` with.
 //
-// The rest are **refused by name rather than accepted and ignored**. `G` is a
-// different regular-expression syntax and translating it is work of its own;
-// `A`, `B`, `P`, `V` and `X` each agree with `E` on every probe above, which
-// is not evidence that they *are* `E`; and no probe here gives `M`, `N`, `O`,
-// `S`, `U`, `a`, `g`, `m`, `p`, `s` or `x` anything to do. A flag taken and
-// dropped is worse than one refused, because a pattern that silently means
-// something else is a wrong answer at status 0.
+// The rest are **refused by name rather than accepted and ignored**. `A`, `B`,
+// `P`, `V` and `X` each agree with `E` on every probe above, which is not
+// evidence that they *are* `E`; and no probe here gives `M`, `O`, `S`, `U`,
+// `a`, `m` or `x` anything to do. A flag taken and dropped is worse than one
+// refused, because a pattern that silently means something else is a wrong
+// answer at status 0.
+//
+// `G` and `V` are refused for a reason of a different kind, and it is the one
+// thing here that is not a matter of effort. Measured 2026-09-18,
+// `[[ abab == ~(G)\(ab\)\1 ]]` matches there and `[[ abcd == ~(G)\(ab\)\1 ]]`
+// does not, with `[[ abcd == ~(G)\(ab\)cd ]]` as the control that says the
+// group parses: the flavor has **backreferences**. Go's `regexp` is RE2 and
+// has none — `regexp.Compile` refuses `(ab)\1` outright — so that flavor
+// cannot be written on the engine every other one here already uses, and the
+// same two probes answer `no` under `~(E)` and `~(X)`, which says it is `G`'s alone.
+// See #3186.
 //
 // # What is not modeled
 //
@@ -78,6 +100,15 @@ import (
 //     trying prefixes and suffixes, so such a pattern simply does not match
 //     and the value comes back whole, which is what it did before.
 //   - `${.sh.match}` after an ERE with capture groups.
+//   - A group on a field whose remainder holds a `/`. The group is the whole
+//     field's there while the walk matches one component at a time, and the
+//     reference shell's own answers do not compose — see tildeGlobPattern for
+//     the rows. Such a field behaves exactly as it did before any of these
+//     letters was read, which is the one answer here that cannot be a new
+//     wrong one. `N` is the exception, because it is about the word rather
+//     than about matching a component.
+//   - `G`, `P`, `V` and `X`, for the reason given above: one of them needs
+//     backreferences, which the engine the others would use does not have.
 
 // tildeFlavor is the pattern language a `~(…)` prefix selects.
 type tildeFlavor uint8
@@ -101,6 +132,12 @@ type tildeModifier struct {
 	fold   bool
 	left   bool
 	right  bool
+	// greedy is `g`: the match takes as much subject as it can from where it
+	// begins. See tildeGreedyTrim, which is the one surface that can show it.
+	greedy bool
+	// null is `N`: a pattern that names nothing deletes the word rather than
+	// standing as the text it was written as. See Runner.tildeGlobPattern.
+	null bool
 }
 
 // kshTildeLetters are the letters ksh93 accepts inside a `~(…)` group.
@@ -113,7 +150,7 @@ type tildeModifier struct {
 const kshTildeLetters = "ABEFGKLMNOPSUVXaglimprsx"
 
 // honoredTildeLetters are the ones this shell answers.
-const honoredTildeLetters = "EFKLilr"
+const honoredTildeLetters = "EFKLNgilprs"
 
 // splitTildeModifier peels a `~(…)` prefix off the front of p.
 //
@@ -146,8 +183,12 @@ func readTildeModifier(body string) (m tildeModifier, unhonored byte) {
 			m.flavor = tildeERE
 		case 'F', 'L':
 			m.flavor = tildeLiteral
-		case 'K':
+		case 'K', 'p', 's':
 			m.flavor = tildeGlob
+		case 'g':
+			m.greedy = on
+		case 'N':
+			m.null = on
 		case 'i':
 			m.fold = on
 		case 'l':
@@ -254,4 +295,105 @@ func (r *Runner) tildeModifierOpts(o patternOpts, pattern string) patternOpts {
 		r.stopTheShell()
 	}
 	return o
+}
+
+// tildePrefixModifier reads a `~(…)` prefix off the front of a pattern, for a
+// caller outside the matcher that needs to know what the letters asked for.
+//
+// False where the dialect has no such group, where the pattern carries none,
+// and where the group holds a letter this shell does not answer — that last
+// one because the refusal belongs to Runner.tildeModifierOpts, which says
+// which letter it was, and a caller here guessing at the group's meaning
+// first is how the two would come to disagree.
+func tildePrefixModifier(pattern string, hasGroup bool) (tildeModifier, bool) {
+	if !hasGroup {
+		return tildeModifier{}, false
+	}
+	body, _, ok := splitTildeModifier(pattern)
+	if !ok {
+		return tildeModifier{}, false
+	}
+	m, unhonored := readTildeModifier(body)
+	if unhonored != 0 {
+		return tildeModifier{}, false
+	}
+	return m, true
+}
+
+// tildeGreedyTrim reports whether `~(g)` makes this trim take the longest
+// piece its pattern will match.
+//
+// `g` is the match taking as much subject as it can from where it begins, and
+// a trim is the only surface where that is visible: a whole-subject match has
+// no length to choose and a replacement here already takes the longest span.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-19, with `v=aXbXc` and
+// `w=abcabc`:
+//
+//	${v#~(g)*X}   c       where ${v#*X} is bXc and ${v##*X} is c
+//	${w#~(g)a*b}  c       where ${w#a*b} is cabc and ${w##a*b} is c
+//	${v#~(g)*}    empty   where ${v#*} is the whole value
+//	${v%~(g)X*}   aXb     where ${v%X*} is aXb and ${v%%X*} is a
+//	${w%~(g)b*c}  abca    where ${w%b*c} is abca and ${w%%b*c} is a
+//
+// So it reaches a **prefix** trim and not a suffix one, and that is the same
+// rule rather than two: a prefix trim is pinned at the start of the value, so
+// the far end is free and greed lengthens the piece; a suffix trim is pinned
+// at the end, so what greed would lengthen is already fixed and the shell
+// still takes the suffix that begins latest.
+func tildeGreedyTrim(pattern string, prefix bool, o patternOpts) bool {
+	if !prefix {
+		return false
+	}
+	m, ok := tildePrefixModifier(pattern, o.tilde)
+	return ok && m.greedy
+}
+
+// tildeGlobPattern reports whether a field carries a `~(…)` group that makes
+// it a **pattern** for pathname expansion, and what that group asked for.
+//
+// A name with no metacharacter in it is not a pattern and never reaches the
+// filesystem — which is why `~(N)zzz` was passed through as the six
+// characters it was written as, and why `~(i)A.TXT` found nothing in a
+// directory holding `a.txt`. The group is what makes it one, measured on
+// ksh93u+ 2012-08-01, 2026-09-19, in a directory holding `a.txt` and `b.txt`:
+//
+//	~(i)a.txt   a.txt        the group sent a name to the filesystem
+//	~(E)a.txt   a.txt        and so does every other flavor
+//	~(F)a.txt   a.txt
+//	~(N)a       deleted      nothing is named `a`
+//	~(N)zz      deleted
+//	~()a.txt    ~()a.txt     an **empty** group does not
+//	~(E)zzz     ~(E)zzz      a miss without `N` stands as it was written
+//
+// The empty-group row is why this asks for a body and not just for a group.
+//
+// True for a letter this shell does not answer as well, deliberately: the
+// field then reaches the matcher and Runner.tildeModifierOpts refuses it by
+// name, which is what `~(G)a*` already did. Declining it here instead would
+// leave `~(G)a.txt` as a silent literal, and a pattern that quietly means
+// something else is the shape this repository minds most.
+//
+// **A remainder holding a `/` is left out**, and that is a limit rather than
+// a reading. The group is the whole field's there and the walk matches one
+// component at a time, so honoring it would give the letters to the first
+// component and to no other — and the reference shell does not answer that
+// shape consistently enough to copy. Measured the same day from
+// `/tmp/k3186`, holding `Sub/C.txt`: `~(N)Sub/C.txt` and
+// `~(N)/tmp/k3186/Sub/C.txt` both name the file, while `~(E)Su./C..xt` and
+// `~(i)/tmp/k3186/sub/c.txt` are each the characters they were written with
+// even though the flavor and the fold would match every component. So a
+// field with a `/` in it behaves exactly as it did before any of these
+// letters was read, which is the one answer here that cannot be a new wrong
+// one. See #3186.
+func tildeGlobPattern(field string, hasGroup bool) (tildeModifier, bool) {
+	if !hasGroup {
+		return tildeModifier{}, false
+	}
+	body, rest, ok := splitTildeModifier(field)
+	if !ok || body == "" || strings.Contains(rest, "/") {
+		return tildeModifier{}, false
+	}
+	m, _ := readTildeModifier(body)
+	return m, true
 }

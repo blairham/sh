@@ -4494,7 +4494,10 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 	search bool,
 ) (int, int, matchReport, bool) {
 	prefix := trimsPrefix(op)
-	longest := trimTakesLongest(op)
+	// `~(g)` asks for the same thing the doubled spelling does, at the one
+	// trim where the request has anywhere to go — see tildeGreedyTrim, which
+	// is where the rows are and why a suffix trim is not one of them.
+	longest := trimTakesLongest(op) || tildeGreedyTrim(pattern, prefix, o)
 	stops := unitStops(value, o)
 	last := len(stops) - 1
 

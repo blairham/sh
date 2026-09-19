@@ -738,11 +738,22 @@ same day in the same container:
 | `kill -l 6` | `ABRT` | `ABRT` |
 | `kill -l 29` | `POLL` | `IO` |
 
-Both pairs are in `Semantics.SignalNamesTheShellAlsoReads` now, so the reading
-is right in both directions. The **listing** writes `29) POLL` and ` 6) ABRT`
-— the alias for one pair and the table's own name for the other — which
-`Diagnostics.SignalListingWritesTheAlias` cannot say, being one answer for the
-whole table. So the flag stays off and the one row still differing is #3684.
+The **listing** writes `29) POLL` and ` 6) ABRT` — and so does the
+translating form, which is what settles what kind of value each is.
+`Diagnostics.SignalListingWritesTheAlias` cannot say it, being one answer for
+the whole table, but neither can a per-name version of it: `kill -l 29` is
+`POLL` here and ksh93's `kill -l 6` is `ABRT` while its listing says `IOT`, so
+one column writes its word in both places and the other holds a preference for
+its listing alone.
+
+So `POLL` is not an older spelling beside this table's name — it *is* this
+shell's name for the signal, and `IO` is the platform's word that it also
+reads. `Semantics.SignalNamesTheShellSpellsItsOwnWay` carries the one pair
+(`IO=POLL`); it is written wherever a number comes back as a name and it
+resolves back to the number, so `kill -s POLL`, `kill -POLL` and
+`trap 'x' POLL` all reach signal 29 too. `IOT=ABRT` stays in
+`SignalNamesTheShellAlsoReads`, which is the reading-only field it belongs to,
+and `SignalListingWritesTheAlias` stays off (#3684).
 
 ## An unmatched `[` in a pattern is a character
 

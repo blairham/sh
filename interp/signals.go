@@ -282,6 +282,16 @@ func (r *Runner) canonicalSignal(s string) (string, syscall.Signal, signalWord) 
 		up = trimmed
 	}
 	if !byNumber {
+		// A word this shell spells its own way becomes the table's name for
+		// the same reason the alias below does, and before it: the two are
+		// resolved in the order signalNamed resolves them, so one route
+		// cannot take a word another refuses. Measured 2026-09-18, BusyBox
+		// v1.37.0 in the pinned image: `trap 'x' POLL; kill -POLL $$` fires
+		// the handler there, and the shell writes `29) POLL` for the same
+		// signal. See Semantics.SignalNamesTheShellSpellsItsOwnWay.
+		if table, ok := r.signalSpelledAs(up); ok {
+			up = table
+		}
 		// An older spelling the shell answers to becomes the name its own
 		// table carries, so everything downstream — the trap table, `trap
 		// -p`, the handler's name — is written in one word. Measured

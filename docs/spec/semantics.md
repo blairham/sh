@@ -2001,6 +2001,29 @@ engine does not reproduce: a trap set as `IOT` there lists as `IOT` and here
 lists as `ABRT`. That is remembering the word, which is a third question and
 a smaller divergence than the refusal it replaced (#3536).
 
+`Semantics.SignalNamesTheShellSpellsItsOwnWay` is the fourth, and it is a
+**name** rather than a preference. BusyBox ash calls signal 29 `POLL`: its
+listing writes `29) POLL`, its `kill -l 29` writes `POLL`, and both `POLL`
+and the platform's own `IO` read back to 29. On the same binary `kill -l 6`
+is `ABRT` and the listing's line 6 is ` 6) ABRT`, so it is the one pair and
+not a rule over the table.
+
+That is what separates it from the field above, and the separation is
+measured rather than tidy: ksh93u+ writes `IOT` in its listing and `ABRT`
+for `kill -l 6` on one run, so there the older word is the listing's
+preference; BusyBox writes `POLL` in both places, so there it is the shell's
+word for the signal. A single field answering either question gets the other
+wrong — a per-name listing flag leaves `kill -l 29` writing `IO`, and a
+spelling applied to ksh93 makes its `kill -l 6` say `IOT` (#3684).
+
+Written as `TABLE=SHELL` pairs, the opposite way round from
+`SignalNamesTheShellAlsoReads`, because the two read in opposite directions:
+one turns a word the script wrote into the table's name, and this one turns
+the table's name into the word the shell writes. It is resolved on the
+reading side too, and in front of the alias, so no route can take a word
+another refuses — `kill -s POLL`, `kill -POLL` and `trap 'x' POLL` all reach
+the same signal the listing named.
+
 ### `kill -s` and `kill -n` take different words
 
 Measured 2026-09-17 and 2026-09-18, each reference under a matching `argv[0]`

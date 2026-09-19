@@ -174,6 +174,13 @@ func (r *Runner) knownSignal(name string) bool {
 // IOT and bash 5.3.20 answers none of them. See
 // Semantics.SignalNamesTheShellAlsoReads.
 func (r *Runner) signalNamed(name string) (signalEntry, bool) {
+	if table, ok := r.signalSpelledAs(name); ok {
+		// A word this shell spells its own way, back to what the table
+		// carries it under — so the name the same shell *writes* for a
+		// number reads back to that number, which is what makes it a name
+		// and not a rendering.
+		name = table
+	}
 	if canonical, ok := r.signalAlias(name); ok {
 		name = canonical
 	}
@@ -191,6 +198,29 @@ func (r *Runner) signalAlias(name string) (string, bool) {
 	for _, pair := range strings.Fields(r.sem().SignalNamesTheShellAlsoReads) {
 		if alias, canonical, ok := strings.Cut(pair, "="); ok && alias == name {
 			return canonical, true
+		}
+	}
+	return "", false
+}
+
+// signalSpelling is the word this shell writes for a table entry wherever a
+// number is turned back into a name — the entry's own name in every column
+// but one. See Semantics.SignalNamesTheShellSpellsItsOwnWay.
+func (r *Runner) signalSpelling(name string) string {
+	for _, pair := range strings.Fields(r.sem().SignalNamesTheShellSpellsItsOwnWay) {
+		if table, shell, ok := strings.Cut(pair, "="); ok && table == name {
+			return shell
+		}
+	}
+	return name
+}
+
+// signalSpelledAs is that field read backwards: the table's name for a word
+// this shell spells its own way, so the word is read as well as written.
+func (r *Runner) signalSpelledAs(word string) (string, bool) {
+	for _, pair := range strings.Fields(r.sem().SignalNamesTheShellSpellsItsOwnWay) {
+		if table, shell, ok := strings.Cut(pair, "="); ok && shell == word {
+			return table, true
 		}
 	}
 	return "", false
@@ -1010,7 +1040,7 @@ func (r *Runner) signalListing() []signalCell {
 	cells := make([]signalCell, 0, len(byNumber))
 	for _, k := range byNumber {
 		if r.knownSignal(k.Name) {
-			cells = append(cells, signalCell{int(k.Sig), r.signalListingName(k.Name)})
+			cells = append(cells, signalCell{int(k.Sig), r.signalSpelling(r.signalListingName(k.Name))})
 			continue
 		}
 		if unnamed != "" {
@@ -1236,7 +1266,12 @@ func (r *Runner) killListUnnamedInRange(n int) (name string, ok, answered bool) 
 func (r *Runner) killSignalName(n int) (string, bool) {
 	for _, k := range r.signalTable() {
 		if int(k.Sig) == n {
-			return k.Name, true
+			// The shell's own word where it has one, which is the same word
+			// its listing writes: a column that renames a signal renames it
+			// everywhere a number comes back as a name. Not the listing's
+			// alias preference, which one column holds for its listing
+			// alone — see signalListingName.
+			return r.signalSpelling(k.Name), true
 		}
 	}
 	return "", false

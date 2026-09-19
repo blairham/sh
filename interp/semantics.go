@@ -3130,10 +3130,45 @@ type Semantics struct {
 	// place an alias is *written* is ksh93's bare listing, which is
 	// Diagnostics.KillListingWritesTheAlias.
 	//
+	// A shell that writes a word of its own everywhere is not this field but
+	// SignalNamesTheShellSpellsItsOwnWay, which is the next one down: that
+	// word is the table's name in that column rather than an older spelling
+	// beside it.
+	//
 	// Space-separated pairs, in the spelling the table uses and with no SIG
 	// prefix on either side, and a string rather than a map for the reason
 	// SignalNamesTheShellLacks is one: a Semantics is compared with `==`.
 	SignalNamesTheShellAlsoReads string
+
+	// SignalNamesTheShellSpellsItsOwnWay are signals this shell calls
+	// something else, written as `TABLE=SHELL` pairs.
+	//
+	// The third direction, and it is a *name* rather than a preference: the
+	// word is what the shell writes wherever a number is turned back into a
+	// name, and it reads back to the same number. Measured 2026-09-18,
+	// BusyBox v1.37.0 in the digest-pinned alpine image, each probe a script
+	// file under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	kill -l           line 29 is `29) POLL`
+	//	kill -l 29        POLL
+	//	kill -l POLL      29
+	//	kill -l IO        29
+	//	kill -l 6         ABRT
+	//	kill -l IOT       6
+	//	kill -l           line 6 is ` 6) ABRT`
+	//
+	// So that column writes POLL in both places and ABRT in both, which is
+	// what separates this from SignalListingWritesTheAlias: ksh93u+ writes
+	// `IOT` in its listing and `ABRT` for `kill -l 6` on the same binary, so
+	// there the alias is a preference the listing holds and here the word is
+	// the shell's name for the signal. A field that answered one of those
+	// would get the other wrong, which is why they are two (#3684).
+	//
+	// The platform's own name stays readable — `kill -l IO` is 29 there —
+	// because it is still what the table carries; the shell's word resolves
+	// back through this field. Space-separated pairs, no SIG prefix, and a
+	// string for the reason the two fields above are strings.
+	SignalNamesTheShellSpellsItsOwnWay string
 
 	// KillNameOptionReadsANumber takes a word of digits after `kill -s` as
 	// the signal of that number rather than as a name.

@@ -163,6 +163,13 @@ type Parser struct {
 	// [Parser.expandPipelineHead].
 	aliasHeadHandled bool
 
+	// aliasFuncRefused says the command word about to be read as a function
+	// name is one the alias table holds, in the dialect that refuses such a
+	// definition. Set where the expansion is declined and spent at the
+	// parentheses, which is where the refusal is located — see
+	// [Dialect.AliasRefusesAFunctionName].
+	aliasFuncRefused bool
+
 	err        error
 	incomplete bool
 
@@ -3960,6 +3967,17 @@ func (p *Parser) peekIsRightParen() bool {
 // word, on input that has nothing to do with the definition. Asking the lexer
 // there reads the wrong text and the definition is refused — measured on
 // `main`, where every other shell in the panel defines the function.
+// peekIsFuncParensAdjacent is peekIsFuncParens with the blank in front of the
+// `(` counting. A pending token carries no blank between it and the one
+// before it, so an alias's own body is always adjacent — which is the same
+// answer the lexer gives for text written that way.
+func (p *Parser) peekIsFuncParensAdjacent() bool {
+	if len(p.pending) > 0 {
+		return p.peekIsFuncParens()
+	}
+	return p.lex.peekIsFuncParensAdjacent()
+}
+
 func (p *Parser) peekIsFuncParens() bool {
 	switch len(p.pending) {
 	case 0:
@@ -4036,6 +4054,16 @@ func (p *Parser) refuseNameKeptByTheDialect(fn *FuncDecl) bool {
 // and a word list with a redirection between it and the parentheses — and
 // everything after the `(` is the same production in all three.
 func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
+	if p.aliasFuncRefused {
+		// The name is one the alias table holds, in the dialect that will
+		// not define a function under one. The remark has already been
+		// written where the word stands; what is left is the parse failure,
+		// located at the parentheses, which is where that shell puts it.
+		// See Parser.aliasAtAFunctionName.
+		p.aliasFuncRefused = false
+		p.failUnexpected("")
+		return fn
+	}
 	p.next() // (
 	if !p.at(TokRightParen) {
 		p.failUnexpectedOperand(")")

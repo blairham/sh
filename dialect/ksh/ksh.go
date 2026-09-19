@@ -24,6 +24,18 @@ func Dialect() syntax.Dialect {
 	// rather than an offset of nothing (#2818).
 	d.ParamSubstringOffsetTakesALeadingColon = true
 	d.AliasesExpandUnlessTold = true
+	// An alias standing where a function name is being defined is declined
+	// where the `(` is immediately after the word, and expanded where a
+	// blank separates them. Measured 2026-09-18, script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`: with `alias zz='typeset -n'`,
+	// `zz() { :; }` is silent at 0 and `zz () { :; }` is
+	// `syntax error at line 2: \`(' unexpected` at 3.
+	//
+	// It is what the preset aliases cost here rather than a curiosity: this
+	// shell ships eight whose values are declaration words, so
+	// `nameref() { :; }` and `float() { :; }` were a parse error costing
+	// every line of the file (#3643).
+	d.AliasAtAFunctionName = syntax.AliasSuppressedWhereTheParenIsAdjacent
 	d.ExpandAliasesInProgramText = syntax.RouteOnEveryRoute
 	// And a body's newlines are lines of the program: `$LINENO` after a
 	// two-line body reads one more than the physical line.

@@ -1039,6 +1039,64 @@ One column of the first still misses, and for an unrelated reason: dash
 parses a command substitution with the line that holds it rather than when
 it runs, so its `$( )` there is read before the `alias` beside it — #2357.
 
+### An alias standing where a function name is being defined
+
+The word in front of the `()` of `name() { … }` is a command word, so a
+dialect that expands aliases there expands this one too — and the panel
+splits **three** ways about whether it should.
+`syntax.Dialect.AliasAtAFunctionName` is the flag.
+
+Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+with standard input on /dev/null. The body is `alias zz='typeset -n'` and
+then the definition, whose expansion cannot be a legal one, with
+`printf 'after\n'` behind it. B is the same with a blank before the `(`; C is
+A under `alias zz=echo`, whose expansion **is** a legal definition; D is
+`function zz { :; }`, the spelling with no `(` at all.
+
+| column | A | B | C | D |
+|---|---|---|---|---|
+| bash 5.3.20 | syntax error, 2 | the same | `after`, 0 | `after`, 0 |
+| dash 0.5.12 | syntax error, 2 | the same | `after`, 0 | no keyword |
+| BusyBox ash 1.37.0 | syntax error, 2 | the same | `after`, 0 | `after`, 0 |
+| ksh93u+ 2012-08-01 | **`after`, 0** | syntax error, **3** | `after`, 0 | `after`, 0 |
+| zsh 5.9.2 | its own refusal, **1** | the same | **the same** | `after`, 0 |
+
+**bash has to be measured with its expansion switched on.** `shopt -s
+expand_aliases` is off in a script there, so a bash column taken without it
+expands nothing at all and prints `after` for every body — which reads exactly
+like a shell that suppresses. Column C cannot tell the two apart either, which
+is why the control here is `alias e='echo EXPANDED'; e`: that is
+`e: command not found` at 127 in a plain bash script and `EXPANDED` in every
+other column.
+
+So three of the five **expand**, which is the core's answer and needs no flag.
+The two that do not:
+
+- **ksh93 declines the expansion where the `(` stands immediately after the
+  word**, and expands where a blank separates them. Column B is the whole of
+  that finding, and it is why the reading is adjacency rather than "a function
+  name": one blank moves it.
+- **zsh refuses the definition**, before any parse of the body, and refuses
+  column C too — so it is the *name being an alias* that is refused rather
+  than anything about the value. It writes two lines and exits 1: its own
+  sentence, then the ordinary parse failure at the parentheses. That is the
+  shape `syntax.Remark` exists for — a remark that accompanies a fatal error —
+  so the sentence is `RemarkFunctionNameIsAnAlias` and
+  `interp.Diagnostics.FunctionNameIsAnAlias` words it.
+
+**Column D settles a question the panel is otherwise silent about.** The word
+after `function` is not a command word, so no column expands there: bash,
+ksh93, zsh and BusyBox ash all answer `after` at 0, and dash's refusal is its
+lack of the keyword rather than anything about aliases. ksh93's adjacency rule
+has nothing to apply to.
+
+It matters here rather than in principle because ksh93 ships eight preset
+aliases whose values are declaration words — `integer`, `float`, `compound`,
+`nameref`, `functions`, `autoload`, `source`, `times`. Expanding one of them
+at a definition makes `nameref() { :; }` a **parse error**, which costs every
+line of the file rather than its own, where the reference shell defines the
+function and says nothing (#3643).
+
 ### Three kinds of alias, and two namespaces
 
 zsh has two further kinds, and no other shell in the panel has either:

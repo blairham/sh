@@ -1754,7 +1754,12 @@ func (p *printer) span(s Span) {
 		// most. A space nobody needed is layout; a space omitted where some
 		// dialect would read the construct back as arithmetic is a changed
 		// program. See Dialect.ContinuationPartsTheArithmeticOpener.
-		if strings.HasPrefix(s.Value, "(") && doubleParenIsArith("$("+s.Value+")", 3, false) {
+		// The quoting half of the same choice: a scan that tracks quoting
+		// finds the arithmetic reading in more texts than one that does not,
+		// because a `)` inside quotes closes nothing for it. See
+		// Dialect.ArithSubstScanIgnoresQuoting, which is the two columns
+		// whose scan is blind to it.
+		if strings.HasPrefix(s.Value, "(") && doubleParenIsArith("$("+s.Value+")", 3, false, false) {
 			p.str("$( " + s.Value + ")")
 			return
 		}

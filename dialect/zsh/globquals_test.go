@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // qualifierDir builds the directory these rows were measured against: a
@@ -85,6 +86,54 @@ func TestAQualifierListIsRefusedWithTheCharacterNamed(t *testing.T) {
 		out, st := runZsh(t, dir, "cd "+dir+"\n"+tc.src)
 		if !strings.Contains(out, tc.want) || st == 0 {
 			t.Errorf("%s = %q (status %d), want %q and a failure", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// TestTheThreeFileTimeQualifiers: `a` and `c` are qualifiers this shell has,
+// beside the `m` that was the only one implemented (#3533).
+//
+// The ages are set with a real change to each clock rather than left to the
+// machine's: the files are stamped a hundred days back, so `-1` (newer than a
+// day) keeps neither and `+1` (older than a day) keeps both, and no row
+// depends on how long the test took to run. The inode-change time cannot be
+// stamped — it is the kernel's own — so `c` is asserted where it is certainly
+// recent instead.
+//
+// Measured 2026-09-18 on zsh 5.9.2 in a directory holding no match:
+// `zz*(a+1)` and `zz*(c1)` are `no matches found` where this engine said
+// `unknown file attribute`, and `zz*(a)` with no number behind it is `number
+// expected` — the same refusal `m` gives, which is what says the letter and
+// the operand are two complaints rather than one.
+func TestTheThreeFileTimeQualifiers(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"t1", "t2"} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		old := time.Now().Add(-100 * 24 * time.Hour)
+		if err := os.Chtimes(filepath.Join(dir, n), old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ src, want string }{
+		{`printf "[%s]" *(m+1)`, `[t1][t2]`},
+		{`printf "[%s]" *(a+1)`, `[t1][t2]`},
+		{`printf "[%s]" *(md+99)`, `[t1][t2]`},
+		{`printf "[%s]" *(ad+99)`, `[t1][t2]`},
+		{`printf "[%s]" *(c-1)`, `[t1][t2]`},
+	} {
+		out, st := runZsh(t, dir, "cd "+dir+"\n"+tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+	// A time qualifier with no number behind it is the operand's complaint
+	// and not the letter's, in all three.
+	for _, letter := range []string{"m", "a", "c"} {
+		out, st := runZsh(t, dir, "cd "+dir+"\nprintf '[%s]' *("+letter+")")
+		if !strings.Contains(out, "number expected") || st == 0 {
+			t.Errorf("*(%s) = %q at %d, want `number expected` and a refusal", letter, out, st)
 		}
 	}
 }

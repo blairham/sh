@@ -1941,19 +1941,45 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 				// inert column steps over it holding nothing, which is what
 				// keeps `[a[.nosuch.]b]` matching a and b and no letter of
 				// the body.
-				i = next
-				continue
+				//
+				// Stepped over as a *member* and not by leaving the loop,
+				// which is the half of #3607 the low bound is: a `-` behind
+				// it is still a range's operator there, so `[[.nosuch.]-c]`
+				// is a range from nothing and not the two ordinary members
+				// `-` and `c`. Measured 2026-09-18, and no column matches
+				// either of them.
+				lo = ""
+			} else {
+				// Nothing closed it, so there is no element and no length to
+				// skip. Where the reading is inert the delimiter's characters
+				// are members like any other — `[[.a]` is the three-member set
+				// `[`, `.`, `a` in bash — which is what falls through here, with
+				// the frozen columns carrying their freeze past it.
+				lo, next, _ = plainBracketMember(p, i, o)
 			}
-			// Nothing closed it, so there is no element and no length to
-			// skip. Where the reading is inert the delimiter's characters
-			// are members like any other — `[[.a]` is the three-member set
-			// `[`, `.`, `a` in bash — which is what falls through here, with
-			// the frozen columns carrying their freeze past it.
-			lo, next, _ = plainBracketMember(p, i, o)
 		}
 		// A `-` is literal at the end, which is why `[a-]` matches a dash.
 		if next+1 < len(p) && p[next] == '-' && p[next+1] != ']' {
-			hi, after, _ := bracketMember(p, next+1, o)
+			hi, after, read := bracketMember(p, next+1, o)
+			if !read {
+				// The other half of #3607: a high bound that is not an
+				// element is the same unknown body as one standing on its
+				// own, and it reaches the dialect's answer for that rather
+				// than being handed to the range as the nothing it holds.
+				// Measured 2026-09-18 — `[a-[.nosuch.]]` matches nothing at
+				// all in ksh93 and dash, `a` included, where this engine
+				// built the range anyway and matched every character above
+				// the low end in all three columns.
+				switch o.unknownClass {
+				case UnknownClassEndsTheScan:
+					frozen = true
+				case UnknownClassEmptiesTheBracket:
+					frozen, matched = true, false
+				}
+				if after == next+1 {
+					hi, after, _ = plainBracketMember(p, next+1, o)
+				}
+			}
 			// Ranked rather than compared as text: `[a-é]` has to hold ç,
 			// which is between them by code point and is not between them
 			// byte for byte.

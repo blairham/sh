@@ -226,17 +226,28 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			}
 			i += n
 			section = append(section, globTest{kind: 'l', negated: negate, follow: follow, count: count})
-		case 'm':
-			// The modification time, as an age in whole units — see
+		case 'a', 'c', 'm':
+			// The three file times, as an age in whole units — `m` for the
+			// modification, `a` for the access and `c` for the inode change.
+			// One arm because they are one qualifier with three clocks
+			// behind it: the unit letter, the sign and the number are read
+			// the same way for each, and only the stat field differs. See
 			// parseGlobAge for the unit letter and fileAge for why the
 			// comparison is over a truncated number.
+			//
+			// Measured 2026-09-18 on zsh 5.9.2 in a directory holding no
+			// match: `zz*(a+1)` and `zz*(c1)` are `no matches found` where
+			// this engine said `unknown file attribute`, and `zz*(a)` with
+			// no number behind it is `number expected` — the same refusal
+			// `m` already gave, which is what says the three share a reader
+			// rather than only a letter (#3533).
 			count, unit, n, diag := parseGlobAge(list[i:])
 			if diag != "" {
 				return q, diag, false
 			}
 			i += n
 			section = append(section, globTest{
-				kind: 'm', negated: negate, follow: follow, count: count, unit: unit,
+				kind: c, negated: negate, follow: follow, count: count, unit: unit,
 			})
 		case 'u', 'g':
 			id, n, diag := parseOwnerArgument(c, list[i:])
@@ -340,6 +351,9 @@ func globTestMatches(t globTest, info fs.FileInfo, now time.Time) bool {
 		return ok && t.count.holds(links)
 	case 'm':
 		return t.count.holds(fileAge(info.ModTime(), now, t.unit))
+	case 'a', 'c':
+		when, ok := fileTime(info, t.kind)
+		return ok && t.count.holds(fileAge(when, now, t.unit))
 	}
 	if bit, ok := globPermissionBits[t.kind]; ok {
 		return mode.Perm()&bit != 0

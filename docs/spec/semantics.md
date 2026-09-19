@@ -7600,6 +7600,27 @@ The one divergence is the status when the answer is nothing: dash reports 127,
 the status of a command that was looked for and run, where the other three
 report a plain failure.
 
+**Which words of the grammar a shell will own up to is the report's question
+and not the grammar's.** The words are answered from
+`syntax.Dialect.Reserves` since #2918 — a list in the interpreter is a claim
+about a language it does not define — and two rows of that measurement are
+not the grammar at all. Measured 2026-09-18:
+
+| word | bash 5.3 | zsh 5.9.2 | ksh93u+ | dash | BusyBox ash |
+| --- | --- | --- | --- | --- | --- |
+| `[[` | `[[` | `[[` | `[[` | 127 | `[[` |
+| `]]` | `]]` | 1 | 1 | 127 | 127 |
+| `in` | `in` | 1 | `in` | `in` | `in` |
+
+So `]]` is named by bash alone among the four shells that have the construct,
+where `[[` is named by every one of them — the two ends of one construct, two
+answers — and `in` is named by everyone but zsh. Both shells that decline
+*have* what the word is part of. `interp.Runner.SetReservedWords` is where a
+dialect says so, which zsh already used for a report that is not its parser's
+table; ksh93 uses it for this one word (#2981). The two remaining columns have
+neither construct and fall through to the ordinary search, which is what makes
+`command -v time` a path in dash and a keyword everywhere else.
+
 ### `builtin` is not the same command everywhere
 
 bash and zsh have a `builtin` that runs a builtin and only a builtin. **ksh93

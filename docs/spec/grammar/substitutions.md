@@ -81,15 +81,34 @@ the first `)` closes the count and a `+` follows it.
 Where the input runs out before the count reaches zero, the construct
 stays arithmetic and the complaint is the one an unfinished `$((` gets.
 
-Quoting is the one edge the five do not share:
+Quoting is the one edge the five do not share, and it is a dialect axis
+rather than a choice:
 
 | probe | bash 5.3, 3.2, bash-as-`sh` | ksh93, zsh |
 | --- | --- | --- |
-| `echo $(( '0)' + 1 ))` | an arithmetic error | runs `0)` as a command |
+| `echo $(( '0)' + 1 ))` | an arithmetic error, 1 | runs `0)` as a command |
+| `echo $(( "0)" + 1 ))` | an arithmetic error, 1 | runs `0)` as a command |
 
 bash tracks quoting in the deciding scan, so a `)` inside a string closes
 nothing — the same rule as *The closing delimiter is not found by
-counting* above. ksh93 and zsh let it close. We follow bash.
+counting* above. ksh93 and zsh let it close, which is
+`Dialect.ArithSubstScanIgnoresQuoting` (#3530). Both rows were measured
+2026-09-18 in script files under `env -i`; the second is what the entry
+here lacked when it said "we follow bash", and the confirmation it needed
+to be an axis rather than a preference.
+
+**A second field and not the `((` scan's.** The two scans ask the
+same-shaped question at two constructs and the split falls the same way
+in both, but they were measured separately: a single flag would assert
+that they can never part. See `Dialect.ArithCommandScanIgnoresQuoting`,
+and #3069, which says so where it landed.
+
+The field means nothing where `ArithSubstFallsBackToCommandSubst` is off
+— dash and BusyBox ash, which have no fallback reading at all — and the
+*printer* keeps the tracking reading whatever the dialect says, because a
+scan that tracks quoting finds arithmetic in more texts and a space
+written where some dialect would read the construct back as arithmetic is
+layout where an omitted one is a changed program.
 
 The choice belongs to the lexer, since by the time the parser sees tokens
 it has been made.

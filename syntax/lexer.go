@@ -3251,7 +3251,8 @@ func (l *Lexer) doubleParenKind(skip int) SpanKind {
 	// The expression begins behind `$`, the pair the `$` reached across, `(`,
 	// the pair *that* reached across, and `(`.
 	from := l.off + 3 + skip + l.arithOpenerContinuationAt(l.off+2+skip)
-	if doubleParenIsArith(l.src, from, l.dialect.ContinuationPartsTheArithmeticCloser) {
+	if doubleParenIsArith(l.src, from, l.dialect.ContinuationPartsTheArithmeticCloser,
+		l.dialect.ArithSubstScanIgnoresQuoting) {
 		return ArithSubst
 	}
 	return CommandSubst
@@ -3309,13 +3310,19 @@ func (l *Lexer) takeArithOpenerContinuation() {
 // gives the construct back. One rule, asked from both ends.
 // from is the offset the expression begins at — behind the whole opener,
 // however many line continuations it was written with.
-func doubleParenIsArith(src string, from int, partsCloser bool) bool {
+// ignoresQuoting is the dialect's answer to whether this scan sees a `)`
+// written inside quotes — see [Dialect.ArithSubstScanIgnoresQuoting], which is
+// the same-shaped question the `((` scan asks one construct over.
+func doubleParenIsArith(src string, from int, partsCloser, ignoresQuoting bool) bool {
 	depth := 1
 	for i := from; i < len(src); i++ {
 		switch src[i] {
 		case '\\':
 			i++
 		case '\'', '"', '`':
+			if ignoresQuoting {
+				continue
+			}
 			if j := skipQuotedFrom(src, i); j > i {
 				i = j
 			}
@@ -3734,10 +3741,52 @@ func (l *Lexer) continuationAfterADollar(i int, q Quoting) (skip int, stoppedAt 
 		// records for that shell's refusal inside `${ }`.
 		stops = NoDollarForm
 	}
+	if l.dialect.PatternCharacterUndoesTheContinuationStop && q == Unquoted &&
+		l.patternCharacterBefore(i-1) {
+		// A pattern character earlier in the same word takes the stop away,
+		// in the one column that has a stop to take — see
+		// [Dialect.PatternCharacterUndoesTheContinuationStop]. The `$` is at
+		// i-1, the byte the caller looked at before asking.
+		stops = NoDollarForm
+	}
 	if form := l.dollarFormAt(i + n); stops.Has(form) {
 		return 0, form
 	}
 	return n, NoDollarForm
+}
+
+// patternCharacterBefore reports whether the word being read holds an
+// unquoted `*`, `?`, `[`, `{` or `~` in front of offset i.
+//
+// The five are measured and the list is neither "the glob metacharacters" nor
+// "the expansion characters": `~` is in it and `}` and `]` are not, and a
+// quoted or escaped one does not count — measured 2026-09-16 and again
+// 2026-09-18 on ksh93u+, where `'*'$\⏎x` keeps the stop and `*$\⏎x` loses it.
+// See [Dialect.PatternCharacterUndoesTheContinuationStop] for the rows.
+//
+// A scan of the source rather than a flag the word scanner sets, because the
+// question is about text this lexer has already read and nothing else in the
+// grammar asks it: a bit carried through every literal path would be a cost
+// every dialect paid for one column's second look at a word.
+func (l *Lexer) patternCharacterBefore(i int) bool {
+	if !l.wordStart.IsValid() {
+		return false
+	}
+	for j := int(l.wordStart.Offset); j < i && j < len(l.src); j++ {
+		switch l.src[j] {
+		case '\\':
+			j++
+		case '\'', '"':
+			k := skipQuotedFrom(l.src, j)
+			if k == j {
+				return false
+			}
+			j = k
+		case '*', '?', '[', '{', '~':
+			return true
+		}
+	}
+	return false
 }
 
 // takeContinuationAfterADollar steps a scanner's cursor over the line

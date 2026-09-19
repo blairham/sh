@@ -367,15 +367,81 @@ and no drawing code reads it.
 
 Building it in `repl` is therefore a capability addition and not a theme
 detail: bash, ksh, dash and ash get a right prompt they have never had,
-and the zsh dialect gets to *name* the one the substrate draws. It has to
-answer, at minimum:
+and the zsh dialect gets to *name* the one the substrate draws.
 
-- what happens when the typed line reaches it — hide, and redraw when the
-  line shrinks back **(unmeasured — settle against real zsh, which is the
-  only shell in the panel that has one)**;
-- what happens on a terminal too narrow to hold both sides;
-- that it is not written into scrollback, so a resized window does not
-  leave fragments behind.
+#### Measured, because zsh is the only place the answers exist
+
+zsh 5.9.2 driven through a pseudo-terminal, 2026-09-19, with `zsh -f -i`
+on a scratch `HOME` and `ZDOTDIR`, `TERM=xterm-256color`, `LC_ALL=C`,
+`PS1='L> '` (3 cells). The line is grown a character at a time and
+repainted with `^L`, which makes zsh draw the whole prompt again, so what
+is being read is what it *would* draw rather than what happens to be left
+on the screen.
+
+**It ends one cell short of the right edge.** The bytes are the whole
+answer — 40 columns, `RPROMPT='RIGHT'`, nothing typed:
+
+    L> \x1b[K\x1b[31CRIGHT\x1b[36D
+
+The cursor is at column 4 after `L> `, forward 31 puts it at 35, and
+`RIGHT` fills 35 through 39 of 40. **Column 40 is left blank.** With ten
+characters typed it is `\x1b[21C` from column 14 — the same column 35 —
+so the right prompt is placed against the right-hand edge and not
+relative to the line.
+
+**It is drawn while the line is at least one blank cell short of it**, and
+that threshold is exactly `columns − right − 2`. Six configurations, and
+the widest left-plus-typed width that still keeps it:
+
+| columns | right prompt | widest line keeping it | `columns − right − 2` |
+| --- | --- | --- | --- |
+| 40 | 5 | 33 | 33 |
+| 40 | 1 | 37 | 37 |
+| 40 | 10 | 28 | 28 |
+| 30 | 5 | 23 | 23 |
+| 80 | 5 | 73 | 73 |
+| 20 | 3 | 15 | 15 |
+
+The two cells are the blank column at the right edge and one blank column
+between the line and the right prompt. **A terminal too narrow for both
+sides is the same rule and not a special case**: at 7 columns with a
+5-cell right prompt the threshold is 0, the 3-cell `PS1` already exceeds
+it, and nothing is drawn — measured, not derived.
+
+**It is not redrawn per keystroke, and it is erased by the line's own
+erase.** Growing the line one character at a time, the keystroke that
+crosses the threshold is the only one that carries anything with it:
+
+    to 29 columns:  "x"
+    to 30 columns:  "x"
+    to 31 columns:  "x\x1b[K"        <- crosses; the erase takes it off
+    to 32 columns:  "x"
+
+So zsh draws it once, leaves it on the screen while the line grows under
+it, and loses it to the `\x1b[K` that the crossing redraw writes anyway.
+**It comes back on its own** when the line shrinks back below the
+threshold, with no repaint forced.
+
+**zsh leaves it in scrollback.** Accepting a line that is showing one
+writes `\x1b[?2004l\r\r\n` and nothing else — no erase of the row, no
+repositioning. The right prompt of every command stays on the screen
+above its output.
+
+#### What we do with that
+
+The first three are behavior to reproduce, and the formula is the
+implementation: draw the right prompt at `columns − width` when
+`left + 1 + width + 1 ≤ columns`, and otherwise draw nothing. The banner
+lines' gap fill already refuses to place a right half it cannot fit, and
+this is the same refusal one row down.
+
+The last one is a **deliberate departure**, and it is the reason this
+document asked the question. A right prompt left in scrollback is a
+fragment: the row it is on was laid out for a terminal of the width it had
+at the time, so a resized window smears it, and it is decoration that
+nobody reads twice attached to output people do. So ours is erased on the
+row the line was accepted on — which is work the transient prompt is doing
+anyway, and is why the two are one change rather than two.
 
 ### Transient prompt
 
@@ -393,10 +459,39 @@ it will change directory. A prompt is therefore trimmed unless the
 below the `cd` rather than just above it. The difference is stated in the
 documentation rather than hidden.
 
+#### Where the redraw goes, settled against the code rather than guessed
+
 Transient redrawing is a `repl` capability for the same reason the right
-prompt is, and it is the piece most likely to interact badly with the
-blocks store and with `groundForPrompt` — settle that interaction before
-writing it, not after.
+prompt is, and this document said it was the piece most likely to
+interact badly with the blocks store and with `groundForPrompt`. Read,
+2026-09-19, and it is less entangled than that:
+
+- **`editor.endLine` is the seam.** It already does the three things in
+  the order a trim needs: redraw the line if the accept came out of a
+  paste and it was never drawn, `toLastRow` to get below a wrapped line,
+  then `before + "\r\n"`. A transient redraw is one more step *in front*
+  of that — re-render with the trimmed prompt, repaint the prompt's rows,
+  and let the existing `toLastRow` do the counting, which it can only do
+  correctly once the rows it counts are the rows on the screen.
+- **`groundForPrompt` cannot collide with it**, because it runs at the
+  top of the *next* `readLine`, after the command. The two are on
+  opposite sides of the command's own output, and there is no ordering
+  between them to get wrong. What *is* on the same side is
+  `markUnfinished`, which pads a partial row with `cols − mark` spaces
+  and depends on where the cursor is — so the trim goes before
+  `toLastRow` and never between `toLastRow` and the mark.
+- **The blocks store writes nothing to the screen.** Its marks are the
+  conduit's own, in band on a captured stream rather than on the
+  terminal, so a trimmed prompt is invisible to it. What it records is
+  the command's facts, and a prompt collapsing after the line was
+  accepted changes none of them.
+
+The remaining care is the one `drawnPrompt` already documents: a prompt
+with a newline in it is drawn in two pieces, and only the last row is
+rewritten on a redraw, because `\r` returns to the row the cursor is on.
+A trim that shortens a two-row prompt to one row therefore has to move up
+and erase rather than rewrite in place — which is the same arithmetic
+`toLastRow` does, in the other direction.
 
 ## Segments
 
@@ -805,22 +900,22 @@ slower than the prompt it replaces.
 Written down rather than assumed, because a spec entry that presents a
 guess as a fact is worse than an absent entry:
 
-1. Right-prompt behavior when the typed line reaches it, and on a
-   terminal too narrow for both sides. zsh is the only column in the
-   panel that has one, so it is the only place to measure it.
-2. The interaction between transient redraw, `groundForPrompt`, and the
-   blocks store.
-3. What an async segment draws before its answer arrives.
-4. Containment for a segment function that does not terminate.
-5. What a plugin segment costs when it is *publishing* rather than being
+1. What an async segment draws before its answer arrives.
+2. Containment for a segment function that does not terminate.
+3. What a plugin segment costs when it is *publishing* rather than being
    asked — the redraw rate a chatty plugin can force, and what bounds
    it.
-6. **The fidelity claim itself.** Until the cell-grid comparison exists
+4. **The fidelity claim itself.** Until the cell-grid comparison exists
    and runs against a real configuration, "draws what it draws" is
    asserted and not shown — and it is the one claim in this document a
    person can check by looking.
-7. The per-prompt cost of the render itself, against the plain prompt it
+5. The per-prompt cost of the render itself, against the plain prompt it
    replaces, on a cold page cache as well as a warm one.
+
+Two came off this list on 2026-09-19 and are written up where they
+belong rather than here: right-prompt behavior is under *The right
+prompt is new here*, and the transient redraw's interaction with
+`groundForPrompt` and the blocks store is under *Transient prompt*.
 
 Each of these is a measurement to run before the code that depends on it
 is written.

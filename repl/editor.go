@@ -65,6 +65,12 @@ type editor struct {
 	lastTab         bool
 	completedBefore bool
 
+	// listsMatches draws the matches on the keystroke that found them
+	// ambiguous rather than on a second one. False is the answer of a dialect
+	// that has no such option and of one whose person has turned it off; see
+	// EditorStyle.ListMatchesWithoutASecondKeyOption for the measurement.
+	listsMatches bool
+
 	// menu is the menu completion in flight, where a run of menu keystrokes
 	// is going on. See completemenu.go, which is the whole of it.
 	menu menuWalk
@@ -1061,6 +1067,18 @@ func columns(matches []string, width int) []string {
 func (e *editor) write(s string) {
 	e.drawn.valid = false
 	_, _ = io.WriteString(e.out, s)
+}
+
+// ring sounds the bell, and is the one thing written to a terminal that does
+// not invalidate what is drawn.
+//
+// Nothing is printed and no cursor moves, so a redraw after one would rewrite
+// a row that is already right. Measured 2026-09-19 through a pseudo-terminal:
+// a word that matches nothing answers a completion key with `\a` and **nothing
+// else** in both shells with a line editor, so a redraw beside it is bytes
+// this editor would be alone in sending.
+func (e *editor) ring() {
+	_, _ = io.WriteString(e.out, bell)
 }
 
 // itoa without importing strconv for one call on the keystroke path.

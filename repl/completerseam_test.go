@@ -96,7 +96,7 @@ func TestTheFirstCompleterWithAnAnswerIsTheWholeAnswer(t *testing.T) {
 	second := &recordingCompleter{answer: []string{"beta"}}
 
 	e := &editor{line: []rune("a"), pos: 1}
-	matches := e.complete(completers{first, second})
+	matches, _ := e.complete(completers{first, second})
 
 	if matches != nil {
 		t.Errorf("one match should be filled in rather than listed, got %v", matches)

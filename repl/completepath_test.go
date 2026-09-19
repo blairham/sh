@@ -47,7 +47,7 @@ func completionFixture(t *testing.T) string {
 func typeAndTab(t *testing.T, c Completer, typed string) (string, []string) {
 	t.Helper()
 	e := &editor{line: []rune(typed), pos: len([]rune(typed)), out: &strings.Builder{}}
-	listed := e.complete(c)
+	listed, _ := e.complete(c)
 	return string(e.line), drawnRows(listed)
 }
 

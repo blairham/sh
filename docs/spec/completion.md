@@ -187,11 +187,54 @@ The core follows zsh here as well and offers only real entries, so
 `.<TAB>` on this fixture completes `.hidden` outright. `../` remains
 typable; it is one character longer than a Tab.
 
+## The bell, and when the matches are drawn
+
+A completion keystroke that puts nothing on the line says so. Measured
+2026-09-19 through a pseudo-terminal, in a tree whose `big/` holds
+`aa00/` through `aa11/`, with the word completed through each shell's
+own shipped completion system:
+
+| typed, then one Tab | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- |
+| `big/aa0` — ten matches, agreeing on nothing more | `\a` | `\a` and the listing |
+| `big/zzznope` — nothing matches | `\a` | `\a`, and nothing else at all |
+| `big/a` — twelve matches agreeing on `aa` | `\a` and the `a` | the `a` |
+
+Three facts, and the core takes the first two:
+
+**A keystroke that reaches the line is silent, and one that does not
+rings.** The two silent cases a person cannot tell apart from the
+line — a word that matched nothing, and a word whose matches agree on
+nothing past what is typed — are the same keystroke, and both ring.
+
+**The bell is the only thing written.** Row two is `\a` and no redraw
+in both shells, which is what makes it an assertion rather than a
+count: nothing moves, so nothing is repainted.
+
+**Whether the matches are drawn on that same keystroke is a dialect's
+answer.** zsh draws them with the bell; bash rings and waits for a
+second Tab, which then lists and is itself silent. Specified with the
+rest of the editor's style, as
+`EditorStyle.ListMatchesWithoutASecondKeyOption` — named for the option
+because it is one a person turns off, and measured: `unsetopt autolist`
+in zsh leaves the same keystroke writing the bell alone.
+
+Row three is the one divergence the core does not take. bash rings for
+an ambiguous completion even when it fills something in; zsh rings only
+when nothing reached the line, and that is what this editor does.
+
+zsh's own two switches are separable, measured on the ambiguous row:
+`unsetopt listbeep` leaves the listing and drops the bell, `unsetopt
+autolist` leaves the bell and drops the listing, and only both off is
+silence. The bell's switch is not modeled here — the bell is what both
+shells do by default and what this editor always does.
+
 ## Listing
 
-When the matches do not agree beyond what is typed, a second Tab prints
-them. Both shells print **only the part of the name below the directory
-being completed**, never the whole word:
+When the matches do not agree beyond what is typed, they are printed —
+on that keystroke or on a second one, per the axis above. Both shells
+print **only the part of the name below the directory being
+completed**, never the whole word:
 
     : sub/<TAB><TAB>
     nested.txt   nested2.txt  other.txt
@@ -254,10 +297,11 @@ the cursor put after `uniq` in `cat uniqXYZ`, the prefix spelling
 inserted the `_` the three matches agree on and left `XYZ` where it was,
 while the whole-word spelling found nothing and rang the bell.
 
-**No bell.** zsh rings one for a completion that matches nothing and for
-the ambiguous insertion a menu makes. This editor rings the bell nowhere,
-Tab included, so the difference is an editor-wide question rather than
-one about these keys.
+**The bell.** zsh rings one for a completion that matches nothing and
+for the ambiguous insertion a menu makes. This editor rings it for the
+first of those — see *The bell, and when the matches are drawn* above,
+which is an editor-wide rule rather than one about these keys — and not
+yet for the second, which belongs to the menu.
 
 ## What is deliberately not here
 

@@ -24,7 +24,7 @@ import "testing"
 // it moves Semantics.ArithLeadingZeroIsOctal, which is what makes `$(( 010 ))`
 // eight rather than ten, and it was accepted and inert until #2884.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
-	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr", "interactivecomments", "banghist"} {
+	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr", "interactivecomments", "banghist", "autolist"} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
 			t.Fatalf("%s is not in the table at all", base)
@@ -45,7 +45,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 139; recordedCount != want {
+	if want := 138; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

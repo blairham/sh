@@ -291,6 +291,24 @@ type EditorStyle struct {
 	// this editor does not offer yet.
 	ViInsertAtStartOfLineSkipsLeadingBlanks bool
 
+	// ListMatchesWithoutASecondKeyOption names the option that draws the
+	// matches on the very keystroke that found them ambiguous, rather than
+	// leaving them for a second one.
+	//
+	// The two shells with a line editor disagree, measured 2026-09-19 through
+	// a pseudo-terminal on a word whose matches agree on nothing past what is
+	// typed — `: big/aa0` against ten `aa0N/` directories:
+	//
+	//	bash 5.3.20   \a                     then, on a second key, the listing
+	//	zsh 5.9.2     \a and the listing      and a third answer on the second key
+	//
+	// Named for the option rather than given as a value for the reason
+	// MarkUnfinishedOutputOption is: `unsetopt autolist` at the prompt is a
+	// person asking for the other answer, and measured, it gets it — the same
+	// keystroke then writes the bell alone. An empty name is a dialect with
+	// no such option, and the listing waits for a second key.
+	ListMatchesWithoutASecondKeyOption string
+
 	// CompletionMatchesHiddenFiles offers names beginning with a dot to a
 	// word that does not begin with one.
 	//

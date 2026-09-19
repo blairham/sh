@@ -1842,6 +1842,10 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		interrupt:       s.Editor.Interrupt,
 		listQuery:       s.Editor.ListQuery,
 		listQueryEchoes: s.Editor.ListQueryEchoesTheKey,
+		// Whether the matches are drawn on the keystroke that found them
+		// ambiguous. Read through the option rather than taken as a value,
+		// because it is one a person turns off at the prompt.
+		listsMatches: s.dialectOption(s.Editor.ListMatchesWithoutASecondKeyOption),
 		// Whether to ask the terminal to mark a paste, and how a marked one
 		// is drawn. Two of the four ask and ksh93 does not; see paste.go.
 		bracketedPaste: s.Editor.BracketedPaste,

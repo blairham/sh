@@ -26,11 +26,17 @@ import (
 // reports the matches when it cannot decide.
 //
 // Returning the matches rather than printing them: the editor owns the screen,
-// and deciding *when* to list is its business — the second Tab, not the first.
-func (e *editor) complete(c Completer) []Candidate {
+// and deciding *when* to list is its business — see completeKey, which is
+// where the dialect's answer to that is read.
+//
+// The second result says the line was written to. It is not "there were no
+// matches": a word that matched nothing and a word whose matches agree on
+// nothing past what is typed are the same keystroke from the line's point of
+// view, and that is the fact a bell is about.
+func (e *editor) complete(c Completer) (matches []Candidate, filled bool) {
 	start, word, candidates := e.candidates(c)
 	if len(candidates) == 0 {
-		return nil
+		return nil, false
 	}
 	// The words are what is inserted and what the prefix is computed over;
 	// a candidate with no word is a row of a listing and nothing else, so
@@ -38,15 +44,15 @@ func (e *editor) complete(c Completer) []Candidate {
 	words := insertableWords(candidates)
 	if len(words) == 1 {
 		e.replaceWord(start, words[0]+completionSuffix(word, words[0]))
-		return nil
+		return nil, true
 	}
 	// Several. Fill in as far as they agree, which is what makes a second Tab
 	// worth pressing rather than a repeat of the first.
 	if common := commonPrefix(words); len(words) > 1 && len(common) > len(word) {
 		e.replaceWord(start, common)
-		return nil
+		return nil, true
 	}
-	return displayCandidates(candidates, word)
+	return displayCandidates(candidates, word), false
 }
 
 // candidates is what the word under the cursor could become, and where that
@@ -501,8 +507,29 @@ func (e *editor) completerFor(name string) Completer {
 // keystroke's and not the first's.
 func (e *editor) completeKey(c Completer, wasTab bool, prompt drawnPrompt) {
 	var matches []Candidate
-	e.change(false, func() { matches = e.complete(c) })
-	if len(matches) > 0 && wasTab && e.confirmList(matches, prompt) {
+	var filled bool
+	e.change(false, func() { matches, filled = e.complete(c) })
+	// Whether the matches are drawn now or left for a second key is the
+	// dialect's answer; see EditorStyle.ListMatchesWithoutASecondKeyOption.
+	listing := len(matches) > 0 && (wasTab || e.listsMatches)
+	if !filled && (e.listsMatches || !listing) {
+		// Nothing reached the line, so the person is told the only other way
+		// there is. Measured 2026-09-19 through a pseudo-terminal, and it is
+		// what both shells with a line editor do for a word that matches
+		// nothing and for one whose matches agree on nothing past what is
+		// typed — the two cases that look identical from the line.
+		//
+		// Not on the keystroke whose whole job is the listing: where the
+		// matches wait for a second key, that second key draws them and is
+		// silent, which is why this asks about the listing rather than only
+		// about the line. Where they are drawn on the first key the bell
+		// rings with them, measured, and the two are separable there — the
+		// listing survives `unsetopt listbeep` and the bell survives
+		// `unsetopt autolist`. Only the pair being off is silence, and that
+		// switch is not modeled here.
+		e.ring()
+	}
+	if listing && e.confirmList(matches, prompt) {
 		e.list(matches, prompt)
 	}
 	e.redraw(prompt)

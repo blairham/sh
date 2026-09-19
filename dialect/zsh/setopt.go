@@ -231,7 +231,14 @@ var zshOptions = []zshOption{
 	// axis this dialect answers `No` — see zsh.go.
 	switchBacked("autocd", false, (*interp.Runner).AutoCd, (*interp.Runner).SetAutoCd),
 	recorded("autocontinue", false),
-	recorded("autolist", true),
+	// AUTO_LIST is read by the line editor on every completion key — see
+	// repl.EditorStyle.ListMatchesWithoutASecondKeyOption, which names it —
+	// so it is not `recorded`, which means remembered and acted on by
+	// nothing. Measured 2026-09-19 through a pseudo-terminal: with it on, a
+	// word whose matches agree on nothing past what is typed answers one Tab
+	// with the bell and the listing, and with it off the same key writes the
+	// bell alone and the listing waits for a second (#3714).
+	storeBacked("autolist", true),
 	recorded("automenu", true),
 	recorded("autonamedirs", false),
 	recorded("autoparamkeys", true),

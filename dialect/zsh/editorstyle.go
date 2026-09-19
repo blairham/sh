@@ -82,6 +82,14 @@ func EditorStyle() repl.EditorStyle {
 		// a blank and bash puts it at column 0. It is the only place the two
 		// shells' command modes disagree about a key this editor offers.
 		ViInsertAtStartOfLineSkipsLeadingBlanks: true,
+		// The matches are drawn on the keystroke that found them ambiguous
+		// rather than on a second one. Measured 2026-09-19 through a
+		// pseudo-terminal on `: big/aa0` against ten `aa0N/` directories:
+		// this shell writes the bell and the listing on the first Tab where
+		// bash writes the bell alone and waits for a second. Named for the
+		// option because `unsetopt autolist` is a person asking for bash's
+		// answer, and measured, it gets it.
+		ListMatchesWithoutASecondKeyOption: "AUTO_LIST",
 		// Measured: a bare Tab in a directory holding a `.hidden` lists
 		// everything except it, and `.` completes it outright because it is
 		// then the only match. Left false rather than written out, so that

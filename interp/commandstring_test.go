@@ -60,6 +60,62 @@ func TestOnlyAFailedExpansionAnswersByHowTheShellStarted(t *testing.T) {
 	}
 }
 
+// And it belongs to the shell that was handed the string, not to a copy of
+// it. The same failure inside `( … )` or inside a command substitution leaves
+// the ordinary fatal status, where the same failure inside a *function* — the
+// same shell, a deeper frame — keeps the command-string answer.
+//
+// The pair is the shape: a subshell row alone cannot tell "a boundary drops
+// it" from "only the outermost statement carries it".
+func TestTheCommandStringStatusBelongsToTheShellHandedTheString(t *testing.T) {
+	for _, src := range []string{"set -u\nunset V\n", "unset V\n"} {
+		read := "echo \"$V\"\n"
+		if !strings.HasPrefix(src, "set -u") {
+			read = "echo \"${V?}\"\n"
+		}
+		for _, c := range []struct {
+			name string
+			body string
+			want int
+		}{
+			{"the shell itself", read, 127},
+			{"a function it calls", "f() { " + strings.TrimSuffix(read, "\n") + "; }\nf\n", 127},
+			{"a subshell", "( " + strings.TrimSuffix(read, "\n") + " )\n", 1},
+			{"a command substitution", "v=$( " + strings.TrimSuffix(read, "\n") + " )\n", 1},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				if got := cmdStringStatus(t, src+c.body, true, 127); got != c.want {
+					t.Errorf("%q: status = %d, want %d", src+c.body, got, c.want)
+				}
+			})
+		}
+	}
+}
+
+// The subshell's own status, read where the script can see it: `$?` after a
+// subshell that died of the failure is the dialect's fatal one and not the
+// command-string answer.
+func TestASubshellThatDiesOfAFailedExpansionReportsTheFatalStatus(t *testing.T) {
+	var buf strings.Builder
+	sem := PosixSemantics()
+	sem.FatalErrorStatusIsOne = Yes
+	dg := Diagnostics{ExpansionFailureStatusFromCommandString: 127}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &dg, Name: "sh", Route: RouteCommandString,
+		Stdout: &buf, Stderr: &buf,
+	})
+	f, err := syntax.Parse("set -u\nunset V\n( echo \"$V\" )\necho \"after=$?\"\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "after=1\n"; !strings.HasSuffix(got, want) {
+		t.Errorf("output = %q, want it to end %q", got, want)
+	}
+}
+
 func cmdStringStatus(t *testing.T, src string, commandString bool, answer int) int {
 	t.Helper()
 	var buf strings.Builder

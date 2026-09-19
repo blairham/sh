@@ -4029,9 +4029,25 @@ func (r *Runner) fatalParamError(format string, args ...any) {
 
 // fatalExpansionQuiet is the same for a failure that has already reported
 // itself, as fatalQuiet is to fatal.
+//
+// The status belongs to the shell that was handed the string and not to
+// every runner under it. A subshell that dies of the same failure leaves the
+// dialect's ordinary fatal status behind, measured under `-c` with `x`
+// unset:
+//
+//	set -u; : $x                     127
+//	set -u; f() { : $x; }; f         127
+//	set -u; ( : $x ); echo $?          1
+//	set -u; v=$( : $x ); echo $?       1
+//	set -u; ( ( : $x ) ); echo $?      1
+//	set -u; ( ${y?w} ); echo $?        1
+//
+// So the discriminator is the boundary rather than the frame: a function is
+// the same shell and keeps the answer, and a copy of it does not. Route is
+// carried by the clone, which is why asking it alone put 127 on all six.
 func (r *Runner) fatalExpansionQuiet() {
 	r.fatalQuiet()
-	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString {
+	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString && !r.inSubshell {
 		r.status = n
 	}
 }

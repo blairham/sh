@@ -367,12 +367,23 @@ func TestUlimit(t *testing.T) {
 	if out, _ := run("ulimit -f"); strings.TrimSpace(out) != "4" {
 		t.Errorf("block size: said %q, want 4", out)
 	}
-	// The two letters that are not universal.
+	// The letters are this table's own and two of them are nobody else's:
+	// the process count is `-p`, which is the pipe buffer in bash and ksh93,
+	// and file locks are `-w`, which is swap in ksh93. There is no `-u`.
+	// Measured 2026-09-18 by setting each and reading the row back (#2806).
 	if _, st := run("ulimit -m"); st != 0 {
 		t.Errorf("-m: status %d, want present=yes", st)
 	}
 	if _, st := run("ulimit -u"); st == 0 {
 		t.Errorf("-u: status %d, want present=no", st)
+	}
+	run("ulimit -p 42")
+	if got := held[interp.ResourceProcesses]; got[0] != 42 {
+		t.Errorf("-p set the process count to %d, want 42", got[0])
+	}
+	run("ulimit -w 7")
+	if got := held[interp.ResourceFileLocks]; got[0] != 7 {
+		t.Errorf("-w set the file locks to %d, want 7", got[0])
 	}
 	// Whether setting lowers the hard limit with the soft one.
 	run("ulimit -t 50")

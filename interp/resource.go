@@ -47,9 +47,9 @@ const (
 	// on macOS — bash 5.3, zsh, dash — refuses all five letters and leaves
 	// their rows out of `ulimit -a`; the same binaries on Linux read all
 	// five and list them. So these are a *platform's* resources rather than
-	// a dialect's, which is why they are not in resourceLetters: which
-	// letters a shell's `ulimit` accepts is a separate question, answered
-	// per shell and per platform, and left open here (#2805).
+	// a dialect's, and the letter follows the row: a shell accepts the
+	// letter exactly where its table prints the line, which is what
+	// Runner.HasRlimit already decides (#2805).
 	//
 	// Each is counted raw — a priority, a count, a byte total — which is
 	// measured rather than assumed: `--ulimit nice=15 --ulimit rtprio=9
@@ -71,6 +71,24 @@ const (
 	// ResourceFileLocks is `-x`, how many file locks this process may hold.
 	// A count. Linux's RLIMIT_LOCKS.
 	ResourceFileLocks
+	// ResourceRealtimeTime is `-R`, the microseconds a real-time thread may
+	// run before it must block. Linux's RLIMIT_RTTIME, and the sixteenth and
+	// last limit that kernel numbers. bash lists it first and zsh last,
+	// which is each shell's own order rather than a disagreement about the
+	// limit.
+	ResourceRealtimeTime
+
+	// ResourcePipeBuffer is not a limit at all: it is the size of a pipe's
+	// buffer, which two shells list beside the limits and neither can
+	// change. It is reached through the same hooks because it is the same
+	// kind of fact — a number this platform fixes, that the package
+	// interpreting a script has no business looking up for itself.
+	//
+	// Measured 2026-09-18: bash writes it in 512-byte blocks and prints 1 on
+	// macOS arm64 and 8 in the panel's Alpine image, and ksh93 writes it in
+	// bytes and prints 512 on macOS — so the number is 512 and 4096, and the
+	// two shells disagree only about the unit.
+	ResourcePipeBuffer
 )
 
 // RlimitInfinity is "no limit", the value a shell prints as `unlimited` and
@@ -95,15 +113,25 @@ type resourceLetter struct {
 
 const kilobyte = 1024
 
+// resourceLetters is what `ulimit` reads where the dialect has said nothing
+// about its table — see Diagnostics.UlimitListing, which is where a shell's
+// letters actually come from, and UlimitListingRow.Letter.
+//
+// A shell's own table is the answer because the letters are not shared: `-p`
+// is the pipe buffer in bash and ksh93 and the process count in dash, `-w` is
+// file locks in dash and swap in ksh93, and `-x` is file locks everywhere but
+// there. Measured 2026-09-18 across seven columns on two kernels.
+//
+// What is left here is the substrate's own fallback, and it is POSIX's: the
+// eight letters every shell in the panel spells the same way, without `-m` or
+// `-u`, which the standard does not name and which two of the columns lack.
 var resourceLetters = []resourceLetter{
 	{'c', ResourceCore, 0},
 	{'d', ResourceData, kilobyte},
 	{'f', ResourceFileSize, 0},
 	{'l', ResourceLockedMemory, kilobyte},
-	{'m', ResourceResidentSet, kilobyte},
 	{'n', ResourceOpenFiles, 1},
 	{'s', ResourceStack, kilobyte},
 	{'t', ResourceCPUTime, 1},
-	{'u', ResourceProcesses, 1},
 	{'v', ResourceAddressSpace, kilobyte},
 }

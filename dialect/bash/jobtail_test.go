@@ -109,10 +109,24 @@ type -a f`)
 	}
 }
 
-// ulimit -a renders bash's table — asserted whole, over fake limits, so the
-// page is exact and nothing outside the test moves.
-func TestUlimitListing(t *testing.T) {
-	f, err := syntax.Parse("ulimit -a", bash.Dialect())
+// The limits macOS does not have, and so the rows and letters bash drops
+// there — measured 2026-09-18 against bash 5.3.20 on macOS arm64 and 5.3.9 in
+// the panel's Alpine image, which print the same table less these six rows.
+var notOnDarwin = map[interp.Resource]bool{
+	interp.ResourceRealtimeTime:       true,
+	interp.ResourceSchedulingPriority: true,
+	interp.ResourcePendingSignals:     true,
+	interp.ResourceMessageQueues:      true,
+	interp.ResourceRealtimePriority:   true,
+	interp.ResourceFileLocks:          true,
+}
+
+// ulimitRun runs a snippet over fake limits, with the pipe buffer this
+// platform's own and hasRlimit saying which limits its kernel has — so the
+// table is asserted for both kernels from either one.
+func ulimitRun(t *testing.T, has func(interp.Resource) bool, pipe int64, src string) (string, int) {
+	t.Helper()
+	f, err := syntax.Parse(src, bash.Dialect())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,15 +140,49 @@ func TestUlimitListing(t *testing.T) {
 			return 12345 * 1024, 12345 * 1024, nil
 		case interp.ResourceOpenFiles, interp.ResourceProcesses:
 			return 256, 256, nil
+		case interp.ResourcePipeBuffer:
+			return pipe, pipe, nil
 		}
 		return interp.RlimitInfinity, interp.RlimitInfinity, nil
 	}
 	r.SetRlimit = func(interp.Resource, int64, int64) error { return nil }
+	r.HasRlimit = has
 	bash.Apply(r)
-	if _, err := r.Run(context.Background(), f); err != nil {
+	st, err := r.Run(context.Background(), f)
+	if err != nil {
 		t.Fatal(err)
 	}
-	want := "core file size              (blocks, -c) unlimited\n" +
+	return buf.String(), st
+}
+
+// ulimit -a renders bash's table — asserted whole, over fake limits, so the
+// page is exact and nothing outside the test moves.
+//
+// Both kernels, from either one: the seventeen rows are the whole table and
+// the eleven are what a kernel without those six limits prints, every
+// surviving row byte-identical including its padding (#2806).
+func TestUlimitListing(t *testing.T) {
+	linux := "real-time non-blocking time  (microseconds, -R) unlimited\n" +
+		"core file size              (blocks, -c) unlimited\n" +
+		"data seg size               (kbytes, -d) unlimited\n" +
+		"scheduling priority                 (-e) unlimited\n" +
+		"file size                   (blocks, -f) 12345\n" +
+		"pending signals                     (-i) unlimited\n" +
+		"max locked memory           (kbytes, -l) unlimited\n" +
+		"max memory size             (kbytes, -m) unlimited\n" +
+		"open files                          (-n) 256\n" +
+		"pipe size                (512 bytes, -p) 8\n" +
+		"POSIX message queues         (bytes, -q) unlimited\n" +
+		"real-time priority                  (-r) unlimited\n" +
+		"stack size                  (kbytes, -s) unlimited\n" +
+		"cpu time                   (seconds, -t) unlimited\n" +
+		"max user processes                  (-u) 256\n" +
+		"virtual memory              (kbytes, -v) unlimited\n" +
+		"file locks                          (-x) unlimited\n"
+	if out, _ := ulimitRun(t, nil, 4096, "ulimit -a"); out != linux {
+		t.Errorf("a kernel with every limit got %q, want %q", out, linux)
+	}
+	darwin := "core file size              (blocks, -c) unlimited\n" +
 		"data seg size               (kbytes, -d) unlimited\n" +
 		"file size                   (blocks, -f) 12345\n" +
 		"max locked memory           (kbytes, -l) unlimited\n" +
@@ -145,8 +193,30 @@ func TestUlimitListing(t *testing.T) {
 		"cpu time                   (seconds, -t) unlimited\n" +
 		"max user processes                  (-u) 256\n" +
 		"virtual memory              (kbytes, -v) unlimited\n"
-	if buf.String() != want {
-		t.Errorf("got %q, want %q", buf.String(), want)
+	has := func(res interp.Resource) bool { return !notOnDarwin[res] }
+	if out, _ := ulimitRun(t, has, 512, "ulimit -a"); out != darwin {
+		t.Errorf("a kernel without the six got %q, want %q", out, darwin)
+	}
+}
+
+// TestUlimitLettersFollowTheRows: the letters bash reads are the rows it
+// prints, which is what makes the set the platform's — `ulimit -e` is read on
+// one kernel and a bad option on the other, from one binary (#2805).
+func TestUlimitLettersFollowTheRows(t *testing.T) {
+	has := func(res interp.Resource) bool { return !notOnDarwin[res] }
+	for _, letter := range []string{"e", "i", "q", "r", "x", "R"} {
+		if out, st := ulimitRun(t, nil, 4096, "ulimit -"+letter); st != 0 {
+			t.Errorf("-%s on a kernel that has the limit: %q status %d, want it read", letter, out, st)
+		}
+		out, st := ulimitRun(t, has, 512, "ulimit -"+letter)
+		if st != 2 || !strings.Contains(out, "invalid option") {
+			t.Errorf("-%s on a kernel that does not: %q status %d, want bash's bad-option refusal at 2", letter, out, st)
+		}
+	}
+	// And the pipe buffer is read on both and set on neither, in the words
+	// the kernel gives the attempt.
+	if out, st := ulimitRun(t, has, 512, "ulimit -p"); st != 0 || strings.TrimSpace(out) != "1" {
+		t.Errorf("-p: %q status %d, want 1 at 0", out, st)
 	}
 }
 

@@ -1178,8 +1178,6 @@ func Semantics() interp.Semantics {
 	// And CDPATH is a search beside the ordinary relative lookup, with the
 	// fallback POSIX gives it (#2896).
 	s.CdpathReplacesTheRelativeLookup = interp.No
-	s.UlimitHasResidentSet = interp.Yes
-	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	s.UlimitTakesHardKeyword = interp.No
 	s.UlimitTakesSoftKeyword = interp.No
@@ -2182,21 +2180,21 @@ func Diagnostics() interp.Diagnostics {
 		// so that is an answer per shell *and* per platform rather than a
 		// value on an axis, and it is left open in #2805.
 		UlimitListing: []interp.UlimitListingRow{
-			{Prefix: "core file size (blocks)         (-c) ", Res: interp.ResourceCore},
-			{Prefix: "data seg size (kb)              (-d) ", Res: interp.ResourceData, Scale: 1024},
-			{Prefix: "scheduling priority             (-e) ", Res: interp.ResourceSchedulingPriority, Scale: 1},
-			{Prefix: "file size (blocks)              (-f) ", Res: interp.ResourceFileSize},
-			{Prefix: "pending signals                 (-i) ", Res: interp.ResourcePendingSignals, Scale: 1},
-			{Prefix: "max locked memory (kb)          (-l) ", Res: interp.ResourceLockedMemory, Scale: 1024},
-			{Prefix: "max memory size (kb)            (-m) ", Res: interp.ResourceResidentSet, Scale: 1024},
-			{Prefix: "open files                      (-n) ", Res: interp.ResourceOpenFiles, Scale: 1},
-			{Prefix: "POSIX message queues (bytes)    (-q) ", Res: interp.ResourceMessageQueues, Scale: 1},
-			{Prefix: "real-time priority              (-r) ", Res: interp.ResourceRealtimePriority, Scale: 1},
-			{Prefix: "stack size (kb)                 (-s) ", Res: interp.ResourceStack, Scale: 1024},
-			{Prefix: "cpu time (seconds)              (-t) ", Res: interp.ResourceCPUTime, Scale: 1},
-			{Prefix: "max user processes              (-u) ", Res: interp.ResourceProcesses, Scale: 1},
-			{Prefix: "virtual memory (kb)             (-v) ", Res: interp.ResourceAddressSpace, Scale: 1024},
-			{Prefix: "file locks                      (-x) ", Res: interp.ResourceFileLocks, Scale: 1},
+			{Prefix: "core file size (blocks)         (-c) ", Letter: 'c', Res: interp.ResourceCore},
+			{Prefix: "data seg size (kb)              (-d) ", Letter: 'd', Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "scheduling priority             (-e) ", Letter: 'e', Res: interp.ResourceSchedulingPriority, Scale: 1},
+			{Prefix: "file size (blocks)              (-f) ", Letter: 'f', Res: interp.ResourceFileSize},
+			{Prefix: "pending signals                 (-i) ", Letter: 'i', Res: interp.ResourcePendingSignals, Scale: 1},
+			{Prefix: "max locked memory (kb)          (-l) ", Letter: 'l', Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "max memory size (kb)            (-m) ", Letter: 'm', Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "open files                      (-n) ", Letter: 'n', Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "POSIX message queues (bytes)    (-q) ", Letter: 'q', Res: interp.ResourceMessageQueues, Scale: 1},
+			{Prefix: "real-time priority              (-r) ", Letter: 'r', Res: interp.ResourceRealtimePriority, Scale: 1},
+			{Prefix: "stack size (kb)                 (-s) ", Letter: 's', Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "cpu time (seconds)              (-t) ", Letter: 't', Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "max user processes              (-u) ", Letter: 'u', Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "virtual memory (kb)             (-v) ", Letter: 'v', Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "file locks                      (-x) ", Letter: 'x', Res: interp.ResourceFileLocks, Scale: 1},
 		},
 		UmaskBadOption:  "illegal option %[1]s",
 		PrintfBadOption: "illegal option %[1]s",

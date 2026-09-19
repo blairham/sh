@@ -1955,8 +1955,6 @@ func Semantics() interp.Semantics {
 	// falls back to the operand as it stands, and a `./` operand is not
 	// searched at all (#2896).
 	s.CdpathReplacesTheRelativeLookup = interp.No
-	s.UlimitHasResidentSet = interp.Yes
-	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	// `ulimit -n hard` and `-n soft`, which bash alone has both of.
 	s.UlimitTakesHardKeyword = interp.Yes
@@ -3248,18 +3246,38 @@ func Diagnostics() interp.Diagnostics {
 		// `ulimit -a`, row for row as the engine writes it. The pipe row is
 		// not a resource limit and never moves; its value is this machine
 		// family's constant.
+		// The seventeen rows bash 5.3 prints on Linux, which is the whole of
+		// its table: a kernel without a limit drops that row and moves
+		// nothing else, so the eleven macOS prints are these with `-R`,
+		// `-e`, `-i`, `-q`, `-r` and `-x` taken out — measured 2026-09-18 on
+		// bash 5.3.20 (aarch64-apple-darwin25) and 5.3.9 in the panel's
+		// Alpine image, byte-identical row for row, padding included
+		// (#2806).
+		//
+		// `pipe size` is the platform's own number rather than a limit and
+		// is 1 block here and 8 there, which is what makes it a resource
+		// read through the hooks instead of a constant in this table. The
+		// letter is still read and still cannot be set: `ulimit -p 8` is
+		// `ulimit: pipe size: cannot modify limit: Invalid argument` at 1,
+		// for every operand including the value the row already holds.
 		UlimitListing: []interp.UlimitListingRow{
-			{Prefix: "core file size              (blocks, -c) ", Res: interp.ResourceCore},
-			{Prefix: "data seg size               (kbytes, -d) ", Res: interp.ResourceData, Scale: 1024},
-			{Prefix: "file size                   (blocks, -f) ", Res: interp.ResourceFileSize},
-			{Prefix: "max locked memory           (kbytes, -l) ", Res: interp.ResourceLockedMemory, Scale: 1024},
-			{Prefix: "max memory size             (kbytes, -m) ", Res: interp.ResourceResidentSet, Scale: 1024},
-			{Prefix: "open files                          (-n) ", Res: interp.ResourceOpenFiles, Scale: 1},
-			{Prefix: "pipe size                (512 bytes, -p) ", Fixed: "1"},
-			{Prefix: "stack size                  (kbytes, -s) ", Res: interp.ResourceStack, Scale: 1024},
-			{Prefix: "cpu time                   (seconds, -t) ", Res: interp.ResourceCPUTime, Scale: 1},
-			{Prefix: "max user processes                  (-u) ", Res: interp.ResourceProcesses, Scale: 1},
-			{Prefix: "virtual memory              (kbytes, -v) ", Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "real-time non-blocking time  (microseconds, -R) ", Letter: 'R', Res: interp.ResourceRealtimeTime, Scale: 1},
+			{Prefix: "core file size              (blocks, -c) ", Letter: 'c', Res: interp.ResourceCore},
+			{Prefix: "data seg size               (kbytes, -d) ", Letter: 'd', Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "scheduling priority                 (-e) ", Letter: 'e', Res: interp.ResourceSchedulingPriority, Scale: 1},
+			{Prefix: "file size                   (blocks, -f) ", Letter: 'f', Res: interp.ResourceFileSize},
+			{Prefix: "pending signals                     (-i) ", Letter: 'i', Res: interp.ResourcePendingSignals, Scale: 1},
+			{Prefix: "max locked memory           (kbytes, -l) ", Letter: 'l', Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "max memory size             (kbytes, -m) ", Letter: 'm', Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "open files                          (-n) ", Letter: 'n', Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "pipe size                (512 bytes, -p) ", Letter: 'p', Res: interp.ResourcePipeBuffer, Scale: 512},
+			{Prefix: "POSIX message queues         (bytes, -q) ", Letter: 'q', Res: interp.ResourceMessageQueues, Scale: 1},
+			{Prefix: "real-time priority                  (-r) ", Letter: 'r', Res: interp.ResourceRealtimePriority, Scale: 1},
+			{Prefix: "stack size                  (kbytes, -s) ", Letter: 's', Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "cpu time                   (seconds, -t) ", Letter: 't', Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "max user processes                  (-u) ", Letter: 'u', Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "virtual memory              (kbytes, -v) ", Letter: 'v', Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "file locks                          (-x) ", Letter: 'x', Res: interp.ResourceFileLocks, Scale: 1},
 		},
 		UlimitBadNumber: "ulimit: %[1]s: invalid number",
 		// bash names the resource by the same label `ulimit -a` gives it.

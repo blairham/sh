@@ -1618,6 +1618,33 @@ type Diagnostics struct {
 	// listing as the unanswered question it is.
 	UlimitListing []UlimitListingRow
 
+	// UlimitListingInKernelOrder lists the table in the order this kernel
+	// numbers its limits rather than in a layout of the shell's own, one row
+	// per number — see Runner.RlimitOrder.
+	//
+	// One column does this and it is visible from outside: measured
+	// 2026-09-18, zsh prints nine rows on macOS arm64 and sixteen in the
+	// panel's Alpine image, each sequence exactly its kernel's numbering,
+	// where every other column keeps one order on both. It is also why that
+	// shell has no resident-set row on a kernel that numbers the resident
+	// set and the address space alike — the row it prints for that number is
+	// the address space (#2806).
+	UlimitListingInKernelOrder bool
+
+	// UlimitReadOnly is a row that cannot be set being set — the rows a
+	// shell lists as unsupported, which are a sentence rather than a limit.
+	// One verb: the row's short name.
+	//
+	// Measured 2026-09-18 on ksh93u+, which is the only column with such
+	// rows: `ulimit -x 1` is `ulimit: locks: is read only` at 1, and the
+	// name is the row's own short one rather than the label its table prints
+	// — `msgqueue` for `message queue size (Kibytes)`. See
+	// UlimitListingRow.Name.
+	UlimitReadOnly string
+
+	// UlimitReadOnlyStatus is what that reports. Zero means 1.
+	UlimitReadOnlyStatus int
+
 	// UlimitCannotChange is the kernel refusing the change — raising a hard
 	// limit, most often.
 	//

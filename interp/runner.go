@@ -380,6 +380,25 @@ type Runner struct {
 	// fault and should still be reported.
 	HasRlimit func(res Resource) bool
 
+	// RlimitOrder is the limits this kernel has, in the order it numbers
+	// them, one entry per number. Nil — the default — means no order was
+	// supplied and a table that asks for one is printed as the dialect
+	// wrote it.
+	//
+	// It is an order and not a set, which is what separates it from
+	// HasRlimit: one shell lists its table in the kernel's own numbering
+	// rather than in a layout of its own, so the rows it prints and the
+	// sequence it prints them in are both the platform's. Measured
+	// 2026-09-18, zsh 5.9.2 on macOS arm64 and 5.9 in the panel's Alpine
+	// image: nine rows there in the order the BSD header numbers them and
+	// sixteen here in the order asm-generic/resource.h does, each exactly.
+	//
+	// One entry per *number* is the load-bearing part. Where a kernel spells
+	// two limits with one number — macOS numbers RLIMIT_RSS and RLIMIT_AS
+	// alike — that shell prints one row, which is why it has no `-m` there
+	// and bash, listing its own table, keeps one.
+	RlimitOrder []Resource
+
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
 	procSubs []procSubPipe

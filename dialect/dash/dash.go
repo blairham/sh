@@ -1119,8 +1119,6 @@ func Semantics() interp.Semantics {
 	// And CDPATH is a search beside the ordinary relative lookup, with the
 	// fallback POSIX gives it (#2896).
 	s.CdpathReplacesTheRelativeLookup = interp.No
-	s.UlimitHasResidentSet = interp.Yes
-	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes
 	s.UlimitTakesHardKeyword = interp.No
 	s.UlimitTakesSoftKeyword = interp.No
@@ -1807,17 +1805,27 @@ func Diagnostics() interp.Diagnostics {
 		},
 		BuiltinBadNameStatus: 2,
 		// `ulimit -a`, row for row as the engine writes it.
+		// The twelve rows dash 0.5.12 prints on Linux; macOS has neither of
+		// the last two and prints the ten above them unchanged. Measured
+		// 2026-09-18 on both, with the letter of each row read back by
+		// setting it and finding the number in the row — which is the only
+		// way to learn them here, since this is the one table that names no
+		// letters. Two are its own: the process count is `-p`, which is the
+		// pipe buffer in bash and ksh93, and file locks are `-w`, which is
+		// swap in ksh93. There is no `-u` at all (#2806).
 		UlimitListing: []interp.UlimitListingRow{
-			{Prefix: "time(seconds)        ", Res: interp.ResourceCPUTime, Scale: 1},
-			{Prefix: "file(blocks)         ", Res: interp.ResourceFileSize},
-			{Prefix: "data(kbytes)         ", Res: interp.ResourceData, Scale: 1024},
-			{Prefix: "stack(kbytes)        ", Res: interp.ResourceStack, Scale: 1024},
-			{Prefix: "coredump(blocks)     ", Res: interp.ResourceCore},
-			{Prefix: "memory(kbytes)       ", Res: interp.ResourceResidentSet, Scale: 1024},
-			{Prefix: "locked memory(kbytes) ", Res: interp.ResourceLockedMemory, Scale: 1024},
-			{Prefix: "process              ", Res: interp.ResourceProcesses, Scale: 1},
-			{Prefix: "nofiles              ", Res: interp.ResourceOpenFiles, Scale: 1},
-			{Prefix: "vmemory(kbytes)      ", Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "time(seconds)        ", Letter: 't', Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "file(blocks)         ", Letter: 'f', Res: interp.ResourceFileSize},
+			{Prefix: "data(kbytes)         ", Letter: 'd', Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "stack(kbytes)        ", Letter: 's', Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "coredump(blocks)     ", Letter: 'c', Res: interp.ResourceCore},
+			{Prefix: "memory(kbytes)       ", Letter: 'm', Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "locked memory(kbytes) ", Letter: 'l', Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "process              ", Letter: 'p', Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "nofiles              ", Letter: 'n', Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "vmemory(kbytes)      ", Letter: 'v', Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "locks                ", Letter: 'w', Res: interp.ResourceFileLocks, Scale: 1},
+			{Prefix: "rtprio               ", Letter: 'r', Res: interp.ResourceRealtimePriority, Scale: 1},
 		},
 		PrintfUsage:             "printf: usage: printf format [arg ...]",
 		TrapBadSignal:           "trap: %[1]s: bad trap",

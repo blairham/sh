@@ -2263,8 +2263,6 @@ func Semantics() interp.Semantics {
 	// with the directory right there, and a `./` operand is searched too
 	// rather than exempted (#2896). Measured 2026-09-18.
 	s.CdpathReplacesTheRelativeLookup = interp.Yes
-	s.UlimitHasResidentSet = interp.Yes
-	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	// No keyword either way here; the operand is an expression instead,
 	// so `hard` is a parameter and the complaint is that it is not set.
@@ -4057,28 +4055,42 @@ func Diagnostics() interp.Diagnostics {
 		// `ulimit -a`, row for row as the engine writes it. The rows this
 		// platform's engine calls unsupported, and the constant pipe and
 		// socket buffers, are fixed text rather than resource limits.
+		// Measured on ksh93u+ 2012-08-01, which is the panel's, and on macOS
+		// alone: no image carries that build for a second kernel, and the
+		// ksh93u+m 1.0.4 that Debian ships is a different table — a wider
+		// label column and four rows this one has never had. So this is the
+		// one column of the five whose Linux table is unmeasured, and the
+		// rows it calls unsupported are the shell's own sentence rather than
+		// the kernel's silence: every one of them is read on macOS, where
+		// the other four refuse the letter outright (#2806).
+		//
+		// A row that is a sentence cannot be set, and this shell says so in
+		// its own words with the row's short name — `ulimit: msgqueue: is
+		// read only` at 1, for a row labeled `message queue size (Kibytes)`,
+		// which is why the name is written down beside the label.
 		UlimitListing: []interp.UlimitListingRow{
-			{Prefix: "address space limit (Kibytes)  (-M)  ", Res: interp.ResourceAddressSpace, Scale: 1024},
-			{Prefix: "core file size (blocks)        (-c)  ", Res: interp.ResourceCore},
-			{Prefix: "cpu time (seconds)             (-t)  ", Res: interp.ResourceCPUTime, Scale: 1},
-			{Prefix: "data size (Kibytes)            (-d)  ", Res: interp.ResourceData, Scale: 1024},
-			{Prefix: "file size (blocks)             (-f)  ", Res: interp.ResourceFileSize},
-			{Prefix: "locks                          (-x)  ", Fixed: "not supported"},
-			{Prefix: "locked address space (Kibytes) (-l)  ", Res: interp.ResourceLockedMemory, Scale: 1024},
-			{Prefix: "message queue size (Kibytes)   (-q)  ", Fixed: "not supported"},
-			{Prefix: "nice                           (-e)  ", Fixed: "not supported"},
-			{Prefix: "nofile                         (-n)  ", Res: interp.ResourceOpenFiles, Scale: 1},
-			{Prefix: "nproc                          (-u)  ", Res: interp.ResourceProcesses, Scale: 1},
-			{Prefix: "pipe buffer size (bytes)       (-p)  ", Fixed: "512"},
-			{Prefix: "max memory size (Kibytes)      (-m)  ", Res: interp.ResourceResidentSet, Scale: 1024},
-			{Prefix: "rtprio                         (-r)  ", Fixed: "not supported"},
-			{Prefix: "socket buffer size (bytes)     (-b)  ", Fixed: "512"},
-			{Prefix: "sigpend                        (-i)  ", Fixed: "undefined"},
-			{Prefix: "stack size (Kibytes)           (-s)  ", Res: interp.ResourceStack, Scale: 1024},
-			{Prefix: "swap size (Kibytes)            (-w)  ", Fixed: "not supported"},
-			{Prefix: "threads                        (-T)  ", Fixed: "not supported"},
-			{Prefix: "process size (Kibytes)         (-v)  ", Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "address space limit (Kibytes)  (-M)  ", Letter: 'M', Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "core file size (blocks)        (-c)  ", Letter: 'c', Res: interp.ResourceCore},
+			{Prefix: "cpu time (seconds)             (-t)  ", Letter: 't', Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "data size (Kibytes)            (-d)  ", Letter: 'd', Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "file size (blocks)             (-f)  ", Letter: 'f', Res: interp.ResourceFileSize},
+			{Prefix: "locks                          (-x)  ", Letter: 'x', Fixed: "not supported", Name: "locks"},
+			{Prefix: "locked address space (Kibytes) (-l)  ", Letter: 'l', Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "message queue size (Kibytes)   (-q)  ", Letter: 'q', Fixed: "not supported", Name: "msgqueue"},
+			{Prefix: "nice                           (-e)  ", Letter: 'e', Fixed: "not supported", Name: "nice"},
+			{Prefix: "nofile                         (-n)  ", Letter: 'n', Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "nproc                          (-u)  ", Letter: 'u', Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "pipe buffer size (bytes)       (-p)  ", Letter: 'p', Fixed: "512", Name: "pipe"},
+			{Prefix: "max memory size (Kibytes)      (-m)  ", Letter: 'm', Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "rtprio                         (-r)  ", Letter: 'r', Fixed: "not supported", Name: "rtprio"},
+			{Prefix: "socket buffer size (bytes)     (-b)  ", Letter: 'b', Fixed: "512", Name: "sbsize"},
+			{Prefix: "sigpend                        (-i)  ", Letter: 'i', Fixed: "undefined", Name: "sigpend"},
+			{Prefix: "stack size (Kibytes)           (-s)  ", Letter: 's', Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "swap size (Kibytes)            (-w)  ", Letter: 'w', Fixed: "not supported", Name: "swap"},
+			{Prefix: "threads                        (-T)  ", Letter: 'T', Fixed: "not supported", Name: "threads"},
+			{Prefix: "process size (Kibytes)         (-v)  ", Letter: 'v', Res: interp.ResourceAddressSpace, Scale: 1024},
 		},
+		UlimitReadOnly:        "ulimit: %[1]s: is read only",
 		PrintfUsage:           "Usage: printf [ options ] format [string ...]",
 		PrintfUsageUnprefixed: true,
 		TrapBadSignal:         "trap: %[1]s: bad trap",

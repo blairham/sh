@@ -699,6 +699,25 @@ type Semantics struct {
 	// answer, and for the written order that comes with it.
 	PrefixExpandedBeforeTheRedirections PrefixRedirectionOrder
 
+	// PrefixExpandedBeforeADeclarationsOperand decides whether a command's
+	// assignment prefix is worked through **before** a declaration utility's
+	// operand is expanded, so that a substitution in a prefix value runs
+	// ahead of one in the operand.
+	//
+	// A third position in the same sequence
+	// PrefixExpandedBeforeTheRedirections halves, and not a second face of
+	// it: zsh opens the redirections before it touches the prefix and still
+	// works through the prefix before the operand, so one ordering of the
+	// three cannot carry both answers. Yes in ksh93 and zsh, No in bash 5.3,
+	// bash 3.2, dash and BusyBox ash.
+	//
+	// Asked only where a prefix and a declaration's operand are both
+	// written, which is the point the two columns part company; an ordinary
+	// command's argument is expanded before its prefix in every column,
+	// ours included. See interp/prefixoperandorder.go for the panel and for
+	// that control (#3814).
+	PrefixExpandedBeforeADeclarationsOperand Answer
+
 	// AssignmentPrefixPersistsAfterAFunction keeps `v=9 f` set once `f` has
 	// returned, instead of giving the name back what it held before the call.
 	//
@@ -21409,7 +21428,12 @@ func PosixSemantics() Semantics {
 		// is what zsh, dash and BusyBox ash do; bash and ksh93 are the
 		// departures and say so in their own presets.
 		PrefixExpandedBeforeTheRedirections: PrefixExpandedBeforeRedirectionsNever,
-		EchoInterpretsEscapes:               No,
+		// The same section puts the command's words in step 1 and the
+		// assignments in step 4, so the standard's answer is that the operand
+		// is reached first — which is what dash, the shell in the panel that
+		// targets this text, does. ksh93 and zsh are the departures.
+		PrefixExpandedBeforeADeclarationsOperand: No,
+		EchoInterpretsEscapes:                    No,
 		// POSIX has `echo` and `printf` exit greater than zero when "an
 		// error occurred", and a write that went nowhere is one; dash
 		// complies. zsh is the holdout, keeping status 0.
@@ -22662,6 +22686,15 @@ func CoreSemantics() Semantics {
 		// refusing `x=1 cmd`. bash and ksh93 are the departures and say so
 		// themselves. See interp/prefixredirorder.go.
 		PrefixExpandedBeforeTheRedirections: PrefixExpandedBeforeRedirectionsNever,
+		// And the operand of a declaration utility is expanded before the
+		// prefix, which is four of the six columns and is the order the
+		// standard's own steps give — XCU 2.9.1 expands the command's words
+		// in step 1 and the assignments in step 4. Answered here rather than
+		// left to refuse for the reason above it: the question is asked of
+		// every `x=1 typeset s=2`, so a refusal would be the substrate
+		// refusing a shape four shells agree about. ksh93 and zsh are the
+		// departures and say so themselves. See interp/prefixoperandorder.go.
+		PrefixExpandedBeforeADeclarationsOperand: No,
 		// A clustered `-abc` leaves OPTIND naming the word until its last
 		// letter has been read, which is what four of the six columns do and
 		// what a script shifting by `OPTIND-1` between calls needs. dash and

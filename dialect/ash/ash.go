@@ -222,6 +222,11 @@ func Semantics() interp.Semantics {
 	// the digest-pinned image, `w=$(echo S >&2) f > /nope/x` writes `can't
 	// create /nope/x` alone (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
+	// And a declaration utility's operand is reached before that prefix, as
+	// in dash: measured 2026-09-19 in the digest-pinned image,
+	// `PRE=$(echo PRE >&2) export s=$(echo OP >&2)` writes `OP` and then
+	// `PRE` (#3814).
+	s.PrefixExpandedBeforeADeclarationsOperand = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	s.DeclarationPromotesThePrefixEntry = interp.No
 	// unanswered SubscriptedAssignmentPrefix, SubscriptedPrefixIsTakenBack:

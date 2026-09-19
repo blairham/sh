@@ -1,9 +1,10 @@
 # Installing, and running this as a login shell
 
-Six binaries come out of a build — the substrate driver `sh`, and the
-dialect binaries `bash`, `zsh`, `ksh`, `dash` and `ash`. This file is how they
-get out of the build directory, and what it takes to make one of them the
-shell a terminal starts.
+Six shells come out of a build — the substrate driver `sh`, and the dialect
+binaries `bash`, `zsh`, `ksh`, `dash` and `ash` — plus the formatter `shfmt`,
+which is installed differently and is covered under Homebrew below. This file
+is how the shells get out of the build directory, and what it takes to make
+one of them the shell a terminal starts.
 
 Read the last two sections before you `chsh`. A session reads everything a
 real shell of the same name reads, in the same order — "What a session
@@ -135,9 +136,20 @@ Once a version is tagged, the tap carries it:
 
     brew install blairham/tap/sh
 
-The formula installs into the keg's `libexec` and links **nothing** into
-`bin`, for the reason above. `brew --prefix sh` names the keg; the shells
-are in `$(brew --prefix sh)/libexec`.
+The formula installs the six shells into the keg's `libexec` and links
+**none of them** into `bin`, for the reason above. `brew --prefix sh`
+names the keg; the shells are in `$(brew --prefix sh)/libexec`.
+
+`shfmt` is the one binary that does go into `bin`, so it is on your `PATH`
+after the install and `shfmt -w script.sh` works from anywhere. The reason
+above does not reach it: it is never resolved implicitly the way a shell
+name is, and a formatter an editor or a pre-commit hook cannot name is a
+formatter nothing calls. Homebrew's own `shfmt` formula (mvdan.cc/sh)
+claims the same name, so this one declares `conflicts_with "shfmt"` — you
+can have either, and `brew` will say so rather than failing at the
+symlink. Note that `make install` does **not** install `shfmt`; that is a
+difference between the two routes, not an oversight you can configure
+away.
 
 **Use the path `brew --prefix` prints, not the one `ls` shows you.** Those
 are two spellings of the same directory today, and only one of them keeps

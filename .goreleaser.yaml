@@ -196,13 +196,17 @@ changelog:
 # cask would also quarantine every binary it downloads, which for a shell means
 # Gatekeeper refusing the thing `chsh` was just pointed at.
 #
-# **It installs nothing into `bin`, on purpose.** `bin.install "bash"` would put
-# a file called `bash` in Homebrew's bin, which is ahead of /bin on the PATH of
+# **It puts no shell into `bin`, on purpose.** `bin.install "bash"` would put a
+# file called `bash` in Homebrew's bin, which is ahead of /bin on the PATH of
 # every machine that has Homebrew — so `brew install sh` would silently take
 # over the system shells for every script on the machine, and undoing it would
-# need the shell it had just replaced. Everything lands in the keg's libexec,
-# which is off PATH, and the caveats say how to reach it. That is the same
-# decision `make install` makes, for the same reason.
+# need the shell it had just replaced. All six land in the keg's libexec, which
+# is off PATH, and the caveats say how to reach it. That is the same decision
+# `make install` makes, for the same reason.
+#
+# `shfmt` is the exception and does go into `bin` — see the note on
+# `bin.install "shfmt"` below. The rule is about names resolved *implicitly*,
+# and nothing resolves a formatter that way.
 brews:
 - name: sh
   repository:

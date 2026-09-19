@@ -69,11 +69,22 @@ var (
 	write = flag.Bool("w", false, "write the result back to each file instead of to standard output")
 	list  = flag.Bool("l", false, "list the files whose layout differs, and exit 1 if any do")
 	diffM = flag.Bool("d", false, "print a unified diff where the layout differs, and exit 1 if any does")
+	vers  = flag.Bool("version", false, "print the version and exit")
 )
+
+// version is what a release stamps in, the same way the shells beside it are
+// stamped. A var rather than a const because that is the only thing
+// `-ldflags -X main.version=` can write to, and a hand-built checkout says
+// `0.0.0-dev` rather than claiming a tag it was not cut from.
+var version = "0.0.0-dev"
 
 func main() {
 	flag.Usage = usage
 	flag.Parse()
+	if *vers {
+		fmt.Println(name, version) //nolint:errcheck // a closed stdout is not worth a branch
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, name+":", err)
 		os.Exit(1)

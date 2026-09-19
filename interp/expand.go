@@ -5395,7 +5395,8 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 
 // dollarZero answers `$0`, and every all-zero digit run that means it.
 //
-// Three readings, one per value of Semantics.DollarZeroNames: the shell's own
+// A value the frame was given comes first, where the dialect has a way of
+// writing one. Then three readings, one per value of Semantics.DollarZeroNames: the shell's own
 // name however deep it is, whatever the shell is *inside*, or the nearest
 // function spelled with the `function` keyword.
 //
@@ -5406,6 +5407,15 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 // function that called it — which is why the two have separate walks rather
 // than one with a filter on it.
 func (r *Runner) dollarZero() (string, bool) {
+	if held, ok := r.heldDollarZero(); ok {
+		// A value this frame was *given*, which answers before any of the
+		// three readings and without consulting the axis: a stored `$0` is
+		// not a question about where the name comes from, it is a name that
+		// was written down. One dialect can write one — see
+		// Runner.storeDollarZero and Semantics.ReadNameOperands — and the
+		// frame it was written on is the only one that answers with it.
+		return held, true
+	}
 	call, inCall := r.innermostCall()
 	keyword, inKeyword := r.innermostKeywordFunction()
 	if !inCall && !inKeyword {

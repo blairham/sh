@@ -80,6 +80,17 @@ type Frame struct {
 	// sibling entered later at the same depth is still a different frame —
 	// which is the distinction the RETURN trap turns on.
 	serial int
+
+	// zeroName is a `$0` this frame was *given*, and zeroNameHeld says it
+	// was. One dialect lets a builtin's output operand name position 0, and
+	// what that writes is a value the frame carries rather than a parameter:
+	// it answers inside the call that wrote it, it is gone when the call
+	// returns, and a call made afterwards still reports its own name. So it
+	// sits beside the frame for the same reason the positional list is saved
+	// and restored around a call, and the frame the call pushes starts
+	// without one — see [Runner.dollarZero] and #3672.
+	zeroName     string
+	zeroNameHeld bool
 }
 
 // IsFunction reports whether this frame is a function call, as against a
@@ -153,6 +164,35 @@ func (r *Runner) pushFrame(f Frame) {
 		f.File = r.Name
 	}
 	r.frames = append(r.frames, f)
+}
+
+// heldDollarZero is the `$0` the innermost frame was given, if it was given
+// one.
+//
+// The script's own level is not in r.frames — it is the shell rather than a
+// call — so the runner carries that one itself and this is the single place
+// that knows which of the two answers.
+func (r *Runner) heldDollarZero() (string, bool) {
+	if n := len(r.frames); n > 0 {
+		f := r.frames[n-1]
+		return f.zeroName, f.zeroNameHeld
+	}
+	return r.zeroName, r.zeroNameHeld
+}
+
+// storeDollarZero puts a value where heldDollarZero will find it.
+//
+// Nothing is pushed or popped: a frame already ends when its call does, so a
+// value written onto one goes away with it and a value written at the top
+// level lasts as long as the shell does. That is the whole of the measured
+// behavior and it needs no unwinding of its own.
+func (r *Runner) storeDollarZero(value string) {
+	if n := len(r.frames); n > 0 {
+		r.frames[n-1].zeroName = value
+		r.frames[n-1].zeroNameHeld = true
+		return
+	}
+	r.zeroName, r.zeroNameHeld = value, true
 }
 
 // popFrame leaves one.

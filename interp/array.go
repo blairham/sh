@@ -1621,12 +1621,14 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 // writes nothing at all (see positionalFdVar). The two are measured apart and
 // stay apart.
 //
-// Position 0 is `$0` in that shell and is deliberately not taken here: a write
-// to it is visible inside the function that made it and gone when the call
-// returns, which is a per-frame value this runner does not have — `$0` is
-// derived from the call stack rather than stored. Measured the same day,
-// `f() { printf 'x\n' | read 0; echo "[$0]"; }; f; echo "[$0]"` is `[x]` then
-// the script's own name. Filed as #3672 rather than half-modeled here.
+// Position 0 is `$0` in that shell, and it is not in the positional list at
+// all: a write to it is visible inside the function that made it and gone
+// when the call returns, so it is a value the *frame* carries rather than a
+// parameter. Measured the same day — `f() { printf 'x\n' | read 0; echo
+// "[$0]"; }; f; echo "[$0]"` is `[x]` then the script's own name, and
+// `printf 'x\n' | read 0; f() { echo "[$0]"; }; f` is `[x]` then `[f]`, so a
+// call made after a write still reports its own name. See
+// Runner.storeDollarZero, which is where it goes, and #3672.
 func (r *Runner) setOperandValue(name, value string) {
 	if r.storeThroughPositional(name, value) {
 		return
@@ -1641,8 +1643,14 @@ func (r *Runner) storeThroughPositional(name, value string) bool {
 		return false
 	}
 	n, ok := positionalFdVar(name)
-	if !ok || n < 1 {
+	if !ok {
 		return false
+	}
+	if n == 0 {
+		// Position 0 is `$0`, which is not in the positional list at all and
+		// is a value the *frame* carries — see Runner.storeDollarZero.
+		r.storeDollarZero(value)
+		return true
 	}
 	for len(r.Params) < n {
 		r.Params = append(r.Params, "")

@@ -4139,9 +4139,13 @@ func toggleCase(c rune) rune {
 }
 
 func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
-	out, m := trim(value, pattern, e.Op, r.patternOpts(pattern, value),
-		r.armOrder(), searchingFlag(e))
+	// A literal pattern records here where the same literal in a condition
+	// does not, which is measured and is why the record is turned on without
+	// asking whether the pattern is one — see interp/patternrecord.go.
+	o := r.recordingPatternOpts(r.patternOpts(pattern, value), pattern)
+	out, m := trim(value, pattern, e.Op, o, r.armOrder(), searchingFlag(e))
 	r.publishMatch(m)
+	r.recordPatternMatch(m)
 	return out
 }
 
@@ -4184,7 +4188,7 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	if pattern == "" && e.Anchor != 0 && !r.anchoredEmptyPatternFires() {
 		return value
 	}
-	o := r.replacementPatternOpts(pattern, value)
+	o := r.recordingPatternOpts(r.replacementPatternOpts(pattern, value), pattern)
 	// One spelling of "read the replacement", used by both branches. It is
 	// `replacementOf` and not `joinWord` because a replacement is **text**
 	// and not a pattern (#1337), and having the two branches read it two
@@ -4193,8 +4197,17 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	repl := r.replacementWord(e)
 	if !reportsAMatch(o) {
 		with := r.replacementFor(repl)
+		// The **first** match writes the record, measured: `v=hello;
+		// ${v//[lo]/X}` leaves `l` and not the `o` the last one matched. The
+		// replacement is still read once, which is why this branch and not
+		// the reporting one below is where a recorded match lands.
+		first := true
 		return replace(value, pattern, e, o, r.armOrder(), r.emptyMatchDeclined,
-			func(_ matchReport, matched string) string {
+			func(m matchReport, matched string) string {
+				if first {
+					r.recordPatternMatch(m)
+					first = false
+				}
 				return with(matched)
 			})
 	}

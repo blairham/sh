@@ -160,6 +160,7 @@ ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
 ash   OperandSubscriptQuoting
 ash   OperatorAfterTheSubscriptListingIsBad
+ash   PatternMatchWritesTheMatchRecord
 ash   PrefixInAWholeTableListing
 ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
@@ -428,6 +429,7 @@ dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
 dash  OperandSubscriptQuoting
 dash  OperatorAfterTheSubscriptListingIsBad
+dash  PatternMatchWritesTheMatchRecord
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixInAWholeTableListing
 dash  PrefixListingNamesADeclaredOnlyCompound
@@ -572,6 +574,7 @@ zsh   NegativeSubscriptCountsOverAPromotedScalar
 zsh   OperatorAfterTheSubscriptListingIsBad
 zsh   OptionNamespaceIgnoresSeparators
 zsh   OptionNamespaceTakesANoPrefix
+zsh   PatternMatchWritesTheMatchRecord
 zsh   PrefixListingNamesADeclaredOnlyCompound
 zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfHexFloatZeroFillPrecedesThePrefix

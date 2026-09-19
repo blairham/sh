@@ -52,11 +52,24 @@ type capturePlan struct {
 	// end of the pattern's own top level. See planCaptures for why that is
 	// the reading, and where it diverges.
 	whole bool
+	// recording says the plan was seeded by a *surface* rather than by
+	// anything in the pattern — the dialect whose every successful pattern
+	// match writes a record, see interp/patternrecord.go. The groups are
+	// numbered the same way and the whole match is asked for the same way;
+	// what changes is who reads the report, and that reports below answers
+	// no for such a plan.
+	recording bool
 }
 
 // reports says the pattern fills a parameter when it matches, which is what
 // decides whether a replacement has to be expanded again for each match.
-func (p capturePlan) reports() bool { return p.count > 0 || p.whole }
+//
+// A recording plan is not one, and that is measured rather than tidy: on the
+// binary whose surfaces record, `x=aaa; i=0; ${x//a/$((++i))}` is `111` and
+// leaves `i` at 1, so the record is filled and the replacement is still read
+// once. Answering yes here would have made every replacement in that dialect
+// expand its right-hand side per match.
+func (p capturePlan) reports() bool { return !p.recording && (p.count > 0 || p.whole) }
 
 // matchWhere is everything the position-aware flags need that is *not* about
 // how a pattern reads: how long the whole subject is, which groups it
@@ -524,11 +537,21 @@ func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capt
 			base, p = base+len(p)-len(rest), rest
 			continue
 		}
-		if p[0] == '*' || p[0] == '#' {
+		if p[0] == '#' || (p[0] == '*' && !quantifierOpensAGroup(p, o)) {
 			p, base = p[1:], base+1
 			continue
 		}
 		item, rest, ok := splitClosableItem(p, -1, &o)
+		if !ok && quantifierOpensAGroup(p, o) {
+			// `*(b)` — splitClosableItem gives up on a leading `*` because in
+			// the dialect it was written for that byte is always a wildcard.
+			// Here it is the group's quantifier, and the group has to be
+			// numbered like any other or `a*(b)cd` reports no groups where
+			// `a?(b)cd` reports one.
+			if _, _, after, isGroup := splitGroup(p, -1, &o); isGroup {
+				item, rest, ok = p[:len(p)-len(after)], after, true
+			}
+		}
 		if !ok {
 			break
 		}
@@ -549,6 +572,18 @@ func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capt
 		base, p = base+len(item), rest
 	}
 	return whole
+}
+
+// quantifierOpensAGroup reports whether the byte at the start of p is the
+// quantifier of a group rather than an operator of its own.
+//
+// `*` is the one byte both readings claim: it is a wildcard in the dialect
+// with flag groups and the closure quantifier of `*(b)` in the dialect with
+// quantified ones. Stepping over it unconditionally left `(b)` to be read as a
+// bare group, which the quantified dialect does not have, so `a*(b)cd`
+// numbered no groups at all where `a?(b)cd` numbered one.
+func quantifierOpensAGroup(p string, o patternOpts) bool {
+	return o.quantified && len(p) > 1 && p[1] == '('
 }
 
 // planFlags folds one flag group's letters into the two answers this pass
@@ -587,6 +622,10 @@ type matchReport struct {
 	// whole is the `(#m)` span, and set says the pattern asked for it.
 	whole    capSpan
 	wantsAll bool
+	// recording says this report is the surface's record rather than
+	// something the pattern asked for, which decides who publishes it: see
+	// Runner.publishMatch and Runner.recordPatternMatch.
+	recording bool
 }
 
 // wanted reports whether this pattern asks a surface for anything at all.
@@ -652,6 +691,11 @@ func hasPatternFlagGroup(pattern string) bool {
 // publishMatch writes a successful match into the parameters the pattern
 // asked for, and writes nothing at all where it asked for none.
 //
+// Nor where the *surface* asked rather than the pattern: a recording report
+// carries the same spans and goes to Runner.recordPatternMatch instead, so the
+// dialect that fills a record of its own does not also fill parameters it does
+// not have.
+//
 // The silence is measured and load-bearing: `match=(zz); [[ abc == (#b)abc ]]`
 // leaves `match` as `(zz)` in real zsh, and so does a `(#b)` pattern that
 // fails — so a script that reads `$match` after a match with no group sees
@@ -659,7 +703,7 @@ func hasPatternFlagGroup(pattern string) bool {
 // would clear it, which is the same class of wrong answer as a `(#b)` that
 // never filled it.
 func (r *Runner) publishMatch(m matchReport) {
-	if !m.wanted() {
+	if m.recording || !m.wanted() {
 		return
 	}
 	// The indices a script reads are the dialect's own: the shell with these

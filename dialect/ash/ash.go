@@ -329,7 +329,8 @@ func Semantics() interp.Semantics {
 	// class).
 	s.EmptyRegexOperandIsAnError = interp.No
 	// unanswered RegexMatchSurvivesAFailedMatch,
-	// RegexMatchOmitsGroupsThatDidNotMatch: there is no `=~` here — the
+	// RegexMatchOmitsGroupsThatDidNotMatch,
+	// PatternMatchWritesTheMatchRecord: there is no `=~` here — the
 	// line above is the empty-operand question this shell cannot be asked
 	// either — so no evaluation ever reaches a record.
 	// A `<(cmd)` may stand as a condition's operand and is performed there,

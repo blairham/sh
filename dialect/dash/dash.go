@@ -1392,9 +1392,10 @@ func Semantics() interp.Semantics {
 	// this preset with the construct turned back on is not left refusing.
 	s.UnknownConditionOptionIsAStatus = interp.No
 	// unanswered RegexMatchSurvivesAFailedMatch,
-	// RegexMatchOmitsGroupsThatDidNotMatch: there is no `=~` here to
+	// RegexMatchOmitsGroupsThatDidNotMatch,
+	// PatternMatchWritesTheMatchRecord: there is no `=~` here to
 	// evaluate, and nothing names a record for one to fill, so neither
-	// question can be put. The line above is the same absence at the
+	// question can be put, and no pattern match has one to write. The line above is the same absence at the
 	// construct that would hold the operator.
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// `break` with no loop around it is ignored here, silently: measured,

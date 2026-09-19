@@ -1244,6 +1244,10 @@ func Semantics() interp.Semantics {
 	// Both measured 2026-09-18.
 	s.RegexMatchSurvivesAFailedMatch = interp.No
 	s.RegexMatchOmitsGroupsThatDidNotMatch = interp.No
+	// A pattern match writes nothing there. Measured 2026-09-19 on 5.3.20:
+	// `[[ abcd =~ (b)(c) ]]` fills BASH_REMATCH and `[[ abcd == a*d ]]`,
+	// `case`, a glob and `${v#he}` all leave it exactly as that left it.
+	s.PatternMatchWritesTheMatchRecord = interp.No
 	// A process substitution may stand as a condition's operand here, and is
 	// performed there: `[[ $v == <(cmd) ]]` runs cmd and matches against the
 	// path, which is false for anything a script would have written down.

@@ -6176,6 +6176,31 @@ type Semantics struct {
 	// the record, so a failed match answers the axis above instead.
 	RegexMatchOmitsGroupsThatDidNotMatch Answer
 
+	// PatternMatchWritesTheMatchRecord fills that same record from a
+	// successful **pattern** match, with nothing in the pattern having asked
+	// — so `[[ abcd == a*d ]]` leaves `abcd` behind it and `v=hello;
+	// ${v#he}` leaves `he`.
+	//
+	// The two dialects that name a record split on it: measured 2026-09-19,
+	// ksh93u+ 2012-08-01 writes it and bash 5.3.20 leaves `BASH_REMATCH`
+	// holding whatever the last `=~` put there. So the record's *name* and
+	// what fills it are two questions, and a dialect that answers the first
+	// has still to answer this one.
+	//
+	// The set it covers is measured rather than derived, and it is narrower
+	// than "every match": a `[[ ]]` comparison and every pattern operator of
+	// parameter expansion write it, and a `case` arm, pathname expansion, a
+	// unary or ordering test and a substring do not. Within the condition it
+	// is narrower again — a right operand holding no unescaped pattern
+	// operator writes nothing, where a *literal* `${v#he}` writes — which is
+	// the one place the two halves differ. interp/patternrecord.go carries
+	// the whole table.
+	//
+	// Asked only where a dialect named the record — Runner.SetRegexMatch —
+	// so the shells that keep their captures under another shape, or keep
+	// none, never reach it.
+	PatternMatchWritesTheMatchRecord Answer
+
 	// EmptyRegexOperandIsAnError refuses `[[ x =~ "" ]]` rather than
 	// matching with it. The four shells with the operator split two to two:
 	// bash refuses with `invalid regular expression \`\': empty
@@ -25760,6 +25785,13 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	// arm and an element filter each ask whether the pattern describes the
 	// string, and none of them is choosing how much of it a match takes.
 	o.whole = true
+	if condition && patternHasAnOperator(pattern, o) {
+		// The record one dialect keeps of what its last match matched, which
+		// is the condition's and never the `case`'s — and never a comparison
+		// whose right operand is a string rather than a pattern. See
+		// interp/patternrecord.go for both halves of that, measured.
+		o = r.recordingPatternOpts(o, pattern)
+	}
 	matched, report := matchPatternIn(pattern, s, s, 0, o)
 	if bad {
 		// zsh gives up over the pattern rather than failing the match, and
@@ -25795,6 +25827,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	// untouched, so the walk goes through matchPattern instead.
 	if matched {
 		r.publishMatch(report)
+		r.recordPatternMatch(report)
 	}
 	return matched
 }

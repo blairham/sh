@@ -2015,6 +2015,10 @@ func Semantics() interp.Semantics {
 	// `read` is not a special builtin anywhere, so its bad name is not fatal
 	// here either — `read 1bad; echo after` prints both lines.
 	s.BadNameToReadFatal = interp.No
+	// And `getopts`: measured 2026-09-18, `echo A; getopts x 1bad -x; echo
+	// "B st=$?"` writes all three lines here, so the refusal costs the
+	// script nothing beyond its own status (#3555).
+	s.BadNameToGetoptsFatal = interp.No
 	// And `printf -v` refuses the same operands without ending anything:
 	// measured 2026-09-17, `printf -v '1x' %s Q` is
 	// ``printf: `1x': not a valid identifier`` at 2 with the rest of the
@@ -2063,6 +2067,10 @@ func Semantics() interp.Semantics {
 	// `read 'a[2]'` and `printf -v 'a[2]'` fill the element, measured
 	// 2026-09-10 on `a=(x y z)` — `x Q z`, in 3.2 as well as 5.3.
 	s.StoreOperandTakesASubscript = interp.Yes
+	// And `getopts` does not, in the shell that fills `read 'a[1]'`:
+	// measured 2026-09-18, `getopts x 'o[1]' -x` draws this shell's
+	// not-a-valid-identifier refusal at 1, brackets and all (#3555).
+	s.GetoptsOperandTakesASubscript = interp.No
 	// `r[@]` and `r[*]` on a builtin's operand are refused by the operand
 	// as written and say nothing about arithmetic: measured 2026-09-17,
 	// `r=(1 2 3); read 'r[@]' <<< Y; echo "same=$?"` is
@@ -3445,6 +3453,11 @@ func Diagnostics() interp.Diagnostics {
 			// `read "v?p"` is `` `v?p' `` here, because bash has no prompt
 			// operand to split it at.
 			"read": "%[1]s: `%[2]s': not a valid identifier",
+			// And `getopts`, whose name operand says the same — and says it
+			// to `o[1]` as well, in a shell that fills `read 'a[1]'`: this
+			// builtin does not take a subscript here. Measured 2026-09-18
+			// (#3555).
+			"getopts": "%[1]s: `%[2]s': not a valid identifier",
 			// And `printf -v 1bad`, which is the same sentence under this
 			// builtin's name at this builtin's own status — measured
 			// 2026-09-17, ``printf: `1x': not a valid identifier`` at 2.

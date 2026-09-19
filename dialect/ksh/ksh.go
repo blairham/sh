@@ -2306,6 +2306,10 @@ func Semantics() interp.Semantics {
 	// option` and a usage line at 2 — so it never reaches an operand to
 	// judge.
 	s.BadNameToReadFatal = interp.No
+	// And `getopts`: measured 2026-09-18, `echo A; getopts x 1bad -x; echo
+	// "B st=$?"` writes all three lines here, so the refusal costs the
+	// script nothing beyond its own status (#3555).
+	s.BadNameToGetoptsFatal = interp.No
 	// Not fatal here either, and ksh93 goes further than any other member of
 	// the panel in saying so: it calls the refusal a *warning*.
 	s.UnsetReadonlyFatal = interp.No
@@ -2347,6 +2351,10 @@ func Semantics() interp.Semantics {
 	s.UnsetElementEmptiesAnUnwrittenArrayInASubshell = interp.Yes
 	// `read 'a[2]'` fills the element, measured 2026-09-10 on `a=(x y z)`.
 	s.StoreOperandTakesASubscript = interp.Yes
+	// And `getopts` takes one too, which bash does not: measured
+	// 2026-09-18, `getopts x 'o[1]' -x` is 0 here with the letter in
+	// `${o[1]}` (#3555).
+	s.GetoptsOperandTakesASubscript = interp.Yes
 	// This column really does evaluate the brackets, and `@` is not an
 	// operand: measured 2026-09-17, `r=(1 2 3); read 'r[@]'` is
 	// `read: @: arithmetic syntax error` at 1 with the array whole and the
@@ -3941,6 +3949,13 @@ func Diagnostics() interp.Diagnostics {
 			// takes readonly's wording rather than export's.
 			"set":   "%[1]s: %[2]s: invalid variable name",
 			"unset": "%[1]s: %[2]s: invalid variable name",
+			// `getopts` is the one bad-name refusal here that leaves the
+			// builtin out of its own sentence, and it carries no line
+			// number either: measured 2026-09-18, `getopts x 1bad -x` is
+			// `<file>: 1bad: invalid variable name` at 1 where `unset 1bad`
+			// on the same line is `<file>[N]: unset: 1bad: invalid variable
+			// name`. See BuiltinBadNameNamesTheShellAlone (#3555).
+			"getopts": "%[2]s: invalid variable name",
 			// `typeset ':'` and `typeset 1x`, both `invalid variable name`
 			// and both fatal. `integer` reaches this entry rather than one of
 			// its own, because this shell's `integer 1x` calls itself
@@ -3996,8 +4011,13 @@ func Diagnostics() interp.Diagnostics {
 		// cycle is refused at the declaration here — see
 		// Semantics.NamerefCycleIsRefused — so there is never a read through
 		// one for this shell to warn about.
-		BuiltinBadNameKeepsValue: true,
-		BuiltinUsageUnprefixed:   true,
+		// `getopts` is the one bad-name refusal here that keeps neither the
+		// builtin nor the line: `<file>: 1bad: invalid variable name`,
+		// where `unset 1bad` is `<file>[N]: unset: 1bad: …`.
+		BadNameRefusalHidesTheBuiltin: map[string]bool{"getopts": true},
+		BadNameRefusalOmitsTheLine:    map[string]bool{"getopts": true},
+		BuiltinBadNameKeepsValue:      true,
+		BuiltinUsageUnprefixed:        true,
 		// Three of this shell's builtins write their complaint bare, where
 		// every other one of them carries the shell's name. Measured over
 		// the whole set on ksh93u+ 2012-08-01; nothing the three have in

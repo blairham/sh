@@ -438,7 +438,14 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 		}
 	}
 	line := Wording(wording, "%[1]s: `%[2]s': not a valid identifier", builtin, shown)
-	if d.BuiltinBadNameNamesTheShellAlone[key] {
+	if d.BadNameRefusalOmitsTheLine[builtin] {
+		// The file half of the ordinary location and no count after it. Its
+		// own branch rather than BuiltinBadNameNamesTheShellAlone below,
+		// which writes the name the *shell* was invoked by: this one writes
+		// the script's, which is what the reference does.
+		who, _, _ := r.locationNameAndLine(r.speaker == "")
+		r.errf("%s%s\n", d.prefixWithoutLine(who, r.inBuiltin), line)
+	} else if d.BuiltinBadNameNamesTheShellAlone[key] {
 		// This one complaint reports as the shell itself, where the same
 		// builtin's other refusals are located — see
 		// Diagnostics.BuiltinBadNameNamesTheShellAlone. The builtin's name
@@ -506,6 +513,41 @@ func (r *Runner) isReadName(name string) bool {
 // are keyed by builtin in the tables already.
 func (r *Runner) isPrintfName(name string) bool {
 	return r.isStoreOperandName("printf", name)
+}
+
+// isGetoptsName is that question at `getopts`, and it is the same rule with a
+// different subscript gate.
+//
+// `getopts` judged nothing at all until #3555: it took whatever word it was
+// handed, stored under it and reported 0, so `getopts x 1bad -x` left a
+// parameter no expansion can read back and the loop that went on to read it
+// saw an empty value. Every column in the panel refuses it — measured
+// 2026-09-18, bash 5.3.20, bash 3.2.57, bash as `sh`, ksh93u+, zsh 5.9.2,
+// dash 0.5.12 and BusyBox ash 1.37.0 — so judging is core and only the
+// sentence, the status and the fatality are the dialect's.
+//
+// The strictness is ReadNameOperands read a third time, and measured rather
+// than assumed: `set -- P Q; getopts x 1 -x` fills `$1` in zsh 5.9.2 and is
+// refused in bash, ksh93 and dash, which is the same split `read 1` takes.
+//
+// **The subscript gate is its own axis and that is the whole reason this is
+// not isStoreOperandName.** bash has arrays and still refuses `getopts x
+// 'o[0]'` as a name, where `read 'a[0]'` fills the element — so
+// StoreOperandTakesASubscript, which is Yes there, would answer this builtin
+// wrongly. See Semantics.GetoptsOperandTakesASubscript.
+func (r *Runner) isGetoptsName(name string) bool {
+	if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) &&
+		r.sem().GetoptsOperandTakesASubscript != No {
+		return true
+	}
+	return r.isBuiltinName("getopts", name, r.sem().ReadNameOperands)
+}
+
+// badGetoptsName reports an operand `getopts` cannot write through, through
+// the same wording table, the same status table and the same fatality gate as
+// every other bad name.
+func (r *Runner) badGetoptsName(name string) int {
+	return r.badBuiltinName("getopts", name, name, r.sem().BadNameToGetoptsFatal)
 }
 
 // isStoreOperandName is the shared rule: an operand a builtin writes through

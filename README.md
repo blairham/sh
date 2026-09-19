@@ -97,13 +97,16 @@ short.
   an unset name, a redirect that cannot open, division by zero, an unknown
   option to six different builtins, running a directory, `exit foo` — each
   run once through the real shell and through ours under a matching
-  `argv[0]`, compared on stderr and exit status together. Byte-identical
-  20/20 for `bash` and `dash`, 19/20 for `ksh` and `zsh`, 16/20 for `ash`:
-  **94 of 100**. And of the six misses exactly one is a wording — `ash`
-  says `%` where we say `%z` for a bad `printf` directive. The other five
-  each carry a different exit status, a different line number, or a
-  different answer, which is behavior rather than phrasing. Twenty common
-  situations is a sample and not a census, and the corpus behind the
+  `argv[0]`, compared on stderr and exit status together. Re-measured
+  2026-09-19: byte-identical **20/20 for `bash`, `zsh`, `ksh` and `dash`**,
+  80 of 80 across the four columns whose reference is installed here — the
+  `ksh` and `zsh` misses of 2026-09-16 are gone. `ash`, whose reference is
+  a container, last read 16/20 on 2026-09-16, and of its four misses
+  exactly one is a wording: it says `%` where we say `%z` for a bad
+  `printf` directive. The other three carry a different exit status, a
+  different line number, or a different answer, which is behavior rather
+  than phrasing. Twenty common situations is a sample and not a census,
+  and the corpus behind the
   percentages above is two hundred times larger and much stranger. The
   probe is `internal/cmd/diagsample`, a few seconds a column, so this
   bullet can be re-checked rather than inherited — which is how it came

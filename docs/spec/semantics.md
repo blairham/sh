@@ -2443,6 +2443,65 @@ wording, where it had been concatenated.
 pair. The block carries no location, exactly as the block a bare `kill` writes
 does.
 
+## The all-processes target, and why signal 0 could measure it
+
+POSIX gives the pid `-1` a meaning no other number has: every process the
+caller may signal. #2145 asked whether `kill` should refuse it, and recorded
+that it "was not measured by running it, for the obvious reason" — on a
+developer's machine the call takes down their login shells and every agent
+session.
+
+**It is measurable, and the instrument is signal 0.** `kill -0` runs the
+kernel's permission check and delivers nothing, so the whole panel answers the
+question on a working machine. Measured 2026-09-19:
+
+| | `kill -0 -- -$$` (own group) | `kill -0 -- -1` (everything) | `kill -0 -- -99999` (absent group) |
+| --- | --- | --- | --- |
+| bash 5.3.20 | 0 | **0** | 1 |
+| zsh 5.9.2 | 0 | **0** | 1 |
+| dash 0.5.12 | 0 | **0** | 1 |
+| BusyBox 1.37.0 ash | 0 | **0** | 1 |
+| ksh93u+ 2012-08-01 | 0 | **`kill: -1: permission denied`, 1** | `kill: -99999: no such process`, 1 |
+
+ksh93 answers those three columns three different ways, so `-1` is to it
+neither "a group that is there" nor "a group that is gone". It is a case of its
+own with a diagnostic of its own — the shell refusing by name, not an errno
+coming back from the kernel. What proves that is the middle column read across:
+bash makes the identical call, as the same user on the same machine in the same
+second, and gets 0.
+
+So #2145's argument against refusing — "**every panel shell permits it**, so
+refusing is a deviation and a conformance miss" — **is false.** One column
+refuses it deliberately. Refusing has real-shell precedent, and the
+disagreement is what an axis is for:
+`Semantics.KillRefusesTheAllProcessesTarget`, **Yes** in ksh and **No** in the
+other four.
+
+The axis is asked only where the operand really is that pid. Every other
+target, process groups included, takes one path in every dialect, so the
+question sits at the disagreement rather than on the send.
+
+### Why the axis is worth its weight
+
+The operand is not only written on purpose. It arrives in real scripts as a
+*default*: gitstatus writes
+
+    typeset -gi GITSTATUS_DAEMON_PID_$name="${sysparams[procsubstpid]:--1}"
+
+and survives only because it also guards with `[[ $daemon_pid == <1-> ]]`
+before `kill -- -$daemon_pid`. A caller that writes the default and omits the
+guard asks to signal everything it can reach. Under the refusing answer that
+becomes a sentence; under the permitting answer `kill -1` from a container
+stays the deliberate act it is. Both are real positions, which is why this is
+an axis rather than a fix.
+
+### `--` is not end-of-options in this `kill`
+
+Found while measuring the above and left for its own issue. bash, zsh and
+ksh93 all take `kill -- -1`; this shell answers `kill: --: not a pid`, as dash
+(`Illegal number: -`) and BusyBox ash (`invalid number '--'`) do. The pid is
+still reachable here as `kill -0 -1`, which is the spelling the test uses.
+
 ### BusyBox `kill` writes the shell's name and nothing else
 
 Every failure in that applet is status **1** — there is no route to 2 in it at

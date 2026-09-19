@@ -2549,6 +2549,8 @@ func Semantics() interp.Semantics {
 	s.GetoptsAssignmentRestartsWord = interp.No
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// zsh 5.9.2 sends it: `kill -0 -- -1` is 0.
+	s.KillRefusesTheAllProcessesTarget = interp.No
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// OPTIND names the word until its last letter has been read.

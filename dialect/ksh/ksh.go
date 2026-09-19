@@ -2210,6 +2210,10 @@ func Semantics() interp.Semantics {
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// ksh93u+ alone refuses it, and by name: `kill -0 -- -1` is
+	// `kill: -1: permission denied` at 1, where `-$$` is 0 and an
+	// absent group is `no such process`.
+	s.KillRefusesTheAllProcessesTarget = interp.Yes
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// bash's answer here: OPTIND names the word until its last letter.

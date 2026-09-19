@@ -1888,6 +1888,8 @@ func Semantics() interp.Semantics {
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// bash 5.3.20 sends it: `kill -0 -- -1` is 0.
+	s.KillRefusesTheAllProcessesTarget = interp.No
 	// A trim on `$@` runs over each field. dash and BusyBox ash run it
 	// over the joined list once.
 	s.OperatorDistributesOverTheFieldList = interp.Yes

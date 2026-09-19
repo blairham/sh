@@ -4,6 +4,7 @@
 package ksh_test
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -56,7 +57,13 @@ func TestTheBareListingWritesTheOlderNameAndTheUnnamedPosition(t *testing.T) {
 	if names[5] != "IOT" {
 		t.Errorf("signal 6 is listed as %q, want IOT", names[5])
 	}
-	if !strings.Contains(out, "SIG29") {
+	// The unnamed position is **this platform's**, not this table's: signal
+	// 29 is INFO on macOS and this shell has no name for it, and on Linux
+	// the same number is a signal the shared table names — so the row only
+	// exists on the machine the measurement was taken on. The rendering
+	// itself is pinned platform-independently by
+	// TestAnUnnamedPositionIsWrittenTheDialectsWay in interp.
+	if runtime.GOOS == "darwin" && !strings.Contains(out, "SIG29") {
 		t.Errorf("kill -l wrote %q, want SIG29 in it for the position this table cannot name", out)
 	}
 	if strings.Contains(out, "ABRT") {

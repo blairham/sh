@@ -2332,6 +2332,91 @@ Nothing in `interp` reads the field, the same way nothing in it reads
 `StartupFileOptions`: both are invocation inputs, and the front end is where an
 invocation is read.
 
+## Starting in another shell's semantics: `--emulate`
+
+**The rule.** One shell in the panel takes an invocation option whose next
+word is the *mode* it starts in — the semantics of another shell, in effect
+before the first line is read. It is not a spelling of an option name: the
+word after it is taken unconditionally, an unknown mode is a silent no-op, an
+attached `=value` is not a spelling of it, and it has to be the **first**
+option word on the line.
+
+Applying the mode is not the front end's: what an emulation means is a
+question only the shell being emulated can answer, and that shell already has
+a builtin for it. So the vector carries the builtin's *name*, and the front
+end asks the runner for it once the runner exists — the same split `-o <name>`
+already has.
+
+### Measured
+
+2026-09-18 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin LC_ALL=C` with `HOME` an
+empty directory. bash 5.3.20, bash 3.2.57, dash 0.5.12, ksh93u+ 2012-08-01 and
+BusyBox ash 1.37.0 have no such option and refuse the word.
+
+| invocation | writes | exits |
+| --- | --- | --- |
+| `--emulate sh -c 'v="a b"; set -- $v; echo $#'` | `2`, where a plain `-c` says `1` | 0 |
+| `--emulate ksh -c emulate` | `ksh` | 0 |
+| `--emulate fish -c 'emulate; echo ran'` | `zsh`, then `ran` | 0 |
+| `--emulate "" -c emulate` | `zsh` — the same silence | 0 |
+| `--emulate -- sh -c emulate` | `can't open input file: sh` | 127 |
+| `--emulate -c 'echo ran'` | `can't open input file: echo ran` | 127 |
+| `--emulate=sh -c 'echo ran'` | `no such option: emulate=sh` | 1 |
+| `--emulate` | `--emulate: argument required` | **1** |
+| `-x --emulate sh -c :` | `--emulate: must precede other options` | **1** |
+| `--emulate sh -x -c :` | `+ :` | 0 |
+| `--emulate ksh --emulate sh -c emulate` | `sh` | 0 |
+
+Five facts, and none follows from the others:
+
+- **The next word is taken unconditionally.** The `-- sh` and `-c 'echo ran'`
+  rows are what prove it, since both are words a front end would otherwise
+  claim: `--` becomes the mode and `sh` becomes the script operand.
+- **An unknown mode is silence, not a refusal** — and it is the builtin's own
+  answer to the same word, which is why the mode is never judged at the front
+  end.
+- **`=value` is not a spelling of it.** The word falls through to the option
+  namespace and is refused there, at that namespace's status.
+- **Both refusals are 1**, where a word this front end cannot place exits 2.
+  The wording and the status are the dialect's on both.
+- **It must come first.** Any other option word before it — a letter, an `-o`
+  name, a `--name` — makes it a refusal. A second `--emulate` is not "another
+  option word": it is granted, and the last mode is the one the shell starts
+  in.
+
+And one about order that is invisible from a passing command line: **the
+emulation is applied before the invocation's own options.** An emulation
+resets the option table to the mode's defaults, so `--emulate sh -x` applied
+the other way round would put out the trace the same line asked for. Real zsh
+traces.
+
+### Which words the builtin reads as a mode
+
+The front end hands the word over behind an end-of-options `--`, because it
+was taken unconditionally and a mode is not a command line. That made four
+rows of the builtin's own reading matter, and all four were wrong here until
+#3156. Measured in the same run:
+
+| written | real zsh | why |
+| --- | --- | --- |
+| `emulate -- sh` | `sh` | `--` ends the options |
+| `emulate --` | the current mode | a marker alone leaves a bare call |
+| `emulate -- -c` | silence | a word behind the marker is a mode, not a letter |
+| `emulate ""` | silence | written and empty is a mode like any other |
+| `emulate "" sh` | `unknown argument sh` | and it occupied the operand |
+| `emulate -` | the current mode | an option word carrying no letters |
+| `emulate +` | silence | which a lone plus is **not** — it is a mode |
+| `emulate -L --` | `not enough arguments` | the count check is about letters |
+
+So "no mode" and "the empty mode" are two states, and only the first prints.
+
+### Where it lives
+
+`interp.Semantics.EmulationOption` — spelling, builtin name, the two refusal
+sentences and their status — read by `driver`, which grants the word in
+`emulationOption` and runs the builtin in `applyEmulation`. Nothing in
+`interp` reads the field, for the reason nothing in it reads `VersionOption`.
+
 ## Two startup inputs the environment carries
 
 Neither is an axis: one shell in the panel reads both names and the other three

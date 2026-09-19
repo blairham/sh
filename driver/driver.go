@@ -496,6 +496,15 @@ func MainArgs(sh Shell, argv []string) int {
 			sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, se.path, se.err))
 			return sh.Diagnostics.ScriptStatus(se.err)
 		}
+		var er *emulationRefusal
+		if errors.As(err, &er) {
+			// The dialect's sentence and the dialect's status, which is the
+			// whole reason this is a type of its own: the word was placed
+			// and then refused, so neither the usage block below nor this
+			// front end's usage status is the answer.
+			sh.errf("%s: %s\n", sh.Name, er.text)
+			return er.status
+		}
 		var oe *optionError
 		if errors.As(err, &oe) {
 			// An option word this front end could not place. The dialect's
@@ -797,6 +806,11 @@ type source struct {
 	// loop is where it was read and because it beats every route: see
 	// Semantics.VersionOption.
 	version bool
+	// emulation and emulating are `--emulate`'s mode word and whether it was
+	// written, carried past the route for the reason startup is: the mode is
+	// applied once the runner exists and every route has one.
+	emulation string
+	emulating bool
 	// scriptErr is a script operand that would not open, held until the
 	// invocation's own options have been applied — which is the order every
 	// shell in the panel has. See route, where it is carried instead of
@@ -1005,6 +1019,15 @@ type invocation struct {
 	// differently, and the sign of the word the letter was in is the whole
 	// of the question. See Semantics.PlusSignedCommandStringIsDollarZero.
 	plusC bool
+	// emulation is the mode word `--emulate` was given and emulating whether
+	// the option was written at all — a pair rather than one string because
+	// the empty word is a mode like any other, and a measured one: `zsh
+	// --emulate "" -c emulate` is silent at 0 with the mode unchanged,
+	// exactly as `--emulate fish` is. sawOption is what makes the option's
+	// position a fact rather than a guess; see Semantics.EmulationOption.
+	emulation string
+	emulating bool
+	sawOption bool
 	// startup is what the startup-file options said, accumulated the same
 	// way the rest is and read off the dialect's own spellings; see
 	// Semantics.StartupFileOptions.
@@ -1093,6 +1116,59 @@ func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (
 	}
 	return args, true, nil
 }
+
+// emulationOption reads `--emulate MODE`, reporting whether the word was one
+// at all and what arguments are left.
+//
+// Beside startupOption rather than folded into it because the two differ in
+// every part but the shape: this one is refused for its *position*, its
+// missing-argument sentence and status are the dialect's rather than this
+// front end's, and what it records is applied by a builtin once a runner
+// exists. See Semantics.EmulationOption for the measurements.
+//
+// The next word is taken unconditionally, which is measured and is the point:
+// `zsh --emulate -- sh` reads `--` as the mode and then fails to open `sh`,
+// and `zsh --emulate -c 'echo ran'` reads `-c` as the mode and then fails to
+// open `echo ran`. A front end that claimed either word back would be
+// answering a command line real zsh does not.
+func (sh Shell) emulationOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
+	e := sh.Semantics.EmulationOption
+	if e.Spellings == "" || !spelt(e.Spellings, spelling) {
+		return args, false, nil
+	}
+	if inv.sawOption && e.OutOfOrder != "" {
+		return nil, true, &emulationRefusal{
+			text:   interp.Wording(e.OutOfOrder, e.OutOfOrder, spelling),
+			status: e.Status,
+		}
+	}
+	if len(args) < 1 {
+		return nil, true, &emulationRefusal{
+			text:   interp.Wording(e.MissingArgument, e.MissingArgument, spelling),
+			status: e.Status,
+		}
+	}
+	// Last one wins, which is measured: `--emulate ksh --emulate sh` starts
+	// under sh. Nothing is applied here — the mode is a word until a runner
+	// exists for the builtin to be asked for.
+	inv.emulation, inv.emulating = args[0], true
+	return args[1:], true, nil
+}
+
+// emulationRefusal is an emulation option this front end placed and then
+// refused on the dialect's own terms.
+//
+// Its own type for the reason optionError is one, plus a second: the *status*
+// is the dialect's and this front end's usage status is not it. zsh answers 1
+// to both of its refusals where a word this front end could not place is 2,
+// so returning a plain error would have exited the wrong number while
+// printing the right sentence — the shape #483 records one level up.
+type emulationRefusal struct {
+	text   string
+	status int
+}
+
+func (e *emulationRefusal) Error() string { return e.text }
 
 // input reads the whole argument vector: the options, then the operands.
 //
@@ -1225,6 +1301,17 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 	// worse diagnostic — the letters of `--rcfile` include a `c`, so a shell
 	// without that option would have taken the *next word* as a command
 	// string and run it.
+	// The emulation option before everything, including the bookkeeping
+	// below, because its whole rule is about what came before it: any other
+	// option word makes it a refusal, so the word that grants it must be the
+	// one word that does not count as one. Measured — `zsh -x --emulate sh`
+	// and `zsh -o xtrace --emulate sh` are both `--emulate: must precede
+	// other options` at 1, while `zsh --emulate ksh --emulate sh` is granted
+	// and the last one wins. See Semantics.EmulationOption.
+	if rest, matched, err := sh.emulationOption(a, args, inv); matched {
+		return rest, err
+	}
+	inv.sawOption = true
 	if strings.HasPrefix(a, "--") {
 		// The version option first, because it answers rather than records:
 		// nothing after it is read, so there is no interaction with the rest
@@ -1490,6 +1577,9 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	// route for the reason `-i` is: every route reads at least one of them,
 	// so deciding it per route is how one of them would come to be forgotten.
 	in.startup = inv.startup
+	// And the emulation, for the same reason again: it is applied against a
+	// runner, and which route built that runner does not change the mode.
+	in.emulation, in.emulating = inv.emulation, inv.emulating
 	return in, nil
 }
 
@@ -2134,6 +2224,11 @@ func (sh Shell) runInput(in source) int {
 	// which is the dialect's plumbing rather than the user's text: tracing
 	// it under `-x` or killing it under `-e` would be reporting on machinery
 	// nobody wrote.
+	// The emulation the invocation asked for, before those options and for a
+	// measured reason: an emulation resets the option table to that mode's
+	// defaults, so `--emulate sh -x` applied the other way round would have
+	// put out the trace it was given. See Shell.applyEmulation.
+	sh.applyEmulation(r, in)
 	if code, ok := sh.applyOptions(r, in.opts); !ok {
 		return code
 	}
@@ -2207,6 +2302,38 @@ func (sh Shell) runInput(in source) int {
 	}
 
 	return sh.execute(r, pr, in)
+}
+
+// applyEmulation hands the mode `--emulate` named to the builtin that
+// implements it, once the runner that builtin acts on exists.
+//
+// The front end reads the option and the *dialect* applies it, which is the
+// same split `-o <name>` already has: what an emulation means is a question
+// only the shell being emulated can answer, and this front end has no option
+// table at all. So the value carries the builtin's name and the runner is
+// asked for it, exactly as `emulate -c` asks for `eval`.
+//
+// A mode the builtin does not know is the builtin's silence and not an error
+// here, which is measured: `zsh --emulate fish -c 'echo ran'` runs the
+// command and leaves the mode alone. What is *not* silent is a dialect that
+// names a spelling and no builtin — it would read the word and apply nothing,
+// which reads as a working option — so that pair is asserted where the value
+// is written rather than defended here.
+func (sh Shell) applyEmulation(r *interp.Runner, in source) {
+	if !in.emulating {
+		return
+	}
+	b, ok := r.Builtin(sh.Semantics.EmulationOption.Builtin)
+	if !ok {
+		return
+	}
+	// Behind an end-of-options marker, because the word was taken
+	// unconditionally and a mode is not a command line: real zsh reads
+	// `--emulate -c` and `--emulate --` as modes it does not know and says
+	// nothing, where a builtin handed the bare word would read the letters.
+	// The marker is the builtin's own — every shell's convention — so this
+	// is the front end saying "operand" and not knowing anything more.
+	_ = b(r, sh.context(), []string{"--", in.emulation})
 }
 
 // applyOptions installs the set options the invocation named, once the

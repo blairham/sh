@@ -991,9 +991,10 @@ type Semantics struct {
 	//
 	// Asked only in POSIX mode and only once a name in the prefix is really
 	// frozen, so it is two questions deep off the common path. Answered by
-	// the one dialect measured in the mode: the other three reach it as `sh`
-	// and what they do there is unmeasured, so the preset declines the move
-	// rather than asserting the standard's reading for a shell nobody asked.
+	// the one dialect measured in the mode: zsh, ksh93, dash and BusyBox ash
+	// reach it only under the `sh` name and what they do there is
+	// unmeasured, so the preset declines the move rather than asserting the
+	// standard's reading for a shell nobody asked.
 	PosixModeSharpensAPrefixRefusal Answer
 
 	// PrefixToAFrozenNameIsCheckedFirst refuses the prefix **before** the

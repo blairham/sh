@@ -1898,9 +1898,11 @@ wrong at once.
 machine has. `kill -l 7` was a refusal in the bash and dash dialects and the
 bare number in the other three, in a shell running on the machine that calls
 7 `EMT`. The table is split now: the shared part in `interp/killbuiltin.go`
-and the rest in `interp/platformsignals_<goos>.go`, which is the same shape
-`ulimit`'s per-platform letters take, and for the same reason — a table
-written once is wrong on one of the two machines.
+and the rest in `interp/platformsignals_<goos>.go` — a table written once is
+wrong on one of the two machines. `ulimit`'s per-platform letters are the
+same question answered one seam along: there the platform's limits already
+reach the engine through a hook, so the letters follow the rows rather than
+needing a table of their own.
 
 **The range is not the table.** Linux has 64 signals and names for 33 of
 them, and every reference sends all 64: `kill -40` is a real send in bash,
@@ -12082,17 +12084,63 @@ worded 1 in bash and zsh and a silent 1 in ksh93
 (`Diagnostics.DisownNoCurrentJob`, empty meaning silence). Its sweeping
 letters (-a, -h, -r) are unimplemented and refused by name.
 
-**`ulimit -a`** is four tables that share nothing — labels, order, row
+**`ulimit -a`** is five tables that share nothing — labels, order, row
 sets, units — so each is the dialect's data
 (`Diagnostics.UlimitListing`): a row is a literal prefix and a value,
 live from the limit or fixed where the row is not a resource limit at
-all (pipe and socket buffers, the rows one engine lists as
-`not supported`). The `-n` row reports what the Go runtime raised the
-soft limit to, not what a child will get — driver/rlimit.go records why
-that is not fixable. The locked-memory, resident-set and process-count
-limits joined the driver's table by platform header numbers
-(driver/rlimit_darwin.go, _linux.go); elsewhere they keep the honest
-refusal.
+all (socket buffers, the rows one engine lists as `not supported`). The
+`-n` row reports what the Go runtime raised the soft limit to, not what
+a child will get — driver/rlimit.go records why that is not fixable.
+The locked-memory, resident-set and process-count limits joined the
+driver's table by platform header numbers (driver/rlimit_darwin.go,
+_linux.go); elsewhere they keep the honest refusal.
+
+**The letters are the table's, which is what makes them answerable per
+platform** (#2805, #2806). Measured 2026-09-18 over seven columns on two
+kernels: every shell reads exactly the letters its own `ulimit -a`
+prints, so a row a kernel cannot answer takes its letter with it. One
+binary of bash refuses `-e` on macOS and reads it on Linux, and the six
+rows that separate its eleven-row table from its seventeen-row one are
+exactly the six limits the BSD kernel does not have. So
+`UlimitListingRow.Letter` is where a shell's letters live, and the
+substrate's own fallback — for a caller that has described no table — is
+POSIX's eight, which name neither `-m` nor `-u`. Two axes came out with
+the old arrangement: `UlimitHasResidentSet` and `UlimitHasProcessCount`
+were a bool each for a question the table already answers in more
+detail, and the detail matters — dash *has* the process count and spells
+it `-p`, which is the pipe buffer in bash and ksh93, and spells file
+locks `-w`, which is swap in ksh93.
+
+Three shapes follow, each measured rather than reasoned:
+
+- **The rows are the kernel's, in the kernel's order, in one column.**
+  zsh prints nine rows on macOS and sixteen on Linux, each its kernel's
+  own numbering exactly — `Diagnostics.UlimitListingInKernelOrder`, read
+  against `Runner.RlimitOrder`, which the front end fills in with one
+  entry per *number*. That is why zsh has no `-m` on a kernel that
+  numbers the resident set and the address space alike and bash, listing
+  its own table, keeps one: the row zsh prints for that number is the
+  address space.
+- **The pipe buffer is the platform's number and not a limit.** 512 bytes
+  on macOS and 4096 on Linux, which bash writes as `1` and `8` in
+  512-byte blocks. It is `ResourcePipeBuffer`, read through the same
+  hooks — the interpreting package looks no platform constant up for
+  itself — and it cannot be set: `ulimit -p 8` is the kernel's own
+  `cannot modify limit: Invalid argument` at 1, for every operand
+  including the one the row already holds.
+- **A row that is a sentence is read everywhere and set nowhere.**
+  ksh93's `not supported` and `undefined` rows are the shell's own
+  answer rather than the kernel's, so it reads `-e`, `-i`, `-q`, `-r`
+  and `-x` on a machine where the other four refuse the letters
+  outright, and refuses to set one under the row's short name:
+  `ulimit: msgqueue: is read only` at 1 for a row labeled `message queue
+  size (Kibytes)` (`Diagnostics.UlimitReadOnly`,
+  `UlimitListingRow.Name`).
+
+ksh93 is the one column whose Linux table is unmeasured: no image
+carries 93u+ 2012-08-01, and the 93u+m 1.0.4 Debian ships is a different
+table — a wider label column and four rows this one never had. Its
+sentences are recorded as measured on macOS.
 
 **The directory stack** stays in the prelude — shell over `cd`, the
 extension seam working as designed — and became a real stack: `pushd`

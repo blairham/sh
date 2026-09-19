@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -31,14 +32,103 @@ func init() {
 type UlimitListingRow struct {
 	// Prefix is the label column exactly as the engine writes it.
 	Prefix string
-	// Fixed, when non-empty, is the whole value: the rows about pipe and
-	// socket buffers, and the ones an engine lists as unsupported, are not
-	// resource limits and never move.
+	// Letter is the option letter this row is read with, and it is where a
+	// shell's letters come from: `ulimit -X` is the row spelled X, and a
+	// letter no row spells is a bad option.
+	//
+	// Measured 2026-09-18 over seven columns on two kernels, and the letters
+	// are not shared enough to live anywhere else: `-p` is the pipe buffer
+	// in bash and ksh93 and the process count in dash, `-w` is file locks in
+	// dash and swap in ksh93, `-x` is file locks in everyone but ksh93 —
+	// where it is a row that says it has none — and `-u` is a letter dash
+	// does not have at all. Zero means a row this shell prints and has no
+	// letter for, which is the one zsh writes as `-N 15`.
+	Letter byte
+	// Fixed, when non-empty, is the whole value: the rows about socket
+	// buffers, and the ones an engine lists as unsupported, are not resource
+	// limits and never move. Reading one prints the text; setting one is
+	// refused, since there is nothing behind it to set.
 	Fixed string
+	// Name is what a refusal calls this row where the label is not it. One
+	// shell writes `ulimit: msgqueue: is read only` for a row its table
+	// labels `message queue size (Kibytes)`, and the short name is nowhere
+	// in the long one. Empty means the label, which is what every other
+	// refusal already uses — see Diagnostics.ulimitResourceName.
+	Name string
 	// Res and Scale are the live rows' inputs — the resource, and what one
 	// printed unit is worth, zero meaning the dialect's block unit.
 	Res   Resource
 	Scale int64
+}
+
+// name is what a refusal about this row calls it.
+func (row UlimitListingRow) name() string {
+	if row.Name != "" {
+		return row.Name
+	}
+	label := row.Prefix
+	if i := strings.IndexByte(label, '('); i >= 0 {
+		label = label[:i]
+	}
+	return strings.TrimSpace(label)
+}
+
+// ulimitRows is the table this shell prints here and now: the dialect's rows,
+// less the ones this kernel has no limit behind, and in the kernel's own
+// order where the dialect lists them that way.
+//
+// It answers `ulimit -a` and `ulimit -X` alike, which is the measurement:
+// every column accepts exactly the letters its own table prints. bash refuses
+// `-e` on macOS and reads it on Linux from one binary, and zsh has no `-m` on
+// macOS because the row is not there — while ksh93 reads `-e` on both,
+// because its row is a sentence saying the limit is not supported rather than
+// a limit (#2805).
+func (r *Runner) ulimitRows() []UlimitListingRow {
+	rows := r.diag().UlimitListing
+	out := make([]UlimitListingRow, 0, len(rows))
+	if r.diag().UlimitListingInKernelOrder && len(r.RlimitOrder) > 0 {
+		byRes := make(map[Resource]UlimitListingRow, len(rows))
+		for _, row := range rows {
+			if row.Fixed == "" {
+				byRes[row.Res] = row
+			}
+		}
+		for _, res := range r.RlimitOrder {
+			if row, ok := byRes[res]; ok {
+				out = append(out, row)
+			}
+		}
+		return out
+	}
+	for _, row := range rows {
+		// A limit this kernel does not have is not a row that reads zero —
+		// it is a row that is not there. See Runner.HasRlimit for the
+		// three shells that were measured saying so.
+		if row.Fixed == "" && r.HasRlimit != nil && !r.HasRlimit(row.Res) {
+			continue
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// ulimitRow is the row a letter reads, and false where this shell has no such
+// letter.
+//
+// A dialect that has not said what its table looks like falls back to the
+// substrate's own letters — see resourceLetters, which is POSIX's set and not
+// any shell's.
+func (r *Runner) ulimitRow(c byte) (UlimitListingRow, bool) {
+	if len(r.diag().UlimitListing) == 0 {
+		res, scale, ok := lookupResource(c)
+		return UlimitListingRow{Letter: c, Res: res, Scale: scale}, ok
+	}
+	for _, row := range r.ulimitRows() {
+		if row.Letter == c {
+			return row, true
+		}
+	}
+	return UlimitListingRow{}, false
 }
 
 // ulimitListing is `ulimit -a`: every row the dialect lists, soft limits
@@ -58,15 +148,9 @@ func (r *Runner) ulimitListing(hard bool) int {
 	if r.unspecified {
 		return r.status
 	}
-	for _, row := range rows {
+	for _, row := range r.ulimitRows() {
 		if row.Fixed != "" {
 			r.printf("%s%s\n", row.Prefix, row.Fixed)
-			continue
-		}
-		// A limit this kernel does not have is not a row that reads zero —
-		// it is a row that is not there. See Runner.HasRlimit for the
-		// three shells that were measured saying so.
-		if r.HasRlimit != nil && !r.HasRlimit(row.Res) {
 			continue
 		}
 		unit := row.Scale
@@ -96,8 +180,12 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 	// reading gives the soft one and writing sets both. Unanimous.
 	var hard, soft, all bool
 	// The default resource is `-f`, which is why bare `ulimit` reports the
-	// file-size limit rather than a summary.
-	res, scale := ResourceFileSize, int64(0)
+	// file-size limit rather than a summary. Read from the dialect's own row
+	// where it has one, so the unit is not written down twice.
+	row, ok := r.ulimitRow('f')
+	if !ok {
+		row = UlimitListingRow{Letter: 'f', Res: ResourceFileSize}
+	}
 	for len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' {
 		if args[0] == "--" {
 			args = args[1:]
@@ -116,8 +204,8 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 				all = true
 			default:
 				var found bool
-				res, scale, found = lookupResource(c)
-				if !found || !r.hasResource(res) {
+				row, found = r.ulimitRow(c)
+				if !found {
 					line := Wording(r.diag().UlimitBadOption,
 						"ulimit: -%[1]s: invalid option", string(c))
 					// One column writes this one bare, where every other
@@ -148,7 +236,21 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 	if all {
 		return r.ulimitListing(hard)
 	}
-	unit := scale
+	if row.Fixed != "" {
+		// A row that is a sentence rather than a limit. Reading it prints
+		// the sentence; setting it is refused, and one shell's wording for
+		// that refusal is its own — `ulimit: locks: is read only` at 1,
+		// measured 2026-09-18 on ksh93u+ at every fixed row it has.
+		if len(args) == 0 {
+			r.printf("%s\n", row.Fixed)
+			return 0
+		}
+		r.diagf("%s\n", Wording(r.diag().UlimitReadOnly,
+			"ulimit: %[1]s: is read only", row.name()))
+		return orDefault(r.diag().UlimitReadOnlyStatus, 1)
+	}
+	res := row.Res
+	unit := row.Scale
 	if unit == 0 {
 		// The block scale, which is the one dialect question in the numbers:
 		// 1024 bytes in bash, 512 in the other three.
@@ -225,21 +327,6 @@ func lookupResource(c byte) (Resource, int64, bool) {
 		}
 	}
 	return 0, 0, false
-}
-
-// hasResource reports whether this dialect's `ulimit` addresses one.
-//
-// Two of the ten are not universal, which is measured rather than assumed:
-// zsh has no `-m` and dash has no `-u`, and each reports the letter as an
-// option it does not know.
-func (r *Runner) hasResource(res Resource) bool {
-	switch res {
-	case ResourceResidentSet:
-		return r.ask(r.sem().UlimitHasResidentSet, "`ulimit -m`")
-	case ResourceProcesses:
-		return r.ask(r.sem().UlimitHasProcessCount, "`ulimit -u`")
-	}
-	return true
 }
 
 // ulimitOperand reads the word a limit is being set from, in the three

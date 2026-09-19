@@ -17624,15 +17624,6 @@ type Semantics struct {
 	// docs/spec/semantics.md, "A probe the corpus could hold after all".
 	UlimitBlockIsKilobyte Answer
 
-	// UlimitHasResidentSet is `ulimit -m`. True in bash, dash and ksh93; zsh
-	// has no such letter and reports it as a bad option. Recorded as
-	// `ulimit/a-letter-zsh-does-not-have`.
-	UlimitHasResidentSet Answer
-
-	// UlimitHasProcessCount is `ulimit -u`. True in bash, ksh93 and zsh; dash
-	// has no such letter. Recorded as `ulimit/a-letter-dash-does-not-have`.
-	UlimitHasProcessCount Answer
-
 	// UlimitTakesHardKeyword reads the word `hard` in a limit's place as the
 	// ceiling this resource has now, so `ulimit -n hard` raises the soft
 	// limit to whatever the process is allowed. True in bash and zsh.
@@ -20330,10 +20321,11 @@ func PosixSemantics() Semantics {
 		UmaskPrintsFourDigits: Yes,
 		// POSIX says setting the mask writes nothing.
 		UmaskSetWithSPrints: No,
-		// POSIX counts these in 512-byte blocks, and names neither -m nor -u.
+		// POSIX counts these in 512-byte blocks. It names neither -m nor
+		// -u, which is the substrate's own letter set rather than an axis:
+		// a shell's letters are the rows of its table, and the fallback for
+		// a dialect with no table is POSIX's — see resourceLetters.
 		UlimitBlockIsKilobyte: No,
-		UlimitHasResidentSet:  No,
-		UlimitHasProcessCount: No,
 		// POSIX sets both when neither is named.
 		UlimitSetsBothLimits: Yes,
 		// POSIX gives `ulimit` one operand, "a decimal integer" or the word

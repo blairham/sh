@@ -13,7 +13,12 @@ const (
 	rlimitLockedMemory = 8
 )
 
-// And five this kernel has that the BSDs do not, by the numbers
+// The pipe buffer, which is not a limit and is listed beside them by two
+// shells all the same. Measured 2026-09-18 in the panel's Alpine image: bash
+// writes it in 512-byte blocks and prints 8 there.
+const pipeBufferBytes = 4096
+
+// And six this kernel has that the BSDs do not, by the numbers
 // asm-generic/resource.h gives them. Go's syscall package names none of the
 // five on any platform, so they are written out here for the same reason the
 // three above are.
@@ -23,4 +28,5 @@ const (
 	rlimitMessageQueues      = 12
 	rlimitSchedulingPriority = 13
 	rlimitRealtimePriority   = 14
+	rlimitRealtimeTime       = 15
 )

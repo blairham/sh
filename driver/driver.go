@@ -1884,6 +1884,9 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// `ulimit -a` lists the rows that exist here rather than failing on
 		// the first one that does not.
 		r.HasRlimit = hasRlimit
+		// And in what order it numbers them, for the one table that is laid
+		// out in the kernel's sequence rather than in the shell's own.
+		r.RlimitOrder = rlimitOrder()
 		// And it waits for its own children, which is the only way to be
 		// told that one *stopped* rather than finished.
 		r.WaitForCommand = waitForCommand

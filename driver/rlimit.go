@@ -5,6 +5,7 @@ package driver
 
 import (
 	"fmt"
+	"sort"
 	"syscall"
 
 	"github.com/blairham/sh/interp"
@@ -51,6 +52,7 @@ func init() {
 		interp.ResourceMessageQueues:      rlimitMessageQueues,
 		interp.ResourceSchedulingPriority: rlimitSchedulingPriority,
 		interp.ResourceRealtimePriority:   rlimitRealtimePriority,
+		interp.ResourceRealtimeTime:       rlimitRealtimeTime,
 	} {
 		if id >= 0 {
 			rlimitOf[res] = id
@@ -61,8 +63,41 @@ func init() {
 // hasRlimit reports whether this kernel has a limit at all, which is what
 // tells `ulimit -a` a row belongs in the table. See Runner.HasRlimit.
 func hasRlimit(res interp.Resource) bool {
+	if res == interp.ResourcePipeBuffer {
+		return pipeBufferBytes > 0
+	}
 	_, ok := rlimitOf[res]
 	return ok
+}
+
+// rlimitOrder is the limits this kernel has in the order it numbers them, one
+// entry per number. See Runner.RlimitOrder, which is what reads it and why the
+// sequence rather than the set is the answer.
+//
+// Where one number carries two names — this platform's headers number the
+// resident set and the address space alike, and the map above holds both — the
+// entry is the address space. Measured rather than chosen: the shell that
+// lists in this order prints `-v: address space` for that number on such a
+// kernel and has no `-m` row at all, while on a kernel that numbers the two
+// apart it prints both.
+func rlimitOrder() []interp.Resource {
+	byNumber := make(map[int]interp.Resource, len(rlimitOf))
+	for res, id := range rlimitOf {
+		if prev, taken := byNumber[id]; taken && prev == interp.ResourceAddressSpace {
+			continue
+		}
+		byNumber[id] = res
+	}
+	numbers := make([]int, 0, len(byNumber))
+	for id := range byNumber {
+		numbers = append(numbers, id)
+	}
+	sort.Ints(numbers)
+	order := make([]interp.Resource, 0, len(numbers))
+	for _, id := range numbers {
+		order = append(order, byNumber[id])
+	}
+	return order
 }
 
 // getRlimit reads one limit, in the kernel's own units.
@@ -115,6 +150,16 @@ func hasRlimit(res interp.Resource) bool {
 // wrong, and only for this one resource — every other matched the panel
 // exactly, and so did this one's hard limit.
 func getRlimit(res interp.Resource) (int64, int64, error) {
+	// The pipe buffer is the platform's own number rather than a limit, and
+	// it is read through this hook so that the package interpreting a script
+	// never looks a platform constant up for itself. It has no soft and hard
+	// halves, so the one number answers both.
+	if res == interp.ResourcePipeBuffer {
+		if pipeBufferBytes == 0 {
+			return 0, 0, fmt.Errorf("this build has no such limit")
+		}
+		return pipeBufferBytes, pipeBufferBytes, nil
+	}
 	id, ok := rlimitOf[res]
 	if !ok {
 		return 0, 0, fmt.Errorf("this build has no such limit")
@@ -127,6 +172,13 @@ func getRlimit(res interp.Resource) (int64, int64, error) {
 }
 
 func setRlimit(res interp.Resource, soft, hard int64) error {
+	// Nothing can change the pipe buffer, and the kernel's own word for the
+	// attempt is what the shell that lists it prints: `ulimit: pipe size:
+	// cannot modify limit: Invalid argument`, measured 2026-09-18 on bash
+	// 5.3.20 for every operand including the value the row already holds.
+	if res == interp.ResourcePipeBuffer {
+		return syscall.EINVAL
+	}
 	id, ok := rlimitOf[res]
 	if !ok {
 		return fmt.Errorf("this build has no such limit")

@@ -41,6 +41,7 @@ var sharedStacks = map[string]string{
 	"trapSnapshot":   "only ever replaced wholesale or set to nil, and inheritTraps rebuilds a subshell's traps from scratch",
 	"pipeStatus":     "rebuilt with append([]int(nil), …) on every pipeline, so a write never lands in an array anyone else holds",
 	"optionLists":    "the option namespaces a dialect bound in Apply, appended to at setup and never again",
+	"RlimitOrder":    "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
 }
 
 // seedStacks gives every slice on a Runner an element and spare capacity.
@@ -64,6 +65,7 @@ func seedStacks(r *Runner) {
 	r.borrowed = append(make([]borrowedText, 0, 4), borrowedText{})
 	r.InheritedFiles = append(make([]*os.File, 0, 4), nil)
 	r.ProcessAnchor = append(make([]string, 0, 4), "seed")
+	r.RlimitOrder = append(make([]Resource, 0, 4), ResourceCPUTime)
 	r.redirFds = append(make([]int, 0, 4), 0)
 	r.arithValueNames = append(make([]string, 0, 4), "seed")
 	r.jobs = append(make([]*Job, 0, 4), nil)

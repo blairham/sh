@@ -13,7 +13,12 @@ const (
 	rlimitProcesses    = 7
 )
 
-// The five Linux limits this kernel does not have. Not "unimplemented" and
+// The pipe buffer, which is not a limit and is listed beside them by two
+// shells all the same. Measured 2026-09-18: bash writes it in 512-byte blocks
+// and prints 1 here, and ksh93 writes it in bytes and prints 512.
+const pipeBufferBytes = 512
+
+// The six Linux limits this kernel does not have. Not "unimplemented" and
 // not zero: there is no such limit here, so `ulimit -a` leaves the row out
 // entirely — which is what bash 5.3, zsh and dash were each measured doing on
 // this platform, each printing its Linux table without them.
@@ -23,4 +28,5 @@ const (
 	rlimitMessageQueues      = -1
 	rlimitSchedulingPriority = -1
 	rlimitRealtimePriority   = -1
+	rlimitRealtimeTime       = -1
 )

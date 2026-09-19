@@ -4437,12 +4437,12 @@ echo "reached-after st=$?"`,
 	{
 		ID: "ulimit/a-letter-zsh-does-not-have", Category: "traps and exit",
 		Snippet: `ulimit -m >/dev/null; echo "st=$?"`,
-		Why:     "the resident-set letter, read by bash, dash and ksh93 and a bad option in zsh — the UlimitHasResidentSet axis. The value goes to /dev/null because it is the machine's, not the shell's; the letter's existence is the question",
+		Why:     "the resident-set letter, read by bash, dash and ksh93 and a bad option in zsh — the letter follows the row, and zsh prints no resident-set row on a kernel that numbers the resident set and the address space alike. The value goes to /dev/null because it is the machine's, not the shell's; the letter's existence is the question",
 	},
 	{
 		ID: "ulimit/a-letter-dash-does-not-have", Category: "traps and exit",
 		Snippet: `ulimit -u >/dev/null; echo "st=$?"`,
-		Why:     "the process-count letter, read by bash, ksh93 and zsh where dash refuses it at 2 and carries on — the UlimitHasProcessCount axis, and the other half of the pair above: neither absence is a subset of the other, which is what makes them two axes",
+		Why:     "the process-count letter, read by bash, ksh93 and zsh where dash refuses it at 2 and carries on — dash has the limit and spells it `-p`, which is the pipe buffer in two of the others, so the letters are each table's own and not a shared set",
 	},
 	{
 		ID: "ulimit/the-listings-own-row-for-a-limit-just-set", Category: "traps and exit",

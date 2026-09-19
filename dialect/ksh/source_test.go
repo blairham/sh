@@ -418,6 +418,27 @@ func TestUlimit(t *testing.T) {
 	if _, st := run("ulimit -u"); st != 0 {
 		t.Errorf("-u: status %d, want present=yes", st)
 	}
+	// And the rows that are a sentence rather than a limit: this shell reads
+	// those letters where the other four refuse them outright, because
+	// nothing behind them is the kernel's — and refuses to set one in its
+	// own words, under the row's own short name (#2805, measured 2026-09-18
+	// on ksh93u+ 2012-08-01).
+	for _, tc := range []struct{ letter, sentence, name string }{
+		{"x", "not supported", "locks"},
+		{"q", "not supported", "msgqueue"},
+		{"e", "not supported", "nice"},
+		{"i", "undefined", "sigpend"},
+		{"p", "512", "pipe"},
+		{"b", "512", "sbsize"},
+	} {
+		if out, st := run("ulimit -" + tc.letter); st != 0 || strings.TrimSpace(out) != tc.sentence {
+			t.Errorf("-%s: %q status %d, want %q at 0", tc.letter, out, st, tc.sentence)
+		}
+		out, st := run("ulimit -" + tc.letter + " 5")
+		if want := "ulimit: " + tc.name + ": is read only"; st != 1 || !strings.Contains(out, want) {
+			t.Errorf("-%s 5: %q status %d, want %q at 1", tc.letter, out, st, want)
+		}
+	}
 	// Whether setting lowers the hard limit with the soft one.
 	run("ulimit -t 50")
 	if got := held[interp.ResourceCPUTime]; got[1] != 50 {

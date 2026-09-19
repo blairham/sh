@@ -28,8 +28,6 @@ func ulimitRun(t *testing.T, held map[Resource]limitPair, tweak func(*Semantics)
 	var buf bytes.Buffer
 	sem := permissive()
 	sem.UlimitBlockIsKilobyte = No
-	sem.UlimitHasResidentSet = Yes
-	sem.UlimitHasProcessCount = Yes
 	sem.UlimitSetsBothLimits = Yes
 	if tweak != nil {
 		tweak(&sem)
@@ -122,22 +120,162 @@ func TestUlimitSets(t *testing.T) {
 	}
 }
 
-// Two of the ten letters are not universal.
-func TestUlimitResourcesThatNotEveryShellHas(t *testing.T) {
+// ulimitRunTable is ulimitRun with a table: the rows a dialect lists, the
+// limits this pretend kernel has, and the order it numbers them in.
+func ulimitRunTable(t *testing.T, held map[Resource]limitPair, dg Diagnostics, has func(Resource) bool, order []Resource, src string) (string, int) {
+	t.Helper()
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	sem := permissive()
+	sem.UlimitBlockIsKilobyte = No
+	sem.UlimitSetsBothLimits = Yes
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
+	r.GetRlimit = func(res Resource) (int64, int64, error) {
+		p := held[res]
+		return p.soft, p.hard, nil
+	}
+	r.SetRlimit = func(res Resource, soft, hard int64) error {
+		held[res] = limitPair{soft, hard}
+		return nil
+	}
+	r.HasRlimit, r.RlimitOrder = has, order
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return buf.String(), st
+}
+
+// residentSetTable is a table naming the two resources the substrate's own
+// letters leave out, each on the letter the measured tables give it.
+var residentSetTable = Diagnostics{UlimitListing: []UlimitListingRow{
+	{Prefix: "resident set ", Letter: 'm', Res: ResourceResidentSet, Scale: 1024},
+	{Prefix: "processes ", Letter: 'u', Res: ResourceProcesses, Scale: 1},
+}}
+
+// TestUlimitLettersComeFromTheTable: a shell reads exactly the letters its own
+// `ulimit -a` prints, which is what makes the set answerable per platform —
+// the row goes and the letter goes with it (#2805).
+//
+// The substrate's own fallback, for a caller that has described no table, is
+// POSIX's: it names neither the resident set nor the process count, and two
+// of the measured columns do not have them either.
+func TestUlimitLettersComeFromTheTable(t *testing.T) {
 	held := limits(map[Resource]limitPair{ResourceResidentSet: {1024, 1024}, ResourceProcesses: {50, 50}})
-	if out, st, _ := ulimitRun(t, held, nil, `ulimit -m`); st != 0 || strings.TrimSpace(out) != "1" {
-		t.Errorf("-m where it exists: %q status %d", out, st)
+	for _, tc := range []struct {
+		src  string
+		want string
+	}{
+		{`ulimit -m`, "1"},
+		{`ulimit -u`, "50"},
+	} {
+		out, st := ulimitRunTable(t, held, residentSetTable, nil, nil, tc.src)
+		if st != 0 || strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s against a table that names it: %q status %d, want %q at 0", tc.src, out, st, tc.want)
+		}
+		out, st, _ = ulimitRun(t, held, nil, tc.src)
+		if st == 0 {
+			t.Errorf("%s with no table: %q status %d, want it refused — the substrate's letters are POSIX's", tc.src, out, st)
+		}
 	}
-	out, st, _ := ulimitRun(t, held, func(s *Semantics) { s.UlimitHasResidentSet = No }, `ulimit -m`)
-	if st == 0 || !strings.Contains(out, "m") {
-		t.Errorf("-m where it does not: %q status %d, want it refused as an option", out, st)
+	// And the letter is the row's own rather than the resource's: one column
+	// spells the process count `-p`, which is the pipe buffer in two others.
+	dg := Diagnostics{UlimitListing: []UlimitListingRow{
+		{Prefix: "process ", Letter: 'p', Res: ResourceProcesses, Scale: 1},
+	}}
+	if out, st := ulimitRunTable(t, held, dg, nil, nil, `ulimit -p`); st != 0 || strings.TrimSpace(out) != "50" {
+		t.Errorf("-p against a table that spells the process count with it: %q status %d", out, st)
 	}
-	if out, st, _ := ulimitRun(t, held, nil, `ulimit -u`); st != 0 || strings.TrimSpace(out) != "50" {
-		t.Errorf("-u where it exists: %q status %d", out, st)
+	if out, st := ulimitRunTable(t, held, dg, nil, nil, `ulimit -u`); st == 0 {
+		t.Errorf("-u against that table: %q status %d, want it refused", out, st)
 	}
-	out, st, _ = ulimitRun(t, held, func(s *Semantics) { s.UlimitHasProcessCount = No }, `ulimit -u`)
+}
+
+// TestALetterLeavesWithItsRow: a limit this kernel does not have is not a row
+// that reads zero and not a letter that reads one — both go, and nothing else
+// moves. This is the macOS half of #2805, asserted on a machine that may be
+// either.
+func TestALetterLeavesWithItsRow(t *testing.T) {
+	held := limits(map[Resource]limitPair{ResourceFileLocks: {77, 77}, ResourceCPUTime: {60, 60}})
+	dg := Diagnostics{UlimitListing: []UlimitListingRow{
+		{Prefix: "cpu time  ", Letter: 't', Res: ResourceCPUTime, Scale: 1},
+		{Prefix: "file locks ", Letter: 'x', Res: ResourceFileLocks, Scale: 1},
+	}}
+	everything := func(Resource) bool { return true }
+	if out, st := ulimitRunTable(t, held, dg, everything, nil, `ulimit -x`); st != 0 || strings.TrimSpace(out) != "77" {
+		t.Errorf("-x on a kernel that has it: %q status %d", out, st)
+	}
+	without := func(res Resource) bool { return res != ResourceFileLocks }
+	out, st := ulimitRunTable(t, held, dg, without, nil, `ulimit -x`)
 	if st == 0 {
-		t.Errorf("-u where it does not: %q status %d, want it refused", out, st)
+		t.Errorf("-x on a kernel that has no such limit: %q status %d, want it refused", out, st)
+	}
+	if out, st := ulimitRunTable(t, held, dg, without, nil, `ulimit -a`); st != 0 || out != "cpu time  60\n" {
+		t.Errorf("`ulimit -a` without that limit: %q status %d, want the other row alone", out, st)
+	}
+}
+
+// TestAFixedRowReadsItsSentenceAndRefusesToBeSet: one column lists rows that
+// are a sentence rather than a limit, reads the letter on every platform
+// because nothing behind it is the kernel's, and refuses to set one in its own
+// words with the row's own short name.
+func TestAFixedRowReadsItsSentenceAndRefusesToBeSet(t *testing.T) {
+	held := limits(map[Resource]limitPair{})
+	dg := Diagnostics{
+		UlimitListing: []UlimitListingRow{
+			{Prefix: "locks  ", Letter: 'x', Fixed: "not supported", Name: "locks"},
+		},
+		UlimitReadOnly: "ulimit: %[1]s: is read only",
+	}
+	none := func(Resource) bool { return false }
+	if out, st := ulimitRunTable(t, held, dg, none, nil, `ulimit -x`); st != 0 || strings.TrimSpace(out) != "not supported" {
+		t.Errorf("reading a fixed row: %q status %d, want its sentence at 0", out, st)
+	}
+	out, st := ulimitRunTable(t, held, dg, none, nil, `ulimit -x 5`)
+	if st != 1 || !strings.Contains(out, "ulimit: locks: is read only") {
+		t.Errorf("setting a fixed row: %q status %d, want the read-only refusal at 1", out, st)
+	}
+}
+
+// TestTheKernelsOwnOrderPicksTheRowsAndTheirSequence is the other shape a
+// table takes: one column lists in the order the kernel numbers its limits,
+// one row per number, so a kernel that spells two limits with one number gets
+// one row and the other letter is not read at all (#2806).
+func TestTheKernelsOwnOrderPicksTheRowsAndTheirSequence(t *testing.T) {
+	held := limits(map[Resource]limitPair{
+		ResourceResidentSet:  {1024, 1024},
+		ResourceAddressSpace: {2048, 2048},
+		ResourceCPUTime:      {60, 60},
+	})
+	dg := Diagnostics{
+		UlimitListing: []UlimitListingRow{
+			{Prefix: "-t: cpu time ", Letter: 't', Res: ResourceCPUTime, Scale: 1},
+			{Prefix: "-m: resident set ", Letter: 'm', Res: ResourceResidentSet, Scale: 1024},
+			{Prefix: "-v: address space ", Letter: 'v', Res: ResourceAddressSpace, Scale: 1024},
+		},
+		UlimitListingInKernelOrder: true,
+	}
+	// A kernel that numbers the two alike, so its order carries one of them.
+	shared := []Resource{ResourceCPUTime, ResourceAddressSpace}
+	out, st := ulimitRunTable(t, held, dg, nil, shared, `ulimit -a`)
+	if st != 0 || out != "-t: cpu time 60\n-v: address space 2\n" {
+		t.Errorf("`ulimit -a` in the kernel's order: %q status %d", out, st)
+	}
+	if out, st := ulimitRunTable(t, held, dg, nil, shared, `ulimit -m`); st == 0 {
+		t.Errorf("-m where that kernel prints no such row: %q status %d, want it refused", out, st)
+	}
+	// And a kernel that numbers them apart prints both, in its own sequence
+	// rather than in the one the table is written in.
+	apart := []Resource{ResourceCPUTime, ResourceResidentSet, ResourceAddressSpace}
+	out, st = ulimitRunTable(t, held, dg, nil, apart, `ulimit -a`)
+	if st != 0 || out != "-t: cpu time 60\n-m: resident set 1\n-v: address space 2\n" {
+		t.Errorf("`ulimit -a` where the two are numbered apart: %q status %d", out, st)
+	}
+	if out, st := ulimitRunTable(t, held, dg, nil, apart, `ulimit -m`); st != 0 || strings.TrimSpace(out) != "1" {
+		t.Errorf("-m there: %q status %d, want it read", out, st)
 	}
 }
 
@@ -277,7 +415,7 @@ func TestUlimitCannotChangeNamesTheResource(t *testing.T) {
 	dg := Diagnostics{
 		UlimitCannotChange: "ulimit: %[1]s: cannot modify limit: %[3]s",
 		UlimitListing: []UlimitListingRow{
-			{Prefix: "open files                          (-n) ", Res: ResourceOpenFiles, Scale: 1},
+			{Prefix: "open files                          (-n) ", Letter: 'n', Res: ResourceOpenFiles, Scale: 1},
 		},
 	}
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})

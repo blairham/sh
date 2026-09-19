@@ -410,7 +410,25 @@ func TestUlimit(t *testing.T) {
 		interp.ResourceFileSize: {2048, interp.RlimitInfinity},
 		interp.ResourceCPUTime:  {100, interp.RlimitInfinity},
 	}
-	run := func(src string) (string, int) {
+	// The order each kernel numbers its limits in, which is the order this
+	// shell lists them in and the set of rows it has at all — measured
+	// 2026-09-18, nine rows on macOS arm64 and sixteen in the panel's Alpine
+	// image, each its kernel's sequence exactly. macOS numbers the resident
+	// set and the address space alike, so its order carries one of the two.
+	darwinOrder := []interp.Resource{
+		interp.ResourceCPUTime, interp.ResourceFileSize, interp.ResourceData,
+		interp.ResourceStack, interp.ResourceCore, interp.ResourceAddressSpace,
+		interp.ResourceLockedMemory, interp.ResourceProcesses, interp.ResourceOpenFiles,
+	}
+	linuxOrder := []interp.Resource{
+		interp.ResourceCPUTime, interp.ResourceFileSize, interp.ResourceData,
+		interp.ResourceStack, interp.ResourceCore, interp.ResourceResidentSet,
+		interp.ResourceProcesses, interp.ResourceOpenFiles, interp.ResourceLockedMemory,
+		interp.ResourceAddressSpace, interp.ResourceFileLocks, interp.ResourcePendingSignals,
+		interp.ResourceMessageQueues, interp.ResourceSchedulingPriority,
+		interp.ResourceRealtimePriority, interp.ResourceRealtimeTime,
+	}
+	runOn := func(order []interp.Resource, src string) (string, int) {
 		t.Helper()
 		f, err := syntax.Parse(src, zsh.Dialect())
 		if err != nil {
@@ -421,6 +439,7 @@ func TestUlimit(t *testing.T) {
 		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "zsh", Dialect: presetDialect()}
 		r.GetRlimit = func(res interp.Resource) (int64, int64, error) { p := held[res]; return p[0], p[1], nil }
 		r.SetRlimit = func(res interp.Resource, soft, hard int64) error { held[res] = [2]int64{soft, hard}; return nil }
+		r.RlimitOrder = order
 		zsh.Apply(r)
 		st, rerr := r.Run(context.Background(), f)
 		if rerr != nil {
@@ -428,16 +447,38 @@ func TestUlimit(t *testing.T) {
 		}
 		return buf.String(), st
 	}
+	run := func(src string) (string, int) { t.Helper(); return runOn(darwinOrder, src) }
 	// 2048 bytes is 4 blocks of 512 and 2 of 1024.
 	if out, _ := run("ulimit -f"); strings.TrimSpace(out) != "4" {
 		t.Errorf("block size: said %q, want 4", out)
 	}
-	// The two letters that are not universal.
+	// The letters are the rows, and the rows are the kernel's: no `-m` where
+	// the resident set and the address space are one number, and a `-m` and
+	// five more where they are not (#2805).
 	if _, st := run("ulimit -m"); st == 0 {
 		t.Errorf("-m: status %d, want present=no", st)
 	}
 	if _, st := run("ulimit -u"); st != 0 {
 		t.Errorf("-u: status %d, want present=yes", st)
+	}
+	for _, letter := range []string{"m", "x", "i", "q", "e", "r"} {
+		if _, st := runOn(linuxOrder, "ulimit -"+letter); st != 0 {
+			t.Errorf("-%s on a kernel that numbers it: status %d, want it read", letter, st)
+		}
+		if _, st := run("ulimit -" + letter); st == 0 {
+			t.Errorf("-%s on a kernel that does not: status %d, want it refused", letter, st)
+		}
+	}
+	// And the listing is that kernel's sequence rather than the order the
+	// table is written in: locked memory comes after the file descriptors on
+	// one and before the address space on the other.
+	out, _ := runOn(linuxOrder, "ulimit -a")
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != 16 || !strings.HasPrefix(lines[15], "-N 15:") || !strings.HasPrefix(lines[5], "-m:") {
+		t.Errorf("`ulimit -a` on a kernel with sixteen limits: %q", out)
+	}
+	if out, _ := run("ulimit -a"); len(strings.Split(strings.TrimSuffix(out, "\n"), "\n")) != 9 {
+		t.Errorf("`ulimit -a` on a kernel with nine: %q", out)
 	}
 	// Whether setting lowers the hard limit with the soft one.
 	run("ulimit -t 50")

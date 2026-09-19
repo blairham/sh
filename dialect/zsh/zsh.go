@@ -2567,8 +2567,6 @@ func Semantics() interp.Semantics {
 	// An empty operand is a limit of nought: `ulimit -n ""` is silent at 0
 	// and leaves `ulimit -n` answering `0` (#3064). Measured 2026-09-18.
 	s.UlimitEmptyOperandIsZero = interp.Yes
-	s.UlimitHasResidentSet = interp.No
-	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No
 	// zsh takes `hard` and refuses `soft`, which is why the two words are
 	// two axes: `ulimit -n soft` here is `invalid number: soft`.
@@ -3998,17 +3996,40 @@ func Diagnostics() interp.Diagnostics {
 		UnsetReadonly: "read-only variable: %s",
 		// `ulimit -a`, row for row as the engine writes it — the flag
 		// first, no pipe row, and no resident-set row at all.
+		// The sixteen rows zsh 5.9 prints on Linux. This shell lists in the
+		// *kernel's* order rather than one of its own — see
+		// UlimitListingInKernelOrder — so the sequence here is a reading
+		// order and not the output: on a kernel that numbers nine limits
+		// this prints nine, in that kernel's sequence.
+		//
+		// Measured 2026-09-18 on zsh 5.9.2 (macOS arm64) and 5.9 in the
+		// panel's Alpine image. macOS numbers the resident set and the
+		// address space alike and this shell prints the address-space row
+		// for it, which is why it has no `-m` there and refuses the letter
+		// while bash, listing its own table, reads it (#2806).
+		//
+		// `-N 15` is the one row with no letter behind it: the option form
+		// is `-N <number>`, which nothing else in the panel has, so the row
+		// prints and the letter is not read.
 		UlimitListing: []interp.UlimitListingRow{
-			{Prefix: "-t: cpu time (seconds)              ", Res: interp.ResourceCPUTime, Scale: 1},
-			{Prefix: "-f: file size (blocks)              ", Res: interp.ResourceFileSize},
-			{Prefix: "-d: data seg size (kbytes)          ", Res: interp.ResourceData, Scale: 1024},
-			{Prefix: "-s: stack size (kbytes)             ", Res: interp.ResourceStack, Scale: 1024},
-			{Prefix: "-c: core file size (blocks)         ", Res: interp.ResourceCore},
-			{Prefix: "-v: address space (kbytes)          ", Res: interp.ResourceAddressSpace, Scale: 1024},
-			{Prefix: "-l: locked-in-memory size (kbytes)  ", Res: interp.ResourceLockedMemory, Scale: 1024},
-			{Prefix: "-u: processes                       ", Res: interp.ResourceProcesses, Scale: 1},
-			{Prefix: "-n: file descriptors                ", Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "-t: cpu time (seconds)              ", Letter: 't', Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "-f: file size (blocks)              ", Letter: 'f', Res: interp.ResourceFileSize},
+			{Prefix: "-d: data seg size (kbytes)          ", Letter: 'd', Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "-s: stack size (kbytes)             ", Letter: 's', Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "-c: core file size (blocks)         ", Letter: 'c', Res: interp.ResourceCore},
+			{Prefix: "-m: resident set size (kbytes)      ", Letter: 'm', Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "-u: processes                       ", Letter: 'u', Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "-n: file descriptors                ", Letter: 'n', Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "-l: locked-in-memory size (kbytes)  ", Letter: 'l', Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "-v: address space (kbytes)          ", Letter: 'v', Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "-x: file locks                      ", Letter: 'x', Res: interp.ResourceFileLocks, Scale: 1},
+			{Prefix: "-i: pending signals                 ", Letter: 'i', Res: interp.ResourcePendingSignals, Scale: 1},
+			{Prefix: "-q: bytes in POSIX msg queues       ", Letter: 'q', Res: interp.ResourceMessageQueues, Scale: 1},
+			{Prefix: "-e: max nice                        ", Letter: 'e', Res: interp.ResourceSchedulingPriority, Scale: 1},
+			{Prefix: "-r: max rt priority                 ", Letter: 'r', Res: interp.ResourceRealtimePriority, Scale: 1},
+			{Prefix: "-N 15: rt cpu time (microseconds)   ", Res: interp.ResourceRealtimeTime, Scale: 1},
 		},
+		UlimitListingInKernelOrder: true,
 		// Lazy rather than QuoteShell: this shell drops the empty `''`
 		// segments that closing and reopening leaves, so `ab'` traces as
 		// `'ab'\\'` where bash writes `'ab'\\'''`. Measured 2026-09-13 against

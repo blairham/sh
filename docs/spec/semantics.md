@@ -18902,6 +18902,61 @@ has, which is what makes it a reading of the form rather than a list: dash
 names `<` and `>` and falls back for `==`, BusyBox names `==` and falls back
 for `=~`.
 
+#### A four-word `!` in front of a negation
+
+**`TestFourWordsNegateANegationOnce`** — dash yes · bash no · zsh no ·
+ash no · ksh93 no (and unreachable there)
+
+POSIX gives the four-operand rule as "if `$1` is `!`, negate the three-word
+result of `$2 $3 $4`". One column drops its own negation at exactly that
+count, and only where the three words behind the `!` are themselves a
+negation.
+
+Measured 2026-09-18 and 2026-09-19, script files under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null. Every column is
+silent on every row, so the status is the whole answer.
+
+| list | dash 0.5.12 | bash 5.3.20, zsh 5.9.2, ksh93u+, BusyBox ash |
+| --- | --- | --- |
+| `[ ! ! -n x ]` | **1** | 0 |
+| `[ ! ! -n "" ]` | **0** | 1 |
+| `[ ! ! -z x ]` | **0** | 1 |
+| `[ ! ! -z "" ]` | **1** | 0 |
+| `[ ! ! -d / ]` | **1** | 0 |
+| `[ ! ! -n -n ]` | **1** | 0 |
+| `[ ! ! ! x ]` | **0** | 1 |
+| `[ ! ! ! "" ]` | **1** | 0 |
+| `[ ! ! \( \) ]` | **0** | the three refuse; ash refuses too |
+
+Each of dash's answers is the three-word reading of the rest, unnegated:
+`[ ! -n x ]` is 1 and `[ ! -z x ]` is 0 in every column, `[ ! \( \) ]` is 0.
+
+**It is the count and the shape together**, and three groups of controls say
+so. The counts on either side negate as a recursive reading predicts in that
+column too — `[ ! ! x ]` is 0, `[ ! ! ! -n x ]` is 1, `[ ! ! x = x ]` is 0,
+`[ ! ! ! ! -n x ]` is 0. A four-word `!` in front of something that is not a
+negation negates normally — `[ ! x = x ]` is 1, `[ ! x -a y ]` is 1,
+`[ ! \( x \) ]` is 1. And the sharpest row is `[ ! ! = x ]`, which is **0 in
+every column including dash**: its inner three words are a string comparison,
+because `=` binds the first `!` as its left operand, so they are not a
+negation and the outer `!` negates. A reading of "two leading `!`s cancel at
+four words" predicts a refusal there and is wrong.
+
+So the question the fold is asked against is *which of the three-word
+readings these words take* — `Runner.threeWordsReadAsANegation`, which mirrors
+the order the three-word case already has: the binary operator first, then the
+two connectives, and only then a leading `!`.
+
+Two shapes at the same count are measured and **not** modeled, because they
+are a different disagreement: `[ ! -a x ]` and `[ ! ! -a x ]` are
+`-a: unexpected operator` at 2 in dash where this shell answers 0 and 1. That
+is the three-word ordering the "half modeled" note above already records —
+dash asks the `!` question ahead of the connective — reached at four words
+through the same door, and it is #3717.
+
+Nobody writes two leading `!`s and both columns exit without output, so this
+is a status a script reading `$?` could see and nothing more (#3700).
+
 #### One expression off the front of the operands
 
 **`TestReadsOneExpressionOffTheOperands`** — ksh93 yes · bash no · dash no ·

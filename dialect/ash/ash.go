@@ -267,6 +267,10 @@ func Semantics() interp.Semantics {
 	// rows, which say it is the group standing alone and not grouping in
 	// general (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.Yes
+	// `[ ! ! -n x ]` is 0 here and `[ ! ! -z "" ]` is 1, so the four-word
+	// `!` negates the negation behind it. Measured 2026-09-19 in the pinned
+	// Alpine image, BusyBox 1.37 (#3700).
+	s.TestFourWordsNegateANegationOnce = interp.No
 	// And the general case of it: any refusal reached with a group still
 	// open is that sentence here, where this engine named the word its own
 	// reader stopped at. Seventeen shapes move and four controls do not —

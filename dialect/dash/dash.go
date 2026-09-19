@@ -637,6 +637,14 @@ func Semantics() interp.Semantics {
 	// And a parenthesized unary standing alone is read here, where the
 	// sibling cannot close the group: `[ ( -n x ) ]` is 0.
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	// At exactly four words, a leading `!` in front of a negation takes the
+	// three-word reading of the rest and does not negate it again:
+	// `[ ! ! -n x ]` is 1 here and 0 in the other four, which is the answer
+	// `[ ! -n x ]` gives on its own. Three words and five words negate as a
+	// recursive reading predicts, and a four-word `!` in front of something
+	// that is not a negation negates too — `[ ! x = x ]` is 1. Measured
+	// 2026-09-18 and 2026-09-19 (#3700).
+	s.TestFourWordsNegateANegationOnce = interp.Yes
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// And a group with nothing in it is a false expression rather than a
 	// refusal: `[ ( ) ]` is a silent 1 here and composes with the

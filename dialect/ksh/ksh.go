@@ -1699,6 +1699,12 @@ func Semantics() interp.Semantics {
 	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
 	// `[ ( -n x ) ]` is 0 here (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	// Unreachable here, and answered rather than left open for that reason:
+	// TestReadsOneExpressionOffTheOperands below is Yes, so this shell reads
+	// one expression off the front and the argument counts are never
+	// consulted. `[ ! ! -n x ]` is 0 in the reference all the same, measured
+	// 2026-09-19 (#3700).
+	s.TestFourWordsNegateANegationOnce = interp.No
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// And a group with nothing in it is `argument expected` at 2 here too
 	// (#3687).

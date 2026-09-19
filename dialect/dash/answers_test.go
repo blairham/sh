@@ -63,6 +63,11 @@ func TestTheHelperRunsUnderThisDialectAndNotTheCore(t *testing.T) {
 
 func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	s := dash.Semantics()
+	// A frozen name in a prefix is reported in whatever order the command
+	// was going to do things in (#1943).
+	if got := s.PrefixToAFrozenNameIsCheckedFirst; got != interp.FrozenPrefixCheckedWithTheCommand {
+		t.Errorf("PrefixToAFrozenNameIsCheckedFirst = %v, want %v", got, interp.FrozenPrefixCheckedWithTheCommand)
+	}
 	for _, tc := range []struct {
 		axis string
 		got  interp.Answer
@@ -89,7 +94,6 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.Yes},
-		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},

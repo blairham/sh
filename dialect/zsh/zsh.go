@@ -2791,7 +2791,7 @@ func Semantics() interp.Semantics {
 	// "${@-word}"` is empty and `"${@+word}"` is `word` (#1941).
 	s.PositionalListWithNoneIsSet = interp.Yes
 	// The expand-first order, with dash and ksh93 (#1943).
-	s.PrefixToAFrozenNameIsCheckedFirst = interp.No
+	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedWithTheCommand
 	// A `*` or `@` subscript inside an expression is the slice, joined and
 	// then read as an expression: measured 2026-09-11 on 5.9.2, `typeset -A
 	// m; m[k]=9; $(( m[*] ))` is 9 and `a=(1+1); $(( a[*] * 3 ))` is 6.

@@ -331,18 +331,62 @@ answer for five kinds of nine, which is how this was first filed.
   at status 1 where the refusal is not fatal. Yes in ksh93 and zsh, No in
   bash. Unanswered in the standard's preset, where every refusal is fatal
   and the command's fate never arises.
-- **`PrefixToAFrozenNameIsCheckedFirst`** — whether the check happens
-  before the command's values are expanded and its redirections opened.
-  Yes in bash alone. Measured 2026-09-12 with `readonly x=1`:
+- **`PrefixToAFrozenNameIsCheckedFirst`** — when the check happens
+  against when the command's values are expanded and its redirections
+  opened. Three orders, not two. Measured 2026-09-12 with `readonly x=1`:
   `x=$((1/0)) /bin/echo RAN` says `x: readonly variable`, prints `RAN`
-  and never mentions the division there, and reports the division and no
-  `RAN` in dash, ksh93 and zsh; `x=2 /bin/echo RAN >/nope/f` names the
+  and never mentions the division in bash, and reports the division and
+  no `RAN` in dash, ksh93 and zsh; `x=2 /bin/echo RAN >/nope/f` names the
   name and then the file there, and only the file elsewhere. Two probes
   agreeing on one boundary is what makes it a boundary rather than a
   quirk of arithmetic, and the first says the value is not merely
   reported later but **never evaluated**. Read once a name in the prefix
   is actually frozen, which is where the other three are asked and for
   the same reason (#1943).
+
+  **ksh93 is a third answer and the external command is what hid it.**
+  Both probes above are in front of `/bin/echo`, which is the one kind
+  that column opens the redirections for. Measured 2026-09-18, a script
+  file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on
+  /dev/null, each line its own `( … )` with `readonly V=0` in front:
+
+  | the line | ksh93u+ |
+  | --- | --- |
+  | `V=1 : > /nope/f` | `V: is read only`, and no file complaint |
+  | `V=1 typeset q=2 > /nope/f` | the same |
+  | `V=1 command eval : > /nope/f` | the same — `command` is transparent there |
+  | `V=1 command : > /nope/f` | the same |
+  | `V=1 f > /nope/f` | the same |
+  | `V=1 print hi > /nope/f` | the file complaint alone, 1 |
+  | `V=1 nosuchcmd > /nope/f` | the file complaint alone, 1 |
+
+  So the name is checked ahead of the redirection in front of a function
+  and a special builtin and behind it in front of a regular builtin and an
+  external — the same split `PrefixExpandedBeforeTheRedirections` draws,
+  and the same set that shell keeps a prefix for. The two are held apart
+  because one column holds them apart: BusyBox ash checks the name first
+  and expands nothing first. The values are
+  `FrozenPrefixCheckedFirst` (bash, ash),
+  `FrozenPrefixCheckedFirstWhereItPersists` (ksh93) and
+  `FrozenPrefixCheckedWithTheCommand` (dash, zsh).
+
+  **The regular builtin is not evidence either way**, and is not read as
+  such: `PrefixToARegularBuiltinIsRefused` is No in that column, so
+  nothing is written in front of `print` whichever order the two happen
+  in. The rows that decide it are the special builtin and the function,
+  where the complaint stands and the file's never appears.
+
+  **And a complaint written before the redirections are opened is not a
+  redirection's**, so it is not located as one: ksh93 writes
+  `<script>: line 2: V: is read only`, its plain-assignment location,
+  where this engine wrote the builtin form `<script>[2]:` because it had
+  already recorded a builtin's redirection as being opened. The record is
+  now made behind the check rather than in front of it (#3314).
+
+  The issue's own case is the first row seen through a redirection that
+  *succeeds*: `readonly V=0; V=1 export > /dev/null 2>&1` writes the
+  complaint there, because the check happens before the `2>&1` is in
+  force, and wrote nothing at all here.
 
 The kind is read once, at the dispatch, by resolving the command word the
 way the dispatch itself resolves it — a function shadows a builtin and a

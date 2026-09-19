@@ -215,7 +215,7 @@ func TestAFrozenPathIsNotSuppliedByAPrefix(t *testing.T) {
 			// How a refused prefix is reported, and whether it ends the
 			// script, are questions of their own and not this one's. They
 			// are answered here so that what is left to see is the search.
-			s.PrefixToAFrozenNameIsCheckedFirst = No
+			s.PrefixToAFrozenNameIsCheckedFirst = FrozenPrefixCheckedWithTheCommand
 			s.PrefixRefusalFatality = PrefixRefusalNeverFatal
 			s.PrefixRefusalCostsTheCommand = No
 			r.Semantics = &s

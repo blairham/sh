@@ -676,7 +676,7 @@ func Semantics() interp.Semantics {
 	// checked, so a failure in either is what gets reported and the frozen
 	// name is never named. Measured 2026-09-12, with ksh93 and zsh against
 	// the three bash builds (#1943).
-	s.PrefixToAFrozenNameIsCheckedFirst = interp.No
+	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedWithTheCommand
 	// The mask reaches the trim, so an escaped IFS whitespace character
 	// closing a `read` value is data and stays — this shell alone.
 	// Measured 2026-09-12: `printf 'a b c\\ \n' | read x y` leaves `b c `

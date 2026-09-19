@@ -849,7 +849,7 @@ func Semantics() interp.Semantics {
 	// happens: `unset u; readonly x=1; x=${u:=set} /bin/true` is `x: is read
 	// only` and leaves `u` unset, so neither the value nor the command was
 	// reached. dash answers the other way (#1943).
-	s.PrefixToAFrozenNameIsCheckedFirst = interp.Yes
+	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedFirst
 	// `printf 'a\cb'` writes `a` and stops, where dash writes the letter.
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	// `printf '%ld\n' 5` is 5, so the length modifiers are read rather than

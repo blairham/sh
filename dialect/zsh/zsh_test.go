@@ -121,6 +121,11 @@ func TestSemantics(t *testing.T) {
 		t.Errorf("ExitInTrapReportsEarlierStatus = %v, want %v", got, want)
 	}
 	s := zsh.Semantics()
+	// A frozen name in a prefix is reported in whatever order the command
+	// was going to do things in (#1943).
+	if got := s.PrefixToAFrozenNameIsCheckedFirst; got != interp.FrozenPrefixCheckedWithTheCommand {
+		t.Errorf("PrefixToAFrozenNameIsCheckedFirst = %v, want %v", got, interp.FrozenPrefixCheckedWithTheCommand)
+	}
 	for _, tc := range []struct {
 		axis string
 		got  interp.Answer
@@ -206,7 +211,6 @@ func TestSemantics(t *testing.T) {
 		{"WholeSubscriptOnAScalarSlicesIt", s.WholeSubscriptOnAScalarSlicesIt, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
 		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.Yes},
-		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
 		// A math error inside `(( ))` leaves 2 here and 1 in the rest of the
 		// panel, with the same sentence in front of it either way.

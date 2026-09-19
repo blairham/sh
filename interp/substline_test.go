@@ -212,3 +212,83 @@ func TestABackquotedBodysRefusalMayCountTheBodyAgain(t *testing.T) {
 		})
 	}
 }
+
+// A substitution inside a re-read fragment — an expansion's operand, a
+// subscript, an arithmetic expression — is placed on the line that holds it.
+//
+// The fragment is lexed on its own, so every span it yields is numbered from
+// the fragment's first line. That number reached the reader: measured
+// 2026-09-19 on a two-line script whose second line is the row, every
+// reference column names line 2 and every one of ours named line 1 (#3810).
+//
+//	echo ${x:-$(echo hi; for)}     zsh 5.9.2   s.sh:2: parse error near `)'
+//	                               ours        s.sh:1: parse error near `)'
+//
+// The ksh93 column is what localized it: its sentence carries the line twice
+// — `s.sh: line 2: syntax error at line 1:` — so the prefix, placed from the
+// command, was right while the failure's own line was wrong.
+//
+// Every dialect and every one of those fragments, so a plain fix rather than
+// an axis. The rows below use a command that is not found, because that
+// reaches the line through the body's own runner; the refusal route is the
+// test under it.
+func TestASubstitutionInAFragmentIsPlacedInTheScript(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a default operand", "true\ntrue\necho ${x:-$(nosuchcmd)}\n", ":3:"},
+		{"an alternate operand", "true\ntrue\nx=1; echo ${x:+$(nosuchcmd)}\n", ":3:"},
+		{"a pattern operand", "true\ntrue\necho ${x#$(nosuchcmd)}\n", ":3:"},
+		{"a replacement operand", "true\ntrue\necho ${x/a/$(nosuchcmd)}\n", ":3:"},
+		{"a substring offset", "true\ntrue\necho ${x:$(nosuchcmd)}\n", ":3:"},
+		{"a quoted operand", "true\ntrue\necho \"${x:-$(nosuchcmd)}\"\n", ":3:"},
+		{"an operand inside an operand", "true\ntrue\necho ${x:-${y:-$(nosuchcmd)}}\n", ":3:"},
+		{"an arithmetic expansion", "true\ntrue\necho $(( $(nosuchcmd) + 1 ))\n", ":3:"},
+		{"an arithmetic command", "true\ntrue\n(( $(nosuchcmd) + 1 ))\n", ":3:"},
+		{"an arithmetic loop header", "true\ntrue\nfor ((i=$(nosuchcmd);0;)); do :; done\n", ":3:"},
+		{"an operand inside an arithmetic expansion", "true\ntrue\necho $(( ${y:-$(nosuchcmd)} + 1 ))\n", ":3:"},
+		{"an arithmetic expansion inside an operand", "true\ntrue\necho ${x:-$(( $(nosuchcmd) ))}\n", ":3:"},
+		// The body's own lines still count from where it opened, which the
+		// offset must not flatten.
+		{"a body spanning lines in an operand", "true\necho ${x:-$(\ntrue\nnosuchcmd\n)}\n", ":4:"},
+		// Shapes that were already right, so the offset must not move them.
+		{"the same body outside an operand", "true\ntrue\necho $(nosuchcmd)\n", ":3:"},
+		{"an operand on the first line", "echo ${x:-$(nosuchcmd)}\n", ":1:"},
+		{"an operand with no substitution", "true\ntrue\nnosuchcmd ${x:-y}\n", ":3:"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := substLine(t, c.src, Diagnostics{Location: LocationTightLine}); !strings.Contains(got, c.want) {
+				t.Errorf("reported %q, want it to name %s", got, c.want)
+			}
+		})
+	}
+}
+
+// And the **refusal** of such a body, which is the route the issue was filed
+// from: the body never parses, so nothing of it runs and the line comes from
+// the refusal rather than from the body's runner.
+func TestARefusedBodyInAFragmentIsPlacedInTheScript(t *testing.T) {
+	dg := Diagnostics{Location: LocationTightLine, SyntaxError: "syntax error: unexpected %[1]s"}
+	for _, c := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a default operand", "true\ntrue\necho ${x:-$(if; then :; fi)}\n", ":3:"},
+		{"a pattern operand", "true\ntrue\necho ${x#$(if; then :; fi)}\n", ":3:"},
+		{"an arithmetic expansion", "true\ntrue\necho $(( $(if; then :; fi) ))\n", ":3:"},
+		{"an arithmetic command", "true\ntrue\n(( $(if; then :; fi) ))\n", ":3:"},
+		{"an arithmetic loop header", "true\ntrue\nfor ((i=$(if; then :; fi);0;)); do :; done\n", ":3:"},
+		// Already right, and still right.
+		{"outside a fragment", "true\ntrue\necho $(if; then :; fi)\n", ":3:"},
+		{"on the first line", "echo ${x:-$(if; then :; fi)}\n", ":1:"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := substLine(t, c.src, dg); !strings.Contains(got, c.want) {
+				t.Errorf("reported %q, want it to name %s", got, c.want)
+			}
+		})
+	}
+}

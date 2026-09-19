@@ -90,6 +90,7 @@ var Areas = []Area{
 		[]string{
 			"params", "expansion", "substrings", "patsub", "plusassign",
 			"substitution-closer", "substitution-echo", "substitution-fatality",
+			"substitution-line",
 		},
 	},
 	{"arithmetic evaluation", 2305, []string{"arith"}},

@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Where a `$( … )` body refused inside an expansion's operand is located —
+# #3810.
+#
+# An operand is read again when the word is expanded, so the spans it yields
+# were numbered from the operand's own first line and not from the file's.
+# That number reaches a reader: the body below was located at **line 1**
+# whatever line held it, in every dialect, where every reference shell names
+# the line it is on.
+#
+# bash writes the line twice for this failure — once in the prefix and once
+# in front of the script line it echoes underneath — so one case grades the
+# placement and the echo together. A copy of the shape in
+# ksh/substitution-line.tests rather than a shared file, because the wording
+# is this column's.
+#
+# The controls come first: `$LINENO` says the file's own numbering is what it
+# looks like, and a body that parses inside an operand says the operand is
+# expanded at all. Neither can be written as a second *failure*, because this
+# one ends the script wherever it stands — a subshell included.
+#
+# One failing case, and it is last: the failure ends the script.
+
+printf 'the controls first\n'
+printf 'this line -> [%s]\n' "$LINENO"
+printf 'an ordinary body -> [%s]\n' "${u:-$(echo hi)}"
+
+printf 'the case\n'
+echo ${u:-$(echo hi
+for)}
+printf 'never reached\n'

@@ -3895,8 +3895,17 @@ func Diagnostics() interp.Diagnostics {
 		// And `read`, which names itself in its builtin location as `set`
 		// does — and then calls itself a warning, which nothing else in the
 		// panel does. See ReadonlyVariableInRead.
-		ReadonlyRefusalNamesBuiltin: map[string]bool{"set": true, "read": true},
-		ReadonlyVariableInRead:      "%[2]s: warning: %[1]s: is read only",
+		ReadonlyRefusalNamesBuiltin: map[string]bool{
+			"set": true, "read": true,
+			// And `let`, measured 2026-09-18: `readonly x=1; let x=2` is
+			// `<file>[2]: let: x: is read only` at 1, where the same refusal
+			// raised by `(( x=3 ))` on the next line is
+			// `<file>: line 4: x: is read only` — the language's own
+			// location and no builtin in it. So it is this builtin's
+			// sentence and not the arithmetic's (#3568).
+			"let": true,
+		},
+		ReadonlyVariableInRead: "%[2]s: warning: %[1]s: is read only",
 		// A failed history substitution names what was *typed* here, where
 		// bash names the modifier it rewrote the line into: measured
 		// 2026-09-15 through a pseudo-terminal, `^hello^goodbye^` against a

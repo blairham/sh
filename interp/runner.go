@@ -8379,7 +8379,18 @@ func (r *Runner) refuseReadonlyInACommand(name string) bool {
 		// for `readonly x=1; (( x = 2 ))` and does not for the same write
 		// through `let`. So the builtin's own reading is neither axis's, and
 		// the one thing the panel agrees on is that it is not fatal (#3470).
-		r.reportReadonlyRefusal(name, assignedAnyhow, false)
+		//
+		// **assignedByBuiltin rather than assignedAnyhow**, which decides
+		// the sentence and not the cost: the write is one the *builtin*
+		// made, so a dialect that names the builtin in this refusal names
+		// this one. Measured 2026-09-18 on ksh93u+, `readonly x=1; let x=2`
+		// is `<file>[2]: let: x: is read only`, where the two sentences
+		// around it — that builtin's own divide-by-zero and the same
+		// refusal raised from `read` — already carry the name and the
+		// builtin's location, and `(( x=2 ))` on the next line carries
+		// neither. The fatality is the `false` beside it, which stays
+		// #3470's answer (#3568).
+		r.reportReadonlyRefusal(name, assignedByBuiltin, false)
 		r.status = 1
 		return true
 	}

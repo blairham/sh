@@ -2178,7 +2178,7 @@ func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 		last = int(t.End.Offset)
 		if t.Kind == TokWord {
 			// Through newWord, so a nested ${ } in an operand is parsed too.
-			nested := p.newWord(t.Spans, at, at)
+			nested := p.newWord(placeLinesIn(t.Spans, at), at, at)
 			w.Spans = append(w.Spans, nested.Spans...)
 			continue
 		}
@@ -2221,7 +2221,7 @@ func (p *Parser) quotedWordFrom(text string, at Pos) *Word {
 	}
 	// Through newWord, so a nested ${ } in the operand is parsed too — and
 	// parsed knowing it is in this same quoting, since the spans carry it.
-	return p.newWord(spans, at, at)
+	return p.newWord(placeLinesIn(spans, at), at, at)
 }
 
 // firstRune is the one character a diagnostic names when the operator it
@@ -2450,4 +2450,38 @@ func flagGroupTail(src string) string {
 		}
 		return r
 	}, src)
+}
+
+// placeLinesIn re-numbers spans read out of a fragment of the script — an
+// expansion's operand, a subscript — so that the lines they carry are the
+// file's.
+//
+// A fragment is lexed on its own, so a span it yields is numbered from the
+// fragment's first line and not from the file's. That number reaches a
+// reader: a `$( … )` refused inside a `${ … }` operand was located at line 1
+// wherever in the script it stood, in every dialect, where every reference
+// shell names the line it is on (#3810). The fragment's first line is the
+// line the expansion opens on, because a `${` and the operand inside it are
+// separated by an operator and never by a newline.
+//
+// **The line alone**, and the offset and the column are left as the fragment
+// counted them. Those two would have to be measured from where the operand's
+// text begins inside the braces, which nothing here knows — every literal
+// span an operand yields is already given the expansion's own position
+// rather than one of its own, so they were never the fragment's to state.
+//
+// A no-op for an expansion on the first line, which is the whole of what
+// keeps this off the common path.
+func placeLinesIn(spans []Span, at Pos) []Span {
+	if at.Line <= 1 {
+		return spans
+	}
+	out := make([]Span, len(spans))
+	copy(out, spans)
+	for i := range out {
+		if out[i].Pos.Line > 0 {
+			out[i].Pos.Line += at.Line - 1
+		}
+	}
+	return out
 }

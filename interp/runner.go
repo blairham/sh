@@ -1625,6 +1625,23 @@ type Runner struct {
 	// something rather than the innermost level.
 	substLevelsOut []substLevel
 
+	// substFragmentLine is how far into the script the text being expanded
+	// begins, for a text that was lexed **again at run time** and so numbers
+	// its spans from one: an arithmetic expansion's expression is such a
+	// text, because an expression holding an expansion is not read until it
+	// has one. Nought where the spans being expanded are the script's own.
+	//
+	// Read by Runner.spanLineBase, which is where a substitution's body is
+	// placed in the file. Without it a body refused inside a `$(( … ))` was
+	// located at line 1 wherever the expansion stood, in every dialect
+	// (#3810) — the same fact the operand route had, one read earlier.
+	//
+	// Accumulated rather than set, so a `$(( … ))` inside a `$(( … ))` is
+	// still placed in the file, and cleared at the door of a substitution
+	// body, whose own lines are counted by Runner.lineBase instead. See
+	// inArithText and atFreshSubstLevel.
+	substFragmentLine int
+
 	// commandFirstWord is the word of the *first token* of the simple command
 	// being run — the earliest of its assignments, its words and its
 	// redirections as they were written — or nil outside one.

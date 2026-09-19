@@ -474,7 +474,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			return nil
 		}
 		if !skippedInit {
-			if _, ok := r.forArithPart(c.Init, initText); !ok {
+			if _, ok := r.forArithPart(c.Init, initText, c.Pos()); !ok {
 				return nil
 			}
 		}
@@ -493,7 +493,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 				return nil
 			}
 			if c.Cond != nil || c.CondText != "" {
-				v, ok := r.forArithPart(c.Cond, condText)
+				v, ok := r.forArithPart(c.Cond, condText, c.Pos())
 				if !ok {
 					return nil
 				}
@@ -529,7 +529,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 				return nil
 			}
 			if !skippedPost {
-				if _, ok := r.forArithPart(c.Post, postText); !ok {
+				if _, ok := r.forArithPart(c.Post, postText, c.Pos()); !ok {
 					return nil
 				}
 			}
@@ -549,8 +549,13 @@ func arithPartWritten(tree syntax.ArithExpr, text string) bool {
 	return tree != nil || strings.TrimSpace(text) != ""
 }
 
-func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
+func (r *Runner) forArithPart(tree syntax.ArithExpr, text string, at syntax.Pos) (int, bool) {
+	// The part's text is read again when the loop reaches it, so a
+	// substitution in it is placed from the header's line rather than from
+	// the text's own first. See Runner.inArithCommandText (#3810).
+	putBackLine := r.inArithCommandText(at)
 	resolved, expanded, perr := r.arithTreeOver(tree, text)
+	putBackLine()
 	if r.failedHeading() {
 		// The expansion inside the part failed. Its diagnostic is written and
 		// what is left of the text is not an expression, so parsing on would

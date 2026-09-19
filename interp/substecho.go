@@ -315,9 +315,17 @@ func (r *Runner) inBraceOperand(q syntax.Quoting) func() {
 // on this span and not in anything the outer level had recorded.
 func (r *Runner) atFreshSubstLevel(span syntax.Span) func() {
 	saved, savedOuter := r.substLevel, r.substLevelsOut
+	savedFragment := r.substFragmentLine
 	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), outerLevel(saved, span))
 	r.substLevel = substLevel{}
-	return func() { r.substLevel, r.substLevelsOut = saved, savedOuter }
+	// And the body's lines are its own from here: whatever re-lexed text
+	// this substitution was written in, the body is parsed separately and
+	// placed by Runner.lineBase. See Runner.substFragmentLine.
+	r.substFragmentLine = 0
+	return func() {
+		r.substLevel, r.substLevelsOut = saved, savedOuter
+		r.substFragmentLine = savedFragment
+	}
 }
 
 // outerLevel is the level a nested text is entered from, with the entering
@@ -333,9 +341,35 @@ func outerLevel(at substLevel, span syntax.Span) substLevel {
 // returns the undo. See substLevel.arith.
 func (r *Runner) inArithText(span syntax.Span) func() {
 	saved, savedOuter := r.substLevel, r.substLevelsOut
+	savedFragment := r.substFragmentLine
 	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), outerLevel(saved, span))
 	r.substLevel = substLevel{arith: true}
-	return func() { r.substLevel, r.substLevelsOut = saved, savedOuter }
+	// The text is lexed again here, so what it yields is numbered from the
+	// expansion's own line rather than from the file's, and how far in that
+	// line is has to travel with it. See Runner.substFragmentLine (#3810).
+	r.substFragmentLine += int(span.Pos.Line) - 1
+	return func() {
+		r.substLevel, r.substLevelsOut = saved, savedOuter
+		r.substFragmentLine = savedFragment
+	}
+}
+
+// inArithCommandText opens the re-lexed text of an arithmetic *command* —
+// `(( … ))`, or one part of a `for (( ; ; ))` header — and returns the undo.
+//
+// Not a level, and that is the difference from inArithText: a command has
+// nothing lexically open around it, so nothing here writes a second message.
+// What it shares is the numbering — the text is lexed again when it runs, so
+// a substitution inside it carries the text's own line and not the file's,
+// and `(( $(for) ))` on line 2 was reported at line 1 in every dialect.
+// See Runner.substFragmentLine (#3810).
+//
+// The construct's own position, which is the line its text begins on: a `((`
+// and the expression after it are never separated by a newline.
+func (r *Runner) inArithCommandText(at syntax.Pos) func() {
+	saved := r.substFragmentLine
+	r.substFragmentLine += int(at.Line) - 1
+	return func() { r.substFragmentLine = saved }
 }
 
 // substLevelEcho is the line a level with something open writes, or the empty

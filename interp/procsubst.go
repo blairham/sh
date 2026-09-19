@@ -98,7 +98,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// 3 in bash 5.3.20, zsh 5.9.2 and ksh93u+, and was 1 here in every
 	// dialect. The same offset a command substitution's body carries — see
 	// Runner.lineBase.
-	sub.lineBase = r.lineBase + int(span.Pos.Line) - 1
+	sub.lineBase = r.spanLineBase(span)
 
 	// The end this shell keeps is counted rather than closed on the body's
 	// return, and the count starts at one for the body itself. What else can

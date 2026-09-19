@@ -120,7 +120,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// **Read once and used twice**, by the refusal below and by the runner
 	// that runs what parsed. Two copies of this rule is how the refusal came
 	// to place a body its own runner would have placed correctly.
-	base := r.lineBase + int(span.Pos.Line) - 1
+	base := r.spanLineBase(span)
 	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
 		base = 0
 	}
@@ -757,4 +757,19 @@ func leadingNewlines(src string) int {
 		}
 	}
 	return n
+}
+
+// spanLineBase is how far into the script a span's own text begins: the line
+// the span carries, taken through whatever was between it and the file.
+//
+// Two offsets rather than one, because a span reaches here by two roads. The
+// script's own text is numbered from the file, and Runner.lineBase says how
+// far into it the input being run started — a function body, a sourced file,
+// a substitution's body. A text lexed **again at run time** is numbered from
+// itself, and Runner.substFragmentLine says where that text begins; an
+// arithmetic expression is the one that arrives that way. Adding only the
+// first located a `$( … )` refused inside a `$(( … ))` at line 1 whatever
+// line held it, in every dialect (#3810).
+func (r *Runner) spanLineBase(span syntax.Span) int {
+	return r.lineBase + r.substFragmentLine + int(span.Pos.Line) - 1
 }

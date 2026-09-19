@@ -50,6 +50,11 @@ func killSem() Semantics {
 	// finishes its body and the parent stops afterwards. The other answer
 	// has cases of its own.
 	s.SubshellRunsOnAfterSignalingTheShell = Yes
+	// A number written after `-s` is the number, which is four of the five
+	// columns and the core's own reading. The one that holds `-s` to a name
+	// is pinned in dialect/zsh; answering it here keeps a case about some
+	// *other* kill axis from meeting an unanswered one on the way.
+	s.KillNameOptionReadsANumber = Yes
 	return s
 }
 

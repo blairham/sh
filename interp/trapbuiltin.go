@@ -448,7 +448,11 @@ func (r *Runner) printedSignalName(name string) string {
 	if name == "EXIT" || r.pseudoTrapSlot(name) != nil {
 		return name
 	}
-	return r.diag().TrapPrintsSignalPrefix + name
+	// And the word this shell uses when it is the one naming a signal, which
+	// in one column is an older spelling than the table's own: measured
+	// 2026-09-17, ksh93u+ answers both `trap 'x' IOT; trap` and `trap 'x'
+	// ABRT; trap` with IOT, exactly as its `kill -l` does.
+	return r.diag().TrapPrintsSignalPrefix + r.signalListingName(name)
 }
 
 // listSignals is `trap -l`, and it is `kill -l`'s listing.

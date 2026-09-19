@@ -161,12 +161,53 @@ func (r *Runner) signalTable() []signalEntry {
 // knownSignal reports whether a bare, uppercased name is one of the signals
 // this shell can send.
 func (r *Runner) knownSignal(name string) bool {
+	_, ok := r.signalNamed(name)
+	return ok
+}
+
+// signalNamed is the table entry a bare, uppercased word names, an older
+// spelling of a name included.
+//
+// One lookup for every route a name arrives by — `kill -s`, `kill -SPEC`,
+// `kill -l NAME` and `trap` — because the alias is the *table's* and not one
+// builtin's: measured 2026-09-17, ksh93u+ and zsh 5.9.2 answer all four with
+// IOT and bash 5.3.20 answers none of them. See
+// Semantics.SignalNamesTheShellAlsoReads.
+func (r *Runner) signalNamed(name string) (signalEntry, bool) {
+	if canonical, ok := r.signalAlias(name); ok {
+		name = canonical
+	}
 	for _, k := range r.signalTable() {
 		if k.Name == name {
-			return true
+			return k, true
 		}
 	}
-	return false
+	return signalEntry{}, false
+}
+
+// signalAlias turns an older name this shell also answers to into the name
+// its own table carries.
+func (r *Runner) signalAlias(name string) (string, bool) {
+	for _, pair := range strings.Fields(r.sem().SignalNamesTheShellAlsoReads) {
+		if alias, canonical, ok := strings.Cut(pair, "="); ok && alias == name {
+			return canonical, true
+		}
+	}
+	return "", false
+}
+
+// signalListingName is the word the bare listing writes for a table entry,
+// which is the entry's own name in every column but one.
+func (r *Runner) signalListingName(name string) string {
+	if !r.diag().SignalListingWritesTheAlias {
+		return name
+	}
+	for _, pair := range strings.Fields(r.sem().SignalNamesTheShellAlsoReads) {
+		if alias, canonical, ok := strings.Cut(pair, "="); ok && canonical == name {
+			return alias
+		}
+	}
+	return name
 }
 
 func biKill(r *Runner, _ context.Context, args []string) int {
@@ -344,7 +385,20 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 	}
 	if n, err := strconv.Atoi(spec); err == nil {
 		if n == 0 {
+			// Not a signal at all but the existence probe, and it is asked
+			// before anything else because every column takes it after `-s`:
+			// `kill -s 0 $$` is 0 in all five, zsh included.
 			return "", 0, nil
+		}
+		if form == killSpecOption &&
+			!r.ask(r.sem().KillNameOptionReadsANumber, "a number written after `kill -s`") {
+			if r.unspecified {
+				return "", 0, nil
+			}
+			// `-s` takes a name, and a word of digits is not one in the
+			// column that holds to it — which reports the digits as the name
+			// they are not, hint and all, rather than as a bad number.
+			return bad()
 		}
 		for _, k := range knownSignals {
 			if int(k.Sig) == n {
@@ -387,6 +441,12 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 		}
 		return bad()
 	}
+	if form == killSpecNumberOption && r.diag().KillBadSignumIsAUsageError {
+		// One column reads a word that is not a number after `-n` as a
+		// misuse of the option rather than as a signal nobody has, and
+		// writes the same block a bare `kill` writes, at the same status.
+		return "", 0, &killError{kind: killUsage}
+	}
 	if form == killSpecNumberOption || (form == killSpecFlag && startsWithDigit(spec)) {
 		// Number-shaped and not a number, so it never reaches the name
 		// table: `SIG9X` names nothing in any column, and the one shell with
@@ -409,10 +469,8 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 		}
 		up = trimmed
 	}
-	for _, k := range r.signalTable() {
-		if k.Name == up {
-			return k.Name, k.Sig, nil
-		}
+	if k, ok := r.signalNamed(up); ok {
+		return k.Name, k.Sig, nil
 	}
 	return bad()
 }
@@ -927,6 +985,41 @@ func (r *Runner) killStatus(sent, failed int) int {
 	}
 }
 
+// signalCell is one position of the bare listing: the number the host gives
+// it, and the word this shell writes there.
+type signalCell struct {
+	sig  int
+	text string
+}
+
+// signalListing is the bare listing's positions, in the host's numbering.
+//
+// It walks the *platform's* table rather than this dialect's, because a
+// position the dialect cannot name is not always a position it leaves out.
+// Measured 2026-09-17: ksh93u+ on macOS writes `SIG29` where every other
+// column writes `INFO`, and dash on Linux writes a bare `16` for the STKFLT
+// it is short of — two shells with the same gap and two renderings of it, and
+// this engine dropped the row in both. See
+// Diagnostics.KillListingUnnamedPosition, whose empty value is the third
+// answer: leave the position out, which is what a shell whose table is the
+// platform's never has to decide.
+func (r *Runner) signalListing() []signalCell {
+	byNumber := append([]signalEntry{}, knownSignals...)
+	sort.Slice(byNumber, func(i, j int) bool { return byNumber[i].Sig < byNumber[j].Sig })
+	unnamed := r.diag().KillListingUnnamedPosition
+	cells := make([]signalCell, 0, len(byNumber))
+	for _, k := range byNumber {
+		if r.knownSignal(k.Name) {
+			cells = append(cells, signalCell{int(k.Sig), r.signalListingName(k.Name)})
+			continue
+		}
+		if unnamed != "" {
+			cells = append(cells, signalCell{int(k.Sig), fmt.Sprintf(unnamed, int(k.Sig))})
+		}
+	}
+	return cells
+}
+
 // listSignalTable writes the whole signal table, which is what `kill -l`
 // with no operands prints and — in the one dialect whose `trap` has the
 // letter — what `trap -l` prints too.
@@ -941,18 +1034,17 @@ func (r *Runner) killStatus(sent, failed int) int {
 // in, which is what makes the listing a fact about the machine rather than
 // about this file.
 func (r *Runner) listSignalTable() int {
-	byNumber := append([]signalEntry{}, r.signalTable()...)
-	sort.Slice(byNumber, func(i, j int) bool { return byNumber[i].Sig < byNumber[j].Sig })
-	names := make([]string, len(byNumber))
-	for i, k := range byNumber {
-		names[i] = k.Name
+	cells := r.signalListing()
+	names := make([]string, len(cells))
+	for i, c := range cells {
+		names[i] = c.text
 	}
 	// Four shells, four shapes; the constant says whose this is.
 	switch r.diag().KillListing {
 	case KillListingNumbered:
 		var b strings.Builder
-		for i, k := range byNumber {
-			fmt.Fprintf(&b, "%2d) SIG%s", int(k.Sig), k.Name)
+		for i, k := range cells {
+			fmt.Fprintf(&b, "%2d) SIG%s", k.sig, k.text)
 			// A tab after every entry and a newline instead of it at the end
 			// of a row, so a short last row carries the tab it was separated
 			// by and then a newline of its own. Measured: bash's last line is
@@ -964,7 +1056,7 @@ func (r *Runner) listSignalTable() int {
 				continue
 			}
 			b.WriteByte('\t')
-			if i == len(byNumber)-1 {
+			if i == len(cells)-1 {
 				b.WriteByte('\n')
 			}
 		}
@@ -1248,6 +1340,12 @@ func (e *killError) fallback() string {
 func (e *killError) format(d Diagnostics) string {
 	switch e.kind {
 	case killMissingSignalArgument:
+		// The operand is the option itself, which is the only thing that
+		// tells the two sentences apart: one column calls what `-s` wants a
+		// signame and what `-n` wants a numeric signum.
+		if e.operand == "-n" {
+			return orElse(d.KillMissingNumberArgument, d.KillMissingSignalArgument)
+		}
 		return d.KillMissingSignalArgument
 	case killInvalidSignal:
 		return d.KillInvalidSignal

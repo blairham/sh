@@ -727,6 +727,11 @@ func Semantics() interp.Semantics {
 	// which is what separates this from the refusal a number out of range
 	// draws at 2.
 	s.SignalNamesTheShellLacks = "STKFLT"
+	// And the listing writes that position as its bare number rather than
+	// leaving it out: measured 2026-09-17 in the panel's Alpine image, where
+	// this shell's `kill -l` is `…|TERM|16|CHLD|…`. Diagnostics carries the
+	// rendering, since ksh93 has the same gap and writes `SIG29` for it
+	// (#3536).
 	s.SIGPrefixAccepted = interp.No
 	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
@@ -1910,7 +1915,8 @@ func Diagnostics() interp.Diagnostics {
 			"noexec", "stdin", "xtrace", "verbose", "vi", "emacs",
 			"noclobber", "allexport", "notify", "nounset", "nolog", "debug",
 		},
-		KillListing: interp.KillListingZeroFirst,
+		KillListing:                interp.KillListingZeroFirst,
+		KillListingUnnamedPosition: "%[1]d",
 		// And when that directory was the PATH search's only match, dash
 		// names it in the message and still numbers the failure 127.
 		DirectoryOnPathStatus: 127,

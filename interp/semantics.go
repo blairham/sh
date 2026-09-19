@@ -3070,6 +3070,48 @@ type Semantics struct {
 	// once.
 	SignalNamesTheShellLacks string
 
+	// SignalNamesTheShellAlsoReads are older names for signals the table
+	// already carries, written as `ALIAS=NAME` pairs.
+	//
+	// The sibling of SignalNamesTheShellLacks and the opposite direction: a
+	// shell's table can be shorter than the platform's, and it can also
+	// answer to a word the platform's own header stopped using. Measured
+	// 2026-09-17 on macOS arm64, each reference under a matching `argv[0]`:
+	// `kill -l IOT` is `6` in ksh93u+ and zsh 5.9.2 and `invalid signal
+	// specification` in bash 5.3.20, and dash does not read names there at
+	// all. The two that take it take it everywhere a name goes — `kill -s
+	// IOT`, `kill -IOT` and `trap 'x' IOT` are all a real ABRT — so it is
+	// the table's and not one builtin's.
+	//
+	// It is a reading and never a writing: `kill -l 6` is `ABRT` in both of
+	// them, so a number translated back is the table's own name. The one
+	// place an alias is *written* is ksh93's bare listing, which is
+	// Diagnostics.KillListingWritesTheAlias.
+	//
+	// Space-separated pairs, in the spelling the table uses and with no SIG
+	// prefix on either side, and a string rather than a map for the reason
+	// SignalNamesTheShellLacks is one: a Semantics is compared with `==`.
+	SignalNamesTheShellAlsoReads string
+
+	// KillNameOptionReadsANumber takes a word of digits after `kill -s` as
+	// the signal of that number rather than as a name.
+	//
+	// `-s` takes a *name*, and zsh alone holds to that for a word that is
+	// all digits. Measured 2026-09-17, each reference under a matching
+	// `argv[0]` from a script file: `kill -s 9 999999` reaches a real send
+	// in bash 5.3.20, ksh93u+, dash and BusyBox ash 1.37.0 — each reporting
+	// the missing process at 1 — where zsh 5.9.2 answers `unknown signal:
+	// SIG9` and the listing hint, also at 1.
+	//
+	// Signal 0 is not this question and is asked before it: `kill -s 0 $$`
+	// is 0 in all five, zsh included, because the probe is not a signal.
+	//
+	// Distinct from KillSendsASignalNumberItCannotName, which is the same
+	// position with a number *out of range*: `-s 99` is refused in ksh93 and
+	// zsh where `-99` is sent. This is the row where the three that send
+	// part company with zsh (#3544).
+	KillNameOptionReadsANumber Answer
+
 	// KillListNamesZeroAsExit gives `kill -l 0` the name `EXIT`, which is the
 	// pseudo-signal a shell's own trap table has at that number rather than
 	// one the kernel knows.
@@ -20339,6 +20381,15 @@ func PosixSemantics() Semantics {
 		// what a standard saying nothing about names past its own list
 		// implies: the number is the portable spelling.
 		KillListLeavesAnUnnamedSignalBlank: No,
+		// POSIX writes `-s signal_name` and calls the operand symbolic, and
+		// says in the same breath that `-signal_number` names the same
+		// signal — so a number is a portable way to say which signal is
+		// meant, and the standard nowhere says that spelling stops being
+		// one after `-s`. Four of the five references read it, which is
+		// what the core is: a common denominator that refused what four
+		// columns take would be a shell nobody could write `kill -s "$sig"`
+		// against.
+		KillNameOptionReadsANumber: Yes,
 		// POSIX gives `exec` no options at all, so none of its three letters
 		// is one: a leading `-l` there is the name of a command.
 		ExecTakesTheLoginLetter:            No,

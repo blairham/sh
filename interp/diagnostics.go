@@ -3528,6 +3528,30 @@ type Diagnostics struct {
 	// KillMissingSignalArgument is `-s` with nothing after it. One verb: the
 	// option, since two dialects name it and two do not.
 	KillMissingSignalArgument string
+	// KillMissingNumberArgument is `-n` with nothing after it, where that
+	// is a different sentence from the one `-s` draws.
+	//
+	// ksh93 alone, and it is the option's own noun rather than a rewording:
+	// `kill -s` there is `-s: signame argument expected` and `kill -n` is
+	// `-n: numeric signum argument expected`, both followed by the usage
+	// block at 2. bash, zsh and dash word the two alike, and dash has no
+	// `-n` to word. Empty means KillMissingSignalArgument, which is what
+	// every other column says in both places (#3544).
+	KillMissingNumberArgument string
+	// KillBadSignumIsAUsageError answers `kill -n 9x` with the usage block
+	// and no sentence at all.
+	//
+	// ksh93 alone. `-n` takes a *numeric* signum there, and a word that is
+	// not one is a misuse of the option rather than a signal nobody has:
+	// measured 2026-09-18, `kill -n 9x 999999` and `kill -n NOPE 999999`
+	// each write the two-line usage block, unprefixed, at 2 and nothing
+	// else. The other columns reach a sentence — bash's `invalid signal
+	// specification`, zsh's `invalid signal number` — and dash has no `-n`.
+	//
+	// It is the block a bare `kill` writes, so it is KillUsage rather than a
+	// wording of its own, and it carries KillUsageStatus for the same
+	// reason: the refusal really is the usage error (#3544).
+	KillBadSignumIsAUsageError bool
 	// KillIllegalOptionPerLetter writes the unknown-option complaint once
 	// per *character* of the word rather than once for the word.
 	//
@@ -5319,6 +5343,39 @@ type Diagnostics struct {
 	PlusOListsActive bool
 	// KillListing is the shape of `kill -l` with no operands.
 	KillListing KillListingForm
+	// KillListingUnnamedPosition is how the bare listing writes a position
+	// this platform has and this shell's own table cannot name.
+	//
+	// One verb: the number. `SIG%[1]d` in ksh93, whose listing writes
+	// `SIG29` for the signal every other column on macOS calls INFO, and
+	// `%[1]d` in dash, whose listing on Linux writes a bare `16` for the
+	// STKFLT it has no name for. The two shells with this gap render it
+	// differently, which is what makes it a field rather than a rule.
+	//
+	// Empty leaves the position out of the listing altogether — which is
+	// what bash and BusyBox ash do with Linux's first three real-time
+	// numbers, and what every column does on a machine whose whole range it
+	// names.
+	//
+	// The *translating* form is not this: `kill -l 29` is the bare `29` in
+	// ksh93, which is KillListLeavesAnUnnamedSignalBlank's row. The same gap
+	// is spelled two ways by one shell, which is why it takes two fields
+	// (#3536).
+	KillListingUnnamedPosition string
+	// SignalListingWritesTheAlias writes an older name wherever this shell
+	// lists a signal, in place of the name its own table carries.
+	//
+	// ksh93 alone, and it reaches both listings rather than `kill -l`'s.
+	// Measured 2026-09-17: the sixth entry of its `kill -l` is `IOT` where
+	// every other column writes `ABRT`, and `trap 'x' ABRT; trap` writes
+	// `IOT` there too — the same word whichever spelling set the trap, so
+	// it is what this shell calls signal 6 when it is the one talking.
+	//
+	// Its own `kill -l 6` is still `ABRT`, which is what makes this a
+	// listing preference and not a second name for the number: which names
+	// the shell answers to is Semantics.SignalNamesTheShellAlsoReads, and
+	// zsh reads IOT without ever writing it of its own accord (#3536).
+	SignalListingWritesTheAlias bool
 
 	// ReadArgCount is a bare `read` in the dialect that wants a name. No
 	// verbs.

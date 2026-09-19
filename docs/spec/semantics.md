@@ -1933,15 +1933,72 @@ signal that is there and has no name. Four columns write the number at status
 the range — and dash is the column that proves they are two, since it prints
 `32` for a signal Linux has and refuses `65` at status 2 (#3287).
 
-Two gaps are left open and are worth naming rather than discovering:
+One gap is left open and is worth naming rather than discovering.
+**Linux's real-time signals have names this table does not carry**: bash and
+dash write `RTMIN+5` for 40 and `RTMAX` for 64, where zsh and BusyBox ash
+write the numbers. Sending them is fixed; naming them is not, and it cannot
+be fixed by measurement alone — `SIGRTMIN` is the C library's and not the
+kernel's, Go's `syscall` does not export it, and the two columns that have
+names disagree with glibc about where the range starts (#3535).
 
-- **Linux's real-time signals have names this table does not carry.** bash
-  and dash write `RTMIN+5` for 40 and `RTMAX` for 64, where zsh and BusyBox
-  ash write the numbers. Sending them is fixed; naming them is not, so the
-  two columns that name them get the numbers.
-- **ksh93 writes `SIG29` in its bare listing** for the position it cannot
-  name, and `IOT` where every other column writes `ABRT`. The listing drops
-  the row instead. Both are alias questions about that one column's table.
+### The listing is a third view of the table
+
+Measured 2026-09-17, `kill -l` with no operands from a script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C`. Two positions of ksh93's listing are
+not what the same shell answers when it is asked about a number, which is
+what makes them a listing question and not a table one.
+
+`Diagnostics.KillListingUnnamedPosition` is how a position the platform has
+and this shell cannot name is written *in the listing*. ksh93 writes `SIG29`
+and dash on Linux writes a bare `16`, and this engine dropped the row in
+both — the listing walked the dialect's table, so a name the dialect lacks
+took the position with it. It walks the platform's now and asks this field
+what to put there; empty leaves the position out, which is what a shell whose
+table is the platform's never has to decide. The translating form spells the
+same gap differently — ksh93's `kill -l 29` is the bare `29` — which is
+`KillListLeavesAnUnnamedSignalBlank` and is why one gap takes two fields.
+
+`Semantics.SignalNamesTheShellAlsoReads` is the mirror of
+`SignalNamesTheShellLacks`: a shell can answer to a word its own table has
+stopped carrying. `IOT` is signal 6 in ksh93 and zsh and a refusal in bash,
+and the two that take it take it everywhere a name goes — `kill -l IOT`,
+`kill -s IOT`, `kill -IOT` and `trap 'x' IOT` are all the ABRT the table
+carries. It is a reading and never a writing: `kill -l 6` is `ABRT` in both.
+
+`Diagnostics.SignalListingWritesTheAlias` is the one place it *is* written,
+and it is ksh93 alone. Its `kill -l` lists 6 as `IOT`, and so does its
+`trap`, whichever spelling set the trap — so the field is about what this
+shell calls a signal when it is the one talking rather than about `kill`.
+zsh reads `IOT` and writes it back only when the script wrote it, which this
+engine does not reproduce: a trap set as `IOT` there lists as `IOT` and here
+lists as `ABRT`. That is remembering the word, which is a third question and
+a smaller divergence than the refusal it replaced (#3536).
+
+### `kill -s` and `kill -n` take different words
+
+Measured 2026-09-17 and 2026-09-18, each reference under a matching `argv[0]`
+from a script file. Three shapes, and each is a different half of the same
+sentence — `-s` takes a name and `-n` takes a number, and the panel disagrees
+about how strictly.
+
+`Semantics.KillNameOptionReadsANumber` is a word of digits after `-s`. bash,
+ksh93, dash and BusyBox ash all read it as the number and reach a real send;
+zsh alone holds `-s` to the symbolic spelling and answers `unknown signal:
+SIG9` with its listing hint, at 1. Signal 0 is asked before the axis and not
+by it — `kill -s 0 $$` is 0 in all five, because the probe is not a signal.
+The neighboring axis is `KillSendsASignalNumberItCannotName`, which is this
+position with a number *out of range*: `-s 99` is refused in ksh93 and zsh
+where `-99` is sent, and this is the same position with one in range, where
+the three that send part company with zsh.
+
+`Diagnostics.KillBadSignumIsAUsageError` is a word after `-n` that is not a
+number. ksh93 writes the two-line usage block, unprefixed, at 2 and nothing
+else — the option was misused, rather than a signal nobody has — where the
+other columns reach a sentence. `Diagnostics.KillMissingNumberArgument` is
+the same option with nothing after it at all: ksh93 says `-n: numeric signum
+argument expected` where it says `-s: signame argument expected`, and one
+field could not hold both. bash, zsh and dash word the two alike, and dash
+has no `-n` to word (#3544).
 
 ## `trap -l` and `kill -l` are one listing
 

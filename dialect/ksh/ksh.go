@@ -1911,6 +1911,14 @@ func Semantics() interp.Semantics {
 	// `kill -29` sends, because a number is the kernel's. Measured
 	// 2026-09-17 on ksh93 93u+ 2012-08-01.
 	s.SignalNamesTheShellLacks = "INFO"
+	// And one name older than the table's own: `IOT` is signal 6 here, as it
+	// is in zsh, where bash refuses it outright. Measured 2026-09-17 —
+	// `kill -l IOT`, `kill -s IOT`, `kill -IOT` and `trap 'x' IOT` are all
+	// the ABRT the table carries, while `kill -l 6` is `ABRT`, so the older
+	// spelling is read and never written back. The bare listing is the one
+	// place it *is* written, which Diagnostics.SignalListingWritesTheAlias
+	// answers (#3536).
+	s.SignalNamesTheShellAlsoReads = "IOT=ABRT"
 	// And a signal written onto the option with no space: `kill -n9` and
 	// `kill -sKILL` both send. Measured 2026-09-12. This shell is looser
 	// still — it takes `kill -s9` too, which the axis records and does not
@@ -4172,10 +4180,18 @@ func Diagnostics() interp.Diagnostics {
 		KillIllegalOptionPerLetter: true,
 		KillIllegalOptionUsage:     kshKillUsage,
 		KillMissingSignalArgument:  "kill: %[1]s: signame argument expected\n" + kshKillUsage,
-		KillUsageStatus:            2,
-		KillBadOptionStatus:        2,
-		KillUsageUnprefixed:        true,
-		KillTargetUnprefixed:       true,
+		KillMissingNumberArgument:  "kill: %[1]s: numeric signum argument expected\n" + kshKillUsage,
+		KillBadSignumIsAUsageError: true,
+		// The listing spells both of this shell's differences from the
+		// table it is reading: `IOT` for 6, where `kill -l 6` is `ABRT`,
+		// and `SIG29` for the position it has no name for, where
+		// `kill -l 29` is the bare number. Measured 2026-09-17 (#3536).
+		KillListingUnnamedPosition:  "SIG%[1]d",
+		SignalListingWritesTheAlias: true,
+		KillUsageStatus:             2,
+		KillBadOptionStatus:         2,
+		KillUsageUnprefixed:         true,
+		KillTargetUnprefixed:        true,
 		// `[ -Q x -a -n x ]` is `[: x: unknown operator` here: the dash word
 		// is an operand like any other, and the complaint names the second of
 		// the two the primary is left with (#1290).

@@ -75,8 +75,16 @@ func TestPromptSequences(t *testing.T) {
 			t.Errorf("\\%c drew %q, want %q", code, got, want)
 		}
 	}
-	if !st.Octal {
-		t.Error("three octal digits are not read; measured, \\007 drew the bell")
+	// Three exactly, which is this shell's reading and not the panel's:
+	// measured, `\007` drew the bell and `\1` and `\10` were each drawn as
+	// the two characters written. BusyBox ash reads a shorter run as a
+	// number, which is why this is a value (#3570).
+	if st.Octal != repl.OctalExactlyThree {
+		t.Errorf("Octal = %v, want exactly three: `\\007` drew the bell and `\\10` did not", st.Octal)
+	}
+	// And no hexadecimal spelling at all: `\x41` drew the four characters.
+	if st.Hex {
+		t.Error("bash has no `\\x` spelling, and it drew `\\x41` whole")
 	}
 	// zsh's visual language is not bash's: `%B` is a percent code, and bash
 	// has no letter that draws a color of its own.

@@ -44,6 +44,8 @@ type (
 	PromptResolver = interp.PromptResolver
 	// PromptCondition is one question a `%(x.true.false)` escape asks.
 	PromptCondition = interp.PromptCondition
+	// PromptOctal is how many octal digits after the escape name a byte.
+	PromptOctal = interp.PromptOctal
 	// PromptQuantityResolver is what one condition counts, for the reader
 	// that has the facts.
 	PromptQuantityResolver = interp.PromptQuantityResolver
@@ -56,6 +58,13 @@ const (
 	DropBoth   = interp.DropBoth
 	Foreground = interp.Foreground
 	Background = interp.Background
+)
+
+// How long a run of octal digits after the escape is.
+const (
+	NoOctalEscape     = interp.NoOctalEscape
+	OctalExactlyThree = interp.OctalExactlyThree
+	OctalUpToThree    = interp.OctalUpToThree
 )
 
 // Every field a prompt can draw.

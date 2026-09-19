@@ -75,7 +75,7 @@ func PromptStyle() interp.PromptStyle {
 		},
 		// `\007` drew the bell and `\101` drew `A`; `\0`, `\1`, `\10` and `\8`
 		// were left as written.
-		Octal: true,
+		Octal: interp.OctalExactlyThree,
 		// `\q` draws `\q`.
 		Unknown:   interp.KeepBoth,
 		Privilege: "$",

@@ -3272,6 +3272,14 @@ func Diagnostics() interp.Diagnostics {
 		// order, so `export e1=1 e2=2` is three lines. See
 		// interp/xtracedeclaration.go.
 		TraceRepeatsAScalarOperandAfter: []string{"export", "readonly"},
+		// An operand whose value is a parenthesized list goes the other way:
+		// it is taken off the command line and written in front, where a
+		// scalar stays where it was. `typeset b=(3 4)` is `+ b=('3' '4')` and
+		// then `+ typeset b`, measured 2026-09-19 on 5.3.20 and 3.2.57 alike,
+		// and every element is quoted whether or not it needs to be — which
+		// is what the second field says. See interp/xtracearrayoperand.go.
+		TraceDeclarationArrayOperand:        interp.TraceOperandSplitBefore,
+		TraceArrayOperandQuotesEveryElement: true,
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
 		EvalNaming:       interp.SourceBeforeLocation,

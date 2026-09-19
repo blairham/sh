@@ -352,6 +352,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// inherits for exactly as long as it takes to run a command of its own —
 	// the same reading, and cloned for the same reason.
 	c.declarationOperands = slices.Clone(r.declarationOperands)
+	// And its array-literal operands, for the same reason and with the same
+	// reading — a clone appending into the parent's slice is exactly what this
+	// file exists to prevent.
+	c.arrayOperands = slices.Clone(r.arrayOperands)
 	// And the names the running command's prefix is holding, with what they
 	// held before it and what a declaration has done to them, for the same
 	// reason and with the same reading: a clone started inside a prefixed

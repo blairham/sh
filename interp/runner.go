@@ -3215,6 +3215,12 @@ type Runner struct {
 	// and restored behind it, so a command inside this one's expansion
 	// answers for itself. See interp/xtracedeclaration.go.
 	declarationOperands []int
+	// arrayOperands is this command's `name=( … )` operands, each with the
+	// position of the bare name it leaves in argv and, while tracing, the
+	// element list expanded ahead of the command's own line. Set for the
+	// length of one simple command and restored behind it, for the reason
+	// declarationOperands is. See interp/xtracearrayoperand.go.
+	arrayOperands []arrayOperand
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
@@ -5616,8 +5622,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// utility has made the name local. Splitting it that way is what lets
 	// `local` do the one thing only it can do, which is decide the scope the
 	// assignment then lands in.
+	savedArrayOperands := r.arrayOperands
+	r.arrayOperands = nil
+	defer func() { r.arrayOperands = savedArrayOperands }()
 	for _, a := range c.Assigns {
 		if a.Operand {
+			// Where the bare name lands is recorded with it, because `set -x`
+			// has to put something else in that position and the expanded
+			// word cannot say which operand it came from. See
+			// interp/xtracearrayoperand.go.
+			r.arrayOperands = append(r.arrayOperands, arrayOperand{assign: a, at: len(argv)})
 			argv = append(argv, a.Name)
 		}
 	}
@@ -5824,6 +5838,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// values have expanded, and neither answer may move in between: `x=1 set
 	// +x` is the command that would move the first, and a function defined
 	// by a redirection the second.
+	// And an array-literal operand's elements, expanded once here so the
+	// assignment the command performs can be written before the command's own
+	// line — which is where two of the three columns that have the construct
+	// write it. The store that runs after the utility takes this very list.
+	r.expandArrayOperands()
+
 	tracesPrefix := r.tracesItsPrefix(c.Assigns, argv)
 	prefixFollows := tracesPrefix && r.tracePrefixFollowsTheCommand(argv)
 	if !tracesPrefix || prefixFollows {
@@ -9182,9 +9202,19 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 // as operands, which the parser kept apart from the prefix ones.
 func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
 	for _, a := range c.Assigns {
-		if a.Operand {
-			r.assign(ctx, a)
+		if !a.Operand {
+			continue
 		}
+		if e := r.expandedArrayOperand(a); e != nil {
+			// The elements were expanded before the utility ran, so that the
+			// trace could say what this assignment is about to do. Handing
+			// them over is what keeps that from being a second expansion —
+			// the arrangement Runner.withPreparedValue already has for a bare
+			// literal's trace.
+			r.withPreparedValue(ctx, e)
+			continue
+		}
+		r.assign(ctx, a)
 	}
 }
 

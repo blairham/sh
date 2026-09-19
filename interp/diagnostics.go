@@ -6652,6 +6652,16 @@ type Diagnostics struct {
 	// TraceOperandOnTheCommandLine, which is every other column's answer and
 	// the substrate's own. See interp/xtracedeclaration.go.
 	TraceDeclarationOperand TraceDeclarationOperand
+	// TraceDeclarationArrayOperand is the same question asked of an operand
+	// whose value is a **parenthesized list** — `typeset a=(1 2)` — and it is
+	// a separate field because one column answers the two differently. Zero
+	// is TraceOperandOnTheCommandLine. See interp/xtracearrayoperand.go for
+	// the panel and for why the two do not collapse.
+	TraceDeclarationArrayOperand TraceDeclarationOperand
+	// TraceArrayOperandQuotesEveryElement single-quotes each element of such
+	// a literal whether or not the ordinary rule would — `typeset b=(3 4)`
+	// written as `+ b=('3' '4')`. One column; see the same file.
+	TraceArrayOperandQuotesEveryElement bool
 	// TraceRepeatsAScalarOperandAfter names the utilities that write a
 	// `name=value` operand **again** on a line of its own behind the command
 	// line: `export ev=1` traces `+ export ev=1` and then `+ ev=1`.

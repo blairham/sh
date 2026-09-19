@@ -55,13 +55,20 @@ type declareFlags struct {
 	// precision and precisionNamed are under. The letter is kept rather than
 	// three bools because a name carries one of the three and the listing
 	// has to write back which — see fieldwidth.go.
-	widthLetter byte
-	width       int
-	widthNamed  bool
-	readonly    bool
-	export      bool
-	assoc       bool
-	array       bool
+	//
+	// widthZeroFill is the `Z` letter where it **rides on** one of the other
+	// two rather than being a third of them, which is the reading
+	// Semantics.DeclareZeroFillLetter records for ksh93: there a name
+	// carries a justification and a fill at once and the listing writes both
+	// — `typeset -Z 4 -R 4 d=0007`.
+	widthLetter   byte
+	widthZeroFill bool
+	width         int
+	widthNamed    bool
+	readonly      bool
+	export        bool
+	assoc         bool
+	array         bool
 	// compoundVar is `-C`, ksh93's compound-variable letter: a fourth kind
 	// beside the scalar and the two arrays. Its own field rather than a
 	// third value of a container enum because it is not a container — the
@@ -659,12 +666,10 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 					// between them before the loop reached here.
 					break
 				}
-				if f.widthLetter == 0 {
-					// The earlier letter of the three wins, measured:
-					// `typeset -RZ 5 l=7` is `    7` and lists as
-					// `typeset -R5`, where `typeset -LZ 5 m=7` is `7    `.
-					f.widthLetter = byte(c)
-				}
+				// What `Z` is and which justification survives a pair of
+				// them are both dialect answers — see recordWidthLetter,
+				// where the two axes are asked.
+				r.recordWidthLetter(&f, byte(c))
 			case 'p':
 				// Print rather than declare. `+p` prints too — measured in
 				// both shells that spell the option at all.
@@ -1234,6 +1239,21 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// either letter — measured, both orders answer the same way. See the
 		// axis; the other reading lets the first letter written win, which
 		// the parse has already settled by the time this is reached.
+		return r.refuseWithUsage(name)
+	}
+	if widthLetterCompany(f) && r.declareOptionTakesANumber('L') &&
+		r.ask(r.sem().WidthLettersExcludeTheIntegerLetter,
+			"the integer and width letters on one declaration") {
+		// The integer letter and a width letter cannot both stand here, and
+		// the refusal is the builtin's usage block rather than a complaint
+		// about either letter — measured, every order answers the same way.
+		// See the axis; the other reading lets the first letter written win,
+		// which the parse has already settled by the time this is reached.
+		//
+		// Gated on the dialect having the letters as widths at all, so a
+		// shell where `L` means something else never meets the question: a
+		// bare `strings.ContainsAny` would ask it of a letter this engine
+		// read as a width nowhere.
 		return r.refuseWithUsage(name)
 	}
 	if r.unspecified {
@@ -2470,12 +2490,26 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// `typeset e=abcd`. Nothing is written back, exactly as `+F`
 			// and `+i` write nothing back, because this shell never stored
 			// the padded text in the first place.
+			//
+			// A zero fill is the one part of a presentation that does come
+			// back off, in the column that stored one — see
+			// widthZerosUnwound, where the measurement is.
+			r.widthZerosUnwound(name)
 			delete(r.fieldWidth, name)
 		} else {
+			// The attribute being replaced presented the text the name is
+			// holding, and the one arriving has to read the text rather than
+			// the presentation — see widthUnwound, where the measurements
+			// are.
+			r.widthUnwound(name)
 			if r.fieldWidth == nil {
 				r.fieldWidth = map[string]fieldWidth{}
 			}
-			w := fieldWidth{letter: f.widthLetter, width: r.fieldWidth[name].width}
+			w := fieldWidth{
+				letter:   f.widthLetter,
+				zeroFill: f.widthZeroFill,
+				width:    r.fieldWidth[name].width,
+			}
 			if f.widthNamed {
 				// A number written down replaces whatever the name had,
 				// including a width it had learned: measured, `typeset -L 3
@@ -3042,7 +3076,8 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 func withoutListingLetters(f declareFlags) declareFlags {
 	f.integer, f.integerOff, f.base, f.baseNamed = false, false, 0, false
 	f.float, f.precision, f.precisionNamed = false, 0, false
-	f.widthLetter, f.width, f.widthNamed = 0, 0, false
+	f.widthLetter, f.widthZeroFill = 0, false
+	f.width, f.widthNamed = 0, false
 	f.readonly, f.readonlyOff = false, false
 	f.export, f.assoc, f.array = false, false, false
 	f.lower, f.upper, f.unique, f.hidden = false, false, false, false
@@ -4227,6 +4262,17 @@ func (r *Runner) attributeWouldChange(name, value string) bool {
 		if err != nil || itoa(n) != value {
 			return true
 		}
+	}
+	if _, ok := r.fieldWidth[name]; ok && !r.caseFoldsOnRead() &&
+		r.widthPadded(name, value) != value {
+		// A width the name already carries, in the column that stores the
+		// presentation: a declaration naming a different letter or a
+		// different number re-presents what the name is holding. Measured
+		// 2026-09-18 on ksh93u+ — `typeset -R 4 v=ab; typeset -L 4 v` reads
+		// `ab  `, and `typeset -L 4 e=ab; typeset -L 6 e` reads `ab    ` —
+		// while the same second line naming what the name already has
+		// answers the value back and asks no dialect at all.
+		return true
 	}
 	if r.caseFoldsOnRead() {
 		// The case letters cannot change what is *stored* in this shell —

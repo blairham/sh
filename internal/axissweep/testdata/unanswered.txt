@@ -94,6 +94,7 @@ ash   DeclareMatchingLetter
 ash   DeclareNumberDetachedOnlyAtTheWordEnd
 ash   DeclarePrintReportsAMissingName
 ash   DeclareTypeLetter
+ash   DeclareZeroFillLetter
 ash   DisownAlwaysFails
 ash   DisownRemovesTheJob
 ash   EarlierDeclarationLetterBlocksALaterPlus
@@ -235,6 +236,8 @@ ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 ash   ValuelessSubscriptedOperand
 ash   WholeArraySubscriptAssigningATable
 ash   WholeArraySubscriptAssigningAnArray
+ash   WidthJustificationPrecedence
+ash   WidthLettersExcludeTheIntegerLetter
 ash   WritingSubstitutionIsWaitedForAtTheCommand
 
 bash  ArithDivisionByZeroYieldsAValue
@@ -250,6 +253,7 @@ bash  DeclareMappingLetter
 bash  DeclareMatchingLetter
 bash  DeclareNumberDetachedOnlyAtTheWordEnd
 bash  DeclareTypeLetter
+bash  DeclareZeroFillLetter
 bash  ExitTrapFiresPastTheEnd
 bash  ExportThroughASubscriptedOperandRecordsTheLetter
 bash  FloatFormatLetterE
@@ -268,6 +272,8 @@ bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
 bash  SubscriptedPrefixIsTakenBack
+bash  WidthJustificationPrecedence
+bash  WidthLettersExcludeTheIntegerLetter
 
 dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
@@ -340,6 +346,7 @@ dash  DeclareMatchingLetter
 dash  DeclareNumberDetachedOnlyAtTheWordEnd
 dash  DeclarePrintReportsAMissingName
 dash  DeclareTypeLetter
+dash  DeclareZeroFillLetter
 dash  DisownAlwaysFails
 dash  DisownRemovesTheJob
 dash  DollarSingleBackslashC
@@ -507,6 +514,8 @@ dash  ValuelessDeclarationOfAHeldNameListsIt
 dash  ValuelessSubscriptedOperand
 dash  WholeArraySubscriptAssigningATable
 dash  WholeArraySubscriptAssigningAnArray
+dash  WidthJustificationPrecedence
+dash  WidthLettersExcludeTheIntegerLetter
 dash  WritingSubstitutionIsWaitedForAtTheCommand
 
 ksh   ArithSubscriptSkippedWhenNameUnset

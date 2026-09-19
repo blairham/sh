@@ -2663,6 +2663,14 @@ func Semantics() interp.Semantics {
 	// reading. Measured 2026-09-14, `typeset -h s q=1` and `declare -h s
 	// q=1` are both `invalid option` with the usage line, so neither the
 	// hide-in-scope attribute nor the string argument can be put to it.
+	// unanswered DeclareZeroFillLetter: there is no `Z` letter here under
+	// either reading. Measured 2026-09-18 on 5.3.20 and 3.2 alike, `declare
+	// -Z 4 d=7` is `declare: -Z: invalid option` with the usage line, so the
+	// question of whether it is a justification or a fill cannot be put.
+	// unanswered WidthJustificationPrecedence: nor can a pair of them be
+	// written to rank — `declare -LR 5 a=7` is the same refusal, at the `L`.
+	// unanswered WidthLettersExcludeTheIntegerLetter: nor the integer letter
+	// beside one, for the same reason (#2859).
 	// unanswered NumericTypeLettersAreExclusive: the pair cannot be written.
 	// `-E` is not a letter at all and `-F` is the function listing, so
 	// `declare -iF a=1` is that same refusal in 3.2 and `-i: invalid option`

@@ -1316,6 +1316,30 @@ func bareAssignmentFlags(d declaration) []string {
 			flags = append(flags, itoa(d.base))
 		}
 	}
+	if d.hasWidth {
+		// The width letters, last of all and each with its number as a word
+		// of its own. Measured 2026-09-18 on ksh93u+ 2012-08-01 a letter at
+		// a time: `typeset -x -L 3`, `typeset -r -L 3`, `typeset -l -L 4`,
+		// `typeset -t -L 3`, `typeset -a -L 3` and `typeset -x -r -t -L 4`,
+		// so they follow everything above and the order among the three
+		// decides nothing — a name carries one justification.
+		//
+		// The number is written even where it is zero, which is not the
+		// float letters' rule and is measured rather than carried over:
+		// `typeset -L k` with no width and no value lists as `typeset -L 0
+		// k` and `typeset -Z m` as `typeset -Z 0 -R 0 m`, where a precision
+		// nobody wrote is left off the letter entirely.
+		if d.width.zeroFill {
+			// The fill and the justification it rides on are two letters
+			// here and the listing writes both, the fill first: `typeset -Z
+			// 4 d=7` lists as `typeset -Z 4 -R 4 d=0007` and `typeset -ZL 5
+			// q=7` as `typeset -Z 5 -L 5 q='7    '`. See
+			// Semantics.DeclareZeroFillLetter, which is where the other
+			// reading writes one letter for the pair.
+			flags = append(flags, "-Z", itoa(d.width.width))
+		}
+		flags = append(flags, "-"+string(d.width.letter), itoa(d.width.width))
+	}
 	return dropACompoundLetterBesideAnother(flags, compoundAt)
 }
 

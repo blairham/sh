@@ -3410,6 +3410,26 @@ func Semantics() interp.Semantics {
 	// into on its own: `typeset -iF 3 a=1.5` is `typeset -i3 a=1` and
 	// `-Fi 3` is `typeset -F a=1.500`.
 	s.NumericTypeLetterPrecedence = interp.NumericLetterFirstWrittenWins
+	// `Z` is a **justification of its own** here and the third member of an
+	// exclusive set with `L` and `R`, where ksh93 reads it as a fill riding
+	// on one of the other two. Measured 2026-09-18 on zsh 5.9.2: `typeset
+	// -ZL 5 q=7` lists as `typeset -Z5 q=7` and is `00007`, and `typeset -LZ
+	// 5 r=7` as `typeset -L5 r=7` and is `7    ` — one letter written back
+	// for a pair, and the value the surviving letter's. See
+	// interp/fieldwidth.go for ksh93's pair of letters (#2859).
+	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterIsAJustificationOfItsOwn
+	// And which of them survives is the numeric letters' rule again, with
+	// the same answer: the **first written** wins. Measured in the same run
+	// — `typeset -LR 5 t=7` lists as `typeset -L5 t=7`, `-RL` as `typeset
+	// -R5`, `-ZRL` as `typeset -Z5` and `-LRZ` as `typeset -L5`. ksh93 takes
+	// the last.
+	s.WidthJustificationPrecedence = interp.WidthJustificationFirstWrittenWins
+	// And a width letter may stand beside the integer one, the first written
+	// winning there too: measured 2026-09-18, `typeset -iL 5 a=7` lists as
+	// `typeset -i5 a=7` — the `5` a base — and `typeset -Li 5 a=7` as
+	// `typeset -L5 a=7`. ksh93 answers both with typeset's usage block and
+	// ends the script.
+	s.WidthLettersExcludeTheIntegerLetter = interp.No
 	// A bare `-F` or `-E` over a name that already has a precision keeps it
 	// here — measured, `typeset -F 3 x=1.5; typeset -F x` still reads
 	// `1.500` — where ksh93 resets to the letter's default.

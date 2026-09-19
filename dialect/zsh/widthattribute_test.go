@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 )
 
 // The width attributes — `typeset -L`, `-R` and `-Z` — #1461.
@@ -186,6 +189,66 @@ func TestAnArrayLiteralDropsTheWidthAttribute(t *testing.T) {
 		// The control — declared an array with the letter, it stays, and the
 		// elements are not padded either.
 		{`typeset -aL 3 c=(ab cdefg); typeset -p c`, "typeset -aL3 c=( ab cdefg )\n"},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// `Z` is a **justification of its own** here and the third member of an
+// exclusive set with `L` and `R`, where ksh93 reads it as a fill riding on one
+// of the other two and writes both letters back. Measured on zsh 5.9.2,
+// 2026-09-18, the same arrangement as the rows above (#2859).
+//
+// The rows are chosen so that each of the two readings answers them
+// differently: under the other one `-LZ` would be `L` **and** a fill, so the
+// last row would be `12   ` rather than `0012 `.
+func TestTheZeroFillLetterIsAJustificationOfItsOwn(t *testing.T) {
+	if got := zsh.Semantics().DeclareZeroFillLetter; got != interp.DeclareZeroFillLetterIsAJustificationOfItsOwn {
+		t.Errorf("DeclareZeroFillLetter = %v, want a justification of its own", got)
+	}
+	if got := zsh.Semantics().WidthJustificationPrecedence; got != interp.WidthJustificationFirstWrittenWins {
+		t.Errorf("WidthJustificationPrecedence = %v, want the first letter written", got)
+	}
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		// One letter written back for a pair, and the value the surviving
+		// letter's.
+		{`typeset -ZL 5 c=7; print -r -- "[$c]"; typeset -p c`, "[00007]\ntypeset -Z5 c=7\n"},
+		{`typeset -LZ 5 r=7; print -r -- "[$r]"; typeset -p r`, "[7    ]\ntypeset -L5 r=7\n"},
+		{`typeset -ZRL 5 d=7; typeset -p d`, "typeset -Z5 d=7\n"},
+		{`typeset -LRZ 5 e=7; typeset -p e`, "typeset -L5 e=7\n"},
+		{`typeset -LR 5 t=7; print -r -- "[$t]"`, "[7    ]\n"},
+		{`typeset -RL 5 u=7; print -r -- "[$u]"`, "[    7]\n"},
+		// The leading zeros a left-hand ride would take off, kept.
+		{`typeset -LZ 5 i=0012; print -r -- "[$i]"`, "[0012 ]\n"},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A width letter may stand beside the integer one here, the first written
+// winning, where ksh93 answers the pair with typeset's usage block and ends
+// the script. Measured 2026-09-18 (#2859).
+func TestAWidthLetterSharesWithTheIntegerLetter(t *testing.T) {
+	if got := zsh.Semantics().WidthLettersExcludeTheIntegerLetter; got != interp.No {
+		t.Errorf("WidthLettersExcludeTheIntegerLetter = %v, want No", got)
+	}
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		// The `5` becomes a *base* where the integer letter wins, which is
+		// the half that says both letters were really read.
+		{`typeset -iL 5 a=7; typeset -p a`, "typeset -i5 a=7\n"},
+		{`typeset -Li 5 b=7; typeset -p b`, "typeset -L5 b=7\n"},
 	} {
 		t.Run(tc.src, func(t *testing.T) {
 			out, st := runZsh(t, dir, tc.src)

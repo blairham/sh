@@ -3542,6 +3542,12 @@ func Diagnostics() interp.Diagnostics {
 		// `[ -n "]" ]` is `[ -n ']' ]`.
 		TraceBareBracket:  interp.TraceBracketPairBare,
 		TraceArrayLiteral: interp.TraceArraySpaced,
+		// A declaration utility's operand is taken off the command line and
+		// written as an assignment in front of it: `typeset x=1` is `+ x=1`
+		// and then `+ typeset x`, and `export e1=1 e2=2` is three lines.
+		// Measured 2026-09-19 on 93u+ 2012-08-01. See
+		// interp/xtracedeclaration.go.
+		TraceDeclarationOperand: interp.TraceOperandSplitBefore,
 		// The assignment written in front of a command is traced *after* the
 		// command's own line — `+ /bin/echo c` then `+ C=3` — except in front
 		// of a special builtin or a function, where it comes first. See

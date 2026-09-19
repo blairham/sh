@@ -3219,6 +3219,14 @@ func Diagnostics() interp.Diagnostics {
 		// An empty *value* is written bare here where an empty argument is
 		// written as two quotes — see TraceEmptyAssignmentValueIsBare.
 		TraceEmptyAssignmentValueIsBare: true,
+		// `export ev=1` is traced twice — `+ export ev=1` and then `+ ev=1`
+		// — and `typeset -x tx=1` once, on the same binary in the same run,
+		// so it is the command word and not the export attribute that
+		// decides. `local` and `declare -x` are one line too. Measured
+		// 2026-09-19 on 5.3.20 and 3.2.57 alike; one line per operand, in
+		// order, so `export e1=1 e2=2` is three lines. See
+		// interp/xtracedeclaration.go.
+		TraceRepeatsAScalarOperandAfter: []string{"export", "readonly"},
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
 		EvalNaming:       interp.SourceBeforeLocation,

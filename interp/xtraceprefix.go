@@ -297,7 +297,7 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 		// Every assignment was refused or is one this shell does not write a
 		// line for. The command is traced as it would be with no prefix at
 		// all, which is what the panel shows for `readonly x=1; x=2 cmd`.
-		r.traceCommand(argv, c)
+		r.traceCommand(argv)
 		return
 	}
 	if d.TracePrefixAssignment == TracePrefixOwnLineBefore ||
@@ -311,7 +311,7 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 			r.traceLine(w, d)
 		}
 		r.releaseTraceTurn()
-		r.traceCommand(argv, c)
+		r.traceCommand(argv)
 		return
 	}
 	line := strings.Join(words, " ") + " "
@@ -319,7 +319,7 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 		r.tracePrefixRepeatsBeforeTheCommand(argv) {
 		line += r.tracePrefix()
 	}
-	line += strings.Join(r.traceCommandWords(argv, d, c), " ")
+	line += strings.Join(r.traceCommandWords(argv, d), " ")
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	r.errf("%s%s\n", r.tracePrefix(), line)

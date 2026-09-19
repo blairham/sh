@@ -196,7 +196,23 @@ const (
 //
 // dash and BusyBox ash quote nothing at all here (`+ export e=a b`), so the
 // field is not asked of them; ksh93 writes a declaration's assignment on a
-// line of its own and is a different shape again — see #3567.
+// line of its own and is a different shape again — see
+// Diagnostics.TraceDeclarationOperand and #3567.
+//
+// **How far it reaches** is part of the answer, and it is not "every operand".
+// Measured 2026-09-19 on zsh 5.9.2, over one quoted word that is a `name=`
+// only after it has expanded:
+//
+//	typeset "y=a b"        	typeset 'y=a b'
+//	typeset "y=a b" x=1    	typeset 'y=a b' x=1
+//	typeset x=1 "y=a b"    	typeset x=1 y='a b'
+//
+// The same word, written both ways in the same shell, so the rendering runs
+// from the first operand that was *written* as an assignment to the end of
+// the line. See Runner.declarationOperandsFrom. ksh93 renders one even where
+// nothing on the line was written as an assignment — `typeset "y=a b"` is
+// `typeset y='a b'` there — which is a third answer to this field and is
+// measured and not modeled.
 type TraceAssignmentOperand uint8
 
 const (
@@ -314,11 +330,12 @@ const (
 
 // traceCommand writes one command's trace line.
 //
-// The command is carried rather than only its words because one question the
-// line asks is about the command and not about any word of it: whether a
-// `name=value` operand is an *assignment* here, which is what decides how it
-// is quoted. See Runner.traceDeclares.
-func (r *Runner) traceCommand(words []string, c *syntax.SimpleCmd) {
+// One question the line asks is about the command and not about any word of
+// it: whether a `name=value` word is an *assignment* here, which decides both
+// how it is quoted and — in two columns — whether it is written on this line
+// at all. The expansion already answered it, word by word, and left the
+// answer in Runner.declarationOperands rather than being asked again here.
+func (r *Runner) traceCommand(words []string) {
 	if !r.tracing() || len(words) == 0 {
 		return
 	}
@@ -331,21 +348,41 @@ func (r *Runner) traceCommand(words []string, c *syntax.SimpleCmd) {
 		return
 	}
 	d := r.diag()
-	r.errf("%s%s\n", r.tracePrefix(), strings.Join(r.traceCommandWords(words, d, c), " "))
+	for _, line := range r.traceOperandsBefore(words, d) {
+		// The column that takes a declaration's operands off the command
+		// line writes them ahead of it, one line each. See
+		// interp/xtracedeclaration.go.
+		r.traceLine(line, d)
+	}
+	r.errf("%s%s\n", r.tracePrefix(), strings.Join(r.traceCommandWords(words, d), " "))
+	for _, line := range r.traceOperandsAfter(words, d) {
+		// And the column that leaves them where they were writes them again
+		// behind it, for two utilities and no others.
+		r.traceLine(line, d)
+	}
 }
 
 // traceCommandWords is one command's words, quoted for a trace. Split out of
 // traceCommand because a prefixed command's line is built elsewhere and has
 // to quote its words the same way — see Runner.tracePrefixAndCommand.
-func (r *Runner) traceCommandWords(words []string, d Diagnostics, c *syntax.SimpleCmd) []string {
+func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
 	quoted := make([]string, len(words))
-	declaring := r.traceDeclares(c, words, d)
+	split := r.traceOperandSplitsBefore(words, d)
+	from := r.declarationOperandsFrom()
 	for i, w := range words {
 		if traceBracketIsBare(d.TraceBareBracket, words, i) {
 			quoted[i] = w
 			continue
 		}
-		if i > 0 && declaring {
+		if i > 0 && split && r.declarationOperandIndex(i) {
+			// The assignment was written on its own line in front, and what
+			// is left here is the name. Only the words that were *read* as
+			// assignments move: see Runner.declarationOperandIndex.
+			quoted[i] = traceOperandCommandWord(w)
+			continue
+		}
+		if i > 0 && from >= 0 && i >= from &&
+			d.TraceAssignmentOperand == TraceAssignmentOperandValue {
 			if operand, ok := traceAssignmentOperand(w, d); ok {
 				quoted[i] = operand
 				continue
@@ -354,39 +391,6 @@ func (r *Runner) traceCommandWords(words []string, d Diagnostics, c *syntax.Simp
 		quoted[i] = traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
 	}
 	return quoted
-}
-
-// traceDeclares reports whether this command's `name=value` operands are
-// written as assignments rather than as words.
-//
-// It is the *same* question the expansion asked — Runner.declarationCommand,
-// not a second reading of the command word — and that is what the measurement
-// needs. Under zsh 5.9.2, a script file with `set -x` on line 1:
-//
-//	typeset x="a b"           typeset x='a b'
-//	typeset -- x="a b"        typeset -- x='a b'
-//	export x="a b" PATH       export x='a b' PATH
-//	'typeset' x="a b"         typeset 'x=a b'
-//	c=typeset; $c x="a b"     typeset 'x=a b'
-//	command typeset x="a b"   typeset 'x=a b'
-//
-// The last three are the discriminator: that shell's
-// Semantics.DeclarationCommandWord is DeclarationByUnquotedLiteralWord and its
-// CommandPrefixKeepsADeclaration is no, and the trace follows both exactly.
-// Asking `does this word name a declaration utility` instead would quote the
-// three of them the other way round, which is the shape where the trace and
-// the expansion come to disagree about what the line meant.
-//
-// Asked only where the dialect writes the operand as an assignment, so no
-// other column pays for the walk or reaches the axis the prefix reading asks.
-func (r *Runner) traceDeclares(c *syntax.SimpleCmd, words []string, d Diagnostics) bool {
-	if d.TraceAssignmentOperand != TraceAssignmentOperandValue {
-		return false
-	}
-	if c == nil || len(words) == 0 {
-		return false
-	}
-	return r.declarationCommand(c, words)
 }
 
 // traceAssignmentOperand spells a declaration utility's operand as the target

@@ -905,10 +905,60 @@ already asked rather than a lookalike — asking "does this word name a
 declaration utility" instead would write the last two the other way round, and
 the line would say the command meant something the shell did not do.
 
+**How far the rendering reaches is part of the answer, and it is not "every
+operand".** Measured 2026-09-19 on zsh 5.9.2 over one quoted word that is a
+`name=` only once it has expanded:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `typeset "y=a b"` | `typeset 'y=a b'` |
+| `typeset "y=a b" x=1` | `typeset 'y=a b' x=1` |
+| `typeset x=1 "y=a b"` | `typeset x=1 y='a b'` |
+
+The same word, written both ways in the same shell, so the rendering runs from
+the first operand that was **written** as an assignment to the end of the
+line. ksh93 renders one even where nothing on the line was — `typeset "y=a b"`
+is `typeset y='a b'` there — which is a third answer to this field, measured
+and not modeled.
+
 dash and BusyBox ash quote nothing here (`+ export e=a b`) and need no answer.
-ksh93 is a different shape again and is not this field: it writes a
-declaration's assignment on a **line of its own** — `+ x='a b'` then
-`+ typeset x` — which is #3567.
+
+### Where a declaration's operand is written, which is a question before that
+
+ksh93 does not write the operand on the command line at all: it writes it as an
+assignment on a **line of its own in front**, and leaves the bare name behind —
+`typeset x=1` is `+ x=1` then `+ typeset x`, and `export e1=1 e2=2` is
+`+ e1=1`, `+ e2=2`, `+ export e1 e2`. `Diagnostics.TraceDeclarationOperand` is
+the axis, and `TraceOperandSplitBefore` is that value.
+
+The name and not the target: `typeset -a a; typeset a[1]=v` is `+ a[1]=v` then
+`+ typeset a`, so the subscript goes with the assignment line.
+
+**bash writes the operand a second time *behind* the command line, for two
+utilities and no others.** `export ev=1` is `+ export ev=1` then `+ ev=1`, and
+`readonly rv=5` likewise; `typeset x=1` is one line.
+`Diagnostics.TraceRepeatsAScalarOperandAfter` names them, as a literal list,
+because the two derivations that suggest themselves are both measured wrong:
+`typeset -x tx=1` and `declare -x dx=1` are one line on the same binary in the
+same run, so it is not "the utilities that export", and `local` is not a
+special builtin and is one line too, so it is not "the special builtins". The
+list is `export, readonly`, spelled as the command word.
+
+The lines are per **operand** and in order — `export e1=1 e2=2` is three lines
+— and the repeat follows the utility that ran rather than the dialect's reading
+of how a declaration must be spelled: `c=export; $c ev=1` is not a declaration
+to bash and still writes `+ ev=1`, as do `builtin export ev=1` and
+`command -p export ev=1`.
+
+An **array literal** operand is a third answer that is measured and not
+modeled. bash writes `+ a=('1' '2')` ahead of the command line for
+`typeset a=(1 2)` while leaving a scalar where it is, and ksh93 and zsh both
+show the expanded elements. Writing that line needs the literal's elements
+expanded before the utility runs, and the utility is what decides how they are
+read — `typeset -A m=([k]=v)` reads `[k]` as a key only because `typeset -A`
+has already declared the name a table — so the expansion cannot be moved in
+front of the trace without deciding that question before the answer exists.
+#3567 carries the measurement.
 
 ### The brackets of a test are the one exemption
 

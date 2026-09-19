@@ -58,6 +58,13 @@ func TestAnAssignmentOperandIsWrittenTwoWays(t *testing.T) {
 		// a second `=` on the sides they are written on.
 		{`typeset x+="a b"`, `typeset 'x+=a b'`, `typeset x+='a b'`},
 		{`typeset x="a=b c"`, `typeset 'x=a=b c'`, `typeset x='a=b c'`},
+		// The reach: the rendering runs from the first operand that was
+		// *written* as an assignment to the end of the line, so the same
+		// quoted word is written both ways depending on what stands in front
+		// of it. Measured 2026-09-19 on zsh 5.9.2, which is the column that
+		// holds this value.
+		{`typeset x=1 "y=a b"`, `typeset x=1 'y=a b'`, `typeset x=1 y='a b'`},
+		{`typeset "y=a b" x=1`, `typeset 'y=a b' x=1`, `typeset 'y=a b' x=1`},
 	} {
 		if got := tracedLine(t, c.src, nil, Diagnostics{}); got != c.whole {
 			t.Errorf("%s whole: got %q, want %q", c.src, got, c.whole)

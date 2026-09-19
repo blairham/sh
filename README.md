@@ -67,18 +67,26 @@ Or from source:
     make install                           # /usr/local/libexec/sh — needs sudo to write
     make install PREFIX="$HOME/.local"     # no sudo
 
-Six binaries: `sh`, and the dialect binaries `bash`, `zsh`, `ksh`, `dash`
+Six shells: `sh`, and the dialect binaries `bash`, `zsh`, `ksh`, `dash`
 and `ash`. They land in `libexec` and **not** in a `bin` directory, because
 they are named after the shells they model — a directory ahead of `/bin`
 on `PATH` would answer for every program on the machine that resolves a
 shell by name. `make install` refuses a `SHELLDIR` that is on `PATH`
-unless it is told to go ahead, and the formula links nothing into
+unless it is told to go ahead, and the formula keeps them out of
 Homebrew's `bin` for the same reason.
 
 So you run one by its full path, and `docs/install.md` has the whole of
 it — including what `/etc/shells` and `chsh` need to make one of them a
 login shell, and how to try one first as a terminal profile's command,
 which is a checkbox to revert rather than a rescue.
+
+The formatter `shfmt` is the exception. The tap does put it on your
+`PATH`, because that rule is about names a machine resolves *implicitly* —
+a shebang, a `system()`, a `chsh` — and nothing resolves a formatter that
+way; an editor or a pre-commit hook calls it by name or not at all.
+Homebrew's own `shfmt` (mvdan.cc/sh) wants that name too, so the formula
+declares the conflict and you pick one. `make install` does not install
+`shfmt` at all yet.
 
 A session reads everything a real shell of the same name reads, in the
 same order: `~/.bashrc`, `~/.zshrc`, the profile files, and the machine's

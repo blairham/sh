@@ -691,6 +691,13 @@ type patternOpts struct {
 	// resolved. Its own value rather than a Runner because the matcher has
 	// none, which is the same reason chars and fold are here.
 	classes patternClasses
+	// record says this surface writes what the pattern matched into the
+	// record a `=~` fills, which one dialect does for a condition and for
+	// every pattern operator of parameter expansion. It is the surface's
+	// answer and not the pattern's, which is why it is set by
+	// Runner.recordingPatternOpts rather than read off the text — see
+	// interp/patternrecord.go.
+	record bool
 	// extended says the operators one shell keeps behind an option of its
 	// own are live: `(#…)` flag groups, the `#` and `##` closures, the `^`
 	// negation and the `~` exclusion. Off, all four are ordinary characters,
@@ -995,7 +1002,12 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 		return false, matchReport{}
 	}
 	span := capSpan{begin: base, end: base + len(piece), set: true}
-	return true, w.caps.report(subject, span, w.plan.whole)
+	m := w.caps.report(subject, span, w.plan.whole)
+	// Who publishes it travels with it: a plan a surface seeded goes to the
+	// record rather than to the parameters a pattern flag fills. See
+	// interp/patternrecord.go.
+	m.recording = w.plan.recording
+	return true, m
 }
 
 // matchTopLevel matches a whole pattern, splitting it on a `|` that stands
@@ -1700,6 +1712,13 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 		for i := splitFloor(rest, s, rp, &o); i <= len(s); i++ {
 			mark := o.where.caps.mark()
 			if !matchesAnyArm(arms, armAt, s[:i], at, o) && matchHere(rest, s[i:], rp, at+i, o) {
+				// The text the negation consumed is what the group matched,
+				// and a surface that records every group wants it: measured
+				// 2026-09-19, `[[ abcd == a!(z)cd ]]` records `abcd` and then
+				// `b`. Nothing inside the arms can have written a span here —
+				// they were asked whether they match, and the answer taken is
+				// that they do not.
+				o.where.caps.record(gp, at, at+i)
 				return true
 			}
 			o.where.caps.rollback(mark)

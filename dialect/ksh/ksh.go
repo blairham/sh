@@ -636,6 +636,12 @@ func Semantics() interp.Semantics {
 	// elements here and four in bash (#2916). Both measured 2026-09-18.
 	s.RegexMatchSurvivesAFailedMatch = interp.Yes
 	s.RegexMatchOmitsGroupsThatDidNotMatch = interp.Yes
+	// And a successful *pattern* match writes that same record, with nothing
+	// in the pattern having asked: `[[ abcd == a*d ]]` leaves `abcd` and
+	// `v=hello; ${v#he}` leaves `he`. Measured 2026-09-19 on 93u+
+	// 2012-08-01; see interp/patternrecord.go for the whole set and for what
+	// is outside it.
+	s.PatternMatchWritesTheMatchRecord = interp.Yes
 	// An associative array's subscript is a quoting context here, as it is
 	// in bash: `m["k"]=W` stores under `k`.
 	s.SubscriptIsAQuotingContext = interp.Yes

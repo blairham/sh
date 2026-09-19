@@ -639,6 +639,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	readonlyListing := r.posixSavedReadonlyListing
 	bareListing := r.posixSavedBareListing
 	badOption := r.posixSavedBadOption
+	dotNoOperand := r.posixSavedDotNoOperand
 	badSetName, badSetLetter := r.posixSavedBadSetName, r.posixSavedBadSetLetter
 	assignPrefix := r.posixSavedAssignPrefix
 	aliasReserved := r.posixSavedAliasReserved
@@ -665,6 +666,8 @@ func (r *Runner) SetPosixMode(on bool) {
 		bareListing = posixListing(r.posixSavedBareListing)
 		r.posixSavedBadOption = r.sem().BadOptionToSpecialBuiltinFatal
 		badOption = r.sem().BadOptionToSpecialBuiltinFatalInPosixMode
+		r.posixSavedDotNoOperand = r.sem().DotWithNoOperandIsFatal
+		dotNoOperand = r.sem().DotWithNoOperandIsFatalInPosixMode
 		r.posixSavedFuncSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionName
 		funcSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionNameInPosixMode
 		r.posixSavedBadSetName = r.sem().BadSetOptionNameFatal
@@ -804,6 +807,15 @@ func (r *Runner) SetPosixMode(on bool) {
 		// given zsh-as-`sh` a fatality zsh does not have, which is the whole
 		// of why this axis was not simply added to the others (#2583).
 		s.BadOptionToSpecialBuiltinFatal = badOption
+		// And a bare `.` beside it, which is the same shape asked of a
+		// different failure and is deliberately not folded into that one:
+		// ksh93 ends the script on the missing operand under every name and
+		// carries on from the `eval` misuse, so a shell whose POSIX mode
+		// moved both together would be wrong about one of them in two
+		// columns. See Semantics.DotWithNoOperandIsFatalInPosixMode for the
+		// rows and for the control that says it is this builtin's failure
+		// and not the mode.
+		s.DotWithNoOperandIsFatal = dotNoOperand
 		// The ninth, and the second one that is about what a special builtin
 		// leaves behind rather than about what ends a script. It takes the
 		// standard's own answer, like the seven above and unlike the one

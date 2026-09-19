@@ -156,3 +156,40 @@ func TestPosixModeStopsMatchingARedirectionTarget(t *testing.T) {
 		t.Errorf("out %q, want a brace target still ambiguous in the mode", out)
 	}
 }
+
+// And the mode moves what a **bare `.`** costs, which is a third axis it
+// carries and not a second face of the special-builtin one.
+//
+// Measured 2026-09-19, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> case.sh`
+// over a script file with standard input on the null device, a bare `.` on one
+// line and `echo after=$?` on the next:
+//
+//	bash 5.3.20                 the complaint and its usage, 2, `after=2` runs
+//	bash 5.3.20 `set -o posix`  the same two lines, and the script ends at 2
+//	bash 5.3.20 as `sh`         the same two lines, and the script ends at 2
+//	bash 3.2.57                 the same, with 3.2's shorter usage line
+//
+// The control is `false` on the line before, which runs on under the mode in
+// every column — so what ends the script is this builtin's failure and not the
+// mode being fatal about everything (#3818).
+func TestPosixModeEndsTheScriptOnABareDot(t *testing.T) {
+	if out, st := answersRun(t, ".\necho after=$?\n"); !strings.Contains(out, "after=2") || st != 0 {
+		t.Errorf("out %q status %d, want this shell's own answer, which runs on", out, st)
+	}
+	out, st := answersRun(t, "set -o posix\n.\necho after=$?\n")
+	if strings.Contains(out, "after=") || st != 2 {
+		t.Errorf("out %q status %d, want the mode to end the script at 2", out, st)
+	}
+	if !strings.Contains(out, "filename argument required") {
+		t.Errorf("out %q, want the complaint still written", out)
+	}
+	// Leaving the mode puts the dialect's own answer back, which is the half
+	// a one-way swap gets wrong.
+	if out, st := answersRun(t, "set -o posix\nset +o posix\n.\necho after=$?\n"); !strings.Contains(out, "after=2") || st != 0 {
+		t.Errorf("out %q status %d, want leaving the mode to restore the answer", out, st)
+	}
+	// The control: an ordinary failure under the same mode runs on.
+	if out, st := answersRun(t, "set -o posix\nfalse\necho after=$?\n"); !strings.Contains(out, "after=1") || st != 0 {
+		t.Errorf("out %q status %d, want an ordinary failure to run on in the mode", out, st)
+	}
+}

@@ -1502,6 +1502,11 @@ func Semantics() interp.Semantics {
 	// fatalities are two questions in this column, and this site was reading
 	// the other one (#3277).
 	s.DotWithNoOperandIsFatal = interp.No
+	// And no mode moves it: this shell has no `set -o posix` — measured
+	// 2026-09-19 in the digest-pinned image, `set -o posix` is `illegal
+	// option -o posix` — and the bare `.` leaves 2 behind and runs on under
+	// `sh` as under every other name (#3818).
+	s.DotWithNoOperandIsFatalInPosixMode = interp.No
 	s.DotReadsOptions = interp.Yes
 	// `eval` reads none, unlike `.` above — measured against BusyBox
 	// 1.37.0, where `eval -- echo hi` is `eval: --: not found` at 127.

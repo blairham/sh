@@ -1519,6 +1519,12 @@ func Semantics() interp.Semantics {
 	// `filename argument required` and the builtin's usage, leave 2 behind,
 	// and the script runs on. Measured 2026-09-18 on bash 5.3.20.
 	s.DotWithNoOperandIsFatal = interp.No
+	// POSIX mode moves it, and the invocation name is only a door into that
+	// mode: measured 2026-09-19, `set -o posix` in front of the bare `.`
+	// ends plain bash's script at 2 exactly as this binary called `sh` does,
+	// and the control — `false` on the line before — runs on under both. So
+	// the departure is the mode's and not argv[0]'s (#3818).
+	s.DotWithNoOperandIsFatalInPosixMode = interp.Yes
 	s.DotPassesArguments = interp.Yes
 	// A directory operand is an error here and success in zsh and dash.
 	// Measured, `. ./` is `bash: line 1: .: ./: is a directory` at 1, and

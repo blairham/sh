@@ -734,6 +734,10 @@ func Semantics() interp.Semantics {
 	// unanswered DotWithNoOperandIsFatal: the axis above says a missing
 	// operand is not an error here at all — measured, `.` alone is silent at 0
 	// — so there is no failure for a cost to be asked about.
+	// unanswered DotWithNoOperandIsFatalInPosixMode: its plain half is
+	// unanswered for the reason above, and this shell is the mode — measured
+	// 2026-09-19, `.` alone is silent at 0 under `dash` and under `sh`
+	// alike, so there is still no failure for a cost to be asked about.
 	s.DotReadsOptions = interp.Yes
 	// `eval` reads none, unlike `.` above: `eval -- echo hi` is `eval: --:
 	// not found` at 127, so the marker is the command.

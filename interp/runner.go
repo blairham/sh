@@ -2087,6 +2087,11 @@ type Runner struct {
 	posixSavedForName       ForNameRunForm
 	posixSavedFuncName      FuncNameRunForm
 	posixSavedBadOption     Answer
+	// And what a bare `.` costs, which the mode moves in bash and in nobody
+	// else: saved rather than asserted, because `set +o posix` has to put
+	// ksh93's own Yes back and not the standard's answer. See
+	// Semantics.DotWithNoOperandIsFatalInPosixMode.
+	posixSavedDotNoOperand Answer
 	// And whether a special builtin's name may be a function's, which the
 	// mode moves at the definition rather than at the parse — so a script
 	// may enter the mode, define nothing, and leave it, and the dialect's

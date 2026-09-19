@@ -2193,6 +2193,11 @@ func Semantics() interp.Semantics {
 	// And a missing operand is `not enough arguments` at 1 with the script
 	// running on, measured 2026-09-18 on zsh 5.9.2 under both spellings.
 	s.DotWithNoOperandIsFatal = interp.No
+	// And the mode moves nothing here either: measured 2026-09-19, this
+	// shell called `sh` still writes `not enough arguments` at 1 and runs
+	// the line after it, which is the row that keeps the companion from
+	// being a constant inside the mode (#3818).
+	s.DotWithNoOperandIsFatalInPosixMode = interp.No
 	s.DotPassesArguments = interp.Yes
 	// A leading dash-word is the file here, so `. -p dir f` is a complaint
 	// about a file called `-p` and not about an option.

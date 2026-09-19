@@ -601,16 +601,22 @@ jobs:
       image: ubuntu:24.04
     timeout-minutes: 30
     steps:
-    # A job container starts from the image and nothing else, so the two
-    # things the runner's own image would have provided have to be asked for.
-    # `make` is what the target is; git is so checkout clones rather than
-    # falling back to a source tarball.
+    # A job container starts from the image and nothing else, so what the
+    # runner's own image would have provided has to be asked for. `make` is
+    # what the target is; git is so checkout clones rather than falling back
+    # to a source tarball; and **gcc is load bearing rather than tidy** --
+    # suite.BuildHelpers compiles the three C programs the suite calls, and
+    # without a compiler suitecheck skips the whole run. Its own comment says
+    # why that matters: a suite without its helpers does not score badly, it
+    # scores zero, because the calls fail under both shells and the two
+    # failures match. That skip is what the second dispatch of this change
+    # came back with -- green, in 21 seconds, having measured nothing.
     - name: What a bare image does not have
       if: needs.changes.outputs.code == 'true'
       run: |
         apt-get update -qq
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-          make git ca-certificates
+          make git ca-certificates gcc libc6-dev
         # The container runs as root and the workspace is the runner's uid, so
         # git calls the checkout a dubious ownership and refuses it. That is
         # not cosmetic: `go build` stamps VCS status, so it stops with

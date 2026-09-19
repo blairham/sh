@@ -54,4 +54,24 @@ const (
 	// errno, which cannot tell a missing file from a missing directory
 	// apart.
 	LastSearchedEntry
+
+	// FirstExistingCandidate is bash 5.3.20: the first candidate that
+	// **existed** is the one kept, whatever it was, and a directory kept
+	// that way is reported as if nothing had been found at all.
+	//
+	// The `$d:$g` row above is the one that says so, and it is the only row
+	// of the seven that parts this from FirstInterestingCandidate: with a
+	// directory of the name earlier on PATH and a non-executable file of the
+	// name after it, bash says `not found` at 127 where every other reading
+	// reaches the file and says `Permission denied` at 126. The `$g:$d`
+	// control confirms it from the other side — with the file first, bash
+	// reports the file — so the directory is kept and is what suppresses the
+	// later row, rather than being passed over.
+	//
+	// Not expressible as Semantics.DirectoryOnPathIsACandidate. That axis is
+	// about the *report* and bash answers it No: a directory kept here is
+	// still written as `command not found`. What it cannot say is that the
+	// directory stops the search from looking further for something to
+	// complain about (#3578).
+	FirstExistingCandidate
 )

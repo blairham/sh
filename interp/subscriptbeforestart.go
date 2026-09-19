@@ -24,7 +24,7 @@ import "strconv"
 // holding no element at all: an unset name, a name holding a plain string, and
 // an array that has been emptied. Semantics.SubscriptBeforeTheFirstElementNeedsAnElement
 // is what decides whether such a name has an end to count back from.
-func (r *Runner) subscriptBeforeTheFirstElement(name string, n, end int) {
+func (r *Runner) subscriptBeforeTheFirstElement(name string, n, end int, length subscriptLength) {
 	p := r.sem().SubscriptBeforeTheFirstElementRead
 	if p == SubscriptBeforeStartIsNothing {
 		// The whole of the silent answer, and the fast path: nothing is
@@ -33,6 +33,12 @@ func (r *Runner) subscriptBeforeTheFirstElement(name string, n, end int) {
 	}
 	if end == 0 && r.ask(r.sem().SubscriptBeforeTheFirstElementNeedsAnElement,
 		"a name holding no element having no end to count back from") {
+		return
+	}
+	if r.unspecified {
+		return
+	}
+	if length.is && r.refusesTheLengthBeforeTheFirstElement(length.written) {
 		return
 	}
 	if r.unspecified {
@@ -56,4 +62,49 @@ func (r *Runner) subscriptBeforeTheFirstElement(name string, n, end int) {
 			"a negative subscript counting back past the first element"))
 		r.status, r.unspecified = 2, true
 	}
+}
+
+// subscriptLength is what a length route has to say about a subscript that
+// reached past the first element, and what a read route has not.
+//
+// Two facts rather than the node, because the three call sites that count a
+// position are not all looking at one: `$(( a[-4] ))`, a nameref's target and
+// a redirection's operand each reach elemAt with no `${#…}` anywhere in
+// sight, and a zero value is exactly what they mean.
+type subscriptLength struct {
+	// is says the expansion was `${#a[-4]}` rather than `${a[-4]}`.
+	is bool
+	// written is the subscript as the script wrote it, which is the whole of
+	// the wording's subject in the column that refuses this: `[-4]`, with its
+	// brackets and without the name.
+	written string
+}
+
+// refusesTheLengthBeforeTheFirstElement is `${#a[-4]}` where the dialect
+// answers the length differently from the read, and reports whether it did.
+//
+// The subject is the subscript **as it was written**, brackets included and
+// with no name in front of it, where the read one line up names the array —
+// which is the same split, in the same column, that
+// Semantics.EmptyAssociativeKeyRefusesTheLength and
+// Diagnostics.EmptyAssociativeKeyLength already record for `${#m[$w]}` under
+// an empty key. That pair next door is the model rather than a new shape.
+//
+// And it abandons the word rather than standing beside an empty value:
+// measured 2026-09-18 on bash 5.3.20, `a=(x y z); echo "[${#a[-4]}]"; echo
+// after` writes the complaint, then `after`, and never the `[…]` line at all,
+// where the read one line up writes `[]` and carries on.
+func (r *Runner) refusesTheLengthBeforeTheFirstElement(written string) bool {
+	if !r.ask(r.sem().SubscriptBeforeTheFirstElementRefusesTheLength,
+		"`${#a[-4]}`, the length of an element a negative subscript reached past") {
+		// Either the dialect answers the length as the read answers it —
+		// zsh, which is silent either way, and ksh93, which gives the read's
+		// sentence and ends the script — or no dialect was chosen and ask
+		// has said so.
+		return false
+	}
+	r.diagf("%s\n", Wording(r.diag().SubscriptBeforeTheFirstElementLength,
+		"[%[1]s]: bad array subscript", written))
+	r.expandErr = true
+	return true
 }

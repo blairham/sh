@@ -485,8 +485,9 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image, `unset
 	// "a[x]"` is `unset: line 1: a[x]: bad variable name` at 2 — the brackets
 	// are part of a name and are refused as one, quoted or not (#3049).
-	// unanswered SubscriptBeforeTheFirstElementRead and
-	// unanswered SubscriptBeforeTheFirstElementNeedsAnElement: there is no
+	// unanswered SubscriptBeforeTheFirstElementRead,
+	// unanswered SubscriptBeforeTheFirstElementNeedsAnElement and
+	// unanswered SubscriptBeforeTheFirstElementRefusesTheLength: there is no
 	// array to count back through, and no subscript on the right of a name
 	// either. Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image,
 	// `a=(x y z)` is `syntax error: unexpected "("` at 2 and `a=x; echo

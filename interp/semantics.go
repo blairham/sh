@@ -13403,6 +13403,38 @@ type Semantics struct {
 	// unpinned dash, ash: neither has arrays.
 	SubscriptBeforeTheFirstElementNeedsAnElement Answer
 
+	// SubscriptBeforeTheFirstElementRefusesTheLength answers `${#a[-4]}` —
+	// the **length** of the element the same reach was made for — apart from
+	// the read.
+	//
+	// bash alone, and the two differ in both halves. Measured 2026-09-18, a
+	// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin
+	// /dev/null, against bash 5.3.20, over `a=(x y z)`, `a=()` and `a=x`
+	// alike:
+	//
+	//	echo "[${a[-4]}]"; echo after    a: bad array subscript | [] | after
+	//	echo "[${#a[-4]}]"; echo after   [-4]: bad array subscript | after
+	//
+	// The subject is the subscript **as written**, with its brackets and
+	// without the name — Diagnostics.SubscriptBeforeTheFirstElementLength —
+	// and the refusal abandons the word rather than standing beside an empty
+	// value, so the `echo` never runs. It is the exact pair
+	// EmptyAssociativeKeyRefusesTheLength and
+	// Diagnostics.EmptyAssociativeKeyLength already record for `${#m[$w]}`
+	// under an empty key: same column, same split between the read and the
+	// length, same two subjects.
+	//
+	// False in the other two columns with arrays, and for two different
+	// reasons: zsh is silent on both routes, and ksh93 gives the length the
+	// read's own sentence and ends the script on it.
+	//
+	// **A name holding nothing at all is not this question**, and that is
+	// measured rather than symmetry: `unset a; echo "[${#a[-4]}]"` is `[0]`
+	// and silent in bash where `unset a; echo "[${a[-4]}]"` is the read's
+	// complaint. The length of a name that is not there is answered before
+	// the subscript is looked at (#3591).
+	SubscriptBeforeTheFirstElementRefusesTheLength Answer
+
 	// OperandSubscriptQuoting is which quoting written inside a **builtin
 	// operand's** subscript holds a `]` back from ending it — `unset
 	// "a['x]y']"`, where the quotes reached the builtin because the shell's

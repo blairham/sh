@@ -1006,6 +1006,16 @@ func Semantics() interp.Semantics {
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No
+	// And the candidate kept is the first one that **existed**, whatever it
+	// was — which is a third reading beside the two PathCandidateReport
+	// already held, and a row `$d` alone on PATH cannot reach. Measured
+	// 2026-09-18 with `$d` a directory named `zzcmd` and `$g` a
+	// non-executable file of that name: `$d:$g` is `zzcmd: command not
+	// found` at 127 here where every other column reaches the file and says
+	// `Permission denied` at 126, and the `$g:$d` control is the file in
+	// every column. So the directory is kept and suppresses the later row,
+	// rather than being walked past (#3578).
+	s.PathCandidateReported = interp.FirstExistingCandidate
 	// And what a `command -p` search resolved goes into the command hash here,
 	// where it does not in the other four: with `PATH=/nonexistent_zz`, a
 	// `command -p ls` and a plain `ls` after it, the second is 0 in this
@@ -2286,6 +2296,14 @@ func Semantics() interp.Semantics {
 	s.NegativeSubscriptPastTheStartInserts = interp.No
 	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartIsReported
 	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.No
+	// And the *length* of that element is a second answer here, which no
+	// other column has: measured 2026-09-18, `a=(x y z); echo
+	// "[${#a[-4]}]"; echo after` writes `[-4]: bad array subscript` and then
+	// `after`, with the `echo` abandoned — where the read one line up names
+	// the array, expands to nothing and carries on. Same rows for `a=()` and
+	// for `a=x`; a name holding nothing at all is `[0]` and silent, which is
+	// the length being answered before the subscript is looked at (#3591).
+	s.SubscriptBeforeTheFirstElementRefusesTheLength = interp.Yes
 	s.OperandSubscriptQuoting = interp.OperandSubscriptEveryQuote
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
 	// `declare a=1; declare a+=2` is `12`: a declaration's operand carries
@@ -2745,6 +2763,12 @@ func Diagnostics() interp.Diagnostics {
 		NumericOperandTooMany: "%[1]s: too many arguments",
 		TypeKeyword:           "%[1]s is a shell keyword",
 		TypeFunction:          "%[1]s is a function",
+		// The third sentence for an external, once the name is in the
+		// command hash: measured 2026-09-18, `type ls` is `ls is /bin/ls`
+		// on a first lookup and `ls is hashed (/bin/ls)` after an `ls` has
+		// run, and `command -V` writes whichever of the two `type` writes
+		// (#3579).
+		TypeHashedExternal: "%[1]s is hashed (%[2]s)",
 		// The only wording in the panel that carries its own quotes, and the
 		// only verb that is not "alias".
 		TypeAlias:     "%[1]s is aliased to `%[2]s'",
@@ -2970,8 +2994,11 @@ func Diagnostics() interp.Diagnostics {
 		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
 		BadArraySubscript:                  "%[1]s[%[2]s]: bad array subscript",
 		SubscriptBeforeTheFirstElementRead: "%[1]s: bad array subscript",
-		CannotConvertTableToArray:          "%[2]s: %[1]s: cannot convert associative to indexed array",
-		CannotConvertArrayToTable:          "%[2]s: %[1]s: cannot convert indexed to associative array",
+		// The length's subject is the subscript as written, brackets and
+		// all, where the read's is the array's name.
+		SubscriptBeforeTheFirstElementLength: "[%[1]s]: bad array subscript",
+		CannotConvertTableToArray:            "%[2]s: %[1]s: cannot convert associative to indexed array",
+		CannotConvertArrayToTable:            "%[2]s: %[1]s: cannot convert indexed to associative array",
 		// One verb rather than two: the literal form's complaint comes from
 		// the assignment and names no builtin. See
 		// Semantics.TableUnderAnArrayLiteralDeclaration.

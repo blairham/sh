@@ -1886,6 +1886,31 @@ type Diagnostics struct {
 	// Two verbs, the same two TypeExternal takes: the name and the path.
 	TypePathnameOperand string
 
+	// TypeHashedExternal is that same line once the name is in the command
+	// hash — the third wording for an external, and two columns have it.
+	//
+	// Measured 2026-09-18, a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with stdin /dev/null, asking `type ls`, running `ls`, and
+	// asking again:
+	//
+	//	              first lookup        after it has run
+	//	bash 5.3.20   ls is /bin/ls       ls is hashed (/bin/ls)
+	//	dash 0.5.12   ls is /bin/ls       ls is a tracked alias for /bin/ls
+	//	zsh 5.9.2     ls is /bin/ls       the same
+	//	ksh93u+       tracked alias       the same
+	//	BusyBox ash   ls is /bin/ls       the same
+	//
+	// Empty means the same sentence either way, which is what zsh, ksh93 and
+	// BusyBox ash answer. ksh93 writes `tracked alias` on a name's *first*
+	// lookup and is therefore TypeExternal's row and not this one — the
+	// discriminator there is the slash, measured in #2953, and the table is
+	// this field's.
+	//
+	// `command -V` writes whichever sentence `type` writes, in every column,
+	// so this is one wording and not two. Two verbs, the same two TypeExternal
+	// takes: the name and the path (#3579).
+	TypeHashedExternal string
+
 	// TypeUndefinedFunction is that line again for a function whose body has
 	// not been read yet, in the two shells that have such a thing. One verb,
 	// the name, and empty in a shell where a function is a function:
@@ -2508,6 +2533,20 @@ type Diagnostics struct {
 	// Only a dialect whose Semantics.SubscriptBeforeTheFirstElementRead says
 	// something has anything to put here.
 	SubscriptBeforeTheFirstElementRead string
+
+	// SubscriptBeforeTheFirstElementLength is what the *length* of that same
+	// element says, in the one column that answers the two differently.
+	//
+	// One verb, and it is not the name: the subject is the subscript **as the
+	// script wrote it**, brackets included — `[-4]: bad array subscript`
+	// where the read one line up is `a: bad array subscript`. The same two
+	// subjects EmptyAssociativeKeyLength and SubscriptBeforeTheFirstElementRead
+	// take, in the same shell, for the neighboring pair.
+	//
+	// Only a dialect answering
+	// Semantics.SubscriptBeforeTheFirstElementRefusesTheLength Yes reaches
+	// it (#3591).
+	SubscriptBeforeTheFirstElementLength string
 
 	// EmptyAssociativeKeyRead is what a *read* of a keyed table says when the
 	// key came out empty. One verb: the name, without the subscript — bash

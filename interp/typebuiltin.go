@@ -302,6 +302,10 @@ func (r *Runner) typePath(name string, m typeMode) int {
 	if r.unspecified {
 		return 2
 	}
+	// Read before the lookup, because the lookup itself may hash the name
+	// and the sentence is about the table as it stood when the question was
+	// asked. See Runner.typeExternalSentence.
+	_, hashed := r.hashedCommandPath(name)
 	path, err := r.lookPathReporting(name)
 	if err != nil {
 		if sentence {
@@ -321,7 +325,7 @@ func (r *Runner) typePath(name string, m typeMode) int {
 		return r.status
 	}
 	if sentence {
-		r.printf("%s\n", r.TypeExternalSentence(name, path))
+		r.printf("%s\n", r.typeExternalSentence(name, path, hashed))
 	} else {
 		r.printf("%s\n", path)
 	}
@@ -541,6 +545,10 @@ func (r *Runner) typeAllPaths(name string, m typeMode) int {
 	if r.unspecified {
 		return 2
 	}
+	// Read before the search, for the reason the plain answer reads it
+	// before its own: the lookup hashes the name in one of the two columns
+	// that have a hashed sentence. See Runner.typeExternalSentence.
+	_, hashed := r.hashedCommandPath(name)
 	if !r.reservedBuiltin(name) {
 		for _, path := range r.lookPathAll(name) {
 			found = true
@@ -554,7 +562,7 @@ func (r *Runner) typeAllPaths(name string, m typeMode) int {
 				// of the rows the search left, not for their paths.
 				r.printf("file\n")
 			case sentence:
-				r.printf("%s\n", r.TypeExternalSentence(name, path))
+				r.printf("%s\n", r.typeExternalSentence(name, path, hashed))
 			default:
 				r.printf("%s\n", path)
 			}
@@ -669,6 +677,7 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 	// The same guard `command -v` has, and for the same reason: there is an
 	// executable called /usr/bin/umask and this shell will not run it, so
 	// saying where it is would be answering about the wrong thing.
+	_, hashedBefore := r.hashedCommandPath(name)
 	if !r.reservedBuiltin(name) {
 		if path, err := r.lookPathReporting(name); err == nil {
 			if r.sayKind(kind, name, "file", NamedKindWord(NameFile)) {
@@ -681,7 +690,7 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 			if r.unspecified {
 				return r.status
 			}
-			r.printf("%s\n", r.TypeExternalSentence(name, path))
+			r.printf("%s\n", r.typeExternalSentence(name, path, hashedBefore))
 			return 0
 		}
 	}

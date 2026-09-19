@@ -138,6 +138,11 @@ func (r *Runner) lookPath(name string) (string, error) {
 	// it, because whether a directory counts as a candidate at all is the
 	// one part of this search the panel disagrees on.
 	var denied, dirDenied *pathError
+	// And the third reading: the first candidate that *existed*, whatever it
+	// was. One column keeps that one and reports a directory found there as
+	// if nothing had been found — see PathCandidateReport.FirstExistingCandidate,
+	// where the pair of rows that needs it is.
+	var firstExisting *pathError
 	// The other reading of the same walk, in the one column that has it: the
 	// failure reported is the **last** entry searched rather than the first
 	// interesting one. kept is what that entry left, and skipped is the run
@@ -167,6 +172,13 @@ func (r *Runner) lookPath(name string) (string, error) {
 			}
 		case !errors.Is(err, os.ErrNotExist) && denied == nil:
 			denied = &pathError{name: name, resolved: candidate, err: err}
+		}
+		if firstExisting == nil && !errors.Is(err, os.ErrNotExist) &&
+			!errors.Is(err, syscall.ENOTDIR) {
+			firstExisting = &pathError{
+				name: name, resolved: candidate,
+				onPathDirectory: isDir, err: err,
+			}
 		}
 		if !last {
 			continue
@@ -205,6 +217,25 @@ func (r *Runner) lookPath(name string) (string, error) {
 			return "", kept
 		}
 		return "", &pathError{name: name, missing: true, err: errNotFound}
+	}
+	if r.sem().PathCandidateReported == FirstExistingCandidate {
+		if firstExisting == nil {
+			return "", &pathError{name: name, missing: true, err: errNotFound}
+		}
+		if firstExisting.onPathDirectory &&
+			!r.ask(r.sem().DirectoryOnPathIsACandidate,
+				"a directory found on PATH standing as the failed candidate") {
+			// The column this reading is for answers that No, so a directory
+			// kept here is reported as nothing found — the same sentence and
+			// status it gives a name that was never on PATH at all. Keeping
+			// it is still what suppresses the later non-executable file,
+			// which is the whole difference from the other reading.
+			return "", &pathError{name: name, missing: true, err: errNotFound}
+		}
+		if r.unspecified {
+			return "", &pathError{name: name, missing: true, err: errNotFound}
+		}
+		return "", firstExisting
 	}
 	if denied != nil {
 		return "", denied

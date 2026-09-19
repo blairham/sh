@@ -20,10 +20,30 @@ import "strings"
 // had the tracked-alias sentence written out as a literal in two places, and
 // the pathname operand was wrong in both.
 func (r *Runner) TypeExternalSentence(name, path string) string {
+	_, hashed := r.hashedCommandPath(name)
+	return r.typeExternalSentence(name, path, hashed)
+}
+
+// typeExternalSentence is that line with the command hash read as it stood
+// **before** the lookup this sentence is about.
+//
+// The distinction is measured rather than tidy: dash's own `type ls` puts the
+// name in the table and still writes the plain sentence for that same
+// lookup — `hash` afterwards shows `/bin/ls` and the line said `ls is
+// /bin/ls` — so a report that asked the table after its own search would
+// never write the first of the two sentences at all. See
+// Diagnostics.TypeHashedExternal.
+func (r *Runner) typeExternalSentence(name, path string, hashed bool) string {
 	if strings.ContainsRune(name, '/') {
 		if w := r.diag().TypePathnameOperand; w != "" {
 			return Wording(w, "%[1]s is %[2]s", name, path)
 		}
+	}
+	if w := r.diag().TypeHashedExternal; w != "" && hashed {
+		// The third wording, in the two columns that have one. Behind the
+		// slash, because a word that was never searched for is never in the
+		// table either.
+		return Wording(w, "%[1]s is %[2]s", name, path)
 	}
 	return Wording(r.diag().TypeExternal, "%[1]s is %[2]s", name, path)
 }

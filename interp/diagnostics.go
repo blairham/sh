@@ -3013,13 +3013,25 @@ type Diagnostics struct {
 	// ParamNullOrNotSet is the word `${x:?}` uses when none was given. That
 	// form covers two cases at once and each shell says so differently:
 	//
-	//	bash   parameter null or not set
-	//	dash   parameter not set or null
-	//	ksh93  parameter null  (only when it is there and empty)
-	//	zsh    parameter not set
+	//	bash         parameter null or not set
+	//	dash         parameter not set or null
+	//	BusyBox ash  parameter not set or null — dash's wording
+	//	ksh93        parameter null  (only when it is there and empty)
+	//	zsh          parameter not set
 	//
 	// Empty falls back to `parameter not set`, which is what plain `${x?}`
-	// says in all four and what zsh says for both forms.
+	// says in most of the panel and what zsh says for both forms.
+	//
+	// **`most of` is measured, and it used to be a four.** Re-measured
+	// 2026-09-19 across all seven columns with `unset x`, `${x?}` and
+	// `${x:?}` each in a subshell of its own: bash 5.3, bash-as-`sh`, dash,
+	// BusyBox ash, ksh93 and zsh all say `parameter not set` for the plain
+	// form, and **bash 3.2.57 does not** — it writes `parameter null or not
+	// set` for `${x?}` as well, so that column uses one sentence where 5.3
+	// uses two. It is a column rather than a dialect, which is why the
+	// fallback still reads the way it does; a reader taking the old sentence
+	// at its word would have gone looking for the difference in the dialect
+	// vector, where it is not.
 	ParamNullOrNotSet string
 
 	// ParamNull is the word for a parameter that is *there and empty*, where
@@ -3048,7 +3060,8 @@ type Diagnostics struct {
 	//
 	// It applies only where the shell names *itself*, which is the two routes
 	// that have no file: `-c` and standard input. A script is named by its
-	// own path — measured, all four print the script and not the shell — so
+	// own path — re-measured 2026-09-19 across all seven columns, every one
+	// of them prints the script and not the shell — so
 	// the script route keeps Runner.Name, which is the path. That is the same
 	// three-way split `$0` is decided by rather than a second rule.
 	SelfName string
@@ -4028,8 +4041,15 @@ type Diagnostics struct {
 	// CommandStringParsedWhole reads all of a `-c` command before running any
 	// of it. zsh alone does, so `sh -c 'echo one
 	// { fi; }'` prints one everywhere else and nothing there. A *script* is
-	// read a line at a time in all four, which is why this asks only about
-	// the command string.
+	// read a line at a time in every column — zsh included, which is the
+	// point — and that is why this asks only about the command string.
+	//
+	// Re-measured 2026-09-19 across all seven. The `-c` half splits six to
+	// one exactly as stated, with BusyBox ash in the six; the script half is
+	// unanimous at seven, `one` printed before the refusal, zsh among them.
+	// The old sentence counted four, which left the fifth dialect out of a
+	// group it is in and left zsh looking like a column the script row had
+	// never been measured on.
 	CommandStringParsedWhole bool
 
 	// StdinProgramSurvivesAParseFailure reports a line that did not parse and
@@ -4281,9 +4301,21 @@ type Diagnostics struct {
 	InvocationNameRefusalNamesTheShell bool
 
 	// ScriptLocation is Location for a script read from a file, when the two
-	// differ. ksh93 is the only shell in the panel where they do: `ksh -c`
-	// names no location at all, and `ksh script` says "line 2". Zero means
-	// "the same as Location", which is true of the other three.
+	// differ. Zero means "the same as Location".
+	//
+	// **Two shells in the panel differ, not one.** ksh93 is the one this
+	// used to name — `ksh -c` names no location at all and `ksh script` says
+	// `[2]` — and BusyBox ash does the same thing: measured 2026-09-19,
+	// `ash -c 'echo a<newline>cd /zz/nosuch'` writes `/bin/ash: cd: line 1:
+	// can't cd to …` with the command string's own count, where the same two
+	// lines in a file are `/w/case.sh: cd: line 2: …`. A parse failure splits
+	// the same way and more sharply: `ash -c` writes `/bin/ash: syntax
+	// error: unexpected "fi"` with **no line at all**, and the file route
+	// writes `line 2`.
+	//
+	// dialect/ash has held LocationLineWord here since the column was
+	// written, so the value was right and the sentence counted the panel one
+	// short — which is the #3228 reading error rather than a defect.
 	ScriptLocation LocationStyle
 
 	// The wording of individual failures. Each is a format string, and empty
@@ -5024,7 +5056,22 @@ type Diagnostics struct {
 	// for the dialect that names that part and so has nothing to name:
 	// `for ((;))` is a bare `parse error` in zsh where `for ((;2))` is
 	// `parse error near `2'`. Empty means the dialect says the same either
-	// way, which three of the four do.
+	// way.
+	//
+	// Measured 2026-09-19, both headers through `-c`, all seven columns, and
+	// the panel does not divide into four of anything:
+	//
+	//	bash 5.3, as `sh`, 3.2   `arithmetic expression required` either way
+	//	zsh 5.9.2                the two sentences above — the one that parts
+	//	dash, BusyBox ash        no C-style `for` at all: `Bad for loop
+	//	                         variable`, so neither header is reached
+	//	ksh93u+ 2012-08-01       `for ((;2))` is a syntax error and
+	//	                         `for ((;))` **faults** — `Memory fault`,
+	//	                         status 267 through the harness
+	//
+	// So two columns never arrive and one has no answer to give, which is
+	// three columns that are not "says the same either way" and are not the
+	// dissenter either. The old count folded all of that into one number.
 	ForArithHeaderNoPart string
 	// ForArithSeparator is a C-style `for` header with *more* than two
 	// separators, in a dialect that refuses one — see
@@ -6550,8 +6597,10 @@ type Diagnostics struct {
 	// and it names the *quoting run* rather than the braces alone, so
 	// `x${@:=abc}y` and `"${@:=abc}"` are blamed whole.
 	//
-	// The status is not here. dash exits 2 where the other three exit 1, and
-	// that is Semantics.FatalErrorStatusIsOne, which this failure already
+	// The status is not here. dash and BusyBox ash exit 2 where the other
+	// five columns exit 1 — re-measured 2026-09-19, and ash writes dash's
+	// sentence too, `@: bad variable name` — and that is
+	// Semantics.FatalErrorStatusIsOne, which this failure already
 	// goes through — a second number would be the same axis written twice.
 	//
 	// Its own field rather than a reuse of a builtin's bad-name wording

@@ -6581,6 +6581,26 @@ type Diagnostics struct {
 	// Zero is TraceAssignmentOperandWhole, which is bash's answer and the
 	// substrate's own. See the type for the panel.
 	TraceAssignmentOperand TraceAssignmentOperand
+	// TraceDeclarationOperand is *where* that operand is written, which is
+	// the question before the one above: one column takes it off the command
+	// line altogether and writes it as an assignment in front. Zero is
+	// TraceOperandOnTheCommandLine, which is every other column's answer and
+	// the substrate's own. See interp/xtracedeclaration.go.
+	TraceDeclarationOperand TraceDeclarationOperand
+	// TraceRepeatsAScalarOperandAfter names the utilities that write a
+	// `name=value` operand **again** on a line of its own behind the command
+	// line: `export ev=1` traces `+ export ev=1` and then `+ ev=1`.
+	//
+	// bash alone, and the list is literal rather than derived, because the
+	// two derivations anybody would reach for are both measured wrong.
+	// "The utilities that export" fails on the same binary in the same run —
+	// `export ev=1` repeats and `typeset -x tx=1` does not, and neither does
+	// `declare -x dx=1`. "The special builtins" fails because `local` is not
+	// one and does not repeat either, while `.` is one and has no operand.
+	// What is left is the command word: `export` and `readonly`.
+	//
+	// Nil everywhere else, which is dash, BusyBox ash, ksh93 and zsh.
+	TraceRepeatsAScalarOperandAfter []string
 	// TraceEmptyAssignmentValueIsBare writes an assignment whose value is
 	// empty as the name, the operator and nothing — `A=` rather than `A=''`.
 	//

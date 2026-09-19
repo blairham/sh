@@ -343,6 +343,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// still holds is what this file exists to prevent.
 	c.prefixTraceAssigns = slices.Clone(r.prefixTraceAssigns)
 	c.prefixTraceValues = slices.Clone(r.prefixTraceValues)
+	// And where that command's declaration operands stood, which a clone
+	// inherits for exactly as long as it takes to run a command of its own —
+	// the same reading, and cloned for the same reason.
+	c.declarationOperands = slices.Clone(r.declarationOperands)
 	// And the names the running command's prefix is holding, with what they
 	// held before it and what a declaration has done to them, for the same
 	// reason and with the same reading: a clone started inside a prefixed

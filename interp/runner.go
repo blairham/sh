@@ -3166,6 +3166,17 @@ type Runner struct {
 	// compound may not be exported and an index array may. See
 	// Runner.exportRefusesACompound.
 	compoundOperands map[string]bool
+	// declarationOperands is where in the command's expanded words the
+	// `name=value` operands stand — the positions the expansion routed
+	// through Runner.expandAssignArg rather than through word expansion.
+	//
+	// Kept rather than re-derived, because `set -x` asks the same question
+	// again and an expanded string cannot answer it: `typeset "x=a b"` and
+	// `n=x; typeset $n=1` both come to a word with an `=` in it and neither
+	// was read as an assignment. Set for the length of one simple command
+	// and restored behind it, so a command inside this one's expansion
+	// answers for itself. See interp/xtracedeclaration.go.
+	declarationOperands []int
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
@@ -5412,6 +5423,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// whether it outlives a call, what `set -x` writes for it. See
 	// keywordassign.go.
 	var promoted []*syntax.Assign
+	// Where in argv the declaration operands land, for the trace. See
+	// Runner.declarationOperands.
+	var operandAt []int
 	for i, w := range c.Args {
 		if r.expandErr || r.ctl == controlExit {
 			// The command is abandoned at its first failed expansion rather
@@ -5445,10 +5459,19 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				break
 			}
 			if declaring {
+				operandAt = append(operandAt, len(argv))
 				argv = append(argv, r.expandAssignArg(w))
 				continue
 			}
 		}
+		// An appending operand, which this engine does not read as an
+		// assignment but every shell that has one does — see
+		// interp.appendOperandShaped. The word takes the ordinary route and
+		// only its position is kept, so the trace can write it the way the
+		// panel writes it without changing what it does.
+		appendOperand := i > 0 && len(argv) > 0 && appendOperandShaped(w) &&
+			r.declarationCommand(c, argv)
+		operandStart := len(argv)
 		// expandWord split in two, so the match can be decided between the
 		// halves rather than before the word is read.
 		fields := r.expandWordEscaped(w)
@@ -5475,7 +5498,18 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			fields = fields[1:]
 		}
 		argv = append(argv, r.globFieldsUnlessSuppressed(fields, noglob)...)
+		if appendOperand && len(argv) == operandStart+1 {
+			// One field, so there is a single position to record. A word that
+			// split has none, and nothing in the panel splits one.
+			operandAt = append(operandAt, operandStart)
+		}
 	}
+	// The operand positions belong to this command alone: a command
+	// substitution in one of the values has already run, with a set of its
+	// own, and whatever ran before this command must come back afterwards.
+	savedOperands := r.declarationOperands
+	r.declarationOperands = operandAt
+	defer func() { r.declarationOperands = savedOperands }()
 	if len(promoted) > 0 {
 		// The command as though the assignments had been written in front of
 		// it. A copy rather than a write through the pointer: the tree is the
@@ -5674,7 +5708,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// in a dialect without `&>` came to leave no file behind, the exact
 		// silent case the AmpersandRedirect comment warns about.
 		if len(c.Redirs) > 0 {
-			r.traceCommand(argv, c)
+			r.traceCommand(argv)
 
 			// Assignments and a redirection with no command name. There is
 			// no other process for a here-document body to expand in.
@@ -5705,7 +5739,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if !tracesPrefix || prefixFollows {
 		// With no prefix to write, and in the column that writes it behind
 		// the command, the command's own line comes first and is unchanged.
-		r.traceCommand(argv, c)
+		r.traceCommand(argv)
 	}
 
 	// A frozen name in the prefix, in the dialect that checks it before
@@ -5769,7 +5803,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	}
 	if tracedHere {
 		// The prefix's lines are written; the command's is all that is left.
-		r.traceCommand(argv, c)
+		r.traceCommand(argv)
 	} else if tracesPrefix && !prefixFollows {
 		// Ahead of the redirections, which is measured and not incidental:
 		// `z=1 cmd >/nope/f` writes `+ z=1` and `+ cmd` and *then* the

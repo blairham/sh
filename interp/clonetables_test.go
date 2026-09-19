@@ -277,6 +277,9 @@ func seedTables(r *Runner) {
 	r.endedProducers = map[string]bool{"seed": true}
 	r.absentElements = map[string]string{"seed": "v"}
 	r.absentParams = map[string]string{"seed": "v"}
+	r.conditionAnswers = map[string]ConditionAnswer{
+		"seed": func(*Runner, context.Context, string, []string) (bool, bool) { return false, false },
+	}
 	r.aliases = map[string]aliasDef{"seed": {value: "v"}}
 	r.suffixAliases = map[string]string{"seed": "v"}
 	r.namedAliases = map[string]bool{"seed": true}

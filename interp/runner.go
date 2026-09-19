@@ -3178,6 +3178,11 @@ type Runner struct {
 	// when a dialect has named it, because nothing else can read it.
 	pipeStatus     []int
 	pipeStatusName string
+	// conditionAnswers is the conditional operators a dialect has said what
+	// it means by, keyed by the operator as it is written — see
+	// conditionanswer.go. Empty in the core, which has the grammar for none
+	// of them.
+	conditionAnswers map[string]ConditionAnswer
 	// regexMatchName is what the dialect calls the record of what the last
 	// `=~` captured. With no name, nothing is recorded — see regexmatch.go.
 	regexMatchName string

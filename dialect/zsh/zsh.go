@@ -4804,6 +4804,12 @@ func Apply(r *interp.Runner) {
 	// refuse outside of, and #2776 for the rest of the module they belong to.
 	registerCompadd(r)
 	registerCompset(r)
+	// And the module's other four features, which are conditions rather than
+	// builtins: `[[ -prefix … ]]` and its three neighbors are the tests
+	// `compset` performs without the move. See completioncondition.go, and
+	// #3042 for the measurement that says loading the module is not what
+	// makes them exist.
+	registerCompletionConditions(r)
 	// And `zsh/computil`'s eight, which is what the completion system zsh
 	// *ships* is written in: `_arguments`, `_describe`, `_tags` and `_values`
 	// are shell functions whose working parts are these. See computil.go.

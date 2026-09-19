@@ -1128,6 +1128,15 @@ func (p *printer) cond(e CondExpr) {
 			p.str(" ")
 			p.rawWord(w)
 		}
+	case *CondCompletion:
+		// The operator stands in front of its operands — see CondCompletion
+		// — and each of them is a pattern, so they go back unquoted exactly
+		// as they were read, the way CondBinary's right operand does.
+		p.str(x.Op)
+		for _, w := range x.Words {
+			p.str(" ")
+			p.rawWord(w)
+		}
 	case *CondBinary:
 		p.word(x.X)
 		p.str(" " + x.Op + " ")

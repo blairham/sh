@@ -67,10 +67,7 @@ func main() {
 		only = flag.String("only", "",
 			"comma-separated file names to run, for working on the harness itself")
 		panel = flag.Bool("panel", false, "print the panel of columns and stop")
-		cells = flag.Bool("cells", false,
-			"print #2291's leg-2 roll-up — column x area, with the cells closed by "+
-				"measurement — and stop. Starts no shell.")
-		own = flag.Bool("own", false,
+		own   = flag.Bool("own", false,
 			"grade our own committed suite instead of a fetched one, every column at once")
 		ownRoot = flag.String("root", suite.OurRoot,
 			"where our own suite lives in the tree")
@@ -82,18 +79,6 @@ func main() {
 
 	if *panel {
 		printPanel()
-		return
-	}
-
-	// Before the context, because this starts nothing: the roll-up is a
-	// derivation over the table and the files, so it costs a directory read
-	// and answers on a machine with no shells and no container runtime at
-	// all. That is what makes it quotable from a pull request rather than
-	// from whoever last ran the sweep.
-	if *cells {
-		if code := printCells(*ownRoot); code != 0 {
-			os.Exit(code)
-		}
 		return
 	}
 

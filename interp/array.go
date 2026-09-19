@@ -59,45 +59,7 @@ type Element struct {
 	// still counts as an element and reads back as the two characters `(` and
 	// `)` with a newline between them.
 	Nested Array
-	// Kind says which of the things an element can be it is, where the value
-	// alone cannot say. Zero is what every element was before the field
-	// existed, so Element{}, Scalar(v) and Element{Nested: built} all keep
-	// their exact meaning.
-	Kind ElementKind
 }
-
-// ElementKind distinguishes elements that hold the same *value* and are not
-// the same *thing*.
-//
-// One state so far, and it earned the field rather than a bool because the
-// question it answers — what is this element, given that its value cannot say
-// — is the question the store keeps being asked. See #3511.
-type ElementKind uint8
-
-const (
-	// ElementHoldsItsValue is an element whose value is the whole of it: the
-	// string in Str, or the array in Nested. Every element in every dialect
-	// but the one below.
-	ElementHoldsItsValue ElementKind = iota
-	// ElementDeclaredAndEmpty is an element a declaration brought into being
-	// without giving it a value, which is a state distinct from holding the
-	// empty string.
-	//
-	// Measured on ksh93u+ 2012-08-01, 2026-09-19, `env -i
-	// PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null, read through
-	// `sed -n l` — the two states differ in a listing and nowhere else:
-	//
-	//	typeset -A m; typeset 'm[k]'   typeset -A m=([k]=)
-	//	typeset -A m; m[k]=            typeset -A m=([k]='')
-	//
-	// and the declaration does not take an assigned key back down to it:
-	// `m[k]=; typeset 'm[k]'` is `([k]='')` as well, both orders.
-	//
-	// Everything else about the two is the same and is measured: the key is
-	// counted by `${#m[@]}`, named by `${!m[@]}`, yields one empty field in
-	// `${m[@]}`, answers `${m[k]+SET}` and reads back empty.
-	ElementDeclaredAndEmpty
-)
 
 // Scalar is an element holding a string, which is every element in five of the
 // six columns.
@@ -137,7 +99,7 @@ func (e Element) scalar() string {
 // arrays built the same way are the same element and would have compared
 // different.
 func (e Element) equal(f Element) bool {
-	if e.Str != f.Str || e.Kind != f.Kind || (e.Nested == nil) != (f.Nested == nil) {
+	if e.Str != f.Str || (e.Nested == nil) != (f.Nested == nil) {
 		return false
 	}
 	return e.Nested == nil || e.Nested.equal(f.Nested)
@@ -175,7 +137,7 @@ func (e Element) clone() Element {
 	if e.Nested == nil {
 		return e
 	}
-	return Element{Str: e.Str, Nested: e.Nested.clone(), Kind: e.Kind}
+	return Element{Str: e.Str, Nested: e.Nested.clone()}
 }
 
 // equal reports whether two arrays hold the same elements at the same

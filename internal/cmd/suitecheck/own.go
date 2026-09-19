@@ -207,23 +207,6 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	printCrossOmission(crossless)
 	printOwnOmission(crossless)
 
-	// The campaign's leg-2 count, under the numbers it is a count of. It is a
-	// derivation rather than a result of this run — `-cells` prints the same
-	// thing without starting a shell — and it is here as well because a
-	// number nobody meets beside the figures it summarizes is a number that
-	// gets quoted from memory, which is how leg 2's first count came to
-	// reconstruct from nothing (#3481).
-	if roll, err := suite.RollUp(root); err != nil {
-		fmt.Fprintf(os.Stderr, "suitecheck: the cell roll-up: %v\n", err)
-		code = 1
-	} else {
-		fmt.Print(roll.Report())
-		fmt.Println()
-		if len(roll.Stale) > 0 {
-			code = 1
-		}
-	}
-
 	if len(skipped) > 0 {
 		fmt.Println("  columns not run")
 		for _, why := range skipped {
@@ -257,13 +240,6 @@ func printOwnColumn(rep suite.Report) {
 		// than the other four make: both shells ran inside an image, so this
 		// pins the behavior of that image rather than of this machine.
 		fmt.Printf("  reached    %s — both shells ran in there, on one copy of the files\n", rep.Route)
-	} else if why := s.UngatedReason(); why != "" {
-		// The other half of the same sentence. A gated column says which
-		// image it was reached through; an ungated one has to say it was
-		// not, or the two differ in the report only by a line the gated one
-		// has — and the reader who notices is the one who already knew to
-		// look. The figure below is this machine's shell, whatever that is.
-		fmt.Printf("  UNGATED    %s\n", wrap(why, "             "))
 	}
 	fmt.Printf("  parsed     %-9s %5.1f%%   our parser read the whole file\n",
 		fmt.Sprintf("%d/%d", rep.Parsed, rep.Files), 100*rep.ParseRate())

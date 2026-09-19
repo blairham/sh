@@ -4023,6 +4023,58 @@ type Dialect struct {
 	// the run-time complaint in bash, which is a different split again.
 	FunctionNameCheckedWhenTheDefinitionRuns bool
 
+	// ReservedWordStandsBehindAnAssignmentPrefix keeps a written-out reserved
+	// word's reading where an assignment prefix stands in front of it, so the
+	// complaint lands on the word itself rather than on whatever token closes
+	// the construct it opened.
+	//
+	// One column, and it is every word the grammar reserves rather than a
+	// handful. Measured 2026-09-18, script files under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME and no startup files:
+	//
+	//	written                     zsh 5.9.2   bash 5.3, bash 3.2, ksh93,
+	//	                                        dash and BusyBox 1.37.0 ash
+	//	v=x { :; }                       names `{`     names `}`
+	//	v=x while :; do :; done          names `while` names `do`
+	//	v=x if :; then :; fi             names `if`    names `then`
+	//	v=x for i in a; do :; done       names `for`   names `do`
+	//	v=x case a in a) :;; esac        names `case`  names `)`
+	//	v=x function f { :; }            names `function`  names `}`
+	//	v=x select i in a; do :; done    names `select`    —
+	//	v=x until false; do :; done      names `until` names `do`
+	//	v=x repeat 2 do :; done          names `repeat`    —
+	//	v=x foreach i (a); :; end        names `foreach`   —
+	//	v=x [[ -n a ]]                   names `[[`    a command that is not found
+	//	v=x time :                       names `time`  runs /usr/bin/time
+	//	v=x !                            names `!`     —
+	//	v=x then / do / done / fi / esac / else / elif   names each one
+	//	v=x end                          names `end`   —
+	//	v=x coproc cat                   names `coproc`    —
+	//	v=x in                           command not found: in
+	//	v=x ( : )                        names `(` everywhere
+	//
+	// The last two rows are the controls. `in` is special inside `for` and
+	// `case` and an ordinary command name where a command begins, so it is
+	// not in the set even in that column; `(` is an operator rather than a
+	// word, so no reading was ever taken away from it and every column
+	// agrees.
+	//
+	// Three of the rows are worse than a wording without this: `v=x time :`
+	// ran `/usr/bin/time`, `v=x !` was a command that could not be found, and
+	// `v=x [[ -n a ]]` reached the pattern matcher (#3560).
+	//
+	// Not the same question as
+	// [Dialect.AliasedReservedWordStandsBehindAnAssignmentPrefix], which is
+	// ksh93's and is asked where the word arrived **from an alias**: there a
+	// written-out `v=x { :; }` names `}` and only the aliased spelling keeps
+	// the reading. This column needs no alias for any row above.
+	ReservedWordStandsBehindAnAssignmentPrefix bool
+
+	// RedirectionBeforeACompound says whether a redirection may stand in
+	// front of a compound command, and before which of them — see
+	// [RedirectionBeforeACompoundPolicy] for the three values and the panel.
+	RedirectionBeforeACompound RedirectionBeforeACompoundPolicy
+
 	// ConditionCloserIsAWordWhereATermBegins reads a `]]` standing where a
 	// condition **term** belongs as an ordinary word, so the closer is only a
 	// closer once the condition has something to close over.
@@ -6416,6 +6468,91 @@ func (d Dialect) Reserves(name string) bool {
 // dialect has, so a report about what is runnable must name them, and they
 // are not words the lexer reserves, so the rule about which words an alias
 // may shadow has never been about them. See [Parser.reservedInDialect].
+// RedirectionBeforeACompoundPolicy says whether a redirection may stand in
+// **front** of a compound command, and before which of them.
+//
+// POSIX puts a compound command's redirections after it and every shell takes
+// them there; two of the panel take them in front as well, and they take them
+// before different things. Measured 2026-09-18, script files under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	written                                zsh 5.9.2  ksh93u+  bash, dash, ash
+//	>/dev/null ( echo hi )                 runs       runs     refuses
+//	>/dev/null (( 1 ))                     runs       runs     refuses
+//	>/dev/null { echo hi; }                runs       refuses  refuses
+//	>/dev/null while false; do :; done     runs       refuses  refuses
+//	>/dev/null if true; then echo hi; fi   runs       refuses  refuses
+//	>/dev/null for i in a; do echo hi; done  runs     refuses  refuses
+//	>/dev/null case a in a) echo hi;; esac   runs     refuses  refuses
+//	>/dev/null until true; do :; done      runs       refuses  refuses
+//	>/dev/null select i in a; do break; done runs     refuses  refuses
+//	>/dev/null repeat 2 do echo hi; done   runs       —        —
+//	>/dev/null foreach i (a); echo hi; end runs       —        —
+//	2>/dev/null [[ -n a ]]                 runs       refuses  refuses
+//	>/dev/null ! false                     refuses    —        —
+//	>/dev/null coproc cat                  refuses    —        —
+//
+// So one column takes it before a **parenthesized** command alone and the
+// other before every compound it has. The two rows at the bottom are that
+// column's own boundary: `!` and `coproc` are not compound commands there and
+// the redirection does not reach them.
+//
+// The **assignment prefix** takes it away in both: `v=x >/dev/null ( echo hi
+// )` and `>/dev/null v=x { echo hi; }` are refused in zsh and in ksh93 alike,
+// which is why this is asked only where nothing but redirections has been
+// read (#3560).
+type RedirectionBeforeACompoundPolicy uint8
+
+const (
+	// RedirectionBeforeACompoundIsRefused is POSIX's own shape, and the
+	// answer bash 5.3, bash 3.2, dash and BusyBox 1.37.0 ash give: a
+	// compound command's redirections follow it.
+	RedirectionBeforeACompoundIsRefused RedirectionBeforeACompoundPolicy = iota
+	// RedirectionMayPrecedeAParenthesizedCommand takes one in front of `(
+	// … )` and `(( … ))` and nowhere else: ksh93.
+	RedirectionMayPrecedeAParenthesizedCommand
+	// RedirectionMayPrecedeAnyCompoundCommand takes one in front of every
+	// compound command the dialect has: zsh.
+	RedirectionMayPrecedeAnyCompoundCommand
+)
+
+func (p RedirectionBeforeACompoundPolicy) String() string {
+	switch p {
+	case RedirectionMayPrecedeAParenthesizedCommand:
+		return "before a parenthesized command"
+	case RedirectionMayPrecedeAnyCompoundCommand:
+		return "before any compound command"
+	}
+	return "refused"
+}
+
+// reservedAtACommandStart reports whether name is a word this dialect reads as
+// reserved where a **command** begins.
+//
+// reservesWord with two differences, and both are measured rather than
+// reasoned. The constructs a preset adds bring words with them — `[[`,
+// `repeat`, `foreach` and its `end`, `coproc` — and none of those is in the
+// union reservesWord reads. And `in` is **not** one: it is special inside
+// `for` and `case` and an ordinary command name anywhere else, so `v=x in` is
+// `command not found: in` in the column that refuses every other reserved
+// word behind a prefix. See
+// [Dialect.ReservedWordStandsBehindAnAssignmentPrefix] for the rows.
+func (d Dialect) reservedAtACommandStart(name string) bool {
+	switch name {
+	case "in":
+		return false
+	case "[[":
+		return d.DoubleBracket
+	case "repeat":
+		return d.Repeat
+	case "foreach", "end":
+		return d.Foreach
+	case "coproc":
+		return d.Coproc
+	}
+	return d.reservesWord(name)
+}
+
 func (d Dialect) reservesWord(name string) bool {
 	switch name {
 	case "select":

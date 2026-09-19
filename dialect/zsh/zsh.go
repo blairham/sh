@@ -365,6 +365,22 @@ func Dialect() syntax.Dialect {
 	// column alone: bash 5.3, bash 3.2 and ksh93 all name the newline there.
 	// See syntax.Dialect.ConditionNewlineMayFollowATermsFirstWord (#3627).
 	d.ConditionNewlineMayFollowATermsFirstWord = true
+	// A written-out reserved word keeps its reading behind an assignment
+	// prefix here, where bash 5.3, bash 3.2, ksh93, dash and BusyBox ash all
+	// drop it and read the word as an ordinary command name — so the
+	// complaint lands on the word rather than on whatever closes what it
+	// opened. Three of the rows were worse than a
+	// wording without it: `v=x time :` ran /usr/bin/time, `v=x !` was a
+	// command that could not be found, and `v=x [[ -n a ]]` reached the
+	// pattern matcher. See
+	// syntax.Dialect.ReservedWordStandsBehindAnAssignmentPrefix (#3560).
+	d.ReservedWordStandsBehindAnAssignmentPrefix = true
+	// And a redirection written in *front* of a compound command belongs to
+	// it, which is ordinary zsh and which this shell refused for every
+	// compound it has. ksh93 takes one before a parenthesized command alone;
+	// bash and dash take none. See
+	// syntax.RedirectionBeforeACompoundPolicy (#3560).
+	d.RedirectionBeforeACompound = syntax.RedirectionMayPrecedeAnyCompoundCommand
 	// A `{ … }` written immediately after `$$` is a run of characters: a
 	// blank, a newline or an operator inside is text, and the braces are a
 	// brace list nowhere — though a range written straight into them still

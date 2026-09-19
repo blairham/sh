@@ -1375,6 +1375,85 @@ the loop; dash has no C-style `for` at all:
     for ((i=0;i<2;i++)); do read x; …; done <d  the loop reads the file
     for … done 2>f                              and the same for stderr
 
+### And two of them take one in *front*
+
+POSIX puts a compound command's redirections after it. Two columns take them
+in front as well, and they take them before different things. Measured
+2026-09-18, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+
+| written | zsh 5.9.2 | ksh93u+ | bash 5.3.20 · dash · ash |
+| --- | --- | --- | --- |
+| `>/dev/null ( echo hi )` | runs | runs | refuses |
+| `>/dev/null (( 1 ))` | runs | runs | refuses |
+| `>/dev/null { echo hi; }` | runs | refuses | refuses |
+| `>/dev/null while false; do :; done` | runs | refuses | refuses |
+| `>/dev/null if true; then echo hi; fi` | runs | refuses | refuses |
+| `>/dev/null for i in a; do echo hi; done` | runs | refuses | refuses |
+| `>/dev/null case a in a) echo hi;; esac` | runs | refuses | refuses |
+| `>/dev/null until true; do :; done` | runs | refuses | refuses |
+| `>/dev/null select i in a; do break; done` | runs | refuses | refuses |
+| `>/dev/null repeat 2 do echo hi; done` | runs | — | — |
+| `>/dev/null foreach i (a); echo hi; end` | runs | — | — |
+| `>/dev/null ! false` | refuses | — | — |
+| `>/dev/null coproc cat` | refuses | — | — |
+
+So one column takes it before a **parenthesized** command alone and the other
+before every compound it has; the last two rows are that column's own
+boundary, `!` and `coproc` not being compound commands there.
+`Dialect.RedirectionBeforeACompound` carries the three values.
+
+**The assignment prefix takes the reading away in both**: `v=x >/dev/null (
+echo hi )` and `>/dev/null v=x { echo hi; }` are refused in zsh and in ksh93
+alike, which is why the question is asked only where nothing but redirections
+has been read.
+
+The redirections are the compound's, in front of whatever it carries of its
+own — the written order, which is the order they are applied in. The
+canonical printer writes them all after the command, as it already does for a
+simple command's leading ones, because that printer promises the tree rather
+than the spelling; the formatter writes them back where they stood, because
+it owns only the space between tokens. Two rows are measured and not modeled
+and both are reached by a different production: `>/dev/null time :` is a
+pipeline and `>/dev/null function f { :; }` holds its redirections on the
+body, so the leading ones would have to be written back somewhere other than
+where they belong (#3560).
+
+### A reserved word behind an assignment prefix
+
+One column keeps a written-out reserved word's reading there, so the
+complaint lands on the word; the rest drop it and read the word as an
+ordinary command name, so the complaint lands on whatever closes what the
+word opened. Measured the same day and the same way:
+
+| written | zsh 5.9.2 | bash 5.3.20 | ksh93u+ | dash · ash |
+| --- | --- | --- | --- | --- |
+| `v=x { :; }` | names `{` | names `}` | names `}` | names `}` |
+| `v=x while :; do :; done` | names `while` | names `do` | names `do` | names `do` |
+| `v=x if :; then :; fi` | names `if` | names `then` | names `then` | names `then` |
+| `v=x case a in a) :;; esac` | names `case` | names `)` | names `)` | names `)` |
+| `v=x function f { :; }` | names `function` | names `}` | names `}` | — |
+| `v=x time :` | names `time` | runs `/usr/bin/time` | runs it | runs it |
+| `v=x !` | names `!` | — | — | — |
+| `v=x [[ -n a ]]` | names `[[` | a command that is not found | — | — |
+| `v=x then` … `elif`, `end`, `coproc` | names each | a command that is not found | — | — |
+| `v=x in` | command not found | the same | the same | the same |
+| `v=x ( : )` | names `(` | names `(` | names `(` | names `(` |
+
+The last two rows are the controls. `in` is special inside `for` and `case`
+and an ordinary command name where a command begins, so it is out of the set
+even there; `(` is an operator rather than a word, so no reading was ever
+taken from it. And a `}` is the one word the prefix does not reach in the
+column that reserves it everywhere: it **ends** the command, so `{ a+=( $p )
+}` is a brace body whose last statement is the assignment.
+
+Three of the rows are worse than a wording without this:
+`v=x time :` ran `/usr/bin/time`, `v=x !` was a command that could not be
+found, and `v=x [[ -n a ]]` reached the pattern matcher.
+`Dialect.ReservedWordStandsBehindAnAssignmentPrefix` is the flag, and it is
+not `AliasedReservedWordStandsBehindAnAssignmentPrefix`: that one is ksh93's
+and is asked where the word arrived **from an alias**, where a written-out
+`v=x { :; }` names `}` (#2888, #3560).
+
 ## Loops
 
 `while`, `until` and `for` exit **0 when the body never runs**:

@@ -1425,7 +1425,8 @@ next line:
     echo STILL-HERE
 
 bash 5.3, zsh 5.9.2, ksh93u+ **and dash** all print the diagnostic and draw
-the next prompt, with `STILL-HERE` printed. Not only `set -u`: the same is
+the next prompt, with `STILL-HERE` printed — at a terminal, which is the
+qualification the next-but-one subsection is about. Not only `set -u`: the same is
 true of `${x?word}` and `${x:?word}`, a division by zero, a substitution
 that will not read, a readonly reassignment where the dialect calls one
 fatal, an error inside a function or a loop typed at the prompt, and a
@@ -1458,6 +1459,57 @@ alike — so there is nothing to override.
 from making a shell nobody can leave. Measured at a prompt in all four:
 `exit`, `exit 7`, `eval 'exit 7'` and errexit firing (`set -e` then
 `false`) each end the session.
+
+### What makes a prompt a prompt: the flag, not the descriptor
+
+The table above was measured at a terminal, and one column's answer moves
+when the terminal does. Measured 2026-09-19, the same `set -u` probe under
+`-i`, each shell reached three ways — through a pipe, from a regular file,
+and through a real pseudo-terminal typed one paced line at a time:
+
+| | a terminal | a pipe or a regular file |
+| --- | --- | --- |
+| bash 5.3.20 | carries on | carries on |
+| bash 3.2.57 | carries on | carries on |
+| bash as `sh` | carries on | carries on |
+| ksh93u+ | carries on | carries on |
+| zsh 5.9.2 | carries on | carries on |
+| BusyBox ash 1.37.0 | carries on | carries on |
+| **dash 0.5.12** | carries on | **the session ends** |
+
+So one column of seven reads *interactive* for this rule as `isatty(0)` and
+the other six read the flag. `echo $((1/0))` splits the panel the same way,
+and a plain `false` is survived on both routes everywhere, so it is the
+**abandonment** that moves and not the prompting: that shell draws its `$ `
+prompts on both routes.
+
+**It is standard input and not the controlling terminal.** The pipe-against-a-terminal
+comparison moves two things at once, so the discriminating probe holds the
+session still and moves only the descriptor: on one controlling terminal,
+`-i` with a *regular file* on standard input abandons exactly as a pipe
+does, where the same arrangement carries on in every other column.
+
+**This shell reads the flag, in every dialect**, and that is a decision
+rather than an oversight. An axis here would be answered `Yes` by one shell
+alone, and its entire observable surface is a route no person takes and
+every harness does — `internal/smoke`, the pty fixtures and every
+`-i`-through-a-pipe test drive a shell whose standard input is not a
+terminal, so the answer would show up only where this project reads it and
+never at somebody's prompt. Reading the descriptor at the boundary is the
+third option and the worst one: it would make `interp` answer a *language*
+question from what descriptor 0 happens to be, which is the coupling
+`Runner.GiveUpTheLine` was made a call rather than a flag to avoid.
+
+**The one thing the split does settle is a generalization.** `oracle.Panel`
+carries dash as standing in for the minimal `/bin/sh` implementations. The
+other minimal one is BusyBox ash, and on this rule it sides with the five
+rather than with dash — so this is one shell's reading, not the small-shell
+family's, and that is the half of #1165 nothing had measured.
+
+`TestThePromptBoundaryDoesNotMoveWithWhatStandardInputIs` in `driver` is the
+guard: the same probe over a pipe, a regular file and a pseudo-terminal, with
+a script arm beside them that must still stop at the failure — without which
+all three pass for a shell that abandons nothing.
 
 ## A construct a prompt can never finish
 

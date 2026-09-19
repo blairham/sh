@@ -685,3 +685,127 @@ func TestAColorCodesArgumentReachesTheTerminalAsBytes(t *testing.T) {
 		t.Fatalf("the session did not end; drawn so far: %q", drawn.text())
 	}
 }
+
+// The prompt boundary does not move with what standard input is.
+//
+// A prompt is a boundary for a fatal error — the unit is the line, not the
+// session — and this asks the question the boundary was never asked: whether
+// the answer depends on the *kind* of thing standard input is, rather than on
+// the front end having decided this is a session.
+//
+// It is a question because one column answers it differently. Measured
+// 2026-09-19 with `set -u; echo X${NOPE}` under `-i`, each shell reached three
+// ways — a pipe, a regular file, and a real pseudo-terminal typed one paced
+// line at a time:
+//
+//	                  a terminal   a pipe or a file
+//	bash 5.3.20       carries on   carries on
+//	bash 3.2.57       carries on   carries on
+//	bash as sh        carries on   carries on
+//	ksh93u+           carries on   carries on
+//	zsh 5.9.2         carries on   carries on
+//	BusyBox ash       carries on   carries on
+//	dash 0.5.12       carries on   the session ends
+//
+// So one of the seven reads *interactive* for this rule as `isatty(0)` and the
+// other six read the flag. The route is the same one on both sides for that
+// shell: a regular file abandons exactly as a pipe does, on the same
+// controlling terminal, which is what says the descriptor and not the session
+// is what it asks about (#1165).
+//
+// This shell reads the flag, in every dialect, and that is a decision rather
+// than an oversight: the axis would be answered `Yes` by one shell alone, and
+// its entire observable surface is a route no person takes and every harness
+// does — `internal/smoke`, the pty fixtures and every `-i`-through-a-pipe test
+// here drive a shell whose standard input is not a terminal. Reading the
+// descriptor at the boundary would also put an opinion about descriptors into
+// `interp`, which is the coupling [interp.Runner.GiveUpTheLine] was made a
+// call rather than a flag to avoid.
+//
+// The third arm is what keeps the other two from passing for a shell that
+// never abandons anything: the same three lines in a *script* must stop at the
+// failure. Without it a shell with no boundary at all scores perfectly here.
+func TestThePromptBoundaryDoesNotMoveWithWhatStandardInputIs(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // history and startup files, never the user's
+
+	// Written as an expression, so that waiting for `mark-42` cannot be
+	// satisfied by a terminal echoing back what was typed.
+	const (
+		guard = "set -u"
+		fails = "echo X${NOPE}"
+		mark  = "echo mark-$((6 * 7))"
+		want  = "mark-42"
+	)
+
+	t.Run("a pipe on standard input", func(t *testing.T) {
+		read, write, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = read.Close() })
+		go func() {
+			_, _ = io.WriteString(write, guard+"\n"+fails+"\n"+mark+"\n")
+			_ = write.Close()
+		}()
+
+		sh := shell()
+		sh.Stdin = read
+		out, errs, _ := runArgs(t, sh, "testsh", "-i")
+		if !strings.Contains(out, want) {
+			t.Errorf("the session ended at the failure: out = %q, err = %q", out, errs)
+		}
+	})
+
+	t.Run("a regular file on standard input", func(t *testing.T) {
+		sh := shell()
+		sh.Stdin = openFile(t, writeScript(t, guard+"\n"+fails+"\n"+mark+"\n"))
+		out, errs, _ := runArgs(t, sh, "testsh", "-i")
+		if !strings.Contains(out, want) {
+			t.Errorf("the session ended at the failure: out = %q, err = %q", out, errs)
+		}
+	})
+
+	t.Run("a terminal on standard input", func(t *testing.T) {
+		control, tty := terminal(t)
+		sh := shell()
+		sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
+
+		drawn := watch(t, control, defaultPrompt)
+		done := make(chan int, 1)
+		go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
+
+		// Paced: a line is typed only once the shell has drawn the prompt
+		// asking for it. Bytes written ahead of that are read under the line
+		// discipline instead of by the editor, and the lost keystroke reads
+		// as a shell that ran nothing.
+		for _, line := range []string{guard, fails} {
+			drawn.awaitReadyForInput(t)
+			write(t, control, line+"\r")
+		}
+		drawn.awaitReadyForInput(t)
+		write(t, control, mark+"\r")
+		drawn.await(t, want)
+		drawn.endSession(t, control)
+
+		select {
+		case <-done:
+		case <-time.After(sessionBudget):
+			_ = control.Close() // unblock the read the shell is sitting in
+			t.Fatalf("the session did not end; drawn so far: %q", drawn.text())
+		}
+	})
+
+	// The control. A script has no prompt to give the line back to, so the
+	// same failure stops the file — which is what makes the three arms above
+	// a statement about the boundary rather than about a shell that survives
+	// everything.
+	t.Run("and a script still stops at the failure", func(t *testing.T) {
+		out, _, code := runArgs(t, shell(), "testsh", writeScript(t, guard+"\n"+fails+"\n"+mark+"\n"))
+		if strings.Contains(out, want) {
+			t.Errorf("the script ran past the failure: out = %q", out)
+		}
+		if code == 0 {
+			t.Error("status = 0 after an unset parameter under set -u, want nonzero")
+		}
+	})
+}

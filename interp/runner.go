@@ -5976,7 +5976,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				_ = r.prefixExpansion(a)
 				continue
 			}
-			if !r.prefixPersistsAtThisBuiltin(argv[0], kind) &&
+			persists := r.prefixPersistsAtThisBuiltin(argv[0], kind)
+			if !persists &&
 				!r.builtinKeepsAnAssignmentPrefix(argv[0]) &&
 				r.subscriptedPrefixTakenBack(a) {
 				// The second reason a prefix is not taken back, and it is a
@@ -5985,6 +5986,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// question above, for `:` and `shift` included. See
 				// Semantics.BuiltinsKeepingAnAssignmentPrefix.
 				undo = append(undo, r.saveVar(a.Name))
+			}
+			if persists {
+				// And a value this shell keeps is not an enclosing call's to
+				// give back. See Runner.callPrefixesLetTheNameGo, which is
+				// the other end of the frames an `unset` reaches into.
+				r.callPrefixesLetTheNameGo(a.Name)
 			}
 			// Whether a discipline hears about it is whether there is a
 			// store for it to hear about. A *regular* builtin's prefix is the

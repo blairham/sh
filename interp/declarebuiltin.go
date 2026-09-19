@@ -4822,7 +4822,13 @@ func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
 func (r *Runner) expandAssignArg(w *syntax.Word) string {
 	i, j, ok := assignNameSplit(w)
 	if !ok {
-		// Never, from the one caller: assignShaped asked this same question.
+		// An appending operand, `x+=v`, whose name assignNameSplit refuses
+		// and appendNameSplit takes. The `+` stays on the name half, which
+		// is what the utility reads the operator off.
+		i, j, ok = appendNameSplit(w)
+	}
+	if !ok {
+		// Never, from either caller: both asked one of those two questions.
 		return r.expandAssignValue(w)
 	}
 	name := *w

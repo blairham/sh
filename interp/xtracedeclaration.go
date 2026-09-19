@@ -3,11 +3,7 @@
 
 package interp
 
-import (
-	"strings"
-
-	"github.com/blairham/sh/syntax"
-)
+import "strings"
 
 // Where `set -x` writes a declaration utility's `name=value` operand.
 //
@@ -59,12 +55,12 @@ const (
 	// assignment line and not with the word that is left behind, and the cut
 	// is at the `=` with a subscript dropped rather than an identifier kept.
 	//
-	// An **appending** operand is measured and not reproduced: ksh93 writes
-	// `typeset x+=q` as `+ x+=q` then `+ typeset x+`, and this engine does
-	// not split it because it does not read it as an assignment at all —
-	// `assignNameSplit` requires a plain name in front of the `=` and `x+`
-	// is not one, in every dialect. That is a gap in the *reading* rather
-	// than in the trace, so it is filed on its own.
+	// An **appending** operand splits the same way: ksh93 writes
+	// `typeset x+=q` as `+ x+=q` then `+ typeset x+`, and so does this. It
+	// did not until #3772, because the word was not read as an assignment
+	// at all — `assignNameSplit` requires a plain name in front of the `=`
+	// and `x+` is not one — so it split into fields and the position this
+	// line is keyed on was never recorded. See interp.appendNameSplit.
 	TraceOperandSplitBefore
 )
 
@@ -98,37 +94,6 @@ func (r *Runner) declarationOperandIndex(i int) bool {
 		}
 	}
 	return false
-}
-
-// appendOperandShaped reports whether a word is a declaration utility's
-// **appending** operand, `name+=value`, as written.
-//
-// Its own test because Runner.assignShaped does not take one: that reading
-// requires a plain name in front of the `=` and `x+` is not one, so
-// `typeset x+=v` reaches the utility as an ordinary word in every dialect
-// here. Every shell in the panel that has the construct reads it as an
-// assignment — measured 2026-09-19, zsh 5.9.2 traces `typeset x+='a b'` and
-// ksh93u+ splits it out in front as `+ x+=q` then `+ typeset x+` — so the
-// trace records where it stood and renders it the way the shells do, while
-// what the word *does* is left exactly as it was.
-func appendOperandShaped(w *syntax.Word) bool {
-	if w == nil || len(w.Spans) == 0 {
-		return false
-	}
-	head := w.Spans[0]
-	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted {
-		return false
-	}
-	at := strings.Index(head.Value, "+=")
-	if at < 0 {
-		return false
-	}
-	if plain := strings.IndexByte(head.Value, '='); plain < at {
-		// An earlier `=` ends the name first, so the `+=` is inside the
-		// value: `x=a+=b` is not an append.
-		return false
-	}
-	return isPlainName(head.Value[:at])
 }
 
 // declarationOperandsFrom is where this command's first declaration operand

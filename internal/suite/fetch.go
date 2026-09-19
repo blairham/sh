@@ -18,6 +18,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // The fetch is the part of this instrument that has to be got right first
@@ -103,6 +104,34 @@ func stampMatches(dir, want string) bool {
 	return err == nil && strings.TrimSpace(string(got)) == want
 }
 
+// fetchTimeout bounds the whole request — connect, headers and body — because
+// nothing else does.
+//
+// This ran on `http.DefaultClient`, which has no timeout of its own, under a
+// context from `signal.NotifyContext`, which has no deadline of its own. So a
+// stalled read here had exactly one bound: the CI job's own `timeout-minutes:
+// 30`, reached with nothing printed, because the report is written after the
+// sweep. That is the shape of the one run in sixty that #3082 could not
+// explain — job 35323005114 ran 34m41s, its step never completed, and GitHub
+// retained no log for it at all.
+//
+// Generous rather than tight: the archive is a few megabytes and the fetch
+// happens once per build directory, so this is a bound on *hanging* and not a
+// performance budget. A cold runner on a slow morning must not be turned into
+// a red job by it.
+//
+// Not a context deadline, because the caller's context is the one that carries
+// interruption and wrapping it here would put the bound on whichever of the
+// two expires first — which reads as "the fetch timed out" for a Ctrl-C. A
+// client timeout says what it is.
+const fetchTimeout = 5 * time.Minute
+
+// fetchClient is that bound, as a value a test can shorten. A package variable
+// rather than a client built per call so that a test can prove the timeout is
+// *there*: a bound nothing exercises is the bound that turns out to be missing
+// the day it was needed.
+var fetchClient = &http.Client{Timeout: fetchTimeout}
+
 // download reads the archive into memory. They are a few megabytes and
 // holding one is cheaper than a partial file on disk that a later run would
 // have to decide about.
@@ -111,7 +140,7 @@ func download(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := fetchClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

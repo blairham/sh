@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/blairham/sh/internal/wild"
 )
@@ -199,5 +200,54 @@ func TestFetchLandsWhereMakeWildRefusesToLook(t *testing.T) {
 		if reason := wild.DeniedDir(dir, own); reason == "" {
 			t.Errorf("%s unpacks into %s and the sweep would read it", s.Name, dir)
 		}
+	}
+}
+
+// A server that accepts the connection and never answers is the shape that
+// cost #3082 a 34-minute job with an empty log: `http.DefaultClient` has no
+// timeout and the caller's `signal.NotifyContext` has no deadline, so the only
+// bound was the CI job's own thirty minutes.
+//
+// The test drives a real handler that blocks until the test is over rather
+// than a fake transport, because what was missing was a *client* setting and a
+// fake would have been configured by the same line that was absent. It shortens
+// `fetchClient` for the length of the case, which is the only reason that is a
+// package variable.
+//
+// Asserting the wall clock as well as the error: a fetch that returned the
+// right error after thirty minutes would still be the bug.
+func TestFetchGivesUpOnAServerThatNeverAnswers(t *testing.T) {
+	stall := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		<-stall
+	}))
+	defer srv.Close()
+	defer close(stall)
+
+	was := fetchClient
+	fetchClient = &http.Client{Timeout: 150 * time.Millisecond}
+	defer func() { fetchClient = was }()
+
+	s, _ := sample()
+	s.URL = srv.URL
+	start := time.Now()
+	_, err := Fetch(context.Background(), s, t.TempDir(), false)
+	if !errors.Is(err, ErrOffline) {
+		t.Fatalf("want ErrOffline, got %v", err)
+	}
+	if took := time.Since(start); took > 10*time.Second {
+		t.Errorf("gave up after %v; an unbounded read is what left a job with nothing in its log", took)
+	}
+}
+
+// And the shipped bound is a bound. A constant nothing reads is a constant
+// that can be deleted with every test still green, which is how the setting
+// came to be missing in the first place.
+func TestTheShippedFetchIsBounded(t *testing.T) {
+	if fetchClient.Timeout <= 0 {
+		t.Fatal("the fetch client has no timeout; a stalled read is bounded only by the job")
+	}
+	if fetchClient.Timeout != fetchTimeout {
+		t.Errorf("fetch client timeout = %v, want the declared %v", fetchClient.Timeout, fetchTimeout)
 	}
 }

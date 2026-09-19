@@ -2211,6 +2211,7 @@ func Semantics() interp.Semantics {
 	s.TimesRejectsArguments = interp.Yes
 	// `[ ( -n x ) ]` is 0 here (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// unanswered LocalThroughCommandDeclaresNothing: `command local a=1` is
 	// `command not found: local` at 127 in this shell, so the declaration
 	// this axis is about never happens and there is nothing to measure.

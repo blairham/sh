@@ -1675,6 +1675,7 @@ func Semantics() interp.Semantics {
 	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
 	// `[ ( -n x ) ]` is 0 here (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// unanswered LocalThroughCommandDeclaresNothing: this shell has no
 	// `local` at all — `command local a=1` is `local: not found` at 127 —
 	// so the axis cannot be put to it.

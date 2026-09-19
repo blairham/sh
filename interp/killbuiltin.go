@@ -1061,6 +1061,15 @@ func (r *Runner) listSignalTable() int {
 			}
 		}
 		r.printf("%s", b.String())
+	case KillListingNumberedPerLine:
+		var b strings.Builder
+		for _, k := range cells {
+			// The number in a two-wide right-aligned column and the name
+			// bare — ` 1) HUP` and `10) USR1`. No `SIG` and no packing, so
+			// this shares only the number column with the shape above it.
+			fmt.Fprintf(&b, "%2d) %s\n", k.sig, k.text)
+		}
+		r.printf("%s", b.String())
 	case KillListingSpaceJoined:
 		r.printf("%s\n", strings.Join(names, " "))
 	case KillListingZeroFirst:

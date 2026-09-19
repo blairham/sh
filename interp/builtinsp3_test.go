@@ -56,6 +56,13 @@ func TestKillListingShapes(t *testing.T) {
 		{"per line", KillListingPerLine, func(s string) bool {
 			return strings.HasPrefix(s, "HUP\nINT\n")
 		}},
+		// The number column of the numbered shape with the per-line shape's
+		// bare name: ` 1) HUP`, no `SIG` and no packing. It shares half its
+		// spelling with each of two other forms and is neither, which is
+		// why it is a fifth value rather than a flag on one of them.
+		{"numbered per line", KillListingNumberedPerLine, func(s string) bool {
+			return strings.HasPrefix(s, " 1) HUP\n 2) INT\n")
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, _ := run(t, `kill -l`, func(r *Runner) {

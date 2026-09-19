@@ -648,11 +648,101 @@ and the axis says what is observed rather than naming a rule
 (`Semantics.TestGroupedUnaryAloneLosesTheClosingParen`). Three words or
 four, behind any number of leading `!`s.
 
-Two shapes this engine already refuses reach the same sentence there and
-a different one here — `[ \( x y \) ]` and `[ \( -Q x \) ]` are
-`closing paren expected` in BusyBox and `unknown operand` here, both at 2.
-That is a wording difference on an expression both refuse, and it is not
-this axis.
+### And so does anything else that stops inside an open group
+
+The general case of the same defect, and the paragraph above used to end by
+setting it aside. Every expression that gives up while a `(` is still open
+is that one sentence, whatever the reading would otherwise have said. The
+status is 2 in both columns throughout, so what moves is the sentence
+(`Semantics.TestFailureInsideAnUnclosedGroupIsTheParen`, #3665).
+
+Measured 2026-09-18, BusyBox v1.37.0 in the pinned image with `cmd/ash`
+cross-compiled and run in the same container:
+
+| case | BusyBox 1.37.0 | here, before |
+| --- | --- | --- |
+| `[ \( x y \) ]` | `closing paren expected` | `y: unknown operand` |
+| `[ \( -Q x \) ]` | the same | `x: unknown operand` |
+| `[ \( -a x \) ]` | the same | `x: unknown operand` |
+| `[ \( -n x y \) ]` | the same | `argument expected` |
+| `[ \( -n x ]` | the same | `-n: unknown operand` |
+| `[ \( \) ]` | the same | `): unknown operand` |
+| `[ \( \) x ]` | the same | `): unknown operand` |
+| `[ \( -a ]` | the same | `argument expected` |
+| `[ \( \( x \) ]` | the same | `x: unknown operand` |
+| `[ \( \( \) \) ]` | the same | `): unknown operand` |
+| `[ \( x y z \) ]` | the same | `argument expected` |
+| `[ \( x y \) junk ]` | the same | `argument expected` |
+| `[ \( x y \) -a z ]` | the same | `argument expected` |
+| `[ x -a \( y ]` | the same | `argument expected` |
+| `[ x -a \( y z \) ]` | the same | `argument expected` |
+| `[ x -a \( \) ]` | the same | `argument expected` |
+| `[ \( x \) -a \( y z \) ]` | the same | `argument expected` |
+| `[ \( \) junk ]` | the same | `(: unknown operand` |
+
+**The controls are what make it an open group rather than a parenthesis.**
+Once the group has closed, the leftover is named as an ordinary word — and
+a second `(` standing there is a word too, not an opener:
+
+| case | BusyBox 1.37.0 |
+| --- | --- |
+| `[ \( x \) junk ]` | `junk: unknown operand` |
+| `[ \( x \) junk more ]` | `junk: unknown operand` |
+| `[ \( x \) \( y \) ]` | `(: unknown operand` |
+| `[ x \) ]` | `): unknown operand` — nothing was ever opened |
+
+Fourteen more agree before and after: `[ \( x \) ]`, `[ \( x = x \) ]`,
+`[ \( 1 -eq 1 \) ]`, `[ \( x \) -a \( y \) ]`, `[ ! \( x \) ]` and
+`[ \( ! x \) ]` among them.
+
+**dash is not this rule and has the same wording**, which is why the axis is
+one column's. It reads `[ \( -n x \) ]` and `[ \( -n \) ]` at 0, names
+the word in `[ \( x y \) ]`, and answers a silent **1** for an empty group
+where BusyBox refuses — a status a script can see. See #3687.
+
+## The bare `kill -l` listing is numbered, one per line
+
+A fifth shape, sharing its number column with bash's and its bare name with
+ksh93's and being neither: the number right-aligned in two, `) `, then the
+name with no `SIG` in front of it, one entry per line
+(`Diagnostics.KillListingNumberedPerLine`, #3655).
+
+Measured 2026-09-18 against BusyBox v1.37.0 in the pinned image, `kill -l`
+from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`, newlines
+written `|`:
+
+```
+BusyBox ash   1) HUP| 2) INT| 3) QUIT|…|31) SYS|35) RTMIN|64) RTMAX|
+dash          0|HUP|INT|QUIT|…|SYS|32|33|34|RTMIN|…|RTMAX|
+here, before  0|HUP|INT|QUIT|…                       (dash's shape)
+```
+
+The first three lines as bytes are ` 1) HUP\n 2) INT\n 3) QUIT\n`. It also
+**skips the positions it cannot name** — `31) SYS` then `35) RTMIN` then
+`64) RTMAX`, with nothing between — which is the empty value of
+`Diagnostics.KillListingUnnamedPosition` and was already right here: this
+column's table has no name for those numbers either.
+
+This had dash's zero-first shape, which is the one thing about the listing it
+does not share with dash.
+
+**Two spellings the applet reads that the table does not name**, measured the
+same day in the same container:
+
+| probe | BusyBox 1.37.0 | here, before |
+| --- | --- | --- |
+| `kill -l POLL` | `29` | `unknown signal 'POLL'` |
+| `kill -l IO` | `29` | `29` |
+| `kill -l IOT` | `6` | `unknown signal 'IOT'` |
+| `kill -l CLD` | `unknown signal 'CLD'` | the same |
+| `kill -l 6` | `ABRT` | `ABRT` |
+| `kill -l 29` | `POLL` | `IO` |
+
+Both pairs are in `Semantics.SignalNamesTheShellAlsoReads` now, so the reading
+is right in both directions. The **listing** writes `29) POLL` and ` 6) ABRT`
+— the alias for one pair and the table's own name for the other — which
+`Diagnostics.SignalListingWritesTheAlias` cannot say, being one answer for the
+whole table. So the flag stays off and the one row still differing is #3684.
 
 ## An unmatched `[` in a pattern is a character
 

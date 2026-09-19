@@ -139,3 +139,76 @@ func TestABackquotedBodysRefusalIsPlacedWhereItsFailuresAre(t *testing.T) {
 		t.Errorf("not restarting: reported %q, want :4:", got)
 	}
 }
+
+// One dialect adds the body's newlines to a refused backquoted body's line,
+// and only where the substitution stands in the command's **first token**.
+//
+// The axis is the addition; the discriminator is the token. Every row below
+// holds the same body and the same opening line and they answer three ways,
+// which is what says the rule is not an offset — see
+// Diagnostics.BackquotedSubstitutionFailureAddsItsBodysNewlines for the sweep
+// it was read off.
+func TestABackquotedBodysRefusalMayCountTheBodyAgain(t *testing.T) {
+	dg := Diagnostics{
+		Location:    LocationTightLine,
+		SyntaxError: "syntax error: unexpected %[1]s",
+		BackquotedSubstitutionFailureAddsItsBodysNewlines: true,
+	}
+	plain := Diagnostics{Location: LocationTightLine, SyntaxError: "syntax error: unexpected %[1]s"}
+	for _, c := range []struct {
+		name       string
+		src        string
+		want, base string
+	}{
+		{
+			// The body opens on line 2 and fails on the file's line 3, so
+			// the addition of its one newline names line 4.
+			"an assignment that is the first token",
+			"true\nv=`echo hi\nif; then :; fi`\n", ":4:", ":3:",
+		},
+		{
+			"a command word ahead of it",
+			"true\ncat `echo hi\nif; then :; fi`\n", ":3:", ":3:",
+		},
+		{
+			// The same assignment, with an assignment written before it.
+			// Nothing about the body moved and the answer did.
+			"an assignment that is not the first token",
+			"true\nv=1 w=`echo hi\nif; then :; fi`\n", ":3:", ":3:",
+		},
+		{
+			"a redirection ahead of it",
+			"true\n2>&1 `echo hi\nif; then :; fi`\n", ":3:", ":3:",
+		},
+		{
+			// A redirection *behind* it leaves the word first, so the
+			// addition stands — the pair is what says this is the token's
+			// position and not the presence of a redirection.
+			"a redirection behind it",
+			"true\n`echo hi\nif; then :; fi` 2>&1\n", ":4:", ":3:",
+		},
+		{
+			// Three lines of body, failing on the second of them: the
+			// addition is the body's *whole* newline count, so 3 + 2.
+			"a three-line body failing on its second",
+			"true\nv=`echo hi\nif; then :; fi\necho t`\n", ":5:", ":3:",
+		},
+		{
+			// The other spelling is untouched, which keeps the answer about
+			// backquotes rather than about substitution.
+			"the other spelling",
+			"true\nv=$(echo hi\nif; then :; fi)\n", ":3:", ":3:",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := substLine(t, c.src, dg); !strings.Contains(got, c.want) {
+				t.Errorf("adding: reported %q, want it to name %s", got, c.want)
+			}
+			// Without the axis every row is the failure's own line, which is
+			// what three of the four columns write.
+			if got := substLine(t, c.src, plain); !strings.Contains(got, c.base) {
+				t.Errorf("plain: reported %q, want it to name %s", got, c.base)
+			}
+		})
+	}
+}

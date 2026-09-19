@@ -3305,6 +3305,47 @@ type Diagnostics struct {
 	// #3553 measures.
 	SubstitutionBodyStartsAtItsOpenersLine bool
 
+	// BackquotedSubstitutionFailureAddsItsBodysNewlines adds the number of
+	// newlines inside the backquotes to the line a refused backquoted body is
+	// reported at, when the substitution is written in the command's **first
+	// token**.
+	//
+	// bash alone, and it is a rule rather than an offset. Measured 2026-09-18
+	// over forty-four shapes, `env -i PATH=/usr/bin:/bin LC_ALL=C
+	// /opt/homebrew/bin/bash s.sh`, stdin from /dev/null. Take N as the file
+	// line the failure is on and B as the newlines inside the backquotes:
+	//
+	//	written                                     N  B  bash
+	//	`v=`⏎…`` opening line 2, failing line 3      3  1  4
+	//	the same with two lines above it            4  1  5
+	//	a three-line body, failing on its second    3  2  5
+	//	a four-line body, failing on its third      4  3  7
+	//	`cat `⏎…``, `: `, `echo `, `export v=`      3  1  3
+	//	`v=1 w=`⏎…``                                3  1  3
+	//	`>out `⏎…``                                 3  1  3
+	//	`` `⏎…` `` as the whole command             3  1  4
+	//	`if `⏎…`; then :; fi`                       4  1  5
+	//	`case `⏎…` in`, `for z in `⏎…``             3  1  3
+	//
+	// So it is **N + B where the substitution is in the command's first
+	// token, and N otherwise** — and the first token is the earliest of the
+	// assignments, the words and the redirections as they were written, which
+	// is what `>out `…`` and `v=1 w=`…`` are the controls for. The four-line
+	// row is what says B is the body's *whole* newline count rather than the
+	// newlines ahead of the failure: the failure is on the body's third of
+	// four lines there and bash still adds three.
+	//
+	// #3553 read this as "+1 where the command is a bare assignment" and then
+	// as "+1 per line of body", and the panel splits four ways rather than
+	// three: zsh and ksh93 place the refusal at the failure's own file line,
+	// dash numbers the body from its own first line
+	// (BackquotedSubstitutionRestartsLines), BusyBox ash is a fourth answer
+	// again, and this is bash's.
+	//
+	// Here rather than in Semantics for BackquotedSubstitutionRestartsLines'
+	// reason: it is a question about where a message says something happened.
+	BackquotedSubstitutionFailureAddsItsBodysNewlines bool
+
 	// JobStarted announces a backgrounded job. Two verbs: the job number and
 	// the process id.
 	//

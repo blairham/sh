@@ -2533,6 +2533,10 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				// `set -u` is asked here or nowhere. See
 				// checkNounsetLength (#2980).
 				r.checkNounsetLength(e, elems)
+				// And the list-shaped subscript that check skips on
+				// purpose, which is a count and has three answers of its
+				// own. See checkNounsetCount (#3125).
+				r.checkNounsetCount(e)
 				// `${#a[@]}` is the number of elements; `${#a[0]}` is the
 				// length of one. The subscript decides which question was
 				// asked, which is why this is here rather than below.

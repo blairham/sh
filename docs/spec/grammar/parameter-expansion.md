@@ -1467,6 +1467,18 @@ too wide:
   is `UnsetNameWithAWholeArraySubscriptIsRefused`, asked at
   `Runner.checkNounsetWholeArray` so that the element refusal here still
   never fires for `[@]` (#2980).
+- **A count of a whole array**, which is the same brackets under `${#…}`
+  and a third split again. `${#nope[@]}` is `0` in ksh93, refused in zsh
+  for a name holding nothing at all, and refused in both bash columns for
+  a name holding no **array** — a scalar among them, so `x=abc;
+  ${#x[@]}` is a refusal there and `3` in zsh while `${x[@]}` on the same
+  line is `abc` in both. bash's refusal also gives up only the line,
+  where its `${#x}` on an unset name ends the shell. It is
+  `WholeArrayCount` with `WholeArrayCountRefusalAbandonsTheLine` beside
+  it, asked at `Runner.checkNounsetCount` so that the length refusal here
+  still never fires for `[@]`. A reference aimed at a whole array reaches
+  it by the ordinary rewrite: `${#r}` on `declare -n r=a[@]` *is*
+  `${#a[@]}` (#3125).
 - **A subscript on a plain string**, where the section above applies: a
   position past the end of a string is empty and quiet in the column
   that counts characters, and a missing element in the two that read a

@@ -1277,6 +1277,24 @@ func Semantics() interp.Semantics {
 	// EmptyArrayIsSet above — and a table falls through to the key lookup,
 	// which `n[@]=x` then answers yes (#3436).
 	s.ConditionWholeArraySubscript = interp.ConditionWholeArraySubscriptNamesTheParameter
+	// The **count** of a whole array asks a third question again, and it is
+	// the widest of the three: under `set -u`, `${#a[@]}` is refused unless
+	// the name holds a list. A scalar is refused — `x=abc; ${#x[@]}` is
+	// `x: unbound variable` while `${x[@]}` on the same line is `abc` — and
+	// so is a name that was never mentioned; `a=(); ${#a[@]}` is `0`, which
+	// is the row that says an assigned-and-empty array is not what this is
+	// about. zsh 5.9.2 draws the line one name over (a scalar counts there)
+	// and ksh93u+ refuses nothing.
+	//
+	// And the refusal **gives up the line rather than the shell**, which is
+	// the opposite of what the same option does here one construct over:
+	// `echo "c=${#a[@]}"; echo SAME` writes the sentence, never runs `SAME`,
+	// leaves 1 behind and runs the next line, where `${#a}` on the same
+	// unset name ends the shell. Measured 2026-09-18 on bash 5.3.20 and bash
+	// 3.2.57 alike, under `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from a
+	// script file with `echo REACHED` on the line after (#3125).
+	s.WholeArrayCount = interp.WholeArrayCountRefusesANameHoldingNoArray
+	s.WholeArrayCountRefusalAbandonsTheLine = interp.Yes
 	// The export letter says nothing about scope here: `declare -x v=1`
 	// inside a function is an ordinary local.
 	s.ExportLetterDeclaresAGlobal = interp.No
@@ -3042,6 +3060,13 @@ func Diagnostics() interp.Diagnostics {
 		PromptBuiltinLocation: interp.LocationNameOnly,
 		NotFound:              "%s: command not found",
 		UnboundVariable:       "%s: unbound variable",
+		// And the **count** of a whole array names the bare name where every
+		// other subscripted refusal here writes the brackets back:
+		// `${#a[@]}` is `a: unbound variable` and `${a[@]}` on the same
+		// unset name in bash 3.2.57 is `a[@]: unbound variable`. Measured
+		// 2026-09-18 on bash 5.3.20 and bash 3.2.57, from a script file
+		// under `set -u` (#3125).
+		WholeArrayCountNamesTheBareName: true,
 		// The sigil written back, which no other column does: `${@:=w}`
 		// with no parameters is `$@: cannot assign in this way`, and
 		// `${1:=w}` names `$1`. Identical in 3.2.57 and in the same binary

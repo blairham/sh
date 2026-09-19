@@ -16249,6 +16249,37 @@ type Semantics struct {
 	// between them and existence is not about the join.
 	UnsetNameWithAWholeArraySubscriptIsRefused Answer
 
+	// WholeArrayCount is what `${#a[@]}` does under `set -u` when the name is
+	// not one holding a list — a count rather than a length, and three
+	// answers rather than two. The measurement and the rows are on
+	// WholeArrayCountPolicy, which is also where the reason it is read rather
+	// than asked is written down.
+	WholeArrayCount WholeArrayCountPolicy
+
+	// WholeArrayCountRefusalAbandonsTheLine says the refusal WholeArrayCount
+	// makes gives up the line and runs the next one, rather than ending the
+	// shell as every other `set -u` refusal in the same column does.
+	//
+	// Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from
+	// a script file under `set -u` with `a` never set, the refusal written as
+	// `echo "c=${#a[@]}"; echo SAME` and `echo "NEXT=$?"` on the line after:
+	//
+	//	                  ${#a[@]}                        ${#a} — the control
+	//	bash 5.3.20       no SAME, NEXT=1, exits 0        ends the shell at 1
+	//	bash 3.2.57       no SAME, NEXT=1, exits 0        ends the shell at 1
+	//	zsh 5.9.2         ends the shell at 1             ends the shell at 1
+	//
+	// The control is what makes this its own question rather than a reading
+	// of FailedExpansionAbandonsTheLine: the two columns answer *that* axis
+	// the other way round from this one, and the same option on the same
+	// unset name one construct over ends the bash shells outright.
+	//
+	// Asked only where WholeArrayCount refuses, so the base's answer is the
+	// one a column that refuses nothing would never reach — ending the shell,
+	// which is what the standard describes for `set -u` and what every other
+	// refusal here does.
+	WholeArrayCountRefusalAbandonsTheLine Answer
+
 	// WholeArrayColonTest is what the **colon** of `${a[@]:-word}` and
 	// `${a[@]:+word}` tests when the subscript names the whole array. The
 	// colon-less form is EmptyArrayIsSet's; this is the other half of the
@@ -21689,6 +21720,15 @@ func PosixSemantics() Semantics {
 		LengthOfAMissingElementIsRefused:           No,
 		UnsetNameWithAWholeArraySubscriptIsRefused: No,
 		SubstringNegativeLengthIsEmpty:             No,
+		// The count of a whole array is the same story a fourth time:
+		// ksh93u+ counts whatever the name holds and never refuses, the two
+		// bash columns refuse a name holding no array and zsh 5.9.2 refuses
+		// one holding nothing at all. The standard has no arrays, so the base
+		// counts; the unwinding answer beside it is never reached from a
+		// vector that refuses nothing, and it holds the reading every other
+		// `set -u` refusal takes.
+		WholeArrayCount:                       WholeArrayCountCounts,
+		WholeArrayCountRefusalAbandonsTheLine: No,
 		// The standard has no arrays, so this follows the reading that is
 		// the scalar's own: bash 5.3.20 tests the value the expansion joins
 		// to, under `[@]` and `[*]` alike. ksh93u+ tests the first element

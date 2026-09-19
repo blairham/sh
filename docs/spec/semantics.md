@@ -20134,6 +20134,70 @@ this **moves** the question rather than deleting that guard: the element
 check still never fires for `[@]`, and this one never fires for anything
 else.
 
+**`WholeArrayCount`** — bash refuses a name holding no array · dash n/a ·
+ksh93 counts · zsh refuses a name holding nothing
+
+What `${#a[@]}` does under `set -u` when the name is not one holding a
+list. A **count** rather than a length, and a question of its own rather
+than either of the two axes above reached by another route: those are
+asked of a named element and of a whole-array *value*, and this is asked
+of the number the brackets ask for. The panel gives it three answers
+where each of those gives two, and no two of the three lines fall in the
+same place.
+
+Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from a
+script file under `set -u` with `echo REACHED` on the line after,
+standard input on /dev/null:
+
+| written | bash 5.3.20 | bash 3.2.57 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- | --- |
+| `${#a[@]}`, `a` never set | `a: …`, REACHED | `a: …`, REACHED | `0` | `a[@]: …` |
+| `${#a[*]}`, `a` never set | `a: …`, REACHED | `a: …`, REACHED | `0` | `a[*]: …` |
+| `a=(); ${#a[@]}` | `0` | `0` | `1` | `0` |
+| `typeset -a a; ${#a[@]}` | `a: …`, REACHED | — | `0` | `0` |
+| `typeset -A t; ${#t[@]}` | `t: …`, REACHED | — | `0` | `0` |
+| `x=abc; ${#x[@]}` | `x: …`, REACHED | `x: …`, REACHED | `1` | `3` |
+
+Rows three and six are what separate the two columns that refuse. bash
+refuses every name that does not hold an **array value** — a scalar is
+refused, and `${x[@]}` on that same scalar is `abc` at 0 in the same run
+— where zsh refuses only a name holding **nothing at all**, so a scalar
+is a length there. ksh93u+ refuses nothing and counts what is there.
+
+Row three is also the control that says neither column is asking about
+emptiness: an array assigned no elements is `0` in both, and it is the
+row `typeset -a a` differs from.
+
+One cell is measured and not matched: `typeset -a a; ${#a[@]}` is a
+refusal in bash 5.3.20 and `0` here, because a name **declared** an array
+and never assigned one and a name assigned `()` are one state in this
+store. That is the same missing state #3511 is about.
+
+**`WholeArrayCountRefusalAbandonsTheLine`** — bash yes · dash n/a · ksh93 no · zsh no
+
+Says the refusal above gives up the line and runs the next one, rather
+than ending the shell as every other `set -u` refusal in the same column
+does. Measured 2026-09-18 from a script file, the refusal written as
+`echo "c=${#a[@]}"; echo SAME` with `echo "NEXT=$?"` on the line after:
+
+| | `${#a[@]}` | `${#a}` — the control |
+| --- | --- | --- |
+| bash 5.3.20 | no `SAME`, `NEXT=1`, exits 0 | ends the shell at 1 |
+| bash 3.2.57 | no `SAME`, `NEXT=1`, exits 0 | ends the shell at 1 |
+| zsh 5.9.2 | ends the shell at 1 | ends the shell at 1 |
+
+The control is what makes this its own question rather than a reading of
+`FailedExpansionAbandonsTheLine`: the two columns answer *that* axis the
+other way round from this one, and the same option on the same unset name
+one construct over ends the bash shells outright.
+
+The subject parts with it. bash writes the **bare** name back where every
+other subscripted refusal there writes the brackets — `${#a[@]}` is
+`a: unbound variable` and bash 3.2.57's `${a[@]}` on the same name is
+`a[@]: unbound variable` — which is
+`Diagnostics.WholeArrayCountNamesTheBareName` and not a reading the
+subject could take from the expansion.
+
 **`WholeArrayColonTest`** — bash the join · dash n/a · ksh93 the first element · zsh the element count under `[@]`
 
 What the **colon** of `${a[@]:-word}` and `${a[@]:+word}` tests when the

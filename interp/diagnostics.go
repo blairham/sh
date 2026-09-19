@@ -5963,6 +5963,25 @@ type Diagnostics struct {
 	// why Runner.paramErrorSubject is a function of its own rather than a
 	// call to Runner.unboundSubject (#3241).
 	ParamErrorNamesTheArray bool
+	// WholeArrayCountNamesTheBareName writes `a` rather than `a[@]` when
+	// `set -u` refuses to count what the name holds.
+	//
+	// Measured 2026-09-18, `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from
+	// a script file under `set -u` with `a` never set:
+	//
+	//	              bash 5.3.20              bash 3.2.57              zsh 5.9.2
+	//	${#a[@]}      a: unbound variable      a: unbound variable      a[@]: parameter not set
+	//	${#a[*]}      a: unbound variable      a: unbound variable      a[*]: parameter not set
+	//	${a[@]}       counted, no refusal      a[@]: unbound variable   a[@]: parameter not set
+	//
+	// Row three is the control and it is why this is a field of its own
+	// rather than a reading Runner.unboundSubject could take from the
+	// expansion: the column that drops the brackets under a **count** writes
+	// them back for the whole-array *value* one row down, so the subject
+	// follows the construct rather than the subscript. See
+	// Runner.wholeArrayCountSubject, and Semantics.WholeArrayCount for what
+	// decides whether there is a sentence to name anything in.
+	WholeArrayCountNamesTheBareName bool
 
 	// SubscriptIsAnIndexAndARange is what a subscript says when one reading
 	// of it needs the single index it named and another makes it a span. No

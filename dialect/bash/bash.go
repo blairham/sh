@@ -1631,6 +1631,10 @@ func Semantics() interp.Semantics {
 	s.QuitResetRestoresTheDefault = interp.No
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// A subshell's own EXIT trap runs however the subshell ended. Measured
+	// 2026-09-18 over the nine rows of interp.SubshellExitTrapPolicy, each
+	// plain and under `set -e` (#3612).
+	s.SubshellExitTrapAfterAGiveUp = interp.SubshellExitTrapAlwaysRuns
 	// `kill -n signum` is an option here, and `-s` with nothing after it is
 	// an option missing its argument rather than a signal named `s`.
 	s.KillReadsTheNumberOption = interp.Yes

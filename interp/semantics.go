@@ -2909,6 +2909,12 @@ type Semantics struct {
 	// written expecting.
 	FatalErrorUnderErrexitSkipsTheExitTrap Answer
 
+	// SubshellExitTrapAfterAGiveUp is the same question at the subshell
+	// boundary, and it is a second axis rather than the field above reaching
+	// further: one column answers the two differently. See
+	// [SubshellExitTrapPolicy] for the three values and for the table.
+	SubshellExitTrapAfterAGiveUp SubshellExitTrapPolicy
+
 	// FunctionLocalTraps is whether a trap a function *sets* is undone when
 	// that function returns — the displaced disposition coming back, and the
 	// signal going back to its default where nothing was displaced. See
@@ -20557,6 +20563,10 @@ func PosixSemantics() Semantics {
 		// is over, so PrefixRefusalCostsTheCommand stays unanswered (#1219).
 		PrefixToARegularBuiltinIsRefused: Yes,
 		PrefixRefusalFatality:            PrefixRefusalAlwaysFatal,
+		// POSIX 2.14 has the EXIT trap run when the shell exits and draws no
+		// exception for an error the shell reported, so the standard's own
+		// answer is the one three of the five columns give.
+		SubshellExitTrapAfterAGiveUp: SubshellExitTrapAlwaysRuns,
 		// XCU makes an expansion error fatal to a non-interactive shell, so
 		// the standard's preset does not survive one.
 		FailedExpansionAbandonsTheLine:         No,
@@ -24261,6 +24271,81 @@ func (r *Runner) valueBackslashInAPattern() ValueBackslashPolicy {
 		r.unspecified = true
 	}
 	return p
+}
+
+// SubshellExitTrapPolicy says which give-ups take a **subshell's own** EXIT
+// trap away from it.
+//
+// The top-level question is Semantics.FatalErrorUnderErrexitSkipsTheExitTrap
+// and this is not that field with a wider reach, because one column answers
+// the two differently: ksh93 runs the trap at the top level for every row and
+// skips it in a subshell for some. Measured 2026-09-18, script files under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C`, each row written once as
+// `trap 'echo TRAP_RAN' EXIT` at the top of a script and once as
+// `( trap 'echo TRAP_RAN' EXIT; … )`, and each of those twice — plain and
+// with `set -e` in front. bash 5.3.20, dash 0.5.12, ksh93u+ 2012-08-01, zsh
+// 5.9.2 and BusyBox 1.37.0 ash, the last inside the pinned container:
+//
+//	row in a subshell              zsh     ksh93   bash/dash/ash
+//	readonly r=1; readonly r=2     skips   skips   runs
+//	set -u; echo "$nosuch"         skips   skips   runs
+//	echo $((1/0))                  skips   skips   runs
+//	echo "${nosuch?word}"          skips   skips   runs
+//	set -Z                         skips   runs    runs
+//	export -Z v, readonly -Z v     n/a     runs    runs
+//	false, exit 3, true            runs    runs    runs
+//	shift 5, unset -Z, cd /nope    runs    runs    runs
+//	: > /nonexistent/x             runs    runs    runs
+//
+// and every one of those is the same with `set -e` and without, which is what
+// says the option decides nothing here — the opposite of the top level, where
+// it is half the discriminator. The `n/a` rows are ones zsh does not give the
+// subshell up over at all, so they cannot be asked there.
+//
+// Three facts follow and each is a value below. Two columns take the trap away
+// from a subshell the shell itself gave up on, and three do not; of the two,
+// one also takes it for a special builtin complaining about **how it was
+// called** and the other does not. `${x?word}` goes with the errors in both,
+// although that operator is a request to stop rather than an error at the top
+// level in the same column (Semantics.ParamErrorIsAnExitRequest) — which is
+// the row that says the subshell reading is wider than the top-level one
+// rather than the same set.
+//
+// The boundary is the subshell and not the statement: measured on zsh over
+// `$( … )`, a pipeline element, a background job and a subshell inside a
+// subshell, each of those four skips it (#3612).
+type SubshellExitTrapPolicy uint8
+
+const (
+	// SubshellExitTrapUnspecified is a vector that has not chosen. It runs
+	// the trap, which is the reading of three of the five columns and what a
+	// cleanup handler is written expecting — read without asking, as the
+	// top-level field beside it is.
+	SubshellExitTrapUnspecified SubshellExitTrapPolicy = iota
+	// SubshellExitTrapAlwaysRuns runs a subshell's own EXIT trap however the
+	// subshell ended: bash, dash and BusyBox ash.
+	SubshellExitTrapAlwaysRuns
+	// SubshellExitTrapSkippedByAReportedError takes it away when the shell
+	// reported an error and gave the subshell up over it, and leaves it for a
+	// stop the script asked for and for a builtin's complaint about its own
+	// operands: ksh93.
+	SubshellExitTrapSkippedByAReportedError
+	// SubshellExitTrapSkippedByABuiltinsUsageToo is that and a special
+	// builtin's usage complaint as well: zsh, where `( trap … EXIT; set -Z )`
+	// loses the handler and ksh93's keeps it.
+	SubshellExitTrapSkippedByABuiltinsUsageToo
+)
+
+func (p SubshellExitTrapPolicy) String() string {
+	switch p {
+	case SubshellExitTrapAlwaysRuns:
+		return "always runs"
+	case SubshellExitTrapSkippedByAReportedError:
+		return "skipped by a reported error"
+	case SubshellExitTrapSkippedByABuiltinsUsageToo:
+		return "skipped by a reported error or a builtin's usage"
+	}
+	return "unspecified"
 }
 
 // PrefixRefusalFatalityPolicy is what a refused assignment prefix — `x=2 cmd`

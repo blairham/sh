@@ -708,6 +708,9 @@ func Semantics() interp.Semantics {
 	// measure a preference from.
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// A subshell's own EXIT trap runs however the subshell ended, as it does
+	// in bash. Measured 2026-09-18 (#3612).
+	s.SubshellExitTrapAfterAGiveUp = interp.SubshellExitTrapAlwaysRuns
 	// `-n` is not an option here, so `kill -n 99` is the dash-word `n` read
 	// as option letters: `kill: Illegal option -n` at 2, measured
 	// 2026-09-17 on dash 0.5.12. And `-s` with nothing after it is its own

@@ -16111,6 +16111,9 @@ an error — see `ParamErrorIsAnExitRequest` — a classification this shell
 already had.
 
 bash, dash, ksh93 and BusyBox ash run the trap on every row of that table.
+ksh93 is the one to re-read alongside `SubshellExitTrapAfterAGiveUp` below:
+it runs the trap on every row **here** and not on every row in a subshell,
+which is what makes the two separate questions rather than one reach.
 
 It reaches further than the case it was filed on: #2744 recorded it as a
 refused `set` option, and the same rows hold for a readonly reassignment, a
@@ -16120,6 +16123,56 @@ zero.
 Read without asking. A shell that has chosen nothing runs the trap, which
 is what the other four columns do and what a cleanup handler is written
 expecting.
+
+**`SubshellExitTrapAfterAGiveUp`** — bash always runs · dash always runs ·
+ksh93 skipped by a reported error · zsh skipped by a reported error or a
+builtin's usage · ash always runs
+
+The same question at the **subshell** boundary, and a second axis rather
+than the field above reaching further — because one column answers the two
+differently. ksh93 runs the trap at the top level for every row of that
+table and skips it in a subshell for some.
+
+Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, each row written as `( trap 'echo TRAP_RAN' EXIT; … )` and run
+twice — plain and with `set -e` in front. bash 5.3.20, dash 0.5.12, ksh93u+
+2012-08-01, zsh 5.9.2 and BusyBox 1.37.0 ash inside the pinned container:
+
+| row, inside `( … )` | zsh | ksh93 | bash · dash · ash |
+| --- | --- | --- | --- |
+| `readonly r=1; readonly r=2` | skips | skips | runs |
+| `set -u; echo "$nosuch"` | skips | skips | runs |
+| `echo $((1/0))` | skips | skips | runs |
+| `echo "${nosuch?word}"` | skips | skips | runs |
+| ``v=`echo hi; for` `` | skips | skips | runs |
+| `set -Z` | skips | runs | runs |
+| `export -Z v`, `readonly -Z v` | — | runs | runs |
+| `false`, `exit 3`, `true` | runs | runs | runs |
+| `shift 5`, `unset -Z`, `cd /nope` | runs | runs | runs |
+| `: > /nonexistent/x` | runs | runs | runs |
+
+Every one of those is the same with `set -e` and without, which is what
+says the option decides nothing here — the opposite of the top level, where
+it is half the discriminator. The dashed rows are ones zsh does not give
+the subshell up over at all, so they cannot be asked there.
+
+Three facts, and each is one of the three values. Two columns take the
+handler from a subshell the shell itself gave up on and three do not; of
+the two, one also takes it for a special builtin complaining about **how it
+was called** and the other does not. `${x?word}` goes with the errors in
+both, although the same operator keeps the handler at the *top level* in
+the same column, being a request to stop rather than an error — which is
+the row that says the subshell reading is wider than the top-level one
+rather than the same set.
+
+The boundary is the subshell and not the statement: measured on zsh over
+`$( … )`, a pipeline element, a background job and a subshell inside a
+subshell, all four skip. `Runner.subshellExitTrapSkippedByAGiveUp` is where
+it is read, beside the top-level one, and the classification it reads is
+`abandonError`, `abandonParamError` and `abandonSubstParse` against
+`abandonUsage` (#3612).
+
+Read without asking, for the same reason as the field above.
 
 **`SetAppliesTheWordsAfterARefusedOption`** — bash no · dash no · ksh93 no
 · zsh yes · ash no

@@ -1894,6 +1894,17 @@ func Semantics() interp.Semantics {
 	// measure a preference from.
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// A subshell that the shell reported an error and gave up on runs no
+	// EXIT trap of its own, with or without `set -e` — a readonly
+	// reassignment, an unset name under `set -u`, a division by zero,
+	// `${x?word}` and a command substitution that would not parse all lose
+	// the handler. A builtin's complaint about how it was *called* keeps it:
+	// `( trap … EXIT; set -Z )` runs the handler here and does not in zsh,
+	// which is the row that makes this three values rather than two. The top
+	// level keeps the handler on every one of those rows, which is what makes
+	// this a second axis rather than FatalErrorUnderErrexitSkipsTheExitTrap
+	// reaching further. Measured 2026-09-18 on ksh93u+ 2012-08-01 (#3612).
+	s.SubshellExitTrapAfterAGiveUp = interp.SubshellExitTrapSkippedByAReportedError
 	// `kill -n signum` is an option here, and `-s` with nothing after it is
 	// an option missing its argument rather than a signal named `s`.
 	s.KillReadsTheNumberOption = interp.Yes

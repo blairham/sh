@@ -4422,6 +4422,13 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	if r.exitTrapSkippedByAFatalError() {
 		return false
 	}
+	// And a *subshell* ending over one, which is a question of its own: the
+	// option decides nothing there, two columns answer it rather than one,
+	// and `${x?word}` joins the errors. See
+	// Runner.subshellExitTrapSkippedByAGiveUp.
+	if r.subshellExitTrapSkippedByAGiveUp() {
+		return false
+	}
 	body := *r.exitTrap
 	// Cleared before running so the body cannot fire it again, and so a
 	// `trap` inside it replaces rather than recurses.

@@ -271,3 +271,37 @@ func (r *Runner) exitTrapSkippedByAFatalError() bool {
 	}
 	return r.sem().FatalErrorUnderErrexitSkipsTheExitTrap == Yes
 }
+
+// subshellExitTrapSkippedByAGiveUp is the same question at the subshell
+// boundary, where it has an answer of its own: the option decides nothing
+// there and two columns answer it rather than one.
+//
+// See [SubshellExitTrapPolicy] for the nine-row table across five shells. The
+// short of it: bash, dash and BusyBox ash run the trap however the subshell
+// ended; ksh93 and zsh take it away from a subshell the shell itself reported
+// an error and gave up on; and of those two only zsh also takes it for a
+// special builtin's complaint about how it was called.
+//
+// `${x?word}` is in the skipping set for both, which is why abandonParamError
+// is listed beside abandonError rather than left with the requested stops. A
+// command substitution whose body would not parse is there too, measured
+// 2026-09-18 on `( trap … EXIT; v=`+"`"+`echo hi; for`+"`"+` )`: zsh and ksh93 lose the
+// handler and bash keeps it.
+// That is the row where this reaches further than the top-level field: the
+// same operator keeps the trap at the top of a script in the same shell,
+// because it is a request to stop there — see Semantics.ParamErrorIsAnExitRequest.
+//
+// Read without asking, as the top-level field is: a vector that has chosen
+// nothing runs the trap.
+func (r *Runner) subshellExitTrapSkippedByAGiveUp() bool {
+	if !r.inSubshell {
+		return false
+	}
+	switch r.abandon {
+	case abandonError, abandonParamError, abandonSubstParse:
+		return r.sem().SubshellExitTrapAfterAGiveUp >= SubshellExitTrapSkippedByAReportedError
+	case abandonUsage:
+		return r.sem().SubshellExitTrapAfterAGiveUp == SubshellExitTrapSkippedByABuiltinsUsageToo
+	}
+	return false
+}

@@ -103,4 +103,21 @@ printf 'a simple command stopped on the same redirection\n'
 	printf 'compound redirection under ERR -> quiet, status %s\n' "$?" ) 2> /dev/null
 ( trap 'printf "err\n"' ERR; printf 'NOT REACHED\n' > /nonexistent/x
 	printf 'simple redirection under ERR -> status %s\n' "$?" ) 2> /dev/null
+# A subshell the shell reported an error and gave up on runs no EXIT trap of
+# its own, with or without `set -e` — and a builtin complaining about how it
+# was *called* keeps it, which is where this shell parts company with the
+# other column that skips anything. The top level keeps the handler on every
+# one of these rows, so the answer belongs to the boundary. Measured
+# 2026-09-18 over nine rows, each written plain and under `set -e` (#3612).
+( trap 'printf "TRAP_RAN\n"' EXIT; readonly rs=1; readonly rs=2
+	printf 'NOT REACHED\n' ) 2> /dev/null
+( trap 'printf "TRAP_RAN\n"' EXIT; printf '[%s]' "${nosuch?word}"
+	printf 'NOT REACHED\n' ) 2> /dev/null
+( trap 'printf "TRAP_RAN\n"' EXIT; set -u; printf '[%s]' "$nosuch2"
+	printf 'NOT REACHED\n' ) 2> /dev/null
+printf 'a subshell given up on ran no handler, with no option\n'
+( trap 'printf "TRAP_RAN\n"' EXIT; set -Z; printf 'NOT REACHED\n' ) 2> /dev/null
+( trap 'printf "TRAP_RAN\n"' EXIT; exit 3 )
+printf 'and a usage complaint, or a request to stop, kept it\n'
+
 printf 'done\n'

@@ -58,6 +58,29 @@ lacks is core when the other three agree — recorded alongside the
 version that introduced it, so a lint targeting old bash has the fact it
 needs.
 
+## The holdout rule is about membership, not about meaning
+
+The section above is about **which constructs are in the language**, and
+a sole holdout does not keep one out. It says nothing about what a
+construct in the language *means*, and the two must not be run together:
+a difference about meaning is a conflict, and a conflict gets a vector
+field rather than a core answer — which is the rule two sections up, in
+"Never in the core".
+
+`[^abc]` is the worked example, and it was filed as a contradiction
+between the two rules before it was read as this (#489). Every panel
+shell parses it; six of the seven read the caret as negating the class
+and dash reads it as an ordinary character. So it is not a construct dash
+lacks — the pattern runs there and **matches different things** — and the
+holdout rule has nothing to say about it. `Semantics.BracketCaretNegates`
+is the field, and `semantics.md` has the measurement and the POSIX text
+that declines to settle it.
+
+The tell is what a wrong answer costs. A construct held out of the core
+because one shell refuses it would be a **parse error** for the scripts
+that use it, which announces itself; the wrong reading of `[^abc]` is a
+pattern that still matches, silently, just not the intended things.
+
 ## Why not strict POSIX
 
 POSIX omits `local`, which dash, bash and zsh all provide. A core that

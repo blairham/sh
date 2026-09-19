@@ -247,6 +247,71 @@ An axis whose wrong answer is an error is self-limiting. An axis whose
 wrong answer is a different working program is not, and it is the case a
 dialect system exists to get right. See `grammar/tokenization.md`.
 
+## A sole dissenter on a *meaning* is still an axis
+
+`docs/spec/core.md` says a construct only one panel shell refuses goes
+into the core anyway — "dash is excluded by decision" and "bash 3.2 is
+evidence, not a veto". `BracketCaretNegates` has exactly that shape: six
+of the seven columns read `[^abc]` as a negated class and dash alone
+reads the caret as an ordinary character. Read quickly, the boundary rule
+and the axis look as though they disagree, and #489 was filed on that
+reading.
+
+They do not, because they answer different questions, and the difference
+is the first claim in `AGENTS.md`: **grammar differences are additive and
+semantic differences are conflicts.** core.md's rule is about *membership*
+— does this construct parse, is it in the language at all — and there a
+sole holdout is outvoted, because a core that refuses what six shells
+accept is a core nobody can write against. This is not a membership
+question. `[^abc]` parses in every column, including dash; a pattern using
+it runs everywhere and **matches different things**. That is identical
+syntax with two meanings, which core.md itself sends to the vector in as
+many words: *"Never in the core — any construct on a conflict axis
+resolved by fiat. Conflicts get a vector field, not a core answer."*
+
+A majority is not evidence about a meaning the way it is evidence about a
+construct. Nothing about six shells agreeing makes dash's reading wrong in
+dash, and the cost of getting it wrong runs the other way from a refused
+construct: a missing construct is a parse error and announces itself,
+where the wrong reading of `[^abc]` is the **silent** shape — the pattern
+still matches, just not the intended things, which is the failure `Not
+every difference announces itself` above is about.
+
+And there is no standard answer to promote to. POSIX XCU §2.13.1 gives
+shell pattern matching `!` in the role regular-expression notation gives
+`^`, and says a bracket expression whose first character is an unquoted
+circumflex produces unspecified results. So dash is not deviating from a
+rule the others follow; the standard declined to say, and the shells
+filled the gap two ways.
+
+Measured 2026-09-18, seven columns, each under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with a scratch HOME and BusyBox through the digest-pinned alpine
+image. The subject must be a letter the class does **not** name — a caret
+matches under both readings, which is the trap the axis comment records:
+
+    case z in [^abc])   bash 5.3.20, bash 3.2.57, bash-as-sh, ksh93u+,
+                        zsh 5.9.2, BusyBox 1.37.0 ash   matched
+                        dash                            no match
+    case b in [^abc])   the same six                    no match
+                        dash                            matched
+
+The second row is the same fact from the other side and is what a single
+row cannot say: dash is not failing to match, it is matching the class
+`{^, a, b, c}`. Corpus row `pat/bracket-caret-is-an-extension` holds the
+panel.
+
+**So the axis stays, the preset answers stay, and nothing in the code
+moves.** The `posix` preset says no, for the reason
+`grammar/patterns.md` records: in a shell pattern the standard has `!`
+*replace* `^`, which leaves the caret ordinary, and dash inherits it. The
+five shells that negate say so in their own vectors.
+
+What #497 predicted is also worth keeping, because it is the half that
+could have changed the answer: a fifth panel member might have given dash
+company and turned "sole dissenter" into a grouping. BusyBox ash
+negates, so it did not — the sole-dissenter reading survives a seventh
+column rather than losing to it (#489).
+
 ## An assignment prefixed to a frozen name: one unanimous answer and three axes
 
 `readonly x=1` then `x=2 cmd` is two questions: whether the refusal is

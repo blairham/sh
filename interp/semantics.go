@@ -3331,6 +3331,18 @@ type Semantics struct {
 	// treats `^` as an ordinary character; bash — all three builds — ksh93,
 	// zsh and BusyBox ash negate.
 	//
+	// A sole dissenter, and still a field rather than a core answer with an
+	// override, which is #489's question. docs/spec/core.md outvotes a
+	// holdout about **membership** — whether a construct is in the language
+	// — and this is not that: `[^abc]` parses in every column, dash's
+	// included, and matches different things. Identical syntax with two
+	// meanings is a conflict, and core.md sends those to the vector in as
+	// many words. There is no standard answer to promote to either: POSIX
+	// XCU §2.13.1 gives shell patterns `!` in the role regular-expression
+	// notation gives `^`, and leaves a leading unquoted circumflex
+	// unspecified. See docs/spec/semantics.md, "A sole dissenter on a
+	// *meaning* is still an axis".
+	//
 	// The subject has to be a letter the class does not name, and this
 	// comment used to say the opposite. A caret matches `[^abc]` under
 	// *both* readings — literally, where the class holds a caret, and by

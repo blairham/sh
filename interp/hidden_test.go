@@ -69,6 +69,29 @@ func TestBracketCaretIsADialectQuestion(t *testing.T) {
 	if got, _ := run(t, src, withSem(member)); got != "no-caret\n" {
 		t.Errorf("No: got %q, want %q", got, "no-caret\n")
 	}
+	// The same fact from the other side, which one subject cannot say: under
+	// the member reading the class is `{^, a, b, c}`, so a letter the class
+	// *does* name matches there and not under the negating one. Without this
+	// row the axis is pinned by a shell that fails to match, which a broken
+	// bracket reader would also do.
+	const inclass = `case b in [^abc]) echo member;; *) echo negated;; esac`
+	if got, _ := run(t, inclass, withSem(negates)); got != "negated\n" {
+		t.Errorf("Yes: got %q, want %q", got, "negated\n")
+	}
+	if got, _ := run(t, inclass, withSem(member)); got != "member\n" {
+		t.Errorf("No: got %q, want %q", got, "member\n")
+	}
+	// And the subject that decides nothing, asserted so that it cannot be
+	// mistaken for one that does: a caret matches under **both** readings —
+	// literally where the class holds one, and by negation everywhere else,
+	// a caret being none of `a`, `b`, `c`. A probe using it sat in the axis
+	// comment proving nothing.
+	const caret = `case '^' in [^abc]) echo match;; *) echo no;; esac`
+	for _, sem := range []Semantics{negates, member} {
+		if got, _ := run(t, caret, withSem(sem)); got != "match\n" {
+			t.Errorf("a caret subject should match under both readings, got %q", got)
+		}
+	}
 	// `!` is the portable negation and needs no answer from anyone.
 	for _, sem := range []Semantics{negates, member, CoreSemantics()} {
 		if got, _ := run(t, `case d in [!abc]) echo neg;; *) echo no;; esac`, withSem(sem)); got != "neg\n" {

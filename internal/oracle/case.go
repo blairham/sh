@@ -20787,7 +20787,7 @@ echo "read=[$l]"`,
 	{
 		ID: "pipe/a-second-coprocess-while-one-runs-is-refused", Category: "redirection",
 		Snippet: `cat |& cat |& echo "second=$?"; echo after`,
-		Why:     "and the refusal that is the operator's own, where the `coproc` word replaces its predecessor silently in both shells that have it. ksh93 answers `process already exists` and ends the script, so `after` is never reached. Written on one line through `-c` deliberately: in a *file* ksh93 blames the line before the second operator rather than its own, which is an off-by-one in its reporting and not something worth reproducing — the divergence is written down in docs/spec/grammar/commands.md instead of copied (#1141)",
+		Why:     "and the refusal that is the operator's own, where the `coproc` word replaces its predecessor silently in both shells that have it. ksh93 answers `process already exists` and ends the script, so `after` is never reached. Written on one line through `-c` deliberately: from a *file* the sentence is sited at the last statement the shell entered rather than at the operator, which is a rule over thirteen shapes rather than an off-by-one and is now reproduced — see docs/spec/grammar/commands.md (#1141, #3391)",
 	},
 	{
 		ID: "pipe/both-streams-takes-no-blank-between-its-two-bytes", Category: "redirection",

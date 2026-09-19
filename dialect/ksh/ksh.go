@@ -3970,6 +3970,12 @@ func Diagnostics() interp.Diagnostics {
 		// none running says so — the only reachable answer here, this
 		// grammar having no `|&`.
 		ReadNoCoprocess: "read: no query process",
+		// And a second `cmd |&` while one is still running is sited at the
+		// last statement the shell entered rather than at the operator.
+		// Measured over thirteen shapes on 2026-09-18; the rows are in the
+		// field's own doc comment, and the shortest of them is `cat |&`
+		// twice and nothing else, which ksh93 blames on line 1.
+		CoprocessAlreadyRunningNamesTheLastStatementEntered: true,
 		// ksh93's `type` is `whence -v`, and a refused option says so —
 		// measured with `type -t echo`, whose complaint and usage line both
 		// name `whence`.

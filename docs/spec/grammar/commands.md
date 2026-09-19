@@ -4007,11 +4007,55 @@ one was ever started — and the two constructs answer it differently,
 which is why the refusal lives on the operator's path rather than
 becoming a dialect axis over one shared path.
 
-One divergence is recorded rather than reproduced: in a **script file**
-ksh93 blames the line *before* the second operator — line 4 for a `|&`
-on line 5, line 1 for one on line 2 — where this names the statement that
-was refused. Under `-c` neither prints a line at all and the two agree
-byte for byte, which is the form the corpus row takes.
+**And the refusal is sited at the last statement the shell entered**, not
+at the operator that was refused. This used to be written down here as an
+off-by-one recorded rather than reproduced — "ksh93 blames the line
+*before* the second operator" — which fits a two-line file and nothing
+else. Measured over thirteen shapes on 2026-09-18, ksh93u+ 2012-08-01,
+from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with
+standard input on the null device, every file ending with a second
+`cat |&`:
+
+| script | the line named |
+| --- | --- |
+| `cat \|&` (1), `cat \|&` (2) | 1 |
+| `echo a` (1), `echo b` (2), the pair (3, 4) | 2 |
+| `echo a` (1), `if true; then` (2), the pair, `fi` | 2 |
+| the same with `while`, `until`, `for` and `case` | 2 in all four |
+| `echo a` (1), `( cat \|&` (2), `cat \|& )` (3) | 1 |
+| `echo a` (1), `{ cat \|&` (2), `cat \|& }` (3) | 1 |
+| `echo a` (1), `f(){` … `}` (2–5), `f` (6) | 6 |
+| `echo a` (1), `cat \|&` (2), `{ echo z; }` (3), `cat \|&` (4) | 3 |
+| `echo a` (1), `cat \|&` (2), `( echo z )` (3), `cat \|&` (4) | 1 |
+| `echo a` (1), `{ echo p` (2), `echo q; }` (3), the pair (4, 5) | 3 |
+| `echo a` (1), `( echo p` (2), `echo q )` (3), the pair (4, 5) | 1 |
+
+One rule accounts for all of them, and it is a count of statements
+*entered* rather than of commands run:
+
+- an ordinary command advances it, and so does a compound's **keyword**
+  head — `if`, `while`, `until`, `for` and `case` all set it to the line
+  the keyword is on;
+- a **coprocess statement** does not, which is why the count is behind
+  the operator by however much ran in front of it;
+- a **grouping's head** — `(` or `{` — is not a statement and does not
+  advance it, while what runs *inside* a brace group does, being at the
+  same level;
+- what runs inside a `( … )` advances the **subshell's** copy and never
+  comes back, which is the only thing that tells the two groupings apart.
+
+The last point is what the earlier reading got wrong by reading two rows
+as one: `{ cat |& ⏎ cat |& }` answering 1 is not an exception, because
+the only statements in it are coprocesses. Only a brace group with an
+ordinary command in it separates "a grouping's head is not a statement"
+from "a subshell's body goes with the subshell", and both are true.
+
+`Diagnostics.CoprocessAlreadyRunningNamesTheLastStatementEntered` is the
+answer and the count is `Runner.enteredLine`; the subshell leg needs no
+code, a subshell being a cloned runner here. Under `-c` this shell leaves
+`line 1` out of a location, so a `-c` string whose first statement is the
+refused one prints the bare sentence — which is the form the corpus row
+takes and is why the row agreed byte for byte throughout.
 
 Two things the operator has and this does not, both refused by name
 rather than answered wrong: `>&p` and `<&p`, the descriptor spellings of

@@ -1428,6 +1428,37 @@ type Diagnostics struct {
 	// in one shell and its wording is not a variable.
 	CoprocessAlreadyRunning string
 
+	// CoprocessAlreadyRunningNamesTheLastStatementEntered sites that refusal
+	// at the last statement the shell *entered* rather than at the operator
+	// that was refused.
+	//
+	// Measured on ksh93u+ 2012-08-01, 2026-09-18, thirteen shapes from a
+	// script file under `env -i`, every one ending with a second `cat |&`:
+	//
+	//	cat |& / cat |&                             line 1
+	//	echo a / echo b / the pair                  line 2
+	//	echo a / if true; then / the pair / fi      line 2
+	//	the same with while, until, for, case       line 2
+	//	echo a / ( cat |& / cat |& )                line 1
+	//	echo a / { cat |& / cat |& }                line 1
+	//	echo a / f(){ … } / f                       the line `f` is on
+	//	echo a / cat |& / { echo z; } / cat |&      line 3
+	//	echo a / cat |& / ( echo z ) / cat |&       line 1
+	//	echo a / { echo p / echo q; } / the pair    line 3
+	//	echo a / ( echo p / echo q ) / the pair     line 1
+	//
+	// Which is one rule: a coprocess statement does not advance the count,
+	// a grouping's head is not a statement, and a subshell's body advances a
+	// copy that goes away with the subshell — while a compound's keyword head
+	// and everything inside a brace group do advance it. See
+	// Runner.enteredLine, which is where the count is kept.
+	//
+	// False everywhere else, which is every dialect: the other spelling of a
+	// coprocess replaces its predecessor silently and has nothing to site.
+	// The message is the operator's own in this shell when it is false, which
+	// is the reading this tree had before the sweep above (#3391).
+	CoprocessAlreadyRunningNamesTheLastStatementEntered bool
+
 	// BuiltinComplaintName is the name a builtin's complaints call it, by
 	// the name it was invoked as, for a dialect whose complaint names a
 	// different one. ksh93's `type` is `whence -v` and its refusals say so:

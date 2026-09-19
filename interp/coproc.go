@@ -125,7 +125,18 @@ func (r *Runner) coprocStmt(ctx context.Context, st *syntax.Stmt) error {
 		// Named for the statement that was refused, the way a command's own
 		// complaints are: nothing has run for this statement yet, so the
 		// line the previous command left behind would be the wrong one.
-		r.line = r.lineOf(st.Pos())
+		//
+		// Except in the one dialect that has the operator, which sites it at
+		// the last statement it entered instead — a number a coprocess
+		// statement never advances, so it is behind the operator by however
+		// much ran in front of it. See
+		// Diagnostics.CoprocessAlreadyRunningNamesTheLastStatementEntered for
+		// the thirteen shapes that say so.
+		if r.diag().CoprocessAlreadyRunningNamesTheLastStatementEntered {
+			r.line = r.lastStatementLine()
+		} else {
+			r.line = r.lineOf(st.Pos())
+		}
 		r.fatal("%s\n", Wording(r.diag().CoprocessAlreadyRunning, "process already exists"))
 		return nil
 	}

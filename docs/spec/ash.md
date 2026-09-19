@@ -54,8 +54,17 @@ Measured, ash goes the other way on every question that was checked:
 So the sentence in `interp/semantics.go` about `BracketCaretNegates` —
 "dash alone treats `^` as an ordinary character" — survives ash rather
 than losing to it, and `docs/spec/core.md`'s boundary is not
-re-litigated. An ash column, when it lands, **widens** the non-dash
-agreement rather than narrowing it.
+re-litigated. The ash column **widens** the non-dash agreement rather
+than narrowing it, re-measured 2026-09-18 on BusyBox v1.37.0 through the
+digest-pinned image: `case z in [^abc])` matches there as it does in the
+five other non-dash columns.
+
+That is the half that could have changed #489's answer and did not — a
+sixth agreeing column would have become a grouping if it had gone the
+other way. It stays an axis regardless, for a reason the column count
+does not reach: the caret is a disagreement about what a pattern
+**means** rather than about whether it parses, and core.md's holdout rule
+governs membership. `semantics.md` has that argument in full.
 
 The grammar goes the same way. ash takes nine constructs dash refuses:
 

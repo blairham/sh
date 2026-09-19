@@ -91,24 +91,41 @@ rather than given a value.
 
 ## Bracket expressions
 
-| form | meaning | dash | bash | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- |
-| `[abc]` | any of those characters | yes | yes | yes | yes |
-| `[a-z]` | a range | yes | yes | yes | yes |
-| `[!abc]` | none of those | yes | yes | yes | yes |
-| `[^abc]` | none of those | **no** | yes | yes | yes |
-| `[[:digit:]]` | a character class | yes | yes | yes | yes |
-| `[a-]` | a trailing `-` is literal | yes | yes | yes | yes |
+| form | meaning | dash | ash | bash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `[abc]` | any of those characters | yes | yes | yes | yes | yes |
+| `[a-z]` | a range | yes | yes | yes | yes | yes |
+| `[!abc]` | none of those | yes | yes | yes | yes | yes |
+| `[^abc]` | none of those | **no** | yes | yes | yes | yes |
+| `[[:digit:]]` | a character class | yes | yes | yes | yes | yes |
+| `[a-]` | a trailing `-` is literal | yes | yes | yes | yes | yes |
 
 **`!` is the portable negation; `^` is an extension** that dash does not
 have — there it is an ordinary character, so `[^abc]` matches a literal
 `^`, `a`, `b` or `c`. Silent again: the pattern still matches things,
 just not the things intended.
 
-Semantics axis: `BracketCaretNegates` — dash no, bash, ksh93 and zsh
-yes. Unanswered in the core, and the `posix` preset says no, because in
-a shell pattern the standard has `!` *replace* `^` in the role it plays
-in regular expression notation (XCU §2.13.1), which leaves `^` ordinary.
+Semantics axis: `BracketCaretNegates` — dash no, BusyBox ash, bash,
+ksh93 and zsh yes. Unanswered in the core, and the `posix` preset says
+no, because in a shell pattern the standard has `!` *replace* `^` in the
+role it plays in regular expression notation (XCU §2.13.1), which leaves
+`^` ordinary.
+
+**dash is the sole dissenter and it is still an axis**, which is what
+#489 asked. `core.md`'s rule that a lone holdout does not keep a
+construct out of the core is about *membership*, and this is not a
+construct dash lacks: `[^abc]` parses there and matches a different set.
+Identical syntax with two meanings is a conflict, and a conflict is a
+field. `semantics.md` has the seven-column measurement and the reasoning
+under "A sole dissenter on a *meaning* is still an axis".
+
+The subject used to measure it has to be a letter the class does **not**
+name. A caret matches `[^abc]` under both readings — literally, where the
+class holds one, and by negation everywhere else — so it decides nothing,
+and a probe using it sat in the axis comment for a while proving nothing.
+`case z in [^abc])` matches in every column but dash, and `case b in
+[^abc])` matches in dash alone, which is the same fact from the other
+side: dash is not failing to match, it is matching `{^, a, b, c}`.
 
 ### What a refused pattern costs the script
 

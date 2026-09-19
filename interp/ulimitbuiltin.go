@@ -44,11 +44,45 @@ type UlimitListingRow struct {
 	// does not have at all. Zero means a row this shell prints and has no
 	// letter for, which is the one zsh writes as `-N 15`.
 	Letter byte
-	// Fixed, when non-empty, is the whole value: the rows about socket
-	// buffers, and the ones an engine lists as unsupported, are not resource
-	// limits and never move. Reading one prints the text; setting one is
-	// refused, since there is nothing behind it to set.
+	// Fixed, when non-empty, is the whole value: a row an engine lists as
+	// unsupported on every kernel is not a resource limit and never moves.
+	// Reading one prints the text; setting one is refused, since there is
+	// nothing behind it to set.
 	Fixed string
+	// Absent, when non-empty, is what this row prints on a kernel that has
+	// no number behind Res — where an ordinary row would be dropped from
+	// the table and its letter refused with it.
+	//
+	// It is the state Fixed could not say, and it is the difference between
+	// a row a shell lists and a limit a kernel has. One column's five rows —
+	// `locks`, `msgqueue`, `nice`, `rtprio` and `sigpend` — read this
+	// kernel's number where there is one and print a sentence of the
+	// engine's own where there is not: `not supported` for four of them and
+	// `undefined` for the fifth. Measured 2026-09-18 on one build,
+	// ksh93u+ 2012-08-01, on two kernels — every one of the five reads a
+	// number on Linux and prints its sentence on macOS, and the table is
+	// otherwise row for row identical (#3693).
+	//
+	// While the limit is missing the row behaves exactly as a Fixed one: the
+	// sentence is the whole value and a set is refused as read only. Where
+	// the kernel has the limit the row is an ordinary live one.
+	Absent string
+	// ReadOnly refuses a set in the dialect's read-only words even where the
+	// value is a live read, which is the shape of a row that reports a fact
+	// about the platform rather than a limit.
+	//
+	// The pipe and socket buffer rows are the measured case: both print the
+	// kernel's own pipe buffer — 512 on macOS and 4096 on Linux — and both
+	// answer `ulimit -p 100` with `ulimit: pipe: is read only` at 1 on
+	// either kernel, so the number moves with the platform and the refusal
+	// does not. Fixed cannot say that either: it would hold one kernel's
+	// number as text.
+	//
+	// It is not what every unsettable row wants. Another column's pipe row
+	// is refused by the attempt itself — `cannot modify limit: Invalid
+	// argument`, the kernel's own word — which is what a live row already
+	// does through Runner.SetRlimit and needs nothing here.
+	ReadOnly bool
 	// Name is what a refusal calls this row where the label is not it. One
 	// shell writes `ulimit: msgqueue: is read only` for a row its table
 	// labels `message queue size (Kibytes)`, and the short name is nowhere
@@ -73,9 +107,38 @@ func (row UlimitListingRow) name() string {
 	return strings.TrimSpace(label)
 }
 
+// hasLimit is Runner.HasRlimit with its default. A caller that has not said
+// which limits this build's kernel has is taken to have them all, which is
+// what keeps a dialect's table whole for an embedder that supplied only the
+// two read and write hooks.
+func (r *Runner) hasLimit(res Resource) bool {
+	return r.HasRlimit == nil || r.HasRlimit(res)
+}
+
+// ulimitSentence is the text a row prints in place of a number, and false
+// where the row reads a limit. A row carrying Absent is each of those on one
+// kernel apiece, which is the whole of why the field exists.
+func (r *Runner) ulimitSentence(row UlimitListingRow) (string, bool) {
+	if row.Fixed != "" {
+		return row.Fixed, true
+	}
+	if row.Absent != "" && !r.hasLimit(row.Res) {
+		return row.Absent, true
+	}
+	return "", false
+}
+
+// ulimitReadOnly is the refusal a row that cannot be written answers a set
+// with, in the dialect's own words and with the row's own short name.
+func (r *Runner) ulimitReadOnly(row UlimitListingRow) int {
+	r.diagf("%s\n", Wording(r.diag().UlimitReadOnly,
+		"ulimit: %[1]s: is read only", row.name()))
+	return orDefault(r.diag().UlimitReadOnlyStatus, 1)
+}
+
 // ulimitRows is the table this shell prints here and now: the dialect's rows,
-// less the ones this kernel has no limit behind, and in the kernel's own
-// order where the dialect lists them that way.
+// less the ones this kernel has no limit behind and no sentence for, and in
+// the kernel's own order where the dialect lists them that way.
 //
 // It answers `ulimit -a` and `ulimit -X` alike, which is the measurement:
 // every column accepts exactly the letters its own table prints. bash refuses
@@ -87,6 +150,11 @@ func (r *Runner) ulimitRows() []UlimitListingRow {
 	rows := r.diag().UlimitListing
 	out := make([]UlimitListingRow, 0, len(rows))
 	if r.diag().UlimitListingInKernelOrder && len(r.RlimitOrder) > 0 {
+		// In the kernel's own order a row is placed by the number the
+		// kernel gives its limit, so a row the kernel has no number for has
+		// nowhere to go and an Absent sentence has no line to be printed
+		// on. No measured column asks for both, and the column that lists
+		// this way has no sentence rows at all.
 		byRes := make(map[Resource]UlimitListingRow, len(rows))
 		for _, row := range rows {
 			if row.Fixed == "" {
@@ -103,8 +171,9 @@ func (r *Runner) ulimitRows() []UlimitListingRow {
 	for _, row := range rows {
 		// A limit this kernel does not have is not a row that reads zero —
 		// it is a row that is not there. See Runner.HasRlimit for the
-		// three shells that were measured saying so.
-		if row.Fixed == "" && r.HasRlimit != nil && !r.HasRlimit(row.Res) {
+		// three shells that were measured saying so, and Absent for the
+		// one that keeps the row and prints a sentence instead.
+		if row.Fixed == "" && row.Absent == "" && !r.hasLimit(row.Res) {
 			continue
 		}
 		out = append(out, row)
@@ -183,8 +252,8 @@ func (r *Runner) ulimitListing(hard bool) int {
 		return r.status
 	}
 	for _, row := range r.ulimitRows() {
-		if row.Fixed != "" {
-			r.printf("%s%s\n", row.Prefix, row.Fixed)
+		if text, ok := r.ulimitSentence(row); ok {
+			r.printf("%s%s\n", row.Prefix, text)
 			continue
 		}
 		unit := row.Scale
@@ -316,18 +385,23 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 	if all {
 		return r.ulimitListing(hard)
 	}
-	if row.Fixed != "" {
-		// A row that is a sentence rather than a limit. Reading it prints
-		// the sentence; setting it is refused, and one shell's wording for
-		// that refusal is its own — `ulimit: locks: is read only` at 1,
-		// measured 2026-09-18 on ksh93u+ at every fixed row it has.
+	if text, ok := r.ulimitSentence(row); ok {
+		// A row that is a sentence rather than a limit, either always or on
+		// this kernel. Reading it prints the sentence; setting it is
+		// refused, and one shell's wording for that refusal is its own —
+		// `ulimit: locks: is read only` at 1, measured 2026-09-18 on
+		// ksh93u+ at every such row it has, on both kernels.
 		if len(args) == 0 {
-			r.printf("%s\n", row.Fixed)
+			r.printf("%s\n", text)
 			return 0
 		}
-		r.diagf("%s\n", Wording(r.diag().UlimitReadOnly,
-			"ulimit: %[1]s: is read only", row.name()))
-		return orDefault(r.diag().UlimitReadOnlyStatus, 1)
+		return r.ulimitReadOnly(row)
+	}
+	if len(args) > 0 && row.ReadOnly {
+		// And a row whose number is read from the platform and still cannot
+		// be written. The same refusal, which is why it is the same wording
+		// and not a second one.
+		return r.ulimitReadOnly(row)
 	}
 	res := row.Res
 	unit := row.Scale

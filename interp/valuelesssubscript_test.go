@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // What a declaration does with a subscripted operand that carries **no
@@ -252,6 +253,69 @@ func TestAGiveUpAtOneOperandStopsTheBuiltinThere(t *testing.T) {
 			line := out[strings.LastIndex(out, "x=["):]
 			if line != c.want {
 				t.Errorf("out %q ended %q, want %q", out, line, c.want)
+			}
+		})
+	}
+}
+
+// And the key it leaves holds **nothing**, which is a state of its own and not
+// the empty string. The two are identical everywhere a script can look and one
+// byte apart in a listing, which is the whole of the difference.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-19, `env -i PATH=/usr/bin:/bin
+// LC_ALL=C` with stdin on /dev/null, read through `sed -n l`. Rows two, three
+// and four are the controls that keep the state from spreading: an assignment
+// writes the empty string whichever side of the declaration it falls, so a
+// change that made every empty value list bare fails them.
+func TestAValuelessOperandOnATableLeavesAKeyHoldingNothing(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"declared and holding nothing", `typeset 'm[k]'`, "typeset -A m=([k]=)\n"},
+		{"assigned the empty string", `m[k]=`, "typeset -A m=([k]='')\n"},
+		{"an assignment after it is still a value", `typeset 'm[k]'; m[k]=`, "typeset -A m=([k]='')\n"},
+		{"and a declaration over a value leaves it", `m[k]=; typeset 'm[k]'`, "typeset -A m=([k]='')\n"},
+		{"one of each, side by side", `typeset 'm[k]'; m[j]=v`, "typeset -A m=([j]=v [k]=)\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			src := "typeset -A m\n" + c.src + "\ntypeset -p m"
+			out, st := valuelessSubRunWith(t, ValuelessSubscriptedOperandReadsTheSubscript,
+				func(s *Semantics) {
+					// The column that can produce the state is the one whose
+					// listing shows it, so its listing is the one asked for.
+					s.DeclareListing = DeclareListingBareAssignments
+					s.DeclareValueQuoting = ListingQuoteWhenNeededDollar
+				}, src)
+			if out != c.want || st != 0 {
+				t.Errorf("out %q (status %d), want %q at 0", out, st, c.want)
+			}
+		})
+	}
+}
+
+// Everywhere but the listing the declared key is an ordinary one, which is
+// measured rather than assumed — it is counted, named, yields a field, answers
+// the `+` form and reads back empty. A state that hid the key from any of
+// those would pass the listing rows above and be wrong.
+func TestADeclaredTableKeyIsAnOrdinaryKeyEverywhereElse(t *testing.T) {
+	const probe = `echo "n=${#m[@]} k=[${!m[@]}] v=[${m[@]}] set=[${m[k]+SET}] len=${#m[k]}"`
+	want := "n=1 k=[k] v=[] set=[SET] len=0\n"
+	for _, c := range []struct{ name, src string }{
+		{"declared", `typeset 'm[k]'`},
+		{"assigned the empty string", `m[k]=`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// Its own runner rather than valuelessSubRun's, because
+			// `${!m[@]}` needs a grammar the strict core does not offer and
+			// the keys are half of what this row is checking.
+			out, st := runGrammar(t, "typeset -A m\n"+c.src+"\n"+probe,
+				func(d *syntax.Dialect) { d.ParamIndirection = true },
+				func(r *Runner) {
+					sem := permissive()
+					valuelessSubSemantics(&sem)
+					sem.ValuelessSubscriptedOperand = ValuelessSubscriptedOperandReadsTheSubscript
+					r.Semantics = &sem
+				})
+			if out != want || st != 0 {
+				t.Errorf("out %q (status %d), want %q at 0", out, st, want)
 			}
 		})
 	}

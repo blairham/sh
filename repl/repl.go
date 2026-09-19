@@ -559,6 +559,11 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			return s.status(), nil
 		}
 		line, err := ed.readLine(drawn)
+		// A seed belongs to the read it was set for and to no later one: the
+		// next prompt after a verified line is an empty one whichever way
+		// this read ended, ^C included. Cleared here rather than on each way
+		// out below, because there are five of them.
+		ed.lineStart = lineStart{}
 		switch {
 		case errors.Is(err, ErrInterrupted):
 			// ^C abandons whatever was half-typed, including the earlier
@@ -595,14 +600,25 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// the second line of a `for` loop is expanded when that line is read
 		// — and before the parser, because the expansion decides what the
 		// parser is given (#3093).
-		if expanded, ok := s.expanded(line, ed.history, ed.remember); !ok {
+		expanded, outcome := s.expanded(line, ed.history, ed.remember)
+		switch outcome {
+		case dropLine:
 			// A reference nothing matched, or a `:p` that asked to see the
 			// expansion and run nothing. Either way the construct in hand is
 			// abandoned the way ^C abandons it: measured, bash draws a fresh
 			// prompt rather than a continuation one.
 			pending.Reset()
 			continue
-		} else {
+		case verifyLine:
+			// `shopt histverify`: the expansion is drawn back on the editing
+			// line and the person decides. The construct in hand is **kept**
+			// — measured, a `!!` verified inside a half-typed `for` loop is
+			// redrawn at `> ` and the loop goes on — so nothing is reset, and
+			// the end-of-input key keeps a prompt's meaning rather than a
+			// command's, so `^U` then `^D` still ends the session.
+			ed.lineStart = lineStart{seeded: true, text: expanded, endOnEndOfInput: true}
+			continue
+		case runLine:
 			line = expanded
 		}
 		// Counted here rather than per line read. A construct typed over

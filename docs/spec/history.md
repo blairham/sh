@@ -850,11 +850,56 @@ was taken 2026-09-18: **zsh 5.9.2 has the form** (`!{x}` is the event `x`) and
 the name). So it is a dialect's construct rather than the engine's, and the
 answer is Semantics.HistoryBracedEventReference rather than a deletion.
 
-**Not implemented: `shopt histverify`**, which puts the expansion back on the
-editing line instead of running it. It is the one remaining piece and it is a
-*line editor's* feature rather than a reader's: nothing about the expansion
-changes, only what is done with the result, and the seam it needs is the one
-that puts text into the editing buffer.
+### Verifying an expansion before it runs
+
+`shopt histverify` in bash and `setopt HIST_VERIFY` in zsh put the expansion
+back on the **editing line** instead of running it, with the cursor at its
+end. Both are off by default. Nothing about the expansion changes — the same
+reference against the same list gives the same text — and only what is done
+with the result moves, which is why it is a *line editor's* option rather than
+a reader's and why it has no meaning on the script route.
+
+Measured 2026-09-19 through a pseudo-terminal against bash 5.3.20 run
+`--norc --noprofile -i`, and the same rows against zsh 5.9.2 under `-f`, with
+`echo AAA` already in the list:
+
+| typed | what happens |
+| --- | --- |
+| `!!` | a prompt reading `echo AAA`, cursor at its end, nothing run |
+| ` BBB` then Return | `AAA BBB` — the text was editable and typing appended |
+| the list afterwards | `echo AAA`, `echo AAA BBB`; no entry for the verification |
+| `!!` then `^C` | nothing runs and the list gains nothing at all |
+| a line the expansion did not change | runs, with no echo and no second look |
+| a reference nothing matched | the same complaint, and the same dropped line |
+| `!!:p` | still printed, still recorded, still not seeded |
+
+Four of those are worth saying out loud because each is a thing a plausible
+implementation gets wrong.
+
+**The echo is replaced rather than added to.** With the option off the
+expanded line is written to standard error before it runs, because there is
+otherwise no way to see what is about to happen; with it on the person is
+looking at the text on their own line and bash writes nothing.
+
+**Nothing is recorded by the verification itself.** The list holds what was
+**accepted**, once. An abandoned verification leaves it exactly as it was, and
+an accepted one is recorded by the ordinary accept — so this is not `:p`,
+which records the expansion precisely because nothing else will.
+
+**The construct in hand is kept.** A reference nothing matched abandons a
+half-typed construct the way `^C` does; a verified line does not. Measured,
+`for i in 1` then `do !!` is redrawn at the **continuation** prompt with the
+whole physical line expanded, and `done` after it closes a loop that runs.
+
+**The accepted line is expanded again**, because it is an ordinary line: with
+`echo AAA` in the list, `!!` seeds `echo AAA`, and typing ` !!` on the end and
+pressing Return seeds `echo AAA echo AAA` rather than running it.
+
+`shopt histreedit` is the neighboring option and is the same seam from the
+failure side: measured on the same binary, a reference nothing matched is put
+back on the line **as typed** (`!nosuch`) for repair, where without it the
+line is dropped. It is independent of `histverify` — either turns it on — and
+is not implemented here; see #3203 for why it was separated.
 
 **One divergence, deliberately not modeled.** A reference recalling a command
 that holds a here-document — `cat <<EOD` / `body` / `EOD` and then `echo !!` —

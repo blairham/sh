@@ -1792,6 +1792,12 @@ type Runner struct {
 	// the whole reason: the file runs before the session's first prompt, and
 	// a default applied afterwards would put back the thing it turned off.
 	histExpandMoved bool
+	// histVerify is whether an expansion that changed the line goes back on
+	// the editing line instead of running — bash's `shopt histverify` and
+	// zsh's `HIST_VERIFY`. Off in both, and it changes nothing about the
+	// expansion itself: the same call gives the same answer and only what is
+	// done with it moves. See HistoryExpansionVerifies.
+	histVerify bool
 	// histMemory is the last substitution and search history expansion made,
 	// which the next line's `:&` and `%` read. See histexpand.Memory.
 	histMemory *histexpand.Memory

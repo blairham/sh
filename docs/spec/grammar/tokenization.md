@@ -593,12 +593,31 @@ An unquoted here-document body stops nothing, in every dialect: a body holding
 the same exemption ksh93's `${ }` refusal has, and for the same reason — the
 body's continuations are gone before an expansion in it is scanned.
 
-One shape is measured and deliberately not modeled. Outside quotes ksh93
-takes its own stop away when a **pattern character stands earlier in the same
-word**: `[$\⏎x]`, `{$\⏎x`, `*$\⏎x` and `?$\⏎x` all expand there while `a$\⏎x`
-and `!$\⏎x` do not. Reading that would make the `$` depend on glob characters
-already passed, which is a question about the word rather than about this
-delimiter (#3523).
+Outside quotes ksh93 **takes its own stop away when a pattern character
+stands earlier in the same word**, which is
+`Dialect.PatternCharacterUndoesTheContinuationStop` and was recorded here as
+unmodeled until #3523. The set is five characters and was measured one at a
+time, 2026-09-18, with the word written as a `printf` operand:
+
+| prefix | ksh93u+ | prefix | ksh93u+ |
+| --- | --- | --- | --- |
+| `a` | `<a$x>` | `[` | `<[5>` |
+| `!` | `<!$x>` | `{` | `<{5>` |
+| `}` | `<}$x>` | `*` | `<*5>` |
+| `]` | `<]$x>` | `?` | `<?5>` |
+| `'*'` | `<*$x>` | `~` | `<~5>` |
+| `"*"` | `<*$x>` | `a[b]` | `<a[b]5>` |
+| `\*` | `<*$x>` | | |
+
+The three quoted spellings are what make it a question about *unquoted*
+pattern characters, and the closing `}` and `]` are what make the set five
+characters rather than "the punctuation" — `~` is in it and is no glob
+metacharacter at all. Whether the rule is about globbing or about that shell
+taking a second pass over a word it has marked as a pattern is not decidable
+from outside, and the field records what was seen. The other four columns have
+no stop for it to take away, so there is no panel split here: this is one
+shell against our reading of it. `echo [$\⏎x]` printing `[5]` is this, and it
+is the shape a reader is most likely to write.
 
 Two further shapes are at a construct's delimiters rather than in front of
 them, and they are the next two sections: the pair standing *between* the two

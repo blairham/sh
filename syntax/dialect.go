@@ -2397,6 +2397,62 @@ type Dialect struct {
 	// measured and left (#3069).
 	ArithCommandScanIgnoresQuoting bool
 
+	// ArithSubstScanIgnoresQuoting is the same question at the `$((`
+	// fallback: whether the scan that decides between arithmetic and a
+	// command substitution holding a subshell sees a `)` written inside
+	// quotes.
+	//
+	// Measured 2026-09-17 and again 2026-09-18, each probe in a script file
+	// of its own under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	probe                   bash 5.3, 3.2, as sh  zsh 5.9.2        ksh93u+
+	//	echo $(( '0)' + 1 ))    arithmetic error, 1   `0)` not found   the same
+	//	echo $(( "0)" + 1 ))    arithmetic error, 1   `0)` not found   the same
+	//
+	// So the three bash columns track quoting in the deciding scan and the
+	// other two do not — the same split ArithCommandScanIgnoresQuoting
+	// records for `((`, at the other construct.
+	//
+	// **Two fields and not one**, for the reason #3069 gives: the two scans
+	// were measured separately and a single flag would assert that they can
+	// never part. They agree today; that is a measurement rather than a
+	// guarantee.
+	//
+	// Meaningless where ArithSubstFallsBackToCommandSubst is off, which is
+	// dash and BusyBox ash — neither has the fallback reading at all (#3530).
+	ArithSubstScanIgnoresQuoting bool
+
+	// PatternCharacterUndoesTheContinuationStop takes away the stop
+	// [Dialect.ContinuationStopsADollarAt] puts on a `$` where an unquoted
+	// `*`, `?`, `[`, `{` or `~` stands earlier in the same word.
+	//
+	// One column has a stop at all and this is that column's exception to it.
+	// Measured 2026-09-16 and again 2026-09-18 on ksh93u+ 2012-08-01, `x=5`,
+	// each probe a script file of its own; the word is `<prefix>$\⏎x`, written
+	// as the operand of a `printf` whose format wraps it in angle brackets:
+	//
+	//	prefix   ksh93u+     prefix   ksh93u+
+	//	a        `<a$x>`     [        `<[5>`
+	//	!        `<!$x>`     {        `<{5>`
+	//	}        `<}$x>`     *        `<*5>`
+	//	]        `<]$x>`     ?        `<?5>`
+	//	'*'      `<*$x>`     ~        `<~5>`
+	//	"*"      `<*$x>`     a[b]     `<a[b]5>`
+	//	\*       `<*$x>`
+	//
+	// So the left column keeps the stop and the right loses it, and the three
+	// quoted spellings are what say the character has to be unquoted. The
+	// list is neither the glob metacharacters nor the expansion characters:
+	// `~` is in it and the closing `}` and `]` are not.
+	//
+	// Whether the rule is about globbing or about that shell taking a second
+	// pass over a word it has marked as a pattern is not decidable from
+	// outside, and the field says what was seen rather than which of those it
+	// is. The other four columns have no stop for it to take away, so there
+	// is no panel split here — this is one shell against our reading of it
+	// (#3523).
+	PatternCharacterUndoesTheContinuationStop bool
+
 	// FunctionKeyword enables `function name { ... }`. Absent from dash,
 	// present in bash, ksh93 and zsh.
 	FunctionKeyword bool

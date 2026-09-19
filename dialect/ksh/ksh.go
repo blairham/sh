@@ -347,6 +347,15 @@ func Dialect() syntax.Dialect {
 	// shell resumes after giving the reading up rather than about the scan.
 	// See the flag for the five rows.
 	d.ArithCommandScanIgnoresQuoting = true
+	// And the same at the `$((` fallback, which is a second field because
+	// the two scans were measured separately: `echo $(( '0)' + 1 ))` runs a
+	// command named `0)` here where the bash columns refuse the expression
+	// (#3530).
+	d.ArithSubstScanIgnoresQuoting = true
+	// And a pattern character earlier in the word takes away the stop a
+	// continuation behind a `$` puts on it: `echo [$\⏎x]` is `[5]` here,
+	// which is the shape a reader is most likely to write (#3523).
+	d.PatternCharacterUndoesTheContinuationStop = true
 	// A `name=( … )` operand keeps the array reading through *quoting* of the
 	// command word here: `'typeset' a=(x y)`, `\typeset a=(x y)` and
 	// `type"set" a=(x y)` all set the array, where bash 5.3 refuses each as a
@@ -4275,6 +4284,11 @@ func Apply(r *interp.Runner) {
 	// function's result. An embedder who applies this dialect to a Runner of
 	// their own never builds a Shell, and is the caller this is for.
 	r.SetPromptStyle(PromptStyle())
+	// And what this shell will call a reserved word, which is its grammar
+	// less `]]` — see kshReserves, where the measurement is. The report is a
+	// question of its own here, as it is in zsh: the construct parses and
+	// the closing word is not a name the shell owns up to (#2981).
+	r.SetReservedWords(kshReserves(Dialect()))
 	// What the last `=~` matched, under this shell's name for it. The
 	// captures are the only way to read what an ERE matched here — there is
 	// no second spelling — so without this the operator's whole point was

@@ -628,6 +628,11 @@ func Dialect() syntax.Dialect {
 	// a backslash and a command substitution are stepped over in every column
 	// and are not this. See the flag for the five rows.
 	d.ArithCommandScanIgnoresQuoting = true
+	// And the same at the `$((` fallback, which is a second field because
+	// the two scans were measured separately: `echo $(( '0)' + 1 ))` runs a
+	// command named `0)` here where the bash columns refuse the expression
+	// (#3530).
+	d.ArithSubstScanIgnoresQuoting = true
 	// A run of digits after an unbraced `$` is one positional parameter here.
 	// Measured 2026-09-15 with `set -- 1 2 3 4 5 6 7 8 9 ten eleven`: `$10` is
 	// `ten` and `$11` is `eleven` in this shell, where bash 5.3, bash 3.2,

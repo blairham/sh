@@ -1602,14 +1602,28 @@ to it adds no conditional anywhere.
 The type tests `.`, `/`, `@`, `p` and `%`, the nine permission letters,
 `s`, `S` and `t` for the bits outside the permission triples, `f` and its
 mode argument, `u`, `g`, `U` and `G` for ownership, `l` and its numeric
-argument for the link count, the `-` that follows a link before testing,
-the `^` that turns any of them, the `,` that unions them, `N` and `D`,
-and the `:` that opens a modifier list.
+argument for the link count, the three file times `m`, `a` and `c` with
+their unit letter and signed number, the `-` that follows a link before
+testing, the `^` that turns any of them, the `,` that unions them, `N`
+and `D`, and the `:` that opens a modifier list.
+
+The three times are one qualifier with three clocks behind it, and they
+were one letter until #3533: `m` reads the modification time, `a` the
+access time and `c` the inode change time, and the unit letter, the sign
+and the number are read the same way for each. `[.x.]`-shaped refusals
+aside, the letter and the operand are two complaints — measured
+2026-09-18 on zsh 5.9.2, `zz*(a)` with no number behind it is `number
+expected` where an unimplemented letter is `unknown file attribute: a`,
+so a column that had neither said the wrong thing about which half was
+wrong. `fs.FileInfo` carries only the modification time, so the other two
+are read from the platform's own stat fields, which are spelled
+differently on each — a per-GOOS file beside the qualifiers, the shape the
+signal table already takes.
 
 Everything else in that language — `=` for a socket, the `%b` and `%c`
 spellings that separate the two kinds of device, `e` and `+` for a
 command's verdict, `d` for a device, `o`, `O`, `Y` and `[n,m]` for
-ordering and counting, `a`, `m` and `c` for times, `L` for a size, and
+ordering and counting, `L` for a size, and
 the `(#q…)` form that needs `extended_glob` — is refused by name with the
 shell's own wording rather than answered wrong. `*(L+1)` here is
 `unknown file attribute: L`, where the shell would list the names above
@@ -2915,7 +2929,32 @@ that finds no element, a `-` behind such a sub-expression makes a range whose
 low bound is the `[` that opened it: `[[.a.]-c]` is the run from `[` to `c`
 there and `[[.a.]-_]` is `[ \ ] ^ _`, while `[[.a.]q]` matches no `[` at all,
 so the character is a bound and never a member. Every other column answers the
-same pattern with an empty bracket and this one follows them. The wider
-question — what a range bound that is not an element does anywhere — is
-#3607, and it is already wrong in the other columns for reasons that predate
-this reading.
+same pattern with an empty bracket and this one follows them.
+
+**A bound that is not an element is the unknown body it is**, which is #3607
+and needed no axis of its own: a body that is not an element asks
+`Semantics.UnknownCharacterClass`, and it asks it at a range's end as much as
+anywhere else. Measured 2026-09-18 under `LC_ALL=C`:
+
+| pattern | subject | bash 5.3.20 | ksh93u+ | dash 0.5.12 |
+| --- | --- | --- | --- | --- |
+| `[[.nosuch.]-c]` | `c` | n | n | n |
+| `[[.nosuch.]-c]` | `-` | n | n | n |
+| `[a-[.nosuch.]]` | `b` | Y | n | n |
+| `[a-[.nosuch.]]` | `~` | Y | n | n |
+| `[a-[.nosuch.]]` | `-` | n | n | n |
+
+Two different wrongs were live and in opposite directions. At the **low** end
+the unread element left the scan before the `-` was looked at, so
+`[[.nosuch.]-c]` was the two ordinary members `-` and `c` — matched here and
+by none of the three shells. At the **high** end the range was built with an
+upper bound that had come back empty, so the bracket held every character
+above its low end in all three columns, where two of them hold nothing at all.
+
+Under the inert reading the sub-expression contributes nothing and the range
+stands with the nothing it holds: an empty low bound ranks above every
+character in the set, so the range is empty, and an empty high bound leaves
+the range open above its low end. That is bash's answer, row for row,
+including the characters past ASCII — and the readings that end the scan or
+empty the bracket reach the bracket's own answer instead, which is ksh93's and
+dash's *nothing at all*, `a` included.

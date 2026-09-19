@@ -312,3 +312,58 @@ func TestACollatingElementMayBeWrittenAsAName(t *testing.T) {
 		}
 	}
 }
+
+// TestABoundThatIsNotAnElementMakesNoRange: a `[.x.]` or `[=x=]` whose body is
+// not an element leaves no member, and where such a sub-expression stands at
+// one end of a range the matcher must not build a range out of it anyway
+// (#3607).
+//
+// The two ends are two different wrongs and both were live. At the low end the
+// unread element left the loop before the `-` was looked at, so `[[.nosuch.]-c]`
+// was the two ordinary members `-` and `c` — matched by every column here and
+// by none of the shells this was measured against. At the high end the range
+// was built with an upper bound that had come back empty, so the bracket held
+// every character above its low end under readings whose answer is that it
+// holds nothing at all.
+//
+// The axis that decides is UnknownCharacterClass, which is already this
+// question one construct over: a body that is not an element is the unknown
+// body a `[:name:]` with no such name is. So there is no new axis here, and
+// the three readings are asserted through it.
+//
+// Under the inert reading the sub-expression contributes nothing and the range
+// stands with the nothing it holds: a low bound that is empty ranks above
+// every character in the set, so the range is empty, and a high bound that is
+// empty leaves the range open above its low end. Measured 2026-09-18 in the C
+// locale against a shell whose reading is inert, over `a b c d z - . ~` and
+// four characters past ASCII.
+func TestABoundThatIsNotAnElementMakesNoRange(t *testing.T) {
+	for _, tc := range []struct {
+		pattern, subject string
+		inert            bool
+	}{
+		// The low bound: nothing matches under any reading.
+		{"[[.nosuch.]-c]", "a", false},
+		{"[[.nosuch.]-c]", "c", false},
+		{"[[.nosuch.]-c]", "-", false},
+		{"[[.nosuch.]-c]", "z", false},
+		// The high bound: the range is open above its low end where the
+		// reading is inert, and the bracket holds nothing where it is not.
+		{"[a-[.nosuch.]]", "a", true},
+		{"[a-[.nosuch.]]", "b", true},
+		{"[a-[.nosuch.]]", "z", true},
+		{"[a-[.nosuch.]]", "~", true},
+		{"[a-[.nosuch.]]", "-", false},
+		{"[a-[.nosuch.]]", "]", false},
+	} {
+		if got := collates(t, ACollatingElementMayBeNamed, UnknownClassIsInert, tc.pattern, tc.subject); got != tc.inert {
+			t.Errorf("inert: %s vs %q = %v, want %v", tc.pattern, tc.subject, got, tc.inert)
+		}
+		for _, unknown := range []UnknownClassPolicy{UnknownClassEndsTheScan, UnknownClassEmptiesTheBracket} {
+			if got := collates(t, OneCharacterIsACollatingElement, unknown, tc.pattern, tc.subject); got {
+				t.Errorf("%v: %s vs %q matched, want nothing — the bracket holds nothing under this reading",
+					unknown, tc.pattern, tc.subject)
+			}
+		}
+	}
+}

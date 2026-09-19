@@ -2146,6 +2146,11 @@ func Semantics() interp.Semantics {
 	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.No
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes
+	// `[ ( -n x ) ]` is 0 here (#3419).
+	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	// unanswered LocalThroughCommandDeclaresNothing: `command local a=1` is
+	// `command not found: local` at 127 in this shell, so the declaration
+	// this axis is about never happens and there is nothing to measure.
 	s.UnterminatedBracket = interp.BracketBadPattern
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: not a pattern, the same as a bare `[`.

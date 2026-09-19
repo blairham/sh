@@ -78,8 +78,8 @@ ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
 ash   CompoundRedirectionFailureIsJudged
-ash   CoprocEndsInAnArray
 ash   ConditionWholeArraySubscript
+ash   CoprocEndsInAnArray
 ash   DebugTrapRefiresOnEnteringAFunction
 ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
@@ -235,6 +235,7 @@ ash   ValuelessSubscriptedOperand
 ash   WholeArraySubscriptAssigningATable
 ash   WholeArraySubscriptAssigningAnArray
 ash   WritingSubstitutionIsWaitedForAtTheCommand
+
 bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
@@ -266,6 +267,7 @@ bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
 bash  SubscriptedPrefixIsTakenBack
+
 dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
@@ -321,8 +323,8 @@ dash  ChainedSubscriptReadsANestedValue
 dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute
 dash  CompoundPipelineStatusRecord
-dash  CoprocEndsInAnArray
 dash  ConditionWholeArraySubscript
+dash  CoprocEndsInAnArray
 dash  DebugTrapRefiresOnEnteringAFunction
 dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls
@@ -419,13 +421,13 @@ dash  OneCommandStopsACommandString
 dash  OperandSubscriptQuoting
 dash  OperatorAfterTheSubscriptListingIsBad
 dash  PipefailSubstitutesTheBareSignal
+dash  PrefixInAWholeTableListing
 dash  PrefixListingNamesADeclaredOnlyCompound
 dash  PrefixRefusalCostsTheCommand
 dash  PrefixToAKeywordFunctionIsScopedToTheCall
 dash  PrintfFloatOperandIsEvaluatedTwice
 dash  PrintfOutputPrecedesComplaint
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
-dash  PrefixInAWholeTableListing
 dash  PrintfReportsAMissingHexDigit
 dash  ProducedParameterListing
 dash  QuitResetRestoresTheDefault
@@ -504,6 +506,7 @@ dash  ValuelessSubscriptedOperand
 dash  WholeArraySubscriptAssigningATable
 dash  WholeArraySubscriptAssigningAnArray
 dash  WritingSubstitutionIsWaitedForAtTheCommand
+
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
@@ -519,6 +522,7 @@ ksh   InteractiveStartupFileWhenLogin
 ksh   JobsStateFiltersAccumulate
 ksh   LocalDashSavesTheShellOptions
 ksh   LocalOutsideAFunctionIsFatal
+ksh   LocalThroughCommandDeclaresNothing
 ksh   LongOptionNameIgnoresHyphens
 ksh   NegatedTestRecordsThePostNegationStatus
 ksh   PrintfReportsAMissingHexDigit
@@ -533,6 +537,7 @@ ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
 ksh   UmaskPermissionCopyBesideLetters
 ksh   UnsetEndsTheProducedPipelineStatus
+
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
 zsh   DeclarationThroughAReferenceNamesTheOperand
@@ -546,6 +551,7 @@ zsh   IndirectionYieldsName
 zsh   JobsListsWhatChangedSinceTheLastReport
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
+zsh   LocalThroughCommandDeclaresNothing
 zsh   LongOptionValueIsANumber
 zsh   NamerefArrayRefusal
 zsh   NamerefCycleIsRefused

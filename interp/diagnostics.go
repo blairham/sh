@@ -530,6 +530,17 @@ type Diagnostics struct {
 	// Empty leaves the two words to the unary reading, which is what the
 	// other four columns give (#2917, #3550).
 	TestTrailingBinaryOperandExpected string
+
+	// TestClosingParenExpected is a group the reading never closed. No
+	// verbs: the sentence names nothing.
+	//
+	// Written for the shape Semantics.TestGroupedUnaryAloneLosesTheClosingParen
+	// is about, which is where the two columns that have the sentence differ
+	// from the rest of the panel. Measured 2026-09-18 on BusyBox v1.37.0:
+	// `[ ( -n x ) ]` is a bare `closing paren expected` at 2, carrying the
+	// shell and the line the way that column's other `test` refusals do and
+	// naming neither the builtin nor a word.
+	TestClosingParenExpected string
 	// ProcessSubstitutionNotInCondition is a `<(cmd)` standing as a
 	// condition's operand in a dialect that does not allow one there. One
 	// verb: the substitution as it was written, `<(cmd)` and not its inside.

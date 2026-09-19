@@ -255,13 +255,30 @@ func Semantics() interp.Semantics {
 	// to it. That prediction is the one #497 was filed on and is the one it
 	// refuted.
 	s.BracketCaretNegates = interp.Yes
-	// An unterminated bracket in a pattern matches nothing rather than being
-	// read as a literal: `case a in [a) echo one;; *) echo def;; esac`
-	// reaches the default arm.
-	s.UnterminatedBracket = interp.BracketNoMatch
+	// An unterminated bracket in a pattern is an ordinary character, which is
+	// bash's and ksh93's answer and not the sibling's: `case [ in [) echo
+	// one;; *) echo def;; esac` reaches the first arm here and the default
+	// one in dash. Measured 2026-09-18 on BusyBox v1.37.0 in the pinned
+	// image, quoted and unquoted and through a parameter alike, and it
+	// reaches `[[ ]]` too, which is this shell's `test` (#3420). The value
+	// this replaces was dash's, inherited and never measured.
+	// `[ ( -n x ) ]` is `closing paren expected` at 2 here, where every other
+	// column reads the group and answers 0 — see the axis for the eleven
+	// rows, which say it is the group standing alone and not grouping in
+	// general (#3419).
+	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.Yes
+	// And `command local a=1` declares nothing at all, which is the sibling's
+	// answer too (#3370).
+	s.LocalThroughCommandDeclaresNothing = interp.Yes
+	s.UnterminatedBracket = interp.BracketLiteral
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
-	// inside it is what left it open: unmeasured — no BusyBox was reachable; this keeps the answer the shell already gave, which is dash's (#3379).
-	s.UnterminatedBracketAfterASubExpression = interp.BracketNoMatch
+	// inside it is what left it open: the same literal reading again, which
+	// is bash's and where ksh93 leaves. Measured the same day with the
+	// prefix trim the axis is written on — `w=[a; ${w#[[:alpha:]}` is empty
+	// here, so the `[` matched itself and `[:alpha:]` matched the `a` as an
+	// ordinary set. That closes the gap #3379 left open, where no BusyBox
+	// was reachable and this kept dash's answer.
+	s.UnterminatedBracketAfterASubExpression = interp.BracketLiteral
 	// But inside a bracket expression it escapes nothing at all: the
 	// backslash is an ordinary member of the set and the character behind it
 	// keeps whatever meaning it has there. `case 'a]c' in a[\]]c)` reaches
@@ -2341,6 +2358,12 @@ func Diagnostics() interp.Diagnostics {
 		// parse took (#3550).
 		TestTooManyArguments: "%[1]s: unknown operand",
 		TestOperandExpected:  "argument expected",
+		// A group this shell's reading never closed, which it reaches where
+		// nothing else in the panel does — see
+		// interp.Semantics.TestGroupedUnaryAloneLosesTheClosingParen. Named
+		// after nothing, like the sentence above it: `[ ( -n x ) ]` is a
+		// bare `closing paren expected` at 2 (#3419).
+		TestClosingParenExpected: "closing paren expected",
 		// And the same sentence with the operator named, which is the other
 		// half of that parse: a binary operator this shell has, standing in
 		// the trailing position, is missing its right operand rather than

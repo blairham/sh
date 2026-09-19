@@ -223,6 +223,10 @@ const (
 	errIncorrectSyntax
 	// errIntegerExpected is a non-numeric operand to a numeric comparison.
 	errIntegerExpected
+	// errClosingParenExpected is a group the reading never closed. One
+	// column reaches it where no other does — see
+	// Semantics.TestGroupedUnaryAloneLosesTheClosingParen.
+	errClosingParenExpected
 	// errArithmeticOperand is an operand of a numeric comparison that would
 	// not read as an arithmetic expression, in a dialect that reads one that
 	// way. The operand field carries the whole worded math complaint rather
@@ -251,6 +255,8 @@ func (e *testError) fallback() string {
 		return "%[2]s: %[1]s"
 	case errBinaryExpected:
 		return "%[2]s: %[1]s: binary operator expected"
+	case errClosingParenExpected:
+		return "%[2]s: closing paren expected"
 	}
 	return "%[2]s: %[1]s: unary operator expected"
 }
@@ -273,8 +279,37 @@ func (e *testError) format(d Diagnostics) string {
 		return ""
 	case errBinaryExpected:
 		return d.TestBinaryExpected
+	case errClosingParenExpected:
+		return d.TestClosingParenExpected
 	}
 	return d.TestUnaryExpected
+}
+
+// groupedUnaryAlone is the shape
+// [Semantics.TestGroupedUnaryAloneLosesTheClosingParen] refuses: a group
+// holding a unary operator and nothing but its operand, standing as the whole
+// expression behind any number of leading `!`s.
+//
+// Three words or four and no more, which is measured rather than tidy. One
+// word further and the shell reads the expression again: `[ ( -n x -a y ) ]`
+// is 0 there, where `[ ( -n x ) ]` and `[ ( -n ) ]` are both the refusal. The
+// same group inside a longer expression is read as well — `[ ( -n x ) -a x ]`
+// is 0 — which is why the whole list is what this looks at.
+//
+// The axis is asked only once the shape is found, so no other dialect is
+// asked a question its own `test` never poses.
+func (r *Runner) groupedUnaryAlone(args []string) bool {
+	for len(args) > 0 && args[0] == "!" {
+		args = args[1:]
+	}
+	if len(args) != 3 && len(args) != 4 {
+		return false
+	}
+	if args[0] != "(" || args[len(args)-1] != ")" || !r.isTestUnary(args[1]) {
+		return false
+	}
+	return r.ask(r.sem().TestGroupedUnaryAloneLosesTheClosingParen,
+		"`[ ( -n x ) ]` refused as a group that never closed")
 }
 
 // bareTerminalTest is whether a lone `-t` is `-t 1` rather than a non-empty
@@ -312,6 +347,14 @@ func (r *Runner) testExpr(form testForm, args []string) (bool, error) {
 		// every dialect, and the question it answers is settled for the core
 		// in the preset.
 		return r.frontExpr(form, args)
+	}
+	if r.groupedUnaryAlone(args) {
+		// A group whose first word is a unary operator, standing as the
+		// whole expression, in the one column that cannot close it. Before
+		// the counts because it is both a four-word shape and a three-word
+		// one, and behind neither: `[ ( -n ) ]` is the same refusal as
+		// `[ ( -n x ) ]`.
+		return false, &testError{kind: errClosingParenExpected}
 	}
 	switch len(args) {
 	case 0:

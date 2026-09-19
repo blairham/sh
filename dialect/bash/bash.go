@@ -1515,6 +1515,11 @@ func Semantics() interp.Semantics {
 	// one writes one, and an element that is not the last does not fire at
 	// all.
 	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.Yes
+	// `[ ( -n x ) ]` is 0: the group is read like any other (#3419).
+	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	// And `command local a=1` declares the local, which is what makes the
+	// two shells that drop it a split rather than a rule (#3370).
+	s.LocalThroughCommandDeclaresNothing = interp.No
 	s.UnterminatedBracket = interp.BracketLiteral
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: a literal `[`, and the rest of the pattern behind it — `[[:alpha:]` takes `[` plus one of `:alpha`'s five characters, which is the same reading the axis above gives a bare `[`.

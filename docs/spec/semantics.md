@@ -25777,6 +25777,42 @@ value is stored, so `s=5 kf` fires nothing in the column that scopes the
 prefix: the store lands in a cell the call just made and nothing was
 watching it (#3161).
 
+### Two prefixes over one name, and which take-back runs
+
+A call's prefix and an inner command's prefix can stand over the same
+name at once, and where the inner one **persists**, the value is the
+shell's and the call's take-back does not run over it. Measured
+2026-09-18 on bash 5.3.20 under `set -o posix`, which is where that
+column's prefix in front of a special builtin persists:
+
+    f(){ e=3 readonly e; }; e=7 f     [3]
+    f(){ m=3 :; };         m=7 f      [3]
+    inner(){ n=3 readonly n; }
+    outer(){ n=7 inner; … }; n=9 outer  [3] inside outer and [3] at the top
+
+The second row is what names the mechanism, and it is not the one #3447
+named: **no declaration is written in it at all**, so what survives the
+call is the persistence itself rather than the declaration keeping its
+own prefix entry (*A declaration inside a prefixed command*, above). The
+third says every enclosing call gives the name up rather than the nearest
+one — both levels read 3 afterwards, so a drop that stopped at the
+innermost frame would put 9 back at the top.
+
+The controls are what keep this from reading as "a write wins": with the
+same enclosing prefix, a plain `v=3`, an `export w=3`, a `readonly x=3`
+and a `y=3 export y` all leave the name **unset** after the call, in
+`posix` mode and out of it. A prefix that does not persist is given back
+exactly as it always was, and so is every ordinary assignment.
+
+Core rather than an axis: it is a consequence of two answers already
+given — this prefix persists, that call's prefix does not — and no column
+answers the pair differently from the way its own two answers compose.
+The frames are `Runner.callPrefixes`, the same ones an `unset` reaches
+into, and the difference between the two is that `unset` replays what
+the frame displaced and this drops it: there the name is meant to
+disappear, here it is meant to stand at what the inner prefix left in it
+(#3447).
+
 ## The `n` letter beside another one
 
 A declaration may write the reference letter next to an ordinary

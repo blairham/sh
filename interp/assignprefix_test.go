@@ -457,3 +457,53 @@ echo "[$x]"`
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A prefix the shell **keeps** is not an enclosing call's to give back.
+//
+// Two prefixes stand over one name at once — the call's and the inner
+// command's — and where the inner one persists, the name is the shell's
+// afterwards. The call's take-back used to run over it and hand the name back
+// what it held before the call, so a value the shell had just kept was gone
+// one return later (#3447).
+//
+// The rows are measured in the dialect that answers Yes to both halves; see
+// Runner.callPrefixesLetTheNameGo for the panel and for the controls.
+func TestAKeptPrefixLeavesTheEnclosingCallsFrames(t *testing.T) {
+	keeping := func() Semantics {
+		sem := permissive()
+		sem.AssignmentPrefixPersistsOnSpecialBuiltin = Yes
+		// And the *call's* own prefix is taken back, which is the half that
+		// makes the rows about one prefix outranking another rather than
+		// about nothing being taken back at all.
+		sem.AssignmentPrefixPersistsAfterAFunction = No
+		return sem
+	}
+	t.Run("the call gives the name up", func(t *testing.T) {
+		got := prefixAssignRun(t, `f(){ m=3 :; }; m=7 f; echo "[${m-U}]"`, keeping())
+		if want := "[3]\n"; got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+	t.Run("every enclosing call gives it up", func(t *testing.T) {
+		got := prefixAssignRun(t, `inner(){ n=3 :; }
+outer(){ n=7 inner; echo "[${n-U}]"; }
+n=9 outer; echo "[${n-U}]"`, keeping())
+		if want := "[3]\n[3]\n"; got != want {
+			t.Errorf("got %q, want %q — a drop that stopped at the nearest frame puts 9 back", got, want)
+		}
+	})
+	t.Run("a prefix that does not persist is still given back", func(t *testing.T) {
+		sem := keeping()
+		sem.AssignmentPrefixPersistsOnSpecialBuiltin = No
+		got := prefixAssignRun(t, `f(){ m=3 :; }; m=7 f; echo "[${m-U}]"`, sem)
+		if want := "[U]\n"; got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+	t.Run("an ordinary write inside the call is still given back", func(t *testing.T) {
+		got := prefixAssignRun(t, `f(){ v=3; }; v=7 f; echo "[${v-U}]"`, keeping())
+		if want := "[U]\n"; got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+}

@@ -211,3 +211,56 @@ func (r *Runner) exportTheArrayOfAnElement(base string, on bool) {
 		r.declarationExports(base, on)
 	}
 }
+
+// callPrefixesLetTheNameGo is what a prefix the shell **keeps** does to the
+// frames an enclosing call's prefix is holding: the name leaves every one of
+// them, and what they had displaced is not given back.
+//
+// Two prefixes are live over one name at once, and the inner one has just
+// become the shell's. Without this the outer one's take-back runs over it on
+// the way out and the name comes back to whatever it was before the call —
+// which is the whole of #3447.
+//
+// Measured 2026-09-18 on bash 5.3.20, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+// with a scratch HOME, from a script file, under `set -o posix` so that a
+// prefix in front of a special builtin persists:
+//
+//	f(){ e=3 readonly e; }; e=7 f; echo "[${e-U}]"        [3]
+//	f(){ m=3 :; };         m=7 f; echo "[${m-U}]"         [3]
+//	inner(){ n=3 readonly n; }
+//	outer(){ n=7 inner; echo "[${n-U}]"; }
+//	n=9 outer; echo "[${n-U}]"                            [3] and [3]
+//
+// The second row is the one that says which mechanism this is: **no
+// declaration is written at all**, so it is not the declaration's keeping
+// (Semantics.DeclarationPromotesThePrefixEntry) that survives the call — it
+// is the persistence itself. The issue named the declaration, and the row
+// that separates them is the one with nothing but a colon in it.
+//
+// And the third is why every frame gives the name up rather than the
+// innermost: both enclosing calls read 3 afterwards, so a drop that stopped
+// at the nearest frame would have let the outer one put 9 back at the top.
+//
+// The controls, which are what keep this from being "a write wins": with the
+// same enclosing prefix, a plain `v=3`, an `export w=3`, a `readonly x=3` and
+// a `y=3 export y` all leave the name **unset** after the call, in `posix`
+// mode and out of it. A prefix that does not persist is given back exactly as
+// it always was.
+func (r *Runner) callPrefixesLetTheNameGo(name string) {
+	for i := range r.callPrefixes {
+		f := &r.callPrefixes[i]
+		if !slices.Contains(f.names, name) {
+			continue
+		}
+		f.names = slices.DeleteFunc(slices.Clone(f.names),
+			func(n string) bool { return n == name })
+		// The undo entry goes with it and is **not** replayed, which is the
+		// difference between this and the `unset` spelling next door: that
+		// one gives the displaced value back because the name is meant to
+		// disappear, and here the name is meant to stand at what the inner
+		// prefix left in it.
+		if j := slices.IndexFunc(f.undo, func(u savedVar) bool { return u.name == name }); j >= 0 {
+			f.undo = slices.Delete(slices.Clone(f.undo), j, j+1)
+		}
+	}
+}

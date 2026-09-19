@@ -42,6 +42,7 @@ var sharedStacks = map[string]string{
 	"pipeStatus":     "rebuilt with append([]int(nil), …) on every pipeline, so a write never lands in an array anyone else holds",
 	"optionLists":    "the option namespaces a dialect bound in Apply, appended to at setup and never again",
 	"RlimitOrder":    "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
+	"substLevelsOut": "rebuilt with append([]substLevel{}, …) every time a level opens, so a write never lands in an array anyone else holds",
 }
 
 // seedStacks gives every slice on a Runner an element and spare capacity.
@@ -100,6 +101,7 @@ func seedStacks(r *Runner) {
 	})
 	r.aroundFunctionCalls = append(make([]func(*Runner) func(), 0, 4), nil)
 	r.selfPending = append(make([]string, 0, 4), "seed")
+	r.substLevelsOut = append(make([]substLevel, 0, 4), substLevel{})
 	r.trapSnapshot = append(make([]savedTrap, 0, 4), savedTrap{})
 	r.trapContexts = append(make([]trapContext, 0, 4), trapContext(0))
 	r.pipeStatus = append(make([]int, 0, 4), 0)

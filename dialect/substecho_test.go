@@ -90,6 +90,121 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 			},
 		},
 		{
+			// **Inside double quotes**, where that dialect writes a
+			// different sentence rather than a different quote. The quote is
+			// still open when the input runs out, and it is what the line
+			// names (#3355).
+			//
+			// bash is the control column and is unmoved: it quotes the
+			// script's line whatever is open around the substitution, so a
+			// rule about open contexts must not reach it.
+			name: "the substitution is inside double quotes",
+			src:  "printf 'start\\n'\necho \"x $(echo hi; for) y\"\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: unmatched \"\n",
+				"bash": "s.sh: line 2: syntax error near unexpected token `)'\n" +
+					"s.sh: line 2: `echo \"x $(echo hi; for) y\"'\n",
+				"dash": "s.sh: 2: Syntax error: Bad for loop variable\n",
+				"ksh":  "s.sh: line 2: syntax error at line 2: `)' unexpected\n",
+			},
+		},
+		{
+			// **Inside an expansion's operand**, where the `${` is what is
+			// still open. Same shape, different sentence, and the same
+			// control column.
+			//
+			// One line, and that is a limit rather than a preference: the
+			// **first** message is misplaced for this shape — a body inside
+			// a `${ }` operand is reported at line 1 of a script whose
+			// second line holds it, in every column, on `main` and here
+			// alike. That is the span-placement half this issue also names
+			// and it is untouched by this change, so the rows that would
+			// expose it are written where the two lines coincide. Filed
+			// separately; the sentence is what these rows are about.
+			name: "the substitution is an expansion's operand",
+			src:  "echo ${x:-$(echo hi; for)}\n",
+			want: map[string]string{
+				"zsh": "s.sh:1: parse error near `)'\n" +
+					"s.sh:2: closing brace expected\n",
+				"bash": "s.sh: line 1: syntax error near unexpected token `)'\n" +
+					"s.sh: line 1: `echo ${x:-$(echo hi; for)}'\n",
+				"dash": "s.sh: 1: Syntax error: Bad for loop variable\n",
+				"ksh":  "s.sh: line 1: syntax error at line 1: `)' unexpected\n",
+			},
+		},
+		{
+			// The discriminator between the two above: with a quote **and**
+			// a brace open at one level, the quote is what is named — and it
+			// is named from either side, so this is not "the innermost
+			// context wins". Written twice because one order alone would
+			// pass against a build that always reported the outermost.
+			name: "a quote outside the brace outranks it",
+			src:  "echo \"${x:-$(for)}\"\n",
+			want: map[string]string{
+				"zsh": "s.sh:1: parse error near `)'\n" +
+					"s.sh:2: unmatched \"\n",
+				"bash": "s.sh: line 1: syntax error near unexpected token `)'\n" +
+					"s.sh: line 1: `echo \"${x:-$(for)}\"'\n",
+			},
+		},
+		{
+			name: "a quote inside the brace outranks it too",
+			src:  "echo ${x:-\"$(for)\"}\n",
+			want: map[string]string{
+				"zsh": "s.sh:1: parse error near `)'\n" +
+					"s.sh:2: unmatched \"\n",
+				"bash": "s.sh: line 1: syntax error near unexpected token `)'\n" +
+					"s.sh: line 1: `echo ${x:-\"$(for)\"}'\n",
+			},
+		},
+		{
+			// And the row that says a line is written per **level** and not
+			// per open context: two braces at one level write one line. A
+			// build that unwound the contexts one at a time would write
+			// `closing brace expected` twice here, and the reading this was
+			// first proposed under predicted exactly that.
+			name: "two braces at one level write one line",
+			src:  "echo ${x:-${y:-$(for)}}\n",
+			want: map[string]string{
+				"zsh": "s.sh:1: parse error near `)'\n" +
+					"s.sh:2: closing brace expected\n",
+			},
+		},
+		{
+			// A level holding neither writes nothing at all and the level
+			// outside it still writes its own: the intermediate `$( )` here
+			// is such a level, and the quote is the script's. Without the
+			// walk outward this writes nothing, which is what it did.
+			name: "an empty level falls through to the one outside it",
+			src:  "printf 'start\\n'\necho \"$(echo $(for))\"\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: unmatched \"\n",
+			},
+		},
+		{
+			// An arithmetic expansion's text is re-lexed, so it is a level
+			// too — and one with no sentence of its own. The quote outside
+			// it is what is named, and the unquoted spelling of the same row
+			// writes nothing at all, which is the control: a build that read
+			// the span's quoting without opening a level names a quote for a
+			// row that holds none.
+			name: "an arithmetic level has no sentence of its own",
+			src:  "echo \"$(( $(for) + 1 ))\"\n",
+			want: map[string]string{
+				"zsh": "s.sh:1: parse error near `)'\n" +
+					"s.sh:2: unmatched \"\n",
+			},
+		},
+		{
+			name: "an unquoted arithmetic level writes no second line",
+			src:  "echo $(( $(for) + 1 ))\n",
+			want: map[string]string{
+				"zsh": "s.sh:1: parse error near `)'\n",
+			},
+		},
+		{
 			// No newline at the end of the file, so the reader has none to
 			// take and zsh's second line is not moved on. The word is exactly
 			// twenty bytes, which that dialect marks although nothing is cut.

@@ -212,6 +212,172 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 	return lines
 }
 
+// substLevel is what one lexing level still has open when the input runs out.
+//
+// A *level* is the text of one command substitution body, the script itself
+// being the outermost of them. The unit matters, and it is what the reading
+// this was built from got wrong: the messages do not come one per open
+// context, they come one per level.
+//
+// Measured 2026-09-19 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin LC_ALL=C zsh
+// -f s.sh`, standard input on the null device, one line per script. The first
+// message is `s.sh:1: parse error near `)'` in every row and is left out; the
+// rest is the whole of what follows it:
+//
+//	echo $(for)                          parse error near `$(for)'
+//	echo "$(for)"                        unmatched "
+//	echo ${x:-$(for)}                    closing brace expected
+//	echo "${x:-$(for)}"                  unmatched "
+//	echo ${x:-"$(for)"}                  unmatched "
+//	echo ${x:-${y:-$(for)}}              closing brace expected
+//	echo "${x:-"$(for)"}"                unmatched "
+//	echo "x ${y:-$(for)} z"              unmatched "
+//	echo "x $(echo ${y:-$(for)})"        closing brace expected, unmatched "
+//	echo ${x:-$(echo "$(for)")}          unmatched ", closing brace expected
+//	echo $(echo "$(for)")                unmatched ", parse error near `$(echo "$(for)")…'
+//	echo $(echo $(for))                  parse error near `$(echo $(for))'
+//	echo $(echo ${y:-$(for)})            closing brace expected, parse error near `$(echo ${y…'
+//	echo ${x:-$(echo ${y:-$(for)})}      closing brace expected, closing brace expected
+//	echo "$(echo "$(echo "$(for)")")"    unmatched ", unmatched ", unmatched "
+//	echo $(( $(for) + 1 ))               parse error near `$(( $(for) + 1 ))'
+//	echo "$(( $(for) + 1 ))"             unmatched "
+//
+// Three rules come off those rows and each has a row that fails without it:
+//
+//   - **One line per level, innermost outward.** Row 9 and row 10 are the
+//     same three contexts in opposite orders and the lines follow the order;
+//     rows 14 and 15 are two and three levels each writing one.
+//   - **Two contexts open at one level write one line, not two.** Row 6 is
+//     two braces and writes one, where "one line per open context" predicts
+//     two. That is the row that falsifies the reading this replaces.
+//   - **A quote at a level outranks a brace at that level.** Row 4 has the
+//     quote outside the brace and row 5 has it inside, and both write
+//     `unmatched "` and never the brace's sentence — so it is not the
+//     innermost context of the level that is named, it is the quote.
+//
+// And the level with nothing open writes nothing at all, which is rows 12 and
+// 16: the intermediate `$( )` and the `$(( ))` are levels that hold no quote
+// and no brace, and neither contributes a line. Only the *outermost* level
+// has a sentence for that case, which is the `parse error near` line #3331
+// and #3731 already build.
+//
+// This shell writes one of those lines rather than all of them, because one
+// refusal is written from one place. The one it writes is the innermost
+// level's, which is the first zsh writes.
+type substLevel struct {
+	// quoted is a double quote still open at this level, whether it is
+	// around the failing substitution or around an expansion holding it.
+	quoted bool
+	// braced is a `${` still open at this level: the failing substitution is
+	// somewhere in an expansion's operand.
+	braced bool
+	// arith is an arithmetic expansion's text, which is a level with no
+	// sentence of its own. Measured: `echo $(( $(for) + 1 ))` writes the
+	// *outermost* level's `parse error near `$(( $(for) + 1 ))'` and no line
+	// for the arithmetic, exactly as an intermediate `$( )` writes none.
+	//
+	// A field rather than a bare reset, because the text is re-lexed and the
+	// spans it yields carry a quoting of their own: a reset alone left the
+	// span's own `Quoting` to fold in below and produced `unmatched "` for a
+	// row with no quote in it.
+	arith bool
+}
+
+// inBraceOperand records that what is being expanded now is an expansion's
+// operand, and returns the undo.
+//
+// The enclosing expansion's own quoting comes with it, because that is the
+// route by which `"${x:-$(for)}"`'s quote reaches the operand: the `"` is on
+// the *expansion's* span and the operand's spans are written bare inside it.
+func (r *Runner) inBraceOperand(q syntax.Quoting) func() {
+	saved := r.substLevel
+	r.substLevel.braced = true
+	if q != syntax.Unquoted {
+		r.substLevel.quoted = true
+	}
+	return func() { r.substLevel = saved }
+}
+
+// atFreshSubstLevel opens a new level for a substitution body, and returns
+// the undo.
+//
+// A body is lexed on its own, so what the text around it left open is not
+// open inside it: the level that answers for `echo $(echo "$(for)")` is the
+// body's, which holds the quote, and not the script's, which holds nothing.
+//
+// The level it replaces is kept rather than dropped, because a level with
+// nothing open writes no line and the one outside it still writes its own —
+// `echo "$(echo $(for))"` is `unmatched "` from the script's level, with the
+// body's level contributing nothing between them.
+//
+// That is also why the substitution's *own* quoting is folded into the level
+// being left behind: the `"` of that row is around the outer `$( )`, so it is
+// on this span and not in anything the outer level had recorded.
+func (r *Runner) atFreshSubstLevel(span syntax.Span) func() {
+	saved, savedOuter := r.substLevel, r.substLevelsOut
+	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), outerLevel(saved, span))
+	r.substLevel = substLevel{}
+	return func() { r.substLevel, r.substLevelsOut = saved, savedOuter }
+}
+
+// outerLevel is the level a nested text is entered from, with the entering
+// span's own quoting folded in. See atFreshSubstLevel.
+func outerLevel(at substLevel, span syntax.Span) substLevel {
+	if !at.arith && span.Quoting != syntax.Unquoted {
+		at.quoted = true
+	}
+	return at
+}
+
+// inArithText opens the level of an arithmetic expansion's re-lexed text, and
+// returns the undo. See substLevel.arith.
+func (r *Runner) inArithText(span syntax.Span) func() {
+	saved, savedOuter := r.substLevel, r.substLevelsOut
+	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), outerLevel(saved, span))
+	r.substLevel = substLevel{arith: true}
+	return func() { r.substLevel, r.substLevelsOut = saved, savedOuter }
+}
+
+// substLevelEcho is the line a level with something open writes, or the empty
+// string where the level holds neither a quote nor a brace.
+//
+// The failing span's own quoting is folded in here rather than at the door,
+// because it is the one context that is on the span: `echo "$(for)"` has the
+// quote around the substitution itself, where `"${x:-$(for)}"` has it around
+// the expansion the substitution is an operand of.
+func (r *Runner) substLevelEcho(span syntax.Span) string {
+	d := r.diag()
+	// The innermost level first, and outward past every level that holds
+	// nothing. A level with neither a quote nor a brace writes no line at
+	// all — the intermediate `$( )` of `echo "$(echo $(for))"` and the
+	// `$(( ))` of `echo "$(( $(for) + 1 ))"` are both such a level — and the
+	// level outside it still writes its own, which in both of those is the
+	// script's `unmatched "`.
+	// The one context that is on the span rather than around it.
+	inner := outerLevel(r.substLevel, span)
+	for at := len(r.substLevelsOut); ; at-- {
+		level := inner
+		if at < len(r.substLevelsOut) {
+			level = r.substLevelsOut[at]
+		}
+		switch {
+		case level.quoted:
+			if d.UnmatchedQuote == "" {
+				return ""
+			}
+			return Wording(d.UnmatchedQuote, `unmatched %[1]s`, `"`, `"`, "", 0, 0) + "\n"
+		case level.braced:
+			if d.UnmatchedBraceSubst == "" {
+				return ""
+			}
+			return Wording(d.UnmatchedBraceSubst, "closing brace expected", "${", "}", "", 0, 0) + "\n"
+		}
+		if at == 0 {
+			return ""
+		}
+	}
+}
+
 // substWordEcho is the second line of the dialect that quotes the script from
 // the start of the word holding the substitution.
 //
@@ -238,11 +404,15 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 // that shell quotes `$(for)` (#3355).
 //
 // Inside double quotes the second message is `unmatched "` and inside an
-// expansion's operand `closing brace expected`; an arithmetic expansion's
-// text is re-lexed, so the span's column is counted from that text rather
-// than from the line, and a substitution nested in a substitution is placed
-// from the enclosing body. None of those is written, rather than a quote from
-// the wrong place.
+// expansion's operand `closing brace expected`, and those come first, because
+// they are what the *level* has open and this sentence is what a level with
+// nothing open writes. See substLevel for the rows and the three rules.
+//
+// An arithmetic expansion's text is re-lexed, so the span's column is counted
+// from that text rather than from the line, and a substitution nested in a
+// substitution is placed from the enclosing body; where neither level has a
+// quote or a brace open, neither of those is written, rather than a quote
+// from the wrong place.
 //
 // Nor inside a function body, where this dialect locates a message by the
 // function and the line within it. It reads a body where the definition is,
@@ -256,18 +426,27 @@ func (r *Runner) substWordEcho(span syntax.Span, lines []string, start, own, lin
 	if r.inTrapBody || r.diag().LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {
 		return "", 0
 	}
+	if own < 1 || own > len(lines) {
+		return "", 0
+	}
+	if own < len(lines) {
+		// A newline ends the failure's line and the reader has taken it, so
+		// the message stands one line past it. Read off the text here for
+		// the reason the word's own sentence reads it off below: it is the
+		// same end of input and there is one rule for where it is placed.
+		line++
+	}
+	if echo := r.substLevelEcho(span); echo != "" {
+		return echo, line
+	}
 	if w == nil || w != r.expandingOuterWord || span.Quoting != syntax.Unquoted ||
-		w.Start.Line != span.Pos.Line || w.Start.Col > span.Pos.Col || own < 1 || own > len(lines) {
+		w.Start.Line != span.Pos.Line || w.Start.Col > span.Pos.Col {
 		return "", 0
 	}
 	row := lines[start-1]
 	from, at := int(w.Start.Col)-1, int(span.Pos.Col)-1
 	if at+2 > len(row) || row[at:at+2] != "$(" {
 		return "", 0
-	}
-	if own < len(lines) {
-		// A newline ends the failure's line, and the reader has taken it.
-		line++
 	}
 	return Wording(r.diag().SyntaxUnexpected, `"%[1]s" unexpected`, r.diag().nearText(row[from:])) + "\n", line
 }

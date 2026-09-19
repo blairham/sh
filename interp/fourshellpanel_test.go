@@ -137,12 +137,43 @@ import (
 // defect precisely where the count was smallest, in the column the phrase set
 // was written to find.
 //
+// # The fourth pass, and the two readings that were wrong about a bash column
+//
+// 2026-09-19, six more across all seven columns, taking diagnostics.go from
+// 37 to 31. Two of the six are not count corrections:
+//
+//   - ScriptLocation said "ksh93 is the only shell in the panel where they
+//     differ" and "true of the other three". **Both halves are wrong about
+//     the same column**: BusyBox ash differs too — `ash -c` writes a parse
+//     failure with no line at all where the same two lines in a file are
+//     `line 2`, and a runtime failure counts the command string's own lines
+//     rather than the file's. dialect/ash has held LocationLineWord since the
+//     column was written, so the value was right and the sentence counted one
+//     short.
+//   - ParamNullOrNotSet's fallback said `parameter not set` "is what plain
+//     ${x?} says in all four". **bash 3.2.57 says `parameter null or not
+//     set` for the plain form too**, using one sentence where 5.3 uses two —
+//     so the exception is a bash column rather than the missing dialect, and
+//     a reader taking the sentence at its word would have gone looking in the
+//     dialect vector, where it is not. BusyBox ash is the missing dialect and
+//     writes dash's wording.
+//
+// ForArithHeaderNoPart is the one where no count of four was available at
+// all: two columns never reach the question (dash and ash have no C-style
+// `for`), one has no answer to give (ksh93u+ 2012 **faults** on `for ((;))`
+// where `for ((;2))` is an ordinary syntax error), bash says the same either
+// way in all three of its columns, and zsh is the dissenter the field exists
+// for. CommandStringParsedWhole, SelfName and the `${@:=abc}` status were
+// count corrections with the membership measured: ash is in bash's group for
+// the first two, and it is **with dash** on the third, exiting 2 where the
+// other five exit 1.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
 	"semantics.go":   33,
-	"diagnostics.go": 37,
+	"diagnostics.go": 31,
 	filepath.Join("..", "syntax", "dialect.go"): 11,
 }
 

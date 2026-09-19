@@ -2292,6 +2292,11 @@ type Runner struct {
 	// scopes is the stack `local` unwinds. Shell scoping is dynamic, so
 	// there is one set of variables and this records what to put back.
 	scopes []*scope
+	// memberNamesInUse is whether this shell has ever held a name with a
+	// member separator in it, or a compound variable to hold one. It gates
+	// the namespace half of a shadow, which is dead weight in the four
+	// dialects with no spelling that could set it. See compoundlocal.go.
+	memberNamesInUse bool
 	// redirErr records that a redirection failed to open. The command must
 	// not run: a redirect that could not be applied would otherwise send its
 	// output to the terminal, which is the loudest possible wrong answer.
@@ -7487,6 +7492,27 @@ type scope struct {
 	// caller's name reading as one that has lost its elements. See
 	// Runner.compoundHeldAnElement.
 	heldAnElementBefore map[string]bool
+	// memberNamespaces are the names whose **member** namespace this scope
+	// shadowed — every name under `c.` displaced along with `c` itself. It
+	// is read on the write path as well as on the exit: a member the body
+	// creates has nothing saved for it, and this is what says the name
+	// belongs to the call. See compoundlocal.go.
+	memberNamespaces map[string]bool
+	// compoundMarkBefore is whether a shadowed name was a compound variable
+	// when the declaration displaced it. Saved beside the three value tables
+	// because the mark *is* the name's kind — a name holding the fourth kind
+	// holds nothing in any of them — so restoring the three alone left the
+	// caller's `c` reading as a compound with no members, or as an ordinary
+	// name that had been one. Absent means this scope never shadowed the
+	// name and **false** that it shadowed one that was not a compound, which
+	// is what takes back a mark the call itself added. See compoundlocal.go.
+	compoundMarkBefore map[string]bool
+	// namespaceOwned is every **member** name this scope holds a copy of, and
+	// it is kept apart from the records above because it must outlive them:
+	// the restore deletes what it puts back, and the namespace sweep asks
+	// this question about names it may already have restored. See
+	// compoundlocal.go.
+	namespaceOwned map[string]bool
 	// savedAssoc shadows the associative table the same way, attribute and
 	// all: what comes back on exit is whether the name was associative as
 	// much as what it held.
@@ -8915,6 +8941,10 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.scalarOverCompound(name, value, form) {
 		return
 	}
+	// A member of a namespace a declaration in this scope shadowed belongs
+	// to the call, and is made local before it is written rather than after.
+	// See compoundlocal.go, which hangs off the same five stores.
+	r.localizeMemberWrite(name)
 	// And a name holding a *compound variable* keeps none of it: the scalar
 	// replaces the whole tree. See compoundVariableRetyped for the five
 	// stores this is one of, and why it is five rather than one.

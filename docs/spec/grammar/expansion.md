@@ -239,6 +239,52 @@ works as intended.
 
 All four agree. **Core behavior, no vector field.**
 
+### A bare `~` after the script has assigned to `HOME`
+
+One build answers this with a home the script has already replaced, and the
+row is written down because the obvious reading of it is wrong.
+
+Measured 2026-09-19, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/orig`, from
+`-c`, `HOME=/h; echo ~`:
+
+| shell | answer |
+| --- | --- |
+| bash 5.3.20 | `/orig` |
+| bash as `sh` | `/orig` |
+| bash 3.2.57 | `/h` |
+| zsh 5.9.2 | `/h` |
+| ksh93u+ | `/h` |
+| dash 0.5.12 | `/h` |
+| BusyBox ash 1.37.0 | `/h` |
+| here | `/h` |
+
+**It is not the home the shell started with**, which is what it looks like
+from that one probe and is what #3484 was filed on. It is a **cache that
+anything building an environment for a child refreshes**:
+
+    HOME=/h; true; echo ~                      /orig     a builtin
+    HOME=/h; export FOO=1; echo ~              /orig
+    HOME=/h; ( true ); echo ~                  /orig     a subshell
+    HOME=/h; /usr/bin/true; echo ~             /h        an external command
+    HOME=/h; echo a | cat >/dev/null; echo ~   /h        a pipeline
+    HOME=/h; echo $(true); echo ~              /h        a command substitution
+    HOME=/h; echo ~; /usr/bin/true; echo ~     /orig then /h
+
+and it is the tilde alone: a bare `cd` in that shell goes to the current
+`$HOME` while `cd ~` on the same line goes to the cached one, and `~user`,
+`~+` and `~-` all answer from the database and from `PWD`/`OLDPWD` as
+usual.
+
+**Recorded and not modeled**, which is a decision and not an omission. Two
+readings are available and both are worse than answering `$HOME`:
+freezing the value at startup contradicts six of the rows above, and
+reproducing the cache means reproducing an invalidation that is incidental
+to building a child's environment — a `HOME=/x; cd ~` that goes to the old
+home for as long as the script runs only builtins. It is also one build
+against its own 3.2, so it is a candidate upstream regression rather than a
+family rule. The cost of not taking it is countable and small: seven lines
+of one fetched suite file (#3484).
+
 ### `~+` and `~-`
 
 Two named tildes expand to directories rather than to a home: `~+` is

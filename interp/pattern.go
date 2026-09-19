@@ -2329,22 +2329,38 @@ func inPosixClass(name string, unit string) bool {
 // reading of the classes — this follows the three that agree, and the corpus
 // records ksh93's answer beside it.
 //
-// digit is **false** and not unicode.IsNumber, which is measured and is where
-// the panel splits again: `case ٣ in [[:digit:]]` is a hit in bash 5.3 and 3.2
-// and a miss in ksh93, zsh and dash. POSIX says the digit class holds only the
-// digits 0 through 9 in every locale, so the standard and three of the four
-// agree, and bash is the one out. `[[:alnum:]]` still holds it, which is bash
-// and zsh together. That leaves the bash dialect deviating from bash on this
-// one class, which is #956 — either an axis or a decision written down, and
-// not something to inherit from a comment.
+// digit is **false** and not unicode.IsNumber, which is measured and is the
+// standard's answer: POSIX XBD 7.3.1 says the digit class holds only the digits
+// 0 through 9 in every locale. It reads as a deviation on this machine, where
+// `case ٣ in [[:digit:]]` is a hit in bash 5.3 and 3.2 and a miss in ksh93,
+// zsh and dash — and that is what #956 filed. It is not one. **The class a
+// character falls in outside ASCII is the host C library's table**, and the
+// same probe run against glibc has bash answering no with everybody else.
+// Measured 2026-09-18 on bash 5.2.37 and zsh 5.9 in a Debian container against
+// bash 5.3.20 and zsh 5.9.2 here, each cell macOS · glibc:
+//
+//	                        bash    zsh     ksh93   here
+//	digit, xdigit  ٣ ５   Y · n   n · n   n · n   n
+//	alnum          ٣ ５   Y · Y   Y · Y   Y · Y   Y
+//	alpha          ٣ ５   n · Y   n · Y   Y · Y   n
+//	alnum, alpha   Ⅷ      n · Y   n · Y   n · Y   n
+//
+// bash's and zsh's rows move with the C library and ksh93's alpha does not,
+// which is the tell: the two that ask iswctype are the two that changed their
+// answer when the library changed. So an axis here would record which machine
+// the oracle ran on, and the tables below are this shell's own answer in every
+// locale — glibc bash's on the class the panel was said to split over, macOS
+// bash's on the rest, and the standard's throughout. docs/spec/semantics.md
+// carries the measurement under *The classes a character falls in outside
+// ASCII* (#956).
 //
 // **xdigit splits identically and this comment used to say it could not.**
 // Measured 2026-09-12: `case ٣ in [[:xdigit:]]` is a hit in bash 5.3 and 3.2
 // and a miss in ksh93, zsh and dash — so the sentence below claiming no
 // character outside ASCII is in it "in the shells measured" was true of three
 // columns and never checked against the fourth. It is still absent from the
-// table, which keeps it answering false and keeps it agreeing with digit; both
-// classes are one question and #956 is where it is asked. blank and cntrl are
+// table, which keeps it answering false and keeps it agreeing with digit; the
+// two classes are one question and the paragraph above is its answer. blank and cntrl are
 // absent for the original reason, which does hold: Go's unicode tables would
 // put characters in cntrl that no shell here does.
 //

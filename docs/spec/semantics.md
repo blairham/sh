@@ -6096,13 +6096,57 @@ same gap two code points wide: macOS writes U+2014 as `81 5c` and U+FF3C as
 `81 5f` and the table has neither, standing U+2015 and U+005C in those
 codes instead.
 
-**Transliteration is not attempted.** A character the charset genuinely
-lacks gets the axis's answer here, where bash on macOS is measured
-substituting something near it — `\u00e9` under `ru_RU.CP1251` is
-`27 65`, an apostrophe and an `e`, and `\u0100` is a plain `A` in every
-charset that lacks it. That is the C library's `//TRANSLIT` behavior
-showing through a shell, it differs between C libraries, and reproducing
-it would mean pinning one platform's tables as the answer.
+**And the two platforms do not hold the same Big5**, which is the same
+point from the other side and is the sharper half of it: matching "the
+byte the charset stands the character in" is matching *a machine's*
+charset, because they differ. Same probe, same two machines,
+`printf '%s' $'\uHHHH' | od -An -tx1` under `zh_TW.Big5` there and
+`zh_TW.big5` on glibc:
+
+| code point | bash, macOS | bash, glibc | here |
+| --- | --- | --- | --- |
+| U+4E2D | `a4 a4` | `a4 a4` | `a4 a4` |
+| U+0439 | `c7 d2` | the escape | `c7 d2` |
+| U+20AC | the escape | `a3 e1` | the escape |
+
+The table here is Unicode's base Big5 and it agrees with macOS on both
+rows the platforms split on, which is what the row-by-row encoding against
+the real shell above was checking — against the shell on *this* machine.
+`eucJP` is the same shape without the disagreement: both platforms' bash
+transcode U+00E9 to `8f ab b1` and this shell, holding no table for it,
+writes the escape back in either place (#555).
+
+**Transliteration is not attempted, and the shell that attempts it is one
+platform's.** A character the charset genuinely lacks gets the axis's
+answer here, where bash on macOS is measured substituting something near
+it — `\u00e9` under `ru_RU.CP1251` is `27 65`, an apostrophe and an `e`,
+and `\u0100` is a plain `A` in every charset that lacks it. That it is the
+C library's `//TRANSLIT` behavior showing through a shell was a reading of
+that measurement; running the same probe on another C library makes it one.
+Measured 2026-09-18 from a script file under `env -i` with `LC_ALL` and
+`LANG` both set, on `debian@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01c`
+`cf3182cc4017c709b6259bc132` — bash 5.2.37, zsh 5.9, glibc — beside the
+same probe against bash 5.3.20 here:
+
+| locale | code point | bash, macOS | bash, glibc | here |
+| --- | --- | --- | --- | --- |
+| `ru_RU.CP1251` | U+00E9 | `27 65` | the escape | the escape |
+| `fr_FR.ISO8859-1` | U+0100 | `41` | the escape | the escape |
+| `zh_TW.Big5` | U+00E9 | `3f` | the escape | the escape |
+| `fr_FR.ISO8859-1` | U+20AC | the escape | the escape | the escape |
+
+so **glibc's bash writes the escape back in every row this shell does**,
+and there is no transliteration to reproduce there at all. Adopting
+macOS's substitution would buy agreement on this machine at the price of
+disagreeing with bash on Linux, which is the failure mode the escape
+written back does not have: a missing byte is visible and a different one
+is not. The answer stays the axis's (#3030).
+
+The probe has to hold the **escape** and not the character, and this is
+where it is worth saying so: a script file carrying a literal `é` reads as
+`c3 a9` out of every column in every locale, since nothing in it asks a
+shell to encode a code point. That reads exactly like a panel that agrees
+and is a measurement of the file.
 
 ### A hexadecimal escape with no digits
 
@@ -8711,6 +8755,59 @@ copy. `TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty` joins
 the two halves, so teaching this shell a locale that groups fails a test
 that names `printf` rather than quietly writing a number with the flag
 thrown away.
+
+### The classes a character falls in outside ASCII
+
+`LC_CTYPE`'s tables are the host C library's in the same way `LC_NUMERIC`'s
+data is, and the panel reads them rather than answering for itself — which
+is what settles the question #956 asked. That issue recorded
+`case ٣ in [[:digit:]]` as a hit in bash and a miss in every other column
+and read it as bash against the standard, a disagreement wide enough to
+want an axis of its own. Run against another C library, bash answers
+**no**, with the rest of the panel and with this shell.
+
+Measured 2026-09-18 from a script file under `env -i` with `LC_ALL` and
+`LANG` set to `en_US.UTF-8`, the characters built by `printf '%b'` octal so
+that every column matches the same bytes. `٣` U+0663 and `５` U+FF15 are
+`Nd`, `Ⅷ` U+2167 is `Nl`, `é` U+00E9 is `Ll`:
+
+| | bash | zsh | ksh93 | here |
+| --- | --- | --- | --- | --- |
+| `digit`, `xdigit` — `٣` `５` | **Y** · n | n · n | n · n | n |
+| `alnum` — `٣` `５` | Y · Y | Y · Y | Y · Y | Y |
+| `alpha` — `٣` `５` | n · **Y** | n · **Y** | Y · Y | n |
+| `alpha` — `Ⅷ` | n · **Y** | n · **Y** | Y · Y | n |
+| `alnum` — `Ⅷ` | n · **Y** | n · **Y** | n · **Y** | n |
+| `alnum`, `alpha` — `é` | Y · Y | Y · Y | Y · Y | Y |
+
+Each cell is macOS · glibc: bash 5.3.20 and zsh 5.9.2 here against bash
+5.2.37 and zsh 5.9 in `debian@sha256:d7e12182ce18b85b93007c1dedf31f2d29e`
+`01ccf3182cc4017c709b6259bc132`, ksh93u+ against ksh93u+m 1.0.10.
+
+Read down a column rather than across. **bash's digit row moves and so
+does its alpha row; zsh moves with it; ksh93's `alpha` does not move at
+all** — which is the tell, since ksh93 is the column that carries its own
+tables and the two that follow `iswctype` are the two that changed answer
+when the C library changed. glibc calls the Arabic-Indic digit and the
+roman numeral letters where macOS does not, and macOS calls the
+Arabic-Indic digit a digit where glibc does not.
+
+So there is no shell-level disagreement here to model: an axis would
+record which machine the oracle ran on. This shell answers from its own
+generated Unicode tables — `digit` is the standard's ASCII-only class
+(POSIX XBD 7.3.1), `alnum` is a letter or an `Nd` digit, `alpha` is
+`unicode.IsLetter` — which is glibc bash's answer on the class the panel
+was said to split over, macOS bash's on the rest, and the standard's
+throughout. The `alpha` rows are where it is narrower than both, and that
+is the same missing-row shape the charset tables have: visible rather than
+different (#956).
+
+`internal/oracle` pins `LC_ALL=C`, where every column says no to all of
+it, so the corpus cannot reach this and the two rows that carry these
+characters run under a locale set in the case. Five of the recorded
+panel's columns are binaries on the machine that ran the harness, so a row
+whose subject is a locale table records that machine's answer and not the
+shell's — the same caution the numeric data above earns.
 
 ## What `command` and `whence` answer, and for how many names
 

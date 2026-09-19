@@ -35,7 +35,7 @@ func withFPath(t *testing.T, src string) (string, int) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	out, st, err := preset.Combined(t, dialecttest.Base{
+	out, st, err := preset.CombinedThroughTheAliases(t, dialecttest.Base{
 		Dir: dir, Vars: map[string]string{"PATH": dir, "FPATH": dir},
 	}, src)
 	if err != nil {

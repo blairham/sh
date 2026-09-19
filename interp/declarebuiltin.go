@@ -381,6 +381,20 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			}
 			pending = 0
 			f.remove = a == "+"
+			if f.function {
+				// And it reaches the function listing where the `f` letter
+				// has already been read, which is the same sign meaning the
+				// same thing one word later: measured 2026-09-18,
+				// `f(){ :; }; typeset -f +` writes `f()` on ksh93u+ and `f`
+				// on zsh 5.9.2 — the name alone in both — where
+				// `typeset -f -` writes the body. This shell read the sign
+				// off the letter alone, so `typeset +f` named the function
+				// and `typeset -f +` wrote it out (#3371).
+				//
+				// The last sign written wins, which is what the two spellings
+				// being one question means.
+				f.functionOff = f.remove
+			}
 			continue
 		}
 		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {

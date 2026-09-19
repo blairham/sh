@@ -46,14 +46,23 @@ func TestTheKeywordSpellingRefusesTheSameNames(t *testing.T) {
 // And a *regular* builtin is an ordinary name. Without this row a fix that
 // refused every builtin would pass the two above.
 //
-// `times` and `hash` belong to this half in ksh93 — both are preset *aliases*
-// there rather than builtins — and neither is a row, because this helper
-// installs no alias table and would answer for a shell the binary is not.
+// The names that are **aliases** here rather than builtins are not rows, and
+// there are more of them than there were: `times`, `hash`, `integer`, `float`,
+// `compound`, `nameref`, `functions` and `source` all reach this shell through
+// the preset alias table. ksh93 takes every one of them as a function name —
+// measured 2026-09-18, `nameref() { :; }` and `float() { :; }` from a script
+// file under `env -i` are a silent 0 there, and so is `alias zz='typeset -n';
+// zz() { :; }` — because **that shell does not expand an alias for a word a
+// `(` follows**. This one does, so `nameref() { :; }` becomes
+// `typeset -n() { :; }` and is a syntax error, which is a parser gap of its
+// own and not this test's subject. It shows only for an alias whose value is a
+// declaration word: `alias zz=echo; zz() { :; }` defines `zz` here exactly as
+// it does there, because `echo() { :; }` is a legal definition either way.
 func TestARegularBuiltinIsAnOrdinaryFunctionName(t *testing.T) {
 	for _, name := range []string{
 		"true", "false", "read", "cd", "pwd",
 		"command", "wait", "umask", "getopts", "jobs", "kill", "ulimit",
-		"builtin", "whence", "disown", "nameref", "float", "integer",
+		"builtin", "whence", "disown",
 		"echo", "test",
 	} {
 		// Defined and not called: a body calling the name it shadows is a

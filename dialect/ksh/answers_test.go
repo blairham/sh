@@ -36,7 +36,7 @@ import (
 // way `dialect/zsh/v5` was, which is what #1221 is.
 func answersRun(t *testing.T, src string) (string, int) {
 	t.Helper()
-	out, st, err := preset.Combined(t, dialecttest.Base{
+	out, st, err := preset.CombinedThroughTheAliases(t, dialecttest.Base{
 		Name: "sh", Dir: t.TempDir(), Env: []string{"PATH=/usr/bin:/bin"},
 	}, src)
 	if err != nil {

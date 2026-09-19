@@ -10786,6 +10786,31 @@ implementation that always added `E` looks right on every other row and
 wrong on that one. The word resolved to nothing at all here until #3291,
 in a shell whose own `$reswords` names it.
 
+**And in ksh93 `integer` is not a builtin either.** Neither is `nameref`,
+`functions`, `source` or `times`: all five are **preset aliases** there —
+`typeset -li`, `typeset -n`, `typeset -f`, `command .` and
+`{ { time;} 2>&1;}` — with no command behind them. That matters only
+where an alias cannot reach, which is exactly three spellings: a quoted
+word, an expanded one, and a word whose alias has been taken away.
+Measured 2026-09-18 on ksh93u+ 2012-08-01, a script file under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null, each
+`unalias` and the word after it on lines of their own:
+
+    'integer' a=1                  integer: not found, 127
+    cmd=integer; $cmd b=2          integer: not found, 127
+    x=1; \nameref r=x              nameref: not found, 127
+    unalias integer; integer a=1   integer: not found, 127
+    'functions' / 'source' / 'times'   the same under each name
+    integer d=3                    st=0, and d is 3
+
+`times` is the one that costs something to say: it is a POSIX special
+builtin in the substrate and in every other dialect, and ksh93 has no
+such builtin at all — the alias runs the `time` keyword inside a group,
+which is why its output is the keyword's layout rather than a builtin's.
+`float` and `compound` were already right here, because this
+implementation never had a builtin for either, and that agreement is
+what said the alias route needs no builtin behind it (#3371).
+
 **A plus word on `integer` removes nothing in ksh93 and everything in
 zsh** — `Semantics.IntegerPlusFormTakesAttributesOff`:
 

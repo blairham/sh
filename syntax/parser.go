@@ -1219,6 +1219,20 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
+// skipAnonBodySeparators steps over what may stand between a nameless
+// function's header and its body.
+//
+// A `;` as well as a newline, and for both spellings of the header: measured
+// 2026-09-19 on zsh 5.9.2, `function; { echo $#; } a b` and `() ; { echo $#; }
+// a b` each print `2`, so the separator is a property of the position rather
+// than of the keyword. See [Parser.peekIsAnonBody], which has to agree with
+// this over the raw source before a token is asked for.
+func (p *Parser) skipAnonBodySeparators() {
+	for p.at(TokNewline) || p.at(TokSemi) {
+		p.next()
+	}
+}
+
 // skipCaseHeaderSeparators steps over what may stand inside a `case` header:
 // newlines everywhere, and a `;` where the dialect takes one. See
 // [Dialect.CaseHeaderSpansSeparators].
@@ -4466,15 +4480,56 @@ func (p *Parser) failProcSubstOutOfPlace(pos Pos, opener string) {
 	}
 }
 
-// peekIsAnonBody reports whether `function` is followed straight by a body
-// rather than by a name, which is the keyword spelling of an anonymous
-// function.
+// peekIsAnonBody reports whether `function` is followed by a body rather than
+// by a name, which is the keyword spelling of an anonymous function.
+//
+// The body may stand on a later line, and that is not a formatting liberty —
+// it changes what the construct *is*. Measured 2026-09-19 against zsh 5.9.2
+// with `-f`, each row a script file under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C`: `function` then a newline then `{ echo $#; } a b` prints `2`,
+// and so do the spellings with a blank line, a `;`, a comment line or several
+// of each in between. So the words after the body are the call's positional
+// parameters exactly as they are on one line, and refusing them left this
+// engine at a parse error where the reference runs.
+//
+// The rows with no arguments, which look like they already agreed, are what
+// say this is a reach rather than a repair. Read as a bare keyword followed by
+// an ordinary group they print the same bytes — and they are not the same
+// program: `function` ⏎ `{ typeset y=2; }` ⏎ `echo $y` writes nothing in the
+// reference, because the body was a function's and the name was local to it,
+// where a group would have left `2` behind. That is measured, and it is why
+// the reach does not wait for an argument to appear.
+//
+// What is *not* skipped is everything that ends the command rather than
+// separating one: a redirection, `&&`, `||` and `|` all leave the keyword
+// standing alone, measured a spelling at a time, and the arm terminators
+// `;;`, `;&` and `;|` are not the separator `;` is. So this steps over blanks,
+// newlines, a plain `;`, a line continuation and a comment, and stops at the
+// first thing that is none of them (#3778).
 func (p *Parser) peekIsAnonBody() bool {
-	i := p.lex.off
-	for i < len(p.lex.src) && isBlank(p.lex.src[i]) {
-		i++
+	src, i := p.lex.src, p.lex.off
+	for i < len(src) {
+		switch c := src[i]; {
+		case isBlank(c), c == '\n':
+			i++
+		case c == ';':
+			if i+1 < len(src) && (src[i+1] == ';' || src[i+1] == '&' || src[i+1] == '|') {
+				// An arm terminator, which ends the command the keyword is
+				// in rather than separating it from the next one.
+				return false
+			}
+			i++
+		case c == '\\' && i+1 < len(src) && src[i+1] == '\n':
+			i += 2
+		case c == '#':
+			for i < len(src) && src[i] != '\n' {
+				i++
+			}
+		default:
+			return c == '{' || c == '('
+		}
 	}
-	return i < len(p.lex.src) && (p.lex.src[i] == '{' || p.lex.src[i] == '(')
+	return false
 }
 
 // parseAnonFunc reads `() body [word …]` and `function body [word …]`.
@@ -4493,7 +4548,7 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 		}
 		p.next()
 	}
-	p.skipNewlines()
+	p.skipAnonBodySeparators()
 	// A nameless function's body is a function body, which is what says the
 	// try-always keyword may not follow it: measured 2026-09-07, `() { echo
 	// anon; } always { echo A; }` is a parse error on the `}` in the shell

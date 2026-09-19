@@ -2637,18 +2637,28 @@ type Diagnostics struct {
 	// ReturnOutsideAFunction is a `return` with nothing to return from —
 	// neither a function nor a sourced file. No verbs.
 	//
-	// Only bash says anything at all — all three of its columns — and it is
-	// also the only one that does not obey: measured 2026-09-19 over all
-	// seven columns, `return 3` at the top of a script draws its "can only
-	// return from a function or sourced script" complaint there and then
-	// runs the next command, at status 0. dash, ksh93, zsh and BusyBox ash
-	// all end the script silently at 3, so there is nothing for the other
-	// four to word.
+	// Only bash says anything at all — all three of its columns — and it
+	// is also the only one that keeps going. Measured 2026-09-19 over all
+	// seven columns, `return 3` at the top of a script:
+	//
+	//	bash 5.3, bash 3.2   the complaint, then the next command, status 0
+	//	bash-as-`sh`         the complaint, then the script ends, status 2
+	//	dash, ksh93, zsh,    silence, and the script ends at 3
+	//	  BusyBox ash
+	//
+	// So the wording is bash's in all three of its columns and nobody
+	// else's, and the four that end the script have nothing to word.
 	//
 	// The old sentence said "the other three obey it", which was two errors
 	// in one clause: the panel leaves four columns to obey rather than
 	// three, and bash was in neither group — it neither obeyed nor was
 	// counted among those that did.
+	//
+	// The middle row is the one worth keeping: the *same binary* called `sh`
+	// draws the same sentence and then treats it as fatal, which is a third
+	// behavior neither of the two groups holds. It is not a dialect value —
+	// there is no bash-as-`sh` preset — and it is the column a four-shell
+	// reading of this field would never have reached.
 	ReturnOutsideAFunction string
 
 	// LoopControlOutsideALoop is a `break` or a `continue` with no loop
@@ -3677,11 +3687,17 @@ type Diagnostics struct {
 	// write `INT`. Empty in four of the five, and never used for EXIT,
 	// which is not a signal.
 	//
-	// Measured 2026-09-19 with `trap : INT; trap`: `SIGINT` in bash 5.3,
-	// bash-as-`sh` and bash 3.2, and a bare `INT` in dash, ksh93, zsh and
-	// BusyBox ash. The quoting of the command is a separate question and
-	// splits differently — dash and ash write `':'` where ksh93 and zsh
-	// write a bare `:` — which is why it is not this field.
+	// Measured 2026-09-19 with `trap : INT; trap`: `SIGINT` in bash 5.3 and
+	// bash 3.2, and a bare `INT` in **bash-as-`sh`**, dash, ksh93, zsh and
+	// BusyBox ash. So this is the `bash` dialect's answer and not that
+	// binary's — the same bash called `sh` writes what everyone else does,
+	// which is a column no four-shell reading of this field could reach and
+	// is why the prefix is keyed to the dialect rather than to the shell.
+	//
+	// The quoting of the command is a separate question and splits
+	// differently again — dash, ash and both `sh`-mode-agnostic bash columns
+	// write `':'` where ksh93 and zsh write a bare `:` — which is why it is
+	// not this field.
 	TrapPrintsSignalPrefix string
 	// TrapConditionRequired is the refusal of `trap EXIT`, taking nothing.
 	// ksh93 only, since ksh93 is the only dialect that refuses the form.

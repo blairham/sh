@@ -146,14 +146,56 @@ type Suite struct {
 	// printed.
 	NotYet string
 	// Container, when set, is the name of the oracle panel member whose
-	// container route this column's reference is reached by. Empty is a
-	// binary on the machine running the harness, which is every column but
-	// ash.
+	// container route this column's reference is reached by.
 	//
 	// A name rather than an image and a digest, so that the pin lives in one
 	// place: see [RunContained]. A second digest for one shell would drift
 	// from the first and both would look authoritative.
 	Container string
+	// Image and Digest pin an image for a column the oracle panel cannot
+	// route, and they are the other half of the same rule Container states.
+	//
+	// The rule is one pin per shell-in-an-image, not one pin per repository.
+	// The oracle reaches BusyBox inside a container because there is no
+	// BusyBox here, so ash names that panel member and adds no pin of its
+	// own. The oracle reaches bash as a binary on this machine, so there is
+	// no bash-in-an-image pin anywhere for a column to borrow, and a column
+	// that wants one has to carry it. Naming the panel member that does not
+	// exist would be the drift this guards against, one indirection along.
+	//
+	// Digest is a manifest digest and never a tag, which is the whole
+	// provenance argument: `bash:5.3` moved twice in the two days this
+	// column was being argued about — 5.3.15 to 5.3.20 to a new index digest
+	// at the same 5.3.20 — so a column pinned to the tag would report a
+	// shell that changed and nothing could tell that from a shell that
+	// behaved differently. An *index* digest rather than a per-architecture
+	// manifest one, so that one pin covers the amd64 runner and an arm64
+	// laptop. TestAContainedColumnIsPinnedByDigest is the guard.
+	Image, Digest string
+	// CrossHere says a binary of this column's shell on the machine running
+	// the harness is a usable cross-check reference, for a column whose
+	// *grading* reference is inside an image.
+	//
+	// The two are different questions and #3480 is where that became load
+	// bearing. Grading asks "does cmd/bash agree with the bash this column
+	// names", and containing it is what makes that figure absolute on every
+	// machine. The cross-check asks "do the reference shells on one machine
+	// agree with each other about core/", which is a question about the
+	// references and not about us — and it needs them on one machine, since
+	// a reference in an image would score a libc diagnostic as a
+	// disagreement between two shells.
+	//
+	// So a contained column can still supply a cross-check reference, and
+	// bash does: without it, containing bash would take core/ from four
+	// references to three, ext/ from three to two and drop the bash/
+	// only-here check over 21 files — a grading figure bought with a weaker
+	// tier claim. With it, nothing is given up.
+	//
+	// It is a statement and not a search, because the search would be wrong
+	// for ash: Lookup's second entry is /bin/busybox, which exists on a
+	// Linux host and is a multi-call binary rather than a shell when it is
+	// run by that path. A found path is not a reference.
+	CrossHere bool
 	// MustReport is a lowercase fragment the reference's own version string
 	// must contain for this column to be believed. /bin/sh is BusyBox on
 	// Alpine and dash on Debian, so a column reached by a path alone can

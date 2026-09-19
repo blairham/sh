@@ -61,6 +61,7 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	var reports []suite.Report
 	var skipped []string
 	var contained []string
+	var crossless []string
 
 	for _, s := range suite.OurColumns() {
 		if s.NotYet != "" {
@@ -73,23 +74,39 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 			code = 1
 			continue
 		}
-		if s.Container != "" {
-			// The reference exists nowhere on this machine, so the whole
-			// sweep goes into the image: see suite.RunContained. The binary
-			// is cross-compiled there rather than taken from -own-bin,
-			// because the one `make suite` built here is for this machine
-			// and the image is Linux.
+		if s.Contained() {
+			// The reference is pinned inside an image, so the whole sweep
+			// goes in there: see suite.RunContained. The binary is
+			// cross-compiled there rather than taken from -own-bin, because
+			// the one `make suite` built here is for this machine and the
+			// image is Linux.
 			rep, err := suite.RunContained(ctx, s, root, "./cmd/"+s.Dialect, opts)
 			if err != nil {
-				// Loud, and a column rather than a silence. This is the one
-				// column a developer's machine can legitimately fail to
-				// reach, and `ash: not run (no container runtime here)` has
-				// to be impossible to mistake for `ash: agrees`.
+				// Loud, and a column rather than a silence. A machine with
+				// no container runtime legitimately cannot reach these, and
+				// `ash: not run (no container runtime here)` has to be
+				// impossible to mistake for `ash: agrees`.
 				skipped = append(skipped, fmt.Sprintf("%s — %s", s.Name, err.Error()))
 				continue
 			}
 			reports = append(reports, rep)
 			contained = append(contained, s.Name)
+			// Grading and cross-checking are two different questions, so a
+			// contained column still supplies a cross-check reference where
+			// this machine has one. Without this, containing a column takes
+			// its reference out of suite.CrossCheck and its dialect tier out
+			// of suite.OnlyHere — core/ from four references to three, ext/
+			// from three to two, and the 21 files under bash/ unchecked — so
+			// an absolute grading figure would have been bought with a
+			// weaker tier claim. See suite.CrossHere for why this is a
+			// statement on the column rather than a search: a path that
+			// exists is not a reference.
+			reference, here := s.CrossHereReference()
+			if !here {
+				crossless = append(crossless, s.Name)
+				continue
+			}
+			refs = append(refs, suite.Reference{Name: s.Name, Path: reference})
 			continue
 		}
 		reference, found := suite.Locate(s.Lookup)
@@ -167,7 +184,12 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 		}
 	}
 	for _, col := range suite.OurColumns() {
-		if col.DialectTier() == "" || col.Container != "" {
+		// A contained column is no longer skipped here. OnlyHere needs the
+		// column's own reference among refs and reports nothing without it,
+		// so the condition that matters is already the one it applies —
+		// and where a contained column kept a reference on this machine,
+		// its dialect tier keeps the check it had before it was pinned.
+		if col.DialectTier() == "" {
 			continue
 		}
 		own, err := suite.OnlyHere(ctx, root, col, refs, opts)
@@ -181,8 +203,9 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 			code = 1
 		}
 	}
-	printCrossOmission(contained)
-	printOwnOmission(contained)
+	printContained(contained, crossless)
+	printCrossOmission(crossless)
+	printOwnOmission(crossless)
 
 	if len(skipped) > 0 {
 		fmt.Println("  columns not run")
@@ -309,25 +332,72 @@ func printOwnTable(reports []suite.Report) {
 	fmt.Println()
 }
 
-// printCrossOmission says which columns the cross-check could not include,
-// and why it is a limit of the machine rather than a judgement about them.
+// printContained says which columns were graded inside an image, and which
+// of the two questions that does and does not change.
 //
-// A column reached inside a container has a reference on a different
-// operating system from the others. Comparing its bytes against theirs would
-// fold a libc diagnostic and a coreutil into the answer and call the result a
-// disagreement between shells, which is the confound the contained sweep was
-// arranged to avoid one level down. So it is left out — and saying so is the
-// point: a cross-check that listed four shells where five columns ran, with
-// nothing explaining the difference, reads as a shell that agreed.
-func printCrossOmission(contained []string) {
+// It is printed on every run that has one, because the claim a contained
+// column makes is both stronger and narrower than the others': stronger
+// because the reference is a pinned build rather than whatever the machine
+// has, narrower because the figure is about that image. A column whose
+// reference changed underneath the number is exactly what pinning it is for,
+// and a reader who is not told which columns are pinned cannot tell the two
+// kinds of figure apart.
+func printContained(contained, crossless []string) {
 	if len(contained) == 0 {
 		return
 	}
-	fmt.Printf("  not in the cross-check: %s\n", strings.Join(contained, ", "))
-	fmt.Println("    reached inside a container, so its reference is on another operating")
-	fmt.Println("    system. Comparing those bytes against the references here would score a")
-	fmt.Println("    libc diagnostic as a disagreement between two shells. The column is")
-	fmt.Println("    graded against its own reference in there, where both sides match.")
+	out := map[string]bool{}
+	for _, name := range crossless {
+		out[name] = true
+	}
+	fmt.Printf("  graded inside a pinned image: %s\n", strings.Join(contained, ", "))
+	fmt.Println("    both shells ran in there on one copy of the files, so the figure is the")
+	fmt.Println("    same on a runner as on a laptop rather than a fact about the machine's")
+	fmt.Println("    own build of the reference. That is what a WRONG BUILD banner says is")
+	fmt.Println("    missing, and it is what #2291's per-column bar can be counted from.")
+	var kept []string
+	for _, name := range contained {
+		if !out[name] {
+			kept = append(kept, name)
+		}
+	}
+	if len(kept) > 0 {
+		fmt.Printf("    still a cross-check reference here: %s\n", strings.Join(kept, ", "))
+		fmt.Println("      Grading and cross-checking ask different questions. Grading asks")
+		fmt.Println("      whether our binary agrees with the build this column names, which is")
+		fmt.Println("      why it is pinned. The cross-check asks whether the reference shells")
+		fmt.Println("      on one machine agree with each other, which is a question about them")
+		fmt.Println("      and needs them all in one place — so it keeps the binary on this")
+		fmt.Println("      machine, pinned by nothing, exactly as it was before this column was")
+		fmt.Println("      contained. Containing a column without this would have paid for an")
+		fmt.Println("      absolute grading figure with a tier claim over fewer references.")
+	}
+	fmt.Println()
+}
+
+// printCrossOmission says which columns the cross-check could not include,
+// and why it is a limit of the machine rather than a judgement about them.
+//
+// A column graded inside an image whose shell this machine does not have —
+// BusyBox on a Mac is the whole of the list today — supplies no reference
+// here at all. Its reference inside the image is on a different operating
+// system from the others, so folding those bytes in would score a libc
+// diagnostic and a coreutil as a disagreement between two shells, which is
+// the confound the contained sweep was arranged to avoid one level down.
+//
+// Saying so is the point: a cross-check that listed four shells where five
+// columns ran, with nothing explaining the difference, reads as a shell that
+// agreed.
+func printCrossOmission(crossless []string) {
+	if len(crossless) == 0 {
+		return
+	}
+	fmt.Printf("  not in the cross-check: %s\n", strings.Join(crossless, ", "))
+	fmt.Println("    graded inside a container and with no binary of that shell on this")
+	fmt.Println("    machine to stand in, so it supplies no reference here. Comparing the")
+	fmt.Println("    bytes from in there against the references here would score a libc")
+	fmt.Println("    diagnostic as a disagreement between two shells. The column is graded")
+	fmt.Println("    against its own reference in there, where both sides match.")
 	fmt.Println()
 }
 
@@ -383,12 +453,18 @@ func printMoved(why string) {
 	fmt.Printf("%s%s\n", indent, wrap(why, indent))
 }
 
-// printOwnOmission says why a contained column's own tier is not checked this
-// way, for printCrossOmission's reason one step over: the references here are
-// on a different operating system from the one its reference runs on, so
-// "alone" would be measuring two machines.
-func printOwnOmission(contained []string) {
-	for _, name := range contained {
+// printOwnOmission says why a column's own tier is not checked this way, for
+// printCrossOmission's reason one step over: with no binary of that shell
+// here, the references this tier would be held against are all on a different
+// operating system from the one its reference runs on, so "alone" would be
+// measuring two machines.
+//
+// It is the crossless list rather than every contained column, and that is
+// the #3480 change in one line: a contained column that still has a binary
+// here keeps its only-here check, because that check runs on this machine and
+// never went near the image.
+func printOwnOmission(crossless []string) {
+	for _, name := range crossless {
 		col, ok := suite.FindOurs(name)
 		if !ok || col.DialectTier() == "" {
 			continue

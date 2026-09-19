@@ -70,6 +70,37 @@ const (
 	suitePath  = "/suite"
 )
 
+// Contained says this column's reference shell is reached inside an image
+// rather than as a binary on the machine running the harness.
+//
+// Two spellings answer it and they are one rule rather than two: a column
+// whose shell the oracle panel already reaches that way names the panel
+// member, and a column whose shell it does not reaches carries the pin
+// itself. See [Suite.Container] and [Suite.Image].
+func (s Suite) Contained() bool { return s.Container != "" || s.Image != "" }
+
+// Reach is the container route this column's reference is reached by.
+//
+// It is the one place the two spellings are resolved, so that everything
+// downstream — the pull, the ref printed in the report, the client probe —
+// is the same code for both. [oracle.ContainerReach] is reused rather than
+// reimplemented for the reason this repository has written down more than
+// once: a second helper that does the same job is where a fix lands on one
+// copy and not the other.
+func (s Suite) Reach() (*oracle.ContainerReach, error) {
+	if s.Container != "" {
+		reach, ok := oracle.Container(s.Container)
+		if !ok {
+			return nil, fmt.Errorf("no container route named %q in the oracle's panel", s.Container)
+		}
+		return reach, nil
+	}
+	if s.Image == "" || s.Digest == "" {
+		return nil, fmt.Errorf("the %s column is not reached inside a container", s.Name)
+	}
+	return &oracle.ContainerReach{Image: s.Image, Digest: s.Digest}, nil
+}
+
 // Reply is what the in-container half writes on its standard output: one
 // report, or one reason there is not one.
 //
@@ -92,9 +123,9 @@ type Reply struct {
 // one, which is the reason the oracle builds its runner instead of shipping
 // it.
 func RunContained(ctx context.Context, s Suite, root, ourPkg string, opts Options) (Report, error) {
-	reach, ok := oracle.Container(s.Container)
-	if !ok {
-		return Report{}, fmt.Errorf("no container route named %q in the oracle's panel", s.Container)
+	reach, err := s.Reach()
+	if err != nil {
+		return Report{}, err
 	}
 	cli, err := reach.Client(ctx)
 	if err != nil {

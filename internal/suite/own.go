@@ -148,6 +148,29 @@ var Ours = []Suite{
 		// Ubuntu 24.04 ships 5.2.21, and #3113 measured seven `0 / 2` rows
 		// on the runner that do not exist here — a 5.2-against-5.3
 		// difference wearing our column's clothes.
+		//
+		// That skew is what the image removes. The `Our own suite (report
+		// only)` job graded this column against whatever bash the runner had
+		// and printed a WRONG BUILD banner over the figure, so the number
+		// was a fact about ubuntu-latest and #2291's `strict 100%` bar could
+		// not be met here by any amount of correct work. Both shells now run
+		// inside a digest-pinned image whose bash is 5.3.20 — patch for
+		// patch the build these cases were measured against, which is
+		// stricter than AgainstReport asks — so the figure is the same on a
+		// runner and on a laptop. #3480.
+		//
+		// The image is Alpine 3.24 plus bash, so the external utilities in
+		// there are BusyBox rather than the GNU or BSD ones these cases were
+		// written beside. That cancels for the grading, because both shells
+		// run in there on one copy of the files — the same argument
+		// [RunContained] already makes — and it is the second reason the
+		// contained column's bytes cannot be held against the references on
+		// this machine. Hence CrossHere: the cross-check is a different
+		// question and keeps the local binary. See [Suite.CrossHere].
+		Image:         "bash",
+		Digest:        "sha256:61962062d969cb46dfc2bad061d36342406fa485f64f246aa7e95693ca07df1f",
+		MustReport:    "bash",
+		CrossHere:     true,
 		Against:       "GNU bash 5.3",
 		AgainstReport: "version 5.3",
 	},
@@ -264,6 +287,31 @@ var Ours = []Suite{
 		Container:  "ash",
 		MustReport: "busybox",
 	},
+}
+
+// CrossHereReference is the binary on the machine running the harness that a
+// contained column contributes to the cross-check, and whether it has one.
+//
+// It is the whole of the #3480 rule in one function, so that the rule is in
+// the package that states it rather than in the command that prints it.
+// Three answers and each is a different thing:
+//
+//	not contained   not this function's question — the column's grading
+//	                reference is the binary here and is already a reference.
+//	contained, no   the shell is not on this machine at all, which is why the
+//	                column is contained. It supplies nothing and the report
+//	                says so.
+//	contained, yes  the shell is here as well, so the cross-check keeps it.
+//
+// The second and third are told apart by [Suite.CrossHere] rather than by
+// whether a path exists, and that is deliberate: ash's Lookup holds
+// /bin/busybox, which exists on a Linux host and is a multi-call binary
+// rather than a shell when run by that path. A found path is not a reference.
+func (s Suite) CrossHereReference() (string, bool) {
+	if !s.Contained() || !s.CrossHere {
+		return "", false
+	}
+	return Locate(s.Lookup)
 }
 
 // OurColumns is the native columns, built and unbuilt.

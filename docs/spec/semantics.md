@@ -2129,6 +2129,49 @@ be fixed by measurement alone — `SIGRTMIN` is the C library's and not the
 kernel's, Go's `syscall` does not export it, and the two columns that have
 names disagree with glibc about where the range starts (#3535).
 
+**And the C library is not the only thing holding that range.** Measured
+2026-09-19, the same Go program built once for linux/arm64 and run in both
+containers — `signal.Notify` for one number, `kill(2)` at its own process, and
+a tenth of a second to see whether the channel or the kernel answers first:
+
+| number | glibc (Debian bookworm) | musl (the pinned Alpine image) |
+| --- | --- | --- |
+| 32, 33 | never delivered | never delivered |
+| 34 | never delivered — the process ends at 162 | never delivered |
+| 35 through 64 | delivered, all thirty | delivered, all thirty |
+
+The reserved set is **identical on both C libraries**, which is the fact that
+decides the gap above. glibc puts `RTMIN` at 34 and musl puts it at 35, so the
+two disagree by one — and this runtime holds 32, 33 and 34 whichever library
+it was linked against, because it reserves the union rather than the library's
+own. So a shell built this way cannot receive the number glibc calls `RTMIN`,
+and adopting that column's offset would have this shell answer `kill -l 34`
+with a name for a signal that ends it. Adopting musl's 35 on a glibc machine
+misnames every number in the range by one instead. Neither is a table this
+engine can honestly write, and the third answer — the numbers, which is what
+zsh and BusyBox ash write — is what it writes today.
+
+**The same boundary reaches `trap`, and there the panel splits.** A number
+inside the kernel's range with no name in the table is a condition four
+columns take and one refuses. Measured 2026-09-19, a script file holding
+`trap 'echo CAUGHT' N` then `kill -N $$` then `echo SURVIVED`, under `env -i
+PATH=/usr/bin:/bin LC_ALL=C`:
+
+| column | 15 | 34 | 35 through 64 |
+| --- | --- | --- | --- |
+| bash 5.2.15, dash 0.5.12, ksh93u+ on glibc | caught | caught | caught |
+| bash, dash, BusyBox ash 1.37.0 on musl | caught | ends the shell | caught |
+| zsh 5.9 on either | caught | `undefined signal: 34` | the same refusal |
+| every dialect here, on either | caught | refused | refused |
+
+So the accepting columns take a number from their own library's `RTMIN`
+upward and refuse below it, which is the same constant again; zsh refuses the
+whole range on both libraries and is the column this engine already matches,
+in wording as well as in verdict. The disagreement is real and therefore wants
+an axis rather than a correction — and the axis's *boundary* is the C library
+constant this section has already said is out of reach, with the one number
+the runtime reserves and glibc names sitting exactly on it (#3798).
+
 ### The listing is a third view of the table
 
 Measured 2026-09-17, `kill -l` with no operands from a script file under

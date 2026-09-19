@@ -565,6 +565,18 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			r.killFailed(&killError{kind: killNoSuchProcess, operand: t, errno: syscall.ESRCH})
 			continue
 		}
+		if !fromJob && len(aims) == 1 && aims[0].pid == allProcesses && r.refusesTheAllProcessesTarget() {
+			// The one operand POSIX gives a meaning of its own: every
+			// process this one may signal. ksh93 refuses it by name, and
+			// this is the only place the answer can differ — every other
+			// number, process group included, is the same send in every
+			// dialect, so the question is asked here rather than beside
+			// them. EPERM because that is what the refusal means and what
+			// the wording in each dialect is already written against.
+			failed++
+			r.killFailed(&killError{kind: killNotPermitted, operand: t, errno: syscall.EPERM})
+			continue
+		}
 		if len(aims) == 0 {
 			// A target that is there with nothing to reach, which is a job
 			// either way: one that has ended and that the script has not
@@ -693,6 +705,23 @@ func (r *Runner) killTarget(t string) (targets []jobProcess, fromJob bool, bad i
 	}
 	targets, found := r.jobProcesses(j)
 	return targets, true, found
+}
+
+// allProcesses is the pid POSIX defines as every process the caller may
+// signal. Named because `-1` read as a bare number beside a process group is
+// indistinguishable from any other negative pid, and it is not one.
+const allProcesses = -1
+
+// refusesTheAllProcessesTarget reports whether this dialect answers `kill -1`
+// with a diagnostic rather than with the signal.
+//
+// Asked only where the operand is really that pid, which is the discipline
+// every conditional axis in this package follows: a shell that sends it and a
+// shell that refuses it agree about every other target, so putting the
+// question on the common send path would be recording a disagreement where
+// there is none.
+func (r *Runner) refusesTheAllProcessesTarget() bool {
+	return r.ask(r.sem().KillRefusesTheAllProcessesTarget, "`kill` refusing the all-processes target")
 }
 
 // aimsAJobSpecAtItsGroup reports whether this dialect points a `%` spec at

@@ -3423,6 +3423,43 @@ type Semantics struct {
 	// has to keep the pid here.
 	KillJobSpecAimsAtTheGroup Answer
 
+	// KillRefusesTheAllProcessesTarget refuses the pid `-1` — the operand
+	// POSIX defines as every process this one may signal — instead of
+	// handing it to the kernel.
+	//
+	// ksh93 alone refuses it, and refuses it *by name* rather than as a
+	// process group it could not reach. Measured 2026-09-19 with signal 0,
+	// which performs the permission check and delivers nothing, so the panel
+	// could be run on a working machine rather than reasoned about:
+	//
+	//	kill -0 -- -$$       the shell's own group, which is really there
+	//	kill -0 -- -1        every process
+	//	kill -0 -- -99999    a group that is not there
+	//
+	// ksh93u+ answers those three differently — 0, `kill: -1: permission
+	// denied` at 1, and `kill: -99999: no such process` at 1 — so `-1` is
+	// neither "a group that is there" nor "a group that is missing" to it.
+	// It is a third case with a diagnostic of its own. bash 5.3.20, zsh
+	// 5.9.2, dash 0.5.12 and BusyBox 1.37.0 ash all answer 0 for `-1` and
+	// send it.
+	//
+	// That bash returns 0 for the identical call, as the same user on the
+	// same machine in the same second, is what says ksh93's refusal is the
+	// shell's own and not an errno relayed from the kernel.
+	//
+	// The refusal is worth having an axis for rather than a constant because
+	// the operand reaches real scripts through a default. gitstatus writes
+	// `${sysparams[procsubstpid]:--1}` and is saved only by a second guard
+	// it also writes; a caller with the default and without the guard asks
+	// to signal everything it can reach. Where the dialect refuses, that
+	// becomes a sentence instead. Where it does not, `kill -- -1` from a
+	// script in a container stays the deliberate thing it is.
+	//
+	// It is asked only when the operand really is `-1`, so every other
+	// target — including every other process group — takes the same path in
+	// every dialect.
+	KillRefusesTheAllProcessesTarget Answer
+
 	// OperatorDistributesOverTheFieldList runs a trim or a replacement over
 	// each field of `$@` rather than over the whole list once.
 	//
@@ -21344,6 +21381,9 @@ func PosixSemantics() Semantics {
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,
+		// The standard leaves `-1` to the kernel, and four of the five
+		// columns hand it straight there.
+		KillRefusesTheAllProcessesTarget: No,
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
 		// over the whole list once and say so themselves.
 		OperatorDistributesOverTheFieldList: Yes,
@@ -22470,6 +22510,9 @@ func CoreSemantics() Semantics {
 		// `kill %1` reaches the job's process; dash aims at its group and
 		// says so itself.
 		KillJobSpecAimsAtTheGroup: No,
+		// The standard leaves `-1` to the kernel, and four of the five
+		// columns hand it straight there.
+		KillRefusesTheAllProcessesTarget: No,
 		// `kill -n signum` is taken, which is three of the five columns and
 		// what the substrate has always had — dash and BusyBox ash are the
 		// two without it and each says so itself. `-s` with nothing after it

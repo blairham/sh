@@ -71,6 +71,25 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 			},
 		},
 		{
+			// A **redirection target**, which is a word like any other and
+			// was reached through a second expansion walk that recorded no
+			// word at all — so the dialect quoting the word had nothing to
+			// quote from and wrote no second line (#3355). Nothing about
+			// the message is special; the call was missing.
+			//
+			// bash is left out of this row rather than measured wrong: it
+			// stops the script at the refusal where this engine goes on to
+			// call the target ambiguous, which is a separate divergence and
+			// not this one. ksh93 places its own sentence at `line 0` here.
+			name: "the substitution is a redirection target",
+			src:  "printf 'start\\n'\necho hi >$(echo hi; for)\necho after\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: parse error near `$(echo hi; for)'\n",
+				"dash": "s.sh: 2: Syntax error: Bad for loop variable\n",
+			},
+		},
+		{
 			// No newline at the end of the file, so the reader has none to
 			// take and zsh's second line is not moved on. The word is exactly
 			// twenty bytes, which that dialect marks although nothing is cut.

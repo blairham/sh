@@ -231,11 +231,18 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 // the end of the file, and `zsh:2` under `-c` for a two-line string. That is
 // the reader having taken the newline, which is why it is read off the text.
 //
-// Only for a span written straight into a word the command line holds, at the
-// column the word places it. Inside double quotes the second message is
-// `unmatched "`, inside an expansion's operand `closing brace expected`, and
-// the word of a redirection or an arithmetic expansion is not reached here —
-// none of those is written, rather than a quote from the wrong place (#3355).
+// Only for a span written straight into a word, at the column the word places
+// it. A redirection target is such a word and reaches this — its expansion
+// walks the spans itself and had recorded no word at all, which is a missing
+// call rather than a missing rule, so `echo hi >$(for)` wrote nothing where
+// that shell quotes `$(for)` (#3355).
+//
+// Inside double quotes the second message is `unmatched "` and inside an
+// expansion's operand `closing brace expected`; an arithmetic expansion's
+// text is re-lexed, so the span's column is counted from that text rather
+// than from the line, and a substitution nested in a substitution is placed
+// from the enclosing body. None of those is written, rather than a quote from
+// the wrong place.
 //
 // Nor inside a function body, where this dialect locates a message by the
 // function and the line within it. It reads a body where the definition is,

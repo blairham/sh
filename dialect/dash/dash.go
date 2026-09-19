@@ -631,6 +631,12 @@ func Semantics() interp.Semantics {
 	// sibling cannot close the group: `[ ( -n x ) ]` is 0.
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
+	// And a group with nothing in it is a false expression rather than a
+	// refusal: `[ ( ) ]` is a silent 1 here and composes with the
+	// connectives and the negation — `[ ( ) -o x ]` is 0, `[ x -a ( ) ]`
+	// is 1, `[ ! ( ) ]` is 0 — where the other five columns write a
+	// sentence and exit 2. Alone in the panel (#3687).
+	s.TestEmptyGroupIsFalse = interp.Yes
 	s.UnterminatedBracket = interp.BracketNoMatch
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: a class that can never match, the same as a bare `[`.

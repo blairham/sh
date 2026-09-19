@@ -11998,6 +11998,38 @@ type Semantics struct {
 	// column's answer and not the ash family's (#3665, #3687).
 	TestFailureInsideAnUnclosedGroupIsTheParen Answer
 
+	// TestEmptyGroupIsFalse reads a group with nothing between its
+	// parentheses as a false expression rather than as a list the reading
+	// could not place.
+	//
+	// A status difference and not a wording one, which is what separates it
+	// from the rest of the disagreements about groups: a script reading `$?`
+	// sees 1 where the other columns write a sentence and exit 2. Measured
+	// 2026-09-18, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// with standard input on /dev/null, against dash 0.5.12, bash 5.3.20,
+	// zsh 5.9.2, ksh93u+ 2012-08-01 and BusyBox v1.37.0 ash in the pinned
+	// image:
+	//
+	//	[ ( ) ]              1 on this axis; a refusal in the other five
+	//	[ ( ( ) ) ]          1                nested, and the same
+	//	[ x -a ( ) ]         1                as an operand of a connective
+	//	[ ( ) -o x ]         0                and of the other one
+	//	[ ( ) -a ( ) ]       1                on both sides at once
+	//	[ ! ( ) ]            0                behind a negation
+	//	[ ! ! ( ) ]          0                and behind two
+	//	[ ( ) -a x -o y ]    0                inside a longer expression
+	//
+	// So the empty group is an operand like any other and composes with the
+	// connectives and the negation, which is what says it is a *value* and
+	// not a shape the front of the reader happens to skip. The controls are
+	// the groups that are not empty: `[ ( x ) ]` is 0 and `[ ( "" ) ]` is 1
+	// in every column, so this is the empty one alone.
+	//
+	// Asked only where a `(` is closed by the very next word, so no column
+	// whose groups all have something in them is put a question its own
+	// `test` never reaches (#3687).
+	TestEmptyGroupIsFalse Answer
+
 	// LocalThroughCommandDeclaresNothing runs `command local a=1` for its
 	// operand checks and declares nothing, assigns nothing and reports 0 —
 	// the scope the prefix puts the declaration in is not the function's.
@@ -21099,7 +21131,12 @@ func PosixSemantics() Semantics {
 		// than with a reading, and says so where it overrides this.
 		TestGroupedUnaryAloneLosesTheClosingParen:  No,
 		TestFailureInsideAnUnclosedGroupIsTheParen: No,
-		TestStringOrder: TestStringOrderNeither,
+		// And a group with nothing in it is not an expression at all: POSIX
+		// gives `( expr )` an operand, so a reading that finds the closing
+		// parenthesis where the expression belonged has run out of words
+		// rather than found a false one.
+		TestEmptyGroupIsFalse: No,
+		TestStringOrder:       TestStringOrderNeither,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several
 		// operators in a clause are allowed, an omitted who means all three,

@@ -11354,7 +11354,7 @@ rather than a second field.
 **`Semantics.IntegerBaseComesFromTheValueAssigned`** — bash no · dash no · ksh93 no · zsh yes
 
 The half of the base that is not the letter, and zsh alone. The base is
-learned from the *radix prefix* of the value assigned, and it sticks to
+learned from a *radix written in* the value assigned, and it sticks to
 the name:
 
     typeset -i a; a=0x10           ksh93 16    zsh 16#10
@@ -11362,14 +11362,40 @@ the name:
     typeset -i c; c=8#7;  c=99     ksh93 99    zsh 8#143
     a=0x10; typeset -i a           ksh93 16    zsh 16#10
 
-Two things teach it nothing in any column: a leading zero, which is not a
-radix, and a value that arrived already evaluated — `$((0x10))` hands the
-assignment four decimal characters and there is no prefix left to read. A
-*sign* in front of one does not hide it: `b=-0x10` is `-16#10`.
+**Written in, and not written at the front.** The value an integer name
+is assigned is an expression rather than a number, and a radix inside one
+is read exactly as a radix standing alone is. Measured 2026-09-18 on zsh
+5.9.2, from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
 
-The leading-zero row splits the panel for a reason of its own, which is
-#1270 and not this: `016` is 14 in the three bash columns, which read it
-as octal, and 16 in both shells that have a base.
+    typeset -i a=1+0x1f            ksh93 32    zsh 16#20
+    typeset -i b=0x1f+1            ksh93 32    zsh 16#20
+    typeset -i c=1?0x10:2          ksh93 16    zsh 16#10
+    typeset -i d='(1+0x1f)'        ksh93 32    zsh 16#20
+    typeset -i e=1+16#ff           ksh93 256   zsh 16#100
+    typeset -i f=1+010             ksh93 9     zsh 8#11 (octal_zeroes)
+
+It reaches every route that folds a text through the attribute and not
+only the declaration: `typeset -i a; a=1+0x1f` is `16#20`, `typeset -i
+b=1; b+=1+0x1f` is `16#21`, and `c=1+0x10; typeset -i c` — the re-read a
+held value takes when the attribute arrives — is `16#11`. Which is the
+same answer the arithmetic route already gave `(( y = 1 + 0x1f ))`, and
+it is one question over one representation now: both walk the parsed
+expression for its first radix rather than scanning characters. Scanning
+the characters can only ever find a radix that *begins* the text, which
+is why an operator in front of one taught nothing here until #3670.
+
+One thing teaches it nothing in any column: a value that arrived already
+evaluated — `$((0x10))` hands the assignment four decimal characters and
+there is no radix left to read. A *sign* in front of one does not hide
+it: `b=-0x10` is `-16#10`.
+
+A bare leading zero is a radix too where the dialect reads one as octal,
+which is #3520 and is stated in full under
+`IntegerAssignmentReadsALeadingZeroAsDecimal` above; the `1+010` row here
+is that reading met inside an expression. Without `octal_zeroes` the
+panel splits for a reason of its own, which is #1270 and not this: `016`
+is 14 in the three bash columns, which read it as octal, and 16 in both
+shells that have a base.
 
 What is learned is a base the shell **takes**, not only one it writes a
 value in, and ten is the row that says so: `b=10#5` lists back as

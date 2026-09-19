@@ -2443,6 +2443,55 @@ wording, where it had been concatenated.
 pair. The block carries no location, exactly as the block a bare `kill` writes
 does.
 
+## `--` stands in two places in `kill`, and only one of them is common
+
+Split out of #2145's measurement and filed as #3817, whose title said `--` is
+not end-of-options here. That is wrong, and the correction is the finding: it
+**is** end-of-options, in front of everything. The gap is the second place it
+can stand.
+
+Measured 2026-09-19 against process group `-99999`, which does not exist, so
+no row could deliver anything even where the default signal stands:
+
+| | `kill -- T` | `kill -0 -- T` | `kill -s 0 -- T` |
+| --- | --- | --- | --- |
+| bash 5.3.20 | the target | the target | the target |
+| zsh 5.9.2 | the target | the target | the target |
+| ksh93u+ | the target | the target | the target |
+| dash 0.5.12 | the target | `Illegal number: -` | the target |
+| BusyBox 1.37.0 ash | the target | `invalid number '--'` | `invalid number '--'` |
+| this shell, before | the target | `--: not a pid` | `--: not a pid` |
+
+The marker **in front** is common ground — six columns for six — and this
+shell already had it, at the top of `killSignal`. Behind the signal it splits
+three to two, which is `Semantics.KillTakesEndOfOptionsAfterTheSignal`.
+
+The status cannot tell these apart: an absent process group and a word that is
+not a pid are both **1**. Only the sentence discriminates, which is why the
+rows above are messages rather than numbers.
+
+### dash's row is by the form, not by the dialect
+
+dash takes the marker behind `-s 0` and reads it as a target behind `-0`. That
+is a split by *how the signal was written*, which no per-dialect value can
+carry, so dash answers **No** at the reading the two spellings share and the
+`-s` half is recorded here rather than modeled.
+
+### Exactly one marker is consumed
+
+`kill -- -- T` complains about the second `--` and then reaches `T` in bash
+5.3.20 and ksh93u+; zsh 5.9.2 takes both. We consume one, with bash and ksh:
+the reading in front takes the first, which leaves no signal read, and this
+axis is asked only where a signal really was — so the second stays the target
+it was written as.
+
+### Why the spelling matters at all
+
+`--` is how a script writes a negative operand without it being read as an
+option, which is the whole reason the spelling exists. `kill -TERM -- -$pgid`
+is the ordinary way to signal a process group, and it is the spelling the one
+real-world caller in #2145 writes.
+
 ## The all-processes target, and why signal 0 could measure it
 
 POSIX gives the pid `-1` a meaning no other number has: every process the

@@ -2239,6 +2239,8 @@ func Semantics() interp.Semantics {
 	// `kill: -1: permission denied` at 1, where `-$$` is 0 and an
 	// absent group is `no such process`.
 	s.KillRefusesTheAllProcessesTarget = interp.Yes
+	// ksh93u+ reaches the target behind either spelling.
+	s.KillTakesEndOfOptionsAfterTheSignal = interp.Yes
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// bash's answer here: OPTIND names the word until its last letter.

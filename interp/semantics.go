@@ -3491,6 +3491,39 @@ type Semantics struct {
 	// every dialect.
 	KillRefusesTheAllProcessesTarget Answer
 
+	// KillTakesEndOfOptionsAfterTheSignal takes `--` in the second place it
+	// can stand — behind a signal option rather than in front of everything.
+	//
+	// The marker in *front* is common: `kill -- -99999` reaches the target
+	// in all six columns. Behind the signal it splits, measured 2026-09-19
+	// against a process group that is not there, so no row could deliver
+	// anything:
+	//
+	//	                 kill -0 -- T        kill -s 0 -- T
+	//	bash 5.3.20      the target          the target
+	//	zsh 5.9.2        the target          the target
+	//	ksh93u+          the target          the target
+	//	dash 0.5.12      `Illegal number: -` the target
+	//	BusyBox 1.37.0   `invalid number`    `invalid number`
+	//
+	// The status cannot tell these apart — an absent process group and a
+	// word that is not a pid are both 1 — so every row was read from the
+	// sentence rather than the number.
+	//
+	// dash is the reason this is an axis rather than a constant: it takes
+	// the marker behind `-s 0` and reads it as a target behind `-0`. That
+	// split is by the *form* the signal was written in, which no
+	// per-dialect value can carry, so dash answers at the reading the two
+	// spellings share and its `-s` half is recorded in
+	// docs/spec/semantics.md.
+	//
+	// It matters because `--` is how a script writes a negative operand
+	// without it being read as an option, which is the whole reason the
+	// spelling exists — `kill -TERM -- -$pgid` is the ordinary way to signal
+	// a process group, and it is the spelling the one real caller in #2145
+	// writes.
+	KillTakesEndOfOptionsAfterTheSignal Answer
+
 	// OperatorDistributesOverTheFieldList runs a trim or a replacement over
 	// each field of `$@` rather than over the whole list once.
 	//
@@ -21639,6 +21672,8 @@ func PosixSemantics() Semantics {
 		// The standard leaves `-1` to the kernel, and four of the five
 		// columns hand it straight there.
 		KillRefusesTheAllProcessesTarget: No,
+		// The standard says the marker ends the options wherever it stands.
+		KillTakesEndOfOptionsAfterTheSignal: Yes,
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
 		// over the whole list once and say so themselves.
 		OperatorDistributesOverTheFieldList: Yes,
@@ -22792,6 +22827,8 @@ func CoreSemantics() Semantics {
 		// The standard leaves `-1` to the kernel, and four of the five
 		// columns hand it straight there.
 		KillRefusesTheAllProcessesTarget: No,
+		// The standard says the marker ends the options wherever it stands.
+		KillTakesEndOfOptionsAfterTheSignal: Yes,
 		// `kill -n signum` is taken, which is three of the five columns and
 		// what the substrate has always had — dash and BusyBox ash are the
 		// two without it and each says so itself. `-s` with nothing after it

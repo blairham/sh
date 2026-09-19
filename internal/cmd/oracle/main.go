@@ -42,6 +42,7 @@ func main() {
 		gated  = flag.Bool("gated", false, "run the corpus twice through -bin, with and without a sandbox policy, and report what the policy changed")
 		pol    = flag.String("policy", "", "the policy file -gated uses; empty generates one confining writes to the scratch directory")
 		drop   = flag.Bool("allow-losing-measurements", false, "write the record even though a column has lost measurements the record already holds")
+		only   = flag.String("only", "", "regenerate only these cases, by comma-separated ID, and keep the record for every other")
 	)
 	flag.Parse()
 
@@ -71,13 +72,25 @@ func main() {
 		return
 	}
 
-	if err := run(*check, *golden, *doc, *drop); err != nil {
+	if err := run(*check, *golden, *doc, *drop, splitIDs(*only)); err != nil {
 		fmt.Fprintln(os.Stderr, "oracle:", err)
 		os.Exit(exitFailure)
 	}
 }
 
-func run(check bool, goldenPath, docPath string, allowLoss bool) error {
+// splitIDs reads the -only list. Empty means the whole corpus, which is what
+// a regeneration has always been.
+func splitIDs(s string) []string {
+	var out []string
+	for _, f := range strings.Split(s, ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func run(check bool, goldenPath, docPath string, allowLoss bool, only []string) error {
 	// Asked first, and before a shell is run, because it is the half that
 	// gives the same answer on every machine: the corpus, the record and the
 	// rendered document either agree with each other or they do not. The
@@ -92,7 +105,24 @@ func run(check bool, goldenPath, docPath string, allowLoss bool) error {
 		stale = bad
 	}
 
-	got, err := oracle.Execute(context.Background(), oracle.Corpus)
+	// What this run executes, which is the whole corpus unless -only named
+	// cases. Refused rather than narrowed silently if a name is not in the
+	// corpus: a typo would run nothing, rewrite the record identically and
+	// exit 0, which reads as "there was nothing to change".
+	run := oracle.Corpus
+	if len(only) > 0 {
+		if check {
+			return fmt.Errorf("-only regenerates; it has nothing to say to -check, " +
+				"which grades the whole panel against the whole record")
+		}
+		sel, err := oracle.Select(oracle.Corpus, only)
+		if err != nil {
+			return err
+		}
+		run = sel
+	}
+
+	got, err := oracle.Execute(context.Background(), run)
 	if err != nil {
 		return err
 	}
@@ -112,7 +142,12 @@ func run(check bool, goldenPath, docPath string, allowLoss bool) error {
 		// as the name: "install it" and "start Docker" are different work.
 		fmt.Printf("  %-12s NOT RUN — %s\n", a.Name, a.Reason)
 	}
-	fmt.Printf("  %d cases across %d shells\n\n", len(oracle.Corpus), len(got.Shells))
+	if len(only) > 0 {
+		fmt.Printf("  %d of %d cases across %d shells — the record is kept for the rest\n\n",
+			len(run), len(oracle.Corpus), len(got.Shells))
+	} else {
+		fmt.Printf("  %d cases across %d shells\n\n", len(oracle.Corpus), len(got.Shells))
+	}
 
 	// Said here, before either branch, because it is true of both and
 	// because it is the one result that is neither a measurement nor a
@@ -149,6 +184,19 @@ func run(check bool, goldenPath, docPath string, allowLoss bool) error {
 			prev = nil
 		default:
 			return fmt.Errorf("reading %s to carry racing rows forward: %w", goldenPath, err)
+		}
+		// The partial run becomes a whole one before anything else looks at
+		// it, so everything below — the racing rows, the confirmation, the
+		// loss refusal, the document — is handed exactly what a whole
+		// regeneration hands it. See Run.Merge: it refuses a named case with
+		// a column missing from it, and refuses a panel that is not the
+		// record's, both of which a whole run cannot get into.
+		if len(only) > 0 {
+			merged, err := got.Merge(prev, oracle.IDs(run))
+			if err != nil {
+				return err
+			}
+			got = merged
 		}
 		// Pinned before anything is counted or confirmed: a racing row's
 		// cells are carried forward here, so asking what changed before

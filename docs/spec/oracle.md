@@ -297,12 +297,51 @@ asks every column the same question.
 `internal/oracle` implements this, and `internal/cmd/oracle` drives it:
 
     make oracle         # re-measure, rewrite measurements.md and the golden record
+    make oracle-case CASES=cat/one,cat/two
+                        # re-measure only those, keeping the record for the rest
     make oracle-check   # fail if the panel no longer behaves as recorded
 
 The corpus is checked-in Go data, one entry per behavior a spec entry
 asserts. Each carries a `Why` explaining what it pins down — without
 that, a case that changes later gets "fixed" by updating the golden
 record, which is how a regression becomes a feature.
+
+### Regenerating part of the record
+
+`make oracle` writes the whole record from one live run, so a case could not
+be committed until every column of the panel was reachable at once. That
+parked measured, correct cases indefinitely — #3384 held three collating
+element rows measured against five columns and unable to land, because
+landing them meant a sweep of 1122 cases across seven and a BusyBox that a
+macOS machine has only through a container. **"This case is measured" and
+"this case can be committed" were two different questions, and the second one
+depended on hardware.**
+
+`make oracle-case` makes them one question. It runs the cases named in
+`CASES`, lays their cells over the record for every other case, and hands the
+result to exactly the same writer a whole regeneration hands it —
+`Run.Record` still owns the ordering, the racing rows, the unmeasured markers
+and the refusal to lose a column. There is one writer; this runs in front of
+it.
+
+Two refusals are what make a partial record indistinguishable from a whole
+one, and both are checked before anything is merged:
+
+- **A named case with a column missing from it** is refused. `LostMeasurements`
+  structurally cannot catch this one — it asks what the record held, and for a
+  brand new case it held nothing — so the row would be written with a column
+  simply absent and nothing would look wrong.
+- **A panel that is not the record's** is refused, whether a shell is missing
+  or a build has moved. The record holds one build string per shell for the
+  whole file, so a merge across two panels writes rows measured under
+  conditions the panel table cannot express.
+
+The mechanism self-checks on every use, and it is worth knowing why: every
+unnamed case's cells come from the record unchanged, so `LostMeasurements`
+over the merged result must report **zero** loss outside the named rows, and
+`Confirm` re-runs only the cases that changed — which can only be the named
+ones. The strongest control available costs nothing: regenerate a case that is
+already recorded and the file that comes back should be byte-identical.
 
 `make oracle-check` runs in `make check` and in CI. Drift is deliberately
 **not** described as a failure of the code: a shell was upgraded, or a

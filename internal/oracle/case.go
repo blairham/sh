@@ -17676,6 +17676,21 @@ printf "[%s]" .@(hid); echo`,
 			"shell has no option of its own for a script to write back",
 	},
 	{
+		ID: "pat/a-collating-element-is-one-member", Category: "pattern matching",
+		Snippet: `t() { eval "case \"\$2\" in ($1) printf Y;; *) printf n;; esac"; }; for p in "[[.a.]]" "[[=a=]]" "[[.a.]x]"; do printf "%s:" "$p"; for s in a "a]" x; do t "$p" "$s"; done; printf " "; done; echo`,
+		Why:     "`[.x.]` is a collating element and `[=x=]` an equivalence class in every column but one, and the row is shaped so the holdout is visible as a *shape* rather than as a missed match. Where the construct is read, `[[.a.]]` matches `a` and not `a]`; where it is not, the same text is the three-member set `[`, `.`, `a` with a literal `]` behind it, so it matches `a]` and not `a`. zsh is the column without either construct; bash, ksh93 and dash all have both. A probe that only asked about `a` would read the holdout as a plain miss and say nothing about what it read instead",
+	},
+	{
+		ID: "pat/a-collating-element-as-a-range-bound", Category: "pattern matching",
+		Snippet: `t() { eval "case \"\$2\" in ($1) printf Y;; *) printf n;; esac"; }; for p in "[[.a.]-c]" "[a-[.c.]]" "[a[.-.]z]"; do printf "%s:" "$p"; for s in b "c]" - ; do t "$p" "$s"; done; printf " "; done; echo`,
+		Why:     "an element stands at either end of a range, which is the half of the construct a single-member probe cannot reach. The third field is the control that says the element is a *member* and not the operator: `[a[.-.]z]` holds the three characters a, `-` and z rather than a run from a to z, so it matches `-` and not b. The holdout column reads the `-` as the operator still, over a run that ends at a `[`, and its bracket ends at the element's own `]` — so `[a-[.c.]]` matches `c]` there and b everywhere else",
+	},
+	{
+		ID: "pat/a-collating-body-that-is-not-an-element", Category: "pattern matching",
+		Snippet: `t() { eval "case \"\$2\" in ($1) printf Y;; *) printf n;; esac"; }; printf "closed:"; for s in a b n; do t "[a[.nosuch.]b]" "$s"; done; printf " unclosed:"; for s in "xy]" "[y]" "ay]"; do t "[x[.a]y]" "$s"; done; echo`,
+		Why:     "in the C locale a collating element is one character, so a longer body is not an element — and what that does to the bracket around it is the same three readings an unrecognized `[:name:]` gets: inert in bash, the scan given up at the name in dash, the whole bracket emptied in ksh93. The `n` field is what separates *inert* from *the delimiters were ordinary characters*: no letter of the body is ever a member. The second half is the other shape, a `[.` nothing closes, where the inert column does read the characters for themselves and the other two carry their give-up past it — so the three readings answer both shapes and answer them differently. bash 3.2 is the column that does not: it answers the closed body with 5.3 and the unclosed one with ksh93, which is why the two halves are one row",
+	},
+	{
 		ID: "glob/dot-and-dotdot-in-a-listing", Category: "expansion",
 		Snippet: `mkdir -p gd/sub && cd gd && : > a.txt && : > .dot && echo .*; echo .*/; echo *`,
 		Why: "whether `.` and `..` are in the names a pathname expansion may match. " +

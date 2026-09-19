@@ -145751,6 +145751,159 @@
         "TimedOut": false
       }
     },
+    "pat/a-collating-body-that-is-not-an-element": {
+      "ash": {
+        "Stdout": "closed:YYn unclosed:nnn",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "closed:YYn unclosed:YYY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "closed:YYn unclosed:YYY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "closed:YYn unclosed:nnn",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "closed:Ynn unclosed:Ynn",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "closed:nnn unclosed:nnn",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "closed:nnn unclosed:YYY",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/a-collating-element-as-a-range-bound": {
+      "ash": {
+        "Stdout": "[[.a.]-c]:Ynn [a-[.c.]]:nnn [a[.-.]z]:nnn ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[[.a.]-c]:Ynn [a-[.c.]]:Ynn [a[.-.]z]:nnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[[.a.]-c]:Ynn [a-[.c.]]:Ynn [a[.-.]z]:nnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[[.a.]-c]:Ynn [a-[.c.]]:Ynn [a[.-.]z]:nnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[[.a.]-c]:Ynn [a-[.c.]]:Ynn [a[.-.]z]:nnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[[.a.]-c]:Ynn [a-[.c.]]:Ynn [a[.-.]z]:nnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[[.a.]-c]:nnn [a-[.c.]]:nYn [a[.-.]z]:nnn ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/a-collating-element-is-one-member": {
+      "ash": {
+        "Stdout": "[[.a.]]:nnn [[=a=]]:nnn [[.a.]x]:nnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[[.a.]]:Ynn [[=a=]]:Ynn [[.a.]x]:YnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[[.a.]]:Ynn [[=a=]]:Ynn [[.a.]x]:YnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[[.a.]]:Ynn [[=a=]]:Ynn [[.a.]x]:YnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[[.a.]]:Ynn [[=a=]]:Ynn [[.a.]x]:YnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[[.a.]]:Ynn [[=a=]]:Ynn [[.a.]x]:YnY ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[[.a.]]:nYn [[=a=]]:nYn [[.a.]x]:nnn ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/a-condition-operand-out-of-a-command-substitution": {
       "ash": {
         "Stdout": "hit",

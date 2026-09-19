@@ -94,6 +94,21 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// `subst/a-body-that-will-not-parse-stops-the-line` and
 	// `subst/a-body-that-will-not-parse-in-a-branch-never-taken`.
 	p := r.ParseWithAliases(src, r.bodyDialect(span))
+	if !span.Backquoted && span.Kind == syntax.CommandSubst {
+		// The text is the inside of a `$( )`, cut out of the script by the
+		// lexer, and that is a fact only this call site still holds: the
+		// parentheses are not in `src`. What turns on it is where a
+		// here-document in the body ends — at the end of the text, or at the
+		// delimiter the last line of it begins with, in the one dialect that
+		// reads it that way.
+		//
+		// **The backquoted spelling is left out and that is measured**, not
+		// symmetry: `` v=`cat <<E` ⏎ `w` ⏎ `E ` `` answers `[w⏎E ]` in bash
+		// 5.3, body, exactly as bash 3.2 has it. The old-style substitution
+		// does not take the route. See
+		// syntax.Dialect.HeredocLastLineIsADelimiterPrefix.
+		p.InsideProgramParentheses()
+	}
 	// Where the body sits in the script, so that what it reports is reported
 	// where a reader can find it. The span's own line is the body's first,
 	// because a span starts at its opening delimiter — and it accumulates,

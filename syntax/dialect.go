@@ -2329,6 +2329,67 @@ type Dialect struct {
 	// the construct is unclosed all the same and the answer does not change.
 	HeredocEndsAtClosingParen bool
 
+	// HeredocLastLineIsADelimiterPrefix reads the last line of the text
+	// inside `$( )` as a delimiter *prefix*, where a here-document in that
+	// text reached the end of it without ever seeing the delimiter on a line
+	// of its own: the delimiter is consumed and the rest of that line is
+	// parsed as more of the substitution.
+	//
+	// The looser half of HeredocEndsAtClosingParen above, and one shell has
+	// it. Measured 2026-09-12 and re-measured 2026-09-18 from a script file
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C`, bash 5.3.20 against bash
+	// 3.2.57, ksh93u+, dash and zsh 5.9.2, over
+	//
+	//	v=$(cat <<E
+	//	w
+	//	E <tail>
+	//	echo "[$v]"
+	//
+	//	tail          bash 5.3                          bash 3.2 and the rest
+	//	)             [w]                               [w⏎E ] or a refusal
+	//	x)            `x: command not found`, [w]        the same
+	//	x y)          the same with an argument          the same
+	//	x) (no blank) `x: command not found`, [w]        the same
+	//	E)            `E: command not found`, [w]        the same
+	//	; echo hi)    syntax error at `;`, echoing       the same
+	//	              `` ` ; echo hi)' ``
+	//
+	// **The match is a bare prefix and needs no blank**, which is what the
+	// fourth and fifth rows say: `Ex)` consumes the `E` and runs `x`.
+	//
+	// **It is a recovery at the end of the text and not a prefix match on
+	// every body line**, which is the control that makes it safe. A body line
+	// beginning with the delimiter, with the document then closed properly —
+	//
+	//	v=$(cat <<E
+	//	EXTRA
+	//	E
+	//	)
+	//
+	// — answers `[EXTRA]`: `EXTRA` begins with `E` and is not taken as the
+	// delimiter. Move the closer up onto the `E` line and the answer is
+	// `[EXTRA]` again, with the `E ` line consumed. So a well-formed document
+	// cannot be terminated early by this, which was the regression it looked
+	// like it might carry into a very common construct.
+	//
+	// **And it is `$( )` and nothing else.** The discriminating shape puts
+	// the prefix line last in a plain file — `cat <<E` / `w` / `E x` with
+	// nothing after it — and bash gives cat the body `w⏎E x`, so the rule is
+	// not a general here-document rule. The backquoted spelling of the same
+	// substitution answers `[w⏎E ]`, body, exactly as bash 3.2 has it.
+	//
+	// The warning that goes with it is not a cost: RemarkHeredocAtEOF fires
+	// in exactly these cases already and both shells write
+	// `warning: here-document at line 1 delimited by end-of-file (wanted
+	// `E')` character for character. The well-formed control is what says the
+	// remark must *not* fire for a document closed on its own line.
+	//
+	// Not ksh93, which refuses this shape with `` syntax error at line 1:
+	// `(' unmatched `` — it runs the document to end of input and then cannot
+	// find the closer, which is a question about how the substitution's
+	// extent is found rather than about this rule (#1021).
+	HeredocLastLineIsADelimiterPrefix bool
+
 	// HeredocDelimiterAcrossAContinuation says whether a body line built out
 	// of two or more physical lines may itself be the delimiter, and how far.
 	// See [ContinuedHeredocDelimiter], which carries the measurement.

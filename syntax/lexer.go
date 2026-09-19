@@ -5117,8 +5117,50 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 	// names the here-document's own line, which is measured.
 	lastLine := r.OpPos
 	var body strings.Builder
+	// Where the last line the body took began, and how long the body was
+	// before it — so that the line can be given back at the end of the text
+	// inside parentheses. See heredocPrefixEndsTheParens.
+	var lastBody Pos
+	lastBodyLen, tookALine := 0, false
 	for {
 		if l.eof() {
+			if tookALine && l.heredocPrefixEndsTheParens(lastBody, delim, strip) {
+				// The text inside the parentheses ran out and the last line
+				// of it begins with the delimiter. That line is not body: the
+				// delimiter is taken off it and what follows is program text
+				// again, so the body is cut back and the cursor put where the
+				// delimiter ended.
+				//
+				// A recovery at the end and not a rule about every line —
+				// which is what keeps a body line that merely begins with the
+				// delimiter from closing a document that closes properly two
+				// lines later. See Dialect.HeredocLastLineIsADelimiterPrefix
+				// for the control that says so.
+				kept := body.String()[:lastBodyLen]
+				body.Reset()
+				body.WriteString(kept)
+				l.rewindTo(lastBody)
+				if strip {
+					for !l.eof() && l.peek() == '\t' {
+						l.advance()
+					}
+				}
+				for range len(delim) {
+					l.advance()
+				}
+				// The same remark the eof branch below raises, on the same
+				// line: this document was not closed by a delimiter of its
+				// own, and the one shell that says so says it here. Measured
+				// byte for byte against it.
+				l.remarks = append(l.remarks, Remark{
+					Kind:  RemarkHeredocAtEOF,
+					Pos:   lastBody,
+					At:    r.OpPos,
+					Token: delim,
+				})
+				l.markHeredocEnd(lastBody)
+				break
+			}
 			// Reaching the end without the delimiter is unfinished input and
 			// not a syntax error: every shell in the panel takes the body as
 			// everything to the end and runs the command, one of them with a
@@ -5183,6 +5225,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			break
 		}
 		lastLine = linePos
+		lastBody, lastBodyLen, tookALine = linePos, body.Len(), true
 		body.WriteString(line)
 	}
 
@@ -5263,6 +5306,45 @@ func (l *Lexer) delimiterClosesParens(delim string, strip bool) bool {
 	}
 	rest := l.src[i:]
 	return strings.HasPrefix(rest, delim) && strings.HasPrefix(rest[len(delim):], ")")
+}
+
+// heredocPrefixEndsTheParens reports whether the line beginning at `at` — the
+// last the body took before the text ran out — begins with the delimiter, so
+// that the delimiter is consumed and the rest of the line becomes program text
+// again.
+//
+// The looser half of delimiterClosesParens, and a different shell's: that one
+// needs the closing parenthesis immediately behind the delimiter and can
+// therefore be asked of every line, because nothing but a delimiter is
+// followed by one. This one asks only about the **last** line of the text, and
+// the restriction is the whole of what makes it safe — a body line that merely
+// begins with the delimiter, with the document closed properly below it, is
+// body. See [Dialect.HeredocLastLineIsADelimiterPrefix] for the measurement
+// and for that control.
+func (l *Lexer) heredocPrefixEndsTheParens(at Pos, delim string, strip bool) bool {
+	if !l.inProgramParens || !l.dialect.HeredocLastLineIsADelimiterPrefix || delim == "" {
+		return false
+	}
+	i := int(at.Offset)
+	if i < 0 || i > len(l.src) {
+		return false
+	}
+	if strip {
+		for i < len(l.src) && l.src[i] == '\t' {
+			i++
+		}
+	}
+	return strings.HasPrefix(l.src[i:], delim)
+}
+
+// rewindTo puts the cursor back where it has already been.
+//
+// The line and column go back with the offset, which is the whole reason this
+// is a method rather than an assignment: they are counted as the cursor moves,
+// so an offset moved on its own leaves every later position claiming the wrong
+// line. Only ever given a position this lexer produced.
+func (l *Lexer) rewindTo(at Pos) {
+	l.off, l.line, l.col = int(at.Offset), int(at.Line), int(at.Col)
 }
 
 // markHeredocEnd records how far a here-document reached, keeping the furthest

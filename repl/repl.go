@@ -524,6 +524,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 
 	ed := s.newEditor(ctx, state)
 	ed.history = earlier
+	// And the seam that runs from the shell *to* the editor, which is this
+	// one and no other: a command that hands a person a line to edit. Cleared
+	// on the way out for the reason TakeInterrupt is — the Runner is the
+	// caller's, and a hook left pointing at this session's editor would
+	// outlive the editor. See lineread.go.
+	s.Runner.EditLine = s.lineReader(ed)
+	defer func() { s.Runner.EditLine = nil }()
 	// What this session will write, which is not the same list as what it can
 	// recall. The two used to be one — the new tail of the editor's history —
 	// and they cannot be, because a dialect exists in which an ignored line is

@@ -5,6 +5,8 @@ package zsh
 
 import (
 	"context"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -62,19 +64,52 @@ import (
 // the `-a ignored` warning and *then* the bad name, and `vared -t /dev/null
 // -c v` is the terminal named by the letter and not the one the shell has.
 //
-// # The editing half
+// # The editing half, which is the session's
 //
-// It is refused by name, and the sentence says which half is missing rather
-// than pretending the terminal is unreachable — a shell at a prompt has one,
-// and answering `can't access terminal` there would be a wrong sentence
-// rather than a missing feature.
-//
-// What it needs is a seam this package cannot reach: repl holds the editor and
+// At a prompt the value goes into the line editor, is edited, and what was
+// accepted is stored. That needs a seam running from the shell *to* the
+// editor, which is the only one of its kind: repl holds the editor and
 // restores the terminal's own line discipline before every command, so a
-// builtin that wanted to read a line would have to be handed the editor and
-// the raw-mode round trip with it. Every seam repl offers today runs the other
-// way — repl calling the shell — and #2914 carries the measured table for the
-// one that would run this way.
+// builtin reading a line has to be handed the editor and the raw-mode round
+// trip with it. [interp.Runner.EditLine] is that seam and repl/lineread.go
+// fills it in (#2914).
+//
+// Measured 2026-09-18 through a pseudo-terminal against zsh 5.9.2 under `-i`
+// with a scratch rc:
+//
+//	v=hello; vared v          draws `hello`, cursor at its end; typing appends
+//	vared -p 'P ' v           draws `P hello` — the prompt and nothing else
+//	vared -c newv             an empty line, and the name is created from it
+//	vared -c -a newa          the same, split into an array
+//	vared -c -A newm          the same, read as keys and values
+//	a=(one two); vared a      `one two`, joined on the first character of IFS
+//	vared 'a[2]'              the element, written back to the element alone
+//	vared -h v                Up recalls the session's own history; without
+//	                          it Up rings the bell and recalls nothing
+//	^C during the edit        130, the variable untouched, and **the rest of
+//	                          the line does not run**
+//	vared -e v, ^D when empty 1, the variable untouched
+//
+// **Two rows of #2914's own table are corrected by that run.** It says `^C`
+// is status 1 — it is 130, and it abandons what the shell was reading, which
+// is why `vared v; print after` prints nothing. And it says `^D` on an empty
+// line does the same as `^C` — without `-e` it does neither: zsh's `^D` there
+// is `delete-char-or-list`, and on an empty line it offered to list all 1064
+// commands. This editor's `^D` is not that action, so without `-e` the key
+// does nothing here; see repl's lineStart.endOnEndOfInput.
+//
+// # What is still refused, by name
+//
+// `-t`, `-r`, `-M`, `-m`, `-i`, `-f` and `-g` are stored and then refused: a
+// terminal other than the shell's, a right-hand prompt, a keymap to read the
+// line under, and widgets to run at each end of it are each a real feature
+// this editor has no half of. Refusing by name is the rule the rest of this
+// dialect follows — a letter accepted and ignored is a script that thinks it
+// got what it asked for.
+//
+// `vared 1` from inside a *widget* is a different problem and stays refused
+// through the same door: the editor is already reading a key there, where at a
+// prompt it is idle between commands. #2914 splits that half out.
 //
 // # `-a` and `-A` are ignored without `-c`, which is measured and not a guess
 //
@@ -94,7 +129,8 @@ const varedLetters = "aAcgheMmtprif"
 func registerVared(r *interp.Runner) { r.Register("vared", varedBuiltin) }
 
 func varedBuiltin(r *interp.Runner, _ context.Context, args []string) int {
-	var array, assoc, create bool
+	var array, assoc, create, history, endOnEndOfInput bool
+	var prompt, unimplemented string
 	var operands []string
 	ended := false
 	for i := 0; i < len(args); i++ {
@@ -120,6 +156,21 @@ func varedBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 				assoc = true
 			case 'c':
 				create = true
+			case 'h':
+				history = true
+			case 'e':
+				endOnEndOfInput = true
+			case 'g', 'M', 'm', 'i', 'f', 'r', 't':
+				// Accepted, stored and not acted on — a keymap, a widget to
+				// run at each end of the read, a right-hand prompt, and a
+				// terminal other than the shell's. Each is a real feature
+				// this editor has no half of, so a run that named one is
+				// refused by name below rather than edited as though the
+				// letter had not been there. The first one named is what the
+				// refusal says, which is the order the letters were read in.
+				if unimplemented == "" {
+					unimplemented = string(rune(letter))
+				}
 			}
 			if !strings.ContainsRune(varedArgLetters, rune(letter)) {
 				continue
@@ -133,6 +184,9 @@ func varedBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 				// and there are no more letters in this word. `break` is the
 				// whole of that — walking `at` to the end first would be an
 				// assignment nothing reads.
+				if letter == 'p' {
+					prompt = word[at+1:]
+				}
 				break
 			}
 			if i+1 >= len(args) {
@@ -140,6 +194,9 @@ func varedBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 				return 1
 			}
 			i++
+			if letter == 'p' {
+				prompt = args[i]
+			}
 			break
 		}
 	}
@@ -180,12 +237,162 @@ func varedBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		r.Diagnosef("can't access terminal\n")
 		return 1
 	}
-	// A session, where the terminal is there and the editor is not reachable
-	// from here. Named rather than answered with the sentence above, which
-	// would be a wrong sentence at a prompt. See the note at the top of this
-	// file and #2914.
-	r.Diagnosef("the line editor cannot be re-entered from a command yet\n")
-	return 1
+	if r.EditLine == nil {
+		// A terminal, and a front end that offered no editor to re-enter.
+		// Named rather than answered with the sentence above, which would be
+		// a wrong sentence where the terminal is plainly there.
+		r.Diagnosef("the line editor cannot be re-entered from a command yet\n")
+		return 1
+	}
+	if unimplemented != "" {
+		r.Diagnosef("-%s is not implemented yet\n", unimplemented)
+		return 1
+	}
+	line, end := r.EditLine(interp.LineEdit{
+		Prompt:          prompt,
+		Initial:         varedInitial(r, name),
+		History:         history,
+		EndOnEndOfInput: endOnEndOfInput,
+	})
+	switch end {
+	case interp.LineEditInterrupted:
+		// **130, and the rest of the line does not run.** Measured 2026-09-18
+		// through a pseudo-terminal against zsh 5.9.2: `vared v; print after`
+		// interrupted with `^C` prints nothing and the next `$?` is 130 — so
+		// the interrupt abandons what the shell was reading rather than
+		// failing one command. #2914 records this as "the variable is left as
+		// it was, status 1", which is the status of the *other* ending.
+		r.StopTheScript(varedInterruptStatus)
+		return varedInterruptStatus
+	case interp.LineEditEndOfInput:
+		// Only reachable with `-e`, which is what asked for the key to end
+		// the read. Measured: the variable is left as it was and the status
+		// is 1.
+		return 1
+	case interp.LineEditUnavailable:
+		return 1
+	}
+	varedStore(r, name, line, array, assoc)
+	return 0
+}
+
+// varedInterruptStatus is what an abandoned edit answers: 128 plus the
+// interrupt, which is what a command killed by one answers everywhere.
+const varedInterruptStatus = 130
+
+// varedInitial is the text the line starts from.
+//
+// Measured 2026-09-18 through a pseudo-terminal against zsh 5.9.2, one shape
+// at a time, with the value joined on the **first character of IFS** rather
+// than on a space — `IFS=:` with `a=(one two)` draws `one:two`, which is the
+// same rule `$*` joins on:
+//
+//	v=hello        vared v        hello
+//	a=(one two)    vared a        one two, and what is accepted is split again
+//	a=(one two)    vared 'a[2]'   two, and only that element is written back
+//	typeset -A m=(k1 v1)  vared m  k1 v1 — the pairs, joined the same way
+//	vared -c newv                  nothing; the line starts empty
+//
+// An association's pairs are drawn in sorted key order, which is this tree's
+// answer everywhere an association is listed: the shells promise no order and
+// a deterministic one is worth having. See interp.AssocArray.
+func varedInitial(r *interp.Runner, name string) string {
+	if base, index, ok := varedElement(r, name); ok {
+		elems, _ := r.GetArray(base)
+		if index >= 1 && index <= len(elems) {
+			return elems[index-1]
+		}
+		return ""
+	}
+	// The compound shapes first, and that order is load-bearing rather than
+	// tidy: a scalar read of an association answers its *first value* and a
+	// scalar read of an array answers its first element, so asking GetVar
+	// first draws `v1` where the line should hold `k1 v1`.
+	if table, ok := r.GetAssoc(name); ok {
+		keys := make([]string, 0, len(table))
+		for k := range table {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		pairs := make([]string, 0, 2*len(keys))
+		for _, k := range keys {
+			pairs = append(pairs, k, table[k])
+		}
+		return r.JoinOnIFS(pairs)
+	}
+	if elems, ok := r.GetArray(name); ok {
+		return r.JoinOnIFS(elems)
+	}
+	if v, ok := r.GetVar(name); ok {
+		return v
+	}
+	return ""
+}
+
+// varedStore writes back what was accepted.
+//
+// **The kind already there decides, and the letters decide only for a name
+// that is not there yet.** That is what `-a` and `-A` mean — they say which
+// kind to *create*, which is why they are ignored without `-c` and why this
+// asks the store first. A name that holds an array gets the line split back
+// into elements whatever the letters said.
+func varedStore(r *interp.Runner, name, line string, array, assoc bool) {
+	if base, index, ok := varedElement(r, name); ok {
+		elems, _ := r.GetArray(base)
+		for len(elems) < index {
+			elems = append(elems, "")
+		}
+		if index >= 1 {
+			elems[index-1] = line
+		}
+		r.SetArray(base, elems)
+		return
+	}
+	if _, ok := r.GetAssoc(name); ok || assoc {
+		r.SetAssoc(name, varedPairs(r.SplitOnIFS(line)))
+		return
+	}
+	if _, ok := r.GetArray(name); ok || array {
+		r.SetArray(name, r.SplitOnIFS(line))
+		return
+	}
+	r.SetVar(name, line)
+}
+
+// varedPairs reads a flat list as an association's keys and values, which is
+// how `-c -A` builds one: measured, `kk vv` accepted for `vared -c -A newm`
+// makes `$newm[kk]` `vv`. A trailing key with no value takes the empty string.
+func varedPairs(fields []string) map[string]string {
+	out := make(map[string]string, len(fields)/2)
+	for i := 0; i < len(fields); i += 2 {
+		value := ""
+		if i+1 < len(fields) {
+			value = fields[i+1]
+		}
+		out[fields[i]] = value
+	}
+	return out
+}
+
+// varedElement splits `a[2]` into the array and the one-based index, and
+// reports whether the operand was of that shape at all.
+//
+// The index is arithmetic in the shell being modeled; only a literal number is
+// read here, and anything else is treated as a plain name — which is what this
+// builtin's own existence check already does with the operand.
+func varedElement(r *interp.Runner, name string) (base string, index int, ok bool) {
+	text, rest, cut := strings.Cut(name, "[")
+	if !cut || !strings.HasSuffix(rest, "]") {
+		return "", 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimSuffix(rest, "]"))
+	if err != nil {
+		return "", 0, false
+	}
+	if _, isArray := r.GetArray(text); !isArray {
+		return "", 0, false
+	}
+	return text, n, true
 }
 
 // isVaredName is the identifier check this builtin makes, and it is far

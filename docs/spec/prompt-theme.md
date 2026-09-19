@@ -36,6 +36,14 @@ any other project's configuration file, and it does not claim any other
 project's parameter names. Capability parity is the goal; a shared
 namespace is not.
 
+**And decided 2026-09-19, after the above:** the engine must be able to
+**import a configuration from another prompt program** — powerlevel10k
+first, because it is what the maintainer runs today, then starship — and
+**draw what that program draws**. Import writes our vocabulary and is
+one-way; nothing at render time reads another project's file. See
+*Importing a configuration from another prompt*, which is the section
+that turns "looks the same" into something that can fail.
+
 **And the binding constraint, decided the same day:** the engine must be
 **expandable and configurable without ever building the shell**. Not
 "mostly" — a person who wants a segment this tree has never heard of
@@ -508,6 +516,124 @@ release added a built-in of the same name has been silently overruled by
 their own shell, which is the failure class this repository treats as
 its worst.
 
+## Importing a configuration from another prompt
+
+A person arriving here has a prompt they already like, and often a
+configuration file they have been tuning for years. The engine must take
+that file and draw what it drew.
+
+**This is a converter, not a compatibility surface**, and the difference
+is the whole reason it does not reopen the vocabulary decision above:
+
+- import runs **once**, reads the other project's file, and writes
+  **our** settings into **our** configuration file;
+- nothing on the render path ever reads another project's file, name or
+  format;
+- the imported result is an ordinary configuration afterwards —
+  editable, shareable, and indistinguishable from one written by hand.
+
+### The claim is testable or it is not made
+
+"It looks the same" is an opinion until something can fail. So fidelity
+is defined as a comparison against the real program, and it needs an
+instrument in the family of `make oracle`, `make acp` and `make
+sandbox`: drive the real prompt, drive ours, compare.
+
+**Compare a cell grid, not a byte string.** Two different SGR spellings
+paint the same screen — `38;5;31` and `31` are the same color, and an
+attribute can be set in either order — so a byte diff fails on prompts
+that are identical to look at. The comparison is over **rendered cells**:
+per cell, the grapheme, foreground, background and attributes. That is
+what "looks exactly the same" means, stated so a machine can check it.
+
+The context has to be pinned on both sides or the diff is noise: working
+directory, repository state, exit status, command duration, job count,
+terminal width, and the clock. Every one of those is an input to some
+segment.
+
+Rules this instrument inherits from the ones already here:
+
+- **Never strip ANSI.** A harness that compares plain text cannot tell a
+  working theme from a colorless one, which is the blind spot that has
+  hidden broken rendering in this tree before.
+- **Drive it through a pty with a multi-row prompt.** A one-row `PS1`
+  cannot catch a frame that is correct in its pieces and wrong in its
+  nesting.
+- **Fixture against the real configuration**, not a reduced one written
+  to pass. A generated 1,720-line file with 280 settings is the case that
+  matters; a ten-line file proves nothing about it.
+
+### powerlevel10k: evaluate the file, do not parse it
+
+The file is a zsh program, and this shell has a zsh dialect. So import
+**sources it in a zsh-dialect runner and harvests the parameter
+namespace** rather than pattern-matching assignments out of the text.
+
+That is not a refinement. Two shapes in a real generated configuration
+defeat a text reader outright:
+
+- **The version gate the file opens with.** A range inside a group,
+  `[[ $ZSH_VERSION == (5.<1->*|<6->*) ]]`, decides whether any of the
+  configuration is applied at all — and it is the construct #1217 was
+  filed for.
+- **Names built by brace expansion.** One line,
+  `POWERLEVEL9K_PROMPT_CHAR_{OK,ERROR}_VIINS_CONTENT_EXPANSION='❯'`,
+  is **two** settings. A text reader has to reimplement brace expansion
+  to see them; an evaluator gets them for free.
+
+A parser would have to become a zsh interpreter to be correct. We have
+one, and it is in the process.
+
+### Content expansions are the case that decides "most" from "all"
+
+A generated configuration points a segment's content at shell code. The
+real one on this machine reads:
+
+    POWERLEVEL9K_VCS_CONTENT_EXPANSION='${$((my_git_formatter(1)))+${my_git_format}}'
+
+That calls a shell function for its side effect, in arithmetic context,
+and uses the `${…+…}` form to substitute the variable the function set.
+There is no reading of that which is not "run this shell code".
+
+Honoring it means calling the function, which costs no fork here, and
+which the engine already allows through *A segment can be a shell
+function*. Import therefore carries the function definitions it finds
+alongside the settings, and the segment calls them.
+
+Where a configuration's code cannot be carried, the setting is **named
+at import** rather than dropped silently or half-interpreted into
+something that looks nearly right.
+
+### starship: a second converter, not the same one
+
+starship's configuration is TOML with a different model — per-module
+`format` and `style` strings, a `$fill`, and modules rather than a flat
+namespace — so it is a separate converter that shares the fidelity
+harness and the output format.
+
+It is second because powerlevel10k is what is in use. It is worth doing
+because the two together are most of the themed prompts in the world, and
+because one of them being a hand translation of the other is a fixture
+we already have: the same prompt from two sources is a stronger test than
+either alone.
+
+### What cannot be identical, said before anyone is surprised
+
+- **Repository counts** until #1314 lands: the branch is drawn
+  synchronously, the counts arrive or do not. The upstream ships a daemon
+  for this and its prompt waits for it; ours does not wait.
+- **Anything the source computes by forking.** starship runs
+  `node --version` to fill a version module; no segment here forks. The
+  pin-file segments answer a neighboring question and are **not**
+  substituted in silently, because "what this project is pinned to" and
+  "what is on `PATH` right now" are different answers.
+- **Instant prompt**, which has no counterpart: it exists because the
+  real prompt is not ready for tens of milliseconds, and it is accepted
+  and reported rather than implemented.
+
+Each of these is a line in the import report, not a footnote in a
+document nobody reads at the moment they hit it.
+
 ## Repository status
 
 Split by what it costs:
@@ -620,7 +746,11 @@ guess as a fact is worse than an absent entry:
 5. What a plugin segment costs when it is *publishing* rather than being
    asked — the redraw rate a chatty plugin can force, and what bounds
    it.
-6. The per-prompt cost of the render itself, against the plain prompt it
+6. **The fidelity claim itself.** Until the cell-grid comparison exists
+   and runs against a real configuration, "draws what it draws" is
+   asserted and not shown — and it is the one claim in this document a
+   person can check by looking.
+7. The per-prompt cost of the render itself, against the plain prompt it
    replaces, on a cold page cache as well as a warm one.
 
 Each of these is a measurement to run before the code that depends on it

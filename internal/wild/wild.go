@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package wild sweeps the shell scripts installed on the machine and reports
-// which of them this parser cannot read.
+// which of them this parser cannot read — and which of them it reads where the
+// reference shell will not.
 //
 // It exists because the corpus cannot find this class of bug. Every case in
 // the corpus is a snippet someone wrote to pin one behavior down, so the
@@ -60,6 +61,25 @@ type Report struct {
 	// them, whether they are shell scripts at all is unknowable.
 	Skipped  map[string]int
 	Failures []Result
+	// Lax is the other direction: files this parser read and the reference
+	// shell refuses. Paths only, because there is nothing else to say — a
+	// file we accepted produced no diagnostic of ours, and the reference's
+	// is its own wording rather than a fact we can rank causes from.
+	//
+	// It exists because the sweep was one-directional and read as coverage
+	// of both. Counting the files we cannot read drives that number to zero
+	// and says nothing at all about a parser that accepts everything, which
+	// is the failure mode a permissive grammar has: #3040 measured 0 of 1203
+	// shipped functions refused here, and running the same population the
+	// other way found three the reference refuses and this parser reads
+	// (#3144). Neither number is wrong; one question had never been asked.
+	//
+	// Not every entry is a defect, and the report says so rather than
+	// pretending otherwise. A refusal the reference makes at `-n` can rest
+	// on something no static read can reach, and a shebang that lies puts a
+	// file here as readily as a real gap does. It is a population to triage,
+	// which is one more than the sweep had.
+	Lax []string
 }
 
 // DefaultDirs are where a machine keeps its scripts. Missing ones are skipped,
@@ -213,6 +233,13 @@ func Sweep(ctx context.Context, scope Scope, dialect syntax.Dialect, reference s
 		}
 		if _, perr := syntax.Parse(string(src), dialect); perr == nil {
 			rep.Parsed++
+			// The reverse question, asked of the files we *read*. It is the
+			// expensive half — one reference start per accepted file, where
+			// before the reference was consulted only for the few we refused
+			// — and it is the half that cannot be answered any other way.
+			if !accepts(ctx, reference, path) {
+				rep.Lax = append(rep.Lax, path)
+			}
 			continue
 		} else if !accepts(ctx, reference, path) {
 			rep.NotShell++
@@ -228,6 +255,7 @@ func Sweep(ctx context.Context, scope Scope, dialect syntax.Dialect, reference s
 		}
 	}
 	sort.Slice(rep.Failures, func(i, j int) bool { return rep.Failures[i].Path < rep.Failures[j].Path })
+	sort.Strings(rep.Lax)
 	return rep
 }
 

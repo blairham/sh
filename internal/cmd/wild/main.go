@@ -152,8 +152,9 @@ func sweep(name string, scope wild.Scope, dialect syntax.Dialect, reference stri
 			name, len(absent), len(scope.Dirs), strings.Join(absent, " "))
 	}
 	rep := wild.Sweep(context.Background(), scope, dialect, reference)
-	fmt.Printf("%s: scripts found: %d   parsed: %d   refused by %s too: %d   failures: %d\n",
-		name, rep.Scanned, rep.Parsed, refName(reference), rep.NotShell, len(rep.Failures))
+	fmt.Printf("%s: scripts found: %d   parsed: %d   refused by %s too: %d   failures: %d   read here and refused by %s: %d\n",
+		name, rep.Scanned, rep.Parsed, refName(reference), rep.NotShell, len(rep.Failures),
+		refName(reference), len(rep.Lax))
 	// Skipped files are counted and never named: printing a path would
 	// invite the reader to open a file CLEANROOM.md forbids opening.
 	if len(rep.Skipped) > 0 {
@@ -161,7 +162,32 @@ func sweep(name string, scope wild.Scope, dialect syntax.Dialect, reference stri
 			name, skipSummary(rep.Skipped))
 	}
 	report(name, rep, verbose)
+	lax(name, rep, reference, verbose)
 	return rep
+}
+
+// lax prints the other direction: the files this parser read that the
+// reference refuses.
+//
+// Printed as a list of paths and never ranked, because there is no cause to
+// rank by. A file we accepted left no diagnostic of ours, and the reference's
+// own wording is that shell's expression rather than a fact — so the sweep can
+// say which files to look at and cannot say what they have in common. That is
+// the honest shape of this half and it is worth more than the number alone:
+// the three findings behind #3144 were three separate constructs.
+//
+// The count is on the numbers line above whether it is zero or not, and this
+// list is what -v adds, for the same reason the framework population is named
+// on a run that did not sweep it: a direction nobody mentions is the one a
+// reader assumes was included.
+func lax(name string, rep wild.Report, reference string, verbose bool) {
+	if len(rep.Lax) == 0 || !verbose {
+		return
+	}
+	fmt.Printf("\n%s read here and refused by %s (%d scripts):\n", name, refName(reference), len(rep.Lax))
+	for _, p := range rep.Lax {
+		fmt.Printf("  %s\n", p)
+	}
 }
 
 // frameworkDepth is how far to descend below a configured root: deeper than a

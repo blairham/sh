@@ -364,3 +364,63 @@ func TestAbsentNamesTheRootsThatAreNotDirectories(t *testing.T) {
 		}
 	}
 }
+
+// The sweep asks its question in both directions.
+//
+// Counting the files this parser cannot read is a number that goes to zero and
+// then says nothing: a parser that accepted every byte would score perfectly on
+// it. The other direction — a file this parser reads and the reference shell
+// refuses — is the only thing in the tree that can catch a grammar that is too
+// permissive, and nothing asked it until #3144. That enumeration over one
+// shell's shipped functions read 0 of 1203 refused here while three of those
+// files were accepted where the shell itself will not have them.
+//
+// Both halves are asserted from one sweep, because the failure this replaces
+// was a report that answered one of them and was read as answering both.
+func TestTheSweepAsksBothDirections(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "good", "#!/bin/sh\necho hi\n")
+	write(t, dir, "ours", "#!/bin/sh\n{ fi; }\n")
+
+	// A reference that refuses one named file and accepts everything else, so
+	// that one sweep holds a file each direction can claim. Its refusal is the
+	// shape the reverse direction is for: the file parses here.
+	//
+	// Written outside the swept directory, because it is itself a shell script
+	// with a shebang and the sweep would otherwise find and count it.
+	ref := filepath.Join(t.TempDir(), "ref")
+	script := "#!/bin/sh\ncase \"$2\" in *cranky) exit 1 ;; esac\nexit 0\n"
+	if err := os.WriteFile(ref, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "cranky", "#!/bin/sh\necho hi\n")
+
+	rep := wild.Sweep(context.Background(), wild.Scope{Dirs: []string{dir}}, bash.Dialect(), ref)
+	if rep.Parsed != 2 {
+		t.Errorf("parsed = %d, want 2: both shell files read here", rep.Parsed)
+	}
+	if len(rep.Failures) != 1 || filepath.Base(rep.Failures[0].Path) != "ours" {
+		t.Errorf("failures = %+v, want the one file this parser refuses", rep.Failures)
+	}
+	// The half that did not exist. A file counted in Parsed is not evidence
+	// of anything on its own, which is what this direction says out loud.
+	if len(rep.Lax) != 1 || filepath.Base(rep.Lax[0]) != "cranky" {
+		t.Errorf("lax = %v, want the one file read here and refused there", rep.Lax)
+	}
+}
+
+// A file this parser refuses is never also counted as one it read too easily.
+//
+// The two directions share the same reference call, and a report that put a
+// file in both would double-count the population and make the reverse
+// direction look busier than it is — which for a number whose whole value is
+// that it is usually small is the way it stops being read.
+func TestTheTwoDirectionsDoNotShareAFile(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "bad", "#!/bin/sh\n{ fi; }\n")
+
+	rep := wild.Sweep(context.Background(), wild.Scope{Dirs: []string{dir}}, bash.Dialect(), "/usr/bin/false")
+	if rep.NotShell != 1 || len(rep.Failures) != 0 || len(rep.Lax) != 0 {
+		t.Errorf("a file both refuse: %+v, want it counted as not-shell and nothing else", rep)
+	}
+}

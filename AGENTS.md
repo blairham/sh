@@ -818,7 +818,22 @@ silently ate apostrophes were found the same way. Scripts in the wild ask
 different questions, in bulk, and were written without knowing this
 implementation exists.
 
-Five things about how it looks are worth knowing, because each was a blind
+**It sweeps in both directions.** A file this parser refuses is a failure; a
+file it *reads* that the reference refuses at `-n` is the other half, printed
+on the same line and listed under `-v`. The second half exists because the
+first is a number that goes to zero and then stops saying anything: a parser
+that accepted every byte would score perfectly on it. That is not
+hypothetical — an enumeration over one shell's 1203 shipped functions read **0
+refused here**, and running the same population the other way found three the
+shell itself will not have (#3144). Neither number was wrong; one question had
+never been asked. The reverse list is paths and nothing else, because a file we
+accepted produced no diagnostic of ours to rank causes from and the reference's
+own wording is that shell's expression rather than a fact. It is a population
+to triage rather than a defect list: a refusal the reference makes at `-n` can
+rest on something no static read can reach, exactly as `shopt -s extglob` makes
+bash refuse its own suite's file at `-n` while running it to completion.
+
+Five more things about how it looks are worth knowing, because each was a blind
 spot before it was a flag.
 
 **It sweeps two populations and names both.** `-dirs` holds the installed

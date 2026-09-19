@@ -4106,10 +4106,19 @@ func Diagnostics() interp.Diagnostics {
 		},
 		// The `[` that opens a test is bare and the `]` that closes it is an
 		// argument like any other: `[ 1 -lt 2 ']'`.
-		TraceBareBracket:  interp.TraceBracketCommandWordBare,
-		TraceStyle:        interp.TraceNameLine,
-		TraceForHeader:    interp.TraceForAssign,
-		TraceArrayLiteral: interp.TraceArraySpaced,
+		TraceBareBracket: interp.TraceBracketCommandWordBare,
+		// A declaration utility's operand is written as an assignment —
+		// the target bare and only the value quoted — where bash quotes
+		// the whole word. Measured 2026-09-18: `typeset x="a b"` is
+		// `typeset x='a b'` here and `typeset 'x=a b'` there, and
+		// `typeset x=a=b` is `typeset x='a=b'` here, where that shell
+		// has no reason to quote at all. The same word after `echo` is
+		// one quoted word in both, which is what says it is the command
+		// in front of it that decides (#3654).
+		TraceAssignmentOperand: interp.TraceAssignmentOperandValue,
+		TraceStyle:             interp.TraceNameLine,
+		TraceForHeader:         interp.TraceForAssign,
+		TraceArrayLiteral:      interp.TraceArraySpaced,
 		// The prefix goes on the command's own line, with the trace prefix
 		// written a second time between the assignments and the words when
 		// the command is one this shell runs itself: `+x.sh:3> A=3 +x.sh:3>

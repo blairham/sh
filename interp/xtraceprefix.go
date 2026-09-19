@@ -290,14 +290,14 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d Diagnostics) []str
 // tracePrefixAndCommand writes a prefixed command's trace in the two shapes
 // that put the assignment ahead of the command: bash's own lines, and the one
 // line dash, BusyBox ash and zsh write.
-func (r *Runner) tracePrefixAndCommand(assigns []*syntax.Assign, argv []string) {
+func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 	d := r.diag()
-	words := r.prefixTraceWords(assigns, d)
+	words := r.prefixTraceWords(c.Assigns, d)
 	if len(words) == 0 {
 		// Every assignment was refused or is one this shell does not write a
 		// line for. The command is traced as it would be with no prefix at
 		// all, which is what the panel shows for `readonly x=1; x=2 cmd`.
-		r.traceCommand(argv)
+		r.traceCommand(argv, c)
 		return
 	}
 	if d.TracePrefixAssignment == TracePrefixOwnLineBefore ||
@@ -311,7 +311,7 @@ func (r *Runner) tracePrefixAndCommand(assigns []*syntax.Assign, argv []string) 
 			r.traceLine(w, d)
 		}
 		r.releaseTraceTurn()
-		r.traceCommand(argv)
+		r.traceCommand(argv, c)
 		return
 	}
 	line := strings.Join(words, " ") + " "
@@ -319,7 +319,7 @@ func (r *Runner) tracePrefixAndCommand(assigns []*syntax.Assign, argv []string) 
 		r.tracePrefixRepeatsBeforeTheCommand(argv) {
 		line += r.tracePrefix()
 	}
-	line += strings.Join(r.traceCommandWords(argv, d), " ")
+	line += strings.Join(r.traceCommandWords(argv, d, c), " ")
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	r.errf("%s%s\n", r.tracePrefix(), line)

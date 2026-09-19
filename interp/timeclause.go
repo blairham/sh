@@ -144,6 +144,16 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 		}()
 	}
 
+	if r.noexec {
+		// A timed command `set -n` will not run is the one shape the column
+		// that reads a command's words is silent about: measured 2026-09-19,
+		// `time echo =nosuchcmd` writes nothing where `! echo =nosuchcmd`
+		// writes the refusal. Counted rather than read off the node, because
+		// the clause's body is a pipeline and the element is what reaches
+		// the reader. See interp/noexecwords.go.
+		r.noexecUnread++
+		defer func() { r.noexecUnread-- }()
+	}
 	selfBefore, childrenBefore, okBefore := processTimes()
 	var timing *pipelineTiming
 	if d.TimeLayout == TimePerCommand {

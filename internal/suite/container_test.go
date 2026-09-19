@@ -22,18 +22,104 @@ func TestAContainedColumnNamesARouteThePanelHas(t *testing.T) {
 		if s.Container == "" {
 			continue
 		}
-		reach, ok := oracle.Container(s.Container)
-		if !ok {
+		if _, ok := oracle.Container(s.Container); !ok {
 			t.Fatalf("the %s column is reached through the oracle panel member %q, "+
 				"and that member takes no container route — so this column has a second "+
 				"account of how to get to the shell and the two will drift",
 				s.Name, s.Container)
 		}
-		if !strings.Contains(reach.Ref(), "@sha256:") {
-			t.Fatalf("the %s column's image %q is not pinned by digest: a tag moves, "+
-				"and a column that moved underneath itself would report a shell that changed",
-				s.Name, reach.Ref())
+	}
+}
+
+// A tag moves, and a column pinned to one would report a shell that changed
+// with nothing able to tell that from a shell that behaved differently.
+// `bash:5.3` moved twice in the two days the bash column was being argued
+// about, which is that abstraction made concrete.
+//
+// Both spellings are asked the same question here, and that is the point of
+// asking it in one place: the oracle's own guard covers the panel members,
+// and a column carrying its own pin is reached by nothing the oracle checks.
+func TestAContainedColumnIsPinnedByDigest(t *testing.T) {
+	for _, s := range Ours {
+		if !s.Contained() {
+			continue
 		}
+		reach, err := s.Reach()
+		if err != nil {
+			t.Fatalf("the %s column says it is contained and names no route: %v", s.Name, err)
+		}
+		ref := reach.Ref()
+		digest, ok := strings.CutPrefix(ref[strings.LastIndex(ref, "@")+1:], "sha256:")
+		if !ok || len(digest) != 64 {
+			t.Fatalf("the %s column's image %q is not pinned by a sha256 digest: a tag "+
+				"moves, and a column that moved underneath itself would report a shell "+
+				"that changed", s.Name, ref)
+		}
+	}
+}
+
+// A column that is not contained is already a reference on this machine, so
+// CrossHere would be saying something about it that is not a question. The
+// field exists only to tell two contained columns apart — the shell is also
+// here, or it is not — and a value on a column the distinction cannot reach
+// reads as a claim it does not make.
+func TestCrossHereIsOnlyForAContainedColumn(t *testing.T) {
+	for _, s := range Ours {
+		if s.CrossHere && !s.Contained() {
+			t.Fatalf("the %s column sets CrossHere and is graded against a binary on this "+
+				"machine already, so the field claims something it cannot mean", s.Name)
+		}
+	}
+}
+
+// The #3480 rule, and the half a table guard can hold: a contained column
+// contributes a cross-check reference exactly when it says it has one, and
+// never merely because a path exists.
+//
+// The distinction is load bearing rather than tidy. ash's Lookup holds
+// /bin/busybox, which is on every Linux host and is a multi-call binary
+// rather than a shell when it is run by that path — so a contained column
+// that found its reference by looking would hand the cross-check a program
+// that answers nothing this suite asks, under the name of a shell.
+func TestOnlyAColumnThatSaysSoLendsACrossCheckReference(t *testing.T) {
+	dir := t.TempDir()
+	here := filepath.Join(dir, "shell")
+	if err := os.WriteFile(here, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	contained := Suite{Name: "x", Image: "img", Digest: "sha256:" + strings.Repeat("0", 64), Lookup: []string{here}}
+
+	if path, ok := contained.CrossHereReference(); ok {
+		t.Fatalf("a contained column that does not say it has a reference here lent %q anyway", path)
+	}
+	lending := contained
+	lending.CrossHere = true
+	path, ok := lending.CrossHereReference()
+	if !ok {
+		t.Fatal("a contained column that says the shell is here as well lent nothing, so " +
+			"containing it would quietly take a reference out of the cross-check")
+	}
+	if path != here {
+		t.Fatalf("lent %q, wanted %q", path, here)
+	}
+	// And never from a column that is not contained: that column's own
+	// grading reference is already in refs, and lending a second would count
+	// one shell twice.
+	local := Suite{Name: "x", Lookup: []string{here}, CrossHere: true}
+	if _, ok := local.CrossHereReference(); ok {
+		t.Fatal("a column that is not contained lent a second reference under its own name")
+	}
+}
+
+// Reach is the one place the two spellings of "contained" are resolved, so a
+// column that is neither has to say so rather than hand back a zero route
+// that would pull whatever `@` resolves to.
+func TestReachRefusesAColumnThatIsNotContained(t *testing.T) {
+	if _, err := (Suite{Name: "x"}).Reach(); err == nil {
+		t.Fatal("a column reached as a binary on this machine was given a container route")
+	}
+	if _, err := (Suite{Name: "x", Image: "img"}).Reach(); err == nil {
+		t.Fatal("a column naming an image and no digest was given a route, which is a tag pin")
 	}
 }
 
@@ -43,7 +129,7 @@ func TestAContainedColumnNamesARouteThePanelHas(t *testing.T) {
 // column would vanish with the work already done.
 func TestAContainedColumnIsNotAlsoUnbuilt(t *testing.T) {
 	for _, s := range Ours {
-		if s.Container != "" && s.NotYet != "" {
+		if s.Contained() && s.NotYet != "" {
 			t.Fatalf("the %s column is reached through a container and still says it is "+
 				"not yet a column: %s", s.Name, s.NotYet)
 		}
@@ -55,7 +141,7 @@ func TestAContainedColumnIsNotAlsoUnbuilt(t *testing.T) {
 // eye what a path inside an image resolved to.
 func TestAContainedColumnSaysWhatItMustReport(t *testing.T) {
 	for _, s := range Ours {
-		if s.Container != "" && s.MustReport == "" {
+		if s.Contained() && s.MustReport == "" {
 			t.Fatalf("the %s column is reached inside an image and names nothing its "+
 				"reference's version string must contain, so a different shell at the "+
 				"same path would record as this one", s.Name)

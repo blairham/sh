@@ -1306,15 +1306,46 @@ twice. What goes into the image is the whole sweep and not only the
 reference: a suite file calls programs, so grading BusyBox-in-Alpine against
 `cmd/ash`-on-macOS would score two operating systems as two shells. Both run
 in there, on one copy of the files, graded by `suite.Sweep` cross-compiled
-from this tree. For the same reason the contained column is **left out of the
-tier cross-check** and the report says so — a cross-check listing four shells
-where five columns ran, with nothing explaining the difference, reads as a
-shell that agreed.
+from this tree.
 
-With no container runtime the column prints `ash — no container runtime here
-(docker is not on PATH)` under *columns not run* and the target still exits 0.
-That is the same rule the unbuilt fetched columns follow: a column that is not
-run is printed rather than dropped.
+**The bash column is pinned the same way, and it is the reason the two halves
+of "contained" had to be told apart.** On a runner the reference used to be
+whatever bash `apt` had — 5.2.21 against the 5.3 the cases were measured
+against — so the report printed a `WRONG BUILD` banner over the figure and
+#2291's per-column bar could not be met there by any amount of correct work.
+Both shells now run inside a digest-pinned `bash` image at 5.3.20, patch for
+patch the build the cases name, so the number is the same on a runner as on a
+laptop (#3480). ksh93 is deliberately **not** pinned this way and stays
+report-only: no distribution packages AT&T's 2012 build, and grading `cmd/ksh`
+against ksh93u+m would measure the fork.
+
+The digest is the pin, never the tag: `bash:5.3` moved twice in the two days
+this column was argued about — 5.3.15 to 5.3.20 to a new index digest at the
+same 5.3.20 — and a column pinned to a tag would report a shell that changed
+with nothing able to tell that from a shell that behaved differently. An
+*index* digest, so one pin covers the amd64 runner and an arm64 laptop.
+
+**Grading and cross-checking are two different questions, and containing a
+column must not silently answer the second one.** The grading figure wants a
+pinned reference; `suite.CrossCheck` and `suite.OnlyHere` want every reference
+on **one machine**, since a reference in an image would score a libc
+diagnostic as a disagreement between two shells. Containing a column used to
+take it out of both, which would have cost `core/` a reference, `ext/` a
+reference and the 21 files under `bash/` their only-here check — an absolute
+grading figure bought with a weaker tier claim. So a contained column lends
+the binary on this machine to the cross-check when it has one, and
+`suite.CrossHere` is what says it does. It is a statement on the column rather
+than a search, because a found path is not a reference: ash's lookup list ends
+at `/bin/busybox`, which is on every Linux host and is a multi-call binary
+rather than a shell when run by that path. ash therefore lends nothing, and
+the report prints which columns are in the cross-check and which are not — a
+cross-check listing four shells where five columns ran, with nothing
+explaining the difference, reads as a shell that agreed.
+
+With no container runtime a contained column prints `ash — no container
+runtime here (docker is not on PATH)` under *columns not run* and the target
+still exits 0. That is the same rule the unbuilt fetched columns follow: a
+column that is not run is printed rather than dropped.
 
 **It is not a second grader.** A native column is a `suite.Suite` with `Ours`
 set and its files on disk instead of in an archive; `suite.Sweep` grades it

@@ -42,18 +42,29 @@ func TestTheListingIsNumberedOnePerLine(t *testing.T) {
 	}
 }
 
-// Two spellings this applet reads that the table does not name, measured the
-// same day in the same container: `kill -l POLL` and `kill -l IO` are both
-// `29`, and `kill -l IOT` is `6` where `kill -l CLD` is refused. Both were
-// refused here.
+// Two spellings this applet reads that the platform's table does not name,
+// measured the same day in the same container: `kill -l POLL` and `kill -l
+// IO` are both `29`, and `kill -l IOT` is `6` where `kill -l CLD` is refused.
+// Both were refused here.
 //
-// The listing writes `29) POLL` and ` 6) ABRT` — the alias for one pair and
-// the table's own name for the other — which
-// Diagnostics.SignalListingWritesTheAlias cannot say, being one answer for
-// the whole table. So it stays off and the remaining row is #3684.
+// They are not the same *kind* of word, which is what #3655 could not yet
+// say and #3684 measured. The listing writes `29) POLL` and ` 6) ABRT` — and
+// so does the translating form, `kill -l 29` being `POLL` and `kill -l 6`
+// being `ABRT`. A word written in both places is this shell's **name** for
+// the signal, so `POLL` is `SignalNamesTheShellSpellsItsOwnWay` and `IOT` is
+// the reading-only `SignalNamesTheShellAlsoReads`.
+//
+// The measurement that separates them is a second column:
+// Diagnostics.SignalListingWritesTheAlias is what ksh93u+ needs, where the
+// listing writes `IOT` and `kill -l 6` writes `ABRT` on one binary. It stays
+// off here, because this applet does not hold a preference for its listing —
+// it has a different name for one signal.
 func TestTheAppletReadsTwoSpellingsTheTableDoesNotName(t *testing.T) {
-	if got := ash.Semantics().SignalNamesTheShellAlsoReads; got != "POLL=IO IOT=ABRT" {
-		t.Errorf("SignalNamesTheShellAlsoReads is %q, want both pairs", got)
+	if got := ash.Semantics().SignalNamesTheShellAlsoReads; got != "IOT=ABRT" {
+		t.Errorf("SignalNamesTheShellAlsoReads is %q, want the reading-only pair", got)
+	}
+	if got := ash.Semantics().SignalNamesTheShellSpellsItsOwnWay; got != "IO=POLL" {
+		t.Errorf("SignalNamesTheShellSpellsItsOwnWay is %q, want IO=POLL", got)
 	}
 	if ash.Diagnostics().SignalListingWritesTheAlias {
 		t.Error("SignalListingWritesTheAlias is on, which would write `6) IOT`")

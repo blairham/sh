@@ -1310,7 +1310,14 @@ func Semantics() interp.Semantics {
 	// Diagnostics.SignalListingWritesTheAlias cannot say, being one answer
 	// for the whole table. So the flag stays off, the reading is right for
 	// both, and the one row the listing still differs on is #3684.
-	s.SignalNamesTheShellAlsoReads = "POLL=IO IOT=ABRT"
+	s.SignalNamesTheShellAlsoReads = "IOT=ABRT"
+	// And signal 29 is called POLL here rather than being an older name
+	// beside the table's own: `kill -l` writes `29) POLL`, `kill -l 29`
+	// writes `POLL`, and both `POLL` and the platform's `IO` read back
+	// to 29. Measured 2026-09-18 on BusyBox v1.37.0 in the pinned image.
+	// `kill -l 6` is `ABRT` in the same run, so this is the one pair and
+	// not a preference over the whole table (#3684).
+	s.SignalNamesTheShellSpellsItsOwnWay = "IO=POLL"
 	// `exec -a name` is BusyBox's too, which the ash preset had inherited a
 	// No for: `exec -a NAME /bin/echo` was `-a: not found` here and runs the
 	// applet named NAME there. The other two letters are not — `-l` and `-c`

@@ -66,6 +66,21 @@ type setOption struct {
 	on bool // get reads the live state, for the listing; nil means the static
 	// `on` field is the whole answer.
 	get func(*Runner) bool
+
+	// listed is what `set -o` *prints* for this name, where that is not what
+	// the option reads. Nil is the ordinary case and means the listing shows
+	// what get says.
+	//
+	// One name in the panel needs it, and it took measuring both readings to
+	// find: ksh93's `login_shell` is `off` in its listing on **every** route
+	// — a plain `-c`, `-l`, `-o login_shell`, and an argv[0] of `-ksh` alike
+	// — while `[[ -o login_shell ]]` in the same shell is *true* under each
+	// of the three login routes. Measured 2026-09-18 on 93u+ 2012-08-01.
+	//
+	// So the two readings genuinely disagree there, and a single `get` can
+	// only have been wrong about one of them. It was wrong about the listing
+	// for the whole life of the row.
+	listed func(*Runner) bool
 }
 
 // commonSetOptions are the names every shell in the panel has. They are the
@@ -445,19 +460,58 @@ var extraSetOptions = map[string]setOption{
 	// Three of them are facts about the *invocation* and read live state
 	// here rather than a default: `bgnice` and `rc` are off in a script and
 	// on at a prompt, which is the same fact `interactive` above reports,
-	// and `login_shell` is on under both login routes and off otherwise. A
-	// constant written for any of the three would have been wrong on one of
-	// the two runs that produced it.
+	// and `login_shell` answers true to `[[ -o ]]` under both login routes
+	// and false otherwise. A constant written for any of the three would
+	// have been wrong on one of the two runs that produced it.
+	//
+	// The sentence above used to say `login_shell` is *listed* on under both
+	// login routes, and that was measured with one instrument. Re-measured
+	// 2026-09-18 with both: the listing is `off` on every route this shell
+	// has, and only the option test moves. #3255.
 	// `bgnice` is recorded *over* that live fact rather than fixed to it,
 	// because ksh93 moves it and `rc` it will not: measured 2026-09-16,
 	// `set -o bgnice; set -o` reports `bgnice on` in a script whose bare
 	// listing said off, while `set -o rc` there is `bad option(s)` in both
 	// directions — which is why only one of the two takes a request.
 	"bgnice": recordedOverOption("bgnice", false, func(r *Runner) bool { return r.Interactive }),
-	"rc":     {get: func(r *Runner) bool { return r.Interactive }},
+	// `rc` is the shell reading its run-commands file, which is on at a
+	// prompt by default and which the *invocation* moves in either
+	// direction. Measured 2026-09-18 on ksh93u+ with `$ENV` pointing at a
+	// file that announces itself:
+	//
+	//	ksh -c              nothing read, `rc off`, `$-` chsB
+	//	ksh -E -c           the file runs, `rc on`,  `$-` chsBE
+	//	ksh -o rc -c        the same three
+	//	ksh +E -c           nothing read, `$-` chsB
+	//	ksh -i -c   (pipe)  the file runs, `rc on`,  `$-` icmsBE
+	//	ksh -i +E -c (pipe) **nothing read**, `rc off`, `$-` icmsB
+	//
+	// The last row is why this is recorded over the live fact rather than
+	// being it: the state defaults to whether the shell is interactive and
+	// the words that started it beat that default, in both directions. `set
+	// -o rc` from a script is refused either way, which is what
+	// AddImmovableSetOptions says and what keeps this from being movable.
+	//
+	// The state is what a front end reads to decide whether to open the
+	// file; see Semantics.RunCommandsOptionName, which is how it is named
+	// without this package naming a shell.
+	"rc": recordedOverOption("rc", false, func(r *Runner) bool { return r.Interactive }),
 	// login_shell reads the field the front end filled in, the same one
-	// `$-`'s `l` is drawn from where a dialect shows the letter.
-	"login_shell": {get: func(r *Runner) bool { return r.LoginShell }},
+	// `$-`'s `l` is drawn from where a dialect shows the letter — and it
+	// *moves* that field, because the option is one of the three routes into
+	// being a login shell. Measured 2026-09-18 on ksh93u+ with a `~/.profile`
+	// that announces itself: `ksh -o login_shell -c` runs the profile and
+	// reports `$-` as `chsBl`, exactly as `ksh -l -c` does.
+	//
+	// And the listing says `off` throughout, which is measured on all four
+	// routes and is not what the option *reads*: `[[ -o login_shell ]]` is
+	// true under every one of the three login routes in the same shell. The
+	// two disagree; see the `listed` field.
+	"login_shell": {
+		get:    func(r *Runner) bool { return r.LoginShell },
+		apply:  func(r *Runner, on bool) { r.LoginShell = on },
+		listed: func(*Runner) bool { return false },
+	},
 
 	// And the rest are states, listed with the state this shell is in. Two
 	// of them are on, and both describe how a *line* is read and drawn
@@ -1546,6 +1600,16 @@ func (o setOption) state(r *Runner) bool {
 	return o.on
 }
 
+// listedState is what a `set -o` listing prints for this name, which is
+// state above unless the dialect's own measurement said otherwise. See the
+// `listed` field for the one name in the panel whose two readings disagree.
+func (o setOption) listedState(r *Runner) bool {
+	if o.listed != nil {
+		return o.listed(r)
+	}
+	return o.state(r)
+}
+
 // listedOptions is every row a `set -o` listing writes: the dialect's own
 // table where it installed one with SetOptionTable, and the substrate's names
 // with their states otherwise.
@@ -1561,7 +1625,7 @@ func (r *Runner) listedOptions() []ListedOption {
 	rows := make([]ListedOption, 0, len(names))
 	for _, n := range names {
 		o, _ := r.lookupSetOption(n)
-		rows = append(rows, ListedOption{Name: n, On: o.state(r), NegatedName: r.negatedOptions[n]})
+		rows = append(rows, ListedOption{Name: n, On: o.listedState(r), NegatedName: r.negatedOptions[n]})
 	}
 	return rows
 }

@@ -2258,7 +2258,7 @@ func (sh Shell) runInput(in source) int {
 	// `sh -i script.sh` read a person's run-commands file: measured, `bash -i
 	// -c cmd` reads `~/.bashrc`, and one shell reads a file on *every*
 	// invocation whether or not there is anyone to prompt.
-	if code := sh.startup(r, in); code != 0 {
+	if code := sh.startup(r, loginShellOption(sh, r, in)); code != 0 {
 		return code
 	}
 	if r.Exited() {
@@ -2334,6 +2334,32 @@ func (sh Shell) applyEmulation(r *interp.Runner, in source) {
 	// The marker is the builtin's own — every shell's convention — so this
 	// is the front end saying "operand" and not knowing anything more.
 	_ = b(r, sh.context(), []string{"--", in.emulation})
+}
+
+// loginOption folds an option that made this a login shell back into the
+// invocation, so that the startup sequence reads it.
+//
+// `-o login_shell` is the third route into being one, and it is the only route
+// that arrives *after* the invocation has been read: the letter and a dashed
+// argv[0] are both words this front end saw, while the name goes to the option
+// namespace and lands in Runner.LoginShell. So the runner is asked once the
+// options have been applied, and the answer is written back where
+// readsLoginProfile already looks.
+//
+// Only where the invocation did not already say so, which is what keeps this
+// from being a change of meaning rather than an addition: `startup.login` is
+// the *explicit* route, and readsLoginProfile reads a profile for it even in a
+// shell that is not interactive. A dashed argv[0] is the inferred route and
+// must stay inferred, since one dialect reads no profile for it.
+//
+// Measured 2026-09-18 on ksh93u+ 2012-08-01 with a `~/.profile` that announces
+// itself: `ksh -o login_shell -c 'echo $-'` runs the profile and reports
+// `chsBl`, byte for byte with `ksh -l -c`.
+func loginShellOption(sh Shell, r *interp.Runner, in source) source {
+	if r.LoginShell && !in.loginShell() {
+		in.startup.login = true
+	}
+	return in
 }
 
 // applyOptions installs the set options the invocation named, once the

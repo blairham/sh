@@ -242,7 +242,7 @@ func (sh Shell) readsLoginProfile(in source) bool {
 // so a shell that only asked the runner would pick its file before the answer
 // existed.
 func (sh Shell) interactiveStartupFile(r *interp.Runner, in source) int {
-	if !in.interactive {
+	if !sh.readsRunCommandsFile(r, in) {
 		return 0
 	}
 	if name := sh.Semantics.InteractiveStartupFile; name != "" && !in.posix && !r.PosixMode() {
@@ -278,6 +278,37 @@ func (sh Shell) interactiveStartupFile(r *interp.Runner, in source) int {
 	// one expands to nothing and names nothing, which sourceFile answers.
 	env, _ := r.GetVar("ENV")
 	return sh.sourceFile(r, r.Expand(env))
+}
+
+// readsRunCommandsFile answers whether this invocation reads the file a shell
+// reads because there is a person on the other end.
+//
+// Being interactive is the answer in five of the six columns, and this is a
+// function rather than that expression because of the sixth: one dialect has
+// an option name for the question, which the invocation moves in **both**
+// directions. Measured 2026-09-18 on ksh93u+ with `$ENV` pointing at a file
+// that announces itself — `ksh -E -c` and `ksh -o rc -c` read it where the
+// shell is not interactive at all, and `ksh -i +E` with a program on a pipe
+// reads *nothing* where a plain `ksh -i` reads it.
+//
+// So neither half of that is "interactive": a guard on interactivity alone
+// would have been wrong in one direction for each row. See
+// Semantics.RunCommandsOptionName.
+//
+// Asked of the runner rather than of the invocation, because the option
+// arrives through the option namespace and lands in the runner — the same
+// route `-o <name>` interactivity takes, one step later. A name the dialect
+// declares and this shell does not answer falls back to interactivity, which
+// is what a dialect naming an option it never installed would mean.
+func (sh Shell) readsRunCommandsFile(r *interp.Runner, in source) bool {
+	name := sh.Semantics.RunCommandsOptionName
+	if name == "" {
+		return in.interactive
+	}
+	if on, known := r.NamedOption(name); known {
+		return on
+	}
+	return in.interactive
 }
 
 // nonInteractiveStartupFile sources the file a shell reads when it is *not*

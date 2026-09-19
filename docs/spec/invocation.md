@@ -441,9 +441,24 @@ the other. The **letter** is still recorded: ours reports the startup fact
 and refuses `set -l`, so `set +l` does not take the letter back out.
 **ksh93 is the mirror image and stranger**: `set -l` is a bad option
 there, and its own `set -o` listing says `login_shell off` in the very
-invocation whose `$-` contains `l` — a shell disagreeing with itself,
-recorded and not modeled. Neither is implemented, and neither is asked by
-a case.
+invocation whose `$-` contains `l` — a shell disagreeing with itself.
+
+That last is **modeled since #3255**, because it turned out to be a
+disagreement between two *readings* rather than a shell being merely odd.
+Measured 2026-09-18 on 93u+ 2012-08-01 on all four routes it has:
+
+| invocation | `$-` | `set -o` row | `[[ -o login_shell ]]` |
+| --- | --- | --- | --- |
+| `ksh -c` | `chsB` | off | false |
+| `ksh -l -c` | `chsBl` | **off** | **true** |
+| `ksh -o login_shell -c` | `chsBl` | **off** | **true** |
+| `exec -a -ksh ksh -c` | `chsBl` | **off** | **true** |
+
+So the listing is a constant and the option test is live, and a single reading
+of the state can only have been right about one of them. Ours was wrong about
+the listing for the row's whole life, reporting `on` under `-l`. `setOption`
+carries a separate `listed` reading for it now, and nothing else in the panel
+needs one.
 
 ### The letters an interactive shell starts with are a second vector
 
@@ -483,6 +498,25 @@ script and on under `-i`, and the letter is `histexpand`'s.
 **bash 3.2 dissents against its own later build**, and by route as well: it
 answers `hiB` for `-i script.sh` and `hiBHc` for `-i -c`. 5.3 is the panel
 member that counts, as it is everywhere else.
+
+#### `E` is not in the field either, and for the same reason
+
+`E` is ksh93's `rc` option — the one that reads `$ENV` — and the invocation
+moves it in **both** directions. Measured 2026-09-18 with a program on a pipe:
+
+| invocation | `$-` | `set -o` row | `$ENV` read |
+| --- | --- | --- | --- |
+| `ksh -i` | `icmsBE` | `rc on` | yes |
+| `ksh -i +E` | `icmsB` | `rc off` | **no** |
+| `ksh -E -c` | `chsBE` | `rc on` | yes |
+| `ksh -c` | `chsB` | `rc off` | no |
+
+The second row is what takes the letter out of the field: a shell that wrote
+`E` because it was interactive would print it in an invocation that had just
+been told to read nothing, and the third row is one no "interactive letters"
+string can produce at all. So the letter comes from the option's own state,
+exactly as `m` comes from the monitor's. See *Reading the run-commands file
+without a prompt* below (#3255).
 
 #### `m` is not in the field, and must not be
 
@@ -2416,6 +2450,69 @@ So "no mode" and "the empty mode" are two states, and only the first prints.
 sentences and their status — read by `driver`, which grants the word in
 `emulationOption` and runs the builtin in `applyEmulation`. Nothing in
 `interp` reads the field, for the reason nothing in it reads `VersionOption`.
+
+## Reading the run-commands file without a prompt
+
+**The rule.** Whether a shell reads the file it reads "because there is a
+person on the other end" is *being interactive* in five of the six columns and
+an **option** in the sixth. One dialect names the state, and its invocation
+moves that name in both directions — so neither half of the question is
+"interactive", and a front end guarding on interactivity alone is wrong in one
+direction for each row.
+
+The state is a `set -o` name and it is the invocation's alone: a running script
+may not move it, in either direction, which is the same route split
+`interactive` already has (`Semantics.ImmovableOptionsSetAtInvocation`).
+
+### Measured
+
+2026-09-18 on ksh93u+ 2012-08-01 under `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+with `$HOME` an empty directory holding a `.profile` that announces itself and
+`$ENV` pointing at a file that does the same. The interactive rows have a
+program on a pipe, so nothing but the invocation can make the shell one.
+
+| invocation | profile | `$ENV` | `$-` | `rc` row | `login_shell` row |
+| --- | --- | --- | --- | --- | --- |
+| `ksh -c` | — | — | `chsB` | off | off |
+| `ksh -E -c` | — | **ran** | `chsBE` | **on** | off |
+| `ksh -o rc -c` | — | **ran** | `chsBE` | **on** | off |
+| `ksh +E -c` | — | — | `chsB` | off | off |
+| `ksh -o norc -c` | — | — | `chsB` | off | off |
+| `ksh -i -c` | — | **ran** | `icmsBE` | **on** | off |
+| `ksh -i +E -c` | — | — | `icmsB` | **off** | off |
+| `ksh -l -c` | **ran** | — | `chsBl` | off | off |
+| `ksh -o login_shell -c` | **ran** | — | `chsBl` | off | off |
+| `ksh -o nologin_shell -c` | — | — | `chsB` | off | off |
+| `ksh -o login_shell -o rc -c` | **ran** | **ran** | `chsBEl` | on | off |
+
+Five facts:
+
+- **`rc` is the `-E` letter.** The two spellings are the same invocation, down
+  to the letter in `$-`.
+- **It is not "interactive".** `ksh -E -c` reads the file with no prompt
+  anywhere, and `ksh -i +E` reads *nothing* with a prompt — the two rows a
+  guard on interactivity gets wrong in opposite directions.
+- **`login_shell` is `-l`.** It runs the profile and puts `l` in `$-`, which is
+  what `-l` does; it is not an inert row, which is what #3255 assumed.
+- **The two compose**, which is how they are told apart from one switch written
+  twice.
+- **A script may move neither**, and the *letter* is refused in its own words:
+  `set -E` is `set: -E: unknown option` and `set -o rc` is `set: rc: bad
+  option(s)`. Two sentences, and a letter that resolved to the name and
+  borrowed the name's sentence is a plausible-looking wrong answer.
+
+### Where it lives
+
+`Semantics.RunCommandsOptionName` names the option, which the front end reads
+in `driver.Shell.readsRunCommandsFile` before it opens the file — empty in the
+five dialects with no such name, where the question is interactivity and
+nothing else. The state itself is the option table's, recorded over the live
+fact the way `bgnice` is.
+
+`login_shell` is the option table's too: it *moves* `Runner.LoginShell`, and
+the front end folds that back into the invocation before the startup sequence
+runs (`driver.loginShellOption`) — the option is the one of the three login
+routes that arrives after the invocation has been read.
 
 ## Two startup inputs the environment carries
 

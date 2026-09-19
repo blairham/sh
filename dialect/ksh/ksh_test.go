@@ -794,22 +794,31 @@ func TestARedirectionInAnUncompoundedBodyIsRefused(t *testing.T) {
 // TestDollarDashInteractiveStartupLetters, and this is the shell that decides
 // the shape of the axis. Measured 2026-09-05: `ksh -i script.sh` reports
 // `imBE` where a script reports `hB`, so the `h` is *dropped* — `set -o` says
-// `trackall on` for the script and off when interactive — and `rc` comes on,
-// which is the `E`. A field of letters to append could not have said any of
-// that.
+// `trackall on` for the script and off when interactive — and a field of
+// letters to append could not have said that.
 //
-// The `m` is deliberately absent from the field. It is a monitor that is
-// really running — `set -o` reports `monitor on` under `-i script.sh` in this
-// shell and off in bash and zsh — so the letter belongs to the runner's state.
-// That the shell turns job control on there and this front end does not is
-// recorded in docs/spec/invocation.md as measured and not modeled.
+// **Two** of the four letters in that row are deliberately absent from the
+// field, and for one reason: a letter naming state the runner holds has to
+// come from the runner or it will be printed where the state is not there.
+//
+//   - `m` is a monitor that is really running — `set -o` reports `monitor on`
+//     under `-i script.sh` in this shell and off in bash and zsh. That this
+//     shell turns job control on there and this front end does not is
+//     recorded in docs/spec/invocation.md as measured and not modeled.
+//   - `E` is the `rc` option, and it left this string in #3255. Measured
+//     2026-09-18 with a program on a pipe: `ksh -i` reports `icmsBE` and
+//     reads `$ENV`, while `ksh -i +E` reports `icmsB` and reads **nothing**.
+//     A letter written into this string would have appeared in that second
+//     row, naming a file the shell had just been told not to read.
 func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 	got := ksh.Semantics().InteractiveOptionLetters
-	if want := "BE"; got != want {
+	if want := "B"; got != want {
 		t.Errorf("InteractiveOptionLetters = %q, want %q", got, want)
 	}
-	if strings.ContainsRune(got, 'm') {
-		t.Error("the monitor letter must come from the monitor, not from a startup string")
+	for _, letter := range "mE" {
+		if strings.ContainsRune(got, letter) {
+			t.Errorf("%q names state the runner holds; it must come from the runner and not from a startup string", letter)
+		}
 	}
 }
 

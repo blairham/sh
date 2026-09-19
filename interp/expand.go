@@ -678,6 +678,14 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 	}
 	w = r.wordForRun(w)
 	r.expandTilde(w)
+	// The word is recorded here for the same reason expandOneWordFields
+	// records its own: a diagnostic raised inside the expansion names the
+	// text it sits in, and a target reached through this second walk was
+	// reaching it with nothing recorded at all. One dialect's second line
+	// after a refused `$( … )` body quotes the script from the start of the
+	// word holding it — see Runner.substWordEcho — and a target got no
+	// second line rather than a quote from the wrong place (#3355).
+	defer r.inWord(w)()
 
 	f := newWordFields()
 	u := newWordFields()

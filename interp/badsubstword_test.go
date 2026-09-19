@@ -90,6 +90,37 @@ func TestBadSubstitutionNamesWhatTheDialectAsksFor(t *testing.T) {
 	}
 }
 
+// And a **redirection target** is a word like any other, which is what the
+// two word-naming answers mean by "the word". It is expanded through a walk of
+// its own — a target has three readings and an ordinary word one — and that
+// walk recorded no word at all, so every one of these named the expansion
+// alone whatever the dialect asked for (#3355).
+func TestARedirectionTargetIsAWordLikeAnyOther(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		names BadSubstitutionSubject
+		src   string
+		want  string
+	}{
+		{"the word, bare", NamesTheWholeWord, `x=a; : >pre${x@QQ}post`, "pre${x@QQ}post: bad substitution"},
+		{"the word, quoted", NamesTheWholeWord, `x=a; : >"[${x@QQ}]"`, `"[${x@QQ}]": bad substitution`},
+		{"the run, bare", NamesTheQuotingRun, `x=a; : >pre${x@QQ}post`, "pre${x@QQ}post: bad substitution"},
+		// The default is unmoved: it never asked about the word.
+		{"the expansion", NamesTheExpansion, `x=a; : >pre${x@QQ}post`, "${x@QQ}: bad substitution"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dg := Diagnostics{BadSubstitutionNames: c.names}
+			if c.names != NamesTheExpansion {
+				dg.BadSubstitution = "%[1]s: bad substitution"
+			}
+			_, errs, _ := badWordRun(t, c.src, dg, wordNamingSemantics(), false)
+			if !strings.Contains(errs, c.want) {
+				t.Errorf("said %q, want %q", errs, c.want)
+			}
+		})
+	}
+}
+
 func TestACommandIsAbandonedAtItsFirstBadWord(t *testing.T) {
 	for _, c := range []struct{ name, src, first string }{
 		// A letter the family does not have, which is a failed expansion

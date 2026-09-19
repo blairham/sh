@@ -11113,6 +11113,16 @@ type Semantics struct {
 	// the local untouched, zsh assigns the visible cell — the local — and
 	// leaves the global alone. Asked only there: with no local in front,
 	// both write the global, which is what the letter is for.
+	//
+	// Reached from **either word the dialect spells the letter on**. Where
+	// LocalOptions carries a `g`, `local -g` is the same declaration as
+	// `declare -g` and is run as one — measured 2026-09-19, eleven shapes
+	// written both ways agree byte for byte and status for status, and the
+	// letter means the line declares no local at all, so the shadow, the
+	// scope's saved export and the freeze that comes off at the return are
+	// all about a binding it does not make. Reading the letter a second time
+	// under the second word is what left `local -g` taking a new local for
+	// as long as it did (#3724).
 	DeclareGlobalReachesPastALocal Answer
 
 	// LocalOptions is the same question asked of `local`, whose answers do

@@ -519,6 +519,17 @@ func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 	case 4:
 		if args[0] == "!" {
 			v, err := r.testExpr(form, args[1:])
+			if r.threeWordsReadAsANegation(form, args[1:]) &&
+				r.ask(r.sem().TestFourWordsNegateANegationOnce,
+					"a four-word `test` whose leading `!` stands in front of a negation") {
+				// One column takes the three-word reading of the rest and
+				// does not negate it again, so `[ ! ! -n x ]` there is
+				// `[ ! -n x ]`. Only where the rest is itself a negation:
+				// `[ ! x = x ]` negates in every column, and so does
+				// `[ ! ! = x ]`, whose three words are a string comparison
+				// with `!` as the left operand.
+				return v, err
+			}
 			return !v, err
 		}
 		if args[0] == "(" && args[3] == ")" {
@@ -547,6 +558,23 @@ func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 		return false, &testError{kind: errTooManyArguments, operand: leftover}
 	}
 	return v, nil
+}
+
+// threeWordsReadAsANegation reports whether the three-word reading of these
+// words takes its `!` branch rather than one of the two that come before it.
+//
+// It mirrors the order in testExprRead's three-word case and has to stay with
+// it: the binary operator is looked for first, then the two connectives, and
+// only then is a leading `!` a negation. `[ ! = x ]` is the row that makes
+// the order load-bearing — `=` binds the `!` as a left operand, so those
+// three words are a string comparison and not a negation at all.
+//
+// Asked by the four-word reading, which one column is measured to *absorb*
+// rather than negate. See Semantics.TestFourWordsNegateANegationOnce.
+func (r *Runner) threeWordsReadAsANegation(form testForm, args []string) bool {
+	return len(args) == 3 && args[0] == "!" &&
+		!r.testBinaryOperatorWord(form, args[1]) &&
+		args[1] != form.and && args[1] != form.or
 }
 
 // testOneOperand is the one-word reading: a word, true when it is not empty.
@@ -1097,10 +1125,43 @@ func (r *Runner) stringOrderOperator(op string) bool {
 	return false
 }
 
+// testBinaryOperatorWord reports whether a word stands as the *operator* of a
+// three-word reading, which is exactly the set binaryTest below handles.
+//
+// It reads the vector rather than asking it, because it is consulted a second
+// time — see threeWordsReadAsANegation — and asking twice would complain
+// twice about one word. The two spellings a dialect may lack report through
+// their own axes inside binaryTest, so an unanswered axis counts as an
+// operator here: that way the refusal is reached rather than routed around.
+func (r *Runner) testBinaryOperatorWord(form testForm, op string) bool {
+	switch op {
+	case "=", "!=", "-nt", "-ot", "-ef", "-eq", "-ne", "-lt", "-le", "-gt", "-ge":
+		return true
+	case "==":
+		return form.patterns || r.sem().TestAcceptsDoubleEqual != No
+	case "=~":
+		return form.patterns
+	case "<", ">":
+		switch r.sem().TestStringOrder {
+		case TestStringOrderBoth, TestStringOrderUnspecified:
+			return true
+		case TestStringOrderGreaterOnly:
+			return op == ">"
+		}
+	}
+	return false
+}
+
 // binaryTest is `a OP b`. The third return says whether the middle word was an
 // operator at all, which is what lets the caller fall back to another reading
 // rather than guessing.
 func (r *Runner) binaryTest(form testForm, left, op, right string) (bool, error, bool) {
+	if !r.testBinaryOperatorWord(form, op) {
+		// Not an operator word at all, which is the same answer the switch
+		// below falls out of — said once, in the one place a second reader
+		// can ask the question too.
+		return false, nil, false
+	}
 	if form.patterns {
 		switch op {
 		case "=", "==", "!=":

@@ -12066,6 +12066,51 @@ type Semantics struct {
 	// the reading and the rows each of its steps is pinned by, and #2959.
 	TestReadsOneExpressionOffTheOperands Answer
 
+	// TestFourWordsNegateANegationOnce makes a four-word `test` led by `!`
+	// take the three-word reading of the rest **without** negating it again,
+	// where the rest is itself a negation.
+	//
+	// POSIX gives the four-operand rule as "if $1 is `!`, negate the
+	// three-word result of $2 $3 $4", and one column drops its own negation
+	// at exactly that count and exactly that shape. dash 0.5.12, measured
+	// 2026-09-18 and 2026-09-19 as script files under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with stdin `/dev/null`:
+	//
+	//	probe               words  dash  bash/zsh/ksh93/ash
+	//	[ ! ! -n x ]        4      1     0
+	//	[ ! ! -z "" ]       4      1     0
+	//	[ ! ! -z x ]        4      0     1
+	//	[ ! ! -n "" ]       4      0     1
+	//	[ ! ! -d / ]        4      1     0
+	//	[ ! ! ! x ]         4      0     1
+	//	[ ! ! ! "" ]        4      1     0
+	//	[ ! ! \( \) ]       4      0     1 (dash only — the rest refuse)
+	//
+	// Each of those is the three-word reading of the rest, unnegated:
+	// `[ ! -n x ]` is 1 and `[ ! -z x ]` is 0 in every column.
+	//
+	// **It is the count and the shape together**, which is what keeps this
+	// from being a rule about `!` at all. Three words and five words negate
+	// as a recursive reading predicts in that column too — `[ ! ! x ]` is 0,
+	// `[ ! ! ! -n x ]` is 1, `[ ! ! x = x ]` is 0 — and a four-word `!` in
+	// front of something that is *not* a negation negates normally:
+	// `[ ! x = x ]` is 1, `[ ! x -a y ]` is 1 and `[ ! \( x \) ]` is 1 there.
+	//
+	// The sharpest row is `[ ! ! = x ]`, which is 0 in every column
+	// including dash. Its inner three words are a string comparison — `=`
+	// binds `!` as the left operand — so they are not a negation, and the
+	// outer `!` negates. A reading of "two leading `!`s cancel to one at
+	// four words" predicts a refusal there and is wrong; see
+	// Runner.threeWordsReadAsANegation, which asks the question the three
+	// readings are ordered by.
+	//
+	// Nobody writes two leading `!`s, and both columns exit without output,
+	// so this is a status a script reading `$?` could see and nothing more.
+	//
+	// ksh93 cannot be asked: TestReadsOneExpressionOffTheOperands above is
+	// Yes there, so the argument counts are never reached (#3700).
+	TestFourWordsNegateANegationOnce Answer
+
 	// TestGroupedUnaryAloneLosesTheClosingParen refuses a group whose first
 	// word is a unary operator when that group is the whole expression, as a
 	// closing parenthesis the reading never reached.

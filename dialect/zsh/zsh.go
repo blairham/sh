@@ -2238,6 +2238,9 @@ func Semantics() interp.Semantics {
 	s.TimesRejectsArguments = interp.Yes
 	// `[ ( -n x ) ]` is 0 here (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	// `[ ! ! -n x ]` is 0 here, so the four-word `!` negates the negation
+	// behind it. Measured 2026-09-19 (#3700).
+	s.TestFourWordsNegateANegationOnce = interp.No
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// And a group with nothing in it is `argument expected` at 2 here,
 	// which is a refusal rather than a false expression (#3687).

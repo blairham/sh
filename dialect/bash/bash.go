@@ -1572,6 +1572,10 @@ func Semantics() interp.Semantics {
 	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.Yes
 	// `[ ( -n x ) ]` is 0: the group is read like any other (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	// A four-word `!` in front of a negation negates it, the way a
+	// recursive reading predicts: `[ ! ! -n x ]` is 0 here and 1 in the one
+	// column that drops the outer negation. Measured 2026-09-19 (#3700).
+	s.TestFourWordsNegateANegationOnce = interp.No
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// And a group with nothing in it is refused rather than false:
 	// `[ ( ) ]` is `[: (: unary operator expected` at 2 (#3687).

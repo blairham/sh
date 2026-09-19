@@ -25,7 +25,9 @@
 #   `read` with no name       dash alone makes it an error rather than REPLY
 #   `kill -s SIGUSR1`         dash alone refuses the SIG prefix
 #   `kill` with no operand    zsh alone says 1 where the others say 2
-#   the `hash` listing        four formats, one per shell
+#   the `hash` listing        four formats, one per shell — and dash's is
+#                             asked through `sort`, since its order is its
+#                             own hash table's (#2897)
 #   a `cd` that used CDPATH   prints the directory in three and not in zsh
 #
 # CDPATH is used inside a subshell below and nowhere else in this file. That

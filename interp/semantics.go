@@ -13787,9 +13787,11 @@ type Semantics struct {
 	// So zsh agrees with bash at every other surface in this group and
 	// disagrees at this one, which is the whole reason the group is three
 	// fields. The control is the same operand with nothing in it to expand
-	// — `unset -v 'p[plain]'` takes the element away in all four columns —
-	// which says the disagreement is about the round and not about whether
-	// a quoted subscript reaches `unset` at all.
+	// — `unset -v 'p[plain]'` takes the element away in bash 5.3.20 with
+	// the option either way, in zsh 5.9.2 and in ksh93u+, which are the
+	// four probes above and every column that can be asked — which says the
+	// disagreement is about the round and not about whether a quoted
+	// subscript reaches `unset` at all.
 	//
 	// bash 3.2.57 has no associative array, and dash 0.5.12 and BusyBox ash
 	// 1.37.0 have no array of either kind, so three of the seven columns

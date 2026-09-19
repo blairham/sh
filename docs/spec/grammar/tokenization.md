@@ -1419,6 +1419,63 @@ can equal. Without the dash nothing is stripped and `<tab>EOF` ends a
 pinned Alpine image, runs out on all four rows as dash does.
 `syntax.Dialect.StrippedHeredocDelimiter` carries it.
 
+### A body that would have to come from outside the substitution
+
+The rules above are all about a body that is *inside* the parentheses. A
+here-document opened in a **one-line** substitution has none: the text ends
+on the operator's own line, so the body would have to come from the lines
+after the **enclosing command**.
+
+Measured 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with standard input on the null device, over
+
+    echo one
+    echo $(cat <<EOF)
+    body
+    EOF
+    echo after
+
+| column | output | status |
+| --- | --- | --- |
+| bash 5.3.20 | `one`, a warning that a here-document was unterminated, `body`, `after` | 0 |
+| zsh 5.9.2 | `one`, an empty substitution, `body` and `EOF` run as commands, `after` | 0 |
+| dash 0.5.12 | the same, in its own words | 0 |
+| BusyBox ash 1.37.0 | the same | 0 |
+| ksh93u+ 2012-08-01 | `one`, then a syntax error at line 2, and `after` never reached | 3 |
+
+So four columns leave the substitution empty and run the body's lines as
+program text, and one refuses the construct while the line is read — `one`
+having already run, which is what says *while*.
+
+**ksh93's leg is what this tree takes**, and it is
+`syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution` with
+`interp.Diagnostics.HeredocOutsideSubstitution` for the sentence:
+
+    s.sh: syntax error at line 2: `<<EOF' here-document not contained within command substitution
+
+The quoted token is the operator with the delimiter's quoting off. `<<-EOF`,
+`<<"EOF"` and `<<\EOF` are each `<<EOF`, a descriptor in front of the
+operator is not written, and `<<'E O F'` is `<<E O F` with its blanks.
+
+**bash's leg is not modeled**, and it is a parser capability rather than a
+dialect's answer: the body has to reach the *outer* lexer's pending queue
+from inside a span that has already closed, which is the cost
+`docs/spec/grammar/substitutions.md` declines under *when a substitution's
+body is read*. Written as one axis with three values, bash's would be a value
+no code produces — the decoration `make axis-sweep` exists to find — so it is
+a flag over the quiet reading plus an issue of its own (#3711).
+
+**Two shapes are outside the rule, and both are measured rather than
+reasoned.** The backquoted spelling is accepted — `` `cat <<EOF` `` with the
+body after it gives the four-column answer, a body being unable to hold the
+mark that would close it. And `cat <(cat <<EOF)` is accepted too, where that
+shell reads the body from the lines after the enclosing command, which is
+bash's reading of the `$( )` shape and is the same unmodeled capability. The
+`${ cat <<EOF; }` spelling **is** refused there with the same sentence, and
+is the one row of this not taken: that body ends at a token start rather than
+where a list ends, so it is scanned rather than parsed and nothing at scan
+time knows a here-document was opened.
+
 ## `<<<` is a redirection, not a heredoc
 
 It shares a prefix with `<<` and nothing else. There is no delimiter, no

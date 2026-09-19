@@ -4792,6 +4792,19 @@ type Diagnostics struct {
 	// and the status a given-up line leaves is already 1. See
 	// syntax.Dialect.InputDuplicateOperandIsAFileNumber.
 	FileNumber string
+	// HeredocOutsideSubstitution is what a here-document opened inside a
+	// `$( )` or `${ ; }` whose body is not inside it says. Two verbs: %[1]s
+	// the operator with its delimiter, quoting off, and %[2]d the line the
+	// operator is on.
+	//
+	// Empty leaves the substrate's own sentence, which is what the four
+	// columns that accept the shape would say if they ever raised it — and
+	// they never do, the refusal being one dialect's. See
+	// syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution.
+	HeredocOutsideSubstitution string
+	// PromptHeredocOutsideSubstitution is the same sentence for a person at a
+	// prompt, where a line number is not a thing to name.
+	PromptHeredocOutsideSubstitution string
 
 	// ForArithHeader is a C-style `for` header that does not hold the two
 	// separators its three expressions are parted by — `for (())`,
@@ -7446,6 +7459,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
 	case syntax.ErrFileNumber:
 		return Wording(d.FileNumber, se.Msg, se.Token, se.Pos.Line)
+	case syntax.ErrHeredocOutsideSubstitution:
+		return Wording(d.HeredocOutsideSubstitution, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrForArithHeader:
 		form := d.ForArithHeader
 		if se.LastToken == "" && d.ForArithHeaderNoPart != "" {
@@ -7670,6 +7685,7 @@ func (d Diagnostics) ForPrompt() Diagnostics {
 		{&d.BadSubstitution, d.PromptBadSubstitution},
 		{&d.SyntaxError, d.PromptSyntaxError},
 		{&d.ForArithHeader, d.PromptForArithHeader},
+		{&d.HeredocOutsideSubstitution, d.PromptHeredocOutsideSubstitution},
 	} {
 		if w.prompt != "" {
 			*w.at = w.prompt

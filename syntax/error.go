@@ -252,6 +252,20 @@ const (
 	//
 	// Token and LastToken carry what ErrForArithHeader's do.
 	ErrForArithSeparator
+	// ErrHeredocOutsideSubstitution is a here-document opened inside a
+	// substitution that holds a program — `$( )` or `${ ; }` — whose body is
+	// not inside it, which is what `echo $(cat <<EOF)` leaves: the text ends
+	// on that line and the body would have to come from the lines after the
+	// *enclosing* command.
+	//
+	// Its own kind because the one column that refuses it words it as a
+	// statement about the here-document rather than as a token the grammar
+	// did not want, and because it is refused while the line is read — the
+	// commands in front of it have already run. Token is `<<` with the
+	// delimiter's quoting off, which is what that sentence quotes. See
+	// [Dialect.HeredocBodyMustBeInsideTheSubstitution], which carries the
+	// panel.
+	ErrHeredocOutsideSubstitution
 )
 
 // TokenClass is what sort of thing a token is, for the dialect that words an

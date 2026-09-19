@@ -312,6 +312,23 @@ func (r *Runner) groupedUnaryAlone(args []string) bool {
 		"`[ ( -n x ) ]` refused as a group that never closed")
 }
 
+// emptyGroup is a `(` closed by the very next word, on the axis that reads
+// one as false rather than as a list that ran out of words.
+//
+// Both readings of `test` reach it — the two-word count and the grammar — and
+// both ask here, because the shape is the same one and the answer is the
+// dialect's rather than the route's. The axis is asked only once the shape is
+// found, so no dialect whose groups always hold something is asked a question
+// its own `test` never poses.
+//
+// See Semantics.TestEmptyGroupIsFalse.
+func (r *Runner) emptyGroup(open, next string) bool {
+	if open != "(" || next != ")" {
+		return false
+	}
+	return r.ask(r.sem().TestEmptyGroupIsFalse, "`[ ( ) ]` read as a false expression")
+}
+
 // bareTerminalTest is whether a lone `-t` is `-t 1` rather than a non-empty
 // string. Two shells read it that way and four do not — see
 // Semantics.BareTerminalTestIsDescriptorOne, where the measurement is.
@@ -419,6 +436,12 @@ func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 				return !on, err
 			}
 			return args[1] == "", nil
+		}
+		if r.emptyGroup(args[0], args[1]) {
+			// A group closed by its own next word, standing as the whole
+			// expression. Before unaryTest because `(` is not a unary
+			// operator and that is the refusal this replaces.
+			return false, nil
 		}
 		return r.unaryTest(args[0], args[1])
 	case 3:
@@ -629,6 +652,14 @@ func (p *testParser) primary() (bool, error) {
 	}
 	if p.peek() == "(" {
 		p.pos++
+		if p.more() && p.r.emptyGroup("(", p.peek()) {
+			// Nothing between the parentheses, on the axis that reads that
+			// as a value. Both words are taken, so the group stands where
+			// any other operand would and the connectives around it compose
+			// with it.
+			p.pos++
+			return false, nil
+		}
 		v, err := p.orExpr()
 		if err != nil {
 			return false, p.r.unclosedGroup(err)

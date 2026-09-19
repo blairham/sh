@@ -272,6 +272,10 @@ func Semantics() interp.Semantics {
 	// reader stopped at. Seventeen shapes move and four controls do not —
 	// see the axis, which has them (#3665).
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.Yes
+	// And a group with nothing in it is `closing paren expected` at 2 here,
+	// which is a refusal and not the false expression the sibling reads
+	// (#3687).
+	s.TestEmptyGroupIsFalse = interp.No
 	// And `command local a=1` declares nothing at all, which is the sibling's
 	// answer too (#3370).
 	s.LocalThroughCommandDeclaresNothing = interp.Yes

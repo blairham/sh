@@ -1688,6 +1688,9 @@ func Semantics() interp.Semantics {
 	// `[ ( -n x ) ]` is 0 here (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
+	// And a group with nothing in it is `argument expected` at 2 here too
+	// (#3687).
+	s.TestEmptyGroupIsFalse = interp.No
 	// unanswered LocalThroughCommandDeclaresNothing: this shell has no
 	// `local` at all — `command local a=1` is `local: not found` at 127 —
 	// so the axis cannot be put to it.

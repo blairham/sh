@@ -18640,6 +18640,51 @@ different question. `interp/testfrontexpression.go` carries the reading with
 the row each of its steps is pinned by, `share/suite/ksh/conditions.tests`
 asks them against the real shell, and #2959 is the issue.
 
+**`TestEmptyGroupIsFalse`** — bash no · dash **yes** · ksh93 no ·
+zsh no · BusyBox ash no
+
+Reads `( )` — a group closed by its own next word — as a false expression
+rather than as a list the reading could not place. dash alone, and it is a
+**status** difference rather than a wording one: a script reading `$?` sees
+1 where the other five columns write a sentence and exit 2.
+
+Measured 2026-09-18, each probe a script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null —
+dash 0.5.12, bash 5.3.20, zsh 5.9.2, ksh93u+ 2012-08-01 and BusyBox v1.37.0
+ash in the pinned image:
+
+| probe | dash 0.5.12 | the other five |
+| --- | --- | --- |
+| `[ \( \) ]` | silent, 1 | a sentence, 2 |
+| `[ \( \( \) \) ]` | silent, 1 | a sentence, 2 |
+| `[ x -a \( \) ]` | silent, 1 | a sentence, 2 |
+| `[ \( \) -o x ]` | silent, **0** | a sentence, 2 |
+| `[ \( \) -a \( \) ]` | silent, 1 | a sentence, 2 |
+| `[ ! \( \) ]` | silent, **0** | a sentence, 2 |
+| `[ \( \) -a x -o y ]` | silent, **0** | a sentence, 2 |
+| `[ \( x \) ]` | 0 | 0 |
+| `[ \( "" \) ]` | 1 | 1 |
+
+The last two rows are the control and they are the point: a group that
+holds something is read the same way everywhere, so this is the *empty*
+group and not grouping. The `-o`, `-a` and `!` rows are the second control
+— the empty group composes with the connectives and the negation like any
+other operand, which is what says it is a value rather than a shape the
+front of the reader happens to skip.
+
+Both of `test`'s readings reach it and both ask, because they share no
+code: the argument counts POSIX specifies take the two- and four-word
+lists and the grammar takes everything longer, so a fix in one leaves the
+other refusing. The axis is asked only once a `(` is found closed by the
+very next word, so no column whose groups all hold something is put a
+question its own `test` never reaches (#3687).
+
+The rest of that measurement's thirty probes differ only in the *sentence*,
+at status 2 on both sides, and they are not this axis: what a refusal
+inside an unclosed group is called is a four-column disagreement — bash
+writes ``[: `)' expected, found ]``, dash `closing paren expected`, zsh and
+ksh93 `argument expected` — rather than dash's alone.
+
 
 ### the names a builtin will and will not take
 

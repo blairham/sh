@@ -2665,6 +2665,10 @@ func Semantics() interp.Semantics {
 	// a[1]+=q` leaves `pq` at 0, and so do the same lines under `export`
 	// and `readonly` and over a chain. Measured 2026-09-19 (#3789).
 	s.DeclarationTakesASubscriptedAppendOperand = interp.Yes
+	// And the same operator on an *array literal* operand, which this shell
+	// does not take: `typeset u+=(3 4)` is `typeset: u+: invalid variable
+	// name` and the script ends.
+	s.DeclarationTakesAnAppendingArrayOperand = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes

@@ -135,8 +135,9 @@ func TestAnArrayOperandIsTracedInEveryDialect(t *testing.T) {
 //
 // Only the traced lines are compared. ksh93 goes on to refuse the `u+` it left
 // on the command line — `typeset: u+: invalid variable name` — which is a
-// question about what the utility is handed rather than about what was
-// written, and this shell does not hand it one.
+// question about what the utility is *handed* rather than about what was
+// written, and it is Semantics.DeclarationTakesAnAppendingArrayOperand's:
+// see dialect/appendarrayoperand_test.go for that half.
 func TestAnAppendingArrayOperandKeepsItsMarkerWhereTheColumnDoes(t *testing.T) {
 	for _, c := range []struct {
 		dialecttest.Preset

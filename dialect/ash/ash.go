@@ -194,6 +194,10 @@ func Semantics() interp.Semantics {
 	// And `export 'a[1]+=q'` is `a[1]+: bad variable name` too, measured
 	// 2026-09-19 in the pinned alpine image: no arrays, so no split.
 	s.DeclarationTakesASubscriptedAppendOperand = interp.No
+	// And the same operator on an array-literal operand, which this grammar
+	// has no way to write — `typeset u+=(3 4)` is a syntax error here — so
+	// the value is the scalar one above and is never reached.
+	s.DeclarationTakesAnAppendingArrayOperand = interp.No
 	// A prefix to a function, both halves with its sibling: visible and
 	// exported for the length of the call, gone afterwards. Measured
 	// 2026-09-12 in the pinned alpine image (#2407).

@@ -3043,6 +3043,10 @@ func Semantics() interp.Semantics {
 	// `not an identifier: a[1]+` at 1, which is the same refusal at a
 	// different wording rather than a different answer.
 	s.DeclarationTakesASubscriptedAppendOperand = interp.No
+	// And the same operator on an *array literal* operand, which this shell
+	// does not take: `typeset u+=(3 4)` is `not valid in this context: u+`
+	// and the script ends.
+	s.DeclarationTakesAnAppendingArrayOperand = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No

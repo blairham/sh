@@ -159,3 +159,38 @@ func appendNameSplit(w *syntax.Word) (span, off int, ok bool) {
 	span, off, appends, ok := declarationNameSplit(w)
 	return span, off, ok && appends
 }
+
+// An array literal written as a declaration's operand may carry the append
+// operator too — `typeset u+=(3 4)` — and what the utility is *handed* there
+// is not what it is handed for a scalar.
+//
+// The parser keeps the assignment apart and leaves a name in argv, so the
+// operator has nowhere to be unless the name carries it. One column takes the
+// operand and hands over the bare name; three leave the `+` on it and refuse
+// the name that leaves behind — see
+// Semantics.DeclarationTakesAnAppendingArrayOperand for the rows and for why
+// it is not the scalar field asked again.
+//
+// Nothing here writes a refusal. The name `u+` is refused by the same reader
+// that refuses it for a scalar operand, in each shell's own words and with
+// each shell's own idea of how far the script gets afterwards, so a dialect
+// that already reproduced `typeset "u+"` reproduces this by being handed the
+// same word.
+
+// arrayOperandName is the word an array-literal operand leaves in argv for the
+// utility to read.
+//
+// The bare name where the dialect takes the operator, and the name with the
+// operator still on it where it does not. Asked only of an appending literal:
+// a plain `typeset a=(1 2)` has no operator to place and reaches the question
+// with nothing to decide.
+func (r *Runner) arrayOperandName(a *syntax.Assign) string {
+	if !a.Append {
+		return a.Name
+	}
+	if r.ask(r.sem().DeclarationTakesAnAppendingArrayOperand,
+		"a declaration taking a `name+=( … )` operand") {
+		return a.Name
+	}
+	return a.Name + "+"
+}

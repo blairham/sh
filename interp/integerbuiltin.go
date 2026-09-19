@@ -467,12 +467,34 @@ func (r *Runner) learnIntegerBase(name, text string) {
 		return
 	}
 	base := integerBaseOfLiteral(text)
-	if base == 0 {
+	// A **bare leading zero** names a base too, where the dialect reads one
+	// as octal: measured 2026-09-17 on zsh 5.9.2 under `setopt octal_zeroes`,
+	// `typeset -i d=010` reads back `8#10` — eight, written in the base it
+	// was read in — where `typeset -i h=0x10` has always been `16#10` here.
+	// The prefix spellings this function knows are not the only way to write
+	// a radix down; they are only the two that carry it in the text (#3520).
+	// Trimmed the way integerBaseOfLiteral trims, and measured: `typeset -i
+	// s=" 010 "` is `8#10` on zsh 5.9.2, so the spaces around a literal are
+	// not what tells a number from an expression here.
+	padded := base == 0 && zeroPadded(strings.TrimSpace(text))
+	if base == 0 && !padded {
 		return
 	}
 	if !r.ask(r.sem().IntegerBaseComesFromTheValueAssigned,
 		"an integer name taking its output base from the value assigned to it") {
 		return
+	}
+	if padded {
+		// Behind the learning question, so a dialect that takes no base from
+		// a value is never asked what a leading zero means — which is every
+		// column but one, and two of them read a leading zero as octal while
+		// carrying no base at all. Asking in front of it would put a
+		// question to `typeset -i e=010` in bash, whose answer is a plain 8
+		// either way.
+		if !r.octalLeadingZero() {
+			return
+		}
+		base = 8
 	}
 	if !r.validIntegerBase(base) {
 		// A radix outside what the dialect takes is not a base it can

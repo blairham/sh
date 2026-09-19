@@ -35,10 +35,22 @@ func TestOctalZeroesMakesALeadingZeroABase(t *testing.T) {
 		// literal, so the option reaches text no expression ever held.
 		{`setopt octal_zeroes; k=010; echo "$(( k ))"`, "8\n"},
 		{`k=010; echo "$(( k ))"`, "10\n"},
-		// And so does an assignment to an integer name, and `let`.
-		{`setopt octal_zeroes; typeset -i d=010; echo "$d"`, "8\n"},
-		{`setopt octal_zeroes; let "x=010"; echo "$x"`, "8\n"},
-		{`setopt octal_zeroes; e=010; typeset -i e; echo "$e"`, "8\n"},
+		// And so does an assignment to an integer name, and `let` — which
+		// renders the eight in the **base it was read in**, because a
+		// leading zero is a radix here as much as `0x` is and an integer
+		// name carries the base its value named. These three rows read `8`
+		// until #3520: the number was right and the rendering was short, and
+		// the expectation written here was this shell's answer rather than
+		// the measurement. Re-measured 2026-09-17 on zsh 5.9.2 from a script
+		// file under `env -i PATH=/usr/bin:/bin LC_ALL=C` — `typeset -p d`
+		// lists `typeset -i8 d=8` for the first of them.
+		{`setopt octal_zeroes; typeset -i d=010; echo "$d"`, "8#10\n"},
+		{`setopt octal_zeroes; let "x=010"; echo "$x"`, "8#10\n"},
+		{`setopt octal_zeroes; e=010; typeset -i e; echo "$e"`, "8#10\n"},
+		// And the option is what makes it one: with the zero decimal there
+		// is no radix to carry, which is the control the three rows above
+		// need and did not have.
+		{`typeset -i d=010; echo "$d"`, "10\n"},
 		// The underscored spelling and the run-together one are one name, as
 		// every name in this namespace is.
 		{`setopt octalzeroes; echo "$(( 010 ))"`, "8\n"},

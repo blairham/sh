@@ -903,8 +903,20 @@ func (r *Runner) declareIntegerFromArithmetic(name string, from syntax.ArithExpr
 	if f := r.arithOutput; f != nil && f.Based {
 		base = f.Base
 	}
+	padded := false
 	if base == 0 {
-		base = radixBaseWritten(from)
+		base, padded = radixWritten(from)
+	}
+	if base == 0 && padded && r.octalLeadingZero() {
+		// The leading zero is a radix as much as a prefix is, where the
+		// dialect reads one as octal — `let "x=010"` under `setopt
+		// octal_zeroes` is `8#10` on zsh 5.9.2, the same answer the
+		// declaration route gives `typeset -i d=010`. Asked here rather than
+		// inside the walk because what numerals the expression holds is a
+		// property of the text and what a leading zero *means* is the
+		// dialect's, and asked only where there is such a numeral to ask
+		// about: `(( x = 5 ))` poses no question (#3520).
+		base = 8
 	}
 	if base == 0 || !r.validIntegerBase(base) {
 		return
@@ -918,30 +930,45 @@ func (r *Runner) declareIntegerFromArithmetic(name string, from syntax.ArithExpr
 	r.integerBase[name] = base
 }
 
-// radixBaseWritten is the base named by the first radix literal in an
-// expression, or 0 where it holds none.
-func radixBaseWritten(e syntax.ArithExpr) int {
+// radixWritten is the base named by the first radix literal in an expression,
+// or 0 where it holds none — and whether any numeral in it is a **bare
+// leading zero**, which is a base where the dialect reads one as octal.
+//
+// Both in one walk because they are one question asked of the same numerals,
+// and because a second walk beside this one is how a node kind comes to be
+// read by one of them and not the other.
+//
+// The leading zero reaches as far into the expression as a prefix does, which
+// is measured rather than assumed: on zsh 5.9.2 under `setopt octal_zeroes`,
+// `let "y=1+010"` is `8#11` exactly as `(( u = 1 + 0x1f ))` is `16#20`. The
+// first guess here was that a leading zero counted only as the whole of what
+// was written, and the probe said otherwise (#3520).
+//
+// The base wins where an expression holds both. Nothing measures that pair —
+// `(( q = 0x1f + 010 ))` is not a spelling anyone writes — and it is the
+// order the two readings already stood in.
+func radixWritten(e syntax.ArithExpr) (base int, padded bool) {
 	switch x := e.(type) {
 	case nil:
-		return 0
+		return 0, false
 	case *syntax.ArithNum:
-		return integerBaseOfLiteral(x.Text)
+		return integerBaseOfLiteral(x.Text), zeroPadded(x.Text)
 	case *syntax.ArithUnary:
-		return radixBaseWritten(x.X)
+		return radixWritten(x.X)
 	case *syntax.ArithCond:
-		if b := radixBaseWritten(x.Then); b != 0 {
-			return b
+		if b, p := radixWritten(x.Then); b != 0 || p {
+			return b, p
 		}
-		return radixBaseWritten(x.Else)
+		return radixWritten(x.Else)
 	case *syntax.ArithBinary:
-		if b := radixBaseWritten(x.X); b != 0 {
-			return b
+		if b, p := radixWritten(x.X); b != 0 || p {
+			return b, p
 		}
-		return radixBaseWritten(x.Y)
+		return radixWritten(x.Y)
 	case *syntax.ArithAssign:
-		return radixBaseWritten(x.Value)
+		return radixWritten(x.Value)
 	}
-	return 0
+	return 0, false
 }
 
 // arithPlaceOf is the target an operator can write through, and false for an

@@ -6938,6 +6938,20 @@ says `bad math expression: operator expected at ` where bash names the token
 and the base. A prefix is untouched in both directions, so this is the bare
 leading zero and not radix reading generally.
 
+**And the base the zero named is carried**, which is the half those two
+`8#10` rows state and which this shell wrote as a plain `8` until #3520.
+An integer name takes its output base from the value assigned to it where
+`IntegerBaseComesFromTheValueAssigned` says so, and a bare leading zero
+is a radix there exactly as `0x` is — `typeset -p d` lists `typeset -i8
+d=8`. It reaches as far into an expression as a prefix does, measured on
+the same shell: `let "y=1+010"` is `8#11` as `(( u = 1 + 0x1f ))` is
+`16#20`, which is the reading a first guess here got wrong in the narrow
+direction. The gate is both answers together and is asked in that order —
+a dialect that takes no base from a value is never asked what a leading
+zero means, which is every column but this one, and two of them read the
+zero as octal while carrying no base at all: `typeset -i e=010` is a
+plain `8` in bash and a plain `10` in ksh93.
+
 Recorded is exactly the wrong answer for a name like this, and #2884 is the
 record of why: accepted, remembered and acted on by nothing is the shape that
 reads as *working*. A script sets it, draws no diagnostic, and gets the other

@@ -29,14 +29,14 @@ import (
 // and deciding *when* to list is its business — see completeKey, which is
 // where the dialect's answer to that is read.
 //
-// The second result says the line was written to. It is not "there were no
-// matches": a word that matched nothing and a word whose matches agree on
-// nothing past what is typed are the same keystroke from the line's point of
-// view, and that is the fact a bell is about.
-func (e *editor) complete(c Completer) (matches []Candidate, filled bool) {
+// The second result is what the keystroke did, which is a **third** thing
+// beyond the line and the matches: the two shells with a line editor ask
+// different questions about it, so neither "the line was written to" nor
+// "there were matches" is enough on its own. See completionOutcome.
+func (e *editor) complete(c Completer) (matches []Candidate, did completionOutcome) {
 	start, word, candidates := e.candidates(c)
 	if len(candidates) == 0 {
-		return nil, false
+		return nil, completionFoundNothing
 	}
 	// The words are what is inserted and what the prefix is computed over;
 	// a candidate with no word is a row of a listing and nothing else, so
@@ -44,16 +44,46 @@ func (e *editor) complete(c Completer) (matches []Candidate, filled bool) {
 	words := insertableWords(candidates)
 	if len(words) == 1 {
 		e.replaceWord(start, words[0]+completionSuffix(word, words[0]))
-		return nil, true
+		return nil, completionSettledTheWord
 	}
 	// Several. Fill in as far as they agree, which is what makes a second Tab
 	// worth pressing rather than a repeat of the first.
 	if common := commonPrefix(words); len(words) > 1 && len(common) > len(word) {
 		e.replaceWord(start, common)
-		return nil, true
+		return nil, completionFilledInWhatTheyAgreeOn
 	}
-	return displayCandidates(candidates, word), false
+	return displayCandidates(candidates, word), completionHadNothingToInsert
 }
+
+// completionOutcome is what one completion keystroke did, in the three states
+// the bell is decided by.
+//
+// Three and not two, because the two shells with a line editor split them
+// differently. Measured 2026-09-19 through a pseudo-terminal against twelve
+// directories agreeing on a prefix, one unique name, and a word agreeing on
+// nothing more:
+//
+//	bash 5.3.20   \a and the prefix   the name and a space   \a
+//	zsh  5.9.2    the prefix          the name and a space   \a
+//
+// So a settled word is silent in both and an unsettled one rings in both; the
+// middle state — several matches and a prefix put in — is bash's alone. A
+// pair of booleans could not say that without one of them meaning two things.
+type completionOutcome uint8
+
+const (
+	// completionFoundNothing: no match at all, and the line is as it was.
+	completionFoundNothing completionOutcome = iota
+	// completionSettledTheWord: one match, put in whole with whatever
+	// follows a finished word.
+	completionSettledTheWord
+	// completionFilledInWhatTheyAgreeOn: several matches, and more of the
+	// word than was typed is now on the line.
+	completionFilledInWhatTheyAgreeOn
+	// completionHadNothingToInsert: several matches agreeing on nothing past
+	// what is typed, so the line is as it was and the matches are the answer.
+	completionHadNothingToInsert
+)
 
 // candidates is what the word under the cursor could become, and where that
 // word begins.
@@ -507,26 +537,12 @@ func (e *editor) completerFor(name string) Completer {
 // keystroke's and not the first's.
 func (e *editor) completeKey(c Completer, wasTab bool, prompt drawnPrompt) {
 	var matches []Candidate
-	var filled bool
-	e.change(false, func() { matches, filled = e.complete(c) })
+	var did completionOutcome
+	e.change(false, func() { matches, did = e.complete(c) })
 	// Whether the matches are drawn now or left for a second key is the
 	// dialect's answer; see EditorStyle.ListMatchesWithoutASecondKeyOption.
 	listing := len(matches) > 0 && (wasTab || e.listsMatches)
-	if !filled && (e.listsMatches || !listing) {
-		// Nothing reached the line, so the person is told the only other way
-		// there is. Measured 2026-09-19 through a pseudo-terminal, and it is
-		// what both shells with a line editor do for a word that matches
-		// nothing and for one whose matches agree on nothing past what is
-		// typed — the two cases that look identical from the line.
-		//
-		// Not on the keystroke whose whole job is the listing: where the
-		// matches wait for a second key, that second key draws them and is
-		// silent, which is why this asks about the listing rather than only
-		// about the line. Where they are drawn on the first key the bell
-		// rings with them, measured, and the two are separable there — the
-		// listing survives `unsetopt listbeep` and the bell survives
-		// `unsetopt autolist`. Only the pair being off is silence, and that
-		// switch is not modeled here.
+	if e.ringsFor(did, listing) {
 		e.ring()
 	}
 	if listing && e.confirmList(matches, prompt) {
@@ -537,4 +553,31 @@ func (e *editor) completeKey(c Completer, wasTab bool, prompt drawnPrompt) {
 	// completions in a row are a request to see the matches, and anything
 	// between them is not.
 	e.lastTab = true
+}
+
+// ringsFor reports whether this keystroke sounds the bell, given what it did
+// and whether it is drawing the matches.
+//
+// A word it settled is silent in both shells with a line editor, and a word
+// it could not move rings in both. The middle case is the disagreement: bash
+// asks whether the word is **settled** and rings for an ambiguous completion
+// even while it puts a prefix in, and zsh asks whether the keystroke **did
+// anything** and stays silent. See
+// EditorStyle.BellRingsOnAnAmbiguousCompletionThatInserts, which is measured
+// and identical in bash 5.3.20 and bash 3.2.57.
+//
+// The listing is the other half, and only for the shells that keep the
+// matches back: where a second key exists to draw them, that key draws them
+// and is silent — measured, one bell over two Tabs — so what is asked is
+// whether this keystroke is that one. Where they are drawn on the first key
+// the bell rings beside them.
+func (e *editor) ringsFor(did completionOutcome, listing bool) bool {
+	switch did {
+	case completionSettledTheWord:
+		return false
+	case completionFilledInWhatTheyAgreeOn:
+		return e.bellsOnAPartialCompletion
+	default:
+		return e.listsMatches || !listing
+	}
 }

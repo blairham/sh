@@ -1846,6 +1846,9 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// ambiguous. Read through the option rather than taken as a value,
 		// because it is one a person turns off at the prompt.
 		listsMatches: s.dialectOption(s.Editor.ListMatchesWithoutASecondKeyOption),
+		// And whether an ambiguous completion rings even while it fills a
+		// prefix in, which is one shell's answer and not the other's.
+		bellsOnAPartialCompletion: s.Editor.BellRingsOnAnAmbiguousCompletionThatInserts,
 		// Whether to ask the terminal to mark a paste, and how a marked one
 		// is drawn. Two of the four ask and ksh93 does not; see paste.go.
 		bracketedPaste: s.Editor.BracketedPaste,

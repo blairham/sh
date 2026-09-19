@@ -507,6 +507,11 @@ func Semantics() interp.Semantics {
 	// And a comment is left as written. See
 	// Semantics.HistoryCommentStopsExpansion.
 	s.HistoryCommentStopsExpansion = interp.Yes
+	// And a `G` in front of an `s` substitutes once per word. Measured
+	// 2026-09-18 after `echo foo boo`, `!!:Gs/o/0/` is `ech0 f0o b0o`,
+	// which zsh and ksh93 both refuse as a modifier they do not know. See
+	// Semantics.HistoryWordwiseSubstitutionModifier.
+	s.HistoryWordwiseSubstitutionModifier = interp.Yes
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.

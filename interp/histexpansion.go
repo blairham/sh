@@ -78,6 +78,12 @@ func (r *Runner) HistoryChars() histexpand.Chars {
 	c.DoubleQuotesProtect = r.posixMode && r.sem().HistoryExpansionSparesDoubleQuotesInPosixMode == Yes
 	c.QuoteInPlace = r.sem().HistoryQuoteModifierInPlace == Yes
 	c.CommentStops = r.sem().HistoryCommentStopsExpansion == Yes
+	c.QuoteIsText = r.sem().HistoryQuoteEndsAnEventReference == Yes
+	c.EventCharClosesAnEventName = r.sem().HistoryEventCharClosesAnEventName == Yes
+	c.BracedEvent = r.sem().HistoryBracedEventReference == Yes
+	c.LastWordEndsTheDesignator = r.sem().HistoryLastWordEndsTheDesignator == Yes
+	c.FirstWordEndsARange = r.sem().HistoryFirstWordEndsARange == Yes
+	c.WordwiseSubstitution = r.sem().HistoryWordwiseSubstitutionModifier == Yes
 	switch r.sem().HistoryWords {
 	case HistoryWordsShell:
 		c.Words = histexpand.WordsShell

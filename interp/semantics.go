@@ -16500,6 +16500,77 @@ type Semantics struct {
 	// asked, for the reason HistoryWords is.
 	HistoryCommentStopsExpansion Answer
 
+	// HistoryQuoteEndsAnEventReference makes a single quote or a backquote
+	// against the event character ordinary text, and ends a `!string` event
+	// name at one.
+	//
+	// Measured 2026-09-18 (#3421), in a script and again at a prompt:
+	// `echo T!'xE'` is `!'xE': event not found` in bash 5.3.20 and ksh93u+,
+	// which read the quote as part of the name, and `T!'x E` printed whole
+	// in zsh 5.9.2. A backquote splits the same way — the two shells that
+	// take the quote take it too, and the one that leaves it alone runs the
+	// command substitution it opens. A double quote ends the name in all
+	// three and is not this question.
+	//
+	// Read rather than asked, for the reason HistoryWords is.
+	HistoryQuoteEndsAnEventReference Answer
+
+	// HistoryEventCharClosesAnEventName ends a `!string` event name at a
+	// second event character inside it, that character included, rather than
+	// reading it as an ordinary letter of the name.
+	//
+	// Measured 2026-09-18 with `X!ab!cdY` against a one-line list:
+	// `!ab!cdY: event not found` in bash 5.3.20 from a script and in
+	// ksh93u+ at a prompt, where zsh 5.9.2 at one says `event not found:
+	// ab!` — the name stops after the second `!` and keeps it. Read, not
+	// asked, for the reason HistoryWords is.
+	HistoryEventCharClosesAnEventName Answer
+
+	// HistoryBracedEventReference reads `!{…}` as an event reference whose
+	// braces say where it ends.
+	//
+	// It is a csh form and one column has it. Measured 2026-09-18 (#3220):
+	// `!{x}` is the event `x` in zsh 5.9.2 at a prompt, while bash 5.3.20
+	// and 3.2.57 from a script and ksh93u+ at a prompt take the whole run
+	// after the `!` as an event *name* — `X!{!!}Y` is `!{!!}Y: event not
+	// found` — so the brace is not punctuation there at all. Read, not
+	// asked, for the reason HistoryWords is.
+	HistoryBracedEventReference Answer
+
+	// HistoryLastWordEndsTheDesignator ends a word designator at its `$`, so
+	// that a `-` or a `*` after it is text rather than the start of a range.
+	//
+	// Measured 2026-09-18 over `echo a b c d e`: `!!:$-3` is `e-3`, `!!:$-`
+	// is `e-` and `!!:$*` is `e*` in bash 5.3.20 from a script and in
+	// ksh93u+ at a prompt. zsh 5.9.2 at a prompt reads the `-` as a range
+	// it cannot make and refuses the first two as `no such word in event`,
+	// answering the third `e`. Read, not asked, for the reason HistoryWords
+	// is.
+	HistoryLastWordEndsTheDesignator Answer
+
+	// HistoryFirstWordEndsARange reads the quick-substitution character as
+	// word one where a range's **end** is written, as it already is where a
+	// range's start is.
+	//
+	// Measured 2026-09-18 over `echo a b c d e`: `!!:1-^` is `a` in bash
+	// 5.3.20 from a script and in zsh 5.9.2 at a prompt, and `!!:2-^` is a
+	// backwards range both refuse. ksh93u+ leaves the character as ordinary
+	// text and answers `a b c d^`, which is `1-` and then a `^`. Read, not
+	// asked, for the reason HistoryWords is.
+	HistoryFirstWordEndsARange Answer
+
+	// HistoryWordwiseSubstitutionModifier is the `G` in front of a history
+	// reference's `s` or `&`: one substitution in **each word** of the text,
+	// rather than the first (plain) or every one (`g`).
+	//
+	// Measured 2026-09-18 after `echo foo boo`: `!!:Gs/o/0/` is `ech0 f0o
+	// b0o` in bash 5.3.20, where `foo` keeps its second `o` and a `g` would
+	// not have left it. zsh 5.9.2 says `illegal modifier: G` and ksh93u+
+	// says `G: unrecognized history modifier`, which is what this shell says
+	// wherever the axis is No. Read, not asked, for the reason HistoryWords
+	// is.
+	HistoryWordwiseSubstitutionModifier Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -20810,6 +20881,20 @@ func PosixSemantics() Semantics {
 		HistoryQuoteModifierInPlace: No,
 		// And one of them stops at a comment.
 		HistoryCommentStopsExpansion: No,
+		// Two of the three take a quote after the event character as part
+		// of the name, read a second event character as an ordinary letter
+		// of it, and have no braced form; the third is zsh and overrides
+		// all three.
+		HistoryQuoteEndsAnEventReference:  No,
+		HistoryEventCharClosesAnEventName: No,
+		HistoryBracedEventReference:       No,
+		// Two of the three end a word designator at its `$`, and two read a
+		// `^` at a range's end as word one — a different two, so neither
+		// preset value is anybody's whole answer.
+		HistoryLastWordEndsTheDesignator: Yes,
+		HistoryFirstWordEndsARange:       Yes,
+		// And the `G` modifier is one shell's alone.
+		HistoryWordwiseSubstitutionModifier: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
 		// dash is the one shell that refuses the letter, and overrides.

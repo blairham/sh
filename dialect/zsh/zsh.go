@@ -864,6 +864,23 @@ func Semantics() interp.Semantics {
 	// And a `:q` quotes where it is written. See
 	// Semantics.HistoryQuoteModifierInPlace.
 	s.HistoryQuoteModifierInPlace = interp.Yes
+	// A quote or a backquote against the event character is ordinary text
+	// here and part of the event's name in bash and ksh93, a second event
+	// character closes the name it is in, and `!{…}` is the braced form
+	// neither of the others has. Measured 2026-09-18 at a prompt: `echo
+	// "T!'x E"` prints its own text, `X!ab!cdY` is `event not found: ab!`,
+	// and `!{x}` is the event `x`. See
+	// Semantics.HistoryQuoteEndsAnEventReference,
+	// Semantics.HistoryEventCharClosesAnEventName and
+	// Semantics.HistoryBracedEventReference.
+	s.HistoryQuoteEndsAnEventReference = interp.Yes
+	s.HistoryEventCharClosesAnEventName = interp.Yes
+	s.HistoryBracedEventReference = interp.Yes
+	// And a `$` does not end a word designator: `!!:$-3` is a range this
+	// shell cannot make rather than the last word with `-3` written after
+	// it, which is `no such word in event`. Measured the same day over
+	// `echo a b c d e`. See Semantics.HistoryLastWordEndsTheDesignator.
+	s.HistoryLastWordEndsTheDesignator = interp.No
 	// No keyword option. The letter is not the option here: zsh spells
 	// `interactivecomments` with `-k` and answers `no such option` to `set
 	// -o keyword`, both measured 2026-09-16, so a `name=value` word after

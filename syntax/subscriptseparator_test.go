@@ -340,7 +340,7 @@ func arrayLiteralElems(t *testing.T, src string, d syntax.Dialect) []string {
 	}
 	out := make([]string, 0, len(a.Elems))
 	for _, e := range a.Elems {
-		out = append(out, syntax.PrintWord(e))
+		out = append(out, syntax.PrintArrayElem(e))
 	}
 	return out
 }

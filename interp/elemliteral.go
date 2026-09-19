@@ -169,7 +169,7 @@ func (r *Runner) spliceTargetIsAnArray(a *syntax.Assign) bool {
 // expanding the elements and taking the fields: a literal may place its own
 // elements — `a[2]=([3]=p)` splices three positions, two of them empty — and
 // two spellings of one construct must not come to disagree about that.
-func (r *Runner) literalWords(name string, elems []*syntax.Word) ([]string, bool) {
+func (r *Runner) literalWords(name string, elems []*syntax.ArrayElem) ([]string, bool) {
 	parsed, ok := r.literalElems(elems, r.literalShapeReadsSubscripts(elems))
 	if !ok {
 		// A failed element list costs the splice, exactly as it costs the

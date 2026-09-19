@@ -619,9 +619,18 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 // modeled here, for the reason traceAssign gives about the subscript:
 // expanding the elements to print them would expand them twice. Tracked as
 // #1959.
-func traceArrayLiteral(elems []*syntax.Word, parsed []literalElem, style TraceArrayLiteral, d Diagnostics) string {
+func traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style TraceArrayLiteral, d Diagnostics) string {
 	var words []string
-	for i, w := range elems {
+	for i, e := range elems {
+		if e.Word == nil {
+			// A literal standing where an element goes traces as it was
+			// written, which is the same answer the `[sub]=value` shape gets
+			// below: what it expanded to is a value with a shape, and a trace
+			// is a line of words.
+			words = append(words, syntax.PrintArrayElem(e))
+			continue
+		}
+		w := e.Word
 		if parsed == nil || parsed[i].subscripted {
 			// The words as written, which is one dialect's whole answer —
 			// and, in the dialect that prints the values, the fallback for a

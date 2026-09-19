@@ -127,8 +127,22 @@ func (r *Runner) assignDollarZero(a *syntax.Assign) {
 // same operation with the old value at the front of the replacement.
 func (r *Runner) spliceParams(n int, a *syntax.Assign) {
 	var words []string
-	for _, w := range a.Elems {
-		words = append(words, r.expandWord(w)...)
+	for _, e := range a.Elems {
+		if e.Word == nil {
+			// A literal standing where an element goes has no reading as a
+			// *positional parameter*: the parameters are a flat list of
+			// strings, so what would be stored is the element's own scalar
+			// reading. Only one dialect can write one and none of them
+			// splices positionals, so this is unreachable rather than a
+			// choice; taking the scalar keeps the count right if it ever is.
+			value, ok := r.nestedLiteral("", e.Nested.Elems)
+			if !ok {
+				return
+			}
+			words = append(words, value.scalar())
+			continue
+		}
+		words = append(words, r.expandWord(e.Word)...)
 	}
 	params := r.paramsExtendedTo(n)
 	if a.Append {

@@ -270,7 +270,7 @@ func TestAnArrayElementsGroupIsItsOwnElement(t *testing.T) {
 		}
 		got := make([]string, 0, len(a.Elems))
 		for _, w := range a.Elems {
-			got = append(got, w.Literal())
+			got = append(got, w.Word.Literal())
 		}
 		if len(got) != len(tc.want) {
 			t.Errorf("%s: %d elements %q, want %d %q", tc.src, len(got), got, len(tc.want), tc.want)

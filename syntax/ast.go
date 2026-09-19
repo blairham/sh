@@ -267,6 +267,66 @@ func (w *Word) Literal() string {
 	return string(b)
 }
 
+// ArrayElem is one element of `name=( … )`: a word, or a literal of its own.
+//
+// A struct rather than a bare word because one dialect lets an element *be* a
+// literal — `a=( (1 2) (3 4) )` is a two-element array whose elements are
+// arrays, which is that shell's multi-dimensional array. A parallel list
+// beside Elems would have been cheaper and is the shape this tree keeps
+// getting wrong: a reader that forgets a second list compiles and is silently
+// wrong, where a reader that has not been taught about a new field does not
+// compile at all.
+//
+// Both are set where the element names a subscript *and* the value it names
+// is a literal — `a=( [0]=(1 2) )`, where the word is the `[0]=` head and the
+// literal is what goes under the key.
+type ArrayElem struct {
+	// Word is the element where it is an ordinary word, which is every
+	// element in every dialect but one, and the `[sub]=` head where the
+	// element names where its value goes.
+	Word *Word
+	// Nested is the literal standing where an element goes, and nil where the
+	// element is a word. IsArray is true on it and Name is empty; its own
+	// Elems may nest again, to any depth — `a=( ( (1 2) (3) ) (4) )` is
+	// three levels and reads back as one.
+	//
+	// An [Assign] rather than a list of its own so that the inner literal is
+	// the same node the outer one is, positions and all, and so that the
+	// reading that tells an array literal from a compound variable's body has
+	// one place to record its answer. See [Dialect.NestedArrayLiteral].
+	Nested *Assign
+}
+
+func (e *ArrayElem) Pos() Pos {
+	if e.Word != nil {
+		return e.Word.Pos()
+	}
+	return e.Nested.Pos()
+}
+
+func (e *ArrayElem) End() Pos {
+	if e.Word != nil {
+		return e.Word.End()
+	}
+	return e.Nested.End()
+}
+
+// WordElem is one element that is an ordinary word, which is how every
+// element list that cannot nest is built.
+func WordElem(w *Word) *ArrayElem { return &ArrayElem{Word: w} }
+
+// WordElems is a whole list of them, for the callers that have words already.
+func WordElems(ws []*Word) []*ArrayElem {
+	if ws == nil {
+		return nil
+	}
+	out := make([]*ArrayElem, len(ws))
+	for i, w := range ws {
+		out[i] = WordElem(w)
+	}
+	return out
+}
+
 // Assign is `name=value` in a command prefix or on its own.
 type Assign struct {
 	// Operand marks an assignment written *after* the command word rather
@@ -285,7 +345,7 @@ type Assign struct {
 	// Elems is `name=( … )`, and IsArray distinguishes an empty array from a
 	// bare `name=` — `a=()` and `a=` are different states, exactly as an
 	// absent `for` list differs from an empty one.
-	Elems   []*Word
+	Elems   []*ArrayElem
 	IsArray bool
 	// Members is the body of a **compound variable** literal — `c=(a=1 b=2)`,
 	// whose parentheses hold a list of declarations rather than a list of

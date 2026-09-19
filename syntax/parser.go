@@ -3654,7 +3654,51 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// [Dialect.ArrayLiteralShapeFollowsTheFirstElement].
 		shaped := p.dialect.ArrayLiteralShapeFollowsTheFirstElement
 		subscripted := false
-		for p.tok.Kind == TokWord && p.err == nil {
+		for p.err == nil {
+			if p.dialect.NestedArrayLiteral && p.at(TokLeftParen) {
+				if shaped && subscripted {
+					// The literal took its keyed shape from a first element
+					// that named a subscript, and there a parenthesis is a
+					// **value** and nothing else: `a=( [0]=(1 2) )` is one
+					// element under a key, where the two read apart would be
+					// a key holding nothing and a nested element beside it.
+					// Anywhere else in that shape it is refused, which is
+					// measured — see subscriptedHeadAwaitingALiteral.
+					head := subscriptedHeadAwaitingALiteral(a.Elems)
+					if head == nil {
+						p.lex.inArgument = saved
+						p.lex.inArrayLiteral = savedArray
+						p.lex.inDeclarationOperand = savedDecl
+						p.failUnexpected("")
+						return a
+					}
+					head.Nested = p.nestedArrayLiteral()
+					if p.err != nil {
+						break
+					}
+					if p.skipArrayElementSeparators(true) {
+						break
+					}
+					continue
+				}
+				// A literal standing where an element goes, which is that
+				// dialect's multi-dimensional array. Read before the word
+				// branch because the parenthesis is a token here and not the
+				// front of a word: `a=( (1 2)x )` is two elements, the
+				// literal and `x`, so the close paren ends the element
+				// wherever it falls. See [Dialect.NestedArrayLiteral].
+				a.Elems = append(a.Elems, &ArrayElem{Nested: p.nestedArrayLiteral()})
+				if p.err != nil {
+					break
+				}
+				if p.skipArrayElementSeparators(true) {
+					break
+				}
+				continue
+			}
+			if p.tok.Kind != TokWord {
+				break
+			}
 			// Saved before p.word(), which reads the token after this one on
 			// its way out: by the time the element is a word the parser has
 			// moved past it, and a refusal has to quote what was written
@@ -3685,7 +3729,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			if p.refuseProcSubstOutOfPlace(el) {
 				break
 			}
-			a.Elems = append(a.Elems, el)
+			a.Elems = append(a.Elems, WordElem(el))
 			if p.skipArrayElementSeparators(true) {
 				break
 			}
@@ -3710,6 +3754,86 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		p.next()
 	}
 	return a
+}
+
+// subscriptedHeadAwaitingALiteral is the element a nested literal belongs to
+// rather than standing beside: the one just read, where it named a subscript
+// and was given no value.
+//
+// Blanks between the two are allowed and a value is not — measured on ksh93u+
+// 2012-08-01, 2026-09-19:
+//
+//	a=( [0]= (1 2) )        typeset -A a=([0]=(1 2) )
+//	a=( [0]+= (1 2) )       typeset -A a=([0]=(1 2) )
+//	a=( [0]= [1]= (1 2) )   typeset -A a=([0]='' [1]=(1 2) )
+//	a=( [0]=x (1 2) )       `(' unexpected
+//	a=( [0]= (1 2) (3 4) )  `(' unexpected
+//
+// so it is the element just read and no further back, and the last two rows
+// are what the caller refuses when this answers nil.
+func subscriptedHeadAwaitingALiteral(elems []*ArrayElem) *ArrayElem {
+	if len(elems) == 0 {
+		return nil
+	}
+	last := elems[len(elems)-1]
+	if last.Word == nil || last.Nested != nil {
+		return nil
+	}
+	_, value, _, ok := ElementSubscript(last.Word)
+	if !ok || (value != nil && value.Literal() != "") {
+		return nil
+	}
+	return last
+}
+
+// nestedArrayLiteral reads a literal standing where an element goes —
+// `a=( (1 2) (3 4) )`, and to any depth: `a=( ( (1 2) (3) ) (4) )` is three
+// levels and `${a[0][0][1]}` reads `2` back out of it.
+//
+// The lexer state the outer literal set — an element stands where an argument
+// does, subscripts span their blanks, and a declaration operand is still being
+// read — is already what a nested one wants, so nothing is saved or restored
+// here: the parentheses this reads are inside the ones that set it.
+//
+// No compound-variable reading is offered, which is measured rather than an
+// omission: `a=( (p=1 q=2) )` really does make a compound there, and it is the
+// construct #2853 is about — a compound has nowhere in this store to be read
+// back from yet, so the words are taken as an array's and the divergence is
+// recorded rather than half-built.
+func (p *Parser) nestedArrayLiteral() *Assign {
+	n := &Assign{IsArray: true, Start: p.tok.Pos}
+	p.next()
+	p.skipArrayElementSeparators(false)
+	for p.err == nil && !p.at(TokRightParen) {
+		switch {
+		case p.at(TokLeftParen):
+			n.Elems = append(n.Elems, &ArrayElem{Nested: p.nestedArrayLiteral()})
+		case p.tok.Kind == TokWord:
+			el := p.word()
+			// An element is not a word a command takes, the same refusal the
+			// outer literal makes of the same shape (#930).
+			if p.refuseProcSubstOutOfPlace(el) {
+				return n
+			}
+			n.Elems = append(n.Elems, WordElem(el))
+		default:
+			p.failUnexpected(")")
+			return n
+		}
+		if p.err != nil || p.skipArrayElementSeparators(true) {
+			return n
+		}
+	}
+	if p.err != nil {
+		return n
+	}
+	if !p.at(TokRightParen) {
+		p.failUnexpected(")")
+		return n
+	}
+	n.Stop = p.tok.End
+	p.next()
+	return n
 }
 
 // giveUpOnTheArray is the recovery for a syntax error inside a compound

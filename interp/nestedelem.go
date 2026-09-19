@@ -80,7 +80,7 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 // gap in it rather than a dense one. Two spellings of one construct must not
 // come to disagree about what a literal *is*; see literalWords, which is the
 // same call for the dialect that splices.
-func (r *Runner) nestedLiteral(name string, elems []*syntax.Word) (Element, bool) {
+func (r *Runner) nestedLiteral(name string, elems []*syntax.ArrayElem) (Element, bool) {
 	parsed, ok := r.literalElems(elems, r.literalShapeReadsSubscripts(elems))
 	if !ok {
 		return Element{}, false

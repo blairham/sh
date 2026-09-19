@@ -281,6 +281,17 @@ func (r *Runner) canonicalSignal(s string) (string, syscall.Signal, signalWord) 
 		}
 		up = trimmed
 	}
+	if !byNumber {
+		// An older spelling the shell answers to becomes the name its own
+		// table carries, so everything downstream — the trap table, `trap
+		// -p`, the handler's name — is written in one word. Measured
+		// 2026-09-17: `trap 'x' IOT` is 0 in ksh93u+ and zsh 5.9.2 and `bad
+		// trap` in bash 5.3.20, which is the same split every other route
+		// for a name takes. See Semantics.SignalNamesTheShellAlsoReads.
+		if canonical, ok := r.signalAlias(up); ok {
+			up = canonical
+		}
+	}
 	if !byNumber && !r.knownSignal(up) {
 		// A name this shell's own table has never had, which is not the same
 		// as a signal the machine does not have — see

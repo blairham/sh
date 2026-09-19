@@ -729,6 +729,19 @@ func Semantics() interp.Semantics {
 	s.KillReadsTheNumberOption = interp.Yes
 	s.KillOptionWithNoArgumentIsASignalName = interp.No
 	s.KillSendsASignalNumberItCannotName = interp.Yes
+	// And `-s` really does take a name here: a word of digits after it is
+	// the name it is not. Measured 2026-09-17 — `kill -s 9 999999` is
+	// `unknown signal: SIG9` and the listing hint at 1, where bash, ksh93,
+	// dash and BusyBox ash all reach a real send. The number *out of* range
+	// is the axis above and this is the same position with one in it, which
+	// is where the three that send part company with this column (#3544).
+	s.KillNameOptionReadsANumber = interp.No
+	// One name older than the table's own: `IOT` is signal 6 here, as it is
+	// in ksh93 and as it is not in bash. Measured 2026-09-17 — `kill -l
+	// IOT`, `kill -s IOT`, `kill -IOT` and `trap 'x' IOT` are all the ABRT
+	// the table carries, and `kill -l 6` is `ABRT`, so this shell reads the
+	// older spelling and never writes it (#3536).
+	s.SignalNamesTheShellAlsoReads = "IOT=ABRT"
 	// Neither editing mode is selected on its own. Measured 2026-09-11 in a
 	// session at a real terminal: `[[ -o emacs ]]` and `[[ -o vi ]]` both
 	// answer 1 there, which is why this shell's own default for `emacs` is

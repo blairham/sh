@@ -73,6 +73,61 @@ type Lexer struct {
 	// and in two of the three dialects that have `[[ ]]` so does a bare `|`.
 	inRegex bool
 
+	// afterTildeGroup is set once the word being read has taken a `~(…)`
+	// group, and lasts to the end of that word.
+	//
+	// A `~(…)` prefix turns what follows it into the flavor's own text, and
+	// the rule has **two halves with different reaches**, which is what a
+	// first reading of this got wrong. Measured on ksh93u+ 2012-08-01,
+	// 2026-09-19, each probe its own `env -i PATH=/usr/bin:/bin LC_ALL=C
+	// /bin/ksh -c …` with standard input on `/dev/null`:
+	//
+	//   - **A `(` belongs to the word wherever the word stands**, balanced
+	//     and nesting, and this field is the whole of that half:
+	//
+	//	print -r -- ~(E)(ab)cd; echo AFTER   `~(E)(ab)cd` then `AFTER`
+	//	x=~(E)(ab)cd; print -r -- "$x"       `~(E)(ab)cd`
+	//	case abcd in ~(E)(ab)cd) …           matches, and the arm's `)` closes it
+	//	[[ abcd == ~(E)(a(b))cd ]]           0 — so it nests
+	//	[[ abcd == x~(E)(ab)cd ]]            1, no error — mid-word too
+	//
+	//   - **The other operators stop separating only in the right operand of
+	//     a pattern comparison**, which is [Lexer.inPattern]. Each row with
+	//     the subject that does *not* match, because the status alone cannot
+	//     tell "the character is the pattern's" from "the character was the
+	//     shell's and the list happened to answer 0":
+	//
+	//	[[ zzz == ~(E)ab|zz ]]   0, and `[[ qqq == … ]]` is 1
+	//	[[ "a&b" == ~(E)a&b ]]   0, and `[[ zzz == … ]]` is **1**, silent
+	//	[[ "a;b" == ~(E)a;b ]]   0, and a shell `;` would leave `b: not found`
+	//	[[ "a<b" == ~(E)a<b ]]   0, and `[[ zzz == … ]]` is 1
+	//	[[ "a>b" == ~(E)a>b ]]   0, and `[[ zzz == … ]]` is 1
+	//	[[ "a)b" == ~(F)a)b ]]   0 — an unmatched closer is text there
+	//
+	//     And the controls that put the boundary where it is, every one of
+	//     them a **refusal** in that shell:
+	//
+	//	print -r -- ~(E)a;b        `~(E)a`, then `b: not found`
+	//	print -r -- ~(E)a|cat      a pipeline — the `|` is the shell's
+	//	printf '[%s]' ~(N)x; echo  the `;` ends the command
+	//	[[ ~(E)a;b == "a;b" ]]     syntax error — the *left* operand
+	//	[[ -n ~(E)a;b ]]           syntax error — a unary operand
+	//	case "a;b" in ~(E)a;b) …   syntax error — a `case` arm
+	//
+	// What it does **not** change either way is quoting or expansion:
+	// `~(E)"a b"`, `~(E)a${v}c` and `~(E)a$(print b)c` behave as they would
+	// anywhere, and `~(E)a'b` is still an unterminated quote. An unquoted
+	// blank or newline still ends the word — `[[ abcd == ~(E)(ab) cd ]]` is
+	// ``syntax error at line 1: `cd' unexpected`` there. So this is a list of
+	// characters that stop *separating*, not a raw-text mode.
+	//
+	// One measured row is not modeled: `case "a|b" in ~(E)a|b)` matches
+	// there, so a `case` arm reads the `|` as the pattern's while reading the
+	// `;` as the shell's. A `case` arm is not inPattern here, so the `|`
+	// stays the arm's separator — the narrower reading, and the one that
+	// cannot swallow an arm. See [Dialect.TildeGroup] (#3808).
+	afterTildeGroup bool
+
 	// inCondition is set while the parser is inside `[[ ]]`. One dialect
 	// reads pattern groups there and nowhere else, and the lexer is what has
 	// to know: whether `(` ends the word is decided before any parser sees a
@@ -1519,6 +1574,25 @@ func (l *Lexer) endsWord(c byte) bool {
 			return !l.dialect.RegexTakesAlternation
 		}
 	}
+	if l.afterTildeGroup {
+		// A `~(…)` group has been taken, so a `(` belongs to the word
+		// wherever the word stands — the scanner below takes it whole, so it
+		// nests and so the unbalanced `)` a `case` arm ends with is still the
+		// arm's.
+		if c == '(' {
+			return false
+		}
+		// And in the right operand of a pattern comparison, and there alone,
+		// the shell's other operators stop separating too. See
+		// Lexer.afterTildeGroup for the rows and for the six refusals that
+		// put the boundary here.
+		if l.inPattern {
+			switch c {
+			case '|', '&', ';', '<', '>', ')':
+				return false
+			}
+		}
+	}
 	if l.pidBraces > 0 {
 		// Inside a `{ … }` run opened immediately after `$$` nothing
 		// separates either, until the brace that matches. One test rather
@@ -2412,6 +2486,18 @@ func (l *Lexer) scanWord(start Pos) Token {
 	// subscriptHasMatchingClose reads it off a finished scan.
 	l.subscriptDepth, l.subscriptCloses = 0, 0
 	l.pidBraces, l.pidBraceOpen = 0, Pos{}
+	// The flavor's text lasts to the end of *this* word and no further, so
+	// the state is cleared as each word begins. A stale one would make the
+	// next word's `(` a character of it — `[[ abcd == ~(E)(ab)cd && ab ==
+	// a(b) ]]` is a refusal in ksh93u+ and would have parsed.
+	//
+	// Here and not also on the way out, which is the whole of it: nothing
+	// reads the flag between words — endsWord is consulted only while a scan
+	// is running — and a second clear that no probe can tell apart from its
+	// absence is a line claiming a guarantee it does not add. The parser's
+	// own backtracking copies the whole lexer, so a scan it throws away takes
+	// the flag with it. See Lexer.afterTildeGroup.
+	l.afterTildeGroup = false
 
 	// pidArmed says the `$$` just read is touching a `{`, so that brace opens
 	// a run of text. A local rather than a field: the arming and the brace it
@@ -2505,6 +2591,16 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// not its.
 			lit.WriteString(l.scanPatternGroup())
 
+		case c == '(' && l.afterTildeGroup:
+			// The rest of the word after a `~(…)` group: a `(` there is the
+			// flavor's and is taken whole, so that `~(E)(a(b))cd` nests and
+			// so that the unbalanced `)` a `case` arm ends with is still the
+			// arm's. See Lexer.afterTildeGroup.
+			if lit.Len() == 0 {
+				litPos = l.pos()
+			}
+			lit.WriteString(l.scanPatternGroup())
+
 		case c == '(' && l.opensTildeGroup():
 			// A `(` straight after a `~` belongs to the word in the one
 			// grammar that has `~(…)`, whatever that grammar says about
@@ -2514,6 +2610,12 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// shell keeps it as literal text. See
 			// [Dialect.TildeGroup] for the rows.
 			lit.WriteString(l.scanPatternGroup())
+			// And from here to the end of the word the flavor's own text
+			// begins, where the shell's operators are ordinary characters.
+			// Set after the group rather than at the `~`, because it is the
+			// group that says so: a bare `~` prefixes a home directory and
+			// changes nothing. See Lexer.afterTildeGroup.
+			l.afterTildeGroup = true
 
 		case c == '(' && l.opensPatternGroup():
 			// A parenthesised group belongs to the word rather than ending

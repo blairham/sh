@@ -7,6 +7,8 @@ import (
 	"context"
 	"strconv"
 	"strings"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // `integer`, which is the declaration builtin under a second name with the
@@ -452,11 +454,53 @@ func octalNumeral(text string) bool {
 	return true
 }
 
-// learnIntegerBase takes a name's output base from the radix prefix of the
+// radixInsideExpression is the base a radix literal *inside* an assignment's
+// text names, and whether a bare leading zero stands anywhere in it — the
+// same pair radixWritten gives the arithmetic route, over a text this route
+// has only as characters.
+//
+// Parsed here rather than handed down from the evaluation that follows,
+// which is the other way it could have arrived. Three routes learn from a
+// text — an assignment folded through an attribute, an append, and the
+// re-read a name already holding a value takes when `-i` arrives — and the
+// tree is of no use to any of them but this question, so handing one down
+// would have widened three signatures to narrow one. Nothing is observable
+// either way: the ordering of the learn against the evaluation cannot be
+// measured, because a text that fails to evaluate ends the shell before
+// anything can read the name's base back.
+//
+// A text that is only a numeral never reaches the parser. That is nearly
+// every assignment an integer name ever takes, and it is already answered
+// above by the literal reading; parsing it again here would put a parse on
+// the hot path to learn nothing. plainNumeral is the test builtin's, reused
+// rather than copied: it already means "digits with at most a sign, and no
+// leading zero in front of another digit", and the leading zero it excludes
+// is one this route must still look at.
+func (r *Runner) radixInsideExpression(text string) (base int, padded bool) {
+	text = strings.TrimSpace(text)
+	if text == "" || plainNumeral(text) {
+		return 0, false
+	}
+	p := syntax.NewParser("", r.dialect())
+	e := p.ParseArithFor(text, syntax.Pos{})
+	if p.Err() != nil {
+		// Text that will not parse is not this function's to report: the
+		// evaluation that follows parses it again and says so, in the
+		// wording and with the status the dialect gives an assignment.
+		return 0, false
+	}
+	return radixWritten(e)
+}
+
+// learnIntegerBase takes a name's output base from a radix written in the
 // text being assigned to it, where the dialect learns one and the name has
 // none already.
 //
-// Asked only when the text actually names a base, so a plain `n=5` under an
+// A radix at the front of the text is read out of the characters; a radix
+// standing anywhere else is an expression's, and radixInsideExpression goes
+// and finds it.
+//
+// Asked only when the text actually holds a radix, so a plain `n=5` under an
 // integer name never reaches the dialect — which matters, because that is
 // nearly every assignment there is.
 func (r *Runner) learnIntegerBase(name, text string) {
@@ -501,6 +545,24 @@ func (r *Runner) learnIntegerBase(name, text string) {
 	// answered: `a=08; typeset -i a` met a refusal in a suite that had
 	// nothing to do with bases.
 	padded := base == 0 && octalNumeral(strings.TrimSpace(text))
+	if base == 0 && !padded {
+		// The text is not a numeral, so it is an **expression**, and an
+		// expression carries its radix wherever the radix stands rather than
+		// at its front: measured 2026-09-18 on zsh 5.9.2, `typeset -i a=1+0x1f`
+		// reads back `16#20` and `typeset -i t=1+010` under `setopt
+		// octal_zeroes` reads back `8#11`, exactly as `(( a = 1 + 0x1f ))`
+		// does. Reading the text as a literal can only ever find a radix that
+		// begins it, so every row with an operator in it taught nothing
+		// (#3670).
+		//
+		// radixWritten is the same walk the arithmetic route learns by, so
+		// the two routes now answer one question over one representation —
+		// the point of the fix, and why this is not a second reader standing
+		// beside the literal one. The literal reading above is a fast path
+		// over the same leaves and not a second answer: radixWritten's
+		// numeral case is integerBaseOfLiteral and octalNumeral.
+		base, padded = r.radixInsideExpression(text)
+	}
 	if base == 0 && !padded {
 		return
 	}

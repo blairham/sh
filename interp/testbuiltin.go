@@ -902,7 +902,12 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		if !r.dialect().ParameterIsSetTest {
 			break
 		}
-		return r.parameterIsSet(operand)
+		// testParameterIsSet and not parameterIsSet, for the one thing the
+		// builtin does that the condition does not: a subscript that
+		// reached it as text is rounded here, and `shopt -s
+		// assoc_expand_once` stops the round at this operator alone. See
+		// Semantics.TestIsSetExpandsAFlatSubscript (#3298).
+		return r.testParameterIsSet(operand)
 	case "-a":
 		// The file test, not the connective: two words have already settled
 		// which this is. Asked of the dialect at both gates for the reason

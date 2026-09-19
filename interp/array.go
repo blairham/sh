@@ -1526,6 +1526,22 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 		r.setOperandValue(name, value)
 		return 0, false
 	}
+	// In front of every reading of the brackets below, for the reason
+	// declareElement gives: what the subscript *is* decides which element
+	// the emptiness refusal, the whole-array spelling and the arithmetic are
+	// about. A text that a second round turns into `x y` names that key from
+	// here on, the store's own complaints included.
+	//
+	// Semantics.OutputOperandExpandsAFlatSubscript is whether this shell
+	// rounds and Runner.ExpandsAnOperandsSubscriptAgain whether the session
+	// still permits it — this is one of the surfaces `shopt -s
+	// assoc_expand_once` names, where the declaration's round beside it is
+	// not (#3298).
+	sub = r.operandSubscriptText(base, sub, r.sem().OutputOperandExpandsAFlatSubscript,
+		"a store through a builtin's operand expanding a subscript that reached it as text")
+	if r.unspecified {
+		return r.status, true
+	}
 	// The *store* is speaking from here on, not the builtin that reached it,
 	// and the location says so: measured, `read 'a[1/0]'` is `zsh:1: division
 	// by zero` and `read 'v[0]'` is `zsh:1: v: assignment to invalid subscript

@@ -78,3 +78,39 @@ func (r *Runner) expandedSubscriptText(operand string) (string, bool) {
 func subscriptTextCouldExpand(sub string) bool {
 	return strings.ContainsAny(sub, "$`\\'\"")
 }
+
+// operandSubscriptText is the subscript a *builtin's* operand names once the
+// round has been made, where the dialect makes one and the session has not
+// asked it to stop.
+//
+// The same shape as declarationSubscriptText one file along, and the same
+// round, with one thing added: a switch. The three surfaces this serves are
+// the ones bash lets a script turn off by name — `shopt -s assoc_expand_once`
+// and its synonym — where a declaration's operand and `[[ -v ]]` keep
+// rounding whatever the option says. See
+// Runner.ExpandsAnOperandsSubscriptAgain.
+//
+// The axis is asked *before* the switch is read and only where a round could
+// change the text at all, which keeps the order right in both directions: a
+// dialect that does not round is never asked about an option it has no name
+// for, and a session that turned the round off does not record an answer to
+// an axis it then ignores.
+func (r *Runner) operandSubscriptText(base, sub string, axis Answer, what string) string {
+	if !subscriptTextCouldExpand(sub) {
+		return sub
+	}
+	if !r.ask(axis, what) {
+		return sub
+	}
+	if !r.ExpandsAnOperandsSubscriptAgain() {
+		return sub
+	}
+	// Reassembled into the whole `name[sub]` for expandedSubscriptText's
+	// reason: Runner.reference is the one route from a resolved text to the
+	// parameter expansion it spells, and going through it is what makes
+	// every site's second round the same round.
+	if key, again := r.expandedSubscriptText(base + "[" + sub + "]"); again {
+		return key
+	}
+	return sub
+}

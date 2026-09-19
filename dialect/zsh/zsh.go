@@ -3683,6 +3683,30 @@ func Semantics() interp.Semantics {
 	// counts to. See
 	// interp.Semantics.DeclarationOperandExpandsItsSubscript (#3298).
 	s.DeclarationOperandExpandsItsSubscript = interp.Yes
+
+	// The store through a builtin's name operand rounds too, and `test -v`
+	// with it. `unset` is where this shell parts from the one that has a
+	// name for the whole group, and it is the only surface in it where the
+	// two disagree — which is why the three are three fields rather than
+	// one. Measured 2026-09-19 on zsh 5.9.2, from a script file with
+	// standard input on /dev/null, over `k='x y'` and a table holding one
+	// element under the key `x y`:
+	//
+	//	unset -v 'a[$k]'      the element **survives**
+	//	unset 'a[$k]'         the element **survives**
+	//	printf -v 'c[$k]' P   the key `x y`
+	//	read 'b[$k]' <<<Z     the key `x y`
+	//	test -v 'g[$k]'       true
+	//	[ -v 'g[$k]' ]        true
+	//
+	// The control for the first two rows is the same operand with nothing in
+	// it to expand: `unset 'a[plain]'` takes the element away here, so the
+	// survival above is the round not happening rather than the quoted
+	// brackets not reaching `unset`. See
+	// interp.Semantics.UnsetExpandsAFlatSubscript (#3298).
+	s.UnsetExpandsAFlatSubscript = interp.No
+	s.OutputOperandExpandsAFlatSubscript = interp.Yes
+	s.TestIsSetExpandsAFlatSubscript = interp.Yes
 	return s
 }
 

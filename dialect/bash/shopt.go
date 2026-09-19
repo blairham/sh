@@ -447,6 +447,25 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).EchoExpandsEscapes,
 		set: (*interp.Runner).SetEchoExpandsEscapes,
 	},
+	// One switch under two names, which is measured and not a convenience:
+	// `shopt -s array_expand_once` turns `assoc_expand_once` on too and the
+	// reverse, on bash 5.3.20. Two entries reading and writing the same bit
+	// is the whole of that — nothing has to copy one name's state to the
+	// other, and no listing can show them disagreeing.
+	//
+	// The sense inverts here and nowhere else, for the reason
+	// `no_empty_cmd_completion` above gives: what the option asks for is the
+	// round to *stop*, and the core holds the capability the positive way
+	// round. See interp.Runner.ExpandsAnOperandsSubscriptAgain, which also
+	// carries which surfaces move and which two deliberately do not.
+	"array_expand_once": {
+		get: func(r *interp.Runner) bool { return !r.ExpandsAnOperandsSubscriptAgain() },
+		set: func(r *interp.Runner, on bool) { r.SetExpandsAnOperandsSubscriptAgain(!on) },
+	},
+	"assoc_expand_once": {
+		get: func(r *interp.Runner) bool { return !r.ExpandsAnOperandsSubscriptAgain() },
+		set: func(r *interp.Runner, on bool) { r.SetExpandsAnOperandsSubscriptAgain(!on) },
+	},
 	"shift_verbose": {
 		get: (*interp.Runner).ReportsShiftPastTheEnd,
 		set: (*interp.Runner).SetReportsShiftPastTheEnd,
@@ -663,13 +682,12 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 // Every name #1429 and #1445 collected is now wired; nothing in the table
 // below is a behavior somebody asked for and did not get. The last two,
 // `dirspell` and `direxpand`, are in shoptSwitches above.
-// `array_expand_once` and `assoc_expand_once` are the two names in this
-// table recorded on the side this shell is *not* on, and they are left there
-// on purpose. They are one switch under two names — measured 2026-09-16 on
-// bash 5.3.20, `shopt -s array_expand_once` turns `assoc_expand_once` on too
-// and the reverse — and what they name is the suppression of a *second*
-// expansion of an associative array subscript. The observable that separates
-// the two states is a subscript the shell never expanded to begin with:
+// `array_expand_once` and `assoc_expand_once` were the two names in this
+// table recorded on the side this shell was *not* on, and they are in
+// shoptSwitches above now. What they name is the suppression of a second
+// expansion of a subscript that reached a builtin as text, and the observable
+// that separates the two states is a subscript the shell never expanded to
+// begin with:
 //
 //	declare -A a; k='x y'; a[$k]=hello
 //	unset -v 'a[$k]'          # quoted, so unset receives the dollar sign
@@ -677,20 +695,18 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 //
 // bash with the names off — its default — prints UNSET, because `unset`
 // expands the subscript itself and finds the key. With them on it prints
-// hello. This shell prints hello, so the state the names describe is the
-// state it is already in, and `shopt -s assoc_expand_once` is refused for a
-// request that has in fact been granted.
+// hello, and this shell printed hello either way, so the state the names
+// described was the state it was already in and `shopt -s assoc_expand_once`
+// was refused for a request that had in fact been granted.
 //
-// Recording them on would make that refusal go away, and it was measured
-// rather than assumed: bash's own quotearray file drops four lines and its
-// shopt file gains exactly four, because a listing that reads `on` where
-// bash's default reads `off` is a difference of its own and the file that
-// lists every name finds it twice. A wash, so the honest half of the answer
-// is not worth buying with the dishonest half. What closes it is the second
-// expansion itself, so that the names can genuinely be off — #3298.
+// Recording them on would have made that refusal go away, and it was
+// measured rather than assumed: bash's own quotearray file drops four lines
+// and its shopt file gains exactly four, because a listing that reads `on`
+// where bash's default reads `off` is a difference of its own and the file
+// that lists every name finds it twice. A wash, so the honest half of the
+// answer was not bought with the dishonest half; what closed it was the
+// second expansion itself (#3298).
 var shoptStates = map[string]bool{
-	"array_expand_once":    false,
-	"assoc_expand_once":    false,
 	"bash_source_fullpath": false,
 	"cdable_vars":          false,
 	"cmdhist":              true,

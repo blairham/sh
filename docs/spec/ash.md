@@ -618,6 +618,89 @@ the same line one operator over — it has `<` and `>` and not `==` — which
 is why `Diagnostics.TestTrailingBinaryOperandExpected` is a wording both
 columns hold rather than a list either of them carries (#3550).
 
+### A group holding a unary operator alone never closes
+
+The third difference in this builtin, and it is a defect in the shell
+rather than a reading: a group whose contents are a unary operator and its
+operand, standing as the **whole** expression, is `closing paren expected`
+at 2 — where bash, ksh93, zsh and dash all evaluate it and answer 0
+(#3419).
+
+| case | BusyBox 1.37.0 | the rest of the panel |
+| --- | --- | --- |
+| `[ \( -n x \) ]` | `closing paren expected`, 2 | 0 |
+| `[ \( -z "" \) ]` | `closing paren expected`, 2 | 0 |
+| `[ \( -n \) ]` | `closing paren expected`, 2 | 0 |
+| `[ ! \( -n x \) ]` | `closing paren expected`, 2 | 1 |
+| `[ \( ! -n x \) ]` | 1 | 1 |
+| `[ \( ! x \) ]` | 1 | 1 |
+| `[ \( a \) ]` | 0 | 0 |
+| `[ \( a = a \) ]` | 0 | 0 |
+| `[ \( \( -n x \) \) ]` | 0 | 0 |
+| `[ \( -n x \) -a x \]` | 0 | 0 |
+| `[ \( -n x -a y \) ]` | 0 | 0 |
+
+The controls are the whole of the finding. A parenthesized string, a
+parenthesized comparison, a `!` in front of the operator *inside* the
+group, a group inside a group and the same group with anything behind it
+are all read — so this is neither "no grouping" nor "no unary in a group",
+and the axis says what is observed rather than naming a rule
+(`Semantics.TestGroupedUnaryAloneLosesTheClosingParen`). Three words or
+four, behind any number of leading `!`s.
+
+Two shapes this engine already refuses reach the same sentence there and
+a different one here — `[ \( x y \) ]` and `[ \( -Q x \) ]` are
+`closing paren expected` in BusyBox and `unknown operand` here, both at 2.
+That is a wording difference on an expression both refuse, and it is not
+this axis.
+
+## An unmatched `[` in a pattern is a character
+
+`case [ in [)` takes the arm here, which is bash's and ksh93's answer and
+not the sibling's — the value this dialect had been given by inheritance
+and never measured (#3420). It reaches `[[ ]]` too, since that keyword is
+`test` in this shell.
+
+| probe | BusyBox 1.37.0 | dash 0.5.12 | bash 5.3 | zsh 5.9.2 |
+| --- | --- | --- | --- | --- |
+| `case [ in [)` | match | no | match | `bad pattern: [` |
+| `case a[ in a[)` | match | no | match | — |
+| `v='['; case [ in $v)` | match | no | match | — |
+| `[[ "[" == "[" ]]` | 0 | — | — | — |
+| `w='[a'; ${w#[}` | `a` | `[a` | `a` | — |
+| `w='[a'; ${w#[[:alpha:]}` | (empty) | `[a` | (empty) | — |
+
+The last row is the neighboring axis — a bracket a `[:name:]` inside it
+left open — which #3379 recorded as unmeasured for want of a BusyBox to
+ask. It is the same literal reading, so both axes are bash's here and
+ksh93 is the column that moves between them. dash 0.5.13.1 reads the bare
+`[` as a character as well, which is a *version* difference in that shell
+rather than a platform one: the panel's dash is 0.5.12 and gives the
+no-match answer on both kernels.
+
+## `command local` declares nothing
+
+`command local a=1` inside a function declares nothing, assigns nothing
+and reports 0, here and in dash, where bash declares the local. The scope
+the prefix puts the declaration in is not the function's (#3370).
+
+| line | BusyBox 1.37.0 | dash 0.5.12 | bash 5.3 |
+| --- | --- | --- | --- |
+| `command local a=1`, read inside the call | `outer` | `outer` | `1` |
+| the same read after the call | `outer` | `outer` | `outer` |
+| `local b=2` with no prefix | `2` | `2` | `2` |
+| `command local a=1` outside a function | silent, 0 | silent, 0 | — |
+| `command local -x c=1` | `local: -x: bad variable name`, 2 | the same | — |
+
+The last two rows are what say the builtin still runs: a bare `local`
+outside a function is `not in a function` at 2 in both shells, and the
+refusal that is left is the one the builtin gives a name it cannot have —
+this shell gives `local` no option letters, so `-x` is a name. So the
+operands are read and the declaration goes nowhere, rather than the word
+being skipped. `command export a=1` and `command readonly a=1` assign
+normally in both, which is what makes it `local` alone. The operand is
+still not split there, which is a separate axis (#3341).
+
 ## `read`'s complaints are its own, and one of them is the applet's
 
 Four separate differences, measured the same day and in the same way:

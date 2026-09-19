@@ -623,6 +623,13 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsEscEscape = interp.No
 	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No
+	// `command local a=1` declares nothing, assigns nothing and reports 0:
+	// the operands are still read — `command local -x c=1` is `local: -x:
+	// bad variable name` at 2 — and the declaration goes nowhere (#3370).
+	s.LocalThroughCommandDeclaresNothing = interp.Yes
+	// And a parenthesized unary standing alone is read here, where the
+	// sibling cannot close the group: `[ ( -n x ) ]` is 0.
+	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: a class that can never match, the same as a bare `[`.

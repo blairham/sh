@@ -399,6 +399,13 @@ type Runner struct {
 	// and bash, listing its own table, keeps one.
 	RlimitOrder []Resource
 
+	// localUnderCommandPrefix is `local` running with a `command` in front of
+	// it, which two dialects answer by declaring nothing — see
+	// Semantics.LocalThroughCommandDeclaresNothing. Held here rather than
+	// passed, because the builtin is reached through the dispatcher like any
+	// other and the prefix is two frames up by then.
+	localUnderCommandPrefix bool
+
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
 	procSubs []procSubPipe

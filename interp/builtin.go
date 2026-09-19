@@ -5955,7 +5955,19 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 // environment — there is only ever one set of variables, and `local` says
 // which of them to put back.
 func biLocal(r *Runner, _ context.Context, args []string) int {
-	if len(r.scopes) == 0 {
+	// Asked here rather than at the prefix, so that a shell which never
+	// finds this builtin through `command` is never asked — see biCommand.
+	nowhere := r.localUnderCommandPrefix &&
+		r.ask(r.sem().LocalThroughCommandDeclaresNothing, "`command local a=1` declaring nothing")
+	if r.unspecified {
+		return r.status
+	}
+	if len(r.scopes) == 0 && !nowhere {
+		// The refusal is the declaration's, so a declaration that goes
+		// nowhere has nothing to refuse: `command local a=1` outside a
+		// function is silent at 0 in the two columns that drop it, where a
+		// bare `local` there is `not in a function` at 2. Measured with the
+		// rest of Semantics.LocalThroughCommandDeclaresNothing.
 		if st, stop := r.localOutsideAFunction(); stop {
 			return st
 		}
@@ -6004,6 +6016,15 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	}
 	args, status, ended := r.builtinNames("local", args, false)
 	if r.unspecified {
+		return status
+	}
+	if nowhere {
+		// The names have been read and a bad one has already been refused;
+		// what does not happen is the declaration. See
+		// Semantics.LocalThroughCommandDeclaresNothing.
+		if ended {
+			return r.endAfterABadName(status)
+		}
 		return status
 	}
 	for _, a := range args {

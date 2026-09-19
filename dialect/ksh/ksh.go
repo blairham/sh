@@ -1673,6 +1673,11 @@ func Semantics() interp.Semantics {
 	// And a C-style `for` header, which zsh gives up too where it stays for
 	// `(( ))` — see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
 	s.ForHeaderArithmeticErrorIsFatal = interp.Yes
+	// `[ ( -n x ) ]` is 0 here (#3419).
+	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	// unanswered LocalThroughCommandDeclaresNothing: this shell has no
+	// `local` at all — `command local a=1` is `local: not found` at 127 —
+	// so the axis cannot be put to it.
 	s.UnterminatedBracket = interp.BracketLiteral
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: the column that moves: a bare `[` is a literal `[` here and `[[:alpha:]` matches nothing at all.

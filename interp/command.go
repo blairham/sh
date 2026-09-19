@@ -117,6 +117,23 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	outer := r.inBuiltin
 	r.inBuiltin = ""
 	defer func() { r.inBuiltin = outer }()
+	if args[0] == "local" {
+		// Two columns run the word for its operand checks and put the
+		// declaration nowhere — see
+		// Semantics.LocalThroughCommandDeclaresNothing, which biLocal asks
+		// once it is running. The flag says only that the prefix is there;
+		// the axis is asked where the declaration would happen, so the two
+		// columns that never find `local` through this builtin at all are
+		// never asked a question their own shell cannot pose (#3370).
+		//
+		// Set only where the word itself is `local`, so `command eval
+		// 'local a=1'` is the ordinary declaration it is in those shells:
+		// this builtin has the name in front of it, and the one behind an
+		// `eval` never reaches here.
+		held := r.localUnderCommandPrefix
+		r.localUnderCommandPrefix = true
+		defer func() { r.localUnderCommandPrefix = held }()
+	}
 	return r.runWithoutFunctions(ctx, args, defaultPath)
 }
 

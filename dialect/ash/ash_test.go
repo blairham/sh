@@ -152,7 +152,7 @@ func TestTheAnswersThatSideWithBashRatherThanDash(t *testing.T) {
 	}
 	// Unmeasured for the same reason, and the same treatment: the answer the
 	// shell already gave, which is dash's (#3379).
-	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketNoMatch; got != want {
+	if got, want := s.UnterminatedBracketAfterASubExpression, interp.BracketLiteral; got != want {
 		t.Errorf("UnterminatedBracketAfterASubExpression = %v, want %v", got, want)
 	}
 	// And no parameter for the order an expansion comes back in.

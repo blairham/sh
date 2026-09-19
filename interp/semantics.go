@@ -2654,9 +2654,10 @@ type Semantics struct {
 	// differently only because it has no such construct — there the bracket
 	// really is closed.
 	//
-	// BusyBox ash is unmeasured: no BusyBox was reachable when this was
-	// taken, so its preset keeps the answer it already gave, which is the
-	// one dash gives. #3379 holds the same gap on the neighboring axis.
+	// BusyBox ash was measured on 2026-09-18, in the pinned image and with
+	// the same trim: `[` on `[a` leaves `a` and `[[:alpha:]` leaves nothing,
+	// so it is the literal reading on both axes — bash's, and not the
+	// sibling's it had been given (#3419, #3420).
 	UnterminatedBracketAfterASubExpression BracketPolicy
 	// UnknownCharacterClass is what a bracket does with a `[:name:]` whose
 	// name this shell has never heard of — including the empty one, `[::]`,
@@ -11891,6 +11892,64 @@ type Semantics struct {
 	// the reading and the rows each of its steps is pinned by, and #2959.
 	TestReadsOneExpressionOffTheOperands Answer
 
+	// TestGroupedUnaryAloneLosesTheClosingParen refuses a group whose first
+	// word is a unary operator when that group is the whole expression, as a
+	// closing parenthesis the reading never reached.
+	//
+	// One column does this and it is a defect in that shell rather than a
+	// reading anybody would choose — which is why the axis says what is
+	// *observed* rather than naming a rule. Measured 2026-09-18 on BusyBox
+	// v1.37.0 in the pinned image, script files under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	[ ( -n x ) ]        closing paren expected, 2   where the panel is 0
+	//	[ ( -z "" ) ]       closing paren expected, 2
+	//	[ ( -n ) ]          closing paren expected, 2   the operator alone
+	//	[ ! ( -n x ) ]      closing paren expected, 2   and behind a `!`
+	//	[ ( ! -n x ) ]      1                           but not behind one
+	//	[ ( ! x ) ]         1                           inside the group
+	//	[ ( a ) ]           0
+	//	[ ( a = a ) ]       0
+	//	[ ( ( -n x ) ) ]    0                           nor one group in
+	//	[ ( -n x ) -a x ]   0                           nor with anything
+	//	[ x -a ( -n x ) ]   0                           behind the group
+	//
+	// So it is the four-word shape and the three-word one under it, with or
+	// without leading `!`s, and only where the group is the whole of the
+	// expression: the same group inside a longer one is read. The controls
+	// are what say this is not "no grouping at all" and not "no unary in a
+	// group" (#3419).
+	//
+	// The wording is Diagnostics.TestClosingParenExpected. Shapes this
+	// engine already refuses for other reasons — `[ ( x y ) ]`, `[ ( -Q x )
+	// ]` — are refused at the same status in both and differ only in the
+	// sentence, which is why they are not this axis.
+	TestGroupedUnaryAloneLosesTheClosingParen Answer
+
+	// LocalThroughCommandDeclaresNothing runs `command local a=1` for its
+	// operand checks and declares nothing, assigns nothing and reports 0 —
+	// the scope the prefix puts the declaration in is not the function's.
+	//
+	// Measured 2026-09-18, dash 0.5.12 and BusyBox v1.37.0 (the pinned
+	// image), script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	f() { command local a=1; echo "[${a-UNSET}]"; }; a=outer; f
+	//	  dash, ash  [outer]        bash  [1]
+	//	command local a=1                   silent at 0 outside a function,
+	//	                                    where a bare `local` there is
+	//	                                    `not in a function` at 2
+	//	f() { command local -x c=1; }       local: -x: bad variable name, 2
+	//
+	// The last row is why this is not "the word is not run": the operands
+	// are read and a name this shell cannot have is still refused, in the
+	// builtin's own words. `command export a=1` and `command readonly a=1`
+	// assign normally in both, so it is `local` alone (#3370).
+	//
+	// zsh and ksh93 never reach the question — one has no `local` at all and
+	// the other declines to find it through `command`, both at 127 — so
+	// neither answers it.
+	LocalThroughCommandDeclaresNothing Answer
+
 	// TestTrailingConnectiveTakesAMissingOperand reads a `-a` or a `-o` that
 	// ends the operand list as the connective it is, with a right operand
 	// that is missing and therefore false — rather than as a word where an
@@ -20870,6 +20929,12 @@ func PosixSemantics() Semantics {
 		// right side is missing: POSIX gives the two-word form its own rule
 		// and the rule has no arm for this.
 		TestTrailingConnectiveTakesAMissingOperand: No,
+		// And a parenthesized expression standing alone is read: POSIX
+		// gives the four-operand form `( expr )` its own rule and the
+		// three-operand form one beside it, so the group closes. The one
+		// column that cannot close it is answering with a defect rather
+		// than with a reading, and says so where it overrides this.
+		TestGroupedUnaryAloneLosesTheClosingParen: No,
 		TestStringOrder: TestStringOrderNeither,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several

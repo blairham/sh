@@ -2191,7 +2191,7 @@ func Semantics() interp.Semantics {
 	// says `x: readonly variable`, prints `RAN` and never mentions the
 	// division, and `x=2 /bin/echo RAN >/nope/f` names the name and then the
 	// file where dash, ksh93 and zsh name the file alone (#1943).
-	s.PrefixToAFrozenNameIsCheckedFirst = interp.Yes
+	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedFirst
 	// The brackets of an arithmetic subscript hold an expression, and `*` is
 	// not one: measured 2026-09-11 on 5.3.15, `typeset -A m; m[k]=9;
 	// $(( m[*] ))` is 0, where the expansion `"${m[*]}"` is 9.

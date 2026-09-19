@@ -2455,10 +2455,27 @@ func Semantics() interp.Semantics {
 	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator
 	// fires at all (#1941).
 	s.PositionalListWithNoneIsSet = interp.No
-	// dash's and zsh's order for a frozen name in a prefix: whatever the
-	// command was going to do first happens first, and only bash checks the
-	// name ahead of it (#1943).
-	s.PrefixToAFrozenNameIsCheckedFirst = interp.No
+	// This shell's own order for a frozen name in a prefix, and it is
+	// neither of the two this axis began with: the name is checked ahead of
+	// everything the command does in front of a **function** and a **special
+	// builtin**, and the redirections are opened first in front of a regular
+	// builtin and an external (#1943, #3314).
+	//
+	// That is the same split Semantics.PrefixExpandedBeforeTheRedirections
+	// draws below and the same set this shell keeps a prefix for, which is
+	// what says it is one persistence rule read twice rather than two rules
+	// that agree. Measured 2026-09-18, a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null, each
+	// line its own `( … )` with `readonly V=0` in front and `> /nope/f`
+	// behind: `:`, `typeset q=2`, `command eval :`, `command :` and a
+	// function all write `V: is read only` and never the file's complaint,
+	// where `print hi` and a name nothing answers for write the file's
+	// alone at 1.
+	//
+	// The issue's case is the first of those through a redirection that
+	// *succeeds*: `V=1 export > /dev/null 2>&1` writes the complaint here
+	// because the check happens before the `2>&1` is in force.
+	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedFirstWhereItPersists
 	// The same as the bash column: measured 2026-09-11 on ksh93u+,
 	// `typeset -A m; m[k]=9; $(( m[*] ))` is 0.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No

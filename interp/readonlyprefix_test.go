@@ -47,7 +47,7 @@ func readonlyPrefixRun(t *testing.T, src string) (stdout, stderr string, status 
 	// redirections is its own axis and is not what these rows are about;
 	// answered the way three of the four presets do so the reports below
 	// are the refusal's alone. TestWhenAFrozenPrefixIsChecked asserts both.
-	sem.PrefixToAFrozenNameIsCheckedFirst = No
+	sem.PrefixToAFrozenNameIsCheckedFirst = FrozenPrefixCheckedWithTheCommand
 	var out, errs bytes.Buffer
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
@@ -214,7 +214,7 @@ func TestAPrefixIsNeverRefusedAsADeclaration(t *testing.T) {
 	sem := permissive()
 	// Answered so the one line asserted below is the refusal's, as in
 	// readonlyPrefixRun — the order the check runs in is its own axis.
-	sem.PrefixToAFrozenNameIsCheckedFirst = No
+	sem.PrefixToAFrozenNameIsCheckedFirst = FrozenPrefixCheckedWithTheCommand
 	var out, errs bytes.Buffer
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{

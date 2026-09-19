@@ -67,6 +67,12 @@ func TestTheHelperRunsUnderThisDialectAndNotTheCore(t *testing.T) {
 
 func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	s := ksh.Semantics()
+	// The one column that answers the order by the command's kind: ahead of
+	// the redirections in front of a function and a special builtin, behind
+	// them in front of a regular builtin and an external (#3314).
+	if got := s.PrefixToAFrozenNameIsCheckedFirst; got != interp.FrozenPrefixCheckedFirstWhereItPersists {
+		t.Errorf("PrefixToAFrozenNameIsCheckedFirst = %v, want %v", got, interp.FrozenPrefixCheckedFirstWhereItPersists)
+	}
 	for _, tc := range []struct {
 		axis string
 		got  interp.Answer
@@ -114,7 +120,6 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.No},
-		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.No},
 		{"EmptyAssociativeKeyIsAnError", s.EmptyAssociativeKeyIsAnError, interp.No},

@@ -122,6 +122,50 @@ func (r *Runner) frozenPrefixNames(assigns []*syntax.Assign) []string {
 	return frozen
 }
 
+// FrozenPrefixCheckOrder is when a frozen name in an assignment prefix is
+// refused, against when the command's values are expanded and its
+// redirections opened — see [Semantics.PrefixToAFrozenNameIsCheckedFirst].
+type FrozenPrefixCheckOrder uint8
+
+const (
+	// FrozenPrefixCheckUnspecified is no answer, and is refused like any
+	// other.
+	FrozenPrefixCheckUnspecified FrozenPrefixCheckOrder = iota
+	// FrozenPrefixCheckedWithTheCommand does whatever the command was going
+	// to do first: a value that will not expand and a file that will not
+	// open each report on their own and the frozen name is never mentioned.
+	// zsh and dash.
+	//
+	// The zero value is the unspecified one rather than this, because a
+	// dialect that has not been asked has not answered.
+	FrozenPrefixCheckedWithTheCommand
+	// FrozenPrefixCheckedFirst refuses the name ahead of everything the
+	// command does, whatever the command is: bash and BusyBox ash.
+	FrozenPrefixCheckedFirst
+	// FrozenPrefixCheckedFirstWhereItPersists refuses it ahead of the
+	// command only where the assignment is a real store — in front of a
+	// function or a special builtin — and opens the redirections first for a
+	// regular builtin and an external: ksh93.
+	//
+	// The same split [PrefixRedirectionOrder] draws, and the same reading of
+	// it: what the word resolves to, looking through `command`. It is one
+	// shell reading its own persistence rule twice rather than two rules
+	// that happen to agree, which is why both read prefixCommandOf.
+	FrozenPrefixCheckedFirstWhereItPersists
+)
+
+func (f FrozenPrefixCheckOrder) String() string {
+	switch f {
+	case FrozenPrefixCheckedWithTheCommand:
+		return "the frozen name is checked with the command"
+	case FrozenPrefixCheckedFirst:
+		return "the frozen name is checked first"
+	case FrozenPrefixCheckedFirstWhereItPersists:
+		return "the frozen name is checked first where the prefix persists"
+	}
+	return "unspecified"
+}
+
 // refusePrefixesEarly is the readonly check on an assignment prefix, run
 // before the command's values are expanded and before its redirections are
 // opened. That order is Semantics.PrefixToAFrozenNameIsCheckedFirst.
@@ -138,8 +182,25 @@ func (r *Runner) refusePrefixesEarly(assigns []*syntax.Assign, argv []string) bo
 	if len(argv) == 0 || len(r.frozenPrefixNames(assigns)) == 0 {
 		return false
 	}
-	if !r.ask(r.sem().PrefixToAFrozenNameIsCheckedFirst,
-		"a frozen name in a prefix checked before the command's values and redirections") {
+	switch r.sem().PrefixToAFrozenNameIsCheckedFirst {
+	case FrozenPrefixCheckedWithTheCommand:
+		return false
+	case FrozenPrefixCheckedFirst:
+	case FrozenPrefixCheckedFirstWhereItPersists:
+		// Read before the refusal rather than inside it, because the
+		// question here is the *order* and not whether the name is refused
+		// at all: a regular builtin is both the kind this shell opens the
+		// redirections for and the kind PrefixToARegularBuiltinIsRefused
+		// says nothing about, and asking the order first keeps the two
+		// answers from being told apart by which one happened to fire.
+		if k := r.prefixCommandOf(argv).kind; k != prefixBeforeFunction &&
+			k != prefixBeforeSpecialBuiltin {
+			return false
+		}
+	default:
+		r.diagf("%s\n", r.unanswered(
+			"a frozen name in a prefix checked before the command's values and redirections"))
+		r.status, r.unspecified = 2, true
 		return false
 	}
 	r.prefixCheckedFirst = true

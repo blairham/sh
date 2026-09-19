@@ -61,6 +61,11 @@ func TestTheHelperRunsUnderThisDialectAndNotTheCore(t *testing.T) {
 
 func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	s := bash.Semantics()
+	// The one column that checks a frozen name in a prefix ahead of
+	// everything the command does, whatever the command is (#1943, #3314).
+	if got := s.PrefixToAFrozenNameIsCheckedFirst; got != interp.FrozenPrefixCheckedFirst {
+		t.Errorf("PrefixToAFrozenNameIsCheckedFirst = %v, want %v", got, interp.FrozenPrefixCheckedFirst)
+	}
 	for _, tc := range []struct {
 		axis string
 		got  interp.Answer
@@ -111,9 +116,6 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"PositionalListWithNoneIsSet", s.PositionalListWithNoneIsSet, interp.No},
-		// The one column that checks a frozen name in a prefix before the
-		// command's values and redirections (#1943).
-		{"PrefixToAFrozenNameIsCheckedFirst", s.PrefixToAFrozenNameIsCheckedFirst, interp.Yes},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.Yes},
 		// The one column that refuses to store under an empty key (#1938).

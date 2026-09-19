@@ -964,9 +964,9 @@ type Semantics struct {
 
 	// PrefixToAFrozenNameIsCheckedFirst refuses the prefix **before** the
 	// command's values are expanded and before its redirections are opened.
-	// `No` does the other things first, so a value that will not expand and
-	// a file that will not open each report on their own and the frozen name
-	// is never mentioned.
+	// FrozenPrefixCheckedWithTheCommand does the other things first, so a
+	// value that will not expand and a file that will not open each report
+	// on their own and the frozen name is never mentioned.
 	//
 	// Measured 2026-09-07 and again 2026-09-12, script file, `readonly x=1`
 	// in front of each line:
@@ -996,7 +996,39 @@ type Semantics struct {
 	// answered the same way whichever order the two happen in — bash runs
 	// the command in both rows above, exactly as it does with a prefix that
 	// expands.
-	PrefixToAFrozenNameIsCheckedFirst Answer
+	//
+	// **ksh93 is neither of the two answers above**, which is what made the
+	// field an order rather than a yes and a no (#3314). Measured 2026-09-18
+	// on ksh93u+ 2012-08-01, a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with standard input on /dev/null, each line its own `( … )`
+	// with `readonly V=0` in front of it and `> /nope/f` behind it:
+	//
+	//	V=1 : > /nope/f                 `V: is read only`, no file complaint
+	//	V=1 typeset q=2 > /nope/f       the same
+	//	V=1 command eval : > /nope/f    the same — `command` is transparent
+	//	V=1 command : > /nope/f         the same
+	//	V=1 f > /nope/f                 the same, with `f() { echo IN; }`
+	//	V=1 print hi > /nope/f          the file complaint alone, 1
+	//	V=1 nosuchcmd > /nope/f         the file complaint alone, 1
+	//
+	// so the name is checked ahead of the redirection in front of a function
+	// and a special builtin and behind it in front of a regular builtin and
+	// an external — the same split PrefixRedirectionOrder draws, and the
+	// same set this shell keeps a prefix for. The two are read apart because
+	// one shell holds them apart: BusyBox ash checks the name first and
+	// expands nothing first.
+	//
+	// The issue's own case is the first row seen through a redirection that
+	// *succeeds*: `readonly V=0; V=1 export > /dev/null 2>&1` writes the
+	// complaint to the shell's own stderr there, because the check happens
+	// before the `2>&1` is in force, where this engine swallowed it (#3314).
+	//
+	// **The regular builtin is not evidence either way about the order**, and
+	// is not read as such: PrefixToARegularBuiltinIsRefused is No in that
+	// column, so nothing is written in front of `print` whichever order the
+	// two happen in. The rows that decide it are the special builtin and the
+	// function, where the complaint stands and the file's never appears.
+	PrefixToAFrozenNameIsCheckedFirst FrozenPrefixCheckOrder
 
 	// EchoOptions is the set of letters `echo` reads as options: `n` for
 	// every shell measured, `e` everywhere but dash, `E` in bash and zsh

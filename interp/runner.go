@@ -5510,20 +5510,6 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.traceCommand(argv)
 	}
 
-	// On the record while the redirections are opened, so a dialect that
-	// counts a redirection opened for a builtin as the builtin's own can
-	// say so. Cleared before the builtin runs: from there on it is the
-	// builtin itself that is speaking.
-	if len(argv) > 0 {
-		// The word itself, whatever it names: a refused `{name}>` store is
-		// reported under it whether it is a builtin or a program — measured,
-		// `declare -n s; /bin/echo hi {s}>/dev/null` is `/bin/echo: `10':
-		// not a valid identifier` in bash 5.3.20.
-		r.redirForCommandWord = argv[0]
-		if _, ok := r.lookupBuiltin(argv[0]); ok {
-			r.redirectForBuiltin = argv[0]
-		}
-	}
 	// A frozen name in the prefix, in the dialect that checks it before
 	// anything else this command does. Ahead of the redirections because
 	// that is exactly what the order is about: the same shell reports the
@@ -5545,6 +5531,28 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	}
 	if r.refusePrefixesEarly(c.Assigns, argv) {
 		return nil
+	}
+	// On the record while the redirections are opened, so a dialect that
+	// counts a redirection opened for a builtin as the builtin's own can
+	// say so. Cleared before the builtin runs: from there on it is the
+	// builtin itself that is speaking.
+	//
+	// **Behind the frozen-name check**, which is what the check being first
+	// means: a complaint written before the redirections are opened is not a
+	// redirection's, so it must not be located as one. ksh93 writes
+	// `<script>: line 1: V: is read only` for `readonly V=0; V=1 : >/nope/f`
+	// — its plain-assignment location — where this engine, having already
+	// said a builtin's redirection was being opened, wrote the builtin form
+	// `<script>[1]:` (#3314).
+	if len(argv) > 0 {
+		// The word itself, whatever it names: a refused `{name}>` store is
+		// reported under it whether it is a builtin or a program — measured,
+		// `declare -n s; /bin/echo hi {s}>/dev/null` is `/bin/echo: `10':
+		// not a valid identifier` in bash 5.3.20.
+		r.redirForCommandWord = argv[0]
+		if _, ok := r.lookupBuiltin(argv[0]); ok {
+			r.redirectForBuiltin = argv[0]
+		}
 	}
 	defer func() { r.prefixTraceAssigns, r.prefixTraceValues = nil, nil }()
 	tracedHere := false

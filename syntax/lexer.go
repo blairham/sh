@@ -3447,7 +3447,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			}
 			value := l.src[start:l.off]
 			l.advance() // the )
-			if kind == CommandSubst {
+			if kind == CommandSubst || kind == ArithSubst {
 				// And a here-document this text opened and could not feed,
 				// where the dialect refuses one. `$( )` and not the two
 				// process substitutions, which is measured: the shell that
@@ -3508,6 +3508,16 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			if holdsCommands(kind) && l.commentsExist() && commentCouldStart(l.prevByte()) {
 				l.skipComment()
 				continue
+			}
+			l.advance()
+		case '$':
+			// A substitution the count is about to step through. Counting is
+			// right for finding the `)` and blind to what the program inside
+			// did, which is the half one dialect refuses — see
+			// Lexer.noteHeredocInsideASkippedSubstitution. The cursor is left
+			// exactly where it was, so the count is unchanged.
+			if l.peekAt(1) == '(' && l.peekAt(2) != '(' {
+				l.noteHeredocInsideASkippedSubstitution(l.off + 2)
 			}
 			l.advance()
 		case '(':
@@ -3612,7 +3622,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// continuations — and in a single-quoted part they are not.
 		value = l.src[start:end]
 	}
-	if kind == CommandSubst {
+	if kind == CommandSubst || kind == ArithSubst {
 		// The read above failed and the parentheses were counted instead,
 		// which is what a *nested* substitution looks like from out here: the
 		// inner one is the thing that was refused and the outer read failed
@@ -4065,6 +4075,45 @@ func (l *Lexer) takeHeredocOutside() bool {
 		l.err = e
 	}
 	return true
+}
+
+// noteHeredocInsideASkippedSubstitution asks a `$( )` the skippers step over
+// whether it opened a here-document it could not feed, and records the answer
+// for the read out here to raise.
+//
+// The skippers count parentheses rather than reading a program, which is right
+// for what they are for — finding the `)` — and is exactly what leaves this
+// question unasked. A `$( )` written **inside a parameter-expansion word or
+// inside an arithmetic expansion** is reached only that way, so one dialect's
+// refusal of an uncontained here-document never arrived at the point the text
+// was *read*: it either never arrived at all, or arrived from the re-parse the
+// value gets at expansion time, located as a line the shell was running and
+// with the status a running line leaves (#3719).
+//
+// Measured 2026-09-19 against ksh93u+ 2012-08-01, each case a script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null device,
+// `echo one` then the row then `body`, `EOF`, `echo after`:
+//
+//	echo $(cat <<EOF)          refused at line 2, status 3
+//	echo ${x-$(cat <<EOF)}     the same sentence, the same line, the same status
+//	echo ${x:-$(cat <<EOF)}    the same
+//	echo "${x-$(cat <<EOF)}"   the same
+//
+// Only the first of those arrived here; the second and third ran `body` and
+// `EOF` as commands at status 0, and the fourth said `line 2: syntax error at
+// line 1:` at status 1.
+//
+// Gated on the dialect, so only the shell that has the rule pays for the
+// second read. The saved `lastInner` is put back because that field belongs to
+// the construct this lexer is in the middle of, and a sub-parse that ran out
+// would otherwise hand its own opener to the next thing that asked.
+func (l *Lexer) noteHeredocInsideASkippedSubstitution(from int) {
+	if !l.dialect.HeredocBodyMustBeInsideTheSubstitution {
+		return
+	}
+	inner := l.lastInner
+	defer func() { l.lastInner = inner }()
+	l.parseToClose(from)
 }
 
 func (l *Lexer) parseToCloseBrace(from int) (int, []Remark, bool) {
@@ -4581,6 +4630,12 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		// opening blank is body text and this one's pipe is its marker.
 		return Span{Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 	}
+	// And a here-document a `$( )` in this word opened and could not feed,
+	// which the body's own scan noted on the way past. Raised here rather
+	// than left to the re-parse this value gets at expansion time, which
+	// would locate it as a line the shell was running. See
+	// Lexer.noteHeredocInsideASkippedSubstitution.
+	l.takeHeredocOutside()
 	return Span{Kind: ParamExp, Value: value, Quoting: q, Pos: open}
 }
 
@@ -4917,6 +4972,10 @@ func (l *Lexer) skipSubstitution() bool {
 	open := l.pos()
 	l.advance() // $
 	l.advance() // (
+	// And what the skip cannot see, in the one dialect that refuses it —
+	// see Lexer.noteHeredocInsideASkippedSubstitution. Before the skip, so
+	// the read starts where the program does.
+	l.noteHeredocInsideASkippedSubstitution(l.off)
 	// The arithmetic spelling needs no case of its own. Its second `(` is
 	// the next character skipToDepth reads, and counting it there is what
 	// makes both `)` at the other end belong to the construct — so one loop

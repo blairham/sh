@@ -48,6 +48,15 @@ func (r *Runner) typeExternalSentence(name, path string, hashed bool) string {
 	//
 	// After the slash test, which is a fact about the operand as written.
 	name = r.NameReportWord(name)
+	// And the path again, for the one column where the sentence and the
+	// bare-path forms *disagree*: zsh 5.9.2 quotes the path inside the
+	// sentence and writes it plain for `command -v`, `whence`, `where` and
+	// `which`. Asked here rather than in Runner.reportedPath because that is
+	// what the disagreement is — the sentence is the only route that quotes.
+	// Empty in every column whose two routes agree, ksh93's included, where
+	// the quoting is Diagnostics.NameReportQuoting's and is already on the
+	// path by the time it arrives here.
+	path = r.typeSentencePathWord(path)
 	if pathname {
 		if w := r.diag().TypePathnameOperand; w != "" {
 			return Wording(w, "%[1]s is %[2]s", name, path)
@@ -60,4 +69,15 @@ func (r *Runner) typeExternalSentence(name, path string, hashed bool) string {
 		return Wording(w, "%[1]s is %[2]s", name, path)
 	}
 	return Wording(r.diag().TypeExternal, "%[1]s is %[2]s", name, path)
+}
+
+// typeSentencePathWord is the path a `type`-family sentence writes, spelled
+// the way the dialect writes a word it could not otherwise write bare.
+//
+// The same alphabet NameReportWord reads, because it is the same shell's own
+// word-writing function — measured character for character rather than
+// assumed. See Diagnostics.TypeSentencePathQuoting.
+func (r *Runner) typeSentencePathWord(path string) string {
+	d := r.diag()
+	return traceQuote(path, d.TypeSentencePathQuoting, d.TraceMetacharacters)
 }

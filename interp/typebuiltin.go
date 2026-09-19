@@ -500,7 +500,12 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			if r.unspecified {
 				return r.status
 			}
-			r.printf("%s is %s\n", name, path)
+			// The wording is the shared one and the path is still written
+			// the way this dialect writes a word inside a sentence: the
+			// letter changes how many rows there are, not how a row spells
+			// what it found. Measured 2026-09-19 — zsh's `type -a 'a b'` is
+			// `a b is '/…/a b'`, the same line its plain `type` writes.
+			r.printf("%s is %s\n", name, r.typeSentencePathWord(path))
 		}
 	}
 	if found {

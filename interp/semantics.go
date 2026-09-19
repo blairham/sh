@@ -16627,7 +16627,7 @@ type Semantics struct {
 	// predicts the maximum a second time, and ksh93 answers
 	// 1.84467440737096e+19.
 	//
-	// Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01, where the double is
+	// Measured 2026-09-16 against AT&T ksh93u+ 2012-08-01, where a long double is
 	// 64 bits wide. Nothing about it is confined to the edge of the word:
 	//
 	//	$(( 9007199254740993 ))            9007199254740992
@@ -16638,6 +16638,27 @@ type Semantics struct {
 	//	$(( 2**63 ))                       9223372036854775807
 	//	$(( 2**64 ))                       1.84467440737096e+19
 	//	$(( big * 2 ))                     1.84467440737096e+19
+	//
+	// The carriage is the C `long double` and its width is the **platform's**,
+	// which is why the same build answers two ways. Measured 2026-09-18 on
+	// `Version AJM 93u+ 2012-08-01` on macOS arm64 and on Debian bullseye's
+	// linux/arm64 package of it (#3695):
+	//
+	//	(2**53 + 1) - 2**53       0 on macOS, 1 on Linux
+	//	(2**112 + 1) - 2**112     0 on macOS, 1 on Linux
+	//	(2**113 + 1) - 2**113     0 on both
+	//	1.0/3                     15 significant digits, against 33
+	//
+	// A significand holding 2^112+1 and losing 2^113+1 is 113 bits, which is
+	// IEEE binary128; one that has already lost 2^53+1 is 53. The subtractions
+	// are what discriminate — `2^53+1` alone is equally consistent with a
+	// 64-bit integer path, which `$(( 2**64 + 1 ))` then rules out by coming
+	// back exact on Linux.
+	//
+	// This axis holds the macOS reading on either kernel, because the panel
+	// the record is measured from is the macOS one. Whether a dialect binary
+	// on Linux should answer its own kernel's way is open, and is a decision
+	// about what the panel means rather than a measurement.
 	//
 	// A written numeral rounds as an evaluated one does, and `/`, `%` and the
 	// bitwise operators still do their work on the word — the value goes back

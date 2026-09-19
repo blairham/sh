@@ -438,6 +438,20 @@ func (r *Runner) integerRenderedText(name, decimal string) string {
 	return r.integerRendered(name, v)
 }
 
+// octalNumeral is a zero-padded numeral whose digits are all octal ones,
+// which is the only shape a bare leading zero names a base in.
+func octalNumeral(text string) bool {
+	if !zeroPadded(text) {
+		return false
+	}
+	for i := 0; i < len(text); i++ {
+		if text[i] == '8' || text[i] == '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // learnIntegerBase takes a name's output base from the radix prefix of the
 // text being assigned to it, where the dialect learns one and the name has
 // none already.
@@ -467,12 +481,44 @@ func (r *Runner) learnIntegerBase(name, text string) {
 		return
 	}
 	base := integerBaseOfLiteral(text)
-	if base == 0 {
+	// A **bare leading zero** names a base too, where the dialect reads one
+	// as octal: measured 2026-09-17 on zsh 5.9.2 under `setopt octal_zeroes`,
+	// `typeset -i d=010` reads back `8#10` — eight, written in the base it
+	// was read in — where `typeset -i h=0x10` has always been `16#10` here.
+	// The prefix spellings this function knows are not the only way to write
+	// a radix down; they are only the two that carry it in the text (#3520).
+	// Trimmed the way integerBaseOfLiteral trims, and measured: `typeset -i
+	// s=" 010 "` is `8#10` on zsh 5.9.2, so the spaces around a literal are
+	// not what tells a number from an expression here.
+	//
+	// And the digits have to *be* octal, which is not tidiness: `08` is a
+	// zero-padded numeral that no leading-zero reading makes a base, since
+	// the column that reads one refuses the numeral outright — `setopt
+	// octal_zeroes; typeset -i x=08` is `bad math expression` on zsh 5.9.2 —
+	// while the columns that do not read one have a decimal 8 with no base
+	// in it. Without the check this asked the learning question about every
+	// padded number there is, which is a question a dialect may not have
+	// answered: `a=08; typeset -i a` met a refusal in a suite that had
+	// nothing to do with bases.
+	padded := base == 0 && octalNumeral(strings.TrimSpace(text))
+	if base == 0 && !padded {
 		return
 	}
 	if !r.ask(r.sem().IntegerBaseComesFromTheValueAssigned,
 		"an integer name taking its output base from the value assigned to it") {
 		return
+	}
+	if padded {
+		// Behind the learning question, so a dialect that takes no base from
+		// a value is never asked what a leading zero means — which is every
+		// column but one, and two of them read a leading zero as octal while
+		// carrying no base at all. Asking in front of it would put a
+		// question to `typeset -i e=010` in bash, whose answer is a plain 8
+		// either way.
+		if !r.octalLeadingZero() {
+			return
+		}
+		base = 8
 	}
 	if !r.validIntegerBase(base) {
 		// A radix outside what the dialect takes is not a base it can

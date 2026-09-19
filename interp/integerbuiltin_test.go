@@ -358,11 +358,17 @@ func TestTheOutputBaseLearnedFromTheValue(t *testing.T) {
 		learns Answer
 		want   string
 	}{
-		// Row 4 reads 14 rather than 16 because this test vector's
-		// arithmetic takes a leading zero as octal, which is a different
-		// question and one the panel splits on. What the row is here for is
-		// that `016` teaches the name no *base* under either answer.
-		{Yes, "1[16#10]\n2[16#5]\n3[8#143]\n4[14]\n5[16]\n"},
+		// Row 4 reads fourteen rather than sixteen because this test
+		// vector's arithmetic takes a leading zero as octal, which is a
+		// different question and one the panel splits on. **It teaches the
+		// name base 8 as well**, which this row used to say it did not:
+		// measured 2026-09-17 on zsh 5.9.2 — the one column that learns a
+		// base from a value — `setopt octal_zeroes; typeset -i d; d=016`
+		// lists back as `typeset -i8 d=14` and reads `8#16`, and with the
+		// option off it is a plain 16 with no base. A leading zero is a
+		// radix where the dialect reads one, and the comment here asserted
+		// the opposite of what the shell does (#3520).
+		{Yes, "1[16#10]\n2[16#5]\n3[8#143]\n4[8#16]\n5[16]\n"},
 		{No, "1[16]\n2[5]\n3[99]\n4[14]\n5[16]\n"},
 	} {
 		out, errs, st := integerRun(t, `typeset -i a; a=0x10; echo "1[$a]"
@@ -676,5 +682,101 @@ func TestAnUnansweredNegativeSignAxisRefusesByName(t *testing.T) {
 	}
 	if out != "2[-5]\n" {
 		t.Errorf("re-render gave %q, want the number left as it was", out)
+	}
+}
+
+// A **bare leading zero** names a base too, where the dialect reads one as
+// octal — so `typeset -i d=010` renders the eight it read in the base it read
+// it in. The two prefixes the text carries are not the only way a radix is
+// written down; they are the two that are visible in the characters.
+//
+// Measured 2026-09-17 on zsh 5.9.2 under `setopt octal_zeroes`, which is the
+// one column where both halves are Yes; the arithmetic agreed throughout and
+// only the rendering of the name was short (#3520).
+func TestABareLeadingZeroTeachesTheBaseWhereItIsOctal(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		octal Answer
+		src   string
+		want  string
+	}{
+		{
+			"a declaration's own value", Yes,
+			`typeset -i d=010; echo "[$d]"`, "[8#10]\n",
+		},
+		{
+			"a value assigned to a name that has the letter", Yes,
+			`typeset -i e; e=010; echo "[$e]"`, "[8#10]\n",
+		},
+		{
+			// The control that says this is the leading zero and not the
+			// padding: with the zero reading as decimal there is no base to
+			// learn, and ten is what the name holds.
+			"and not where a leading zero is decimal", No,
+			`typeset -i d=010; echo "[$d]"`, "[10]\n",
+		},
+		{
+			// The spaces around a literal do not make it an expression,
+			// which is the same trim the prefix spellings get.
+			"a literal with spaces around it", Yes,
+			`typeset -i s=" 010 "; echo "[$s]"`, "[8#10]\n",
+		},
+		{
+			// Zero itself is padded and is still a base, which is the row
+			// that says nothing here is testing for a non-zero value.
+			"a padded zero", Yes,
+			`typeset -i z=00; echo "[$z]"`, "[8#0]\n",
+		},
+		{
+			// And an unpadded number teaches nothing, in either answer.
+			"an ordinary number", Yes,
+			`typeset -i n=10; echo "[$n]"`, "[10]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, st := integerRun(t, tc.src, func(s *Semantics) {
+				s.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+				s.IntegerBaseComesFromTheValueAssigned = Yes
+				s.ArithLeadingZeroIsOctal = tc.octal
+				// A zero-padded number assigned to an integer name is its own
+				// axis and the rows here walk past it: the column these were
+				// measured in reads the digits as the number they spell.
+				s.IntegerAssignmentReadsALeadingZeroAsDecimal = No
+			}, Diagnostics{})
+			if out != tc.want || st != 0 || errs != "" {
+				t.Errorf("got %q (stderr %q, status %d), want %q", out, errs, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the arithmetic route learns it from the same numeral, wherever in the
+// expression it stands — measured, `let "y=1+010"` is `8#11` there exactly as
+// `(( u = 1 + 0x1f ))` is `16#20`. The first reading of this was that a
+// leading zero counted only as the whole of what was written, and the probe
+// said otherwise.
+func TestAnArithmeticAssignmentLearnsTheLeadingZerosBase(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		octal Answer
+		src   string
+		want  string
+	}{
+		{"a numeral of its own", Yes, `(( x = 010 )); echo "[$x]"`, "[8#10]\n"},
+		{"a numeral inside the expression", Yes, `(( y = 1 + 010 )); echo "[$y]"`, "[8#11]\n"},
+		{"not where the zero is decimal", No, `(( x = 010 )); echo "[$x]"`, "[10]\n"},
+		{"and a prefix still wins where there is one", Yes, `(( v = 0x1f )); echo "[$v]"`, "[16#1F]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, st := integerRun(t, tc.src, func(s *Semantics) {
+				s.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+				s.IntegerBaseComesFromTheValueAssigned = Yes
+				s.ArithmeticAssignmentDeclaresAnInteger = Yes
+				s.ArithLeadingZeroIsOctal = tc.octal
+			}, Diagnostics{})
+			if out != tc.want || st != 0 || errs != "" {
+				t.Errorf("got %q (stderr %q, status %d), want %q", out, errs, st, tc.want)
+			}
+		})
 	}
 }

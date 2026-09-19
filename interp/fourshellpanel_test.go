@@ -57,12 +57,59 @@ import (
 // drops the `alias ` prefix from a listing, so two fields documented as
 // "bash" are bash-as-bash.
 //
+// A second pass the same day measured eight more across all seven columns and
+// takes the budget from 45 to 37. Every dialect value it checked was right
+// again, so it too is a corrected record; what it changed is what a reader is
+// told. Three of the eight were wrong about more than a count:
+//
+//   - ReturnOutsideAFunction said "the other three obey it and end the
+//     script". Four columns obey it, and bash — the shell the sentence was
+//     about — does not: it complains and runs the next command at status 0,
+//     so it was in neither group while appearing to be the subject of both.
+//   - TrapBadSignal said status 1 was "the only part of this any two of them
+//     agree on". BusyBox ash writes bash's wording and ksh93 writes dash's,
+//     so the wordings pair up across the family lines and the sentence was
+//     false in exactly the direction the missing column supplies.
+//   - UnboundPositional said "true of three of the four", and the count was
+//     right by accident: the three are dash, zsh and ash, and ksh93 does not
+//     refuse an unset positional under `set -u` at all. A column with nothing
+//     to word had been filed as a column that words it the same way.
+//
+// LowercaseReason is the one that had to be measured twice, and it is the
+// reminder that a probe has to discriminate: ash's other reasons read
+// lowercase and look exactly like that flag, and only a reason it does not
+// substitute — Permission denied — tells the two apart. It capitalizes, so
+// zsh really is alone.
+//
+// # The panel is seven columns and one of them is an invocation
+//
+// Two of this pass's eight had to be corrected *after* they were written,
+// because the first probe set `argv[0]` on `env` rather than on the shell it
+// was about to exec — so what it called bash-as-`sh` was an ordinary bash and
+// the column read as a duplicate of the one beside it. Running the same binary
+// through a link named `sh` puts it in POSIX mode, and two of the eight split:
+//
+//   - ReturnOutsideAFunction: bash and bash 3.2 complain and run the next
+//     command at 0; the same binary called `sh` complains and ends the script
+//     at 2. A third behavior neither group holds.
+//   - TrapPrintsSignalPrefix: bash and bash 3.2 write `SIGINT`; the same
+//     binary called `sh` writes `INT`, with everybody else.
+//
+// That is the same class as the previous pass's `HashEmptyTable` and
+// `AliasListPrefix`, and it is worth stating in its own right: **the column a
+// four-shell sentence leaves out is usually BusyBox ash and is not always**.
+// #3228's own framing says "almost always", and a reader who takes that as
+// "always" will check ash, find it agrees, and file the sentence as correct
+// while a bash column two rows over disagrees. A probe that cannot tell
+// bash-as-`sh` from bash cannot see any of these, and it looks exactly like a
+// probe that can.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
 	"semantics.go":   41,
-	"diagnostics.go": 45,
+	"diagnostics.go": 37,
 	filepath.Join("..", "syntax", "dialect.go"): 11,
 }
 

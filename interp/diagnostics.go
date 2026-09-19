@@ -2542,7 +2542,15 @@ type Diagnostics struct {
 	//
 	// ksh93 alone, and it is two departures at once: no bracketed reason,
 	// and "open" even where the redirection was creating. Empty leaves the
-	// ordinary wordings standing, which is what the other three want.
+	// ordinary wordings standing, which is what the other four want.
+	//
+	// Measured 2026-09-19 over all seven columns with `e=; echo x > $e`:
+	// ksh93 `: cannot open`; bash 5.3, bash-as-`sh` and bash 3.2 all
+	// `$e: ambiguous redirect`; dash `cannot create : Directory
+	// nonexistent`; zsh `no such file or directory: `; BusyBox ash
+	// `can't create : nonexistent directory`. Four wordings and no
+	// abstention, so ksh93 is alone in needing a field and the column the
+	// old sentence left out is one of the four that do not.
 	EmptyRedirectTarget string
 
 	// AmbiguousRedirect is a redirection whose target did not expand to
@@ -2629,8 +2637,28 @@ type Diagnostics struct {
 	// ReturnOutsideAFunction is a `return` with nothing to return from —
 	// neither a function nor a sourced file. No verbs.
 	//
-	// Only one shell in the panel says anything at all: the other three obey
-	// it and end the script, so there is nothing for them to word.
+	// Only bash says anything at all — all three of its columns — and it
+	// is also the only one that keeps going. Measured 2026-09-19 over all
+	// seven columns, `return 3` at the top of a script:
+	//
+	//	bash 5.3, bash 3.2   the complaint, then the next command, status 0
+	//	bash-as-`sh`         the complaint, then the script ends, status 2
+	//	dash, ksh93, zsh,    silence, and the script ends at 3
+	//	  BusyBox ash
+	//
+	// So the wording is bash's in all three of its columns and nobody
+	// else's, and the four that end the script have nothing to word.
+	//
+	// The old sentence said "the other three obey it", which was two errors
+	// in one clause: the panel leaves four columns to obey rather than
+	// three, and bash was in neither group — it neither obeyed nor was
+	// counted among those that did.
+	//
+	// The middle row is the one worth keeping: the *same binary* called `sh`
+	// draws the same sentence and then treats it as fatal, which is a third
+	// behavior neither of the two groups holds. It is not a dialect value —
+	// there is no bash-as-`sh` preset — and it is the column a four-shell
+	// reading of this field would never have reached.
 	ReturnOutsideAFunction string
 
 	// LoopControlOutsideALoop is a `break` or a `continue` with no loop
@@ -3620,8 +3648,17 @@ type Diagnostics struct {
 	// TrapBadSignal is what `trap` says about a condition that names no
 	// signal it knows. One verb: the condition as written.
 	//
-	// The status is not a field beside it: all four report 1, which is the
-	// only part of this any two of them agree on.
+	// The status is not a field beside it: every column reports 1. Measured
+	// 2026-09-19 with `trap : NOSUCHSIG` in a script, all seven —
+	// dash, bash 5.3, bash-as-`sh`, bash 3.2, ksh93, zsh and BusyBox ash.
+	//
+	// The wording is not the free-for-all this comment used to claim it was.
+	// It said 1 was "the only part of this any two of them agree on", and
+	// the fifth dialect is what falsifies it: BusyBox ash writes bash's
+	// `invalid signal specification` and ksh93 writes dash's `bad trap`, so
+	// there are four wordings over seven columns rather than one each, and
+	// two of the pairs cross the family lines. zsh is the one nobody joins,
+	// with `undefined signal`.
 	TrapBadSignal string
 	// TrapBadSignalUnprefixed prints that complaint with no location and no
 	// shell name in front of it. dash alone, and only for `trap`: its `kill`
@@ -3637,10 +3674,6 @@ type Diagnostics struct {
 	// dialect with both letters refuses at 2 ahead of any other reading of
 	// the line. No verbs.
 	TrapBothPrintLetters string
-	// TrapPrintsSignalPrefix goes in front of a signal's name when printing
-	// what is trapped: bash writes `trap -- : SIGINT` where the other three
-	// write `INT`. Empty in three of the four, and never used for EXIT,
-	// which is not a signal.
 	// LocalOutsideAFunction is the refusal of `local` at the top level,
 	// taking nothing: bash says it can only be used in a function and dash
 	// says it is not in one.
@@ -3648,7 +3681,23 @@ type Diagnostics struct {
 	// TrapCouldNotParse follows the parse failure when a dialect reads a
 	// trap's action as the trap is set, taking nothing. zsh only, since zsh
 	// is the only dialect that reads it then.
-	TrapCouldNotParse      string
+	TrapCouldNotParse string
+	// TrapPrintsSignalPrefix goes in front of a signal's name when printing
+	// what is trapped: bash writes `trap -- : SIGINT` where the other four
+	// write `INT`. Empty in four of the five, and never used for EXIT,
+	// which is not a signal.
+	//
+	// Measured 2026-09-19 with `trap : INT; trap`: `SIGINT` in bash 5.3 and
+	// bash 3.2, and a bare `INT` in **bash-as-`sh`**, dash, ksh93, zsh and
+	// BusyBox ash. So this is the `bash` dialect's answer and not that
+	// binary's — the same bash called `sh` writes what everyone else does,
+	// which is a column no four-shell reading of this field could reach and
+	// is why the prefix is keyed to the dialect rather than to the shell.
+	//
+	// The quoting of the command is a separate question and splits
+	// differently again — dash, ash and both `sh`-mode-agnostic bash columns
+	// write `':'` where ksh93 and zsh write a bare `:` — which is why it is
+	// not this field.
 	TrapPrintsSignalPrefix string
 	// TrapConditionRequired is the refusal of `trap EXIT`, taking nothing.
 	// ksh93 only, since ksh93 is the only dialect that refuses the form.
@@ -3856,10 +3905,19 @@ type Diagnostics struct {
 
 	// LowercaseReason lowercases the strerror text this dialect quotes.
 	//
-	// zsh alone: `permission denied` where the other three print the C
+	// zsh alone: `permission denied` where the other four print the C
 	// string's own `Permission denied`. It is a property of the shell rather
 	// than of any one message, which is why it is a flag here instead of
 	// being spelled out in every format that carries a reason.
+	//
+	// BusyBox ash is the column that had to be measured rather than
+	// assumed, because its other reasons read lowercase and look like this
+	// flag: `: < /zzz/nosuch` is `can't open /zzz/nosuch: no such file`
+	// there. That is its own FileNotFound wording and not a lowercased
+	// strerror, and the discriminating probe is a reason it does not
+	// substitute — measured 2026-09-19 against an unreadable file as an
+	// ordinary user, ash writes `Permission denied` exactly as dash, all
+	// three bash columns and ksh93 do.
 	LowercaseReason bool
 
 	// DotNotFound is what `.` says when the operand had no slash in it and
@@ -4437,7 +4495,13 @@ type Diagnostics struct {
 	EvalNaming       SourceNaming
 	SourceFileNaming SourceNaming
 	// EvalSourceName is what `eval`'s text is called when it is named. Empty
-	// means "eval", which is three of the four; zsh calls it `(eval)`.
+	// means "eval", which is four of the five; zsh calls it `(eval)`.
+	//
+	// Measured 2026-09-19 with `eval 'nosuchcmd_zz'` in a script: dash,
+	// ksh93 and BusyBox ash all label the frame `eval`, and zsh writes
+	// `(eval):1:`. bash names the script rather than the frame on this
+	// route, which is EvalNaming above and not this field — the word it
+	// uses where it does name one is `eval` too.
 	EvalSourceName string
 	// SourceFileIsTheBuiltin names the builtin that read a file rather than
 	// the file: ksh93 reports `.` where every other column reports the path.
@@ -4549,7 +4613,9 @@ type Diagnostics struct {
 	BorrowedTextRendersTheCallStack bool
 	// UnterminatedEndsOnNextLine puts the end of input on the line after the
 	// text rather than on its last: `eval "if"` is line 2 in bash and line 1
-	// in the other three.
+	// in the other four. Measured 2026-09-19 over all seven columns — line 2
+	// in bash 5.3, bash-as-`sh` and bash 3.2, line 1 in dash, ksh93, zsh and
+	// BusyBox ash.
 	UnterminatedEndsOnNextLine bool
 
 	// CondOperand is a token standing where a conditional operator wanted a
@@ -6438,15 +6504,26 @@ type Diagnostics struct {
 	// the colon it uses everywhere else, which is why this is not NotFound.
 	EqualsNotFound string
 	// UnboundVariable is an unset parameter under `set -u`. One verb: the
-	// name. bash calls it unbound where the other three call it not set.
+	// name. bash calls it unbound where the other four call it not set —
+	// measured 2026-09-19, `unbound variable` in bash 5.3, bash-as-`sh` and
+	// bash 3.2, and `parameter not set` in dash, ksh93, zsh and BusyBox
+	// ash.
 	UnboundVariable string
 	// UnboundPositional is the same failure for a parameter whose name is not
 	// a variable name — `$1`, and `$!` before any background command. One
 	// verb: the name, without its `$`. Empty means "the same as
-	// UnboundVariable", which is true of three of the four — bash alone
-	// writes the `$` back, saying `$1: unbound variable` and
-	// `$!: unbound variable` where it says `NOPE: unbound variable` for a
-	// name.
+	// UnboundVariable" — bash alone writes the `$` back, saying
+	// `$1: unbound variable` and `$!: unbound variable` where it says
+	// `NOPE: unbound variable` for a name.
+	//
+	// The old sentence put that at "three of the four", and the count was
+	// right by accident: measured 2026-09-19 with `set -u; echo "$1"`, the
+	// three that word it the same way as an unset name are dash, zsh and
+	// BusyBox ash, and **ksh93 does not refuse an unset positional under
+	// `set -u` at all** — empty output at status 0, where the same shell
+	// refuses an unset *name*. So there is no fourth column wording this
+	// the same way; there is a column with nothing to word. dialect/ksh
+	// already holds that answer and was not changed.
 	//
 	// Named for the positional because that is where it was found, and it
 	// holds for `$!` too because bash's rule is about the *sigil* rather than

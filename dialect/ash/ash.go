@@ -2013,19 +2013,31 @@ func Diagnostics() interp.Diagnostics {
 
 		// The parse failures, in this shell's own order: the complaint first
 		// and the token after it, all lower case.
-		SyntaxUnexpected:         `syntax error: unexpected "%[1]s"`,
-		SyntaxUnexpectedWord:     "syntax error: unexpected word",
-		SyntaxUnexpectedNewline:  "syntax error: unexpected newline",
-		SyntaxRedirectUnexpected: "syntax error: unexpected redirection",
-		SyntaxExpecting:          ` (expecting "%[1]s")`,
-		SyntaxError:              "syntax error: %[1]s",
-		SyntaxErrorStatus:        2,
-		ForName:                  "syntax error: bad for loop variable",
-		Unterminated:             `syntax error: unexpected end of file (expecting "%[4]s")`,
-		UnterminatedNoConstruct:  "syntax error: unexpected end of file",
-		UnmatchedQuote:           "syntax error: unterminated quoted string",
-		UnmatchedBackquote:       "syntax error: unterminated quoted string",
-		UnmatchedCmdSubst:        `syntax error: unexpected end of file (expecting ")")`,
+		SyntaxUnexpected:        `syntax error: unexpected "%[1]s"`,
+		SyntaxUnexpectedWord:    "syntax error: unexpected word",
+		SyntaxUnexpectedNewline: "syntax error: unexpected newline",
+		// A refused newline is blamed on the line it *ends*, which is the
+		// line after the one it was written on — the value dash has carried
+		// since it was measured and this dialect never held, so every
+		// newline refusal here was numbered one line early. Measured
+		// 2026-09-19 in the pinned container, script files under standard
+		// input on the null device: `case\nin x) ;; esac`, `case x in x)
+		// :;; zzz` and a bare `!` are all `line 2` in BusyBox ash 1.37.0 and
+		// were all `line 1` here, and dash answers the same three at the
+		// same lines in its own wording.
+		UnexpectedNewlineIsOnTheNextLine: true,
+		SyntaxRedirectUnexpected:         "syntax error: unexpected redirection",
+		SyntaxExpecting:                  ` (expecting "%[1]s")`,
+		SyntaxExpectingClass:             " (expecting %[1]s)",
+		SyntaxError:                      "syntax error: %[1]s",
+		SyntaxErrorStatus:                2,
+		ForName:                          "syntax error: bad for loop variable",
+		Unterminated:                     `syntax error: unexpected end of file (expecting "%[4]s")`,
+		UnterminatedExpectingAClass:      "syntax error: unexpected end of file (expecting %[4]s)",
+		UnterminatedNoConstruct:          "syntax error: unexpected end of file",
+		UnmatchedQuote:                   "syntax error: unterminated quoted string",
+		UnmatchedBackquote:               "syntax error: unterminated quoted string",
+		UnmatchedCmdSubst:                `syntax error: unexpected end of file (expecting ")")`,
 		// Backticks alone, exactly as dash does it: this shell numbers a
 		// `$( … )` body from the file and a backquoted one from one.
 		// Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image, both

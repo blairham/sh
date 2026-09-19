@@ -305,19 +305,20 @@ type Parser struct {
 	// parseCondition and cleared by the parseList that reads it.
 	inCondition bool
 
-	// inCasePattern says the token about to be refused stands where a `case`
-	// arm's pattern belongs — after the arm's optional `(` and before the
-	// `)` that closes the list. One dialect reads the end of the input there
-	// as the newline that would have ended the line, and this is the only
-	// position it does that in. See Dialect.CasePatternRunsOutAsANewline,
-	// where the six columns are, and failUnexpectedAt, which is the one
-	// place that reads this.
+	// inCaseWord says the token about to be refused stands where a `case`
+	// wants a word — its **subject**, and an arm's **pattern**, the latter
+	// after the arm's optional `(` and before the `)` that closes the list.
+	// One dialect reads the end of the input in either place as the newline
+	// that would have ended the line, and those are the only positions it
+	// does that in. See Dialect.CaseWordRunsOutAsANewline, where the six
+	// columns are, and failUnexpectedAt, which is the one place that reads
+	// this.
 	//
 	// A field rather than a test at each refusing site because there are
-	// three of them — the list that never reached a `)`, the alternative
-	// after a `|` that never arrived, and the `(` with nothing behind it —
-	// and a rule written out at some of them is the shape of defect this
-	// tree keeps producing.
+	// four of them — the subject, the list that never reached a `)`, the
+	// alternative after a `|` that never arrived, and the `(` with nothing
+	// behind it — and a rule written out at some of them is the shape of
+	// defect this tree keeps producing.
 	// condWords are the words of the `[[ ]]` group being read, as each was
 	// written, for the one dialect whose refusal counts them. Rebuilt at
 	// every condPrimary — which is where each group begins — and read by
@@ -333,7 +334,7 @@ type Parser struct {
 	// in front of a refusal; see Error.CondGroupsOpen.
 	condGroups int
 
-	inCasePattern bool
+	inCaseWord bool
 }
 
 // maxParamDepth is how far `${x:-${y:-…}}` may nest before the parser stops.
@@ -891,6 +892,30 @@ func (p *Parser) failUnexpected(expected string) {
 	p.failUnexpectedAs(expected, false)
 }
 
+// failUnexpectedWord is failUnexpected where what would have stood there is a
+// word of any spelling rather than one particular word.
+//
+// The distinction is the expectation's and not the refused token's, so it is
+// recorded beside Expected rather than beside Class: the two dialects that
+// print an expectation quote a spelling and leave a class bare — dash answers
+// `for in x; do :; done` with `(expecting "do")` and `case ; in x) ;; esac`
+// with `(expecting word)`. See Error.ExpectedIsAClass.
+func (p *Parser) failUnexpectedWord() {
+	p.failUnexpectedWordAt(p.tok)
+}
+
+// failUnexpectedWordAt is failUnexpectedWord where the token to blame is not
+// the one the parser is on — the run-out a dialect reads as a newline.
+func (p *Parser) failUnexpectedWordAt(tok Token) {
+	if p.err != nil {
+		return
+	}
+	p.failUnexpectedAt(tok, "word", false)
+	if e, ok := p.err.(*Error); ok {
+		e.ExpectedIsAClass = true
+	}
+}
+
 func (p *Parser) failUnexpectedAs(expected string, plain bool) {
 	p.failUnexpectedAt(p.tok, expected, plain)
 }
@@ -909,7 +934,7 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		return
 	}
 	if tok.Kind == TokEOF {
-		if !p.inCasePattern || !p.dialect.CasePatternRunsOutAsANewline {
+		if !p.inCaseWord || !p.dialect.CaseWordRunsOutAsANewline {
 			p.ranOut()
 			p.err = p.unterminated(expected)
 			return
@@ -4494,10 +4519,15 @@ func (p *Parser) parseFuncKeyword() Command {
 		// a loop's variable position — see
 		// [Dialect.EndOfInputIsANewlineWhereNoneCouldStand].
 		if p.tok.Kind == TokEOF && p.dialect.EndOfInputIsANewlineWhereNoneCouldStand {
-			p.failUnexpectedAt(Token{Kind: TokNewline, Pos: p.tok.Pos}, "", false)
+			p.failUnexpectedWordAt(Token{Kind: TokNewline, Pos: p.tok.Pos})
 			return fn
 		}
-		p.failUnexpected("")
+		// A word of any spelling would have stood here, which the dialects
+		// that print an expectation say bare: BusyBox ash 1.37.0 answers
+		// `function; echo after` with `unexpected ";" (expecting word)`,
+		// measured 2026-09-19 in the pinned container. See
+		// Error.ExpectedIsAClass.
+		p.failUnexpectedWord()
 		return fn
 	}
 	first, ok := p.funcKeywordName()
@@ -6103,7 +6133,20 @@ func (p *Parser) parseCase() Command {
 	p.next()
 	p.lex.noAssignment, p.lex.inCaseSubject = false, false
 	if c.Word = p.word(); c.Word == nil {
-		p.fail("expected a word after `case`")
+		// The subject is a word position, so the dialect that reads a
+		// run-out there as a newline reads this one too. See inCaseWord.
+		p.inCaseWord = true
+		defer func() { p.inCaseWord = false }()
+		// The ordinary unexpected-token refusal, because that is what every
+		// column answers here: a sentence of this parser's own would be the
+		// one place a `case` subject is refused in words no shell uses.
+		// Measured 2026-09-19 on `case ; in x) ;; esac` — bash 5.3.20
+		// ``syntax error near unexpected token `;'``, zsh 5.9.2 ``parse
+		// error near `;'``, ksh93u+ ``syntax error at line 1: `;'
+		// unexpected``, dash 0.5.12 `";" unexpected (expecting word)`,
+		// BusyBox ash 1.37.0 `unexpected ";" (expecting word)`. The status
+		// was already each column's own; only the sentence was ours.
+		p.failUnexpectedWord()
 		return c
 	}
 	// The subject stands where no command takes a word, so one dialect
@@ -6180,7 +6223,7 @@ func (p *Parser) parseCase() Command {
 		// reads the end of the input in as a newline. Cleared on every way
 		// out below, the arm's *body* being ordinary commands where the end
 		// of the input is the end of the input again.
-		p.inCasePattern = true
+		p.inCaseWord = true
 		parenthesized := false
 		if p.at(TokLeftParen) {
 			if p.emptyParensStartAt(p.tok) {
@@ -6191,7 +6234,7 @@ func (p *Parser) parseCase() Command {
 				// pattern list and parses, which is what says the refusal
 				// is the token's and not the emptiness's (#1111).
 				p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
-				p.inCasePattern = false
+				p.inCaseWord = false
 				p.failUnexpected("")
 				return c
 			}
@@ -6207,17 +6250,17 @@ func (p *Parser) parseCase() Command {
 		}
 		if !p.casePatterns(it, parenthesized) {
 			p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
-			p.inCasePattern = false
+			p.inCaseWord = false
 			return c
 		}
 		p.lex.inArgument = saved
 		if !p.at(TokRightParen) {
 			p.lex.inCaseParenList = savedList
 			p.failUnexpectedOperand(")")
-			p.inCasePattern = false
+			p.inCaseWord = false
 			return c
 		}
-		p.inCasePattern = false
+		p.inCaseWord = false
 		// Cleared before the read that follows, which is the arm's *body* —
 		// ordinary commands, where a newline is a statement separator again.
 		p.lex.inCaseParenList = savedList

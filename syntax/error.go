@@ -311,6 +311,20 @@ type Error struct {
 	Innermost string
 	// Expected is the word that would have closed it — `fi`, `done`, `esac`.
 	Expected string
+	// ExpectedIsAClass says Expected names a *class* of token rather than
+	// one spelling: a word of any spelling, where `fi` is one word and no
+	// other.
+	//
+	// It is read by the two dialects that print what they expected, and
+	// they part the two the same way they part a refused token from a
+	// refused class — a spelling is quoted and a class is bare. Measured
+	// 2026-09-19, script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// with standard input on the null device: dash 0.5.12 answers `for in
+	// x; do :; done` with `word unexpected (expecting "do")` and `case ; in
+	// x) ;; esac` with `";" unexpected (expecting word)`, and BusyBox ash
+	// 1.37.0 the same both times in its own word order. See
+	// Diagnostics.SyntaxExpectingClass.
+	ExpectedIsAClass bool
 	// LastToken is the last token consumed before the input ran out, which
 	// is what the remaining shell names.
 	LastToken string

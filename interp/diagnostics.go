@@ -4827,6 +4827,25 @@ type Diagnostics struct {
 	// valid. One verb: that word. Empty means the dialect never says.
 	SyntaxExpecting string
 
+	// SyntaxExpectingClass is SyntaxExpecting where the expectation is a
+	// *class* of token rather than one spelling — a word of any spelling,
+	// where `do` is one word and no other. One verb: the class name. Empty
+	// means the dialect words the two alike.
+	//
+	// The same parting these dialects make on the refused token, made a
+	// second time on the expected one: a spelling is quoted and a class is
+	// bare. Measured 2026-09-19, script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null device:
+	//
+	//	dash 0.5.12   `for in x; do :; done`      word unexpected (expecting "do")
+	//	dash 0.5.12   `case ; in x) ;; esac`      ";" unexpected (expecting word)
+	//	BusyBox ash   `for in x; do :; done`      unexpected word (expecting "do")
+	//	BusyBox ash   `case ; in x) ;; esac`      unexpected ";" (expecting word)
+	//
+	// See syntax.Error.ExpectedIsAClass, which is what says which of the two
+	// the parser recorded.
+	SyntaxExpectingClass string
+
 	// SubstitutionBodyExpecting is appended to a token the grammar did not
 	// want inside a `$( … )` body, naming the parenthesis that would have
 	// closed it. One verb: %[1]s that closer. Empty means the dialect says
@@ -4954,6 +4973,20 @@ type Diagnostics struct {
 	// wording never mentioned a construct leave this empty and keep the
 	// sentence they already have.
 	UnterminatedNoConstruct string
+	// UnterminatedExpectingAClass is the same state where what would have
+	// stood there is a *class* of token rather than one spelling — the
+	// quoting the dialect puts around `%[4]s` in Unterminated is what parts
+	// them, so it is a whole second wording rather than a suffix. Same
+	// verbs. Empty means the dialect words the two alike, which is every
+	// column that does not print an expectation at all.
+	//
+	// Measured 2026-09-19, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with standard input on the null device. dash 0.5.12 answers
+	// a file holding `case` and no final newline with `end of file
+	// unexpected (expecting word)`, where an unclosed `case x in` is `end of
+	// file unexpected (expecting ")")`; BusyBox ash 1.37.0 says the same two
+	// in its own word order. See syntax.Error.ExpectedIsAClass.
+	UnterminatedExpectingAClass string
 	// BadSubstitution replaces a parse failure inside `${ }` entirely. No
 	// verbs: no shell in the panel says which operator was wrong.
 	BadSubstitution string
@@ -7459,8 +7492,11 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 		form = d.SyntaxUnexpectedNewline
 	}
 	if se.Redirect && d.SyntaxRedirectUnexpected != "" {
-		// One dialect does not name the token here at all.
-		return d.SyntaxRedirectUnexpected
+		// One dialect does not name the token here at all. What it expected
+		// is still appended, because the two halves are independent:
+		// measured 2026-09-19, dash 0.5.12 answers `case > in x) ;; esac`
+		// with `redirection unexpected (expecting word)`.
+		return d.SyntaxRedirectUnexpected + d.expectingClause(se)
 	}
 	if se.Construct == "[[" && d.CondSyntaxUnexpected != "" {
 		// A token refused inside a condition, where this dialect says
@@ -7471,11 +7507,29 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 	if moved, ok := d.newlineLine(se); ok {
 		line = moved
 	}
-	msg := Wording(form, `"%[1]s" unexpected`, token, se.Expected, line)
-	if se.Expected != "" && d.SyntaxExpecting != "" {
-		msg += Wording(d.SyntaxExpecting, "", se.Expected)
+	return Wording(form, `"%[1]s" unexpected`, token, se.Expected, line) +
+		d.expectingClause(se)
+}
+
+// expectingClause is what this dialect appends to say what would have been
+// valid, empty where it never says.
+//
+// Two forms rather than one, because a dialect that says it parts a spelling
+// from a class the same way it parts a refused token from a refused class:
+// `(expecting "do")` names one word and `(expecting word)` names any. See
+// SyntaxExpectingClass.
+func (d Diagnostics) expectingClause(se *syntax.Error) string {
+	if se.Expected == "" {
+		return ""
 	}
-	return msg
+	form := d.SyntaxExpecting
+	if se.ExpectedIsAClass && d.SyntaxExpectingClass != "" {
+		form = d.SyntaxExpectingClass
+	}
+	if form == "" {
+		return ""
+	}
+	return Wording(form, "", se.Expected)
 }
 
 // nearText is the quoted word an unmatched construct ran out inside, cut to
@@ -7653,6 +7707,9 @@ func (d Diagnostics) ParseFailure(err error) string {
 		form := d.Unterminated
 		if se.Construct == "" && d.UnterminatedNoConstruct != "" {
 			form = d.UnterminatedNoConstruct
+		}
+		if se.ExpectedIsAClass && d.UnterminatedExpectingAClass != "" {
+			form = d.UnterminatedExpectingAClass
 		}
 		return Wording(form, "syntax error: unterminated %[1]s",
 			se.Construct, se.ConstructLine, se.Innermost, se.Expected,

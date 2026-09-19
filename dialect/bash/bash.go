@@ -170,9 +170,9 @@ func Dialect() syntax.Dialect {
 	// The end of the input at a `case` arm's pattern is the newline that
 	// would have ended the line, so `case x in x) :;; zzz` names the newline
 	// where the other five columns name the end of the file or the `case`
-	// that never closed. See syntax.Dialect.CasePatternRunsOutAsANewline for
+	// that never closed. See syntax.Dialect.CaseWordRunsOutAsANewline for
 	// the two spellings that separate a reading from an accident (#2251).
-	d.CasePatternRunsOutAsANewline = true
+	d.CaseWordRunsOutAsANewline = true
 	d.FunctionKeywordParens = true
 	// A name followed by `(` is a function definition here, whether or not
 	// the `)` comes next.

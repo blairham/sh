@@ -560,8 +560,11 @@ func TestTheDialectWordsItsOwnSyntaxError(t *testing.T) {
 		{"input that ran out", "if", "Bespoke unfinished if on line 1"},
 		// `${`, the plain quotes and `$'…'` all have kinds of their own now,
 		// so the catch-all is reached through a construct nobody has worded
-		// yet — a `case` with no subject, which is a plain ErrSyntax.
-		{"something else entirely", "case ;", "Bespoke syntax complaint"},
+		// yet — an unclosed group inside a condition, which is a plain
+		// ErrSyntax. It was `case ;` until that refusal became the ordinary
+		// unexpected-token one in every column (#3758), which is what a
+		// construct "nobody has worded yet" is expected to stop being.
+		{"something else entirely", "[[ ( a ]]", "Bespoke syntax complaint"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, errs, code := runArgs(t, sh, "testsh", "-c", tc.src)

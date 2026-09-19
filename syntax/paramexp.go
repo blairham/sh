@@ -1522,9 +1522,13 @@ func scanParamName(s string, dot bool) (name, rest string) {
 // Dialect.SubscriptQuoteProtectsTheClosingBracket for which constructs each
 // dialect counts.
 //
-// An unterminated quote returns -1, the same as an unclosed bracket: there is
-// no closing `]` in what is left, and the caller's answer to that is already
-// to leave the brackets alone.
+// An unterminated quote returns -1 over **source**, the same as an unclosed
+// bracket: the run goes on past the end of this text and there is no closing
+// `]` in what is left, so the caller leaves the brackets alone.
+//
+// Over a builtin's **operand** it does not, which is the one place the two
+// scans part — see SubscriptClosingBracket.
+//
 // SubscriptClosingBracket is where the `]` that closes a subscript stands, counting from
 // the `[` the text starts with, or -1 where there is none.
 //
@@ -1538,17 +1542,40 @@ func scanParamName(s string, dot bool) (name, rest string) {
 // Which quoting holds a `]` back is the caller's to supply: the parser reads
 // Dialect.SubscriptQuoteProtectsTheClosingBracket, and the builtin's operand
 // reads an answer of its own, because the panel does not answer the two alike.
-func SubscriptClosingBracket(s string, quoting SubscriptQuoting) int {
-	return closingBracket(s, quoting)
+//
+// looseQuotes is the one thing beyond the quoting set that differs, and it is
+// why this takes a flag rather than being the same call: with it an
+// **unterminated** quote is an ordinary character rather than a run to the
+// end of the text. It belongs to an operand whose brackets the *parser*
+// read — `unset m[$k]` with `$k` holding `80's`, where the apostrophe came
+// out of a value and is a byte of the key with nothing further along the
+// line to close against. In source, and in an operand the shell was handed
+// as one string, the same byte opens a run that goes on past the `]` and,
+// measured, refuses the whole script for an unmatched quote. The unquoting
+// half of the operand's answer, Runner.operandSubscriptUnquoted, has always
+// read a lone quote as a character; this is the scanning half, told when to
+// agree with it.
+func SubscriptClosingBracket(s string, quoting SubscriptQuoting, looseQuotes bool) int {
+	return closingBracketScan(s, quoting, looseQuotes)
 }
 
 func closingBracket(s string, quoting SubscriptQuoting) int {
+	return closingBracketScan(s, quoting, false)
+}
+
+// closingBracketScan is the scan both spellings share. looseQuotes is whether
+// an unterminated quoting construct is an ordinary byte — true for a
+// builtin's operand, false for source.
+func closingBracketScan(s string, quoting SubscriptQuoting, looseQuotes bool) int {
 	depth := 0
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
 		case '\\':
 			if quoting.Has(SubscriptBackslashQuotes) {
 				if i+1 >= len(s) {
+					if looseQuotes {
+						continue
+					}
 					return -1
 				}
 				i++
@@ -1557,6 +1584,9 @@ func closingBracket(s string, quoting SubscriptQuoting) int {
 			if quoting.Has(SubscriptSingleQuotes) {
 				end := strings.IndexByte(s[i+1:], '\'')
 				if end < 0 {
+					if looseQuotes {
+						continue
+					}
 					return -1
 				}
 				i += end + 1
@@ -1565,6 +1595,9 @@ func closingBracket(s string, quoting SubscriptQuoting) int {
 			if quoting.Has(SubscriptDoubleQuotes) {
 				end := closingDoubleQuote(s[i+1:])
 				if end < 0 {
+					if looseQuotes {
+						continue
+					}
 					return -1
 				}
 				i += end + 1
@@ -1589,6 +1622,9 @@ func closingBracket(s string, quoting SubscriptQuoting) int {
 			if quoting.Has(SubscriptDollarSingleQuotes) && i+1 < len(s) && s[i+1] == '\'' {
 				end := closingSingleQuoteAfterEscapes(s[i+2:])
 				if end < 0 {
+					if looseQuotes {
+						continue
+					}
 					return -1
 				}
 				i += end + 2

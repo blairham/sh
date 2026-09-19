@@ -3248,6 +3248,23 @@ type Runner struct {
 	// length of one simple command and restored behind it, for the reason
 	// declarationOperands is. See interp/xtracearrayoperand.go.
 	arrayOperands []arrayOperand
+	// lexedSubscriptOperands is this command's operands whose brackets the
+	// **parser** read — `unset a[$k]`, where the `[` and the `]` stood
+	// outside every quoting construct, so the subscript between them was a
+	// word and was expanded once before the builtin saw anything.
+	//
+	// The texts rather than the positions, because an operand reaches a
+	// builtin as a string and the argv slot it stood in does not survive
+	// the option scan and the name filtering in front of it. A command that
+	// writes one operand both ways in a single call — `unset a[$k]
+	// "a[$k]"` — is the one place the two could be confused, and nothing in
+	// the panel spells that.
+	//
+	// Set for the length of one simple command and restored behind it, for
+	// the reason declarationOperands is. See Runner.operandSubscriptText,
+	// which is the one reader: a lexed subscript has already been expanded
+	// and is not expanded a second time.
+	lexedSubscriptOperands []string
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
@@ -5520,6 +5537,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// Where in argv the declaration operands land, for the trace. See
 	// Runner.declarationOperands.
 	var operandAt []int
+	var lexedAt []string
 	for i, w := range c.Args {
 		if r.expandErr || r.ctl == controlExit {
 			// The command is abandoned at its first failed expansion rather
@@ -5640,6 +5658,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// split has none, and nothing in the panel splits one.
 			operandAt = append(operandAt, operandStart)
 		}
+		// The same one-field rule, for the same reason, and the fact is about
+		// the word as *written*: whether the brackets of a subscripted
+		// operand stood outside every quoting construct. See
+		// Runner.lexedSubscriptOperands.
+		if len(argv) == operandStart+1 && wordBracketsAreLexed(w) {
+			lexedAt = append(lexedAt, argv[operandStart])
+		}
 	}
 	// The operand positions belong to this command alone: a command
 	// substitution in one of the values has already run, with a set of its
@@ -5647,6 +5672,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	savedOperands := r.declarationOperands
 	r.declarationOperands = operandAt
 	defer func() { r.declarationOperands = savedOperands }()
+	savedLexed := r.lexedSubscriptOperands
+	r.lexedSubscriptOperands = lexedAt
+	defer func() { r.lexedSubscriptOperands = savedLexed }()
 	if len(promoted) > 0 {
 		// The command as though the assignments had been written in front of
 		// it. A copy rather than a write through the pointer: the tree is the

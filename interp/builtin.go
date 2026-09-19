@@ -2734,10 +2734,18 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// the function in bash and left it standing with the name rewritten.
 		// What the reference does decide is the **freeze**, which is
 		// frozenNameOfAnUnset a few lines below.
+		written := name
 		if aimed, is := r.namerefTarget(name); is && !isNameLike(aimed) {
 			name = aimed
 		}
-		base, sub, subscripted := r.subscriptOperand(name)
+		// The brackets this command wrote unquoted are the parser's, and the
+		// subscript between them is a word it already expanded: an
+		// apostrophe in it came out of a value and is a byte of the key.
+		// Asked of the operand as *written*, ahead of the reference rewrite
+		// above, because the set records the text the command line carried.
+		// See Runner.subscriptOperandRead for the six spellings.
+		lexed := r.operandBracketsWereLexed(written)
+		base, sub, subscripted := r.subscriptOperandRead(name, lexed)
 		if !subscripted {
 			base = name
 		}
@@ -2751,7 +2759,15 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// and Runner.ExpandsAnOperandsSubscriptAgain whether the session
 		// still permits it — this is one of the four surfaces `shopt -s
 		// assoc_expand_once` names (#3298).
-		if subscripted {
+		if subscripted && !lexed {
+			// A subscript the parser read is not read again: it reached
+			// `unset` as a word and was expanded once, which is the
+			// measurement in subscriptOperandRead — `unset m[$b]` with
+			// `b='x$y'` and a table holding both `x$y` and `xZZZ` takes the
+			// literal key away in bash 5.3.20, where `unset "m[$b]"` takes
+			// the expanded one. The axis below is about the *text* shape and
+			// the switch beside it is a script turning that round off; a
+			// lexed subscript never reaches either.
 			sub = r.operandSubscriptText(base, sub, r.sem().UnsetExpandsAFlatSubscript,
 				"`unset` expanding a subscript that reached it as text")
 			if r.unspecified {
@@ -3433,8 +3449,36 @@ func firstOptionLetter(operand string) string {
 // silent wrong answer in the third; what it replaced was `1][2: arithmetic
 // syntax error`, which is nobody's (#1380).
 func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
+	return r.subscriptOperandRead(operand, false)
+}
+
+// subscriptOperandRead is subscriptOperand with the one thing a caller may
+// answer differently: whether the *parser* read these brackets, which decides
+// what an unterminated quote between them is. See operandBracketsBalance.
+//
+// One caller passes true — `unset`, and only for an operand this command
+// wrote with its brackets outside every quoting construct. Measured
+// 2026-09-19 from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+// bash 5.3.20, a table holding one element under the key `x'y`:
+//
+//	unset m[$b]      b="x'y"   the element is gone
+//	unset m["x'y"]             gone
+//	unset m[x\'y]              gone
+//	unset "m[$b]"              still there, silent at 0
+//	o="m[$b]"; unset $o        still there
+//	o="m[$b]"; unset "$o"      still there
+//
+// The line runs through the brackets and not through the key: the three that
+// remove it wrote `[` and `]` unquoted, and the three that leave it handed
+// the builtin a string. Every other operand builtin refuses the key on
+// **both** routes — `printf -v c[$b] P`, `read c[$b]`, `typeset c[$b]=W` and
+// their quoted spellings are all “not a valid identifier“ there — so this
+// is `unset`'s row and not a rule about operands. The control is a key with
+// nothing to quote, `unset m[plain]`, which removes the element on every one
+// of the six spellings.
+func (r *Runner) subscriptOperandRead(operand string, lexed bool) (string, string, bool) {
 	open := strings.IndexByte(operand, '[')
-	if open <= 0 || !r.operandBracketsBalance(operand[open:]) {
+	if open <= 0 || !r.operandBracketsBalance(operand[open:], lexed) {
 		return "", "", false
 	}
 	base := operand[:open]
@@ -3518,7 +3562,13 @@ func (r *Runner) operandSubscriptTilde(base, sub string) string {
 // unbalanced operand every other column refuses (#2491).
 func (r *Runner) operandSubscripts(builtin, operand string) (string, []string, bool) {
 	if !r.dialect().ChainedAssignSubscript || !chainedOperandBuiltin(builtin) {
-		base, sub, ok := r.subscriptOperand(operand)
+		// `unset` reads a lexed operand's brackets here exactly as its body
+		// does a few lines on. Two readings of one operand is what made the
+		// name check call `unset m[80's]` a plain name and the body call it
+		// an element — see subscriptOperandRead, and note that this is the
+		// shape CLEANROOM's "a second helper spreads the bug" note is about.
+		lexed := builtin == "unset" && r.operandBracketsWereLexed(operand)
+		base, sub, ok := r.subscriptOperandRead(operand, lexed)
 		if !ok {
 			return "", nil, false
 		}

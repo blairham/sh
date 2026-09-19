@@ -3,7 +3,12 @@
 
 package interp
 
-import "strings"
+import (
+	"slices"
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // A subscript that reaches a construct as *text* rather than as a word.
 //
@@ -113,4 +118,48 @@ func (r *Runner) operandSubscriptText(base, sub string, axis Answer, what string
 		return key
 	}
 	return sub
+}
+
+// operandBracketsWereLexed reports whether the command now running wrote this
+// operand with its brackets outside every quoting construct, so the parser
+// lexed the subscript and the shell expanded it once before the builtin saw
+// anything.
+//
+// Asked by text rather than by position for Runner.lexedSubscriptOperands'
+// reason: an operand reaches a builtin as a string, and the argv slot it
+// stood in does not survive the option scan and the name filtering in front
+// of it.
+func (r *Runner) operandBracketsWereLexed(operand string) bool {
+	return slices.Contains(r.lexedSubscriptOperands, operand)
+}
+
+// wordBracketsAreLexed reports whether a word carries a `[` and a later `]`
+// that both stand in **unquoted** literal text, which is what makes the
+// subscript between them a word the parser read rather than a text a builtin
+// is handed whole.
+//
+// Read off the spans, because that is the only place the fact survives:
+// `unset m[$k]` and `unset "m[$k]"` come to the same string and name
+// different elements. See Runner.subscriptOperandRead for the rows.
+func wordBracketsAreLexed(w *syntax.Word) bool {
+	if w == nil {
+		return false
+	}
+	open := false
+	for _, span := range w.Spans {
+		if span.Kind != syntax.Literal || span.Quoting != syntax.Unquoted {
+			continue
+		}
+		for i := 0; i < len(span.Value); i++ {
+			switch span.Value[i] {
+			case '[':
+				open = true
+			case ']':
+				if open {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

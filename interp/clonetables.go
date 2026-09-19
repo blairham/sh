@@ -357,6 +357,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// reading — a clone appending into the parent's slice is exactly what this
 	// file exists to prevent.
 	c.arrayOperands = slices.Clone(r.arrayOperands)
+	// And which of that command's operands were written with their brackets
+	// unquoted, for the same reason and with the same reading. See
+	// Runner.lexedSubscriptOperands.
+	c.lexedSubscriptOperands = slices.Clone(r.lexedSubscriptOperands)
 	// And the names the running command's prefix is holding, with what they
 	// held before it and what a declaration has done to them, for the same
 	// reason and with the same reading: a clone started inside a prefixed

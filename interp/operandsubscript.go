@@ -46,8 +46,14 @@ func (r *Runner) operandSubscriptQuoting() syntax.SubscriptQuoting {
 // refused silently — the element the script meant to clear survived with
 // nothing said (#3049). `${a['x]y']}` had learned the same lesson one scanner
 // over and this one did not move with it.
-func (r *Runner) operandBracketsBalance(text string) bool {
-	end := syntax.SubscriptClosingBracket(text, r.operandSubscriptQuoting())
+//
+// lexed is whether the **parser** read these brackets, which decides what an
+// unterminated quote between them is: a byte of the key where the subscript
+// was a word the shell expanded, and a run to the end of the text where the
+// operand arrived as one string. See syntax.SubscriptClosingBracket's
+// looseQuotes and Runner.lexedSubscriptOperands.
+func (r *Runner) operandBracketsBalance(text string, lexed bool) bool {
+	end := syntax.SubscriptClosingBracket(text, r.operandSubscriptQuoting(), lexed)
 	return end >= 0 && end == len(text)-1
 }
 

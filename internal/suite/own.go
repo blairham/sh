@@ -188,45 +188,6 @@ var Ours = []Suite{
 		// to guess from the runner's package list.
 		Against:       "zsh 5.9.2",
 		AgainstReport: "zsh 5.9.2",
-		// #3480 asked whether to loosen this to `zsh 5.9` — every
-		// distribution that has 5.9 reports exactly that, and 5.9.2 is a
-		// build string no public image carries — or to publish an image
-		// reporting 5.9.2. It was put as a question about what the column
-		// claims. **It is answerable by measurement, and the measurement
-		// says do not loosen.**
-		//
-		// Measured 2026-09-19, this column's 81 files run under two builds
-		// on one machine, each in a directory of its own, the shell's path
-		// normalized out: 79 are byte-identical under Homebrew's 5.9.2 and
-		// Apple's 5.9, and **two are not** — zsh/builtins.tests and
-		// zsh/diagnostics.tests. Both differences are `kill`:
-		//
-		//	kill -L        5.9.2 has the letter; 5.9 has not, and its usage
-		//	               line says `type kill -l for a list of signals`
-		//	kill -l 160    `160` in 5.9.2; `32` in 5.9
-		//	kill -l 257    `257` in 5.9.2; `HUP` in 5.9
-		//
-		// A second 5.9 confirms it is the release rather than one vendor's
-		// patch: a Linux zsh 5.9 image answers exactly as Apple's does on
-		// all three probes, so two independent 5.9 builds agree with each
-		// other and differ from 5.9.2. Loosening would gate this column
-		// against a shell that answers two of its own files differently,
-		// which is a pinned figure bought with a false claim — the trade
-		// #3797 refused for bash and refused correctly.
-		//
-		// So the column stays ungated until an image of the build it names
-		// exists. The 25 cells that leaves are **open** and not ledgered:
-		// building and publishing that image is work somebody can do, which
-		// is the line between this and the ksh93 entry in
-		// [UnclosableByConstruction].
-		Ungated: "no public image reports zsh 5.9.2, and the 5.9 images are not a " +
-			"substitute: measured 2026-09-19 over this column's 81 files on one " +
-			"machine, two of them differ between 5.9.2 and 5.9 — `kill -L` exists " +
-			"in 5.9.2 and not in 5.9, and `kill -l` of an out-of-range number " +
-			"answers the number rather than wrapping. Two independent 5.9 builds " +
-			"agree with each other against 5.9.2, so it is the release and not a " +
-			"vendor patch. Gating against 5.9 would pin the figure and record a " +
-			"claim the measurement contradicts (#3480)",
 	},
 	{
 		Name:     "ksh93",
@@ -293,35 +254,6 @@ var Ours = []Suite{
 		AgainstReport: "esc=4 pipefail-listed=n",
 		AgainstProbe: `e=$(printf 'a\eZ'); case $(set -o) in *pipefail*) p=y ;; *) p=n ;; esac; ` +
 			`printf 'esc=%s pipefail-listed=%s\n' "${#e}" "$p"`,
-		// And the fingerprint is why this column cannot be gated either.
-		// Measured 2026-09-19 across five images: debian:bookworm-slim,
-		// debian:trixie-slim, ubuntu:24.04 and ubuntu:22.04 all answer
-		// `esc=3`, trixie adding `pipefail-listed=y`, and Alpine has no dash
-		// at all. **Not one public image is the build this column names.**
-		//
-		// What the patch costs is measured rather than assumed, and it is
-		// the whole of this column's gap on a runner. On the panel build
-		// here the column is **67/67 strict**; on `ubuntu-latest` it reads
-		// 64/67, and the three are dash/printf.tests (`printf 'a\eZ'` writes
-		// the escape), dash/builtins.tests (`privileged` in the `set -o`
-		// listing) and dash/variables.tests (`LINENO` present upstream,
-		// absent in Debian's). Three files, three patch points, and every
-		// one of them is the distribution rather than us.
-		//
-		// So restating the column against a build that exists would grade
-		// `cmd/dash` against a shell answering three of its own cases
-		// differently from the one the cases were written beside. Ungated is
-		// the honest state, and its 25 cells stay **open**.
-		Ungated: "no public image is an unpatched dash: measured 2026-09-19, " +
-			"debian:bookworm-slim, debian:trixie-slim, ubuntu:24.04 and " +
-			"ubuntu:22.04 all answer esc=3 where this column is graded against " +
-			"esc=4, and Alpine ships no dash. The patch is not cosmetic — it is " +
-			"the whole of this column's gap on a runner: 67/67 strict on the " +
-			"panel build here against 64/67 there, the three being `printf " +
-			"'a\\eZ'`, `privileged` in the `set -o` listing, and `LINENO`. " +
-			"Restating the column against a patched build would grade cmd/dash " +
-			"against a shell that answers three of its own cases differently " +
-			"(#3480)",
 	},
 	{
 		// The column that was a row until now. There is no BusyBox on a

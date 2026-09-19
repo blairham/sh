@@ -248,7 +248,12 @@ type editor struct {
 	// screen row the last draw left the cursor on, counted from the row the
 	// prompt starts in — 0 until the line is long enough to wrap.
 	width func() int
-	row   int
+
+	// transient answers what the prompt collapses to once the line has been
+	// accepted, or "" for a prompt that stays as it was drawn. Nil is the
+	// same as "". See transientprompt.go.
+	transient TransientPrompt
+	row       int
 
 	// drawn is what the last redraw put on the screen, and is what lets the
 	// next one write only the difference. See repaint.go — including why
@@ -880,6 +885,11 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 		// row it counts from is only accurate once the line has been drawn.
 		e.redraw(prompt)
 	}
+	// The trim goes here: in front of toLastRow, and never between toLastRow
+	// and the mark that may follow it — markUnfinished pads a partial row
+	// with `cols - mark` spaces and depends on where the cursor is, so a
+	// repaint between the two would be padding against a row that had moved.
+	prompt = e.trimPrompt(prompt)
 	e.toLastRow(prompt)
 	e.write(before + "\r\n")
 	e.row = 0

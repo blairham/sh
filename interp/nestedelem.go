@@ -197,14 +197,6 @@ func nestedAppended(held, value Element, appendTo bool) Element {
 // there is no question to ask here — an element that holds an array is written
 // as an array wherever it turns up.
 func (r *Runner) listedElement(e Element) string {
-	if e.Kind == ElementDeclaredAndEmpty {
-		// Declared and holding nothing, which is the one state whose
-		// *listing* is the only place it differs from the value it looks
-		// like: `[k]=` where an assigned empty string is `[k]=''`. No axis,
-		// for the reason nestTrailingSpace carries none — only one column
-		// can produce the state at all. See ElementDeclaredAndEmpty.
-		return ""
-	}
 	if e.Nested == nil {
 		return r.declareQuoted(e.Str)
 	}

@@ -196,24 +196,6 @@ type Suite struct {
 	// Linux host and is a multi-call binary rather than a shell when it is
 	// run by that path. A found path is not a reference.
 	CrossHere bool
-	// Ungated is why this column's reference is not pinned inside an image,
-	// and it is printed on every run of the column.
-	//
-	// The counterpart of [Suite.Image]: a gated column says which image it
-	// was reached through, and an ungated one has to say why it was not.
-	// Without this a contained column and a local one differ in the report
-	// only by a line the contained one has, so the reader who notices is the
-	// reader who already knew to look — and a figure graded against whatever
-	// build the machine had reads exactly like one graded against a pin.
-	// #3480 asks for "the column reported as gated"; this is the other half
-	// of that sentence.
-	//
-	// It is a measurement rather than a plan. "No image yet" is a status
-	// somebody has to re-derive; what belongs here is what was measured when
-	// the question was asked, so the next reader can tell a column waiting on
-	// an artifact from a column waiting on a decision.
-	Ungated string
-
 	// MustReport is a lowercase fragment the reference's own version string
 	// must contain for this column to be believed. /bin/sh is BusyBox on
 	// Alpine and dash on Debian, so a column reached by a path alone can

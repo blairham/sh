@@ -336,6 +336,18 @@ type Shell struct {
 	// happens exactly as it would with no theme wired.
 	Theme PromptTheme
 
+	// Transient is asked, as each line is accepted, what prompt to leave
+	// behind in its place. Nil, or an answer of "", leaves the prompt as it
+	// was drawn — which is what a front end that has not said gets.
+	//
+	// The point of it is scrollback: a session's history becomes its output
+	// rather than twenty copies of a two-row frame. What decides the answer
+	// is the front end's, not this package's, because the settings worth
+	// having include one that depends on whether the previous command
+	// changed directory — shell state, which repl does not read. See
+	// transientprompt.go.
+	Transient TransientPrompt
+
 	// Completers are what answers Tab before this shell's own completion
 	// does, in order. Nil is a session that completes the way the substrate
 	// does, which is what a front end that has not said gets.
@@ -1928,6 +1940,9 @@ func (s Shell) markIfAsked() string {
 func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 	return &editor{
 		in: s.In, out: s.Out, comp: s.completer(ctx),
+		// What to collapse the prompt to once the line is accepted, which is
+		// nothing unless the front end said otherwise.
+		transient: s.Transient,
 		// The shell's directory, not the process's, and asked fresh: a
 		// completer is handed it in every Completion and `cd` moves it
 		// between one keystroke and the next.

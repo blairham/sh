@@ -459,6 +459,28 @@ it will change directory. A prompt is therefore trimmed unless the
 below the `cd` rather than just above it. The difference is stated in the
 documentation rather than hidden.
 
+#### Built, 2026-09-19
+
+`repl.Shell.Transient` is a `func() string` asked as each line is
+accepted: an empty answer, or none wired, leaves the prompt as drawn.
+**The `always` / `same-dir` / `off` policy stays above `repl`**, because
+`same-dir` has to know whether the previous command changed directory —
+shell state, which this package does not read. `repl` asks; the front end
+answers. That is the `PromptProvider` bargain and it is what keeps the
+package free of any dialect.
+
+The trim reaches further up than a redraw does. `redraw` returns with
+`\r`, goes up as far as the line came down, and rewrites from the
+prompt's *last* row — the rows above are written once and left alone,
+which is what stops a two-row prompt laddering. A trim is the one case
+those rows must not be left alone, so it goes up past them
+(`e.row + leadRows(prompt.lead)`) before erasing to the end of the
+screen.
+
+It returns the prompt now on the screen, and that return is the whole
+interface: `toLastRow` counts rows from the prompt's width and can only
+count correctly against the width the screen is actually wearing.
+
 #### Where the redraw goes, settled against the code rather than guessed
 
 Transient redrawing is a `repl` capability for the same reason the right

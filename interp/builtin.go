@@ -6025,6 +6025,37 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			}
 		}
 	}
+	if f.global && !nowhere {
+		// `local -g` is not a local declaration at all: the letter says the
+		// name belongs to the shell, so every step below — the shadow, the
+		// scope's saved export, the freeze that comes off at the return — is
+		// about a binding this line does not make. So it is the *declaration*
+		// from here on, which is what the shell that spells the letter on
+		// both words does.
+		//
+		// Measured 2026-09-19 on bash 5.3.20, `env -i PATH=/usr/bin:/bin
+		// LC_ALL=C` with a scratch HOME, eleven shapes with `local -g`
+		// against the same line written `declare -g`: the two are the same
+		// bytes and the same status in every one — past a local, valueless,
+		// `+=`, an array literal, `-x`, `-r`, `-i`, `-A`, under a call's
+		// assignment prefix, from a nested call, and through `command`.
+		//
+		// Delegating rather than reading the letter a second time here is
+		// the point. `-g` is asked in five separate places on the
+		// declaration route — the operand's assignment (interp/globaloperand.go),
+		// the call's prefix and its own (interp/globalunderacallprefix.go,
+		// interp/globalunderitsownprefix.go), the export letter that asks for
+		// it, and the store — and a copy of that reading under this word
+		// would be the second helper that carries four of the five.
+		//
+		// Below the refusal, the listing and `local -`, which are this
+		// word's own and are not the declaration's: `local -g x=1` outside a
+		// function is still `can only be used in a function`, and a bare
+		// `local -gp q` still lists what `local` lists. Above the name
+		// check, because declareNames does that itself and a bad name
+		// refused twice is reported twice.
+		return r.declareNames("local", args, f)
+	}
 	args, status, ended := r.builtinNames("local", args, false)
 	if r.unspecified {
 		return status

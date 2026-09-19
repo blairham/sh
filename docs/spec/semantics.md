@@ -23721,10 +23721,70 @@ indexed array` in all three and ended the script for it in the ksh column,
 because the valueless path put the array letter on a name that was already
 a table.
 
+**The key it leaves in a table holds nothing, which is not the empty
+string.** ksh93's listing writes the two apart and nothing else does — an
+element is otherwise the same in every way a script can ask about it.
+Measured on ksh93u+ 2012-08-01, 2026-09-19, `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with stdin on /dev/null, each row its own `( … )`, read through
+`sed -n l`:
+
+    typeset -A m; typeset 'm[k]'            typeset -A m=([k]=)
+    typeset -A m; m[k]=                     typeset -A m=([k]='')
+    typeset -A m; m[k]=; typeset 'm[k]'     typeset -A m=([k]='')
+    typeset -A m; typeset 'm[k]'; m[k]=     typeset -A m=([k]='')
+    typeset -A m; typeset 'm[k]'; m[j]=v    typeset -A m=([j]=v [k]=)
+
+Rows three and four are the boundary and they close it from both sides:
+the declaration never takes an assigned key back down to holding nothing,
+whichever order the two are written in, so it writes only where there is
+no key yet. Everywhere else the declared key is an ordinary one, measured:
+`${#m[@]}` counts it, `${!m[@]}` names it, `${m[@]}` yields one empty
+field for it, `${m[k]+SET}` answers, and `${#m[k]}` is 0.
+
+Modeled as a *kind* on the stored element — `interp.ElementDeclaredAndEmpty`
+— rather than as a second table beside the store, because the two states
+differ in one listing and in nothing else. No axis: only the column that
+reads a valueless operand's subscript without writing an element can
+produce the state, so no other dialect can be asked about it.
+
+**The same construct on an indexed array is not modeled, and that is
+deliberate.** ksh93 records something there too, and what it records
+cannot be stated as a rule — the same declaration answers differently
+depending on where the subscript falls relative to the array's extent, and
+two of that column's own readers disagree about whether the result exists.
+Measured the same day and the same way:
+
+    f=(1 2 3); typeset 'f[9]'    ${#f[@]} is 4, ${!f[@]} is 0 1 2,
+                                 typeset -p f is ([0]=1 [1]=2 [2]=3)
+    f=(1 2);   typeset 'f[2]'    ${#f[@]} is 3, ${!f[@]} is 0 1 2,
+                                 ${f[@]} is `1`, `2` and an empty field,
+                                 typeset -p f is (1 2 )
+    f=(1 2);   typeset 'f[3]'    ${#f[@]} is 3, ${!f[@]} is 0 1,
+                                 typeset -p f is ([0]=1 [1]=2)
+    f=(1 2);   typeset 'f[-1]'   unchanged, ${#f[@]} is 2
+    f=(1 2 3); typeset 'f[9]'    ${f[9]-UNSET} is empty — the element is
+                                 there — and ${f[9]+SET} is empty and
+                                 `[[ -v f[9] ]]` is false — it is not
+    typeset 'z[1]'               on a fresh name: typeset -a z=([0]=),
+                                 ${#z[@]} is 0, ${z[0]-UNSET} is UNSET
+    typeset 'z[5]'               on a fresh name: identical to the row
+                                 above, subscript and all
+    typeset 'z[0]'               on a fresh name: `typeset -p z` prints
+                                 nothing at all, at status 0
+
+The second and third rows are the pair that settles it: one subscript past
+the last element is counted **and** named and yields a field; two past is
+counted and neither. The fifth row is that column's `-` and its `+`
+disagreeing about the same element. The last three are the subscript being
+discarded outright. Those are that implementation's bookkeeping about its
+own storage rather than behavior this shell could state, so the count
+stays what the array holds. #3511.
+
 Pinned by `decl/an-exported-array-in-a-child-environment`,
 `decl/an-exported-array-with-nothing-in-it` and
 `decl/a-subscripted-operand-with-no-value`, and by
-`TestAValuelessSubscriptedOperandIsReadWhereTheDialectReadsIt` and its
+`TestAValuelessSubscriptedOperandIsReadWhereTheDialectReadsIt`,
+`TestAValuelessOperandOnATableLeavesAKeyHoldingNothing` and their
 neighbors in `interp/`.
 
 **The name a declaration then declares is the base**, with the array

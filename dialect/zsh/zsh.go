@@ -1536,6 +1536,16 @@ func Semantics() interp.Semantics {
 	// script file with each row in a subshell (#2980).
 	s.LengthOfAMissingElementIsRefused = interp.Yes
 	s.UnsetNameWithAWholeArraySubscriptIsRefused = interp.Yes
+	// The **count** of a whole array is a third shape of the same option and
+	// it is refused here too, for a name holding nothing at all: `${#a[@]}`
+	// on a name that was never mentioned is `a[@]: parameter not set` and
+	// ends the shell, where ksh93u+ answers `0`. A name holding a string is
+	// not a name holding nothing — `x=abc; ${#x[@]}` is `3` here — which is
+	// what separates this from bash 5.3.20's reading of the same line, where
+	// a scalar is refused alongside the absent name. Measured 2026-09-18 on
+	// zsh 5.9.2 under `env -i HOME=… PATH=/usr/bin:/bin LC_ALL=C`, from a
+	// script file with `echo REACHED` on the line after (#3125).
+	s.WholeArrayCount = interp.WholeArrayCountRefusesANameHoldingNothing
 	// And the colon form of the same operator counts the elements under
 	// `[@]` rather than reading the join, so a one-element array holding the
 	// empty string is a **value**: `f=(""); "${f[@]:-x}"` is `[]` and

@@ -611,6 +611,14 @@ jobs:
         apt-get update -qq
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
           make git ca-certificates
+        # The container runs as root and the workspace is the runner's uid, so
+        # git calls the checkout a dubious ownership and refuses it. That is
+        # not cosmetic: `go build` stamps VCS status, so it stops with
+        # `error obtaining VCS status: exit status 128` before the harness
+        # starts -- and `|| true` below turns that into a **green job that
+        # measured nothing**, which is exactly the shape a report-only step is
+        # worst at showing. Caught on the first dispatch of this change.
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - uses: actions/checkout@v6
       if: needs.changes.outputs.code == 'true'
     - uses: actions/setup-go@v6
@@ -668,4 +676,10 @@ jobs:
       # `|| true` stays for the ordinary case it already covers -- a fetch
       # that could not reach the network, a non-zero suitecheck.
       continue-on-error: true
+      # Named rather than defaulted, because the default is not the same in a
+      # container: the runner picked `sh -e {0}` in there against
+      # `/usr/bin/bash -e {0}` outside, and the step shell is the process the
+      # broadcast kills. Holding it to the shell the job has always used keeps
+      # the container the only thing this change moves.
+      shell: bash -e {0}
       run: make bash-suite ARGS="-timeout 30s" || true

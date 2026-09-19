@@ -1920,6 +1920,23 @@ type Runner struct {
 	// range is not governed by it — bash names a negative count with the
 	// option off as well as on, measured.
 	shiftPastEndQuiet bool
+	// operandSubscriptExpandedOnce withholds the second round of expansion a
+	// subscript that reached a builtin as **text** gets — bash's
+	// `assoc_expand_once` and its synonym `array_expand_once`, the only
+	// names in the panel for asking a shell to stop rounding.
+	//
+	// Stored as the negative so the zero value rounds wherever the dialect's
+	// axis says it does, which is what a Runner that was never told about
+	// the option already did. The option names the *suppression*, so the
+	// bit a dialect's table holds and the bit here have opposite senses and
+	// the accessor is where that is decided once.
+	//
+	// It reaches the three axes that carry it — UnsetExpandsAFlatSubscript,
+	// OutputOperandExpandsAFlatSubscript and TestIsSetExpandsAFlatSubscript
+	// — and nothing else. A declaration's operand and `[[ -v ]]` round under
+	// their own axes whatever this says, measured: see
+	// Semantics.DeclarationOperandExpandsItsSubscript.
+	operandSubscriptExpandedOnce bool
 	// echoExpandsEscapes makes `echo` interpret its backslash escapes with no
 	// `-e` in front of them — bash's `xpg_echo`, and the only name in the
 	// panel for asking a shell to move to the other side of

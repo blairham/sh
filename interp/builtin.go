@@ -2741,6 +2741,29 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		if !subscripted {
 			base = name
 		}
+		// In front of every reading of the brackets below, for the reason
+		// storeThroughOperand gives: what the subscript *is* decides which
+		// element the freeze, the emptiness refusal and the arithmetic are
+		// about. A text a second round turns into `x y` names that key from
+		// here on.
+		//
+		// Semantics.UnsetExpandsAFlatSubscript is whether this shell rounds
+		// and Runner.ExpandsAnOperandsSubscriptAgain whether the session
+		// still permits it — this is one of the four surfaces `shopt -s
+		// assoc_expand_once` names (#3298).
+		if subscripted {
+			sub = r.operandSubscriptText(base, sub, r.sem().UnsetExpandsAFlatSubscript,
+				"`unset` expanding a subscript that reached it as text")
+			if r.unspecified {
+				return r.status
+			}
+		}
+		// The operand's own text is deliberately *not* rewritten with the
+		// key the round found. What a diagnostic quotes is what the script
+		// wrote — `unset 'a[(r)$k]'` names the flag group the script typed —
+		// and the element the removal lands on is `sub`, which is the half
+		// that moved.
+		//
 		// Before the subscript is read, and named by the *base*: `unset a[0]`
 		// against a readonly `a` is refused by the variable the subscript
 		// indexes, and the two shells with arrays that refuse it say `a`

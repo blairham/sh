@@ -13765,6 +13765,83 @@ type Semantics struct {
 	// that row, which the two columns that expand answer differently.
 	DeclarationOperandExpandsItsSubscript Answer
 
+	// UnsetExpandsAFlatSubscript is the same second round at `unset`, whose
+	// operand names an element to take away rather than one to write.
+	//
+	// The three axes below are the surfaces where the round is **not** the
+	// dialect's last word: one column names them together and turns all
+	// three off at once, which is why each carries the switch
+	// Runner.ExpandsAnOperandsSubscriptAgain beside it and the declaration's
+	// round above does not. The axis says whether the shell rounds at all;
+	// the switch is a script asking it to stop.
+	//
+	// A field of its own rather than a share of the store's below, because
+	// the columns part here and nowhere else in the group. Measured
+	// 2026-09-19 from a script file with standard input on /dev/null, over
+	// `k='x y'` and a table holding one element under the key `x y`:
+	//
+	//	                    bash 5.3.20  the option on  zsh 5.9.2  ksh93u+
+	//	unset -v 'a[$k]'    gone         survives       survives   survives
+	//	unset 'a[$k]'       gone         survives       survives   survives
+	//
+	// So zsh agrees with bash at every other surface in this group and
+	// disagrees at this one, which is the whole reason the group is three
+	// fields. The control is the same operand with nothing in it to expand
+	// — `unset -v 'p[plain]'` takes the element away in bash 5.3.20 with
+	// the option either way, in zsh 5.9.2 and in ksh93u+, which are the
+	// four probes above and every column that can be asked — which says the
+	// disagreement is about the round and not about whether a quoted
+	// subscript reaches `unset` at all.
+	//
+	// bash 3.2.57 has no associative array, and dash 0.5.12 and BusyBox ash
+	// 1.37.0 have no array of either kind, so three of the seven columns
+	// cannot be asked.
+	UnsetExpandsAFlatSubscript Answer
+
+	// OutputOperandExpandsAFlatSubscript is the same second round at a
+	// builtin that *stores* through a name operand — `printf -v 'c[$k]' P`
+	// and `read 'b[$k]'`, which share one seam here because they share one
+	// in every shell that has both.
+	//
+	// Measured 2026-09-19, the same probes and the same table:
+	//
+	//	                     bash 5.3.20  the option on  zsh 5.9.2  ksh93u+
+	//	printf -v 'c[$k]' P  key `x y`    key `$k`       key `x y`  no `-v`
+	//	read 'b[$k]' <<<Z    key `x y`    key `$k`       key `x y`  key `$k`
+	//
+	// ksh93 has no `-v` for `printf` at all, so its column is the `read`
+	// row alone; the two shells that have both answer them identically,
+	// which is what makes this one field and not two.
+	//
+	// The store is reached through Runner.storeThroughOperand, so the round
+	// happens in front of every reading of the brackets — the emptiness
+	// refusal, the whole-array spelling and the arithmetic alike — for the
+	// reason declareElement gives: what the subscript *is* decides which
+	// element the refusals are about.
+	OutputOperandExpandsAFlatSubscript Answer
+
+	// TestIsSetExpandsAFlatSubscript is the same second round at `test -v`
+	// and `[ -v ]`, which is **not**
+	// ConditionIsSetExpandsAFlatSubscript above even though the two
+	// operators answer alike about everything else.
+	//
+	// They part precisely here, and in one column, which is what says this
+	// is a switch rather than a dialect's answer. Measured 2026-09-19 over
+	// the same table:
+	//
+	//	                    bash 5.3.20  the option on  zsh 5.9.2  ksh93u+
+	//	test -v 'g[$k]'     true         false          true       false
+	//	[ -v 'g[$k]' ]      true         false          true       false
+	//	[[ -v 'g[$k]' ]]    true         **true**       true       false
+	//
+	// The middle column's third row is the measurement: bash's `[[ -v ]]`
+	// does not move with the option and its `test -v` does, so one shell
+	// gives the same question two answers and only the builtin's is a
+	// script's to change. `test -v 'g[nope]'` is false in every column,
+	// which is the control that says the true rows found the key rather
+	// than answering true for any subscript.
+	TestIsSetExpandsAFlatSubscript Answer
+
 	// ConditionArithmeticReadsTheWrittenSubscript is the same question at
 	// the word-spelled comparisons — `[[ a[k] -eq 5 ]]` — where the operand
 	// is read as an arithmetic *expression* rather than asked about.
@@ -21428,6 +21505,14 @@ func PosixSemantics() Semantics {
 		// to take, and the panel member that has both reads the text as it
 		// stands.
 		DeclarationOperandExpandsItsSubscript: No,
+		// And the same three for the surfaces one column lets a script turn
+		// off: the standard has no array for `unset` to reach into, no `-v`
+		// for `printf`, no subscripted operand for `read`, and no `-v` for
+		// `test`. So the preset follows the column that can be asked and
+		// reads every subscript as the text it stands as.
+		UnsetExpandsAFlatSubscript:         No,
+		OutputOperandExpandsAFlatSubscript: No,
+		TestIsSetExpandsAFlatSubscript:     No,
 		// And the same for the comparisons, where the two columns that can
 		// be asked both read the operand as it stands after expansion. bash
 		// is the column that overrides it.

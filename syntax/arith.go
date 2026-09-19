@@ -1876,8 +1876,15 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 // b="80's"; a["80's"]=4; shopt -s assoc_expand_once; let ++a[$b]` leaves 5 in
 // bash 5.3.20 and the same line with the option unset is `a[80's]: bad array
 // subscript` twice and `let: `a[80's]': not a valid identifier`. Refusing
-// here would be the *other* answer to an option this shell does not carry,
-// and it cost a line of bash's own `assoc` file when it was tried.
+// here would be the *other* answer to that option, and it cost a line of
+// bash's own `assoc` file when it was tried.
+//
+// The option itself has a name in the engine now — interp.Runner
+// .ExpandsAnOperandsSubscriptAgain, which #3298 wired over the four builtin
+// operands it was measured to move — and this reading is deliberately not one
+// of the surfaces it reaches. So the divergence above is unchanged and is now
+// a stated one rather than an absent capability: the option-off answer is
+// what this shell does not have, at this surface alone.
 func (a *arithParser) subscriptCloser(open int) (int, bool) {
 	for _, quoted := range [...]bool{a.dial.ArithSubscriptQuoting, false} {
 		var scan ArithBracketScan

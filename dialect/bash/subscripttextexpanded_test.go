@@ -54,24 +54,56 @@ func TestTheIsSetConditionExpandsASubscriptThatReachedItAsText(t *testing.T) {
 	}
 }
 
-// `test -v` takes the same text and does **not** get the second round here,
-// which is the row that keeps the two spellings apart.
+// `test -v` takes the same text and gets the same second round — and unlike
+// the keyword beside it, a script can turn that round off by name.
 //
-// Measured on bash 5.3.20: `test -v 'm[$k]'` is set by default and unset
+// Measured 2026-09-19 on bash 5.3.20, each probe from a script file with
+// standard input on /dev/null: `test -v 'm[$k]'` is set by default and unset
 // under `shopt -s assoc_expand_once`, while `[[ -v 'm[$k]' ]]` is set under
-// both. So the builtin's surface moves with an option this shell does not
-// have yet and the condition's does not move at all — routing the builtin
-// through the condition's reading would pin one state of that option as this
-// dialect's answer. See #3298, which is still open for the option.
-func TestTheTestBuiltinTakesNoSecondRoundOverASubscriptText(t *testing.T) {
+// both. So the two spellings of one operator are one answer apart, and only
+// the builtin's is a script's to change — which is why the builtin reads
+// interp.Semantics.TestIsSetExpandsAFlatSubscript and the keyword reads
+// .ConditionIsSetExpandsAFlatSubscript (#3298).
+func TestTheTestBuiltinTakesTheSecondRoundAndTheOptionStopsIt(t *testing.T) {
 	const setup = `declare -A m; k='x y'; m[$k]=V; `
-	cond := setup + `[[ -v 'm[$k]' ]] && echo SET || echo UNSET`
-	builtin := setup + `test -v 'm[$k]' && echo SET || echo UNSET`
-	if out, st := answersRun(t, cond); out != "SET\n" || st != 0 {
-		t.Errorf("the condition = %q status %d, want SET at 0", out, st)
-	}
-	if out, st := answersRun(t, builtin); out != "UNSET\n" || st != 0 {
-		t.Errorf("the builtin = %q status %d, want UNSET at 0", out, st)
+	for _, c := range []struct{ name, src, want string }{
+		{"the keyword", setup + `[[ -v 'm[$k]' ]] && echo SET || echo UNSET`, "SET"},
+		{"the builtin", setup + `test -v 'm[$k]' && echo SET || echo UNSET`, "SET"},
+		{"the bracket spelling", setup + `[ -v 'm[$k]' ] && echo SET || echo UNSET`, "SET"},
+		{
+			"the keyword with the option set",
+			`shopt -s assoc_expand_once; ` + setup + `[[ -v 'm[$k]' ]] && echo SET || echo UNSET`,
+			"SET",
+		},
+		{
+			"the builtin with the option set",
+			`shopt -s assoc_expand_once; ` + setup + `test -v 'm[$k]' && echo SET || echo UNSET`,
+			"UNSET",
+		},
+		{
+			"the bracket spelling with the option set",
+			`shopt -s assoc_expand_once; ` + setup + `[ -v 'm[$k]' ] && echo SET || echo UNSET`,
+			"UNSET",
+		},
+		// The control: a key that is not there is unset under either state,
+		// so the rows above turn on which key was looked up rather than on
+		// the operator answering true for any subscript at all.
+		{
+			"a key that is not there",
+			setup + `test -v 'm[nope]' && echo SET || echo UNSET`,
+			"UNSET",
+		},
+		{
+			"a key that is not there, with the option set",
+			`shopt -s assoc_expand_once; ` + setup + `test -v 'm[nope]' && echo SET || echo UNSET`,
+			"UNSET",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if out, st := answersRun(t, c.src); out != c.want+"\n" || st != 0 {
+				t.Errorf("%s = %q status %d, want %q at 0", c.src, out, st, c.want)
+			}
+		})
 	}
 }
 

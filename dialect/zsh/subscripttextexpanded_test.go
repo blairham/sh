@@ -83,3 +83,51 @@ func TestThisDialectExpandsASubscriptThatArrivedAsText(t *testing.T) {
 		t.Errorf("DeclarationOperandExpandsItsSubscript = %v, want %v", got, interp.Yes)
 	}
 }
+
+// The builtins' surfaces, where this shell agrees with the column that has a
+// name for them everywhere but `unset`.
+//
+// That one row is the reason the group is three axes rather than one.
+// Measured 2026-09-19 on zsh 5.9.2, each probe from a script file with
+// standard input on /dev/null, over `typeset -A m; k='x y'; m[$k]=hello`:
+// `unset 'm[$k]'` leaves the element standing, while `read 'm[$k]'` and
+// `printf -v 'm[$k]'` write the key `x y` and `test -v 'm[$k]'` finds it. The
+// control is the same operand with nothing in it to expand — `unset
+// 'm[plain]'` does take the element away — which says the survival is the
+// round not happening rather than the quoted brackets not reaching `unset`.
+// See interp.Semantics.UnsetExpandsAFlatSubscript (#3298).
+func TestABuiltinsOperandRoundsExceptAtUnset(t *testing.T) {
+	const table = `typeset -A m; k='x y'; m[$k]=hello; `
+	const keys = `; for q in "${(@k)m}"; do printf '[%s]' "$q"; done`
+	for _, c := range []struct{ name, src, want string }{
+		{"unset leaves the element standing", table + `unset 'm[$k]'; printf '[%s]' "${m[$k]-GONE}"`, "[hello]"},
+		{"and with the letter", table + `unset -v 'm[$k]'; printf '[%s]' "${m[$k]-GONE}"`, "[hello]"},
+		{"but takes one it can name", `typeset -A m; m[plain]=hello; unset 'm[plain]'; printf '[%s]' "${m[plain]-GONE}"`, "[GONE]"},
+		{"read writes the expanded key", `typeset -A m; k='x y'; read 'm[$k]' <<<Z` + keys, "[x y]"},
+		{"printf writes the expanded key", `typeset -A m; k='x y'; printf -v 'm[$k]' P` + keys, "[x y]"},
+		{"the is-set builtin finds it", table + `test -v 'm[$k]' && echo SET || echo UNSET`, "SET\n"},
+		{"and its bracket spelling", table + `[ -v 'm[$k]' ] && echo SET || echo UNSET`, "SET\n"},
+		{"a key that is not there", table + `test -v 'm[nope]' && echo SET || echo UNSET`, "UNSET\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if out, st := answersRun(t, c.src); out != c.want || st != 0 {
+				t.Errorf("%s = %q status %d, want %q at 0", c.src, out, st, c.want)
+			}
+		})
+	}
+}
+
+// The three the builtins read, pinned where the rest of them are — and this
+// shell parts from the one that names the group at exactly one of them.
+func TestThisDialectRoundsABuiltinsSubscriptTextExceptAtUnset(t *testing.T) {
+	s := zsh.Semantics()
+	if got := s.UnsetExpandsAFlatSubscript; got != interp.No {
+		t.Errorf("UnsetExpandsAFlatSubscript = %v, want %v", got, interp.No)
+	}
+	if got := s.OutputOperandExpandsAFlatSubscript; got != interp.Yes {
+		t.Errorf("OutputOperandExpandsAFlatSubscript = %v, want %v", got, interp.Yes)
+	}
+	if got := s.TestIsSetExpandsAFlatSubscript; got != interp.Yes {
+		t.Errorf("TestIsSetExpandsAFlatSubscript = %v, want %v", got, interp.Yes)
+	}
+}

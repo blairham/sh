@@ -51,6 +51,33 @@ func (r *Runner) parameterIsSet(name string) (bool, error) {
 	return r.elementIsSet(base, sub, subscripted), nil
 }
 
+// testParameterIsSet answers `test -v name` and `[ -v name ]`, which is
+// parameterIsSet with one round in front of it.
+//
+// A function of its own rather than a flag on parameterIsSet, because the two
+// operators genuinely part here and only here: bash's `[[ -v 'g[$k]' ]]`
+// finds the key `x y` whatever `shopt -s assoc_expand_once` says and its
+// `test -v 'g[$k]'` stops finding it, so a shared route would have to pin one
+// of the two answers. Everything after the round is the same lookup, which is
+// the half the two operators do share — see parameterIsSet.
+//
+// Semantics.TestIsSetExpandsAFlatSubscript is whether this shell rounds at
+// all and Runner.ExpandsAnOperandsSubscriptAgain whether the session still
+// permits it; operandSubscriptText reads both. Where nothing rounds, this is
+// parameterIsSet exactly.
+func (r *Runner) testParameterIsSet(operand string) (bool, error) {
+	base, sub, subscripted := r.subscriptOperand(operand)
+	if !subscripted {
+		return r.parameterIsSet(operand)
+	}
+	sub = r.operandSubscriptText(base, sub, r.sem().TestIsSetExpandsAFlatSubscript,
+		"`test -v` expanding a subscript that reached it as text")
+	if r.unspecified {
+		return false, nil
+	}
+	return r.elementIsSet(base, sub, true), nil
+}
+
 // elementIsSet is the lookup both routes end at, once the operand has been
 // split into a base and a subscript by whichever of the two readings applies.
 func (r *Runner) elementIsSet(base, sub string, subscripted bool) bool {

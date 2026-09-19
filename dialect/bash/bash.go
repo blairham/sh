@@ -2848,6 +2848,36 @@ func Semantics() interp.Semantics {
 	// it is the dialect's answer rather than a switch. See
 	// interp.Semantics.DeclarationOperandExpandsItsSubscript (#3298).
 	s.DeclarationOperandExpandsItsSubscript = interp.Yes
+
+	// And the three surfaces where a script *can* turn the round off, which
+	// is what `shopt -s assoc_expand_once` and its synonym name. The axis
+	// says this shell rounds; the switch beside it, which only this dialect
+	// wires, is what a script uses to stop it. See
+	// interp.Runner.ExpandsAnOperandsSubscriptAgain.
+	//
+	// Measured 2026-09-19 on bash 5.3.20, from a script file with standard
+	// input on /dev/null, over `k='x y'` and a table holding one element
+	// under the key `x y` — the left column is this shell's default and the
+	// right the same probe under `-O assoc_expand_once`:
+	//
+	//	unset -v 'a[$k]'      the element is gone   it survives
+	//	unset 'a[$k]'         the element is gone   it survives
+	//	printf -v 'c[$k]' P   the key `x y`         the key `$k`
+	//	read 'b[$k]' <<<Z     the key `x y`         the key `$k`
+	//	test -v 'g[$k]'       true                  false
+	//	[ -v 'g[$k]' ]        true                  false
+	//	[[ -v 'g[$k]' ]]      true                  **true**
+	//
+	// The last row is why `[[ -v ]]` is answered by the axis above and not
+	// by one of these: the same question reaches the keyword and the builtin
+	// and only the builtin's answer is a script's to change. The controls
+	// are the same operands with nothing in them to expand — `unset
+	// 'a[plain]'` removes the element and `test -v 'g[nope]'` is false in
+	// every column — which say the rows above turn on the round rather than
+	// on whether a quoted subscript reaches the builtin at all.
+	s.UnsetExpandsAFlatSubscript = interp.Yes
+	s.OutputOperandExpandsAFlatSubscript = interp.Yes
+	s.TestIsSetExpandsAFlatSubscript = interp.Yes
 	return s
 }
 

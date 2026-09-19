@@ -116,6 +116,35 @@ func (r *Runner) ReportsShiftPastTheEnd() bool { return !r.shiftPastEndQuiet }
 // SetReportsShiftPastTheEnd moves it.
 func (r *Runner) SetReportsShiftPastTheEnd(on bool) { r.shiftPastEndQuiet = !on }
 
+// ExpandsAnOperandsSubscriptAgain reports whether a subscript that reaches a
+// builtin as **text** — `unset -v 'a[$k]'`, `printf -v 'c[$k]'`, `read
+// 'b[$k]'`, `test -v 'g[$k]'` — is expanded once more before the element is
+// found, which is bash's `assoc_expand_once` read the way round the shell
+// behaves rather than the way round the option is named.
+//
+// One shell in the panel names the question and it names the suppression:
+// `shopt -s assoc_expand_once` asks for the round to *stop*, and
+// `array_expand_once` is the same switch under a second name. So the table
+// inverts and this does not, for the reason CompletesEmptyCommandWord gives —
+// there is exactly one place in the program where the sense of the bit is
+// decided.
+//
+// It is a permission and not a behavior: the round happens where a dialect's
+// axis says it does and this can only turn that down. The three axes are
+// Semantics.UnsetExpandsAFlatSubscript,
+// Semantics.OutputOperandExpandsAFlatSubscript and
+// Semantics.TestIsSetExpandsAFlatSubscript, and the surfaces they cover are
+// the four this option was measured to move. Two neighboring surfaces round
+// under axes of their own and are deliberately out of reach here, because
+// bash does not move them either: a declaration's operand and `[[ -v ]]`
+// find the key `x y` with the option set and unset alike, measured
+// 2026-09-19.
+func (r *Runner) ExpandsAnOperandsSubscriptAgain() bool { return !r.operandSubscriptExpandedOnce }
+
+// SetExpandsAnOperandsSubscriptAgain moves it, in the positive direction the
+// getter reads.
+func (r *Runner) SetExpandsAnOperandsSubscriptAgain(on bool) { r.operandSubscriptExpandedOnce = !on }
+
 // EchoExpandsEscapes reports whether `echo` interprets its backslash escapes
 // with no `-e` in front of them — bash's `xpg_echo`.
 //

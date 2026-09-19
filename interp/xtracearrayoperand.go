@@ -75,42 +75,6 @@ type arrayOperand struct {
 	expanded *expandedAssign
 }
 
-// expandArrayOperands expands each array-literal operand's elements once,
-// before the command's own trace line is written.
-//
-// Asked only while tracing, which is the same arrangement
-// Runner.prepareTracedAssign has for a bare literal: nothing here changes what
-// the assignment stores, only when the value it stores was computed. The wider
-// question of *when* an untraced operand is expanded is a separate measured
-// difference — bash and ksh93 expand it before the command's redirections are
-// opened and this shell expands it after, which `typeset a=($(echo hi >&2))
-// 2>/dev/null` shows — and is not this issue's.
-func (r *Runner) expandArrayOperands() {
-	if !r.tracing() {
-		return
-	}
-	for i := range r.arrayOperands {
-		op := &r.arrayOperands[i]
-		a := op.assign
-		if a.Members != nil || len(a.Elems) == 0 {
-			// A compound body writes the member assignments it performs and
-			// has no element list of its own, and an empty literal has
-			// nothing to expand.
-			continue
-		}
-		parsed, ok := r.literalElems(a.Elems,
-			r.literalReadsSubscripts(a.Name, a.Elems, a.Append))
-		if !ok {
-			// The element list failed — an unmatched pattern where the
-			// dialect calls that an error, a division by zero. The store
-			// abandons the assignment for the same reason, so there is
-			// nothing to write a line about.
-			continue
-		}
-		op.expanded = &expandedAssign{assign: a, elems: parsed, elemsSet: true}
-	}
-}
-
 // expandedArrayOperand is the element list already expanded for this operand,
 // or nil where the store is to expand it itself.
 func (r *Runner) expandedArrayOperand(a *syntax.Assign) *expandedAssign {

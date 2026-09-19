@@ -2206,6 +2206,13 @@ func Semantics() interp.Semantics {
 	// without; `exit 3`, a plain `false` under the option and `${x?word}` all
 	// keep it. See interp.Runner.exitTrapSkippedByAFatalError (#2744).
 	s.FatalErrorUnderErrexitSkipsTheExitTrap = interp.Yes
+	// A *subshell* loses it for the same errors with no option at all, and
+	// for two more besides: `${x?word}`, which keeps it at the top level
+	// here, and a refused `set` option, which ksh93's subshell keeps.
+	// Measured 2026-09-18 over nine rows in `( … )`, each written plain and
+	// under `set -e` — identical both ways. See
+	// interp.SubshellExitTrapPolicy (#3612).
+	s.SubshellExitTrapAfterAGiveUp = interp.SubshellExitTrapSkippedByABuiltinsUsageToo
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
 	// The operand of `exit` and of `return` is an arithmetic expression here,
 	// and alone in the panel: `return r` is the value of `r` and `return r+1`

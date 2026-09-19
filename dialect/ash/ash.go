@@ -1250,6 +1250,9 @@ func Semantics() interp.Semantics {
 	s.QuitResetRestoresTheDefault = interp.No
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// A subshell's own EXIT trap runs however the subshell ended. Measured
+	// 2026-09-18 on BusyBox 1.37.0 inside the pinned container (#3612).
+	s.SubshellExitTrapAfterAGiveUp = interp.SubshellExitTrapAlwaysRuns
 	// `-n` is not an option here either, and this shell reads what is left
 	// as a signal rather than as an option: `kill -n 99 <pid>` is `bad
 	// signal name 'n'` at 1, the same sentence `kill -Q` draws. `kill -s`

@@ -82,12 +82,23 @@ printf 'a reported error under set -e ran no handler\n'
 ( trap 'printf "TRAP_RAN\n"' EXIT; set -e; exit 3 )
 printf 'and a request to stop kept it\n'
 
-# Two rows are held out of the pair above, and the reason is a **second**
-# answer this shell has that nothing here models yet: inside a subshell the
-# handler is skipped for a reported error whether or not `set -e` is on.
-# Measured 2026-09-18 — `( trap … EXIT; readonly r=1; readonly r=2 )` runs no
-# handler here and does run one at the top level of the same script, and so
-# does `( trap … EXIT; set -e; printf "${nosuch?word}" )`, which keeps its
-# handler at the top level because that operator is a request to stop rather
-# than an error. Writing either row as it stands would pin a divergence
-# instead of a behavior. See #3612.
+# The subshell boundary has a second answer of its own, and it is wider than
+# the one above: there the handler goes for a reported error with **no option
+# at all**, and `${x?word}` goes with the errors although it keeps its handler
+# at the top level, being a request to stop rather than an error. A special
+# builtin's complaint about how it was *called* goes too, which is where this
+# shell parts company with the other column that skips anything. Measured
+# 2026-09-18 over nine rows, each written plain and under `set -e` — identical
+# both ways (#3612).
+( trap 'printf "TRAP_RAN\n"' EXIT; readonly rs=1; readonly rs=2
+	printf 'NOT REACHED\n' ) 2> /dev/null
+( trap 'printf "TRAP_RAN\n"' EXIT; printf '[%s]' "${nosuch?word}"
+	printf 'NOT REACHED\n' ) 2> /dev/null
+( trap 'printf "TRAP_RAN\n"' EXIT; set -Z; printf 'NOT REACHED\n' ) 2> /dev/null
+printf 'a subshell given up on ran no handler, with no option\n'
+
+# And the controls on the same boundary: a stop the subshell asked for keeps
+# it, and so does a builtin complaining about its own operands.
+( trap 'printf "TRAP_RAN\n"' EXIT; exit 3 )
+( trap 'printf "TRAP_RAN\n"' EXIT; cd /nosuchdir_zz; printf 'ran on\n' ) 2> /dev/null
+printf 'and a request to stop, or an ordinary failure, kept it\n'

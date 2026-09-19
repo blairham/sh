@@ -1020,6 +1020,23 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	if r.readonlyFunctionRedefined(c.Name) {
 		return nil
 	}
+	// A definition written inside a `namespace NAME { … }` body is stored
+	// under the member name, which is what the reference lists back:
+	// measured, `namespace ns { f(){ :; }; }; typeset +f` writes `.ns.f()`.
+	// Here rather than at the top of this function, because the name checks
+	// above judge the word the script wrote — a dotted name is refused in
+	// this dialect and the member's dot is not the script's.
+	//
+	// A copy, because the declaration is the parser's tree and this shell is
+	// a library: the name it is *stored* under is the runner's business.
+	// Everything below reads the stored name from it, which is the point —
+	// the region a call runs in is read back off it. See
+	// interp/namespace.go.
+	if member := r.namespaceFuncName(c.Name); member != c.Name {
+		named := *c
+		named.Name = member
+		c = &named
+	}
 	if r.funcs == nil {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
@@ -1391,6 +1408,16 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		defer r.popCallArguments()
 	}
 	r.Params, r.inFunc = args, fn.Name
+	// And the namespace the *callee* was written in, which is what makes a
+	// namespace lexical rather than dynamic. Measured both ways: a function
+	// defined outside and called from inside a body reads the caller's scope,
+	// and one defined inside and called from outside still reads the
+	// namespace's members. Read off the stored name rather than saved around
+	// the call, because a save-and-restore answers the first of those wrong.
+	// See interp/namespace.go.
+	savedNamespace := r.namespace
+	r.namespace = r.namespaceOfFunction(fn.Name)
+	defer func() { r.namespace = savedNamespace }()
 	// A call is an execution unit, so a bare `exit` or `return` in the body
 	// reports what the *body* has run rather than what the caller left
 	// behind. Measured: `g() { return; }; false; g` reports 0 in the one

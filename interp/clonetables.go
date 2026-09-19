@@ -95,6 +95,11 @@ func (c *Runner) ownTables(r *Runner) {
 	c.compoundHeldAnElement = maps.Clone(r.compoundHeldAnElement)
 	c.declaredBare = maps.Clone(r.declaredBare)
 	c.compoundVariable = maps.Clone(r.compoundVariable)
+	// The namespaces a `namespace NAME { … }` block has declared. A subshell
+	// that opens one must not leave it behind: measured, `( namespace ns {
+	// x=1; } )` then `${.ns.x}` is unset. The members go with it, since they
+	// are ordinary names in the tables above.
+	c.namespaces = maps.Clone(r.namespaces)
 
 	// The attribute tables `declare` and `typeset` write. A subshell's
 	// attribute must not outlive it: measured, `x=1; (readonly x); x=2`

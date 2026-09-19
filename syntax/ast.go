@@ -902,3 +902,37 @@ func (c *FuncDecl) End() Pos {
 }
 
 func (c *FuncDecl) commandNode() {}
+
+// NamespaceClause is `namespace NAME { list }`, a name-resolution region over
+// a compound named after it.
+//
+// One column in the panel has the word — ksh93 — and it is reserved there
+// only where a command may begin, which is what
+// [Dialect.NamespaceBlock] gates: `namespace=5` assigns and `echo namespace`
+// prints the operand in all six columns, and both have to go on doing so.
+//
+// The body is a list rather than a [Group] node, the way a [TryClause]'s
+// halves are: the braces are mandatory punctuation of this production, so a
+// nested group node would carry no fact the construct does not already state.
+// Redirections belong to the construct — `namespace ns { echo a; } > out`
+// sends the body's output there, measured 2026-09-19 on ksh93u+ 2012-08-01.
+type NamespaceClause struct {
+	// Name is the word standing where the namespace's name belongs, **as it
+	// was written** and never expanded.
+	//
+	// Measured rather than assumed: `n=ns; namespace $n { x=1; }` reports
+	// `.$n: invalid variable name` and runs nothing, so the shell is judging
+	// the text rather than a value. A word that is no name at all is
+	// therefore carried here and refused when the clause runs, at status 1 —
+	// `namespace .ns { x=1; }` is `.ns: is not an identifier` and not a parse
+	// error, which is the same stage split [ForClause.RefusedName] records.
+	Name  string
+	List  []*Stmt
+	Start Pos
+	Stop  Pos
+	redirs
+}
+
+func (c *NamespaceClause) Pos() Pos     { return c.Start }
+func (c *NamespaceClause) End() Pos     { return c.Stop }
+func (c *NamespaceClause) commandNode() {}

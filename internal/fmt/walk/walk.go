@@ -49,6 +49,9 @@ func Nodes(n syntax.Node, fn func(syntax.Node) bool) {
 	case *syntax.Group:
 		stmts(x.List, fn)
 		redirects(x.Redirs, fn)
+	case *syntax.NamespaceClause:
+		stmts(x.List, fn)
+		redirects(x.Redirs, fn)
 	case *syntax.TryClause:
 		stmts(x.Try, fn)
 		stmts(x.Always, fn)

@@ -977,6 +977,43 @@ type Dialect struct {
 	// Nesting works in both halves.
 	TryAlways bool
 
+	// NamespaceBlock is `namespace NAME { list }`, the reserved word that opens a
+	// name-resolution region.
+	//
+	// One column has it: ksh93u+ 2012-08-01. Measured 2026-09-19, each row its
+	// own script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard
+	// input on /dev/null, against `namespace ns { x=1; }`:
+	//
+	//	ksh93u+       silent, 0
+	//	bash 5.3.20   syntax error near unexpected token `}', 2
+	//	zsh 5.9.2     parse error near `}', 1
+	//	dash 0.5.12   Syntax error: "}" unexpected, 2
+	//
+	// **The word is reserved where a command begins and nowhere else**, which is
+	// what keeps it a dialect's word rather than a name taken away from the other
+	// five: `namespace=5` assigns and `echo namespace` prints the operand, in
+	// ksh93 as in every other column. So the flag is read from the command
+	// dispatch and the word is not in the lexer's tables.
+	//
+	// The production is the word, then one word standing where the name belongs,
+	// then a brace group. Measured on the same run:
+	//
+	//	namespace ns { echo inside; }; echo after   inside, after, 0
+	//	namespace ns / { echo hi; }                 hi, 0 - the brace may follow a newline
+	//	namespace ns; echo after                    syntax error naming `;', 3
+	//	namespace; echo two                         the same
+	//	namespace ns{ echo hi; }                    syntax error naming `echo', 3
+	//	"namespace" ns { echo hi; }                 syntax error naming `}', 3
+	//	if true; then namespace ns { echo in; }; fi in, 0 - it nests where a command stands
+	//	namespace ns { echo a; } > out.txt          the block takes redirections
+	//	namespace .ns { x=1; }                      `.ns: is not an identifier`, 1
+	//
+	// The last row is the stage split, and it is the reason
+	// [NamespaceClause.Name] carries a word rather than the parse refusing one: a
+	// name that is no name is a *runtime* refusal there, at the dialect's
+	// ordinary fatal status, and a file holding one still reads.
+	NamespaceBlock bool
+
 	// AnonymousFunction is `() { … }` and `function { … }`: a function with
 	// no name, defined and run where it stands, with the words after it as
 	// its positional parameters. One shell in the panel has it; in the other
@@ -6745,6 +6782,13 @@ func (d Dialect) Reserves(name string) bool {
 		return d.DoubleBracket
 	case "coproc":
 		return d.Coproc
+	case "namespace":
+		// Named as a keyword by the one column that has it: measured
+		// 2026-09-19, `whence -v namespace` and `type namespace` are both
+		// `namespace is a keyword` on ksh93u+, and `command -v namespace`
+		// answers the bare word at 0. Where the flag is off it falls
+		// through to the ordinary search, which is what the other five do.
+		return d.NamespaceBlock
 	}
 	return d.reservesWord(name)
 }
@@ -6837,6 +6881,8 @@ func (d Dialect) reservedAtACommandStart(name string) bool {
 		return d.Foreach
 	case "coproc":
 		return d.Coproc
+	case "namespace":
+		return d.NamespaceBlock
 	}
 	return d.reservesWord(name)
 }

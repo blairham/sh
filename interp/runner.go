@@ -1072,6 +1072,19 @@ type Runner struct {
 	// a member that reads back and does not list. See compoundvariable.go.
 	compoundVariable map[string]bool
 
+	// namespaces is the set of names a `namespace NAME { … }` block has
+	// declared, and namespace is the region in force while one's body runs —
+	// empty for every other line of every script.
+	//
+	// The set exists for the read half of the region and nothing else: a read
+	// of `${.ns.gv}` that the namespace holds nothing for falls through to the
+	// plain `gv`, and only this table can tell `.ns.gv` from an ordinary
+	// dotted name nobody has assigned. The *members* are not in here — they
+	// are ordinary names spelled with a dot, exactly as a compound variable's
+	// are. See interp/namespace.go.
+	namespaces map[string]bool
+	namespace  string
+
 	// aliases is the table `alias` and `unalias` keep. Substitution happens
 	// when a line is parsed, which is the other half of the feature and lives
 	// in the parser rather than here; the two meet at [Runner.ExpandingAlias].
@@ -5179,7 +5192,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// package is a library.
 		r.prevLine, r.line = r.line, r.lineOf(c.Pos())
 		switch c.(type) {
-		case *syntax.Group, *syntax.Subshell:
+		case *syntax.Group, *syntax.Subshell, *syntax.NamespaceClause:
 			// A grouping's head is not a statement, so it does not advance
 			// the count of the last statement entered. What runs *inside* a
 			// brace group does, at this level; what runs inside a subshell
@@ -5293,6 +5306,8 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		return err
 	case *syntax.Group:
 		return r.group(ctx, x)
+	case *syntax.NamespaceClause:
+		return r.namespaceClause(ctx, x)
 	case *syntax.TryClause:
 		return r.tryClause(ctx, x)
 	case *syntax.Subshell:
@@ -5906,7 +5921,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	}
 
 	// A function shadows a builtin and an external command alike.
-	if fn, ok := r.funcs[argv[0]]; ok {
+	//
+	// The name is the namespace's where a `namespace NAME { … }` body defined
+	// one — measured, `namespace ns { f(){ echo IN; }; f; }` runs it and a
+	// bare `f` afterwards is `not found` at 127. A call to a name the region
+	// holds nothing for falls through to the plain name, which is what lets a
+	// function defined outside be called from inside. See
+	// interp/namespace.go.
+	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok {
 		// A name the shell is still waiting to read a body for is read now,
 		// and the definition the file leaves is what runs. Here rather than
 		// inside the call, because the call is handed the declaration it
@@ -8668,6 +8690,10 @@ func (r *Runner) frozenNameOfAnAssignment(name string) string {
 }
 
 func (r *Runner) setVarAs(name, value string, form assignForm) {
+	// A write inside a namespace body always makes a member, which is the half
+	// of the region that keeps `x=IN` from leaving it. Ahead of the reference
+	// handling, for the reason storedValue's copy of this is.
+	name = r.namespaceWriteName(name)
 	if r.selfNameref(name) {
 		// The write half of the read above: a reference aimed at its own
 		// name lands on the global cell. Ahead of namerefAssignmentTarget,
@@ -8959,6 +8985,14 @@ func (r *Runner) bareReadSubscript(name string) string {
 // storedValue is varValue with the discipline hooks left off: what the
 // tables, the producers and the environment say the name holds.
 func (r *Runner) storedValue(name string, folded bool) (string, bool) {
+	// Which name a bare word means, where a `namespace NAME { … }` body is
+	// running or where the name is one of a namespace's members. Ahead of the
+	// reference walk below, because this decides which *cell* the written name
+	// denotes and the walk decides what that cell points at. One comparison
+	// against the empty string in every shell that has no such block, which is
+	// five of the six columns and every line of the sixth outside one. See
+	// interp/namespace.go.
+	name = r.namespaceReadName(name)
 	// A read through a name reference lands on what it points at. Only a
 	// plain-name target here: a reference aimed at an *element* has its
 	// subscript read as arithmetic, and arithmetic reaches command

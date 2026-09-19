@@ -629,6 +629,13 @@ func (p *printer) command(c Command) {
 	case *Group:
 		p.braceGroup(x.List)
 		p.redirs(x.Redirs)
+	case *NamespaceClause:
+		// The name is written back as it stood, which is what keeps a word
+		// the clause is going to refuse readable in the file it came from —
+		// the same rule a refused loop variable is printed under.
+		p.str("namespace " + x.Name + " ")
+		p.braceGroup(x.List)
+		p.redirs(x.Redirs)
 	case *TryClause:
 		// The redirections go after the *second* half, because they belong to
 		// the whole construct: writing one after the try half is what ends it

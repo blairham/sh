@@ -100,6 +100,7 @@ func (r *Runner) assocDeclared(name string) bool {
 // markAssoc gives a name the associative attribute, which is what
 // `declare -A` and `typeset -A` do. Declaring twice keeps the elements.
 func (r *Runner) markAssoc(name string) {
+	name = r.namespaceWriteName(name)
 	if _, produced := r.DynamicAssocs[name]; produced {
 		// A produced association already has the attribute — assocDeclared
 		// answers from this very table — and giving it a stored table would put an empty one
@@ -139,6 +140,7 @@ func (r *Runner) markAssoc(name string) {
 // association, still hold the right keys, and never say it had stopped
 // tracking. See SetDynamicAssocWriter.
 func (r *Runner) setAssocElem(name, key, value string) {
+	name = r.namespaceWriteName(name)
 	name = r.throughNameref(name)
 	if write, ok := r.dynamicAssocWriters[name]; ok {
 		write(r, key, value, true)

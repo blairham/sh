@@ -27567,3 +27567,123 @@ measures is whether the axis is *reached*, which is a much easier bar than
 whether anything can tell `Yes` from `No`. Only a flip between two answers
 asks the question that found the four, so that is what the sweep counts;
 the reachability flips are behind `-unspecified`.
+
+## A namespace is a name-resolution region over a compound
+
+`namespace NAME { … }` is one column's construct — the grammar is in
+`grammar/commands.md` — and what it does to the names inside it was
+costed twice as a store this shell has nothing like before anybody tried
+the spelling that reads one.
+
+It is not a scope stack. **A namespace is a compound under a name whose
+first character is a dot, and its members are ordinary names spelled with
+a dot** — the same store `c=(a=1)` already puts `c.a` in. Measured on
+ksh93u+ 2012-08-01, 2026-09-19, each row its own script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on `/dev/null`:
+
+| written | ksh93u+ |
+| --- | --- |
+| `namespace ns { x=1; }` then `${ns.x-unset}` | `unset` — the spelling the issue tried |
+| the same, then `${.ns.x-unset}` | **`1`** |
+| `namespace ns { x=1; }; .ns.x=2` then a second block reads `$x` | `2` |
+| `namespace ns { x=1; }; unset .ns.x` then `${.ns.x-unset}` | `unset` |
+| `namespace ns { x=1; }; unset .ns` then `${.ns.x-unset}` | `unset` |
+| `namespace ns { f(){ echo hi; }; }` then `.ns.f` | `hi`, and a bare `f` is `not found` at 127 |
+| `namespace ns { x=1; }` then `typeset -p .ns.x` | `.ns.x=1` |
+| `namespace ns { f(){ :; }; }` then `typeset +f` | `.ns.f()` |
+| `namespace ns { c=(m=1); }` then `${.ns.c.m}` | `1` — a member may be a compound of its own |
+
+### The read half and the write half are one rule
+
+An unqualified name written between the braces reads the member where
+there is one and the plain name otherwise; a write always makes a member.
+That single rule is what the following six rows are, and the last two are
+what say the fall-through is a *lookup* rather than a copy taken at the
+opening brace.
+
+| written | ksh93u+ |
+| --- | --- |
+| `x=OUTER; namespace ns { echo "${x-unset}"; }` | `OUTER` |
+| `x=OUTER; namespace ns { x=IN; }; echo "$x"` | `OUTER` |
+| `namespace ns { x=1; }; namespace ns { echo "$x"; }` | `1` |
+| `namespace ns { x=1; }; namespace n2 { echo "${x-unset}"; }` | `unset` |
+| `gv=GLOBAL; namespace ns { y=1; }` then `${.ns.gv-unset}` | `GLOBAL` |
+| `gv=A; namespace ns { y=1; }; gv=B` then `${.ns.gv}` | `B` |
+| `gv=G; namespace ns { gv=M; }` then `$gv` / `${.ns.gv}` | `G` / `M` |
+| `namespace ns { PATH=/zzz; }` then `$PATH` / `${.ns.PATH}` | the search path / `/zzz` |
+
+So "the body reads the outer name" and "a write does not leak" are not
+two rules. They are the read and the write of one region that starts out
+holding nothing and gains a member the moment the body assigns — and the
+key listing says the same thing: `gv=G; namespace ns { x=1; }` then
+`${!.ns.@}` answers the shell's own parameters **and** `.ns.gv` and
+`.ns.x`.
+
+Everything a name can hold goes in: `typeset t=1`, an array literal, a
+loop's variable, a `readonly`, and an export. The export is the row worth
+naming, because it says a namespace is not a way to reach the
+environment: `namespace ns { typeset -x E=1; }` leaves
+`env | grep -c '^E=1'` at `0` and `${.ns.E}` at `1`.
+
+### It is lexical, not dynamic
+
+The region belongs to where the code was **written**, and that is
+measured in both directions rather than assumed.
+
+| written | ksh93u+ |
+| --- | --- |
+| `x=OUTER; g(){ echo "${x-unset}"; x=FROMG; }; namespace ns { g; }` | `OUTER`, and `$x` is `FROMG` afterwards |
+| `namespace ns { x=1; }; h(){ echo "${x-unset}"; }; namespace ns { h; }` | `unset` |
+| `namespace ns { x=1; f(){ echo "${x-unset}"; }; }` then `.ns.f` | **`1`** |
+| `namespace ns { f(){ y=IN; }; }` then `.ns.f` | `$y` unset, `${.ns.y}` is `IN` |
+
+Row three is the one that decides the implementation: a function defined
+inside the braces and called from *outside* still resolves through the
+namespace. So the region cannot be saved and restored around a call — it
+has to travel with the callee — and the record of it is already there,
+because such a function is stored under the member name. Reading the
+region off the function's own name is therefore free, and a
+save-and-restore would have answered row one wrong.
+
+A `.`-sourced file, an `eval` and a command substitution written inside
+the braces do inherit the region; they are text the block is running
+rather than a body defined somewhere else.
+
+### Namespaces are flat
+
+`namespace a { namespace b { x=1; }; }` leaves it at `${.b.x}`, and
+`${.a.b.x}` is `unset`. Nesting the blocks does not nest the names, which
+falls out of the region being replaced rather than appended to.
+
+### What is deliberately not modeled
+
+Four rows are the reference's own bookkeeping, measured and left out
+because this shell could not state any of them as a rule. Written down so
+that a later reader knows they were seen rather than missed.
+
+- `((n++))` inside the body writes the **global**, where `n=$((n+1))`
+  makes a member: `n=5; namespace ns { ((n++)); }` leaves the global at 6
+  and `n=5; namespace ns { n=$((n+1)); }` leaves it at 5 with `${.ns.n}`
+  at 6. Here both make a member, which is the rule every other row
+  states.
+- `unset x` inside the body leaves the *global* defined and empty there —
+  `x=OUTER; namespace ns { unset x; }` then `"[$x]"` is `[]` and not
+  `[OUTER]`. Here it takes the member and leaves the global alone.
+- Inside `( … )` the fall-through is not stable: a file whose *second*
+  subshell assigns inside `namespace ns` makes the *third* subshell's
+  read of an unassigned name answer `unset` where the first answered the
+  global's value, though a namespace made in a subshell does not
+  otherwise leak. Recorded as an artifact rather than a rule, the way
+  #2853's surface 2 is — and it is why every row above is its own script
+  file.
+- `typeset -p .ns` writes the whole block back as `namespace ns { … }`
+  and `${.ns}` answers the member names separated by blanks. Both are a
+  *listing* of the region, and neither is what a compound variable writes
+  here; inventing a third rendering to match them would be a decision and
+  not a measurement.
+
+Corpus and suite: the construct is one column's, so the case for it
+belongs in `share/suite/ksh/` rather than in the graded corpus. It is not
+in `share/suite/ksh/control.tests` for the reason #3309 gives — the whole
+file is read before any of it runs, so an unparsed `namespace` would cost
+every section of that file rather than its own.

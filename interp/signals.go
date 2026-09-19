@@ -179,7 +179,12 @@ func (r *Runner) sigs() *signalState {
 func (r *Runner) TrapsSignal() func(sig syscall.Signal) bool {
 	s := r.sigs()
 	return func(sig syscall.Signal) bool {
-		name, ok := signalNumbers[strconv.Itoa(int(sig))]
+		// signalName rather than the number table, because the two answer
+		// differently for a signal the kernel delivers and the table cannot
+		// name: those are trapped under their decimal spelling, and a front
+		// end told "not trapped" ends the shell before the handler the
+		// script installed can run.
+		name, ok := signalName(sig)
 		if !ok {
 			return false
 		}
@@ -280,6 +285,12 @@ func (r *Runner) canonicalSignal(s string) (string, syscall.Signal, signalWord) 
 	byNumber := false
 	if name, ok := signalNumbers[s]; ok {
 		up, byNumber = name, true
+	} else if n, ok := r.unnamedTrapNumber(s); ok {
+		// A number this kernel delivers and the table cannot name, taken as
+		// the condition it is where the dialect says so. The decimal is the
+		// key, because there is no name to be the key — see trapKey, which
+		// is how an arrival finds the entry again.
+		return strconv.Itoa(n), syscall.Signal(n), signalTrappable
 	} else if trimmed, had := strings.CutPrefix(up, "SIG"); had && r.knownSignal(trimmed) {
 		if !r.ask(r.sem().SIGPrefixAccepted, "the SIG prefix on a signal name") {
 			// Not a name this dialect has, so it names nothing — which is
@@ -321,6 +332,71 @@ func (r *Runner) canonicalSignal(s string) (string, syscall.Signal, signalWord) 
 		return up, sig, signalTrappable
 	}
 	return up, 0, signalUnknown
+}
+
+// unnamedTrapNumber reads a `trap` condition that is a plain decimal this
+// kernel delivers and this shell's table has no name for, and reports whether
+// this dialect takes one as a condition at all.
+//
+// Only where the number is written the way the shell writes it back. `015` is
+// not a condition here and is not TERM either, which is the reading the
+// number table already had — this adds numbers past the last name, not a
+// second spelling for the ones that have one.
+//
+// The named case is asked first and separately, so the helper is total: a
+// number the table *can* name is never one of these, however it is reached.
+// See Semantics.TrapTakesASignalNumberItCannotName for the measurement, and
+// note it is read rather than asked, exactly as the neighboring `kill` axis
+// is: the refusal it would otherwise produce is a real answer one column
+// gives, so a vector that says nothing keeps it.
+func (r *Runner) unnamedTrapNumber(s string) (int, bool) {
+	n, err := strconv.Atoi(s)
+	if err != nil || strconv.Itoa(n) != s {
+		return 0, false
+	}
+	if _, named := signalNumbers[s]; named {
+		return 0, false
+	}
+	if !signalInPlatformRange(n) {
+		return 0, false
+	}
+	return n, r.sem().TrapTakesASignalNumberItCannotName == Yes
+}
+
+// trapKey is the condition a signal was trapped under: the table's name where
+// the shell has one, and the decimal spelling where the kernel's range runs
+// past the table.
+//
+// It exists because a send resolves a *name* and the trap table is keyed by
+// condition, and for an unnamed number those two came apart: `kill -40 $$`
+// carries an empty name, so the lookup asked the table for "" and found
+// nothing however carefully the trap had been set (#3798).
+func trapKey(name string, sig syscall.Signal) string {
+	if name != "" {
+		return name
+	}
+	if signalInPlatformRange(int(sig)) {
+		return strconv.Itoa(int(sig))
+	}
+	return ""
+}
+
+// trapConditionSignal is the number a trap key names, and zero for a
+// condition that is not a signal at all.
+//
+// The table first and the decimal second, in that order, so a key that is a
+// name is never parsed and a key that is a number never has to be in the
+// table. `wait` reports the signal that interrupted it by number, and reading
+// an unnamed condition's number out of the name table alone answered 0 — a
+// signal nobody has.
+func trapConditionSignal(name string) syscall.Signal {
+	if sig, ok := trappableSignals[name]; ok {
+		return sig
+	}
+	if n, err := strconv.Atoi(name); err == nil && signalInPlatformRange(n) {
+		return syscall.Signal(n)
+	}
+	return 0
 }
 
 // trapSignal records what to run when a signal arrives.
@@ -700,7 +776,7 @@ func (r *Runner) pendingTrap() (syscall.Signal, bool) {
 	s.drainForwarded()
 	for _, name := range s.pending {
 		if body, ok := s.traps[name]; ok && body != "" {
-			return trappableSignals[name], true
+			return trapConditionSignal(name), true
 		}
 	}
 	return 0, false
@@ -771,7 +847,19 @@ func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, 
 	}
 }
 
-// signalName maps a delivered signal back to the name a trap was set under.
+// signalName maps a delivered signal back to the condition a trap was set
+// under.
+//
+// The decimal tail is the other half of what a nameless condition needs. A
+// trap on one of those subscribes to the real signal — trapSignal's
+// signal.Notify takes the number, name or no name — so an arrival from
+// outside the process comes back through here, and a lookup that only knew
+// the table dropped it on the floor: the handler ran for a signal the script
+// sent itself and never for the one its supervisor sent it.
+//
+// Out of range stays unnamed, which is what keeps this a mapping rather than
+// a rendering: a number that is not a signal on this kernel names no
+// condition, and nothing can have trapped it.
 func signalName(s os.Signal) (string, bool) {
 	sys, ok := s.(syscall.Signal)
 	if !ok {
@@ -781,6 +869,9 @@ func signalName(s os.Signal) (string, bool) {
 		if want == sys {
 			return name, true
 		}
+	}
+	if signalInPlatformRange(int(sys)) {
+		return strconv.Itoa(int(sys)), true
 	}
 	return "", false
 }

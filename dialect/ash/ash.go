@@ -1288,6 +1288,14 @@ func Semantics() interp.Semantics {
 	s.TrapPrintsBareWithP = interp.No
 	s.TrapListsSignalsWithL = interp.No
 	s.TrapOneArgumentIsACondition = interp.Yes
+	// A number this kernel delivers that no name in the table covers is a
+	// condition here, and this is the column whose listing writes it back as
+	// the number. Measured 2026-09-19 on linux/arm64, BusyBox ash 1.37.0 in
+	// the digest-pinned alpine image, the script file `trap 'echo CAUGHT' $1;
+	// kill -$1 $$; echo SURVIVED`: 15, 35, 40 and 64 all print CAUGHT then
+	// SURVIVED at 0 — 35 included, which is the first number musl's own
+	// SIGRTMIN covers.
+	s.TrapTakesASignalNumberItCannotName = interp.Yes
 	s.TrapReportsAnUnknownSingleCondition = interp.Yes
 	s.TrapSingleUnknownConditionIsUsage = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No

@@ -2649,6 +2649,14 @@ func Semantics() interp.Semantics {
 	// word `-p`, and the failure surfaces when it fires.
 	s.TrapParsesOptions = interp.No
 	s.TrapOneArgumentIsACondition = interp.Yes
+	// And the one column that refuses a number the table cannot name.
+	// Measured 2026-09-19 on linux/arm64, zsh 5.9 in Debian bookworm, the
+	// script file `trap 'echo CAUGHT' $1; kill -$1 $$; echo SURVIVED`: 15
+	// prints CAUGHT then SURVIVED, and 40 and 64 are `undefined signal: N`
+	// with the shell then dying of the signal at 128 + N. Written here rather
+	// than left to the preset, because the value a preset happens to hold is
+	// not a measurement and the next reader cannot tell the two apart.
+	s.TrapTakesASignalNumberItCannotName = interp.No
 	s.TrapReportsAnUnknownSingleCondition = interp.No
 	// ERR and DEBUG but not RETURN, and both follow the script everywhere:
 	// into functions, and — alone in the panel — into subshells and command

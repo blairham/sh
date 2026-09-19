@@ -5,6 +5,7 @@ package interp
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -448,6 +449,25 @@ func (r *Runner) printedSignalName(name string) string {
 	if name == "EXIT" || r.pseudoTrapSlot(name) != nil {
 		return name
 	}
+	if n, err := strconv.Atoi(name); err == nil && signalInPlatformRange(n) {
+		// A condition the shell has no name for is listed as the number it
+		// is, with no `SIG` in front of it — a prefix is part of a *name*,
+		// and `SIG40` is a word no shell reads back.
+		//
+		// This is byte-identical to one column and short of three. Measured
+		// 2026-09-19 in Debian bookworm and in the digest-pinned alpine
+		// image, `trap 'echo R' 40; trap`: BusyBox ash 1.37.0 writes `trap --
+		// 'echo R' 40`, and bash 5.2.15, dash 0.5.12 and ksh93u+ all write
+		// the C library's own name for it — `SIGRTMIN+6` in bash, `RTMIN+6`
+		// in the other two — where 6 is 40 minus that library's SIGRTMIN.
+		// That constant is 34 under glibc and 35 under musl, `syscall` does
+		// not export it, and this binary is linked against neither, so the
+		// spelling is out of reach here for the same reason
+		// platformsignals_linux.go already records it as. The number is what
+		// the shell can say truthfully, and it reads back into this same
+		// shell as the condition it names (#3798).
+		return strconv.Itoa(n)
+	}
 	// And the word this shell uses when it is the one naming a signal, which
 	// in one column is an older spelling than the table's own: measured
 	// 2026-09-17, ksh93u+ answers both `trap 'x' IOT; trap` and `trap 'x'
@@ -530,6 +550,16 @@ func trapConditionNumber(name string) int {
 		if k.Name == name {
 			return int(k.Sig)
 		}
+	}
+	if n, err := strconv.Atoi(name); err == nil && signalInPlatformRange(n) {
+		// A condition whose whole spelling is its number, which is what a
+		// signal this kernel delivers and the table cannot name is trapped
+		// under. It sorts where the number puts it and not at -1: measured
+		// 2026-09-19 in Debian bookworm with HUP, TERM and 40 all trapped,
+		// bash 5.2.15, dash 0.5.12 and BusyBox ash 1.37.0 list it last and
+		// ksh93u+ lists it first, which is each column's own order for 1, 15
+		// and 40 rather than a place of its own.
+		return n
 	}
 	return -1
 }

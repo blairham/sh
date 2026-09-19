@@ -996,6 +996,11 @@ func Semantics() interp.Semantics {
 	s.TrapPrintsBareWithP = interp.No
 	s.TrapListsSignalsWithL = interp.No
 	s.TrapOneArgumentIsACondition = interp.Yes
+	// A number this kernel delivers that no name in the table covers is a
+	// condition here. Measured 2026-09-19 on linux/arm64, dash 0.5.12 in
+	// Debian bookworm, the script file `trap 'echo CAUGHT' $1; kill -$1 $$;
+	// echo SURVIVED`: 15, 40 and 64 all print CAUGHT then SURVIVED at 0.
+	s.TrapTakesASignalNumberItCannotName = interp.Yes
 	s.TrapReportsAnUnknownSingleCondition = interp.Yes
 	s.TrapSingleUnknownConditionIsUsage = interp.No
 	// The sole holdout on the pseudo-conditions: `trap … ERR` is refused

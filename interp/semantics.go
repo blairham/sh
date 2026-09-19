@@ -20771,6 +20771,12 @@ func PosixSemantics() Semantics {
 		// right side is missing: POSIX gives the two-word form its own rule
 		// and the rule has no arm for this.
 		TestTrailingConnectiveTakesAMissingOperand: No,
+		// And a parenthesized expression standing alone is read: POSIX
+		// gives the four-operand form `( expr )` its own rule and the
+		// three-operand form one beside it, so the group closes. The one
+		// column that cannot close it is answering with a defect rather
+		// than with a reading, and says so where it overrides this.
+		TestGroupedUnaryAloneLosesTheClosingParen: No,
 		TestStringOrder: TestStringOrderNeither,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several

@@ -360,6 +360,11 @@ func Dialect() syntax.Dialect {
 	// word reading ksh93 has — `[[ ]] ]]` and `[[ ]] == x ]]` are refusals
 	// here and run there — only where the refusal lands (#2964).
 	d.ConditionTermMissingBlamesTheTokenAfterTheCloser = true
+	// A condition term's first word may be the last thing on its line, with
+	// the operator or the `]]` that decides it written on the next. This
+	// column alone: bash 5.3, bash 3.2 and ksh93 all name the newline there.
+	// See syntax.Dialect.ConditionNewlineMayFollowATermsFirstWord (#3627).
+	d.ConditionNewlineMayFollowATermsFirstWord = true
 	// A `{ … }` written immediately after `$$` is a run of characters: a
 	// blank, a newline or an operator inside is text, and the braces are a
 	// brace list nowhere — though a range written straight into them still

@@ -3118,6 +3118,10 @@ func Diagnostics() interp.Diagnostics {
 		// a shorter `near` at the token's. Measured on bash 5.3.15 —
 		// `[[ -n x` newline `-z "" ]]` names line 1 and then line 2.
 		CondSyntaxPreamble: "syntax error in conditional expression: unexpected token `%[1]s'",
+		// And the one position it words as a statement about what it was
+		// waiting for: a newline behind a term whose shape is not yet
+		// settled. Measured 2026-09-18 on 5.3.20 and 3.2 alike (#3627).
+		CondTermUndecidedPreamble: "unexpected token `%[1]s', conditional binary operator expected",
 		// And a *second* sentence for a token standing where a condition was
 		// to begin, with no sentence at all for the closer itself — see
 		// CondCommandPreamble, and CondGroupUnclosed for the line each open

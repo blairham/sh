@@ -41,7 +41,14 @@ func PrintFileWith(f *File, l Layout) string {
 		return ""
 	}
 	p := printer{layout: l}
-	p.lines(f.Stmts)
+	if l.FileFollowsTheSourceUnits {
+		p.units(f.Stmts)
+	} else {
+		p.lines(f.Stmts)
+	}
+	if l.TrailingBlankLine {
+		p.str("\n")
+	}
 	return p.b.String()
 }
 
@@ -298,6 +305,52 @@ type Layout struct {
 	// decides this for itself, since a name list is greedy and only a
 	// newline ends it.
 	BraceAfterAFunctionHeaderOnItsOwnLine bool
+
+	// StatementsShareALineOutsideADeclaration joins the statements of a block
+	// with Separator and a blank rather than giving each a line, and keeps a
+	// brace group or a subshell on the line it started — everywhere but inside
+	// a function declaration's body, where Lines applies as it stands.
+	//
+	// One field with a boundary in its name, because the boundary is what was
+	// measured. A canonicalizer that writes a whole script back uses one
+	// arrangement for a declaration's body and another for everything outside
+	// one, and the two differ in exactly this: `{ echo a; echo b; }` written at
+	// file scope comes back on one line, and the same group inside `f() { … }`
+	// comes back over four. It is not a depth rule and not a rule about the
+	// outermost command — `if true; then { echo a; echo b; }; fi` at file scope
+	// expands the `if` and leaves the group alone, and `if true; then f() {
+	// echo a; echo b; }; fi` expands the declaration's group while joining the
+	// `if`'s own body. The declaration is the whole of the boundary.
+	//
+	// What a keyword opens still takes lines of its own: `if a; then` ends its
+	// line, the body is indented, and `fi` starts one. So this is narrower than
+	// turning Lines off, which flattens the construct as well.
+	StatementsShareALineOutsideADeclaration bool
+
+	// FileFollowsTheSourceUnits writes the statements of a *file* the way the
+	// input laid them out: a statement that begins on a later line than the one
+	// before it ended begins a line of its own, and a gap of any size between
+	// two of them becomes exactly one blank line.
+	//
+	// The top level only, which is what makes it a separate answer from Lines.
+	// Inside a block the same arrangement ignores the source's lines entirely —
+	// `if true; then` over three input lines comes back with its body joined on
+	// one — so a file's own line structure is preserved at the level a reader
+	// has by the line and nowhere below it.
+	//
+	// A gap before the *first* statement counts, which is how a shebang and a
+	// leading comment block leave a blank line behind in an engine whose tree
+	// holds no comments.
+	FileFollowsTheSourceUnits bool
+
+	// TrailingBlankLine ends the output with a blank line.
+	//
+	// Its own field rather than part of the one above, because the two come
+	// apart on a route that exists: an engine that writes a file back unit by
+	// unit and then meets a parse failure writes every unit it read and no
+	// blank line at the end, where the same engine reaching the end of the
+	// input writes one.
+	TrailingBlankLine bool
 }
 
 // FunctionHeader is how a function declaration's header is spelled.
@@ -380,9 +433,17 @@ type printer struct {
 	// depth how many blocks deep the writing has reached.
 	layout Layout
 	depth  int
+	// inDeclaration is whether the writing has descended into a function
+	// declaration's body, which is the one boundary an arrangement may change
+	// at — see Layout.StatementsShareALineOutsideADeclaration.
+	inDeclaration bool
 	// heredocs are the bodies owed by the statement being written, which go
 	// after it rather than where the operator is.
 	heredocs []*Redirect
+	// consumed is the last source line a written here-document body reached,
+	// which is the one thing a statement's own End cannot say — see units,
+	// its only reader.
+	consumed int32
 }
 
 func (p *printer) str(s string) { p.b.WriteString(s) }
@@ -426,6 +487,48 @@ func (p *printer) newLine() {
 // apart only because the two callers read better for it.
 func (p *printer) lines(list []*Stmt) { p.stmts(list) }
 
+// units writes the statements of a file the way the input laid them out.
+//
+// A unit is what one input line's worth of grammar produced: statements that
+// begin where the one before them ended share a line, and one that begins on
+// a later line begins a line. A gap of any size between two of them — blank
+// lines, comment lines, both — becomes exactly one blank line, and a gap
+// before the first statement counts, which is what a shebang leaves behind in
+// a tree that holds no comments.
+//
+// Only the top level asks this. Inside a block the arrangement decides where
+// the lines go and the source does not, which is why this is a loop of its own
+// and not a value of Layout.Lines.
+func (p *printer) units(list []*Stmt) {
+	var ended int32
+	for i, st := range list {
+		switch {
+		case i > 0 && st.Pos().Line == ended:
+			// The same unit: what the source wrote on one line stays on one.
+			p.separate(list[i-1], st)
+		default:
+			if i > 0 {
+				p.str("\n")
+			}
+			if st.Pos().Line > ended+1 {
+				p.str("\n")
+			}
+		}
+		p.stmt(st)
+		ended = st.End().Line
+		if p.consumed > ended {
+			// A here-document body went on past the statement that owed it,
+			// so the unit ended where the body did. Without this the lines
+			// it read look like a gap, and a blank line goes in that the
+			// input never had.
+			ended = p.consumed
+		}
+	}
+	if len(list) > 0 {
+		p.str("\n")
+	}
+}
+
 // stmts writes a list, separating each from the one before it the way the
 // source did.
 //
@@ -446,8 +549,32 @@ func (p *printer) stmts(list []*Stmt) {
 	}
 }
 
+// shareALine reports whether the statements being written join a line rather
+// than taking one each — see Layout.StatementsShareALineOutsideADeclaration,
+// whose boundary this is the whole of.
+func (p *printer) shareALine() bool {
+	return p.layout.StatementsShareALineOutsideADeclaration && !p.inDeclaration
+}
+
 // separate writes what goes between two statements.
 func (p *printer) separate(prev, next *Stmt) {
+	if p.layout.Lines && p.shareALine() {
+		// Joined, whatever the source did, which is the same disregard for
+		// the source's lines the branch below has — it differs only in
+		// writing the separator and a blank where that writes a newline.
+		switch {
+		case prev.Background:
+			// Already terminated: `&` is the separator, and `&;` parses
+			// nowhere. The blank is all that keeps the two apart.
+			p.str(" ")
+		case p.atLineStart():
+			// A here-document body ended the line, so there is nothing on
+			// this line to terminate and the next statement starts here.
+		default:
+			p.str(p.layout.Separator + " ")
+		}
+		return
+	}
 	if p.layout.Lines {
 		if prev.Background && p.layout.BackgroundKeepsTheLine {
 			// The `&` is the terminator, so there is nothing to write
@@ -580,7 +707,7 @@ func (p *printer) expr(e Expr) {
 // both required — they are what make it a reserved word rather than the start
 // of a name.
 func (p *printer) braceGroup(list []*Stmt) {
-	if p.layout.Lines {
+	if p.layout.Lines && !p.shareALine() {
 		p.str("{" + p.layout.BraceOpenSuffix)
 		// The outermost brace — a function's own — is the one that differs; a
 		// brace inside one opens a line in every arrangement measured.
@@ -609,7 +736,7 @@ func (p *printer) command(c Command) {
 	case *SimpleCmd:
 		p.simple(x)
 	case *Subshell:
-		if p.layout.Lines && p.layout.SubshellBodyOnItsOwnLines {
+		if p.layout.Lines && p.layout.SubshellBodyOnItsOwnLines && !p.shareALine() {
 			// The shape a brace group gets, which one engine's listing gives
 			// a subshell too. No separation to arrange for here: the
 			// parenthesis ends its line, so nothing can run into it.
@@ -841,7 +968,11 @@ func (p *printer) command(c Command) {
 				p.str(" ")
 			}
 			p.str("()")
-			if _, braced := x.Body.(*Group); braced && p.layout.BraceAfterAFunctionHeaderOnItsOwnLine {
+			// A body that is not a brace group still opens one where the
+			// arrangement braces every body, so the question is whether a `{`
+			// is about to be written and not whether the source had one.
+			_, braced := x.Body.(*Group)
+			if (braced || p.layout.BodyIsAlwaysBraced) && p.layout.BraceAfterAFunctionHeaderOnItsOwnLine {
 				p.str(" \n" + p.pad())
 			} else {
 				p.str(" ")
@@ -857,7 +988,19 @@ func (p *printer) command(c Command) {
 				p.str(" ")
 			}
 		}
-		p.command(x.Body)
+		// A declaration's body is the one boundary an arrangement may change
+		// at, and the change reaches everything inside it — a group nested
+		// three deep in a declared body is written the declared way.
+		//
+		// printed rather than command, so that an arrangement asking for a
+		// body that is always braced gets one here too: a nested `inner() ( …
+		// )` comes back with `{ … }` around the subshell in the engine this
+		// models, and writing the subshell bare was a second place the same
+		// normalization was owed.
+		saved := p.inDeclaration
+		p.inDeclaration = true
+		p.printed(x.Body)
+		p.inDeclaration = saved
 	case *CoprocClause:
 		p.str("coproc ")
 		// The word as written where it was not a bare name: printing what it
@@ -1605,6 +1748,17 @@ func (p *printer) flushHeredocs() {
 		}
 		if rd.Heredoc != nil {
 			p.str(rd.Heredoc.Literal())
+			// The last source line this statement consumed, which its own
+			// End does not name: a body is read from the lines *after* the
+			// command. Only units asks, and it asks because a gap is the
+			// distance from where the statement really ended.
+			//
+			// One line back from the body's end, which sits at the start of
+			// the line *after* the delimiter — so the delimiter's own line
+			// is the last one the unit took.
+			if end := rd.Heredoc.End().Line - 1; end > p.consumed {
+				p.consumed = end
+			}
 		}
 		if !p.atLineStart() {
 			return

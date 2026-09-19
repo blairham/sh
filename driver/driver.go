@@ -703,6 +703,53 @@ func (sh Shell) announceHelp() int {
 	return h.Status
 }
 
+// listScript writes the program back instead of running it, and answers with
+// the status the invocation ends on.
+//
+// What it writes is a canonical form and not the author's text: the tree holds
+// no comments, so the shebang and every comment in the file are gone from the
+// output. That is a fact about the option and not a shortcoming of this front
+// end — the shell being modeled writes the same blank where a comment stood,
+// measured — and it is why the arrangement is a syntax.Layout and not the
+// formatter's syntax.Style.
+//
+// A parse failure is not silence. Everything read before it is written, then
+// the ordinary parse diagnostic in the ordinary wording, and the status is the
+// dialect's ScriptListingOption.ParseFailureStatus rather than the one a run
+// of the same script would exit — measured, 1 against 2, with the same
+// sentence on standard error both times.
+func (sh Shell) listScript(in source, r *interp.Runner, src string) int {
+	if in.onStdin {
+		// The program is on the descriptor and there is no run to read it a
+		// block at a time, so it is read whole. Nothing else reads the
+		// descriptor afterwards: the listing ends the invocation.
+		b, err := io.ReadAll(sh.Stdin)
+		if err != nil {
+			sh.errf("%s: %v\n", sh.Name, err)
+			return 1
+		}
+		src = string(b)
+	}
+	p := syntax.NewParser(src, sh.Dialect.On(in.programRoute()))
+	f := p.Parse()
+	l := r.ScriptListingLayout()
+	err := p.Err()
+	if err != nil {
+		// The blank line at the end belongs to reaching the end of the
+		// input, which this did not: measured, the same script that lists
+		// with a trailing blank line when it parses lists without one when
+		// it does not.
+		l.TrailingBlankLine = false
+	}
+	_, _ = fmt.Fprint(sh.Stdout, syntax.PrintFileWith(f, l))
+	if err == nil {
+		return 0
+	}
+	sh.sayRemarks(in.dg, in.diagName(), p.Remarks(), 0, true)
+	sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, src))
+	return sh.Semantics.ScriptListingOption.ParseFailureStatus
+}
+
 func (sh Shell) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(sh.Stderr, format, args...)
 }
@@ -820,6 +867,15 @@ type source struct {
 	// is nothing to run. Beside version and for its reasons, and it beats it
 	// where both were written: see Semantics.HelpOption.
 	help bool
+	// scriptListing says the invocation asked for the program written back
+	// rather than run. It travels here rather than on the invocation alone
+	// because the route decides whether it applies: measured, a command
+	// string wins over the option and is simply run.
+	//
+	// The prompt route is the one this is deliberately not set on, and it is
+	// the one row of the option nobody has measured: there is no script to
+	// list until a person has typed one and ended it.
+	scriptListing bool
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
@@ -1054,6 +1110,12 @@ type invocation struct {
 	// ended the reading would answer what the reference refuses. See
 	// Semantics.HelpOption.
 	help bool
+	// scriptListing is the dialect's option asking for the program written
+	// back rather than run — bash's `--pretty-print`. Recorded here and
+	// answered after the operands have been read, because which route the
+	// invocation named decides whether it applies: measured, a command string
+	// wins over the option outright. See Semantics.ScriptListingOption.
+	scriptListing bool
 	// policy names a policy file and audit names where the event stream goes
 	// — `--policy FILE`, `--audit FILE`, long form only. They are the one
 	// pair of options here that no real shell has, and they are here anyway
@@ -1348,6 +1410,14 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			inv.help = true
 			return args, nil
 		}
+		// And the option that asks for the program written back, recorded
+		// the same way and for the same reason: the reading goes on, so a
+		// refused word behind it still wins, and which route was named is
+		// not known until the operands have been read.
+		if spelt(sh.Semantics.ScriptListingOption.Spellings, a) {
+			inv.scriptListing = true
+			return args, nil
+		}
 		rest, matched, err := sh.startupOption(a, args, inv)
 		if matched {
 			return rest, err
@@ -1603,6 +1673,11 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	// And the emulation, for the same reason again: it is applied against a
 	// runner, and which route built that runner does not change the mode.
 	in.emulation, in.emulating = inv.emulation, inv.emulating
+	// Whether the program is to be written back rather than run, which is the
+	// one invocation fact here that a *route* can overrule. Measured on bash
+	// 5.3.20: `--pretty-print -c 'echo hi'` writes `hi`, so a command string
+	// wins outright; a prompt has nothing to list yet and is left alone.
+	in.scriptListing = inv.scriptListing && !in.prompt && in.input != commandStringLabel
 	return in, nil
 }
 
@@ -2269,6 +2344,16 @@ func (sh Shell) runInput(in source) int {
 		// when this was answered in the front end.
 		sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, in.scriptErr.path, in.scriptErr.err))
 		return sh.Diagnostics.ScriptStatus(in.scriptErr.err)
+	}
+	if in.scriptListing {
+		// The invocation asked for the program rather than a run of it, so
+		// nothing below this happens: no startup file is read and no line is
+		// executed. Here rather than earlier because everything above it is
+		// judged first — a file that will not open is the ordinary 127 and
+		// there is nothing to list, measured — and after the runner is built
+		// because the arrangement needs one, for the one field that decodes
+		// a `$'…'`. See Runner.ScriptListingLayout.
+		return sh.listScript(in, r, src)
 	}
 	// The startup files, before the script. After the options, which is where
 	// the panel has them: `-x` given to the invocation traces the profile's

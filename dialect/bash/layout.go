@@ -23,6 +23,33 @@ func FunctionLayout() syntax.Layout {
 	return l
 }
 
+// ScriptListingLayout is how a whole script is written back when the
+// invocation asked for the program rather than a run of it.
+//
+// It is FunctionLayout with four answers changed, which is the finding this
+// whole arrangement rests on: what the option writes is not a formatter's
+// output but the *listing* layout applied to a file. Measured 2026-09-19 on
+// bash 5.3.20 over 33 probe scripts, `env -i PATH=/usr/bin:/bin LC_ALL=C`.
+//
+// The header is the first of the four: a declaration nested inside a listed
+// body is spelled with the keyword and the parentheses, and the same
+// declaration written back as part of a script is spelled with the
+// parentheses alone.
+//
+// The other three are what a file has that a function body does not — a top
+// level. Outside a declaration the statements of a block share a line and a
+// brace group keeps its own, where inside one each takes a line; the file's
+// own units are kept, with a gap of any size between two of them collapsing
+// to one blank line; and the output ends with a blank line.
+func ScriptListingLayout() syntax.Layout {
+	l := FunctionLayout()
+	l.FunctionHeader = syntax.FunctionHeaderParens
+	l.StatementsShareALineOutsideADeclaration = true
+	l.FileFollowsTheSourceUnits = true
+	l.TrailingBlankLine = true
+	return l
+}
+
 // ExportedFunctionLayout is how a function is written into the environment for
 // a child to read back.
 func ExportedFunctionLayout() syntax.Layout {

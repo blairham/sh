@@ -16257,6 +16257,13 @@ type Semantics struct {
 	// does not know.
 	ScriptListingOption ScriptListingOption
 
+	// StringCatalogOption is how this shell answers an invocation option
+	// asking it to list the strings the program marked for translation
+	// instead of running it — bash's `-D`, `--dump-strings` and
+	// `--dump-po-strings`. See [StringCatalogOption]. The zero value is a
+	// shell with no such option.
+	StringCatalogOption StringCatalogOption
+
 	// EmulationOption is how this shell's *invocation* asks it to start under
 	// another shell's semantics, before any line is read — zsh's
 	// `--emulate MODE`. See [EmulationOption]. The zero value is a shell with
@@ -20786,6 +20793,53 @@ type ScriptListingOption struct {
 	// exits: measured, the file that exits 2 when bash runs it exits 1 when
 	// bash lists it, with the same sentence on standard error both times.
 	ParseFailureStatus int
+}
+
+// StringCatalogOption is what a shell does when its invocation asks it to list
+// the strings the program marked for translation rather than run it.
+//
+// The mark is `$"…"` and one column in the panel has it *and* an option to
+// list it. Measured 2026-09-19 on bash 5.3.20, every run under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null:
+//
+//	bash 5.3.20   `-D` and `--dump-strings` write each string in double
+//	              quotes; `--dump-po-strings` writes a gettext catalog entry
+//	              for each. Both at 0, and nothing is run.
+//	zsh 5.9.2     reads `$"…"` as a literal `$` and has no such option
+//	ksh93u+       the same
+//	dash 0.5.12   the same
+//	BusyBox ash   the same
+//
+// Four rows measured and encoded rather than tidied up:
+//
+//   - Every route answers it. Unlike the option that writes the program
+//     back, a command string does *not* win: `-D -c 'echo $"x"'` lists the
+//     string and runs nothing, and so does standard input.
+//   - The portable form wins wherever both were written, in either order.
+//   - A parse failure writes every string read before it, then the ordinary
+//     parse diagnostic in the ordinary wording, and exits the status a *run*
+//     of the same script would — which is the opposite of what the
+//     program-listing option does, and is why that one carries a status of
+//     its own and this one does not.
+//   - A file that will not open is the ordinary 127, because the failure
+//     happens before there is anything to list.
+//
+// Recording the mark promises nothing about *translating* it. These options
+// print and run nothing, no message catalog is consulted, and `TEXTDOMAIN` is
+// not implemented — see [syntax.Span.Translated].
+type StringCatalogOption struct {
+	// Spellings names the plain form, whitespace-separated and written
+	// exactly as a command line writes it. Empty means the shell has no such
+	// option, and the word is then refused like any other it does not know.
+	Spellings string
+
+	// PortableObjectSpellings names the form that writes a gettext catalog —
+	// a `#: file:line` comment, a `msgid` and an empty `msgstr` per string.
+	//
+	// Its own field rather than a flag on one roster, because a shell may
+	// have either without the other and because the two are answered
+	// together: written with the plain form, in either order, this one wins.
+	PortableObjectSpellings string
 }
 
 // EmulationOption is an invocation option that starts the shell under another

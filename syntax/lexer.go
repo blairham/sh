@@ -2745,17 +2745,26 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 	case c == '$' && l.peekAt(1+skip) == '"' && l.dialect.DollarDoubleQuote:
 		// `$"..."` marks the string for locale translation. With no message
 		// catalog every shell that has the form reads it as a plain
-		// double-quoted string — same escapes, same expansions — so the `$`
-		// contributes nothing and the spans are exactly what a bare `"`
-		// produces. The printer therefore writes them back as plain quotes:
-		// the two spellings parse to identical trees, and recording the `$`
-		// would be keeping a byte the tree has no question for. Where the
-		// flag is off, the `$` falls through to the literal path, which is
-		// what dash and zsh do with it.
+		// double-quoted string — same escapes, same expansions — so the mark
+		// changes nothing about how the spans expand, and they are exactly
+		// what a bare `"` produces.
+		//
+		// The mark itself is recorded all the same, on [Span.Translated].
+		// This comment used to say it should not be, on the reasoning that
+		// the tree had no question for the byte — true of every consumer the
+		// tree had then, and false of the one invocation option whose whole
+		// job is to list these strings and no others (#3003). A tree that
+		// dropped the `$` could not answer it at all. Where the flag is off,
+		// the `$` falls through to the literal path, which is what dash and
+		// zsh do with it.
 		flush()
 		l.advance() // $
 		l.takeContinuationAfterADollar(Unquoted)
-		return l.scanDouble(), true
+		spans := l.scanDouble()
+		for i := range spans {
+			spans[i].Translated = true
+		}
+		return spans, true
 
 	case l.inHeredocDelimiter && l.startsDelimiterSubstitution():
 		// Below `$'` and `$"`, which are quoting rather than expansion and

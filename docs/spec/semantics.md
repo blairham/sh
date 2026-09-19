@@ -12849,6 +12849,13 @@ failure did not: the same script lists with a trailing blank line when it
 parses and without one when it does not. That is the pair of routes that makes
 `TrailingBlankLine` a separate field.
 
+### Two smaller things it also normalizes
+
+A `$"…"` comes back as a plain double-quoted string — the mark is gone, the
+same way it is gone from `declare -f`. See *Listing the strings a program
+marked for translation* below, which is where that measurement lives and where
+the options that *do* show them are.
+
 ### What is not reproduced
 
 **bash reprints inside a command substitution and this writes the span back as
@@ -12862,6 +12869,121 @@ It is **not** a fault of this option. `declare -f` reprints inside `$( )` in
 the same way, so it is a fidelity gap on a route already shipped, and it is
 filed on its own rather than folded in here.
 
+
+## Listing the strings a program marked for translation
+
+`$"…"` is a double-quoted string marked for a message catalog, and two of the
+seven columns read the mark at all — bash and ksh93 strip the `$` and take a
+plain double-quoted string; dash, zsh and BusyBox ash keep the `$` as a
+literal character. Only bash has invocation options that *list* the marked
+strings: `-D`, `--dump-strings` and `--dump-po-strings`.
+`Semantics.StringCatalogOption` holds the answer; measured 2026-09-19 on
+`/opt/homebrew/bin/bash` 5.3.20, every run under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null.
+
+**Nothing is translated.** The three options print and run nothing, no message
+catalog is consulted, and `TEXTDOMAIN` is not implemented. Recording the mark
+is a fact about the text; it is not a promise about a catalog, and this
+paragraph is here so that the next reader does not take it for one.
+
+### The mark is on the span, not in the quoting
+
+`syntax.Span.Translated` carries it, and it is a flag rather than a `Quoting`
+value of its own. The tree already states the rule this follows, beside
+`Span.CurrentShell`: a distinction that everything which *runs* a word treats
+alike belongs on a flag, and only a distinction that changes expansion earns a
+quoting value. With no catalog loaded the mark changes nothing — same escapes,
+same expansions, same splitting — so a quoting value would have put it in
+front of forty readers with no question for it.
+
+It is set on **every span of the run**, because a run is what carries one pair
+of quotes: `$"a$xb"` is three spans inside one `$"…"`.
+
+The lexer used to drop it, with a comment saying the tree held no question for
+the byte. That was true of every consumer the tree had and false of the one
+whose whole job is to find these strings (#3003).
+
+### Writing it back: the round trip keeps it and every listing drops it
+
+`Layout.TranslatedWordWrittenPlain` is the answer, and the measurement was not
+the obvious one. bash drops the mark in **all** of the places it says a body
+back — `declare -f`, `type`, `export -f` and the whole-script listing alike:
+
+    f() { echo $"hi"; }; declare -f f      f () ⏎{ ⏎    echo "hi"⏎}
+
+So the mark is an invocation-time fact there: by the time a body can be
+listed, the word has already been read. The default keeps it, because a round
+trip that dropped it would hand back a program the options below cannot see,
+and bash's three arrangements ask for it to go. ksh93 is the other column with
+the form and answers differently for a different reason — its listing is the
+source text, so the `$` comes back because every byte does.
+
+### The three options
+
+    echo $"one"          -D, --dump-strings      "one"
+    echo $"one"          --dump-po-strings       #: t.sh:1⏎msgid "one"⏎msgstr ""
+
+The plain form writes the text back inside the quotes it was written in, with
+nothing escaped again — it is already a double-quoted body. The portable form
+writes a gettext catalog entry: a `#:` comment naming the origin and the line,
+a `msgid`, and an empty `msgstr`.
+
+A string holding a newline is written in pieces, which is the catalog format's
+own rule: `msgid ""` and then one quoted piece per line, each but the last
+ending in `\n` — so a string that ends in a newline finishes with an empty
+piece. Inside a piece, `\` becomes `\\` and `"` becomes `\"`.
+
+Six rows about where the options apply, all measured and all encoded:
+
+    -D -c 'echo $"x"'          lists the string and runs nothing — a command
+                               string does NOT win, which is the opposite of
+                               the whole-program listing above
+    -D < f.sh                  standard input is listed; the origin is the
+                               shell's own name
+    --dump-po-strings -c …     the origin is `-c`
+    -D a.sh b.sh               only `a.sh`; the rest are the parameters
+    -D nosuch.sh               the ordinary 127, nothing listed
+    +D f.sh                    the same as `-D`; the sign is not read
+
+The two forms may both be written and **the portable one wins, in either
+order** — `--dump-strings --dump-po-strings` and the reverse give the catalog.
+That is why the vector holds two spellings rather than one roster.
+
+A parse failure lists every string read before it, writes the ordinary parse
+diagnostic in the ordinary wording, and exits the status a **run** of the same
+input would — 2, byte-identical sentence. That is deliberately *not* a status
+of its own, and it is the row that parts this option from `--pretty-print`,
+which answers 1 where the run answers 2.
+
+### What is not reached
+
+A `$"…"` written **inside a substitution** is not listed here and is listed by
+bash: `echo ${x-$"never"}` and `echo $(echo $"never")` each name the string
+there and neither does here. A `$(…)` span holds its script as unparsed text
+and a `${…}` span holds its operators the same way, so the mark inside one is
+text rather than a run.
+
+It is the same recursion a *listing* of those spans would need — see the
+`$( )` note under the whole-program listing above — and the limit is asserted
+rather than left to be discovered, so the day the printer learns to reprint
+inside a substitution the assertion fails rather than the behavior quietly
+improving.
+
+One smaller difference, and it is the printer's normalization rather than this
+option's: a backslash written doubled inside the quotes comes back singly,
+because the tree records the character and not the spelling. `$"a\\b"` lists as
+`"a\b"` here and as `"a\\b"` there. The string is the same string; the
+spelling is not.
+
+### The walk is the printer's
+
+`syntax.TranslatedStrings` finds them by *printing* the file with a collector
+attached rather than by walking the tree itself. A second traversal would have
+to know every node kind, and the one it missed would be silent — where a
+printer that failed to reach a node would be writing a program back with a
+piece of it missing, which nothing in this tree could keep quiet about. The
+same reasoning is why a redirection target is reached: it is written through
+the printer's own sub-printer, and the collector travels with it.
 
 ## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack
 

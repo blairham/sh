@@ -703,26 +703,32 @@ func (sh Shell) announceHelp() int {
 	return h.Status
 }
 
-// listScript writes the program back instead of running it, and answers with
-// the status the invocation ends on.
+// listProgram answers every invocation option that asks for the program
+// instead of a run of it, and returns the status the invocation ends on.
 //
-// What it writes is a canonical form and not the author's text: the tree holds
-// no comments, so the shebang and every comment in the file are gone from the
-// output. That is a fact about the option and not a shortcoming of this front
-// end — the shell being modeled writes the same blank where a comment stood,
-// measured — and it is why the arrangement is a syntax.Layout and not the
-// formatter's syntax.Style.
+// One function and one parse, because the options **compose**: asked for both
+// the marked strings and the program, the shell being modeled writes the
+// strings, then the program, then one diagnostic if the input would not parse.
+// Measured 2026-09-19 — `--dump-strings --pretty-print` and the reverse both
+// write both, in that order.
 //
-// A parse failure is not silence. Everything read before it is written, then
-// the ordinary parse diagnostic in the ordinary wording, and the status is the
-// dialect's ScriptListingOption.ParseFailureStatus rather than the one a run
-// of the same script would exit — measured, 1 against 2, with the same
-// sentence on standard error both times.
-func (sh Shell) listScript(in source, r *interp.Runner, src string) int {
+// What the program listing writes is a canonical form and not the author's
+// text: the tree holds no comments, so the shebang and every comment in the
+// file are gone from the output. That is a fact about the option and not a
+// shortcoming of this front end — the shell being modeled writes the same
+// blank where a comment stood, measured — and it is why the arrangement is a
+// syntax.Layout and not the formatter's syntax.Style.
+//
+// A parse failure is not silence. Everything read before it is listed, then
+// the ordinary parse diagnostic in the ordinary wording. The status is the
+// dialect's ScriptListingOption.ParseFailureStatus where the program was
+// asked for — measured 1, against the 2 a *run* of the same script exits —
+// and the ordinary parse status where only the strings were.
+func (sh Shell) listProgram(in source, r *interp.Runner, src string) int {
 	if in.onStdin {
 		// The program is on the descriptor and there is no run to read it a
-		// block at a time, so it is read whole. Nothing else reads the
-		// descriptor afterwards: the listing ends the invocation.
+		// block at a time, so it is read whole. Nothing reads the descriptor
+		// afterwards: the listing ends the invocation.
 		b, err := io.ReadAll(sh.Stdin)
 		if err != nil {
 			sh.errf("%s: %v\n", sh.Name, err)
@@ -732,22 +738,96 @@ func (sh Shell) listScript(in source, r *interp.Runner, src string) int {
 	}
 	p := syntax.NewParser(src, sh.Dialect.On(in.programRoute()))
 	f := p.Parse()
-	l := r.ScriptListingLayout()
 	err := p.Err()
-	if err != nil {
-		// The blank line at the end belongs to reaching the end of the
-		// input, which this did not: measured, the same script that lists
-		// with a trailing blank line when it parses lists without one when
-		// it does not.
-		l.TrailingBlankLine = false
+	if in.stringCatalog || in.stringCatalogPortable {
+		sh.writeMarkedStrings(in, f)
 	}
-	_, _ = fmt.Fprint(sh.Stdout, syntax.PrintFileWith(f, l))
+	if in.scriptListing {
+		l := r.ScriptListingLayout()
+		if err != nil {
+			// The blank line at the end belongs to reaching the end of the
+			// input, which this did not: measured, the same script lists
+			// with a trailing blank line when it parses and without one when
+			// it does not.
+			l.TrailingBlankLine = false
+		}
+		_, _ = fmt.Fprint(sh.Stdout, syntax.PrintFileWith(f, l))
+	}
 	if err == nil {
 		return 0
 	}
 	sh.sayRemarks(in.dg, in.diagName(), p.Remarks(), 0, true)
 	sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, src))
-	return sh.Semantics.ScriptListingOption.ParseFailureStatus
+	if in.scriptListing {
+		return sh.Semantics.ScriptListingOption.ParseFailureStatus
+	}
+	return in.dg.StatusForParseError(err)
+}
+
+// writeMarkedStrings lists the strings the program marked for translation.
+//
+// Nothing is translated and no message catalog is consulted — see
+// Semantics.StringCatalogOption, and syntax.Span.Translated, which is what
+// records the mark. The option lists what a translator would be given.
+func (sh Shell) writeMarkedStrings(in source, f *syntax.File) {
+	for _, m := range syntax.TranslatedStrings(f) {
+		if in.stringCatalogPortable {
+			// The portable form wins wherever both were written, in either
+			// order — measured, and the reason the two are separate flags.
+			_, _ = fmt.Fprintf(sh.Stdout, "#: %s:%d\n%s\nmsgstr \"\"\n",
+				sh.markedStringOrigin(in), m.Line, portableObjectMsgid(m.Text))
+			continue
+		}
+		// The text back inside the quotes it was written in, and nothing
+		// else: it is already a double-quoted body, so anything that escaped
+		// it again would be showing a string the script does not hold.
+		_, _ = fmt.Fprintf(sh.Stdout, "%s%s%s\n", `"`, m.Text, `"`)
+	}
+}
+
+// markedStringOrigin is what a catalog entry calls the file the string came
+// from, which differs by route: a script is named by its path, a command
+// string by the front end's label for it, and standard input by the shell
+// itself. Measured on all three.
+func (sh Shell) markedStringOrigin(in source) string {
+	switch {
+	case in.file != "":
+		return in.file
+	case in.input != "":
+		return in.input
+	}
+	return sh.Name
+}
+
+// portableObjectMsgid writes one catalog entry's `msgid`.
+//
+// A string holding no newline is written on the keyword's own line. One that
+// holds a newline is written as an empty `msgid` followed by a quoted piece
+// per line, each but the last ending in `\n` — so a string ending in a
+// newline finishes with an empty piece. Measured on the shell that writes
+// these, which is the only reason the shape is this and not another.
+func portableObjectMsgid(text string) string {
+	if !strings.Contains(text, "\n") {
+		return `msgid "` + portableObjectEscape(text) + `"`
+	}
+	lines := strings.Split(text, "\n")
+	var b strings.Builder
+	b.WriteString(`msgid ""`)
+	for i, line := range lines {
+		b.WriteString("\n\"" + portableObjectEscape(line))
+		if i < len(lines)-1 {
+			b.WriteString(`\n`)
+		}
+		b.WriteString(`"`)
+	}
+	return b.String()
+}
+
+// portableObjectEscape protects the two characters a catalog string may not
+// hold bare. The newline is not one of them — it is the line split above.
+func portableObjectEscape(text string) string {
+	text = strings.ReplaceAll(text, `\`, `\\`)
+	return strings.ReplaceAll(text, `"`, `\"`)
 }
 
 func (sh Shell) errf(format string, args ...any) {
@@ -876,6 +956,13 @@ type source struct {
 	// the one row of the option nobody has measured: there is no script to
 	// list until a person has typed one and ended it.
 	scriptListing bool
+	// stringCatalog and stringCatalogPortable are the invocation asking for
+	// the marked strings rather than a run, carried here beside the rest of
+	// what an invocation decided. Every route answers them — unlike an option
+	// that writes the whole program back, a command string does not win over
+	// these, measured.
+	stringCatalog         bool
+	stringCatalogPortable bool
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
@@ -1116,6 +1203,14 @@ type invocation struct {
 	// invocation named decides whether it applies: measured, a command string
 	// wins over the option outright. See Semantics.ScriptListingOption.
 	scriptListing bool
+	// stringCatalog and stringCatalogPortable are the dialect's options
+	// asking for the strings the program marked for translation rather than
+	// a run of it — bash's `-D`/`--dump-strings` and `--dump-po-strings`.
+	// Two flags because both may be written and the portable form wins
+	// whichever order they came in, measured. See
+	// Semantics.StringCatalogOption.
+	stringCatalog         bool
+	stringCatalogPortable bool
 	// policy names a policy file and audit names where the event stream goes
 	// — `--policy FILE`, `--audit FILE`, long form only. They are the one
 	// pair of options here that no real shell has, and they are here anyway
@@ -1418,6 +1513,19 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			inv.scriptListing = true
 			return args, nil
 		}
+		// And the options that ask for the strings the program marked for
+		// translation. Both are recorded rather than answered, for help's
+		// reason: the reading goes on, so a refused word behind either still
+		// wins. The portable form is asked first because it wins where both
+		// were written, which is measured and is true in either order.
+		if spelt(sh.Semantics.StringCatalogOption.PortableObjectSpellings, a) {
+			inv.stringCatalogPortable = true
+			return args, nil
+		}
+		if spelt(sh.Semantics.StringCatalogOption.Spellings, a) {
+			inv.stringCatalog = true
+			return args, nil
+		}
 		rest, matched, err := sh.startupOption(a, args, inv)
 		if matched {
 			return rest, err
@@ -1512,6 +1620,13 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			// carry it and nothing else about it is a sign's question, so
 			// `on` is not read. See Semantics.EndOfOptionsInvocationLetter.
 			inv.endOptions = true
+		case spelt(sh.Semantics.StringCatalogOption.PortableObjectSpellings, "-"+string(ch)):
+			inv.stringCatalogPortable = true
+		case spelt(sh.Semantics.StringCatalogOption.Spellings, "-"+string(ch)):
+			// A letter spelling of the same option. The sign is not read,
+			// which is measured rather than assumed: `+D` lists the strings
+			// exactly as `-D` does.
+			inv.stringCatalog = true
 		case ch == 's' && on:
 			inv.fromStdin = true
 		case on && sh.namesStartupOption("-"+string(ch)):
@@ -1678,6 +1793,12 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	// 5.3.20: `--pretty-print -c 'echo hi'` writes `hi`, so a command string
 	// wins outright; a prompt has nothing to list yet and is left alone.
 	in.scriptListing = inv.scriptListing && !in.prompt && in.input != commandStringLabel
+	// And whether the invocation asked for the strings the program marked
+	// for translation rather than a run of it. Every route answers it — a
+	// command string does not win over these, measured — so only a prompt is
+	// left out, which has nothing to list until somebody has typed it.
+	in.stringCatalog = inv.stringCatalog && !in.prompt
+	in.stringCatalogPortable = inv.stringCatalogPortable && !in.prompt
 	return in, nil
 }
 
@@ -2345,15 +2466,15 @@ func (sh Shell) runInput(in source) int {
 		sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, in.scriptErr.path, in.scriptErr.err))
 		return sh.Diagnostics.ScriptStatus(in.scriptErr.err)
 	}
-	if in.scriptListing {
+	if in.scriptListing || in.stringCatalog || in.stringCatalogPortable {
 		// The invocation asked for the program rather than a run of it, so
 		// nothing below this happens: no startup file is read and no line is
 		// executed. Here rather than earlier because everything above it is
 		// judged first — a file that will not open is the ordinary 127 and
 		// there is nothing to list, measured — and after the runner is built
-		// because the arrangement needs one, for the one field that decodes
-		// a `$'…'`. See Runner.ScriptListingLayout.
-		return sh.listScript(in, r, src)
+		// because one of the arrangements needs one, for the field that
+		// decodes a `$'…'`. See Runner.ScriptListingLayout.
+		return sh.listProgram(in, r, src)
 	}
 	// The startup files, before the script. After the options, which is where
 	// the panel has them: `-x` given to the invocation traces the profile's

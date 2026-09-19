@@ -279,6 +279,26 @@ type Span struct {
 	// only whether the result is split afterwards, not what the span is.
 	Quoting Quoting
 
+	// Translated says a double-quoted run was written `$"…"`, the mark one
+	// shell has for a string a message catalog may translate.
+	//
+	// A flag rather than a [Quoting] value of its own, for the reason
+	// CurrentShell below is one: with no catalog loaded the mark changes
+	// nothing about the string — same escapes, same expansions, same
+	// splitting — so everything that *expands* a word treats the two
+	// spellings alike, and only the reading, the writing back and the one
+	// invocation option that lists these strings can tell them apart. A
+	// quoting value would have put the distinction in front of forty readers
+	// that do not have a question for it.
+	//
+	// It is set on every span of the run, because a run is what carries one
+	// pair of quotes: `$"a$xb"` is three spans inside one `$"…"`.
+	//
+	// See [TranslatedStrings], which is the reader, and note what recording
+	// the mark does *not* promise — nothing here translates anything, and no
+	// message catalog is consulted.
+	Translated bool
+
 	// CurrentShell says a command substitution was written `${ cmd;}`, which
 	// runs in the shell that read it rather than in a subshell — so what it
 	// assigns survives, which is the only reason the spelling exists.

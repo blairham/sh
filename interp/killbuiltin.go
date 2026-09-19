@@ -876,13 +876,13 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// involved: the handler runs before the next command because the
 		// arrival was recorded here, not because a goroutine was quick.
 		r.selfSignaled(name)
-	case !trapped && fatalSignal(name) && r.untrappedSignalIgnored(name):
+	case !trapped && fatalSignal(name, sig) && r.untrappedSignalIgnored(name):
 		// The shell has taken this signal's default action away from the
 		// kernel and put nothing in its place, so the raise is not merely
 		// survivable — it does not happen. Reported as sent, because the
 		// builtin succeeded: what the signal then did is not `kill`'s answer.
 		return nil
-	case !trapped && fatalSignal(name):
+	case !trapped && fatalSignal(name, sig):
 		// Nothing is sent here either, and for a sharper reason. A signal
 		// already on its way arrives on whichever thread the kernel picks,
 		// which may be while the shell is still running an EXIT trap — that
@@ -970,13 +970,27 @@ func (r *Runner) untrappedSignalIgnored(name string) bool {
 }
 
 // fatalSignal reports whether a signal with no handler ends the process.
-func fatalSignal(name string) bool {
+//
+// Asked of the number as well as the name, because the two come apart exactly
+// where the platform's range runs past its table: `kill -40 $$` on Linux names
+// nothing and is still a signal the kernel delivers, and reading the answer out
+// of a table keyed by name gave every one of those thirty-three numbers the
+// answer a signal nobody has — survivable — so the shell ran on at status 0
+// where all five references die at 128 + N (#3777).
+//
+// The name is asked first and the number only where there is no name, so a
+// platform whose table covers its whole range never reaches the second half.
+// An out-of-range number does not either: it has no name for the same reason,
+// but it is not a signal, and the send that carries it is the kernel's to
+// refuse — see KillSendsASignalNumberItCannotName.
+func fatalSignal(name string, sig syscall.Signal) bool {
 	for _, k := range knownSignals {
 		if k.Name == name {
 			return k.Fatal
 		}
 	}
-	return false
+	return name == "" && signalInPlatformRange(int(sig)) &&
+		platformUnnamedSignalsEndTheShell
 }
 
 // signalDeath stops the script because the shell has just killed itself.
@@ -1005,6 +1019,18 @@ func (r *Runner) signalDeath(name string, sig syscall.Signal) {
 	r.status = 128 + int(sig)
 	r.stopTheShell()
 }
+
+// diedOfItsOwnSignal reports whether this shell sent itself a fatal signal and
+// has still to die of it.
+//
+// The number and not the name, because a platform can deliver a signal this
+// shell has no name for and the death is no less real for that: Linux's
+// real-time range is thirty-three numbers `kill` sends and the table cannot
+// name, and reading the empty name as "no death" left the EXIT trap, the
+// history file and above all the re-raise all treating a killed shell as one
+// that had exited normally (#3777). Zero is not a signal — `kill -0` is the
+// existence probe and never reaches signalDeath.
+func (r *Runner) diedOfItsOwnSignal() bool { return r.killedBySig != 0 }
 
 // hangupExitStatus is what a shell that treats SIGHUP as an exit exits with.
 // Measured, and it is a constant rather than the signal's number: it stays 1

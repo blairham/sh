@@ -121,6 +121,13 @@ type signalState struct {
 	// `(kill -INT $$; echo s); echo done` prints s and not done in dash and
 	// zsh — and the parent stops when it next looks, which is where a real
 	// parent blocked in wait would be ended by the kernel.
+	//
+	// The number is what says a death was recorded, not the name. A signal
+	// the platform delivers and this shell has no name for is still a death —
+	// Linux's real-time range is thirty-three of them — and reading the empty
+	// name as "nothing happened" is what let `(kill -40 $$)` leave the parent
+	// running (#3777). Zero is not a signal: `kill -0` is the existence probe
+	// and never reaches here.
 	died    string
 	diedSig syscall.Signal
 	// defaultRestored names the signals `trap -` has explicitly handed back
@@ -635,7 +642,7 @@ func (r *Runner) recordSharedDeath(name string, sig syscall.Signal) {
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.died == "" {
+	if s.diedSig == 0 {
 		s.died, s.diedSig = name, sig
 	}
 }
@@ -648,7 +655,7 @@ func (r *Runner) takeSharedDeath() (string, syscall.Signal, bool) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.died == "" {
+	if s.diedSig == 0 {
 		return "", 0, false
 	}
 	name, sig := s.died, s.diedSig

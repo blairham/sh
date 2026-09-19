@@ -312,8 +312,22 @@ func (p *printer) expr(e syntax.Expr) {
 		}
 		p.expr(x.Y)
 	case *syntax.Pipeline:
-		if x.Negated {
+		switch {
+		case x.Negated && len(x.Cmds) > 0:
 			p.b.WriteString("! ")
+		case x.Negated:
+			// A bare negation is the whole command, so the blank that
+			// separates the `!` from a pipeline has nothing to separate it
+			// from and was written anyway — a line of trailing whitespace
+			// out of the formatter.
+			p.b.WriteString("!")
+		case len(x.Cmds) == 0:
+			// An *even* run of them, which negates nothing and still exits
+			// 0 where a single `!` exits 1. The count is not kept on the
+			// tree — one flag is the whole rule — and it does not need to
+			// be, since every even run behaves alike and two is the
+			// shortest. Writing nothing left the line out of the script.
+			p.b.WriteString("! !")
 		}
 		for i, c := range x.Cmds {
 			if i > 0 {

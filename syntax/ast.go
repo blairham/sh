@@ -130,21 +130,41 @@ func (b *BinaryExpr) End() Pos  { return b.Y.End() }
 func (b *BinaryExpr) exprNode() {}
 
 // Pipeline is one or more commands joined by `|`.
+//
+// Cmds is empty for a bare negation — a `!` with no pipeline after it, which
+// [Dialect.BareNegationReach] says where a dialect takes. Nothing runs and the
+// negation inverts a success, so the status is 1. That node is the reason
+// Bang and Stop are both recorded: it is the one shape whose extent is the
+// keyword run rather than a command.
 type Pipeline struct {
 	// Negated records a leading `!`, which applies to the whole pipeline
 	// rather than to its first command: `! true | false` exits 0.
+	//
+	// False for an *even* run of them where [Dialect.RepeatedNegationToggles]
+	// says each inverts the one before it, so it does not stand in for "a `!`
+	// was written": `! !` is a bare negation that negates nothing.
 	Negated bool
 	Bang    Pos
-	Cmds    []Command
+	// Stop is the end of the last `!`, for a bare negation that has no
+	// command to end at — the same fact [TimeClause.Stop] carries for a bare
+	// `time`. Set whenever a `!` is read, and unset where none was.
+	Stop Pos
+	Cmds []Command
 }
 
 func (p *Pipeline) Pos() Pos {
-	if p.Negated {
+	if len(p.Cmds) == 0 || p.Negated {
 		return p.Bang
 	}
 	return p.Cmds[0].Pos()
 }
-func (p *Pipeline) End() Pos  { return p.Cmds[len(p.Cmds)-1].End() }
+
+func (p *Pipeline) End() Pos {
+	if len(p.Cmds) == 0 {
+		return p.Stop
+	}
+	return p.Cmds[len(p.Cmds)-1].End()
+}
 func (p *Pipeline) exprNode() {}
 
 // TimeClause is `time [-p] [pipeline]`: the pipeline runs whole and the shell

@@ -22,6 +22,24 @@ import "syscall"
 // table does not carry — bash and dash write `RTMIN+5` for 40 where zsh and
 // BusyBox ash write `40`. Numbering them is a separate question from being
 // able to send them, and only the second is in range here.
+//
+// #3535 asked for the names and the answer is that there are none to have.
+// `SIGRTMIN` is the *C library's* constant, not the kernel's: the kernel
+// gives 32..64 and says nothing about where user-visible numbering starts,
+// and each library reserves a different count of the bottom for its own
+// threading. Measured 2026-09-19, the same shell answering the same question
+// differently on the two libraries:
+//
+//	kill -l 40     glibc (Debian bookworm)   musl (Alpine)
+//	bash 5.3       RTMIN+6                   RTMIN+5
+//	dash 0.5.12    RTMIN+6                   RTMIN+5
+//
+// So RTMIN is 34 under glibc and 35 under musl, and one fixed number has two
+// names depending on what the shell was linked against. This shell links
+// neither and has no constant to read, so either base would be a guess that
+// is wrong on one of the two platforms it runs on. The number is the only
+// answer true on both — and it is what zsh and BusyBox ash write in both
+// columns. Pinned in platformsignalnames_linux_test.go.
 var platformSignals = []signalEntry{
 	{"STKFLT", syscall.SIGSTKFLT, true},
 	{"PWR", syscall.SIGPWR, true},

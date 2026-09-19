@@ -5460,6 +5460,28 @@ type Semantics struct {
 	// is dash of the three columns that take the name at all.
 	NonInteractiveOptionName string
 
+	// RunCommandsOptionName is the `set -o` name that decides whether this
+	// shell reads its run-commands file, where that is a state an invocation
+	// can move rather than a consequence of being interactive.
+	//
+	// Read by the front end rather than by this package, exactly as the two
+	// names above are, and for the same reason: the file is opened by the
+	// front end and the option reaches it through the runner. Empty in every
+	// dialect but one, which is a shell whose run-commands file is read if
+	// and only if it is interactive.
+	//
+	// ksh93u+ 2012-08-01 is the one, where the name is `rc` and the letter
+	// is `-E`. Measured 2026-09-18 with `$ENV` pointing at a file that
+	// announces itself: `ksh -E -c`, `ksh -o rc -c` and an interactive `ksh
+	// -i` all run it, and `ksh +E -c` and `ksh -i +E` run nothing — so the
+	// option is neither "interactive" nor a state a script can reach, and
+	// the letter is the invocation's alone (`set -E` is `unknown option`).
+	//
+	// Not an axis: the other five columns have no such name, so what is
+	// modeled is a per-dialect *name* rather than a disagreement about
+	// behavior — the shape NonInteractiveStartupVariable already has.
+	RunCommandsOptionName string
+
 	// PlusSignedInteractiveLetterStillPrompts is `+i`: whether the plus sign
 	// asks for a prompt the way the minus does, instead of taking one back.
 	//

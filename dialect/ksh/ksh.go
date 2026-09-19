@@ -674,7 +674,7 @@ func Semantics() interp.Semantics {
 	// to come from the runner or not at all. That this shell turns job
 	// control on there and the front end does not is measured, recorded in
 	// docs/spec/invocation.md, and a separate question.
-	s.InteractiveOptionLetters = "BE"
+	s.InteractiveOptionLetters = "B"
 	// ksh93 has a history expander and starts with it **off**, at a prompt as
 	// well as in a script — the one shell in the panel that does, and the
 	// reason the second half of this is an axis rather than a constant.
@@ -2793,6 +2793,10 @@ func Semantics() interp.Semantics {
 	// only `interactive`, and the `no` half is the shell's own prefix over
 	// it (#3221).
 	s.InteractiveOptionName = "interactive"
+	// And the name for whether the run-commands file is read, which this
+	// column alone has and which its invocation moves in both directions.
+	// See Semantics.RunCommandsOptionName for the six measured rows.
+	s.RunCommandsOptionName = "rc"
 	s.NonInteractiveOptionName = "nointeractive"
 	// And the `set` builtin reads such a word the same way, which is this
 	// column and not zsh's: `set --xtrace q` here traces and leaves `q` as
@@ -4458,7 +4462,19 @@ func Apply(r *interp.Runner) {
 	// letter two shells spell different options with — zsh's `-G` is
 	// `nullglob` — which is exactly what that table is for. See
 	// interp.Runner.SetOptionLetterNames.
-	r.SetOptionLetterNames(map[rune]string{'G': "globstar"})
+	// And `-E`, which is the `rc` name written as a letter — `ksh -E -c` and
+	// `ksh -o rc -c` are the same invocation, measured. The letter is the
+	// invocation's alone, exactly as the name is: `set -E` inside the shell
+	// is `set: -E: unknown option`, which is what AddImmovableSetOptions
+	// below already says about the name and what the route split serves.
+	//
+	// Written here rather than in InteractiveOptionLetters, which is where
+	// the `E` used to come from: that string would have put the letter in
+	// `$-` for every interactive shell, including `ksh -i +E`, where the
+	// measured answer has no `E` and reads no file. A letter naming an
+	// option is drawn from the option's own state, which is the rule that
+	// keeps `m` out of the same string.
+	r.SetOptionLetterNames(map[rune]string{'G': "globstar", 'E': "rc"})
 	// The `set -o` names beyond the ones every shell has. Measured 2026-09-15
 	// against ksh93u+ 2012-08-01 by diffing the whole listing: 32 rows there
 	// against 20 here, and five of the twenty spelled the other way round

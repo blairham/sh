@@ -1438,6 +1438,17 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				// this state is named with what was measured about it.
 				continue
 			}
+			if r.immovableName(name) && !r.atInvocation {
+				// A letter abbreviating a name this shell will not move
+				// from a script is refused **as a letter**, which is not
+				// the same sentence the name gets. Measured 2026-09-18 on
+				// ksh93u+ 2012-08-01, where `-E` is the invocation's
+				// spelling of `rc`: `set -E` is `set: -E: unknown option`
+				// and `set -o rc` is `set: rc: bad option(s)`, and the two
+				// wordings are the shell telling a letter it has never
+				// heard of from a name it lists and will not take.
+				return r.badSetOptionLetter(opt, on)
+			}
 			sign := "-"
 			if !on {
 				sign = "+"

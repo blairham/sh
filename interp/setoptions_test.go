@@ -109,27 +109,36 @@ func TestANameThisShellDoesNotDoIsRememberedRatherThanRefused(t *testing.T) {
 // The refusal is still there for a name with nothing behind it at all.
 //
 // It is the substrate's answer to a name a dialect declared and the table
-// knows nothing about — every entry in the table is now implemented, recorded
-// or read-only, so the two names that reach this are `rc` and `login_shell`,
-// which report a fact about the invocation and have no state to write. The one
-// shell that lists them refuses them out loud in both directions and declares
-// so with AddImmovableSetOptions, which is why the branch is reached here by a
-// runner that declares the name and not the refusal.
+// knows nothing about, which is exactly where **an embedder's own name** lands
+// the day it is declared without an answer.
+//
+// The name is a made-up one rather than a row of the table, and that is the
+// correction #3255 forced. This used to declare `rc` — on the reading that
+// every entry in the table was implemented, recorded or read-only, so the two
+// names left reaching this branch were `rc` and `login_shell`. Both of them
+// now move something real, so a test written against either would have been
+// pinning the branch through a row that had stopped standing in for it, and
+// what it would have caught is a row changing rather than the branch going.
+//
+// A name the table does not carry cannot stop standing for it: `lookupSetOption`
+// hands back the zero setOption for one the dialect declared and the substrate
+// has never heard of, and the zero value is precisely "off, and nothing to
+// write". That is the branch, reached the way an embedder reaches it.
 //
 // Pinned rather than left to the table, because a branch nothing can reach is
-// dead data that reads as a rule: this is where an embedder's own name lands
-// the day it is declared without an answer.
+// dead data that reads as a rule.
 func TestADeclaredNameWithNothingBehindItIsStillRefused(t *testing.T) {
-	setup := func(r *Runner) { r.AddSetOptions("rc") }
-	out, _ := run(t, "set -o rc\necho \"st=$?\"\n", setup)
+	const name = "embedders-own-name"
+	setup := func(r *Runner) { r.AddSetOptions(name) }
+	out, _ := run(t, "set -o "+name+"\necho \"st=$?\"\n", setup)
 	if !strings.Contains(out, "not implemented") || !strings.Contains(out, "st=2") {
-		t.Errorf("set -o rc said %q, want it refused as unimplemented at 2", out)
+		t.Errorf("set -o %s said %q, want it refused as unimplemented at 2", name, out)
 	}
 	// And the other direction is the state it is already in, so it is granted
 	// — which is what says the refusal is about the promise and not the name.
-	out, _ = run(t, "set +o rc\necho \"st=$?\"\n", setup)
+	out, _ = run(t, "set +o "+name+"\necho \"st=$?\"\n", setup)
 	if strings.Contains(out, "not implemented") || !strings.Contains(out, "st=0") {
-		t.Errorf("set +o rc said %q, want it granted at 0", out)
+		t.Errorf("set +o %s said %q, want it granted at 0", name, out)
 	}
 }
 

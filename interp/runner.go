@@ -5543,7 +5543,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// in a dialect without `&>` came to leave no file behind, the exact
 		// silent case the AmpersandRedirect comment warns about.
 		if len(c.Redirs) > 0 {
-			r.traceCommand(argv)
+			r.traceCommand(argv, c)
 
 			// Assignments and a redirection with no command name. There is
 			// no other process for a here-document body to expand in.
@@ -5574,7 +5574,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if !tracesPrefix || prefixFollows {
 		// With no prefix to write, and in the column that writes it behind
 		// the command, the command's own line comes first and is unchanged.
-		r.traceCommand(argv)
+		r.traceCommand(argv, c)
 	}
 
 	// A frozen name in the prefix, in the dialect that checks it before
@@ -5638,7 +5638,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	}
 	if tracedHere {
 		// The prefix's lines are written; the command's is all that is left.
-		r.traceCommand(argv)
+		r.traceCommand(argv, c)
 	} else if tracesPrefix && !prefixFollows {
 		// Ahead of the redirections, which is measured and not incidental:
 		// `z=1 cmd >/nope/f` writes `+ z=1` and `+ cmd` and *then* the
@@ -5646,7 +5646,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// frozen-name check, so the column that refuses a prefix before it
 		// evaluates anything still evaluates nothing.
 		r.expandPrefixTraceValues(c.Assigns)
-		r.tracePrefixAndCommand(c.Assigns, argv)
+		r.tracePrefixAndCommand(c, argv)
 	}
 
 	// And whether the command is one this shell runs itself, which decides

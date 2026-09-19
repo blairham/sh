@@ -6288,6 +6288,14 @@ type Diagnostics struct {
 	// `[ … ]` test is printed without quotes even though the same character
 	// is quoted everywhere else.
 	TraceBareBracket TraceBareBracket
+	// TraceAssignmentOperand is how a declaration utility's `name=value`
+	// operand is written, which is a question about the *command* rather
+	// than about the word: the same bytes are one quoted word after `echo`
+	// and a target and a value after `typeset`.
+	//
+	// Zero is TraceAssignmentOperandWhole, which is bash's answer and the
+	// substrate's own. See the type for the panel.
+	TraceAssignmentOperand TraceAssignmentOperand
 	// TraceEmptyAssignmentValueIsBare writes an assignment whose value is
 	// empty as the name, the operator and nothing — `A=` rather than `A=''`.
 	//

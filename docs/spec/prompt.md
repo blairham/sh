@@ -747,6 +747,58 @@ hold it:
   here and quoted by every other member — which is also what makes its
   bracket line read the way it does, two sections down.
 
+### A declaration's operand is written as an assignment in one column
+
+`Diagnostics.TraceMetacharacters` decides whether a word is quoted and
+`Diagnostics.TraceQuoting` how; neither can say **what a word is**, and one
+column splits a declaration utility's `name=value` operand at the `=` and
+quotes only the value. `Diagnostics.TraceAssignmentOperand` is the answer.
+
+Measured 2026-09-18, a script file with `set -x` on line 1, `env -i
+PATH=/usr/bin:/bin LC_ALL=C`, standard input on /dev/null:
+
+| written | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- |
+| `typeset x="a b"` | `typeset 'x=a b'` | `typeset x='a b'` |
+| `typeset x=a=b` | `typeset x=a=b` | `typeset x='a=b'` |
+| `typeset x=*` | `typeset 'x=*'` | `typeset x='*'` |
+| `typeset x=` | `typeset x=` | `typeset x=''` |
+| `typeset x+="a b"` | `typeset 'x+=a b'` | `typeset x+='a b'` |
+| `echo x=a=b` | `echo x=a=b` | `echo 'x=a=b'` |
+
+The last row is the control and it is what makes this a question about the
+*command*: the same bytes after a command that declares nothing are one quoted
+word in both columns. The `=` rows are the second control — bash has no reason
+to quote an `=` at all, so a reader looking only at those would call the whole
+difference `TraceMetacharacters` and be wrong about the first row, where both
+columns quote and only the extent differs.
+
+**The split is at the first `=`**, which is what leaves an append's `+` on the
+bare side, and the value goes through the same
+`TraceEmptyAssignmentValueIsBare` the shell's own assignment line asks — the
+column that writes `x=''` here writes `x=''` for a bare assignment too.
+
+**It is the expansion's own answer and not a second reading of the command
+word**, which three rows say:
+
+| written | zsh 5.9.2 | |
+| --- | --- | --- |
+| `typeset -- x="a b"` | `typeset -- x='a b'` | still a declaration after `--` |
+| `'typeset' x="a b"` | `typeset 'x=a b'` | a quoted spelling is not one |
+| `c=typeset; $c x="a b"` | `typeset 'x=a b'` | nor is one reached by an expansion |
+
+Those are exactly `Semantics.DeclarationCommandWord`'s
+`DeclarationByUnquotedLiteralWord` and that column's `no` for
+`CommandPrefixKeepsADeclaration`, so the trace asks the question the expansion
+already asked rather than a lookalike — asking "does this word name a
+declaration utility" instead would write the last two the other way round, and
+the line would say the command meant something the shell did not do.
+
+dash and BusyBox ash quote nothing here (`+ export e=a b`) and need no answer.
+ksh93 is a different shape again and is not this field: it writes a
+declaration's assignment on a **line of its own** — `+ x='a b'` then
+`+ typeset x` — which is #3567.
+
 ### The brackets of a test are the one exemption
 
 `[ 1 -lt 2 ]` traces as `'[' 1 -lt 2 ']'` in bash, `[ 1 -lt 2 ]` in ksh93 and

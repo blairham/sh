@@ -8234,7 +8234,7 @@ on the same route, with `zz=1` defined:
 | `alias -t zz` | **silent, 0** | — | — | — |
 | `alias -x zz` | **silent, 0** | — | — | — |
 | `alias -pt zz` | **silent, 0** | — | — | — |
-| `alias -p nosuch` | **silent, 0** | `alias: nosuch: not found`, 1 | `bad option: -p`, 1 | two complaints, 1 |
+| `alias -p nosuch` | **silent, 0** | **silent, 0** | `bad option: -p`, 1 | two complaints, 1 |
 | `alias -p nosuch zz` | **silent, 0** | — | — | — |
 | `alias -p zz=2` | defines, 0 | defines, 0 | — | — |
 | `ls; alias -t ls` | **silent, 0** | — | — | — |
@@ -8256,6 +8256,58 @@ first time a letter grew an argument.
 
 dash's row is not a disagreement about the separator — it reads no options for
 `alias` at all, so `--` and `-p` are names there.
+
+**bash's `-p` row was recorded wrong and is corrected above.** That table said
+`alias: nosuch: not found` at 1 for `alias -p nosuch`; re-measured 2026-09-19
+on bash 5.3.20 over all three routes — a script file, `-c`, and standard input,
+each under `env -i PATH=/usr/bin:/bin LC_ALL=C` — the answer is silent at 0
+every time. It is the next section's field and not this one's.
+
+### `alias -p` is the whole listing, and it stops reading
+
+`Semantics.AliasPrintOptionIgnoresItsOperands`. Behind that letter there are
+no operands: a definition does not define, a name is neither looked up nor
+reported, a name this shell would otherwise refuse is not checked, and the
+status is 0.
+
+Measured 2026-09-19 on bash 5.3.20, script files under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null:
+
+| probe | bash 5.3.20 |
+| --- | --- |
+| `alias a=1 b=2; alias -p a` | **both lines, 0** |
+| `alias a=1 b=2; alias a` | `alias a='1'`, 0 |
+| `alias a=1 b=2; alias -p` | both lines, 0 |
+| `alias a=1 b=2; alias -- a` | `alias a='1'`, 0 |
+| `alias -p nosuch` | **silent, 0** |
+| `alias nosuch` | `alias: nosuch: not found`, 1 |
+| `alias -- nosuch` | `alias: nosuch: not found`, 1 |
+| `alias -p z=1; alias` | **silent, 0 — nothing defined** |
+| `alias z=1; alias -p z=2; alias` | `alias z='1'` twice, 0 |
+| `alias -p 'a b'=echo` | **silent, 0 — no name check either** |
+| `alias 'a b'=echo` | ``alias: `a b': invalid alias name``, 1 |
+| `alias -pp nosuch` | silent, 0 |
+
+**The first row is the one that settles it, and the shape of the probe is the
+point.** With a single alias defined, `alias -p a` cannot be told apart from a
+lookup of `a` that happened to be quiet about a miss — which is how this was
+first read, as "`-p` suppresses the not-found report", a rule that fits every
+probe in #3701 and is not what the shell does. With two aliases defined the
+answer holds a name nobody asked for, and the reading collapses.
+
+The `--` rows are the control that says it is the **letter**: a separator ends
+the options and leaves the operand exactly as a bare call does, filtering,
+reporting and refusing.
+
+It is a different rule from `AliasOptionEndsTheLookup` above, and the two part
+on a name the table **holds**: ksh93's `alias -p zz` writes nothing at all
+where bash's writes the whole table, and a definition behind the option still
+defines in ksh93 and does not in bash. Both are quiet about a *missing* name,
+which is why one silence reads like the other until a held name is put to it.
+
+The other three columns cannot be asked. zsh has no `-p` (`alias: bad option:
+-p`, 1); dash and BusyBox ash read no options for `alias`, so `-p` is a name
+there (#3701).
 
 ### Four preset aliases one shell will not report
 

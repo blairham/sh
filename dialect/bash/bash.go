@@ -653,6 +653,13 @@ func Semantics() interp.Semantics {
 	// unalias h` is 0 then 1 here, as it is in zsh, dash and BusyBox ash.
 	s.AliasRemembersTheNamesItNames = interp.No
 	s.AliasOptionEndsTheLookup = interp.No
+	// `-p` is the whole listing and stops reading: every operand behind it
+	// is discarded, so `alias a=1 b=2; alias -p a` writes both lines,
+	// `alias -p nosuch` is silent at 0 where `alias nosuch` is
+	// `alias: nosuch: not found` at 1, and `alias -p z=1` defines nothing.
+	// The letter and not any option word — `alias -- a` lists `a` alone and
+	// `alias -- nosuch` reports. Measured 2026-09-19 (#3701).
+	s.AliasPrintOptionIgnoresItsOperands = interp.Yes
 	// A command word that is exactly `-` is a command name here and is
 	// reported as one: `- echo hi` is `command not found` at 127 and the
 	// script carries on. zsh is the column that throws the word away (#3236).

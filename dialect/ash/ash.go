@@ -1177,6 +1177,10 @@ func Semantics() interp.Semantics {
 	// h` is 0 then 1, and a name only looked up is not remembered either.
 	s.AliasRemembersTheNamesItNames = interp.No
 	s.AliasOptionEndsTheLookup = interp.No
+	// `alias` reads no options here either, so `-p` is a name and there is
+	// no letter for an operand to stand behind. See AliasParsesOptions
+	// (#3701).
+	s.AliasPrintOptionIgnoresItsOperands = interp.No
 	// A command word that is exactly `-` is a command name here and is
 	// reported as one: `- echo hi` is `command not found` at 127 and the
 	// script carries on. zsh is the column that throws the word away (#3236).

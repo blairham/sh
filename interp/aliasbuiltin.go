@@ -327,6 +327,21 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 	} else if r.unspecified {
 		return 2
 	}
+	if form.prefixed && len(args) > 0 && r.ask(r.sem().AliasPrintOptionIgnoresItsOperands,
+		"`alias -p` discarding its operands and listing the whole table") {
+		// One column reads `-p` as the whole listing and stops reading:
+		// every operand behind it is thrown away, so a definition does not
+		// define and a name is neither looked up nor reported. Measured with
+		// *two* aliases defined, which is what tells it apart from a lookup
+		// that is merely quiet about a miss — `alias a=1 b=2; alias -p a`
+		// writes both lines there.
+		//
+		// Written as an emptying of the operand list rather than as a branch
+		// of its own, because what the letter leaves is exactly the bare
+		// listing below and a second copy of that loop would be a second
+		// answer to how this shell lists.
+		args = nil
+	}
 	if len(args) == 0 {
 		// `alias -m` with no pattern is the plain listing rather than a
 		// refusal, measured — unlike `unalias -m`, where a removal with no

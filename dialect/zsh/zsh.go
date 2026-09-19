@@ -1207,6 +1207,10 @@ func Semantics() interp.Semantics {
 	// 1 here.
 	s.AliasRemembersTheNamesItNames = interp.No
 	s.AliasOptionEndsTheLookup = interp.No
+	// There is no `-p` here for an operand to stand behind: `alias -p zz` is
+	// `alias: bad option: -p` at 1, with or without a `--` after it.
+	// Measured 2026-09-19 (#3701).
+	s.AliasPrintOptionIgnoresItsOperands = interp.No
 	// The two builtins that keep an assignment written in front of them here
 	// without being special ones — `V=1 alias` and `V=1 hash` leave `V` set,
 	// where `V=1 :` and `V=1 shift 0` do not. See

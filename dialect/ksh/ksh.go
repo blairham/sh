@@ -833,6 +833,11 @@ func Semantics() interp.Semantics {
 	// 2026-09-18; it was read from the separator alone until the letters
 	// were put to it (#3677).
 	s.AliasOptionEndsTheLookup = interp.Yes
+	// And that is a different rule from the one bash's `-p` follows, which
+	// is why this is No rather than a second spelling of the line above:
+	// there `alias -p zz` writes the *whole table* and here it writes
+	// nothing at all, the held name included (#3701).
+	s.AliasPrintOptionIgnoresItsOperands = interp.No
 	// A command word that is exactly `-` is a command name here and is
 	// reported as one: `- echo hi` is `command not found` at 127 and the
 	// script carries on. zsh is the column that throws the word away (#3236).

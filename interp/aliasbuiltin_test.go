@@ -46,6 +46,10 @@ func aliasRunArgs(t *testing.T, tweak func(*Semantics), dg Diagnostics, src stri
 	sem.AliasHasExportOption = No
 	sem.AliasRemembersTheNamesItNames = No
 	sem.AliasOptionEndsTheLookup = No
+	// And the other silent-`alias` field, off for the same reason: a suite
+	// about the plain builtin must not also be a suite about the column
+	// where `-p` throws its operands away. See aliasprintoperands_test.go.
+	sem.AliasPrintOptionIgnoresItsOperands = No
 	sem.AliasQuoting = ListingQuoteAlwaysEscaped
 	sem.BadOptionToSpecialBuiltinFatal = No
 	if tweak != nil {

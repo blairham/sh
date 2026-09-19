@@ -139,6 +139,64 @@ func TestArithErrorNamesTheBuiltin(t *testing.T) {
 	}
 }
 
+// The same answer, one builtin over. A declaration whose *value* will not
+// evaluate raises the evaluator's sentence through a builtin, and every column
+// names the builtin for it exactly where it names one for `let` — measured
+// 2026-09-18 over `typeset -i a=1+` in a script file:
+//
+//	bash 5.3.20	loc.sh: line 1: typeset: 1+: arithmetic syntax error: …
+//	ksh93u+    	loc.sh[1]: typeset: 1+: more tokens expected
+//	zsh 5.9.2  	loc.sh:1: bad math expression: operand expected …
+//
+// and `integer a=1+`, `float a=1+`, `local -i a=1+` and `a=1+; integer a` are
+// the same three answers, which is why this rides on the message's rule rather
+// than on a field of its own (#3342).
+func TestADeclarationsBadValueNamesTheBuiltinWhereLetDoes(t *testing.T) {
+	// Both doors: the expression the reader could not finish, and the one it
+	// read and could not evaluate. They are separate call sites and the first
+	// draft named the builtin at only one of them.
+	for _, src := range []struct{ text, blamed string }{
+		{`typeset -i a=1+`, "1+: operand expected"},
+		{`typeset -i a=1/0`, "division by zero"},
+	} {
+		for _, tc := range []struct {
+			names bool
+			want  string
+		}{
+			{true, "sh:typeset:1: " + src.blamed},
+			{false, "sh:1: " + src.blamed},
+		} {
+			diag := Diagnostics{
+				ArithErrorNamesTheBuiltin: tc.names,
+				NamesBuiltinInLocation:    true,
+				Location:                  LocationTightLine,
+			}
+			out, _ := run(t, src.text, func(r *Runner) { r.Diagnostics = &diag })
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("%q %v: got %q, want %q", src.text, tc.names, got, tc.want)
+			}
+		}
+	}
+}
+
+// And only where a builtin is speaking. The same evaluator is reached from a
+// plain assignment to a name already carrying the attribute, and bash writes
+// no name in front of that one — `typeset -i a=1; a+=2+` is a bare `2+:
+// arithmetic syntax error` there — because there is no builtin to name.
+func TestAnIntegerAssignmentOutsideADeclarationNamesNobody(t *testing.T) {
+	for _, names := range []bool{true, false} {
+		diag := Diagnostics{
+			ArithErrorNamesTheBuiltin: names,
+			NamesBuiltinInLocation:    true,
+			Location:                  LocationTightLine,
+		}
+		out, _ := run(t, "typeset -i a=1\na+=2+\n", func(r *Runner) { r.Diagnostics = &diag })
+		if got, want := strings.TrimSpace(out), "sh:2: 2+: operand expected"; got != want {
+			t.Errorf("%v: got %q, want %q", names, got, want)
+		}
+	}
+}
+
 // And the answer is about the *message* and not about the builtin: the same
 // shell's `let` with no operand at all is the builtin's own complaint and
 // still names it.

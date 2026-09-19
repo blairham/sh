@@ -3450,7 +3450,7 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 	p := syntax.NewParser("", r.dialect())
 	e := p.ParseArithFor(text, syntax.Pos{})
 	if err := p.Err(); err != nil {
-		r.fatal("%s\n", r.diag().ParseFailure(err))
+		r.mathFatalf("%s", r.diag().ParseFailure(err))
 		return 0, false
 	}
 	v, err := r.evalArith(e)
@@ -3468,10 +3468,17 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 			// a `set -u` refusal — 127 from a `-c` string in bash, which
 			// Runner.fatal would put its own 1 over. See
 			// Runner.arithNounsetRefusal.
+			//
+			// The refusal is the shell's own rather than the declaration's
+			// — the same split `let` makes, and for the same reason — so it
+			// keeps diagf and does not go through the naming rule below.
 			r.diagf("%s\n", r.arithFailure(text, err))
 			return 0, false
 		}
-		r.fatal("%s\n", r.arithFailure(text, err))
+		// mathFatalf rather than fatal: this is the evaluator's sentence
+		// raised through a builtin, and each column names the builtin for it
+		// exactly where it names one for `let`. See Runner.mathFatalf.
+		r.mathFatalf("%s", r.arithFailure(text, err))
 		return 0, false
 	}
 	return v, true
@@ -3641,12 +3648,18 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 	p := syntax.NewParser("", r.dialect())
 	e := p.ParseArithFor(text, syntax.Pos{})
 	if err := p.Err(); err != nil {
-		r.fatal("%s\n", r.diag().ParseFailure(err))
+		r.mathFatalf("%s", r.diag().ParseFailure(err))
 		return 0, false
 	}
 	v, err := r.evalNum(e)
 	if err != nil {
-		r.fatal("%v\n", err)
+		// arithFailure and mathFatalf, as integerNumber does: the float
+		// letters reach the same evaluator and the same two questions — which
+		// text the sentence quotes back, and which column names the builtin —
+		// and answering them differently here left ksh93's `float a=1/0` as a
+		// bare `divide by zero` where that shell writes `typeset: 1/0: divide
+		// by zero` (#3342).
+		r.mathFatalf("%s", r.arithFailure(text, err))
 		return 0, false
 	}
 	return v.asFloat(), true

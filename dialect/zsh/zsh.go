@@ -4024,6 +4024,10 @@ func Diagnostics() interp.Diagnostics {
 		// file — `./inc.sh:1: command not found: nosuch` — while one inside
 		// a function still names the function, which the answer above wins.
 		LocationNamesTheCurrentFile: true,
+		// A dot script's failure is diagnosed under the name it could not
+		// open, which is the same rename DollarZeroNames makes on the path
+		// where the file does open (#2958).
+		DotFailureNamesTheFileItCouldNotOpen: true,
 		// And text `eval` is running is named for itself over both — see
 		// Diagnostics.LocationNamesTheEvalText, where the nine rows are.
 		LocationNamesTheEvalText: true,

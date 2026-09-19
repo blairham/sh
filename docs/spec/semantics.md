@@ -8316,6 +8316,48 @@ Corpus: `help/a-builtin-answers-the-help-option`,
 `help/a-bad-option-is-followed-by-the-builtins-usage`,
 `help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one`.
 
+## A bad option run is named letter by letter in one column
+
+`Semantics.BuiltinReportsEveryBadOption` is ksh93's, and the unit it works
+on is the **run** rather than the word. Measured 2026-09-18 against ksh93u+
+2012-08-01 over `print`, `env -i PATH=/usr/bin:/bin LC_ALL=C ksh -c <probe>`:
+
+    print -qz        -q | -z | the usage        2
+    print -q -z      -q | -z | the usage        2   the run, not the word
+    print -nqz x     -q | -z | the usage        2   a letter it has is stepped over
+    print -qnz x     the same
+    print -q9z       -q | -9 | -z | the usage   2   a digit is an ordinary letter
+    print "-n y"     `- ` | -y | the usage      2
+    print -qfFMT x   -q | the usage             2   an argument ends the run
+    print -qu3 x     -q | the usage             2
+    print -z foo     -z | the usage             2   one letter reads the same either way
+
+So the walk crosses word boundaries, steps over a letter the builtin really
+has, and stops at a letter that takes an argument — which is the rule
+`interp`'s own `everyBadOption` already followed for every builtin that
+reaches `Runner.refuseOption`. `print` is ksh93's own builtin and lives in
+`dialect/ksh`, so it did not reach that reader and named the first letter
+alone (#3573).
+
+**Its own refusals give way to a bad letter, and that is measured rather than
+an ordering nobody thought about.** `-v` and `-C` are options the reference
+has and this engine does not, and `-p` with no coprocess running is a fault
+this engine reports:
+
+    print -qv x   print: -q: unknown option + the usage   2
+    print -vq x   the same, whichever order they are written in
+    print -qC x   the same
+    print -qp x   the same
+
+A word the shell cannot **read** is answered in front of anything it merely
+cannot **do**, in either written order — so the two "not implemented yet"
+letters and the coprocess fault are held until the run has been read, and a
+run with no bad letter in it answers exactly as it did before.
+
+The first row of #3573 — `print "--- hello"` refused as options where ksh93
+prints it — was already right on `main` when this was measured, and is left
+where it is.
+
 ## read's options are the dialect's letters
 
 `Semantics.ReadOptions`, in the getopts spelling — a `:` after a letter

@@ -15633,6 +15633,51 @@ type Semantics struct {
 	// three returned 2 for it where the real shell returns 1.
 	KillSendsASignalNumberItCannotName Answer
 
+	// TrapTakesASignalNumberItCannotName reads a decimal condition this
+	// kernel delivers and this shell's table has no name for as a signal to
+	// trap, rather than as a word naming nothing.
+	//
+	// unpinned: the question exists only where a kernel's range runs past the
+	// table's last name, and on this panel that is Linux alone — macOS stops
+	// at 31 and names every number to it, so no row the corpus runs on this
+	// machine can reach the axis either way. The cases are Linux-gated, in
+	// interp/trapunnamedsignal_test.go.
+	//
+	// bash 5.2.15, dash 0.5.12, ksh93u+ and BusyBox ash 1.37.0 take it; zsh
+	// 5.9 refuses it with `undefined signal: N` and the script then dies of
+	// the signal it was arranging to survive. Measured 2026-09-19 on
+	// linux/arm64 in both containers of the panel — Debian bookworm for
+	// glibc, the digest-pinned alpine image for musl — each probe the script
+	// file `trap 'echo CAUGHT' $1; kill -$1 $$; echo SURVIVED` under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null device:
+	//
+	//	         N=15          N=40                    N=64
+	//	bash     CAUGHT/SURV   CAUGHT/SURV             CAUGHT/SURV
+	//	dash     CAUGHT/SURV   CAUGHT/SURV             CAUGHT/SURV
+	//	ksh93    CAUGHT/SURV   CAUGHT/SURV             CAUGHT/SURV
+	//	ash      CAUGHT/SURV   CAUGHT/SURV             CAUGHT/SURV
+	//	zsh      CAUGHT/SURV   undefined signal: 40    undefined signal: 64
+	//	                       then dies at 168        then dies at 192
+	//
+	// N=15 is the control and it discriminates: every column catches a named
+	// signal, so a row that refuses 40 is refusing the *number* rather than
+	// failing to trap at all.
+	//
+	// Read rather than `ask`ed, for the reason the axis above it is: an
+	// unanswered axis here would swap one refusal for another rather than
+	// stop a shell from guessing. Refusing the condition is a real answer —
+	// one column gives it — and it is the one the standard implies, which is
+	// why No is the base.
+	//
+	// Distinct from KillSendsASignalNumberItCannotName, which is the same
+	// number arriving at the other builtin. That one is about reaching
+	// `kill(2)` at all and splits a different way; the *range* the send
+	// takes has been the kernel's since #3287, so `kill -40 $$` was already
+	// a real send here while `trap … 40` was refused — a script that
+	// arranged to survive the signal was denied the arrangement and then
+	// killed by it (#3798).
+	TrapTakesASignalNumberItCannotName Answer
+
 	// HeldExitListsTheJobs follows that warning with the job table — the
 	// same rows `jobs` writes. bash does and zsh does not: measured through a
 	// pseudo-terminal, `shopt -s checkjobs` then `exit` writes
@@ -22122,6 +22167,11 @@ func PosixSemantics() Semantics {
 		// and says nothing about handing an unknown number to the kernel, so
 		// the base checks its own table first; ksh93 and zsh override.
 		KillSendsASignalNumberItCannotName: No,
+		// The standard has `trap` take "a signal number" and leaves what
+		// counts as one to the implementation, so the base holds to the
+		// names it has; the columns whose kernel has more numbers than names
+		// override.
+		TrapTakesASignalNumberItCannotName: No,
 		CdpathAnnouncesTheDirectory:        Yes,
 		FdVariableOutlivesTheCommand:       Yes,
 		// The standard has the here-document end at the delimiter and says

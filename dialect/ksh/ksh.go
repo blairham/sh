@@ -2311,6 +2311,11 @@ func Semantics() interp.Semantics {
 	s.TrapListsSignalsWithL = interp.No
 	// The one dialect that refuses `trap EXIT`, and the refusal is fatal.
 	s.TrapOneArgumentIsACondition = interp.No
+	// A number this kernel delivers that no name in the table covers is a
+	// condition here. Measured 2026-09-19 on linux/arm64, ksh93u+ in Debian
+	// bookworm, the script file `trap 'echo CAUGHT' $1; kill -$1 $$; echo
+	// SURVIVED`: 15, 40 and 64 all print CAUGHT then SURVIVED at 0.
+	s.TrapTakesASignalNumberItCannotName = interp.Yes
 	// ERR and DEBUG but not RETURN. Both follow the script into functions;
 	// only DEBUG follows it into a subshell — measured, a command
 	// substitution there captures the DEBUG handler's output and not the

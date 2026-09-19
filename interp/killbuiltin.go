@@ -842,8 +842,14 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		return r.killProcess(pid, sig)
 	}
 	s := r.sigs()
+	// The condition the trap table is keyed by, which is the name only where
+	// the shell has one: a number past the table's last name is trapped under
+	// its decimal spelling, and the send resolves it to an empty name because
+	// there is nothing in the table to resolve it to. Looking the empty name
+	// up found no handler however carefully the script had set one (#3798).
+	key := trapKey(name, sig)
 	s.mu.Lock()
-	body, trapped := s.traps[name]
+	body, trapped := s.traps[key]
 	s.mu.Unlock()
 	if !catchableSignal(sig) {
 		// `trap` takes KILL and STOP because every shell on the panel does,
@@ -875,7 +881,10 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// The shell is the only thing listening, so the kernel is not
 		// involved: the handler runs before the next command because the
 		// arrival was recorded here, not because a goroutine was quick.
-		r.selfSignaled(name)
+		//
+		// The key and not the name, because the pending list is read against
+		// the trap table and a nameless number has no entry under "".
+		r.selfSignaled(key)
 	case !trapped && fatalSignal(name, sig) && r.untrappedSignalIgnored(name):
 		// The shell has taken this signal's default action away from the
 		// kernel and put nothing in its place, so the raise is not merely

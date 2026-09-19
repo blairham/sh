@@ -740,7 +740,7 @@ func printNode(w io.Writer, n syntax.Node, depth int) {
 			case a.IsArray:
 				var els []string
 				for _, e := range a.Elems {
-					els = append(els, e.Literal())
+					els = append(els, syntax.PrintArrayElem(e))
 				}
 				printf(w, "%s  %-8s assign %s=(%s)\n", pad, a.Pos(), a.Name, strings.Join(els, " "))
 			case a.Index != nil:

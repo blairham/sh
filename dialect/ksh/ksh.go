@@ -221,6 +221,12 @@ func Dialect() syntax.Dialect {
 	// it; and `a=( x; ; )` is `` `;' unexpected ``, so it may be written once.
 	// zsh takes all four, which is the reading the other value records (#1162).
 	d.SemicolonInAnArrayLiteral = syntax.OneSemicolonEndsTheArrayElements
+	// A parenthesized element inside a literal is a literal of its own, which
+	// is this shell's multi-dimensional array: `a=( (1 2) (3 4) )` leaves two
+	// elements and `${a[1][0]}` is `3`. bash and dash refuse the paren and
+	// zsh reads it as a glob qualifier, so the construct is this column's
+	// alone (#3410).
+	d.NestedArrayLiteral = true
 	// And this shell has the brace spelling of a `case` header too, with the
 	// two words **paired**: `case x { … }` and `case x in … esac` run, while
 	// `case x { … esac` and `case x in … }` are both `` `case' unmatched ``.

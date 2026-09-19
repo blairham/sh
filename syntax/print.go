@@ -105,6 +105,17 @@ func PrintWord(w *Word) string {
 	return p.b.String()
 }
 
+// PrintArrayElem renders one element of an array literal as it was written —
+// an ordinary word, or a nested literal with its parentheses.
+func PrintArrayElem(e *ArrayElem) string {
+	if e == nil {
+		return ""
+	}
+	var p printer
+	p.arrayElem(e)
+	return p.b.String()
+}
+
 // PrintWordQuotingRun renders the run of spans around index i that share its
 // quoting, *without* the quote characters that surrounded the run.
 //
@@ -1558,15 +1569,50 @@ func (p *printer) assign(a *Assign) {
 		p.str(")")
 	case a.IsArray:
 		p.str("(")
-		for i, e := range a.Elems {
-			if i > 0 {
-				p.str(" ")
-			}
-			p.word(e)
-		}
+		p.arrayElems(a.Elems)
 		p.str(")")
 	case a.Value != nil:
 		p.word(a.Value)
+	}
+}
+
+// arrayElem writes back one element of an array literal: an ordinary word, or
+// a literal of its own.
+//
+// The nested form is written with no blank inside its parentheses —
+// `a=((1 2) (3 4))` — which is what the outer literal's own elements are
+// written with, so the two nest without the spacing drifting a level at a
+// time. What `typeset -p` writes is a separate question and is the
+// interpreter's; see interp.nestedListing.
+func (p *printer) arrayElem(e *ArrayElem) {
+	if e.Word != nil {
+		// The `[sub]=` head where the literal is what goes under the key,
+		// and the whole element where it is not. Written with no blank
+		// between the two, which is the spelling that reads back the same:
+		// a blank there is taken the same way, but the head-less form is not
+		// what `a=( [0]= (1 2) )` said.
+		p.word(e.Word)
+		if e.Nested == nil {
+			return
+		}
+	}
+	p.str("(")
+	p.arrayElems(e.Nested.Elems)
+	p.str(")")
+}
+
+// arrayElems writes an element list, with one blank the source may not have
+// had: a literal whose **first** element is a literal of its own is written
+// `( (1 2) )` rather than `((1 2) )`, because `((` behind an `=` is an
+// arithmetic command and what this printed would not read back as what it
+// printed. The empty case is where it bites — `a=(())` is `((` followed by
+// `))` and nothing else.
+func (p *printer) arrayElems(elems []*ArrayElem) {
+	for i, e := range elems {
+		if i > 0 || (e.Word == nil && e.Nested != nil) {
+			p.str(" ")
+		}
+		p.arrayElem(e)
 	}
 }
 

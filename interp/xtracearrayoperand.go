@@ -161,9 +161,15 @@ func (r *Runner) traceArrayOperandAssignment(a *syntax.Assign, e *expandedAssign
 // ksh93, so the subscript is the text it expanded to and never the number it
 // would evaluate to; `k=kk; typeset -A m=([$k]=v)` is `['kk']` and `m[kk]` in
 // the same two, which is what says it expanded at all.
-func traceArrayOperandLiteral(elems []*syntax.Word, parsed []literalElem, d Diagnostics) string {
+func traceArrayOperandLiteral(elems []*syntax.ArrayElem, parsed []literalElem, d Diagnostics) string {
 	var words []string
-	for i, w := range elems {
+	for i, e := range elems {
+		if e.Word == nil {
+			// As written, for the reason traceArrayLiteral gives.
+			words = append(words, syntax.PrintArrayElem(e))
+			continue
+		}
+		w := e.Word
 		if parsed == nil {
 			words = append(words, syntax.PrintWord(w))
 			continue

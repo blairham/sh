@@ -161,7 +161,9 @@ func findFileSubst(f *syntax.File) (syntax.Span, bool) {
 			}
 			for _, a := range c.Assigns {
 				words = append(words, a.Value)
-				words = append(words, a.Elems...)
+				for _, e := range a.Elems {
+					words = append(words, e.Word)
+				}
 			}
 		case *syntax.CaseClause:
 			words = append(words, c.Word)

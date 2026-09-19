@@ -1058,6 +1058,73 @@ in zsh, exactly as `${a[1]}` reads it — and the second row above says
 `a[1]+=Q` inherits it too, so appending is not a form with a subscript
 rule of its own.
 
+#### A literal standing where an element goes
+
+One shell reads a parenthesized element inside a literal as a literal of
+its own, which is its multi-dimensional array. Measured on ksh93u+
+2012-08-01, 2026-09-19, a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with stdin on /dev/null, read through `sed -n l`:
+
+    a=( (1 2) (3 4) )      ${a[1][0]} is 3, ${a[0][1]} is 2, ${#a[@]} is 2
+                           typeset -a a=((1 2) (3 4) )
+    a=( ( (1 2) (3) ) (4) ) ${a[0][0][1]} is 2
+    a=( () )               one element, typeset -a a=(())
+    a=( (1 2)x )           two elements, `(1 2)` and `x`
+    a=( "(1 2)" )          one element, the six characters
+
+bash and dash refuse the parenthesis outright and zsh reads it as a glob
+qualifier, so the construct is that column's alone — the grammar flag is
+`NestedArrayLiteral`. The fourth row is what makes it a **token**
+boundary rather than a word shape: the close paren ends the element
+wherever it falls, and the fifth is the control that keeps quoting text.
+
+An element that is a literal is **one** element holding what the literal
+built, never words spliced in around it — which is the whole of what
+makes it a dimension. The store for it was already here: an element
+holding an array is what `a[1]=(p q)` and `a[1][2]=v` build.
+
+**The literal is retyped by a nested element that is not first.** The
+first element decides and nothing else:
+
+    a=( (1 2) (3 4) )      typeset -a a=((1 2) (3 4) )
+    a=( (1 2) x (3 4) )    typeset -a a=((1 2) x (3 4) )
+    a=( (1 2) x y )        typeset -a a=((1 2) x y)
+    a=( x (1 2) )          typeset -A a=([0]=x [1]=(1 2) )
+    a=( x y (1 2) )        typeset -A a=([0]=x [1]=y [2]=(1 2) )
+    a=( "" (1 2) )         typeset -A a=([0]='' [1]=(1 2) )
+    a=( x y )              typeset -a a=(x y)
+
+so a literal whose first element nests stays indexed however many plain
+elements follow it, and one whose first element is plain becomes a keyed
+table as soon as any element nests. The last row is the control that
+keeps the rule about nesting rather than about the elements. Nothing a
+script reads moves — the keys are the positions written out, so
+`${#a[@]}`, `${!a[@]}`, `${a[@]}` and `${a[1][0]}` answer the same either
+way; what changes is the attribute a listing shows, and that a
+non-numeric subscript then goes in where an indexed array would refuse
+it.
+
+**In the keyed shape a parenthesis is a value and nothing else.** Where
+the first element named a subscript — the shape
+`ArrayLiteralShapeFollowsTheFirstElement` settles — a literal goes under
+the key the head just read named, and is refused anywhere else:
+
+    a=( [0]=(1 2) )         typeset -A a=([0]=(1 2) )
+    a=( [0]= (1 2) )        typeset -A a=([0]=(1 2) )   — a blank is allowed
+    a=( [0]+= (1 2) )       typeset -A a=([0]=(1 2) )
+    a=( [0]= [1]= (1 2) )   typeset -A a=([0]='' [1]=(1 2) )
+    a=( [0]=x (1 2) )       `(' unexpected
+    a=( [0]= (1 2) (3 4) )  `(' unexpected
+
+so it is the element just read and no further back, and a head that
+already has a value does not take one.
+
+**What this does not match**, measured the same day: `a+=( (5 6) )` on a
+name already holding `((1 2) (3 4))` leaves `typeset -a a=((5 6) )`
+there — the append **replaces** — where an append of plain elements adds
+to the end as everywhere else. That is that implementation's own
+bookkeeping rather than a rule, and an append here still appends. #3410.
+
 An array assignment may also be an **operand** of a declaration utility
 — `typeset a=(x y)`, `local a=(x y)`, `readonly a=(p q)` — which is a
 separate grammar flag, because it is reached by the word after a command

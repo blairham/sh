@@ -33,6 +33,12 @@ type literalElem struct {
 	// fields is what a bare element expanded to, which may be any number of
 	// words: an array is built from a command's output that way.
 	fields []string
+	// nested is the value a literal standing in an element's place built, and
+	// nil where the element is an ordinary one. One element whatever the
+	// literal held, and not a list: `a=( (1 2) (3 4) )` is two elements, each
+	// an array, which is the whole of what makes it a dimension rather than a
+	// splice.
+	nested *Element
 }
 
 // literalElems expands an array literal's elements once, and reports whether
@@ -76,14 +82,41 @@ type literalElem struct {
 // goes or is an ordinary word with a bracket in front of it. True everywhere
 // but one dialect; see [Runner.literalReadsSubscripts], which is the whole of
 // what decides it and where it is measured.
-func (r *Runner) literalElems(elems []*syntax.Word, readsSubscripts bool) ([]literalElem, bool) {
+func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts bool) ([]literalElem, bool) {
 	if parsed, ok := r.takeExpandedElements(elems); ok {
 		// Already expanded, by the caller that is about to trace what they
 		// came to. See Runner.assignAll.
 		return parsed, true
 	}
 	out := make([]literalElem, 0, len(elems))
-	for _, w := range elems {
+	for _, el := range elems {
+		if el.Nested != nil {
+			// A literal of its own, which becomes one element holding what it
+			// built rather than words spliced in around it. Built through the
+			// same placement every literal uses, so a nested one with a
+			// subscript in it leaves the same gap the outer spelling leaves.
+			value, ok := r.nestedLiteral("", el.Nested.Elems)
+			if !ok {
+				return nil, false
+			}
+			if el.Word == nil {
+				out = append(out, literalElem{nested: &value})
+				continue
+			}
+			// A `[sub]=` head with the literal as its value, which places
+			// what it built where the subscript says rather than at the next
+			// position. The head's own halves are read by the same split
+			// every other subscripted element takes.
+			sub, _, appends, ok := r.assocElem(el.Word)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, literalElem{
+				sub: sub, subscripted: true, appendValue: appends, nested: &value,
+			})
+			continue
+		}
+		w := el.Word
 		// Asked before the element is read rather than after it, so that an
 		// element the shape has made a word is expanded once and not twice.
 		// A discarded reading is not free: `i=0; a=(p [$((i++))]=v)` is two
@@ -119,7 +152,7 @@ func (r *Runner) literalElems(elems []*syntax.Word, readsSubscripts bool) ([]lit
 // store has run. The mark is what keeps a *nested* literal with no elements in
 // it — the one shape whose slice cannot be told from the cached one — from
 // taking the outer list a second time.
-func (r *Runner) takeExpandedElements(elems []*syntax.Word) ([]literalElem, bool) {
+func (r *Runner) takeExpandedElements(elems []*syntax.ArrayElem) ([]literalElem, bool) {
 	e := r.expanded
 	if e == nil || !e.elemsSet || e.elemsTaken || !sameWordList(e.assign.Elems, elems) {
 		return nil, false
@@ -129,7 +162,7 @@ func (r *Runner) takeExpandedElements(elems []*syntax.Word) ([]literalElem, bool
 }
 
 // sameWordList reports whether two element lists are the same slice.
-func sameWordList(a, b []*syntax.Word) bool {
+func sameWordList(a, b []*syntax.ArrayElem) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -179,7 +212,7 @@ func sameWordList(a, b []*syntax.Word) bool {
 // The keyed name is not reached from here at all: a declared associative
 // array takes the assoc path above, which is the last row and which already
 // agreed.
-func (r *Runner) literalReadsSubscripts(name string, elems []*syntax.Word, appendTo bool) bool {
+func (r *Runner) literalReadsSubscripts(name string, elems []*syntax.ArrayElem, appendTo bool) bool {
 	if !r.dialect().ArrayLiteralShapeFollowsTheFirstElement {
 		return true
 	}
@@ -206,11 +239,13 @@ func (r *Runner) literalReadsSubscripts(name string, elems []*syntax.Word, appen
 // list inside the element, and `a[1]=([2]=z p)` is the same syntax error the
 // whole-array spelling gives. What those three do *not* share is the store
 // half, which is about what an append may turn an indexed array into.
-func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.Word) bool {
+func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.ArrayElem) bool {
 	if !r.dialect().ArrayLiteralShapeFollowsTheFirstElement {
 		return true
 	}
-	return len(elems) > 0 && syntax.SubscriptedElement(elems[0])
+	// A nested literal is not a subscripted element, and the dialect that
+	// asks this question has no nested literals to meet.
+	return len(elems) > 0 && elems[0].Word != nil && syntax.SubscriptedElement(elems[0].Word)
 }
 
 // assignArrayLiteral is `a=(…)` and `a+=(…)` on a name with no associative
@@ -221,7 +256,7 @@ func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.Word) bool {
 // is two elements, at 0 and 2, with nothing between them. It used to keep the
 // text — `${a[0]}` answered the six characters `[2]=c` — and nothing reported
 // it, so the array looked populated and was not.
-func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo bool) {
+func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
 	parsed, ok := r.literalElems(elems, r.literalReadsSubscripts(name, elems, appendTo))
 	if !ok {
 		// The elements were not read, so there is nothing to store and the
@@ -258,9 +293,74 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 			a, next = r.appendedOverAScalar(name)
 		}
 	}
-	if a, ok := r.literalInto(name, a, next, parsed); ok {
-		r.storeArray(name, a)
+	built, ok := r.literalInto(name, a, next, parsed)
+	if !ok {
+		return
 	}
+	if !appendTo && nestingRetypesTheLiteral(parsed) {
+		r.storeRetypedNestedLiteral(name, built)
+		return
+	}
+	r.storeArray(name, built)
+}
+
+// nestingRetypesTheLiteral reports whether a literal holding an element that
+// is a literal of its own leaves a **keyed table** rather than an indexed
+// array.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-19, a script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null:
+//
+//	a=( (1 2) (3 4) )      typeset -a a=((1 2) (3 4) )
+//	a=( (1 2) x (3 4) )    typeset -a a=((1 2) x (3 4) )
+//	a=( (1 2) x y )        typeset -a a=((1 2) x y)
+//	a=( x (1 2) )          typeset -A a=([0]=x [1]=(1 2) )
+//	a=( x y (1 2) )        typeset -A a=([0]=x [1]=y [2]=(1 2) )
+//	a=( "" (1 2) )         typeset -A a=([0]='' [1]=(1 2) )
+//	a=( x y )              typeset -a a=(x y)
+//
+// So it is the **first** element that decides, and nothing else: a literal
+// whose first element is a literal of its own stays indexed however many
+// plain elements follow it, and one whose first element is plain becomes a
+// table as soon as any element nests. The last row is the control that keeps
+// it about nesting rather than about the elements.
+//
+// The keys are the positions written out, so nothing a script reads moves —
+// `${#a[@]}`, `${!a[@]}`, `${a[@]}` and `${a[1][0]}` answer the same either
+// way. What changes is the attribute a listing shows and what a later
+// non-numeric subscript may do: `a=( x (1 2) y ); a[zz]=Q` puts a key in
+// there, where an indexed array would refuse it.
+//
+// No axis: only the dialect with nested literals can reach this at all.
+func nestingRetypesTheLiteral(parsed []literalElem) bool {
+	if len(parsed) == 0 || parsed[0].nested != nil {
+		return false
+	}
+	for _, e := range parsed {
+		if e.nested != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// storeRetypedNestedLiteral stores what the rule above decided: the same
+// elements, under their positions written out as keys.
+func (r *Runner) storeRetypedNestedLiteral(name string, a Array) {
+	r.markAssoc(name)
+	if r.AssocArrays == nil {
+		r.AssocArrays = map[string]AssocArray{}
+	}
+	table := make(AssocArray, len(a))
+	for _, i := range a.subscripts() {
+		table[strconv.Itoa(i)] = a[i]
+	}
+	r.AssocArrays[name] = table
+	// Written to, so the name leaves the declared-only set and its scalar
+	// view comes back — the same two notes every keyed write makes, and for
+	// the same reasons. See setAssocElem.
+	r.compoundWasAssigned(name)
+	r.nameIsBack(name)
 }
 
 // appendedOverAScalar is what `name+=(…)` starts from where the name is not
@@ -418,10 +518,44 @@ func (r *Runner) keyedLiteralOverAScalar(name string) {
 // the script has already been ended and nothing should be stored.
 func (r *Runner) literalInto(name string, a Array, next int, parsed []literalElem) (Array, bool) {
 	for _, e := range parsed {
+		if e.nested != nil {
+			// A literal of its own becomes **one** element holding what it
+			// built, wherever the next position is. Not spliced: that is the
+			// whole of what makes `a=( (1 2) (3 4) )` two elements rather
+			// than four, and `${a[1][0]}` reach the `3`.
+			a[next] = *e.nested
+			next++
+			continue
+		}
 		if !e.subscripted {
 			for _, f := range e.fields {
 				a[next] = Scalar(f)
 				next++
+			}
+			continue
+		}
+		if e.nested != nil {
+			// A subscripted head whose value is a literal, placed where the
+			// subscript says. Read below by the same arithmetic every other
+			// subscripted element uses.
+			idx, err := r.subscriptValue(e.sub)
+			if err != nil {
+				r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
+				return nil, false
+			}
+			pos, ok := r.elemPos(a, idx)
+			if !ok {
+				wording := r.diag().BadArrayLiteralSubscript
+				if wording == "" {
+					wording = r.diag().BadArraySubscript
+				}
+				r.failedSubscript("%s\n", Wording(wording,
+					"%[1]s[%[2]s]: bad array subscript", name, e.sub, ""))
+				return nil, false
+			}
+			a[pos] = nestedAppended(a[pos], *e.nested, e.appendValue)
+			if pos >= next {
+				next = pos + 1
 			}
 			continue
 		}

@@ -4842,6 +4842,27 @@ type Dialect struct {
 	// one is safe to be wrong about loudly.
 	ArrayLiteral bool
 
+	// NestedArrayLiteral reads a parenthesized element inside an array
+	// literal as a literal of its own rather than as a syntax error —
+	// `a=( (1 2) (3 4) )`, which is one shell's multi-dimensional array.
+	//
+	// Measured on ksh93u+ 2012-08-01, 2026-09-19, a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin on /dev/null:
+	//
+	//	a=( (1 2) (3 4) ); echo "${a[1][0]} ${a[0][1]} ${#a[@]}"   3 2 2
+	//	a=( ( (1 2) (3) ) (4) ); echo "${a[0][0][1]}"              2
+	//	a=( (1 2)x )                                two elements, `(1 2)` and `x`
+	//	a=( "(1 2)" )                               one element, the text
+	//
+	// bash and dash refuse the `(` outright, and zsh reads it as a glob
+	// qualifier, so the construct belongs to the one column that has it.
+	// The third row is what makes it a *token* boundary rather than a word
+	// shape: the close paren ends the element wherever it falls.
+	//
+	// [Dialect.ArrayLiteral] gates the literal itself; this gates what may
+	// stand inside one.
+	NestedArrayLiteral bool
+
 	// CompoundVariableDeclarators are the command words that, standing first
 	// inside `name=( … )`, make the parentheses a **compound variable's body**
 	// rather than a list of array elements — and their presence at all is what

@@ -119,7 +119,7 @@ func Nodes(n syntax.Node, fn func(syntax.Node) bool) {
 	case *syntax.Assign:
 		word(x.Value, fn)
 		word(x.Index, fn)
-		words(x.Elems, fn)
+		arrayElems(x.Elems, fn)
 		for _, item := range x.Members {
 			Nodes(item, fn)
 		}
@@ -129,6 +129,20 @@ func Nodes(n syntax.Node, fn func(syntax.Node) bool) {
 		word(x.Heredoc, fn)
 	case *syntax.Word:
 		// A leaf for our purposes: spans carry no further extents.
+	}
+}
+
+// arrayElems walks a literal's elements, descending into a nested literal
+// rather than stopping at it: an element that is a literal of its own holds
+// words a formatter has to reach, and a walk that skipped them would leave
+// them unvisited wherever the nesting went.
+func arrayElems(list []*syntax.ArrayElem, fn func(syntax.Node) bool) {
+	for _, e := range list {
+		if e.Word != nil {
+			word(e.Word, fn)
+			continue
+		}
+		arrayElems(e.Nested.Elems, fn)
 	}
 }
 

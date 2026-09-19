@@ -545,7 +545,7 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 
 // assignAssocLiteral is `m=([k]=v …)` on a declared name — and `m+=(…)`,
 // which keeps the elements already there where `=` starts over.
-func (r *Runner) assignAssocLiteral(name string, elems []*syntax.Word, appendTo bool) {
+func (r *Runner) assignAssocLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
 	parsed, ok := r.literalElems(elems, r.literalShapeReadsSubscripts(elems))
 	if !ok {
 		// A failed element list costs the whole table, exactly as it costs
@@ -687,6 +687,13 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 	var pairs []string
 	for _, e := range parsed {
 		if e.subscripted {
+			if e.nested != nil {
+				// The value under the key is a literal of its own —
+				// `a=( [0]=(1 2) )` — which the whole-element write stores
+				// rather than the string one. See storeAssocElement.
+				r.storeAssocElement(name, e.sub, *e.nested)
+				continue
+			}
 			value := e.value
 			if e.appendValue {
 				v, ok := r.keyedLiteralAppend(name, e.sub, value, replaced)

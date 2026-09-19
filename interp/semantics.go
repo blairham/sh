@@ -16184,6 +16184,48 @@ type Semantics struct {
 	// dialect's too, through [Runner.SetShellOptionNamespace] (#3264).
 	ShellOptionInvocationLetter string
 
+	// EndOfOptionsInvocationLetter is the option letter that ends the
+	// *invocation's* option reading, so that every word after the one it is
+	// written in is an operand — what `--` does, spelled as a letter.
+	// Written without its sign, because both signs carry it and it turns
+	// nothing on or off. Empty means the shell has no such letter, which is
+	// six of the seven columns.
+	//
+	// zsh spells it `b`, and zsh alone. Measured 2026-09-19 with `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` and standard input on the null device,
+	// `<shell> -b -c 'echo ran'` and then `<shell> -c 'set -b; echo ran'`:
+	//
+	//	bash 5.3.20      `ran` at 0                         `ran` at 0
+	//	bash 3.2.57      `ran` at 0                         `ran` at 0
+	//	ksh93u+          `ran` at 0                         `ran` at 0
+	//	dash 0.5.12      `ran` at 0                         `ran` at 0
+	//	BusyBox ash      `ran` at 0                         `ran` at 0
+	//	zsh 5.9.2        can't open input file: -c, at 127  set: bad option: -b
+	//
+	// The second column is the control, and it is what says the letter is
+	// the invocation's alone rather than an option with a state: five
+	// columns spend `b` on the option that reports a finished background job
+	// at once, and the sixth refuses it at `set` while reading it at
+	// invocation. So it is here beside ShellOptionInvocationLetter rather
+	// than a row in that dialect's option table, which would have given it a
+	// state it does not have.
+	//
+	// Two things about *where* it stops, both measured in the same run and
+	// neither implied by the other. The word after it is an operand whatever
+	// it looks like, so `zsh -b -c cmd` is a failure to open a file called
+	// `-c` rather than a command that ran, and `zsh -b --version` is a
+	// failure to open `--version` where `zsh --version` prints a version.
+	// But the rest of the *word* is still option letters: `zsh -bx script`
+	// traces the script exactly as `zsh -x script` does, and `zsh -bo xtrace
+	// -c :` still gives `-o` the next word before stopping. So what ends is
+	// the reading of further words.
+	//
+	// Read by the front end rather than by the interpreter, like
+	// ShellOptionInvocationLetter above and for the same reason: the
+	// spelling is the dialect's, and what it does is to the invocation
+	// rather than to the shell.
+	EndOfOptionsInvocationLetter string
+
 	// FunctionSearchVariable names the scalar this shell searches for
 	// *function definition files* — the parameter an `autoload`d name is
 	// looked up on. Empty means the shell has no such search, which is three

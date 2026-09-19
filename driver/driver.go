@@ -1000,6 +1000,16 @@ type invocation struct {
 	// all four shells keep reading options after the `c` and take the
 	// command string from the first operand, whichever sign the word had.
 	sawC bool
+	// endOptions says a letter in the word just read ends the option
+	// reading: everything after that word is an operand, the way it is after
+	// `--`. One dialect has such a letter and no other does; see
+	// Semantics.EndOfOptionsInvocationLetter.
+	//
+	// Recorded rather than acted on where the letter is found, because the
+	// rest of the *word* is still option letters — measured, `zsh -bx
+	// script` traces the script — so what ends is the loop over words and
+	// not the loop over letters.
+	endOptions bool
 	// acp is `--acp`: hand the process to the protocol server rather than
 	// running anything. Recorded here rather than acted on immediately
 	// because the boundary the same line may have asked for has to be
@@ -1265,6 +1275,12 @@ func (sh Shell) options(args []string) ([]string, invocation, error) {
 			if inv.version {
 				return nil, inv, nil
 			}
+			if inv.endOptions {
+				// A letter in that word said the reading stops here. The
+				// word itself was read whole first, which is why this is
+				// after optionWord rather than inside it.
+				return rest, inv, nil
+			}
 			args = rest
 		default:
 			return args, inv, nil
@@ -1419,6 +1435,13 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			// `+i -i` is interactive everywhere.
 			inv.interactive, inv.interactiveWritten =
 				sh.Semantics.PlusSignedInteractiveLetterStillPrompts == interp.Yes, true
+		case sh.Semantics.EndOfOptionsInvocationLetter != "" &&
+			string(ch) == sh.Semantics.EndOfOptionsInvocationLetter:
+			// The letter that ends the option reading at the end of this
+			// word, which one dialect has and no other does. Both signs
+			// carry it and nothing else about it is a sign's question, so
+			// `on` is not read. See Semantics.EndOfOptionsInvocationLetter.
+			inv.endOptions = true
 		case ch == 's' && on:
 			inv.fromStdin = true
 		case on && sh.namesStartupOption("-"+string(ch)):

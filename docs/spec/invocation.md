@@ -162,6 +162,58 @@ shell prints under a refused option carried bash's own line, `-ilrsD or -c
 command or -O shopt_option (invocation only)` — advertising an option the
 front end did not have.
 
+### `-b`, the letter that ends the option reading
+
+One column spends `b` on **ending the invocation's option reading** — every
+word after the one the letter stands in is an operand, the way every word
+after `--` is. Every other column spends it on the option that reports a
+finished background job at once, which is an ordinary `set` option and is
+settable at a prompt.
+
+Measured 2026-09-19 with `env -i PATH=/usr/bin:/bin LC_ALL=C` and standard
+input on the null device. Two invocations per column, because neither answer
+follows from the other:
+
+| column | `SH -b -c 'echo ran'` | `SH -c 'set -b; echo ran'` |
+| --- | --- | --- |
+| bash 5.3.20 | `ran`, 0 | `ran`, 0 |
+| bash 3.2.57 | `ran`, 0 | `ran`, 0 |
+| ksh93u+ 2012-08-01 | `ran`, 0 | `ran`, 0 |
+| dash 0.5.12 | `ran`, 0 | `ran`, 0 |
+| BusyBox ash 1.37.0 | `ran`, 0 | `ran`, 0 |
+| zsh 5.9.2 | `can't open input file: -c`, 127 | `set: bad option: -b`, 1 |
+
+The second column is the control. A letter that named an option would be
+settable at `set` as well, and in five columns it is; in the sixth it is
+refused there by name while being read at invocation. So it is an
+**invocation-only** letter with no state behind it, not a row in that
+dialect's option table.
+
+Two facts about where the reading stops, both from the same run:
+
+- **The word after it is an operand whatever it looks like.** `zsh -b -c cmd`
+  is a failure to open a file called `-c`, `zsh -b -s` one to open `-s`, and
+  `zsh -b --version` one to open `--version` — where `zsh --version` prints a
+  version and exits 0.
+- **The rest of its own word is still option letters.** `zsh -bx script`
+  traces the script exactly as `zsh -x script` does, `zsh -bc 'echo ran'`
+  prints `ran`, and `zsh -bo xtrace -c :` still gives `-o` the next word
+  before stopping. What ends is the reading of further *words*.
+
+Both signs carry it and neither turns anything on: `zsh +b -c cmd` and
+`zsh +bc 'echo ran'` answer exactly as the minus spellings do. The long route
+is not a spelling of it — `zsh --b` is `no such option: b`.
+
+The letter is `Semantics.EndOfOptionsInvocationLetter`, read by the front end
+like `ShellOptionInvocationLetter` above and for the same reason: the spelling
+is the dialect's, and what it does is to the invocation rather than to the
+shell.
+
+It turned up from a **usage block** rather than from a failure. The first
+draft of zsh's `--help` listed `-b`, and the test that runs every spelling the
+block advertises refused to let it stay, because the front end answered `bad
+option: -b` at 1 (#3754). The block lists it now.
+
 ### Every option word is judged before the operand behind it
 
 This was held out of `-O`'s work and is closed by #3284, and it is not that

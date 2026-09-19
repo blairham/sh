@@ -63,11 +63,13 @@ func TestTheHelpOptionWritesTheBlockOnStandardOutput(t *testing.T) {
 // each exercised here, because a usage block that names an option the front
 // end refuses is worse than no block: it is a wrong answer a reader acts on.
 //
-// This is what kept `-b` out of the list. The reference takes it as the end of
-// option processing — `zsh -b -c 'echo ran'` there reads `-c` as the script
-// name and answers `can't open input file: -c` — and this front end refuses
-// the letter outright (#3754). It was in the first draft of the block and this
-// test is what took it out.
+// This is what kept `-b` out of the list, and what now keeps it in. The
+// reference takes it as the end of option processing — `zsh -b -c 'echo ran'`
+// there reads `-c` as the script name and answers `can't open input file: -c`
+// — and this front end refused the letter outright until #3754 gave it
+// Semantics.EndOfOptionsInvocationLetter. It was in the first draft of the
+// block, this test is what took it out, and the row below is what earns it
+// back.
 func TestEverySpellingTheHelpBlockAdvertisesWorks(t *testing.T) {
 	// The four spellings the prose claims, each read back through the option
 	// it names rather than through an exit status: a front end that took the
@@ -102,6 +104,12 @@ func TestEverySpellingTheHelpBlockAdvertisesWorks(t *testing.T) {
 		// The special options, each doing the thing the block says it does.
 		{"-c runs the argument", []string{"-c", "echo ran"}, "ran\n"},
 		{"--emulate starts in the mode", []string{"--emulate", "ksh", "-c", "emulate"}, "ksh\n"},
+		// `-b` stops the reading at the end of its own word, so the letters
+		// welded behind it are still read and the command string still runs.
+		// That the *next* word is an operand is the other half and is
+		// TestTheEndOfOptionsLetterIsReadHere, which cannot live in this
+		// table: every row here exits 0 and that half exits 127.
+		{"-b is read as a letter", []string{"-bc", "echo ran"}, "ran\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, errs, code := runZsh(t, c.argv...)
@@ -128,7 +136,7 @@ func TestEverySpellingTheHelpBlockAdvertisesWorks(t *testing.T) {
 	// the block would advertise something nothing had exercised.
 	exercised := map[string]bool{
 		"--help": true, "--version": true, "--emulate": true,
-		"-c": true, "-o": true, "+o": true,
+		"-c": true, "-o": true, "+o": true, "-b": true,
 	}
 	for _, row := range specialOptionRows(t) {
 		word := strings.Fields(row)[0]
@@ -200,4 +208,29 @@ func specialOptionRows(t *testing.T) []string {
 		t.Fatal("the special-options section is empty")
 	}
 	return rows
+}
+
+// `-b` ends the option reading, so the word after the one it stands in is an
+// operand — which is why the command-string letter after it becomes a path
+// the shell cannot open.
+//
+// Its own test rather than a row in the table above, because every row there
+// exits 0 on standard output and this is a refusal at 127. Measured 2026-09-19
+// on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input
+// on the null device: `zsh -f -b -c 'echo ran'` is `can't open input file: -c`
+// at 127, and `zsh -f -c 'set -b; echo ran'` is `set: bad option: -b` — the
+// control that says the letter is the invocation's and not an option with a
+// state. See interp.Semantics.EndOfOptionsInvocationLetter for the panel.
+func TestTheEndOfOptionsLetterIsReadHere(t *testing.T) {
+	out, errs, code := runZsh(t, "-b", "-c", "echo ran")
+	if code != 127 || !strings.Contains(errs, "-c") || out != "" {
+		t.Errorf("`-b -c 'echo ran'`: status %d out %q stderr %q, "+
+			"want the word after it read as a file at 127", code, out, errs)
+	}
+	// And the same letter at `set` is still refused, which is what keeps it
+	// out of the option table.
+	_, errs, code = runZsh(t, "-c", "set -b; echo ran")
+	if code == 0 || !strings.Contains(errs, "-b") {
+		t.Errorf("`set -b`: status %d stderr %q, want it refused by name", code, errs)
+	}
 }

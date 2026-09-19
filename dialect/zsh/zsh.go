@@ -1061,6 +1061,15 @@ func Semantics() interp.Semantics {
 		OutOfOrder:      "%s: must precede other options",
 		Status:          1,
 	}
+	// `-b` ends the option reading at the end of the word it is written in,
+	// so every word after that one is an operand — which is why `zsh -b -c
+	// cmd` is a failure to open a file called `-c` rather than a command
+	// that ran. The panel's only such letter; five of the other six spend
+	// `b` on the option that reports a finished background job at once, and
+	// this shell refuses it at `set` while reading it at invocation, which
+	// is what says it is the invocation's alone. Measured 2026-09-19; the
+	// rows are in interp.Semantics.EndOfOptionsInvocationLetter.
+	s.EndOfOptionsInvocationLetter = "b"
 	// The parameter an `autoload`d name is looked up on, and the panel's only
 	// one: `autoload -Uz is-at-least` finds its file on `$FPATH` and nothing
 	// else does. Measured under `-f`, so it is the shell's own value and not a

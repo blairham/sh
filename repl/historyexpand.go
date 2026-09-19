@@ -31,34 +31,67 @@ import (
 //
 // A `:p` modifier is the one route that remembers a line and runs nothing,
 // which is what makes it the safe way to look at what a reference resolves to.
-func (s Shell) expanded(line string, hist []string, remember func(string)) (string, bool) {
+func (s Shell) expanded(line string, hist []string, remember func(string)) (string, lineOutcome) {
 	if s.Runner == nil || !s.Runner.HistoryExpansion() {
-		return line, true
+		return line, runLine
 	}
 	if strings.TrimSpace(line) == "" {
-		return line, true
+		return line, runLine
 	}
 	// The history is numbered from 1, which is where every shell in the panel
 	// starts it and what `!1` means.
 	res, err := s.Runner.ExpandHistory(line, hist, 1)
 	if err != nil {
 		s.errf("%s: %s\n", or(s.Name, "sh"), s.Runner.HistoryExpansionRefusal(err))
-		return "", false
+		return "", dropLine
 	}
 	if !res.Changed {
-		return line, true
+		return line, runLine
+	}
+	if s.Runner.HistoryExpansionVerifies() && !res.Print {
+		// The expansion goes back where it came from instead of being run,
+		// and the echo above is what it replaces rather than something it is
+		// added to: measured, the person sees the text once, on the line they
+		// are about to press Return on. See interp.Runner.
+		// HistoryExpansionVerifies for the rows and repl.lineStart for where
+		// the text lands.
+		return res.Line, verifyLine
 	}
 	s.errf("%s\n", res.Line)
 	if res.Print {
 		// `:p` prints the expansion and runs nothing. It is still remembered,
 		// which is what makes the next line able to recall it.
+		//
+		// Unmoved by `histverify`, and measured rather than assumed: with the
+		// option on, `!!:p` still prints and still joins the list, so the two
+		// routes that run nothing do different things with the same text.
 		if remember != nil {
 			remember(res.Line)
 		}
-		return "", false
+		return "", dropLine
 	}
-	return res.Line, true
+	return res.Line, runLine
 }
+
+// lineOutcome is what the expander leaves the session to do with a line.
+//
+// A boolean until there were three answers rather than two, and the third is
+// not a shade of either: dropLine abandons the construct in hand the way ^C
+// abandons it, and verifyLine keeps it — measured, a `!!` verified on the
+// second line of a `for` loop is redrawn at the **continuation** prompt and
+// the loop goes on being typed.
+type lineOutcome int
+
+const (
+	// runLine is the ordinary answer: the text is what the parser is given.
+	runLine lineOutcome = iota
+	// dropLine runs nothing and abandons whatever was half-typed — a
+	// reference nothing matched, or a `:p` that asked only to be shown.
+	dropLine
+	// verifyLine runs nothing and puts the text back on the editing line,
+	// with the construct in hand left alone.
+	verifyLine
+)
 
 // A compile-time reminder that the engine's errors are the only ones this
 // renders: a new one added there without a wording here would print its Go

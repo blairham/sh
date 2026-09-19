@@ -48,6 +48,37 @@ func (r *Runner) StartInteractiveHistory() {
 // line is parsed.
 func (r *Runner) HistoryExpansion() bool { return r.histExpand }
 
+// HistoryExpansionVerifies reports whether an expansion that changed the line
+// is handed back to the person instead of being run.
+//
+// The state bash spells `shopt histverify` and zsh spells `HIST_VERIFY`, off
+// in both. It does nothing to the expansion — the same call, the same
+// arguments, the same answer — and everything to what is done with the
+// result, which is why it is a front end's question rather than this
+// package's: the result goes on the editing line, and only a front end with
+// an editor has one.
+//
+// Measured 2026-09-19 through a pseudo-terminal against bash 5.3.20, and the
+// same rows against zsh 5.9.2 under `setopt HIST_VERIFY`, with `echo AAA` in
+// the list:
+//
+//	!!                    a fresh prompt reading `echo AAA`, cursor at its end
+//	then ` BBB` and Return  runs `echo AAA BBB`
+//	the list afterwards   `echo AAA BBB` — one entry, and the accepted text
+//	!! then ^C            nothing runs and the list gains nothing at all
+//	a line nothing changed  runs, with no echo and no second look
+//	a reference nothing matched  the same complaint as with it off
+//
+// The fourth row is the one worth naming, because the issue asking for this
+// said the expansion still joins the list the way `:p` puts it there. It does
+// not: an abandoned verification leaves the list exactly as it was, and an
+// accepted one is recorded by the ordinary accept as whatever was accepted.
+// So this option records nothing of its own.
+func (r *Runner) HistoryExpansionVerifies() bool { return r.histVerify }
+
+// SetHistoryExpansionVerifies moves it.
+func (r *Runner) SetHistoryExpansionVerifies(on bool) { r.histVerify = on }
+
 // HistoryExpansionInAScript reports whether this dialect reads a script one
 // physical line at a time, keeping the list and expanding against it. See
 // Semantics.HistoryExpansionInAScript, which is bash's row alone.

@@ -476,6 +476,22 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).LocalInheritsTheOuterValue,
 		set: (*interp.Runner).SetLocalInheritsTheOuterValue,
 	},
+	// A line history expansion changed goes back on the editing line rather
+	// than running. The only name in this table whose whole observable is at
+	// a prompt, which is why it sat in shoptStates refusing the write until
+	// there was somewhere to put the text: an editor that cannot be handed a
+	// line has no way to keep the promise, and a shell reporting `on` while
+	// the expansion ran unverified would be the exact failure the option
+	// exists to prevent — a mistyped `!string` running something nobody read.
+	//
+	// What made it buildable is the seam `vared` left behind (#2914):
+	// repl.lineStart is a read that begins from text somebody supplied, and
+	// this is its second caller. See interp.Runner.HistoryExpansionVerifies
+	// for the measured rows and docs/spec/history.md for the prose (#3203).
+	"histverify": {
+		get: (*interp.Runner).HistoryExpansionVerifies,
+		set: (*interp.Runner).SetHistoryExpansionVerifies,
+	},
 }
 
 // shoptReadOnly are the two names that are indicators rather than switches:
@@ -692,7 +708,6 @@ var shoptStates = map[string]bool{
 	"gnu_errfmt":           false,
 	"histappend":           true,
 	"histreedit":           false,
-	"histverify":           false,
 	"huponexit":            false,
 	"interactive_comments": true,
 	"lithist":              true,

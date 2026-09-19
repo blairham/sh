@@ -2552,7 +2552,76 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			_ = elems
 		}
 	}
-	value, set, subscript = r.paramSource(e)
+	// Whether the parameter is read at all, which a reference that comes
+	// back to itself answers No — see the block below.
+	circular := false
+	if e.Indirect {
+		// The two answers a **reference** gives this spelling, both of them
+		// in front of the read below because neither of them reads the
+		// value: the target's name, and the refusal a reference with nothing
+		// to point at makes. They were below it, and the read is what walks
+		// the reference — so a warned reference said the warning on its way
+		// to an answer that discards the value, where the shell being
+		// measured says nothing at all. Measured 2026-09-18 on bash 5.3.20,
+		// `r=OUTER; f(){ local -n r=r; echo "${!r}"; }; f`: the declaration's
+		// own two warnings and then none, where this shell had a third
+		// (#3122).
+		//
+		// An expansion that never reads the value must not read it, which is
+		// the same shape #3121 found for a `.get` discipline — a hook fired
+		// for a read nothing wanted.
+		target, cycle, aimed := r.namerefWalk(e.Name)
+		if aimed {
+			// A name reference answers with the name it points at, which is
+			// not the double read the same spelling means for an ordinary
+			// parameter: `v=1; typeset -n r=v; echo "${!r}"` is `v` in bash
+			// 5.3.15 and ksh93u+ alike, where reading twice would have gone
+			// looking for a parameter called `1`. The chain is followed to
+			// the end — `typeset -n s=r` answers `v` and not `r` — which is
+			// what namerefTarget already does for every reader. See
+			// interp/nameref.go.
+			//
+			// Ahead of the axis below because it is not that question: this
+			// is the same answer in the dialect that reads `${!x}` as the
+			// name and in the one that reads it as an indirection.
+			return target
+		}
+		// A reference with **nothing to point at** is the one state neither
+		// refusal below can reach, and both shells that spell a reference
+		// refuse it. Here it answered the empty string at status 0, which
+		// reads exactly like a reference aimed at a name holding nothing —
+		// and `declare -n out; some_fn out` before the call is an ordinary
+		// way for a script to be in that state. See
+		// Diagnostics.IndirectionUnaimedReference, where the panel is.
+		//
+		// Ahead of the operators too, which is measured rather than assumed:
+		// `${!u-DEF}` and `${!u:?msg}` are the same refusal in bash 5.3.20,
+		// so the word behind the operator never stands in for the value.
+		if w := r.diag().IndirectionUnaimedReference; w != "" && r.isNameref(e.Name) {
+			r.diagf("%s\n", Wording(w, "", e.Name))
+			// What it costs the script is FailedExpansionAbandonsTheLine's
+			// question — bash gives up the rest of the line and runs the
+			// next, ksh93 ends the script at 1 — which expandErr already
+			// puts to it, exactly as refuseIndirection's two sentences do.
+			r.expandErr = true
+			return ""
+		}
+		// And a reference that comes back to **itself** is the third state,
+		// which has no target to answer with and must still not read: the
+		// read walks the loop again and warns about it on the way to a value
+		// this expansion discards. Measured on bash 5.3.20 — the
+		// indirection is refused in exactly the words a name nothing
+		// declared gets, and no warning is written for it.
+		//
+		// Behind the unaimed refusal above rather than in front of it,
+		// because that is the order the two were asked in when both stood
+		// behind the read: a circular reference is not an aimed one, so the
+		// refusal saw it first.
+		circular = cycle
+	}
+	if !circular {
+		value, set, subscript = r.paramSource(e)
+	}
 
 	if !set && !e.Indirect {
 		// An indirection's refusal is the **target's** and is asked below,
@@ -2567,46 +2636,10 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	// the value came from rather than the one written.
 	name := e.Name
 	if e.Indirect {
-		// A **name reference** answers this spelling with the name it points
-		// at, which is not the double read the same spelling means for an
-		// ordinary parameter: `v=1; typeset -n r=v; echo "${!r}"` is `v` in
-		// bash 5.3.15 and ksh93u+ alike, where reading twice would have gone
-		// looking for a parameter called `1`. The chain is followed to the
-		// end — `typeset -n s=r` answers `v` and not `r` — which is what
-		// namerefTarget already does for every reader. See
-		// interp/nameref.go.
+		// The two answers a **reference** gives are above, in front of the
+		// read, because neither of them reads the value. What is left here
+		// is the indirection proper, which does.
 		//
-		// Ahead of the axis below because it is not that question: this is
-		// the same answer in the dialect that reads `${!x}` as the name and
-		// in the one that reads it as an indirection.
-		if target, is := r.namerefTarget(e.Name); is {
-			return target
-		}
-		// A reference with **nothing to point at** is the one state neither
-		// refusal below can reach, and both shells that spell a reference
-		// refuse it. Here it answered the empty string at status 0, which
-		// reads exactly like a reference aimed at a name holding nothing —
-		// and `declare -n out; some_fn out` before the call is an ordinary
-		// way for a script to be in that state. See
-		// Diagnostics.IndirectionUnaimedReference, where the panel is.
-		//
-		// Ahead of the axis below because it is not that question: this is
-		// the same refusal in the dialect that reads `${!x}` as the name and
-		// in the one that reads it as an indirection, and the dialect that
-		// reads it as the name reaches no other indirection refusal at all.
-		//
-		// Ahead of the operators too, which is measured rather than assumed:
-		// `${!u-DEF}` and `${!u:?msg}` are the same refusal in bash 5.3.20,
-		// so the word behind the operator never stands in for the value.
-		if w := r.diag().IndirectionUnaimedReference; w != "" && r.isNameref(e.Name) {
-			r.diagf("%s\n", Wording(w, "", e.Name))
-			// What it costs the script is FailedExpansionAbandonsTheLine's
-			// question — bash gives up the rest of the line and runs the
-			// next, ksh93 ends the script at 1 — which expandErr already
-			// puts to it, exactly as refuseIndirection's two sentences do.
-			r.expandErr = true
-			return ""
-		}
 		// `${!x}` reads x, then reads *that* as a name — in bash. ksh93
 		// parses the same text and yields the name itself, so the grammar
 		// having accepted it is not enough to know what it means.

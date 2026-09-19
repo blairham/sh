@@ -6075,6 +6075,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// declaration writes is a fresh binding, and an attribute applied
 		// ahead of the shadow was saved as the *outer* name's and came back
 		// on return as its own (#1673).
+		// What the name carries before the letters land, so a refused
+		// reference below can put it back — the same hold biDeclare takes,
+		// and one function rather than two. See declarationtakenback.go.
+		held := r.holdTheDeclaration(name)
 		r.applyAttributes(name, f)
 		r.localExportAttribute(name, f.export)
 		if r.unspecified {
@@ -6123,7 +6127,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// the same spelling gets itself back on return. See
 			// interp/nameref.go.
 			if code := r.declareNameref("local", name, value, f, hasValue,
-				r.readonly[name] && !f.readonlyOff, !fresh); code != 0 {
+				r.readonly[name] && !f.readonlyOff, !fresh, held, fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status

@@ -142,10 +142,20 @@ func (r *Runner) indirectAimedAtAList(e *syntax.ParamExpr) (*syntax.ParamExpr, b
 		// one that has not chosen is the scalar path's to report.
 		return nil, false
 	}
-	if _, is := r.namerefTarget(e.Name); is {
+	if _, cycle, is := r.namerefWalk(e.Name); is || cycle {
 		// A name reference answers this spelling with the name it points at
 		// and is not a double read at all. The scalar path holds that
 		// measurement; here it only has to stay out of the way.
+		//
+		// **A reference that comes back to itself is the same answer**, and
+		// leaving it out of this test was one read too many: the walk finds
+		// no target, so the value was read here to see whether it named a
+		// list — and the read walks the loop and warns about it, where the
+		// shell being measured says nothing at all and refuses the
+		// indirection. Measured 2026-09-18 on bash 5.3.20, `r=OUTER; f(){
+		// local -n r=r; echo "${!r}"; }; f`: the declaration's own two
+		// warnings and then none. The scalar path refuses it without reading
+		// either (#3122).
 		return nil, false
 	}
 	text, set, _ := r.paramSource(e)

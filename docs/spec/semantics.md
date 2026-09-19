@@ -25895,6 +25895,83 @@ straight past and the freeze that refuses is always the target's. Only
 the name in the sentence moves. ksh93 answers No — `typeset s=9` through
 a reference to a frozen `u` is `u: is read only` there (#3173).
 
+### What a refused declaration leaves behind
+
+A declaration applies its letters to the name before it knows whether the
+rest of the operand can stand, so a refusal arrives with the letters
+already on. What is left standing afterwards is measured and is **two**
+answers rather than one, split by whether the refusal says anything.
+
+Measured 2026-09-18 on bash 5.3.20, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+with a scratch HOME, from a script file, reading each name back with
+`declare -p`:
+
+    p=orig;          declare -nx p=1x     declare -- p="orig"
+    declare -l q=AB; declare -nx q=1x     declare -l q="ab"
+    e=/;             declare -nx e        declare -- e="/"
+    a=(x y);         declare -nx a        declare -a a=([0]="x" [1]="y")
+                     declare -nx r=1x     r: not found
+    g=G; f(){ declare -nx g=1x; }; f      declare -- g="G", no local made
+
+So a refusal the declaration **reports** — a target that is not a name, a
+target that is this name, a reference over an array — leaves the name
+exactly as the operand found it. The letters the line wrote are gone, the
+letters the name already carried stand, and a name the line brought into
+being is not there at all. The second row is what makes that "put the
+name back" rather than "take this line's letters off": a rule undoing
+what the line wrote would have to know it did not write the `l`.
+
+The **silent** refusal is the other answer, and it is why this is
+per-refusal rather than one policy. `declare -ni r=v` writes no
+diagnostic — the `i` letter shapes the target into a number, and a number
+is not a name — and there the letters stand:
+
+    w=old;  declare -ni w=v               declare -i w="old"
+    f(){ declare -ni z=v; }; f            declare -i z — the local stands
+            declare -ni r=v               r: not found
+    f(){ declare -gni t=v; }; f           t: not found
+
+The first two say the declaration happened and only the aiming failed;
+the last two say a name it brought into being **at the top level** is
+still not brought into being. A local binding is made before the aiming
+is tried and stands whatever the aiming does.
+
+Core rather than an axis: bash is the only column that spells a reference
+at all — ksh93 refuses these targets at the declaration and ends the
+script, and no other panel member has the letter — so there is nobody to
+disagree with. `interp/declarationtakenback.go` holds the take-back and
+takes it through [Runner.captureAttributes], which is the same list a
+scope saves and `unset` clears, so a letter added to the runner has one
+answer here rather than a third (#3575).
+
+### An expansion that never reads the value does not read it
+
+A **circular** reference is where that rule is observable, because the
+read is what walks the loop and says so. Measured 2026-09-18 on bash
+5.3.20, counting the warnings after a `MARK` so the declaration's own two
+are out of the way, with `r=OUTER; f(){ local -n r=r; … }; f`:
+
+    ${!r}                          bash  0        here  0, was 1
+    $r  ${r+S}  ${#r}  ${r-GONE}   bash  1        here  1
+    ${r#x}  ${r/a/b}  ${r^^}       bash  3        here  1
+    ${r:0:2}  ${r@Q}               bash  3        here  1
+
+The first row was a pre-read: `${!r}` answers with a **name** or refuses,
+so it never wants the value, and two places read it anyway on the way
+there — the scalar path ahead of its indirect branch, and the test for
+whether the indirection aims at a list. Both ask the reference first now,
+and a reference that comes back to itself is as much an answer as one that
+aims somewhere.
+
+The last two rows are **not** matched and that is a decision rather than a
+gap. The values agree in every one of them — `${r#x}` is `OUTER` in both —
+so the count is the whole of the difference, and the only way to produce
+it is to resolve the reference three times, which is exactly what #3104
+stopped doing: `${a[i++]#x}` evaluates its subscript once in bash and in
+ksh93 alike, and a shell that walked the reference three times to match a
+number would evaluate it three times too. Emitting the warning without
+resolving would be copying a count rather than modeling anything (#3122).
+
 ## An external command's assignment prefix is a store, in the child
 
 `docs/spec/semantics.md` already records the rule a variable's hooks keep:

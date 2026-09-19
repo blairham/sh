@@ -2146,6 +2146,22 @@ table is the platform's never has to decide. The translating form spells the
 same gap differently — ksh93's `kill -l 29` is the bare `29` — which is
 `KillListLeavesAnUnnamedSignalBlank` and is why one gap takes two fields.
 
+**The listing's range is the kernel's, not the table's.** The walk runs to
+`platformSignalMax` — how far `kill(2)` will take a number — and fills in
+every position the table has no entry for, rather than stopping at the last
+name. Those are the two questions the table and the constant answer
+separately, and where they come apart the same binary gave two answers to
+what a number is called: `kill -l 40` wrote `40`, which is
+`KillListPrintsANumberItCannotName`, while `kill -l` had no row for 40 at
+all. Measured 2026-09-19 in `debian:bookworm` on `linux/arm64`, our dash
+under `env -i LC_ALL=C`: 32 rows before, 65 after against the reference's 65,
+and our ksh 31 before, 64 after against its 64. Nothing moves on the platform
+whose table names every number its kernel takes, and nothing moves in a
+dialect whose `KillListingUnnamedPosition` is empty, which is that field's
+third answer reaching the range as well as the gaps below it. The names the
+two reference columns write there — `RTMIN+6` for 40 — are still #3535's, and
+what closes here is only which positions exist (#3792).
+
 `Semantics.SignalNamesTheShellAlsoReads` is the mirror of
 `SignalNamesTheShellLacks`: a shell can answer to a word its own table has
 stopped carrying. `IOT` is signal 6 in ksh93 and zsh and a refusal in bash,

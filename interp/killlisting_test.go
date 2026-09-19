@@ -4,6 +4,8 @@
 package interp_test
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -182,5 +184,82 @@ func TestTheListingPreferenceAndTheShellsOwnSpellingAreNotOneField(t *testing.T)
 	}
 	if out := run(t, spelling, Diagnostics{}, `kill -l 6`); out != "IOT\n" {
 		t.Errorf("spelling translation: wrote %q, want IOT", out)
+	}
+}
+
+// The bare listing and the translating form are one shell answering one
+// question, so the set of positions they say exist has to be the same set
+// (#3792).
+//
+// It was not. The listing walked the *names* and the translation walks the
+// kernel's range, and those come apart wherever a platform takes more signal
+// numbers than this table has names for: `kill -l 40` wrote `40` on a machine
+// whose bare listing had no row for 40 at all, so the same binary said a
+// position both did and did not exist. The gap is thirty-three positions wide
+// on the kernel that has a real-time range and zero wide on the one that does
+// not, which is why this is written as an invariant over whatever the host
+// takes rather than as a row — a table of numbers here would be a fact about
+// one machine, and the machine that has the gap is not the one this is
+// usually run on.
+//
+// The two axes are pinned to their narrow answers on purpose: a shell that
+// writes a number back for anything it cannot name would answer for every
+// number ever passed to it, and the question here is which positions *exist*.
+func TestTheListingAndTheTranslationAgreeAboutWhichPositionsExist(t *testing.T) {
+	narrow := func(s *Semantics) {
+		// Only a real position answers, so "answered" means "is a signal
+		// here" rather than "was echoed back".
+		s.KillListPrintsANumberItCannotName = No
+		s.KillListLeavesAnUnnamedSignalBlank = No
+		// 0 is the trap table's pseudo-signal rather than a position of the
+		// kernel's, and it is the other test's question.
+		s.KillListNamesZeroAsExit = No
+	}
+	// The numbered shape, because it writes the position beside the word and
+	// so says what it thinks exists without the reader counting lines.
+	dg := Diagnostics{
+		KillListingUnnamedPosition: "%[1]d",
+		KillListing:                KillListingNumberedPerLine,
+	}
+	out, _ := optRunAs(t, narrow, dg, `kill -l`, RouteUnspecified)
+	listed := map[int]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		pos, _, ok := strings.Cut(line, ")")
+		if !ok {
+			t.Fatalf("listing line %q: want `N) word`", line)
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(pos))
+		if err != nil {
+			t.Fatalf("listing line %q: %v", line, err)
+		}
+		listed[n] = true
+	}
+	if len(listed) == 0 {
+		t.Fatal("the listing wrote nothing, so this test is measuring nothing")
+	}
+	// Below 128, so that nothing here is the exit-status reduction — that is
+	// a translation of `$?` rather than a claim that a position exists.
+	for n := 1; n < 128; n++ {
+		_, st := optRunAs(t, narrow, dg, fmt.Sprintf("kill -l %d", n), RouteUnspecified)
+		if answered := st == 0; answered != listed[n] {
+			t.Errorf("position %d: the translation answers %v and the listing has it %v, want the two to agree",
+				n, answered, listed[n])
+		}
+	}
+}
+
+// And the rendering stays the dialect's: a shell that leaves a position it
+// cannot name out of its listing leaves out the ones past the last name too,
+// rather than growing rows it had never written.
+func TestAnEmptyRenderingLeavesThePositionsPastTheTableOutToo(t *testing.T) {
+	out, _ := optRunAs(t, nil, Diagnostics{KillListing: KillListingNumberedPerLine}, `kill -l`, RouteUnspecified)
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		_, word, ok := strings.Cut(line, ") ")
+		if !ok {
+			t.Fatalf("listing line %q: want `N) word`", line)
+		}
+		if _, err := strconv.Atoi(word); err == nil {
+			t.Errorf("listing line %q: a bare number, want every position written as a name", line)
+		}
 	}
 }

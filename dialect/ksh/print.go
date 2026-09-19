@@ -146,6 +146,18 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest []string, code int) {
 	rest = args
 	echoMode := false
+	// Every bad letter of the option run, in the order they were written,
+	// held until the run ends. See badPrintOptions for the measurement and
+	// for why they are not reported where they are found.
+	var bad []byte
+	// And this shell's *own* refusals — a letter the reference has and this
+	// one does not, and a coprocess that is not running — held for the same
+	// reason and outranked by the bad letters. Measured 2026-09-18:
+	// `print -qv x`, `print -vq x`, `print -qC x` and `print -qp x` are each
+	// `print: -q: unknown option` and the usage at 2 in ksh93u+, whichever
+	// order the letters are written in, so a word the shell cannot read at
+	// all is answered before anything it merely cannot do.
+	var held *heldPrintRefusal
 	for !echoMode && len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" && rest[0] != "--" && !dashesEndTheOptions(rest[0]) {
 		if strings.HasPrefix(rest[0], "--") {
 			// A word of two dashes and something else is a *long* option,
@@ -190,13 +202,22 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 				// the letter would have written to.
 				fd, running := r.CoprocWrite()
 				if !running {
-					r.Diagnosef("print: no query process [Bad file descriptor]\n")
-					return nil, 1
+					if held == nil {
+						held = &heldPrintRefusal{
+							msg:    "print: no query process [Bad file descriptor]\n",
+							status: 1,
+						}
+					}
+					continue
 				}
 				opts.fd = fd
 			case 'v', 'C':
-				r.Diagnosef("print: -%c is not implemented yet\n", word[i])
-				return nil, 2
+				if held == nil {
+					held = &heldPrintRefusal{
+						msg:    fmt.Sprintf("print: -%c is not implemented yet\n", word[i]),
+						status: 2,
+					}
+				}
 			case 'f', 'u':
 				arg := word[i+1:]
 				if arg == "" {
@@ -218,12 +239,35 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 					opts.fd = fd
 				}
 				i = len(word)
+				if len(bad) > 0 {
+					// A letter this builtin has and that took the rest of
+					// the word as its argument ends the collecting, which
+					// is measured: `print -qfFMT x` and `print -qu3 x` each
+					// name `-q` alone where `print -q -z` names both.
+					return nil, badPrintOptions(r, bad)
+				}
+				if held != nil {
+					r.Diagnosef("%s", held.msg)
+					return nil, held.status
+				}
 			default:
-				r.Diagnosef("print: -%c: unknown option\n", word[i])
-				_, _ = fmt.Fprintf(r.Err(), "%s\n", printUsage)
-				return nil, 2
+				if !everyBadPrintOption(r) {
+					r.Diagnosef("print: -%c: unknown option\n", word[i])
+					_, _ = fmt.Fprintf(r.Err(), "%s\n", printUsage)
+					return nil, 2
+				}
+				// Held rather than reported: the reference names every bad
+				// letter of the run and the usage follows the lot.
+				bad = append(bad, word[i])
 			}
 		}
+	}
+	if len(bad) > 0 {
+		return nil, badPrintOptions(r, bad)
+	}
+	if held != nil {
+		r.Diagnosef("%s", held.msg)
+		return nil, held.status
 	}
 	if echoMode {
 		// Neither `-` nor `--` ends the options here — both print as words —
@@ -238,6 +282,45 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 		rest = rest[1:]
 	}
 	return rest, -1
+}
+
+// heldPrintRefusal is one of this shell's own refusals, kept until the option
+// run has been read: a bad letter anywhere in the run is answered in front of
+// it. See readPrintOptions, where the rows are.
+type heldPrintRefusal struct {
+	msg    string
+	status int
+}
+
+// everyBadPrintOption reports whether this dialect names every bad letter of
+// an option run rather than the first.
+//
+// The core's own question, read here because this builtin is the dialect's
+// and does not go through Runner.refuseOption: measured 2026-09-18 on ksh93u+
+// 2012-08-01, `print -qz` is `print: -q: unknown option` and
+// `print: -z: unknown option` and then one usage line, at 2, where this shell
+// named `-q` alone. See Semantics.BuiltinReportsEveryBadOption, which `kill`
+// in the same shell has answered since #3165.
+func everyBadPrintOption(r *interp.Runner) bool {
+	return r.Semantics != nil && r.Semantics.BuiltinReportsEveryBadOption == interp.Yes
+}
+
+// badPrintOptions writes one complaint per bad letter and the usage after the
+// lot, and answers with the status the run carries.
+//
+// The run and not the word, which is the half a single-word probe cannot see:
+// measured 2026-09-18, `print -q -z` names both letters exactly as `print -qz`
+// does, and `print -nqz x` and `print -qnz x` name `q` and `z` alike — so a
+// letter this builtin *has* is stepped over and the collecting carries on into
+// the next option word. `print -q9z` names all three, so a digit is an
+// ordinary bad letter here. The one thing that ends it early is a letter that
+// takes an argument, which is why `-f` and `-u` report where they stand.
+func badPrintOptions(r *interp.Runner, bad []byte) int {
+	for _, c := range bad {
+		r.Diagnosef("print: -%c: unknown option\n", c)
+	}
+	_, _ = fmt.Fprintf(r.Err(), "%s\n", printUsage)
+	return 2
 }
 
 // printFormatted is `-f`: printf with this command's operands. The core

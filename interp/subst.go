@@ -845,7 +845,7 @@ func (r *Runner) readSubstitutionsUpTo(f *syntax.File, from int, limit int32) in
 // reporting whether every one of them parsed.
 //
 // Recursive, because the nesting is: `v=$(echo $(if))` is refused with the
-// line in bash 5.3 where `` v=`echo $(if)` `` and `` v=$(echo `if`) `` are
+// line in bash 5.3 where “ v=`echo $(if)` “ and “ v=$(echo `if`) “ are
 // not, so it is the spelling of **each** body and not of the outermost one. A
 // body is one unit however many lines it runs to — it is inside a line
 // already — so there is no limit here, only in the caller.

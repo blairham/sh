@@ -2241,6 +2241,12 @@ func Semantics() interp.Semantics {
 	// `[ ! ! -n x ]` is 0 here, so the four-word `!` negates the negation
 	// behind it. Measured 2026-09-19 (#3700).
 	s.TestFourWordsNegateANegationOnce = interp.No
+	// And the connective before a leading `!` at three words: `[ ! -a / ]`
+	// is 0 here where this shell has no unary `-a` at all — `[ -a / ]` is
+	// `too many arguments` at 2 — so reading the negation first would refuse
+	// and reading the connective first gives the both-set guard over `!` and
+	// `/`. Measured 2026-09-19 (#3717).
+	s.TestThreeWordsNegateBeforeAConnective = interp.No
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// And a group with nothing in it is `argument expected` at 2 here,
 	// which is a refusal rather than a false expression (#3687).

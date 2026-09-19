@@ -271,6 +271,13 @@ func Semantics() interp.Semantics {
 	// `!` negates the negation behind it. Measured 2026-09-19 in the pinned
 	// Alpine image, BusyBox 1.37 (#3700).
 	s.TestFourWordsNegateANegationOnce = interp.No
+	// But at three words a leading `!` is read before the connectives here,
+	// as it is in dash and as POSIX gives the rule: `[ ! -a x ]` is `x:
+	// unknown operand` at 2 and `[ ! x -a ]` is `argument expected` at 2,
+	// each of them this shell's own two-word answer with a `!` in front of
+	// it — the wording differs from dash's and the ordering does not.
+	// Measured 2026-09-19 in the pinned Alpine image, BusyBox 1.37 (#3717).
+	s.TestThreeWordsNegateBeforeAConnective = interp.Yes
 	// And the general case of it: any refusal reached with a group still
 	// open is that sentence here, where this engine named the word its own
 	// reader stopped at. Seventeen shapes move and four controls do not —

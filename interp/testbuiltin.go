@@ -449,20 +449,38 @@ func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 			return ok, err
 		}
 		if args[1] == form.and || args[1] == form.or {
+			if args[0] == "!" && r.threeWordsNegateFirst() {
+				// The one shape the two readings disagree about, and the
+				// only place the axis is asked: a leading `!` ahead of the
+				// connective, which is the order POSIX gives the
+				// three-operand rule in and which two columns follow. So
+				// `[ ! -a x ]` is the two-word `-a x` refused rather than
+				// the both-set guard over the strings `!` and `x`. The
+				// binary reading above still comes first in every column —
+				// `[ ! = x ]` is a string comparison here too. See
+				// Semantics.TestThreeWordsNegateBeforeAConnective.
+				v, err := r.testExpr(form, args[1:])
+				return !v, err
+			}
 			// The connectives, over two *strings* rather than over two
 			// expressions: three words leave no room for an operator on
 			// either side, so each side is true when it is non-empty and
 			// `[ "$a" -a "$b" ]` is the both-set guard people write it for.
 			//
-			// Unanimous across the whole panel — bash 5.3, bash-as-`sh`,
-			// bash 3.2, ksh93, zsh 5.9.2, dash and BusyBox ash all answer
-			// `[ x -a "" ]` false and `[ "" -o x ]` true — which is why it
-			// is here rather than behind an axis, and why the refusal this
-			// replaces was a plain defect: the grammar below already had
-			// both connectives and only the three-word form fell through it
-			// to `binary operator expected` at status 2. A guard that is
+			// The guard itself is unanimous — bash 5.3, bash-as-`sh`, bash
+			// 3.2, ksh93, zsh 5.9.2, dash and BusyBox ash all answer
+			// `[ x -a "" ]` false and `[ "" -o x ]` true — and the refusal
+			// this replaces was a plain defect: the grammar below already
+			// had both connectives and only the three-word form fell through
+			// it to `binary operator expected` at status 2. A guard that is
 			// meant to answer yes or no answered "this is not an
 			// expression", and a script reading `$?` saw neither.
+			//
+			// What is **not** unanimous is where this reading stands against
+			// a leading `!`, which is the branch above it: this comment used
+			// to claim the whole three-word connective form was unanimous,
+			// and `[ ! -a x ]` is a refusal in two of the seven columns
+			// (#3717).
 			//
 			// Not folded into binaryTest, which the grammar also calls: the
 			// parser reads these two as connectives with `-a` binding
@@ -475,6 +493,7 @@ func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 			return left || right, nil
 		}
 		if args[0] == "!" {
+			// The other order, where the connective above got first refusal.
 			v, err := r.testExpr(form, args[1:])
 			return !v, err
 		}
@@ -564,17 +583,37 @@ func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 // words takes its `!` branch rather than one of the two that come before it.
 //
 // It mirrors the order in testExprRead's three-word case and has to stay with
-// it: the binary operator is looked for first, then the two connectives, and
-// only then is a leading `!` a negation. `[ ! = x ]` is the row that makes
-// the order load-bearing — `=` binds the `!` as a left operand, so those
-// three words are a string comparison and not a negation at all.
+// it: the binary operator is looked for first, and then a leading `!` and the
+// two connectives in whichever order
+// Semantics.TestThreeWordsNegateBeforeAConnective puts them.
+// `[ ! = x ]` is the row that makes the binary step load-bearing — `=` binds
+// the `!` as a left operand, so those three words are a string comparison and
+// not a negation at all — and `[ ! -a x ]` is the row that makes the other
+// two an axis rather than an order.
 //
 // Asked by the four-word reading, which one column is measured to *absorb*
 // rather than negate. See Semantics.TestFourWordsNegateANegationOnce.
 func (r *Runner) threeWordsReadAsANegation(form testForm, args []string) bool {
-	return len(args) == 3 && args[0] == "!" &&
-		!r.testBinaryOperatorWord(form, args[1]) &&
-		args[1] != form.and && args[1] != form.or
+	if len(args) != 3 || args[0] != "!" || r.testBinaryOperatorWord(form, args[1]) {
+		return false
+	}
+	if args[1] == form.and || args[1] == form.or {
+		// The one shape the two readings disagree about, asked here for the
+		// same reason it is asked there: where the negation is read first, a
+		// middle `-a` or `-o` does not take these three words away from it,
+		// and `[ ! ! -a x ]` is the refusal `[ ! -a x ]` gives.
+		return r.threeWordsNegateFirst()
+	}
+	return true
+}
+
+// threeWordsNegateFirst reports whether a three-word `test` led by `!` is read
+// as a negation of the other two ahead of the connective reading.
+//
+// See Semantics.TestThreeWordsNegateBeforeAConnective for the panel.
+func (r *Runner) threeWordsNegateFirst() bool {
+	return r.ask(r.sem().TestThreeWordsNegateBeforeAConnective,
+		"a three-word `test` reading its leading `!` before a connective")
 }
 
 // testOneOperand is the one-word reading: a word, true when it is not empty.

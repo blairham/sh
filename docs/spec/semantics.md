@@ -18835,17 +18835,67 @@ many arguments` while `test -Q f` is `unknown condition: -Q`, so `-a` is a
 word that shell knows — as the connective — and `-Q` is not. dash and ash
 have the same connectives and draw no such distinction.
 
-**Half modeled**: at exactly three words the panel disagrees about whether
-`!` binds tighter than the connective. `test ! -a f` is 0 in bash and zsh,
-which read `-a` as the connective between two non-empty strings; 1 in
-ksh93, which reads it as `!` negating a file test; and `-a: unexpected
-operator` in dash, which reads the `!` first and then has no unary `-a` to
-apply. This shell gives bash's answer on the common path, which is what it
-gave before these four axes — and ksh93's own answer where
-`TestReadsOneExpressionOffTheOperands` says yes, because that column's
-three-word reading asks the `!` question first and the ordering is part of
-the reading rather than a separate switch. dash's answer is still not
-modeled.
+#### A leading `!` against the connective, at three words
+
+**`TestThreeWordsNegateBeforeAConnective`** — dash yes · ash yes · bash no ·
+zsh no · ksh93 yes, unreachable
+
+At exactly three words the panel disagrees about whether `!` binds tighter
+than the connective. POSIX gives the three-operand rule in one order — a
+binary primary in the middle first, then a leading `!` negating the
+two-argument test, and `-a`/`-o` in the middle only after that — and two
+columns follow it while two read the connective first.
+
+Measured 2026-09-19, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+with standard input on the null device, BusyBox in the digest-pinned Alpine
+image:
+
+| probe | dash 0.5.12 | BusyBox ash 1.37.0 | bash 5.3.20 | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- | --- | --- | --- |
+| `[ ! -a x ]` | `-a` refused | `x` refused | 0 | 0 | 0 |
+| `[ ! -o x ]` | `-o` refused | `x` refused | 0 | 0 | 0 |
+| `[ ! x -a ]` | 0 | `argument expected` | refuses | 1 | refuses |
+| `[ ! x -o ]` | 1 | `argument expected` | refuses | 1 | refuses |
+| `[ ! -a -a ]` | 0 | `argument expected` | 0 | 0 | 0 |
+| `[ ! -a -o ]` | 1 | `argument expected` | 0 | 0 | 0 |
+
+Each answer in the first two columns is that shell's **own** two-word
+reading with a `!` in front of it, which is what says the ordering is the
+fact and the wording is not: `[ -a x ]` is `-a: unexpected operator` in dash
+and `x: unknown operand` in ash, and `[ x -a ]` is 1 in dash and `argument
+expected` in ash. The last two rows are the sharp pair — one apart in dash,
+being `[ -a -a ]` and `[ -a -o ]` negated, and both 0 in the three columns
+that take the guard over the strings `!` and `-a`.
+
+**`[ ! -a x ]` does not discriminate on its own**, which matters because it
+is the row this was filed on. A column with a unary `-a` answers `[ -a x ]`
+false for a file that is not there, so negating it gives 0 and so does the
+guard. The probe that separates the readings names a file that **exists**:
+
+| probe | dash | ash | bash | zsh | ksh93 |
+| --- | --- | --- | --- | --- | --- |
+| `[ -a / ]` | refuses | refuses | 0 | refuses | 0 |
+| `[ ! -a / ]` | refuses | refuses | 0 | 0 | 1 |
+
+bash has a unary `-a`, so negating first would give 1 and it gives 0; zsh has
+none, so negating first would refuse and it answers 0; ksh93 gives 1, which is
+`[ -a / ]` negated.
+
+ksh93 reaches that ordering through `TestReadsOneExpressionOffTheOperands`
+rather than through this axis — it reads one expression off the front and
+never consults the argument counts — so its value here is recorded and
+unreachable, proven by moving it and finding no row of a 1728-case
+three-word sweep moves with it.
+
+The binary reading comes first in **every** column, which is what keeps this
+from being a rule about a leading `!`: `[ ! = x ]` is 1 everywhere and
+`[ ! -eq x ]` is a refusal about the `!` as a number, because `=` and `-eq`
+bind the `!` as a left operand before either of these readings. It is the
+same row `Runner.threeWordsReadAsANegation` is written on.
+
+The controls that do not move: `[ x -a y ]` is 0, `[ x -a "" ]` is 1 and
+`[ "" -o x ]` is 0 in all five, so the both-set guard a script actually
+writes is unaffected, and `[ ! x -a y ]` is 1 in all five, being four words.
 
 #### A connective with nothing behind it
 
@@ -18947,12 +18997,15 @@ readings these words take* — `Runner.threeWordsReadAsANegation`, which mirrors
 the order the three-word case already has: the binary operator first, then the
 two connectives, and only then a leading `!`.
 
-Two shapes at the same count are measured and **not** modeled, because they
-are a different disagreement: `[ ! -a x ]` and `[ ! ! -a x ]` are
-`-a: unexpected operator` at 2 in dash where this shell answers 0 and 1. That
-is the three-word ordering the "half modeled" note above already records —
-dash asks the `!` question ahead of the connective — reached at four words
-through the same door, and it is #3717.
+Two shapes at the same count are a different disagreement and are modeled by
+a different axis: `[ ! -a x ]` and `[ ! ! -a x ]` are `-a: unexpected
+operator` at 2 in dash where bash, zsh and ksh93 answer 0 and 1. That is the
+three-word ordering `TestThreeWordsNegateBeforeAConnective` above records,
+reached at four words through this door — the fold asks *which of the
+three-word readings* the rest takes, and where the negation is read first a
+middle `-a` does not take those three words away from it. So the fold sees a
+refusal rather than a guard, and `[ ! ! -a x ]` is what `[ ! -a x ]` gives
+(#3717).
 
 Nobody writes two leading `!`s and both columns exit without output, so this
 is a status a script reading `$?` could see and nothing more (#3700).

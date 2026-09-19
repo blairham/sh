@@ -20188,6 +20188,41 @@ A written numeral rounds as an evaluated one does; `/`, `%` and the
 bitwise operators still do their work on the word, and the result goes
 back through the double afterwards, which is what loses the `| 1`.
 
+**The carriage is the C `long double`, and how wide that is belongs to
+the platform rather than to the shell.** Measured 2026-09-18 on the same
+build — `Version AJM 93u+ 2012-08-01`, both columns — on macOS arm64 and
+on Debian bullseye's linux/arm64 package of it (#3695):
+
+    probe                          macOS        Linux
+    (2**53 + 1) - 2**53            0            1
+    (2**112 + 1) - 2**112          0            1
+    (2**113 + 1) - 2**113          0            0
+    1.0/3                          15 digits    33 digits
+    $(( 2**64 + 1 ))               1.84…e+19    18446744073709551617
+    $(( 2**100 ))                  1.26…e+30    1267650600228229401496703205376
+
+The subtractions are the discriminator and they answer completely: a
+significand that still holds 2^112+1 and loses 2^113+1 is **113 bits**,
+which is IEEE binary128, and one that has already lost 2^53+1 is 53,
+which is binary64. The printed precision agrees — 15 significant digits
+against 33 is `DBL_DIG` against binary128's `LDBL_DIG` — and `2**64 + 1`
+coming back exact rules out the other candidate reading, a 64-bit
+integer path, which cannot hold it either. Everything else is unmoved:
+`$(( 1/2 ))` is 0 on both, so integer operands still divide as integers.
+
+So one type in one source answers two ways because `long double` **is**
+`double` on arm64 macOS and is binary128 on arm64 Linux. This is not a
+version difference and not a build difference, and no probe short of the
+two subtractions separates the readings — `2^53+1` alone is consistent
+with a 64-bit integer path, which is the shape a non-discriminating
+probe takes here.
+
+**The axis holds the macOS reading, and so does this shell on either
+kernel**, because the panel this record is measured from is the macOS
+one. Whether a dialect binary running on Linux should answer its own
+kernel's way is open — #3695 — and is a decision about what the panel
+means rather than a measurement.
+
 Whether the answer is written as an integer or in floating notation is
 ksh93's own test and not a magnitude: the value is an integer when a
 saturating `(intmax_t)` cast of it converts back to the same double.

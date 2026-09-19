@@ -197,25 +197,72 @@ func TestTheOutputBaseSaysItselfBack(t *testing.T) {
 	}
 }
 
-// No names is a listing of the integer variables here — `b=16#ff`, `g=7` —
-// which this engine does not build, so it refuses by name. Falling through to
-// the bare declaration listing would have answered with the whole variable
-// table, which is a wrong answer rather than a missing one.
-func TestIntegerWithNoNamesIsNamedAsMissingHere(t *testing.T) {
+// No names is a listing of the integer variables here, and it works now that
+// the word reaches `typeset -li` through the alias rather than a builtin of
+// its own: the filtered listing was already built and the second name was what
+// could not reach it. Measured 2026-09-18 on ksh93u+ 2012-08-01, a script file
+// under `env -i PATH=/usr/bin:/bin LC_ALL=C`: `integer m=2` then a bare
+// `integer` writes `m=2`, and `nn=1` with no attribute on it writes nothing at
+// all (#3371).
+func TestIntegerWithNoNamesListsTheIntegerNamesHere(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `integer nn=1
 integer`)
-	if !strings.Contains(out, "typeset: a listing is not implemented yet") || st != 2 {
-		t.Errorf("bare integer = %q (status %d), want the listing named as missing", out, st)
+	if out != "nn=1\n" || st != 0 {
+		t.Errorf("bare integer = %q (status %d), want the integer names listed", out, st)
+	}
+	// And a name carrying no attribute is not in it, which is what says the
+	// listing is filtered rather than the whole table.
+	out, st = runKsh(t, t.TempDir(), `nn=1
+integer`)
+	if out != "" || st != 0 {
+		t.Errorf("bare integer over a plain name = %q (status %d), want silence", out, st)
 	}
 }
 
-// The word bash and dash do not have stays theirs: nothing here leaks the
-// registration into the other two, which is checked from their own packages —
-// this is the positive half, that the word resolves to a builtin at all.
-func TestIntegerIsABuiltinHere(t *testing.T) {
-	out, st := runKsh(t, t.TempDir(), `whence -v integer`)
-	if !strings.Contains(out, "integer is a shell builtin") || st != 0 {
-		t.Errorf("whence -v integer = %q (status %d), want it named a builtin", out, st)
+// The word bash and dash do not have stays theirs, and here it is an **alias**
+// rather than a builtin — `integer='typeset -li'`, which is what ksh93 ships.
+//
+// Measured 2026-09-18 on ksh93u+ 2012-08-01, a script file under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null, each
+// `unalias` and the word after it on lines of their own so the alias is gone
+// before the next line is parsed:
+//
+//	'integer' a=1                  integer: not found, 127
+//	cmd=integer; $cmd b=2          integer: not found, 127
+//	unalias integer; integer a=1   integer: not found, 127
+//	integer d=3                    st=0, d=3
+//
+// The literal spelling is the only one that works, which is exactly what an
+// alias is: a quoted word, an expanded one and a word whose alias has been
+// taken away are the three routes past one, and this shell has no command
+// behind any of them (#3371).
+func TestIntegerIsAnAliasHereAndNotABuiltin(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{"the literal spelling declares", `integer d=3
+print "d=[$d]"`, "d=[3]\n", 0},
+		{"and it carries the lower-case letter the alias spells", `integer e=7+1
+typeset -p e`, "typeset -l -i e=8\n", 0},
+		{"a quoted spelling is not found", `'integer' a=1
+print "a=[$a]"`, "ksh: integer: not found\na=[]\n", 0},
+		{"an expanded one is not found", `cmd=integer
+$cmd b=2
+print "b=[$b]"`, "ksh: line 2: integer: not found\nb=[]\n", 0},
+		// The third route past an alias — `unalias integer` and then the
+		// word — is measured above and is not a row here: this helper parses
+		// the whole snippet before it runs any of it, so the alias is still
+		// in the table when the second line is read. It takes the
+		// read-as-it-runs route a script file gets, which is `cmd/ksh`'s and
+		// not a dialect test's.
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runKsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != tc.status {
+				t.Errorf("%s = %q at %d, want %q at %d", tc.src, out, st, tc.want, tc.status)
+			}
+		})
 	}
 }
 

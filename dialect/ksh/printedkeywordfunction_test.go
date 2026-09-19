@@ -67,7 +67,7 @@ func TestAPrintedKeywordFunctionStillDeclaresLocals(t *testing.T) {
 // runKshSource runs one source string under this dialect.
 func runKshSource(t *testing.T, src string) (string, int) {
 	t.Helper()
-	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()}, src)
+	out, st, err := preset.CombinedThroughTheAliases(t, dialecttest.Base{Dir: t.TempDir()}, src)
 	if err != nil {
 		t.Fatalf("run %q: %v", src, err)
 	}

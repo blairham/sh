@@ -3765,19 +3765,30 @@ func Diagnostics() interp.Diagnostics {
 			// built, and it is the declaration half of the kind `c=(a=1)`
 			// makes — see interp/compoundvariable.go (#2620).
 			"typeset": "-bsLRSXZ",
+			// **The three entries below are reached only through
+			// interp.Runner.Register.** `functions`, `integer` and the
+			// `nameref` wording further down name words this shell has as
+			// *aliases* rather than builtins — see Register, where the five
+			// of them are unregistered — so a script reaches `typeset`'s
+			// entry above and never these (#3371). They are kept, and
+			// checked against `typeset`'s by integer_test.go, because an
+			// embedder may put the builtin back under the name and a table
+			// that had rotted in the meantime would answer for a shell this
+			// is not.
+			//
 			// `functions` is `typeset -f` under a second name, so the
 			// letters it is missing are read off its own set: `-t` traces a
 			// function and `-u` marks one to be read from `$FPATH`, both of
 			// which ksh93 takes there and this shell does not do, and `-M`
 			// is a character mapping rather than zsh's math facility.
 			//
-			// The alias is what a script actually meets, so this entry is
-			// reached only by the registered builtin behind it — `functions`
-			// written after `unalias functions`, from a route where the
-			// alias never expanded. The line a script writes is
-			// `typeset -f -u`, and that is refused by the two tables under
-			// `typeset`. Both are kept: a name that can be reached has to
-			// answer, and the two must not disagree. `-F`
+			// The alias is what a script meets, and since #3371 it is the
+			// **only** thing it meets: `functions` after `unalias functions`
+			// is `not found` at 127 here exactly as it is on ksh93u+, so
+			// this entry is no longer reachable from a script at all. The
+			// line a script writes is `typeset -f -u`, and that is refused
+			// by the two tables under `typeset`. Kept all the same, for the
+			// reason given at the head of this table. `-F`
 			// and `-m` are deliberately absent: measured, `functions -F`
 			// and `functions -m` are the usage line on ksh93u+, so that
 			// shell has not got them either and "unknown" is the truth.
@@ -4746,40 +4757,56 @@ func Apply(r *interp.Runner) {
 	// corpus row cannot tell "closer" from "right". So the row stays wrong
 	// in the way it already was until the places can be written (#2451).
 	r.Unregister("local")
-	if dot, ok := r.Builtin("."); ok {
-		r.Register("source", dot)
-	}
-	// `integer` is `typeset` with the type already decided, and it is one of
-	// the two shells that has the word: zsh's own `add-zsh-hook` declares
-	// integers before it does anything else — run it under a shell without
-	// the word and it fails there — which is why a shell claiming to be
-	// either of them needs it. Registered rather than built here, so that both
-	// dialects get the *same* declaration — see interp/integerbuiltin.go.
-	r.Register("integer", interp.IntegerBuiltin())
-	// And the assignment rule follows the name the way it follows `declare`:
-	// `integer n=5+2` is a declaration's operand and not a word to split.
-	r.SetDeclaring("integer")
+	// Five words this shell reaches only through its own preset aliases, and
+	// none of them is a command. `integer` is `typeset -li`, `nameref` is
+	// `typeset -n`, `functions` is `typeset -f`, `source` is `command .` and
+	// `times` is `{ { time;} 2>&1;}` — the alias table above writes all five
+	// and it matches ksh93u+ byte for byte, so the *literal* spelling has
+	// always agreed. What did not agree is every spelling an alias cannot
+	// reach, because a name that is also a builtin answers there and a name
+	// that is only an alias does not.
+	//
+	// Measured 2026-09-18 on ksh93u+ 2012-08-01, a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on /dev/null,
+	// each `unalias` and the word after it on lines of their own so the
+	// alias is gone before the next line is parsed:
+	//
+	//	'integer' a=1                  integer: not found, 127
+	//	cmd=integer; $cmd b=2          integer: not found, 127
+	//	x=1; \nameref r=x              nameref: not found, 127
+	//	unalias integer; integer a=1   integer: not found, 127
+	//	whence -v integer              whence: integer: not found, 1
+	//	unalias functions; functions   functions: not found, 127
+	//	unalias source; source         source: not found, 127
+	//	unalias times; times           times: not found, 127
+	//
+	// against `st=0` and the declaration done in each of the first four here.
+	// A quoted word, an expanded one and a word whose alias has been taken
+	// away are the three routes past an alias, and this shell has no command
+	// behind any of them.
+	//
+	// `times` is the one that costs something to say: it is a POSIX special
+	// builtin in the substrate and in every other dialect, and this shell
+	// does not have it at all — the alias runs the `time` keyword in a group
+	// instead, which is why its output is the keyword's layout rather than
+	// the builtin's. `float` and `compound` were already right, because this
+	// shell never had a builtin for either, and that agreement is what said
+	// the alias route needs no builtin behind it.
+	//
+	// Unregistered rather than never registered, because `.`'s synonym and
+	// the substrate's `times` are already in the table by the time this runs.
+	r.Unregister("source")
+	r.Unregister("times")
 	// ksh93's own spellings of "what would this run" and "write this out",
 	// both pervasive in real ksh scripts. See whence.go and print.go.
 	registerWhence(r)
 	registerPrint(r)
-	// `functions` is `typeset -f` under a second name — registered rather
-	// than written here, so the two words reach one listing and cannot come
-	// to disagree about the header, the layout, or the status a name nobody
-	// defined leaves behind. See interp/functionsbuiltin.go.
-	r.Register("functions", interp.FunctionsBuiltin())
 	// `newgrp` is `exec newgrp` under a builtin's name, which is what lets it
 	// be a *special* builtin here. See newgrp.go.
 	registerNewgrp(r)
-	// And `nameref` is `typeset -n` under a second word, on the same terms
-	// and for the same reason. See interp/namerefbuiltin.go.
-	r.Register("nameref", interp.NamerefBuiltin())
 	// The two marks a `-f` line puts on a function: `-u` reads the body from
 	// `$FPATH` at the first call, and `-t` traces it. See fpath.go.
 	registerFPath(r)
-	// The assignment rule follows this name too: `nameref r=v` is a
-	// declaration's operand and not a word to split.
-	r.SetDeclaring("nameref")
 	// How this shell arranges a function it says back, stated rather than
 	// left to the zero value — see FunctionLayout. The same layout for a
 	// function written into the environment, because this shell does not

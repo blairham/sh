@@ -19,7 +19,7 @@ import (
 
 func runKsh(t *testing.T, dir, src string) (string, int) {
 	t.Helper()
-	out, st, err := preset.Combined(t, dialecttest.Base{
+	out, st, err := preset.CombinedThroughTheAliases(t, dialecttest.Base{
 		Dir: dir, Vars: map[string]string{"PATH": dir},
 	}, src)
 	if err != nil {

@@ -204,6 +204,49 @@ func (p Preset) CombinedWithPrelude(t testing.TB, b Base, src string) (out strin
 	return buf.String(), st, rerr
 }
 
+// CombinedThroughTheAliases is [Preset.CombinedWithPrelude] with the snippet
+// parsed the way a shell parses the text it reads *next*: with the runner's
+// alias tables in hand.
+//
+// It exists because a preset alias is not a name the interpreter knows. The
+// two helpers above hand the snippet to `syntax.Parse` before the prelude has
+// run — CombinedWithPrelude parses both texts up front — so a word the dialect
+// ships an alias for arrives at the runner unexpanded and is answered by
+// whatever builtin happens to carry the name. That is how five words ksh93 has
+// only as aliases went on being graded here as builtins: the suite could not
+// tell "the alias expands to the right command" from "a builtin of the same
+// name does the right thing", because it never took the alias route at all
+// (#3371).
+//
+// Two runs on one runner, exactly as CombinedWithPrelude does, and the second
+// parse happens after the first run rather than beside it — which is the whole
+// point, since the prelude is what puts the aliases in the table.
+func (p Preset) CombinedThroughTheAliases(t testing.TB, b Base, src string) (out string, status int, err error) {
+	t.Helper()
+	pre := p.Parse(t, p.Prelude())
+	var buf strings.Builder
+	b.Stdout, b.Stderr = &buf, &buf
+	r := p.Runner(b)
+	// What a front end does before it reads anything: the switch the parser
+	// hook reads is off until somebody sets it, and a helper that handed the
+	// parser three tables it would never consult would have looked exactly
+	// like the tables being empty. See driver/session.go, which sets the
+	// same base from the same field.
+	r.SetAliasExpansionBase(p.Dialect().AliasesExpandUnlessTold)
+	r.SourcingPrelude(true)
+	if _, perr := r.Run(context.Background(), pre); perr != nil {
+		t.Fatalf("prelude: %v", perr)
+	}
+	r.SourcingPrelude(false)
+	parser := r.ParseWithAliases(src, p.Dialect())
+	f := parser.Parse()
+	if perr := parser.Err(); perr != nil {
+		t.Fatalf("parse %q: %v", src, perr)
+	}
+	st, rerr := r.Run(context.Background(), f)
+	return buf.String(), st, rerr
+}
+
 // PromptTableInstalled fails unless a runner this preset builds answers prompt
 // escapes from the very table the dialect hands the prompt drawer.
 //

@@ -10966,6 +10966,69 @@ two shells that spell the letter agree: the global is written. With a
 out=out`. `Semantics.DeclareGlobalReachesPastALocal`, asked only where a
 local shadows the name.
 
+**A call's assignment prefix is the other thing that can stand in front
+of the name, and the same axis decides it.** The prefix and the letter
+each have an answer already — the prefix is given back when the call
+ends, and the letter says the declaration takes no scope of its own —
+and where the write lands is a third thing neither of them says.
+Measured 2026-09-18 on bash 5.3.20 and zsh 5.9.2, from a script file
+under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME and no
+`set -o posix`, so none of #3447's persistence is in play:
+
+    inner(){ typeset -g t=3; }
+    outer(){ t=7 inner; echo "in outer [${t-U}]"; }
+    t=9 outer;  echo "top [${t-U}]"
+
+                          in outer     top
+    bash 5.3.20               9          3
+    zsh 5.9.2                 9          U
+
+**It is a stack and not a keep, which that one probe settles.** The `9`
+inside the caller says the inner call's take-back really did run, and
+the `3` at the top says the outer one gave back the value the
+declaration wrote rather than the one it had displaced. So the write did
+not displace either temporary binding: it landed on the shell's own
+cell, underneath both of them, and what the outermost take-back gave
+back was that cell. Two more rows say the same from the other side — a
+read inside the body is still the prefix's, `7` and not `3`, and a `-g`
+two calls down from the prefix reaches it just the same. ksh93 has no
+`-g` letter at all, so the panel is two columns wide.
+
+That is a different mechanism from #3447, where a prefix the shell
+*keeps* is taken out of every frame and all three levels read 3.
+
+It is the same axis and not a second one, for the reason `unset` reads
+`UnsetRemovesAnEnclosingLocal` at a `local` and at a call's prefix
+alike: bash's letter names the global cell, so it writes under whatever
+is standing on the name, and zsh's letter means "take no new local", so
+it writes the binding that is visible — which here is the prefix's, and
+which leaves with it. Both mechanisms follow from the one reading.
+
+**Which of a `local` and a prefix holds the shell's own cell is decided
+by which took the name first**, and the two orders answer differently.
+With the scope outside the frame — `f(){ local q=5; q=7 g; }` — the
+global cell is the scope's saved copy, so a `q=1` at the top reads `3`
+after `f`. With the frame outside the scope — a `local` in the callee,
+or one in the caller with the prefix further out still — the frame's
+entry is the cell, and the scope's copy is a temporary like any other.
+
+**It is not the value alone that goes underneath.** `typeset -gx e=3`
+under a prefix leaves `declare -x e="3"` behind in bash 5.3.20 and
+`typeset -gr n=3` leaves `declare -r n="3"`, so the whole declaration
+runs on that cell. The controls, which are what keep this from being "a
+declaration wins": a valueless `typeset -g a` writes nothing and is
+taken back with everything else, a declaration with no `-g` is the
+ordinary local, and a plain `c=3` inside the body writes the binding the
+prefix put there and goes back with it — all three leave the name unset
+after the call in both columns.
+
+Two shapes of it are **not** modeled yet and are measured in #3685: an
+array literal — `y=7 f` with `f(){ typeset -ga y=(1 2); }` leaves bash
+holding `1 2` — because the literal is a command operand assigned after
+the builtin has returned rather than part of the declaration, and a
+prefix in front of the declaration *itself* — `w=7 typeset -g w=3` is
+`3` in bash — because that is the builtin's own prefix and not a call's.
+
 **ksh93's `typeset -f` prints the source text verbatim** — its own
 two-space indentation, `echo two; echo three` still on one line. So that
 dialect's parser keeps the definition's characters on the declaration

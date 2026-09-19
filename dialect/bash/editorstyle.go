@@ -51,5 +51,13 @@ func EditorStyle() repl.EditorStyle {
 		// `match-hidden-files` and documents it as on by default, which is
 		// what the run shows.
 		CompletionMatchesHiddenFiles: true,
+		// And the bell, which this shell rings for an ambiguous completion
+		// whether or not it fills a prefix in. Measured 2026-09-19 through a
+		// pseudo-terminal on twelve directories agreeing on `aa`: one Tab
+		// writes `\a` and then the `a`, where zsh writes the `a` alone. A
+		// unique match is silent in both, so what differs is the middle
+		// state — see repl's EditorStyle field for the three rows, and note
+		// that bash 3.2.57 answers identically (#3735).
+		BellRingsOnAnAmbiguousCompletionThatInserts: true,
 	}
 }

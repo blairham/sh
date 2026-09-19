@@ -309,6 +309,31 @@ type EditorStyle struct {
 	// no such option, and the listing waits for a second key.
 	ListMatchesWithoutASecondKeyOption string
 
+	// BellRingsOnAnAmbiguousCompletionThatInserts sounds the bell for a
+	// completion with more than one match even where it put a prefix on the
+	// line.
+	//
+	// Measured 2026-09-19 through a pseudo-terminal, one Tab at a time,
+	// against twelve directories agreeing on `aa`, one unique file and one
+	// unique directory:
+	//
+	//	typed        bash 5.3.20    bash 3.2.57    zsh 5.9.2
+	//	: big/a      \a and `a`     \a and `a`     `a`
+	//	: big/u      the name       the name       the name
+	//	: big/aa0    \a             \a             \a and the listing
+	//
+	// The two shells are asking different questions. bash asks whether the
+	// **word is settled** and rings while it is not, so a keystroke that put
+	// half a word in still rings; zsh asks whether the **keystroke did
+	// anything** and is silent when it did. A unique match is silent in both,
+	// so this is not one shell ringing more often — it is the middle state,
+	// and it is bash's alone.
+	//
+	// False is zsh's answer and the core's, and also what a front end that
+	// has not said gets. Both bash 5.3.20 and bash 3.2.57 give the same
+	// answer, so it is that shell's rather than a version's.
+	BellRingsOnAnAmbiguousCompletionThatInserts bool
+
 	// CompletionMatchesHiddenFiles offers names beginning with a dot to a
 	// word that does not begin with one.
 	//

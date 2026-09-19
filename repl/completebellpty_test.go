@@ -42,12 +42,21 @@ func bellSession(t *testing.T, listsOnTheSameKey bool) *session {
 		// unanswered. See completers: the first answer wins.
 		s.Runner.Dir = t.TempDir()
 		s.Completers = []Completer{CompleterFunc(func(c Completion) []Candidate {
-			if c.Word != "a" {
-				return nil
+			switch c.Word {
+			case "a":
+				// Two words agreeing on nothing past the `a` that was typed,
+				// so there is no prefix to fill in and the keystroke changes
+				// nothing.
+				return Words("abbey", "azure")
+			case "p":
+				// Two agreeing on `pre`, so the keystroke puts two more
+				// characters on the line and the word is still not settled.
+				return Words("present", "pretend")
+			case "s":
+				// One, so the keystroke settles the word.
+				return Words("solitary")
 			}
-			// Two words agreeing on nothing past the `a` that was typed, so
-			// there is no prefix to fill in and the keystroke changes nothing.
-			return Words("abbey", "azure")
+			return nil
 		})}
 		s.Editor.ListMatchesWithoutASecondKeyOption = listMatchesOption
 		s.Runner.SetOptionNamespace(func(_ *interp.Runner, name string) (bool, bool) {
@@ -145,6 +154,57 @@ func TestACompletionThatMatchesNothingWritesTheBellAndNothingElse(t *testing.T) 
 
 	if got := se.screen.String()[len(before):]; !strings.HasPrefix(got, "\aZ") {
 		t.Errorf("the Tab and the key after it wrote %q, want the bell and then the key", got)
+	}
+	se.typeKeys("\n")
+	se.end()
+}
+
+// TestAnAmbiguousCompletionThatFillsAPrefixInIsSilentAtRest is the core's
+// reading, and the row the other axis is measured against.
+func TestAnAmbiguousCompletionThatFillsAPrefixInIsSilentAtRest(t *testing.T) {
+	se := bellSession(t, false)
+	se.typeLine(": p")
+	se.typeKeys("\tZ")
+	waitFor(t, se.screen, "preZ", "the filled-in prefix and the key after it")
+
+	if drawn := se.screen.String(); strings.Contains(drawn, "\a") {
+		t.Errorf("the bell rang for a keystroke that filled a prefix in\nscreen: %q", drawn)
+	}
+	se.typeKeys("\n")
+	se.end()
+}
+
+// TestAnAmbiguousCompletionThatFillsAPrefixInRingsWhereTheAxisSaysSo is the
+// axis moved, and the bell comes **before** the text it fills in.
+func TestAnAmbiguousCompletionThatFillsAPrefixInRingsWhereTheAxisSaysSo(t *testing.T) {
+	se := newSessionWith(t, func(s *Shell) {
+		s.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		s.Runner.Dir = t.TempDir()
+		s.Completers = []Completer{CompleterFunc(func(c Completion) []Candidate {
+			switch c.Word {
+			case "p":
+				return Words("present", "pretend")
+			case "s":
+				return Words("solitary")
+			}
+			return nil
+		})}
+		s.Editor.BellRingsOnAnAmbiguousCompletionThatInserts = true
+	})
+	se.typeLine(": p")
+	se.typeKeys("\tZ")
+	waitFor(t, se.screen, "\areZ", "the bell, the prefix and the key after it")
+
+	// The control, on the same session and the same axis: a keystroke that
+	// **settles** the word is silent even here, which is what says this axis
+	// is about the middle state rather than about ringing more often.
+	se.typeKeys("\n")
+	se.typeLine(": s")
+	se.typeKeys("\t")
+	waitFor(t, se.screen, "solitary ", "the settled word")
+	if n := strings.Count(se.screen.String(), "\a"); n != 1 {
+		t.Errorf("the bell rang %d time(s) over both lines, want the one that did not settle the word\nscreen: %q",
+			n, se.screen.String())
 	}
 	se.typeKeys("\n")
 	se.end()

@@ -199,6 +199,7 @@ own shipped completion system:
 | `big/aa0` — ten matches, agreeing on nothing more | `\a` | `\a` and the listing |
 | `big/zzznope` — nothing matches | `\a` | `\a`, and nothing else at all |
 | `big/a` — twelve matches agreeing on `aa` | `\a` and the `a` | the `a` |
+| `big/u` — one match | the name and a space | the name and a space |
 
 Three facts, and the core takes the first two:
 
@@ -219,9 +220,16 @@ rest of the editor's style, as
 because it is one a person turns off, and measured: `unsetopt autolist`
 in zsh leaves the same keystroke writing the bell alone.
 
-Row three is the one divergence the core does not take. bash rings for
-an ambiguous completion even when it fills something in; zsh rings only
-when nothing reached the line, and that is what this editor does.
+Row three is where the two shells ask **different questions**, and it is
+a dialect's answer rather than the core's: bash asks whether the *word
+is settled* and rings while it is not, so a keystroke that put half a
+word in still rings; zsh asks whether the *keystroke did anything* and
+is silent when it did. A unique match is silent in both, so it is the
+middle state alone — three outcomes rather than two, which is why
+`completionOutcome` has three. Carried as
+`EditorStyle.BellRingsOnAnAmbiguousCompletionThatInserts`, false for the
+core and true for the one shell that answers that way; bash 5.3.20 and
+bash 3.2.57 agree, so it is that shell's answer and not a version's.
 
 zsh's own two switches are separable, measured on the ambiguous row:
 `unsetopt listbeep` leaves the listing and drops the bell, `unsetopt

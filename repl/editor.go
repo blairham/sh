@@ -65,6 +65,12 @@ type editor struct {
 	lastTab         bool
 	completedBefore bool
 
+	// bellsOnAPartialCompletion rings for a completion with several matches
+	// even where it put a prefix on the line. False is the other shell's
+	// answer and the core's; see
+	// EditorStyle.BellRingsOnAnAmbiguousCompletionThatInserts.
+	bellsOnAPartialCompletion bool
+
 	// listsMatches draws the matches on the keystroke that found them
 	// ambiguous rather than on a second one. False is the answer of a dialect
 	// that has no such option and of one whose person has turned it off; see

@@ -78,6 +78,13 @@ var samples = []struct {
 	{name: "zsh-anon", src: "() {\n  echo hi\n}\n", zsh: true},
 	{name: "zsh-try", src: "{\n  echo t\n} always {\n  echo a\n}\n", zsh: true},
 	{name: "zsh-func-many-names", src: "function a b c {\n  echo \"$0\"\n}\n", zsh: true},
+	// A keyword declaration whose body is not a brace group, which the name
+	// list would swallow if it were written beside the header — see
+	// syntax.FunctionKeywordBodyNeedsItsOwnLine and #3746. Here for the
+	// comment and determinism tiers; the shapes are graded in
+	// TestAKeywordDeclarationsNonBraceBodyTakesItsOwnLine.
+	{name: "zsh-func-keyword-body-on-its-own-line", src: "function foo\necho hi\n", zsh: true},
+	{name: "zsh-func-keyword-body-commented", src: "function foo\n# what it does\necho hi\n", zsh: true},
 	// The name list split over lines, which is how the construct is written
 	// in the wild. The header is rebuilt from source text, and a backslash
 	// left standing in it becomes an *escaped space*: this printed

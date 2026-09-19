@@ -10826,6 +10826,22 @@ the script over a bad name — and:
   One table decides both, because a dialect that puts the name in the
   sentence is the one that keeps the builtin's location:
   `Diagnostics.ReadonlyRefusalNamesBuiltin`.
+
+  **`let` is in that table too, and it was the row the form kept out.**
+  Measured 2026-09-18, `readonly x=1; let x=2` is `<file>[2]: let: x: is
+  read only` in ksh93 where this engine wrote `<file>: line 2: x: is read
+  only` — the language's location, and no builtin. The neighbors are the
+  controls: that builtin's own divide-by-zero and the same refusal raised
+  from `read` carried both all along. What was missing beside the table
+  entry is the *form*: `let`'s write is one the builtin made, so it goes
+  in as `assignedByBuiltin` and reaches the sentence that may carry a
+  name, where a bare assignment's does not. The fatality is unchanged and
+  stays #3470's — 1, and the script runs on.
+
+  `(( x=2 ))` is the discriminator that says the sentence is the
+  builtin's and not the arithmetic's: the same write through the
+  arithmetic command is `<file>: line N: x: is read only` there, with no
+  builtin in it, and ends the script (#3568).
 - `set -A` with nothing after it is a refusal in ksh93 —
   `Diagnostics.SetArrayNeedsAName`, `set: -A: name argument expected`
   with set's usage under it — and a *listing* of every array in zsh,

@@ -1712,6 +1712,16 @@ func Semantics() interp.Semantics {
 	// consulted. `[ ! ! -n x ]` is 0 in the reference all the same, measured
 	// 2026-09-19 (#3700).
 	s.TestFourWordsNegateANegationOnce = interp.No
+	// Unreachable here for the same reason, and answered rather than left
+	// open. The reference does read the negation first — `[ ! -a / ]` is 1
+	// there where bash 5.3.20 and zsh 5.9.2 answer 0, which is the probe
+	// that tells the two readings apart, an existing file making the unary
+	// `-a` true so that negating it and taking the both-set guard differ.
+	// It arrives through this shell's own reading rather than through this
+	// axis: TestReadsOneExpressionOffTheOperands above is Yes, so one
+	// expression is read off the front and the argument counts are never
+	// consulted. Measured 2026-09-19 (#3717).
+	s.TestThreeWordsNegateBeforeAConnective = interp.Yes
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// And a group with nothing in it is `argument expected` at 2 here too
 	// (#3687).

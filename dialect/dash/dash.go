@@ -645,6 +645,13 @@ func Semantics() interp.Semantics {
 	// that is not a negation negates too — `[ ! x = x ]` is 1. Measured
 	// 2026-09-18 and 2026-09-19 (#3700).
 	s.TestFourWordsNegateANegationOnce = interp.Yes
+	// And at three words a leading `!` is read before the connectives,
+	// which is the order POSIX gives: `[ ! -a x ]` is `-a: unexpected
+	// operator` at 2 here, the two-word `-a x` refused, where bash, zsh and
+	// ksh93 answer the both-set guard over `!` and `x` and give 0. `[ ! x
+	// -a ]` is 0 here and `[ ! -a -o ]` is 1, each of them this shell's own
+	// two-word answer negated. Measured 2026-09-19 (#3717).
+	s.TestThreeWordsNegateBeforeAConnective = interp.Yes
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// And a group with nothing in it is a false expression rather than a
 	// refusal: `[ ( ) ]` is a silent 1 here and composes with the

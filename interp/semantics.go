@@ -12111,6 +12111,67 @@ type Semantics struct {
 	// Yes there, so the argument counts are never reached (#3700).
 	TestFourWordsNegateANegationOnce Answer
 
+	// TestThreeWordsNegateBeforeAConnective reads a three-word `test` whose
+	// first word is `!` as a **negation of the other two**, ahead of the
+	// reading that takes the middle word as a connective over two strings.
+	//
+	// POSIX gives the three-operand rule in that order — a binary primary in
+	// the middle first, then a leading `!` negating the two-argument test,
+	// and `-a`/`-o` in the middle only after that — and two columns follow
+	// it while three read the connective first. Measured 2026-09-19 as
+	// script files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard
+	// input on the null device, dash 0.5.12 and BusyBox ash 1.37.0 in the
+	// pinned Alpine image against bash 5.3.20, zsh 5.9.2 and ksh93u+:
+	//
+	//	probe          dash          ash                  bash   zsh  ksh93
+	//	[ ! -a x ]     `-a` refused  `x` refused          0      0    0
+	//	[ ! -o x ]     `-o` refused  `x` refused          0      0    0
+	//	[ ! x -a ]     0             `argument expected`  refuses 1   refuses
+	//	[ ! x -o ]     1             `argument expected`  refuses 1   refuses
+	//	[ ! -a -a ]    0             `argument expected`  0      0    0
+	//	[ ! -a -o ]    1             `argument expected`  0      0    0
+	//
+	// Each of the two columns is its own two-word reading with a `!` in
+	// front of it, which is what says the ordering is the fact and the
+	// wording is not: `[ -a x ]` is `-a: unexpected operator` in dash and
+	// `x: unknown operand` in ash, `[ x -a ]` is 1 in dash and `argument
+	// expected` in ash, and every row above is that answer negated. The
+	// last two rows are the sharp pair: `[ ! -a -a ]` and `[ ! -a -o ]` are
+	// one apart in dash, being `[ -a -a ]` and `[ -a -o ]` negated, and both
+	// 0 in the three columns that take the guard over the strings `!` and
+	// `-a`.
+	//
+	// **`[ ! -a x ]` does not discriminate on its own**, and that is worth
+	// saying because it is the row the issue was filed on. A column with a
+	// unary `-a` answers `[ -a x ]` false for a file that is not there, so
+	// negating it gives 0 and so does the guard — the two readings agree.
+	// The probe that separates them names a file that **exists**:
+	//
+	//	probe          dash  ash     bash  zsh  ksh93
+	//	[ -a / ]       2     2       0     2    0
+	//	[ ! -a / ]     2     2       0     0    1
+	//
+	// bash has a unary `-a`, so negating first would give 1 and it gives 0;
+	// zsh has none, so negating first would refuse and it answers 0; ksh93
+	// gives 1, which is `[ -a / ]` negated. That third column reaches the
+	// ordering through TestReadsOneExpressionOffTheOperands rather than
+	// through this axis — it reads one expression off the front and never
+	// consults the argument counts — so its value here is unreachable and
+	// recorded rather than exercised.
+	//
+	// **The binary reading still comes first, in every column.** `[ ! = x ]`
+	// is 1 everywhere and `[ ! -eq x ]` is a refusal about the `!` as a
+	// number, because `=` and `-eq` bind the `!` as a left operand before
+	// either of the readings this axis orders. That row is what keeps this
+	// from being "a leading `!` wins", and it is the same row
+	// Runner.threeWordsReadAsANegation is written on.
+	//
+	// The controls that do not move: `[ x -a y ]` is 0, `[ x -a "" ]` is 1
+	// and `[ "" -o x ]` is 0 in all five, so the both-set guard a script
+	// actually writes is unaffected. `[ ! x -a y ]` is 1 in all five, being
+	// four words. See interp/testbuiltin.go's three-word case, and #3717.
+	TestThreeWordsNegateBeforeAConnective Answer
+
 	// TestGroupedUnaryAloneLosesTheClosingParen refuses a group whose first
 	// word is a unary operator when that group is the whole expression, as a
 	// closing parenthesis the reading never reached.

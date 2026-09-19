@@ -28,12 +28,7 @@ import (
 // Returning the matches rather than printing them: the editor owns the screen,
 // and deciding *when* to list is its business — the second Tab, not the first.
 func (e *editor) complete(c Completer) []Candidate {
-	if c == nil {
-		return nil
-	}
-	start := wordStart(e.line, e.pos)
-	word := string(e.line[start:e.pos])
-	candidates := c.Complete(e.completion(start))
+	start, word, candidates := e.candidates(c)
 	if len(candidates) == 0 {
 		return nil
 	}
@@ -52,6 +47,25 @@ func (e *editor) complete(c Completer) []Candidate {
 		return nil
 	}
 	return displayCandidates(candidates, word)
+}
+
+// candidates is what the word under the cursor could become, and where that
+// word begins.
+//
+// One place asks, because four keys now ask it — Tab, the listing, the menu in
+// both directions — and every one of them has to be asking about the same
+// word. Splitting the question out is what keeps a second copy of "where does
+// this word start" from appearing beside the one in completion() below.
+//
+// A nil completer answers nothing, which is a session with no completion at
+// all; the cursor stands in for the start so that a caller which goes on to
+// replace a word has a position rather than a zero.
+func (e *editor) candidates(c Completer) (start int, word string, matches []Candidate) {
+	if c == nil {
+		return e.pos, "", nil
+	}
+	start = wordStart(e.line, e.pos)
+	return start, string(e.line[start:e.pos]), c.Complete(e.completion(start))
 }
 
 // insertableWords are the replacement words among the candidates: everything a

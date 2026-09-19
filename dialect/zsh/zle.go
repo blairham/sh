@@ -732,11 +732,16 @@ func accepts(name string) bool {
 // cursor lands where the key would have left it, which is why this runs the
 // editor's own action rather than a copy of it.
 //
-// The two the editor will not perform from here are the two that read a key —
-// an incremental search, and a completion that may stop to ask about a long
-// listing. Those are still refused out loud, in the same words a letter this
-// shell has not got gets, because a refusal a script can see beats a call that
-// appears to work. repl decides which two; see repl's performable.
+// The one the editor will not perform from here is the one that is a mode of
+// its own — an incremental search, which has its own read loop and its own
+// drawing. It is refused out loud, in the same words a letter this shell has
+// not got gets, because a refusal a script can see beats a call that appears
+// to work. repl decides which; see repl's performable.
+//
+// A completion was the second until #3043, and the refusal was measured wrong:
+// `zle complete-word` from inside a widget completes in zsh exactly as the Tab
+// key does, second-keystroke listing included, and a plugin that falls back to
+// the standard completion had a shell that printed an error instead.
 func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string) int {
 	if accepts(name) {
 		r.SetVar(zleAccept, "1")

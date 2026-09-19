@@ -129,9 +129,29 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"vi-backward-delete-char":             repl.WidgetBackwardDeleteChar,
 	"expand-or-complete":                  repl.WidgetComplete,
 	"complete-word":                       repl.WidgetComplete,
-	"undo":                                repl.WidgetUndo,
-	"vi-undo-change":                      repl.WidgetUndo,
-	"insert-last-word":                    repl.WidgetInsertLastWord,
+	// The prefix spelling is this editor's completion *exactly*, and that is
+	// the one row of this table that is more accurate than the two above it.
+	// This editor completes the text before the cursor and replaces only that
+	// — repl's Completion says where the word starts and where the cursor is,
+	// and nothing about where the word ends. Measured 2026-09-18 through a
+	// pseudo-terminal against zsh 5.9.2, cursor placed after `uniq` in
+	// `cat uniqXYZ`: `expand-or-complete-prefix` inserted the `_` the three
+	// matches agree on and left `XYZ` alone, where `complete-word` rang the
+	// bell, having found nothing that matches `uniqXYZ` whole.
+	"expand-or-complete-prefix": repl.WidgetComplete,
+	// The listing on its own key, and the menu. See repl/widgets.go, where
+	// the measurements are, and repl/completemenu.go, which is the whole of
+	// what they do. All six of the builtin completion widgets #3043 named
+	// answer something now, so `zle -C` has no completer left that resolves
+	// to nothing.
+	"list-choices":            repl.WidgetListChoices,
+	"delete-char-or-list":     repl.WidgetDeleteCharOrList,
+	"menu-complete":           repl.WidgetMenuComplete,
+	"menu-expand-or-complete": repl.WidgetMenuComplete,
+	"reverse-menu-complete":   repl.WidgetMenuCompleteBackward,
+	"undo":                    repl.WidgetUndo,
+	"vi-undo-change":          repl.WidgetUndo,
+	"insert-last-word":        repl.WidgetInsertLastWord,
 
 	// The three that move between insert and command mode, which are the only
 	// vi-only actions repl names — see repl/widgets.go, which carries the
@@ -194,6 +214,10 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetDeleteChar:              "delete-char",
 	repl.WidgetBackwardDeleteChar:      "backward-delete-char",
 	repl.WidgetComplete:                "expand-or-complete",
+	repl.WidgetListChoices:             "list-choices",
+	repl.WidgetDeleteCharOrList:        "delete-char-or-list",
+	repl.WidgetMenuComplete:            "menu-complete",
+	repl.WidgetMenuCompleteBackward:    "reverse-menu-complete",
 	repl.WidgetUndo:                    "undo",
 	repl.WidgetInsertLastWord:          "insert-last-word",
 	repl.WidgetViCommandMode:           "vi-cmd-mode",
@@ -205,10 +229,17 @@ var widgetNames = map[repl.Widget]string{
 // can be bound to — accepting a line, and the `^D` that is end-of-input on an
 // empty one — under this shell's names for them.
 //
-// Separate from the derived table because repl has no Widget for any of them
+// Separate from the derived table because repl has no Widget for most of them
 // and deliberately does not: a widget constant with nothing behind it would
 // be a name a person could bind and press to no effect. What to call the keys
 // is still this shell's question, which is why the answer is here.
+//
+// **`^D` stays here now that repl.WidgetDeleteCharOrList exists, and that is
+// deliberate.** The action and the key are not the same thing: measured
+// 2026-09-18 through a pseudo-terminal against zsh 5.9.2, the action bound to
+// a key that is not `^D` offers to list on an empty line, while `^D` itself
+// ends the session. Turning this into a binding would hand the key to the
+// action and take the end of input with it.
 var editorControlKeys = map[string]string{
 	"\x04": "delete-char-or-list",
 	"\x0a": "accept-line",
@@ -348,13 +379,12 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 // The lookup is bindkeyWidgets, the table every other widget name is answered
 // from, with the leading `.` off: `.complete-word` reaches the builtin even
 // when something has redefined the plain name, and the two spellings are the
-// same action. Two of the eight completers are in that table, and they are the
-// two that matter — zsh binds Tab to `expand-or-complete`, and `compinit`
-// rebinds it to `complete-word`. The other six answer WidgetNone, which is
-// what a key bound to `menu-complete` or `list-choices` does in this shell
-// today with no completion widget involved: nothing, in the open, rather than
-// a diagnostic per keystroke. Menu completion and a listing widget are the
-// editor's to grow, and #2776 is where the rest of this lives.
+// same action. **All eight completers are in that table since #3043** — the
+// two that matter first, since zsh binds Tab to `expand-or-complete` and
+// `compinit` rebinds it to `complete-word`, and then the six that answered
+// WidgetNone until the editor grew the listing and the menu. A key bound to
+// `menu-complete` or `list-choices` did nothing at all before that, in the
+// open rather than diagnosing, which was honest and was still a dead key.
 //
 // # What the second half added, and what is still missing
 //
@@ -381,12 +411,15 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 // diagnostic, not removed it.
 func completionBinding(widget, completer string) repl.Binding {
 	editorAction := bindkeyWidgets[strings.TrimPrefix(completer, ".")]
-	if editorAction != repl.WidgetComplete {
-		// One of the six completers this editor has not got. The key does
-		// nothing, as it did before #2776, and naming a source of candidates
-		// for a completion that will not happen would be a table saying
-		// something untrue — repl.Binding.Candidates is empty for every key
-		// whose Widget is not WidgetComplete.
+	if !editorAction.UsesCandidates() {
+		// A completer this editor has not got. The key does nothing, and
+		// naming a source of candidates for a completion that will not happen
+		// would be a table saying something untrue — repl.Binding.Candidates
+		// is empty for every key whose action does not use it.
+		//
+		// There are none left among the eight since #3043; this is what a
+		// name outside the eight resolves to, and it is the honest answer for
+		// whatever the next one turns out to be.
 		return repl.Binding{Widget: editorAction}
 	}
 	return repl.Binding{

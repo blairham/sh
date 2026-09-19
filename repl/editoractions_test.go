@@ -106,17 +106,27 @@ func TestAskingForAnActionGetsTheEditorsOwn(t *testing.T) {
 	}
 }
 
-// The two actions that read a key of their own are declined, and the line
-// comes back untouched so a caller that reports the refusal has lost nothing.
+// The one action that is a mode of its own is declined, and the line comes
+// back untouched so a caller that reports the refusal has lost nothing.
 //
-// Those two are the whole of what the seam will not do, and the reason is the
-// one shellwidget.go used to give for the whole seam: running them from inside
-// a widget is re-entering the read loop mid-keystroke.
-func TestTheActionsThatReadAKeyAreDeclined(t *testing.T) {
-	for _, w := range []Widget{WidgetSearchHistoryBackward, WidgetComplete} {
-		if performable(w) {
-			t.Errorf("widget %d is offered, want it declined — it reads a key", w)
-		}
+// It is the whole of what the seam will not do, and the reason is the one
+// shellwidget.go used to give for the whole seam: a reverse incremental search
+// has a read loop and a drawing of its own, so running it from inside a widget
+// is re-entering the read loop mid-keystroke.
+//
+// **This used to name two, and the second was measured wrong.** A completion
+// was declined on the reasoning that it may stop to ask about a long listing
+// and so reads a key too. It does, through the editor's own buffer, with the
+// key loop waiting on the call rather than on the terminal — so there is no
+// second reader. Measured 2026-09-18 through a pseudo-terminal against zsh
+// 5.9.2, with a widget whose whole body is `zle complete-word`: pressing its
+// key filled in what the matches agree on and pressing it again listed them,
+// which is the Tab key's own two-keystroke rule reached by name from inside a
+// widget (#3043). The refusal turned a plugin's fallback to the standard
+// completion into an error.
+func TestTheActionThatReadsAKeyIsDeclined(t *testing.T) {
+	if performable(WidgetSearchHistoryBackward) {
+		t.Error("the search is offered, want it declined — it is a mode of its own")
 	}
 	// And through the seam, with the line intact.
 	var got Line
@@ -141,6 +151,8 @@ func TestTheActionsThatReadAKeyAreDeclined(t *testing.T) {
 		WidgetPreviousHistory, WidgetNextHistory, WidgetClearScreen, WidgetDeleteChar,
 		WidgetBackwardDeleteChar, WidgetUndo, WidgetInsertLastWord,
 		WidgetViCommandMode, WidgetViInsertMode, WidgetViAppendMode,
+		WidgetComplete, WidgetListChoices, WidgetDeleteCharOrList,
+		WidgetMenuComplete, WidgetMenuCompleteBackward,
 	} {
 		if !performable(w) {
 			t.Errorf("widget %d is declined, want it offered", w)

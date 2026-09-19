@@ -56,8 +56,18 @@ type editor struct {
 	// comp answers what a prefix could become, and lastTab says the previous
 	// keystroke was already a Tab — which is what makes the second one list
 	// the matches rather than repeat a completion that changed nothing.
-	comp    Completer
-	lastTab bool
+	// completedBefore is that same fact rolled forward for *this* keystroke,
+	// held on the editor rather than in a local because a completion is now
+	// reached from two directions: a key, and a widget of the shell's calling
+	// one by name through Actions.Perform. A local could only be read by the
+	// first.
+	comp            Completer
+	lastTab         bool
+	completedBefore bool
+
+	// menu is the menu completion in flight, where a run of menu keystrokes
+	// is going on. See completemenu.go, which is the whole of it.
+	menu menuWalk
 
 	// shellComplete asks the shell's own completion system what a word could
 	// become, by the name of the action a key's binding named — see
@@ -296,8 +306,12 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		if n == 0 {
 			continue
 		}
-		wasTab := e.lastTab
-		e.lastTab = false
+		e.completedBefore, e.lastTab = e.lastTab, false
+		// And whether the keystroke before this one was a menu completion,
+		// which is what decides between stepping the walk it started and
+		// beginning a fresh one. The same shape as the line above and for the
+		// same reason — see completemenu.go.
+		e.menu.before, e.menu.now = e.menu.now, false
 		// Whether the keystroke before this one was a kill, which is what
 		// decides between joining onto what ^Y holds and replacing it.
 		//
@@ -345,17 +359,15 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 				return string(e.line), nil
 			}
 			continue
-		case claimed && b.Widget == WidgetComplete:
-			// Completion is the one action this editor performs over *two*
-			// keystrokes — the second Tab is what lists — so a key rebound to
-			// it cannot go through runWidget, which knows only about the key
-			// in hand. It listed nothing before this case existed, and every
-			// real startup file rebinds Tab: `compinit` ends by putting a
-			// completion widget on it, so the rebound key is the ordinary
-			// case and not the exotic one (#2776).
-			e.completeKey(e.completerFor(b.Candidates), wasTab, prompt)
-			continue
 		case claimed:
+			// Completion goes through runWidget like everything else, which
+			// it did not until #3043. It is the one action this editor
+			// performs over *two* keystrokes — the second Tab is what lists —
+			// and runWidget knew only about the key in hand, so a rebound key
+			// needed a case here to list at all (#2776). What removed the
+			// case is completedBefore: the fact the second keystroke needs is
+			// on the editor now, so the one implementation serves the key and
+			// the widget that calls the action by name alike.
 			e.runWidget(b, prompt)
 			continue
 		}
@@ -432,7 +444,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.change(false, e.deleteBackward)
 			e.redraw(prompt)
 		case tab:
-			e.completeKey(e.comp, wasTab, prompt)
+			e.completeKey(e.comp, e.completedBefore, prompt)
 			continue
 		case esc:
 			if e.viEditing() && e.escapeIsTheModeSwitch() {

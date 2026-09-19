@@ -201,7 +201,10 @@ own shipped completion system:
 | `big/a` — twelve matches agreeing on `aa` | `\a` and the `a` | the `a` |
 | `big/u` — one match | the name and a space | the name and a space |
 
-Three facts, and the core takes the first two:
+Four rows and three facts. The last row is the control — a keystroke
+that settles the word is silent in both, which is what stops the first
+fact from reading as "one shell rings more often". The core takes the
+first two facts; the third and the row below them are a dialect's:
 
 **A keystroke that reaches the line is silent, and one that does not
 rings.** The two silent cases a person cannot tell apart from the
@@ -234,8 +237,10 @@ bash 3.2.57 agree, so it is that shell's answer and not a version's.
 zsh's own two switches are separable, measured on the ambiguous row:
 `unsetopt listbeep` leaves the listing and drops the bell, `unsetopt
 autolist` leaves the bell and drops the listing, and only both off is
-silence. The bell's switch is not modeled here — the bell is what both
-shells do by default and what this editor always does.
+silence. Only the second is modeled. The bell has no switch here,
+because ringing when the keystroke reached the line with nothing is
+what both shells do by default, and a person who wants silence is
+asking a question nobody has asked yet.
 
 ## Listing
 

@@ -232,6 +232,11 @@ type editor struct {
 	// next one write only the difference. See repaint.go — including why
 	// nothing has to remember to invalidate it.
 	drawn drawnLine
+
+	// lineStart is the text this read begins from, where a command handed the
+	// editor one rather than a prompt asking for a fresh line. Zero is every
+	// read at a prompt. See lineread.go, which is the whole of it.
+	lineStart lineStart
 }
 
 // readLine reads one line, drawing it as it is typed.
@@ -240,6 +245,14 @@ type editor struct {
 // exit — and ErrInterrupted for ^C, which abandons the line without exiting.
 func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	e.line, e.pos = e.line[:0], 0
+	if e.lineStart.seeded {
+		// A command handed over the line rather than asking for a fresh one,
+		// so the text it supplied is what is on it and the cursor is after
+		// that text. Measured: `vared v` with `v=hello` draws `hello` with
+		// the cursor at its end, and typing appends. See lineread.go.
+		e.line = append(e.line, []rune(e.lineStart.text)...)
+		e.pos = len(e.line)
+	}
 	e.browsing = len(e.history)
 	e.row = 0
 	// Fresh for every line: an edit made to a recalled entry lasts as long as
@@ -276,6 +289,15 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// the last row. See drawnPrompt.
 	e.write(prompt.lead + prompt.text)
 	e.promptDrawn(prompt)
+	if len(e.line) > 0 {
+		// A line that starts with something on it has to be drawn before the
+		// first key rather than by it — the redraws below are a keystroke's,
+		// and a read nobody typed into would otherwise show the prompt and
+		// nothing else. Only reachable for a read a command handed text to;
+		// a prompt's line is empty here. Measured: `vared v` with `v=hello`
+		// draws `hello` at once.
+		e.redraw(prompt)
+	}
 
 	var buf [1]byte
 	for {
@@ -381,7 +403,13 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		case ctrlC:
 			return e.abandon(prompt)
 		case ctrlD:
-			if len(e.line) == 0 {
+			if len(e.line) == 0 && (!e.lineStart.seeded || e.lineStart.endOnEndOfInput) {
+				// End of input on an empty line, which ends a session and —
+				// only where the command that handed over the line asked for
+				// it — ends that read. A read the command did *not* ask it of
+				// falls through to the delete below, which on an empty line
+				// does nothing; see lineStart.endOnEndOfInput for what the
+				// shell being modeled does there instead.
 				e.endLine(prompt, "")
 				return "", io.EOF
 			}

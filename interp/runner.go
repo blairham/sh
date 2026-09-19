@@ -204,6 +204,21 @@ type Runner struct {
 	// corpus records.
 	DieBySignal func(sig syscall.Signal) error
 
+	// EditLine hands a command this shell's own line editor: a prompt, text
+	// already on the line, and back whatever the person accepted.
+	//
+	// Nil — the default — is a shell with no editor to re-enter, which is a
+	// script, a `-c` line, a hook and every embedder. Opt-in for
+	// ReplaceProcess's reason: a Runner in another program has no terminal to
+	// take raw, and deciding to take one is the front end's to make in its own
+	// code. See editline.go for what the request and the endings mean.
+	//
+	// It is the one seam here that runs from the shell *to* the editor. Every
+	// other one — running a widget, drawing a prompt, coloring a line — runs
+	// the other way, and this exists because a builtin that hands a person a
+	// line to edit cannot be written any other way round.
+	EditLine func(req LineEdit) (string, LineEditEnd)
+
 	// GuardConcurrent runs work this shell put on a goroutine of its own — a
 	// background job, either half of a pipeline, a coprocess, a process
 	// substitution — and is where a panic in that work is dealt with.

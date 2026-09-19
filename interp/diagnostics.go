@@ -1202,6 +1202,19 @@ type Diagnostics struct {
 	// front of it — see RemarkNamesItsOwnLine.
 	OperatorsNotSeparated string
 
+	// FunctionNameIsAnAlias is a function being defined under a name the
+	// alias table holds, in the one column that refuses it. Two verbs, and
+	// only the second is ordinarily used: %[1]d is the line and %[2]s is the
+	// name.
+	//
+	//	zsh   defining function based on alias `zz'
+	//
+	// Empty everywhere else: the other four columns either expand the alias
+	// or decline it in silence — see syntax.Dialect.AliasAtAFunctionName.
+	// The remark is followed by the ordinary parse failure at the
+	// parentheses, which is why it is a remark rather than the error itself.
+	FunctionNameIsAnAlias string
+
 	// RemarkNamesItsOwnLine has a remark's wording carry the line it is
 	// about, so the location in front of it says only who is speaking.
 	//
@@ -7467,6 +7480,8 @@ func (d Diagnostics) Remark(r syntax.Remark) string {
 		return Wording(d.BackquoteObsolete, "", r.Pos.Line)
 	case syntax.RemarkOperatorsNotSeparated:
 		return Wording(d.OperatorsNotSeparated, "", r.Pos.Line, r.Token, r.Next)
+	case syntax.RemarkFunctionNameIsAnAlias:
+		return Wording(d.FunctionNameIsAnAlias, "", r.Pos.Line, r.Token)
 	}
 	return ""
 }

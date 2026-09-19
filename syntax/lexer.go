@@ -5080,6 +5080,21 @@ func (l *Lexer) peekIsRightParen() bool {
 	return i < len(l.src) && l.src[i] == ')'
 }
 
+// peekIsFuncParensAdjacent is peekIsFuncParens with the blanks in front of
+// the `(` counting: the parenthesis has to stand immediately after the word.
+//
+// One dialect's alias rule turns on exactly that, and the blank is what
+// decides it — see [Dialect.AliasSuppressedWhereTheParenIsAdjacent]. The
+// blanks *inside* the pair are skipped as they are above, because no
+// measurement puts them in the rule: `zz( ) { :; }` is the same answer as
+// `zz() { :; }` in the column that has it.
+func (l *Lexer) peekIsFuncParensAdjacent() bool {
+	if l.off >= len(l.src) || l.src[l.off] != '(' {
+		return false
+	}
+	return l.peekIsFuncParens()
+}
+
 func (l *Lexer) peekIsFuncParens() bool {
 	i := l.off
 	for i < len(l.src) && isBlank(l.src[i]) {

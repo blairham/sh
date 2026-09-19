@@ -87,7 +87,58 @@ func (p *Parser) expandCommandStart() {
 	}
 	p.aliasNextWord = false
 	p.aliasDone = map[string]bool{}
+	if p.aliasAtAFunctionName() {
+		return
+	}
 	p.expandCommandWord(p.aliasDone)
+}
+
+// aliasAtAFunctionName answers what this dialect does with an alias standing
+// where a **function name** is being defined, and reports whether the
+// expansion is off.
+//
+// Three of the five columns expand there like anywhere else, which is what
+// this shell does and what the zero value keeps. The other two are measured
+// and are not the same answer: one declines the expansion where the `(`
+// stands immediately after the word, and the other refuses the definition
+// outright. See [Dialect.AliasAtAFunctionName], which has the panel.
+//
+// It matters here rather than in principle because a dialect ships preset
+// aliases whose values are declaration words: `nameref() { :; }` and
+// `float() { :; }` expanded to `typeset -n () { :; }`, which is a **parse
+// error** and so costs every line of the file rather than its own (#3643).
+//
+// The table is asked, which is what the refusing column needs: `zz() { :; }`
+// is an ordinary definition there when `zz` names no alias. The other reading
+// would answer the same either way, and asking once keeps the two on one
+// route.
+func (p *Parser) aliasAtAFunctionName() bool {
+	reading := p.dialect.AliasAtAFunctionName
+	if reading == AliasExpandsAtAFunctionName || p.Aliases == nil {
+		return false
+	}
+	if !p.at(TokWord) {
+		return false
+	}
+	if reading == AliasSuppressedWhereTheParenIsAdjacent {
+		if !p.peekIsFuncParensAdjacent() {
+			return false
+		}
+	} else if !p.peekIsFuncParens() {
+		return false
+	}
+	name := p.tok.Text
+	if _, ok := p.Aliases(name); !ok {
+		return false
+	}
+	if reading == AliasRefusesAFunctionName {
+		p.lex.remarks = append(p.lex.remarks, Remark{
+			Kind: RemarkFunctionNameIsAnAlias,
+			Pos:  p.tok.Pos, At: p.tok.Pos, Token: name,
+		})
+		p.aliasFuncRefused = true
+	}
+	return true
 }
 
 // expandPipelineHead offers the word a pipeline begins with to the alias

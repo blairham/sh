@@ -45,6 +45,19 @@ func Dialect() syntax.Dialect {
 	// command substitution, a sourced file and a trap body alike — under a
 	// `-c` string as much as anywhere else.
 	d.AliasesExpandUnlessTold = true
+	// A function defined under a name the alias table holds is refused
+	// outright here, before any parse of the body. Measured 2026-09-18,
+	// script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`: with
+	// `alias zz='typeset -n'`, both `zz() { :; }` and `zz () { :; }` write
+	// two lines and exit 1, and so does the same definition under
+	// `alias zz=echo`, whose expansion would have been a legal definition —
+	// which is what says it is the *name being an alias* that is refused
+	// rather than anything about the value.
+	//
+	// This shell expanded and then read `typeset -n () { :; }` as a
+	// multi-name definition, which is a legal shape here, so two functions
+	// called `typeset` and `-n` were defined in silence at 0 (#3643).
+	d.AliasAtAFunctionName = syntax.AliasRefusesAFunctionName
 	// The shell's own program text is the one place the route matters, and
 	// the reason is not aliases: a `-c` string is read *whole* here — see
 	// Diagnostics.CommandStringParsedWhole — so the `alias` on line 1 has not
@@ -4257,6 +4270,12 @@ func Diagnostics() interp.Diagnostics {
 		// was written: `$((#\))` says `after ##` as readily as `$((##))`.
 		ArithCharacterMissing: "bad math expression: character missing after ##",
 		SyntaxUnexpected:      "parse error near `%[1]s'",
+		// The sentence this shell writes in front of that one when the
+		// function being defined is named by an alias. Two lines, and the
+		// second is the parse failure above located at the parentheses —
+		// which is why this is a remark rather than the error. See
+		// syntax.Dialect.AliasAtAFunctionName (#3643).
+		FunctionNameIsAnAlias: "defining function based on alias `%[2]s'",
 		// The newline is spelled `\n` here rather than by name, and is
 		// blamed on the line it ends (#1364).
 		SyntaxUnexpectedNewline:          "parse error near `\\n'",

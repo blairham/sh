@@ -71,6 +71,15 @@ const (
 	// are the same one: the first operator, which is both where the remark
 	// is located and what it is about.
 	RemarkOperatorsNotSeparated
+	// RemarkFunctionNameIsAnAlias is a function being defined under a name
+	// the alias table holds, in the one column that refuses it. Token is
+	// the name; its two positions are the same one, the word itself.
+	//
+	// A remark and not only an error because the shell writes *two* lines —
+	// its own sentence about the alias, and then the ordinary parse failure
+	// at the parentheses — which is the shape this channel exists for. See
+	// Dialect.AliasAtAFunctionName.
+	RemarkFunctionNameIsAnAlias
 )
 
 func (k RemarkKind) String() string {
@@ -81,6 +90,8 @@ func (k RemarkKind) String() string {
 		return "RemarkBackquoteSubstitution"
 	case RemarkOperatorsNotSeparated:
 		return "RemarkOperatorsNotSeparated"
+	case RemarkFunctionNameIsAnAlias:
+		return "RemarkFunctionNameIsAnAlias"
 	}
 	return "RemarkNone"
 }

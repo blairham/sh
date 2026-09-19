@@ -2737,6 +2737,15 @@ type Dialect struct {
 	// Off in the core, which refuses what the panel disagrees about.
 	AliasesExpandReservedWords bool
 
+	// AliasAtAFunctionName is what happens when the command word an alias
+	// would replace is a **function name being defined** — the word in front
+	// of the `()` of `name() { … }`.
+	//
+	// Three of the five columns expand it like any other command word and
+	// two do not, so the panel splits three ways rather than two. See the
+	// type for the measurement.
+	AliasAtAFunctionName AliasAtAFunctionName
+
 	// AliasedReservedWordStandsBehindAnAssignmentPrefix keeps a reserved
 	// word an alias supplied reserved where the command word stands behind
 	// an assignment prefix, which is the one position a *written* one loses
@@ -6728,3 +6737,51 @@ func (d Dialect) reservesWord(name string) bool {
 	}
 	return reservedWords[name]
 }
+
+// AliasAtAFunctionName is what a dialect does with an alias standing where a
+// function name is being defined.
+//
+// Measured 2026-09-18, script files under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C` with standard input on /dev/null. The body is `alias
+// zz='typeset -n'` and then `zz() { :; }`, whose expansion cannot be a legal
+// definition, with `printf 'after\n'` behind it. Body B is the same with a
+// blank before the `(`; body C is `alias zz=echo`, whose expansion *is* a
+// legal definition.
+//
+//	column         A                      B                C
+//	bash 5.3.20    syntax error, 2        the same         after, 0
+//	dash 0.5.12    syntax error, 2        the same         after, 0
+//	ash 1.37.0     syntax error, 2        the same         after, 0
+//	ksh93u+        after, 0               syntax error, 3  after, 0
+//	zsh 5.9.2      its own refusal, 1     the same         the same
+//
+// **bash has to be measured with its expansion switched on.** `shopt -s
+// expand_aliases` is off in a script there, so a bash column taken without it
+// expands nothing at all and prints `after` for every body — which reads
+// exactly like a shell that suppresses, and is why body C cannot tell the two
+// apart either. With the option on, bash expands.
+//
+// Body C is what says zsh's answer is about the **name being an alias**
+// rather than about the value: it refuses a definition whose expansion would
+// have been perfectly legal.
+//
+// The `function name { … }` spelling is outside all of this: the word after
+// `function` is not a command word, so no column expands there and all five
+// answer `after` at 0 (dash has no keyword and refuses the brace).
+type AliasAtAFunctionName uint8
+
+const (
+	// AliasExpandsAtAFunctionName expands like any other command word. The
+	// zero value, and bash's, dash's and BusyBox ash's answer.
+	AliasExpandsAtAFunctionName AliasAtAFunctionName = iota
+
+	// AliasSuppressedWhereTheParenIsAdjacent declines the expansion where the
+	// `(` stands immediately after the word and expands where a blank
+	// separates them. ksh93's answer, and the blank is what decides it.
+	AliasSuppressedWhereTheParenIsAdjacent
+
+	// AliasRefusesAFunctionName refuses the definition outright, before any
+	// parse of the body, with a remark of its own in front of the parse
+	// failure. zsh's answer. See RemarkFunctionNameIsAnAlias.
+	AliasRefusesAFunctionName
+)

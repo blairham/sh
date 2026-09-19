@@ -36,6 +36,14 @@ any other project's configuration file, and it does not claim any other
 project's parameter names. Capability parity is the goal; a shared
 namespace is not.
 
+**And the binding constraint, decided the same day:** the engine must be
+**expandable and configurable without ever building the shell**. Not
+"mostly" — a person who wants a segment this tree has never heard of
+must be able to have one, from a file and a session, on a binary they
+installed from a release. See *Extending it without building the shell*,
+which is the section the rest of this design has to satisfy rather than
+a feature listed among others.
+
 ## Why this is not in a dialect
 
 A theme engine in `dialect/zsh` would be a prompt that exists only if you
@@ -346,31 +354,14 @@ the life of one render**, because a dozen version-manager segments each
 walking independently is a hundred stats per prompt. One render is the
 memo's whole lifetime, so nothing is ever served stale.
 
-### A segment can be a shell function
+### The roster, which is a convenience and not the mechanism
 
-The interpreter is in this process. So a segment's content may be
-produced by **a shell function in the session**, called in-process with
-no fork, and this works in whatever dialect the session is running —
-a bash function in a bash session, a zsh function in a zsh one.
-
-This is a capability no external prompt program can have, and it is the
-escape hatch that keeps the no-fork rule honest: someone who genuinely
-needs to run something gets to, deliberately and visibly, instead of the
-engine growing a forking segment for every tool in the world.
-
-It is constrained accordingly:
-
-- **Off unless configured.** The default configuration calls nothing, and
-  `prompt show` names every function a configuration installs, so the
-  cost is visible rather than discovered.
-- **A function that fails or is missing costs its segment and nothing
-  else.** The provider's panic guard covers a panic; a non-zero return
-  and an unset name are ordinary outcomes and render nothing.
-- **A function that does not terminate is the hard case**, and the honest
-  answer is the async contract below rather than a timeout invented here
-  **(unmeasured — settle before implementing)**.
-
-### The roster
+The segments compiled in are the ones common enough that everyone would
+otherwise write them. They are **not** a privileged class: a built-in
+segment may use no fact and no capability that a segment arriving from
+outside the binary cannot also have. The moment a built-in needs a
+private interface, the extension path has become second-class and the
+constraint above is broken.
 
 The first set, which is what a prompt is actually looked at for:
 
@@ -401,6 +392,121 @@ tool reported it, and the prompt quietly did something else.
 That list is written down in the code and shrinks as things are
 implemented. It is the same silent-wrong-answer rule the rest of this
 repository holds to, applied to a prompt.
+
+## Extending it without building the shell
+
+This is a requirement, so it gets a section rather than a paragraph.
+**Every part of a prompt must be reachable from outside the binary**:
+the look, the settings, and the segments themselves. A person on a
+released binary who wants a segment nobody here has thought of must be
+able to have one.
+
+Four layers, cheapest first. Each is complete on its own — nobody has to
+reach the next one to get what they want.
+
+| layer | what it adds | what it costs | who it is for |
+| --- | --- | --- | --- |
+| variables | any setting, any dialect | nothing | "make the directory blue" |
+| a file | a whole look, shareable | nothing | "use my preset on every machine" |
+| a shell function | a new segment | one in-process call | "show me the thing my project has" |
+| a plugin | a segment that does real work | a process, asynchronously | "read my cluster / my daemon / my API" |
+
+### Presets and icon tables are files
+
+A preset is a set of assignments and an icon table is a lookup, so both
+are **data, loadable from a path**, not entries in a compiled map. A
+look someone publishes is a file you point a variable at; a glyph set
+for a font this tree has never seen is the same.
+
+The compiled-in presets are seeded from exactly the same format, so
+there is no arrangement a shipped preset can express and a downloaded
+one cannot.
+
+### A segment can be a shell function
+
+The interpreter is in this process. So a segment's content may be
+produced by **a shell function in the session**, called in-process with
+no fork, and this works in whatever dialect the session is running — a
+bash function in a bash session, a zsh function in a zsh one. Define it
+in your startup file, name it in an elements list, and it draws.
+
+This is a capability no external prompt program has, and it is the
+everyday answer to the constraint: the common case for "a segment that
+does not exist yet" is a few lines of shell over a file or a variable,
+and that should cost a person nothing but their own rc.
+
+It is also the escape hatch that keeps the no-fork rule honest. Someone
+who genuinely needs to run something gets to, deliberately and visibly,
+instead of the engine growing a forking segment for every tool in the
+world.
+
+Constrained accordingly:
+
+- **Off unless configured.** The default configuration calls nothing,
+  and `prompt show` names every function a configuration installs, so
+  the cost is visible rather than discovered.
+- **A function that fails or is missing costs its segment and nothing
+  else.** The provider's panic guard covers a panic; a non-zero return
+  and an unset name are ordinary outcomes and render nothing.
+- **A function that does not terminate is the hard case**, and the
+  honest answer is the async contract below rather than a timeout
+  invented here **(unmeasured — settle before implementing)**.
+
+### A segment can be a plugin, and it is async by construction
+
+Some segments have to do real work: query a cluster, ask a daemon, read
+something over a socket. Those belong outside this process, and
+`docs/design/plugins.md` already has the transport, the handshake, the
+trust model and the failure semantics for that. What it does not yet
+have is a role for this, and the role it needs is a **third** one beside
+command and observer.
+
+The exclusion that role has to answer is the hot-path one, and the
+answer is in two parts.
+
+**First, a prompt is not per-keystroke.** `repl.Shell.prompt` fires
+hooks and checks the window size, so it runs once per prompt line.
+#1323's reasoning to the contrary is the thing this document corrects.
+
+**Second, and this is what makes it unconditional: a plugin segment
+never blocks a prompt.** It does not answer a request while the shell
+waits — it **publishes**, and the prompt draws with what it has and is
+redrawn when something new arrives. So the process boundary is not on
+the path between pressing return and seeing a prompt, at all, ever, and
+the latency of a slow or wedged plugin is bounded by nothing because it
+is not being waited on.
+
+That is the same mechanism #1314 needs for repository status, which is
+the point: **one async contract, two users**, rather than a bespoke
+timeout for the prompt.
+
+Consequences worth stating before the role is written:
+
+- A plugin segment's first draw usually shows nothing, and what it shows
+  instead is the per-segment question already open above.
+- A plugin that dies loses its segments, and they render nothing. The
+  prompt does not report a dead plugin on every line; the host's
+  existing failure reporting does it once.
+- A plugin declares its segment names at the handshake, the same way the
+  command role declares its command names, so a name collision is
+  **reported rather than silently resolved**.
+
+### How an element name resolves
+
+An element in a configuration is a name, and the name is looked up in
+one order, most specific first:
+
+1. a shell function in the session
+2. a segment declared by a plugin
+3. a segment compiled in
+4. nothing — and `prompt show` names it under `not yet`
+
+The session wins because it is the most local thing and the person
+writing it is present. A collision at any step is **named** rather than
+quietly resolved — a person whose segment stopped drawing because a
+release added a built-in of the same name has been silently overruled by
+their own shell, which is the failure class this repository treats as
+its worst.
 
 ## Repository status
 
@@ -455,7 +561,13 @@ A preset is a set of assignments, so it is data. The layout pass spans
 powerline arrows", which is the whole range prompts live in, so a preset
 costs no code.
 
-The set ships as data and grows as looks are wanted. Two rules govern it:
+Presets ship as files and are loaded from files — see *Presets and icon
+tables are files*, which is the half of this that the no-rebuild
+constraint decides. A preset somebody publishes and a preset compiled in
+are the same format, so neither can express an arrangement the other
+cannot.
+
+Two further rules govern the ones shipped here:
 
 - **A preset named after another project is a claim about fidelity.** Any
   preset that reproduces a published look declares what it does *not*
@@ -505,7 +617,10 @@ guess as a fact is worse than an absent entry:
    blocks store.
 3. What an async segment draws before its answer arrives.
 4. Containment for a segment function that does not terminate.
-5. The per-prompt cost of the render itself, against the plain prompt it
+5. What a plugin segment costs when it is *publishing* rather than being
+   asked — the redraw rate a chatty plugin can force, and what bounds
+   it.
+6. The per-prompt cost of the render itself, against the plain prompt it
    replaces, on a cold page cache as well as a warm one.
 
 Each of these is a measurement to run before the code that depends on it
@@ -518,6 +633,9 @@ is written.
 - #1314 — repository status as a shell capability, and async segments.
 - #1320 — the primitives an unmodified external theme would need, which
   is a different route to a different goal and stays useful on its own.
+- `docs/design/plugins.md` — the transport, handshake, trust model and
+  failure semantics a segment role would be built on, and the hot-path
+  exclusion it has to answer.
 - `repl/promptprovider.go`, `repl/promptrender.go`, `repl/repl.go` and
   `dialect/zsh/promptnames.go` — the seam as it stands in this tree.
 - `docs/spec/prompt.md` — what a dialect does to a prompt *parameter*,

@@ -54,16 +54,16 @@ func TestWhichFailedPathCandidateIsReported(t *testing.T) {
 	for _, c := range []struct {
 		name, path string
 		// what each answer reports: "dir", "perm" or "missing".
-		first, last string
+		first, last, existing string
 	}{
-		{"the directory alone", isDir, "dir", "dir"},
-		{"an empty entry in front of it", empty + ":" + isDir, "dir", "dir"},
-		{"an empty entry behind it", isDir + ":" + empty, "dir", "missing"},
-		{"a non-executable behind it", isDir + ":" + noExec, "perm", "perm"},
-		{"and in front of it", noExec + ":" + isDir, "perm", "dir"},
-		{"a missing entry behind it is not searched", isDir + ":" + gone, "dir", "dir"},
-		{"an empty entry behind a non-executable", noExec + ":" + empty, "perm", "missing"},
-		{"and in front of one", empty + ":" + noExec, "perm", "perm"},
+		{"the directory alone", isDir, "dir", "dir", "dir"},
+		{"an empty entry in front of it", empty + ":" + isDir, "dir", "dir", "dir"},
+		{"an empty entry behind it", isDir + ":" + empty, "dir", "missing", "dir"},
+		{"a non-executable behind it", isDir + ":" + noExec, "perm", "perm", "dir"},
+		{"and in front of it", noExec + ":" + isDir, "perm", "dir", "perm"},
+		{"a missing entry behind it is not searched", isDir + ":" + gone, "dir", "dir", "dir"},
+		{"an empty entry behind a non-executable", noExec + ":" + empty, "perm", "missing", "perm"},
+		{"and in front of one", empty + ":" + noExec, "perm", "perm", "perm"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			for _, tc := range []struct {
@@ -72,6 +72,12 @@ func TestWhichFailedPathCandidateIsReported(t *testing.T) {
 			}{
 				{FirstInterestingCandidate, c.first},
 				{LastSearchedEntry, c.last},
+				// The third reading: the first candidate that *existed*,
+				// whatever it was. The two rows with a directory in front of
+				// a non-executable file are what part it from the first
+				// reading — they are `dir` here and `perm` there — and the
+				// two orders of that pair are what part it from the second.
+				{FirstExistingCandidate, c.existing},
 			} {
 				setup := func(r *Runner) {
 					r.Env = []string{"PATH=" + c.path}

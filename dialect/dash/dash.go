@@ -471,8 +471,9 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-18, `unset "a[x]"` is `unset: a[x]: bad variable name`
 	// at 2 — the brackets are part of a name and are refused as one, quoted
 	// or not (#3049).
-	// unanswered SubscriptBeforeTheFirstElementRead and
-	// unanswered SubscriptBeforeTheFirstElementNeedsAnElement: there is no
+	// unanswered SubscriptBeforeTheFirstElementRead,
+	// unanswered SubscriptBeforeTheFirstElementNeedsAnElement and
+	// unanswered SubscriptBeforeTheFirstElementRefusesTheLength: there is no
 	// array to count back through, and no subscript on the right of a name
 	// either. Measured 2026-09-18, `a=(x y z)` is `Syntax error: "("
 	// unexpected` at 2 and `a=x; echo "${a[-1]}"` is `Bad substitution` at 2,
@@ -1473,6 +1474,13 @@ func Diagnostics() interp.Diagnostics {
 
 		TypeKeyword:  "%[1]s is a shell keyword",
 		TypeFunction: "%[1]s is a shell function",
+		// And the third sentence for an external, once the name is in the
+		// command hash: measured 2026-09-18, `type ls` is `ls is /bin/ls`
+		// on a first lookup and `ls is a tracked alias for /bin/ls` after an
+		// `ls` has run. The same words ksh93 writes, and a different
+		// question: there they are the *first* answer, keyed on the slash
+		// rather than on the table (#3579).
+		TypeHashedExternal: "%[1]s is a tracked alias for %[2]s",
 		// `a is an alias for echo hi`, body raw.
 		TypeAlias:     "%[1]s is an alias for %[2]s",
 		CommandVAlias: "alias %[1]s=%[2]s",

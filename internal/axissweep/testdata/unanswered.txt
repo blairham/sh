@@ -200,6 +200,7 @@ ash   StoreRefusalOfADeclaredElementLeavesZero
 ash   StoreRefusalThroughPrintfLeavesZero
 ash   SubscriptBeforeTheFirstElementNeedsAnElement
 ash   SubscriptBeforeTheFirstElementRead
+ash   SubscriptBeforeTheFirstElementRefusesTheLength
 ash   SubscriptExpressionStopsAtASeparator
 ash   SubscriptIsAQuotingContext
 ash   SubscriptedArrayLiteral
@@ -466,6 +467,7 @@ dash  StoreRefusalOfADeclaredElementLeavesZero
 dash  StoreRefusalThroughPrintfLeavesZero
 dash  SubscriptBeforeTheFirstElementNeedsAnElement
 dash  SubscriptBeforeTheFirstElementRead
+dash  SubscriptBeforeTheFirstElementRefusesTheLength
 dash  SubscriptExpressionStopsAtASeparator
 dash  SubscriptIsAQuotingContext
 dash  SubscriptedArrayLiteral

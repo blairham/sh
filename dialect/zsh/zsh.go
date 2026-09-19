@@ -2893,6 +2893,9 @@ func Semantics() interp.Semantics {
 	s.NegativeSubscriptPastTheStartInserts = interp.Yes
 	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartIsNothing
 	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.No
+	// And the length is answered exactly as the read is — silently, at `0`.
+	// Measured 2026-09-18 (#3591).
+	s.SubscriptBeforeTheFirstElementRefusesTheLength = interp.No
 	s.OperandSubscriptQuoting = interp.OperandSubscriptQuotesNothing
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
 	// `not valid in this context: a+` — the append operator is not a

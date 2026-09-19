@@ -2551,6 +2551,11 @@ func Semantics() interp.Semantics {
 	s.NegativeSubscriptPastTheStartInserts = interp.No
 	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartEndsTheScript
 	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.Yes
+	// And the length is answered exactly as the read is: `a=(x y z); echo
+	// "[${#a[-4]}]"` is `a: subscript out of range` and the script ends,
+	// which is the read's own sentence and the read's own give-up. Measured
+	// 2026-09-18 (#3591).
+	s.SubscriptBeforeTheFirstElementRefusesTheLength = interp.No
 	s.OperandSubscriptQuoting = interp.OperandSubscriptBackslashQuotes
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.Yes
 	s.BareExitReportsTheUnitsOwnStatus = interp.Yes

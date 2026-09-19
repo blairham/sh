@@ -2069,7 +2069,9 @@ func (r *Runner) readArraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// refusal is not something the name's absence excuses. Read here
 		// rather than above, so the text is expanded once on this path and
 		// once on the other.
-		r.refusesEmptySubscriptText(r.subscriptText(e.Subscript()))
+		written := r.subscriptTextAsWritten(e.Subscript())
+		r.refusesEmptySubscriptText(trimSubscript(written))
+		r.absentNameSubscriptBeforeTheFirstElement(e, written)
 		return nil, true
 	}
 	return r.subscriptOver(e, subscriptSource{name: e.Name, elems: elems, scalar: scalar})
@@ -2197,7 +2199,8 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 			// which is what Semantics.SubscriptBeforeTheFirstElementNeedsAnElement
 			// answers: measured, `a=x; echo "${a[-1]}"` is `a: bad array
 			// subscript` in bash 5.3.20 and silent in ksh93u+.
-			r.subscriptBeforeTheFirstElement(src.name, n, 0)
+			r.subscriptBeforeTheFirstElement(src.name, n, 0,
+				subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
 		}
 		// No hook here, and that is measured rather than an omission: a
 		// scalar has one place, so `g=raw; ${g[1]}` enters nothing in
@@ -2206,7 +2209,8 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		// already run the hook for it.
 		return nil, true
 	}
-	v, held := r.elemAt(src.name, elems, n)
+	v, held := r.elemAtFor(src.name, elems, n,
+		subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
 	if !r.disciplineIsWatching(src.name, disciplineGet) {
 		// Before forwardSubscriptIndex, which counts a negative subscript
 		// from the array *base* — an axis a runner with no dialect cannot
@@ -2327,6 +2331,50 @@ func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, o
 		return []string{v}, true, true
 	}
 	return nil, false, false
+}
+
+// absentNameSubscriptBeforeTheFirstElement answers a negative subscript
+// written on a name that holds nothing at all.
+//
+// The emptied array and the scalar reach the reach's own door already —
+// Runner.elemAt and the scalar branch of Runner.subscriptOver — and this one
+// did not, because subscriptTarget answers "the name holds nothing" before
+// any element is counted and the subscript is then refused as text rather
+// than resolved to a position. So the axis that decides it,
+// Semantics.SubscriptBeforeTheFirstElementNeedsAnElement, was never asked on
+// the one row it was most obviously about: measured 2026-09-18, `unset a;
+// echo "[${a[-1]}]"; echo after` is `a: bad array subscript`, then `[]`, then
+// `after` in bash 5.3.20 — the same three lines `a=()` and `a=x` give in that
+// shell — and this engine was silent.
+//
+// **The length is not this route**, and that is measured rather than left
+// out: `unset a; echo "[${#a[-1]}]"` is `[0]` and silent in the same shell,
+// where the length over an *existing* name is a refusal of its own. A name
+// that is not there has its length answered before the subscript is looked
+// at, so the node's own Length is the guard.
+//
+// The text is the one the caller already expanded, because expanding the word
+// twice would run a command substitution in it twice — the mistake #1915 was.
+func (r *Runner) absentNameSubscriptBeforeTheFirstElement(e *syntax.ParamExpr, written string) {
+	if e.Length || e.IndexRange != nil || r.wholeArrayIndex(e) {
+		return
+	}
+	if r.sem().SubscriptBeforeTheFirstElementRead == SubscriptBeforeStartIsNothing {
+		// The fast path the reach's own door takes, and here it also keeps a
+		// dialect with no arrays from reading a subscript it has no reading
+		// for at all.
+		return
+	}
+	idx := trimSubscript(written)
+	if lo, _, isRange := splitSubscriptRange(idx); isRange && lo != "" {
+		return
+	}
+	n, ok := r.subscriptIndexAsWritten(r.writtenSubscript(e, idx), written)
+	if !ok || n >= 0 {
+		return
+	}
+	// No end to count back from, which is exactly what the axis is about.
+	r.subscriptBeforeTheFirstElement(e.Name, n, 0, subscriptLength{})
 }
 
 // subscriptNameIsAbsent reports whether the name a subscript was written on
@@ -2739,6 +2787,13 @@ func (r *Runner) subscriptIsARange(e *syntax.ParamExpr) bool {
 // the element at 0. A subscript out of range in either direction is no
 // element at all, exactly as `${a[9]}` on three elements is.
 func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
+	return r.elemAtFor(name, elems, n, subscriptLength{})
+}
+
+// elemAtFor is that read with what a `${#a[-4]}` has to say about a subscript
+// that reached past the first element. See subscriptLength, whose zero value
+// is what every route but the parameter expansion's means.
+func (r *Runner) elemAtFor(name string, elems []string, n int, length subscriptLength) (string, bool) {
 	// When the sparse reading compacted a gap out of elems, a position can no
 	// longer be counted there; the store still holds every position. Only a
 	// *stored* array can be behind elems here — a produced one is read before
@@ -2767,7 +2822,7 @@ func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
 			// where each was measured; a non-negative subscript below the
 			// base arrives here too and is the neighboring question, which
 			// every column refuses alike.
-			r.subscriptBeforeTheFirstElement(name, n, end)
+			r.subscriptBeforeTheFirstElement(name, n, end, length)
 		}
 		return "", false
 	}

@@ -7527,6 +7527,24 @@ field, and `LastSearchedEntry` is ksh93's answer: **the failure reported is
 the last PATH entry the search really looked in**, whatever it was, including
 a plain "not there".
 
+**`$d:$g` is bash's own row, and it is a third reading again.** Every other
+column reaches the non-executable file and says `permission`; bash says `not
+found` at 127, and the `$g:$d` control says `permission` — so with the file
+first bash reports the file, and with the directory first the directory is
+what suppresses it. That is neither "the first interesting candidate" nor
+"the last entry searched" but **the first candidate that existed**, with a
+directory reported as if nothing had been found. `FirstExistingCandidate` is
+that value, and the reporting half is still
+`DirectoryOnPathIsACandidate` — which bash answers No, so the directory it
+keeps is written as `command not found` (#3578).
+
+This engine read that No as "a directory is not a candidate at all", so the
+walk passed over `$d` and the later non-executable became the first
+interesting candidate: one row of the seven, in the reporting direction, with
+the status wrong by one value rather than the command run or not run. A
+runnable program later on PATH is unaffected in every row, which is what
+makes a shim directory early on PATH work at all.
+
 ### The probe that could not see it
 
 The axis doc for `DirectoryOnPathIsACandidate` put the directory alone on
@@ -8744,6 +8762,37 @@ pathname operand was wrong in both.
 The discriminator is the slash and not the hash table. `command -V zzc` says
 `tracked alias` on a name's *first* lookup, and clearing the table with
 `unalias -a` or turning tracking off with `set +h` changes nothing (#2953).
+
+### A name that is now in the command hash
+
+Two columns have a **third** wording for an external, and it arrives only
+once the name has been looked up before. Measured 2026-09-18, a script file
+under `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin /dev/null, asking `type
+ls`, running `ls`, and asking again:
+
+| column | first lookup | after it has run |
+| --- | --- | --- |
+| bash 5.3.20 | `ls is /bin/ls` | `ls is hashed (/bin/ls)` |
+| dash 0.5.12 | `ls is /bin/ls` | `ls is a tracked alias for /bin/ls` |
+| zsh 5.9.2 | `ls is /bin/ls` | the same |
+| ksh93u+ | `ls is a tracked alias for /bin/ls` | the same |
+| BusyBox ash 1.37.0 | `ls is /bin/ls` | the same |
+
+`Diagnostics.TypeHashedExternal` is the field and empty means one sentence
+either way, which is what three of the five answer. ksh93's is
+`TypeExternal`'s row and not this one — its words are the same and its
+discriminator is the slash, measured above. `command -V` writes whichever
+sentence `type` writes in every column, so this is one wording and not two.
+
+**The table is read before the lookup**, and that is measured rather than
+tidy: dash's own `type ls` puts the name in the table and still writes the
+plain sentence for that same lookup — `hash` afterwards shows `/bin/ls` and
+the line said `ls is /bin/ls`. A report that asked the table after its own
+search would never write the first of the two sentences at all (#3579).
+
+The `-a` listing is not this question: bash's `type -a ls` after an `ls` has
+run is `ls is /bin/ls`, which is the wording every shell with the letter uses
+there.
 
 ### `-a` and `-p` are different questions
 
@@ -18850,7 +18899,50 @@ element. A non-negative one below the base is the neighboring question
 and every column refuses it; a subscript past the *end* is no element
 anywhere and is silent.
 
+**`SubscriptBeforeTheFirstElementRefusesTheLength`** — bash yes · dash unspecified · ksh93 no · zsh no
+
+The **length** of the element that reach was made for, which bash answers
+apart from the read. Measured 2026-09-18, a script file under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with stdin /dev/null, over `a=(x y z)`, `a=()`
+and `a=x` alike:
+
+    echo "[${a[-4]}]"; echo after    a: bad array subscript | [] | after
+    echo "[${#a[-4]}]"; echo after   [-4]: bad array subscript | after
+
+Two differences in one row and they go together. The subject is the
+subscript **as written**, with its brackets and without the name —
+`Diagnostics.SubscriptBeforeTheFirstElementLength` — and the refusal
+abandons the word rather than standing beside an empty value, so the `echo`
+never runs. It is the exact shape `EmptyAssociativeKeyRefusesTheLength` and
+`Diagnostics.EmptyAssociativeKeyLength` already record for `${#m[$w]}` under
+an empty key: same column, same split between the read and the length, same
+two subjects. The pair next door is the model rather than a new one.
+
+How far the refusal gives up is the route's and not this axis's, and the two
+routes are measured: from a **script file** the command is abandoned and
+`after` runs at 0, and under **`-c`** — one parse unit — nothing after it
+runs at all. The same pair holds for the empty key's length, whose own
+section records the `-c` half alone.
+
+The other two columns with arrays answer No for two different reasons: zsh is
+silent on both routes, and ksh93 gives the length the read's own sentence and
+ends the script on it (#3591).
+
+**A name holding nothing at all is not this question**, and that is measured
+rather than symmetry: `unset a; echo "[${#a[-4]}]"` is `[0]` and silent in
+bash where `unset a; echo "[${a[-4]}]"` is the read's complaint. The length
+of a name that is not there is answered before the subscript is looked at.
+
 **`SubscriptBeforeTheFirstElementNeedsAnElement`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+That axis reaches an **unset** name too, and it had no route to. The emptied
+array and the scalar arrive at the reach's own door — `Runner.elemAt` and the
+scalar branch of `Runner.subscriptOver` — and a name holding nothing did not,
+because the target lookup answers "the name holds nothing" before any element
+is counted and the subscript is then refused as text rather than resolved to
+a position. So bash's `unset a; echo "[${a[-1]}]"` was silent here and is
+`a: bad array subscript` there, on the one row the axis is most obviously
+about (#3591).
 
 Withholds that refusal from a name holding no element at all. The two
 complaining columns disagree about what counting back from nothing is,

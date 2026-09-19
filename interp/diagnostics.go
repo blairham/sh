@@ -1971,6 +1971,38 @@ type Diagnostics struct {
 	TypeNotFound           string
 	TypeNotFoundUnprefixed bool
 
+	// NameReportQuoting spells the name in that sentence — and in
+	// CommandVNotFound beside it — where the word is not one a shell could
+	// write back bare.
+	//
+	// Zero is QuoteNever: the operand is written exactly as it was given,
+	// which is what bash 5.3.20, zsh 5.9.2, dash 0.5.12 and BusyBox ash
+	// 1.37.0 all do — measured 2026-09-18 on `type "a b"` and `command -V
+	// "a b"`, where the four write `a b: not found` bare at 1, 1, 127 and
+	// 127. ksh93u+ writes it back
+	// **shell-quoted**, and it is the same spelling that column's trace
+	// uses, measured character for character rather than assumed — which is
+	// why TraceMetacharacters is read beside this rather than a second
+	// alphabet being written down:
+	//
+	//	written      whence, ksh93u+        set -x; echo <word>
+	//	a b          whence: 'a b': …       'a b'
+	//	]]           whence: ']]': …        ']]'
+	//	=ab          whence: '=ab': …       '=ab'
+	//	ab=          whence: ab=: …         ab=
+	//	a<TAB>b      whence: $'a\tb': …     $'a\tb'
+	//	a!b          whence: a!b: …         a!b
+	//	nosuchcmd    whence: nosuchcmd: …   nosuchcmd
+	//
+	// The leading-`=` row and the tab row are the two that say it is that
+	// function and not a looser one: the position rule and the `$'…'`
+	// spelling both carry over.
+	//
+	// It is the **report** and not every refusal: the same shell writes a
+	// command word it could not run as `x.sh: line 6: a b: not found`, bare,
+	// at 127. See #3666.
+	NameReportQuoting TraceQuoting
+
 	// TypeNotFoundOnStdout writes that line to standard output rather than
 	// to standard error, which is half the panel:
 	//

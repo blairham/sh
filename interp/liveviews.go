@@ -334,3 +334,40 @@ func (r *Runner) MarkLocal(name string) {
 	}
 	r.localMarked[name] = true
 }
+
+// SetAliasNotReported keeps a name out of every answer the `type` family
+// gives while an alias stands under it, and leaves everything else about the
+// alias alone.
+//
+// One shell in the panel ships four preset aliases it will not report, and
+// they are exactly that dialect's **declaration words**. Measured 2026-09-18
+// on ksh93u+ 2012-08-01, a script file under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C` with standard input on /dev/null:
+//
+//	whence integer      1, `whence: integer: not found`
+//	whence -v integer   1, the same          whence -a integer   1, the same
+//	command -v integer  1, silent            command -V integer  1, the same
+//	type integer        1, the same          whence -q integer   1, silent
+//	alias integer       0, `integer='typeset -li'`
+//	integer zz=3        0, and `$zz` is 3
+//
+// against `autoload`, `source`, `times`, `hash` and every other preset alias
+// that shell ships, each of which is reported in full. So the alias is there,
+// the word expands, and `alias` lists it — one family of builtins declines to
+// speak for it.
+//
+// **A mark rather than a set of spellings**, because a rule about names gets
+// a measured row wrong. Giving one of the four a new value keeps it hidden —
+// `alias integer='echo hi'; whence -v integer` is still not found — and
+// taking it away and defining it again does not: `unalias float; alias
+// float=ls; whence -v float` reports normally. So what the shell carries is
+// bookkeeping on the name, which a redefinition leaves and a removal clears.
+//
+// Call it wherever the dialect is installed; it needs no alias to be there
+// yet, and a name with no alias under it is reported as the nothing it is.
+func (r *Runner) SetAliasNotReported(name string) {
+	if r.unreportedAliases == nil {
+		r.unreportedAliases = map[string]bool{}
+	}
+	r.unreportedAliases[name] = true
+}

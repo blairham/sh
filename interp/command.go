@@ -248,7 +248,8 @@ func (r *Runner) reportEveryOperand(names []string, sentence bool) int {
 			// found wordings are shared and only the missing one is this
 			// builtin's own — see Diagnostics.CommandVNotFound.
 			st = r.describeName(name, typeKindNone, false,
-				Wording(r.diag().CommandVNotFound, "command: %[1]s: not found", name))
+				Wording(r.diag().CommandVNotFound, "command: %[1]s: not found",
+					r.NameReportWord(name)))
 		} else {
 			st = r.reportWhatRuns(name)
 		}

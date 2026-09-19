@@ -144,35 +144,18 @@ func appendOperandShaped(w *syntax.Word) bool {
 // answers where it is in the same shape assignNameSplit does: the span it
 // lives in and its offset within that span.
 //
-// Always span zero, because the name and the operator are literal and
-// unquoted by construction — `"x+"=v` and `$n+=v` are not this in any column.
-// The shape is kept anyway so the two splits are interchangeable to the one
-// caller that expands an operand.
+// The appending half of declarationNameSplit, and its own predicate beside
+// assignShaped rather than a loosening of it: assignNameSplit is shared with
+// keywordPromotable, where taking `x+` as a name would make `set -k`'s
+// `x+=1 cmd` a prefix assignment *named* `x+` rather than an append, which
+// nothing has measured.
 //
-// A subscript is deliberately not taken here, where assignNameSplit takes
-// one. `typeset a[1]+=q` is a wider divergence than this predicate's, and
-// three-part: ksh93u+ runs it at 0 and splits it into `+ a[1]+=q` then
-// `+ typeset a`, zsh 5.9.2 refuses the name `a[1]+`, and bash 5.3.20 appends
-// to the element. Filed on its own rather than half-answered here.
+// A subscript is taken here as it is there. `typeset a[1]+=q` was left out
+// when the plain name was taken (#3772) because it is a wider divergence and
+// three-part, and it is this issue's (#3789): the word was split into fields
+// and then matched against the filesystem, and the element it named was
+// replaced rather than joined.
 func appendNameSplit(w *syntax.Word) (span, off int, ok bool) {
-	if w == nil || len(w.Spans) == 0 {
-		return 0, 0, false
-	}
-	head := w.Spans[0]
-	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted {
-		return 0, 0, false
-	}
-	at := strings.Index(head.Value, "+=")
-	if at < 0 {
-		return 0, 0, false
-	}
-	if plain := strings.IndexByte(head.Value, '='); plain < at {
-		// An earlier `=` ends the name first, so the `+=` is inside the
-		// value: `x=a+=b` is not an append.
-		return 0, 0, false
-	}
-	if !isPlainName(head.Value[:at]) {
-		return 0, 0, false
-	}
-	return 0, at + 1, true
+	span, off, appends, ok := declarationNameSplit(w)
+	return span, off, ok && appends
 }

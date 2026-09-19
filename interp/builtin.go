@@ -3236,7 +3236,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 				// measured, ksh93u+ and zsh 5.9.2 both write the element, and
 				// neither puts the array in the environment. See
 				// declareelement.go.
-				r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, declareFlags{}, false)
+				r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, appends, declareFlags{}, false)
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
@@ -6096,7 +6096,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			if hasValue {
 				// `local a[1]=v` is `typeset a[1]=v` under the other word, and
 				// the scope is the whole of what it adds — see declareelement.go.
-				r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, f, true)
+				r.declareElement(base, subs[:len(subs)-1], subs[len(subs)-1], value, appends, f, true)
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
@@ -6419,7 +6419,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			// `readonly a[1]=v`. Nothing else changes for the valueless
 			// form, which falls through to the path it always took.
 			if hasValue {
-				r.declareElement(base, subs[:len(subs)-1], sub, value, declareFlags{readonly: true}, false)
+				r.declareElement(base, subs[:len(subs)-1], sub, value, appends, declareFlags{readonly: true}, false)
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}

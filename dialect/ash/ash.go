@@ -191,6 +191,9 @@ func Semantics() interp.Semantics {
 	s.BinaryContentIsNotRunAsAScript = interp.No
 
 	s.DeclarationTakesAnAppendOperand = interp.No
+	// And `export 'a[1]+=q'` is `a[1]+: bad variable name` too, measured
+	// 2026-09-19 in the pinned alpine image: no arrays, so no split.
+	s.DeclarationTakesASubscriptedAppendOperand = interp.No
 	// A prefix to a function, both halves with its sibling: visible and
 	// exported for the length of the call, gone afterwards. Measured
 	// 2026-09-12 in the pinned alpine image (#2407).

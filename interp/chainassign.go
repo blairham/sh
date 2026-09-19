@@ -222,7 +222,7 @@ func nestedForWrite(held Element, there bool, base int) Array {
 // ksh93 answers the two spellings identically, so they share the walk rather
 // than each having one: the first subscript is resolved the way a declaration
 // resolves a single one, and everything below it is the same.
-func (r *Runner) declareChainedElement(base string, leading []string, last, value string, tableBefore bool) {
+func (r *Runner) declareChainedElement(base string, leading []string, last, value string, appends, tableBefore bool) {
 	key, evaluated, isKey := r.subscriptedOperandKey(base, leading[0], tableBefore)
 	if r.unspecified {
 		return
@@ -257,5 +257,5 @@ func (r *Runner) declareChainedElement(base string, leading []string, last, valu
 	if !ok {
 		return
 	}
-	r.chainWrite(base, held, there, place, leading[1:], last, value, false)
+	r.chainWrite(base, held, there, place, leading[1:], last, value, appends)
 }

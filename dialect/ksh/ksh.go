@@ -2660,6 +2660,11 @@ func Semantics() interp.Semantics {
 	// `typeset: a+: invalid variable name` — the append operator is not a
 	// declaration operand here.
 	s.DeclarationTakesAnAppendOperand = interp.No
+	// On an **element** it is, which is this column's own split and the
+	// reason the two are separate fields: `typeset -a a; a[1]=p; typeset
+	// a[1]+=q` leaves `pq` at 0, and so do the same lines under `export`
+	// and `readonly` and over a chain. Measured 2026-09-19 (#3789).
+	s.DeclarationTakesASubscriptedAppendOperand = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes

@@ -3039,6 +3039,10 @@ func Semantics() interp.Semantics {
 	// `not valid in this context: a+` — the append operator is not a
 	// declaration operand here.
 	s.DeclarationTakesAnAppendOperand = interp.No
+	// Nor with a subscript on the name: `typeset a[1]+=q` is
+	// `not an identifier: a[1]+` at 1, which is the same refusal at a
+	// different wording rather than a different answer.
+	s.DeclarationTakesASubscriptedAppendOperand = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
@@ -4600,11 +4604,20 @@ func Diagnostics() interp.Diagnostics {
 		// Measured 2026-09-12: `typeset 'm[a]b]'=v` is `<shell>:1: not an
 		// identifier: m[a]b]` where `typeset 'a]'=v`, with no bracket to
 		// open one, is `<shell>:typeset:1: not valid in this context: a]`.
+		//
+		// `export` is on the same side, measured 2026-09-19: `export
+		// 'm[a]b]'=v` and `export 'a[1]+'=v` are both `<shell>:1: not an
+		// identifier: <name>` where `export 'a]'=v` and `export 'x+'=v` keep
+		// the builtin and the other wording. `readonly` is **not** — it
+		// answers a bracketed name with `<name>: can't create readonly array
+		// elements`, which is the element refusal rather than a name one, and
+		// is filed on its own rather than spelled as a third wording here.
 		BuiltinBadNameBracketed: map[string]string{
 			"typeset": "not an identifier: %[2]s",
 			"declare": "not an identifier: %[2]s",
 			"local":   "not an identifier: %[2]s",
 			"integer": "not an identifier: %[2]s",
+			"export":  "not an identifier: %[2]s",
 		},
 		BuiltinBadOptionStatus: 1,
 		PrintfUsage:            "not enough arguments",

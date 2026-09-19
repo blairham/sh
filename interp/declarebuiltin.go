@@ -1502,7 +1502,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				// Splitting at the `=` and handing `a[1]` to the variable
 				// store made the whole line a no-op at status 0 — see
 				// declareelement.go.
-				r.declareElement(base, subs[:len(subs)-1], sub, value, df, true)
+				r.declareElement(base, subs[:len(subs)-1], sub, value, appends, df, true)
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
 				}
@@ -4748,6 +4748,19 @@ func assignShaped(w *syntax.Word) bool {
 // assignNameSplit finds the `=` that ends a declaration operand's name and
 // answers where it is: the span it lives in and its offset within that span.
 //
+// The plain half of declarationNameSplit, which is where the walk and the
+// rules it enforces are written down. An **appending** operand is the other
+// half and is appendNameSplit: the two cannot be one predicate, because
+// assignNameSplit is shared with keywordPromotable — see there.
+func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
+	span, off, appends, ok := declarationNameSplit(w)
+	return span, off, ok && !appends
+}
+
+// declarationNameSplit finds the `=` that ends a declaration operand's name,
+// answers where it is — the span it lives in and its offset within that span
+// — and whether the character in front of it was the append operator's `+`.
+//
 // Only an unquoted literal `=` counts, and only one outside the brackets: the
 // subscript is part of the name, so `a[k=1]=v` is the element `k=1` of `a`
 // rather than a name of `a[k`. Depth is tracked rather than assumed, because
@@ -4756,30 +4769,43 @@ func assignShaped(w *syntax.Word) bool {
 // Everything that is not an unquoted literal is allowed only inside the
 // brackets. That is what still refuses `$x=1` and `"a"=1` while taking
 // `a[$i]=v` and `m["k"]=v`, which is the split every shell in the panel makes.
-func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
+//
+// The `+` is taken only immediately in front of the `=` and only once, so
+// `a[1]+=v` and `x+=v` are appends while `a+b=v`, `x++=v` and `a[1]+x=v` are
+// not names at all. It is reported rather than folded into the name because
+// the two readings have different callers and a different axis: see
+// appendNameSplit.
+func declarationNameSplit(w *syntax.Word) (span, off int, appends, ok bool) {
 	if w == nil || len(w.Spans) == 0 {
-		return 0, 0, false
+		return 0, 0, false, false
 	}
 	head := w.Spans[0]
 	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted {
-		return 0, 0, false
+		return 0, 0, false, false
 	}
-	depth, closed, name := 0, false, ""
+	depth, closed, plus, name := 0, false, false, ""
 	for i, s := range w.Spans {
 		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
 			if depth == 0 {
-				return 0, 0, false
+				return 0, 0, false, false
 			}
 			continue
 		}
 		for j := 0; j < len(s.Value); j++ {
-			switch c := s.Value[j]; {
+			c := s.Value[j]
+			if depth == 0 && plus && c != '=' {
+				// The `+` is the operator only where the `=` follows it.
+				// `x+y=v` is a name that is not one and `x++=v` is nothing
+				// in any column, so the word goes back to being ordinary.
+				return 0, 0, false, false
+			}
+			switch {
 			case c == '[':
 				if depth == 0 && closed {
 					// One subscript and no more: `a[1][2]=v` is not a name
 					// this engine knows, and neither is `a[1]x=v`, so the
 					// word goes back to being an ordinary operand.
-					return 0, 0, false
+					return 0, 0, false, false
 				}
 				depth++
 			case c == ']':
@@ -4787,6 +4813,8 @@ func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
 					depth--
 					closed = depth == 0
 				}
+			case c == '+' && depth == 0:
+				plus = true
 			case c == '=' && depth == 0:
 				// The one name test, and it is enough for the bracket as
 				// well: nothing is added to `name` once a subscript has
@@ -4796,20 +4824,20 @@ func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
 				// with the same `name` either way — which is why there is
 				// not one.
 				if !isPlainName(name) {
-					return 0, 0, false
+					return 0, 0, false, false
 				}
-				return i, j, true
+				return i, j, plus, true
 			default:
 				if depth == 0 {
 					if closed {
-						return 0, 0, false
+						return 0, 0, false, false
 					}
 					name += string(c)
 				}
 			}
 		}
 	}
-	return 0, 0, false
+	return 0, 0, false, false
 }
 
 // expandAssignArg expands `name=value` given to a declaration utility,

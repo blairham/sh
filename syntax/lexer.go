@@ -2487,11 +2487,17 @@ func (l *Lexer) scanWord(start Pos) Token {
 	l.subscriptDepth, l.subscriptCloses = 0, 0
 	l.pidBraces, l.pidBraceOpen = 0, Pos{}
 	// The flavor's text lasts to the end of *this* word and no further, so
-	// the state is cleared as each word begins and again as it ends: a stale
-	// one would make the next word's `|` a character of it. See
-	// Lexer.afterTildeGroup.
+	// the state is cleared as each word begins. A stale one would make the
+	// next word's `(` a character of it — `[[ abcd == ~(E)(ab)cd && ab ==
+	// a(b) ]]` is a refusal in ksh93u+ and would have parsed.
+	//
+	// Here and not also on the way out, which is the whole of it: nothing
+	// reads the flag between words — endsWord is consulted only while a scan
+	// is running — and a second clear that no probe can tell apart from its
+	// absence is a line claiming a guarantee it does not add. The parser's
+	// own backtracking copies the whole lexer, so a scan it throws away takes
+	// the flag with it. See Lexer.afterTildeGroup.
 	l.afterTildeGroup = false
-	defer func() { l.afterTildeGroup = false }()
 
 	// pidArmed says the `$$` just read is touching a `{`, so that brace opens
 	// a run of text. A local rather than a field: the arming and the brace it

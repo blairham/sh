@@ -233,6 +233,13 @@ func TestTheseStayRefusals(t *testing.T) {
 		// puts the boundary at the right operand of a pattern comparison.
 		`[[ ~(E)a;b == "a;b" ]]`,
 		`[[ -n ~(E)a;b ]]`,
+		// And the state does not outlive the word it was set in. A second
+		// comparison in the same condition is a second word, and its bare
+		// `(` is the shell's again — ``syntax error at line 1: `(' unexpected``
+		// in ksh93u+, and the row that fails if the flag is never cleared.
+		`[[ abcd == ~(E)(ab)cd && ab == a(b) ]]`,
+		// The same across a command boundary, where the word is a value.
+		`x=~(E)(ab)cd; y=a(b)`,
 	} {
 		if _, err := syntax.Parse(src, d.On(syntax.RouteFromScriptFile)); err == nil {
 			t.Errorf("%q parsed; ksh93u+ refuses it", src)

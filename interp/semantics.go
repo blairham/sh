@@ -14095,6 +14095,63 @@ type Semantics struct {
 	// neither reaches neither.
 	DeclarationTakesASubscriptedAppendOperand Answer
 
+	// DeclarationTakesAnAppendingArrayOperand reads a declaration builtin's
+	// `name+=( … )` operand as the append operator and hands the utility the
+	// bare name, rather than leaving the `+` on the name it hands over.
+	//
+	// The parser keeps an array literal apart from the command's words and
+	// leaves a name in argv for the utility to declare, so the operator has
+	// nowhere to stand unless that name carries it. Where it does, the utility
+	// is handed `u+` and refuses it as a name — which is the same refusal
+	// `typeset "u+"` already draws, in each shell's own words.
+	//
+	// Measured 2026-09-19, script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null
+	// device, over
+	//
+	//	typeset u+=(3 4)
+	//	echo "tail st=$? u=[${u[*]}]"
+	//
+	//	bash 5.3.20       	no complaint, `tail st=0 u=[3 4]`
+	//	bash 5.3.20 as sh 	the same
+	//	bash 3.2.57       	`typeset: `u+\': not a valid identifier`, then
+	//	                  	`tail st=1 u=[3 4]` — refused and assigned
+	//	ksh93u+ 2012-08-01	`typeset: u+: invalid variable name`, and the
+	//	                  	script ends at status 1
+	//	zsh 5.9.2         	`not valid in this context: u+`, and the script
+	//	                  	ends at status 1
+	//	dash 0.5.12       	`Syntax error: "(" unexpected` — no array literal
+	//	BusyBox ash 1.37.0	`syntax error: unexpected "("` — the same
+	//
+	// **bash 3.2.57 is why this is not DeclarationTakesAnAppendOperand asked
+	// again.** That column takes the operator on a *scalar* operand —
+	// `u=1; typeset u+=3` leaves `13` there, at status 0 and with nothing
+	// said — and refuses it on an array literal, so one shell holds both
+	// answers at once and one field cannot carry them.
+	//
+	// Every declaration utility that takes a literal answers alike within a
+	// column: `export ea+=(1 2)`, `readonly ra+=(1 2)` and `local lo+=(1 2)`
+	// inside a function each draw that column's own bad-name sentence naming
+	// the utility that ran — `export: ea+: is not an identifier` on ksh93
+	// against its `typeset: u+: invalid variable name`, the same sentence
+	// twice on zsh — or are taken silently, as they are on bash 5.3.20.
+	//
+	// A *compound* body is the same question and the same answer where the
+	// grammar has one: `typeset -C c+=(p=3)` is `typeset: c+: invalid
+	// variable name` on ksh93, which is the literal's row with the other body
+	// between the parentheses.
+	//
+	// Asked only of an operand written with the operator. A plain
+	// `typeset a=(1 2)` has no `+` to place and reaches the question with
+	// nothing to decide.
+	//
+	// unpinned dash, ash: neither grammar has an array literal, so the operand
+	// cannot be written at all — the rows above are both parse failures. The
+	// scalar spelling they *can* write is
+	// DeclarationTakesAnAppendOperand's, and TestAnAppendingArrayOperandKeepsItsMarker
+	// is what pins this one.
+	DeclarationTakesAnAppendingArrayOperand Answer
+
 	// NegativeSubscriptCountsOverAPromotedScalar resolves a negative
 	// subscript on the left of `=` against the array a held *scalar* is
 	// about to become, rather than against the elements the name already

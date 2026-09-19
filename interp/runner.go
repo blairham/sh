@@ -5649,7 +5649,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// word cannot say which operand it came from. See
 			// interp/xtracearrayoperand.go.
 			r.arrayOperands = append(r.arrayOperands, arrayOperand{assign: a, at: len(argv)})
-			argv = append(argv, a.Name)
+			argv = append(argv, r.arrayOperandName(a))
 		}
 	}
 	// A command whose expansion failed, or depended on an axis no dialect

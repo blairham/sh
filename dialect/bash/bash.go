@@ -2419,6 +2419,10 @@ func Semantics() interp.Semantics {
 	// does not reach it is `export`, which refuses the brackets
 	// themselves — see DeclarationTakesASubscript.
 	s.DeclarationTakesASubscriptedAppendOperand = interp.Yes
+	// And the same operator on an *array literal* operand, which this shell
+	// takes too: `typeset u+=(3 4)` is silent at status 0 here where bash
+	// 3.2.57 refuses the name `u+` it leaves behind.
+	s.DeclarationTakesAnAppendingArrayOperand = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No

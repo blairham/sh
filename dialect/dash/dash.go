@@ -88,6 +88,10 @@ func Semantics() interp.Semantics {
 	// `export 'a[1]+=q'` is `a[1]+: bad variable name` here as well — the
 	// brackets change nothing, since this shell has no arrays to subscript.
 	s.DeclarationTakesASubscriptedAppendOperand = interp.No
+	// And the same operator on an array-literal operand, which this grammar
+	// has no way to write — `typeset u+=(3 4)` is a syntax error here — so
+	// the value is the scalar one above and is never reached.
+	s.DeclarationTakesAnAppendingArrayOperand = interp.No
 	// A prefix to a function is the call's environment and nothing after it,
 	// which is the answer six of the seven columns give and the one POSIX
 	// leaves open. Measured 2026-09-12: `f(){ env | grep "^v="; }; v=1; v=9

@@ -801,9 +801,10 @@ type Dialect struct {
 	// 1 for every other refused line.
 	ForNonWordIsANameError bool
 
-	// ForNameEndOfInputIsANewline makes the input running out where a loop's
-	// variable belonged read as a newline standing there, rather than as a
-	// construct left unfinished.
+	// EndOfInputIsANewlineWhereNoneCouldStand makes the input running out in a
+	// position that takes no newline read as a newline standing there, rather
+	// than as a construct left unfinished. Two positions have that shape: a
+	// loop's variable, and the name after the `function` keyword.
 	//
 	// It is the other half of the three-way split [ForNonWordIsANameError]
 	// begins, and the two together carry the three answers the panel gives a
@@ -822,9 +823,14 @@ type Dialect struct {
 	// the text; see Error.EndLine, which is the half of it already recorded.
 	//
 	// Consulted only where a newline could not have stood, which is why it is
-	// one loop's flag rather than a claim about every failure: everywhere else
-	// the newline is taken and the question never arises.
-	ForNameEndOfInputIsANewline bool
+	// this flag rather than a claim about every failure: everywhere else the
+	// newline is taken and the question never arises. It was named for the
+	// loop while the loop was the only such position; the keyword's name is
+	// the second, and the two answer alike — `function` as the whole of a
+	// file that does not end in a newline is `newline'` in bash 5.3.20, in
+	// that binary as `sh` and in bash 3.2.57, against `end of file` in
+	// ksh93u+ and in BusyBox ash 1.37.0, measured 2026-09-19.
+	EndOfInputIsANewlineWhereNoneCouldStand bool
 
 	// ForBraceBody lets a `for` or `select` loop take a brace group where
 	// `do … done` stands: `for ((;;)) { echo hi; break; }`, and equally
@@ -977,6 +983,45 @@ type Dialect struct {
 	// four a `(` where a command begins opens a subshell and `()` is a
 	// syntax error.
 	AnonymousFunction bool
+
+	// BareFunctionKeyword takes the `function` keyword with no name, no
+	// parameter list and no body at all. It is the anonymous function of
+	// [Dialect.AnonymousFunction] with an empty body, so it is a command
+	// that runs where it stands, and an empty body leaves `$?` as it found
+	// it: `false; function; echo $?` prints 1 there.
+	//
+	// Measured 2026-09-19, script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with standard input on the null device. `st=` is what an
+	// `echo st=$?` on the next line printed.
+	//
+	//	written        bash 5.3.20  bash-as-sh  bash 3.2  ksh93u+  zsh 5.9.2  dash 0.5.12  BusyBox ash 1.37.0
+	//	`function` ⏎   `newline'    `newline'   `newline' `newline' st=0      not found    unexpected newline
+	//	`function;`    `;'          `;'         `;'       `;'       st=0      not found    unexpected ";"
+	//	`function &`   `&'          `&'         `&'       `&'       `&'       not found    unexpected "&"
+	//
+	// So one column takes it and six refuse it, and the six name the token
+	// they found. dash has no keyword at all and runs `function` as a
+	// command name, which is the 127 its own row records; BusyBox ash has
+	// the keyword — `function f { echo B; }` defines and calls there — and
+	// is with the refusing columns rather than with dash, which is the row
+	// #3732 left to measure and guessed the other way.
+	//
+	// The reach is a set rather than a bool's worth of "anywhere", and it is
+	// nearly [BareNegationWhereAListEnds]'s with one difference each way.
+	// Measured the same day, in the column that takes it: `;`, a newline,
+	// the end of input, `|`, `|&`, `&&`, `||`, the `)` of a subshell, the
+	// `}` of a brace group, a `case` arm's `;;`, and a redirection with no
+	// command in front of it all take it — `{ function }`, `( function )`,
+	// `function | cat`, `false || function` and `function > f` all run at
+	// status 0. `&` does not, in any of its spellings: `function &` and
+	// `function &!` are parse errors naming the operator, which is the same
+	// boundary that shell draws for a bare `!`. And no other reserved word
+	// does: `if true; then function fi`, `while false; do function done` and
+	// `case x in x) function esac` are all parse errors, because `fi`,
+	// `done` and `esac` are read there as the *name* this form does not
+	// have. The `}` is the exception among the reserved words and it is not
+	// a name anywhere: `function } { echo B }` is refused on the `}`.
+	BareFunctionKeyword bool
 
 	// AppendAssign enables `name+=value`, which appends rather than
 	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.

@@ -2418,6 +2418,52 @@ shell that has both readings, which is `EmptyCompoundBody` and not this
 rule. So the parentheses are read as a parameter list only when a body
 follows them.
 
+**The keyword with nothing after it is the same function with no body**,
+and it is `BareFunctionKeyword`. Measured 2026-09-19 from a script file
+under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the
+null device: `function` alone runs and is silent at status 0 in zsh
+5.9.2, and is a refusal naming the token in bash 5.3.20, in that binary
+invoked as `sh`, in bash 3.2.57, in ksh93u+ 2012-08-01 and in BusyBox
+ash 1.37.0. dash 0.5.12 has no keyword at all and runs `function` as a
+command name, which is its own row at 127 and not a reading of this.
+
+BusyBox ash is the column #3732 filed without measuring, on the guess
+that it had no keyword and would answer as dash does. It has one —
+`function f { echo B; }; f` prints `B` there — and it is with the
+refusing columns.
+
+**It is not a call with an empty body, and the status is what says so.**
+`false; function` leaves 1 behind where `false; function { }` and
+`false; () { }` both leave 0: nothing runs, so nothing sets a status.
+What a redirection written after it does is the other half of the same
+reading — `echo hi | function > f` puts `hi` in the file, because a
+redirection with no command runs the null command, which is what an
+empty command does everywhere else in that shell.
+
+The reach is a set, and it is nearly the one `BareNegationReach` records
+at `BareNegationWhereAListEnds` with one difference each way. A `;`, a
+newline, the end of input, `|`, `|&`, `&&`, `||`, the `)` of a subshell,
+the `}` of a brace group, a `case` arm's `;;` and a redirection all take
+it. The background operators do not, in any spelling: `function &` and
+`function &!` are parse errors naming the operator. Nor does any other
+reserved word — `if true; then function fi`, `while false; do function
+done` and `case x in x) function esac` are all refused, because `fi`,
+`done` and `esac` are read there as the name this form does not have.
+The `}` is the exception, and it is not a name anywhere: `function } {
+echo B }` is refused on the `}`.
+
+**The refusing columns name the token**, which is the second half of
+#3732 and was a wording of our own before it: `function;` is
+`` syntax error near unexpected token `;' `` in the three bash columns,
+`` `;' unexpected `` in ksh93 and `unexpected ";"` in BusyBox ash — the
+ordinary unexpected-token sentence each of them gives anywhere else.
+Two parts of ash's are not settled by that and are not claimed: it
+writes `(expecting word)` after the token, which needs an expectation
+spelled without quotation marks where `Diagnostics.SyntaxExpecting`
+quotes what it is given, and it names the line after a newline rather
+than the newline's own. Both are true of that column's `case` refusal as
+well, which is where they belong.
+
 Corpus: `core/a-condition-that-ended-itself-takes-its-body`,
 `core/a-short-if-takes-elif-and-else-the-same-way`,
 `core/a-short-if-body-is-one-command`,

@@ -657,6 +657,17 @@ type AnonFunc struct {
 	// Keyword records that the `function` word was used in place of the
 	// empty parameter list, which is the other spelling.
 	Keyword bool
+	// Bare records the keyword standing entirely alone — no name, no
+	// parameter list and no body — which one grammar takes and the rest
+	// refuse. See [Dialect.BareFunctionKeyword].
+	//
+	// Body is an empty group standing where the body was not written, so
+	// that nothing reading a body finds nothing; this is the flag that says
+	// the group is a placeholder rather than a `{ }` somebody typed, and the
+	// two are not the same command. The measured difference is the status:
+	// `false; function` leaves 1 behind, where `false; function { }` leaves
+	// 0, because the first runs nothing at all.
+	Bare bool
 	redirs
 }
 

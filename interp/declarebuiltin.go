@@ -1407,6 +1407,27 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	// for the reason above it: a declaration can be written inside one.
 	outerSpokenAs := r.refusalSpokenAs
 	defer func() { r.refusalSpokenAs = outerSpokenAs }()
+	// A `-g` declaration written inside a call that was given an assignment
+	// prefix writes the shell's own cell, *underneath* the binding the prefix
+	// put on the name — so the temporary bindings come off for the length of
+	// the line and go back on after it, with whatever the declaration left
+	// underneath them recorded as what the outermost call gives back. See
+	// interp/globalunderacallprefix.go.
+	//
+	// Around the whole line rather than around the store, because every step
+	// of the declaration lands on that cell and not the value alone: measured
+	// 2026-09-18 on bash 5.3.20, `declare -gx e=3` under a prefix leaves
+	// `declare -x e="3"` behind and `declare -gr f=3` leaves `declare -r
+	// f="3"`.
+	if f.global {
+		var held []string
+		for _, a := range args {
+			if name, _, _, _ := declarationOperand(a); name != "" {
+				held = append(held, name)
+			}
+		}
+		defer r.globalDeclarationRunsOnTheShellsOwnCell(held)()
+	}
 
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
@@ -2887,6 +2908,17 @@ func (r *Runner) setGlobalVar(name, value string) {
 	for _, sc := range r.scopes {
 		if _, saved := sc.saved[name]; !saved {
 			continue
+		}
+		if _, _, under := r.shellsOwnCellUnderACallPrefix(name); under {
+			// The shell's own cell is an enclosing call's assignment prefix
+			// entry, which is outside this scope — the frame was pushed
+			// before it — and it is what the *visible* cell holds for the
+			// length of this declaration. So the write goes there and this
+			// scope's saved copy is a temporary like any other, restored
+			// over the global when the call it belongs to returns. See
+			// interp/globalunderacallprefix.go, which asked the axis for
+			// this name before the line began.
+			break
 		}
 		if !r.ask(r.sem().DeclareGlobalReachesPastALocal, "`declare -g` writing past a local of the same name") {
 			if r.unspecified {

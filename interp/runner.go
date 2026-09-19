@@ -5930,7 +5930,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		frame := len(r.callPrefixes)
 		if len(callHeld) > 0 {
 			r.callPrefixes = append(r.callPrefixes,
-				callPrefixFrame{names: callHeld, undo: undo, scoped: scoped})
+				callPrefixFrame{
+					names: callHeld, undo: undo, scoped: scoped,
+					// Taken here, before the call's own scope is pushed, so
+					// a `local` inside the body counts as inside this frame
+					// and one the *caller* already had counts as outside it.
+					// See Runner.shellsOwnCellUnderACallPrefix.
+					scopeDepth: len(r.scopes),
+				})
 		}
 		defer func() {
 			r.functionPrefixNames = outerCallHeld

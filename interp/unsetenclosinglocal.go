@@ -155,6 +155,13 @@ type callPrefixFrame struct {
 	// to the shell — see Runner.prefixScopedToTheCall — which the take-back
 	// needs and which is a property of the call rather than of a name.
 	scoped bool
+	// scopeDepth is how many scopes were open when the frame was pushed, so
+	// a frame and a scope holding the same name can be told apart by which
+	// took it first. Read by shellsOwnCellUnderACallPrefix, which has to
+	// know whether a `local` further out owns the shell's cell or the frame
+	// does. Both stacks are pushed from the one place in the one order, so
+	// the number is the whole of the comparison.
+	scopeDepth int
 }
 
 // cloneCallPrefixes copies the frames a subshell inherits, down to each
@@ -167,9 +174,10 @@ func cloneCallPrefixes(frames []callPrefixFrame) []callPrefixFrame {
 	out := make([]callPrefixFrame, len(frames))
 	for i, f := range frames {
 		out[i] = callPrefixFrame{
-			names:  slices.Clone(f.names),
-			undo:   slices.Clone(f.undo),
-			scoped: f.scoped,
+			names:      slices.Clone(f.names),
+			undo:       slices.Clone(f.undo),
+			scoped:     f.scoped,
+			scopeDepth: f.scopeDepth,
 		}
 	}
 	return out

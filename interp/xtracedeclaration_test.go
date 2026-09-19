@@ -93,3 +93,53 @@ func TestTheOperandLinesAreEmptyWhereNoOperandWasWritten(t *testing.T) {
 		wantTrace(t, traceOf(t, src, permissive(), d), "+ export ev\n")
 	}
 }
+
+// TestAnAppendOperandMovesWithTheOtherOperands: an appending operand is an
+// assignment in this grammar, so both fields carry it exactly as they carry a
+// plain one.
+//
+// It did not until #3772. The word was not read as an assignment, so it split
+// into fields and the position both lines are keyed on was never recorded —
+// the split-before answer left `+ export x+=a b` on one line where the column
+// that has it writes `+ x+='a b'` and then `+ export x+`. So this is a trace
+// row that was fixed by a change to the *expansion*, which is why it stands
+// beside the reading's own suite rather than inside it.
+//
+// `x+=$v` and not `x+=1`, because the value is what says the word arrived
+// whole: a value with no blank in it is one field under either reading.
+//
+// How the operand is *rendered* where it stands is a third field and not this
+// one — see TraceAssignmentOperand — so the rows below carry whatever that
+// field's own default writes and vary only in where the operand went.
+func TestAnAppendOperandMovesWithTheOtherOperands(t *testing.T) {
+	const src = "v=\"a b\"\nset -x\nexport x+=$v\n"
+	for _, tc := range []struct {
+		name string
+		diag Diagnostics
+		want string
+	}{
+		{
+			"on the command line",
+			Diagnostics{},
+			"+ export 'x+=a b'\n",
+		},
+		{
+			"split in front of the command",
+			Diagnostics{TraceDeclarationOperand: TraceOperandSplitBefore},
+			"+ x+='a b'\n+ export x+\n",
+		},
+		{
+			"written again behind the command",
+			Diagnostics{TraceRepeatsAScalarOperandAfter: []string{"export"}},
+			"+ export 'x+=a b'\n+ x+='a b'\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := tc.diag
+			d.TraceQuoting = QuoteShell
+			sem := permissive()
+			sem.DeclarationTakesAnAppendOperand = Yes
+			wantTrace(t, traceOf(t, src, sem, d), tc.want)
+		})
+	}
+}

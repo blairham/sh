@@ -5504,13 +5504,42 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				continue
 			}
 		}
-		// An appending operand, which this engine does not read as an
-		// assignment but every shell that has one does — see
-		// interp.appendOperandShaped. The word takes the ordinary route and
-		// only its position is kept, so the trace can write it the way the
-		// panel writes it without changing what it does.
+		// An appending operand, `typeset x+=v`. A second reading beside
+		// assignShaped rather than a loosening of it — see
+		// interp.appendNameSplit for why the two cannot be one — and gated
+		// on the grammar flag that gives a dialect the operator at all,
+		// because the panel splits exactly there.
+		//
+		// Measured 2026-09-19, `set -x; export x+=q*` in a directory
+		// holding a file named `x+=q1`, a script file under
+		// `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+		//
+		//	bash 5.3.20	`+ export 'x+=q*'`	the word is an assignment
+		//	bash 3.2.57	the same        	…
+		//	zsh 5.9.2  	`export x+='q*'` 	…
+		//	ksh93u+    	`+ x+='q*'`      	…
+		//	dash 0.5.12	`+ export x+=q1` 	an ordinary word, matched
+		//	BusyBox ash	`+ export 'x+=q1'`	…
+		//
+		// The same three take it and the same two leave it for splitting:
+		// `v="a b"; export x+=$v` reaches BusyBox ash's trace as two words,
+		// `'x+=a' b`. So this is the grammar's `name+=value` in operand
+		// position and not a rule of its own, and the flag is the gate.
+		//
+		// Which of the three then *accepts* the name `x+` is a later and
+		// separate question — zsh and ksh93 refuse it, bash appends — and
+		// that is Semantics.DeclarationTakesAnAppendOperand, which was
+		// answering about a word that had already been split (#3772).
 		appendOperand := i > 0 && len(argv) > 0 && appendOperandShaped(w) &&
 			r.declarationCommand(c, argv)
+		if appendOperand && r.dialect().AppendAssign {
+			if r.unspecified {
+				break
+			}
+			operandAt = append(operandAt, len(argv))
+			argv = append(argv, r.expandAssignArg(w))
+			continue
+		}
 		operandStart := len(argv)
 		// expandWord split in two, so the match can be decided between the
 		// halves rather than before the word is read.

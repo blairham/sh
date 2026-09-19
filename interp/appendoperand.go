@@ -3,7 +3,11 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // A declaration builtin's operand may carry the append operator: `declare
 // a+=2` joins the value the name is holding rather than replacing it, exactly
@@ -121,4 +125,54 @@ func (r *Runner) declarationAppend(name, value string, global, fresh bool) bool 
 	}
 	r.setVarAs(name, v, assignedByDeclaration)
 	return true
+}
+
+// appendOperandShaped reports whether a word is a declaration utility's
+// **appending** operand, `name+=value`, as written.
+//
+// Its own test beside assignShaped rather than a loosening of it: that
+// reading requires a plain name in front of the `=` and `x+` is not one, and
+// assignNameSplit is shared with keywordPromotable, where taking `x+` as a
+// name would make `set -k`'s `x+=1 cmd` a prefix assignment *named* `x+`
+// rather than an append — which nothing has measured.
+func appendOperandShaped(w *syntax.Word) bool {
+	_, _, ok := appendNameSplit(w)
+	return ok
+}
+
+// appendNameSplit finds the `=` of a declaration operand's `name+=`, and
+// answers where it is in the same shape assignNameSplit does: the span it
+// lives in and its offset within that span.
+//
+// Always span zero, because the name and the operator are literal and
+// unquoted by construction — `"x+"=v` and `$n+=v` are not this in any column.
+// The shape is kept anyway so the two splits are interchangeable to the one
+// caller that expands an operand.
+//
+// A subscript is deliberately not taken here, where assignNameSplit takes
+// one. `typeset a[1]+=q` is a wider divergence than this predicate's, and
+// three-part: ksh93u+ runs it at 0 and splits it into `+ a[1]+=q` then
+// `+ typeset a`, zsh 5.9.2 refuses the name `a[1]+`, and bash 5.3.20 appends
+// to the element. Filed on its own rather than half-answered here.
+func appendNameSplit(w *syntax.Word) (span, off int, ok bool) {
+	if w == nil || len(w.Spans) == 0 {
+		return 0, 0, false
+	}
+	head := w.Spans[0]
+	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted {
+		return 0, 0, false
+	}
+	at := strings.Index(head.Value, "+=")
+	if at < 0 {
+		return 0, 0, false
+	}
+	if plain := strings.IndexByte(head.Value, '='); plain < at {
+		// An earlier `=` ends the name first, so the `+=` is inside the
+		// value: `x=a+=b` is not an append.
+		return 0, 0, false
+	}
+	if !isPlainName(head.Value[:at]) {
+		return 0, 0, false
+	}
+	return 0, at + 1, true
 }

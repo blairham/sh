@@ -28,11 +28,17 @@ import (
 //	unset a;   a[3]=(x y)   ${a[@]} -> x       n=1, the gap is no element
 //	typeset -A h; h[a,b]=(x y)   typeset -A h=([a,b]=(x y) )
 //
-// The listing is how the nested words are read back here at all: a second
-// subscript in an *expansion* — `${a[1][1]}`, which is `q` on the real shell —
-// is still a parse error, and is #2830. A second subscript on the left of an
-// **assignment** is read, and builds this same value by the other route: see
-// interp/chainassign.go, which is `a[1][2]=v` (#2491).
+// The nested words are reachable both ways, and this comment said otherwise
+// for longer than it was true. A second subscript in an **expansion** reads
+// them — measured 2026-09-19, `a=(x y); a[1]=(p q)` then `${a[1][1]}` is `q`
+// and `${a[1][0]}` is `p` here and on ksh93u+ 2012-08-01 alike, with the
+// listing byte-identical beside them — which is what #2830 built and what
+// interp/nestedchainsub.go is. It was a parse error when this construct
+// landed, so `typeset -p` was the only way to see what had been stored; a
+// comment left saying so makes the shell look less finished than it is. A
+// second subscript on the left of an **assignment** is read too, and builds
+// this same value by the other route: see interp/chainassign.go, which is
+// `a[1][2]=v` (#2491).
 //
 // No range reading is asked for and that is not an omission: this dialect
 // reads a subscript's comma as the arithmetic operator whose value is its

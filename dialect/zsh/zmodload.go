@@ -285,6 +285,12 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 		return r.DynamicParameter(name) || r.ParameterWithdrawn(name)
 	case "f":
 		return r.KnownMathFunction(name)
+	case "c":
+		// A condition, which the feature listing names without its leading
+		// dash — `c:prefix` is `[[ -prefix … ]]`. Asked of the runner like
+		// the other three kinds, so the gate opens by itself the day a
+		// dialect answers one (#3042).
+		return r.KnownCondition("-" + name)
 	}
 	return false
 }
@@ -313,6 +319,13 @@ func zmodloadHolds(r *interp.Runner, feature string) bool {
 		return false
 	case "p":
 		return !r.AbsentParameter(name)
+	case "c":
+		// A condition has no word that runs it and no registry a script can
+		// ask, so a missing one is never reported anywhere: `[[ -nosuch x ]]`
+		// is a reading of the grammar and not a lookup. It holds the module
+		// shut for the same reason an unregistered parameter does — nothing
+		// downstream would say a word.
+		return true
 	}
 	return true
 }

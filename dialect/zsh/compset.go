@@ -139,9 +139,10 @@ func (cs *completionState) moveCount(
 // movePattern is `-P` and `-S`: the longest match anchored at the start of
 // `PREFIX`, or at the end of `SUFFIX`, moved the same way.
 //
-// Longest rather than shortest, and anchored rather than found anywhere: both
-// are measured — `compset -P '*='` against `foo=che` takes `foo=` and not the
-// empty string, and `compset -P ch` against the same word is 1.
+// The *finding* is matchedLength's, in completioncondition.go, because
+// `[[ -prefix … ]]` is this test with the move left out — the manual says so
+// and one reading of the rule is what keeps the two from drifting. Only the
+// move is here.
 func (cs *completionState) movePattern(
 	r *interp.Runner, rest []string, from, into *string, front bool,
 ) int {
@@ -152,23 +153,16 @@ func (cs *completionState) movePattern(
 	// A leading count restricts which match is taken. It is read so that the
 	// pattern is never mistaken for it, and the longest match is still what
 	// is taken — a distinction no completion in a real tree turns on.
-	pattern := rest[len(rest)-1]
-	for length := len(*from); length >= 0; length-- {
-		piece := (*from)[:length]
-		if !front {
-			piece = (*from)[len(*from)-length:]
-		}
-		if !r.MatchPattern(pattern, piece) {
-			continue
-		}
-		if front {
-			*into, *from = *into+piece, (*from)[length:]
-		} else {
-			*from, *into = (*from)[:len(*from)-length], piece+*into
-		}
+	length := cs.matchedLength(r, rest[len(rest)-1], *from, front)
+	if length < 0 {
+		return 1
+	}
+	if front {
+		*into, *from = *into+(*from)[:length], (*from)[length:]
 		return 0
 	}
-	return 1
+	*from, *into = (*from)[:len(*from)-length], (*from)[len(*from)-length:]+*into
+	return 0
 }
 
 // compsetIndex is `-n`'s operand: the one-based index of the word to make the
@@ -188,19 +182,21 @@ func compsetIndex(r *interp.Runner, rest []string, cs *completionState) int {
 // compsetMatchingIndex is `-N`'s: the same index, found by the pattern the
 // word before it matches.
 //
-// The *last* such word before the current one, which is what makes `compset
-// -N ';'` on a line with two of them complete the command after the second.
+// Both halves are matchingIndex's and endPatternIsAhead's, in
+// completioncondition.go, because `[[ -between … … ]]` is this test with the
+// move left out — see movePattern for why that is one function and not two.
+// The second pattern is the half `-N` took no notice of until the condition
+// needed it: a word matching it has to stand after the cursor, and one
+// matching it nowhere leaves the test as if it were not given.
 func compsetMatchingIndex(r *interp.Runner, rest []string, cs *completionState) int {
 	if len(rest) == 0 {
 		r.Diagnosef("pattern expected\n")
 		return 0
 	}
-	for i := cs.current - 1; i >= 1; i-- {
-		if i-1 < len(cs.words) && r.MatchPattern(rest[0], cs.words[i-1]) {
-			return i + 1
-		}
+	if len(rest) > 1 && !cs.endPatternIsAhead(r, rest[1]) {
+		return 0
 	}
-	return 0
+	return cs.matchingIndex(r, rest[0])
 }
 
 // dropWordsBefore renumbers the line so the word at index n is the first one,

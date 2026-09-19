@@ -255,7 +255,7 @@ the operator table, where this is about how a pattern operand is lexed.
 Two of them are now in that table — see the next section — and the rest
 are recorded in "What this does not cover" below.
 
-## `-prefix` and `-suffix` are conditions in one dialect
+## The four completion conditions are conditions in one dialect
 
     [[ -prefix : ]]                  parses in zsh, and in nothing else
     [[ -prefix //(a|b)/ ]]           the same
@@ -297,6 +297,83 @@ had to be measured before the flag could be added at all:
 | `[[ -prefix && -n x ]]` | the same | error | 0 | 0 | 0 | **0** |
 | `[[ ( -prefix ) ]]` | the same | error | 0 | 0 | 0 | **0** |
 | `[[ -n ]]` | the same | error | error | error | error | `unknown condition: -n` |
+
+`-after` and `-between` answer 0 there too, measured 2026-09-19:
+`[[ -after ]]`, `[[ -between ]]`, `[[ -after && -n x ]]`,
+`[[ -between && -n x ]]` and `[[ ( -between ) ]]` are all 0 with nothing
+said.
+
+### The arities, and what a count outside them does
+
+Measured 2026-09-19 on zsh 5.9.2, `-n` for the parse and a run for the
+verdict. Every row **parses**; the difference is what happens next:
+
+| probe | run |
+| --- | --- |
+| `[[ -prefix a ]]` | `condition can only be used in completion function`, 1 |
+| `[[ -prefix 1 '*=' ]]` | the same — the optional count |
+| `[[ -prefix a b c ]]` | `unknown condition: -prefix`, 2 |
+| `[[ -after a ]]` | **SIGSEGV** |
+| `[[ -after a b ]]` | `unknown condition: -after`, 2 |
+| `[[ -between a b ]]` | **SIGSEGV** |
+| `[[ -between a ]]`, `[[ -between a b c ]]` | `unknown condition: -between`, 2 |
+
+So `-prefix` and `-suffix` take one or two operands, `-after` exactly one
+and `-between` exactly two, and a count outside the range is the refusal
+`ConditionArityIsCheckedWhenItRuns` already carries. An **operand that is
+itself an operator ends the reading**: `[[ -prefix -n x ]]` is
+``parse error near `x'`` there, the `-n` being the whole of `-prefix`'s
+operands — the same rule `[[ -n -z x ]]` follows above.
+
+The two SIGSEGV rows are a crash in zsh 5.9.2 and not a behavior to
+reproduce. Here they get the sentence their two neighbors get.
+
+### Loading `zsh/complete` is not what makes them exist
+
+Measured 2026-09-19 on a fresh `zsh -f`, whose `zmodload` listing is
+`zsh/main` alone:
+
+    $ zsh -f -c '[[ -prefix foo ]]'
+    zsh:1: condition can only be used in completion function          # 1
+    $ zsh -f -c 'zmodload zsh/complete; [[ -prefix foo ]]'
+    zsh:1: condition can only be used in completion function          # 1
+
+Identical before and after, so the module is a no-op for every one of
+them and the grammar carries them at all times. What the module's load
+status *does* decide is `zmodload zsh/complete`'s own exit status, which
+is why the conditions had to be implemented for it to succeed (#3042).
+
+### What each one is true of
+
+From `zshcompwid(1)`: each is true where the corresponding `compset`
+option's test would succeed, and the special parameters are **not**
+modified. `-prefix` is `compset -P`, `-suffix` is `compset -S`, `-after`
+is `compset -N` with only the start pattern, and `-between` is
+`compset -N` with both.
+
+Measured 2026-09-19 through a pseudo-terminal, inside a `zle -C` widget,
+with `git sub a=b=c tail` typed and the cursor at the end of the third
+word — `PREFIX=a=b=c`, `SUFFIX=` empty, `words=(git sub a=b=c tail)`,
+`CURRENT=3`:
+
+| probe | status |
+| --- | --- |
+| `[[ -prefix a ]]`, `[[ -prefix *= ]]`, `[[ -prefix 1 *= ]]` | 0 |
+| `[[ -prefix '*=' ]]` | 1 — quoted, so a literal |
+| `[[ -suffix c ]]` | 1 — `SUFFIX` is empty |
+| `[[ -suffix '' ]]` | 0 |
+| `[[ -after git ]]`, `[[ -after sub ]]`, `[[ -after *u* ]]` | 0 |
+| `[[ -after tail ]]` | 1 — behind the cursor |
+| `[[ -between git tail ]]` | 0 — the end pattern is after the cursor |
+| `[[ -between git sub ]]` | 1 — it is before it |
+| `[[ -between git a=b=c ]]` | 1 — it is *at* the cursor |
+| `[[ -between git zz ]]` | 0 — it matches no word, so it is as if absent |
+
+Two of those rows carry the whole design. **The operand is a pattern and
+quoting decides it**, exactly as for `==`'s right-hand side. And
+**`-between` is not `-after` with a second word nobody reads**: the four
+`-between git …` rows differ only in the end pattern and answer 0, 1, 1
+and 0.
 
 Every other one-operand test in the table demands its operand and says so
 when it is missing. These two do not: with nothing after them the
@@ -1073,8 +1150,8 @@ which is the rule: an operator is either implemented or refused at parse,
 never parsed and then refused at run time. Recorded so their absence is a
 decision.
 
-zsh's completion conditions **other than `-prefix` and `-suffix`**,
-which are the same gap reached from the other end. Measured 2026-09-05 on zsh 5.9.2, with `-n` for the parse and
+zsh's `-word` conditions **other than the four completion ones**, which
+are the same gap reached from the other end. Measured 2026-09-05 on zsh 5.9.2, with `-n` for the parse and
 a run for the rest:
 
 | probe | parses | run |
@@ -1082,7 +1159,8 @@ a run for the rest:
 | `[[ -prefix x ]]` | yes | `condition can only be used in completion function`, 1 |
 | `[[ -suffix x ]]` | yes | the same, 1 |
 | `[[ -after x ]]` | yes | **SIGSEGV** |
-| `[[ -before x ]]`, `-equal`, `-between` | yes | `unknown condition: -X`, 2 |
+| `[[ -between x ]]` | yes | `unknown condition: -between`, 2 — the wrong arity, and `[[ -between x y ]]` is the operator |
+| `[[ -before x ]]`, `-equal` | yes | `unknown condition: -X`, 2 |
 | `[[ -nosuch x ]]` | yes | `unknown condition: -nosuch`, 2 |
 
 So the general rule in that shell is that **any** `-word` followed by an
@@ -1092,11 +1170,10 @@ it would be a decision to change the rule rather than a gap to fill. That
 question is #965, which took the half of it that is about a **known**
 operator's arity — see the section above — and left this one: an operator
 this shell does not have at all is still refused while reading here.
-`-prefix` and `-suffix` were taken *as named operators* instead, which
-keeps the rule, and leaves `-after`, `-before`, `-between` and the rest
-here. The
-other four disagree with it and with each other: bash 5 and ksh93 make
-`[[ -nosuch x ]]` a syntax error, and bash 3.2 accepts it.
+The four completion conditions were taken *as named operators* instead,
+which keeps the rule, and leaves `-before`, `-equal` and the rest here.
+The other four disagree with it and with each other: bash 5 and ksh93
+make `[[ -nosuch x ]]` a syntax error, and bash 3.2 accepts it.
 
 `-after` crashing rather than refusing is a bug in that build, not a
 behavior to model; it also means the row cannot be graded against a run.

@@ -42,7 +42,7 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 		// anything, and a failure left over from the previous command would
 		// abandon this one. See Runner.beginHeading.
 		r.beginHeading()
-		ok, err := r.evalCond(c.Expr)
+		ok, err := r.evalCond(ctx, c.Expr)
 		if r.unspecified {
 			r.status = 2
 			return nil
@@ -79,24 +79,24 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 	})
 }
 
-func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
+func (r *Runner) evalCond(ctx context.Context, c syntax.CondExpr) (bool, error) {
 	switch x := c.(type) {
 	case nil:
 		return false, nil
 
 	case *syntax.CondGroup:
-		return r.evalCond(x.X)
+		return r.evalCond(ctx, x.X)
 
 	case *syntax.CondNot:
 		// The `!` prints with the primary it negates rather than as a part of
 		// its own: `[[ ! -z a ]]` is one line in every shell that has the
 		// construct.
 		r.traceConditionNot()
-		v, err := r.evalCond(x.X)
+		v, err := r.evalCond(ctx, x.X)
 		return !v, err
 
 	case *syntax.CondLogic:
-		l, err := r.evalCond(x.X)
+		l, err := r.evalCond(ctx, x.X)
 		if err != nil {
 			// An operand that produced a status of its own rather than a
 			// truth value. The combining operators read it as a status, so
@@ -112,7 +112,7 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 			var cs condStatus
 			if x.Op == "||" && errors.As(err, &cs) {
 				r.traceConditionOp(x.Op)
-				return r.evalCond(x.Y)
+				return r.evalCond(ctx, x.Y)
 			}
 			return false, err
 		}
@@ -128,10 +128,13 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 		// line. Measured: `[[ -n a || -n b ]]` traces `[[ -n a ]]` in zsh,
 		// the one shell whose line could have held the whole expression.
 		r.traceConditionOp(x.Op)
-		return r.evalCond(x.Y)
+		return r.evalCond(ctx, x.Y)
 
 	case *syntax.CondArity:
 		return r.condWrongArity(x)
+
+	case *syntax.CondCompletion:
+		return r.evalCondCompletion(ctx, x)
 
 	case *syntax.CondUnary:
 		return r.evalCondUnary(x)
@@ -169,6 +172,57 @@ func (r *Runner) condWrongArity(x *syntax.CondArity) (bool, error) {
 	// written: condStatus is the shape testClause takes the number from
 	// without saying anything further, and the shell has been stopped above.
 	return false, condStatus{code: status}
+}
+
+// evalCondCompletion answers one of the four completion-context conditions —
+// `-prefix`, `-suffix`, `-after` and `-between`.
+//
+// The grammar has them wherever a dialect asked for them and the *meaning* is
+// the dialect's, because it is a question about a completion in flight and
+// this package has no completion system. A dialect says what it means with
+// Runner.SetConditionAnswer; nothing registered is the refusal below, which
+// is also what a shell with the grammar and no completion system gives.
+//
+// **The refusal is what a completion condition reached anywhere else gets**,
+// and it is fatal: measured 2026-09-12 over a script file on zsh 5.9.2, the
+// line after it does not run and the status is 1. The sentence names neither
+// the operator nor the operand — `[[ -prefix : ]]`, `[[ -prefix 'ab' ]]` and
+// `[[ -prefix //(a|b)/ ]]` all get the same one.
+//
+// **Loading the module is not what decides this.** Measured 2026-09-19 on a
+// fresh `zsh -f`, whose module listing is `zsh/main` alone: the sentence is
+// identical before and after `zmodload zsh/complete`, so the conditions are
+// the grammar's at all times and the state that matters is whether a
+// completion is running (#3042).
+func (r *Runner) evalCondCompletion(ctx context.Context, x *syntax.CondCompletion) (bool, error) {
+	// Before any word is expanded, so the command a refused process
+	// substitution holds is never started — the rule every other primary
+	// here follows.
+	for _, w := range x.Words {
+		if err := r.condProcSubAllowed(w, false); err != nil {
+			return false, err
+		}
+	}
+	// Each operand as the matcher reads it: unquoted it is a pattern and
+	// quoted it is a literal, which is measured inside a real completion and
+	// is why the tree keeps words rather than strings. See ConditionAnswer.
+	operands := make([]string, 0, len(x.Words))
+	for _, w := range x.Words {
+		operands = append(operands, r.patternOf(w))
+	}
+	if r.condOperandDidNotExpand() {
+		return false, errCondOperandFailed
+	}
+	r.traceConditionPrimary(append([]string{x.Op}, operands...)...)
+	if ask := r.conditionAnswers[x.Op]; ask != nil {
+		if ok, answered := ask(r, ctx, x.Op, operands); answered {
+			return ok, nil
+		}
+	}
+	r.diagf("%s\n", Wording(r.diag().CompletionConditionOutsideCompletion,
+		"condition can only be used in completion function"))
+	r.stopTheShell()
+	return false, condStatus{code: 1}
 }
 
 func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
@@ -232,21 +286,6 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// == 1 ]]` is 0 in zsh with the complaint already written.
 		r.diagf("%s\n", Wording(d.UnknownConditionOption, "no such option: %s", s))
 		return false, condStatus{code: d.UnknownConditionOptionStatus}
-	case "-prefix", "-suffix":
-		// The completion-context tests. One dialect's grammar has them
-		// unconditionally and the restriction is on where they may run, so
-		// reaching one anywhere else is a refusal rather than an answer —
-		// and a fatal one: measured 2026-09-12 over a script file, the line
-		// after it does not run.
-		//
-		// The operand is read and then dropped, which is what the trace
-		// above already did with it. Nothing about the word decides this:
-		// `[[ -prefix : ]]`, `[[ -prefix 'ab' ]]` and `[[ -prefix
-		// //(a|b)/ ]]` all answer the same sentence.
-		r.diagf("%s\n", Wording(r.diag().CompletionConditionOutsideCompletion,
-			"condition can only be used in completion function"))
-		r.stopTheShell()
-		return false, condStatus{code: 1}
 	case "-e", "-f", "-d", "-s", "-r", "-w", "-x",
 		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h",
 		"-O", "-G":

@@ -4163,8 +4163,26 @@ type Dialect struct {
 	// with neither leaves both false.
 	ExtendedPatternInCondition bool
 
-	// CompletionConditions enables `[[ -prefix … ]]` and `[[ -suffix … ]]`,
-	// the two completion-context tests, as one-operand conditions.
+	// CompletionConditions enables the four completion-context tests —
+	// `[[ -prefix … ]]`, `[[ -suffix … ]]`, `[[ -after … ]]` and
+	// `[[ -between … … ]]` — as conditions whose operator stands in front of
+	// its operands.
+	//
+	// **The arities**, measured on zsh 5.9.2, 2026-09-19. `-prefix` and
+	// `-suffix` take a pattern with an optional count in front of it, and
+	// `-between` takes a start pattern and an end pattern:
+	//
+	//	[[ -prefix a ]]        [[ -prefix 1 '*=' ]]    the condition
+	//	[[ -prefix a b c ]]                            unknown condition, 2
+	//	[[ -after a ]]                                 the condition
+	//	[[ -after a b ]]                               unknown condition, 2
+	//	[[ -between a b ]]                             the condition
+	//	[[ -between a ]]       [[ -between a b c ]]    unknown condition, 2
+	//
+	// A count outside the range is the run-time refusal a known operator
+	// with a bad arity already gets here — see
+	// ConditionArityIsCheckedWhenItRuns, which is the same sentence and the
+	// same status.
 	//
 	// zsh alone, and the other four have no such operator at all — `-prefix`
 	// is the completion system's, and dash has no `[[ ]]` — so this is
@@ -4185,11 +4203,20 @@ type Dialect struct {
 	// `-o`'s option name is: `//(127.0.0.1|localhost)/` is one of the two
 	// real occurrences, and it is a pattern with a group in it.
 	//
-	// Deliberately **only these two**. The same shell parses `[[ -nosuch x
+	// Deliberately **only these four**. The same shell parses `[[ -nosuch x
 	// ]]` as well and refuses it at run time with a different sentence, which
 	// is a decision to change the rule that an operator is either implemented
 	// or refused while reading — see docs/spec/grammar/conditions.md, and
 	// #965, which is that question and not this one.
+	//
+	// **Loading `zsh/complete` is not what makes them exist.** Measured
+	// 2026-09-19 on zsh 5.9.2 with a fresh `-f` shell, whose `zmodload`
+	// listing is `zsh/main` alone: `[[ -prefix foo ]]` answers `condition
+	// can only be used in completion function` at status 1 *before* the
+	// module is loaded and the identical sentence after it. So the module is
+	// a no-op for every one of them and the grammar carries them always,
+	// which is why this is a dialect flag and not a thing `zmodload` turns
+	// on (#3042).
 	CompletionConditions bool
 
 	// ConditionArityIsCheckedWhenItRuns lets `[[ … ]]` accept a known

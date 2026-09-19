@@ -57,16 +57,21 @@ print -r -- "both=$?"`)
 // `[[ -after x ]]` in a shell without it is not `command not found`, it is a
 // test that quietly answers something, so a caller cannot be told where it
 // depended on one. That is the failure this builtin was written to prevent,
-// and it is the last kind of feature still holding a module shut.
-//
-// The other three kinds have all left this list, and each left the same way —
+// and every kind of feature has now left the holding list — each the same way,
 // the gate opening by itself as the shell caught up, with nothing in
 // zmodload.go changed for it. A builtin never held. A parameter stopped
 // holding in #1146 once it could refuse by name, which the `zsh/parameter`
 // test below is the other side of. This case named `zsh/terminfo` until
-// #1388, when the two capability parameters arrived; it named `zsh/system`
-// until #1618, when `systell`, `$errnos` and `$sysparams` did.
-func TestAMissingBuiltinDoesNotHoldAModuleShutAndAMissingConditionDoes(t *testing.T) {
+// #1388, when the two capability parameters arrived; `zsh/system` until
+// #1618, when `systell`, `$errnos` and `$sysparams` did; and `zsh/complete`
+// until #3042, when the four conditions did.
+//
+// **The rule that a condition holds is still in zmodloadHolds**, and it is
+// there with no live example, which is the state to keep it in: a condition
+// has no word that runs it, so a script is told nothing about a missing one,
+// and the day a module with a condition this shell has not got is added the
+// answer is already right.
+func TestAMissingBuiltinDoesNotHoldAModuleShut(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil 2>&1
 print -r -- "zutil=$?"
 zregexparse a b c 2>&1
@@ -75,9 +80,7 @@ zmodload zsh/complete 2>&1
 print -r -- "complete=$?"`)
 	want := "zutil=0\n" +
 		"zsh:3: command not found: zregexparse\ncall=127\n" +
-		"zsh:5: failed to load module `zsh/complete': " +
-		"after, between, prefix and suffix are not implemented yet\n" +
-		"complete=1\n"
+		"complete=0\n"
 	if out != want || st != 0 {
 		t.Errorf("the two halves of the rule = %q (status %d), want %q", out, st, want)
 	}
@@ -113,18 +116,32 @@ print -r -- "after=$?"`)
 	}
 }
 
-// A feature that is neither a builtin nor a parameter has no registry to ask,
-// so it holds its module shut and is *named*. `zsh/complete` is the module
-// that shows it: two builtins and four conditions, and it is the **four
-// conditions** that are named — `compadd` and `compset` are missing too and
-// are the loud kind. A shell that counted an unaskable feature as present
-// would load this module and look more capable than it is, which is the silent
-// success in miniature: `[[ -prefix x ]]` has no call site to complain at.
-func TestAFeatureThatCannotBeAskedAboutHoldsItsModuleShut(t *testing.T) {
+// A condition *is* asked about, and `zsh/complete` is the module that shows
+// it: two builtins and four conditions, and the four are asked of
+// interp.Runner.KnownCondition the way a builtin is asked of KnownBuiltin.
+//
+// This module was refused here for as long as the conditions were missing —
+// `after, between, prefix and suffix are not implemented yet` — because a
+// condition has no call site to complain at and a shell that counted an
+// unaskable feature as present would look more capable than it is. #3042
+// answered all four, so the gate opened on its own.
+//
+// The last row is the control: a feature name this module does not have is
+// still refused, so the four above are being *asked about* rather than waved
+// through by kind.
+func TestEveryFeatureOfTheCompleteModuleIsAskedAbout(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/complete 2>&1
-print -r -- "st=$?"`)
-	want := "zsh:1: failed to load module `zsh/complete': " +
-		"after, between, prefix and suffix are not implemented yet\nst=1\n"
+print -r -- "whole=$?"
+for f in c:prefix c:suffix c:after c:between b:compadd b:compset; do
+  zmodload -F zsh/complete $f 2>&1
+  print -r -- "$f=$?"
+done
+zmodload -F zsh/complete c:nosuch 2>&1
+print -r -- "nosuch=$?"`)
+	want := "whole=0\n" +
+		"c:prefix=0\nc:suffix=0\nc:after=0\nc:between=0\n" +
+		"b:compadd=0\nb:compset=0\n" +
+		"zsh:7: module `zsh/complete' has no such feature: `c:nosuch'\nnosuch=1\n"
 	if out != want || st != 0 {
 		t.Errorf("zmodload zsh/complete = %q (status %d), want %q", out, st, want)
 	}
@@ -150,7 +167,7 @@ print -r -- "opt=$?"`)
 // silenced and the status is still 1. A shell that answered 0 here sends a
 // plugin manager on to call a builtin the module was supposed to bring.
 func TestZmodloadDashSIsSilentAndStillFails(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload -s zsh/complete 2>&1
+	out, st := runZsh(t, t.TempDir(), `zmodload -s zsh/nosuchmodule 2>&1
 print -r -- "st=$?"`)
 	want := "st=1\n"
 	if out != want || st != 0 {
@@ -165,13 +182,12 @@ print -r -- "st=$?"`)
 // was already loaded cannot show it at all, because becoming loaded twice
 // looks the same as not being reached.
 func TestZmodloadAttemptsEveryModuleNamed(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload zsh/nosuchmodule zsh/complete zsh/main 2>&1
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/nosuchmodule zsh/alsonosuch zsh/main 2>&1
 print -r -- "st=$?"
 zmodload -e zsh/main
 print -r -- "main-still=$?"`)
 	want := "zsh:1: failed to load module `zsh/nosuchmodule': not implemented yet\n" +
-		"zsh:1: failed to load module `zsh/complete': " +
-		"after, between, prefix and suffix are not implemented yet\n" +
+		"zsh:1: failed to load module `zsh/alsonosuch': not implemented yet\n" +
 		"st=1\nmain-still=0\n"
 	if out != want || st != 0 {
 		t.Errorf("three modules = %q (status %d), want %q", out, st, want)
@@ -373,12 +389,12 @@ print -r -- "named-what-we-have=$?"
 zmodload -F zsh/zutil b:zregexparse 2>&1
 print -r -- "named-what-we-have-not=$?"
 zmodload -F zsh/complete c:prefix 2>&1
-print -r -- "held=$?"`)
+print -r -- "condition=$?"`)
 	want := "whole=0\n" +
 		"named-what-we-have=0\n" +
 		"zsh:5: failed to load module `zsh/zutil': zregexparse is not implemented yet\n" +
 		"named-what-we-have-not=1\n" +
-		"zsh:7: failed to load module `zsh/complete': prefix is not implemented yet\nheld=1\n"
+		"condition=0\n"
 	if out != want || st != 0 {
 		t.Errorf("narrowing = %q (status %d), want %q", out, st, want)
 	}

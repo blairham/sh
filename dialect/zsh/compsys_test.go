@@ -257,21 +257,21 @@ func TestTheseBuiltinsRefuseOutsideACompletion(t *testing.T) {
 // answered 0 now because the builtin exists, and nothing in the module table
 // was edited to make it so.
 //
-// The plain `zmodload zsh/complete` is still refused, and the refusal names
-// what is actually left: the four conditions, which are #3042. Both halves are
-// asserted, because a change that registered the module wholesale would pass
-// the first and be a silent success about the conditions — which is the thing
-// that builtin's wording exists to avoid.
+// The plain `zmodload zsh/complete` was still refused after this, and the
+// refusal named what was left: the four conditions, which #3042 then
+// answered. So the whole module loads now, and the narrowed forms still do —
+// both halves are asserted, because a change that registered the module
+// wholesale would pass the second and be a silent success about the builtins.
 func TestTheModuleGateMovedWithTheBuiltins(t *testing.T) {
 	out, _ := answersRun(t, `zmodload -F zsh/complete b:compadd; echo "named=$?"`+"\n"+
 		`zmodload -F zsh/complete b:compset; echo "set=$?"`+"\n"+
 		`zmodload zsh/complete; echo "whole=$?"`)
-	for _, want := range []string{"named=0", "set=0", "whole=1"} {
+	for _, want := range []string{"named=0", "set=0", "whole=0"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %s in %q", want, out)
 		}
 	}
-	if !strings.Contains(out, "after, between, prefix and suffix are not implemented yet") {
-		t.Errorf("the refusal should name only the four conditions; it said %q", out)
+	if strings.Contains(out, "not implemented yet") {
+		t.Errorf("nothing of this module is missing now; it said %q", out)
 	}
 }

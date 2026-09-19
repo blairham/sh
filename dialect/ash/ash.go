@@ -545,6 +545,13 @@ func Semantics() interp.Semantics {
 	// because it cannot write one (#2419).
 	// unanswered DeclareHideInScopeLetter: no `typeset` here either, so the
 	// lower-case `h` cannot be put to this shell under either reading.
+	// unanswered DeclareZeroFillLetter: BusyBox ash has no `typeset` at all,
+	// measured 2026-09-15 on v1.37.0, so the `Z` letter cannot be put to it
+	// under either reading.
+	// unanswered WidthJustificationPrecedence: the same wall — there are no
+	// width letters here to write two of.
+	// unanswered WidthLettersExcludeTheIntegerLetter: nor a declaration to
+	// carry the integer letter beside one (#2859).
 	// unanswered NumericTypeLettersAreExclusive: nor a pair of numeric
 	// letters to write together.
 	// unanswered PrefixToAKeywordFunctionIsScopedToTheCall: the same wall —

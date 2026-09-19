@@ -506,11 +506,18 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 //
 // The same three questions in the same order — does the name carry a folding
 // attribute, would the fold change this value, and does the dialect send an
-// element through it — so the two callers cannot answer differently. What the
+// element through it — so the two callers cannot answer differently.
+//
+// The **width** letters are among the attributes asked about, and the axis
+// answers them with nothing added: measured 2026-09-18, `typeset -a n;
+// typeset -L 3 n; n=(abcd efgh)` is `(abc efg)` on ksh93u+ and
+// `typeset -aL3 n=( abcd efgh )` on zsh 5.9.2, which is the same split the
+// case letters make and in the same direction. What the
 // bool says is "the value below may be stored": false where the evaluation
 // failed and has already reported, and where the axis went unanswered.
 func (r *Runner) elementValueFolded(name, value string) (string, bool) {
-	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] {
+	_, width := r.fieldWidth[name]
+	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] && !width {
 		return value, true
 	}
 	if !r.attributeWouldChange(name, value) {
@@ -3349,7 +3356,13 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 	// element of a name with none of these attributes, so removing this
 	// changes nothing observable — it only stops the loop below from walking
 	// every array this shell ever stores.
-	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] {
+	//
+	// The width letters are in the list because the column that has them
+	// stores the presentation, which is a change attributeWouldChange reports
+	// — measured, `typeset -a n; typeset -L 3 n; n=(abcd efgh)` is `(abc
+	// efg)` on ksh93u+ (#2859).
+	_, width := r.fieldWidth[name]
+	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] && !width {
 		return a
 	}
 	changed := false

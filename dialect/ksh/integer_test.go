@@ -101,9 +101,20 @@ func TestIntegerReadsTypesetsLettersAndSpeaksAsTypeset(t *testing.T) {
 		}
 	}
 	// A letter this shell really has says so, under the same name.
-	out, st = runKsh(t, t.TempDir(), `integer -Z w=1`)
-	if !strings.Contains(out, "typeset: -Z is not implemented yet") || st != 2 {
-		t.Errorf("integer -Z = %q (status %d), want the letter named as missing", out, st)
+	out, st = runKsh(t, t.TempDir(), `integer -S w=1`)
+	if !strings.Contains(out, "typeset: -S is not implemented yet") || st != 2 {
+		t.Errorf("integer -S = %q (status %d), want the letter named as missing", out, st)
+	}
+	// `-Z` used to be that example and is no longer missing: the width
+	// letters are built (#2859), and under this word they are refused for
+	// **conflicting with the type** rather than for being unknown — measured
+	// 2026-09-18, `integer -L 5 a=ab` and `typeset -iZ 5 a=7` are both
+	// typeset's whole usage block at 2 on ksh93u+, which is what `-H`
+	// already does beside them.
+	out, st = runKsh(t, t.TempDir(), `integer -Z 4 w=1`)
+	if strings.Contains(out, "not implemented") ||
+		!strings.Contains(out, "Usage: typeset [-bflmnprstuxACHS]") || st != 2 {
+		t.Errorf("integer -Z 4 = %q (status %d), want typeset's usage block for the conflict", out, st)
 	}
 }
 

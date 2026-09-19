@@ -2979,13 +2979,21 @@ func Semantics() interp.Semantics {
 	// joins it too, and it is not zsh's letter of the same spelling: here it
 	// takes a string and records nothing, `[-h string]` in this shell's own
 	// usage block.
-	s.DeclareOptions = "aACEFfHhilmMnprtTux"
+	//
+	// `L`, `R` and `Z` join it in #2859, which is the rest of what the
+	// number rule made reachable: each names a **width** the name's value is
+	// presented in, and the store here is the padded text rather than the
+	// raw — the split CaseAttributeFoldsWhenRead already records for `-l`
+	// and `-u`. They are not three more letters on `-E`'s rule, and
+	// interp/fieldwidth.go holds the three places this column parts from the
+	// other one that has them.
+	s.DeclareOptions = "aACEFfHhiLlmMnpRrtTuxZ"
 	// And the number the float letters take, under this shell's own rule for
 	// a detached one: only where the letter ends its option word. `typeset
 	// -Ex 3 a=3.14159` is `3: is not an identifier` here and the float in
 	// zsh, and `typeset -Fx 3 a=1.5` is the same refusal. That rule is what
 	// #1461 and #2559 both deferred; it is the axis below.
-	s.DeclareOptionsTakingANumber = "EF"
+	s.DeclareOptionsTakingANumber = "EFLRZ"
 	s.DeclareNumberDetachedOnlyAtTheWordEnd = interp.Yes
 	s.FloatFormatLetterE = interp.FloatFormatSignificantDigits
 	// And a bare float letter over a name that already has a precision
@@ -3006,6 +3014,27 @@ func Semantics() interp.Semantics {
 	// `typeset -Fi 3 a=1.5` both list `typeset -F 3 a=1.500` here, where zsh
 	// answers them differently (#2419).
 	s.NumericTypeLetterPrecedence = interp.NumericLetterFloatOutranksTheInteger
+	// `Z` is a **fill riding on a justification** here — `R` where the
+	// declaration names none — where zsh reads it as a third justification
+	// of its own. Measured 2026-09-18: `typeset -Z 4 d=7` lists as `typeset
+	// -Z 4 -R 4 d=0007`, naming both letters, and `typeset -ZL 5 q=7` as
+	// `typeset -Z 5 -L 5 q='7    '`, where the fill has no left-hand pad to
+	// lay down and the value's leading zeros come off instead. See
+	// interp/fieldwidth.go for the value table (#2859).
+	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterRidesOnTheJustification
+	// And where a declaration writes both justifications the **last** wins,
+	// across words as well as inside one — the opposite of the rank above
+	// and of zsh's answer to the same question. Measured the same day:
+	// `typeset -LR 5 t=7` lists as `typeset -R 5 t='    7'`, `-RL` as
+	// `typeset -L 5`, and the two-word `typeset -R -L 5 b=7` as `typeset -L
+	// 5 b='7    '`.
+	s.WidthJustificationPrecedence = interp.WidthJustificationLastWrittenWins
+	// And a width letter cannot stand beside the integer one: measured,
+	// `typeset -iL 5 a=7`, `typeset -Li 5 a=7`, `typeset -iZ 5 a=7` and
+	// `integer -L 5 a=ab` are all typeset's whole usage block at 2, and the
+	// script ends there. The float letters are deliberately not in that
+	// question — `typeset -ZF 5 g=1.5` crashes this shell — see the axis.
+	s.WidthLettersExcludeTheIntegerLetter = interp.Yes
 	// The letters a `-f` line marks a function with, both built since #2192:
 	// `-u` says the body is read from `$FPATH` at the first call and `-t`
 	// traces the function. See dialect/ksh/fpath.go, where the measurements
@@ -3100,7 +3129,7 @@ func Semantics() interp.Semantics {
 	// fatally, since these are special builtins there — where `typeset -f
 	// nm` on the same line lists. The word carries a type and a function
 	// has none.
-	s.IntegerOptions = "aACEFHhilmMnprtTux"
+	s.IntegerOptions = "aACEFHhiLlmMnpRrtTuxZ"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -3808,7 +3837,12 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` has left it as well: the compound-variable letter is
 			// built, and it is the declaration half of the kind `c=(a=1)`
 			// makes — see interp/compoundvariable.go (#2620).
-			"typeset": "-bsLRSXZ",
+			// `-L`, `-R` and `-Z` have left this list in #2859: the three
+			// width letters are built, and so is this column's own reading
+			// of them — the fill riding on a justification, the last
+			// justification written winning, and the padded text on the
+			// store. See interp/fieldwidth.go.
+			"typeset": "-bsSX",
 			// **The three entries below are reached only through
 			// interp.Runner.Register.** `functions`, `integer` and the
 			// `nameref` wording further down name words this shell has as
@@ -3870,7 +3904,14 @@ func Diagnostics() interp.Diagnostics {
 			// `-C` leaves this list with the one above it, for the reason
 			// every letter here shares one: `integer` reads typeset's whole
 			// grammar.
-			"integer": "-bsLRSXZ",
+			// `-L`, `-R` and `-Z` leave this list with the one above it,
+			// and under this word they are not even reachable: measured
+			// 2026-09-18, `integer -L 5 a=ab` is typeset's usage block at 2,
+			// because the word already carries the integer attribute and
+			// the two are exclusive — see
+			// Semantics.WidthLettersExcludeTheIntegerLetter. Refused for the
+			// conflict rather than for the letter, exactly as `-H` is.
+			"integer": "-bsSX",
 		},
 		// `-u` on a `-f` line, which is the one letter that cannot go in
 		// the list above: it is also the upper-case attribute, and this

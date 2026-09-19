@@ -8428,6 +8428,11 @@ type Semantics struct {
 	// with a scalar. So the answer is read off the case letters, which are
 	// the only ones that dialect can be asked about here.
 	//
+	// The **width** letters joined the question in #2859 and needed no new
+	// answer from either column: measured 2026-09-18, `typeset -a n; typeset
+	// -L 3 n; n=(abcd efgh)` is `(abc efg)` on ksh93u+ and `typeset -aL3 n=(
+	// abcd efgh )` on zsh 5.9.2 — the same split, the same way round.
+	//
 	// Asked only where a name with one of these attributes has an element
 	// written to it, so an array with no attribute needs no dialect.
 	CompoundElementsGoThroughTheAttribute Answer
@@ -9913,6 +9918,51 @@ type Semantics struct {
 	// wins where a declaration writes more than one and the pair is taken at
 	// all — see NumericTypeLetterPrecedencePolicy.
 	NumericTypeLetterPrecedence NumericTypeLetterPrecedencePolicy
+
+	// DeclareZeroFillLetter is what the `Z` letter of a declaration is: a
+	// justification of its own, or a fill riding on one of the other two —
+	// see DeclareZeroFillLetterPolicy.
+	DeclareZeroFillLetter DeclareZeroFillLetterPolicy
+
+	// WidthJustificationPrecedence is which of `L` and `R` a declaration
+	// writing both ends up with — see WidthJustificationPrecedencePolicy.
+	WidthJustificationPrecedence WidthJustificationPrecedencePolicy
+
+	// WidthLettersExcludeTheIntegerLetter refuses a declaration carrying
+	// both the integer letter and one of the width letters, with the
+	// builtin's usage block.
+	//
+	// The same shape NumericTypeLettersAreExclusive records for `-iE`, and a
+	// field of its own rather than that one widened, because the pair it
+	// names is a different pair and the two answers do not travel together:
+	// the column that refuses `-iE` takes `-iF` and refuses `-iL`, so a
+	// single axis would have to be read as "some pair" and would refuse a
+	// line the shell runs. See numericTypeLetterCompany for the first pair
+	// and widthLetterCompany for this one.
+	//
+	// Measured 2026-09-18 on ksh93u+ 2012-08-01, a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME: `typeset -iL 5 a=7`,
+	// `typeset -Li 5 a=7`, `typeset -iZ 5 a=7` and `integer -L 5 a=ab` are
+	// all typeset's whole usage block at 2, and `typeset` being one of that
+	// shell's special builtins the script ends there. zsh 5.9.2 takes every
+	// one of them and lets the first letter written win — `typeset -iL 5
+	// a=7` lists as `typeset -i5 a=7`, the `5` having become a base, and
+	// `typeset -Li 5 a=7` as `typeset -L5 a=7`.
+	//
+	// Both are complete readings and neither is a subset of the other, which
+	// is what makes it a field: a shell that refused the pair would refuse a
+	// line zsh runs, and one that let a letter win would run a line ksh93
+	// stops on.
+	//
+	// The **float** letters are deliberately not in this question, and that
+	// is a measurement rather than an omission. `typeset -FL 5 c=1.5` is
+	// taken on ksh93u+ and lists as `typeset -E c=1.5` — the wrong letter
+	// for the attribute it declared — and `typeset -ZF 5 g=1.5` **crashes
+	// that shell**, exit 139, measured the same day. A combination whose
+	// reference answer is a segmentation fault is not a behavior to copy, so
+	// this engine leaves the pair alone and lets both attributes stand
+	// (#2859).
+	WidthLettersExcludeTheIntegerLetter Answer
 
 	// TypesetBadOptionFatal ends the script over an option `typeset` does
 	// not have. ksh93 counts `typeset` among its special builtins and stops

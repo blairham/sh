@@ -22266,6 +22266,105 @@ ranking column — see `NumericTypeLettersAreExclusive`, which is **that
 pair alone** and not every float letter. `typeset -iF 3 a=1.5` is taken
 there, which is what narrowed it (#2419).
 
+**`DeclareZeroFillLetter`** — bash unspecified · dash unspecified · ksh93 a fill riding on the justification · zsh a justification of its own
+
+What the `Z` letter of a declaration **is**. Two shells spell the three
+width letters `-L`, `-R` and `-Z`, agree on every value one of them alone
+produces, and disagree about whether the third is one of the set or a
+modifier on it. Measured 2026-09-18 on ksh93u+ 2012-08-01 and zsh 5.9.2,
+a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch
+HOME and standard input on /dev/null (`·` for a blank):
+
+    written                ksh93u+ value  ksh93u+ listing        zsh value  zsh listing
+    typeset -Z 4 d=7       0007           typeset -Z 4 -R 4 d    0007       typeset -Z4 d
+    typeset -ZR 5 p=7      00007          typeset -Z 5 -R 5 p    00007      typeset -Z5 p
+    typeset -ZL 5 q=7      7·····         typeset -Z 5 -L 5 q    00007      typeset -Z5 q
+    typeset -LZ 5 r=7      7·····         typeset -Z 5 -L 5 r    7·····     typeset -L5 r
+    typeset -LZ 5 i=0012   12····         typeset -Z 5 -L 5 i    0012·      typeset -L5 i
+
+Rows three and five are the discriminating ones and neither is a listing
+detail. In ksh93 the letter is a **fill**, which needs a justification
+under it and takes `R` where none is written — so `-LZ` is `L` *and* the
+fill, and the fill has no left-hand pad to lay down: it spends itself the
+other way and the value's leading zeros come off. In zsh the letter is a
+justification of its own, exclusive with the other two, so `-LZ` is `L`
+alone and `0012` keeps its zeros.
+
+Which zeros come off was measured a value at a time under `-LZ` at width
+six: `0012` is `12`, `00ab` is `ab`, `0.5` is `.5`, `0` and `000` are
+nothing at all, and `-07` is untouched, a sign not being a zero. The
+right-hand ride strips nothing — `typeset -RZ 5 a=00ab` is `000ab` —
+because there the fill has somewhere to go.
+
+What the fill is made of is *not* a divergence: both columns fill with
+zeros only where the value begins with a digit, measured at width six on
+`1a`, `1e3`, `0x1f` and `1 2` against `.5`, `+7` and `abc`.
+
+The two bashes have none of the three letters and answer each with an
+invalid option and a usage line; dash and BusyBox ash have no `typeset`
+at all (#2859).
+
+**`WidthJustificationPrecedence`** — bash unspecified · dash unspecified · ksh93 the last letter written · zsh the first letter written
+
+Which of `L` and `R` a declaration writing both ends up with. The same
+shape `NumericTypeLetterPrecedence` records for the numeric letters, and
+the opposite answers from the same two shells — which is why it is a
+field of its own rather than that one reused. Measured in the same run:
+
+    written                 ksh93u+                    zsh 5.9.2
+    typeset -LR 5 t=7       typeset -R 5 t='····7'     typeset -L5 t=7
+    typeset -RL 5 u=7       typeset -L 5 u='7····'     typeset -R5 u=7
+    typeset -ZRL 5 c=7      typeset -Z 5 -L 5 c        typeset -Z5 c
+    typeset -LRZ 5 d=7      typeset -Z 5 -R 5 d        typeset -L5 d
+    typeset -L -R 5 a=7     typeset -R 5 a='····7'
+    typeset -R -L 5 b=7     typeset -L 5 b='7····'
+
+The last two rows say the rule is about the order *written* and not about
+one word's characters: there both letters are really read, in separate
+words, and the later one still wins. They are ksh93's alone because zsh
+answers the two-word spelling with no width attribute at all — a shape
+that belongs to its number-reading rule rather than to this question.
+
+**`WidthLettersExcludeTheIntegerLetter`** — bash unspecified · dash unspecified · ksh93 Yes · zsh No
+
+Whether a declaration may carry the integer letter and a width letter
+both. The same shape `NumericTypeLettersAreExclusive` records for `-iE`,
+and a field of its own because the pair is a different pair and the two
+answers do not travel together: the column that refuses `-iE` **takes**
+`-iF` and refuses `-iL`.
+
+    typeset -iL 5 a=7    ksh93 typeset's usage block, 2, script ends   zsh typeset -i5 a=7
+    typeset -Li 5 a=7    ksh93 the same block                          zsh typeset -L5 a=7
+    typeset -iZ 5 a=7    ksh93 the same block                          zsh typeset -i5 a=7
+    integer -L 5 a=ab    ksh93 the same block                          zsh typeset -iL5 a=0
+
+`integer` is `typeset -li` under an alias in ksh93, so it meets the same
+refusal rather than a rule of its own. In zsh the first letter written
+wins and the `5` becomes a *base* where the integer letter is first,
+which is the half that says both letters were really read.
+
+The **float** letters are deliberately outside this question, and that is
+a measurement rather than an omission: `typeset -FL 5 c=1.5` is taken on
+ksh93u+ and lists as `typeset -E c=1.5` — the wrong letter for the
+attribute it declared — and `typeset -ZF 5 g=1.5` **crashes that shell**,
+exit 139, measured 2026-09-18. A combination whose reference answer is a
+segmentation fault is not a behavior to copy, so this engine leaves the
+pair alone and lets both attributes stand.
+
+Two further ksh93 answers around the width letters are measured and
+**not** modeled, for the same reason and with the same shape — the letter
+this shell records for a name and the letter it writes back come apart:
+
+    typeset -HL 3 f=ab           typeset -L 3 f='ab ' — the `H` is gone
+    typeset -L 4 g=ab
+    typeset -u g                 typeset -u g='AB  ' — the width is gone,
+                                 while the padding it laid down survives
+
+Both keep the *value* the attributes produce and lose one letter from the
+listing, and `typeset -uL 4 l=ab` on the same line keeps both — so what is
+lost is a record rather than a rule. Copying either would break the line
+that keeps them.
+
 **`DeclareHideInScopeLetter`** — bash unspecified · dash unspecified · ksh93 takes a string · zsh hides in scope
 
 The fifth letter two shells spell alike and read as two unrelated things

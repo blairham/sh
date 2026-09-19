@@ -168,7 +168,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		failure := shiftParseError(raw, failureBase)
 		// Placed at the failure's line and followed by the text it was
 		// found in, for the dialects that write one. See substecho.go.
-		putBack := r.substFailureAtItsLine(span, failure)
+		putBack := r.substFailureAtItsLine(span, src, failure)
 		// The sentence, with the clause one dialect adds while it is still
 		// looking for the closing parenthesis — see Runner.substBodyExpecting.
 		r.errf("%s", r.diagLineNamed(construct, "%s%s\n",

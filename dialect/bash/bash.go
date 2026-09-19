@@ -2982,7 +2982,14 @@ func Diagnostics() interp.Diagnostics {
 		// as 2 where zsh, ksh93 and dash all report 3, and three blank lines
 		// between them still report 2. Measured 2026-09-17 (#3362).
 		SubstitutionBodyStartsAtItsOpenersLine: true,
-		EchoesTheOffendingLine:                 true,
+		// And a *backquoted* body's refusal is placed at the failure's own
+		// file line plus the newlines inside the backquotes, where the
+		// substitution stands in the command's first token: `` v=`echo hi⏎for`
+		// `` opening line 2 is reported at line 4 where `` cat `echo hi⏎for` ``
+		// is reported at 3, and `` v=1 w=`echo hi⏎for` `` is 3 again.
+		// Measured 2026-09-18 over forty-four shapes (#3553).
+		BackquotedSubstitutionFailureAddsItsBodysNewlines: true,
+		EchoesTheOffendingLine:                            true,
 		// A substitution body read at expansion time and refused is named
 		// as the construct it came from, which goes with the failure being
 		// the word's rather than the script's — see

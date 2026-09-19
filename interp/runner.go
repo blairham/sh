@@ -1564,6 +1564,25 @@ type Runner struct {
 	// was not.
 	expandingOuterWord *syntax.Word
 
+	// commandFirstWord is the word of the *first token* of the simple command
+	// being run — the earliest of its assignments, its words and its
+	// redirections as they were written — or nil outside one.
+	//
+	// One message reads it, and only by pointer identity against
+	// expandingOuterWord: one dialect's refusal for a backquoted body counts
+	// the body's newlines a second time exactly where the substitution stands
+	// in the command's first token, so `` v=`…` `` and `` v=1 w=`…` `` are
+	// two different answers about the same body. See
+	// Diagnostics.BackquotedSubstitutionFailureAddsItsBodysNewlines for the
+	// sweep and for the two controls that say it is the token's position
+	// rather than whether the command has a name.
+	//
+	// A word pointer rather than a position, because an assignment's value is
+	// the word that expands and it does not begin where the assignment does.
+	// Stale values are harmless for the same reason: a word read by some
+	// other construct is a different pointer.
+	commandFirstWord *syntax.Word
+
 	// scriptText is the source of the program the front end is running, and
 	// runText the text some other route is running in its place. Read by one
 	// diagnostic and written by the routes that run text; see runningText.
@@ -5234,6 +5253,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// Measured — `echo "A:[$BASH_COMMAND]" | sed …` names the `echo` in bash
 	// 5.3.15, not the `sed`.
 	r.recordRunning(c, WholeCommand)
+	// The first token's word, for the one message that asks where in the
+	// command a substitution stands. Put back rather than cleared: a command
+	// substitution's body runs in a runner of its own, but a function called
+	// from here runs in this one and its commands must not leave their
+	// answer behind for the caller's next word.
+	savedFirstWord := r.commandFirstWord
+	r.commandFirstWord = firstTokenWord(c)
+	defer func() { r.commandFirstWord = savedFirstWord }()
 	if !fired {
 		r.runDebugTrap(ctx)
 		if r.debugTrapStopped() {

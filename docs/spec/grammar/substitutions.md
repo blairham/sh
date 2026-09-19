@@ -1269,8 +1269,64 @@ both are read off the one offset the body's runner is given.
 Diagnostics value: `SubstitutionBodyStartsAtItsOpenersLine` — bash alone.
 It sits beside `BackquotedSubstitutionRestartsLines` because the two are
 one question about where a body's lines are counted from, asked of the two
-spellings. The older spelling is a third answer again in that shell and is
-neither field's; it is measured in #3553.
+spellings. The older spelling is a third answer again in that shell, and it
+is the section below.
+
+### Where a backquoted body's refusal is placed
+
+A backquoted body that will not parse is reported at a line, and the panel
+splits **four** ways about which one. Measured 2026-09-18 over forty-four
+shapes from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell>
+s.sh`, stdin from `/dev/null`, in a fresh directory. Take **N** as the file
+line the failure is on and **B** as the number of newlines inside the
+backquotes.
+
+| column | the line it names |
+| --- | --- |
+| zsh 5.9.2 | N |
+| ksh93u+ | N inside its sentence, the command's own line in the prefix |
+| dash 0.5.12 | the body's own line, numbered from one |
+| bash 5.3.20 | **N + B** where the substitution is in the command's **first token**, N otherwise |
+
+Every other spelling is placed at N, so three of the four columns need
+nothing said about them beyond placing this one there too — which is what
+`Runner.substFailureAtItsLine` had declined to do, leaving the refusal at
+the line the **command** began on in every column. That is dash's answer
+written without dash's numbering and no column's at all.
+
+bash's is the fourth, and the rows that tell it from the two simpler
+readings are worth keeping:
+
+| written, the body opening on line 2 | N | B | bash |
+| --- | --- | --- | --- |
+| `` v=`echo hi⏎for` `` | 3 | 1 | **4** |
+| the same with two lines above it | 4 | 1 | **5** |
+| `` v=`echo hi⏎for⏎echo t` `` | 3 | 2 | **5** |
+| `` v=`echo hi⏎echo mid⏎for⏎echo t` `` | 4 | 3 | **7** |
+| `` cat `…` ``, `` : `…` ``, `` echo `…` ``, `` export v=`…` `` | 3 | 1 | 3 |
+| `` v=1 w=`…` ``, `` a=1 b=2 c=`…` ``, `` v=$(echo x) w=`…` `` | 3 | 1 | 3 |
+| `` >out `…` ``, `` 2>&1 `…` `` | 3 | 1 | 3 |
+| `` `…` 2>&1 ``, `` `…` arg ``, `` x`…`y arg ``, `` v=`…` w=1 `` | 3 | 1 | **4** |
+| `` if `…`; then :; fi `` | 4 | 1 | **5** |
+| `` case `…` in *) :;; esac ``, `` for z in `…`; do :; done `` | 3 | 1 | 3 |
+
+Three things in that table are each a control for a reading that fits the
+rest:
+
+- the **four-line body** says B is the body's whole newline count and not
+  the newlines ahead of the failure — the failure is on the third of four
+  lines there and bash still adds three;
+- `` v=1 w=`…` `` and `` a=1 b=2 c=`…` `` say it is not "a command with no
+  name", which is the reading #3553 recorded: those are bare assignments
+  and they take no addition;
+- `` >out `…` `` against `` `…` 2>&1 `` says the first token counts
+  redirections as well as words and assignments — the same word, the same
+  body, and the answer moves with what was written in front of it.
+
+Diagnostics value: `BackquotedSubstitutionFailureAddsItsBodysNewlines` —
+bash alone. The discriminator is a word pointer the runner keeps for the
+simple command it is running, `Runner.commandFirstWord`, compared by
+identity with the outermost word being expanded.
 
 ## What this does not cover
 

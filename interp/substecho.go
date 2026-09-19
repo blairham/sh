@@ -92,30 +92,45 @@ func (r *Runner) textInForce() (string, int) {
 // That is Diagnostics.ParseFailureNamesItsOwnLine, read for the same reason
 // ParseDiagnostic reads it.
 //
-// The parenthesised spellings only. The backquoted one is placed by a rule of
-// its own, and the panel splits three ways on it: measured 2026-09-17, one
-// dialect numbers the body from the file and adds a line where the command
-// holding it is a bare assignment, one numbers it from the body's own first
-// line, and this places it at the line the command begins on. Filed as #3553
-// with the seven shapes rather than guessed at here.
-func (r *Runner) substFailureAtItsLine(span syntax.Span, failure error) func() {
+// **The backquoted spelling is placed here too, and used not to be.** It
+// returned a no-op, so the refusal stood at the line the command began on
+// whatever the body did — which is one dialect's answer and no shell's.
+// Measured 2026-09-18 over the seven shapes of #3553, `env -i
+// PATH=/usr/bin:/bin LC_ALL=C <shell> s.sh`, stdin from /dev/null, each body
+// `echo hi` then `for` so the failure is on the body's second line:
+//
+//	                              file line  zsh  ksh93  dash  bash
+//	`v=` + the body on line 2             3    3      3     2     4
+//	the same with two lines above         4    4      4     2     5
+//	`cat `, `: `, `echo `, `export v=`    3    3      3     2     3
+//	a three-line body failing on its 3rd  4    4      4     3     6
+//
+// So three of the four are the *failure's* line, which is what this does for
+// every other spelling; the dialect that numbers the body from its own first
+// line already arrives with the base taken off
+// (BackquotedSubstitutionRestartsLines) and reads the same rule; and the
+// fourth adds the body's newlines where the substitution stands in the
+// command's first token — Diagnostics.BackquotedSubstitutionFailureAddsItsBodysNewlines,
+// which holds that sweep.
+//
+// body is the substitution's text, read for that addition alone.
+func (r *Runner) substFailureAtItsLine(span syntax.Span, body string, failure error) func() {
 	d := r.diag()
 	line := d.ParseFailureLine(failure)
-	// The older spelling is placed where the script's own line is, *unless*
-	// this dialect numbers that body from its own first line — where it does,
-	// the refusal's line is the body's and the prefix has to say so or the
-	// message contradicts the number inside it.
-	//
-	// Measured 2026-09-18 from a script file under `env -i
-	// PATH=/usr/bin:/bin LC_ALL=C`, `echo one` / ``echo `if; then :; fi` `` /
-	// `echo two`: dash 0.5.12 writes `<script>: 1: Syntax error: ";"
-	// unexpected` where the `$( … )` spelling of the same body writes `2:`,
-	// and BusyBox 1.37.0 writes `line 1` against `line 2` the same way. This
-	// wrote `2:` for both — so `Diagnostics.BackquotedSubstitutionRestartsLines`
-	// reached the runner's location and never the refusal's, which is the
-	// split #2471 identified.
-	if (span.Backquoted && !d.BackquotedSubstitutionRestartsLines) ||
-		d.ParseFailureNamesItsOwnLine || line < 1 || r.linePin != 0 {
+	if span.Backquoted && d.BackquotedSubstitutionFailureAddsItsBodysNewlines &&
+		r.expandingOuterWord != nil && r.expandingOuterWord == r.commandFirstWord {
+		line += strings.Count(body, "\n")
+	}
+	// The dialect that numbers a backquoted body from its own first line
+	// needs no special case: its base is already nought, so the failure's
+	// line *is* the body's and the prefix and the sentence agree. Measured
+	// 2026-09-18 from a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, `echo one` / ``echo `if; then :; fi` `` / `echo two`: dash
+	// 0.5.12 writes `<script>: 1: Syntax error: ";" unexpected` where the
+	// `$( … )` spelling of the same body writes `2:`, and BusyBox 1.37.0
+	// writes `line 1` against `line 2` the same way — the split #2471
+	// identified.
+	if d.ParseFailureNamesItsOwnLine || line < 1 || r.linePin != 0 {
 		return func() {}
 	}
 	saved := r.line
@@ -285,4 +300,35 @@ func (r *Runner) substBodyEcho(span syntax.Span, lines []string, start, own int,
 		return echo
 	}
 	return "`" + row[at+2:] + "'\n"
+}
+
+// firstTokenWord is the word of the earliest token of a simple command — its
+// first assignment's value, its first word, or its first redirection's target,
+// whichever was written first — or nil where that token carries no word, as a
+// bare `v=` does.
+//
+// Read only by Runner.commandFirstWord, and by pointer identity: what the one
+// message that asks needs to know is whether the word it is expanding is the
+// command's first token, and comparing words is exact where comparing
+// positions would have to know that an assignment's value starts after its
+// name.
+func firstTokenWord(c *syntax.SimpleCmd) *syntax.Word {
+	var at syntax.Pos
+	var word *syntax.Word
+	take := func(pos syntax.Pos, w *syntax.Word) {
+		if !pos.IsValid() || (at.IsValid() && !at.After(pos)) {
+			return
+		}
+		at, word = pos, w
+	}
+	if len(c.Assigns) > 0 {
+		take(c.Assigns[0].Pos(), c.Assigns[0].Value)
+	}
+	if len(c.Args) > 0 {
+		take(c.Args[0].Pos(), c.Args[0])
+	}
+	if len(c.Redirs) > 0 {
+		take(c.Redirs[0].Pos(), c.Redirs[0].Word)
+	}
+	return word
 }

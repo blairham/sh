@@ -41,6 +41,18 @@ func unnamedTrapSem(t *testing.T, takes Answer) Semantics {
 	t.Helper()
 	sem := killSem()
 	sem.TrapTakesASignalNumberItCannotName = takes
+	// Two axes a handler and a listing meet on the way, neither of them this
+	// file's subject. An unanswered axis is a refusal by name rather than a
+	// default, so leaving either would make every row here fail on a question
+	// it is not asking — which is what the first run on Linux reported.
+	//
+	// The status a handler sees is answered at the majority's reading, and no
+	// row here reads `$?` inside a handler, so it decides nothing below. How
+	// `trap` spells a value is answered at the spelling the panel writes —
+	// `trap -- 'echo R' 40` — because two rows are *about* the listing and one
+	// re-enters it, so a listing that is not a listing is not a control.
+	sem.SignalHandlerSeesEarlierStatus = No
+	sem.TrapQuoting = ListingQuoteWhenNeededPlain
 	return sem
 }
 

@@ -55,6 +55,7 @@ func helpBlock() string {
 	b.WriteString("  -c COMMAND      take the first argument as a command to run\n")
 	b.WriteString("  -o OPTION       turn an option on by name (listed below)\n")
 	b.WriteString("  +o OPTION       turn one off\n")
+	b.WriteString("  -b              stop reading options: every later word is an operand\n")
 	b.WriteString("\nEvery option below is a name, and each is written four ways:\n" +
 		"`--NAME' and `-o NAME' turn it on, `--no-NAME' and `+o NAME' turn it\n" +
 		"off. A letter's row may name a negative spelling — `--noglob' is `glob'\n" +

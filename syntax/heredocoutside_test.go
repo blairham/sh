@@ -94,6 +94,52 @@ func TestAHereDocumentWhoseBodyIsOutsideItsSubstitutionIsADialectQuestion(t *tes
 			src:   "echo $(echo $(cat <<EOF))\nbody\nEOF\n",
 			token: "<<EOF", line: 1,
 		},
+		// A `$( )` written inside a **parameter-expansion word** or inside an
+		// **arithmetic expansion** reaches the lexer only through a scan that
+		// counts parentheses, so none of these arrived at the point the text
+		// was read: the unbraced words ran the body as commands at 0 and the
+		// quoted and arithmetic ones raised the refusal from the re-parse the
+		// value gets at expansion time, located as a line the shell was
+		// running (#3719). The rows are here rather than in a file of their
+		// own because the answer is the same answer — same kind, same token,
+		// same line — which is the claim.
+		{
+			name:  "inside an unbraced parameter-expansion word",
+			src:   "echo ${x-$(cat <<EOF)}\nbody\nEOF\n",
+			token: "<<EOF", line: 1,
+		},
+		{
+			// The colon form, which used to answer differently from the
+			// bare one for no reason either shell has.
+			name:  "inside a colon-dash word",
+			src:   "echo ${x:-$(cat <<EOF)}\nbody\nEOF\n",
+			token: "<<EOF", line: 1,
+		},
+		{
+			// The same word inside double quotes, which is a second route to
+			// one word: the two used to disagree with *each other*, which is
+			// a fact about this lexer rather than about any shell.
+			name:  "inside a quoted parameter-expansion word",
+			src:   "echo \"${x-$(cat <<EOF)}\"\nbody\nEOF\n",
+			token: "<<EOF", line: 1,
+		},
+		{
+			name:  "inside a trimming word",
+			src:   "echo ${x#$(cat <<EOF)}\nbody\nEOF\n",
+			token: "<<EOF", line: 1,
+		},
+		{
+			name:  "inside an arithmetic expansion",
+			src:   "echo $((1+$(cat <<EOF)))\nbody\nEOF\n",
+			token: "<<EOF", line: 1,
+		},
+		{
+			// The arithmetic expansion whose whole operand is the
+			// substitution, which is the shape a script writes.
+			name:  "the whole of an arithmetic operand",
+			src:   "echo $(( $(cat <<EOF) ))\nbody\nEOF\n",
+			token: "<<EOF", line: 1,
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -163,6 +209,22 @@ func TestTheContainedHeredocRuleIsAboutTheSubstitutionsOwnText(t *testing.T) {
 		{
 			"a substitution with no here-document in it at all",
 			"echo $(echo hi)\necho ok\n",
+		},
+		// The contained shapes of the two routes the refusal now reaches,
+		// which are the controls that say the new rows are about the body
+		// being *outside* rather than about a `$( )` in a word at all. Both
+		// run to completion in the column this flag is from.
+		{
+			"a contained body inside a parameter-expansion word",
+			"echo ${x-$(cat <<EOF\nbody\nEOF\n)}\necho ok\n",
+		},
+		{
+			"a contained body inside an arithmetic expansion",
+			"echo $(( 1 + $(cat <<EOF\n2\nEOF\n) ))\necho ok\n",
+		},
+		{
+			"an ordinary word and an ordinary expansion",
+			"echo ${x-$(echo two)} $((1+$(echo 2)))\necho ok\n",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

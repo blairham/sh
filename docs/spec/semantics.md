@@ -2009,6 +2009,25 @@ or not anything can name it. That is core rather than an axis: the shells
 that check are checking the range, so there is nothing for a dialect to
 disagree about (#3168).
 
+**A default action is the platform's too, and it is a third fact rather
+than a restatement of the first.** Two kernels can both *have* a signal and
+disagree about what it does when nothing has arranged for it. SIGIO is the
+pair: its default action terminates on Linux and is discarded on a BSD, so a
+script that signals itself with no trap set stops on one machine and runs on
+past on the other. The name is shared and the boolean beside it cannot be,
+and the one the shared table carried was the BSD's — measured 2026-09-19 in
+the pinned Alpine image, where `kill -s IO $$` writes `I/O possible` and ends
+the shell at 157 while this engine went silently on at 0. So
+`platformsignals_<goos>.go` carries a third thing beside the names and the
+bound: `platformSignalDefaults`, the shared entries this kernel answers
+differently for. It is one entry today and that is measured rather than read
+off two manuals — every other shared entry whose default could split was sent
+to the shell in the same container, and URG, CHLD, CONT, WINCH, TSTP, TTIN
+and TTOU are silent at 0 there while ABRT, SYS, XCPU, XFSZ, VTALRM and PROF
+all end it, which is the shared table's value for each of them. Nothing about
+a dialect: every column on that kernel ends the same way, which is why the
+one column that runs in a Linux container is where it was seen (#3703).
+
 **A shell's own table can be shorter than the platform's**, which is
 `Semantics.SignalNamesTheShellLacks`. ksh93 on macOS has no name for 29 and
 dash on Linux has none for 16, and each writes the number back where the rest

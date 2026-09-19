@@ -242,6 +242,13 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		return ""
 	}
 
+	// The body parsed, so what runs now runs at a level of its own: a quote
+	// or a brace the text *around* this substitution left open is not open
+	// inside its body, and a refusal in there belongs to the inner level.
+	// See substLevel — this is what keeps `echo "$(echo $(for))"` from
+	// claiming the outer quote for the inner body (#3355).
+	defer r.atFreshSubstLevel(span)()
+
 	if v, answered := r.arithmeticBodySubstitution(f, span); answered {
 		// A body that is nothing but `(( … ))` is read as the arithmetic
 		// expansion in the one dialect that reads it that way — before the

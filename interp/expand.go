@@ -781,6 +781,12 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 	// the difference between `"${a[@]+p q}"` being one field and
 	// `"${a[@]+${a[@]}}"` being two. Each span carries the quoting it was
 	// written with, so the outer quotes need no separate handling.
+	//
+	// The `${` is open around whatever this word holds, though, and one
+	// dialect says so at end of input: a substitution refused in here is
+	// inside a brace that never closed, and inside this expansion's quoting
+	// if it had any. See Runner.inBraceOperand and substLevel (#3355).
+	defer r.inBraceOperand(s.Quoting)()
 	if s.Quoting != syntax.Unquoted {
 		// Quoted, so the word substitutes as *text* and nothing in it is a
 		// pattern. Measured on zsh 5.9.2: `"${nosuch:-*}"` is one asterisk
@@ -2098,6 +2104,10 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 		r.expandErr = true
 		return "", false
 	}
+	// The expression's text is re-lexed, so what it holds is at a level of
+	// its own — and one with no sentence of its own, which is the whole of
+	// what substLevel.arith says (#3355).
+	defer r.inArithText(s)()
 	tree, text, perr := r.arithTreeOver(s.Arith, s.Value)
 	if perr != nil {
 		// A failure to *read* the expression, which can only happen once

@@ -1608,6 +1608,23 @@ type Runner struct {
 	// was not.
 	expandingOuterWord *syntax.Word
 
+	// substLevel is what is still open, lexically, around the substitution
+	// being expanded — at *this* level of substitution nesting and no other.
+	//
+	// It is the whole of what the second message after a refused body needs
+	// from one dialect, and it is not derivable from the failing span: the
+	// quote of `"${x:-$(for)}"` is on the *enclosing expansion's* span and
+	// the brace is on no span at all, so a message read off `span.Quoting`
+	// alone answers neither. See substecho.go for the measurement and for
+	// why a level is the unit (#3355).
+	substLevel substLevel
+
+	// substLevelsOut are the levels outside it, outermost first. A level
+	// with nothing open writes no line and the level outside it still
+	// writes its own, so the answer is the innermost level that holds
+	// something rather than the innermost level.
+	substLevelsOut []substLevel
+
 	// commandFirstWord is the word of the *first token* of the simple command
 	// being run — the earliest of its assignments, its words and its
 	// redirections as they were written — or nil outside one.

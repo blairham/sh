@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -367,6 +367,21 @@ suite: ## Run our own conformance suite in every dialect and report the per-dial
 		-own-bin zsh=$(BINDIR)/own-zsh \
 		-own-bin ksh=$(BINDIR)/own-ksh \
 		-own-bin dash=$(BINDIR)/own-dash $(ARGS)
+
+# The campaign's leg-2 count, derived rather than remembered.
+#
+# It starts no shell and needs no container runtime, which is the point: leg 2
+# is a number #2291 is quoted from, and a number only a full sweep can produce
+# is one that gets quoted from memory. "120 of 230" reconstructed from nothing
+# by the time anybody asked what a cell had been (#3481). This reads
+# suite.Areas, suite.Ours and the files, so the answer is a second's work and
+# is arguable in public.
+#
+# It exits nonzero on a **stale ledger entry** and on nothing else. The counts
+# are meant to move; an entry claiming a cell cannot be closed, on a column
+# somebody has since pinned, is a claim nobody is checking any more.
+suite-cells: ## Print the column x area roll-up, and the cells closed by measurement rather than by a file
+	@go run ./internal/cmd/suitecheck -cells $(ARGS)
 
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)

@@ -145,7 +145,14 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 			// place its answer and the element-writing one coincide — and
 			// the reason the constant's name is about the *subscript* rather
 			// than about never writing anything.
-			r.setAssocElem(base, sub, "")
+			//
+			// The key it leaves holds **nothing** rather than the empty
+			// string, which is a state of its own and one this column's
+			// listing spells out: `typeset -A m=([k]=)` against the
+			// `([k]='')` an assignment leaves. See declareAssocKey, which
+			// carries the measurement and the rule that an assigned key is
+			// never taken back down to it (#3511).
+			r.declareAssocKey(base, sub)
 			return "", letters, true
 		}
 		if _, err := r.subscriptValue(sub); err != nil {

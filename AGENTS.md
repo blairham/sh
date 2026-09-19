@@ -1417,6 +1417,75 @@ over (#2605). What the corpus had all along was the row; what it did not have
 was anything that said it out loud, since the dialect conformance number is
 report-only by design.
 
+`make suite-cells` prints #2291's second leg as a derivation: the
+`(column, area)` space, what is closed, and the cells closed by **measurement
+rather than by a file**. `internal/suite/areas.go` holds the area table and
+`internal/suite/cells.go` the roll-up and the ledger.
+
+It exists because leg 2's first number could not be re-derived. "120 of 230
+cells" was quoted for the whole campaign and 230 reconstructs from none of the
+three readings anyone proposed, because the area set lived on the board as
+issues #2300–#2324 and the column set lived in `suite.Ours` — so no instrument
+could compute the denominator and nobody could say what a cell had been
+(#3481). The areas are in the tree now, checked against the files rather than
+asserted.
+
+**The cell space was chosen by a measurement, and the measurement is
+committed.** Three readings were on the table; the one two comments recommended
+— a cell is closed where the dialect merely *runs a file* for that area —
+turned out to be **125 of 125 already**. `core/` alone carries a file for 24 of
+the 25 areas and the twenty-fifth, arrays, has one in every dialect tier. A
+ledger over a count with nothing open holds nothing and a staleness test over
+an empty ledger checks nothing, so that reading would have produced a mechanism
+that could not fail. `suite.TestOptionBIsSaturated` re-derives it on every run,
+so the choice can be re-argued if it ever stops being true.
+
+So a cell is closed only where the column is **gated** — its reference pinned
+inside a digest-pinned image, so the figure is the same on a runner as on a
+laptop (#3480). Today that is 50 of 125: bash and ash closed, zsh and dash open
+pending #3480's two remaining questions, and ksh93's 25 **closed by
+measurement** — no distribution packages AT&T's 2012 build and grading
+`cmd/ksh` against ksh93u+m measures the fork, so those cells are not waiting on
+work anybody can do.
+
+**The ledger is the deliverable and the staleness test is what makes it one.**
+It is kept on `coverage.UnreachableByConstruction`'s terms: an entry is not a
+forgiveness, it carries the issue holding the evidence and the measurement
+itself, and it is checked against the columns on every run. Four ways it can
+stop being true — the column is gone, the area is gone, the column **has since
+been gated**, or the entry carries no measurement — and the third is the one
+the mechanism is for, since the day a column becomes gatable is exactly the day
+nobody is reading the reason it was not. `TestTheLedgerIsCheckedAgainstTheColumns`
+mutates each of the four on and requires the check to say so, with a control
+row proving the committed ledger stays quiet under the same function.
+
+**An ungated column now says so, with the measurement.** A gated column prints
+the image it was reached through; before this an ungated one printed nothing,
+so the two differed in the report only by a line the gated one had and a figure
+graded against whatever build the machine happened to have read exactly like
+one graded against a pin. `suite.Suite.Ungated` carries what was measured when
+somebody asked why, `UngatedReason` falls back to the ledger entry where one
+covers the column — one sentence, one place, so ksh93's cannot drift into two —
+and `TestAnUngatedColumnSaysWhy` makes the two states exclusive and both
+stated. The zsh and dash columns carry #3480's measurements: no public image
+reports `zsh 5.9.2` and the 5.9 images differ from it on two of that column's
+own files (`kill -L`, and `kill -l` of an out-of-range number), and no public
+image is an unpatched dash — every distribution answers `esc=3`, which is the
+whole of that column's gap on a runner (67/67 strict here against 64/67 there).
+Both stay **open** rather than ledgered, because building and publishing those
+images is work somebody can do.
+
+A second, smaller ledger holds the two files no area claims, and they are the
+finding rather than the leftovers: `boundary.tests` is about a **tier
+boundary** and `inherited.tests` about an **axis set**, which are not areas and
+should not make the area list grow a row. A cell space that cannot see two of
+the files somebody wrote is worth printing rather than rounding off.
+
+The target starts no shell and reads no reference, so it answers in a second on
+a machine with neither. `make suite` prints the same roll-up under its own
+numbers. Neither is a gate on the counts — those are meant to move — but a
+stale ledger entry exits nonzero, and the staleness test runs in `make check`.
+
 `make suite-guard` fails when **our own suite** has lost a file, or shortened
 one. It runs in `make check` and as a step of the same required
 `Build and test (ubuntu-latest)` job, against the same merge base.

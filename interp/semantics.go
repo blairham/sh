@@ -11926,6 +11926,56 @@ type Semantics struct {
 	// sentence, which is why they are not this axis.
 	TestGroupedUnaryAloneLosesTheClosingParen Answer
 
+	// TestFailureInsideAnUnclosedGroupIsTheParen replaces the complaint a
+	// refused expression would otherwise make with
+	// Diagnostics.TestClosingParenExpected, wherever the reading gave up
+	// while it was inside a `( … )` it had not yet closed.
+	//
+	// The companion of the axis above, and the general case of it: that one
+	// is a shape a working expression falls into, this one is what a broken
+	// one is *called*. Both columns refuse at status 2 either way, so what
+	// moves is the sentence.
+	//
+	// Measured 2026-09-18 on BusyBox v1.37.0 in the pinned image, script
+	// files under `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on
+	// /dev/null:
+	//
+	//	[ ( x y ) ]          closing paren expected   where this named `y`
+	//	[ ( -Q x ) ]         closing paren expected   and this named `x`
+	//	[ ( -a x ) ]         closing paren expected
+	//	[ ( -n x y ) ]       closing paren expected
+	//	[ ( -n x ]           closing paren expected
+	//	[ ( ) ]              closing paren expected
+	//	[ ( ) x ]            closing paren expected
+	//	[ ( -a ]             closing paren expected
+	//	[ ( ( x ) ]          closing paren expected
+	//	[ ( ( ) ) ]          closing paren expected
+	//	[ ( x y z ) ]        closing paren expected
+	//	[ ( x y ) junk ]     closing paren expected
+	//	[ ( x y ) -a z ]     closing paren expected
+	//	[ x -a ( y ]         closing paren expected
+	//	[ x -a ( y z ) ]     closing paren expected
+	//	[ x -a ( ) ]         closing paren expected
+	//	[ ( x ) -a ( y z ) ] closing paren expected
+	//
+	// **The controls are the rows where a group did close**, and they are
+	// what say this is not "any expression with a parenthesis in it":
+	//
+	//	[ ( x ) junk ]       junk: unknown operand
+	//	[ ( x ) junk more ]  junk: unknown operand
+	//	[ ( x ) ( y ) ]      (: unknown operand — the leftover is a word
+	//	[ x ) ]              ): unknown operand — no group was ever opened
+	//
+	// So the leftover after a group that parsed is named as a word like any
+	// other, and the second `(` in the third row is named rather than read
+	// as an opener. Only a failure with a group still open takes the
+	// sentence.
+	//
+	// dash has the same wording for some of these and not the same set — it
+	// reads `[ ( -n x ) ]` at 0 and `[ ( ) ]` as false — so this is one
+	// column's answer and not the ash family's (#3665, #3687).
+	TestFailureInsideAnUnclosedGroupIsTheParen Answer
+
 	// LocalThroughCommandDeclaresNothing runs `command local a=1` for its
 	// operand checks and declares nothing, assigns nothing and reports 0 —
 	// the scope the prefix puts the declaration in is not the function's.
@@ -21025,7 +21075,8 @@ func PosixSemantics() Semantics {
 		// three-operand form one beside it, so the group closes. The one
 		// column that cannot close it is answering with a defect rather
 		// than with a reading, and says so where it overrides this.
-		TestGroupedUnaryAloneLosesTheClosingParen: No,
+		TestGroupedUnaryAloneLosesTheClosingParen:  No,
+		TestFailureInsideAnUnclosedGroupIsTheParen: No,
 		TestStringOrder: TestStringOrderNeither,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several

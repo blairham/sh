@@ -630,6 +630,7 @@ func Semantics() interp.Semantics {
 	// And a parenthesized unary standing alone is read here, where the
 	// sibling cannot close the group: `[ ( -n x ) ]` is 0.
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: a class that can never match, the same as a bare `[`.

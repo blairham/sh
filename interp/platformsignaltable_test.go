@@ -173,6 +173,7 @@ func TestTrapListsTheSameTableKillLists(t *testing.T) {
 		KillListingNumbered,
 		KillListingSpaceJoined,
 		KillListingZeroFirst,
+		KillListingNumberedPerLine,
 	} {
 		dg := Diagnostics{KillListing: form}
 		fromKill, _, st := killRun(t, "kill -l\n", sem, dg)

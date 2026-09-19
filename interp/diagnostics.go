@@ -8251,4 +8251,14 @@ const (
 	KillListingSpaceJoined
 	// KillListingZeroFirst is dash's: a 0, then one name per line.
 	KillListingZeroFirst
+	// KillListingNumberedPerLine is BusyBox ash's: `%2d) NAME`, one entry
+	// per line, with no `SIG` in front of the name.
+	//
+	// It shares a number column with bash's shape and nothing else: bash
+	// writes `SIG` and packs five to a row, this writes the bare name one
+	// to a line. Measured 2026-09-18 against BusyBox v1.37.0 in the pinned
+	// Alpine image, `kill -l` from a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, the first three lines shown as
+	// bytes: ` 1) HUP\n 2) INT\n 3) QUIT\n`.
+	KillListingNumberedPerLine
 )

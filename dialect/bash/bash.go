@@ -1539,6 +1539,7 @@ func Semantics() interp.Semantics {
 	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.Yes
 	// `[ ( -n x ) ]` is 0: the group is read like any other (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
 	// And `command local a=1` declares the local, which is what makes the
 	// two shells that drop it a split rather than a rule (#3370).
 	s.LocalThroughCommandDeclaresNothing = interp.No

@@ -267,6 +267,11 @@ func Semantics() interp.Semantics {
 	// rows, which say it is the group standing alone and not grouping in
 	// general (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.Yes
+	// And the general case of it: any refusal reached with a group still
+	// open is that sentence here, where this engine named the word its own
+	// reader stopped at. Seventeen shapes move and four controls do not —
+	// see the axis, which has them (#3665).
+	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.Yes
 	// And `command local a=1` declares nothing at all, which is the sibling's
 	// answer too (#3370).
 	s.LocalThroughCommandDeclaresNothing = interp.Yes
@@ -1290,6 +1295,18 @@ func Semantics() interp.Semantics {
 	s.KillListReducesRepeatedly = interp.Yes
 	s.KillListPrintsANumberItCannotName = interp.Yes
 	s.KillListNamesZeroAsExit = interp.Yes
+	// Two spellings this applet reads beside the names in the table.
+	// Measured 2026-09-18 against BusyBox v1.37.0 in the pinned Alpine
+	// image: `kill -l POLL` and `kill -l IO` are both `29`, and `kill -l
+	// IOT` is `6` where `kill -l CLD` is refused as an unknown signal. Both
+	// were refused here.
+	//
+	// The *listing* writes `29) POLL` and `6) ABRT` — the alias for one of
+	// these pairs and the table's own name for the other — which
+	// Diagnostics.SignalListingWritesTheAlias cannot say, being one answer
+	// for the whole table. So the flag stays off, the reading is right for
+	// both, and the one row the listing still differs on is #3684.
+	s.SignalNamesTheShellAlsoReads = "POLL=IO IOT=ABRT"
 	// `exec -a name` is BusyBox's too, which the ash preset had inherited a
 	// No for: `exec -a NAME /bin/echo` was `-a: not found` here and runs the
 	// applet named NAME there. The other two letters are not — `-l` and `-c`
@@ -2302,7 +2319,13 @@ func Diagnostics() interp.Diagnostics {
 		// 2026-09-16: `kill -s 99 $$`, `kill -l nope` and `kill notapid`
 		// are all 1 in BusyBox 1.37.0.
 		KillArgumentStatus: 1,
-		KillListing:        interp.KillListingZeroFirst,
+		// `%2d) NAME`, one per line, no `SIG` — none of the other four
+		// shapes. Measured 2026-09-18 against BusyBox v1.37.0 in the pinned
+		// Alpine image with `cmd/ash` cross-compiled and run in the same
+		// container: ` 1) HUP`, ` 2) INT`, …, `31) SYS`, `35) RTMIN`,
+		// `64) RTMAX`. This had dash's zero-first shape, which is the one
+		// thing about the listing it does not share with dash (#3655).
+		KillListing: interp.KillListingNumberedPerLine,
 
 		// `getopts` names nothing in front of its two complaints, as dash
 		// does.

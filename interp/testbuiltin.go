@@ -337,7 +337,54 @@ func (r *Runner) bareTerminalTest() bool {
 // than `-o`. That shape is unanimous across the panel; what is *inside* it is
 // not, and one column reads the counts and the grammar differently enough to
 // need a reader of its own — see the axis read on the first line of the body.
+// unclosedGroup is the sentence a refusal takes when the reading gave up
+// inside a group it had not closed, in the one column that replaces it.
+//
+// Every caller is a place where a group is *open*: the parser's own group
+// primary, and the count-based readings, which have no group parser in them
+// at all — so a leading `(` they refuse is a group nothing was ever going to
+// close. See Semantics.TestFailureInsideAnUnclosedGroupIsTheParen.
+func (r *Runner) unclosedGroup(err error) error {
+	if err == nil {
+		return nil
+	}
+	if !r.ask(r.sem().TestFailureInsideAnUnclosedGroupIsTheParen,
+		"a refusal inside an unclosed `test` group named as the missing paren") {
+		return err
+	}
+	return &testError{kind: errClosingParenExpected}
+}
+
+// countedLeadingGroup reports whether a refused expression was read by the
+// argument counts *and* opened a group there.
+//
+// The counts are the whole of the reading for four words or fewer, and none
+// of the four has a group parser in it: the three-word form matches `( x )`
+// and the four-word one `( E )` by position, and everything else with a
+// leading `(` is refused with the parenthesis still open. Four words whose
+// last is not `)` fall past the counts to the parser, which closes its own
+// groups and is why `[ ( x ) junk ]` names the leftover word in both columns.
+func countedLeadingGroup(args []string) bool {
+	switch len(args) {
+	case 2, 3:
+		return args[0] == "("
+	case 4:
+		return args[0] == "(" && args[3] == ")"
+	}
+	return false
+}
+
+// testExpr evaluates the expression and then says what a refusal is called,
+// which is a question one column answers differently — see unclosedGroup.
 func (r *Runner) testExpr(form testForm, args []string) (bool, error) {
+	v, err := r.testExprRead(form, args)
+	if err != nil && countedLeadingGroup(args) {
+		return false, r.unclosedGroup(err)
+	}
+	return v, err
+}
+
+func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 	if r.sem().TestReadsOneExpressionOffTheOperands == Yes {
 		// One column reads a single expression off the front of the list and
 		// drops the rest, which is a different reader rather than a leniency
@@ -584,10 +631,10 @@ func (p *testParser) primary() (bool, error) {
 		p.pos++
 		v, err := p.orExpr()
 		if err != nil {
-			return false, err
+			return false, p.r.unclosedGroup(err)
 		}
 		if !p.more() || p.peek() != ")" {
-			return false, &testError{kind: errOperandExpected}
+			return false, p.r.unclosedGroup(&testError{kind: errOperandExpected})
 		}
 		p.pos++
 		return v, nil

@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -159,6 +159,23 @@ suite-guard: ## Fail if our own suite has lost a file, or shortened one, since t
 
 oracle: ## Regenerate docs/spec/measurements.md and the golden record from a live panel run
 	go run ./internal/cmd/oracle
+
+# A target of its own rather than ARGS on the one above, and the separation is
+# the point. `make oracle` is a 1122-case sweep across seven columns that
+# nobody should start casually; this runs the cases you name and keeps the
+# record for every other, which is a handful of shell invocations. Two names
+# for two costs, so "do not run the sweep" stays a rule about a target rather
+# than a rule about a flag somebody has to remember.
+#
+# It is what unparks a measured case that cannot reach the whole panel: before
+# it, "this case is measured" and "this case can be committed" were different
+# questions and the second one depended on hardware (#3384). It refuses a
+# named case with a column missing from it and refuses a panel that is not the
+# record's, because a partial record that cannot be told from a whole one is
+# the only kind worth having.
+oracle-case: ## Regenerate only the cases named in CASES (comma-separated IDs), keeping the record for the rest
+	@test -n "$(CASES)" || { echo 'usage: make oracle-case CASES=cat/one,cat/two'; exit 2; }
+	go run ./internal/cmd/oracle -only "$(CASES)"
 
 oracle-check: ## Fail if the reference shells no longer behave as recorded
 	go run ./internal/cmd/oracle -check

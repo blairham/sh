@@ -2292,6 +2292,23 @@ type Runner struct {
 	// any complaint the subject makes. See
 	// Semantics.CaseSubjectKeepsThePreviousLine.
 	prevLine int
+	// enteredLine is the line of the last statement this shell *entered*, as
+	// against the line of the command now running. The two are the same for
+	// every ordinary command and part where a construct is entered without
+	// being a statement of its own: a grouping's head — `(` or `{` — does not
+	// advance it, and neither does a coprocess statement, which is refused
+	// before it is entered at all. A compound's *keyword* head does, and so
+	// does everything inside a brace group, which is at this level.
+	//
+	// A subshell's body advances the clone's copy and is thrown away with it,
+	// which is what makes `( … )` look like a grouping that never ran: the
+	// field is a plain int on a Runner a subshell copies, so that falls out
+	// rather than being written.
+	//
+	// Zero means nothing has been entered yet, which reads as the first line
+	// of the input — see Runner.lastStatementLine. One diagnostic names it:
+	// see Diagnostics.CoprocessAlreadyRunningNamesTheLastStatementEntered.
+	enteredLine int
 	// caseSubjectPrev is that line while a `case` subject is being expanded,
 	// and zero everywhere else. Runner.lineNow is where it is taken up; it
 	// is held here rather than written into line so that a subject reading
@@ -3725,6 +3742,23 @@ func (r *Runner) lineOf(p syntax.Pos) int {
 	return int(p.Line) + r.lineBase + r.lineOrigin
 }
 
+// lastStatementLine is Runner.enteredLine as a diagnostic may name it: the
+// line of the last statement this shell entered, and the first line of the
+// input where it has entered none.
+//
+// A script whose very first statement is the one refused is the row that
+// needs the second half — `cat |&` twice and nothing else is `line 1` from a
+// file, where the field still stands at zero. It is not a special case in the
+// route that writes it, either: `-c` leaves line 1 out of a location in that
+// dialect anyway, so the same number produces the bare sentence there and the
+// numbered one from a file, which is what was measured.
+func (r *Runner) lastStatementLine() int {
+	if r.enteredLine == 0 {
+		return 1
+	}
+	return r.enteredLine
+}
+
 // builtinIsSpeaking reports whether this diagnostic belongs to a builtin,
 // which includes a redirection opened for one. Separate from naming the
 // builtin, because the two dialects that ask want different answers for a
@@ -5110,6 +5144,16 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
 		r.prevLine, r.line = r.line, r.lineOf(c.Pos())
+		switch c.(type) {
+		case *syntax.Group, *syntax.Subshell:
+			// A grouping's head is not a statement, so it does not advance
+			// the count of the last statement entered. What runs *inside* a
+			// brace group does, at this level; what runs inside a subshell
+			// advances the clone's copy and goes with it. See
+			// Runner.enteredLine.
+		default:
+			r.enteredLine = r.line
+		}
 	}
 	// And this door is where an interrupt has to be noticed, because for a
 	// loop of the shell's own commands there is no other: nothing in `while

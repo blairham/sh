@@ -139,9 +139,12 @@ printf -- '=== what the operator starts ===\n'
 (
 	# Fatal, so nothing after it in the subshell runs and the answer is the
 	# subshell's own status, read from outside. The sentence itself is held
-	# out: ksh93 words it with a `line N` this shell does not reproduce, N
-	# being the enclosing top-level statement rather than the line the second
-	# operator is on (#3391).
+	# out because it carries a location naming the file it was read from,
+	# which is the harness's business rather than the shell's. The number in
+	# that location is ksh93's own rule — the last statement the shell
+	# entered rather than the line the second operator is on — and it is
+	# reproduced since #3391; dialect/ksh/coproclocation_test.go is where the
+	# thirteen shapes it was measured over are pinned.
 	(
 		cat |&
 		cat |&

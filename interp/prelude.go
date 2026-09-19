@@ -68,10 +68,16 @@ const diagnoseCommand = "diagnose"
 // Runner.prevLine and Semantics.CaseSubjectKeepsThePreviousLine. Every other
 // route sets the line from the node it is about before it says anything, so
 // nothing else could see the difference.
+//
+// Runner.enteredLine is forgotten here for the same reason and is the second
+// construct that can see it: the count is read as it stands rather than being
+// set from a node, so a prelude of twenty-odd lines left a script whose very
+// first statement raises the one diagnostic that reads it blaming line 22 of
+// text the script never saw.
 func (r *Runner) SourcingPrelude(on bool) {
 	r.sourcingPrelude = on
 	if !on {
-		r.line, r.prevLine = 0, 0
+		r.line, r.prevLine, r.enteredLine = 0, 0, 0
 	}
 }
 

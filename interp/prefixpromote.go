@@ -71,6 +71,19 @@ func (r *Runner) keepThePrefixEntry(name string) {
 	if !slices.Contains(r.prefixHeldNames, name) {
 		return
 	}
+	if slices.Contains(r.globalUnderItsOwnPrefix, name) {
+		// A `-g` declaration, which is writing the cell **underneath** this
+		// prefix rather than the binding the prefix made — so there is no
+		// prefix value here for it to keep. The letter takes the question
+		// away rather than answering it: measured 2026-09-18 on bash 5.3.20,
+		// `a=7 declare -x a` leaves `declare -x a="7"` and `t=7 declare -gx
+		// t` leaves `declare -x t`, the attribute with no value at all, and
+		// `c=7 declare -r c` leaves `declare -rx c="7"` against `b=7 declare
+		// -gr b=3` leaving `declare -r b="3"` — without even the export the
+		// prefix put on the temporary. See
+		// interp/globalunderitsownprefix.go.
+		return
+	}
 	if slices.Contains(r.prefixKeptNames, name) {
 		// Two attributes over one name — `declare -rx v` — is one keeping.
 		return

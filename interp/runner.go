@@ -1538,6 +1538,16 @@ type Runner struct {
 	// own can hand the take-back over to that scope. See
 	// Runner.scopeTakesOverThePrefixEntry.
 	prefixHeldUndo []savedVar
+	// globalUnderItsOwnPrefix are the names a `-g` declaration has lifted
+	// that prefix off, for the length of the declaration. The promotion
+	// question is not put for one of them: a declaration writing the cell
+	// *underneath* the prefix is not keeping the prefix's value, and the two
+	// answers are measurably different — see
+	// interp/globalunderitsownprefix.go.
+	//
+	// A slice for the reason the three above it are: a prefix is one, two or
+	// three assignments.
+	globalUnderItsOwnPrefix []string
 	// functionPrefixNames are the names the running function call's own
 	// assignment prefix is holding — a second live prefix, one frame out from
 	// the one above, and the one `f(){ local c; }` called as `c=2 f` meets.
@@ -3183,6 +3193,13 @@ type Runner struct {
 	// m` and `m=(x y)` lists `typeset -a m=(x y)`. See
 	// Semantics.BareElementsInATableLiteralEndTheScript.
 	tableLetterHere map[string]bool
+	// globalLetterHere is the same record for the `-g` letter — the names a
+	// declaration wrote it over, for the operand assignments that run after
+	// the builtin has returned. See interp/globaloperand.go, where the
+	// measurement is; the letter's rule for a *scalar* is asked at the store
+	// instead, in setGlobalVar, and needs no record because the declaration
+	// itself does that write.
+	globalLetterHere map[string]bool
 	// integer names evaluate what is assigned to them: with the attribute,
 	// `n=5+2` stores 7 rather than the four characters. It is a property of
 	// the name and not of the assignment, which is why it is recorded here.
@@ -6210,6 +6227,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.indexedLetterHere = nil
 		outerTable := r.tableLetterHere
 		r.tableLetterHere = nil
+		outerGlobal := r.globalLetterHere
+		r.globalLetterHere = nil
 		if locks {
 			r.assignOperands(ctx, c)
 		} else {
@@ -6233,7 +6252,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.inBuiltin = outer
 		fatal := false
 		if st == 0 && !locks {
+			// A `-g` declaration's array literal lands on the shell's own
+			// cell, under whatever local or call prefix is standing on the
+			// name. Around the operand assignment rather than inside the
+			// builtin, because that is where this value is written — see
+			// interp/globaloperand.go.
+			putShadowsBack := r.globalOperandsRunOnTheShellsOwnCell()
 			r.assignOperands(ctx, c)
+			putShadowsBack()
 			switch {
 			case r.ctl == controlExit:
 				// Something here was fatal, and a fatal error has already set
@@ -6264,6 +6290,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.compoundOperands = outerCompounds
 		r.indexedLetterHere = outerIndexed
 		r.tableLetterHere = outerTable
+		r.globalLetterHere = outerGlobal
 		if fatal {
 			return nil
 		}

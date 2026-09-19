@@ -11408,12 +11408,63 @@ ordinary local, and a plain `c=3` inside the body writes the binding the
 prefix put there and goes back with it — all three leave the name unset
 after the call in both columns.
 
-Two shapes of it are **not** modeled yet and are measured in #3685: an
-array literal — `y=7 f` with `f(){ typeset -ga y=(1 2); }` leaves bash
-holding `1 2` — because the literal is a command operand assigned after
-the builtin has returned rather than part of the declaration, and a
-prefix in front of the declaration *itself* — `w=7 typeset -g w=3` is
-`3` in bash — because that is the builtin's own prefix and not a call's.
+**Two further routes reach the same answer, and neither is a second
+axis** (#3685). The letter either names the shell's own cell, in which
+case the write goes under whatever is standing on the name, or it means
+"take no new local", in which case it writes what is visible — and that
+one reading settles all three mechanisms. What made them separate work
+is that each is a different stack, lifted where it stands.
+
+**An array literal is a command operand**, assigned after the builtin
+has returned rather than as part of the declaration, so the scalar
+spelling's walk never saw it. Measured the same day:
+
+    y=(9 9); f(){ local y=(5); typeset -ga y=(1 2); }   bash  in [5]  top [1 2]
+    f                                                   zsh   in [1 2] top [9 9]
+    z=(9 9); g(){ typeset -ga z=(1 2); }; g              both  top [1 2]
+    w=(9 9); h(){ typeset -ga w=(1 2); }; w=7 h          bash  top [1 2]
+                                                        zsh   top [9 9]
+
+The middle row is the control and is what says the letter reaches this
+route at all: with nothing standing on the name both columns write the
+shell's own cell. The other two are the two things that can stand there
+— a local and a call's prefix — and this shell answered zsh in both,
+which is the axis going *unasked* rather than answered `No`.
+
+**A prefix in front of the declaration itself** is the third stack and
+the innermost: the running command's own entry rather than an enclosing
+call's.
+
+    w=7 typeset w=3          bash  U   zsh  U      the control
+    x=7 typeset -g x=3       bash  3   zsh  U
+    v=1; v=7 typeset -g v=3  bash  3   zsh  1
+    y=7 typeset -g y         bash  U   zsh  U
+
+The first row is what makes the second about the letter: without it the
+prefix's value goes away with the command in both columns. The third
+says the write lands on a cell that was already there rather than merely
+outliving the prefix.
+
+**The letter takes the promotion question away.** One column keeps the
+value its own prefix set where the declaration in front of it names the
+export or readonly attribute over that same name —
+`DeclarationPromotesThePrefixEntry` — and a `-g` declaration is not
+writing that binding, so there is nothing for it to keep:
+
+    a=7 typeset -x a      declare -x a="7"    promoted
+    t=7 typeset -gx t     declare -x t        the attribute alone, no value
+    c=7 typeset -r c      declare -rx c="7"   promoted, prefix export and all
+    b=7 typeset -gr b=3   declare -r b="3"    no export: that was the prefix's
+
+Rows two and four are the letter doing that: what is left is what the
+declaration wrote on the cell underneath, which never had the export
+attribute the prefix put on the temporary.
+
+`interp/globaloperand.go` and `interp/globalunderitsownprefix.go` hold
+the two, and the lift each uses is the one `interp/staticscope.go`
+already builds for a sealed call — a swap and not a copy, so what the
+declaration left is written into the saved copy the return will give
+back.
 
 **ksh93's `typeset -f` prints the source text verbatim** — its own
 two-space indentation, `echo two; echo three` still on one line. So that

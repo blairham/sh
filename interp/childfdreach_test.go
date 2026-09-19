@@ -60,7 +60,7 @@ func TestACoprocessNumberIsClosedInAChildEvenWhenTheProcessHasOneThere(t *testin
 	// dup2 clears close-on-exec on the target, which is the whole point: this
 	// is a descriptor the kernel would hand to any child that is not told
 	// otherwise, and being told otherwise is what the shell owes it.
-	if err := syscall.Dup2(int(w.Fd()), coprocFeedFd); err != nil {
+	if err := testDup2(int(w.Fd()), coprocFeedFd); err != nil {
 		t.Fatalf("dup2 onto %d: %v", coprocFeedFd, err)
 	}
 	t.Cleanup(func() { _ = syscall.Close(coprocFeedFd) })

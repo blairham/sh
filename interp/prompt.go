@@ -953,18 +953,33 @@ func RenderPromptValue(st PromptStyle, r *Runner, text string, field PromptResol
 	return expand(out), "", true
 }
 
-// expandAroundTheEscapes expands the text between a value's escape pairs and
-// leaves the pairs themselves alone, collapsing a doubled escape as it goes.
+// expandAroundTheEscapes expands a value while keeping its escape pairs out of
+// the expansion, collapsing a doubled escape as it goes.
 //
 // See [PromptStyle.ExpansionSkipsTheEscapes] for what was measured. The walk
-// is the whole of it: a run of ordinary text is handed to expand, an escape
-// and its code are written through untouched, and the escape doubled is
-// written once — which is the one collapse, and is why `\\$HOME` expands the
-// parameter where `\$HOME` does not.
+// has three cases and each of them is a row of that measurement:
 //
-// Expanding the runs separately rather than the value as a whole is the point
-// and not a shortcut: a `$` the value quoted must not be expanded, and the
-// only thing that says it was quoted is the escape in front of it.
+//   - An **escape pair** at the top level is written through untouched, so the
+//     table reads what the value held; the escape **doubled** is written once,
+//     which is the one collapse and is why `\\$HOME` expands the parameter
+//     where `\$HOME` does not.
+//   - A **substitution** — `$( … )`, a backquoted body, `$(( … ))` or a plain
+//     `$name` — is handed to the expansion whole, because what a *command*
+//     inside it does with a backslash is that command's own business:
+//     measured, `$(echo \w)` draws `w` and “ `echo \w` “ draws `w`, where
+//     splitting at the escape would hand the expander half a substitution and
+//     refuse the value outright.
+//   - An **expansion's operand** — `${ … }` — is handed over whole as well,
+//     with the pairs the *expander* would otherwise read as quoting written
+//     twice: measured, `${x:-\w}` draws the directory, `${x-a\wb}` draws it
+//     between `a` and `b`, `${x:-\$}` draws the privilege character and
+//     `${x:-\\w}` draws the directory again — so an operand reads its
+//     backslashes exactly as the text around it does, and only the doubled
+//     escape collapses. See protectOperandEscapes.
+//
+// Expanding the ordinary runs separately rather than the value as a whole is
+// the point and not a shortcut: a `$` the value quoted must not be expanded,
+// and the only thing that says it was quoted is the escape in front of it.
 func expandAroundTheEscapes(st PromptStyle, text string, expand func(string) string) string {
 	var out, run strings.Builder
 	flush := func() {
@@ -975,22 +990,140 @@ func expandAroundTheEscapes(st PromptStyle, text string, expand func(string) str
 	}
 	runes := []rune(text)
 	for i := 0; i < len(runes); i++ {
-		if runes[i] != st.Escape {
+		switch runes[i] {
+		case '$', '`':
+			n := promptSubstitutionRun(runes, i)
+			part := string(runes[i : i+n])
+			if runes[i] == '$' && i+1 < len(runes) && runes[i+1] == '{' {
+				part = protectOperandEscapes(st, part)
+			}
+			run.WriteString(part)
+			i += n - 1
+		case st.Escape:
+			flush()
+			out.WriteRune(st.Escape)
+			if i+1 < len(runes) && runes[i+1] != st.Escape {
+				// The code, written through so the table reads what the value
+				// held. A doubled escape falls through to the next iteration
+				// instead, having written one of the pair.
+				out.WriteRune(runes[i+1])
+			}
+			i++
+		default:
 			run.WriteRune(runes[i])
-			continue
 		}
-		flush()
-		out.WriteRune(st.Escape)
-		if i+1 < len(runes) && runes[i+1] != st.Escape {
-			// The code, written through so the table reads what the value
-			// held. A doubled escape falls through to the next iteration
-			// instead, having written one of the pair.
-			out.WriteRune(runes[i+1])
-		}
-		i++
 	}
 	flush()
 	return out.String()
+}
+
+// promptSubstitutionRun is how many runes the construct beginning at i spans —
+// a backquoted body, a `$( … )`, a `$(( … ))`, a `${ … }` or a plain `$name`.
+//
+// Bracket depth rather than a parse: this is deciding which bytes to hand to
+// the expander unbroken, and the expander is the thing that reads them
+// properly. An unclosed construct runs to the end of the value, which hands
+// the expander the same unclosed text the value held and lets it say so.
+func promptSubstitutionRun(runes []rune, i int) int {
+	if runes[i] == '`' {
+		for n := i + 1; n < len(runes); n++ {
+			if runes[n] == '\\' {
+				n++
+				continue
+			}
+			if runes[n] == '`' {
+				return n - i + 1
+			}
+		}
+		return len(runes) - i
+	}
+	if i+1 >= len(runes) {
+		return 1
+	}
+	open, close := '(', ')'
+	if runes[i+1] == '{' {
+		open, close = '{', '}'
+	} else if runes[i+1] != '(' {
+		// `$name`, `$1`, `$?` and the rest: one rune of name at least, and
+		// a run of them where the name is a word. Nothing in here can hold
+		// an escape, so the length only has to be right enough not to eat
+		// one that follows.
+		n := i + 2
+		for n < len(runes) && (runes[n] == '_' || isPromptNameRune(runes[n])) {
+			n++
+		}
+		if n == i+2 {
+			return 2
+		}
+		return n - i
+	}
+	depth := 0
+	for n := i + 1; n < len(runes); n++ {
+		switch runes[n] {
+		case open:
+			depth++
+		case close:
+			depth--
+			if depth == 0 {
+				return n - i + 1
+			}
+		}
+	}
+	return len(runes) - i
+}
+
+// isPromptNameRune reports whether a rune may stand in a parameter's name.
+func isPromptNameRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+}
+
+// protectOperandEscapes writes an escape pair twice where the expander would
+// otherwise read it as quoting, so that the pair reaches the prompt's table.
+//
+// Only inside an expansion's operand, and only in front of a dollar, which is
+// where the two readers actually part. Measured on BusyBox ash 1.37.0, five
+// operands:
+//
+//	${x:-\w}        the directory        the escape is not consumed
+//	${x:-\$}        the privilege char   nor in front of a dollar
+//	${x:-\\w}       the directory        a doubled escape still collapses
+//	${x:-\\$HOME}   the home directory   …and the `$` behind it expands
+//	${x:-a`+"`"+`b}      a backtick between   in front of a backquote it **is**
+//
+// The expander here agrees about all of those but the second, which is the
+// whole of what this repairs — and the last row is why the backquote is not
+// repaired with it: escaping one for the expander would leave a bare backquote
+// opening a substitution that never closes.
+//
+// A command substitution gets none of this on purpose: what the command it
+// holds does with a backslash is the command's own, and `$(echo \w)` draws
+// `w` in the reference because the command printed `w`.
+func protectOperandEscapes(st PromptStyle, text string) string {
+	if !strings.ContainsRune(text, st.Escape) {
+		return text
+	}
+	var b strings.Builder
+	runes := []rune(text)
+	for i := 0; i < len(runes); i++ {
+		b.WriteRune(runes[i])
+		if runes[i] != st.Escape || i+1 >= len(runes) {
+			continue
+		}
+		switch runes[i+1] {
+		case st.Escape:
+			// The pair the expander already collapses the way this shell
+			// does. Written through, both characters.
+			b.WriteRune(runes[i+1])
+			i++
+		case '$':
+			// The pair the expander would eat. Escaped for it, so what comes
+			// back out is the pair the table has to read.
+			b.WriteRune(st.Escape)
+			b.WriteRune(runes[i+1])
+			i++
+		}
+	}
+	return b.String()
 }
 
 // promptWalk is the walker's state: what has been drawn, and where on the

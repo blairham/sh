@@ -177,3 +177,55 @@ func renderWithVars(t *testing.T, st PromptStyle, text string) string {
 	}
 	return out
 }
+
+// The escape-skipping expansion must not break a value's substitutions, which
+// is what a walk that split at every escape did: each of these refused the
+// whole value outright when the escape pairs were cut out of it without regard
+// for what they sat inside.
+//
+// Every row is BusyBox ash 1.37.0 in the digest-pinned image.
+func TestSkippingTheEscapesLeavesTheSubstitutionsWhole(t *testing.T) {
+	st := PromptStyle{
+		Expand: PromptExpandsAlways, ExpandBeforeEscapes: true,
+		ExpansionSkipsTheEscapes: true,
+		Escape:                   '\\', Unknown: DropEscape,
+		Codes:     map[rune]PromptField{'w': FieldCwd},
+		Sequences: map[rune]string{'$': "#", '/': "[slash]"},
+	}
+	for _, c := range []struct{ text, want string }{
+		// An operand's escape reaches the table, so the backslash has to
+		// survive the expander's own quote removal — measured, `${x:-\w}`
+		// draws the directory.
+		{`<${nope:-\w}>`, "</set/by/the/test>"},
+		{`<${nope-a\wb}>`, "<a/set/by/the/testb>"},
+		// In front of a dollar too, which is where the expander and this
+		// shell part company and is the row protectOperandEscapes exists for.
+		{`<${nope:-\$}>`, "<#>"},
+		// A doubled escape in an operand still collapses, and the `$` behind
+		// one still expands — the pair that says the repair is narrow.
+		{`<${nope:-\\w}>`, "</set/by/the/test>"},
+		{`<${nope:-\\$HOME}>`, "<[slash]nowhere>"},
+		// And **not** in front of a backquote: the reference consumes the
+		// escape there, and escaping one for the expander would leave a bare
+		// backquote opening a substitution that never closes.
+		{"<${nope:-a\\`b}>", "<a`b>"},
+		// A command substitution is handed over whole and its **output** is
+		// read by the table afterwards: measured, `$(echo \w)` draws `w`,
+		// because the command printed `w`, and `$(printf %s ABC\\w)` draws
+		// `ABC` and the directory, because the command printed `ABC\w`.
+		{`<$(printf '%s' 'AB\w')>`, "<AB/set/by/the/test>"},
+		// A parameter, a braced name and an arithmetic expansion likewise,
+		// with an escape beside each of them still reaching the table.
+		{`<$D|\w>`, "</set/by/the/test|/set/by/the/test>"},
+		{`<${D}\w>`, "</set/by/the/test/set/by/the/test>"},
+		{`<$((1+2))|\w>`, "<3|/set/by/the/test>"},
+		// And the pair that says the quoting still holds around them.
+		{`<\$HOME|\\$HOME>`, "<#HOME|[slash]nowhere>"},
+	} {
+		t.Run(c.text, func(t *testing.T) {
+			if got := renderWithVars(t, st, c.text); got != c.want {
+				t.Errorf("%q drew %q, want %q", c.text, got, c.want)
+			}
+		})
+	}
+}

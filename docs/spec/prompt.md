@@ -240,6 +240,27 @@ collapses — `PromptStyle.ExpansionSkipsTheEscapes`. Without it the
 expansion turns `\$` into a literal dollar before anything can ask who is
 typing, and this shell's own default draws `$` for root.
 
+**A substitution is handed over whole, and that is the part a naive reading
+gets wrong.** Cutting the escape pairs out of the value wherever they appear
+would hand the expander half a `$( … )` and refuse the whole prompt. Measured:
+
+| written | drawn | what it says |
+| --- | --- | --- |
+| `$(echo \w)` | `w` | the command's own quote removal ran, and the table read `w` |
+| `` `echo \w` `` | `w` | the older spelling likewise |
+| `$(printf %s ABC\\w)` | `ABC` then the directory | so the substitution's **output** is read by the table afterwards |
+| `${x:-\w}` | the directory | an operand's escape reaches the table |
+| `${x-a\wb}` | `a`, the directory, `b` | …wherever in the operand it stands |
+| `${x:-\$}` | `#` at uid 0 | …and in front of a dollar too |
+| `${x:-\\w}` | the directory | a doubled escape in an operand still collapses |
+| `${x:-\\$HOME}` | `/root` | …and the `$` behind it expands |
+| ``${x:-a\`b}`` | ``a`b`` | in front of a **backquote** the escape *is* consumed |
+
+The last row is why the repair inside an operand is only ever in front of a
+dollar: escaping a backquote for the expander would leave a bare one opening a
+substitution that never closes. `interp.protectOperandEscapes` is the whole of
+it and its doc comment holds this table.
+
 ### Two rows this implementation does not match, and neither is the table
 
 Measured against BusyBox with the whole table in place, the drawn prompts

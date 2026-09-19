@@ -156,6 +156,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      packaging: ${{ steps.filter.outputs.packaging }}
     steps:
     # Gated per step, not on the job. A required check that never runs is
     # reported as pending forever, and a matrix job skipped by `if:` never
@@ -173,6 +174,14 @@ jobs:
         BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: |
         code=false
+        # Packaging is gated on the packaging files alone, and deliberately
+        # does **not** take the "a merge runs everything" branch below. That
+        # reasoning is about code an earlier merge may have broken; the
+        # release config has no such drift — it either renders or it does
+        # not, and a merge that did not touch it cannot change the answer.
+        # Forcing it on would put the cross-build matrix on every merge, on a
+        # repository that merges all day.
+        packaging=false
         if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
           # A merge runs everything. Not because the merge itself changed
           # code — it may be pure prose — but because this is the first time
@@ -181,24 +190,42 @@ jobs:
           # since. Narrowing that by diff would defeat the point of it.
           echo "push to $GITHUB_REF_NAME — running everything"
           code=true
-        elif ! git cat-file -e "$BASE" 2>/dev/null; then
-          # No usable base commit — a force push, or a shallow fetch that did
-          # not reach it. `git diff` would fail here and print nothing, and an
-          # empty diff is indistinguishable from "only prose changed", so this
-          # would silently skip every test. The safe answer is to run them.
+        fi
+        # The base check is its own branch rather than an `elif`, because
+        # `packaging` is still undecided after the merge case above and the
+        # diff is the only thing that can decide it.
+        if ! git cat-file -e "$BASE" 2>/dev/null; then
+          # No usable base commit — a force push, a shallow fetch that did not
+          # reach it, or a `workflow_dispatch`, which has no before-commit at
+          # all. `git diff` would fail here and print nothing, and an empty
+          # diff is indistinguishable from "nothing relevant changed", so this
+          # would silently skip everything. The safe answer is to run it.
+          #
+          # For packaging this is also the hand-operated route in: the report
+          # of a dispatch against a branch is how a change to this job gets
+          # exercised before it lands, per `workflow_dispatch` above.
           echo "base commit $BASE is not present — running everything"
           code=true
+          packaging=true
         else
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             case "$f" in
               docs/*|*.md|LICENSE|LICENSE.*|*.png|*.jpg|*.gif|*.svg) ;; # prose
-              *) code=true; break ;;
+              *) code=true ;;
+            esac
+            # The release config, the workflow that runs it, and this file —
+            # which is where the rendering job itself is written, so a change
+            # to the job exercises the job.
+            case "$f" in
+              .goreleaser.yaml|.github/workflows/release.yml|.github/workflows/ci.yml) packaging=true ;;
             esac
           done <<<"$(git diff --name-only "$BASE"...HEAD)"
         fi
         echo "code=$code" >> "$GITHUB_OUTPUT"
+        echo "packaging=$packaging" >> "$GITHUB_OUTPUT"
         echo "changed files are $([ "$code" = true ] && echo 'code — full run' || echo 'prose only — skipping the code jobs')"
+        echo "packaging files $([ "$packaging" = true ] && echo 'changed — rendering a release' || echo 'untouched — skipping the render')"
 
   test:
     name: Build and test
@@ -361,6 +388,127 @@ jobs:
       env:
         SH_DIALECTCOMBO_SHARD: ${{ matrix.shard }}
       run: go test ./syntax -run TestNoDialectCombinationPanics
+
+  packaging:
+    name: Render a release
+    needs: changes
+    runs-on: ubuntu-latest
+    # Not report-only. `.goreleaser.yaml` is otherwise exercised for the first
+    # time by the release workflow, which runs on a `v*` tag -- so a mistake in
+    # it fails at the **last** step of a release, with every artifact built and
+    # the tag already public. The file's own `changelog:` comment records one
+    # that would have: 188,381 characters of release body against GitHub's
+    # 125,000 limit, measured at v0.0.0. Nothing before the tag could have said
+    # so. This is what says so.
+    steps:
+    - uses: actions/checkout@v6
+      if: needs.changes.outputs.packaging == 'true'
+      with:
+        # GoReleaser reads the tag history to build a changelog, and the
+        # `changelog:` gate is `eq .PreviousTag ""` -- so a shallow checkout
+        # would render the one case the config special-cases and never the
+        # ordinary one.
+        fetch-depth: 0
+    - uses: actions/setup-go@v6
+      if: needs.changes.outputs.packaging == 'true'
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    # `--snapshot` stands in for a tag and disables publishing on its own;
+    # `--skip=publish` says it a second time, because the tap token is the one
+    # thing in this config that writes to another repository. No secrets are
+    # passed to this step, deliberately: the render must not be able to reach
+    # the tap even if both guards were wrong. The formula is still written --
+    # to `dist/homebrew/Formula/` -- which is what the next step reads.
+    - name: Render a release, and publish none of it
+      if: needs.changes.outputs.packaging == 'true'
+      uses: goreleaser/goreleaser-action@v7
+      with:
+        distribution: goreleaser
+        version: "~> v2"
+        args: release --snapshot --clean --skip=publish
+    # Rendering proves the config parses and every target builds. It does not
+    # prove the formula installs what the archive carries: the install list is
+    # an explicit `libexec.install "sh", "bash", …` and `libexec.install`
+    # silently skips a name it was not given, which is how `ash` was dropped
+    # from a release once already. A formula quietly missing a shell renders
+    # exactly like a correct one.
+    #
+    # So this compares the two rosters the render itself produced -- the
+    # binaries in `artifacts.json` against the names in the generated formula
+    # -- rather than either against a list written here. A hardcoded list is a
+    # claim about a roster it cannot see, and goes stale the next time someone
+    # adds a binary; derived, the check gets stronger when one is added.
+    - name: Does the formula install every binary the build produced?
+      if: needs.changes.outputs.packaging == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        formula=$(find dist/homebrew -name '*.rb' -print -quit 2>/dev/null || true)
+        # Every check below is written to fail loudly when its input is
+        # missing, because the failure this job exists to catch and a job that
+        # silently measured nothing look identical in a green tick.
+        if [ -z "$formula" ]; then
+          echo "::error::no formula under dist/homebrew -- the brew pipe did not run, so this job proved nothing"
+          exit 1
+        fi
+        echo "reading $formula"
+
+        # A scratch directory, so the job leaves nothing in the checkout.
+        work=$(mktemp -d)
+        built="$work/built.txt"
+        installed="$work/installed.txt"
+
+        # `.extra.ID` is the build id, `.name` the binary it produces; the
+        # same name appears once per platform, hence the dedupe.
+        jq -r '.[] | select(.type == "Binary") | .name' dist/artifacts.json | sort -u > "$built"
+        # **Both destinations, not just libexec.** The keg has two on purpose:
+        # the shells go to `libexec`, which is off PATH, because a `bash` ahead
+        # of `/bin` would answer for every shebang on the machine; `shfmt` goes
+        # to `bin`, because nothing resolves a formatter implicitly and one
+        # behind `opt_libexec` is a formatter nothing calls. A check that read
+        # only `libexec.install` would report the formatter as missing on a
+        # keg that installs it correctly -- which is a false alarm, and the
+        # failure mode that trains people to ignore the job.
+        #
+        # Both quoting styles too, since the formula is generated and this
+        # should not depend on which one GoReleaser emits.
+        sed -n -E 's/.*(libexec|bin)\.install (.*)/\2/p' "$formula" \
+          | tr ',' '\n' \
+          | sed -n -e 's/.*"\([^"]*\)".*/\1/p' -e "s/.*'\([^']*\)'.*/\1/p" \
+          | sort -u > "$installed"
+
+        if [ ! -s "$built" ]; then
+          echo "::error::artifacts.json lists no binaries at all -- the render produced nothing to install"
+          exit 1
+        fi
+        if [ ! -s "$installed" ]; then
+          echo "::error::the rendered formula has no libexec.install list -- nothing would be installed"
+          exit 1
+        fi
+
+        echo "built:     $(tr '\n' ' ' < "$built")"
+        echo "installed: $(tr '\n' ' ' < "$installed")"
+
+        status=0
+        # Built but not installed: the keg comes out missing a binary the
+        # archive carries and the caveats name. This is the `ash` failure.
+        if missing=$(comm -23 "$built" "$installed") && [ -n "$missing" ]; then
+          echo "::error::the archive carries these, and the formula does not install them: $(echo $missing)"
+          status=1
+        fi
+        # Installed but not built: `libexec.install` raises on a name that is
+        # not in the archive, so this fails at `brew install` time instead.
+        if extra=$(comm -13 "$built" "$installed") && [ -n "$extra" ]; then
+          echo "::error::the formula installs these, and the archive does not carry them: $(echo $extra)"
+          status=1
+        fi
+        if [ "$status" -eq 0 ]; then
+          echo "the formula installs all $(wc -l < "$built" | tr -d ' ') binaries the build produced"
+        fi
+        exit "$status"
 
   oracle:
     name: Oracle (report only)

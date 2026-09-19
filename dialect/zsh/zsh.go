@@ -360,6 +360,12 @@ func Dialect() syntax.Dialect {
 	// word reading ksh93 has — `[[ ]] ]]` and `[[ ]] == x ]]` are refusals
 	// here and run there — only where the refusal lands (#2964).
 	d.ConditionTermMissingBlamesTheTokenAfterTheCloser = true
+	// The operand of `<&` is a file number here — digits, a `-` or the
+	// coprocess `p` — and anything else is refused while reading. `>&` is
+	// not the same question: that operator also spells "send both streams to
+	// this file", so a word there is a path. See
+	// syntax.Dialect.InputDuplicateOperandIsAFileNumber (#3144).
+	d.InputDuplicateOperandIsAFileNumber = true
 	// A condition term's first word may be the last thing on its line, with
 	// the operator or the `]]` that decides it written on the next. This
 	// column alone: bash 5.3, bash 3.2 and ksh93 all name the newline there.
@@ -4226,6 +4232,10 @@ func Diagnostics() interp.Diagnostics {
 		// zsh:1: parse error near `true'.
 		MissingFuncBodyOmitsTheLine: true,
 		ForName:                     "parse error near `%[1]s'",
+		// A `<&` whose operand is not a file number: the sentence quotes
+		// nothing, and the command is given up at 1 with the script running
+		// on. Measured 2026-09-18 on zsh 5.9.2 (#3144).
+		FileNumber: "file number expected",
 		// A C-style `for` header with fewer than two separators, named by
 		// the text of its last part and by nothing where that part is blank.
 		// Measured 2026-09-12: `for ((i=0))` is `parse error near `i=0'`,

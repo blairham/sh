@@ -4075,6 +4075,53 @@ type Dialect struct {
 	// [RedirectionBeforeACompoundPolicy] for the three values and the panel.
 	RedirectionBeforeACompound RedirectionBeforeACompoundPolicy
 
+	// InputDuplicateOperandIsAFileNumber requires the operand of `<&` to be a
+	// run of digits, a `-`, or the coprocess letter `p`, and refuses anything
+	// else **while reading**.
+	//
+	// One column, and it is `<&` alone. Measured 2026-09-18 on zsh 5.9.2
+	// under `-f`, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	cat <&5, cat <&55, cat <&-, cat <&p, cat 3<&4              accepted
+	//	cat <&"5", cat <&$'5'                                      accepted
+	//	cat <&5$v, cat <&${v}5, cat <&"5""$v"                      accepted
+	//	cat <&$(echo 5)5, cat <&5$(echo x)                         accepted
+	//	cat <&$v, cat <&"$v", cat <&${v}, cat <&$(echo 5)          refused
+	//	cat <&x, cat <&5x, cat <&{fd}, cat <&`echo 5`              refused
+	//	cat <&$v5, cat <&$v$w, cat <&x$v, cat <&"x"$v              refused
+	//	cat <&${v}x, cat <&""$v, exec {fd}<&$v                     refused
+	//	cat >&$v, cat >&x, cat >&p, cat 2>&$v                      accepted
+	//
+	// It is the **literal text** the parser already holds rather than what
+	// the word would come to: the spans an expansion fills are passed over,
+	// and what is left has to be a non-empty run of digits. Two pairs say so
+	// twice over. `5$v` against `$v5`: a digit the parser can see is enough
+	// and the expansion beside it is not looked into — and `$v5` is the
+	// *parameter* `v5`, one span with no literal text at all, which is why it
+	// goes the other way. `5x` against `5$v`: literal text that is not a
+	// digit refuses whatever stands beside it. The quoted rows are the same
+	// fact once more, `<&"5"` being the digits and `<&"$v"` not.
+	//
+	// The `>&` rows are the control and are why this is not "a duplicating
+	// redirection's operand": that operator also spells "send both streams to
+	// this file", so a word there is a path.
+	//
+	// It is refused while reading and reported where the line stands: `zsh -n`
+	// says so with the script never run, and without `-n` the line before it
+	// prints, the command is skipped at status 1, and the line after it
+	// prints. So the refusal gives up the **line** — [File.Refused] — rather
+	// than the file, which is the same shape a syntax error inside a compound
+	// assignment's parentheses already has.
+	//
+	// One row is measured and not modeled: on a line holding more than one
+	// command, `cat <&$v; echo hi` runs the `echo` there and gives up only
+	// the command. Giving up the line is as far as File.Refused reaches, and
+	// a refusal carried on the *statement* is a wider change than this rule.
+	//
+	// bash 5.3, bash 3.2, ksh93, dash and BusyBox ash read the word and open
+	// whatever it expands to, so every refused row above parsed here (#3144).
+	InputDuplicateOperandIsAFileNumber bool
+
 	// ConditionCloserIsAWordWhereATermBegins reads a `]]` standing where a
 	// condition **term** belongs as an ordinary word, so the closer is only a
 	// closer once the condition has something to close over.

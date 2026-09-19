@@ -207,6 +207,13 @@ const (
 	// four say something about the *name* and only the fourth blames the
 	// word it found.
 	ErrForName
+	// ErrFileNumber is a `<&` whose operand is neither a run of digits nor
+	// `-` nor `p`. Its own kind because the one column that refuses it says
+	// nothing about a token — `file number expected`, with no word quoted —
+	// and because it is refused while reading and reported where the line
+	// stands, which is the same pair ErrForName is. See
+	// [Dialect.InputDuplicateOperandIsAFileNumber].
+	ErrFileNumber
 	// ErrForArithHeader is a C-style `for` header that does not hold two
 	// separators: `for (())`, `for ((;))`, `for ((i=0))`, `for ((1;2))`.
 	//

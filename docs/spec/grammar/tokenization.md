@@ -1312,6 +1312,54 @@ Grammar flag: `Herestring` — core: on; `posix` and `dash`: off. dash is
 the only panel member without it, and refuses at the operator
 (`Syntax error: redirection unexpected`) rather than at the word.
 
+## `<&`'s operand is a file number in one column
+
+`<&` duplicates a descriptor, and four of the panel read its operand as an
+ordinary word and open whatever it expands to. zsh reads it while **parsing**
+and refuses anything that is not a file number. Measured 2026-09-18 on zsh
+5.9.2 under `-f`, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+
+| written | zsh 5.9.2 | bash · ksh93 · dash · ash |
+| --- | --- | --- |
+| `cat <&5`, `<&55`, `<&-`, `<&p`, `3<&4` | runs | runs |
+| `cat <&"5"`, `<&$'5'` | runs | runs |
+| `cat <&5$v`, `<&${v}5`, `<&"5""$v"` | runs | runs |
+| `cat <&$(echo 5)5`, `<&5$(echo x)` | runs | runs |
+| `cat <&$v`, `<&"$v"`, `<&${v}`, `<&$(echo 5)` | `file number expected` | runs |
+| `cat <&x`, `<&5x`, `<&{fd}`, ``<&`echo 5` `` | `file number expected` | runs |
+| `cat <&$v5`, `<&$v$w`, `<&x$v`, `<&"x"$v` | `file number expected` | runs |
+| `cat <&${v}x`, `<&""$v`, `exec {fd}<&$v` | `file number expected` | runs |
+| `cat >&$v`, `>&x`, `>&p`, `2>&$v` | runs | runs |
+
+It is the **literal text the parser already holds** rather than what the word
+would come to: the spans an expansion fills are passed over, and what is left
+has to be a non-empty run of digits — or the whole operand is the `-` that
+closes the descriptor or the `p` that names the coprocess's.
+
+Two pairs say that twice over. `5$v` against `$v5`: a digit the parser can see
+is enough and the expansion beside it is not looked into, and `$v5` is the
+*parameter* `v5`, one span with no literal text at all. `5x` against `5$v`:
+literal text that is not a digit refuses whatever stands beside it.
+
+The last row is the control and is why this is not "a duplicating
+redirection's operand": `>&` also spells *send both streams to this file*, so
+a word there is a path.
+
+The refusal gives up the **line** and not the file — the line before it runs,
+the line after it runs, and `$?` is 1 — which is the shape
+`syntax.File.Refused` already carries for a syntax error inside a compound
+assignment's parentheses. `zsh -n` reports it with the script never run, which
+is how it was found: one of zsh's own shipped functions, `tcp_point`,
+redirects from a descriptor held in a parameter and real `zsh -n` refuses the
+file where this parser accepted it (#3144).
+
+One row is measured and not modeled: on a line holding more than one command,
+`cat <&$v; echo hi` runs the `echo` there and gives up only the command.
+Giving up the line is as far as `File.Refused` reaches.
+
+Grammar flag: `InputDuplicateOperandIsAFileNumber` — `zsh`: on; everything
+else: off.
+
 ## `&>` is the dangerous one
 
 Not every dialect difference is a construct that fails to parse. `&>` is

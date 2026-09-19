@@ -3,11 +3,12 @@ version: 2
 # GoReleaser configuration for sh.
 # See: https://goreleaser.com
 #
-# A release ships six binaries rather than one, because there are six shells:
-# the substrate driver `sh` plus the five dialect binaries. They go into one
-# archive per platform — a person installing this wants all of them, and the
-# dialects are the same core with a different vector, so splitting them into
-# six downloads would be six copies of one program.
+# A release ships seven binaries rather than one. Six of them are shells — the
+# substrate driver `sh` plus the five dialect binaries — and the seventh is
+# `shfmt`, which reads with the same parser and lays out in the same dialect
+# styles. They go into one archive per platform: a person installing this
+# wants all of them, and they are the same core with a different vector, so
+# splitting them into seven downloads would be seven copies of one program.
 project_name: sh
 
 builds:
@@ -82,6 +83,21 @@ builds:
   - -s -w
   - -X main.version={{.Version}}
 
+- id: shfmt
+  binary: shfmt
+  main: ./cmd/shfmt
+  env: [CGO_ENABLED=0]
+  goos: [linux, darwin]
+  goarch: [amd64, arm64]
+  ldflags:
+  - -s -w
+  # Stamped like the six above, though this one serves no protocol. A tool a
+  # person runs by hand is asked what it is by a person, so it grew a
+  # `-version` flag in the same change that started shipping it; an unstamped
+  # binary would answer `0.0.0-dev` out of a tagged release, which is the
+  # failure the note on `cmd/sh` above describes.
+  - -X main.version={{.Version}}
+
 # No windows target. Every route into this program is a POSIX one — process
 # groups, a controlling terminal, signals, `syscall.Exec` — and shipping a
 # binary that cannot start is worse than shipping none.
@@ -112,7 +128,7 @@ archives:
 notarize:
   macos:
   - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
-    ids: [sh, bash, zsh, ksh, dash, ash]
+    ids: [sh, bash, zsh, ksh, dash, ash, shfmt]
     sign:
       certificate: "{{.Env.MACOS_SIGN_P12}}"
       password: "{{.Env.MACOS_SIGN_PASSWORD}}"
@@ -195,14 +211,31 @@ brews:
     token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
   directory: Formula
   homepage: https://github.com/blairham/sh
-  description: A shell parser and interpreter in Go, with bash, zsh, ksh, dash and ash dialects
+  description: A shell parser, interpreter and formatter in Go, with bash, zsh, ksh, dash and ash dialects
   license: Apache-2.0
+  # See the note on `bin.install "shfmt"` below. Declared rather than left to
+  # Homebrew's symlink failure, so the error names the other formula.
+  conflicts: [shfmt]
   install: |
-    # Every binary in the archive, `ash` included. An explicit list is what
+    # Every shell in the archive, `ash` included. An explicit list is what
     # dropped it once already: the archive carries all six, and
     # `libexec.install` silently skips the name it was not given, so the keg
     # came out missing a shell the caveats below promise by name.
     libexec.install "sh", "bash", "zsh", "ksh", "dash", "ash"
+    # **`shfmt` goes into `bin`, and it is the one binary here that should.**
+    # The rule above is about names that are *resolved implicitly*: a `bash`
+    # ahead of `/bin` on PATH answers for every shebang, every `system()` and
+    # every `chsh` on the machine. Nothing resolves a formatter that way — it
+    # is only ever called by name, on purpose, by an editor, a pre-commit hook
+    # or a Makefile, and every one of those is a caller that cannot be handed
+    # a keg-internal path. A formatter behind `opt_libexec` is a formatter
+    # nothing calls.
+    #
+    # The real hazard is the other formula: homebrew-core ships mvdan.cc/sh's
+    # `shfmt`, which wants the same `bin/shfmt`. `conflicts:` below declares
+    # that, so Homebrew refuses with a sentence naming both formulas instead
+    # of the bare "Could not symlink bin/shfmt" that silence produces.
+    bin.install "shfmt"
     # Not into libexec beside the binaries. The function search is
     # `<prefix>/share/sh/site-functions` then `<prefix>/share/sh/functions`,
     # and the prefix a binary in the keg's libexec derives is the keg — so
@@ -220,6 +253,15 @@ brews:
 
       #{opt_libexec}/bash -i
 
+    The formatter is the exception and IS on your PATH as `shfmt`, because an
+    editor or a pre-commit hook can only call it by name:
+
+      shfmt -w script.sh
+
+    homebrew-core ships a different `shfmt` (mvdan.cc/sh). Only one of the two
+    can own that name, so this formula declares the conflict rather than
+    failing at the symlink.
+
     A session reads what a real shell of the same name reads, in the same order:
     the profile, the run-commands file, and the machine's own file in front of
     each. To use one as your login shell, add its full path to /etc/shells and
@@ -235,12 +277,31 @@ brews:
     %w[sh bash zsh ksh dash ash].each do |shell|
       assert_equal "hi", shell_output("#{libexec}/#{shell} -c 'echo hi'").chomp
     end
+    # The formatter is a seventh binary rather than a seventh shell, so it is
+    # not in the list above and needs its own row — and a `-c` probe would not
+    # have caught it, since `shfmt` does not take one. Laying out a script it
+    # has to reparse is the cheapest end-to-end check that the parser, the
+    # dialect style and the printer all made it into the keg.
+    assert_equal "if true; then\n  echo hi\nfi",
+      pipe_output("#{bin}/shfmt -dialect bash", "if true;then\necho hi\nfi\n", 0).chomp
+    assert_match version.to_s, shell_output("#{bin}/shfmt -version")
+
     # The shipped functions are reachable from the default search, which is
     # the half a missing `files:` entry above would break silently: the shell
     # still starts, and every `autoload` in a real startup file fails at the
     # call instead.
+    #
+    # **`env -u FPATH` is what makes this row discriminating**, and without it
+    # the row was decoration. An `FPATH` in the environment *replaces* the
+    # default search rather than adding to it (driver/functiondirs.go), so on
+    # any machine whose own zsh exported one — a CI runner with oh-my-zsh, a
+    # maintainer's laptop — `is-at-least` was loading out of
+    # /usr/share/zsh/5.9/functions and the row passed against a keg that
+    # shipped no functions at all. Unset, `$fpath` is exactly the keg's two
+    # directories, and deleting the shipped copy fails the row.
     assert_equal "5.9", shell_output(
-      "#{libexec}/zsh -f -c 'autoload -Uz is-at-least; is-at-least 5.0 5.9 && echo 5.9'"
+      "/usr/bin/env -u FPATH #{libexec}/zsh -f -c " \
+      "'autoload -Uz is-at-least; is-at-least 5.0 5.9 && echo 5.9'"
     ).chomp
 
 release:
@@ -265,11 +326,13 @@ release:
 
     ### What is in the archive
 
-    Six binaries: the substrate driver `sh`, and the five dialect binaries.
-    They install into `libexec` and **never** into a `bin` directory — they
-    are named after the shells they model, so a directory ahead of `/bin` on
-    `PATH` would answer for every program on the machine that resolves a
-    shell by name.
+    Seven binaries: the substrate driver `sh`, the five dialect binaries, and
+    `shfmt`, which lays a script out in whichever dialect it was written in.
+    They install into `libexec` and **never** into a `bin` directory — the
+    shells are named after the shells they model, so a directory ahead of
+    `/bin` on `PATH` would answer for every program on the machine that
+    resolves a shell by name, and `shfmt` stays out of `bin` so that
+    homebrew-core's formula of the same name can still be installed.
 
         brew install blairham/tap/sh
 

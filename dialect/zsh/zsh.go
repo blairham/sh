@@ -1025,6 +1025,24 @@ func Semantics() interp.Semantics {
 	// What `zsh --version` writes, on standard output at status 0 — measured
 	// 2026-09-11, one line and no more.
 	s.VersionOption = interp.VersionOption{Spellings: "--version", Text: versionLine()}
+	// And `--help`, which this shell answers with a usage block on standard
+	// output at 0 — measured 2026-09-18 on zsh 5.9.2, and `no such option:
+	// help` at 1 here until now, since the front end hands any unmatched
+	// `--word` to the option table and this is not an option name (#3156).
+	//
+	// The whole answer is the **trailer**, which is unusual and is forced by
+	// the measurement: Diagnostics.InvocationUsage is the block a *refused*
+	// option gets as well as the one `--help` gets, and this shell prints no
+	// block at all under a refusal — `zsh -o badname -c :` and `zsh --badname
+	// -c :` are each one line, `no such option: badname`, with nothing after
+	// them. So a block hung there would start appearing where the reference
+	// prints none. The trailer is the one piece of the answer that is this
+	// option's alone, and it is the piece that reads the shell's own name.
+	//
+	// Generated from this dialect's three option tables rather than
+	// committed — see helpBlock, where the measurement that settles that
+	// choice is.
+	s.HelpOption = interp.HelpOption{Spellings: "--help", Trailer: helpBlock()}
 	// And `--emulate MODE`, which is the `emulate` builtin run before a line
 	// is read rather than a spelling of an option name. zsh alone on the
 	// panel; measured 2026-09-18 on 5.9.2 under `env -i PATH=/usr/bin:/bin

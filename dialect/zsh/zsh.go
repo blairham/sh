@@ -4125,6 +4125,19 @@ func Diagnostics() interp.Diagnostics {
 			{Prefix: "-N 15: rt cpu time (microseconds)   ", Res: interp.ResourceRealtimeTime, Scale: 1},
 		},
 		UlimitListingInKernelOrder: true,
+		// `-N <number>`: the one option in the panel whose *operand* names
+		// the resource, by the kernel's own number. It exists because this
+		// shell has a row its letters do not cover — `-N 15: rt cpu time
+		// (microseconds)` — and the number is the platform's, which is what
+		// `ulimit -N 7` says: 10666 processes on macOS and 1024 open files
+		// on Linux, from the same shell. Measured 2026-09-18 on zsh 5.9.2
+		// (macOS arm64) and zsh 5.9 in the pinned Alpine image (#3667).
+		UlimitNumberedOption: interp.UlimitNumberedOption{
+			Letter:      'N',
+			NeedsNumber: "number required after -%[1]s",
+			BadNumber:   "invalid number: %[1]s",
+			OutOfRange:  "can't read limit: invalid argument",
+		},
 		// Lazy rather than QuoteShell: this shell drops the empty `''`
 		// segments that closing and reopening leaves, so `ab'` traces as
 		// `'ab'\\'` where bash writes `'ab'\\'''`. Measured 2026-09-13 against

@@ -1641,6 +1641,12 @@ type Diagnostics struct {
 	// order and layout — see UlimitListingRow. Empty refuses the letter's
 	// listing as the unanswered question it is.
 	UlimitListing []UlimitListingRow
+	// UlimitNumberedOption is the option whose *operand* names the resource
+	// by the kernel's own number rather than by a letter of its own. The
+	// zero value has no letter and the option does not exist.
+	//
+	// One column has one — see UlimitNumberedOption for the panel.
+	UlimitNumberedOption UlimitNumberedOption
 
 	// UlimitListingInKernelOrder lists the table in the order this kernel
 	// numbers its limits rather than in a layout of the shell's own, one row
@@ -8358,3 +8364,51 @@ const (
 	// bytes: ` 1) HUP\n 2) INT\n 3) QUIT\n`.
 	KillListingNumberedPerLine
 )
+
+// UlimitNumberedOption is a `ulimit` option that takes the kernel's own
+// resource *number* as an operand, and the three complaints it makes.
+//
+// Nothing else in the panel has a two-token option here: every other limit is
+// spelled by a letter of its own, and this one exists because that shell has a
+// row its letters do not cover — the real-time CPU limit, which its `ulimit
+// -a` prints as `-N 15: rt cpu time (microseconds)`.
+//
+// Measured 2026-09-18 on zsh 5.9.2 (macOS arm64) and zsh 5.9 in the pinned
+// Alpine image (linux/arm64), each probe a script file under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	probe                 macOS                                  Linux
+//	ulimit -N             number required after -N, 1            the same
+//	ulimit -aN            the same                               the same
+//	ulimit -N x           invalid number: x, 1                   the same
+//	ulimit -N 7           10666 (processes)                      1024 (open files)
+//	ulimit -N7            10666 — attached is the same option    —
+//	ulimit -N 0           the limit numbered nought              —
+//	ulimit -N ""          the same, so an empty operand is nought —
+//	ulimit -N 08          the limit numbered eight, not a refusal —
+//	ulimit -N 7 2000      sets it, and reading gives 2000        —
+//	ulimit -N 15          can't read limit: invalid argument, 1  unlimited
+//
+// The `-N 7` pair is the discriminator: seven is a different resource on the
+// two kernels and that shell prints each one's, so the operand is the
+// platform's number rather than an index into a table of the shell's.
+// Runner.RlimitOrder is what holds that numbering.
+//
+// **Two rows are a read past the end of the kernel's table and are not
+// modeled.** `ulimit -N 99` prints 8176 on macOS and 8192 on Linux, and
+// `ulimit -N -1` prints `unlimited` on both — numbers nothing put there. The
+// one defined out-of-range answer is macOS's for 15, a kernel that numbers
+// nine limits, and that is what OutOfRange writes.
+type UlimitNumberedOption struct {
+	// Letter is the option, and zero means the dialect has no such option.
+	Letter byte
+	// NeedsNumber is the complaint when the letter ends the word with
+	// nothing behind it. One verb, the letter.
+	NeedsNumber string
+	// BadNumber is the complaint for an operand that is not a number. One
+	// verb, the operand as it was written.
+	BadNumber string
+	// OutOfRange is the complaint for a number this kernel has no limit at.
+	// No verbs.
+	OutOfRange string
+}

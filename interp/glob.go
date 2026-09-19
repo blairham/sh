@@ -526,6 +526,15 @@ func closesBracket(s string, i int) bool {
 // `**` asks of everything ahead of it. A second copy of the composition is
 // how the two would come to disagree about a `|`.
 func (r *Runner) describesRatherThanSpells(s string) bool {
+	// A `~(…)` group is a pattern operator in its own right: it says what
+	// language the rest of the piece is written in, so a piece carrying one
+	// describes a name whatever else is in it. Without this, `~(i)a.txt` and
+	// `~(N)zzz` were spelled-out names — looked up as the characters they
+	// were written with, found missing, and passed back through as text.
+	// See tildeGlobPattern, which has the rows and the empty-group control.
+	if _, ok := tildeGlobPattern(s, r.dialect().TildeGroup); ok {
+		return true
+	}
 	if hasUnescapedMeta(s, r.dialect().NumericRangePattern,
 		r.dialect().PatternAlternation, r.dialect().ExtendedPattern,
 		r.MatchOption(ExtendedPatternOperators)) {
@@ -575,6 +584,22 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// bracket sits in it.
 		r.fatalPattern(field, 1)
 		return nil, false
+	}
+	// `N` in the `~(…)` group this dialect writes in front of a pattern.
+	// That the field is a pattern at all is describesRatherThanSpells's
+	// answer, which the group now carries on its own; this is the other
+	// thing the group decides, which is what a miss does to the word. The
+	// letters themselves are the matcher's, one component at a time.
+	// Read without tildeGlobPattern's `/` restriction, because `N` is the
+	// one letter that is about the **word** rather than about matching a
+	// component: `~(N)zz*/x` names nothing and the word goes, whether or not
+	// the letters beside it reach every component. The field still has to be
+	// a pattern for the walk to happen at all, which is the gate below.
+	if tilde, ok := tildePrefixModifier(field, r.dialect().TildeGroup); ok && tilde.null {
+		// The same answer the qualifier list already had for zsh's `(N)`,
+		// reached by the other dialect's spelling, so the two cannot come to
+		// disagree about what deleting a word means.
+		quals.allowNoMatch = true
 	}
 	if !hasQuals && !r.describesRatherThanSpells(field) {
 		// The bar is the one metacharacter hasUnescapedMeta must not count

@@ -2291,7 +2291,10 @@ whole-string one.
 | `F` | a literal string, matching a substring: `~(F)a.c` is the three characters |
 | `L` | a literal string as well, and no probe here separates it from `F` |
 | `K` | the ksh glob, which is what a pattern with no prefix already is |
-| `M` `N` `O` `S` `U` `a` `g` `m` `p` `s` `x` | accepted, and no probe here makes any of them change an answer |
+| `M` `O` `S` `U` `a` `m` `x` | accepted, and no probe here makes any of them change an answer |
+| `p` `s` | the shell glob, the same reading `K` has — re-measured 2026-09-19: `~(p)a?c` and `~(s)a?c` match `abc` while `~(p)a.c` and `~(s)a.c` do not, so the dot is an ordinary character in each and neither is a regular expression |
+| `g` | the match takes as much subject as it can from where it begins: `v=aXbXc; ${v#~(g)*X}` is `c` where `${v#*X}` is `bXc`. It is **not** a global replacement — `${v//~(g)X/-}` and `${v/~(g)X/-}` are what they were without it — and it leaves a suffix trim alone, because that trim is pinned at the far end: `${v%~(g)X*}` is `aXb`, the same shortest suffix `${v%X*}` takes |
+| `N` | the word is deleted where the pattern names nothing, which is what zsh spells `(N)` and bash needs an option for: `printf "[%s]" ~(N)zz*` writes nothing, and `~(N)zzz` goes too where no file is named that |
 | `i` | case-insensitive, and the fold reaches a bracket and a character class as well as a literal — one place further than `nocasematch` reaches, which is measured and is the pairing #2716 is about |
 | `l` `r` | left and right anchors, which only a substring flavor can show |
 | `+` `-` | turn the letters after them on and off |
@@ -2305,6 +2308,22 @@ on standard error.
 "glob, said explicitly". It does not; `K` does. The guess would have read
 `~(G)a?c` as a glob where that shell reads the `?` as a literal character.
 
+A word carrying a group with a **letter** in it is a pattern for pathname
+expansion, whatever else is in it, and that is what makes the letters reach a
+name with no glob character:
+
+| written, in a directory holding `a.txt` and `b.txt` | ksh93u+ |
+| --- | --- |
+| `~(i)a.txt` | `a.txt` |
+| `~(E)a.txt` | `a.txt` |
+| `~(F)a.txt` | `a.txt` |
+| `~(N)a` | deleted — nothing is named `a` |
+| `~()a.txt` | `~()a.txt` — an **empty** group does not |
+| `~(E)zzz` | `~(E)zzz` — a miss without `N` stands as it was written |
+
+The empty-group row is the control that says this is the letters and not the
+parentheses.
+
 The anchors:
 
 | written | `xabcx` | `abcx` | `xabc` | `abc` |
@@ -2316,18 +2335,33 @@ The anchors:
 
 ### What this shell honors, and what it refuses by name
 
-Honored: `E`, `F`, `L`, `K`, `i`, `l`, `r`, the `+`/`-` toggles and the empty
-group. The regular-expression flavors are compiled by Go's `regexp`, which is
-the engine `=~` already uses here.
+Honored: `E`, `F`, `L`, `K`, `N`, `g`, `i`, `l`, `p`, `r`, `s`, the `+`/`-`
+toggles and the empty group. The regular-expression flavors are compiled by
+Go's `regexp`, which is the engine `=~` already uses here.
 
 The rest are **refused by name rather than accepted and ignored** — `<pattern>:
-the ~(G) pattern modifier is not implemented`, at status 1. `G` is a different
-regular-expression syntax and translating it is work of its own; `A`, `B`, `P`,
-`V` and `X` agreeing with `E` on the probes above is not evidence that they
-*are* `E`; and no probe gives `M`, `N`, `O`, `S`, `U`, `a`, `g`, `m`, `p`, `s`
-or `x` anything to do — `~(g)` does not make `${v/p/r}` global, which is the
-one surface a "global" letter could have shown in. A flag taken and dropped is
-a wrong answer at status 0, which is worse than a refusal.
+the ~(G) pattern modifier is not implemented`, at status 1. `A`, `B`, `P`, `V`
+and `X` agreeing with `E` on the probes above is not evidence that they *are*
+`E`, and no probe gives `M`, `O`, `S`, `U`, `a`, `m` or `x` anything to do. A
+flag taken and dropped is a wrong answer at status 0, which is worse than a
+refusal.
+
+`G` and `V` are refused for a reason of a different kind, and it is not a
+matter of effort. Measured 2026-09-18:
+
+| written | ksh93u+ |
+| --- | --- |
+| `[[ abab == ~(G)\(ab\)\1 ]]` | **matches** |
+| `[[ abcd == ~(G)\(ab\)\1 ]]` | no |
+| `[[ abcd == ~(G)\(ab\)cd ]]` | matches — the control that says the group parses |
+| `[[ abab == ~(X)\(ab\)\1 ]]` | no |
+| `[[ abab == ~(E)\(ab\)\1 ]]` | no |
+
+The first two rows together are the claim: the group is captured and the
+reference has to match what it captured, so that flavor has
+**backreferences**. Go's `regexp` is RE2 and has none — `regexp.Compile`
+refuses `(ab)\1` outright — so it cannot be written on the engine every other
+flavor here already uses, and the last two rows say it is `G`'s alone.
 
 ### A regular expression matches a substring, and that reaches the matcher
 
@@ -2351,10 +2385,16 @@ each candidate span would have given.
   there: the matched *span* is removed wherever it sits, so `#` and `%` stop
   being prefix and suffix operators. The trims here go on trying prefixes and
   suffixes, so such a pattern does not match and the value comes back whole.
-- **A word made a pattern by the prefix alone.** `echo ~(E)a.c` expands
-  against the filesystem on ksh93 and is the literal word here, because a
-  `~(` does not yet count as a glob character. With one present —
-  `echo ~(E)b.*` — the walk begins and the flavor is honored.
+- **A group on a field whose remainder holds a `/`.** The group is the whole
+  field's there while the walk matches one component at a time, and the
+  reference shell's own answers do not compose: measured 2026-09-19 in a
+  directory holding `Sub/C.txt`, ksh93u+ names the file for `~(N)Sub/C.txt`
+  and for `~(N)/tmp/…/Sub/C.txt`, and answers the characters as written for
+  `~(E)Su./C..xt` and `~(i)/tmp/…/sub/c.txt` — where the flavor and the fold
+  would each have matched every component. Such a field behaves here exactly
+  as it did before any of these letters was read. `N` is the exception and is
+  read whatever the remainder holds, because it is about the **word** rather
+  than about matching a component.
 - **`${.sh.match}` after an ERE with capture groups.**
 
 ## One shell's extended pattern operators, and the option that gates them

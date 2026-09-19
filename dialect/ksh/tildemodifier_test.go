@@ -90,7 +90,9 @@ func TestATildeModifierReads(t *testing.T) {
 		// answer at status 0.
 		{`[[ abc == ~(G)abc ]]`, "ksh: ~(G)abc: the ~(G) pattern modifier is not implemented\n", 1},
 		{`[[ abc == ~(P)abc ]]`, "ksh: ~(P)abc: the ~(P) pattern modifier is not implemented\n", 1},
-		{`[[ abc == ~(g)abc ]]`, "ksh: ~(g)abc: the ~(g) pattern modifier is not implemented\n", 1},
+		// `g` is answered now, and it is a glob rather than a refusal — see
+		// TestTheGreedyLetterLengthensAPrefixTrim for what it does.
+		{`[[ abc == ~(g)abc ]]`, "", 0},
 	} {
 		out, st := kshOut(t, c.src)
 		if out != c.want || st != c.status {
@@ -105,11 +107,14 @@ func TestATildeModifierReads(t *testing.T) {
 // answers `abc` on ksh93u+ — the expression matched inside the name rather
 // than against the whole of it.
 //
-// The word still has to carry a glob character for the walk to begin, here as
-// there in shape though not in reach: `echo ~(E)a.c` is the literal word in
-// this shell and the two matching names on ksh93, because a `~(` does not by
-// itself make a word a pattern here yet. That gap is recorded rather than
-// papered over — see interp/tildemodifier.go.
+// A `~(…)` group with a letter in it is what makes the word a pattern, so the
+// walk begins for a name with no glob character in it too: `echo ~(E)a.c`
+// answers the two matching names here as it does on ksh93u+. That was the
+// other half of the same gap — the word was looked up as the characters it
+// was written with, found missing, and handed back as text (#3186). An
+// **empty** group does not: `~()a.txt` is those characters in both shells,
+// measured, which is the control that says this is the letters and not the
+// parentheses.
 func TestATildeModifierReachesPathnameExpansion(t *testing.T) {
 	dir := t.TempDir()
 	for _, n := range []string{"abc", "axc", "zzz"} {
@@ -122,6 +127,31 @@ func TestATildeModifierReachesPathnameExpansion(t *testing.T) {
 		{`echo ~(E)^a.*$`, "abc axc\n"},
 		{`echo ~(K)a*`, "abc axc\n"},
 		{`echo ~(F)b*`, "~(F)b*\n"},
+		// The name with no glob character in it, which is the row that gap
+		// was about.
+		{`echo ~(E)a.c`, "abc axc\n"},
+		{`echo ~(i)ABC`, "abc\n"},
+		// And the two letters re-measured as the shell glob rather than as
+		// narrowed regular expressions — see #3186, whose table had them the
+		// other way round.
+		{`echo ~(p)a?c`, "abc axc\n"},
+		{`echo ~(s)a?c`, "abc axc\n"},
+		{`echo ~(g)a*c`, "abc axc\n"},
+		// `N` deletes a word that names nothing, and leaves one that names
+		// something alone. The second row is the silently-literal half of
+		// #3186: `~(N)` on a *matching* pattern used to come back with the
+		// prefix still in the word, at status 0 and with nothing said.
+		{`echo ~(N)qqq`, "\n"},
+		{`echo ~(N)a.c`, "\n"},
+		{`echo ~(N)abc`, "abc\n"},
+		{`echo ~(N)a*`, "abc axc\n"},
+		{`echo ~(N)qq*`, "\n"},
+		{`echo [ ~(N)qq* ]`, "[ ]\n"},
+		// The control that says the deletion is the letter's: the same
+		// pattern without it keeps the word.
+		{`echo qq*`, "qq*\n"},
+		// And an empty group is not a pattern, so the word is its own text.
+		{`echo ~()abc`, "~()abc\n"},
 	} {
 		out, st, err := preset.Combined(t, dialecttest.Base{Dir: dir}, c.src)
 		if err != nil {

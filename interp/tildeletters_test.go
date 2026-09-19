@@ -66,6 +66,15 @@ func TestTheHonoredTildeLettersRead(t *testing.T) {
 		{"i", tildeModifier{fold: true}},
 		{"l", tildeModifier{left: true}},
 		{"r", tildeModifier{right: true}},
+		{"p", tildeModifier{flavor: tildeGlob}},
+		{"s", tildeModifier{flavor: tildeGlob}},
+		{"g", tildeModifier{greedy: true}},
+		{"N", tildeModifier{null: true}},
+		{"gN", tildeModifier{greedy: true, null: true}},
+		// The toggles reach the two new switches as they reach the fold.
+		{"-g", tildeModifier{}},
+		{"-N", tildeModifier{}},
+		{"g-g", tildeModifier{}},
 		{"Ei", tildeModifier{flavor: tildeERE, fold: true}},
 		{"iE", tildeModifier{flavor: tildeERE, fold: true}},
 		{"Elr", tildeModifier{flavor: tildeERE, left: true, right: true}},
@@ -108,6 +117,42 @@ func TestSplittingATildeModifier(t *testing.T) {
 		body, rest, ok := splitTildeModifier(c.src)
 		if ok != c.ok || body != c.body || rest != c.rest {
 			t.Errorf("%q: %q, %q, %v; want %q, %q, %v", c.src, body, rest, ok, c.body, c.rest, c.ok)
+		}
+	}
+}
+
+// tildeGlobPattern is what makes a field a pattern for pathname expansion,
+// and the three things it declines are each measured — see the function's own
+// rows. Read here as well as through a shell probe, because two of the three
+// are absences and a probe that answers "the word stood as written" cannot
+// tell an unread group from a group read and found not to matter.
+func TestATildeGroupMakesAFieldAPattern(t *testing.T) {
+	for _, c := range []struct {
+		field string
+		group bool
+		want  bool
+	}{
+		{"~(N)a.txt", true, true},
+		{"~(i)a.txt", true, true},
+		{"~(E)a.txt", true, true},
+		// A letter this shell does not answer still makes it one, so the
+		// matcher gets to refuse it by name.
+		{"~(G)a.txt", true, true},
+		// An empty group does not, which is the reference shell's answer for
+		// `~()a.txt` and is the control that says this is about letters.
+		{"~()a.txt", true, false},
+		// Nor does a remainder holding a separator, which is the limit.
+		{"~(N)Sub/C.txt", true, false},
+		{"~(i)/tmp/x", true, false},
+		// Nor a word carrying no group, nor a group that never closes.
+		{"a.txt", true, false},
+		{"~(N", true, false},
+		{"a~(N)b", true, false},
+		// And not at all in a grammar without the construct.
+		{"~(N)a.txt", false, false},
+	} {
+		if _, ok := tildeGlobPattern(c.field, c.group); ok != c.want {
+			t.Errorf("tildeGlobPattern(%q, %v) = %v, want %v", c.field, c.group, ok, c.want)
 		}
 	}
 }

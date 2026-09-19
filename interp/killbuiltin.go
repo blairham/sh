@@ -330,6 +330,22 @@ func (r *Runner) killSignal(args []string) (string, syscall.Signal, []string, er
 		}
 		spec, form, args = a[1:], killSpecFlag, args[1:]
 	}
+	if form != killSpecBare && len(args) > 0 && args[0] == "--" &&
+		r.ask(r.sem().KillTakesEndOfOptionsAfterTheSignal,
+			"`kill -0 --` with the end-of-options marker behind the signal") {
+		// The marker is already taken in front of everything, at the top of
+		// this function; this is the *second* place it can stand, and the
+		// two are not the same question. `kill -- -1` is one word the panel
+		// agrees about. `kill -0 -- -1` is the spelling a script writes when
+		// it has a signal to name as well as a negative target, and only
+		// three columns take it.
+		//
+		// Asked only where a signal really was read — form is not bare — so
+		// a `kill -- …` that never named one does not consult the axis, and
+		// a second marker stays the target it was written as, which is what
+		// bash 5.3.20 and ksh93u+ both do.
+		args = args[1:]
+	}
 	name, sig, err := r.signalSpec(spec, form)
 	if err != nil {
 		return "", 0, nil, err

@@ -568,8 +568,49 @@ jobs:
     # anybody actually reads them.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    # The one job in this workflow that runs in a container, and it is not
+    # about which bash is graded -- Ubuntu 24.04 is what `runs-on:
+    # ubuntu-latest` already provides, so the reference build, the numbers and
+    # the delta a burndown reads are all exactly what they were. It is about
+    # what a signal can reach.
+    #
+    # This job was cancelled on **31.1% of main runs** (14 of 45, measured
+    # 2026-09-19; 37.5% and 37.3% on the two days before), always the same
+    # shape: `make: *** Terminated`, then `The operation was canceled`, and
+    # usually `The runner has received a shutdown signal` with exit 143. The
+    # kill lands 150-355s in while *green* runs of the same step take 135-290s
+    # -- the windows overlap completely, so there is no wall and no ceiling,
+    # and 60 distinct runners with zero reuse rules out a bad host. Ten
+    # sibling jobs on identically-provisioned runners are 100% green.
+    #
+    # The mechanism is measured and it is not ours to refuse (#3082). A shell
+    # running `kill -- -1` signals every process its uid may signal, and
+    # **GNU bash 5.3, BusyBox ash and our own cmd/bash all do it** -- so it is
+    # POSIX rather than a defect, and it can come from either side of the
+    # grading. `internal/suite/group_unix.go` correctly puts every run in a
+    # process group of its own, and that containment is sound and simply
+    # cannot reach this: a process group does not bound `kill(-1)`. A PID
+    # namespace does. The runner agent is on the host and the step's processes
+    # are in here, so a uid-wide broadcast from a suite file now stops at the
+    # namespace boundary -- which is the same move `internal/cmd/oraclerunner`
+    # and `internal/cmd/suiteinside` already make one layer in, for the same
+    # reason.
+    #
+    # It is reversible: the diff is this key and the apt line below.
+    container:
+      image: ubuntu:24.04
     timeout-minutes: 30
     steps:
+    # A job container starts from the image and nothing else, so the two
+    # things the runner's own image would have provided have to be asked for.
+    # `make` is what the target is; git is so checkout clones rather than
+    # falling back to a source tarball.
+    - name: What a bare image does not have
+      if: needs.changes.outputs.code == 'true'
+      run: |
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+          make git ca-certificates
     - uses: actions/checkout@v6
       if: needs.changes.outputs.code == 'true'
     - uses: actions/setup-go@v6
@@ -612,4 +653,19 @@ jobs:
       # A file that needs more than 30s is a file that hung, and the harness
       # already reports that as `dialect hung` and declines to score it rather
       # than waiting on it -- so the cap costs no measurement.
+      #
+      # `continue-on-error` rather than only `|| true`, and the distinction is
+      # measured rather than belt-and-braces. The step shell is
+      # `/usr/bin/bash -e {0}`: when the broadcast above reaches the process
+      # group, **that shell dies too and never evaluates the `|| true`** -- so
+      # a step written to be report-only still turned the job red, and no
+      # wording at the step level could have fixed it. `continue-on-error` is
+      # evaluated by the runner agent after the step process is gone, however
+      # it went, which is the only place left that is still alive. The two
+      # halves are one fix: the container is what keeps the agent alive, and
+      # this is what keeps a dead step from reddening a job that reports.
+      #
+      # `|| true` stays for the ordinary case it already covers -- a fetch
+      # that could not reach the network, a non-zero suitecheck.
+      continue-on-error: true
       run: make bash-suite ARGS="-timeout 30s" || true

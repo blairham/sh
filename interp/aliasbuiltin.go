@@ -263,11 +263,11 @@ type aliasForm struct {
 	defining  bool // `-L`: a line that would define the alias back.
 	namesOnly bool // `+g` and its siblings: the name and nothing else.
 	exported  bool // `-x`: mark an entry, and list only the marked ones.
-	// separated is whether a `--` stood between the options and the
-	// operands. Every other builtin in the tree reads the separator and
-	// forgets it; one column does not. See
-	// Semantics.AliasSeparatorEndsTheLookup.
-	separated bool
+	// optioned is whether any option word stood in front of the operands —
+	// a letter, or a bare `--`. Every other builtin in the tree reads its
+	// options and forgets which were written; one column does not. See
+	// Semantics.AliasOptionEndsTheLookup.
+	optioned bool
 }
 
 func biAlias(r *Runner, _ context.Context, args []string) int {
@@ -296,8 +296,12 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 		// separator it reports there is one nobody wrote. It cannot be
 		// mistaken for one: the plus form is zsh's alone and zsh answers the
 		// axis below No, so the two never meet. See readAliasPlusWords.
-		form.separated = separated
 		opts += minus
+		// Any option at all, the separator included: measured, the letters
+		// do not differ from one another here and `--` is not a case of its
+		// own. Read before the letters are sorted out below, because what
+		// this asks is whether one was *written* and not which.
+		form.optioned = opts != "" || separated
 		if countKindLetters(opts) > 1 {
 			// The kinds are namespaces and a filter over one table, so one
 			// call cannot ask for two: measured `illegal combination of
@@ -392,15 +396,16 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 			r.markAliasExported(name)
 			continue
 		}
-		if form.separated && r.ask(r.sem().AliasSeparatorEndsTheLookup,
-			"a name after `alias --` being named rather than looked up") {
-			// The separator ends the *lookup* and not only the options in
+		if form.optioned && r.ask(r.sem().AliasOptionEndsTheLookup,
+			"a name behind an option of `alias` being named rather than looked up") {
+			// An option ends the *lookup* and not only the option reading in
 			// one column: the operand is named, as the mark above names one,
 			// and nothing is printed for it whether the table holds it or
-			// not. Measured — `alias -- r` says nothing where `alias r`
-			// writes the preset's line, and `alias -- nosuch` is silent at 0
-			// where `alias nosuch` is `not found` at 1. So it is not a
-			// quieter report; there is no report and no listing.
+			// not. Measured — `alias -p r` and `alias -- r` both say nothing
+			// where `alias r` writes the preset's line, and `alias -p
+			// nosuch` is silent at 0 where `alias nosuch` is `not found` at
+			// 1. So it is not a quieter report; there is no report and no
+			// listing.
 			continue
 		}
 		found, listed := r.lookupForListing(name, form.kind)

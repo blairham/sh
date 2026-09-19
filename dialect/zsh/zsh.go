@@ -1206,7 +1206,7 @@ func Semantics() interp.Semantics {
 	// A removed alias leaves nothing behind: `unalias h` twice is 0 then
 	// 1 here.
 	s.AliasRemembersTheNamesItNames = interp.No
-	s.AliasSeparatorEndsTheLookup = interp.No
+	s.AliasOptionEndsTheLookup = interp.No
 	// The two builtins that keep an assignment written in front of them here
 	// without being special ones — `V=1 alias` and `V=1 hash` leave `V` set,
 	// where `V=1 :` and `V=1 shift 0` do not. See

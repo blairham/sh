@@ -34,7 +34,21 @@ func (r *Runner) TypeExternalSentence(name, path string) string {
 // never write the first of the two sentences at all. See
 // Diagnostics.TypeHashedExternal.
 func (r *Runner) typeExternalSentence(name, path string, hashed bool) string {
-	if strings.ContainsRune(name, '/') {
+	pathname := strings.ContainsRune(name, '/')
+	// The name as this dialect writes a word it could not otherwise write
+	// bare, which is the same function the not-found sentence uses and is
+	// empty in every column but one. The path arrived quoted already, from
+	// Runner.reportedPath, because the bare-path forms write it with no
+	// sentence around it and the two must agree — measured 2026-09-18 on
+	// ksh93u+ 2012-08-01: with a directory holding a file called `a b` on
+	// PATH, `whence -v 'a b'` is `'a b' is a tracked alias for '/…/a b'` and
+	// `whence 'a b'` is `'/…/a b'`, and a plain name whose *path* holds a
+	// blank quotes the path alone. So they are two words each written back
+	// the same way rather than one quoted sentence.
+	//
+	// After the slash test, which is a fact about the operand as written.
+	name = r.NameReportWord(name)
+	if pathname {
 		if w := r.diag().TypePathnameOperand; w != "" {
 			return Wording(w, "%[1]s is %[2]s", name, path)
 		}

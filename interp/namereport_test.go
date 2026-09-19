@@ -4,6 +4,8 @@
 package interp_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -91,5 +93,107 @@ func TestAnAliasTheDialectDoesNotReportIsStillAnAlias(t *testing.T) {
 		if !strings.Contains(out, c.want) {
 			t.Errorf("%s: out = %q, want %q", c.name, strings.TrimSpace(out), c.want)
 		}
+	}
+}
+
+// And the sentence a *found* name gets is written back the same way, in both
+// of its words (#3678).
+//
+// The not-found sentence above was one word of one sentence. This is the
+// other half of the family: the name and the resolved **path** are each
+// written back through the same function, independently, so a plain name
+// whose directory holds a blank quotes the path and leaves the name alone.
+//
+// Measured 2026-09-18 on ksh93u+ 2012-08-01, script files under `env -i
+// PATH=<dir>:/usr/bin:/bin LC_ALL=C` with standard input on /dev/null, with a
+// directory on PATH holding an executable file literally called `a b`:
+//
+//	whence -v 'a b'    'a b' is a tracked alias for '<dir>/a b'
+//	whence 'a b'       '<dir>/a b'
+//	whence -v zz       zz is a tracked alias for '<dir with a blank>/zz'
+//	whence zz          '<dir with a blank>/zz'
+//	whence -v ls       ls is a tracked alias for /bin/ls
+//
+// The third and fourth rows are what say the two words are written back one
+// at a time rather than the sentence being quoted whole, and the fifth is the
+// control: a name and a path that need nothing are unchanged.
+//
+// The path is written back in Runner.reportedPath, which is the one place
+// every builtin asked *where* a command is passes through — so the sentence
+// forms and the bare-path forms cannot part company, which is what the rows
+// pairing `whence -v` with `whence` are for.
+func TestATypeSentenceWritesBackTheNameAndThePath(t *testing.T) {
+	meta := TraceMetacharacters{Anywhere: "*?[]{}~#", Leading: "="}
+	for _, c := range []struct {
+		name string
+		// dir is the directory the image goes in, relative to the temporary
+		// root, and image is what the file is called.
+		dir, image string
+		// what the sentence and the bare path say when the dialect quotes.
+		sentence, bare string
+	}{
+		{
+			// A name that cannot be written bare, in a directory that can.
+			"a blank in the name", "bin", "a b",
+			"'a b' is %[1]s", "%[1]s",
+		},
+		{
+			// And the other way about: the name is plain and the path is
+			// not, so only one of the two words moves.
+			"a blank in the directory", "b c", "zz",
+			"zz is %[1]s", "%[1]s",
+		},
+		{
+			// The control, where neither word needs anything.
+			"neither word needs quoting", "bin", "zz",
+			"zz is %[1]s", "%[1]s",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			dir := filepath.Join(root, c.dir)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			path := writeImage(t, dir, c.image, []byte("#!/bin/sh\n"), 0o755)
+			for _, q := range []struct {
+				quoting TraceQuoting
+				quotes  bool
+			}{{QuoteNever, false}, {QuoteDollar, true}} {
+				want := path
+				if q.quotes && strings.ContainsRune(path, ' ') {
+					// Written out rather than asked of the quoter, so the
+					// expectation is an independent statement of the rule
+					// rather than the code under test repeated.
+					want = "'" + path + "'"
+				}
+				setup := func(r *Runner) {
+					sem := permissive()
+					dg := Diagnostics{
+						TypeExternal:        "%[1]s is %[2]s",
+						NameReportQuoting:   q.quoting,
+						TraceMetacharacters: meta,
+					}
+					r.Semantics, r.Diagnostics = &sem, &dg
+					r.Dir = root
+					r.Env = []string{"PATH=" + dir}
+				}
+				// The sentence: both words, each written back on its own.
+				out, _ := run(t, `type "`+c.image+`"`, setup)
+				wantLine := c.sentence
+				if !q.quotes {
+					wantLine = strings.ReplaceAll(wantLine, "'", "")
+				}
+				wantLine = strings.ReplaceAll(wantLine, "%[1]s", want)
+				if !strings.Contains(out, wantLine) {
+					t.Errorf("sentence at %v: out = %q, want %q", q.quoting, strings.TrimSpace(out), wantLine)
+				}
+				// And the bare-path form, which has to agree about the path.
+				out, _ = run(t, `command -v "`+c.image+`"`, setup)
+				if strings.TrimSpace(out) != want {
+					t.Errorf("bare path at %v: out = %q, want %q", q.quoting, strings.TrimSpace(out), want)
+				}
+			}
+		})
 	}
 }

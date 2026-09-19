@@ -26,7 +26,23 @@ import (
 // writes either — filepath.Abs tidies a `./` away and ksh93 keeps it. The
 // join is spelled out here for that reason: it is a prefix join, and an
 // absolute operand has nothing to join to.
+// The word is written back the way the dialect writes one it could not
+// otherwise write bare, which is Runner.NameReportWord and is empty in every
+// column but one. Here rather than at each print, because this is the one
+// place every such builtin passes through and the sentence forms and the
+// bare-path forms have to agree: measured 2026-09-18 on ksh93u+ 2012-08-01,
+// `whence 'a b'` is `'/…/a b'` and `whence -v 'a b'` is
+// `'a b' is a tracked alias for '/…/a b'`, so the path is quoted whether or
+// not there is a sentence around it — and `whence zz` with a blank in the
+// *directory* quotes the path while leaving the plain name alone, which is
+// what says the two words are written back one at a time (#3678).
 func (r *Runner) reportedPath(name, resolved string) string {
+	return r.NameReportWord(r.resolvedPathFor(name, resolved))
+}
+
+// resolvedPathFor is which of the two paths is the answer, before it is
+// written back.
+func (r *Runner) resolvedPathFor(name, resolved string) string {
 	if !strings.ContainsRune(name, '/') {
 		return resolved
 	}

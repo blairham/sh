@@ -38,7 +38,7 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 // The separator is ordinarily invisible on purpose: every builtin in the tree
 // reads `alias -- x` and `alias x` as the same call, which is what a POSIX
 // separator is for. One column does not — see
-// Semantics.AliasSeparatorEndsTheLookup — so the fact has to leave the option
+// Semantics.AliasOptionEndsTheLookup — so the fact has to leave the option
 // reader, and it leaves it here rather than being scanned for a second time
 // by the caller. A second scan would be a second copy of "where do the
 // options end", and the two would part company the first time a letter grew

@@ -652,7 +652,7 @@ func Semantics() interp.Semantics {
 	// A removed alias leaves nothing behind: `alias h=1; unalias h;
 	// unalias h` is 0 then 1 here, as it is in zsh, dash and BusyBox ash.
 	s.AliasRemembersTheNamesItNames = interp.No
-	s.AliasSeparatorEndsTheLookup = interp.No
+	s.AliasOptionEndsTheLookup = interp.No
 	// A command word that is exactly `-` is a command name here and is
 	// reported as one: `- echo hi` is `command not found` at 127 and the
 	// script carries on. zsh is the column that throws the word away (#3236).

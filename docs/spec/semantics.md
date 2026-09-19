@@ -8119,7 +8119,7 @@ the controls.
 Three answers about one builtin, and none of them is about what an alias
 *stands for*.
 
-### `--` ends the lookup, not only the options
+### an option ends the lookup, not only the options
 
 `r` is an alias in every column below — one of ksh93's own presets, and
 `alias r=q` in the other three.
@@ -8140,15 +8140,38 @@ operand as a *question*, leaving only the naming behind it. That is the shape
 `alias -t --` already has in this shell, and `alias -t --` is what `hash` is
 here.
 
-`Semantics.AliasSeparatorEndsTheLookup` is the axis. It is the one place in
-this tree where a builtin has to know that a separator was *written* rather
-than only where the options ended, which is why `builtinOptionsSeparated`
-exists: a second scan of the same words would be a second copy of "where do
-the options end", and the two would part company the first time a letter grew
-an argument.
+**It is every option word and not the separator alone.** Measured 2026-09-18
+on the same route, with `zz=1` defined:
+
+| probe | ksh93u+ | bash 5.3.20 | zsh 5.9.2 | dash 0.5.12 |
+| --- | --- | --- | --- | --- |
+| `alias zz` | `zz=1`, 0 | its line, 0 | its line, 0 | its line, 0 |
+| `alias -p zz` | **silent, 0** | its line, 0 | `bad option: -p`, 1 | `-p not found`, then its line, 1 |
+| `alias -t zz` | **silent, 0** | — | — | — |
+| `alias -x zz` | **silent, 0** | — | — | — |
+| `alias -pt zz` | **silent, 0** | — | — | — |
+| `alias -p nosuch` | **silent, 0** | `alias: nosuch: not found`, 1 | `bad option: -p`, 1 | two complaints, 1 |
+| `alias -p nosuch zz` | **silent, 0** | — | — | — |
+| `alias -p zz=2` | defines, 0 | defines, 0 | — | — |
+| `ls; alias -t ls` | **silent, 0** | — | — | — |
+| `ls; alias -t` | `ls=/bin/ls`, 0 | — | — | — |
+
+The last two rows are the pair that says the silence is not a narrower table
+being searched: the bare `-t` listing has the entry and `-t ls` will not
+report it. `alias -L zz` and `alias -Q zz` are `unknown option` there, so the
+rule is over the three letters that shell has and the separator, which is the
+whole option set.
+
+`Semantics.AliasOptionEndsTheLookup` is the axis, and it was
+`AliasSeparatorEndsTheLookup` until the letters were measured (#3677). It is
+the one place in this tree where a builtin has to know that an option was
+*written* rather than only where the options ended, which is why
+`builtinOptionsSeparated` exists: a second scan of the same words would be a
+second copy of "where do the options end", and the two would part company the
+first time a letter grew an argument.
 
 dash's row is not a disagreement about the separator — it reads no options for
-`alias` at all, so `--` is a name there.
+`alias` at all, so `--` and `-p` are names there.
 
 ### Four preset aliases one shell will not report
 
@@ -9091,10 +9114,40 @@ rule gets both wrong.
 word* gets is not: `"a b"` as a command is `x.sh: line 6: a b: not found`
 there, bare (#3666).
 
-**The quoting reaches the answers too, and that half is not modeled.** With a
-file called `a b` on `PATH`, `whence -v "a b"` is `'a b' is a tracked alias
-for '/…/bb/a b'` in that shell and bare here — both the name *and the path*.
-See #3678.
+**The quoting reaches the answers too, and it reaches two words rather than
+one.** Measured 2026-09-18 on the same route, with a directory on `PATH`
+holding an executable file literally called `a b`, and a second directory
+whose own name holds a blank holding one called `zz`:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `whence -v 'a b'` | `'a b' is a tracked alias for '/…/bb/a b'` |
+| `command -V 'a b'` | the same sentence |
+| `type 'a b'` | the same sentence |
+| `whence 'a b'` | `'/…/bb/a b'` |
+| `whence -p 'a b'` | the same |
+| `command -v 'a b'` | the same |
+| `whence -v zz` | `zz is a tracked alias for '/…/b c/zz'` |
+| `whence zz` | `'/…/b c/zz'` |
+| `whence -v ls` | `ls is a tracked alias for /bin/ls` |
+| `whence -v './bb/a b'` | `'./bb/a b' is '/…/./bb/a b'` |
+
+The `zz` rows are what say the two are written back **one at a time**: a plain
+name whose directory holds a blank quotes the path and leaves the name alone,
+so this is not one quoted sentence. The `ls` row is the control where neither
+word needs anything.
+
+The name goes through `Runner.NameReportWord` in `typeExternalSentence`, after
+the slash test that picks which of the three wordings it is; the path goes
+through the same function in `Runner.reportedPath`, which is the one place
+every builtin asked *where* a command is passes through — so the sentence
+forms and the bare-path forms cannot part company (#3678).
+
+zsh quotes the path in its **sentence** and not in its bare-path form —
+`type 'a b'` is `a b is '/…/bb/a b'` there and `command -v 'a b'` is the bare
+path — which this engine does not reproduce and which the shape above cannot
+express, since it quotes the path once for both. That is a third question and
+its own issue.
 
 
 Measured 2026-09-18 from `-c` and from script files under `env -i

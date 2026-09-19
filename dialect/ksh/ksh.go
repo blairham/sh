@@ -825,7 +825,14 @@ func Semantics() interp.Semantics {
 	// remove. Naming is enough — a failed `alias z` leaves the name
 	// behind — and `unalias -a` clears them (#2926).
 	s.AliasRemembersTheNamesItNames = interp.Yes
-	s.AliasSeparatorEndsTheLookup = interp.Yes
+	// An option word in front of an operand ends the *lookup* here, not
+	// only the option reading: `alias -p zz`, `alias -t zz`, `alias -x zz`
+	// and `alias -- zz` are all silent at 0 where `alias zz` writes the
+	// line, and `alias -p nosuch` is silent at 0 where `alias nosuch` is
+	// `not found` at 1. A definition behind one still defines. Measured
+	// 2026-09-18; it was read from the separator alone until the letters
+	// were put to it (#3677).
+	s.AliasOptionEndsTheLookup = interp.Yes
 	// A command word that is exactly `-` is a command name here and is
 	// reported as one: `- echo hi` is `command not found` at 127 and the
 	// script carries on. zsh is the column that throws the word away (#3236).

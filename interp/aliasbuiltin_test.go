@@ -45,7 +45,7 @@ func aliasRunArgs(t *testing.T, tweak func(*Semantics), dg Diagnostics, src stri
 	// them on through tweak.
 	sem.AliasHasExportOption = No
 	sem.AliasRemembersTheNamesItNames = No
-	sem.AliasSeparatorEndsTheLookup = No
+	sem.AliasOptionEndsTheLookup = No
 	sem.AliasQuoting = ListingQuoteAlwaysEscaped
 	sem.BadOptionToSpecialBuiltinFatal = No
 	if tweak != nil {

@@ -47,12 +47,22 @@ import (
 // 1." A ratchet that covers half a population is not a ratchet; new prose
 // simply lands in the half it does not read.
 //
+// That sentence is the first one the file's own pass corrected: dash and
+// BusyBox ash both say 2, and dialect/ash already held 2 throughout. Nine of
+// its lines were measured across all seven columns on 2026-09-19 and
+// rewritten, which is what takes the budget from 54 to 45 — every dialect
+// value checked was right, so what the pass produced is a corrected record
+// rather than a defect. Two findings were not about ash at all: the same bash
+// binary called `sh` is silent where bash announces an empty hash table, and
+// drops the `alias ` prefix from a listing, so two fields documented as
+// "bash" are bash-as-bash.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
 	"semantics.go":   41,
-	"diagnostics.go": 54,
+	"diagnostics.go": 45,
 	filepath.Join("..", "syntax", "dialect.go"): 11,
 }
 

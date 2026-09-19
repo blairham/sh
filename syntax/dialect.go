@@ -1610,9 +1610,10 @@ type Dialect struct {
 	// admits the words a pattern can hold and nothing else.
 	CasePatternListSpansBlanks bool
 
-	// CasePatternRunsOutAsANewline reads the end of the input at a `case`
-	// arm's pattern as the **newline** that would have ended the line, rather
-	// than as the input running out inside an unfinished `case`.
+	// CaseWordRunsOutAsANewline reads the end of the input where a `case`
+	// wants a **word** — its subject, and an arm's pattern — as the
+	// **newline** that would have ended the line, rather than as the input
+	// running out inside an unfinished `case`.
 	//
 	// It decides only the wording of a failure, and the failure is the same
 	// one either way: a pattern was begun and its `)` never arrived. What
@@ -1647,12 +1648,33 @@ type Dialect struct {
 	// other spelling, which is why it is a token substitution rather than a
 	// message.
 	//
-	// **It is the pattern position and nothing wider.** `for i in a b`, `if
+	// **It is where a word belongs and nothing wider.** `for i in a b`, `if
 	// true`, `while true`, `{ echo a`, `select i in a` and an arm's *body*
 	// running out are all the unterminated shape in bash too, measured in the
 	// same run. A flag that made the end of input a newline generally would
 	// encode a rule bash does not have.
-	CasePatternRunsOutAsANewline bool
+	//
+	// The **subject** is the second position and was measured later, on
+	// 2026-09-19 while routing that refusal through the ordinary
+	// unexpected-token sentence (#3758). This comment said "the pattern
+	// position and nothing wider" until then, on a sweep that had asked
+	// every neighboring construct and not the one word inside `case` it had
+	// not reached. A file holding `case` and nothing else, script route,
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null
+	// device:
+	//
+	//	shell        without a trailing newline              with one
+	//	bash 5.3     `newline' unexpected, line 1, echoing `case'   the same
+	//	bash 3.2     the same                                the same
+	//	bash as sh   the same                                the same
+	//	dash         end of file unexpected (expecting word) newline unexpected …
+	//	ash          unexpected end of file (expecting word) unexpected newline …
+	//	ksh93        `case' unmatched                        `newline' unexpected
+	//	zsh          parse error near `case'                 parse error near `\n'
+	//
+	// The same six-column split as the pattern, read the same way: bash
+	// answers both spellings alike and the rest do not.
+	CaseWordRunsOutAsANewline bool
 
 	// FuncDefAtParen commits to a function definition as soon as a name is
 	// followed by `(`, rather than requiring the `()` pair.

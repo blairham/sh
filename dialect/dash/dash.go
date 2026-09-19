@@ -1661,10 +1661,12 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxUnexpectedNewline:          "Syntax error: newline unexpected",
 		UnexpectedNewlineIsOnTheNextLine: true,
 		SyntaxExpecting:                  " (expecting \"%[1]s\")",
+		SyntaxExpectingClass:             " (expecting %[1]s)",
 		// dash does not name the token when it is a redirection operator.
-		SyntaxRedirectUnexpected: "Syntax error: redirection unexpected",
-		ForName:                  "Syntax error: Bad for loop variable",
-		Unterminated:             "Syntax error: end of file unexpected (expecting \"%[4]s\")",
+		SyntaxRedirectUnexpected:    "Syntax error: redirection unexpected",
+		ForName:                     "Syntax error: Bad for loop variable",
+		Unterminated:                "Syntax error: end of file unexpected (expecting \"%[4]s\")",
+		UnterminatedExpectingAClass: "Syntax error: end of file unexpected (expecting %[4]s)",
 		// With nothing open there is nothing it could have been expecting,
 		// and the parenthetical goes rather than standing empty.
 		UnterminatedNoConstruct: "Syntax error: end of file unexpected",

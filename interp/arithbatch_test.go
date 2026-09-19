@@ -44,8 +44,8 @@ func TestBasesRunToSixtyFourWhereAdmitted(t *testing.T) {
 // clamp from a value carried in a double. Each row below fails under the other
 // answer.
 func TestArithmeticCarriedInADoubleWhereAsked(t *testing.T) {
-	carried := func(s *Semantics) { s.ArithValuesAreCarriedInADouble = Yes }
-	word := func(s *Semantics) { s.ArithValuesAreCarriedInADouble = No }
+	carried := func(s *Semantics) { s.ArithValuesAreCarriedInAFloat = Yes }
+	word := func(s *Semantics) { s.ArithValuesAreCarriedInAFloat = No }
 	for _, tc := range []struct {
 		name    string
 		snippet string

@@ -57,7 +57,7 @@ func TestTheTruthOfAValueUnderOneIsNotItsTruncation(t *testing.T) {
 }
 
 // TestANumeralPastTheWordIsTheDouble is the half of
-// Semantics.ArithValuesAreCarriedInADouble that interp's own batch cannot ask:
+// Semantics.ArithValuesAreCarriedInAFloat that interp's own batch cannot ask:
 // the numeral reader takes the *dialect's* word for whether this shell has
 // floats at all, and that harness is a shell with no dialect.
 //

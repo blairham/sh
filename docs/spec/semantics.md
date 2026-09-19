@@ -20620,7 +20620,7 @@ arithmetic. ksh93 answers `inf` for the value once it has been computed
 and zero only for the same value written down, so a reading that made
 every overflow zero would contradict the column it was measured from —
 and the integer side of the same question is a separate axis,
-`ArithValuesAreCarriedInADouble`, whose columns do not line up with
+`ArithValuesAreCarriedInAFloat`, whose columns do not line up with
 these.
 
 Two details of the zero reading, both measured on the only column that
@@ -20703,10 +20703,17 @@ disagree about it. Both halves are needed — the digit run already takes
 exponent's *sign*, without which `$(( 0x1p-1 ))` parses as `0x1p` minus
 one and answers 0.
 
-**`ArithValuesAreCarriedInADouble`** — bash no · dash no · ksh93 yes · zsh no
+**`ArithValuesAreCarriedInAFloat`** — bash no · dash no · ksh93 yes · zsh no
 
-Keeps every arithmetic value in a C double rather than in the machine
-word. ksh93 does; no other column does.
+Keeps every arithmetic value in a floating-point carrier rather than in
+the machine word. ksh93 does; no other column does.
+
+The axis was `ArithValuesAreCarriedInADouble` until #3695, and the name
+was a claim about a C type that holds on exactly one of the three
+platforms the same build runs on — three widths, one source, below.
+The line the axis draws is float carriage against integer-word carriage,
+and that line sits in the same place whatever the float's width, so the
+name says carriage and the comment says width.
 
 This replaced **`ArithOverflowSaturates`**, which recorded the wrong
 model — and recorded it from a probe that could not have told the two
@@ -20764,11 +20771,43 @@ two subtractions separates the readings — `2^53+1` alone is consistent
 with a 64-bit integer path, which is the shape a non-discriminating
 probe takes here.
 
-**The axis holds the macOS reading, and so does this shell on either
-kernel**, because the panel this record is measured from is the macOS
-one. Whether a dialect binary running on Linux should answer its own
-kernel's way is open — #3695 — and is a decision about what the panel
-means rather than a measurement.
+A third column, taken 2026-09-19 on the same pinned digest built for
+**linux/amd64**, says the split is not two-way and not about a kernel.
+`$(( 2**n + 1 - 2**n ))` is `1` while the significand still holds
+`2^n + 1` and `0` once it cannot, so the first `n` answering `0` names
+the width:
+
+    first n answering 0     53        64            113
+    significant digits      15        18            33
+    overflow at             ~1e308    ~1.19e4932    ~1.19e4932
+                            macOS     Linux         Linux
+                            arm64     amd64         arm64
+
+Those are binary64, the x87 80-bit extended format and IEEE binary128 —
+the C `long double` of each target. So there is no per-platform behavior
+in the shell to model: the shell asks its C library for the widest float
+it has, and three toolchains answer three ways. The axis was never wrong
+for one kernel and right for another; it was **under-specified**, and
+naming the width in it was the error rather than the value it holds.
+
+**This shell carries the macOS reading on every kernel, and that is a
+decision.** Two reasons, both stated rather than assumed:
+
+- The panel this record is measured from is the macOS one. Every other
+  row in it is that build on that machine, so a value chosen from a
+  container would make this the single axis graded against a different
+  column.
+- **Go has no 80-bit or 128-bit float.** Matching either Linux column
+  means a software float behind every `$(( ))` — `math/big.Float` at 64
+  or 113 bits of precision, with its own rounding, printing and infinity
+  rules to get right — for a difference that appears only past 2^53,
+  where the panel column is already losing precision by design.
+
+The cost is real and belongs here rather than in a footnote: a `cmd/ksh`
+running on Linux is measurably not the ksh93 beside it for values past
+2^53. What would change that is the arithmetic, not the axis — a third
+value naming the width would be the cheap half of a build nobody has
+costed.
 
 Whether the answer is written as an integer or in floating notation is
 ksh93's own test and not a magnitude: the value is an integer when a
@@ -20859,7 +20898,7 @@ modular rather than a stop at the top of that word, since
 `18446744073709551615` is -1 and `18446744073709551616` is 0. dash
 clamps at the largest signed value, whatever the numeral and whatever
 its base. ksh93 is the column this axis is not asked of at all:
-`ArithValuesAreCarriedInADouble` above is asked first and answers the
+`ArithValuesAreCarriedInAFloat` above is asked first and answers the
 question there instead — and it does **not** answer it by going
 straight to the double, which the `-1` in this very table has always
 said. A numeral with a radix is read in the unsigned word there too;

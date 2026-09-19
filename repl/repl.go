@@ -325,6 +325,17 @@ type Shell struct {
 	// promptprovider.go for the cost and failure rules.
 	PromptProviders []PromptProvider
 
+	// Theme draws the whole prompt from a configuration rather than from the
+	// prompt parameter. Nil is a session whose prompt is the parameter, which
+	// is what a front end that has not said gets.
+	//
+	// It *replaces* rather than contributes: while it is drawing, PS1 is
+	// neither read nor written and PromptProviders are not called. See
+	// promptprovider.go, which carries why each of those is the way round it
+	// is. A theme that answers false is not drawing, and everything below
+	// happens exactly as it would with no theme wired.
+	Theme PromptTheme
+
 	// Completers are what answers Tab before this shell's own completion
 	// does, in order. Nil is a session that completes the way the substrate
 	// does, which is what a front end that has not said gets.
@@ -884,7 +895,7 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 	// against $COLUMNS — a right-aligned segment is the usual reason a
 	// startup file asks for this at all — and a prompt drawn from last
 	// window's width is the one visible symptom the option exists to stop.
-	s.trackWindowSize()
+	_, cols := s.trackWindowSize()
 	s.reportFinishedJobs(continuing)
 	// After the notices and before the prompt is expanded, which is the
 	// order measured — see hooks.go. In the terminal's own line discipline,
@@ -903,10 +914,45 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 	// is a column" have to be taken out of both and the count has to cover
 	// both. Two drawnPrompts added together would be a text of two halves and
 	// a width of one.
-	if continuing {
-		return drawPrompt(s.contributed(true) + s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
+	if themed, drawing := s.themed(continuing, cols); drawing {
+		// The whole prompt, so neither the parameter nor a contribution is
+		// consulted. One drawPrompt all the same: the markers still have to
+		// come out and the width still has to be counted.
+		return drawPrompt(themed)
 	}
-	return drawPrompt(s.contributed(false) + s.prompt("PS1", or(s.Style.Default, "$ ")))
+	if continuing {
+		return drawPrompt(s.contributed(true, cols) + s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
+	}
+	return drawPrompt(s.contributed(false, cols) + s.prompt("PS1", or(s.Style.Default, "$ ")))
+}
+
+// themed is what this session's theme draws, if it is drawing.
+//
+// Behind the same guard a contribution runs behind, and for the same reason:
+// the process is the session, and a prompt that took a shell down with it
+// would end a session that has been open for hours over a segment somebody
+// wanted for decoration. A guarded panic leaves the theme not drawing, so the
+// parameter is what appears and the session keeps its prompt.
+func (s Shell) themed(continuing bool, cols int) (string, bool) {
+	if s.Theme == nil {
+		return "", false
+	}
+	var (
+		prompt  ThemedPrompt
+		drawing bool
+	)
+	if s.guard().Do(func() { prompt, drawing = s.Theme.DrawPrompt(s.promptInfo(continuing, cols)) }) {
+		// It panicked. The report has already been written, and the prompt
+		// falls back to the parameter rather than to nothing.
+		return "", false
+	}
+	if !drawing {
+		return "", false
+	}
+	if continuing {
+		return prompt.Cont, true
+	}
+	return prompt.Text, true
 }
 
 // trackWindowSize puts the terminal's size in $LINES and $COLUMNS, where the
@@ -934,17 +980,23 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 // Set rather than exported. bash does not export either name — `export -p`
 // shows no COLUMNS in a session where `$COLUMNS` is 80 — so a child gets the
 // terminal's size from the terminal, exactly as this shell does.
-func (s Shell) trackWindowSize() {
+// It answers what it measured as well as recording it, because a prompt drawn
+// from a configuration needs the width and asking the terminal twice for one
+// number is two system calls where the prompt already knows the answer. The
+// size is measured whether or not the shell wants it in a variable: the
+// option governs the *variables*, and a theme is not one.
+func (s Shell) trackWindowSize() (rows, cols int) {
+	rows, cols = terminalSize(s.inFile())
 	if s.Runner == nil || !s.Runner.TracksWindowSize() {
-		return
+		return rows, cols
 	}
-	rows, cols := terminalSize(s.inFile())
 	if cols > 0 {
 		s.Runner.SetVar("COLUMNS", strconv.Itoa(cols))
 	}
 	if rows > 0 {
 		s.Runner.SetVar("LINES", strconv.Itoa(rows))
 	}
+	return rows, cols
 }
 
 // contributed is what this session's prompt providers add, in order.
@@ -959,11 +1011,11 @@ func (s Shell) trackWindowSize() {
 // A guarded panic leaves the segment empty and the diagnostic goes where every
 // other one does, so the person sees which shell complained and the prompt
 // still arrives.
-func (s Shell) contributed(continuing bool) string {
+func (s Shell) contributed(continuing bool, cols int) string {
 	if len(s.PromptProviders) == 0 {
 		return ""
 	}
-	info := s.promptInfo(continuing)
+	info := s.promptInfo(continuing, cols)
 	guard := s.guard()
 	var b strings.Builder
 	for _, p := range s.PromptProviders {
@@ -986,16 +1038,46 @@ func (s Shell) contributed(continuing bool) string {
 // Built once and shared, rather than per provider, so that two providers on
 // the same prompt cannot disagree about what the last command was — which they
 // could, since a job finishing between them changes the count.
-func (s Shell) promptInfo(continuing bool) PromptInfo {
-	last := s.counted().last
-	return PromptInfo{
+func (s Shell) promptInfo(continuing bool, cols int) PromptInfo {
+	state := s.counted()
+	dir := s.workingDir()
+	info := PromptInfo{
 		Continued: continuing,
-		Dir:       s.workingDir(),
-		Command:   last.command,
+		Dir:       dir,
+		PrevDir:   state.prevDir,
+		Command:   state.last.command,
 		Status:    s.exitStatus(),
-		Duration:  last.duration,
+		Duration:  state.last.duration,
 		Jobs:      s.liveJobs(),
+		Columns:   cols,
+		Root:      os.Geteuid() == 0,
+		Remote:    s.remote(),
 	}
+	// Recorded after it is read, so the first prompt of a session reports no
+	// previous directory rather than its own — the difference a person cares
+	// about is the one the last command made.
+	state.prevDir = dir
+	return info
+}
+
+// remote reports whether this session arrived over a network.
+//
+// Out of the shell's own variables rather than the process environment, the
+// rule the rest of this reads by, and by the two names every remote shell in
+// use sets: `SSH_CONNECTION` is set by the server for the session and
+// `SSH_TTY` for an interactive one, and neither is set by a local login.
+// A shell reached some other way is not reported as remote, which is the
+// honest answer rather than a guess from the terminal's name.
+func (s Shell) remote() bool {
+	if s.Runner == nil {
+		return false
+	}
+	for _, name := range [...]string{"SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT"} {
+		if v, ok := s.Runner.GetVar(name); ok && v != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // exitStatus is `$?`, and zero for a shell with no Runner.

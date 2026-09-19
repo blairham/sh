@@ -188,8 +188,10 @@ func TestAProviderIsToldWhatTheLastCommandWas(t *testing.T) {
 
 	want := []PromptInfo{
 		{Dir: "/where/it/ran"},
-		{Dir: "/where/it/ran", Command: "echo hi", Duration: 1500 * time.Millisecond},
-		{Dir: "/where/it/ran", Command: "echo hi", Duration: 1500 * time.Millisecond},
+		// PrevDir from the second prompt on: it is where the *previous*
+		// prompt was drawn, and the first of a session has not had one.
+		{Dir: "/where/it/ran", PrevDir: "/where/it/ran", Command: "echo hi", Duration: 1500 * time.Millisecond},
+		{Dir: "/where/it/ran", PrevDir: "/where/it/ran", Command: "echo hi", Duration: 1500 * time.Millisecond},
 	}
 	if !reflect.DeepEqual(p.told, want) {
 		t.Errorf("the provider was told\n got %+v\nwant %+v", p.told, want)

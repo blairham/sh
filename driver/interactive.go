@@ -414,6 +414,14 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// What this binary adds to every prompt, which is nothing for a
 		// dialect binary and the sandbox marker for cmd/sh under a policy.
 		PromptProviders: sh.PromptProviders,
+		// And the theme, which draws the whole prompt from a configuration
+		// instead of from the prompt parameter — every dialect, because it is
+		// a capability of the substrate rather than of a language. It reads
+		// the *runner's* variables, so a person configures it at the prompt
+		// and in an rc file like everything else, and it draws nothing until
+		// something is configured. That is what makes wiring it here cost a
+		// session that never configures one exactly nothing.
+		Theme: repl.NewTheme(r.GetVar),
 		// And what else keeps this session's history, which is nothing unless
 		// the binary attached a tool. The file is told either way.
 		HistoryRecorders: sh.HistoryRecorders,

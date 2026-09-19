@@ -76,6 +76,27 @@ type PromptInfo struct {
 	// Jobs is how many jobs the shell is still looking after. A job that has
 	// finished and whose notice has been given is not one.
 	Jobs int
+
+	// Columns is the terminal's width, or zero where there is nothing to ask
+	// — a pipe, a closed terminal, a kernel that declines. Zero is not a
+	// width of eighty: something that divides by it, or fills to it, is
+	// broken in a way an unknown width is not, and the honest thing to do
+	// with it is to draw nothing that needs one.
+	Columns int
+
+	// Root reports whether this shell is running as the superuser, and
+	// Remote whether the session arrived over a network.
+	//
+	// The process for the first and the session's own variables for the
+	// second, which is the split the rest of this package already makes: a
+	// user id is the process's and `SSH_CONNECTION` is the shell's.
+	Root   bool
+	Remote bool
+
+	// PrevDir is the working directory the previous prompt was drawn in.
+	// Empty at the first prompt of a session, which is how something drawing
+	// a change knows there has not been one yet.
+	PrevDir string
 }
 
 // PromptProvider contributes text to a prompt.
@@ -116,3 +137,53 @@ func NonPrinting(escapes string) string {
 	}
 	return markStart + escapes + markEnd
 }
+
+// ThemedPrompt is a whole prompt, drawn rather than expanded.
+//
+// It is not a PromptProvider's answer widened: a provider contributes text in
+// front of the prompt parameter, and this *is* the prompt. The two shapes
+// exist side by side because they answer different questions — see
+// PromptTheme.
+type ThemedPrompt struct {
+	// Text is the prompt for a new command, newlines and all. The last line
+	// is the one being typed on.
+	Text string
+
+	// Cont is the prompt for the rest of an unfinished construct.
+	Cont string
+}
+
+// PromptTheme draws the whole prompt from a configuration, instead of the
+// prompt parameter being expanded and providers contributing in front of it.
+//
+// Three rules, and each of them is a property somebody could otherwise assume
+// the wrong way round.
+//
+// **The parameter is neither read nor written while a theme is drawing.** So
+// turning the theme off restores whatever the person had, because nothing
+// touched it — and a theme cannot be talked about as "what PS1 is set to",
+// because it is not set to anything.
+//
+// **A theme is the whole prompt, so providers do not contribute in front of
+// it.** A contribution ahead of a frame is outside the frame, which is the
+// "theme pretending to be a prefix" shape this seam exists to avoid, inverted.
+// A front end wiring both gets the theme; that is a decision in its own source
+// rather than something a person can reach, which is why it is documented here
+// and not reported at every prompt.
+//
+// **It is called behind the same panic guard**, for the reason written at the
+// top of this file: a prompt that took the session down over a decorative
+// segment would be worse than the line that did.
+//
+// Answering false is how a theme says it is not drawing this session — no
+// configuration asked for one — and the prompt is then the parameter, exactly
+// as it would be if no theme were wired at all.
+type PromptTheme interface {
+	DrawPrompt(info PromptInfo) (ThemedPrompt, bool)
+}
+
+// PromptThemeFunc adapts a function to PromptTheme.
+type PromptThemeFunc func(PromptInfo) (ThemedPrompt, bool)
+
+// DrawPrompt calls f.
+func (f PromptThemeFunc) DrawPrompt(info PromptInfo) (ThemedPrompt, bool) { return f(info) }

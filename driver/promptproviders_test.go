@@ -70,3 +70,23 @@ func TestAShellWithoutAHighlighterCarriesNoneToTheFrontEnd(t *testing.T) {
 		t.Errorf("the prompt carries a highlighter %#v, want none", got)
 	}
 }
+
+// The theme reaches the prompt in every dialect binary, because a prompt
+// drawn from a configuration is a capability of the substrate rather than of
+// a language. Carried rather than decided at the prompt: a nil here is a
+// shell that can never have one, and it looks exactly like one nobody
+// configured.
+func TestTheThemeReachesTheFrontEnd(t *testing.T) {
+	sh := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
+	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+
+	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	if front.Theme == nil {
+		t.Fatal("no theme reached the front end")
+	}
+	// And it draws nothing until something asks for one, so a session that
+	// never configures a prompt pays for none of this.
+	if _, drawing := front.Theme.DrawPrompt(repl.PromptInfo{}); drawing {
+		t.Error("a theme nobody configured drew a prompt")
+	}
+}

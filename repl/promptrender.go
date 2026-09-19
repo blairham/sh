@@ -406,6 +406,12 @@ type counts struct {
 	line        int
 	pendingLine int
 
+	// prevDir is the working directory the previous prompt was drawn in, for
+	// something that draws a change of directory. Held here rather than
+	// recomputed because it is the one prompt fact that is about the prompt
+	// before this one and nothing else records it.
+	prevDir string
+
 	// last is what the previous command was, for a prompt provider that draws
 	// something about it. Recorded by closeBlock, which is also where the
 	// block store's record of the same command is written — one place and one

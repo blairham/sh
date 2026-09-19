@@ -424,6 +424,19 @@ type Lexer struct {
 	// dialects that read a body from between the parentheses. See
 	// [Lexer.delimiterClosesParens].
 	inProgramParens bool
+
+	// heredocOutside is the refusal the last [Lexer.parseToClose] or
+	// [Lexer.parseToCloseBrace] found waiting, and nil when it found none: a
+	// here-document the substitution's own text opened and never fed, which
+	// one dialect refuses. See
+	// [Dialect.HeredocBodyMustBeInsideTheSubstitution].
+	//
+	// Held rather than raised because those two also read *candidate* text —
+	// `${(` is offered to the subshell-substitution scanner before the
+	// parameter form, and a candidate that is then declined is not a
+	// construct anybody wrote. [Lexer.takeHeredocOutside] is what commits it,
+	// and every caller calls it at the point the read is taken.
+	heredocOutside *Error
 }
 
 // queueHeredoc registers a redirection whose body is still to be read. The
@@ -3434,6 +3447,15 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			}
 			value := l.src[start:l.off]
 			l.advance() // the )
+			if kind == CommandSubst {
+				// And a here-document this text opened and could not feed,
+				// where the dialect refuses one. `$( )` and not the two
+				// process substitutions, which is measured: the shell that
+				// refuses this takes `cat <(cat <<EOF)` and reads the body
+				// from the lines after the enclosing command. See
+				// Lexer.noteHeredocOutside.
+				l.takeHeredocOutside()
+			}
 			return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 		}
 		// Not something the parser could read — half a line at a prompt,
@@ -3589,6 +3611,15 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// removes its continuations where its own quoting says they are
 		// continuations — and in a single-quoted part they are not.
 		value = l.src[start:end]
+	}
+	if kind == CommandSubst {
+		// The read above failed and the parentheses were counted instead,
+		// which is what a *nested* substitution looks like from out here: the
+		// inner one is the thing that was refused and the outer read failed
+		// with it. Raised here rather than left to the re-parse this value
+		// gets at expansion time, which would locate a parse failure as a
+		// line the shell was running. See Lexer.noteHeredocOutside.
+		l.takeHeredocOutside()
 	}
 	return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 }
@@ -3932,6 +3963,7 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 	lex.inProgramParens = true
 	sub := newParserOn(lex, l.dialect)
 	sub.parseList()
+	l.noteHeredocOutside(sub)
 	if sub.err != nil || !sub.at(TokRightParen) {
 		// Kept for the one caller that goes on to run out of input itself,
 		// which is where it becomes true of this lexer too. See innerOpen.
@@ -3970,6 +4002,71 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 // candidate is what makes the offer honest: a `}` inside quotes or inside a
 // substitution leaves that construct unterminated in the prefix, the read
 // fails, and the scan moves on.
+// noteHeredocOutside records — without raising — that the text a substitution
+// holding a program was read from opened a here-document and never fed it.
+//
+// A here-document's body begins on the line after the operator, so a `$( )`
+// or `${ ; }` whose text ends on that line leaves the operator queued with
+// nothing to read: the body would have to come from the lines after the
+// *enclosing* command, which is text the substitution is not made of. One
+// dialect refuses exactly that; see
+// [Dialect.HeredocBodyMustBeInsideTheSubstitution] for the panel and for the
+// spellings it does and does not reach.
+//
+// Not raised here because both readers that call this also read text that may
+// turn out not to be the construct at all — `${(` is offered to the
+// subshell-substitution scanner before the parameter form. See
+// [Lexer.takeHeredocOutside], which every caller runs once the read is taken.
+func (l *Lexer) noteHeredocOutside(sub *Parser) {
+	l.heredocOutside = nil
+	if !l.dialect.HeredocBodyMustBeInsideTheSubstitution {
+		return
+	}
+	if e, ok := sub.lex.err.(*Error); ok && e.Kind == ErrHeredocOutsideSubstitution {
+		// A substitution written *inside* this one was refused, which is
+		// what makes the read out here fail: the refusal belongs to the
+		// inner construct and travels out with the text it was found in.
+		// Without this the outer read falls back to counting parentheses,
+		// the span is taken, and the refusal is raised again by the re-parse
+		// at expansion time — where it is located as a line the shell was
+		// running rather than as a line it was reading.
+		l.heredocOutside = e
+		return
+	}
+	if len(sub.lex.pending) == 0 {
+		return
+	}
+	r := sub.lex.pending[0]
+	// The operator's own line rather than the substitution's, measured with
+	// the two on different lines. The token is the operator and the
+	// delimiter with its quoting off, which is one string in the sentence
+	// and so one Token here: a `-` after the `<<` and a descriptor in front
+	// of it are both left out of it.
+	l.heredocOutside = &Error{
+		Pos: r.OpPos, Kind: ErrHeredocOutsideSubstitution,
+		Token: "<<" + r.Word.Literal(),
+		Msg:   "here-document not contained within command substitution",
+	}
+}
+
+// takeHeredocOutside raises what noteHeredocOutside recorded, if anything, now
+// that the read it came from has been taken.
+//
+// It returns whether it raised, because the two scanners that call it have
+// already moved their cursor over text they can no longer un-read: a refused
+// span is nobody's to go on reading.
+func (l *Lexer) takeHeredocOutside() bool {
+	e := l.heredocOutside
+	l.heredocOutside = nil
+	if e == nil {
+		return false
+	}
+	if l.err == nil {
+		l.err = e
+	}
+	return true
+}
+
 func (l *Lexer) parseToCloseBrace(from int) (int, []Remark, bool) {
 	refused := -1
 	for i := from; i < len(l.src); i++ {
@@ -3979,6 +4076,7 @@ func (l *Lexer) parseToCloseBrace(from int) (int, []Remark, bool) {
 		sub := NewParserAt(l.src[from:i+1], l.dialect, l.line)
 		sub.parseList()
 		if sub.err == nil && sub.atWord("}") {
+			l.noteHeredocOutside(sub)
 			return i, sub.lex.remarks, true
 		}
 		if !sub.at(TokEOF) && refused < 0 {
@@ -4216,7 +4314,13 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	if listBody {
 		if end, remarks, ok := l.parseToCloseBrace(body); ok {
 			// What that read had to say comes back with it, exactly as it
-			// does for the parenthesis a substitution closes at.
+			// does for the parenthesis a substitution closes at — including a
+			// here-document the body opened and could not feed — but only
+			// through the list reading, which the one dialect that refuses
+			// one does not have: it ends this body at a token start and
+			// scans it rather than parsing it, so nothing here knows a
+			// here-document was opened. That row is measured and left; see
+			// Lexer.noteHeredocOutside.
 			l.remarks = append(l.remarks, remarks...)
 			closeAt = end
 		}

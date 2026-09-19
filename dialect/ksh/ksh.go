@@ -457,6 +457,13 @@ func Dialect() syntax.Dialect {
 	// dash and zsh read the body from the whole input instead, so the `)`
 	// goes into it and the construct is never closed (#963).
 	d.HeredocEndsAtClosingParen = true
+	// And a here-document whose body is *not* inside the substitution is
+	// refused rather than left empty: `echo $(cat <<EOF)` with the body on
+	// the lines after it is a syntax error here where four of the five other
+	// columns leave the substitution empty and run those lines as commands.
+	// See syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution for the panel
+	// (#3361).
+	d.HeredocBodyMustBeInsideTheSubstitution = true
 	// And a body line that took a continuation is never the delimiter here,
 	// however it joined — which is the core answer and is written out because
 	// it is measured rather than inherited (#2430). The measured build also
@@ -4467,6 +4474,15 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// script: `function a 1b { :; }` is `syntax error at line 1: invalid
 	// reference list`, where the other three print the sentence alone.
 	d.SyntaxError, d.PromptSyntaxError = parseWording(2, "%[1]s")
+	// A here-document opened inside a `$( )` or `${ ; }` whose text ends
+	// before the body could begin. Measured 2026-09-18 from a script file:
+	// `echo $(cat <<EOF)` is `syntax error at line 1: `<<EOF' here-document
+	// not contained within command substitution`, status 3, with the
+	// commands in front of it already run. The quoted token is the operator
+	// and the delimiter with its quoting off — `<<-EOF`, `<<"EOF"` and
+	// `<<\EOF` are all `<<EOF`, and a descriptor in front of the operator is
+	// not written. See syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution.
+	d.HeredocOutsideSubstitution, d.PromptHeredocOutsideSubstitution = parseWording(2, "`%[1]s' here-document not contained within command substitution")
 	return d
 }
 

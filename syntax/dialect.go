@@ -2329,6 +2329,54 @@ type Dialect struct {
 	// the construct is unclosed all the same and the answer does not change.
 	HeredocEndsAtClosingParen bool
 
+	// HeredocBodyMustBeInsideTheSubstitution refuses a here-document opened
+	// inside a `$( )` or `${ ; }` whose body is not inside it too — which is
+	// what a one-line substitution leaves, the text ending before the body
+	// could begin:
+	//
+	//	echo one
+	//	echo $(cat <<EOF)
+	//	body
+	//	EOF
+	//	echo after
+	//
+	// Measured 2026-09-18 from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null device,
+	// over that file:
+	//
+	//	bash 5.3.20     `one`, a warning that a here-document was
+	//	                unterminated, `body`, `after` — the body is read from
+	//	                the lines after the enclosing command
+	//	zsh 5.9.2       `one`, an empty substitution, `body` and `EOF` run as
+	//	                commands, `after`
+	//	dash 0.5.12     the same, in its own words
+	//	BusyBox ash     the same
+	//	ksh93u+         refused while reading: `syntax error at line 2:
+	//	                `<<EOF' here-document not contained within command
+	//	                substitution`, status 3, `after` never reached
+	//
+	// So it is one column against four, and this flag is that column alone:
+	// with it off the four-column reading stands, which is what the core and
+	// every other preset keep. bash's reading is neither — it needs the body
+	// to reach the *outer* lexer's pending queue from inside a span that has
+	// already closed — and is a parser capability rather than an answer this
+	// flag can hold; see #3711.
+	//
+	// The line named is the one the operator is on rather than the one the
+	// substitution opened on, measured with `echo $(echo a` / `cat <<EOF)`,
+	// which is line 2. The quoted token is `<<` and the delimiter with its
+	// quoting off: `<<-EOF`, `<<"EOF"` and `<<\EOF` are each `<<EOF`, a
+	// descriptor in front of the operator is not written, and `<<'E O F'` is
+	// `<<E O F`, blanks and all. A herestring is not a here-document and is
+	// not refused.
+	//
+	// **It is the two substitution spellings that hold a program and not
+	// every parenthesis.** Measured the same day: the backquoted spelling is
+	// accepted there and answers the four-column reading, and so is `cat
+	// <(cat <<EOF)` — while `${ cat <<EOF; }`, that shell's shared-state
+	// form, is refused with the same sentence.
+	HeredocBodyMustBeInsideTheSubstitution bool
+
 	// HeredocLastLineIsADelimiterPrefix reads the last line of the text
 	// inside `$( )` as a delimiter *prefix*, where a here-document in that
 	// text reached the end of it without ever seeing the delimiter on a line

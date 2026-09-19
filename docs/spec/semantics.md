@@ -331,6 +331,33 @@ answer for five kinds of nine, which is how this was first filed.
   at status 1 where the refusal is not fatal. Yes in ksh93 and zsh, No in
   bash. Unanswered in the standard's preset, where every refusal is fatal
   and the command's fate never arises.
+- **`PosixModeSharpensAPrefixRefusal`** — whether POSIX mode moves both of
+  the answers above. Yes in bash and unmeasured elsewhere, so the preset
+  declines the move rather than asserting the standard's reading for the
+  three columns that reach the mode only as `sh`.
+
+  It is the **fourth outcome** `PrefixRefusalFatality`'s own note records
+  as having no value: a shell that reports, drops the rest of the command
+  list and reaches the next line. That was bash-as-`sh`'s alone and so
+  belonged to no preset; `set -o posix` reaches it under bash's own name,
+  which is what gives it one. Measured 2026-09-18 from a script file with
+  `set -o posix; readonly v=1` in front of each line, `; echo pre=$?`
+  behind the command and `echo b=$?` on the next line:
+
+  | the line | bash 5.3.20 |
+  | --- | --- |
+  | `v=3 true` | no `pre=`, then `b=1` |
+  | `v=3 /usr/bin/true` | no `pre=`, then `b=1` |
+  | `v=3 f` | no `pre=`, then `b=1` |
+  | `v=3 :` | the script ends at 1 |
+  | `v=3 export x=1` | the script ends at 1 |
+
+  So a **special builtin** is fatal and everything else gives up the line.
+  A function body, an `if`, a `for` and a `||` all unwind the same way and
+  a subshell contains it, which is the give-up shape the core already had;
+  from a command string the shell ends at 1 instead. `set +o posix` puts
+  the dialect's own answer back, which is what makes it a mode rather than
+  a build (#3471).
 - **`PrefixToAFrozenNameIsCheckedFirst`** — when the check happens
   against when the command's values are expanded and its redirections
   opened. Three orders, not two. Measured 2026-09-12 with `readonly x=1`:

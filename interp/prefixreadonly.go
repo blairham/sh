@@ -245,28 +245,38 @@ func (r *Runner) prefixRefusalApplies(p prefixCommand) bool {
 // Decided before the names are reported rather than after, because how many of
 // them are named follows from this: a shell that gives the command up stops at
 // the first refusal and a shell that carries on names them all.
-func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip bool, unanswered string) {
+func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip, giveUpTheLine bool, unanswered string) {
+	if r.posixMode && r.ask(r.sem().PosixModeSharpensAPrefixRefusal,
+		"POSIX mode sharpening what a refused assignment prefix costs") {
+		// The mode answers both halves at once and the fatality and cost
+		// axes are not consulted: see
+		// Semantics.PosixModeSharpensAPrefixRefusal for the five rows.
+		if p.kind == prefixBeforeSpecialBuiltin {
+			return true, true, false, ""
+		}
+		return false, true, true, ""
+	}
 	switch r.sem().PrefixRefusalFatality {
 	case PrefixRefusalNeverFatal:
 	case PrefixRefusalAlwaysFatal:
-		return true, true, ""
+		return true, true, false, ""
 	case PrefixRefusalFatalOnASpecialBuiltinOrFunction:
 		fatal = p.kind == prefixBeforeSpecialBuiltin || p.kind == prefixBeforeFunction
 	case PrefixRefusalFatalOnACommandThisShellRuns:
 		fatal = !p.throughCommand && p.kind != prefixBeforeExternal
 	default:
-		return false, true, "what a refused assignment prefix costs"
+		return false, true, false, "what a refused assignment prefix costs"
 	}
 	if fatal {
-		return true, true, ""
+		return true, true, false, ""
 	}
 	switch r.sem().PrefixRefusalCostsTheCommand {
 	case Yes:
-		return false, true, ""
+		return false, true, false, ""
 	case No:
-		return false, false, ""
+		return false, false, false, ""
 	}
-	return false, true, "a refused assignment prefix costing the command it stood in front of"
+	return false, true, false, "a refused assignment prefix costing the command it stood in front of"
 }
 
 // refusePrefixes reports a command's assignment prefixes to frozen names and
@@ -311,7 +321,7 @@ func (r *Runner) refusePrefixesNow(assigns []*syntax.Assign, p prefixCommand, re
 		// — and the command runs with nothing said.
 		return true, false
 	}
-	fatal, skip, unanswered := r.prefixRefusalCost(p)
+	fatal, skip, giveUpTheLine, unanswered := r.prefixRefusalCost(p)
 	if report {
 		// A shell that carries on names *every* frozen name in the prefix,
 		// in written order; one that gives the command up stops at the first.
@@ -332,6 +342,14 @@ func (r *Runner) refusePrefixesNow(assigns []*syntax.Assign, p prefixCommand, re
 		r.status, r.unspecified = 2, true
 	case fatal:
 		r.fatalQuiet()
+	case giveUpTheLine:
+		// The command is not run and neither is the rest of the command
+		// list, which is the whole of the difference from the case below:
+		// measured, `v=3 true; echo pre=$?` writes no `pre=` and the next
+		// line reports 1. Through the door the core's own give-ups use, so
+		// a function body, an `if`, a `for` and a `||` unwind alike and a
+		// command string ends the shell instead.
+		r.GiveUpTheCommandAt(1)
 	case skip:
 		// The command is not run and the status is the refusal's own.
 		// Measured: `readonly x=1; x=2 /bin/echo RAN; echo after` prints the

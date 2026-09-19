@@ -20,6 +20,7 @@ func FunctionLayout() syntax.Layout {
 	// Shown, the outermost brace stands alone on its line; written into the
 	// environment it does not, which is the only difference between the two.
 	l.OutermostBraceOpensALine = true
+	l.CommandSubstitutionIsReprinted = reprintBody(l)
 	return l
 }
 
@@ -57,6 +58,7 @@ func ExportedFunctionLayout() syntax.Layout {
 	// One space, and the same space however deep: what goes into the
 	// environment is not indented to be read.
 	l.Indent, l.Nested = " ", false
+	l.CommandSubstitutionIsReprinted = reprintBody(l)
 	return l
 }
 
@@ -133,4 +135,53 @@ func common() syntax.Layout {
 		FunctionHeader:                        syntax.FunctionHeaderKeywordAndParens,
 		BraceAfterAFunctionHeaderOnItsOwnLine: true,
 	}
+}
+
+// How the inside of a `$( … )` is written back.
+//
+// A command substitution's body is held unparsed — the span is the text, and
+// nothing reads it until the substitution runs — so a printer with nothing but
+// the span writes the characters back. This shell does not: it re-reads the
+// body and lays it out through the same listing, so `$(a >/dev/null;b)` comes
+// back `$(a > /dev/null; b)` and a construct written inside one is spread over
+// lines exactly as it would be outside (#3801). Measured 2026-09-19 on bash
+// 5.3.20 and 3.2.57 through `declare -f` and `export -f`, which answer alike.
+//
+// The arrangement inside is a third one, and both halves of it are measured:
+// the statements of a list follow the source's own line breaks — `$(a;b)` is
+// one line and `$(a` newline `b)` is two — while a construct a reserved word
+// closes is laid out, `$(if true; then echo x; fi)` coming back over three
+// lines with `fi` at the margin. See syntax.Layout.KeywordBodiesTakeTheirOwnLines.
+//
+// It is the *listing's* arrangement rather than a second one: reprintBody is
+// handed the same Layout the caller is using, so the shown form and the
+// exported form each reprint with their own indent, and a substitution inside
+// a substitution reprints with the arrangement of the one that holds it.
+
+// reprintBody re-reads a command substitution's body and writes it back
+// through the same arrangement.
+//
+// One function value however deep the nesting goes, and the knot is tied
+// through the layout rather than through the closure: `l` is the copy the
+// closure reads, and the line after it stores the closure *into* that copy, so
+// a substitution found inside a body is reprinted by the same function with
+// the same arrangement.
+func reprintBody(l syntax.Layout) func(string) (string, bool) {
+	// The inside of a substitution, which is the outside's arrangement with
+	// the two line questions answered the other way.
+	l.Lines = false
+	l.KeywordBodiesTakeTheirOwnLines = true
+	reprint := func(body string) (string, bool) {
+		f, err := syntax.Parse(body, Dialect())
+		if err != nil {
+			// A body is not read until the substitution runs, so a program
+			// holding one that will not parse is a program this shell lists
+			// today. Writing it back as it stands is the answer; refusing to
+			// print it is not.
+			return "", false
+		}
+		return syntax.PrintFileWith(f, l), true
+	}
+	l.CommandSubstitutionIsReprinted = reprint
+	return reprint
 }

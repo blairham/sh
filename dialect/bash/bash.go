@@ -21,6 +21,14 @@ func Dialect() syntax.Dialect {
 	// bash has documented it as deprecated for years and both builds
 	// in the panel still take it (#900).
 	d.DollarBracketArith = true
+	// A `$( … )` body is parsed while the line that holds it is read, so a
+	// body that will not parse refuses the line before any of it runs — and
+	// refuses it even where the substitution is in a branch nothing takes.
+	// The older spelling is not: `` v=`if` `` is read when the word is
+	// expanded here. Measured 2026-09-19; 3.2 reads neither with the line,
+	// so this is a version line inside one lineage exactly as
+	// ArithDoubleQuote is. See syntax.Dialect.SubstitutionBodyRead (#2857).
+	d.SubstitutionBodyRead = syntax.NewerSubstitutionBodyReadWithItsLine
 	// A double quote inside an arithmetic expression is taken out of the
 	// text before anything reads it. Measured 2026-09-10 in 5.3.15 and as
 	// `sh`: with `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and

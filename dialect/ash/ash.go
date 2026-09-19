@@ -52,6 +52,11 @@ func Dialect() syntax.Dialect {
 	// …; }` and `function f() { …; }` both define; `${v:1:3}` of `abcdef` is
 	// `bcd`; `${v/b/X}` of `abc` is `aXc`.
 	d.DollarSingleQuote = true
+	// Both spellings of a command substitution are parsed while the line is
+	// read, which is dash's answer measured again here rather than inherited:
+	// `echo before; v=$(if)` writes nothing in BusyBox 1.37.0 and so does the
+	// backquoted spelling. See syntax.Dialect.SubstitutionBodyRead (#2857).
+	d.SubstitutionBodyRead = syntax.EverySubstitutionBodyReadWithItsLine
 	// `[[` is here, but as `test` with a closing word rather than as the
 	// conditional every other shell with the spelling has: `type '[['` is
 	// `[[ is a shell builtin`, `[[ abc == "a*" ]]` is 0 because the quotes

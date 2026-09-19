@@ -40,6 +40,23 @@ type File struct {
 	// parser's own error instead: there, the refusal *is* the answer, which is
 	// what `bash -n` reports and exits 1 for.
 	Refused error
+
+	// Substitutions are the command substitutions read while this file was
+	// parsed, in reading order, for a dialect that parses their bodies with
+	// the line that holds them. Empty for every other dialect and for a file
+	// holding none.
+	//
+	// The parser cannot parse a body itself: a body is read with the alias
+	// tables, the options and the dialect as the *shell* holds them at that
+	// moment, and none of those are here. So what crosses is the list, and
+	// the shell reads each body before it runs the line — which is the whole
+	// of [Dialect.SubstitutionBodyRead] (#2857).
+	//
+	// Spans rather than pointers into the tree, because a span read out of an
+	// expansion's operand is copied on its way into the word that holds it
+	// and a pointer taken here would name the copy that was left behind.
+	// Nothing writes through them; the list is an index, not a second tree.
+	Substitutions []Span
 }
 
 func (f *File) Pos() Pos {

@@ -52,6 +52,59 @@ const (
 func (a ProgramRoutes) Has(route ProgramRoutes) bool { return a&route != 0 }
 
 // SeparatorSkip is how far a dialect will step over a `;` written where the
+// SubstitutionBodyRead says **when** a command substitution's body is parsed:
+// while the line that holds it is read, or when the substitution runs.
+//
+// The body is a program written inside a word, so the two moments are both
+// defensible and the panel is split three ways rather than two — which is why
+// this is a value and not a bool. Measured 2026-09-19, script files under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null device,
+// over `echo before; v=$(if); echo after` and the same line written with
+// backquotes:
+//
+//	column                 `$( … )`   `` ` … ` ``
+//	dash 0.5.12            with the line   with the line
+//	BusyBox ash 1.37.0     with the line   with the line
+//	bash 5.3.20            with the line   when it runs
+//	bash 5.3.20 as `sh`    with the line   when it runs
+//	bash 3.2.57            when it runs    when it runs
+//	ksh93u+                when it runs    when it runs
+//	zsh 5.9.2              when it runs    when it runs
+//
+// `before` is what says which: a shell that read the body with the line
+// refuses the whole line and prints nothing. The control that makes it a
+// statement about *parsing* rather than about how far a failure unwinds is
+// the same body in a branch nothing takes — `false && v=$(if); echo
+// "after=$?"` — where the four columns above still refuse and the other three
+// print `after=1` with nothing said.
+//
+// The split runs *through* bash, which is the part a reading keyed on the
+// shell's name gets wrong: 5.3 reads the newer spelling with the line and 3.2
+// does not.
+type SubstitutionBodyRead uint8
+
+const (
+	// SubstitutionBodyReadWhenItRuns is the core answer: the body is kept as
+	// source and parsed at the moment the word is expanded, so a body that
+	// will not parse is not a fact about the line at all. bash 3.2, ksh93
+	// and zsh.
+	SubstitutionBodyReadWhenItRuns SubstitutionBodyRead = iota
+
+	// NewerSubstitutionBodyReadWithItsLine parses a `$( … )` body while the
+	// line is read and leaves the older spelling to be read when it runs.
+	// bash 5.3 and the same build as `sh`.
+	//
+	// Measured on the nesting as well as on the plain shape: `v=$(echo
+	// $(if))` is refused with the line there and `` v=`echo $(if)` `` and
+	// `` v=$(echo `if`) `` are not, so it is the spelling of **each** body
+	// and not of the outermost one.
+	NewerSubstitutionBodyReadWithItsLine
+
+	// EverySubstitutionBodyReadWithItsLine parses both spellings with the
+	// line. dash and BusyBox ash.
+	EverySubstitutionBodyReadWithItsLine
+)
+
 // grammar wants a command. See [Dialect.SeparatorWhereACommandBelongs].
 //
 // A count and a place rather than a bool, because the two shells that allow
@@ -5132,6 +5185,19 @@ type Dialect struct {
 	// parser, because only the caller knows it is reading a body and which
 	// spelling opened it. See interp's bodyDialect.
 	SubstitutionBodyRefusesASteppedOverSeparator bool
+
+	// SubstitutionBodyRead says when a command substitution's body is
+	// parsed — with the line that holds it, or when the substitution runs.
+	// See [SubstitutionBodyRead] for the panel and for the control that
+	// makes it a question about parsing.
+	//
+	// What the parser does for it is collect: a body cannot be parsed here,
+	// because the alias tables and the run-time state a body is read under
+	// belong to the shell, so the spans this answer covers are gathered into
+	// [File.Substitutions] and the reader takes them from there. Nothing is
+	// gathered under the core answer, which is what keeps this off the
+	// common path.
+	SubstitutionBodyRead SubstitutionBodyRead
 
 	// AbsentAndOrOperandIsAnEmptyCommand supplies a command that does nothing
 	// and succeeds where an and-or's right-hand side is missing after a

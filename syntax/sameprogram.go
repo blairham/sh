@@ -34,6 +34,7 @@ var (
 	spanType        = reflect.TypeOf(Span{})
 	assignType      = reflect.TypeOf(Assign{})
 	paramExprType   = reflect.TypeOf(ParamExpr{})
+	fileType        = reflect.TypeOf(File{})
 )
 
 // SameProgram reports whether two trees are the same program, and where they
@@ -99,6 +100,15 @@ func spellingOnly(t reflect.Type, name string) bool {
 		// back without the space before the `;` is the same program with a
 		// shorter tail.
 		return t == arithNumType
+	}
+	if name == "Substitutions" {
+		// An **index** over the tree rather than a part of it: every span it
+		// lists is compared where it stands in the word that holds it, and
+		// what is gathered here is a second reference to the same spans for
+		// one reader. Printing may also put two statements on lines the
+		// source did not, which moves nothing about the program and would
+		// move this list. See [File.Substitutions].
+		return t == fileType
 	}
 	if name == "YStart" {
 		// A position, spelled as an offset rather than as a Pos because it

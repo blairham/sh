@@ -172,16 +172,49 @@ import (
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
-	"semantics.go":   33,
-	"diagnostics.go": 31,
-	filepath.Join("..", "syntax", "dialect.go"): 11,
+	"semantics.go":   14,
+	"diagnostics.go": 22,
+	filepath.Join("..", "syntax", "dialect.go"): 0,
 }
 
 // fourShellPanel is the phrase set from the audit that filed #3228. Each one
 // names a panel of four where the panel is seven.
+//
+// **The noun after the number decides it**, and getting that wrong was most
+// of this check. The first spelling matched `all four` and `the other three`
+// bare, which caught sentence after sentence making no claim about the panel:
+// `all four combinations` of a name count and a body spelling, `the other
+// three flags showing through`, `ksh93 takes all four` of the quoting
+// constructs, `a header written over four lines with all four of them`, and
+// four separate `four answers` that are the values of an enum. In
+// syntax/dialect.go it was **eleven matches out of eleven** — the file's whole
+// budget was false, and driving it to zero would have meant rewording prose
+// that is already right.
+//
+// So the number is read with what it counts. A panel noun or an elided one
+// counts; a blocklisted noun does not.
 var fourShellPanel = regexp.MustCompile(
-	`\bthe other three\b|\bthree of the four\b|\ball four\b|\bfour answers\b|` +
-		`\bthe four (?:columns|shells|of them|dialects)\b`)
+	`\bthe other three\b|\bthree of the four\b|\b(?:all |the )four (?:columns|shells|dialects|of them)\b`)
+
+// fourShellNotAPanel is what the number turned out to be counting instead.
+//
+// Every entry was found in the tree rather than imagined: each is a real
+// sentence the bare phrase matched and should not have.
+var fourShellNotAPanel = regexp.MustCompile(
+	`\b(?:the other three|four) (?:flags|rules|combinations|lines|rows|answers|` +
+		`constructs|spellings|letters|words|characters)\b|` +
+		`\bwritten over four lines\b|\bthe other three would\b`)
+
+// fourShellSubset is a panel phrase that names *which* four, which is a
+// counted subset of the seven rather than a claim that the panel is four.
+//
+// `the four columns without the construct`, `all four shells that have =~`,
+// `the four shells that read through a double quote` — each says how its four
+// were chosen, so no reader is left with a four-shell picture of the panel.
+// These are the sentences this audit wants written, not the ones it wants
+// found.
+var fourShellSubset = regexp.MustCompile(
+	`\b(?:columns|shells|dialects|of them) (?:that|without|with|which|having|holding)\b`)
 
 func TestNoNewFourShellPanelInAnAxisDoc(t *testing.T) {
 	for _, path := range slices.Sorted(maps.Keys(fourShellPhraseBudget)) {
@@ -223,7 +256,9 @@ func fourShellPanelLines(t *testing.T, path string) int {
 		if !strings.HasPrefix(strings.TrimSpace(line), "//") {
 			continue
 		}
-		if fourShellPanel.MatchString(line) {
+		if fourShellPanel.MatchString(line) &&
+			!fourShellSubset.MatchString(line) &&
+			!fourShellNotAPanel.MatchString(line) {
 			n++
 		}
 	}

@@ -275,8 +275,31 @@ type ArithIndex struct {
 	// reason Sub is: what a group selects depends on whether the name is an
 	// association, which the parser cannot see.
 	Flags *SubscriptFlags
-	Start Pos
-	Stop  Pos
+	// UnclosedQuote says the brackets were found only once the scan gave up
+	// on a quotation that never closed.
+	//
+	// A subscript's brackets are scanned *through* quotations where the
+	// dialect has them, so a `]` written inside quotes is a character of a
+	// key and closes nothing — see Dialect.ArithSubscriptQuoting. A
+	// quotation that never closes is not one, and the brackets are then
+	// found by scanning again with the quoting ignored, which is how
+	// `a[q'r]` comes to name the three-character key it looks like.
+	//
+	// The panel parts over whether that second scan is allowed to produce a
+	// subscript at all, so the fact that it was needed is recorded here
+	// rather than decided here: the parser cannot see the option a session
+	// carries and cannot see which dialect's answer is wanted. See
+	// interp.Semantics.ArithSubscriptQuotationMustClose.
+	//
+	// It is only ever reachable from text that arrived **already expanded**.
+	// A quotation a script writes inside an arithmetic subscript is closed
+	// before the word is lexed or the word itself is unterminated, so
+	// `(( a[q'r]++ ))` written out is `unexpected EOF while looking for
+	// matching \`''` in bash 5.3.20 and `'' unmatched` in ksh93u+ — measured
+	// 2026-09-20 — and never reaches a subscript scan at all.
+	UnclosedQuote bool
+	Start         Pos
+	Stop          Pos
 }
 
 func (n *ArithIndex) Pos() Pos   { return n.Start }
@@ -384,9 +407,13 @@ type ArithAssign struct {
 	// sentence, which is what makes it one axis and two wordings rather than
 	// a refusal (#1764).
 	Empty bool
-	Op    string // = += -= *= /= %= <<= >>= &= ^= |=
-	Value ArithExpr
-	Start Pos
+	// UnclosedQuote is the same fact on the write side, carried so that a
+	// target names the element a read of it names. See
+	// ArithIndex.UnclosedQuote.
+	UnclosedQuote bool
+	Op            string // = += -= *= /= %= <<= >>= &= ^= |=
+	Value         ArithExpr
+	Start         Pos
 }
 
 func (n *ArithAssign) Pos() Pos   { return n.Start }
@@ -976,7 +1003,8 @@ func (a *arithParser) assign() ArithExpr {
 				}
 				return &ArithAssign{
 					Name: name, Index: sub.Index, Sub: sub.Text, SubMarked: sub.Marked,
-					Flags: sub.Flags, Empty: sub.Empty, Op: op, Value: v, Start: start,
+					Flags: sub.Flags, Empty: sub.Empty, UnclosedQuote: sub.UnclosedQuote,
+					Op: op, Value: v, Start: start,
 				}
 			}
 		}
@@ -1271,7 +1299,8 @@ func (a *arithParser) primary() ArithExpr {
 		if sub := a.subscript(true); sub.Present {
 			return &ArithIndex{
 				Name: name, Index: sub.Index, Sub: sub.Text, SubMarked: sub.Marked,
-				Empty: sub.Empty, Flags: sub.Flags, Start: start, Stop: start,
+				Empty: sub.Empty, Flags: sub.Flags, UnclosedQuote: sub.UnclosedQuote,
+				Start: start, Stop: start,
 			}
 		}
 		return &ArithVar{Name: name, Start: start, Stop: start}
@@ -1689,6 +1718,9 @@ type arithSubscript struct {
 	// Flags is the parenthesized flag group the subscript opened with, where
 	// the dialect has them. See ArithIndex.Flags.
 	Flags *SubscriptFlags
+	// UnclosedQuote says the brackets were found only after the scan gave
+	// up on the quotation it was reading. See ArithIndex.UnclosedQuote.
+	UnclosedQuote bool
 }
 
 // subscript reads `[…]` after a name.
@@ -1795,7 +1827,7 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 		return arithSubscript{}
 	}
 	open := a.off
-	closeAt, ok := a.subscriptCloser(open)
+	closeAt, unclosed, ok := a.subscriptCloser(open)
 	if !ok {
 		// No closing bracket: not a subscript at all, so the name stands
 		// alone and whatever follows is the caller's problem to report.
@@ -1820,7 +1852,7 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 		// second pass would perform a substitution twice.
 		if g, rest, ok := scanSubscriptFlags(inner); ok {
 			g.Arg = literalWord(rest, a.at)
-			return arithSubscript{Present: true, Text: inner, Marked: marked, Flags: g}
+			return arithSubscript{Present: true, Text: inner, Marked: marked, Flags: g, UnclosedQuote: unclosed}
 		}
 	}
 	// The inner parser shares the outer one's error slot, so a
@@ -1849,9 +1881,9 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 	refused := a.p.err != held
 	a.p.err = held
 	if e == nil || refused || sub.off < len(sub.src) {
-		return arithSubscript{Present: true, Text: inner, Marked: marked}
+		return arithSubscript{Present: true, Text: inner, Marked: marked, UnclosedQuote: unclosed}
 	}
-	return arithSubscript{Present: true, Index: e, Text: inner, Marked: marked}
+	return arithSubscript{Present: true, Index: e, Text: inner, Marked: marked, UnclosedQuote: unclosed}
 }
 
 // subscriptCloser is where the bracket opened at open closes, and false when
@@ -1885,8 +1917,8 @@ func (a *arithParser) subscript(emptyOK bool) arithSubscript {
 // of the surfaces it reaches. So the divergence above is unchanged and is now
 // a stated one rather than an absent capability: the option-off answer is
 // what this shell does not have, at this surface alone.
-func (a *arithParser) subscriptCloser(open int) (int, bool) {
-	for _, quoted := range [...]bool{a.dial.ArithSubscriptQuoting, false} {
+func (a *arithParser) subscriptCloser(open int) (int, bool, bool) {
+	for pass, quoted := range [...]bool{a.dial.ArithSubscriptQuoting, false} {
 		var scan ArithBracketScan
 		for i := open; i < len(a.src); i++ {
 			switch b := a.src[i]; {
@@ -1902,12 +1934,17 @@ func (a *arithParser) subscriptCloser(open int) (int, bool) {
 			case b == ']':
 				scan.Depth--
 				if scan.Depth == 0 {
-					return i, true
+					// The second pass is only ever reached because the
+					// first one ran out inside a quotation, so a bracket
+					// found there is one the giving-up found. That is the
+					// fact the evaluator needs and cannot recover: see
+					// ArithIndex.UnclosedQuote.
+					return i, pass > 0, true
 				}
 			}
 		}
 	}
-	return 0, false
+	return 0, false, false
 }
 
 // ArithBracketScan is the quoting state a subscript's bracket scan carries:

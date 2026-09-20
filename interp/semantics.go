@@ -17178,6 +17178,53 @@ type Semantics struct {
 	// (#2581).
 	ArithSubscriptRereadsItsExpandedText Answer
 
+	// ArithSubscriptQuotationMustClose refuses a subscript whose quotation
+	// never closed, rather than finding the brackets a second time with the
+	// quoting ignored and reading what they hold as a key: bash.
+	//
+	// A subscript's brackets are scanned *through* quotations where the
+	// dialect has them — Dialect.ArithSubscriptQuoting, which bash and ksh93
+	// share — so `a[']']` names the one-character key. A quotation that
+	// never closes is not one, and the columns part over what is left: two
+	// of them scan again with the quoting ignored, which makes `a[q'r]` the
+	// three-character key it looks like, and one calls the whole subscript
+	// bad and writes nothing.
+	//
+	// Measured 2026-09-20 from script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null
+	// device, over `typeset -A a; k="q'r"; a[$k]=4`:
+	//
+	//	                         bash 5.3.20         ksh93u+  zsh 5.9.2
+	//	let "++a[$k]"            refused, element 4  5        5
+	//	let "a[$k] = a[$k] + 1"  refused, element 4  5        5
+	//	(( a[$k]++ ))            5                   5        5
+	//	$(( a[$k] + 100 ))       104, element 4      104      104
+	//
+	// The last two rows are the controls, and they say which surface this
+	// is: the same key reached through arithmetic's *own* expansion is
+	// unanimous, so only text that arrived already word-expanded — a `let`
+	// operand — ever puts the question. A script cannot write the shape
+	// directly either: `(( a[q'r]++ ))` is an unterminated word and is
+	// `unexpected EOF while looking for matching `''` in bash 5.3.20 and
+	// `'' unmatched` in ksh93u+, neither of which reaches a subscript scan.
+	//
+	// bash lets a script turn it off by name, which is why
+	// Runner.ExpandsAnOperandsSubscriptAgain is read after this axis and not
+	// instead of it: with `shopt -s assoc_expand_once` both `let` rows above
+	// are 5 in bash 5.3.20, which is the other two columns' answer.
+	//
+	// bash 3.2.57 has no associative array, and dash 0.5.12 and BusyBox ash
+	// 1.37.0 have no array of either kind and no `let`, so three of the
+	// seven columns cannot be asked.
+	//
+	// The refusal carried is the two `bad array subscript` lines bash writes
+	// — one for the read and one for the store — and the element left as it
+	// was. bash's third line, `let: `a[q'r]': not a valid identifier`, is
+	// `let`'s complaint about its whole operand rather than the subscript's
+	// and is deliberately not carried: see #3796, where it is the stated
+	// remainder.
+	ArithSubscriptQuotationMustClose Answer
+
 	// SubstringRangeQuotesPatternCharacters protects the pattern
 	// metacharacters in a substring's offset and length before the range is
 	// read as arithmetic, which turns every one of them into an arithmetic
@@ -22755,6 +22802,10 @@ func PosixSemantics() Semantics {
 		// associative arrays that keep a key a string. zsh is the column
 		// that overrides it.
 		ArithSubscriptRereadsItsExpandedText: No,
+		// The standard has neither arrays nor `let`, so this follows the two
+		// columns that read the giving-up scan's text as a key. bash is the
+		// column that overrides it.
+		ArithSubscriptQuotationMustClose: No,
 		// The standard has no substrings, so this follows the three columns
 		// that have one and evaluate the range they were given. ksh93 is the
 		// column that overrides it.

@@ -364,6 +364,16 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		// and every reading below applies to that instead.
 		x = arithIndexOfTheOperand(x, r.joinWord(x.Flags.Arg))
 	}
+	// A quotation the subscript opened and never closed, which one column
+	// calls a bad subscript and two read as a key. Ahead of the association
+	// below because that is the reading it refuses: the key is what the
+	// giving-up scan produced, and the column that refuses never gets there.
+	if r.reportArithSubscriptUnclosedQuote(x) {
+		// Named and answered zero, and *not* an error: measured, the column
+		// that refuses leaves the element as it was and lets the expression
+		// finish at status 0, so `let "x = a[$k] + 1"` is 1 there.
+		return intNum(0), nil
+	}
 	// A `*` or `@` is the whole array rather than a subscript at all where
 	// the dialect reads the slice here, and it is asked *before* the
 	// association below: the key `*` is what the other answer makes of it,
@@ -537,6 +547,82 @@ func (r *Runner) reportArithWholeArraySubscript(x *syntax.ArithIndex) bool {
 	r.errf("%s\n", r.diag().Report(r.name(), r.line,
 		Wording(r.diag().ArithWholeArraySubscript,
 			"%[1]s[%[2]s]: bad array subscript", x.Name, x.Sub)))
+	return true
+}
+
+// arithSubscriptQuotationRefused is a subscript whose brackets were found
+// only after the scan gave up on a quotation that never closed — the shape
+// `let "++a[$k]"` takes once a `$k` holding an apostrophe has gone in — and
+// the column that calls it a bad subscript rather than reading the three
+// characters as the key they look like.
+//
+// The panel parts at its defaults, which is what makes this an axis rather
+// than only the option bash spells `assoc_expand_once`. Measured 2026-09-20,
+// `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> p.sh` over a script file with
+// standard input on the null device, against `typeset -A a; k="q'r";
+// a[$k]=4`:
+//
+//	                         bash 5.3.20            ksh93u+  zsh 5.9.2
+//	let "++a[$k]"            refused, element 4     5        5
+//	let "a[$k] += 1"         refused, element 4     5        5
+//	(( a[$k]++ ))            5                      5        5
+//	$(( a[$k] + 100 ))       104, element 4         104      104
+//
+// Rows three and four are the controls and they are what locate the surface:
+// the same key reached by arithmetic's *own* expansion is unanimous, because
+// there the value's apostrophe carries a mark and opens no quotation at all.
+// So the question is only ever put to text that arrived already
+// word-expanded — a `let` operand, where the shell's word expander has taken
+// the quoting off and the apostrophe reaches the reader as a byte. A script
+// cannot write the shape directly either: `(( a[q'r]++ ))` is an
+// unterminated word and never reaches a subscript scan in any column.
+//
+// Asked only where a quotation really went unclosed, so the ordinary
+// `$(( a[$i] ))` needs no answer from anyone, and asked *before* Runner
+// .ExpandsAnOperandsSubscriptAgain in the order Runner.operandSubscriptText
+// keeps: a dialect that reads the key is never asked about an option it has
+// no name for, and a session that turned the round off does not record an
+// answer to an axis it then ignores.
+//
+// See Semantics.ArithSubscriptQuotationMustClose.
+func (r *Runner) arithSubscriptQuotationRefused(x *syntax.ArithIndex) bool {
+	if !x.UnclosedQuote {
+		return false
+	}
+	if !r.ask(r.sem().ArithSubscriptQuotationMustClose,
+		"an arithmetic subscript whose quotation never closes, which one column calls a bad subscript") {
+		return false
+	}
+	// The session asked for the one round it already had, which is the
+	// answer the two other columns give by default.
+	return r.ExpandsAnOperandsSubscriptAgain()
+}
+
+// reportArithSubscriptUnclosedQuote is the refusal above written out, which
+// the *read* does and the store does not.
+//
+// Twice, and the count is measured rather than a loop written twice by
+// accident. Against the same table, `let "x = a[$k] + 1"` — one read and a
+// store to a name that is fine — writes `a[q'r]: bad array subscript` twice
+// in bash 5.3.20 and answers the operand zero, and `let "a[$k] = 9"`, which
+// is a store and no read at all, writes the sentence *no* times. So the
+// column writes it per subscript read, and `let "++a[$k]"`'s two lines are
+// that one read's pair rather than one line from each side of the operator.
+//
+// What the store contributes there instead is bash's third line,
+// “let: `a[q'r]': not a valid identifier“, which is `let`'s complaint
+// about its whole operand rather than the subscript's. It is deliberately
+// not carried — see #3796, where it is the stated remainder — so a pure
+// assignment through such a subscript is silent here and stores nothing,
+// which is the element bash leaves and one line short of what bash says.
+func (r *Runner) reportArithSubscriptUnclosedQuote(x *syntax.ArithIndex) bool {
+	if !r.arithSubscriptQuotationRefused(x) {
+		return false
+	}
+	line := r.diag().Report(r.name(), r.line,
+		Wording(r.diag().ArithSubscriptUnclosedQuote,
+			"%[1]s[%[2]s]: bad array subscript", x.Name, x.Sub))
+	r.errf("%s\n%s\n", line, line)
 	return true
 }
 
@@ -851,6 +937,12 @@ type arithPlace struct {
 	// expression read and wrote the *bare name* — `(( m[.k] = 3 ))` would set
 	// m rather than the element, which is a wrong answer with no diagnostic.
 	subscripted bool
+	// unclosedQuote says the subscript's brackets were found only once the
+	// scan gave up on a quotation that never closed, carried so the write
+	// reaches the same answer the read does — the two together are what
+	// write bash's sentence twice for one `++`. See
+	// syntax.ArithIndex.UnclosedQuote.
+	unclosedQuote bool
 }
 
 // arithAssignmentDeclaresAnInteger reports whether writing this name from
@@ -980,7 +1072,8 @@ func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
 	case *syntax.ArithIndex:
 		return arithPlace{
 			name: x.Name, index: x.Index, sub: x.Sub, subMarked: x.SubMarked,
-			empty: x.Empty, flags: x.Flags, subscripted: true,
+			empty: x.Empty, flags: x.Flags, unclosedQuote: x.UnclosedQuote,
+			subscripted: true,
 		}, true
 	}
 	return arithPlace{}, false
@@ -993,7 +1086,7 @@ func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
 	}
 	return r.arithElement(&syntax.ArithIndex{
 		Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked,
-		Empty: p.empty, Flags: p.flags,
+		Empty: p.empty, Flags: p.flags, UnclosedQuote: p.unclosedQuote,
 	})
 }
 
@@ -1107,6 +1200,16 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// marks, so both readings of the subscript are the one text.
 		operand := r.joinWord(p.flags.Arg)
 		p.sub, p.subMarked, p.flags = operand, operand, nil
+	}
+	if r.arithSubscriptQuotationRefused(&syntax.ArithIndex{
+		Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked,
+		Empty: p.empty, UnclosedQuote: p.unclosedQuote,
+	}) {
+		// Nothing written and nothing *said*: the sentence belongs to the
+		// read, which is where the column that refuses writes it, and an
+		// error here would fail the whole expression where that column lets
+		// it finish. See reportArithSubscriptUnclosedQuote.
+		return nil
 	}
 	if r.assocDeclared(p.name) {
 		r.setAssocElem(p.name, r.arithAssocKey(r.arithSubscriptRead(p.subMarked)), text)
@@ -1278,7 +1381,7 @@ func (r *Runner) addNum(n arithNum, step float64) arithNum {
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 	place := arithPlace{
 		name: x.Name, index: x.Index, sub: x.Sub, subMarked: x.SubMarked,
-		flags: x.Flags, empty: x.Empty,
+		flags: x.Flags, empty: x.Empty, unclosedQuote: x.UnclosedQuote,
 		// Brackets were written at all, which none of the three fields above
 		// can say on its own: an empty pair has no index and no text, and so
 		// has a plain name. The empty pair used to be refused while parsing

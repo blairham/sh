@@ -2362,6 +2362,16 @@ func Semantics() interp.Semantics {
 	// association is silent and zero here and never reaches the question
 	// (#1978).
 	s.ArithWholeArraySubscriptIsReportedAsBad = interp.Yes
+	// A subscript whose quotation never closes is a bad subscript here, not
+	// a key found by scanning again with the quoting ignored. Measured
+	// 2026-09-20 on 5.3.20 from a script file, `typeset -A a; k="q'r";
+	// a[$k]=4; let "++a[$k]"` writes `a[q'r]: bad array subscript` twice
+	// and leaves the element at 4, where ksh93u+ and zsh 5.9.2 both answer
+	// 5. `(( a[$k]++ ))` beside it is 5 in every column, which is the
+	// control that says this is the already-expanded operand and not the
+	// key, and `shopt -s assoc_expand_once` moves this column to 5 too —
+	// see interp.Runner.ExpandsAnOperandsSubscriptAgain (#3796).
+	s.ArithSubscriptQuotationMustClose = interp.Yes
 	// A subscript that *expanded* to nothing is the expression that is zero,
 	// so `${a[$w]}` with an empty `$w` is element zero — measured 2026-09-11
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
@@ -3245,6 +3255,7 @@ func Diagnostics() interp.Diagnostics {
 		ValuelessDeclarationEmptySubscript: "%[2]s: `%[1]s[]': not a valid identifier",
 		SubscriptedPrefixIsNotAName:        "`%[1]s': not a valid identifier",
 		ArithWholeArraySubscript:           "%[1]s[%[2]s]: bad array subscript",
+		ArithSubscriptUnclosedQuote:        "%[1]s[%[2]s]: bad array subscript",
 		ArrayLiteralThroughASubscript:      "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the
 		// parentheses, with no array name in front of it. bash 3.2 says the

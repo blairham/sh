@@ -2640,6 +2640,11 @@ func Semantics() interp.Semantics {
 	// 2026-09-12, `a=(3 4 5); $(( a[*] ))` is `*: arithmetic syntax error`
 	// at status 1, where bash reports and answers zero (#1978).
 	s.ArithWholeArraySubscriptIsReportedAsBad = interp.No
+	// A subscript whose quotation never closes is read as the key it looks
+	// like here: measured 2026-09-20 on ksh93u+, `typeset -A a; k="q'r";
+	// a[$k]=4; let "++a[$k]"` leaves 5 under the three-character key,
+	// where bash 5.3.20 calls the subscript bad and leaves 4 (#3796).
+	s.ArithSubscriptQuotationMustClose = interp.No
 	// And the same for a subscript that expanded to nothing, which this
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.

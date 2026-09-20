@@ -2101,6 +2101,19 @@ func Diagnostics() interp.Diagnostics {
 		UnmatchedBraceSubst:                 "syntax error: missing '}'",
 		UnmatchedArithSubst:                 "syntax error: missing '))'",
 		BadSubstitution:                     "syntax error: bad substitution",
+		// The bare name, which is dash's sentence and this shell's too —
+		// measured 2026-09-20, BusyBox v1.37.0 in the pinned image, `set --`
+		// implied by a script file with no operands: `echo "${@:=abc}"` is
+		// `@: bad variable name` at 2, `x${@:=abc}y` blames `@` and not the
+		// word around it, and `echo "${1:=abc}"` is `1: bad variable name`.
+		//
+		// Left unset, the field falls back to zsh's `not an identifier: @`,
+		// which is the fallback because zsh is the one shell whose grammar
+		// has `${name::=word}` — so the column that needed dash's sentence
+		// was inheriting the sentence of the shell furthest from it (#3910).
+		// The status is not here: dash and ash exit 2 where the other five
+		// exit 1, and Semantics.FatalErrorStatusIsOne already answers that.
+		AssignThroughExpansionBadName: "%[1]s: bad variable name",
 
 		// Arithmetic says one thing about every way an expression can be
 		// wrong: `$((1 2))`, `$((1+))`, `$((08))`, `$(('a'))` and `$((0b101))`

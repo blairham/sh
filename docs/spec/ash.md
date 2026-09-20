@@ -836,6 +836,35 @@ same run. `unset`, `export`, `readonly`, `local` and `getopts` refuse the
 same operand located and at 2, which is the control that says the
 exception is this one complaint's rather than the dialect's.
 
+## An assignment through an expansion is refused in dash's words
+
+Measured 2026-09-20, BusyBox v1.37.0 in the pinned image, each line alone
+in a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+
+| probe | BusyBox 1.37.0 | ours, before |
+| --- | --- | --- |
+| `echo "${@:=abc}"` | `@: bad variable name`, 2 | `not an identifier: @`, 2 |
+| `echo "${*:=abc}"` | `*: bad variable name`, 2 | `not an identifier: *`, 2 |
+| `echo "x${@:=abc}y"` | `@: bad variable name`, 2 | `not an identifier: @`, 2 |
+| `echo "${1:=abc}"` | `1: bad variable name`, 2 | `not an identifier: 1`, 2 |
+
+The sentence is dash's exactly, sigil-less name and all, and the third row
+is what says so rather than ksh93's: the parameter is named and the word
+the expansion stands in is not.
+
+`Diagnostics.AssignThroughExpansionBadName` was unset in this column, and
+that field's fallback is **zsh's** `not an identifier: @` — zsh being the
+one shell whose grammar has `${name::=word}`, the operator that reaches
+the question on every name. ash has no such operator and reaches the
+question only through the conditional `${name:=word}` every dialect has,
+so the unset field handed this column the sentence of the shell furthest
+from it and nothing failed. An unset `Diagnostics` value is a wording
+nobody measured, not a wording nobody needs (#3910).
+
+The status was already right and is not this field's: dash and ash exit 2
+where the other five columns exit 1, which is
+`Semantics.FatalErrorStatusIsOne`.
+
 ## Vector summary
 
 `dialect/ash/ash.go` carries the evidence for each answer beside the

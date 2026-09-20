@@ -3322,12 +3322,16 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		// loop takes no scope, so there is never a fresh binding for it to be
 		// about instead. See interp/namerefattribute.go.
 		//
-		// The **value** on the same word does not go there. It parts from the
-		// attribute for one shape — a reference aimed at an *element* — and is
-		// read before the redirect below, because afterwards the subscript it
-		// belongs to is gone. The pair biDeclare keeps, under the third word
-		// of four. See Runner.referenceValueTarget.
-		valueTarget := r.referenceValueTarget(name, declareFlags{})
+		// A reference aimed at an **element** parts the two: the value is the
+		// one cell's and the attribute is the array's or nowhere at all, which
+		// is the axis nameOperandThroughAReference asks. `valueTarget` is the
+		// reference itself where it is not "", because setVarAs already
+		// resolves one to the element and storing the target's text would make
+		// a parameter literally called `a[1]`.
+		valueTarget, letters := r.nameOperandThroughAReference("export", name, declareFlags{}, !strings.ContainsRune(opts, 'n'))
+		if r.unspecified {
+			return r.status
+		}
 		if target, follows := r.attributeFollowsTheReference(name, declareFlags{}); follows {
 			name = target
 		}
@@ -3358,6 +3362,14 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 				// would put back the one the failure set.
 				return r.status
 			}
+		}
+		if !letters {
+			// The column that refuses the attribute has already said so, and
+			// the value above is the whole of what it does: measured, `export
+			// b=Z` over a reference to `a[1]` leaves `p Z r` with no export
+			// letter on `a` and nothing declared under either name, at 0. So
+			// none of the declaration below runs.
+			continue
 		}
 		if hasValue {
 			// `export` is an attribute word, so naming a name a previous
@@ -6548,11 +6560,15 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		// the caller's variable stayed writable at status 0. See
 		// interp/namerefattribute.go.
 		//
-		// The **value** on the same word stays with the element, as it does
-		// under the other three words: read before the redirect replaces the
-		// name, since afterwards the subscript it belongs to is gone. See
-		// Runner.referenceValueTarget.
-		valueTarget := r.referenceValueTarget(name, f)
+		// And a reference aimed at one **element** parts the value from the
+		// freeze — see biExport, where the same two lines stand for the same
+		// reason. This is the row of #3881 that costs a script something: the
+		// freeze landed on the whole array in a dialect that freezes nothing
+		// here, so the next ordinary write to any element was refused.
+		valueTarget, letters := r.nameOperandThroughAReference("readonly", name, f, freezes)
+		if r.unspecified {
+			return r.status
+		}
 		if target, follows := r.attributeFollowsTheReference(name, f); follows {
 			name = target
 		}
@@ -6590,6 +6606,11 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				if r.ctl == controlExit {
 					return r.status
 				}
+				if !letters {
+					// The refused attribute: the join has happened and this
+					// operand is finished. See the tail of this loop.
+					continue
+				}
 				r.declarationAssignmentExport(name, false)
 				if r.unspecified {
 					return r.status
@@ -6604,6 +6625,9 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				// See biExport.
 				return r.status
 			}
+			if !letters {
+				continue
+			}
 			// `readonly` is one shell's `typeset -r` and behaves like it
 			// here: an assignment through it resets the export attribute
 			// where that shell's `typeset` does. See
@@ -6612,6 +6636,14 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified {
 				return r.status
 			}
+		}
+		if !letters {
+			// The column that refuses the attribute has already said so, and
+			// the value above is the whole of what it does: measured,
+			// `readonly b=Y` over a reference to `a[1]` leaves `p Y r` with
+			// `a` **unfrozen**, at 0. Nothing is declared and nothing is
+			// frozen, so the rest of the loop does not run.
+			continue
 		}
 		// `readonly` is an attribute word too — see biExport and
 		// declarationOwnsTheStandingEmpty.

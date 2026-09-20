@@ -608,6 +608,9 @@ func Semantics() interp.Semantics {
 	// `typeset` to write the letters on (#3171).
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: the same wall
 	// again — no references and no `typeset` (#3173).
+	// unanswered ExportOrReadonlyTakesAReferenceToAnElement: the same wall
+	// once more, and there are no arrays either for a reference to point
+	// into (#3881).
 	// unanswered NamerefTargetResolvedWhenAimed: the same wall — no
 	// `typeset`, so there is no declaration for a target to be settled at
 	// (#3124).

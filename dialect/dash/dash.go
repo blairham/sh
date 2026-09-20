@@ -575,6 +575,9 @@ func Semantics() interp.Semantics {
 	// so there is no line for an `n` letter to keep company on (#3171).
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: no references,
 	// and no `typeset` to write one on (#3173).
+	// unanswered ExportOrReadonlyTakesAReferenceToAnElement: the same wall,
+	// and no arrays for a reference to be aimed into — so neither half of the
+	// operand can be written here (#3881).
 	// unanswered NamerefTargetResolvedWhenAimed: no `typeset` and no arrays,
 	// so neither half of the question can be written (#3124).
 	// unanswered NamerefArrayRefusal: the same wall, and no arrays either —

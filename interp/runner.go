@@ -9217,15 +9217,37 @@ func (r *Runner) getVar(name string) (string, bool) { return r.varValue(name, tr
 // storedVar is getVar with the read fold left off: the text the store really
 // holds, in the shell where those are two different things.
 //
-// One caller, and it is `+=`. Measured 2026-09-12 on zsh 5.9.2, `typeset -l
-// lo=AB; lo+=CD` lists back as `ABCD` and reads as `abcd` — so the append
-// joins what was *assigned*, not what a read of it answers. Reading through
-// getVar there stored `abCD`, which is a third text neither shell has.
+// Two callers and both of them are `+=` — the bare `a+=x` statement and the
+// declaration's `typeset a+=x` operand. Measured 2026-09-12 on zsh 5.9.2,
+// `typeset -l lo=AB; lo+=CD` lists back as `ABCD` and reads as `abcd` — so
+// the append joins what was *assigned*, not what a read of it answers.
+// Reading through getVar there stored `abCD`, which is a third text neither
+// shell has.
 //
-// Deliberately narrow. Everything else that wants the store rather than the
-// value already has it: a listing gathers from the tables directly, and the
-// attribute letters are their own question.
-func (r *Runner) storedVar(name string) (string, bool) { return r.varValue(name, false) }
+// A reference aimed at an **element** is read here rather than in varValue,
+// which is what #3880 was: `a=(p q r); typeset -n b='a[1]'; b+=X` left `p X
+// r` where both shells that have references leave `p qX r`, because the join
+// found nothing to join to and the store then wrote the right cell with the
+// wrong text. varValue cannot do it — a subscript is arithmetic and
+// arithmetic reaches the builtin table that function is initialized before,
+// which is why throughNamerefName leaves that half alone and paramSource
+// resolves it for an expansion. This is the append's own read and is on
+// neither path, so it asks namerefReadsAnElement directly.
+//
+// **Both appends, one read.** The two routes had a copy each of "what does
+// this name hold", and a fix written into one of them would have left the
+// other replacing the element — which is the shape #3878 had to unpick three
+// times in one commit.
+//
+// Deliberately narrow otherwise. Everything else that wants the store rather
+// than the value already has it: a listing gathers from the tables directly,
+// and the attribute letters are their own question.
+func (r *Runner) storedVar(name string) (string, bool) {
+	if v, set, element := r.namerefReadsAnElement(name); element {
+		return v, set
+	}
+	return r.varValue(name, false)
+}
 
 func (r *Runner) varValue(name string, folded bool) (string, bool) {
 	if r.disciplined == nil {

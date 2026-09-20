@@ -78,20 +78,30 @@ func TestADeclarationsValueFollowsAReferenceToTheElement(t *testing.T) {
 		{name: "a plain declaration", src: decl + `typeset b=Z; echo "[${a[*]}]"`, want: "[p Z r]\n"},
 		{name: "the global letter", src: decl + `f() { typeset -g b=G; }; f; echo "[${a[*]}]"`, want: "[p G r]\n"},
 		// The two words the first version of this left out, each of which
-		// went on writing element 0. Only the cell is asserted: this shell
-		// carries the attribute to the array here and says nothing, where
-		// bash withholds it and writes ``readonly: `a[1]': not a valid
-		// identifier`` at status 0 — a remainder of its own, and an axis
-		// rather than a defect, since ksh93u+ carries the attribute exactly
-		// as this does (#3886).
-		{name: "the readonly word", src: decl + `readonly b=Z; echo "[${a[*]}]"`, want: "[p Z r]\n"},
-		{name: "the export word", src: decl + `export b=Z; echo "[${a[*]}]"`, want: "[p Z r]\n"},
+		// went on writing element 0. The **attribute** on the same word was
+		// the remainder, and it landed with #3881: bash withholds it and
+		// names the target's own text at status 0, where ksh93u+ carries it
+		// to the array exactly as this shell used to in both dialects. The
+		// sentence is asserted here because it is *this* column's answer —
+		// see Semantics.ExportOrReadonlyTakesAReferenceToAnElement and
+		// TestExportAndReadonlyRefuseAReferenceToAnElement, where the rest of
+		// the rows are.
+		{
+			name: "the readonly word",
+			src:  decl + `readonly b=Z; echo "[${a[*]}]"`,
+			want: "sh: line 1: readonly: `a[1]': not a valid identifier\n[p Z r]\n",
+		},
+		{
+			name: "the export word",
+			src:  decl + `export b=Z; echo "[${a[*]}]"`,
+			want: "sh: line 1: export: `a[1]': not a valid identifier\n[p Z r]\n",
+		},
 		// A table's key through the same shape, which was worse than a wrong
 		// cell: the value went to a *new* key named `0` and `k` kept `v`.
 		{
 			name: "a table's key under the readonly word",
 			src:  `typeset -A m=([k]=v); typeset -n t='m[k]'; readonly t=T; echo "[${m[k]}]"`,
-			want: "[T]\n",
+			want: "sh: line 1: readonly: `m[k]': not a valid identifier\n[T]\n",
 		},
 		{
 			name: "the control: a reference to a whole name is unchanged",

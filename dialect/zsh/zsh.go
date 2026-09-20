@@ -2009,6 +2009,11 @@ func Semantics() interp.Semantics {
 	// missing letter and never reaches a question about the pair (#3171).
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: there is no
 	// reference for a declaration to be redirected through (#3173).
+	// unanswered ExportOrReadonlyTakesAReferenceToAnElement: the same missing
+	// letter, and the `(P)` flag this shell does have is an expansion rather
+	// than a name, so neither builtin can be handed a reference at all.
+	// Measured 2026-09-20 on zsh 5.9.2, `a=(p q r); typeset -n b='a[1]'` is
+	// `typeset: bad option: -n` at 1 (#3881).
 	// unanswered NamerefTargetResolvedWhenAimed: the same missing letter —
 	// there is no reference for a target to be settled on. Measured
 	// 2026-09-18, `typeset -n r=a[1]` is `typeset: bad option: -n` at 1

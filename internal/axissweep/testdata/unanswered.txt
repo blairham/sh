@@ -110,6 +110,7 @@ ash   ErrTrapRunsInsideFunctions
 ash   ExitTrapFiresPastTheEnd
 ash   ExpansionResultSuppliesGroupSyntax
 ash   ExportLetterDeclaresAGlobal
+ash   ExportOrReadonlyTakesAReferenceToAnElement
 ash   ExportThroughASubscriptedOperandRecordsTheLetter
 ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   FailingPipelineWhoseLastElementRanHere
@@ -381,6 +382,7 @@ dash  ErrexitSeesPipefailFailure
 dash  ExitTrapFiresPastTheEnd
 dash  ExpansionResultSuppliesGroupSyntax
 dash  ExportLetterDeclaresAGlobal
+dash  ExportOrReadonlyTakesAReferenceToAnElement
 dash  ExportThroughASubscriptedOperandRecordsTheLetter
 dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  FailingPipelineWhoseLastElementRanHere
@@ -560,6 +562,7 @@ zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
 zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ExpansionResultSuppliesGroupSyntax
+zsh   ExportOrReadonlyTakesAReferenceToAnElement
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
 zsh   IgnoredNamesFollowTheParameter

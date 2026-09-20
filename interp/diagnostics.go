@@ -2244,8 +2244,17 @@ type Diagnostics struct {
 
 	// FunctionListingKeywordHeader is that header for a function declared
 	// with the `function` word, where the dialect writes the word back.
-	// Empty means the dialect writes one header for both spellings, which
-	// is three of the four.
+	// Empty means the dialect writes one header for both spellings.
+	//
+	// Measured 2026-09-20 across all seven columns from `typeset -f f` over
+	// `f() { echo x; }` and `function f { echo x; }` in turn, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` over a script file: bash 5.3,
+	// bash-as-`sh` and bash 3.2 write `f () ` and zsh 5.9.2 writes `f () {`
+	// whichever word declared it, and ksh93u+ writes the spelling back —
+	// `f() { echo x; }` against `function f { echo x; }`. dash and BusyBox
+	// ash never reach the field: neither has `typeset` at all, both answer
+	// `typeset: not found` at 127, and dash has no `function` word to
+	// declare with either.
 	//
 	// It exists because in one shell the two spellings are two *programs*.
 	// ksh93's `typeset` declares a local in a `function f { … }` body and
@@ -4928,10 +4937,20 @@ type Diagnostics struct {
 	// knows, and %[3]d the line, for the dialect that has no location of its
 	// own to put it in.
 	SyntaxUnexpected string
-	// SyntaxUnexpectedWord is the same for an *ordinary* word, which one
-	// dialect refuses to quote: `word unexpected` where a reserved word or an
+	// SyntaxUnexpectedWord is the same for an *ordinary* word, which two
+	// dialects refuse to quote: `word unexpected` where a reserved word or an
 	// operator is `"fi" unexpected`. Empty means "the same as
-	// SyntaxUnexpected", which is three of the four.
+	// SyntaxUnexpected", which is bash, ksh93 and zsh.
+	//
+	// Measured 2026-09-20 across all seven columns over `for do` on one line
+	// and `echo tail` on the next: dash writes `Syntax error: word
+	// unexpected (expecting "do")` and BusyBox ash writes `syntax error:
+	// unexpected word (expecting "do")` — one refusal with the noun on each
+	// side of the verb — where bash 5.3, bash-as-`sh` and bash 3.2 name the
+	// token `` `echo' ``, ksh93u+ writes `` `echo' unexpected ``, and zsh
+	// 5.9.2 takes the header without complaint. dialect/ash has held the
+	// wording since the column was written, so the value was right and it
+	// was the count that was one short.
 	SyntaxUnexpectedWord string
 	// SyntaxUnexpectedNewline is the same for the *newline*, which two
 	// dialects write differently again and for two different reasons. Same
@@ -4966,8 +4985,13 @@ type Diagnostics struct {
 	// SyntaxRedirectUnexpected replaces the message where the unexpected
 	// token is itself a redirection operator. No verbs.
 	//
-	// dash alone: `cat < < x` is `redirection unexpected` there and names the
-	// token in the other three. Empty means the dialect makes no distinction.
+	// Two dialects, not one. Measured 2026-09-20 across all seven columns
+	// over `cat < < x`: dash writes `Syntax error: redirection unexpected`
+	// and BusyBox ash writes `syntax error: unexpected redirection` — the
+	// same distinction with the words the other way round — where bash 5.3,
+	// bash-as-`sh` and bash 3.2 name the token `` `<' `` in their ordinary
+	// sentence and so do ksh93u+ and zsh 5.9.2. Empty means the dialect
+	// makes no distinction.
 	SyntaxRedirectUnexpected string
 
 	// SyntaxExpecting is appended when the parser knows what would have been
@@ -5096,7 +5120,14 @@ type Diagnostics struct {
 	// ``syntax error: `((;;;))'`` on its second line — the header alone,
 	// under a repeat of the sentence's opening words — and answers a header
 	// written over four lines with all four of them. Empty means no second
-	// line, which is what the other three write.
+	// line, which is every other column.
+	//
+	// Measured 2026-09-20 across all seven columns over `for ((;;;)); do :;
+	// done`: bash 5.3, bash-as-`sh` and bash 3.2 write the second line;
+	// ksh93u+ answers `;: arithmetic syntax error` and zsh 5.9.2 `bad math
+	// expression: illegal character: ;`, each on one line; and dash and
+	// BusyBox ash have no C-style `for` at all, refusing the header as a bad
+	// loop variable, so neither reaches the field.
 	ForArithHeaderEcho string
 
 	// Unterminated is input that ran out with a construct still open, and it
@@ -6079,10 +6110,19 @@ type Diagnostics struct {
 	// usually read against.
 	ArithExpressionRanOut string
 	// ArithFailureStatus is the status a failed arithmetic expression carries.
-	// bash reports 1, the status of a command that failed, because it finds
-	// the failure while *expanding* rather than while parsing — we find it
-	// earlier, so the difference has to be stated. Zero means the dialect's
-	// general syntax-error status, which is what the other three want.
+	// bash and ksh93 report 1, the status of a command that failed, because
+	// they find the failure while *expanding* rather than while parsing — we
+	// find it earlier, so the difference has to be stated. Zero means the
+	// dialect's general syntax-error status, which is what dash, zsh and
+	// BusyBox ash leave it at.
+	//
+	// Measured 2026-09-20 across all seven columns over `echo $((1 @))`: 1 in
+	// bash 5.3, bash-as-`sh`, bash 3.2, ksh93u+ and zsh 5.9.2, and 2 in dash
+	// and BusyBox ash. So zero is already the right answer for zsh, whose
+	// general syntax-error status is 1, and for the two whose is 2. ksh93 is
+	// the column the count left out and the one that most needs the field:
+	// its own general syntax-error status is 3, which is what it answers for
+	// `` `fi' unexpected `` in the same run.
 	ArithFailureStatus int
 	// ArithBadOperator is the reason when text where an operator belonged
 	// could not have been one — `1 @`. bash alone words it separately from an

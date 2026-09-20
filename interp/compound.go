@@ -1538,6 +1538,11 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// pair above this function, because a call is not the only thing that
 	// opens one.
 	sc := r.pushScope(fn.Keyword)
+	// The frame now knows where its own scope sits, which is what a frame
+	// selection needs to read the locals standing in it. Here rather than at
+	// the push, because the frame goes on the stack before the scope does
+	// and the window starts above the call's own. See Frame.scopeBase.
+	r.markFrameScopeBase()
 	// And a `getopts` cursor of its own, where the dialect gives a function
 	// one. A function that parses options is only callable twice if the
 	// second call starts over, which is why one shell's own function library

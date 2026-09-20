@@ -1915,6 +1915,12 @@ func Semantics() interp.Semantics {
 	// declaration word here either, so neither half of the question can be
 	// put. Measured 2026-09-12 on BusyBox, `typeset -A h` is `typeset: not
 	// found` and `h=(x)` is `syntax error: unexpected "("` (#2287).
+	// unanswered WholeArraySubscriptThroughAReferenceToATable: no references
+	// here either, so the same wall one step further out — a route needs an
+	// array or a table to write into and a reference to write through, and
+	// this column has none of the three. Not re-measured on 2026-09-20: this
+	// machine has no reachable BusyBox (#3384), and the two absences below
+	// were measured on one.
 	// unanswered WholeArraySubscriptAssigningAnArray and
 	// unanswered WholeArraySubscriptAssigningATable: no arrays here either,
 	// so the same wall. Measured 2026-09-12 on BusyBox, `x=(p q)` is `syntax

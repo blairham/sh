@@ -2597,6 +2597,20 @@ func Semantics() interp.Semantics {
 	// m[@]=Z` are both `@: invalid subscript in assignment` (#2285).
 	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptIsInvalidInAnAssignment
 	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsInvalidInAnAssignment
+	// Through a reference the table takes the key, which is **not** this
+	// column's answer to either field above and is the reason the route has
+	// a field of its own. Measured 2026-09-20 on ksh93u+: `typeset -A
+	// m=([k]=v); nameref n=m[@]` is taken at 0, `n=Z` leaves `[@]=Z` beside
+	// `[k]=v`, and the rest of the line runs — where the bare `m[@]=Z` is
+	// `@: invalid subscript in assignment` and ends the input.
+	//
+	// The *array* half of the same route is unreachable here and needs no
+	// field: a subscript that is not a key is evaluated when the reference
+	// is aimed, so `x=(p q); nameref b=x[@]` is `typeset: @: arithmetic
+	// syntax error` and the input ends before any store. That asymmetry is
+	// this column's alone — bash takes both declarations and refuses both
+	// stores.
+	s.WholeArraySubscriptThroughAReferenceToATable = interp.WholeArraySubscriptIsAnOrdinaryKey
 	// And reading one says nothing either: measured 2026-09-12, `typeset -A
 	// m; m[k]=v; w=; ${m[$w]}` is the empty string at status 0 with no
 	// diagnostic, where bash names the table (#1972).

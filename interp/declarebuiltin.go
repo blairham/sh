@@ -1591,6 +1591,11 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			continue
 		}
 		r.refusalSpokenAs = outerSpokenAs
+		// Where the attributes and the value part company, which is a
+		// reference aimed at an element and nothing else. Read before the
+		// redirect below replaces the name, since afterwards the subscript
+		// the value belongs to is gone. See Runner.referenceValueTarget.
+		valueTarget := r.referenceValueTarget(name, df)
 		if target, follows := r.attributeFollowsTheReference(name, df); follows {
 			// The refusal the redirect leads to may still be spoken of under
 			// the name the script wrote, which is one column's answer and
@@ -1764,7 +1769,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// whatever its attributes make of the join — see
 			// declarationAppend. The axis that says this operand is read at
 			// all was answered in builtinNames.
-			if !r.declarationAppend(name, value, df.global, fresh) {
+			if !r.declarationAppend(r.orName(valueTarget, name), value, df.global, fresh) {
 				return r.status
 			}
 			if r.unspecified || r.ctl == controlExit {
@@ -1777,12 +1782,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				}
 			}
 		case hasValue && df.global:
-			r.setGlobalVar(name, value)
+			r.setGlobalVar(r.orName(valueTarget, name), value)
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}
 		case hasValue:
-			r.setVarAs(name, value, assignedByDeclaration)
+			r.setVarAs(r.orName(valueTarget, name), value, assignedByDeclaration)
 			if r.ctl == controlExit {
 				// See biExport: the failure's status is the one that stands.
 				return r.status

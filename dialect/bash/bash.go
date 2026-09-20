@@ -2319,6 +2319,10 @@ func Semantics() interp.Semantics {
 	// between the two questions (#2285).
 	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptIsABadSubscript
 	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsAnOrdinaryKey
+	// Through a reference the same table refuses, where the bare form above
+	// stores a key. Measured 2026-09-20; see
+	// Semantics.WholeArraySubscriptThroughAReferenceToATable.
+	s.WholeArraySubscriptThroughAReferenceToATable = interp.WholeArraySubscriptIsABadSubscript
 	// And a *read* whose key comes out empty is reported too, with a
 	// different subject and a different outcome: measured 2026-09-12,
 	// `typeset -A m; m[k]=v; w=; ${m[$w]}` writes `m: bad array subscript` —

@@ -9145,6 +9145,51 @@ type Semantics struct {
 	// ksh93 answers both the same way, which is what a single field would
 	// have had to assume of all three (#2285).
 	WholeArraySubscriptAssigningATable WholeArraySubscriptAssignPolicy
+	// WholeArraySubscriptThroughAReferenceToATable is the same spelling
+	// again, over a table, and reached through a **resolved reference**
+	// rather than written on the left of an assignment: bash's `declare -n
+	// n='m[@]'; n=Z` and zsh's `v='m[@]'; ${(P)v::=Z}`.
+	//
+	// A third field because bash parts from *itself* between the two routes,
+	// which is the same evidence that made WholeArraySubscriptAssigningATable
+	// a second one. Measured 2026-09-20 with `typeset -A m; m[k]=v` in front
+	// of it:
+	//
+	//	shell        `m[@]=Z`                 through a reference
+	//	bash 5.3.20  a key named `@`, at 0    `m[@]: bad array subscript`, 1,
+	//	                                      nothing written
+	//	zsh 5.9.2    slice of an associative  the same sentence, and the input
+	//	             array, input ends        ends — no disagreement here
+	//
+	// So one column of the two swaps sides and the other does not, and a
+	// field that read the bare form's answer would have stored bash a key
+	// nothing in that shell writes.
+	//
+	// The **array** half needs no such field: both columns answer it exactly
+	// as they answer WholeArraySubscriptAssigningAnArray, measured the same
+	// day and the same way, so storeWholeArraySubscriptThroughAReference
+	// reads that field for a name that is not a table.
+	//
+	// ksh93 is the third answer and the reason this cannot read either field
+	// above: it takes the *declaration* over a table and stores the key,
+	// where the bare `m[@]=Z` is `@: invalid subscript in assignment` and
+	// ends the input. Its **array** half is unreachable instead — a subscript
+	// that is not a key is evaluated when the reference is aimed, so `x=(p
+	// q); nameref b=x[@]` never becomes a reference at all.
+	//
+	// unpinned bash: no corpus row reaches it. A row would want `declare -n`
+	// and a table, and the three columns without references answer the
+	// snippet as a command name rather than as an assignment, so the record
+	// would grade the absence and not the axis. Pinned in dialect/bash by
+	// TestAWholeArraySubscriptThroughAReferenceIsBad instead, which is where
+	// the give-up-the-line half is measured too.
+	//
+	// unpinned ksh: the same reach problem, and pinned in dialect/ksh by
+	// TestAWholeArraySubscriptThroughAReferenceTakesTheKey.
+	//
+	// unpinned zsh: likewise, and by dialect/zsh's
+	// TestAWholeArraySubscriptThroughAReferenceIsASlice.
+	WholeArraySubscriptThroughAReferenceToATable WholeArraySubscriptAssignPolicy
 
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the

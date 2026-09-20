@@ -237,6 +237,14 @@ func (r *Runner) assignIndirect(written string, t *indirectTarget, v string) boo
 		return r.assignThroughReference(e, v)
 	}
 	if base, sub, ok := r.indirectElement(name); ok {
+		if r.storeWholeArraySubscriptThroughAReference(base, sub, v, assignedAnyhow) {
+			// The same brackets storeThroughNamerefElement answers, reached
+			// by the other spelling of a resolved reference. One helper
+			// rather than two: this store and that one both walked `@` on to
+			// the arithmetic evaluator, and a fix written into only one of
+			// them would have left the other ending the script.
+			return r.status == 0
+		}
 		if r.assocDeclared(base) {
 			r.setAssocElem(base, sub, v)
 			return true
@@ -317,6 +325,14 @@ func (r *Runner) assignThroughReference(e *syntax.ParamExpr, v string) bool {
 		return r.assignReferenceSpan(e, v)
 	}
 	sub := r.subscriptText(e.Index)
+	if r.storeWholeArraySubscriptThroughAReference(e.Name, sub, v, assignedAnyhow) {
+		// `v='x[@]'; ${(P)v::=Z}` — the whole-array spelling in the resolved
+		// text, which is the same question bash's `declare -n b='x[@]'` asks
+		// and is answered in the same helper. It walked on to the evaluator
+		// below and ended the script over a line this shell completes at 0.
+		// Ahead of the table, whose answer here is its own axis.
+		return r.status == 0
+	}
 	if r.assocDeclared(e.Name) {
 		r.setAssocElem(e.Name, r.assocKey(e.Index), v)
 		return true

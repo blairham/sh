@@ -319,7 +319,16 @@ func (r *Runner) readThroughNamerefElement(base, sub string) (string, bool) {
 // `(P)` flag's assignment is for the same reason: the two questions a
 // subscript raises — which container, and what the text evaluates to — have
 // one answer each and both are already settled elsewhere.
-func (r *Runner) storeThroughNamerefElement(base, sub, value string) {
+func (r *Runner) storeThroughNamerefElement(base, sub, value string, form assignForm) {
+	if r.storeWholeArraySubscriptThroughAReference(base, sub, value, form) {
+		// `declare -n b='a[@]'; b=Z` — brackets that name the whole array
+		// rather than an element, which walked on to the arithmetic
+		// evaluator and ended the script over a line bash gives up and
+		// carries on from. Ahead of the table, because the column that
+		// stores a key for the bare `m[@]=Z` does not store one here. See
+		// storeWholeArraySubscriptThroughAReference, where the rows are.
+		return
+	}
 	if r.assocDeclared(base) {
 		r.setAssocElem(base, sub, value)
 		return

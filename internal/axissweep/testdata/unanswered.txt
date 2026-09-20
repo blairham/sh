@@ -236,6 +236,7 @@ ash   UnsetSubscriptSkippedWhenNameUnset
 ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 ash   ValuelessSubscriptedOperand
 ash   WholeArraySubscriptAssigningATable
+ash   WholeArraySubscriptThroughAReferenceToATable
 ash   WholeArraySubscriptAssigningAnArray
 ash   WidthJustificationPrecedence
 ash   WidthLettersExcludeTheIntegerLetter
@@ -516,6 +517,7 @@ dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessDeclarationOfAHeldNameListsIt
 dash  ValuelessSubscriptedOperand
 dash  WholeArraySubscriptAssigningATable
+dash  WholeArraySubscriptThroughAReferenceToATable
 dash  WholeArraySubscriptAssigningAnArray
 dash  WidthJustificationPrecedence
 dash  WidthLettersExcludeTheIntegerLetter

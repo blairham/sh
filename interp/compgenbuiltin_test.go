@@ -43,7 +43,12 @@ func TestCompgenGeneratesWhatThisShellKnows(t *testing.T) {
 			// `file` until #2555 gave that one an answer, which is the shape
 			// to keep an eye on: a row naming a *specific* gap stops testing
 			// the rule the moment the gap is filled.
-			"an action we do not generate", "compgen -A alias\n", "not implemented", "invalid action", 2,
+			//
+			// **1 and not 2**: the gap is said and then contributes nothing,
+			// which is bash's own answer for an action with no matches —
+			// measured, `compgen -A alias zzz` there is silence at 1. See
+			// TestCompgenDegradesAnActionItCannotGenerate (#3899).
+			"an action we do not generate", "compgen -A alias\n", "not implemented", "invalid action", 1,
 		},
 		{
 			// And one that is not an action anywhere, which is a different
@@ -51,14 +56,14 @@ func TestCompgenGeneratesWhatThisShellKnows(t *testing.T) {
 			// something and this is a typo.
 			"a name that is no action", "compgen -A nosuch\n", "invalid action name", "not implemented", 2,
 		},
-		{"an option letter we do not generate", "compgen -v\n", "not implemented", "", 2},
+		{"an option letter we do not generate", "compgen -v\n", "not implemented", "", 1},
 		{
 			// bash has no short letter for the function action at all — `-u`
 			// is user names there — so a function is not what this answers.
 			// It said otherwise once, which is the wrong direction: an answer
 			// where the real shell gives a different one.
 			"there is no short letter for function",
-			"f1() { :; }\ncompgen -u f1\n", "not implemented", "f1\n", 2,
+			"f1() { :; }\ncompgen -u f1\n", "not implemented", "f1\n", 1,
 		},
 		{
 			// A letter bash does not have either, which is a typo rather than

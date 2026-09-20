@@ -457,6 +457,10 @@ func Semantics() interp.Semantics {
 	// found` at 127, so there is no builtin here to read the letter either
 	// way (#2419).
 	// unanswered DeclareHideValueLetter: the same, for `typeset -H h=hid`.
+	// unanswered DeclarePrintPerformsItsOperand: the axis is what a `-p`
+	// listing does with an operand carrying a value, and there is no listing
+	// and no operand. Measured 2026-09-20, `typeset -p s=5` and `declare -p
+	// s=5` are both `not found` at 127 with `s` unset afterwards (#3872).
 	// unanswered ProducedParameterListing: the axis is what a listing with no
 	// operands writes for a produced parameter, and there is no listing.
 	// Measured 2026-09-13, `env -i PATH=/usr/bin:/bin` with a scratch HOME:

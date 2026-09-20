@@ -535,6 +535,11 @@ func Semantics() interp.Semantics {
 	// never happens. `export` over a `readonly` name — the only attribute
 	// this shell does have — is taken at 0, which is a different question
 	// and not this one (#2561).
+	// unanswered DeclarePrintPerformsItsOperand: the axis is what a `-p`
+	// listing does with an operand carrying a value, and BusyBox ash has no
+	// declaration utility to write one on. Measured 2026-09-20 in the pinned
+	// image, `typeset -p s=5` and `declare -p s=5` are both `not found` at
+	// 127 (#3872).
 	// unanswered OperandSubscriptQuoting: there are no arrays, so no operand
 	// of this shell's carries a subscript for a quote to be written inside.
 	// Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image, `unset

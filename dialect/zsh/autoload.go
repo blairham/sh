@@ -588,10 +588,19 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 		// a pending stub any more. See autoloadRunResolved for what the
 		// answer decides.
 		stub := autoloadPending(r, name)
+		// And the stub's own text, for the one failure that has to put it
+		// back. A load zsh refuses leaves the name still waiting to be
+		// loaded, so the *next* call reads the file again — and this engine
+		// cannot learn the body will not parse until the body runs, by which
+		// time the declaration is gone. See autoloadRunResolved.
+		pending, hadPending := r.FunctionBodyText(name)
 		if code := autoloadResolveIn(r, name, names, opts.keepAliases, stub); code != 0 {
 			return code
 		}
-		return autoloadRunResolved(r, ctx, name, stub)
+		if !hadPending {
+			pending = ""
+		}
+		return autoloadRunResolved(r, ctx, name, stub, pending)
 	}
 	if len(names) == 0 {
 		// `+X` with nothing to resolve lists, the same as a bare
@@ -687,7 +696,7 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 // and a builtin has an int to answer with and no way to pass it on. It is
 // reported and answered 1 rather than dropped, which at least leaves a
 // failing status where the shell would have stopped.
-func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string, stub bool) int {
+func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string, stub bool, pending string) int {
 	run := func() (bool, error) {
 		if stub {
 			// No arguments: the frame the body is running in is the call's
@@ -701,6 +710,42 @@ func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string, stu
 		return r.CallFunction(ctx, name, args...)
 	}
 	ran, err := run()
+	// A body this engine could not parse is the **load** failing, not the
+	// script: zsh reads a function file whole when it loads it, so a `$( … )`
+	// in it that will not parse is refused before any of the body runs and
+	// costs nothing but the definition. This engine reads a substitution body
+	// at expansion time, so the same failure arrives from inside a body that
+	// is already running and, with nothing to catch it, ended the whole outer
+	// script — `echo BEFORE; g; echo AFTER` printed only `BEFORE` and exited
+	// 1 where zsh 5.9.2 prints both and exits 0 (#3895).
+	//
+	// Caught here rather than around the resolution, because this is where
+	// the eager read would have been: the resolution has only the file's text
+	// and the bodies are not read until the commands holding them run.
+	//
+	// Only that one kind is caught, which is measured — an unset parameter
+	// under `set -u` and a `${x?word}` in an autoloaded body both end the
+	// script in zsh, and `exit 4` in one still exits 4. See
+	// interp.Runner.GiveUpTheDeferredParse for the five rows.
+	if r.GiveUpTheDeferredParse() {
+		// And the declaration goes back, because a load zsh refuses leaves
+		// the name **still waiting to be loaded**: measured on the same
+		// rows, calling `f` twice reads the file and reports twice, where
+		// this shell had replaced the stub with the body it could not run
+		// and the second call escaped this boundary entirely — the script
+		// died on the call after the one that was contained.
+		//
+		// Only where there was a stub to put back. A hand-written one is
+		// the script's own function and was never replaced, so there is
+		// nothing here to restore.
+		if pending != "" {
+			r.DefineFunctionFromText(name, pending)
+		}
+		// The status zsh leaves behind, measured on the same rows: `f` after
+		// a refused load answers 1, and `f || echo caught` runs the `echo` —
+		// so it is an ordinary failing status rather than a stop.
+		return 1
+	}
 	if err != nil {
 		r.Diagnosef("%s: %v\n", name, err)
 		return 1

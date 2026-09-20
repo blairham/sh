@@ -305,3 +305,54 @@ func (r *Runner) subshellExitTrapSkippedByAGiveUp() bool {
 	}
 	return false
 }
+
+// GiveUpTheDeferredParse ends a **parse** failure this engine deferred,
+// rather than the shell, reporting whether there was one to end.
+//
+// The fifth site of the mechanism above — `.` and `eval` are the first, a
+// startup file the second, a typed line the third, a hook chain the fourth —
+// and the only one whose boundary is a *moment* rather than a piece of text.
+// A shell that reads a `$( … )` body when it reads the line holding it fails
+// while it is still reading, so whatever was doing the reading contains the
+// failure. This engine reads such a body at expansion time instead (see
+// Runner.subst), so the same failure surfaces inside a body that is already
+// running and escapes the construct that would have caught it. A caller that
+// knows it stands where the eager read would have happened says so here.
+//
+// **Only abandonSubstParse is caught, and that is measured rather than
+// cautious.** The two are told apart by the only column that has such a
+// construct — zsh's autoloaded function file, measured 2026-09-20 with
+// `env -i -u FPATH PATH=/usr/bin:/bin LC_ALL=C zsh t.zsh`, the file on
+// `$fpath` and the script `echo BEFORE; f; echo "AFTER $?"`:
+//
+//	file                zsh 5.9.2
+//	v=$(echo hi; for)   BEFORE, two refusals, `AFTER 1`   the script lives
+//	echo X${NOPE?gone}  BEFORE, the refusal, status 1     the script dies
+//	echo X${NOPE} (-u)  BEFORE, the refusal, status 1     the script dies
+//	exit 4              BEFORE, status 4                  and so does this
+//	return 7            BEFORE, `AFTER 7`                 an ordinary return
+//
+// So a boundary that caught every fatal error here would take the second and
+// third rows with it, and those two are the control: a *run-time* error in an
+// autoloaded body ends the script in zsh exactly as it does anywhere else.
+// What the first row is contained by is the **load**, and this is the only
+// kind of failure that belongs to one.
+//
+// A request to stop is not caught, for the reason every boundary above shares
+// and which the fourth row measures.
+func (r *Runner) GiveUpTheDeferredParse() bool {
+	// The shared box first, exactly as GiveUpTheLine takes it: a body that
+	// failed inside a subshell recorded its stop there rather than on this
+	// runner, and `( f )` around the call still leaves the script alive in
+	// zsh. See Semantics.SubstitutionParseErrorEscapesASubshell.
+	if status, stopped := r.takeScriptStop(); stopped {
+		r.status = status
+		r.takeFileError()
+		return true
+	}
+	if r.ctl != controlExit || r.abandon != abandonSubstParse {
+		return false
+	}
+	r.takeFileError()
+	return true
+}

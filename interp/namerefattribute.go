@@ -111,6 +111,12 @@ func (r *Runner) attributeFollowsTheReference(name string, df declareFlags) (str
 // compound, which lands on the lowest element. Nothing said so: the wrong
 // cell was written and the status was the status of a write that worked.
 //
+// The middle row took **two** fixes and the comment claimed it after one.
+// Pointing the store back here put the value in the right cell, and the join
+// still had nothing to join to — so `typeset b+=X` wrote `p X r`, which is
+// this line's own text with the `q` missing, for as long as it took somebody
+// to run it (#3880). The read is [Runner.storedVar]'s now.
+//
 // What it hands back is **the reference itself**, not the element it names,
 // and that is the whole economy of it: [Runner.setVarAs] already resolves a
 // reference to the element and stores through it, and a whole-array subscript
@@ -154,4 +160,72 @@ func (r *Runner) orName(target, name string) string {
 		return name
 	}
 	return target
+}
+
+// nameOperandThroughAReference is `export`'s and `readonly`'s reading of the
+// two functions above, and it is **one** function because those two builtins
+// ask the identical question: an operand that turns out to be a reference
+// aimed at an element parts the value from the attribute, and the dialects
+// disagree about whether the attribute lands at all.
+//
+// It answers where the **value** is stored through — "" for every operand
+// that is not such a reference, which is what [Runner.orName] reads — and
+// whether the **attribute** still lands. The refusal is written here, so a
+// caller can neither forget it nor word it differently from its neighbor;
+// see Semantics.ExportOrReadonlyTakesAReferenceToAnElement for the rows.
+//
+// Written once rather than at each builtin for the reason #3878 records three
+// times over: a second site carrying the same question is how a fix reaches
+// one spelling and leaves the other wrong. `export` and `readonly` were
+// already two copies of "follow the reference to the array", and both copies
+// then stored the value there too — over a compound, which is element zero.
+// So `export b=Z` over `typeset -n b='a[1]'` wrote `Z q r`, silently and at
+// status 0, in every dialect (#3881).
+//
+// The sentence is badBuiltinName's, which is the same refusal the operand
+// earns written out: `export 'a[1]'` is “export: `a[1]': not a valid
+// identifier“ in bash already. Only the **status** parts — 1 when the
+// brackets were typed, 0 when a reference led to them — so the number is
+// dropped here and the builtin's own is left standing.
+//
+// **The `n` letter takes away the sentence and not the refusal**, which is
+// measured rather than reasoned and is why `applies` gates only the complaint.
+// Measured 2026-09-20 on bash 5.3.20, over `a=(p q r); typeset -n b='a[1]'`:
+//
+//	export b         the refusal, 0, and nothing is applied
+//	export -n b      **silent**, 0, and nothing is applied either — an `a`
+//	                 that was exported before the line stays exported
+//	readonly b       the refusal, 0, and `a` is not frozen
+//	readonly -n b    silent, 0
+//	readonly -n b=Z  silent, 0, `p Z r`, and `a` is not frozen
+//
+// So the operand is refused for the attribute on every one of those rows and
+// only the line moves: the word that would *put* an attribute on the name
+// says why, and the word that would take one off says nothing. The value
+// lands throughout. Reading the letter as "then do the ordinary thing" was
+// the first version of this and it *removed* the export attribute `export -n
+// b` leaves standing, which is the row that tells the two readings apart.
+//
+// The two builtins spell the letter's effect differently — `export -n`
+// removes the attribute, `readonly -n` declines to freeze — so each caller
+// passes what its own letters decided rather than re-reading them here.
+func (r *Runner) nameOperandThroughAReference(builtin, name string, df declareFlags, applies bool) (value string, letters bool) {
+	value = r.referenceValueTarget(name, df)
+	if value == "" {
+		return "", true
+	}
+	if r.ask(r.sem().ExportOrReadonlyTakesAReferenceToAnElement,
+		"`export` or `readonly` over a reference aimed at one element") {
+		return value, true
+	}
+	if r.unspecified {
+		return value, false
+	}
+	if applies {
+		// The target's own text, which is what the complaint names: bash
+		// quotes `a[1]` back and never the `b` the script wrote.
+		target, _ := r.namerefTarget(name)
+		r.badBuiltinName(builtin, target, target, No)
+	}
+	return value, false
 }

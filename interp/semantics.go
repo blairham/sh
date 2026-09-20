@@ -1691,6 +1691,69 @@ type Semantics struct {
 	// `typeset s=9` through a reference to a frozen `u` is `u: is read only`
 	// in ksh93u+.
 	DeclarationThroughAReferenceNamesTheOperand Answer
+
+	// ExportOrReadonlyTakesAReferenceToAnElement decides what those two
+	// builtins do with an operand that is a reference aimed at **one element**
+	// — `a=(p q r); typeset -n b='a[1]'; export b=Z`.
+	//
+	// Yes takes it: the attribute lands on the container, because an
+	// attribute is a property of a name and an array has one name, and the
+	// value goes through the reference to the element. No refuses the
+	// *attribute* by the target's own text, at status 0, and the value still
+	// lands on the element.
+	//
+	// Measured 2026-09-20, script files under `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME, `a=(p q r); typeset -n b='a[1]'` in front of each:
+	//
+	//	written        bash 5.3.20                     ksh93u+ 2012-08-01
+	//	export b=Z     export: `a[1]': not a valid      silent, 0, `p Z r`,
+	//	               identifier, 0, `p Z r`, and      and `typeset -x -a a`
+	//	               **no** export letter anywhere
+	//	readonly b=Y   readonly: the same sentence,     silent, 0, `p Y r`,
+	//	               0, `p Y r`, and `a` is not       and `a` **is** frozen
+	//	               frozen — a later `a[2]=N` is 0   — a later `a[2]=N` is
+	//	                                                `a: is read only`
+	//	export b       the sentence, 0, nothing         silent, `typeset -x -a`
+	//	readonly b     the sentence, 0, nothing         silent, `typeset -r -a`
+	//
+	// A table answers the same way in both columns — `typeset -A m=([k]=v);
+	// typeset -n n='m[k]'; export n=Q` is the sentence naming `m[k]` in bash
+	// and `typeset -x -A m` in ksh93 — so the kind of container decides
+	// nothing here and there is one field rather than two.
+	//
+	// **It is the two builtins and not the letter.** `declare -x b` over the
+	// same reference puts `-x` on the array in bash, silently and at 0,
+	// exactly as ksh93's `export b` does, and `declare -i b` does the same —
+	// which is the measured control that says this is not
+	// attributeFollowsTheReference asked again. What parts is the word:
+	// `export` and `readonly` take a *name* operand, and bash checks that
+	// name after following the reference, where the text it finds is `a[1]`
+	// and is no identifier.
+	//
+	// The `readonly` row is the one that costs a script something. This shell
+	// answered ksh93's way in both dialects, so a bash script that wrote
+	// `readonly` over such a reference left the whole array frozen and the
+	// next ordinary write to any element was refused — a failure some lines
+	// later, under a name the script never wrote (#3881).
+	//
+	// Asked only where the operand really is a reference aimed at an element.
+	// A reference to a plain name is the same declaration under either
+	// answer, and a dialect with no references never arrives.
+	//
+	// unpinned bash: no corpus row can reach it. A row would have to write
+	// `typeset -n`, and the three columns without references answer that as a
+	// bad option or a missing command, so the record would grade the absence
+	// and not the axis — the same wall
+	// WholeArraySubscriptThroughAReferenceToATable ran into. Pinned in
+	// dialect/bash by TestExportAndReadonlyRefuseAReferenceToAnElement
+	// instead, which carries the `declare -x` control that says this is the
+	// two builtins and not the letter.
+	//
+	// unpinned ksh: the same reach problem, and pinned in dialect/ksh by
+	// TestExportAndReadonlyTakeAReferenceToAnElement — including the freeze
+	// row, which is where the two columns cost a script different things.
+	ExportOrReadonlyTakesAReferenceToAnElement Answer
+
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other

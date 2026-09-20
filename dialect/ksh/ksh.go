@@ -1589,6 +1589,13 @@ func Semantics() interp.Semantics {
 	// 2026-09-18, `u=1; readonly u; typeset -n s=u; typeset s=9` is `u: is
 	// read only` here (#3173).
 	s.DeclarationThroughAReferenceNamesTheOperand = interp.No
+	// And `export` and `readonly` over a reference aimed at one **element**
+	// are taken in silence, with the letter on the container: measured
+	// 2026-09-20 on ksh93u+, with `a=(p q r); nameref b='a[1]'`, `export b=Z`
+	// is 0, leaves `a` as `p Z r` and lists `typeset -x -a a`, and `readonly
+	// b=Y` leaves `p Y r` with `a` frozen — a later `a[2]=N` is `a: is read
+	// only`. A table answers the same way, `typeset -x -A m` (#3881).
+	s.ExportOrReadonlyTakesAReferenceToAnElement = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No

@@ -1072,6 +1072,17 @@ func Semantics() interp.Semantics {
 	// variable` where the valueless `declare -i s` beside it is `declare: u:
 	// readonly variable` (#3173).
 	s.DeclarationThroughAReferenceNamesTheOperand = interp.Yes
+	// `export` and `readonly` over a reference aimed at one **element**
+	// refuse the attribute by the target's own text and let the value
+	// through: measured 2026-09-20 on 5.3.20, with `a=(p q r); typeset -n
+	// b='a[1]'`, `export b=Z` writes ``export: `a[1]': not a valid
+	// identifier`` at status **0**, leaves `a` as `p Z r`, and puts the
+	// export letter nowhere — `declare -p a` is `declare -a a`. `readonly
+	// b=Y` is the same sentence under its own name and leaves `a` unfrozen,
+	// so a later `a[2]=N` is taken at 0. The control is `declare -x b` beside
+	// it, which lands the letter on `a` silently: it is these two builtins'
+	// name check and not the letter (#3881).
+	s.ExportOrReadonlyTakesAReferenceToAnElement = interp.No
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes

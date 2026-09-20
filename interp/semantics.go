@@ -3036,6 +3036,39 @@ type Semantics struct {
 	// with `[[ -o noglob ]]` instead, zsh scopes **neither** form by
 	// default.
 	FunctionLocalOptions OptionLocality
+	// KeywordFunctionSuspendsErrexitAndXtrace starts the body of a `function
+	// name { … }` call with `-e` and `-x` **off**, whatever the caller had,
+	// and gives them back at the return.
+	//
+	// Not FunctionLocalOptions with a different table in it, and the two come
+	// apart in the only place either is exhibited: that one is a *restore* —
+	// the body reads every option as the caller left it — and this one names
+	// two options the body does not read at all. A probe that only asks what
+	// the caller holds afterwards cannot see it, because a restore answers
+	// that question the same way.
+	//
+	// only-ksh: measured 2026-09-20 over a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, stdin from /dev/null.
+	//
+	//	set -e; function f { false; echo after; }; f; echo tail
+	//	  ksh93u+  after, tail       bash 5.3.20, zsh 5.9.2  nothing
+	//	set -x; function f { echo A; }; f
+	//	  ksh93u+  the body untraced bash 5.3.20, zsh 5.9.2  `+ echo A`
+	//
+	// dash has no `function` keyword — `function f { … }` is `Syntax error:
+	// "}" unexpected` there — so the shape does not run and the preset
+	// answers for it.
+	//
+	// **Two options and not the table**, asked a letter at a time on ksh93u+
+	// with `$-` read outside the call and again inside a keyword body: `e`
+	// and `x` are gone inside, and `u`, `f`, `C`, `v`, `a`, `b`, `m`, `h` and
+	// `k` are all there. The same letters are all there inside a `f() { … }`
+	// body, which is what keys this to the definition form.
+	//
+	// `typeset -ft` is not this and must survive it: that mark traces a
+	// keyword body with the option off, measured in the same run, and it is
+	// carried on Runner.xtraceByMark rather than on the option.
+	KeywordFunctionSuspendsErrexitAndXtrace Answer
 	// SIGPrefixAccepted reads `SIGINT` as a name for the same signal `INT`
 	// names, wherever a signal can be named.
 	//
@@ -21671,6 +21704,11 @@ func PosixSemantics() Semantics {
 		// definition form to scope anything to: the preset takes the
 		// majority's answer, which is also every panel member's but one.
 		FunctionLocalOptions: OptionsSurviveTheFunction,
+		// And the same reason answers the axis beside it: with no second
+		// definition form there is nothing for two options to be turned off
+		// for, and the majority — bash, zsh and every other panel member but
+		// one — turns off neither.
+		KeywordFunctionSuspendsErrexitAndXtrace: No,
 		// The standard says nothing about what a function call does to the
 		// scan position — `local` is not in it — so the preset keeps the
 		// answer it has always had rather than following a member: a call

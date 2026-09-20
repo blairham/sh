@@ -1575,6 +1575,10 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// gives about its own store: `set -o` writes the substrate's state, so
 	// what puts it back is the substrate's too. See localsetoptions.go.
 	r.saveTheOptionTable(sc)
+	// And, in that shell again, two of those options are turned off before the
+	// body runs — which the save above is what makes safe to do, since the
+	// restore at the return is what gives them back. See localsetoptions.go.
+	r.suspendWhatAKeywordCallStartsWithout(sc)
 
 	// One dialect fires the DEBUG trap again here: once for the call where
 	// it was written, and once more with the frame entered — see

@@ -1070,6 +1070,12 @@ func Semantics() interp.Semantics {
 	// function g { set +o noglob; }; g` leaves noglob **on**, and the same
 	// body written `g() { … }` leaves it off (#3308).
 	s.FunctionLocalOptions = interp.OptionsGoBackAtTheReturnOfAKeywordFunction
+	// And the same word turns two of them off on the way *in*, which the
+	// restore above cannot say: `set -e; function f { false; echo after; }; f;
+	// echo tail` writes `after` and `tail` here and nothing in bash or zsh,
+	// and `set -x` leaves a keyword body untraced. Measured 2026-09-20 on AT&T
+	// 93u+ 2012-08-01, a letter at a time — `e` and `x` alone (#3860).
+	s.KeywordFunctionSuspendsErrexitAndXtrace = interp.Yes
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No
 	s.SelectTakesUnterminatedReply = interp.No

@@ -516,10 +516,15 @@ func (r *Runner) namerefSelfReference(name, target string) bool {
 	return true
 }
 
-// namerefTargetIsAName reports whether a word may be aimed at: a name, or a
-// name with a subscript. Both shells refuse anything else at the declaration.
+// namerefTargetIsAName reports whether a word may be aimed at: a name, a name
+// with a subscript, or — in the dialect that has compound variables — a
+// **member path** whose base name is there. Both shells refuse anything else
+// at the declaration. See interp/namerefmember.go for the third shape's rows.
 func (r *Runner) namerefTargetIsAName(target string) bool {
 	if isNameLike(target) {
+		return true
+	}
+	if r.namerefTargetIsAMember(target) {
 		return true
 	}
 	base, _, bracketed := strings.Cut(target, "[")
@@ -665,6 +670,17 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 	// contents reading is *not* an array, so the late check must not fire on
 	// it either.
 	refusedLate := arrayed && shape == NamerefArrayCheckedLastOnTheAttribute
+	// A **member path with no parent**, which is refused in words of its own
+	// and ahead of the bad-name check: the parent is half of what makes a
+	// member path a name here, so behind that check this sentence could never
+	// be reached. The shape is still settled first — `typeset -n c=1a.b` is
+	// the bad-name refusal in ksh93u+ and `typeset -n c=qq.b` is this one —
+	// which is namerefMemberWithoutAParent asking for a well-formed path.
+	// See interp/namerefmember.go.
+	if r.namerefMemberWithoutAParent(target) {
+		return refuse(Wording(d.NamerefTargetHasNoParent,
+			"%[1]s: no parent", target))
+	}
 	if !r.namerefTargetIsAName(target) {
 		return refuse(Wording(d.NamerefBadTarget,
 			"%[1]s: invalid variable name for name reference", target))

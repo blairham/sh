@@ -5360,6 +5360,23 @@ type Diagnostics struct {
 	// where bash has a sentence of its own for this letter.
 	NamerefBadTarget string
 
+	// NamerefTargetHasNoParent is a declaration aiming a name reference at a
+	// **compound member path** whose base name is not there. One verb: the
+	// path as the script wrote it.
+	//
+	// Measured 2026-09-20 on ksh93u+ 2012-08-01: `typeset -n c=qq.b` is
+	// `typeset: qq.b: no parent` at 1 and the script ends, where the same
+	// line over an existing `qq` of any kind is taken in silence.
+	//
+	// **Empty in every dialect that has no compound variables**, and that
+	// emptiness is the gate rather than only the absence of a sentence: a
+	// member path can denote nothing in a shell with no members, so the
+	// dialect that says this is the dialect where a reference may be aimed at
+	// one at all. bash refuses the shape outright — ``declare: `zz.b':
+	// invalid variable name for name reference`` — which is NamerefBadTarget
+	// above. See interp/namerefmember.go.
+	NamerefTargetHasNoParent string
+
 	// NamerefSelfReference is a declaration refusing a reference that would
 	// reach itself, in the dialect that refuses one — see
 	// Semantics.NamerefCycleIsRefused. One verb: the name being declared.

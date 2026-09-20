@@ -2254,9 +2254,21 @@ func Diagnostics() interp.Diagnostics {
 		// And `read`, which names itself in the location the same way:
 		// measured 2026-09-16 in the pinned image, `a=A; readonly a; printf
 		// 'x\n' | read a` is `ash: read: line N: a: is read only`.
-		ReadonlyRefusalNamesBuiltin: map[string]bool{"getopts": true, "read": true},
-		UnsetReadonly:               "%s: is read only",
-		LocalOutsideAFunction:       "not in a function",
+		// And the three declaration builtins that can carry an assignment,
+		// measured 2026-09-20 in the pinned image with `readonly q=1` on the
+		// line above: `readonly q=2` is `case.sh: readonly: line 2: q: is
+		// read only`, `export q=3` names `export`, and `local q=5` inside a
+		// function names `local` — where the bare `q=4` on the next line is
+		// `case.sh: line 2: q: is read only` with no builtin at all. So the
+		// builtin reaches the *location* and never the sentence, which is
+		// why ReadonlyVariableInDeclaration above is the plain wording
+		// (#3908).
+		ReadonlyRefusalNamesBuiltin: map[string]bool{
+			"getopts": true, "read": true,
+			"export": true, "readonly": true, "local": true,
+		},
+		UnsetReadonly:         "%s: is read only",
+		LocalOutsideAFunction: "not in a function",
 
 		// The option refusals: lower case, and the letter alone.
 		SetInvalidOptionName:   "illegal option -o %[1]s",

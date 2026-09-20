@@ -387,7 +387,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// answer `$(( m[k] ))` with 7. Evaluating it instead read the wrong
 	// element and said nothing, which is the silent half of a wrong answer.
 	if a, ok := r.assocFor(x.Name); ok {
-		return r.arithElemValue(arithIndexWritten(x), a[r.arithAssocKey(r.arithSubscriptRead(x.SubMarked))].scalar())
+		return r.arithElemValue(arithIndexWritten(x), a[r.arithAssocKey(r.arithSubscriptRead(x.SubMarked, subscriptAsKey))].scalar())
 	}
 	if r.reportArithWholeArraySubscript(x) {
 		// Named and answered: the operand is zero and the expression keeps
@@ -712,7 +712,7 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	// Read from the marked text and *shown* from the plain one: the marks
 	// are what keep a value's own bracket or quote out of the reading, and
 	// they are no part of what a script wrote. See syntax.ArithValueMark.
-	marked := r.arithSubscriptRead(x.SubMarked)
+	marked := r.arithSubscriptRead(x.SubMarked, subscriptAsExpression)
 	sub := stripArithValueMarks(marked)
 	p := syntax.NewParser("", r.dialect())
 	tree := p.ParseArithExpanded(marked, syntax.Pos{})
@@ -1252,7 +1252,7 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		return nil
 	}
 	if r.assocDeclared(p.name) {
-		r.setAssocElem(p.name, r.arithAssocKey(r.arithSubscriptRead(p.subMarked)), text)
+		r.setAssocElem(p.name, r.arithAssocKey(r.arithSubscriptRead(p.subMarked, subscriptAsKey)), text)
 		return nil
 	}
 	// Through the same reader the element is read by, so a text that is no
@@ -3369,11 +3369,85 @@ func stripArithValueMarks(text string) string {
 // that is known, and a subscript carrying both a marked expansion and an
 // unmarked one is read as it stands: half an expansion is an answer no column
 // gives.
-func (r *Runner) arithSubscriptRead(marked string) string {
+//
+// reading says which of the two consumers is waiting, because they want
+// different text out of the same expansion. See subscriptReading.
+func (r *Runner) arithSubscriptRead(marked string, reading subscriptReading) string {
 	if !syntax.UnmarkedExpansion(marked) || syntax.MarkedExpansion(marked) {
 		return marked
 	}
-	return r.expandArithText(syntax.UnmarkArithValue(marked))
+	text := syntax.UnmarkArithValue(marked)
+	if reading == subscriptAsExpression {
+		return r.expandArithText(text)
+	}
+	return r.arithSubscriptKeyText(text)
+}
+
+// subscriptReading is what a subscript's text is about to become, which is
+// the one thing [Runner.arithSubscriptRead] cannot work out for itself.
+//
+// The two readings want the *same* expansion performed and its result marked
+// differently, and there is no third. See [Runner.arithSubscriptKeyText] for
+// the measurement that parts them.
+type subscriptReading bool
+
+const (
+	// subscriptAsExpression: the text is handed to the parser and read as
+	// arithmetic, which is what an indexed name's brackets hold.
+	subscriptAsExpression subscriptReading = false
+	// subscriptAsKey: the text becomes an associative array's key, which is
+	// a string and is never read as syntax again.
+	subscriptAsKey subscriptReading = true
+)
+
+// arithSubscriptKeyText performs the expansion a re-read subscript still
+// holds, for the reading that makes it a key, and marks what it produced.
+//
+// The marking is the whole point of it not being [Runner.expandArithText].
+// Everything this is handed is *already* between a subscript's brackets — the
+// text is the subscript — so there is no depth to count and no bracket of the
+// script's to find: every byte an expansion produces here is a byte of the
+// key, exactly as one produced inside brackets the source wrote is. Without a
+// mark, [subscriptQuoteRemoval] cannot tell an apostrophe a value carried from
+// one the re-read text spelled, and takes it off.
+//
+// Measured 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> f.sh` over
+// a script file with standard input on the null device, against
+// `typeset -A m; k="q'r'z"; m[$k]=4`:
+//
+//	                          bash 5.3.20  ksh93u+  zsh 5.9.2
+//	e='m[$k]';    $(( $e ))             4        4          4
+//	g="m[q'r'z]"; $(( $g ))             0        4          4
+//
+// Unanimous on the first row, so it is the core's and no axis. The second row
+// is the control that says this is marking rather than a stopped removal: the
+// same two apostrophes, in the same brackets, reached by the same re-read —
+// and bash loses the element there, because those apostrophes are characters
+// of `g`'s own text rather than the product of an expansion performed at
+// subscript-read time. bash parts from the other two on that row over
+// Semantics.SubscriptIsAQuotingContext, which is already answered and is not
+// touched here.
+//
+// **Only this reading**, and that is measured rather than tidiness. The other
+// one hands its text back to the parser, where a mark is what stops a value's
+// bracket closing a subscript — and that is
+// Semantics.ArithSubscriptRereadsItsExpandedText, which zsh answers **yes**:
+// measured the same day, `a=(9 8 7); kb='1]'; e='a[$kb]'; $(( $e ))` is 9 in
+// zsh 5.9.2, the value's `]` closing the brackets. Marking there would
+// override an answered axis in the one column that holds the other value.
+// Nothing overrides anything here, because quote removal is this reading's
+// only consumer and zsh removes no quoting from a subscript at all.
+func (r *Runner) arithSubscriptKeyText(text string) string {
+	if !strings.ContainsAny(text, "$`") {
+		return text
+	}
+	out, _, _ := r.expandRawSpansWith(text, func(literal bool, part string) string {
+		if literal {
+			return part
+		}
+		return markArithValue(part)
+	})
+	return out
 }
 
 // arithAssocKey is the key an associative array's subscript names when the

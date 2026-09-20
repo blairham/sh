@@ -1358,6 +1358,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			}
 			return r.declarePrintForm(nil, r.sem().DeclareListing, true, keep)
 		}
+		// The operands of this listing are its own to perform first, in the
+		// two columns that perform them: `typeset -p s=5` declares and shows
+		// in one line, and what it shows is what it has just stored. See
+		// interp/declareprintoperand.go, which also holds the listing back
+		// until Runner.assignOperands has landed the parenthesized ones.
+		if code, took := r.declarePrintPerformsItsOperands(name, args, f); took {
+			return code
+		}
 		// A letter alongside `-p` that no listing filters on decides nothing,
 		// and refusing the combination would break the plain use to be honest
 		// about the rare one.

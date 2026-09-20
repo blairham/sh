@@ -791,6 +791,10 @@ func Semantics() interp.Semantics {
 	// the array that is also an integer and `declare -aA` writes nothing.
 	s.DeclarationListingFilter = interp.DeclarationFilterKindNarrowsAny
 	s.DeclarePrintReportsAMissingName = interp.Yes
+	// `declare -p e=(1 2)` lists the array it has just made and `declare -p
+	// s=5` is `s=5: not found` at 1 with nothing stored — measured
+	// 2026-09-20 on bash 5.3.20. See interp/declareprintoperand.go.
+	s.DeclarePrintPerformsItsOperand = interp.DeclarePrintOperandIsDeclaredWhereItIsALiteral
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes

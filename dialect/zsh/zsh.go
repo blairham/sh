@@ -1328,6 +1328,11 @@ func Semantics() interp.Semantics {
 	// under both signs.
 	s.DeclarationListingFilter = interp.DeclarationFilterAnyLetter
 	s.DeclarePrintReportsAMissingName = interp.Yes
+	// `typeset -p s=5` performs nothing there: it is `no such variable: s`
+	// at 1 with `s` still unset, and `typeset -p e=(1 2)` answers the same
+	// way — measured 2026-09-20 on zsh 5.9.2. See
+	// interp/declareprintoperand.go.
+	s.DeclarePrintPerformsItsOperand = interp.DeclarePrintOperandIsANameAlone
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
 	// Where it fired for a DEBUG or ERR body too: this shell names the
 	// firing line for every line of every body, so there is no second

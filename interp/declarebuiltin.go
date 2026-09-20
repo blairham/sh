@@ -1666,6 +1666,30 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// See declarationtakenback.go.
 		held := r.holdTheDeclaration(name)
 		r.applyAttributes(name, df)
+		if hasValue && !fresh && r.compoundNameHolds(name) && r.declaresAType(name) {
+			// An attribute **arriving** over a standing array or table reaches
+			// the elements already there, in the column that answers
+			// CompoundAttribute that way, and it arrives whether or not the
+			// same word carries a value. Only the valueless form asked —
+			// declareEmpty reaches rereadStandingValue and a valued one never
+			// does — and the column that folds at arrival got its answer from
+			// the *store*, which used to re-fold whatever array it was handed.
+			// With the store folding only what a write introduces (#3888) that
+			// accident is gone, so the question is asked where it belongs.
+			//
+			// Measured 2026-09-20 with `b=(p q r)` in front of each:
+			// `typeset -i b=5` is `5 0 0` on ksh93u+ and `5 q r` on bash
+			// 5.3.20, which is each column's *valueless* answer with the
+			// value written over element 0 — so it is one rule and not two.
+			//
+			// Ahead of the value, for the same reason the attributes are:
+			// the fold is about the elements the name was holding, and the
+			// value replaces one of them afterwards.
+			r.compoundMeetingAnAttribute(name)
+			if r.unspecified {
+				return r.status
+			}
+		}
 		if !df.global {
 			r.localExportAttribute(name, df.export)
 			if r.unspecified {

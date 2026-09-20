@@ -32,6 +32,19 @@ import "github.com/blairham/sh/interp"
 // to leave out, so `AliasRegularKind` and "all of them" are the same set here;
 // naming the kind is what says the choice was made rather than defaulted.
 func registerBashAliases(r *interp.Runner) {
+	// The listing, which a produced parameter has to be told about: without
+	// it the name is in no table the operand-less walk collects from, so
+	// `declare -A` and the bare `declare -p` wrote nothing for a parameter
+	// whose own `declare -p BASH_ALIASES` this shell already answered.
+	//
+	// Measured 2026-09-20 on bash 5.3.20, script files under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`: a bare `declare -A` writes `declare -A
+	// BASH_ALIASES=()` and `declare -A BASH_CMDS=()` in a shell with no
+	// aliases, and `declare -A BASH_ALIASES=([q]="echo" )` after `alias
+	// q=echo` — so the elements are written here as well as under a name,
+	// which is what ListsItsElements says.
+	r.SetDynamicDeclaration("BASH_ALIASES", interp.ProducedDeclaration{Array: true, ListsItsElements: true})
+
 	r.SetDynamicAssoc("BASH_ALIASES", func(rr *interp.Runner) interp.AssocArray {
 		names := rr.AliasNames(interp.AliasRegularKind)
 		table := make(interp.AssocArray, len(names))

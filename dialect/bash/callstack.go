@@ -138,9 +138,30 @@ func registerCallStack(r *interp.Runner) {
 	// FUNCNAME` with no `=` at the top level where the parameter is absent
 	// rather than empty, and `declare -a BASH_ARGV=()` for one that is empty.
 	for _, name := range []string{
-		"BASH_SOURCE", "FUNCNAME", "BASH_LINENO", "BASH_ARGC", "BASH_ARGV",
+		"FUNCNAME", "BASH_ARGC", "BASH_ARGV",
 	} {
 		r.SetDynamicDeclaration(name, interp.ProducedDeclaration{Array: true})
+	}
+
+	// Two of the five write their elements in the operand-less listing as
+	// well, which is the per-parameter fact ProducedDeclaration.ListsItsElements
+	// is for. Measured 2026-09-20 on bash 5.3.20, a script file whose only
+	// line is `declare -p`, under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	declare -a BASH_ARGC=()
+	//	declare -a BASH_ARGV=()
+	//	declare -a BASH_LINENO=([0]="0")
+	//	declare -a BASH_SOURCE=([0]="p.sh")
+	//	declare -a DIRSTACK=()
+	//	declare -a FUNCNAME
+	//	declare -a GROUPS=()
+	//
+	// The withholding is real and not an empty parameter: the *named*
+	// `declare -p BASH_ARGC` in the same shell writes `([0]="0")`. So the
+	// line is drawn per name, exactly as it is for PIPESTATUS, and these two
+	// are on the other side of it.
+	for _, name := range []string{"BASH_SOURCE", "BASH_LINENO"} {
+		r.SetDynamicDeclaration(name, interp.ProducedDeclaration{Array: true, ListsItsElements: true})
 	}
 
 	r.SetDynamicArray("BASH_LINENO", func(r *interp.Runner) []string {

@@ -1356,7 +1356,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				// — the same answer declarationListing gives.
 				return 0
 			}
-			return r.declarePrintForm(nil, r.sem().DeclareListing, true, keep)
+			return r.declarePrintFiltered(nil, r.sem().DeclareListing, true, keep, true)
 		}
 		// A letter alongside `-p` that no listing filters on decides nothing,
 		// and refusing the combination would break the plain use to be honest
@@ -3078,6 +3078,24 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 		// `typeset -g` on the same table writes every name.
 		return 0, true
 	}
+	// The produced parameters are candidates here exactly as they are under
+	// the unfiltered `-p`, and the letter is what decides which of them
+	// stay. Measured 2026-09-20, one letter per script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, bash 5.3.20 in a shell that has read
+	// nothing: `declare -a` names BASH_ARGC, BASH_ARGV, BASH_LINENO,
+	// BASH_SOURCE, DIRSTACK, FUNCNAME and GROUPS, `declare -A` names
+	// BASH_ALIASES and BASH_CMDS, and `declare -i` names BASHPID, RANDOM and
+	// SRANDOM — while `declare -x` and `declare -r` name none, because no
+	// produced parameter carries either attribute.
+	//
+	// This engine wrote **one** row for `declare -a` — the stored
+	// BASH_VERSINFO — while its own `declare -p` wrote all eight, so the
+	// names were registered and the filtered walk was the one place that
+	// could not see them.
+	names, produced, listing := r.listedNames()
+	if r.unspecified {
+		return r.status, true
+	}
 	if f.added {
 		// Some letter that names an attribute was written with a *minus*,
 		// which is the filtered listing carrying values — `declare -x`
@@ -3085,9 +3103,9 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 		// The same names the plus form selects, written as rows instead of
 		// as bare names, so the two cannot come to disagree about which
 		// names those are (#1868).
-		return r.declarationFilteredListing(r.declarableNames(), keep), true
+		return r.declarationFilteredListing(names, produced, listing, keep), true
 	}
-	return r.declarationFilteredNameListing(r.declarableNames(), keep), true
+	return r.declarationFilteredNameListing(names, produced, listing, keep), true
 }
 
 // withoutListingLetters is one declaration's letters with every letter a

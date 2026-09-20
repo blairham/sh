@@ -602,10 +602,40 @@ func (r *Runner) declarePrint(names []string) int {
 	return r.declarePrintForm(names, r.sem().DeclareListing, true, nil)
 }
 
+// attributeFiltered says a filtered walk is one an *attribute letter* asked
+// for — `declare -a`, `declare -A`, `declare -i` — rather than one a builtin
+// is for, which is `export -p` and `readonly -p`.
+//
+// The difference decides whether the produced parameters are in the walk at
+// all, and it is a measurement rather than a convenience. 2026-09-20, one
+// letter per script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`, bash
+// 5.3.20 in a shell that has read nothing:
+//
+//	declare -a   BASH_ARGC BASH_ARGV BASH_LINENO BASH_SOURCE DIRSTACK FUNCNAME GROUPS
+//	declare -A   BASH_ALIASES BASH_CMDS
+//	declare -i   BASHPID RANDOM SRANDOM
+//	declare -x   no produced name
+//	declare -r   no produced name
+//
+// So the letters that select a *kind* reach them and the two builtins do not,
+// which is what keeps `export -p` and `readonly -p` from asking
+// Semantics.ProducedParameterListing — an axis whose answer neither of them
+// would use.
+type attributeFiltered bool
+
 // declarePrintForm lists declarations in the given form, walking only the
 // names the filter admits when no operands narrow it — which is how
 // `export -p` lists the exported names alone.
 func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, dashP bool, keep func(declaration) bool) int {
+	return r.declarePrintFiltered(names, form, dashP, keep, false)
+}
+
+// declarePrintFiltered is declarePrintForm with [attributeFiltered] stated:
+// byLetter says the filter came from an attribute letter, so the produced
+// parameters are in the walk and the filter decides which of them stay.
+func (r *Runner) declarePrintFiltered(names []string, form DeclarationListingForm, dashP bool,
+	keep func(declaration) bool, byLetter attributeFiltered,
+) int {
 	if form == DeclarationListingUnspecified {
 		r.diagf("%s\n", r.unanswered("how a declaration is listed back"))
 		r.status = 2
@@ -628,12 +658,20 @@ func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, d
 		defer r.walkingTheWholeTable()()
 		names = r.declarableNames()
 		filtered = keep != nil
-		if !filtered {
-			// The unfiltered `-p` alone. `export -p` and `readonly -p` come
-			// through here with a filter, and no produced parameter carries
-			// either attribute in any column of the panel — so they are left
-			// out rather than admitted and then rejected, which would make
-			// the axis a question those two builtins ask and never use.
+		if !filtered || bool(byLetter) {
+			// The unfiltered `-p`, and the walks an attribute *letter* asked
+			// for. `export -p` and `readonly -p` come through here with a
+			// filter and without the letter, and no produced parameter
+			// carries either attribute in any column of the panel — so they
+			// are left out rather than admitted and then rejected, which
+			// would make the axis a question those two builtins ask and
+			// never use.
+			//
+			// A letter is the other way round: `declare -a` writes seven
+			// produced names in bash 5.3.20, `declare -A` two and `declare
+			// -i` three, and this engine wrote none of them while its own
+			// unfiltered `declare -p` wrote every one — see
+			// [attributeFiltered] for the measurement.
 			if add := r.producedListingNames(names); len(add) > 0 {
 				listing = r.producedListing()
 				if r.unspecified {

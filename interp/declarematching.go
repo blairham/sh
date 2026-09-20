@@ -493,7 +493,11 @@ func (r *Runner) declarationNameListing(names []string) int {
 // every plus-signed attribute, named and nothing else. No attribute words —
 // the letters already said which attributes these are.
 func (r *Runner) matchedNameListing(patterns []string, keep func(declaration) bool) int {
-	return r.declarationFilteredNameListing(r.matchedNames(patterns), keep)
+	// No produced names: a pattern selects from the names the walk holds, and
+	// a produced parameter is not one of them until an operand-less listing
+	// adds it. Left as it was rather than widened, because nothing measured
+	// says a pattern reaches one.
+	return r.declarationFilteredNameListing(r.matchedNames(patterns), nil, ProducedListingUnspecified, keep)
 }
 
 // declarationFilteredListing is the *valued* half: the names a minus-signed
@@ -509,12 +513,16 @@ func (r *Runner) matchedNameListing(patterns []string, keep func(declaration) bo
 // `keep`: the two listings differ in what they *write* and not in which names
 // they write, and a second selection here is how the two would come to
 // disagree about a name.
-func (r *Runner) declarationFilteredListing(names []string, keep func(declaration) bool) int {
+func (r *Runner) declarationFilteredListing(names []string, produced map[string]bool,
+	listing ProducedListing, keep func(declaration) bool,
+) int {
 	for _, name := range names {
-		// Whatever declarationOf knows, the way the bare listing takes it: a
+		// Whatever the listing knows, the way the bare listing takes it: a
 		// name that is typed and holds nothing is still a row, and the form
-		// is what decides how it writes one.
-		d, _ := r.declarationOf(name)
+		// is what decides how it writes one. Through listedDeclarationOf so
+		// that a produced parameter's letters are the ones its dialect
+		// registered rather than the nothing an attribute table holds for it.
+		d, _ := r.listedDeclarationOf(name, produced[name], listing)
 		if !keep(d) {
 			continue
 		}
@@ -527,9 +535,11 @@ func (r *Runner) declarationFilteredListing(names []string, keep func(declaratio
 // `typeset +x` with no pattern at all, where the names are the whole table.
 // The same fold declarationNameListing is: the letters decide the test and
 // the caller decides the candidates.
-func (r *Runner) declarationFilteredNameListing(names []string, keep func(declaration) bool) int {
+func (r *Runner) declarationFilteredNameListing(names []string, produced map[string]bool,
+	listing ProducedListing, keep func(declaration) bool,
+) int {
 	for _, name := range names {
-		d, known := r.declarationOf(name)
+		d, known := r.listedDeclarationOf(name, produced[name], listing)
 		if !known || !keep(d) {
 			continue
 		}

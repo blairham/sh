@@ -6392,7 +6392,10 @@ func (r *Runner) namesUnderAPlus(args []string, keep func(declaration) bool) (in
 		// operand path already gives it.
 		return r.status, r.unspecified
 	}
-	return r.declarationFilteredNameListing(r.declarableNames(), keep), true
+	// `export +` and `readonly +`, so no produced name: neither attribute is
+	// carried by one in any column of the panel, which is the same reason
+	// their `-p` leaves them out — see declarePrintForm.
+	return r.declarationFilteredNameListing(r.declarableNames(), nil, ProducedListingUnspecified, keep), true
 }
 
 // The second result is whether `-p` was the word written, which is a

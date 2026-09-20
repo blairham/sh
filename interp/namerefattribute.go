@@ -119,6 +119,18 @@ func (r *Runner) attributeFollowsTheReference(name string, df declareFlags) (str
 // instead would make a parameter literally called `a[1]`, which is what the
 // first version of this did.
 //
+// **Three of the four declaration words ask it**, and the fourth cannot need
+// to: `typeset`/`declare`, `readonly` and `export` all reach an operand whose
+// name is still a reference, where `local` takes a scope first and the copy a
+// shadow makes drops the reference along with every other attribute — so
+// attributeFollowsTheReference has already answered no by the time a value
+// lands there. `readonly` and `export` were left out when this was written
+// for the first word, and each of them went on writing element 0: measured
+// 2026-09-20 with `a=(p q r); typeset -n b='a[1]'`, `readonly b=Z` and
+// `export b=Z` left `Z q r` where bash 5.3.20 and ksh93u+ both leave `p Z r`,
+// and the same pair over `typeset -n t='m[k]'` put a key named `0` into the
+// table and left `k` alone (#3885).
+//
 // "" where the two names are the same, which is every other operand.
 func (r *Runner) referenceValueTarget(name string, df declareFlags) string {
 	if df.nameref || !r.isNameref(name) {

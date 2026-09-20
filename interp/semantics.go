@@ -6577,8 +6577,12 @@ type Semantics struct {
 	// ExportTakesTheAttributeOff gives `export` its `-n`, which takes the
 	// export attribute off a name and leaves the name itself alone. True in
 	// bash — all three builds — and in BusyBox ash, which takes the letter
-	// at status 0 where it has no `-f` at all; the other three refuse the
-	// letter as an option, two of them fatally.
+	// at status 0 where it has no `-f` at all. dash, ksh93 and zsh refuse
+	// the letter as an option, and the two that are fatal about it are dash
+	// and ksh93: measured 2026-09-20 across all seven columns over
+	// `export -n x`, `Illegal option -n` at 2 in dash and `-n: unknown
+	// option` with a usage line at 2 in ksh93u+, against `bad option: -n` at
+	// 1 in zsh 5.9.2 with the next command run.
 	//
 	// The same shape as ExportCarriesFunctions and for the same reason: what
 	// the letter *means* is not in question anywhere it exists — the name
@@ -15246,7 +15250,7 @@ type Semantics struct {
 	// written back byte for byte in every column, ksh93 included —
 	// `command -v /bin/./ls` is `/bin/./ls` in all six.
 	//
-	// This shell used to join *and* clean in all four dialects, which matched
+	// This shell used to join *and* clean in every dialect, which matched
 	// nobody: wrong for bash, zsh, dash and ash by resolving at all, and wrong
 	// for ksh93 by tidying the `./` away. `cmd=$(command -v ./helper)` is
 	// ordinary defensive scripting, and the string it handed back was one the
@@ -15583,8 +15587,11 @@ type Semantics struct {
 	// answer. A child that names the number itself — `sh -c 'cat <&3' 3<<X` —
 	// is handed the table by number, and text this process holds has no
 	// number to hand over: the entry answered nil, a nil is a descriptor
-	// closed in the child, and all four columns of the panel print the body
-	// where this shell said `3: Bad file descriptor` (#2759).
+	// closed in the child, and every column of the panel prints the body
+	// where this shell said `3: Bad file descriptor` (#2759). Re-measured
+	// 2026-09-20 across all seven: `sh -c 'cat <&3' 3<<X` over two lines
+	// writes both of them in dash, bash 5.3, bash-as-`sh`, bash 3.2, ksh93u+,
+	// zsh 5.9.2 and BusyBox ash alike.
 	//
 	// Having to choose a medium, the panel splits on it, and the split is
 	// visible to a script. Measured 2026-09-14 with `exec 3<<X` over two
@@ -15973,9 +15980,9 @@ type Semantics struct {
 	// this reads No in the base: a shell with no opinion should not be
 	// putting numbers it has never heard of into a system call.
 	//
-	// #3139 was the other three getting dash's answer: a number out of range
-	// was an unknown *option* in ksh93, zsh and ash alike, and two of the
-	// three returned 2 for it where the real shell returns 1.
+	// #3139 was ksh93, zsh and ash getting dash's answer: a number out of
+	// range was an unknown *option* in all three of them, and two of those
+	// returned 2 for it where the real shell returns 1.
 	KillSendsASignalNumberItCannotName Answer
 
 	// TrapTakesASignalNumberItCannotName reads a decimal condition this
@@ -18056,7 +18063,12 @@ type Semantics struct {
 	// a controlling terminal, so the sentence is silent about having none
 	// rather than permissive about it. Silent text gets the answer that
 	// claims less — a shell with no terminal does not report a monitor —
-	// which is three of the four as well.
+	// which is what every column but one answers as well. Measured
+	// 2026-09-20 with `<shell> -i case.sh` and no terminal on any descriptor,
+	// the script reading its own `$-`: dash, bash 5.3, bash-as-`sh`, bash
+	// 3.2, zsh 5.9.2 and BusyBox ash all report no `m`, and ksh93u+ reports
+	// one. So the count was a dialect short and ksh93 is the dissenter, which
+	// is what dialect/ksh has held since the field was written.
 	//
 	// Read rather than `ask`ed, exactly as InteractiveOptionLetters is: the
 	// answer is wanted once at startup, before the program has run a line, so
@@ -20945,8 +20957,8 @@ type SystemStartupFiles struct {
 // spelling has no whitespace in it to lose.
 //
 // Measured 2026-09-05 across the panel with a scratch home directory. bash has
-// three of the four and spells them long; zsh has only the first and spells it
-// both ways; dash and ksh93 have none, so a startup file that breaks them is
+// all but one of the fields below and spells its options long; zsh has only
+// the first and spells it both ways; dash and ksh93 have none, so a startup file that breaks them is
 // escaped by moving the file. The shell that has no escape is the reason the
 // other two are worth carrying.
 type StartupFileOptions struct {
@@ -22633,7 +22645,7 @@ func PosixSemantics() Semantics {
 		// the case where there is none rather than permissive about it.
 		// Where the text is silent the preset takes the answer that claims
 		// less: a shell with no terminal does not say it is running a
-		// monitor. It is also three of the four.
+		// monitor. It is also every column but ksh93 — see the field.
 		InteractiveMonitorNeedsATerminal: Yes,
 		// The standard says nothing about announcing a job to a shell that
 		// was handed a script to run, so the preset claims less and says

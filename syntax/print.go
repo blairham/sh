@@ -388,6 +388,32 @@ type Layout struct {
 	// this nil, as does a formatter, which must not edit what it lays out.
 	CommandSubstitutionIsReprinted func(string) (string, bool)
 
+	// ParameterExpansionIsReprinted writes a `${ … }`'s own text back through
+	// this function before it is written out.
+	//
+	// The same shape as CommandSubstitutionIsReprinted and for the same
+	// reason one construct over: a [Span] of kind [ParamExp] holds its
+	// operand as **text**, so a substitution written inside one — the word a
+	// `-` substitutes, the replacement of a `/`, and every other operand
+	// whose operand can hold one — is not a tree this printer can reach. The
+	// one engine that lays a substitution's body out reaches inside a
+	// `${ … }` too: measured 2026-09-20 on bash 5.3.20 through `declare -f`,
+	// `echo ${v-$(a;b)}` comes back `echo ${v-$(a; b)}` and
+	// `echo ${v-$(a >/dev/null;b)}` comes back
+	// `echo ${v-$(a > /dev/null; b)}`, the redirection respaced with the
+	// separator.
+	//
+	// Handed the span's text and not its parts, because what the caller has
+	// to do is find the substitutions in it — which needs its own grammar —
+	// and reprint them without touching a byte of anything else. `false`
+	// means nothing was reached and the text is written as it stands, which
+	// is the same best-effort answer the field above gives.
+	//
+	// Asked of the braced spelling alone: a bare `$x` has no operand to hold
+	// anything. Left nil by every arrangement that does not reprint a
+	// substitution's body either.
+	ParameterExpansionIsReprinted func(string) (string, bool)
+
 	// FunctionHeader is how a function declaration's header is spelled: the
 	// `function` keyword, the `()`, or both.
 	FunctionHeader FunctionHeader
@@ -2235,7 +2261,7 @@ func (p *printer) span(s Span) {
 			p.str("$" + bare)
 			return
 		}
-		p.str("${" + p.ansiCInText(s.Value) + "}")
+		p.str("${" + p.ansiCInText(p.paramExpText(s.Value)) + "}")
 	case ProcSubstIn:
 		p.str("<(" + s.Value + ")")
 	case ProcSubstOut:
@@ -2267,6 +2293,28 @@ func (p *printer) commandSubstBody(body string) string {
 		return out
 	}
 	return body
+}
+
+// paramExpText is what goes between the `${` and the `}`.
+//
+// The characters the span holds, unless the arrangement has a reader for them
+// — see [Layout.ParameterExpansionIsReprinted], which finds the command
+// substitutions written in the operand and lays their bodies out through the
+// same listing, and which hands back `false` for text it could not read.
+//
+// Ahead of ansiCInText rather than behind it, because the reader is given
+// offsets into the text the span holds and that scan rewrites them: a `$'…'`
+// run inside a reprinted body has already been decoded by the printer that
+// reprinted it, so there is nothing left there for the scan to find twice.
+func (p *printer) paramExpText(text string) string {
+	reprint := p.layout.ParameterExpansionIsReprinted
+	if reprint == nil {
+		return text
+	}
+	if out, ok := reprint(text); ok {
+		return out
+	}
+	return text
 }
 
 // bareParam reports whether a parameter can be written without its braces.

@@ -3,7 +3,11 @@
 
 package bash
 
-import "github.com/blairham/sh/syntax"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // How this shell lays a function out, in the two places it does.
 //
@@ -20,7 +24,7 @@ func FunctionLayout() syntax.Layout {
 	// Shown, the outermost brace stands alone on its line; written into the
 	// environment it does not, which is the only difference between the two.
 	l.OutermostBraceOpensALine = true
-	l.CommandSubstitutionIsReprinted = reprintBody(l)
+	attachTheReprints(&l)
 	return l
 }
 
@@ -58,7 +62,7 @@ func ExportedFunctionLayout() syntax.Layout {
 	// One space, and the same space however deep: what goes into the
 	// environment is not indented to be read.
 	l.Indent, l.Nested = " ", false
-	l.CommandSubstitutionIsReprinted = reprintBody(l)
+	attachTheReprints(&l)
 	return l
 }
 
@@ -158,14 +162,29 @@ func common() syntax.Layout {
 // exported form each reprint with their own indent, and a substitution inside
 // a substitution reprints with the arrangement of the one that holds it.
 
+// attachTheReprints gives an arrangement both readers at once.
+//
+// One call rather than a field per caller, because there are two fields now
+// and three arrangements that want them: a caller that set one and not the
+// other would lay out `$(a;b)` and leave the identical body inside
+// `${v-$(a;b)}` as the author typed it, which is exactly the half-reached
+// state #3856 was.
+func attachTheReprints(l *syntax.Layout) {
+	reprint := reprintBody(*l)
+	l.CommandSubstitutionIsReprinted = reprint
+	l.ParameterExpansionIsReprinted = func(text string) (string, bool) {
+		return reprintInsideAnExpansion(text, reprint)
+	}
+}
+
 // reprintBody re-reads a command substitution's body and writes it back
 // through the same arrangement.
 //
 // One function value however deep the nesting goes, and the knot is tied
 // through the layout rather than through the closure: `l` is the copy the
-// closure reads, and the line after it stores the closure *into* that copy, so
-// a substitution found inside a body is reprinted by the same function with
-// the same arrangement.
+// closure reads, and the lines after it store the closures *into* that copy,
+// so a substitution found inside a body — or inside an expansion inside a
+// body — is reprinted by the same functions with the same arrangement.
 func reprintBody(l syntax.Layout) func(string) (string, bool) {
 	// The inside of a substitution, which is the outside's arrangement with
 	// the two line questions answered the other way.
@@ -183,5 +202,100 @@ func reprintBody(l syntax.Layout) func(string) (string, bool) {
 		return syntax.PrintFileWith(f, l), true
 	}
 	l.CommandSubstitutionIsReprinted = reprint
+	l.ParameterExpansionIsReprinted = func(text string) (string, bool) {
+		return reprintInsideAnExpansion(text, reprint)
+	}
 	return reprint
+}
+
+// How a substitution written inside a `${ … }` is written back.
+//
+// A parameter expansion's operand is held as **text**, so the substitution in
+// `${v-$(a;b)}` is not a tree the printer can reach and went back as the
+// author typed it while every `$( … )` beside it was laid out. bash reaches
+// inside one. Measured 2026-09-20 on bash 5.3.20 through `declare -f`,
+// `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null device:
+//
+//	written                        listed
+//	echo ${v-$(a;b)}               echo ${v-$(a; b)}
+//	echo ${v-$(a >/dev/null;b)}    echo ${v-$(a > /dev/null; b)}
+//	echo "${v:-$(a;b)}"            echo "${v:-$(a; b)}"
+//	echo ${v/x/$(a;b)}             echo ${v/x/$(a; b)}
+//	echo ${v-$(a;b)x$(c;d)}        echo ${v-$(a; b)x$(c; d)}
+//	echo ${v-"$(a;b)"}             echo ${v-"$(a; b)"}
+//	echo ${v-`a;b`}                echo ${v-`a;b`}
+//	echo ${v-$((1+ 2))}            echo ${v-$((1+ 2))}
+//	echo ${#v}                     echo ${#v}
+//
+// So it is the operand and not the `-` word: every operator whose operand can
+// hold a substitution reaches it, the second row says the whole listing is
+// applied inside and not only the separator, and the last three are the
+// controls — the backquoted spelling and an arithmetic expansion are written
+// back as written there exactly as they are outside an expansion, and an
+// operand with no substitution in it is untouched (#3856).
+
+// reprintInsideAnExpansion rewrites the command substitutions written inside
+// a parameter expansion's text and leaves every other byte of it alone.
+//
+// Spliced by offset rather than rebuilt from the spans, and that is the whole
+// design: a listing has to round-trip, so anything this does not understand
+// must come back byte for byte. The lexer says where each substitution's body
+// begins and how long it is; everything between those ranges is copied.
+//
+// It recurses through a nested `${ … }` by calling itself, and through a
+// nested `$( … )` by the reprint it is given — which carries the arrangement,
+// so a substitution two levels in is laid out by the listing that holds it.
+// One reprint for both, rather than a second one here: the two readings of
+// what a body looks like cannot part if there is only one of them.
+func reprintInsideAnExpansion(text string, reprint func(string) (string, bool)) (string, bool) {
+	if !strings.Contains(text, "$(") && !strings.Contains(text, "${") {
+		// Nothing a substitution could be written with, which is every
+		// ordinary `${x}` and `${#v}`.
+		return "", false
+	}
+	spans, err := syntax.HeredocSpans(text, Dialect())
+	if err != nil {
+		// Text the lexer would not read — an operand that ran out inside a
+		// substitution. Written back as it stands, for the reason
+		// syntax.Layout.CommandSubstitutionIsReprinted gives: a listing that
+		// refused to print a program this shell otherwise runs is the worse
+		// answer.
+		return "", false
+	}
+	var b strings.Builder
+	at, changed := 0, false
+	for _, sp := range spans {
+		off := int(sp.Pos.Col) - 1
+		if off < at || off+2 > len(text) {
+			continue
+		}
+		var inner string
+		var ok bool
+		switch {
+		case sp.Kind == syntax.CommandSubst && text[off:off+2] == "$(":
+			// The `$( … )` spelling alone. A backquoted body and the
+			// current-shell `${ …;}` are written as written, which is what
+			// the opening two characters say without reading a flag.
+			inner, ok = reprint(sp.Value)
+		case sp.Kind == syntax.ParamExp && text[off:off+2] == "${":
+			// An expansion inside an expansion, read by this same function
+			// so the operand of the inner one is reached too.
+			inner, ok = reprintInsideAnExpansion(sp.Value, reprint)
+		}
+		if !ok {
+			continue
+		}
+		end := off + 2 + len(sp.Value)
+		if end > len(text) {
+			continue
+		}
+		b.WriteString(text[at : off+2])
+		b.WriteString(inner)
+		at, changed = end, true
+	}
+	if !changed {
+		return "", false
+	}
+	b.WriteString(text[at:])
+	return b.String(), true
 }

@@ -157,6 +157,10 @@ func TestTheScriptArrangementIsTheListingOneFourFieldsApart(t *testing.T) {
 		t.Error("a substitution's body is reprinted in one arrangement and not the other")
 	}
 	script.CommandSubstitutionIsReprinted, listing.CommandSubstitutionIsReprinted = nil, nil
+	if script.ParameterExpansionIsReprinted == nil || listing.ParameterExpansionIsReprinted == nil {
+		t.Error("an expansion's operand is reprinted in one arrangement and not the other")
+	}
+	script.ParameterExpansionIsReprinted, listing.ParameterExpansionIsReprinted = nil, nil
 	if (script.AnsiCQuotedWordIsItsValue == nil) != (listing.AnsiCQuotedWordIsItsValue == nil) {
 		t.Error("an ANSI-C word is decoded in one arrangement and not the other")
 	}

@@ -885,6 +885,12 @@ type Runner struct {
 	// dynamicDeclarations is how each produced parameter lists back, as the
 	// dialect that registered it states it — see SetDynamicDeclaration.
 	dynamicDeclarations map[string]ProducedDeclaration
+	// rejoinedOperands are the command words whose `name=( … )` operand is
+	// handed on as a word rather than performed as a declaration, and
+	// operandWasRejoined says this command was one of them. See
+	// interp/rejoinedoperand.go.
+	rejoinedOperands   map[string]bool
+	operandWasRejoined bool
 
 	// listingDrawsNoReading is set while a whole-shell listing is building a
 	// produced parameter's row under an answer that writes no drawn value —
@@ -5766,8 +5772,23 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	savedArrayOperands := r.arrayOperands
 	r.arrayOperands = nil
 	defer func() { r.arrayOperands = savedArrayOperands }()
+	// Saved and restored beside them, and for the same reason: a builtin can
+	// run a builtin, and the inner command's answer must not be the outer
+	// one's. See interp/rejoinedoperand.go.
+	savedRejoined := r.operandWasRejoined
+	r.operandWasRejoined = false
+	defer func() { r.operandWasRejoined = savedRejoined }()
+	rejoins := len(argv) > 0 && r.rejoinsArrayOperand(argv[0])
 	for _, a := range c.Assigns {
 		if a.Operand {
+			if rejoins {
+				// Not a declaration this shell performs: the utility reads
+				// the assignment itself, so what it is handed is the text.
+				// See interp/rejoinedoperand.go.
+				r.operandWasRejoined = true
+				argv = append(argv, r.rejoinedArrayOperand(a))
+				continue
+			}
 			// Where the bare name lands is recorded with it, because `set -x`
 			// has to put something else in that position and the expanded
 			// word cannot say which operand it came from. See
@@ -9397,6 +9418,16 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 // assignOperands applies the array assignments a declaration utility was given
 // as operands, which the parser kept apart from the prefix ones.
 func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
+	if r.operandWasRejoined {
+		// The utility read the operand itself — it was handed the text and
+		// there is nothing left here to store. Asked of the flag the command
+		// line set rather than of the builtin's name, because the name a
+		// builtin is *running under* is not the word the operand was written
+		// behind, and storing here as well left `foo=(x); eval foo+=(y z)`
+		// holding five elements: three from the eval and two more from a
+		// declaration nobody asked for. See interp/rejoinedoperand.go.
+		return
+	}
 	for _, a := range c.Assigns {
 		if !a.Operand {
 			continue

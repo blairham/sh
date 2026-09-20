@@ -95,6 +95,16 @@ func Dialect() syntax.Dialect {
 	d.DeclarationUtilities = map[string]bool{
 		"declare": true, "typeset": true, "local": true,
 		"export": true, "readonly": true,
+		// The sixth, and the one that declares nothing: `eval foo=(1 2)` is
+		// `done` at 0 in bash 5.3.20 and in 3.2.57, and a syntax error in
+		// ksh93u+ and dash 0.5.12. Measured 2026-09-20 from script files
+		// under `env -i PATH=/usr/bin:/bin LC_ALL=C`, alongside `echo`,
+		// `command`, `printf`, `:`, `set`, `unset`, a function and
+		// `/bin/echo`, every one of which is a syntax error in bash too — so
+		// the reading belongs to a list of words and not to builtins as a
+		// class. What the word does with the operand is the other half, and
+		// it is registered on the runner: see interp.Runner.RejoinArrayOperand.
+		"eval": true,
 	}
 	d.CaseContinue = true
 	// A subscript written at command position runs to its matching `]`, so
@@ -3858,6 +3868,11 @@ func Diagnostics() interp.Diagnostics {
 // "not found" there. It is the same function under a second name rather than a
 // second implementation, which is the only way the two cannot drift apart.
 func Apply(r *interp.Runner) {
+	// `eval` is in DeclarationUtilities above because the grammar has to let a
+	// compound assignment follow the word, and it declares nothing: the
+	// operand reaches it as one word holding the assignment with its elements
+	// expanded. See interp/rejoinedoperand.go for the measurements.
+	r.RejoinArrayOperand("eval")
 	// The `set -o` names this shell has and the others do not all have,
 	// measured by asking each of the four to turn every name off. This one
 	// has the most, and five of them belong to it alone.

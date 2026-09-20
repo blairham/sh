@@ -55,7 +55,7 @@ func SameProgram(a, b *File) (string, bool) {
 // spellingOnly reports whether a field holds the source *spelling* of a node
 // rather than anything the program does.
 //
-// Five of them, and each exists because something has to quote the input
+// Six of them, and each exists because something has to quote the input
 // back long after it was read: a background statement's text is what a jobs
 // listing shows, a redirection's is what one grammar's ambiguous-redirect
 // diagnostic names, a subscript's is what a `bad array subscript` names, and
@@ -64,6 +64,11 @@ func SameProgram(a, b *File) (string, bool) {
 // construct re-spells them with it — `a[${i}]=v` printed back as `a[$i]=v`
 // is the same program, and the diagnostic it would earn names the spelling
 // that is now there.
+//
+// The sixth is Stmt.Term, which is that rule about a statement's own
+// terminator rather than about a word: a listing that says the source's
+// separator back needs to know a `;` from a newline, and the two are one
+// program written two ways.
 //
 // The fourth is Bare, which says a parameter expansion was written without
 // braces, and which the span and the expansion node each carry. `${x}` and
@@ -85,6 +90,16 @@ func SameProgram(a, b *File) (string, bool) {
 func spellingOnly(t reflect.Type, name string) bool {
 	if name == "Text" {
 		return t == stmtType || t == redirType
+	}
+	if name == "Term" {
+		// Which token terminated a statement — see [Stmt.Term]. `a;` and `a`
+		// followed by a newline are one program written two ways, and a
+		// printer moves between them by arrangement: an engine that gives
+		// each statement a line writes `;` and a newline where the source
+		// wrote one of them alone. So this is the input's spelling in
+		// exactly the sense the fields above are, kept because a listing has
+		// to say the source's own separator back.
+		return t == stmtType
 	}
 	if name == "IndexText" {
 		return t == assignType || t == paramExprType

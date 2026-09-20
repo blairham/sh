@@ -226,6 +226,12 @@ type Parser struct {
 	// `for i (a b) { echo $i; } echo end`.
 	bodyTookTerm Pos
 
+	// bodyTookKind is which token that was — see [Terminator]. It travels
+	// with bodyTookTerm because the two are one fact read two ways, and a
+	// statement that inherits the position without the kind is a statement
+	// whose listing cannot say what separated it from the next one.
+	bodyTookKind Terminator
+
 	// shortBodyBraced says whether the short body just read was a brace
 	// group rather than the single command the same production also allows.
 	//
@@ -1671,12 +1677,12 @@ func (p *Parser) cannotBeginACommand() bool {
 func (p *Parser) parseStmt() *Stmt {
 	// Cleared here rather than after it is read, so that the statement being
 	// started asks about its own body and never about an earlier one's.
-	p.bodyTookTerm = Pos{}
+	p.bodyTookTerm, p.bodyTookKind = Pos{}, TerminatedByNothing
 	expr := p.parseAndOr()
 	if expr == nil {
 		return nil
 	}
-	st := &Stmt{Expr: expr, Semi: p.bodyTookTerm}
+	st := &Stmt{Expr: expr, Semi: p.bodyTookTerm, Term: p.bodyTookKind}
 	// Where the statement's terminator ends, for keepFunctionSource below.
 	// Invalid until a terminator is read, which is the "nothing followed it"
 	// case that method is written for.
@@ -1725,11 +1731,11 @@ func (p *Parser) parseStmt() *Stmt {
 		st.Text = p.textBetween(expr.Pos(), st.Semi)
 		p.next()
 	case TokSemi:
-		st.Semi = p.tok.Pos
+		st.Semi, st.Term = p.tok.Pos, TerminatedBySemicolon
 		term = p.tok.End
 		p.next()
 	case TokNewline:
-		st.Semi = p.tok.Pos
+		st.Semi, st.Term = p.tok.Pos, TerminatedByNewline
 		term = p.tok.End
 	}
 	p.keepFunctionSource(expr, term)
@@ -5139,7 +5145,7 @@ func (p *Parser) braceLoopBody() (body []*Stmt, stop Pos) {
 	// shell that has short loops, exactly as `for i (a b) { echo $i; } echo
 	// end` is, and without this line the inner loop's `;` terminated the
 	// outer one and the tail ran (measured on zsh 5.9.2, 2026-09-12).
-	p.bodyTookTerm = Pos{}
+	p.bodyTookTerm, p.bodyTookKind = Pos{}, TerminatedByNothing
 	// Set after the group is read and not before, for the same reason the
 	// line above clears rather than leaves: a short form *inside* the braces
 	// runs through here too, and its answer is not this one's.
@@ -5203,7 +5209,7 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 	// The separator the body just took is the loop's as well: there is
 	// nothing between the two commands but the one `;`, so a list may carry
 	// on after the loop where it could not after a `done` or a `}`.
-	p.bodyTookTerm = st.Semi
+	p.bodyTookTerm, p.bodyTookKind = st.Semi, st.Term
 	return []*Stmt{st}, st.End()
 }
 

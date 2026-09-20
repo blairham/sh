@@ -24894,6 +24894,56 @@ A doubled `=` is measured and **not** reproduced: ksh93u+ writes
 is for, and the rule that produces the shell's own spelling there is
 not one the probes could state.
 
+#### The `=` of a bare assignment head inside a list
+
+The head's `=` carries a **backslash** where the value stands as a bare
+word inside parentheses, and carries none anywhere else. Measured
+2026-09-20 on ksh93u+ 2012-08-01, a script file under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with standard input on `/dev/null`, read
+through `sed -n l`:
+
+| written | ksh93u+ |
+| --- | --- |
+| `typeset -a c=(a=1 b=2); typeset -p c` | `typeset -a c=(a\=1 b\=2)` |
+| `typeset -a g=("a=1 b"); typeset -p g` | `typeset -a g=(a\='1 b')` |
+| `typeset -a h=('a=b=c=d'); typeset -p h` | `typeset -a h=(a\='b=c=d')` |
+| `n[0]=('a=1' x); typeset -p n` | `typeset -a n=((a\=1 x) )` |
+| `typeset -C co=(q='a=1'); typeset -p co` | `typeset -C co=(q=a\=1)` |
+| `typeset -a y=('a=1'); set` | `y=(a\=1)` |
+
+and the positions that take none, which are what say this is about the
+**bare-word position** rather than about the character:
+
+| written | ksh93u+ |
+| --- | --- |
+| `v=a=1; typeset -p v` | `v=a=1` |
+| `export v9='a=1'; export -p` | `export v9=a=1` |
+| `typeset -A m=([k]='a=1'); typeset -p m` | `typeset -A m=([k]=a=1)` |
+| `typeset -A t=(['j=2']=v); typeset -p t` | `typeset -A t=([j=2]=v)` |
+| `e=(x y z); unset 'e[1]'; e[5]='a=1'` | `typeset -a e=([0]=x [2]=z [5]=a=1)` |
+
+The reason is the position and the rule is narrow. An index array's
+elements are written as bare words, so an unescaped `a=1` among them
+re-reads as the keyed element `[a]=1` — or, under the compound reading,
+as a body. A key inside brackets and a value after a subscripted
+element's `]=` are already unambiguous where they stand, and a scalar's
+own `=` has already been written by the time its value starts.
+
+Only the **head** changes; the tail keeps whichever of the style's three
+answers it had, so a blank, a `$`, a paren or a quote of its own still
+quotes it — `a\='1 b'`, `a\='$y'`, `a\='(x)'`, `a\=$'it\'s'`. A value
+with no name in front of its first `=` takes no head and so no
+backslash, and is quoted whole: `'=lead'`, `'9x=1'`, `'a.b=1'`,
+`'a b=1'`. A value with no `=` at all is untouched, which is the control
+that separates the head from the position — `a.b`, `9x` and `a-b` all
+list bare.
+
+This is one shell's refinement of `ListedAssignmentPrefixIsBare` rather
+than an axis: it is visible only where that field says yes, and only
+ksh93 says yes. `Runner.listedAssignmentHead` takes the position as
+`ListedValuePlace`, and the two constants name the two halves of the
+table above (#3863).
+
 dash and BusyBox ash answer none of the five: every listing style
 either of them uses quotes whatever it is given, so `'^'`, `'a=b'` and
 `'é'` there say nothing about the set. They are left unanswered rather

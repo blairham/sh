@@ -9622,6 +9622,14 @@ type Semantics struct {
 	// Keys take it too, measured: the same shell lists `[a=b]` and
 	// `[x='y=z']` in a `typeset -p` of a table.
 	//
+	// **Where the value stands decides how the head's `=` is written**, and
+	// that is a parameter rather than a second field: inside parentheses, as
+	// an index array literal's element or a compound body's member value, the
+	// `=` carries a backslash — `typeset -a c=(a\=1 b\=2)` — and outside
+	// them it does not. Only the column that answers yes here can show it, so
+	// there is no disagreement between real shells to record at a point. See
+	// ListedValuePlace and Runner.listedAssignmentHead (#3863).
+	//
 	// A doubled `=` is measured and not reproduced; see
 	// Runner.listedAssignmentHead (#2820).
 	ListedAssignmentPrefixIsBare Answer

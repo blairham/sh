@@ -197,7 +197,7 @@ func nestedAppended(held, value Element, appendTo bool) Element {
 // Nesting can only reach a listing in the one dialect whose axis builds it, so
 // there is no question to ask here — an element that holds an array is written
 // as an array wherever it turns up.
-func (r *Runner) listedElement(e Element) string {
+func (r *Runner) listedElement(e Element, place ListedValuePlace) string {
 	if e.Kind == ElementDeclaredAndEmpty {
 		// Declared and holding nothing, which is the one state whose
 		// *listing* is the only place it differs from the value it looks
@@ -222,7 +222,7 @@ func (r *Runner) listedElement(e Element) string {
 		return "(" + r.compoundVariableBody(e.Str, true) + ")"
 	}
 	if e.Nested == nil {
-		return r.declareQuoted(e.Str)
+		return r.declareQuoted(e.Str, place)
 	}
 	return r.nestedListing(e.Nested)
 }
@@ -240,9 +240,9 @@ func (r *Runner) nestedListing(a Array) string {
 	elems := make([]string, 0, len(subs))
 	for _, i := range subs {
 		if gaps {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(a[i])))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(a[i], ListedValueAlone)))
 		} else {
-			elems = append(elems, r.listedElement(a[i]))
+			elems = append(elems, r.listedElement(a[i], ListedValueInAList))
 		}
 	}
 	return "(" + strings.Join(elems, " ") + nestTrailingSpace(a.lastElement()) + ")"

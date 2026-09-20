@@ -734,28 +734,39 @@ func (p *printer) separate(prev, next *Stmt) {
 		p.newLine()
 		return
 	}
-	// A here-document body has already ended the line.
-	ended := p.atLineStart()
-	if prev.End().Line != next.Pos().Line {
-		if !ended {
-			p.str("\n")
-		}
-		return
-	}
-	if ended {
-		// Written on one line and one of them owed a body, which has to go
-		// on lines of its own. There is no way back onto the first line, so
-		// the rest of it follows the body — which is what a shell does with
-		// `cat <<E; echo after` too.
+	// A here-document body has already ended the line. There is no way back
+	// onto the line the statement was written on, so the rest of it follows
+	// the body — which is what a shell does with `cat <<E; echo after` too.
+	if p.atLineStart() {
 		return
 	}
 	// A backgrounded statement is already terminated: `a & b` is two
-	// statements and `a &; b` is a syntax error. The `&` is the separator.
+	// statements and `a &; b` is a syntax error. The `&` is the separator,
+	// and it is one wherever the next statement was written — measured, `$(a
+	// &` newline `b)` comes back `$(a & b)`.
 	if prev.Background {
 		p.str(" ")
 		return
 	}
-	p.str("; ")
+	// What the source wrote, which is the *token* and not the line it left
+	// the statement on. The two come apart wherever a `;` and a line break
+	// are both there — `$(a;` newline `b)` and a `;` with a comment after it
+	// — and the token is the one measured: bash writes `$(a; b)` for both,
+	// and keeps two lines only where a newline alone terminated (#3830).
+	switch prev.Term {
+	case TerminatedBySemicolon:
+		p.str("; ")
+	case TerminatedByNewline:
+		p.str("\n")
+	default:
+		// Nothing terminated it and nothing above claimed it, which leaves
+		// the source's own lines as the only thing left to follow.
+		if prev.End().Line != next.Pos().Line {
+			p.str("\n")
+		} else {
+			p.str("; ")
+		}
+	}
 }
 
 func (p *printer) stmt(st *Stmt) {

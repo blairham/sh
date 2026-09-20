@@ -102,6 +102,23 @@ type Stmt struct {
 
 	Semi Pos
 
+	// Term is which token terminated the statement, where Semi is only
+	// where it stood.
+	//
+	// Two facts, and a listing needs both. `a;` and a newline after `a` put
+	// the terminator in different places but they are the same *position*
+	// question, and Semi answers it for both — so a reader holding the tree
+	// alone cannot say which of the two was written, and a printer following
+	// the source has nothing to follow but the line numbers. Measured, that
+	// is the wrong thing to follow: the engine that re-reads a `$( … )` body
+	// and writes it back separates two statements by the terminator, so
+	// `$(a;` newline `b)` comes back `$(a; b)` on one line and `$(a` newline
+	// `b)` keeps its two. See [Terminator] for the rows.
+	//
+	// A `&` is not one of the values, because Background already says so and
+	// a second field saying it again is a second thing to keep true.
+	Term Terminator
+
 	// Text is the source this statement was written as, and is recorded only
 	// for a background one.
 	//
@@ -113,6 +130,30 @@ type Stmt struct {
 	// so paying for the text everywhere would be paying for one case.
 	Text string
 }
+
+// Terminator is which token ended a statement — see [Stmt.Term].
+//
+// Three values and not four: a statement ended with `&`, `&!`, `&|` or `|&`
+// is a [TerminatedByNothing] one carrying Background, since the operator is
+// already recorded there and the terminator question has the same answer
+// whichever of the four was written.
+type Terminator uint8
+
+const (
+	// TerminatedByNothing is a statement with no terminator of its own: the
+	// last of a body, one closed by the `}` or `)` around it, one ended by a
+	// `&`, and one whose own body took the separator — see the parser's
+	// bodyTookTerm, which hands the inner statement's answer out with it.
+	TerminatedByNothing Terminator = iota
+
+	// TerminatedBySemicolon is a `;` written after the statement.
+	TerminatedBySemicolon
+
+	// TerminatedByNewline is a line break written after the statement, which
+	// includes the one a comment line stands before: a comment is not in the
+	// tree, so what terminated `a` in `a # c` and a newline is the newline.
+	TerminatedByNewline
+)
 
 func (s *Stmt) Pos() Pos { return s.Expr.Pos() }
 func (s *Stmt) End() Pos {

@@ -156,13 +156,91 @@ func TestASubstitutionsBodyIsListedThisShellsWay(t *testing.T) {
 			want: "f () \n{ \n    echo `for in`\n}\n",
 		},
 		{
-			// The third: a `${…}` span is held unparsed too and is *not*
-			// reprinted here. bash does reach inside one — `${v-$(a;b)}`
-			// comes back `${v-$(a; b)}` there — and this shell's span has no
-			// tree under it to reach. Filed rather than half-built.
-			name: "a substitution inside a parameter expansion is not reached",
+			// A `${…}` span is held unparsed too, and the substitution
+			// written in its operand is reached all the same — spliced by
+			// offset, so everything around it comes back byte for byte
+			// (#3856).
+			name: "a substitution inside a parameter expansion",
 			src:  "f() { echo ${v-$(a;b)}; }\ndeclare -f f",
-			want: "f () \n{ \n    echo ${v-$(a;b)}\n}\n",
+			want: "f () \n{ \n    echo ${v-$(a; b)}\n}\n",
+		},
+		{
+			// The whole listing is applied inside and not only the
+			// separator, which the redirection is what says.
+			name: "a redirection inside a parameter expansion's operand",
+			src:  "f() { echo ${v-$(a >/dev/null;b)}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-$(a > /dev/null; b)}\n}\n",
+		},
+		{
+			// And it is the operand rather than the `-` word: every operator
+			// whose operand can hold a substitution reaches it.
+			name: "a substitution in a replacement",
+			src:  "f() { echo ${v/x/$(a;b)}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v/x/$(a; b)}\n}\n",
+		},
+		{
+			// Two of them, with a byte between, which is what says the
+			// splice is by offset and not a scan that stops at the first.
+			name: "two substitutions in one operand",
+			src:  "f() { echo ${v-$(a;b)x$(c;d)}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-$(a; b)x$(c; d)}\n}\n",
+		},
+		{
+			// An expansion inside an expansion, and a substitution inside
+			// that: the recursion, which one level would pass without.
+			name: "an expansion inside an expansion",
+			src:  "f() { echo ${v-${w-$(a;b)}}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-${w-$(a; b)}}\n}\n",
+		},
+		{
+			// And the other direction, so the arrangement is carried both
+			// ways through the knot rather than only outward.
+			name: "an expansion inside a substitution's body",
+			src:  "f() { echo $(echo ${v-$(a;b)}); }\ndeclare -f f",
+			want: "f () \n{ \n    echo $(echo ${v-$(a; b)})\n}\n",
+		},
+		{
+			// The controls, and each of them could have failed: a backquoted
+			// body and an arithmetic expansion are written back as written
+			// inside an expansion exactly as they are outside one, a `)` a
+			// quotation holds closes nothing, and an operand with no
+			// substitution in it is not touched at all.
+			name: "a backquoted body inside an expansion is untouched",
+			src:  "f() { echo ${v-`a;b`}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-`a;b`}\n}\n",
+		},
+		{
+			// And the same operand carrying one of each, which is the row
+			// that can *fail*: the one above is guarded by the cheap test
+			// for a `$(` anywhere in the text, so it comes back unchanged
+			// whatever the splice would have done with it. Here the text
+			// passes that test and the spelling is what decides — measured
+			// on bash 5.3.20, the two come back `$(a; b)` and `` `c;d` ``.
+			name: "both spellings in one operand",
+			src:  "f() { echo ${v-$(a;b)`c;d`}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-$(a; b)`c;d`}\n}\n",
+		},
+		{
+			// And in the other order, so the backquoted one is not merely
+			// the tail the splice never reached.
+			name: "both spellings, the backquoted one first",
+			src:  "f() { echo ${v-`c;d`$(a;b)}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-`c;d`$(a; b)}\n}\n",
+		},
+		{
+			name: "an arithmetic expansion inside an expansion is untouched",
+			src:  "f() { echo ${v-$((1+ 2))}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-$((1+ 2))}\n}\n",
+		},
+		{
+			name: "a closing parenthesis a quotation holds",
+			src:  "f() { echo ${v-$(echo \")\")}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-$(echo \")\")}\n}\n",
+		},
+		{
+			name: "an operand with no substitution in it",
+			src:  "f() { echo ${#v}${w%%*}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${#v}${w%%*}\n}\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

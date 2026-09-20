@@ -2219,6 +2219,20 @@ func Diagnostics() interp.Diagnostics {
 		// and `<&""`, `>&""` and `<&$UNSET` all print the second.
 		DuplicationTargetIsNotADescriptor: "redir error",
 		EmptyDuplicationTarget:            "syntax error: bad fd number",
+		// And a word that *is* a descriptor with nothing open at it, which
+		// this shell reports as the failed call rather than as a number:
+		// both descriptors, in the order the syscall takes them, and the
+		// errno after. Measured 2026-09-20 in the pinned image over a script
+		// file — `cat <&19` is `dup2(19,0): Bad file descriptor`,
+		// `echo hi >&19` is `dup2(19,1)`, `echo hi 3>&19` is `dup2(19,3)`
+		// and `exec 5>&19` is `dup2(19,5)` — so the target is the verb the
+		// sentence needs and no other column in the panel has it (#3909).
+		//
+		// Descriptor 10 is not the probe: in a script file this shell keeps
+		// the script itself there and answers `10: Bad file descriptor`,
+		// which is bash's shape and is what an earlier measurement read as
+		// agreement.
+		DuplicationSourceNotOpen: "dup2(%[1]s,%[3]s): %[2]s",
 
 		// The declarations. One wording for all of them, naming the part in
 		// front of any `=`.

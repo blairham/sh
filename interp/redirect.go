@@ -385,7 +385,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// Not an open that failed: the duplication's own refusal,
 				// with the word where a number usually stands.
 				r.diagf("%v\n", r.errBadFd(-1, Wording(
-					r.diag().CoprocessDuplicationTargetName, "%[1]s", name)))
+					r.diag().CoprocessDuplicationTargetName, "%[1]s", name), fd))
 				r.status = r.diag().redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
@@ -1469,11 +1469,18 @@ func (r *Runner) refuseWideDupTarget(target string) bool {
 // a *move* splits the two shells the other way round, with ksh93 quoting the
 // word and bash naming the number. See Diagnostics.DuplicationSourceNotOpen,
 // NamesTheDuplicationTargetAsWritten and NamesTheMoveSuffixInTheTarget.
-func (r *Runner) errBadFd(fd int, written string) error {
+func (r *Runner) errBadFd(fd int, written string, target int) error {
 	name := itoa(fd)
 	if written != "" {
 		name = written
 	}
+	// The descriptor the redirection was *aiming at*, which one column names
+	// beside the source and no other names at all. A verb rather than
+	// something the sentence could work out, because it is not derivable from
+	// the source: 0 for `<&`, 1 for a bare `>&`, and the number written in
+	// front of the operator otherwise. See
+	// Diagnostics.DuplicationSourceNotOpen.
+	aimedAt := itoa(target)
 	wording := r.diag().DuplicationSourceNotOpen
 	if ceiling := r.sem().DescriptorNumberCeiling.number(); ceiling > 0 && fd >= ceiling {
 		// Past the shell's own ceiling the refusal is about the *number*
@@ -1487,7 +1494,7 @@ func (r *Runner) errBadFd(fd int, written string) error {
 		}
 	}
 	return errors.New(Wording(wording, "%[1]s: %[2]s",
-		name, r.diag().reasonText(reason(syscall.EBADF))))
+		name, r.diag().reasonText(reason(syscall.EBADF)), aimedAt))
 }
 
 // seekRedirect moves a descriptor's position, which is what `<#((expr))` and
@@ -1701,7 +1708,7 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 	default:
 		v, held := r.fds[m]
 		if !held {
-			return r.errBadFd(m, written)
+			return r.errBadFd(m, written, fd)
 		}
 		src = v
 	}
@@ -1722,19 +1729,19 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 	// *present and closed*, which is the whole of why the check is here and
 	// not there.
 	if _, closed := src.(closedFd); closed {
-		return r.errBadFd(m, written)
+		return r.errBadFd(m, written, fd)
 	}
 	switch fd {
 	case 0:
 		rd, ok := src.(io.Reader)
 		if !ok {
-			return r.errBadFd(m, written)
+			return r.errBadFd(m, written, fd)
 		}
 		r.Stdin = rd
 	case 2, 1:
 		w, ok := src.(io.Writer)
 		if !ok {
-			return r.errBadFd(m, written)
+			return r.errBadFd(m, written, fd)
 		}
 		// A target like any other, so a second one joins the first where the
 		// dialect joins them and replaces it everywhere else.

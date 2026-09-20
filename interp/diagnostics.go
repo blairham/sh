@@ -5588,8 +5588,8 @@ type Diagnostics struct {
 
 	// DuplicationSourceNotOpen is `>&N` and `<&N` where nothing is open at N
 	// — the failure the *duplication* reports, which is not an open and does
-	// not go through CannotOpen. Two verbs: %[1]s is the target and %[2]s the
-	// reason.
+	// not go through CannotOpen. Three verbs: %[1]s is the source, %[2]s the
+	// reason, and %[3]s the descriptor the redirection was aiming at.
 	//
 	// Re-measured 2026-09-20 across all seven columns, `cat <&19`:
 	//
@@ -5607,13 +5607,22 @@ type Diagnostics struct {
 	// names the reason *first* and would answer `bad file descriptor: 19`
 	// here (#734).
 	//
-	// **BusyBox ash takes neither shape**, and this field as written cannot
-	// hold what it does: `dup2(source,target)` carries the descriptor the
+	// **BusyBox ash takes neither shape**, which is why there is a third
+	// verb at all: `dup2(source,target)` carries the descriptor the
 	// redirection was aiming at as well as the one it came from, and the
 	// target is not derivable from the source — 0 for `<&`, 1 for a bare
-	// `>&`, and the number in front of the operator otherwise. It is #3909,
-	// and it is a live defect rather than a corrected record: the field is
-	// empty for that dialect, so this shell writes bash's sentence there.
+	// `>&`, and the number in front of the operator otherwise. Measured
+	// 2026-09-20 in the pinned image over a script file:
+	//
+	//	cat <&19        dup2(19,0): Bad file descriptor
+	//	echo hi >&19    dup2(19,1): Bad file descriptor
+	//	echo hi 2>&19   dup2(19,2): Bad file descriptor
+	//	echo hi 3>&19   dup2(19,3): Bad file descriptor
+	//	exec 5>&19      dup2(19,5): Bad file descriptor
+	//
+	// %[3]s is always a number: every route to this sentence knows the
+	// descriptor it was aiming at, including the coprocess one, where it is
+	// the *source* that has a word — `p` — instead of a number (#3909).
 	//
 	// **Descriptor 10 is not the probe to use.** In a script file BusyBox
 	// answers `10: Bad file descriptor` for `<&10` — bash's shape exactly —

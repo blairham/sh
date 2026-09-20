@@ -9031,6 +9031,9 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// of the region that keeps `x=IN` from leaving it. Ahead of the reference
 	// handling, for the reason storedValue's copy of this is.
 	name = r.namespaceWriteName(name)
+	// The write half of the member path above, and in the same place relative
+	// to the reference handling that storedValue puts it.
+	name = r.compoundMemberThroughAReference(name)
 	if r.selfNameref(name) {
 		// The write half of the read above: a reference aimed at its own
 		// name lands on the global cell. Ahead of namerefAssignmentTarget,
@@ -9356,6 +9359,11 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 	// five of the six columns and every line of the sixth outside one. See
 	// interp/namespace.go.
 	name = r.namespaceReadName(name)
+	// And a member path whose base is a reference is the member of what that
+	// reference points at, which the walk below cannot see: it is keyed on
+	// whole names and `c.a` is not one of them. See
+	// Runner.compoundMemberThroughAReference.
+	name = r.compoundMemberThroughAReference(name)
 	// A read through a name reference lands on what it points at. Only a
 	// plain-name target here: a reference aimed at an *element* has its
 	// subscript read as arithmetic, and arithmetic reaches command
@@ -9846,7 +9854,13 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// element list by the first word inside the parentheses. Ahead of
 		// every array branch because each of them answers to `a.IsArray`,
 		// which is true here too: one spelling, two constructs.
-		r.assignCompoundVariable(ctx, a)
+		//
+		// Through a reference where the name written is one, which the
+		// array-literal branch below already did for its own shape and this
+		// one did not — see Runner.namerefCompoundBodyTarget for the rows.
+		body := *a
+		body.Name = r.namerefCompoundBodyTarget(a.Name)
+		r.assignCompoundVariable(ctx, &body)
 		return
 	case a.IsArray && a.Index != nil:
 		// An array literal *and* a subscript, which is a third thing rather

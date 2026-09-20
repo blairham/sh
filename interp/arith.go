@@ -3445,6 +3445,21 @@ func (r *Runner) arithSubscriptKeyText(text string) string {
 	if !strings.ContainsAny(text, "$`") {
 		return text
 	}
+	if quotationStopsASubscriptsExpansion(text) &&
+		r.ask(r.sem().SubscriptIsAQuotingContext,
+			"an array subscript being a quoting context") {
+		return r.arithSubscriptKeyQuoted(text)
+	}
+	return r.arithSubscriptKeyScan(text)
+}
+
+// arithSubscriptKeyScan is that expansion with every quotation an ordinary
+// character, which is the reading of a dialect whose subscript is no quoting
+// context. See [Runner.arithSubscriptKeyQuoted] for the other one.
+func (r *Runner) arithSubscriptKeyScan(text string) string {
+	if !strings.ContainsAny(text, "$`") {
+		return text
+	}
 	out, _, _ := r.expandRawSpansWith(text, func(literal bool, part string) string {
 		if literal {
 			return part

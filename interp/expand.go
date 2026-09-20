@@ -3601,18 +3601,75 @@ func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }
 // removal produced, which is `@` under one of the two readings the axis
 // offers and would make the whole array of a lookup.
 func (r *Runner) wholeArrayIndex(e *syntax.ParamExpr) bool {
-	return e.IndexFlags == nil && wholeArraySubscript(r.subscriptAsWritten(e.Subscript()))
+	_, ok := r.wholeArraySubscriptAsTyped(e)
+	return ok
 }
 
 // joinedArrayIndex is `[*]`, the spelling that joins, asked the same way.
 func (r *Runner) joinedArrayIndex(e *syntax.ParamExpr) bool {
-	return e.IndexFlags == nil && r.subscriptAsWritten(e.Subscript()) == "*"
+	sub, ok := r.wholeArraySubscriptAsTyped(e)
+	return ok && sub == "*"
 }
 
 // atArrayIndex is `[@]`, the spelling that keeps its fields, asked the same
 // way.
 func (r *Runner) atArrayIndex(e *syntax.ParamExpr) bool {
-	return e.IndexFlags == nil && r.subscriptAsWritten(e.Subscript()) == "@"
+	sub, ok := r.wholeArraySubscriptAsTyped(e)
+	return ok && sub == "@"
+}
+
+// wholeArraySubscriptAsTyped is the whole of the reading the three predicates
+// above share: which of the two spellings a subscript is, and whether it is
+// one at all.
+//
+// **The characters have to be typed.** A subscript that merely *comes out* `@`
+// is an expression like any other, and the store has said so since #3878 —
+// Runner.assignWholeArraySubscript reads `Assign.IndexText`, the text before
+// any expansion, because `i=@; a[$i]=Z` is `bad math expression: operand
+// expected at '@'` in the column that takes the typed spelling. The read was
+// still asking what the subscript *expanded to* and answered the whole array
+// for every way of arriving at those characters. Measured 2026-09-20 on bash
+// 5.3.20 and ksh93u+, script files under `env -i PATH=/usr/bin:/bin` with a
+// scratch HOME, `a=(p q r); K=@` in front of each:
+//
+//	${a[$K]}         arithmetic syntax error in both — was `p q r` at 0
+//	${a[${K}]}       likewise — was `p q r`
+//	${a[$(echo @)]}  likewise — was `p q r`
+//	${a[ @ ]}        likewise, the blanks alone are enough — was `p q r`
+//	${a[@]}          the array. The control, and the only spelling there is
+//	${a["@"]}        the refusal, in both — already right, the other control
+//
+// and over a table, `typeset -A m=([k]=v); m[@]=Z` — the key both columns
+// store there — `${m[$K]}` is the *key's* value `Z` in both, where this shell
+// joined every value and answered `Z v`. So neither column reads an expanded
+// `@` as a whole-array spelling, and each spells out which ordinary reading it
+// falls back to: a key on a table, an expression on an array (#3889).
+//
+// One unquoted literal span and nothing else, which is that rule stated
+// positively. Quoting was already taken away and stays so — `${a["@"]}` and
+// `${a['@']}` are arithmetic refusals in both columns — and the blanks are
+// the row that says a trim cannot stand in for this: `subscriptAsWritten`
+// trimmed them on the reasoning that "a whole-array spelling never has them
+// anyway", and the panel's answer to `${a[ @ ]}` is that a spelling with
+// blanks in it is not one.
+//
+// A flag group takes both spellings away as well, which is the older half of
+// this predicate: `${a[()@]}` and `${a[(e)*]}` are `bad math expression:
+// operand expected` in the grammar that has groups.
+func (r *Runner) wholeArraySubscriptAsTyped(e *syntax.ParamExpr) (string, bool) {
+	if e == nil || e.IndexFlags != nil {
+		return "", false
+	}
+	w := e.Subscript()
+	if w == nil || len(w.Spans) != 1 {
+		return "", false
+	}
+	s := w.Spans[0]
+	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
+		!wholeArraySubscript(s.Value) {
+		return "", false
+	}
+	return s.Value, true
 }
 
 // subscriptAsWritten is the subscript's text with its substitutions performed

@@ -263,11 +263,21 @@ func (r *Runner) unsetAssocElem(name, key string) {
 func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 	// A bare `@` or `*` is the whole array in every shell in the panel, and a
 	// *quoted* one is a key — `${n["@"]}` looks one up and finds nothing.
-	// So the whole-array spelling is decided on the subscript as written,
-	// before any reading of quotes, and never on the key the axis produced:
-	// under the quote-removing answer that key is `@` too, and the two
-	// spellings would collapse into one.
-	if w := r.searchOperand(e.Subscript()); w == "@" || w == "*" {
+	// So the whole-array spelling is decided on the subscript as **typed**,
+	// before any reading of quotes and before any expansion, and never on the
+	// key the axis produced: under the quote-removing answer that key is `@`
+	// too, and the two spellings would collapse into one.
+	//
+	// The expansion is the half this used to leave out, and a table is where
+	// it costs the most. Measured 2026-09-20 with `typeset -A m=([k]=v);
+	// m[@]=Z` — the key both columns store there — and `K=@`, `${m[$K]}` is
+	// that key's value `Z` in bash 5.3.20 and ksh93u+ alike, where this shell
+	// joined every value and answered `Z v` at status 0 with nothing said. A
+	// subscript that merely comes out `@` is ordinary text: a key here, an
+	// expression over an indexed array. See wholeArraySubscriptAsTyped, which
+	// is the same reading the indexed side asks and is asked from here so
+	// that there is one of it (#3889).
+	if _, typed := r.wholeArraySubscriptAsTyped(e); typed {
 		// Non-nil even when empty: the array exists, so `${m[@]:-d}` on an
 		// empty one is zero fields rather than the default — the same answer
 		// an empty indexed array gives.

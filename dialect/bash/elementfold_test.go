@@ -90,6 +90,14 @@ func TestAnElementWriteLeavesTheOtherElementsAlone(t *testing.T) {
 			"[9 2 3]\n",
 		},
 		{
+			// The other store that replaces the name's contents, and the row
+			// that says so: every word `read -a` puts there is a value it
+			// introduces, so every one folds. Measured on bash 5.3.20.
+			"the control: a read that fills the name folds every word",
+			`typeset -i a; read -a a <<< "1+1 2+2"; echo "[${a[*]}]"`,
+			"[2 4]\n",
+		},
+		{
 			"the control: the valueless declaration reaches no element here",
 			`b=(p q r); typeset -i b; echo "[${b[*]}]"`,
 			"[p q r]\n",

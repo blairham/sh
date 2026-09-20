@@ -28,6 +28,11 @@ import "github.com/blairham/sh/interp"
 // taking a function is for: a table filled once would be right until the next
 // command ran and then quietly wrong.
 func registerBashCmds(r *interp.Runner) {
+	// The listing, for the reason the alias table's is — see
+	// registerBashAliases, where the measurement is. Both tables are in the
+	// operand-less `declare -A` in bash 5.3.20 and were in neither listing
+	// here.
+	r.SetDynamicDeclaration("BASH_CMDS", interp.ProducedDeclaration{Array: true, ListsItsElements: true})
 	r.SetDynamicAssoc("BASH_CMDS", func(rr *interp.Runner) interp.AssocArray {
 		names := rr.HashedCommandNames()
 		table := make(interp.AssocArray, len(names))

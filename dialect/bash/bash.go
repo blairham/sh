@@ -29,6 +29,11 @@ func Dialect() syntax.Dialect {
 	// so this is a version line inside one lineage exactly as
 	// ArithDoubleQuote is. See syntax.Dialect.SubstitutionBodyRead (#2857).
 	d.SubstitutionBodyRead = syntax.NewerSubstitutionBodyReadWithItsLine
+	// A here-document a one-line `$( )` or `<( )` opened is fed from the
+	// lines after the enclosing command, and the substitution yields the
+	// body. 5.3's and not 3.2's, and not the backquoted spelling's; see
+	// syntax.Dialect.HeredocBodyFromAfterTheCommand for the panel (#3711).
+	d.HeredocBodyFromAfterTheCommand = syntax.HeredocBodyAfterEitherParenthesizedSpelling
 	// And a `'` inside a double-quoted operand keeps what it opens out of
 	// that read: `echo before; echo "${v-'$(if)'}"; echo after` writes
 	// `before` here and is refused outright by dash and BusyBox ash, which
@@ -3647,6 +3652,11 @@ func Diagnostics() interp.Diagnostics {
 		ReadTimeoutStatus: 142,
 		HereDocumentAtEOF: "warning: here-document at line %[1]d " +
 			"delimited by end-of-file (wanted `%[2]s')",
+		// And what it says when it feeds one of those from the lines after
+		// the enclosing command instead, which is the `$( )` and `<( )`
+		// spellings only — measured 2026-09-20, one document and two (#3711).
+		HeredocCarriedOutOfSubstitution: "warning: command substitution: " +
+			"%[1]d unterminated here-document%[2]s",
 		// bash names the builtin for its own two spellings and not for the
 		// two POSIX has: `declare: r: readonly variable` against a plain
 		// `r: readonly variable` from `export`.

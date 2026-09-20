@@ -492,6 +492,17 @@ type Lexer struct {
 	// construct anybody wrote. [Lexer.takeHeredocOutside] is what commits it,
 	// and every caller calls it at the point the read is taken.
 	heredocOutside *Error
+
+	// bodyPending is what the last [Lexer.parseToClose] left queued and
+	// unfed: the here-document operators the substitution's own text opened
+	// and whose bodies would have to come from the lines after the enclosing
+	// command. PROTOTYPE (#3711).
+	bodyPending       []*Redirect
+	bodyPendingQuoted []bool
+
+	// carried is what [Lexer.carryHeredocsOut] has taken over, for the
+	// parser to put on the file. See [File.CarriedHeredocs].
+	carried []CarriedHeredoc
 }
 
 // queueHeredoc registers a redirection whose body is still to be read. The
@@ -3567,6 +3578,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				// Lexer.noteHeredocOutside.
 				l.takeHeredocOutside()
 			}
+			l.carryHeredocsOut(kind, open)
 			return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 		}
 		// Not something the parser could read — half a line at a prompt,
@@ -4084,6 +4096,7 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 	lex.inProgramParens = true
 	sub := newParserOn(lex, l.dialect)
 	sub.parseList()
+	l.bodyPending, l.bodyPendingQuoted = sub.lex.pending, sub.lex.pendingQuoted
 	l.noteHeredocOutside(sub)
 	if sub.err != nil || !sub.at(TokRightParen) {
 		// Kept for the one caller that goes on to run out of input itself,
@@ -4168,6 +4181,50 @@ func (l *Lexer) noteHeredocOutside(sub *Parser) {
 		Token: "<<" + r.Word.Literal(),
 		Msg:   "here-document not contained within command substitution",
 	}
+}
+
+// carryHeredocsOut queues on *this* lexer the here-document operators the
+// substitution's own text opened and could not feed, so that the lines after
+// the enclosing command are read as their bodies rather than run as commands.
+//
+// This is the seam [Dialect.HeredocBodyMustBeInsideTheSubstitution] declines
+// to reach, and the detection half of it was already done: [Lexer.parseToClose]
+// builds a real sub-parser to find the `)` on every `$( )`, and what that
+// parse leaves in `pending` is exactly the operators this is about. What is
+// added here is the *delivery*, and it is two things. The bodies are read by
+// the outer lexer, because these are its pending now — which is what stops
+// `body` and `EOF` being run as commands. And the redirections themselves go
+// on to the [Span], so that the parse which actually runs the body can be
+// handed the text; the tree the sub-parse built is thrown away, and a body is
+// re-read against the alias table as it stands when the substitution runs.
+//
+// The operators are pointers into a tree nobody keeps, and that is what makes
+// the hand-off work at all: the body is written into `Redirect.Heredoc` at the
+// next newline, which is *after* this span has been copied into the word that
+// holds it, and every copy of the span sees it because they share the pointer.
+//
+// Nothing happens in a dialect whose value is the zero one, and nothing
+// happens inside a `$( )` that is itself inside one: the inner lexer's
+// pending are the inner span's, and carrying them out twice would put one
+// body on two constructs.
+func (l *Lexer) carryHeredocsOut(kind SpanKind, open Pos) {
+	pending, quoted := l.bodyPending, l.bodyPendingQuoted
+	l.bodyPending, l.bodyPendingQuoted = nil, nil
+	if len(pending) == 0 || !l.dialect.HeredocBodyFromAfterTheCommand.carries(kind) {
+		return
+	}
+	for i, r := range pending {
+		l.queueHeredoc(r, quoted[i])
+	}
+	// One remark for the construct rather than one per document, and it
+	// carries the count because the one shell that says anything writes the
+	// number and makes its noun agree with it. Located on the enclosing
+	// command's line, which is the substitution's own opening line.
+	l.remarks = append(l.remarks, Remark{
+		Kind: RemarkHeredocCarriedOut, Pos: open, At: open,
+		Count: len(pending),
+	})
+	l.carried = append(l.carried, CarriedHeredoc{At: open, Redirs: pending})
 }
 
 // takeHeredocOutside raises what noteHeredocOutside recorded, if anything, now

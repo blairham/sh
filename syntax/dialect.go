@@ -2523,10 +2523,11 @@ type Dialect struct {
 	//
 	// So it is one column against four, and this flag is that column alone:
 	// with it off the four-column reading stands, which is what the core and
-	// every other preset keep. bash's reading is neither — it needs the body
-	// to reach the *outer* lexer's pending queue from inside a span that has
-	// already closed — and is a parser capability rather than an answer this
-	// flag can hold; see #3711.
+	// the quiet presets keep. bash's reading is neither, and it is not an
+	// answer this flag can hold — it needs the body to reach the *outer*
+	// lexer's pending queue from inside a span that has already closed. It
+	// is [HeredocBodyFromAfterTheCommand], which is a capability beside this
+	// one rather than a third value of it (#3711).
 	//
 	// The line named is the one the operator is on rather than the one the
 	// substitution opened on, measured with `echo $(echo a` / `cat <<EOF)`,
@@ -2542,6 +2543,61 @@ type Dialect struct {
 	// <(cat <<EOF)` — while `${ cat <<EOF; }`, that shell's shared-state
 	// form, is refused with the same sentence.
 	HeredocBodyMustBeInsideTheSubstitution bool
+
+	// HeredocBodyFromAfterTheCommand reads a here-document a substitution's
+	// text opened and could not feed **from the lines after the enclosing
+	// command**, and hands the body back to the substitution.
+	//
+	// The reading [HeredocBodyMustBeInsideTheSubstitution] names as bash's
+	// and declines to hold, because it is not an answer a flag can carry on
+	// its own: the body has to reach the *outer* lexer's pending queue from
+	// inside a span that has already closed, and then travel back to the
+	// parse that runs the body. See [Span.CarriedHeredocs] for the seam.
+	//
+	// Measured 2026-09-20 from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null device, over
+	//
+	//	echo one
+	//	echo $(cat <<EOF)
+	//	body
+	//	EOF
+	//	echo after
+	//
+	// and the `cat <(cat <<EOF)` and `` echo `cat <<EOF` `` spellings of the
+	// same file:
+	//
+	//	column            $( )              <( )              backquoted
+	//	bash 5.3.20       body, warned      body, warned      quiet reading
+	//	bash 3.2.57       quiet reading     quiet reading     quiet reading
+	//	ksh93u+           refused           body, silent      quiet reading
+	//	zsh 5.9.2         quiet reading     quiet reading     quiet reading
+	//	dash 0.5.12       quiet reading     no such spelling  quiet reading
+	//	BusyBox ash       quiet reading     quiet reading     quiet reading
+	//
+	// where the *quiet reading* is an empty substitution with the body's own
+	// lines then run as commands, which is what the zero value keeps.
+	//
+	// **Three things that a bool would have got wrong**, each of them a row
+	// above rather than a symmetry:
+	//
+	//   - It is a **version line inside one lineage** and not a name's. bash
+	//     3.2 is on the quiet side of every spelling, so a value keyed on
+	//     "bash does this" would put it in that column too — the shape
+	//     [SubstitutionBodyRead] already has.
+	//   - It is **per spelling**, and the spellings split the columns
+	//     differently: ksh93 reads `<( )` this way while refusing `$( )`
+	//     outright, which is why this has a value for the process
+	//     substitution alone.
+	//   - The **backquoted spelling is outside it in every column**. bash 5.3
+	//     writes a different warning there — the ordinary
+	//     [RemarkHeredocAtEOF] one — and then takes the quiet reading, so a
+	//     capability reached from the backquote scanner as readily as from
+	//     the parenthesis one would be wrong in every column that has it.
+	//
+	// The warning is a separate question and is [RemarkHeredocCarriedOut]:
+	// bash writes one naming how many documents were carried, and ksh93
+	// writes nothing at all. See #3711.
+	HeredocBodyFromAfterTheCommand HeredocBodyOutside
 
 	// HeredocLastLineIsADelimiterPrefix reads the last line of the text
 	// inside `$( )` as a delimiter *prefix*, where a here-document in that
@@ -7062,3 +7118,51 @@ const (
 	// failure. zsh's answer. See RemarkFunctionNameIsAnAlias.
 	AliasRefusesAFunctionName
 )
+
+// HeredocBodyOutside is which parenthesized substitution spellings read a
+// here-document's body from the lines after the enclosing command.
+//
+// An enumeration rather than a bool because ksh93 does it for one spelling
+// and bash 5.3 for two, and a bool would have made those one answer. See
+// [Dialect.HeredocBodyFromAfterTheCommand] for the panel.
+type HeredocBodyOutside uint8
+
+const (
+	// HeredocBodyStaysInsideTheSubstitution is the quiet reading four
+	// columns take: the substitution is empty and the body's own lines are
+	// run as commands. The zero value, and what the core keeps.
+	HeredocBodyStaysInsideTheSubstitution HeredocBodyOutside = iota
+	// HeredocBodyAfterProcessSubstitution carries the body for `<( )` and
+	// `>( )` only. ksh93's, whose `$( )` is refused while reading instead —
+	// see [Dialect.HeredocBodyMustBeInsideTheSubstitution].
+	//
+	// **Nothing distinguishes this from the value below in the one dialect
+	// that holds it, and that is said here rather than left to be
+	// rediscovered.** ksh93's `$( )` is refused before the carry is reached,
+	// so moving that preset to the wider value changes no output and fails
+	// no test — a mutation run on 2026-09-20 to check. It records the
+	// measurement rather than deciding an answer, and it is what keeps the
+	// two flags independent: a dialect that carried `$( )` *without* the
+	// refusal would be reading bash's answer under ksh93's name.
+	HeredocBodyAfterProcessSubstitution
+	// HeredocBodyAfterEitherParenthesizedSpelling carries it for `$( )` as
+	// well. bash 5.3's, and not bash 3.2's.
+	HeredocBodyAfterEitherParenthesizedSpelling
+)
+
+// carries reports whether this value reads a body from outside a span of the
+// given kind.
+//
+// The backquoted spelling never reaches here and is not a SpanKind of its
+// own — [Span.Backquoted] is a flag on CommandSubst — so the caller checks
+// that separately, which is the same shape every other rule about the older
+// spelling has in this package.
+func (h HeredocBodyOutside) carries(kind SpanKind) bool {
+	switch kind {
+	case ProcSubstIn, ProcSubstOut:
+		return h != HeredocBodyStaysInsideTheSubstitution
+	case CommandSubst:
+		return h == HeredocBodyAfterEitherParenthesizedSpelling
+	}
+	return false
+}

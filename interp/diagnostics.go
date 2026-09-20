@@ -1230,6 +1230,23 @@ type Diagnostics struct {
 	// inside itself, which is why it takes a line as a verb at all.
 	HereDocumentAtEOF string
 
+	// HeredocCarriedOutOfSubstitution is what a shell says when a
+	// here-document a substitution's text opened is fed from the lines after
+	// the enclosing command. Empty means nothing is said, which is every
+	// column but one — ksh93 does it for `<( )` in silence.
+	//
+	// It takes the count and the plural suffix, in that order, because the
+	// one shell that says anything writes the number and makes its noun
+	// agree with it. Measured 2026-09-20 from a script file: one document is
+	// `warning: command substitution: 1 unterminated here-document` and two
+	// are `... 2 unterminated here-documents`, both on the enclosing
+	// command's line. The suffix is derived from the count rather than being
+	// a second wording, which is the whole of the English in it.
+	//
+	// See syntax.RemarkHeredocCarriedOut and
+	// syntax.Dialect.HeredocBodyFromAfterTheCommand.
+	HeredocCarriedOutOfSubstitution string
+
 	// BackquoteObsolete is what a shell says about the older command
 	// substitution, `` `…` ``. Empty means nothing is said, which is five of
 	// the six columns.
@@ -7921,6 +7938,19 @@ func (d Diagnostics) Remark(r syntax.Remark) string {
 			return ""
 		}
 		return Wording(d.HereDocumentAtEOF, "", r.At.Line, r.Token)
+	case syntax.RemarkHeredocCarriedOut:
+		if d.HeredocCarriedOutOfSubstitution == "" {
+			return ""
+		}
+		// The noun agrees with the number, and the number is the only thing
+		// that decides it — so the suffix is computed here rather than
+		// carried as a second wording nobody could keep in step with the
+		// first.
+		suffix := "s"
+		if r.Count == 1 {
+			suffix = ""
+		}
+		return Wording(d.HeredocCarriedOutOfSubstitution, "", r.Count, suffix)
 	case syntax.RemarkBackquoteSubstitution:
 		return Wording(d.BackquoteObsolete, "", r.Pos.Line)
 	case syntax.RemarkOperatorsNotSeparated:

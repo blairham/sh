@@ -35,14 +35,15 @@ var sharedTables = map[string]string{
 // #1416: a stack has to be pushed and popped once before the array exists,
 // and popping keeps the capacity.
 var sharedStacks = map[string]string{
-	"Env":            "the environment the shell was started with, never appended to after setup",
-	"InheritedFiles": "the files the embedder handed in, never appended to at all",
-	"ProcessAnchor":  "the placeholder command the front end handed in, never appended to at all",
-	"trapSnapshot":   "only ever replaced wholesale or set to nil, and inheritTraps rebuilds a subshell's traps from scratch",
-	"pipeStatus":     "rebuilt with append([]int(nil), …) on every pipeline, so a write never lands in an array anyone else holds",
-	"optionLists":    "the option namespaces a dialect bound in Apply, appended to at setup and never again",
-	"RlimitOrder":    "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
-	"substLevelsOut": "rebuilt with append([]substLevel{}, …) every time a level opens, so a write never lands in an array anyone else holds",
+	"Env":             "the environment the shell was started with, never appended to after setup",
+	"InheritedFiles":  "the files the embedder handed in, never appended to at all",
+	"ProcessAnchor":   "the placeholder command the front end handed in, never appended to at all",
+	"trapSnapshot":    "only ever replaced wholesale or set to nil, and inheritTraps rebuilds a subshell's traps from scratch",
+	"pipeStatus":      "rebuilt with append([]int(nil), …) on every pipeline, so a write never lands in an array anyone else holds",
+	"optionLists":     "the option namespaces a dialect bound in Apply, appended to at setup and never again",
+	"RlimitOrder":     "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
+	"substLevelsOut":  "rebuilt with append([]substLevel{}, …) every time a level opens, so a write never lands in an array anyone else holds",
+	"carriedHeredocs": "the running file's own list, replaced wholesale by RunPart and never appended to — a subshell reads the same file's list, which is what it should see",
 }
 
 // seedStacks gives every slice on a Runner an element and spare capacity.
@@ -74,6 +75,7 @@ func seedStacks(r *Runner) {
 	r.reaped = append(make([]*Job, 0, 4), nil)
 	r.procSubJobs = append(make([]*Job, 0, 4), nil)
 	r.enclosingProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
+	r.carriedHeredocs = append(make([]syntax.CarriedHeredoc, 0, 4), syntax.CarriedHeredoc{})
 	r.scopes = append(make([]*scope, 0, 4), &scope{
 		saved:               map[string]string{"seed": "v"},
 		existed:             map[string]bool{"seed": true},

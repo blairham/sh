@@ -3,7 +3,10 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // How much subject a pattern can possibly consume, which is what makes a
 // substitution stop asking questions whose answer is already no.
@@ -32,13 +35,27 @@ import "strings"
 // could read as something other than one literal byte ends the analysis and
 // the caller goes back to trying every span.
 //
-// That leaves it narrow on purpose. `?` and `[a-z]` consume exactly one
-// *unit*, which is one to four bytes, and either could be admitted with a
-// little more care; neither is here, because neither appeared in the
-// measurement and an untested widening of this bound is the one change in
-// this file that could lose a match. What is admitted is the case that was
-// actually costing the time: a run of ordinary bytes, and an escape in
-// front of one.
+// What is admitted is a run of ordinary bytes, an escape in front of one,
+// and the two constructs that consume exactly one *unit* of subject: `?`
+// and a bracket expression. A unit is one byte where the matcher counts
+// bytes and one to four where it counts characters, so those two widen the
+// upper bound rather than pinning it — which is enough, because what makes
+// the loop quadratic is an upper bound of "the rest of the subject" and not
+// the width of the window under it.
+//
+// The one unit is measured rather than reasoned: [matchHere] steps a `?`
+// and a `[…]` over `o.unitWidth(s)` bytes apiece and neither can take a
+// second unit, whatever the bracket holds. What a bracket *can* do is stop
+// being a bracket — an unterminated one is ordinary text, and the readings
+// of an unclosed or unknown `[:name:]` can make a closed-looking one
+// ordinary too — and then it consumes a byte per character rather than one
+// unit for all of them. So [bracketSpanEnd] refuses every bracket holding a
+// sub-expression of any kind, which is where all of those live.
+//
+// `#` and `*` stay refused and that is the remaining cost: `a*b` and `a#`
+// have no upper bound at all, so a substitution with either in it is still
+// quadratic in the subject. Nothing here narrows that, and nothing here may
+// pretend to.
 
 // spanStoppers is every byte this analysis refuses to reason past, in any
 // dialect and under any option.
@@ -89,12 +106,70 @@ func patternSpanBytes(p string, o patternOpts) (lo, hi int, bounded bool) {
 			lo, hi, i = lo+1, hi+1, i+2
 			continue
 		}
+		switch c {
+		case '?':
+			// One unit, and the `?(` of an extended group is not this: the
+			// `(` behind it is a stopper, so that spelling still gives up on
+			// its second byte rather than being read as a unit and a group.
+			lo, hi, i = lo+1, hi+unitMostBytes(o), i+1
+			continue
+		case '[':
+			end, ok := bracketSpanEnd(p, i)
+			if !ok {
+				return 0, 0, false
+			}
+			lo, hi, i = lo+1, hi+unitMostBytes(o), end+1
+			continue
+		}
 		if strings.IndexByte(spanStoppers, c) >= 0 {
 			return 0, 0, false
 		}
 		lo, hi, i = lo+1, hi+1, i+1
 	}
 	return lo, hi, true
+}
+
+// unitMostBytes is the most subject bytes one unit can be, which is what a
+// `?` or a bracket expression consumes.
+//
+// One byte where the matcher counts bytes. Where it counts characters the
+// unit is a decoded rune, so it is [utf8.UTFMax] — and a byte that decodes
+// as nothing is a unit of one, which is inside that.
+func unitMostBytes(o patternOpts) int {
+	if !o.chars {
+		return 1
+	}
+	return utf8.UTFMax
+}
+
+// bracketSpanEnd is the closing `]` of the bracket expression opening at i,
+// for this analysis alone, and it refuses every bracket holding a
+// sub-expression.
+//
+// [bracketEnd] is the matcher's own scan and is what says where a bracket
+// ends — but only for a bracket whose members are ordinary. A `[.x.]` or a
+// `[=x=]` ends at a `]` that scan does not know is not the bracket's, and a
+// `[:name:]` that nothing closes is read by [Semantics.UnterminatedCharacterClass]
+// in a way that can swallow the `]` the scan stopped at and leave the whole
+// text ordinary. An ordinary reading is a byte per character, which is more
+// than the one unit this bound would have claimed — the one direction that
+// loses a match — so any `[` inside the brackets ends the question here.
+//
+// The refusal is wider than those three constructs, because a bracket
+// holding a literal `[` member is refused with them. That costs the
+// attempts it would have skipped and can lose nothing, which is the trade
+// this whole file makes.
+func bracketSpanEnd(p string, i int) (int, bool) {
+	end, ok := bracketEnd(p, i)
+	if !ok {
+		// Nothing closes it, so it is not a bracket expression at all and
+		// its text is ordinary.
+		return 0, false
+	}
+	if strings.IndexByte(p[i+1:end], '[') >= 0 {
+		return 0, false
+	}
+	return end, true
 }
 
 // spanCouldMatch reports whether a span of n bytes is one the pattern could

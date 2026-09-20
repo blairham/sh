@@ -76,6 +76,21 @@ type Frame struct {
 	// a frame would have moved `$0` with it (#1123).
 	Startup bool
 
+	// scopeBase is the first index of r.scopes that is *inner* to this
+	// frame: the scope the call itself opened is one below it, and every
+	// scope from here up was opened by something this frame went on to run.
+	//
+	// It is the window a frame selection reads and writes through. The
+	// scopes here are save-and-restore records rather than a chain of
+	// tables, so "what does this name hold in that frame" is answered by
+	// the innermost thing that displaced it — see selectedScopeBase.
+	//
+	// Stamped where the call's scope is pushed rather than computed from the
+	// frame's position, because a scope is not only a call: one dialect's
+	// `${ … ;}` body opens one too, and counting frames would have put the
+	// window in the wrong place for any stack with one in it.
+	scopeBase int
+
 	// serial numbers this frame among every frame ever pushed, so a
 	// sibling entered later at the same depth is still a different frame —
 	// which is the distinction the RETURN trap turns on.

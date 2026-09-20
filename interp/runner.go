@@ -9229,6 +9229,13 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// calling here, which is what lets one function do both.
 	delete(r.declaredEmpty, name)
 	r.nameIsBack(name)
+	if r.storeIntoSelectedFrame(name, value) {
+		// The write belongs to a frame this shell is not standing in, so it
+		// goes into that frame's cell rather than the live one — and nothing
+		// below applies, because the name the shell can see here has not
+		// changed. See interp/framescope.go.
+		return
+	}
 	r.Vars[name] = value
 	// And the other half of a tie, if this name is one. After the store, so
 	// that the mirror's own read of this name sees the new value.
@@ -9470,6 +9477,14 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// per member, `)`. Ahead of every table because the name is in none
 		// of them: see interp/compoundvariable.go.
 		return r.compoundVariableText(name), true
+	}
+	if v, set, diverted := r.valueInSelectedFrame(name); diverted {
+		// A script has pointed this shell at another frame, and something
+		// inner to that frame displaced this name — so the tables below hold
+		// a value the selected frame cannot see. See interp/framescope.go,
+		// where the walk is, and note that a name nothing displaced never
+		// gets here: for that one the tables already are the frame's view.
+		return v, set
 	}
 	if a, ok := r.Arrays[name]; ok && !r.removed[name] {
 		// Ahead of Vars, which holds a copy of one element: the array is the

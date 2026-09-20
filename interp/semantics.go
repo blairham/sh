@@ -3491,6 +3491,38 @@ type Semantics struct {
 	// every dialect.
 	KillRefusesTheAllProcessesTarget Answer
 
+	// ArrayOperandIsStoredPastAFailedOpen stores a declaration utility's
+	// array-literal operand even though the command's redirection failed and
+	// the utility never ran.
+	//
+	// Measured 2026-09-19 over a script file, `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`:
+	//
+	//	typeset a=(VAL) 2>/nope/x
+	//	echo "[${a[0]}]"
+	//
+	//	bash 5.3.20, bash 3.2.57   the complaint, then `[VAL]`
+	//	zsh 5.9.2                  the complaint, then `[]`
+	//	ksh93u+                    the complaint, and the shell stops
+	//	dash, BusyBox ash          no array literal, so no question
+	//
+	// **The control is what makes this an axis about array literals rather
+	// than about declarations.** A *scalar* operand is not stored in bash
+	// either — `export s=$(echo VAL) 2>/nope/x` leaves `s` empty there — so
+	// it is not "bash performs a declaration's assignments before it opens
+	// anything".
+	//
+	// ksh93 cannot reach the question: a failed redirection on a declaration
+	// utility ends that shell, so no later command can read the name. That
+	// is RedirectErrorOnSpecialBuiltinFatal, asked at the same place, and it
+	// is why ksh's answer here is not a measurement of this rule.
+	//
+	// Separate from when the elements are *expanded*, which is #3806 and is
+	// already common ground: `typeset a=($(echo VAL; echo SIDE >&2))
+	// 2>/nope/x` shows `SIDE` wherever array literals exist. This axis is
+	// only about the store running afterwards.
+	ArrayOperandIsStoredPastAFailedOpen Answer
+
 	// KillTakesEndOfOptionsAfterTheSignal takes `--` in the second place it
 	// can stand — behind a signal option rather than in front of everything.
 	//
@@ -21672,6 +21704,8 @@ func PosixSemantics() Semantics {
 		// The standard leaves `-1` to the kernel, and four of the five
 		// columns hand it straight there.
 		KillRefusesTheAllProcessesTarget: No,
+		// A command that did not run performed no assignment.
+		ArrayOperandIsStoredPastAFailedOpen: No,
 		// The standard says the marker ends the options wherever it stands.
 		KillTakesEndOfOptionsAfterTheSignal: Yes,
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
@@ -22827,6 +22861,8 @@ func CoreSemantics() Semantics {
 		// The standard leaves `-1` to the kernel, and four of the five
 		// columns hand it straight there.
 		KillRefusesTheAllProcessesTarget: No,
+		// A command that did not run performed no assignment.
+		ArrayOperandIsStoredPastAFailedOpen: No,
 		// The standard says the marker ends the options wherever it stands.
 		KillTakesEndOfOptionsAfterTheSignal: Yes,
 		// `kill -n signum` is taken, which is three of the five columns and

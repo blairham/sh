@@ -6138,6 +6138,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		if r.badDupTarget && !isFunc && isBuiltin {
 			r.fatalQuiet()
 		}
+		r.applyArrayOperandsPastAFailedOpen(ctx, c)
 		return nil
 	}
 

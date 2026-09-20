@@ -82,6 +82,10 @@ func Dialect() syntax.Dialect {
 	// other columns refuse the operand or declare an empty array under the
 	// base name, and this is the grammar for the one that nests (#2491).
 	d.ChainedAssignSubscript = true
+	// `a[]=6` is refused while the program is read here, so the refusal
+	// reaches a branch that is never taken — measured, and the reason this
+	// is a grammar flag rather than only a runtime axis.
+	d.EmptyAssignSubscriptIsASyntaxError = true
 	// And the read half of the same nesting: `${a[1][2]}` was a parse error
 	// here while the write built a value only `typeset -p` could show. The
 	// grammar is shared with the other shell that writes the text and the
@@ -2721,6 +2725,14 @@ func Semantics() interp.Semantics {
 	// syntax error` and exit 1 with nothing after it, by both routes.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.No
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
+	// unanswered EmptySubscriptToAnAssignment: this shell refuses `a[]=6`
+	// while the program is *read*, so no assignment with empty brackets ever
+	// reaches the runtime. Measured 2026-09-20 on ksh93u+ 2012-08-01: `echo
+	// before`, `if false; then a[]=6; fi`, `echo after` writes `before`, then
+	// ``syntax error at line 2: `[]' empty subscript``, and exits 3 — the
+	// branch is never taken and the refusal arrives all the same. See
+	// syntax.Dialect.EmptyAssignSubscriptIsASyntaxError, which is where this
+	// column's answer lives (#3949).
 	// And this is the third answer to what a *valueless* subscripted operand
 	// does: the brackets are read and no element is written. Measured
 	// 2026-09-17, `a=(1 2 3); typeset 'a[1]'` leaves the array exactly as it
@@ -4561,6 +4573,11 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// it was written at the end of, which is dash and zsh's answer too and
 	// leaves bash the odd one out (#1364).
 	d.UnexpectedNewlineIsOnTheNextLine = true
+	// An assignment's empty brackets are named by the brackets and by what
+	// is wrong with them, rather than by the `unexpected` every other
+	// refused token ends in — see
+	// [syntax.Dialect.EmptyAssignSubscriptIsASyntaxError].
+	d.EmptyAssignSubscript, d.PromptEmptyAssignSubscript = parseWording(2, "`%[1]s' empty subscript")
 	d.Unterminated, d.PromptUnterminated = parseWording(6, "`%[3]s' unmatched")
 	// Nothing is unmatched when nothing was open, so the end of input is
 	// named as the thing that was unexpected instead.

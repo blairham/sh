@@ -5936,6 +5936,31 @@ type Dialect struct {
 	// ChainedSubscript enables — see #2830.
 	ChainedAssignSubscript bool
 
+	// EmptyAssignSubscriptIsASyntaxError refuses `a[]=v` — an assignment
+	// whose brackets were written with nothing at all between them — while
+	// the program is being *read*, rather than where it runs.
+	//
+	// One column answers here, and that it answers here is measured rather
+	// than assumed. ksh93u+ 2012-08-01, script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null device:
+	//
+	//	echo before
+	//	if false; then a[]=6; fi
+	//	echo after
+	//
+	// writes `before`, then ``<file>: syntax error at line 2: `[]' empty
+	// subscript``, and exits 3 with no `after`. The branch is never taken
+	// and the refusal arrives all the same, which is what says the grammar
+	// is refusing the text. bash 5.3.20 and zsh 5.9.2 both run that script
+	// to the end in silence and complain only where such an assignment is
+	// actually reached, so theirs is a runtime answer and is
+	// interp.Semantics.EmptySubscriptToAnAssignment instead.
+	//
+	// Every written subscript of the assignment is looked at, not only the
+	// last: `a[][2]=6` and `a[2][]=6` are both refused there, with the same
+	// sentence (#3949).
+	EmptyAssignSubscriptIsASyntaxError bool
+
 	// ArithCharacterCode enables `#name` and `##c` inside an arithmetic
 	// expression: the code of the first character of a parameter's value, and
 	// the code of a character written out.

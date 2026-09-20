@@ -5000,6 +5000,36 @@ type Diagnostics struct {
 	// One field for both, because a sentence naming the token covers a
 	// dialect that only wanted to spell it differently (#1364).
 	SyntaxUnexpectedNewline string
+	// AssignEmptySubscript is what a shell writes about `a[]=v` where the
+	// assignment is refused as it runs. One verb: %[1]s the name.
+	//
+	// Two wordings among the columns that reach it, and neither is the
+	// sentence either neighbor writes for the same brackets: bash 5.3.20
+	// says `a[]: bad array subscript` here where its *declaration* operand
+	// says ``\`a[]': not a valid identifier``, and zsh 5.9.2 says `not an
+	// identifier: a[]`, which is the sentence its arithmetic write already
+	// uses. Empty is bash's, which is also the substrate's reading of a
+	// subscript it could not use.
+	//
+	// See Semantics.EmptySubscriptToAnAssignment for how much of the program
+	// each column gives up behind it (#3949).
+	AssignEmptySubscript string
+	// EmptyAssignSubscript is what the one grammar that refuses `a[]=v`
+	// while reading writes about it. Two verbs: %[1]s the brackets, %[2]d
+	// the line.
+	//
+	// Its own field because the sentence is not the unexpected-token one:
+	// ksh93u+ 2012-08-01 writes ``<file>: syntax error at line 2: `[]' empty
+	// subscript``, naming the brackets and the *trouble with them* where
+	// every other token it did not want ends in `unexpected`. Empty means
+	// the substrate's own sentence, which is what the dialects that answer
+	// this where the assignment runs leave it as — see
+	// [syntax.Dialect.EmptyAssignSubscriptIsASyntaxError] and
+	// Semantics.EmptySubscriptToAnAssignment.
+	EmptyAssignSubscript string
+	// PromptEmptyAssignSubscript is EmptyAssignSubscript for a line typed at
+	// a prompt, where that shell drops the line number from the sentence.
+	PromptEmptyAssignSubscript string
 	// UnexpectedNewlineIsOnTheNextLine puts a refused newline on the line it
 	// *ends* rather than on the line it was written at the end of.
 	//
@@ -7994,6 +8024,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
+	case syntax.ErrEmptyAssignSubscript:
+		return Wording(d.EmptyAssignSubscript, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrHeredocOutsideSubstitution:
 		return Wording(d.HeredocOutsideSubstitution, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrForArithHeader:
@@ -8238,6 +8270,7 @@ func (d Diagnostics) ForPrompt() Diagnostics {
 		{&d.SyntaxError, d.PromptSyntaxError},
 		{&d.ForArithHeader, d.PromptForArithHeader},
 		{&d.HeredocOutsideSubstitution, d.PromptHeredocOutsideSubstitution},
+		{&d.EmptyAssignSubscript, d.PromptEmptyAssignSubscript},
 	} {
 		if w.prompt != "" {
 			*w.at = w.prompt

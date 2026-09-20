@@ -473,6 +473,23 @@ type Assign struct {
 	// value. See [Dialect.DottedName], and [ParamExpr.Member], which is the
 	// same field on the reading side.
 	Member string
+	// EmptySubscript says brackets were written after the name with nothing
+	// at all between them — `a[]=v` — which Index cannot record: the
+	// subscript came to no spans, so the node is otherwise identical to the
+	// one a bare `a=v` produces.
+	//
+	// It is the *written* brackets and not a subscript that came out empty.
+	// `a[$i]=v` with an empty `$i` is a subscript whose text expanded to
+	// nothing, which is the arithmetic reader's question and a different
+	// answer in every column; `a[""]=v` is a subscript holding the empty
+	// string, which is a key in one dialect and zero in another. Only
+	// brackets the source wrote empty set this.
+	//
+	// Every shell that has arrays refuses the construct, and they do not
+	// agree on how — see interp.Semantics.EmptySubscriptToAnAssignment and
+	// [Dialect.EmptyAssignSubscriptIsASyntaxError], which is the column that
+	// refuses it while reading (#3949).
+	EmptySubscript bool
 	// IndexText is the subscript as it was written, before any expansion —
 	// the text between the brackets, and empty where none were.
 	//

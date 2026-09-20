@@ -9894,6 +9894,14 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	// line and names only the variable, exactly as `a=(p q)` and `a[0]=z` do.
 	// The array operand goes through the assignment machinery in every shell
 	// that has it, and the builtin's name never reaches it.
+	if r.refusesEmptyAssignSubscript(a) {
+		// `a[]=6`, brackets written with nothing in them. Ahead of every
+		// branch below, member path included, because the brackets are
+		// refused before anything asks what the name holds or whether it is
+		// frozen — see interp/emptyassignsubscript.go for the ordering that
+		// was measured.
+		return
+	}
 	if a.Member != "" {
 		// `a[1].p=9` — a member of the compound an element holds. The three
 		// pieces name one ordinary name once the subscript has a value, so

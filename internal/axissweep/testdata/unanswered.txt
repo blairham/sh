@@ -105,6 +105,7 @@ ash   EmptyAssociativeKeyIsReportedWhenRead
 ash   EmptyAssociativeKeyRefusesTheLength
 ash   EmptyParamSubscriptIsAnError
 ash   EmptySubscriptTextIsAMathError
+ash   EmptySubscriptToAnAssignment
 ash   ErrTrapRunsInSubshells
 ash   ErrTrapRunsInsideFunctions
 ash   ExitTrapFiresPastTheEnd
@@ -238,8 +239,8 @@ ash   UnsetSubscriptSkippedWhenNameUnset
 ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 ash   ValuelessSubscriptedOperand
 ash   WholeArraySubscriptAssigningATable
-ash   WholeArraySubscriptThroughAReferenceToATable
 ash   WholeArraySubscriptAssigningAnArray
+ash   WholeArraySubscriptThroughAReferenceToATable
 ash   WidthJustificationPrecedence
 ash   WidthLettersExcludeTheIntegerLetter
 ash   WritingSubstitutionIsWaitedForAtTheCommand
@@ -375,6 +376,7 @@ dash  EmptyAssociativeKeyRefusesTheLength
 dash  EmptyParamSubscriptIsAnError
 dash  EmptyReplacementPattern
 dash  EmptySubscriptTextIsAMathError
+dash  EmptySubscriptToAnAssignment
 dash  ErrTrapRefiresForTheCommandItFiredInside
 dash  ErrTrapRunsInSubshells
 dash  ErrTrapRunsInsideFunctions
@@ -521,8 +523,8 @@ dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessDeclarationOfAHeldNameListsIt
 dash  ValuelessSubscriptedOperand
 dash  WholeArraySubscriptAssigningATable
-dash  WholeArraySubscriptThroughAReferenceToATable
 dash  WholeArraySubscriptAssigningAnArray
+dash  WholeArraySubscriptThroughAReferenceToATable
 dash  WidthJustificationPrecedence
 dash  WidthLettersExcludeTheIntegerLetter
 dash  WritingSubstitutionIsWaitedForAtTheCommand
@@ -537,6 +539,7 @@ ksh   CompoundPipelineStatusRecord
 ksh   CoprocEndsInAnArray
 ksh   DeclareGlobalReachesPastALocal
 ksh   EchoLastEscapeFlagWins
+ksh   EmptySubscriptToAnAssignment
 ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin
 ksh   JobsStateFiltersAccumulate

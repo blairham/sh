@@ -2473,6 +2473,12 @@ func Semantics() interp.Semantics {
 	// and the line carries on, which is the control.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.Yes
 	s.BadSubscriptToADeclaration = interp.BadSubscriptAbandonsTheCommand
+	// And a plain `a[]=6` gives up exactly as much again — the rest of the
+	// line, the enclosing function or list with it, and 1 at the next
+	// top-level command. Measured 2026-09-20 on 5.3.20 from a script file:
+	// `a=(1 2 3); a[]=6; echo same-line` writes `a[]: bad array subscript`,
+	// no `same-line`, and the array is still three long (#3949).
+	s.EmptySubscriptToAnAssignment = interp.BadSubscriptAbandonsTheCommand
 	// And with no value the brackets are never read at all, which is why the
 	// axis above is reachable here only through an operand carrying one:
 	// measured 2026-09-17, `a=(1 2 3); declare 'a[b c]'` is silent at 0 and

@@ -1330,6 +1330,11 @@ func Semantics() interp.Semantics {
 	// name rather than a subscript — `readonly 'q[b c]'=v` is `readonly:
 	// q[b c]: bad variable name` at 2, the same complaint as `unset`.
 	//
+	// unanswered EmptySubscriptToAnAssignment: no arrays, so `a[]=6` is not
+	// an assignment at all here. Measured 2026-09-20: it is a command word,
+	// and the shell answers `a[]=6: not found` at 127 with the next line
+	// still running.
+	//
 	// unanswered BadSubscriptEscapesAnArithmeticCommand: there is no
 	// `(( ))` grammar here at all — `(( 1 ))` is a subshell running the
 	// command `1` — so no subscript ever fails inside one.

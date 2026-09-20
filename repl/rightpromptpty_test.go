@@ -134,3 +134,63 @@ func TestAnAcceptedLineLeavesNoRightPromptBehind(t *testing.T) {
 	}
 	s.end()
 }
+
+// A transient prompt and a right prompt on the same accepted line, which is
+// the case the two features create between them and neither owns.
+//
+// They meet in endLine and both act in front of toLastRow. The trim erases
+// from the top of the prompt to the end of the screen, so where one is
+// configured it takes the right prompt with it; where one is not, the erase
+// beside it is what does.
+//
+// **What this test proves, and what it does not.** Deleting rightPromptErase
+// outright leaves this test passing and fails
+// TestAnAcceptedLineLeavesNoRightPromptBehind — checked, rather than reasoned
+// about. So the erase is load-bearing only where no transient prompt is
+// configured, and that other test is what holds it. This one holds the thing
+// no single-feature test can see: that the two acting on the same row in the
+// same breath leave a correct screen rather than a double erase, a cursor one
+// column out, or a banner row half taken down.
+func TestATransientPromptLeavesNoRightPromptEither(t *testing.T) {
+	drawn := 0
+	s := newSessionWith(t, func(sh *Shell) {
+		sh.Transient = func() string { return "· " }
+		sh.Theme = PromptThemeFunc(func(info PromptInfo) (ThemedPrompt, bool) {
+			if info.Continued {
+				return ThemedPrompt{Cont: "> "}, true
+			}
+			drawn++
+			return ThemedPrompt{
+				Text:  "upper\n[" + itoa(drawn) + "] ",
+				Right: rightPromptR,
+			}, true
+		})
+	})
+	s.typeLine("echo hi\n")
+	s.typeLine("\n")
+
+	rows := strings.Split(s.shown().styledText(), "\n")
+	found := false
+	for i, row := range rows {
+		if !strings.Contains(row, "echo hi") {
+			continue
+		}
+		found = true
+		if strings.Contains(row, "R") {
+			t.Errorf("row %d kept its right prompt under a transient prompt:\n%q", i, row)
+		}
+		if !strings.HasPrefix(strings.TrimLeft(row, " "), "·") {
+			t.Errorf("row %d was not trimmed to the transient prompt:\n%q", i, row)
+		}
+		// And the banner row above it is gone too, which is what the trim is
+		// for — a right prompt erased off a frame that stayed would be half
+		// the job.
+		if i > 0 && strings.Contains(rows[i-1], "upper") {
+			t.Errorf("the banner row above the accepted line survived:\n%q", rows[i-1])
+		}
+	}
+	if !found {
+		t.Fatalf("the accepted line is not on the screen:\n%q", s.screen.String())
+	}
+	s.end()
+}

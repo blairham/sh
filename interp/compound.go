@@ -220,8 +220,45 @@ func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 		// `false; while [ $? -eq 0 ]; do …` does not run in any shell in
 		// the panel, and resetting first made it run in ours.
 		defer r.enteringLoop()()
+		// A loop with nothing to test *and* nothing to run never stops, in
+		// either keyword. One grammar admits the shape at all — `until; do
+		// done` is refused by bash 5.3, ksh93, dash and BusyBox ash, as is an
+		// incomplete `until` at end of input — so zsh 5.9.2 is the whole of
+		// the expectation. Measured 2026-09-20, `timeout 3 env -i
+		// PATH=/usr/bin:/bin LC_ALL=C zsh -f s.sh`, standard input on the
+		// null device:
+		//
+		//	until; do \n done; echo C     never returns, 99% CPU
+		//	while; do \n done; echo C     never returns
+		//	echo A; until                 never returns
+		//	echo A; while                 never returns
+		//
+		// and the two rows that say it takes *both* lists rather than either
+		// one:
+		//
+		//	until; do :; done; echo C     `C`, status 0
+		//	echo A; until true            `A`, status 0
+		//
+		// An empty condition on its own is status 0 — which is what stops the
+		// first of those and what makes `while; do :; done` run forever — and
+		// an empty body on its own changes nothing. Read as "an empty
+		// condition is 0" alone, which is what this shell did, `until` leaves
+		// before its first pass and exits 0 where zsh is still going; the
+		// reading looks right for exactly as long as nobody runs the `while`
+		// row beside it, and `while` and `until` sat in one row of this
+		// issue's table for four passes (#3852).
+		bare := len(c.Cond) == 0 && len(c.Body) == 0
 		body := 0
 		for {
+			// The one loop the cancel door in `command` cannot see, because
+			// it runs no command to pass through it — see cancel.go, which
+			// puts the check there on the reasoning that a loop of the
+			// shell's own commands has nowhere else to be noticed. A loop
+			// with no commands in it at all is the gap that leaves, and it
+			// was reachable before this as `while; do \n done`.
+			if r.canceled() {
+				return nil
+			}
 			if err := r.condList(ctx, c.Cond); err != nil {
 				return err
 			}
@@ -235,13 +272,15 @@ func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 				// reported 130.
 				return nil
 			}
-			done := r.status == 0
-			if c.Until {
-				done = !done
-			}
-			if !done {
-				r.status = body
-				return nil
+			if !bare {
+				done := r.status == 0
+				if c.Until {
+					done = !done
+				}
+				if !done {
+					r.status = body
+					return nil
+				}
 			}
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err

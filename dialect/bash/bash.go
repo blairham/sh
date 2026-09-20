@@ -29,6 +29,13 @@ func Dialect() syntax.Dialect {
 	// so this is a version line inside one lineage exactly as
 	// ArithDoubleQuote is. See syntax.Dialect.SubstitutionBodyRead (#2857).
 	d.SubstitutionBodyRead = syntax.NewerSubstitutionBodyReadWithItsLine
+	// And a `'` inside a double-quoted operand keeps what it opens out of
+	// that read: `echo before; echo "${v-'$(if)'}"; echo after` writes
+	// `before` here and is refused outright by dash and BusyBox ash, which
+	// read the same body with the same line. Measured 2026-09-19 — and in
+	// POSIX mode bash joins them, which this dialect does not yet follow.
+	// See syntax.Dialect.AQuotedOperandHidesASubstitutionFromItsLine.
+	d.AQuotedOperandHidesASubstitutionFromItsLine = true
 	// A double quote inside an arithmetic expression is taken out of the
 	// text before anything reads it. Measured 2026-09-10 in 5.3.15 and as
 	// `sh`: with `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and

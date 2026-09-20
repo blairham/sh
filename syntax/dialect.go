@@ -75,8 +75,8 @@ func (a ProgramRoutes) Has(route ProgramRoutes) bool { return a&route != 0 }
 // refuses the whole line and prints nothing. The control that makes it a
 // statement about *parsing* rather than about how far a failure unwinds is
 // the same body in a branch nothing takes — `false && v=$(if); echo
-// "after=$?"` — where the four columns above still refuse and the other three
-// print `after=1` with nothing said.
+// "after=$?"` — where dash, BusyBox ash and the two 5.3 columns still refuse
+// and bash 3.2, ksh93 and zsh print `after=1` with nothing said.
 //
 // The split runs *through* bash, which is the part a reading keyed on the
 // shell's name gets wrong: 5.3 reads the newer spelling with the line and 3.2
@@ -5185,6 +5185,46 @@ type Dialect struct {
 	// parser, because only the caller knows it is reading a body and which
 	// spelling opened it. See interp's bodyDialect.
 	SubstitutionBodyRefusesASteppedOverSeparator bool
+
+	// AQuotedOperandHidesASubstitutionFromItsLine says a `'` written inside
+	// a double-quoted expansion's operand keeps a substitution opened behind
+	// it out of the read of the line, for a dialect that reads a body with
+	// its line at all.
+	//
+	// The operand is read twice — the scan for the closing brace honors the
+	// quotes between the braces, and the operand is then read again with
+	// those quotes standing for themselves — so the two readings disagree
+	// about whether there is a substitution there. Which reading the *line*
+	// is held to is the question, and the columns that read a body with its
+	// line — dash, BusyBox ash, bash 5.3 and that build as `sh` — split on
+	// it. Measured 2026-09-19, script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null
+	// device:
+	//
+	//	column               `echo before; echo "${v-'$(if)'}"; echo after`
+	//	bash 5.3.20          `before`, then a run-time complaint, then `after`
+	//	bash 5.3.20 as `sh`  refused with the line, nothing written
+	//	dash 0.5.12          refused with the line, nothing written
+	//	BusyBox ash 1.37.0   refused with the line, nothing written
+	//
+	// The control that makes it about the quote rather than about the
+	// operand is the same line with the quotes moved off the substitution —
+	// `"${v-'a'$(if)}"` — which every one of those columns refuses with the
+	// line.
+	// And the control that says the two readings really do differ at
+	// expansion is `"[${v-'$(echo hi)'}]"`, which is `['hi']` in all seven
+	// columns: the quotes are characters of the result everywhere, so it is
+	// only the line's read that moves.
+	//
+	// **bash's own answer moves with POSIX mode**, which is why the two bash
+	// rows differ, and that half is not reached from here: this is the
+	// dialect's standing answer and nothing swaps it at `set -o posix`. The
+	// row above is the gap that leaves.
+	//
+	// Consulted only where [Dialect.SubstitutionBodyRead] is not
+	// [SubstitutionBodyReadWhenItRuns]; bash 3.2, ksh93 and zsh never read a
+	// body with a line, so there is nothing for a quote to hide it from.
+	AQuotedOperandHidesASubstitutionFromItsLine bool
 
 	// SubstitutionBodyRead says when a command substitution's body is
 	// parsed — with the line that holds it, or when the substitution runs.

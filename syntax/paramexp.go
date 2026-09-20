@@ -2234,7 +2234,8 @@ func (p *Parser) quotedWordFrom(text string, at Pos) *Word {
 	// asks *when* a body is parsed consults them, so they are gathered only
 	// for one. See Parser.hiddenFromTheScriptsRead.
 	outerQuoted := p.quotedInTheScriptsRead
-	if p.dialect.SubstitutionBodyRead != SubstitutionBodyReadWhenItRuns {
+	if p.dialect.SubstitutionBodyRead != SubstitutionBodyReadWhenItRuns &&
+		p.dialect.AQuotedOperandHidesASubstitutionFromItsLine {
 		p.quotedInTheScriptsRead = p.singleQuotedRunsIn(text)
 	} else {
 		p.quotedInTheScriptsRead = nil

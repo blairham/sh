@@ -135,26 +135,34 @@ func TestEachDialectEndsAWordOnATrailingBackslash(t *testing.T) {
 //	bash 5.3, 3.2       0, the complaint on stderr and `A`, an empty line, `B`
 //	ksh93u+             0, and it prints `n` — no objection at all
 //
-// Two of those four are now ours by measurement rather than by default. The
+// Three of those four are now ours by measurement rather than by default. The
 // `bash` dialect scopes the failure to the word — it names the construct,
 // expands the word to the empty string and carries the script on to `B` at 0
 // — which is [interp.Semantics.SubstitutionParseErrorIsFatal] answered `No`
 // there and `Yes` everywhere else (#2703). The other two answers are not this
 // axis: ksh93 reads the text as nesting that closes and so never has a
 // failure to place, and dash and ash refuse before `echo A` has run, which is
-// a question about *when* the body is read.
+// a question about *when* the body is read — and is
+// [syntax.Dialect.SubstitutionBodyRead], taken in #2857, which is what moved
+// the dash row here from the wrong side of it.
 //
 // The wording is the half that is #2680's: the same end of input inside the
 // same re-lexed body used to come back out as `input ends after a backslash`,
 // which named a rule instead of the construct. A refusal whose cause really
 // is the missing backquote has to keep saying so.
 func TestAnUnbalancedNestedBackquoteNamesTheBackquote(t *testing.T) {
-	// `echo A` runs first in every dialect here, which is itself a fact
+	// `echo A` runs first in three of these four, which is itself a fact
 	// about where the failure happens: the older substitution's body is
 	// unescaped and re-lexed when the word is *expanded*, not when the line
 	// is parsed, so `syntax.Parse` accepts this text and the refusal arrives
-	// mid-run. dash and BusyBox ash are the columns that read the whole line
-	// first and so print nothing at all.
+	// mid-run.
+	//
+	// **dash is the fourth**, and its row carried `A` until #2857: that
+	// column reads *both* substitution spellings with the line that holds
+	// them, so the refusal arrives before the `echo A` in front of it runs,
+	// and the corpus row has said `nothing printed` since it was recorded.
+	// BusyBox ash is the same column and has no preset in this table.
+	// See syntax.Dialect.SubstitutionBodyRead.
 	//
 	// The `bash` row is the one that carries on: the empty line is the word
 	// that failed, and `B` is the statement after it.
@@ -166,7 +174,7 @@ func TestAnUnbalancedNestedBackquoteNamesTheBackquote(t *testing.T) {
 		{"bash", "A\nbash: command substitution: line 1: unexpected EOF while looking for matching ``'\n\nB\n", 0},
 		{"zsh", "A\nzsh:1: unmatched `\n", 1},
 		{"ksh", "A\nksh: syntax error at line 1: ``' unmatched\n", 3},
-		{"dash", "A\ndash: 1: Syntax error: EOF in backquote substitution\n", 2},
+		{"dash", "dash: 1: Syntax error: EOF in backquote substitution\n", 2},
 	} {
 		out, st, err := presets[c.name].Combined(t, dialecttest.Base{}, src)
 		if err != nil {

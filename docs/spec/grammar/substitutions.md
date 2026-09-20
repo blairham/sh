@@ -1094,20 +1094,95 @@ than how far a failure reaches:
 The substitution is never reached. The three lazy columns print `after=1`
 with nothing said; the four eager ones refuse before `false` has run.
 
-**This implementation is on the lazy side in every dialect**, so `bash`,
-`dash` and `ash` are off here. Both rows are in the corpus —
-`subst/a-body-that-will-not-parse-stops-the-line` and
-`subst/a-body-that-will-not-parse-in-a-branch-never-taken` — so a change
-is graded rather than argued.
+### The spelling splits it again, and it splits bash
 
-**What taking the eager side needs**, and why it is not a semantics axis
-alone: the body would have to be parsed where the line is, with the alias
-table and the dialect *as they stood then*, and the result kept — which
-is a field on the span beside `Span.Arith` and `Span.Param`, filled by
-the parser, rather than a flag the interpreter reads. Validating the body
-at the top of each line without keeping the tree would answer the two
-rows above and still get the alias row wrong, which is one rule with two
-implementations and the shape this tree has been bitten by before.
+The table above is the `$( … )` spelling. The backquoted one is a second
+question and the two bash columns answer it the other way. Measured
+2026-09-19, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+standard input on the null device, over `echo before; v=X; echo after` with
+the substitution written in backquotes, and the branch control written the
+same way:
+
+| shell | `$( … )` | `` ` … ` `` |
+| --- | --- | --- |
+| dash 0.5.12 | with the line | with the line |
+| BusyBox ash 1.37.0 | with the line | with the line |
+| bash 5.3.20 | with the line | when it runs |
+| bash 5.3.20 as `sh` | with the line | when it runs |
+| bash 3.2.57 | when it runs | when it runs |
+| ksh93u+ | when it runs | when it runs |
+| zsh 5.9.2 | when it runs | when it runs |
+
+So the answer is three-valued rather than a bool, and it is the spelling of
+**each** body rather than of the outermost one: `v=$(echo $(if))` is refused
+with the line in bash 5.3 where `` v=`echo $(if)` `` and `` v=$(echo `if`) ``
+are not.
+
+### The unit is the logical line
+
+Measured the same day in all four eager columns: a script whose first line is
+a `printf` and whose second holds the refused body writes `start` before the
+refusal, and so does a sourced file and a multi-line `eval` text. So it is not
+"the file is parsed first" — what is read ahead is one logical line's worth,
+which is what a front end reading a line at a time already does.
+
+### The body is read **twice**, which is measured and not an optimisation
+
+The natural reading of "parsed with the line" is that the tree is kept and
+run later. bash does not do that. Measured 2026-09-19, one line, with
+`shopt -s expand_aliases` in front so that a non-interactive shell expands
+at all:
+
+    alias t=echo; v=$(t hi); echo "[$v]"
+
+bash 5.3 answers `[hi]` — the body it read with the line is expanded again
+against the table *that same line went on to change* — where dash answers
+`t: not found` and `[]` from the one read it did. A kept tree would answer
+`[]` in bash, which is the wrong column.
+
+That is what settles the design question this section used to leave open.
+Reading the body with the line and **throwing the tree away** is not "one
+rule with two implementations": it is bash's rule exactly, it leaves dash's
+own column of `alias/nested-text-expands-where-the-command-string-did-not`
+where it was, and it means the parser has to hand over a *list* rather than
+a second tree. `File.Substitutions` is that list and
+`syntax.Dialect.SubstitutionBodyRead` is the flag that fills it.
+
+### A quote in a double-quoted operand — where the four part again
+
+An expansion's operand inside double quotes is read twice by any shell: the
+scan for the closing brace honors the quotes written between the braces, and
+the operand is then read again with those quotes standing for themselves.
+Which of the two readings the *line* is held to is a fifth question, and the
+four eager columns do not agree. Measured 2026-09-19, script files, same
+environment:
+
+| script | bash 5.3.20 | bash 5.3.20 as `sh` | dash | BusyBox ash |
+| --- | --- | --- | --- | --- |
+| `echo before; echo "${v-$(if)}"; echo after` | refused with the line | refused | refused | refused |
+| `echo before; echo "${v-'$(if)'}"; echo after` | **`before`, then a run-time complaint** | refused | refused | refused |
+| `echo before; echo "${v-'a'$(if)}"; echo after` | refused with the line | refused | refused | refused |
+
+Row 2 is the discriminating one and row 3 is its control: moving the quotes
+off the substitution brings bash back in line, so it is the quote that hides
+the opener and not the operand. The control that says the two readings really
+do differ at expansion is `echo "[${v-'$(echo hi)'}]"`, which is `['hi']` in
+all seven columns — the quotes are characters of the result everywhere, so
+what row 2 moves is only the line's read.
+
+bash's own answer here moves with POSIX mode, which is what the second column
+records. `syntax.Dialect.AQuotedOperandHidesASubstitutionFromItsLine` carries
+the dialect's standing answer and nothing swaps it at `set -o posix`, so the
+`sh` column of row 2 is a known gap.
+
+### Where this implementation stands
+
+**The eager side, in `bash`, `dash` and `ash`**, each on its own value of
+`syntax.Dialect.SubstitutionBodyRead`. Both corpus rows —
+`subst/a-body-that-will-not-parse-stops-the-line` and
+`subst/a-body-that-will-not-parse-in-a-branch-never-taken` — grade it, and
+`interp.Runner.readSubstitutionsUpTo` is what reads the list before a line
+runs.
 
 ## Where a refused body says it happened, and what it was looking for
 

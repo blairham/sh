@@ -4452,6 +4452,11 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		r.started = r.Now()
 	}
 	r.programEnd = int(f.End().Line + 1)
+	// The substitution bodies this dialect reads with the line that holds
+	// them, read before any of that line runs. The cursor walks the list as
+	// the lines go by, because the unit is the logical line and not the file:
+	// see Runner.readSubstitutionsUpTo (#2857).
+	substsRead := 0
 	abandoned := 0
 	// The field says which line a give-up inside this chunk gives up, and it
 	// is put back afterwards for a caller that drives a runner both ways.
@@ -4478,6 +4483,11 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 			// spellings agree on every shape either can reach.
 			continue
 		}
+		// Everything up to the newline is parsed before any of it runs, so
+		// the bodies on this logical line are read before its first
+		// statement — the statement's *end* being where the line ends, which
+		// is what puts a compound's whole extent on one line's worth.
+		substsRead = r.readSubstitutionsUpTo(f, substsRead, st.End().Line)
 		// The one place a statement is read at the level a shell reads its
 		// input, which is the level one dialect's `$_` moves at.
 		r.atInputLevel = r.aLoneSimpleCommandOnItsLine(f.Stmts, i)

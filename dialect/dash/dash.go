@@ -20,6 +20,13 @@ func Dialect() syntax.Dialect {
 	// `ABC` document — and one that joined after text does not. bash and zsh
 	// take both and ksh93 neither (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterAfterALeadingContinuation
+	// **Both** spellings of a command substitution are parsed while the line
+	// that holds them is read, so a body that will not parse refuses the
+	// line before any of it runs. Measured 2026-09-19: `echo before; v=$(if)`
+	// and the same with backquotes each write nothing at all, where bash 5.3
+	// writes `before` for the second of them. See
+	// syntax.Dialect.SubstitutionBodyRead (#2857).
+	d.SubstitutionBodyRead = syntax.EverySubstitutionBodyReadWithItsLine
 	d.AliasesExpandUnlessTold = true
 	d.ExpandAliasesInProgramText = syntax.RouteOnEveryRoute
 	// And it splices the body's text, so a newline in one is a line of the

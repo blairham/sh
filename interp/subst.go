@@ -68,177 +68,13 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		defer func() { r.globSuspended = true }()
 	}
 
-	// The alias tables go on it, because a substitution's commands are
-	// commands: `alias t=echo; v=$(t hi)` leaves `hi` in v in every shell of
-	// the panel that expands aliases at all, and left it empty here (#2096).
-	// Parsed whole rather than a line at a time, which is measured — an
-	// alias defined on a substitution's first line does not reach its
-	// second in dash, ksh93 or zsh.
-	// **Here rather than where the line was parsed**, which four of the seven
-	// columns do not do. Measured 2026-09-15 without an alias anywhere:
-	// `echo before; v=$(if); echo after` writes `before` in bash 3.2, ksh93
-	// and zsh and writes nothing in dash, bash 5.3, that build as `sh` and
-	// BusyBox ash — so the split runs through bash, and #2357's reading of it
-	// as dash alone is an artifact of measuring with an alias, which bash
-	// does not expand in a non-interactive shell. `false && v=$(if)` is the
-	// pair: the three lazy columns never read the body at all.
-	//
-	// Not taken, and the reason is that it cannot be a flag read here: the
-	// body would have to be parsed where the line is, with the alias table
-	// and the dialect as they stood then, and the *tree* kept — a field on
-	// the span beside syntax.Span.Arith and syntax.Span.Param, filled by the
-	// parser. Checking the body at the top of each line and throwing the
-	// tree away would answer the two corpus rows and still hand a live alias
-	// table to the parse, which is one rule with two implementations. See
-	// docs/spec/grammar/substitutions.md, and the corpus rows
-	// `subst/a-body-that-will-not-parse-stops-the-line` and
-	// `subst/a-body-that-will-not-parse-in-a-branch-never-taken`.
-	p := r.ParseWithAliases(src, r.bodyDialect(span))
-	if !span.Backquoted && span.Kind == syntax.CommandSubst {
-		// The text is the inside of a `$( )`, cut out of the script by the
-		// lexer, and that is a fact only this call site still holds: the
-		// parentheses are not in `src`. What turns on it is where a
-		// here-document in the body ends — at the end of the text, or at the
-		// delimiter the last line of it begins with, in the one dialect that
-		// reads it that way.
-		//
-		// **The backquoted spelling is left out and that is measured**, not
-		// symmetry: `` v=`cat <<E` ⏎ `w` ⏎ `E ` `` answers `[w⏎E ]` in bash
-		// 5.3, body, exactly as bash 3.2 has it. The old-style substitution
-		// does not take the route. See
-		// syntax.Dialect.HeredocLastLineIsADelimiterPrefix.
-		p.InsideProgramParentheses()
-	}
-	// Where the body sits in the script, so that what it reports is reported
-	// where a reader can find it. The span's own line is the body's first,
-	// because a span starts at its opening delimiter — and it accumulates,
-	// so a substitution inside a substitution is still placed in the file
-	// rather than in whichever body most recently began. One dialect numbers
-	// the older spelling from the top of the body instead, which is
-	// Diagnostics.BackquotedSubstitutionRestartsLines.
-	//
-	// **Read once and used twice**, by the refusal below and by the runner
-	// that runs what parsed. Two copies of this rule is how the refusal came
-	// to place a body its own runner would have placed correctly.
-	base := r.spanLineBase(span)
-	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
-		base = 0
-	}
-	if !span.Backquoted && r.diag().SubstitutionBodyStartsAtItsOpenersLine {
-		// The newlines between the opener and the first command of the body
-		// count for nothing in one dialect, so the first command is on the
-		// opener's line however many of them were written. Taken off the
-		// offset rather than off the text, which would move every position
-		// the body's own refusals and traces are written from. See
-		// Diagnostics.SubstitutionBodyStartsAtItsOpenersLine for the five
-		// rows and for the control that says this is the opener's question.
-		base -= leadingNewlines(src)
-	}
-	f := p.Parse()
-	if err := p.Err(); err != nil {
-		// A substitution re-parses, so the syntax-error status is the
-		// dialect's here too — not only in whatever first read the script.
-		//
-		// Whether it is fatal is the dialect's, and it was a constant here.
-		// dash, ksh93 and zsh abandon the script; bash reports the failure,
-		// expands the word to the empty string and carries the statement and
-		// the script on, exiting 0. They all detect it when they parse the
-		// whole input; this parses the body at expansion time, so either
-		// outcome has to be produced deliberately. Without the stop the
-		// diagnostic appeared and the next command ran regardless, which is
-		// the shape this package keeps finding — and with it always taken, a
-		// script bash finishes stopped here (#2703).
-		// Worded by the dialect, and located in the *script* rather than in
-		// the body. `%v` on a *syntax.Error prints the parser's own
-		// coordinates — `1:3: ";" unexpected` — which is an internal
-		// position string arriving in front of a user, inside a message
-		// whose prefix has already named the right line in the file (#2460).
-		// Its sibling helper for the other two substitution spellings has
-		// asked the dialect since it was written; this one never did.
-		//
-		// Shifted by the same base the body's runner is given, so a refusal
-		// and a command that failed in the same body are placed alike.
-		// Without the shift the one dialect that writes the line *into* its
-		// sentence — `syntax error at line N:` — counted from the body and
-		// disagreed with its own prefix.
-		// And the tag that goes with scoping it to the word: the one
-		// dialect that does not stop names the construct the refusal came
-		// from, because the script's own line is no longer the whole story.
-		// Both of the next two are the older spelling's alone, and for one
-		// reason: the column that scopes this failure to the word reads a
-		// `$( … )` body *with the script*, so that spelling's refusal is the
-		// line's there — untagged, and fatal. Reproducing the outcome
-		// without moving when the body is read means asking about the
-		// spelling, which is what Diagnostics.BackquotedSubstitutionRestartsLines
-		// already does one message over.
-		construct := r.substFailureRoute(span)
-		raw := r.substParseErrorAtItsCloser(span, src, err)
-		// The refusal's own base, which is the body's where the body was
-		// read at expansion time and has lines of its own. See
-		// Runner.expansionBodyLine for why this is not Runner.lineBase.
-		failureBase := base
-		if !span.Backquoted && r.expansionBodyLine > 0 {
-			failureBase += r.expansionBodyLine - 1
-		}
-		failure := shiftParseError(raw, failureBase)
-		// Placed at the failure's line and followed by the text it was
-		// found in, for the dialects that write one. See substecho.go.
-		putBack := r.substFailureAtItsLine(span, src, failure)
-		// The sentence, with the clause one dialect adds while it is still
-		// looking for the closing parenthesis — see Runner.substBodyExpecting.
-		r.errf("%s", r.diagLineNamed(construct, "%s%s\n",
-			r.diag().ParseFailure(failure), r.substBodyExpecting(span, failure)))
-		if echo, at := r.substFailureEcho(span, src, raw, failure, failureBase); echo != "" {
-			if at > 0 {
-				r.line = at
-			}
-			r.errf("%s", r.diagLineNamed(construct, "%s", echo))
-		}
-		putBack()
-		if span.Backquoted && !r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {
-			// The word expands to nothing and the statement goes on, which
-			// is a failed *expansion* rather than a failed script. The
-			// status is left alone for the same reason: the command that
-			// holds the word is about to run and report its own.
-			return ""
-		}
-		// **How far the abandonment reaches**, which is a second question and
-		// the one #3274 was: a subshell contains it in ksh93 and does not in
-		// bash 5.3, bash as `sh`, zsh, dash or BusyBox ash, where the script
-		// ends wherever the substitution was written. See
-		// Semantics.SubstitutionParseErrorEscapesASubshell for the panel and
-		// substitutionstop.go for why the answer is recorded in a box every
-		// clone shares rather than checked at each of the seven boundaries a
-		// shell clones at.
-		//
-		// Asked only from inside one, which is where the columns differ: at
-		// the top level there is nothing to escape and every column already
-		// agrees, so a script without subshells never reaches the axis.
-		// The number the refusal leaves behind. Read before the stop is
-		// recorded, so the box a subshell's failure travels in and the
-		// status this shell reports are the same number rather than two
-		// readings of one rule — see Runner.substParseFailureStatus for the
-		// column that moves and for what says the failing text is not the
-		// script's own line.
-		_, offTheScriptsLine := r.borrowedAtLocation()
-		status := r.substParseFailureStatus(offTheScriptsLine)
-		if r.inSubshell &&
-			r.ask(r.sem().SubstitutionParseErrorEscapesASubshell,
-				"a substitution body that does not parse ending the script from inside a subshell") {
-			r.recordScriptStop(status)
-		}
-		r.status = status
-		// **An error the shell reported, not a request to stop**, which is
-		// what every boundary in fileabandon.go splits on. It was raised
-		// through stopTheShell and so arrived at those boundaries as
-		// abandonRequested — the zero value that file calls "the answer for
-		// a site that has not thought about it" — and the one that pays for
-		// it is the interactive prompt: `v=$(echo hi; for)` typed at a
-		// prompt ended the *session* in every dialect, where all seven
-		// reference columns report it and draw the next prompt (#3300). The
-		// annotation is the whole fix; Runner.GiveUpTheLine already catches
-		// an error and already lets a request through.
-		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonSubstParse, false
+	// The body, parsed. Four of the seven columns have read it already — with
+	// the line that holds it, before any of that line ran — and for those
+	// this is the second read of the same text. See
+	// Runner.readLineSubstitutions for which and for why the first read does
+	// not stand in for this one.
+	f, base, ok := r.readSubstBody(span)
+	if !ok {
 		return ""
 	}
 
@@ -772,4 +608,266 @@ func leadingNewlines(src string) int {
 // line held it, in every dialect (#3810).
 func (r *Runner) spanLineBase(span syntax.Span) int {
 	return r.lineBase + r.substFragmentLine + int(span.Pos.Line) - 1
+}
+
+// readSubstBody parses a substitution's body and reports the refusal where
+// this shell reports one, answering the tree, the offset the body's own lines
+// are counted from, and whether it read at all.
+//
+// Two callers, and the second is the whole of why it is a function: a body is
+// read when the substitution runs in three dialects and **with the line that
+// holds it** in four, and those two moments have to produce the same sentence
+// at the same place or the split becomes a second diagnostic rather than a
+// second moment. See Runner.readLineSubstitutions and
+// syntax.Dialect.SubstitutionBodyRead (#2857).
+func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
+	src := span.Value
+	// The alias tables go on it, because a substitution's commands are
+	// commands: `alias t=echo; v=$(t hi)` leaves `hi` in v in every shell of
+	// the panel that expands aliases at all, and left it empty here (#2096).
+	// Parsed whole rather than a line at a time, which is measured — an
+	// alias defined on a substitution's first line does not reach its
+	// second in dash, ksh93 or zsh.
+	//
+	// **The table as it stands now**, which is what says the read with the
+	// line does not replace this one. Measured 2026-09-19, `shopt -s
+	// expand_aliases` then `alias t=echo; v=$(t hi); echo "[$v]"` on one
+	// line: bash 5.3 answers `[hi]`, so the body it refused with the line is
+	// still expanded against the table the line went on to change, while
+	// dash answers `t: not found` and `[]` from the read it did first. So
+	// bash reads the body twice and dash reads it once, and this shell reads
+	// it twice in both — which leaves dash's alias row where it was and
+	// leaves bash's right. See
+	// `alias/nested-text-expands-where-the-command-string-did-not`.
+	p := r.ParseWithAliases(src, r.bodyDialect(span))
+	if !span.Backquoted && span.Kind == syntax.CommandSubst {
+		// The text is the inside of a `$( )`, cut out of the script by the
+		// lexer, and that is a fact only this call site still holds: the
+		// parentheses are not in `src`. What turns on it is where a
+		// here-document in the body ends — at the end of the text, or at the
+		// delimiter the last line of it begins with, in the one dialect that
+		// reads it that way.
+		//
+		// **The backquoted spelling is left out and that is measured**, not
+		// symmetry: `` v=`cat <<E` ⏎ `w` ⏎ `E ` `` answers `[w⏎E ]` in bash
+		// 5.3, body, exactly as bash 3.2 has it. The old-style substitution
+		// does not take the route. See
+		// syntax.Dialect.HeredocLastLineIsADelimiterPrefix.
+		p.InsideProgramParentheses()
+	}
+	// Where the body sits in the script, so that what it reports is reported
+	// where a reader can find it. The span's own line is the body's first,
+	// because a span starts at its opening delimiter — and it accumulates,
+	// so a substitution inside a substitution is still placed in the file
+	// rather than in whichever body most recently began. One dialect numbers
+	// the older spelling from the top of the body instead, which is
+	// Diagnostics.BackquotedSubstitutionRestartsLines.
+	//
+	// **Read once and used twice**, by the refusal below and by the runner
+	// that runs what parsed. Two copies of this rule is how the refusal came
+	// to place a body its own runner would have placed correctly.
+	base := r.spanLineBase(span)
+	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
+		base = 0
+	}
+	if !span.Backquoted && r.diag().SubstitutionBodyStartsAtItsOpenersLine {
+		// The newlines between the opener and the first command of the body
+		// count for nothing in one dialect, so the first command is on the
+		// opener's line however many of them were written. Taken off the
+		// offset rather than off the text, which would move every position
+		// the body's own refusals and traces are written from. See
+		// Diagnostics.SubstitutionBodyStartsAtItsOpenersLine for the five
+		// rows and for the control that says this is the opener's question.
+		base -= leadingNewlines(src)
+	}
+	f := p.Parse()
+	if err := p.Err(); err != nil {
+		// A substitution re-parses, so the syntax-error status is the
+		// dialect's here too — not only in whatever first read the script.
+		//
+		// Whether it is fatal is the dialect's, and it was a constant here.
+		// dash, ksh93 and zsh abandon the script; bash reports the failure,
+		// expands the word to the empty string and carries the statement and
+		// the script on, exiting 0. They all detect it when they parse the
+		// whole input; this parses the body at expansion time, so either
+		// outcome has to be produced deliberately. Without the stop the
+		// diagnostic appeared and the next command ran regardless, which is
+		// the shape this package keeps finding — and with it always taken, a
+		// script bash finishes stopped here (#2703).
+		// Worded by the dialect, and located in the *script* rather than in
+		// the body. `%v` on a *syntax.Error prints the parser's own
+		// coordinates — `1:3: ";" unexpected` — which is an internal
+		// position string arriving in front of a user, inside a message
+		// whose prefix has already named the right line in the file (#2460).
+		// Its sibling helper for the other two substitution spellings has
+		// asked the dialect since it was written; this one never did.
+		//
+		// Shifted by the same base the body's runner is given, so a refusal
+		// and a command that failed in the same body are placed alike.
+		// Without the shift the one dialect that writes the line *into* its
+		// sentence — `syntax error at line N:` — counted from the body and
+		// disagreed with its own prefix.
+		// And the tag that goes with scoping it to the word: the one
+		// dialect that does not stop names the construct the refusal came
+		// from, because the script's own line is no longer the whole story.
+		// Both of the next two are the older spelling's alone, and for one
+		// reason: the column that scopes this failure to the word reads a
+		// `$( … )` body *with the script*, so that spelling's refusal is the
+		// line's there — untagged, and fatal. Reproducing the outcome
+		// without moving when the body is read means asking about the
+		// spelling, which is what Diagnostics.BackquotedSubstitutionRestartsLines
+		// already does one message over.
+		construct := r.substFailureRoute(span)
+		raw := r.substParseErrorAtItsCloser(span, src, err)
+		// The refusal's own base, which is the body's where the body was
+		// read at expansion time and has lines of its own. See
+		// Runner.expansionBodyLine for why this is not Runner.lineBase.
+		failureBase := base
+		if !span.Backquoted && r.expansionBodyLine > 0 {
+			failureBase += r.expansionBodyLine - 1
+		}
+		failure := shiftParseError(raw, failureBase)
+		// Placed at the failure's line and followed by the text it was
+		// found in, for the dialects that write one. See substecho.go.
+		putBack := r.substFailureAtItsLine(span, src, failure)
+		// The sentence, with the clause one dialect adds while it is still
+		// looking for the closing parenthesis — see Runner.substBodyExpecting.
+		r.errf("%s", r.diagLineNamed(construct, "%s%s\n",
+			r.diag().ParseFailure(failure), r.substBodyExpecting(span, failure)))
+		if echo, at := r.substFailureEcho(span, src, raw, failure, failureBase); echo != "" {
+			if at > 0 {
+				r.line = at
+			}
+			r.errf("%s", r.diagLineNamed(construct, "%s", echo))
+		}
+		putBack()
+		if span.Backquoted && !r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {
+			// The word expands to nothing and the statement goes on, which
+			// is a failed *expansion* rather than a failed script. The
+			// status is left alone for the same reason: the command that
+			// holds the word is about to run and report its own.
+			return nil, 0, false
+		}
+		// **How far the abandonment reaches**, which is a second question and
+		// the one #3274 was: a subshell contains it in ksh93 and does not in
+		// bash 5.3, bash as `sh`, zsh, dash or BusyBox ash, where the script
+		// ends wherever the substitution was written. See
+		// Semantics.SubstitutionParseErrorEscapesASubshell for the panel and
+		// substitutionstop.go for why the answer is recorded in a box every
+		// clone shares rather than checked at each of the seven boundaries a
+		// shell clones at.
+		//
+		// Asked only from inside one, which is where the columns differ: at
+		// the top level there is nothing to escape and every column already
+		// agrees, so a script without subshells never reaches the axis.
+		// The number the refusal leaves behind. Read before the stop is
+		// recorded, so the box a subshell's failure travels in and the
+		// status this shell reports are the same number rather than two
+		// readings of one rule — see Runner.substParseFailureStatus for the
+		// column that moves and for what says the failing text is not the
+		// script's own line.
+		_, offTheScriptsLine := r.borrowedAtLocation()
+		status := r.substParseFailureStatus(offTheScriptsLine)
+		if r.inSubshell &&
+			r.ask(r.sem().SubstitutionParseErrorEscapesASubshell,
+				"a substitution body that does not parse ending the script from inside a subshell") {
+			r.recordScriptStop(status)
+		}
+		r.status = status
+		// **An error the shell reported, not a request to stop**, which is
+		// what every boundary in fileabandon.go splits on. It was raised
+		// through stopTheShell and so arrived at those boundaries as
+		// abandonRequested — the zero value that file calls "the answer for
+		// a site that has not thought about it" — and the one that pays for
+		// it is the interactive prompt: `v=$(echo hi; for)` typed at a
+		// prompt ended the *session* in every dialect, where all seven
+		// reference columns report it and draw the next prompt (#3300). The
+		// annotation is the whole fix; Runner.GiveUpTheLine already catches
+		// an error and already lets a request through.
+		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonSubstParse, false
+		return nil, 0, false
+	}
+	return f, base, true
+}
+
+// readSubstitutionsUpTo parses the bodies of the substitutions a dialect reads
+// with the line that holds them, for every line of f up to and including
+// limit, and answers how far through the list it got.
+//
+// **When** a `$( … )` body is parsed is a dialect question and the panel is
+// split three ways, which syntax.Dialect.SubstitutionBodyRead records. What
+// falls out of it is what a reader sees: measured 2026-09-19 from a script
+// file, `echo before; v=$(if); echo after` writes nothing at all in dash,
+// BusyBox ash, bash 5.3 and that build as `sh` — the line is refused before
+// the `echo` in front of the substitution runs — and writes `before` first in
+// bash 3.2, ksh93 and zsh, which read the body only when the word is
+// expanded. `false && v=$(if); echo "after=$?"` is the control that makes it
+// a statement about *parsing*: the substitution is never reached, and the
+// four columns above still refuse the line where the other three print
+// `after=1` with nothing said. Either row alone is ambiguous — the first
+// could be a shell that gives up the line, the second a shell that swallows
+// the failure — and together they can only be the parse moment.
+//
+// **The logical line is the unit**, which is measured and is why this takes a
+// limit rather than reading the whole file: a script whose line 1 is a
+// `printf` and whose line 2 holds the refused body writes `start` first in
+// every one of the four, and so does a sourced file and a multi-line `eval`
+// text. The front ends already read a line at a time, so limit is the whole
+// file for them; an embedder handing a whole script to Run gets the shell's
+// own granularity from here rather than a different one.
+//
+// The tree is **thrown away**, which is measured rather than convenient: bash
+// 5.3 expands a body against the alias table as it stands when the word is
+// expanded, not the one the line was read under — `alias t=echo; v=$(t hi)`
+// on one line answers `[hi]` there — so a kept tree would be wrong for that
+// column. dash keeps its own and answers `t: not found`, which is a second
+// question this does not answer: its column of
+// `alias/nested-text-expands-where-the-command-string-did-not` is where it
+// shows, and it is no worse for this.
+//
+// The list is in reading order and a line never goes backwards in it, so a
+// cursor is enough to say what has been read.
+func (r *Runner) readSubstitutionsUpTo(f *syntax.File, from int, limit int32) int {
+	for from < len(f.Substitutions) && f.Substitutions[from].Pos.Line <= limit {
+		span := f.Substitutions[from]
+		from++
+		if !r.readNestedSubstitutions(span) {
+			// Reported, and the shell has been told to stop. The rest of the
+			// line's substitutions are not read for the same reason the rest
+			// of the line does not run.
+			return from
+		}
+	}
+	return from
+}
+
+// readNestedSubstitutions reads one body and then the bodies inside it,
+// reporting whether every one of them parsed.
+//
+// Recursive, because the nesting is: `v=$(echo $(if))` is refused with the
+// line in bash 5.3 where “ v=`echo $(if)` “ and “ v=$(echo `if`) “ are
+// not, so it is the spelling of **each** body and not of the outermost one. A
+// body is one unit however many lines it runs to — it is inside a line
+// already — so there is no limit here, only in the caller.
+//
+// The offset moves with the recursion so that a refusal inside a nested body
+// is still placed in the file rather than in whichever body most recently
+// began.
+func (r *Runner) readNestedSubstitutions(span syntax.Span) bool {
+	body, base, ok := r.readSubstBody(span)
+	if !ok {
+		return false
+	}
+	if len(body.Substitutions) == 0 {
+		return true
+	}
+	outer := r.lineBase
+	r.lineBase = base
+	defer func() { r.lineBase = outer }()
+	for _, inner := range body.Substitutions {
+		if !r.readNestedSubstitutions(inner) {
+			return false
+		}
+	}
+	return true
 }

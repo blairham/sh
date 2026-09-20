@@ -132,6 +132,20 @@ type Parser struct {
 	// file, held here from the moment it is raised until NextLine hands it
 	// back on the File. See File.Refused.
 	refused error
+	// lineSubsts are the command substitutions read since the last line was
+	// handed back, for the dialects that parse a body with its line. Nil
+	// under every other dialect, where nothing is gathered at all. Drained by
+	// NextLine onto the File. See File.Substitutions.
+	lineSubsts []Span
+	// quotedInTheScriptsRead are the runs of the fragment now being re-read
+	// that the script's own read had inside single quotes, as byte offsets
+	// into that fragment. Nil while the script itself is being read, where there is no
+	// second reading to disagree with. See Parser.hiddenFromTheScriptsRead.
+	quotedInTheScriptsRead [][2]int
+	// allHiddenFromTheScriptsRead says the fragment being re-read stood
+	// inside such a run in its own turn, so everything under it was hidden
+	// from the script's read whatever this fragment's own quoting says.
+	allHiddenFromTheScriptsRead bool
 	// aliasDone are the names already expanded in the command being read. It
 	// is a field rather than a local because the command word is not always
 	// reached from one place: assignment prefixes stand in front of it, so
@@ -1097,6 +1111,7 @@ func (p *Parser) Parse() *File {
 			continue
 		}
 		f.Stmts = append(f.Stmts, line.Stmts...)
+		f.Substitutions = append(f.Substitutions, line.Substitutions...)
 	}
 	f.Last = p.tok.Pos
 	if p.err == nil && f.Refused != nil {
@@ -1168,6 +1183,7 @@ func (p *Parser) NextLine() (*File, bool) {
 	}
 	f.Last = p.lineEnd()
 	f.Refused, p.refused = p.refused, nil
+	f.Substitutions, p.lineSubsts = p.lineSubsts, nil
 	if p.err != nil {
 		// The line did not read, so none of it runs. That is this function's
 		// own rule — everything up to the newline is parsed before any of it
@@ -2405,9 +2421,28 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 	out := make([]Span, len(spans))
 	copy(out, spans)
 	for i := range out {
+		// Whether the script's own read of this line could see the span at
+		// all. A fragment re-read with the quotes standing for themselves
+		// yields spans that were inside quotes the first time through, and
+		// those are not the line's — see Parser.hiddenFromTheScriptsRead.
+		hidden := p.hiddenFromTheScriptsRead(out[i])
+		// The substitutions a dialect reads with the line, gathered for the
+		// shell that will read them. Here because every word in the tree
+		// comes through this function, an expansion's operand included, and
+		// because the *lexer* that built the span cannot see which word it
+		// ended up in. See File.Substitutions (#2857).
+		if !hidden && p.dialect.SubstitutionBodyRead != SubstitutionBodyReadWhenItRuns &&
+			p.readsBodyWithItsLine(out[i]) {
+			p.lineSubsts = append(p.lineSubsts, out[i])
+		}
 		switch {
 		case out[i].Kind == ParamExp && out[i].Param == nil:
+			// An expansion the first read could not see hides everything
+			// inside it too, however many operands deep the nesting goes.
+			outer := p.allHiddenFromTheScriptsRead
+			p.allHiddenFromTheScriptsRead = outer || hidden
 			out[i].Param = p.parseParamExp(out[i].Value, out[i].Pos, out[i].Quoting, out[i].Bare)
+			p.allHiddenFromTheScriptsRead = outer
 		case out[i].Kind == ArithSubst && out[i].Arith == nil:
 			// Deferring, like the arithmetic command: a `$(( ))` whose
 			// expression will not read does not refuse the file. Both
@@ -6641,4 +6676,60 @@ func (p *Parser) ParseArithFor(src string, at Pos) ArithExpr {
 // of expansion.
 func (p *Parser) ParseArithExpanded(src string, at Pos) ArithExpr {
 	return p.parseArithIn(src, at, true)
+}
+
+// readsBodyWithItsLine reports whether span is a command substitution whose
+// body this dialect parses while the line that holds it is read.
+//
+// The spelling decides, because the panel splits on it: bash 5.3 reads a
+// `$( … )` body with the line and leaves the older spelling to the run, where
+// dash and BusyBox ash read both. The current-shell spellings are outside it
+// — no column that has them reads one with the line — and a body that ran out
+// with the input is left alone, since there is no line for it to belong to
+// yet. See [Dialect.SubstitutionBodyRead].
+func (p *Parser) readsBodyWithItsLine(span Span) bool {
+	if span.Kind != CommandSubst || span.CurrentShell {
+		return false
+	}
+	if !span.Backquoted {
+		return true
+	}
+	return p.dialect.SubstitutionBodyRead == EverySubstitutionBodyReadWithItsLine
+}
+
+// hiddenFromTheScriptsRead reports whether span exists only because a
+// fragment of the script was read a second time under different quoting, so
+// that the read of the line that holds it never saw the span at all.
+//
+// An expansion's operand inside double quotes is the case. The scan that
+// finds the closing brace honors the quotes written between the braces; the
+// operand is then read again with those quotes standing for themselves, and a
+// `'` that stopped the first read stops nothing in the second. So `"${v-'$('}"`
+// holds a command substitution on the second reading and none on the first,
+// and a dialect that reads a body with its line still does not read that one.
+//
+// Measured 2026-09-19 against bash 5.3.20, from a script file under `env -i`,
+// where the `$( … )` body *is* read with the line:
+//
+//	echo before; echo "${v-$(if)}"; echo after    refused, nothing written
+//	echo before; echo "${v-'$(if)'}"; echo after  `before`, then a run-time
+//	                                              complaint naming the
+//	                                              substitution, then `after`
+//	v=SET; echo "${v-'$('}"                       silence: never reached
+//
+// The second row is the discriminating one. Its body parses as readily as the
+// first row's does, so a rule keyed on whether the body reads cannot tell the
+// two apart; what separates them is only that the first read saw one opener
+// and not the other.
+func (p *Parser) hiddenFromTheScriptsRead(span Span) bool {
+	if p.allHiddenFromTheScriptsRead {
+		return true
+	}
+	at := int(span.Pos.Offset)
+	for _, run := range p.quotedInTheScriptsRead {
+		if at >= run[0] && at < run[1] {
+			return true
+		}
+	}
+	return false
 }

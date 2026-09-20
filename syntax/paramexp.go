@@ -2148,6 +2148,16 @@ func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 		return p.quotedWordFrom(text, at)
 	}
 
+	// Nothing here was hidden from the script's read: an operand outside
+	// double quotes is read with the same quoting the scan for the closing
+	// brace used, so the two readings see the same openers. Set rather than
+	// left alone, because an operand of an operand must not be measured
+	// against the enclosing fragment's offsets. See
+	// Parser.hiddenFromTheScriptsRead.
+	outerQuoted := p.quotedInTheScriptsRead
+	p.quotedInTheScriptsRead = nil
+	defer func() { p.quotedInTheScriptsRead = outerQuoted }()
+
 	sub := NewLexer(text, p.operandDialect())
 	// An operand is not a command, so no arithmetic command begins in one.
 	// See Lexer.inOperand: the `((` reading is also a *lossy* one, so an
@@ -2219,9 +2229,65 @@ func (p *Parser) quotedWordFrom(text string, at Pos) *Word {
 	if err := sub.Err(); err != nil && p.err == nil {
 		p.err = err
 	}
+	// What this read is about to find that the first one could not: the `'`
+	// runs the scan for the closing brace stepped over. Only a reader that
+	// asks *when* a body is parsed consults them, so they are gathered only
+	// for one. See Parser.hiddenFromTheScriptsRead.
+	outerQuoted := p.quotedInTheScriptsRead
+	if p.dialect.SubstitutionBodyRead != SubstitutionBodyReadWhenItRuns &&
+		p.dialect.AQuotedOperandHidesASubstitutionFromItsLine {
+		p.quotedInTheScriptsRead = p.singleQuotedRunsIn(text)
+	} else {
+		p.quotedInTheScriptsRead = nil
+	}
+	defer func() { p.quotedInTheScriptsRead = outerQuoted }()
 	// Through newWord, so a nested ${ } in the operand is parsed too — and
 	// parsed knowing it is in this same quoting, since the spans carry it.
 	return p.newWord(placeLinesIn(spans, at), at, at)
+}
+
+// singleQuotedRunsIn is the byte ranges of a `${ … }` operand's text that the
+// scan for the closing brace read as single-quoted, opener and closer
+// included.
+//
+// The same walk Parser.unterminatedQuote makes, and for the same reason: it
+// is the first read's own reading of the text rather than a second opinion
+// about it. A `"` run yields nothing, because an expansion inside double
+// quotes is live in both readings; a `$( … )` and a backquoted body are
+// stepped over whole, so a `'` written inside one quotes that body and not
+// this operand.
+func (p *Parser) singleQuotedRunsIn(text string) [][2]int {
+	var runs [][2]int
+	l := NewLexer(text, p.operandDialect())
+	for !l.eof() {
+		switch c := l.peek(); c {
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '\'', '"':
+			at := l.off
+			l.skipQuoted(c, c == '"')
+			if c == '\'' {
+				runs = append(runs, [2]int{at, l.off})
+			}
+		case '`':
+			l.skipBackticks()
+		case '$':
+			if l.skipSubstitution() {
+				continue
+			}
+			if l.peekAt(1) == '{' {
+				l.scanBraces(Unquoted)
+				continue
+			}
+			l.advance()
+		default:
+			l.advance()
+		}
+	}
+	return runs
 }
 
 // firstRune is the one character a diagnostic names when the operator it

@@ -138,13 +138,22 @@ func TestASubstitutionsBodyIsListedThisShellsWay(t *testing.T) {
 		},
 		{
 			// The second control, and the reason the re-read is best effort:
-			// a substitution's body is not read until the substitution runs,
-			// so a program holding one that will not parse is a program this
-			// shell lists today. It goes back as it stands rather than
-			// taking the listing with it.
+			// a body that will not parse is still a body this shell lists,
+			// and it goes back as it stands rather than taking the listing
+			// with it.
+			//
+			// Written with the **older** spelling, which is measured and not
+			// a convenience: this shell reads a `$( … )` body while the line
+			// that holds it is read, so `f() { echo $(for in); }` never
+			// defines a function here at all — it is `syntax error near
+			// unexpected token `)'` at 2 in bash 5.3.20, with the whole line
+			// quoted back, before `declare` is reached. The backquoted body
+			// is the one that survives to be listed, because that spelling
+			// is read when the substitution runs. See
+			// syntax.Dialect.SubstitutionBodyRead (#2857).
 			name: "a body that will not parse is written back",
-			src:  "f() { echo $(for in); }\ndeclare -f f",
-			want: "f () \n{ \n    echo $(for in)\n}\n",
+			src:  "f() { echo `for in`; }\ndeclare -f f",
+			want: "f () \n{ \n    echo `for in`\n}\n",
 		},
 		{
 			// The third: a `${…}` span is held unparsed too and is *not*

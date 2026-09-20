@@ -123,8 +123,14 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 		{
 			body: "echo x &&",
 			want: map[string]string{
-				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
-				"zsh":   "zsh:2: parse error near `)'\n",
+				"bash": "bash: line 2: syntax error near unexpected token `)'\n",
+				// Measured 2026-09-20: real zsh 5.9.2 **accepts** a body left
+				// dangling on `&&` before the closer -- `v=$(\necho x &&\n)`
+				// runs and `$v` is `x`, at status 0. bash 5.3.20, ksh93u+ and
+				// dash 0.5.12 all refuse it, which is why the other cells
+				// stay. `echo x |` above is the control: zsh refuses that
+				// one, so it is the operator and not the dangling itself.
+				"zsh":   "",
 				"ksh":   "ksh: line 2: syntax error at line 2: `)' unexpected\n",
 				"dash":  "dash: 2: Syntax error: \")\" unexpected\n",
 				"ash":   "ash: syntax error: unexpected \")\"\n",

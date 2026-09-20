@@ -261,3 +261,166 @@ set -o | grep -E '^(emacs|vi) '`
 		})
 	}
 }
+
+// KeywordFunctionSuspendsErrexitAndXtrace: two options a keyword-defined body
+// is not handed at all, which is the half of the same word's option scoping
+// that a restore cannot say (#3860).
+//
+// Every row here runs with the axis on and again with it off, and the pairing
+// is what makes each one a control on the other: the "off" column is what
+// every other shell in the panel does, so a row that answered the same either
+// way would be measuring the construct and not the axis.
+func suspendingSem() Semantics {
+	s := keywordOptionsSem()
+	s.KeywordFunctionSuspendsErrexitAndXtrace = Yes
+	return s
+}
+
+func suspendRun(t *testing.T, on bool, src string) (string, int) {
+	t.Helper()
+	s := keywordOptionsSem()
+	if on {
+		s = suspendingSem()
+	}
+	return run(t, src, func(r *Runner) {
+		withSem(s)(r)
+		r.AddSetOptions("emacs")
+	})
+}
+
+// `-e` is the row that decides whether a script survives, so it is first.
+func TestAKeywordFunctionBodyRunsWithoutErrexit(t *testing.T) {
+	for _, tc := range []struct {
+		name, src   string
+		on, off     string
+		onSt, offSt int
+	}{
+		{
+			// The body's failure is not fatal there and the script runs on.
+			name: "the keyword form",
+			src:  "set -e\nfunction f { false; echo after; }\nf\necho tail\n",
+			on:   "after\ntail\n", onSt: 0,
+			off: "", offSt: 1,
+		},
+		{
+			// **The control**: the same body written the other way is the
+			// ordinary `-e`, with the axis on as well as off. It is what
+			// keys the rule to the definition form rather than to the call.
+			name: "the POSIX form",
+			src:  "set -e\ng() { false; echo after; }\ng\necho tail\n",
+			on:   "", onSt: 1,
+			off: "", offSt: 1,
+		},
+		{
+			// And it comes back: the caller is running under `-e` again the
+			// moment the call returns, which is the restore beside this
+			// doing its half.
+			name: "the caller has it back",
+			src:  "set -e\nfunction f { false; echo after; }\nf\nfalse\necho unreached\n",
+			on:   "after\n", onSt: 1,
+			off: "", offSt: 1,
+		},
+		{
+			// A name the body declares is untouched by any of it — the row
+			// that says what moved is two options and not the body's state.
+			name: "the body still runs",
+			src:  "set -e\nfunction f { v=set; echo \"[$v]\"; }\nf\necho tail\n",
+			on:   "[set]\ntail\n", onSt: 0,
+			off: "[set]\ntail\n", offSt: 0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := suspendRun(t, true, tc.src)
+			if out != tc.on || st != tc.onSt {
+				t.Errorf("with the axis on: %q status %d, want %q status %d", out, st, tc.on, tc.onSt)
+			}
+			out, st = suspendRun(t, false, tc.src)
+			if out != tc.off || st != tc.offSt {
+				t.Errorf("with it off: %q status %d, want %q status %d", out, st, tc.off, tc.offSt)
+			}
+		})
+	}
+}
+
+// `-x` is the second of the two, and the one the shell with this rule gives
+// back through a mark on the name instead.
+func TestAKeywordFunctionBodyRunsWithoutXtrace(t *testing.T) {
+	for _, tc := range []struct{ name, src, on, off string }{
+		{
+			name: "the keyword form",
+			src:  "set -x\nfunction f { echo A; }\nf\n",
+			on:   "+ f\nA\n",
+			off:  "+ f\n+ echo A\nA\n",
+		},
+		{
+			// **The control**, again the definition form.
+			name: "the POSIX form",
+			src:  "set -x\ng() { echo A; }\ng\n",
+			on:   "+ g\n+ echo A\nA\n",
+			off:  "+ g\n+ echo A\nA\n",
+		},
+		{
+			// What the body itself asks for is its own, and it does not
+			// leak out — the restore's half again, on the other option.
+			name: "the body turns it on",
+			src:  "function f { set -x; echo A; }\nf\necho tail\n",
+			on:   "+ echo A\nA\ntail\n",
+			off:  "+ echo A\nA\ntail\n",
+		},
+		{
+			// A function the body calls is not traced either, however that
+			// one was written: what was suspended is the option, for
+			// everything the call reaches.
+			name: "a POSIX function the body calls",
+			src:  "set -x\ng() { echo P; }\nfunction f { g; }\nf\n",
+			on:   "+ f\nP\n",
+			off:  "+ f\n+ g\n+ echo P\nP\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := suspendRun(t, true, tc.src)
+			if out != tc.on {
+				t.Errorf("with the axis on: %q, want %q", out, tc.on)
+			}
+			out, _ = suspendRun(t, false, tc.src)
+			if out != tc.off {
+				t.Errorf("with it off: %q, want %q", out, tc.off)
+			}
+		})
+	}
+}
+
+// Two options and not the table: the third control, and the widest one.
+//
+// A suspension that took the whole option table — or one name too many —
+// passes both suites above and fails here.
+func TestAKeywordFunctionBodyKeepsEveryOtherOption(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// `-u` is on inside, so reading an unset name is still fatal.
+			name: "nounset",
+			src:  "set -u\nfunction f { echo \"[${nope}]\"; }\nf\necho tail\n",
+			want: "sh: nope: parameter not set\n",
+		},
+		{
+			// And `-f` is on inside, so a pattern is still a word.
+			name: "noglob",
+			src:  "set -f\nfunction f { echo *; }\nf\n",
+			want: "*\n",
+		},
+		{
+			// The pairing for `-u`, so the row above cannot pass for having
+			// no name to read: with the option off the same body prints.
+			name: "nounset off",
+			src:  "function f { echo \"[${nope}]\"; }\nf\necho tail\n",
+			want: "[]\ntail\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := suspendRun(t, true, tc.src)
+			if out != tc.want {
+				t.Errorf("%q, want %q", out, tc.want)
+			}
+		})
+	}
+}

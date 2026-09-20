@@ -154,3 +154,37 @@ func (r *Runner) putOptionBack(name string, o setOption, want bool) {
 	// name is not that case — the recording is its state and apply is what
 	// writes it — so those are restored like any other.
 }
+
+// suspendWhatAKeywordCallStartsWithout turns off the two options the shell
+// with this rule does not hand a keyword-defined body.
+//
+// Beside the save above and gated on the same question, which is deliberate
+// and is the one thing about this that is not free to be arranged: what is
+// turned off here is put back by the restore at the return, so a shell that
+// suspended without saving would lose the caller's `-e` for the rest of the
+// run. The two axes are separate facts — a restore is not a reset, and this
+// names two options rather than a table — and the one column that has either
+// has both. See Semantics.KeywordFunctionSuspendsErrexitAndXtrace for what
+// was measured, letter by letter.
+//
+// The letters are not `-e` and `-x` because nothing here is a letter: the
+// option table is keyed by name, and the letter for a name is a dialect's
+// spelling of it. `putOptionBack` is what writes them for the reason it
+// writes the restore — nothing here is a request a script made, so nothing
+// here can be refused, and a complaint on the way *into* a function call
+// would name a word no script wrote.
+func (r *Runner) suspendWhatAKeywordCallStartsWithout(sc *scope) {
+	if !r.keywordCallScopesOptions(sc) {
+		return
+	}
+	if r.sem().KeywordFunctionSuspendsErrexitAndXtrace != Yes {
+		return
+	}
+	for _, name := range [...]string{"errexit", "xtrace"} {
+		o, ok := r.lookupSetOption(name)
+		if !ok || !o.state(r) {
+			continue
+		}
+		r.putOptionBack(name, o, false)
+	}
+}

@@ -78,7 +78,7 @@ func (r *Runner) nestedChainSubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if !found {
 		return nil, true
 	}
-	return []string{last.scalar()}, true
+	return []string{r.elemText(last)}, true
 }
 
 // nestedChainRoot resolves the first subscript against the *name*, which is
@@ -144,7 +144,14 @@ func (r *Runner) nestedElementAt(held Element, idx int) (Element, bool) {
 		el, there := held.Nested[idx]
 		return el, there
 	}
-	if s, ok := scalarElemAt(held.Str, idx, r.arrayBase()); ok {
+	// The element's own text at the base and nowhere else, which is the rule
+	// a *name* holding a string already follows — and a compound answers by
+	// the same rule with the text it renders: measured on ksh93u+
+	// 2012-08-01, `a[1]=(p=1 q=2)` then `${a[1][0]}` is the whole compound
+	// and `${a[1][1]}` is nothing, exactly as `a[1]=plain` answers `plain`
+	// and nothing. Str is a namespace rather than a value for that kind, so
+	// the text has to come from elemText. See interp/subcompound.go.
+	if s, ok := scalarElemAt(r.elemText(held), idx, r.arrayBase()); ok {
 		return Scalar(s), true
 	}
 	return Element{}, false

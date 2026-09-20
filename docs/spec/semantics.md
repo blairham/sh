@@ -27263,6 +27263,171 @@ compound value the name can be started over from — measured in bash 5.3.15,
 where `typeset -ia b=(); b=(5+5 6+6)` gives the same `10 12` as the
 valueless declaration.
 
+## A compound variable held in an array element
+
+`a[1]=(p=1 q=2)` is one column's **fourth kind of value** standing where an
+element goes. The same parentheses hold two constructs there — the nested
+array of the section above and a compound variable's body — and what tells
+them apart is the first word inside them, exactly as it is over a bare name.
+
+Measured on ksh93u+ 2012-08-01, 2026-09-19, each row its own script file
+under `env -i PATH=/usr/bin:/bin LC_ALL=C /bin/ksh x.sh` with standard input
+on `/dev/null` and the output read through `sed -n l`:
+
+| written | ksh93u+ |
+| --- | --- |
+| `a[1]=(p=1 q=2); typeset -p a` | `typeset -a a=([1]=(p=1;q=2))` |
+| `a[1]=(p=1 q=2); "${a[1]}"` | `(`, tab `p=1`, tab `q=2`, `)` — four lines |
+| `a[1]=(p=1 q=2); "${a[1].p}"` | `1` |
+| `a[1]=(p=1 q=(r=2)); "${a[1].q.r}"` | `2` |
+| `a[1]=(p=1 q=2); ${!a[1].@}` | `a[1].p a[1].q` |
+| `a[1]=(p=1 q=2); a[1].p=9; typeset -p a` | `typeset -a a=([1]=(p=9;q=2))` |
+| `a[1]=(typeset -i n=5); typeset -p a[1].n` | `typeset -i a[1].n=5` |
+| `a[1]=(p=1); a[1]+=(q=2); typeset -p a` | `typeset -a a=([1]=(p=1;q=2))` |
+| `typeset -A m; m[k]=(p=1 q=2); typeset -p m` | `typeset -A m=([k]=(p=1;q=2))` |
+| `a[1]=(p=1 q=2); typeset -p a[1]` | `typeset -C a[1]=(p=1;q=2)` |
+
+The controls, which are the rows that say the gap is the **compound
+reading** and not subscripts in general — both are already byte-exact here
+before any of this and must stay so:
+
+| written | ksh93u+ |
+| --- | --- |
+| `b[1]=(x y); typeset -p b; "${b[1]}"` | `typeset -a b=([1]=(x y) )` / `x` |
+| `b[1][2]=q; typeset -p b` | `typeset -a b=([1]=([2]=q) )` |
+
+The **empty** pair of parentheses is the compound too, and it is worth the
+row because it looks as though it is not. `a=(x y z); a[1]=()` lists as
+`typeset -a a=(x () z)` and reads back as a newline between two parens —
+the same two answers under either reading, so a guard keeping the nested
+array there costs nothing that either of those can see. Three rows say it
+costs something anyway:
+
+| written | ksh93u+ |
+| --- | --- |
+| `a=(x y z); a[1]=(); typeset -p a[1]` | `typeset -C a[1]=()` |
+| `a[1]=(); a[1].p=3; typeset -p a` | `typeset -a a=([1]=(p=3))` |
+| `typeset -A m; m[k]=(); typeset -p m[k]` | `typeset -C m[k]=()` |
+
+So the word decides under a subscript exactly as it decides without one,
+with no row taken out.
+
+### There is no member namespace to build
+
+The members are **ordinary names spelled with a dot**, which is the store
+rule the bare compound already follows — and the reference spells a
+subscripted head's members the same way, which is what says the same store
+reaches them: `${!a[1].@}` answers `a[1].p a[1].q` there, and
+`typeset -p a[1].n` writes `typeset -i a[1].n=5`. So the namespace an
+element's compound hangs under is the element's own subscripted spelling,
+`a[1]`, taken from the **evaluated** subscript — `i=1; a[$i].p=9` writes the
+cell `a[1]=(p=1)` created, measured.
+
+Three things follow, and each was measured rather than reasoned:
+
+- **The grammar is the only new thing.** `.` is a name byte where the
+  dialect has the construct, so `c.p` is one name and needs nothing; after
+  a `]` the dot has no reading, which is where `${a[1].p}` and `a[1].p=9`
+  were `` syntax error: `.' unexpected `` here.
+- **A member's whole grammar comes with it.** `${#a[1].p}`, `${a[1].p:-D}`
+  and `${a[1].q.r}` all read there, so the expansion is the plain name
+  `a[1].p` rather than a path of its own.
+- **The members go when the value does.** `a[1]=(x y)`, `a[1]=z`,
+  `a=(x y)`, `unset a` and `unset 'a[1]'` each leave `${a[1].p}` empty.
+
+### A member brings an absent element into being
+
+A member may name an element that is not there, and it creates it as an
+empty compound — the half of the member write with no literal in it at all.
+What decides is **set**-ness, not which table the name has:
+
+| written | ksh93u+ |
+| --- | --- |
+| `a[1].p=5; typeset -p a` | `typeset -a a=([1]=(p=5))` |
+| `a[1].q.r=5; typeset -p a` | `typeset -a a=([1]=(q=(r=5)))` |
+| `a=(x y); a[5].p=9; typeset -p a` | `typeset -a a=([0]=x [1]=y [5]=(p=9))` |
+| `a=1; a[1].p=9; typeset -p a` | `typeset -a a=(1 (p=9))` |
+| `typeset -A m=([k]=v); m[z].p=9` | `typeset -A m=([k]=v [z]=(p=9))` |
+
+Only the *first* link needs it: `a[1].q` is created by the same machinery
+`c.q` is, once `a[1]` stands.
+
+The other side is one of the rows recorded rather than reproduced. Over an
+element that is already there the reference folds the old value into a
+member name — `typeset -A m=([k]=v); m[k].p=9` is
+`typeset -A m=([k]=(p=9.=v))`, and `a=(x y); a[1].p=9` is
+`typeset -a a=(x (p=9.=y))`. A member named `.` with the old element's text
+after it is not a name a shell could state, so an occupied element is left
+alone here and the member write falls through to the ordinary store.
+
+### The listing inverts over an element
+
+A bare compound's members are written *inside* it and nowhere else:
+`c=(p=1 q=2); typeset -p` is one line, `typeset -C c=(p=1;q=2)`. An element's
+compound is the other way round — the array's own row already writes the
+value whole, so the namespace is **not** a row and its direct members are:
+
+| written | ksh93u+ whole-shell `typeset -p` |
+| --- | --- |
+| `a[1]=(p=1 q=2)` | `typeset -a a=([1]=(p=1;q=2))`, `a[1].p=1`, `a[1].q=2` |
+| `a[1]=(p=1 q=(r=2))` | the array row, `a[1].p=1`, `typeset -C a[1].q=(r=2)` |
+| `typeset -A m; m[k]=(p=1)` | `typeset -A m=([k]=(p=1))`, `m[k].p=1` |
+
+Direct members only: the second row is what says so, because `a[1].q.r` is
+written inside `a[1].q` exactly as `c.b.y` is written inside `c.b`. Named
+explicitly a namespace still lists — `typeset -p a[1]` is
+`typeset -C a[1]=(p=1;q=2)` — so this is a filter on the walk rather than a
+rule about the name.
+
+### The `A` letter does not take the compound reading off the literal
+
+This is the half that separates the table letter from the array one, and it
+was filed as a store question before it was measured as a parse one:
+
+| written | ksh93u+ |
+| --- | --- |
+| `typeset -A c=(a=1 b=2); typeset -p c` | `typeset -A c=([0]=(a=1;b=2))` |
+| `typeset -a c=(a=1 b=2); typeset -p c` | `typeset -a c=(a\=1 b\=2)` |
+| `typeset -A c=(x y)` | `cannot append index array to associative array c` |
+| `typeset -A c=([k]=v); typeset -p c` | `typeset -A c=([k]=v)` |
+| `typeset -A c=(); typeset -p c` | `typeset -A c=()` |
+| `typeset -A c=(a=1 b=2); "${c[0].a}"` | `1` |
+| `typeset -A c=(a=1); c[z]=9; typeset -p c` | `typeset -A c=([0]=(a=1) [z]=9)` |
+
+So what `-A` forbids is a **bare-word** literal, not a compound one, and the
+compound it admits becomes the value at the key `0`. `-a` is the letter that
+really takes the reading away, and the empty pair is the one row `-A` does
+settle on its own.
+
+It is the **name's** table-ness and not the command's letters that puts the
+value at a key, measured a second way: `typeset -A c; c=(a=1 b=2)` with no
+letter on the second line gives the same `typeset -A c=([0]=(a=1;b=2))`.
+
+### Two more rows recorded rather than reproduced
+
+With the occupied element above these make three. Both of these are the
+reference's own bookkeeping about a table built this way, and neither is a
+rule this shell could state:
+
+| written | ksh93u+ | here |
+| --- | --- | --- |
+| `typeset -A c=(a=1 b=2); ${#c[@]}` | `0`, and `${!c[@]}` is empty | `1`, key `0` |
+| `typeset -A c=(a=1 b=2); unset c; typeset -p c` | `typeset -A c=()` | nothing |
+
+The first contradicts itself one line later: `typeset -A c=(a=1); c[z]=9`
+counts `1` against the two keys `0` and `z` it lists, and every other route
+to a compound element counts it — `typeset -A m; m[k]=(p=1)` answers `1`.
+The second contradicts the ordinary table beside it: `typeset -A c=([k]=v);
+unset c; typeset -p c` writes nothing there, as it does here. So both are
+left at the answer the rule gives.
+
+This is **not an axis**. No other column has a spelling that can put the
+question — the three that have `a[1]=(…)` at all read it as the nested array
+of the section above, and none of them has a fourth kind of value — so there
+is no disagreement between real shells to record at a point. See the
+`declare/a-table-letter-over-a-compound-body` and
+`arrays/a-second-subscript-on-an-assignment` corpus rows (#2853).
+
 ## The operand a short circuit already decided
 
 `&&` and `||` inside `$(( ))` stop as soon as the left operand settles the

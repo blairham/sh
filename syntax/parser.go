@@ -2675,6 +2675,9 @@ type assignHead struct {
 	// dialect lets a name carry several. Nil is the ordinary one subscript.
 	// See Assign.Leading and Dialect.ChainedAssignSubscript.
 	leading []assignSubscript
+	// member is the dotted path written between the closing bracket and the
+	// `=`, leading dot and all. See Assign.Member.
+	member string
 }
 
 // assignSubscript is one link of a chained assignment subscript, in the same
@@ -2799,6 +2802,12 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 				startSpan, startOff = i, j+2
 				continue
 			}
+			// A dotted member path may stand between the bracket and the
+			// `=`: `a[1].p=9` writes the member `p` of the compound the
+			// element holds. Taken off before the operator is looked for,
+			// because it is part of what is being named and not part of the
+			// value — the same reading `${a[1].p}` takes. See Assign.Member.
+			member, rest := memberPath(rest, p.dialect.DottedName)
 			appends := false
 			if strings.HasPrefix(rest, "+=") {
 				if !p.dialect.AppendAssign {
@@ -2809,6 +2818,7 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 				continue
 			}
 			h.name = name
+			h.member = member
 			h.append = appends
 			h.index = spanRange(t.Spans, startSpan, startOff, i, j)
 			// Just inside the brackets, in the input. Both ends land in an
@@ -2820,7 +2830,7 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 			h.from = p.subscriptPos(t, startSpan, startOff)
 			h.to = offsetBy(s.Pos, j)
 			h.span = i
-			h.off = j + 1
+			h.off = j + 1 + len(member)
 			if appends {
 				h.off++
 			}
@@ -3491,7 +3501,7 @@ func (p *Parser) touchesPrevious(after Pos) bool {
 }
 
 func (p *Parser) parseAssign(h assignHead) *Assign {
-	a := &Assign{Name: h.name, Start: p.tok.Pos, Append: h.append}
+	a := &Assign{Name: h.name, Member: h.member, Start: p.tok.Pos, Append: h.append}
 	if h.index != nil {
 		a.Index = p.newWord(h.index, h.index[0].Pos, p.tok.End)
 		a.IndexFlags = p.assignIndexFlags(h.index)
@@ -3580,16 +3590,30 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// Ahead of the element loop because the readings take a `;`
 		// differently and an element read here could not be given back — see
 		// [Parser.opensACompoundVariableBody].
-		// A subscript alongside the parentheses is a different construct
-		// again — `a[1]=(p q)` makes the *element* a value of its own — and
-		// its own axis already answers it, so the compound reading is not
-		// offered there. See [interp.Semantics.SubscriptedArrayLiteral].
+		// A subscript alongside the parentheses makes the *element* a value
+		// of its own — `a[1]=(p q)` — and that value may be a compound as
+		// readily as an array: `a[1]=(p=1 q=2)` is `typeset -a
+		// a=([1]=(p=1;q=2))` on ksh93u+ 2012-08-01 and its members answer to
+		// `${a[1].p}`, where `a[1]=(x y)` is the nested array
+		// [interp.Semantics.SubscriptedArrayLiteral] already answers for.
+		// So the reading is offered under a subscript too, and the same
+		// word decides it there with nothing taken out — an empty pair of
+		// parentheses included, which was measured rather than assumed: a
+		// guard that kept `a[1]=()` an empty nested array left four rows
+		// disagreeing with the reference and fixed none, because the
+		// element's observable answers are the same either way
+		// (`a=(x y z); a[1]=()` lists as `typeset -a a=(x () z)` and reads
+		// back as a newline between two parens under both readings) while
+		// `typeset -p 'a[1]'` is `typeset -C a[1]=()` there and
+		// `a[1]=(); a[1].p=3` gives `typeset -a a=([1]=(p=3))`, neither of
+		// which the guarded reading could reach.
+		//
 		// The declaration's letters, consumed here and not carried down:
 		// a body of its own is read by rules of its own, so the nested
 		// `q=(p r)` in `typeset -C c=(a=1 q=(p r))` is an array member.
 		reading := p.literalReading
 		p.literalReading = literalWordDecides
-		if h.index == nil && p.opensACompoundVariableBody(reading) {
+		if p.opensACompoundVariableBody(reading) {
 			a.Members = p.compoundVariableBody()
 			if p.err == nil && !p.at(TokRightParen) {
 				p.lex.inArgument = saved

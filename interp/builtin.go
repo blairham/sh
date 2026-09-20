@@ -3062,6 +3062,13 @@ func (r *Runner) unsetOneName(name string) {
 	}
 	delete(r.Arrays, name)
 	delete(r.AssocArrays, name)
+	// A compound an element of either table held goes with the table, for the
+	// reason the parent's own members go with it below: they are names of
+	// their own and nothing else would take them. Measured,
+	// `a[1]=(p=1); unset a; ${a[1].p}` is empty in the shell. After the
+	// delete, so the sweep finds no element claiming any of them. See
+	// interp/subcompound.go.
+	r.sweepElementCompounds(name)
 	// The table is gone, so the note about how it came to be is meaningless
 	// and a later declaration of the name starts the record over. Measured:
 	// `declare -A m=([a]=b); unset m; declare -A m` lists `declare -A m`, the

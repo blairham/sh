@@ -36,12 +36,15 @@ func (a AssocArray) keys() []string {
 	return out
 }
 
-// values returns the values in key order — the reading `${m[@]}` yields.
-func (a AssocArray) values() []string {
+// assocValues returns the values in key order — the reading `${m[@]}` yields.
+//
+// On the runner rather than on the table, for the reason [Runner.denseElems]
+// is: an element may hold a compound, whose text is the names under it.
+func (r *Runner) assocValues(a AssocArray) []string {
 	keys := a.keys()
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, a[k].scalar())
+		out = append(out, r.elemText(a[k]))
 	}
 	return out
 }
@@ -268,7 +271,7 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		// Non-nil even when empty: the array exists, so `${m[@]:-d}` on an
 		// empty one is zero fields rather than the default — the same answer
 		// an empty indexed array gives.
-		values := a.values()
+		values := r.assocValues(a)
 		if e.Length || e.Indirect {
 			// A count and a list of keys, neither of which reads a value —
 			// the same pair the indexed whole-array branch leaves alone.
@@ -290,7 +293,7 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 	if v, ok := a[key]; ok {
 		// The key is the subscript a discipline is entered with, exactly as
 		// a number is for an indexed array. See interp/discipline.go.
-		return []string{r.disciplinedElement(e.Name, key, v.scalar())}
+		return []string{r.disciplinedElement(e.Name, key, r.elemText(v))}
 	}
 	// A key the table has not got fires all the same, and a hook that
 	// assigns answers for it — measured, `${m[zz]}` on a table without `zz`
@@ -578,24 +581,24 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 	if v, ok := a["0"]; ok && len(a) == 1 {
 		// The two answers agree, so nothing is asked — the join of one value
 		// is that value.
-		return v.scalar(), true
+		return r.elemText(v), true
 	}
 	if r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array") {
-		return strings.Join(a.values(), " "), true
+		return strings.Join(r.assocValues(a), " "), true
 	}
 	if r.ask(r.sem().KeyedTableScalarIsTheFirstValue,
 		"a plain `$m` on a keyed table giving the first value rather than the one keyed `0`") {
 		// Where the table keeps an order, "one element" is the first of
 		// them. An empty table has no first value and is still set, which is
 		// the same answer the no-early-return above protects.
-		vs := a.values()
+		vs := r.assocValues(a)
 		if len(vs) == 0 {
 			return "", true
 		}
 		return vs[0], true
 	}
 	v, ok := a["0"]
-	return v.scalar(), ok
+	return r.elemText(v), ok
 }
 
 // assignAssocLiteral is `m=([k]=v …)` on a declared name — and `m+=(…)`,
@@ -1062,14 +1065,14 @@ func (r *Runner) assocElementProducer(name string) (func(*Runner, string) (strin
 // one is what that seam exists to avoid, and an append is a read.
 func (r *Runner) assocElemCurrent(name, key string) string {
 	if a, stored := r.AssocArrays[name]; stored {
-		return a[key].scalar()
+		return r.elemText(a[key])
 	}
 	if produce, ok := r.dynamicAssocElements[name]; ok {
 		v, _ := produce(r, key)
 		return v
 	}
 	if produce, ok := r.DynamicAssocs[name]; ok {
-		return produce(r)[key].scalar()
+		return r.elemText(produce(r)[key])
 	}
 	return ""
 }

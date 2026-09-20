@@ -7304,7 +7304,7 @@ func (r *Runner) exportedCompound(name string) (string, bool) {
 // the order that array or table lists them, and whether it holds one.
 func (r *Runner) compoundValues(name string) ([]string, bool) {
 	if a, ok := r.assocFor(name); ok {
-		return a.values(), true
+		return r.assocValues(a), true
 	}
 	// The *stored* array and not arrayElems, which reads a scalar back as
 	// the array of one it otherwise is — every exported name would have
@@ -9681,6 +9681,14 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	// line and names only the variable, exactly as `a=(p q)` and `a[0]=z` do.
 	// The array operand goes through the assignment machinery in every shell
 	// that has it, and the builtin's name never reaches it.
+	if a.Member != "" {
+		// `a[1].p=9` — a member of the compound an element holds. The three
+		// pieces name one ordinary name once the subscript has a value, so
+		// the assignment is rewritten to that name and the rest of this
+		// function never sees a subscript. See interp/subcompound.go.
+		r.assignElementMember(ctx, a)
+		return
+	}
 	if n, ok := positionalAssignIndex(a.Name); ok {
 		// A number where the name would be, which one dialect's grammar
 		// admits. Ahead of the refusal because a positional parameter cannot
@@ -9705,15 +9713,27 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		return
 	}
 	switch {
+	case a.Members != nil && a.Index != nil:
+		// The body standing where one *element's* value goes, which is the
+		// same construct under a name the subscript supplies. Ahead of the
+		// bare-name branch because both answer to `a.Members`, and ahead of
+		// every array branch because they all answer to `a.IsArray`, which
+		// is true here too: one spelling, three constructs.
+		r.assignSubscriptedCompound(ctx, a)
+		return
+	case len(a.Members) > 0 && !a.Append && r.assocDeclared(a.Name):
+		// The same body with no subscript written, on a name that is a
+		// **table**: `typeset -A c=(p=1 q=2)` puts the compound at the key
+		// `0` rather than making `c` a compound of its own. Ahead of the
+		// bare-name branch and behind the subscripted one, which is the
+		// order the three are decided in. See interp/subcompound.go.
+		r.assignTableCompoundBase(ctx, a)
+		return
 	case a.Members != nil:
 		// A compound variable's body, which the parser told apart from an
 		// element list by the first word inside the parentheses. Ahead of
 		// every array branch because each of them answers to `a.IsArray`,
 		// which is true here too: one spelling, two constructs.
-		//
-		// A subscript alongside it is not a shape this reaches — `c[1]=(a=1)`
-		// makes the element a nested *array* of the one string there, which
-		// is Semantics.SubscriptedArrayLiteral's question and not this one.
 		r.assignCompoundVariable(ctx, a)
 		return
 	case a.IsArray && a.Index != nil:

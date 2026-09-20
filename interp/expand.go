@@ -1301,6 +1301,16 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		return fields, true
 	}
 	e := s.Param
+	// `${a[1].p}` names one member of the compound an element holds, and the
+	// three pieces are one ordinary name once the subscript has a value. The
+	// node is rewritten to that name, so every operator, length and
+	// set-test below reads it exactly as it reads `${c.p}`. Ahead of every
+	// shape because none of them is about this one — including the bare-array
+	// rewrite, which would otherwise hand `${a[1].p}` the `[@]` of an array.
+	// See interp/subcompound.go.
+	if named, ok := r.elementMemberAsAName(e); ok {
+		e = named
+	}
 	// `${+name}` is a count of set-ness and not a value, so none of the
 	// shapes below applies to it — and this stands in front of the bare-array
 	// rewrite in particular, which would otherwise turn `${+a}` into
@@ -2465,6 +2475,15 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// *here* rather than where a value would be fetched — see
 		// absentparam.go for why the fetch is the wrong place.
 		return ""
+	}
+	// `${a[1].p}` is the plain name `a[1].p`, and the scalar path needs the
+	// rewrite for the same reason the list path does: every shape below is
+	// read off the node. The two paths make it separately because they are
+	// entered separately — expandAtList answers and returns for the shapes
+	// that yield fields, and everything else arrives here having never seen
+	// it. See interp/subcompound.go.
+	if named, ok := r.elementMemberAsAName(e); ok {
+		e = named
 	}
 	if e.HasFlags {
 		// Normally intercepted in expandAt; reached directly where a single

@@ -1651,6 +1651,9 @@ func (p *printer) assign(a *Assign) {
 		}
 		p.str("]")
 	}
+	// The member path stands between the bracket and the operator, which is
+	// where it was written: `a[1].p=9`. See Assign.Member.
+	p.str(a.Member)
 	if a.Append {
 		p.str("+")
 	}

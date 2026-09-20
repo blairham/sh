@@ -133,9 +133,38 @@ func (r *Runner) dottedName(name string) bool {
 	if !r.dialect().DottedName || !strings.Contains(name, ".") {
 		return false
 	}
+	// A member of the compound an *element* holds is a name too, and it is
+	// spelled with the element's subscript in it: `a[1].n`. Not an extension
+	// of the byte set but a shape in front of it — the reference writes
+	// exactly this name in its own listings, `typeset -i a[1].n=5`, and
+	// `${!a[1].@}` answers `a[1].p a[1].q`. See interp/subcompound.go.
+	if base, sub, member, ok := elementMemberSplit(name); ok {
+		return sub != "" && isPlainNameText(base) && dottedNameBytes(member)
+	}
+	return dottedNameBytes(name)
+}
+
+// dottedNameBytes is the byte set a dotted name is written in.
+func dottedNameBytes(name string) bool {
 	for i := 0; i < len(name); i++ {
 		c := name[i]
 		if c == '.' || c == '_' || isLetter(c) || (i > 0 && isDigit(c)) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// isPlainNameText is the ordinary identifier, with no dot in it — what stands
+// in front of an element's brackets.
+func isPlainNameText(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c == '_' || isLetter(c) || (i > 0 && isDigit(c)) {
 			continue
 		}
 		return false

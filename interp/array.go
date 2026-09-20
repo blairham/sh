@@ -79,6 +79,28 @@ const (
 	// string in Str, or the array in Nested. Every element in every dialect
 	// but the one below.
 	ElementHoldsItsValue ElementKind = iota
+	// ElementHoldsACompound is an element whose value is a **compound
+	// variable** — ksh93's `a[1]=(p=1 q=2)`, against the nested array
+	// `a[1]=(x y)` standing beside it in the same spelling.
+	//
+	// Its members are not in the element. They are ordinary names in the
+	// flat namespace, spelled with the element's own subscripted name in
+	// front: `a[1].p` and `a[1].q`, which is what the reference's
+	// `${!a[1].@}` answers and what its whole-shell listing writes beside
+	// the array. So Str carries that name — the namespace the members hang
+	// under — rather than a value, and [Runner.elemText] is what turns an
+	// element of this kind into the text a read of it gives.
+	//
+	// Measured on ksh93u+ 2012-08-01, 2026-09-19, and the three surfaces
+	// are three faces of the one fact rather than three rules:
+	//
+	//	a[1]=(p=1 q=2); typeset -p a    typeset -a a=([1]=(p=1;q=2))
+	//	a[1]=(p=1 q=2); "${a[1]}"       the compound over four lines
+	//	a[1]=(p=1 q=2); "${a[1].p}"     1
+	//
+	// with `b[1]=(x y)` — a nested *array* — the control that does not
+	// move: `typeset -a b=([1]=(x y) )`, and `${b[1]}` is `x`.
+	ElementHoldsACompound
 	// ElementDeclaredAndEmpty is an element a declaration brought into being
 	// without giving it a value, which is a state distinct from holding the
 	// empty string.
@@ -120,6 +142,14 @@ func Scalar(v string) Element { return Element{Str: v} }
 // prints `[(`, a newline, `)]`, so an element holding an empty array is one
 // field and that field has a newline in it.
 func (e Element) scalar() string {
+	if e.Kind == ElementHoldsACompound {
+		// Str is the namespace its members hang under and not a value, so
+		// reading it here would put a name where a value belongs. The text
+		// a compound gives is built from those members and needs the store
+		// to find them, which this cannot reach: see [Runner.elemText],
+		// which every read a script can observe goes through.
+		return ""
+	}
 	if e.Nested == nil {
 		return e.Str
 	}
@@ -241,14 +271,19 @@ func (a Array) extent(base int) (from, to int) {
 // exactly 0 to n-1, so the position each element goes to is the subscript
 // itself. Anything else — a gap, a negative subscript — says no here and
 // goes the long way, where the order has to be worked out.
-func (a Array) denseElems() ([]string, bool) {
+//
+// A method on the runner rather than on the array, because an element may hold
+// a **compound** and a compound's text is the names under it — see
+// [Runner.elemText], which needs the store to find them. Every reader of an
+// element's value is on the runner for that reason.
+func (r *Runner) denseElems(a Array) ([]string, bool) {
 	lo, hi, any := a.bounds()
 	if any && (lo != 0 || hi != len(a)-1) {
 		return nil, false
 	}
 	out := make([]string, len(a))
 	for k, v := range a {
-		out[k] = v.scalar()
+		out[k] = r.elemText(v)
 	}
 	return out, true
 }
@@ -322,6 +357,11 @@ func (r *Runner) storeArray(name string, a Array) {
 		return
 	}
 	r.Arrays[name] = a
+	// And the members of a compound no element holds any more, which is the
+	// same one chokepoint reached from the other side: an element write
+	// mutates the array it was handed, so what the name holds *now* is the
+	// only honest question. See interp/subcompound.go.
+	r.sweepElementCompounds(name)
 	// Written to, so the name leaves the declared-only set whatever it was
 	// holding before. The one chokepoint every indexed write reaches, which
 	// is what this note relies on — see compounddeclaredonly.go.
@@ -1949,7 +1989,7 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 // gap.
 func (r *Runner) arrayBareName(a Array) (string, bool) {
 	elem, assigned := a[0]
-	base := elem.scalar()
+	base := r.elemText(elem)
 	// The two readings agree while the base element is the only element there
 	// is — which is `a=(x)` and every scalar-shaped array a script builds —
 	// so the axis is asked only where they part.
@@ -2062,7 +2102,7 @@ func (r *Runner) readArray(a Array) []string {
 	// the two questions below — which subscripts, in what order, and is
 	// anything missing between them — are both already settled for an array
 	// that has no gaps and starts at zero. See denseElems.
-	if elems, dense := a.denseElems(); dense {
+	if elems, dense := r.denseElems(a); dense {
 		return elems
 	}
 	subs := a.subscripts()
@@ -2072,21 +2112,21 @@ func (r *Runner) readArray(a Array) []string {
 	if !r.arrayHasGaps(a) {
 		out := make([]string, 0, len(subs))
 		for _, k := range subs {
-			out = append(out, a[k].scalar())
+			out = append(out, r.elemText(a[k]))
 		}
 		return out
 	}
 	if r.ask(r.sem().ArraysAreSparse, "an unassigned subscript being no element at all") {
 		out := make([]string, 0, len(subs))
 		for _, k := range subs {
-			out = append(out, a[k].scalar())
+			out = append(out, r.elemText(a[k]))
 		}
 		return out
 	}
 	from, to := a.extent(0)
 	out := make([]string, 0, to-from+1)
 	for i := from; i <= to; i++ {
-		out = append(out, a[i].scalar())
+		out = append(out, r.elemText(a[i]))
 	}
 	return out
 }
@@ -2962,7 +3002,7 @@ func (r *Runner) elemAtFor(name string, elems []string, n int, length subscriptL
 	}
 	if compacted {
 		v, ok := a[pos]
-		return v.scalar(), ok
+		return r.elemText(v), ok
 	}
 	if pos >= len(elems) {
 		return "", false

@@ -14,6 +14,9 @@ package syntax
 //	c=(a=1 b=2)                   typeset -C c=(a=1;b=2)
 //	typeset -a c=(a=1 b=2)        typeset -a c=(a\=1 b\=2)
 //	typeset -A c=(a=1 b=2)        typeset -A c=([0]=(a=1;b=2))
+//	typeset -A c=(x y)            cannot append index array to …
+//	typeset -A c=([k]=v)          typeset -A c=([k]=v)
+//	typeset -A c=()               typeset -A c=()
 //	typeset -a c=(a=1; b=2)       syntax error: `b=2' unexpected
 //	typeset -C c=(x y)            syntax error: `x' unexpected
 //	typeset -a c=()               typeset -a c
@@ -31,9 +34,14 @@ const (
 	// reading, so the first word inside the parentheses does — and an empty
 	// pair of them is a compound where the dialect has the construct.
 	literalWordDecides compoundLiteralReading = iota
-	// literalIsAnArray is an `-a` or `-A` letter on the declaration, which
-	// takes the compound reading off the table whatever is written inside.
+	// literalIsAnArray is an `-a` letter on the declaration, which takes the
+	// compound reading off the table whatever is written inside.
 	literalIsAnArray
+	// literalIsATable is an `-A` letter, which does **not**: the word still
+	// decides, and only an *empty* pair of parentheses is settled by the
+	// letter. See [Parser.opensACompoundVariableBody] for the measured rows,
+	// and the table above for the pair that separates the two letters.
+	literalIsATable
 	// literalIsACompound is a `-C` letter, which puts it on and leaves the
 	// body with nothing else it may hold.
 	literalIsACompound
@@ -67,8 +75,10 @@ func declarationLiteralReading(args []*Word) compoundLiteralReading {
 			switch text[i] {
 			case 'C':
 				return literalIsACompound
-			case 'a', 'A':
+			case 'a':
 				reading = literalIsAnArray
+			case 'A':
+				reading = literalIsATable
 			}
 		}
 	}
@@ -101,6 +111,26 @@ func (p *Parser) opensACompoundVariableBody(reading compoundLiteralReading) bool
 		return false
 	case literalIsACompound:
 		return true
+	case literalIsATable:
+		// The `A` letter forbids a *bare-word* literal and not a compound
+		// one, which is the half that separates it from `a`. Measured on
+		// ksh93u+ 2012-08-01, 2026-09-19:
+		//
+		//	typeset -A c=(a=1 b=2)   typeset -A c=([0]=(a=1;b=2))
+		//	typeset -a c=(a=1 b=2)   typeset -a c=(a\=1 b\=2)
+		//	typeset -A c=(x y)       cannot append index array to …
+		//	typeset -A c=([k]=v)     typeset -A c=([k]=v)
+		//	typeset -A c=()          typeset -A c=()
+		//
+		// So the word decides under `-A` exactly as it decides with no
+		// letter at all, and the one row the letter does settle is the
+		// empty pair: `c=()` with no letter is `typeset -C c=()` and
+		// `typeset -A c=()` is the empty table. Falls through to the word
+		// below, with that row taken out first.
+		if p.at(TokRightParen) {
+			return false
+		}
+		return p.atACompoundBodyItem()
 	}
 	if p.at(TokRightParen) {
 		return true
@@ -226,4 +256,39 @@ func (p *Parser) compoundVariableItem() *SimpleCmd {
 		return nil
 	}
 	return c
+}
+
+// memberPath takes the dotted member path off the front of s — the text a
+// name carries *after* a subscript's closing bracket — and returns it with
+// its leading dot, along with what is left.
+//
+// `a[1].p=9` and `${a[1].p}` both reach this with `.p=9` and `.p}` in hand,
+// and both get back `.p`. A path may be several links deep — `.q.r` — because
+// a member may itself be a compound, measured: `a[1]=(p=1 q=(r=2))` then
+// `${a[1].q.r}` answers `2` on ksh93u+ 2012-08-01.
+//
+// It is needed only after a `]`. Before one the whole thing is a single name,
+// because `.` is a name byte where the dialect has the construct and `c.q.r`
+// is read as one name by [Dialect.DottedName] — which is why this is not a
+// second spelling of that rule but the piece it cannot reach.
+//
+// A dot with nothing readable after it yields no path at all, so the text
+// stays whatever it was and the caller refuses it where it stands:
+// `a[1].=9` is not an assignment, exactly as `a[1]x=9` is not.
+func memberPath(s string, dot bool) (member, rest string) {
+	if !dot {
+		return "", s
+	}
+	end := 0
+	for end < len(s) && s[end] == '.' {
+		link := end + 1
+		for link < len(s) && nameByte(s[link], link-(end+1), false) {
+			link++
+		}
+		if link == end+1 {
+			break
+		}
+		end = link
+	}
+	return s[:end], s[end:]
 }

@@ -524,6 +524,10 @@ func Semantics() interp.Semantics {
 	// 2026-09-12, `typeset -A h` is `typeset: not found` and `h=(x)` is
 	// `Syntax error: "(" unexpected`, so the question is refused twice over
 	// before there is a compound to change the kind of (#2287).
+	// unanswered WholeArraySubscriptThroughAReferenceToATable: there are no
+	// references either, so the route the field is about does not exist on
+	// top of the two absences below. Measured 2026-09-20, `typeset -n r=x`
+	// is `typeset: not found`.
 	// unanswered WholeArraySubscriptAssigningAnArray and
 	// unanswered WholeArraySubscriptAssigningATable: there are no arrays, so
 	// a subscript on the left of an assignment is not a subscript. Measured

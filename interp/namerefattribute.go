@@ -78,10 +78,68 @@ func (r *Runner) attributeFollowsTheReference(name string, df declareFlags) (str
 		// typeset -n s=a[1]; typeset -i s` leaves `declare -ai a` in bash and
 		// `typeset -a -i a` in ksh93, both with every element folded. An
 		// attribute is a property of the name and an array has one name.
+		//
+		// The **value** does not follow it there, which is what
+		// referenceValueTarget below is for: the attribute is the array's and
+		// the assignment is still the element's.
 		target = base
 	}
 	if target == name {
 		return name, false
 	}
 	return target, true
+}
+
+// referenceValueTarget is the other half of attributeFollowsTheReference: the
+// name a declaration's **value** is stored through, where that is not the name
+// its attributes land on.
+//
+// They part for one shape only — a reference aimed at an *element*. An
+// attribute is a property of a name and an array has one name, so
+// `typeset -i s` over `typeset -n s=a[1]` types the whole of `a`; the value on
+// the same line still belongs to the one cell. Measured 2026-09-20 on bash
+// 5.3.20, script files under `env -i`, with `a=(p q r); typeset -n b='a[1]'`
+// in front of each:
+//
+//	typeset b=Z         `a` is `p Z r`
+//	typeset b+=X        `a` is `p qX r` — the join reads the element too
+//	typeset -g b=G      `p G r`, from inside a call
+//
+// Every one of those wrote element **0** here, silently and at 0, because the
+// declaration had already replaced the operand's name with the array's for
+// the attributes and then stored the value through it — a scalar over a
+// compound, which lands on the lowest element. Nothing said so: the wrong
+// cell was written and the status was the status of a write that worked.
+//
+// What it hands back is **the reference itself**, not the element it names,
+// and that is the whole economy of it: [Runner.setVarAs] already resolves a
+// reference to the element and stores through it, and a whole-array subscript
+// already gets its answer there too (see
+// storeWholeArraySubscriptThroughAReference). Handing back the target's text
+// instead would make a parameter literally called `a[1]`, which is what the
+// first version of this did.
+//
+// "" where the two names are the same, which is every other operand.
+func (r *Runner) referenceValueTarget(name string, df declareFlags) string {
+	if df.nameref || !r.isNameref(name) {
+		return ""
+	}
+	target, cycle, aimed := r.namerefWalk(name)
+	if cycle || !aimed {
+		return ""
+	}
+	if _, _, element := r.indirectElement(target); !element {
+		return ""
+	}
+	return name
+}
+
+// orName is referenceValueTarget's reading at a store: the element the value
+// belongs to where there is one, and the name the attributes went to where
+// there is not.
+func (r *Runner) orName(target, name string) string {
+	if target == "" {
+		return name
+	}
+	return target
 }

@@ -2969,6 +2969,9 @@ func Semantics() interp.Semantics {
 	// associative array` under both separators (#2285).
 	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptNamesEveryElement
 	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsASliceOfATable
+	// And the `(P)` route answers it the same way, which is the column that
+	// does *not* swap sides between the two.
+	s.WholeArraySubscriptThroughAReferenceToATable = interp.WholeArraySubscriptIsASliceOfATable
 	// Nor is reading one reported: measured 2026-09-12, `typeset -A m;
 	// m[k]=v; w=; ${m[$w]}` is the empty string at status 0 and silent
 	// (#1972).

@@ -1472,6 +1472,112 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 	}
 }
 
+// storeWholeArraySubscriptThroughAReference is `a[@]=Z` reached through a
+// **resolved reference** rather than written on the left of an assignment:
+// bash's `declare -n b='a[@]'; b=Z` and zsh's `v='a[@]'; ${(P)v::=Z}`. The
+// two spellings are one route because the subscript arrives the same way —
+// as the stored text of the reference — and both stores walked it on to the
+// arithmetic evaluator, where `@` is no operand.
+//
+// That cost more than a wrong sentence: the evaluator's refusal **ends the
+// script** at both sites, so one line of a bash script that writes through
+// such a reference took every later line with it, and zsh's did the same for
+// a line it completes at 0.
+//
+// Measured 2026-09-20, script files under `env -i PATH=/usr/bin:/bin` with a
+// scratch HOME, each store followed by `echo "st=$?"` on the **same** line
+// and a read of the container on the next:
+//
+//	bash 5.3.20   `declare -n b='a[@]'; b=Z`   `a[@]: bad array subscript`,
+//	              1, nothing written, and the rest of the line given up
+//	bash 5.3.20   the same over a table        `m[@]: bad array subscript` —
+//	              **not** the key `@` the bare `m[@]=Z` stores there
+//	zsh 5.9.2     `v='a[@]'; ${(P)v::=Z}`      taken: `a` is the one element
+//	              `Z`, at 0, and the line runs on
+//	zsh 5.9.2     the same over a table        `m: attempt to set slice of
+//	              associative array`, and the input ends
+//	ksh93u+       unreachable — `nameref b=a[@]` is refused at the
+//	              *declaration*, `typeset: @: arithmetic syntax error`, and
+//	              the input ends, so there is no store left to make
+//
+// So the **array** half is each column's bare-assignment answer exactly —
+// measured, not assumed, and that is why it reads
+// Semantics.WholeArraySubscriptAssigningAnArray rather than carrying a field
+// of its own. The **table** half is not: bash parts from itself between the
+// two routes, which is what makes
+// Semantics.WholeArraySubscriptThroughAReferenceToATable a second field on
+// the same evidence that made WholeArraySubscriptAssigningATable one.
+//
+// `[*]` answers as `[@]` in both columns, as it does for the bare form.
+//
+// handled is false for any other subscript, which is every ordinary element
+// and is the caller's own arithmetic to do.
+func (r *Runner) storeWholeArraySubscriptThroughAReference(base, sub, value string, form assignForm) (handled bool) {
+	if !wholeArraySubscript(sub) {
+		return false
+	}
+	policy := r.sem().WholeArraySubscriptAssigningAnArray
+	what := "the whole-array subscript in a reference an assignment writes through"
+	if r.assocDeclared(base) {
+		policy = r.sem().WholeArraySubscriptThroughAReferenceToATable
+		what = "the whole-array subscript in a reference an assignment writes through, over a table"
+	}
+	switch policy {
+	case WholeArraySubscriptNamesEveryElement:
+		// The whole name and not its elements, which is the same reading the
+		// bare assignment takes in the column that takes it: a scalar and an
+		// unset name both come out a one-element array.
+		r.setArray(base, []string{value})
+	case WholeArraySubscriptIsABadSubscript:
+		// Reported, and nothing written. What it *costs* is three answers,
+		// not one, and the route decides which — measured 2026-09-20 on bash
+		// 5.3.20 from a script file, with `a=(p q r); declare -n b='a[@]'`
+		// in front of each and `; echo "st=$?"` behind it on the same line:
+		//
+		//	b=Z                  the `echo` never runs, and the **next**
+		//	                     line reads 1
+		//	declare b=Z          `st=1` — the line runs on
+		//	read b <<< Y         `st=1`
+		//	printf -v b Q        `st=1`
+		//	(( b = 5 ))          `st=0` — the assignment is simply not made
+		//	let 'b = 6'          `st=0` and the expression's own value stands
+		//
+		// So the give-up belongs to the bare form alone, which is the split
+		// [assignForm] already draws for the readonly refusal and for
+		// refuseNamerefAim; and an arithmetic construct is left to answer for
+		// itself, exactly as the **bare** `(( a[@] = 5 ))` already is — that
+		// spelling reports, writes nothing and leaves the construct's own 0,
+		// and is the control this was measured against.
+		r.diagf("%s\n", Wording(r.diag().BadArraySubscript,
+			"%[1]s[%[2]s]: bad array subscript", base, sub))
+		if r.arithCommand == 0 && r.inBuiltin != "let" {
+			// An arithmetic construct answers for itself — the assignment is
+			// simply not made and the expression's own value stands — and
+			// `let` is that same construct wearing a builtin's name, which
+			// is why it is spelled out here rather than read off inBuiltin
+			// with the others. The same pair refuseReadonlyInACommand
+			// already draws, and measured the same way.
+			r.status, r.assignFailed = 1, true
+		}
+		if form == assignedAlone {
+			r.abandonTheCommand()
+		}
+	case WholeArraySubscriptIsAnOrdinaryKey:
+		r.setAssocElem(base, sub, value)
+	case WholeArraySubscriptIsInvalidInAnAssignment:
+		// The subscript is the verb here, not the name.
+		r.fatal("%s\n", Wording(r.diag().InvalidSubscriptInAssignment,
+			"%s: invalid subscript in assignment", sub))
+	case WholeArraySubscriptIsASliceOfATable:
+		r.fatal("%s\n", Wording(r.diag().SliceOfAnAssociativeArray,
+			"%[1]s: attempt to set slice of associative array", base))
+	default:
+		r.diagf("%s\n", r.unanswered(what))
+		r.status, r.unspecified = 2, true
+	}
+	return true
+}
+
 // storeOperandWholeArraySubscript is `read 'r[@]'` and `printf -v 'r[*]'` —
 // a builtin's output operand whose brackets name the **whole array** rather
 // than an element — and reports the status the builtin carries along with

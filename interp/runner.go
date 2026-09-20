@@ -8979,7 +8979,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		return
 	} else if target != name {
 		if base, sub, element := r.indirectElement(target); element {
-			r.storeThroughNamerefElement(base, sub, value)
+			r.storeThroughNamerefElement(base, sub, value, form)
 			return
 		}
 		name = target

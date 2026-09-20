@@ -10032,6 +10032,19 @@ type Semantics struct {
 	// listed fine; ksh93 prints nothing for the missing name and answers 0.
 	DeclarePrintReportsAMissingName Answer
 
+	// DeclarePrintPerformsItsOperand is what a `-p` listing does with an
+	// operand that carries a value — `typeset -p s=5`, `typeset -p e=(1 2)`.
+	// The panel gives three answers: ksh93 performs a bare assignment and
+	// lists what it stored, bash declares the operand where the parser kept
+	// it apart as an array literal and reads every other shape as a name,
+	// and zsh performs nothing at all. See DeclarePrintOperandPolicy and
+	// interp/declareprintoperand.go, which carries the measurements.
+	//
+	// Asked only where an operand carries a value or is an array literal,
+	// which is the point the three columns part: `typeset -p name` is the
+	// spelling every script writes and all three answer it alike.
+	DeclarePrintPerformsItsOperand DeclarePrintOperandPolicy
+
 	// DeclareOptions is the set of letters `declare` and `typeset` take,
 	// spelled the way ReadOptions is. The letters are the dialect's own:
 	// `-g` declares a global in the two shells that have the letter and is
@@ -24940,6 +24953,35 @@ func (r *Runner) compoundAttribute() CompoundAttributePolicy {
 	}
 	return p
 }
+
+// DeclarePrintOperandPolicy is what a `-p` listing does with an operand that
+// is not a bare name — see Semantics.DeclarePrintPerformsItsOperand, and
+// interp/declareprintoperand.go for the rows each value was measured from.
+type DeclarePrintOperandPolicy int
+
+const (
+	// DeclarePrintOperandUnspecified is no answer, and it is refused rather
+	// than guessed at: the three readings differ over whether the name is
+	// set at all once the line has run, and a script that reads it back
+	// afterwards cannot tell a shell that declined to store from one that
+	// stored something else.
+	DeclarePrintOperandUnspecified DeclarePrintOperandPolicy = iota
+	// DeclarePrintOperandIsANameAlone performs nothing: the operand is a
+	// name to list, whole, and a name that is not there is reported or
+	// passed over per DeclarePrintReportsAMissingName. zsh 5.9.2, where
+	// `typeset -p s=5` is `no such variable: s` at 1 and leaves `s` unset.
+	DeclarePrintOperandIsANameAlone
+	// DeclarePrintOperandIsAssignedPlainly performs every operand carrying a
+	// value as a *bare* assignment — no attribute letter of the line lands
+	// and no scope is taken — and then lists the name it wrote. ksh93u+.
+	DeclarePrintOperandIsAssignedPlainly
+	// DeclarePrintOperandIsDeclaredWhereItIsALiteral performs only the
+	// operand the parser kept apart as an array literal, as a declaration
+	// carrying the line's value-shaping letters, and reads every other shape
+	// as a name. bash 5.3.20, where `declare -p e=(1 2)` lists the array it
+	// has just made and `declare -p s=5` is `s=5: not found` at 1.
+	DeclarePrintOperandIsDeclaredWhereItIsALiteral
+)
 
 // ScalarUnderACompoundPolicy is what a declaration that gives a name the
 // array or the table attribute does with a *scalar* the name is already

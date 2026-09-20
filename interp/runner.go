@@ -3263,6 +3263,10 @@ type Runner struct {
 	// compound may not be exported and an index array may. See
 	// Runner.exportRefusesACompound.
 	compoundOperands map[string]bool
+	// heldListing is a `-p` listing this command is keeping back until its
+	// own operand assignments have landed — see interp/declareprintoperand.go,
+	// and Runner.assignOperands for why those run after the builtin at all.
+	heldListing heldListing
 	// declarationOperands is where in the command's expanded words the
 	// `name=value` operands stand — the positions the expansion routed
 	// through Runner.expandAssignArg rather than through word expansion.
@@ -6539,6 +6543,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.tableLetterHere = nil
 		outerGlobal := r.globalLetterHere
 		r.globalLetterHere = nil
+		// And the held listing, for the reason every field above it is saved:
+		// a builtin can run another one, and the inner `-p` must not write the
+		// outer one's rows.
+		outerHeldListing := r.heldListing
+		r.heldListing = heldListing{}
 		if locks {
 			r.assignOperands(ctx, c)
 		} else {
@@ -6595,12 +6604,21 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			}
 		}
 		r.applyDeferredFreeze()
+		// The listing a `-p` declaration held back, now that its own operands
+		// have landed — which is the whole of what that spelling needed, since
+		// the assignment above is where the value is really written. Behind
+		// the freeze so that a name is listed with every part of its
+		// declaration on it. See interp/declareprintoperand.go.
+		if code, listed := r.listingHeldForItsOperands(); listed && st == 0 && !fatal {
+			st = code
+		}
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
 		r.compoundOperands = outerCompounds
 		r.indexedLetterHere = outerIndexed
 		r.tableLetterHere = outerTable
 		r.globalLetterHere = outerGlobal
+		r.heldListing = outerHeldListing
 		if fatal {
 			return nil
 		}

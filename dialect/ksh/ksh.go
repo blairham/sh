@@ -937,6 +937,10 @@ func Semantics() interp.Semantics {
 	// where the same table gives bash ten rows.
 	s.DeclarationListingFilter = interp.DeclarationFilterEveryLetter
 	s.DeclarePrintReportsAMissingName = interp.No
+	// `typeset -p s=5` writes `s=5` and leaves 5 behind, carrying none of
+	// the line's letters — measured 2026-09-20 on ksh93u+ 2012-08-01. See
+	// interp/declareprintoperand.go.
+	s.DeclarePrintPerformsItsOperand = interp.DeclarePrintOperandIsAssignedPlainly
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes

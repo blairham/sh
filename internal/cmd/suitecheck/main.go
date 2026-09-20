@@ -358,6 +358,7 @@ func printDiffering(o out, rep suite.Report) {
 	o.printf("                            and a license. Not work — matching it means copying\n")
 	o.printf("                            it. A floor, counted by asking the shell for its own\n")
 	o.printf("                            help and testing membership, never by reading\n")
+	printReordered(o, rep)
 	o.println()
 }
 
@@ -453,4 +454,31 @@ func wrap(text, indent string) string {
 		line += len(word)
 	}
 	return out.String()
+}
+
+// printReordered is the second floor under a differing-line count, and the
+// one that comes from an order rather than from a text.
+//
+// An associative array has no order a script can ask for, and the reference
+// lists its keys in its own hash table's order. Reproducing that means
+// reproducing the hash function, the table size and the growth policy, none
+// of which is in any vendor manual and all of which is in the source
+// CLEANROOM.md's red list covers — so it is a floor, and #3304 records the
+// cost rather than a way to close it.
+//
+// Printed as an **upper** bound and said so, where the documentation figure
+// above it is a lower one. The count comes from canonicalising each side's
+// order independently, which cannot tell an order nobody was asked for from
+// one that is ours to get right, and nothing subtracts it from the raw
+// figure.
+func printReordered(o out, rep suite.Report) {
+	if rep.Reordered == 0 {
+		return
+	}
+	o.printf("                   %6d   of the first, differing only in an order — at most.\n", rep.Reordered)
+	o.printf("                            An associative array's keys come back in the\n")
+	o.printf("                            reference's own hash order, which is in nothing but\n")
+	o.printf("                            its source. An upper bound, because the count cannot\n")
+	o.printf("                            tell that from an order we should get right, and it\n")
+	o.printf("                            corrects neither figure above it\n")
 }

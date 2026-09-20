@@ -1259,6 +1259,29 @@ that have nothing to do with us.** Without `recho`, `zecho` and `printenv` the
 calls fail under both shells and the two failures match, so the run reads as
 *agreement on an error message*. They are compiled, never read.
 
+**Two floors sit under the differing-line count, and they are bounds in
+opposite directions.** The first is the reference quoting its **own
+documentation** — help text, a usage block, a version, a license — which
+matching would mean copying, so it is counted by asking the shell for its help
+and testing membership. That one is a *lower* bound. The second is an
+**order**: an associative array has no order a script can ask for, and the
+reference lists its keys in its own hash table's order, which is in nothing but
+the source `CLEANROOM.md`'s red list covers (#3304). That one is an *upper*
+bound, because it is computed by canonicalising each side independently and a
+per-side canonicalisation cannot tell an order nobody was asked for from an
+order that is ours to get right. **Neither figure is subtracted from anything**
+— the raw count stays what the two runs did.
+
+The same canonicalisation *is* applied where it is sound: to the reference
+against its **own second run**. One shell disagreeing with itself about the
+sequence of the same keys is not a fact about either shell, and until it was
+discounted there `assoc.tests` reported *unstable* and scored nothing at all on
+about half of all runs, over three lines out of some two hundred. It reaches
+two shapes and nothing else — the `[key]="value"` pairs of one listed array on
+one line, and the words of one expansion written a line each — and a rotation
+**across** lines is deliberately left out rather than folded in under a name
+that would make it look covered.
+
 **A truncated file is reported and never scored, and who was truncated is the
 finding.** Each file gets a generous per-file timeout and is killed by process
 *group*, because a suite file backgrounds jobs that hold the output pipe open

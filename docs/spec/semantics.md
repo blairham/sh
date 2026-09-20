@@ -2551,6 +2551,53 @@ ksh93 all take `kill -- -1`; this shell answers `kill: --: not a pid`, as dash
 (`Illegal number: -`) and BusyBox ash (`invalid number '--'`) do. The pid is
 still reachable here as `kill -0 -1`, which is the spelling the test uses.
 
+## A real-time signal's name belongs to the C library
+
+#3535 recorded that two of the four Linux columns *name* the real-time
+signals where we write their numbers, and asked for the names. The answer is
+that there is no name for this shell to write, and the measurement that shows
+it is running the same shell against two C libraries.
+
+Measured 2026-09-19 — `kill -l N` for the same numbers, same shell builds,
+two images:
+
+| | glibc (Debian bookworm) | musl (Alpine) |
+| --- | --- | --- |
+| bash 5.3, `kill -l 34` | `RTMIN` | *empty* |
+| bash 5.3, `kill -l 35` | `RTMIN+1` | `RTMIN` |
+| bash 5.3, `kill -l 40` | **`RTMIN+6`** | **`RTMIN+5`** |
+| dash 0.5.12, `kill -l 40` | **`RTMIN+6`** | **`RTMIN+5`** |
+| zsh 5.9, BusyBox ash | `40` | `40` |
+
+**One fixed number, two names.** `SIGRTMIN` is not the kernel's — the kernel
+gives 32 through 64 and says nothing about where user-visible numbering
+starts. The bottom few are reserved by the *C library* for its own threading,
+and glibc and musl reserve different counts, so glibc's `RTMIN` is 34 and
+musl's is 35. `RTMIN+5` and `RTMIN+6` are the same signal.
+
+#3535 read the discrepancy as "bash's RTMIN is 35 where glibc's is 34". That
+is a misattribution: it is not bash's number at all. The Alpine bash that
+answered 35 is a musl build, and a glibc bash answers 34 — the name moves with
+the library, not with the shell.
+
+So the base is not a property this shell can discover. It links no C library
+and has no `SIGRTMIN` to read, and either base picked by hand would be wrong on
+one of the two platforms it runs on. **Writing the number is the only answer
+that is true on both**, and it is also what zsh and BusyBox ash write in both
+columns — so the current behavior is right and stays.
+
+The other two questions #3535 separated out are answered the same way. Which
+positions a *listing* shows is a per-column choice with no agreement to follow
+— bash skips everything below its own `RTMIN`, BusyBox shows the two ends and
+nothing between, dash and zsh show all of them — and we show all of them, with
+dash and zsh. And what a number is *called* is the question above.
+
+What stays guarded rather than merely written down: a test asserts no entry of
+the platform table ever names a signal at 32 or above, and that the range is
+still the kernel's 64. The failure it is written against is a plausible one —
+the table looks incomplete beside bash, and the fix looks like a base plus an
+offset.
+
 ### BusyBox `kill` writes the shell's name and nothing else
 
 Every failure in that applet is status **1** — there is no route to 2 in it at

@@ -353,7 +353,7 @@ import (
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
 	"semantics.go":   4,
-	"diagnostics.go": 4,
+	"diagnostics.go": 3,
 	filepath.Join("..", "syntax", "dialect.go"): 0,
 }
 

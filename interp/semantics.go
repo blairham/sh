@@ -10720,8 +10720,8 @@ type Semantics struct {
 	// reader is shown the word they typed rather than the one the shell
 	// was left holding after a strip that did not help.
 	//
-	// Unanswered is a refusal, which is the front end's behavior before
-	// this axis existed and is still what the four columns above get.
+	// Unanswered is a refusal, which is the front end's behavior before this
+	// axis existed and is still what the three bash columns and dash get.
 	//
 	// **This is the invocation's spelling and not the `set` builtin's**, and
 	// the two are a different question in one of the two columns that has
@@ -10930,7 +10930,7 @@ type Semantics struct {
 	//	            ash             `illegal option -o -e`, 1
 	//	            zsh             `no such option: -e`, 1
 	//	set -o --   bash x3, ksh93  the listing, 0
-	//	            the other three the same three refusals, of `--`
+	//	            dash, ash, zsh  the same three refusals, of `--`
 	//	set -o -Z   bash x3         `-Z: invalid option`, 2, **no listing**
 	//	            ksh93           `-Z: unknown option`, 2
 	//
@@ -11050,8 +11050,8 @@ type Semantics struct {
 	//
 	// Yes in the three bash columns; No in dash, BusyBox ash and zsh.
 	// Measured 2026-09-13 across all seven, with `command set` in front of
-	// the builtin so that the four columns where a refusal is fatal live long
-	// enough to be asked what they applied, and with a control row —
+	// the builtin so that the four columns that make a refusal fatal live
+	// long enough to be asked what they applied, and with a control row —
 	// `command set -e` alone — proving the probe can see errexit at all:
 	//
 	//	command set -e -Z || true; case $- in *e*) …    bash, ksh93  errexit off

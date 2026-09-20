@@ -2675,10 +2675,15 @@ type Diagnostics struct {
 	// So the wording is bash's in all three of its columns and nobody
 	// else's, and the four that end the script have nothing to word.
 	//
-	// The old sentence said "the other three obey it", which was two errors
-	// in one clause: the panel leaves four columns to obey rather than
-	// three, and bash was in neither group — it neither obeyed nor was
-	// counted among those that did.
+	// What stood here before credited three unnamed columns with obeying it,
+	// which was two errors in one clause: the panel leaves four columns to
+	// obey rather than three, and bash was in neither group — it neither
+	// obeyed nor was counted among those that did.
+	//
+	// The correction is written with the names rather than with a number,
+	// and deliberately: a sentence that quotes the miscount back is still a
+	// miscount on the page, and a reader skimming for the answer finds the
+	// quotation as readily as the correction under it.
 	//
 	// The middle row is the one worth keeping: the *same binary* called `sh`
 	// draws the same sentence and then treats it as fatal, which is a third
@@ -6636,8 +6641,9 @@ type Diagnostics struct {
 	// `$1: unbound variable` and `$!: unbound variable` where it says
 	// `NOPE: unbound variable` for a name.
 	//
-	// The old sentence put that at "three of the four", and the count was
-	// right by accident: measured 2026-09-19 with `set -u; echo "$1"`, the
+	// What stood here before counted three columns out of four, and the
+	// count was right by accident: measured 2026-09-19 with
+	// `set -u; echo "$1"`, the
 	// three that word it the same way as an unset name are dash, zsh and
 	// BusyBox ash, and **ksh93 does not refuse an unset positional under
 	// `set -u` at all** — empty output at status 0, where the same shell

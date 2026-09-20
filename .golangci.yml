@@ -120,15 +120,34 @@ linters:
   exclusions:
     rules:
     # The purity rule guards the library, so it applies where the library
-    # lives — which is interp/ *and* dialect/. A dialect package is not a
-    # front end: an embedder imports it and its Apply runs inside the
+    # lives — which is interp/, dialect/ *and* repl/. A dialect package is
+    # not a front end: an embedder imports it and its Apply runs inside the
     # Runner, so process state read there is read on the library's side of
     # the line, and only the exclusion's old shape made that lint clean.
+    #
+    # repl/ is library too, and that was decided on evidence rather than
+    # taste (#532). Three things say so. It imports **no dialect package at
+    # all** — that is the property the theme work is built on and it holds
+    # today. Its Shell is constructed from outside it, by
+    # driver/interactive.go, which is the front end configuring a library
+    # through exported fields (PromptProviders, Theme, Transient,
+    # Completers, Highlighter). And it already behaves this way on purpose:
+    # repl.TerminalCapabilities takes an `env func(string) string`
+    # parameter, and says in its own doc that this is "rather than this
+    # package reading the process's environment, for the reason AGENTS.md
+    # gives about os.Getenv in library code".
+    #
+    # So repl was keeping the rule without being held to it. Widening costs
+    # two call sites, both annotated where they stand, and os.Geteuid in
+    # promptrender.go and repl.go stays legal because reading the process's
+    # *identity* was never on the forbid list — see the note above.
+    #
+    # driver/ is the front end and is where these calls belong.
     # driver and the binaries are the intended home of these calls, and
     # interp's own tests are embedders — a test may legitimately read the
     # real PATH to find the real /bin/echo, or point TMPDIR somewhere it
     # can watch.
-    - path-except: ^(interp|dialect)/
+    - path-except: ^(interp|dialect|repl)/
       linters:
       - forbidigo
     - path: _test\.go$

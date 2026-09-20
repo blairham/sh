@@ -14,7 +14,7 @@ import "testing"
 // device. Both builds answer every row below identically. This shell listed
 // instead — `export -p s` wrote `declare -x s="5"` where bash writes nothing,
 // and `export -p w=8` wrote `export: w=8: not found` at 1 and left `w` unset
-// and out of the environment where bash exports it (#3904). Its neighbour
+// and out of the environment where bash exports it (#3904). Its neighbor
 // `readonly` was already right, which is what said the two builtins had been
 // written two ways for a difference the panel does not have. See
 // Semantics.ExportOrReadonlyPrintWithOperands.

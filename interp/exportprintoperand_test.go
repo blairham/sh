@@ -30,7 +30,7 @@ func printOperandSem(p ExportPrintOperandPolicy) Semantics {
 
 // ownRow keeps the listing rows for names this suite wrote and drops the
 // rest, so the environment the test process was started with — TMPDIR and
-// its neighbours — does not decide whether a listing counts as narrowed.
+// its neighbors — does not decide whether a listing counts as narrowed.
 // Everything that is not a listing row, an `echo` above all, is kept.
 var ownRow = regexp.MustCompile(`^(export|readonly) (a1|a2|e|r|s|t|u|v|w)=`)
 

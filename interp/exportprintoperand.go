@@ -54,7 +54,7 @@ package interp
 //
 // **`readonly` was already right here and `export` was not**, which is what
 // #3904 is: biReadonly took its listing branch only with no operands, and
-// biExport took it whenever `-p` was written. Two builtins with one behaviour
+// biExport took it whenever `-p` was written. Two builtins with one behavior
 // in every column of the panel were written two ways, so the engine agreed
 // with bash and ksh93 about `readonly -p t=6` and disagreed about `export -p
 // w=8` on the same line of reasoning. One helper answers for both now.

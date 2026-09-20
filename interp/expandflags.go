@@ -1126,7 +1126,7 @@ func (r *Runner) namedBase(name, flags string) (words []string, set, isList bool
 		case hasK:
 			return a.keys(), len(a) > 0, true
 		default:
-			return a.values(), len(a) > 0, true
+			return r.assocValues(a), len(a) > 0, true
 		}
 	}
 	if elems, pok := r.pipelineStatuses(name); pok {

@@ -564,7 +564,17 @@ func (r *Runner) declarableNames() []string {
 		// c=(a=1;b=2)`, and never a `c.a=1` of its own. Named explicitly they
 		// still list — `typeset -p c.a` is `c.a=1` — which is why this is a
 		// filter on the walk rather than a rule about the name.
-		if r.memberOfACompoundVariable(name) {
+		if r.memberOfACompoundVariable(name) && !r.listsBesideItsElement(name) {
+			delete(seen, name)
+		}
+		// And the namespace of a compound an *element* holds is not a row
+		// either, for the same reason read the other way round: the array's
+		// own row already writes that value whole, so `a[1]` beside
+		// `typeset -a a=([1]=(p=1;q=2))` would write it twice. Named
+		// explicitly it still lists — `typeset -p a[1]` is `typeset -C
+		// a[1]=(p=1;q=2)` — which is the filter-on-the-walk shape again.
+		// See interp/subcompound.go.
+		if isElementNamespace(name) {
 			delete(seen, name)
 		}
 	}

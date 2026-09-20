@@ -388,6 +388,18 @@ type Assign struct {
 	// still holds the whole subscript as written, so a reader that does not
 	// know about groups sees what the source said.
 	IndexFlags *SubscriptFlags
+	// Member is the dotted member path written after the subscript's closing
+	// bracket — `.p` in `a[1].p=9`, `.q.r` in `a[1].q.r=4` — with its leading
+	// dot and empty where none was written.
+	//
+	// It is the one place a subscript and a dotted name meet. A member of an
+	// *unsubscripted* compound needs nothing here, because `.` is a name byte
+	// where the dialect has the construct and the whole of `c.p` is the Name;
+	// after a `]` there is no name left to run on, so the member has to be
+	// carried beside the subscript and joined to it once the subscript has a
+	// value. See [Dialect.DottedName], and [ParamExpr.Member], which is the
+	// same field on the reading side.
+	Member string
 	// IndexText is the subscript as it was written, before any expansion —
 	// the text between the brackets, and empty where none were.
 	//

@@ -153,6 +153,7 @@ func (r *Runner) storeAssocElement(name, key string, value Element) {
 		r.AssocArrays[name] = a
 	}
 	a[key] = value
+	r.sweepElementCompounds(name)
 	// Written to, so the name leaves the declared-only set — the same note
 	// setAssocElem makes, and for the same reason.
 	r.compoundWasAssigned(name)
@@ -204,6 +205,21 @@ func (r *Runner) listedElement(e Element) string {
 		// for the reason nestTrailingSpace carries none — only one column
 		// can produce the state at all. See ElementDeclaredAndEmpty.
 		return ""
+	}
+	if e.Kind == ElementHoldsACompound {
+		// The compound's own body between its own parentheses, which is the
+		// same writer `typeset -p c` uses over a bare name: the members are
+		// joined with `;` and the last one takes no terminator, against the
+		// blank-separated elements of the nested array standing beside it in
+		// the same spelling. Measured, ksh93u+ 2012-08-01:
+		//
+		//	a[1]=(p=1 q=2)   typeset -a a=([1]=(p=1;q=2))
+		//	b[1]=(x y)       typeset -a b=([1]=(x y) )
+		//
+		// and the trailing blank the second row has is nestTrailingSpace's,
+		// which asks about the *nested array* an element holds and so
+		// answers no for this one without being told.
+		return "(" + r.compoundVariableBody(e.Str, true) + ")"
 	}
 	if e.Nested == nil {
 		return r.declareQuoted(e.Str)

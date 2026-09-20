@@ -215,6 +215,23 @@ type ParamExpr struct {
 	// `@` or the `*`, which differ exactly as `$@` and `$*` do: one field
 	// each, or one field joined.
 	Prefix byte
+	// Member is the dotted member path written after the subscript's closing
+	// bracket — the `.p` of `${a[1].p}` — with its leading dot, and empty
+	// where none was written.
+	//
+	// The construct is one dialect's compound variable held in an array
+	// element: `a[1]=(p=1 q=2)` there, and the member reads back as the
+	// ordinary name `a[1].p`, which is what that shell's own `${!a[1].@}`
+	// answers and what its whole-shell listing writes beside the array.
+	// Before a `]` no field is needed, because `.` is a name byte where the
+	// dialect has the construct and `c.p` is one Name; after one the dot has
+	// no reading, which is the gap this fills. See [Dialect.DottedName] and
+	// [Assign.Member], the same field on the writing side.
+	//
+	// A lone `.` is a member path too, and it is the one `${!a[1].@}` needs:
+	// the names *under* the element, exactly as `${!c.@}` reads the names
+	// under `c` with the dot on the end of the Name.
+	Member string
 
 	// Inner is the expansion standing where a name would — the `${v}` of
 	// `${${v}#a}` — and is nil for the ordinary shape. Name is empty when it
@@ -1034,6 +1051,32 @@ scan:
 				break
 			}
 		}
+		// A dotted member path after the last subscript names a member of
+		// the compound the element holds — `${a[1].p}`. Read here rather
+		// than in the name scan because the name scan is long since past:
+		// `a` ended at the `[`, and the dot behind the `]` has nothing left
+		// to run on. See Member.
+		if e.Index != nil && p.dialect.DottedName {
+			if member, rest := memberPath(s, true); member != "" {
+				e.Member, s = member, rest
+			} else if e.Indirect && strings.HasPrefix(s, ".") &&
+				(s == ".@" || s == ".*") {
+				// `${!a[1].@}` — the names under the element, where the dot
+				// is the whole path and the `@` is the prefix form. The
+				// memberPath scan declines a dot with nothing readable after
+				// it, which is right for an assignment and is exactly this
+				// row on the reading side.
+				e.Member, s = ".", s[1:]
+			}
+		}
+	}
+	// The prefix form again, now that a subscript and a member path have been
+	// taken off: `${!a[1].@}` reaches here with the `@` alone left, where
+	// `${!a@}` reached the test above with it. One rule, asked at both places
+	// a name can end.
+	if e.Indirect && (s == "@" || s == "*") {
+		e.Prefix = s[0]
+		return e
 	}
 	if s == "" {
 		return e

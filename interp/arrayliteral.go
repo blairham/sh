@@ -356,6 +356,7 @@ func (r *Runner) storeRetypedNestedLiteral(name string, a Array) {
 		table[strconv.Itoa(i)] = a[i]
 	}
 	r.AssocArrays[name] = table
+	r.sweepElementCompounds(name)
 	// Written to, so the name leaves the declared-only set and its scalar
 	// view comes back — the same two notes every keyed write makes, and for
 	// the same reasons. See setAssocElem.

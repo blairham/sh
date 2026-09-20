@@ -545,7 +545,7 @@ func (r *Runner) reportArithWholeArraySubscript(x *syntax.ArithIndex) bool {
 // scalar as the one value it is.
 func (r *Runner) wholeArrayElems(name string) []string {
 	if a, ok := r.assocFor(name); ok {
-		return a.values()
+		return r.assocValues(a)
 	}
 	if elems, ok := r.arrayElems(name); ok {
 		return elems

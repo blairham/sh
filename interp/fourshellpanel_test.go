@@ -234,12 +234,49 @@ import (
 //     to fourShellNotAPanel: a blocklist entry hides the sentence from the
 //     guard and leaves it reading the same way to a person.
 //
+// # The seventh pass, which measured nothing and says so
+//
+// 2026-09-20, five lines that needed no shell run at all, taking
+// diagnostics.go from 17 to 15 and semantics.go from 7 to 4. Every one of
+// them is a count the file had **already** corrected or already spelled out
+// in names, and the only reason they were still here is that the correction
+// was written in a way the ratchet reads:
+//
+//   - **Two were the corrections themselves, quoting the miscount back.**
+//     ReturnOutsideAFunction and UnboundPositional each open their corrected
+//     record by repeating the old sentence in quotation marks, so the phrase
+//     the audit is counting survived the fix that removed it. Both are
+//     rewritten to describe the old count rather than reproduce it — which
+//     is the general rule and is now written into the first of them: a
+//     reader skimming for the answer finds a quoted miscount as readily as
+//     the correction under it.
+//   - **Two were a count the same sentence then spelled out.** The
+//     `set -o --` row of SetODeclinesADashWord names its three refusers on
+//     the two rows above and below it, and LongOptionNamesASetOption's
+//     closing line points at a group its own paragraph opens by naming. Both
+//     now carry the names. No measurement is claimed for either.
+//   - **One was a counted subset written with the wrong joining word.**
+//     SetValidatesOptionLettersFirst's probe note explains why it puts
+//     `command` in front of the builtin, and the four columns it counts are
+//     chosen by a criterion it states in the same breath. It said `columns
+//     where`, and fourShellSubset reads `columns that` — so the sentence was
+//     already the shape this audit wants and was being counted as the shape
+//     it does not. Reworded rather than added to the subset pattern: one
+//     conjunction is a narrower change than widening what the guard forgives
+//     for every line in the tree, and `columns where` appears on five other
+//     lines that this pass did not measure.
+//
+// Worth stating because the three kinds look identical from the count and
+// are three different things to a reader: a fix that left its own evidence
+// behind, a number standing in front of the names it stands for, and prose
+// that was right and read wrong.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
-	"semantics.go":   7,
-	"diagnostics.go": 17,
+	"semantics.go":   4,
+	"diagnostics.go": 15,
 	filepath.Join("..", "syntax", "dialect.go"): 0,
 }
 

@@ -2443,6 +2443,43 @@ wording, where it had been concatenated.
 pair. The block carries no location, exactly as the block a bare `kill` writes
 does.
 
+## A declaration's array literal is stored even though the open failed
+
+Swept out of #3806, which moved *when* a declaration's array operand is
+expanded. This is what happens to the **store** once the command's redirection
+has failed, and it is a separate measured fact (#3815).
+
+Measured 2026-09-19, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> x.sh`:
+
+```sh
+typeset a=(VAL) 2>/nope/x
+echo "[${a[0]}]"
+```
+
+| shell | answer |
+| --- | --- |
+| bash 5.3.20, bash 3.2.57 | the complaint, then `[VAL]` |
+| zsh 5.9.2 | the complaint, then `[]` |
+| ksh93u+ | the complaint, and the shell stops |
+| dash 0.5.12, BusyBox ash | no array literal, so no question |
+
+So bash applies the assignment although the command never ran.
+`Semantics.ArrayOperandIsStoredPastAFailedOpen`.
+
+**It is the array literal alone.** A scalar operand is not stored in bash
+either — `export s=$(echo VAL) 2>/nope/x` leaves `s` empty there — so this is
+not "bash performs a declaration's assignments before it opens anything".
+
+ksh93 cannot be asked. A failed redirection on a declaration utility ends that
+shell, so no later command reads the name; its value here is unreachable
+rather than measured, and the rule that decides it is
+`RedirectErrorOnSpecialBuiltinFatal`.
+
+Separate from **when the elements are expanded**, which is #3806 and is
+already common ground: `typeset a=($(echo VAL; echo SIDE >&2)) 2>/nope/x`
+shows `SIDE` in every column that has array literals, this shell included.
+This axis is only about the store running afterwards.
+
 ## `--` stands in two places in `kill`, and only one of them is common
 
 Split out of #2145's measurement and filed as #3817, whose title said `--` is

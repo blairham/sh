@@ -1112,6 +1112,8 @@ func Semantics() interp.Semantics {
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// BusyBox 1.37.0 ash sends it: `kill -0 -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
+	// BusyBox ash has no array literal, so the question cannot be put.
+	s.ArrayOperandIsStoredPastAFailedOpen = interp.No
 	// BusyBox 1.37.0 ash answers `invalid number '--'` behind both.
 	s.KillTakesEndOfOptionsAfterTheSignal = interp.No
 	// A trim on `$@` runs over the whole list once, as it does in dash.

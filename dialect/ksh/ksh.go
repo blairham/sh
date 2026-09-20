@@ -2239,6 +2239,9 @@ func Semantics() interp.Semantics {
 	// `kill: -1: permission denied` at 1, where `-$$` is 0 and an
 	// absent group is `no such process`.
 	s.KillRefusesTheAllProcessesTarget = interp.Yes
+	// Unreachable rather than measured: a failed redirection on a
+	// declaration utility ends ksh93, so nothing reads the name after.
+	s.ArrayOperandIsStoredPastAFailedOpen = interp.No
 	// ksh93u+ reaches the target behind either spelling.
 	s.KillTakesEndOfOptionsAfterTheSignal = interp.Yes
 	// A trim on `$@` runs over each field, as it does in bash.

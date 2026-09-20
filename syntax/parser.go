@@ -5297,7 +5297,8 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 		p.ranOut()
 		return nil, p.tok.Pos
 	}
-	if p.atStopWord() || p.at(TokRightParen) || p.atAJoiningOperator() {
+	if p.atStopWord() || p.at(TokRightParen) ||
+		(p.dialect.ShortBodyEndsOnAJoiningOperator && p.atAJoiningOperator()) {
 		// A stop word or a `)` is somebody else's, and it is *here*, so the
 		// input did not run out: the body is empty and the construct is
 		// finished. `while cond; { … }` is this, with the group taken as the
@@ -5357,6 +5358,13 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 // second separator is stepped over and the `print` becomes the body — an
 // empty body there would run it once. That is
 // [Dialect.SeparatorWhereACommandBelongs]'s question and not this one.
+// Asked only where [Dialect.ShortBodyEndsOnAJoiningOperator] is on. The rows
+// above are all zsh, and the core is the language every panel shell accepts —
+// so this is added by a dialect rather than taken from one, the additive
+// direction [Dialect.EmptyCompoundBody] describes for a grammar flag. Ungated
+// it also reached the core, where it moved `while | do :; done` onto the stop
+// word `do` — the exact shape TestAShortBodyRefusesTheTokenThatIsThere exists
+// to refuse.
 func (p *Parser) atAJoiningOperator() bool {
 	switch p.tok.Kind {
 	case TokPipe, TokPipeAmp, TokAndAnd, TokOrOr:

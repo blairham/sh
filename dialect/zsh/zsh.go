@@ -121,6 +121,11 @@ func Dialect() syntax.Dialect {
 	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
 	// so.
 	d.ShortForm = true
+	// And a short body may be empty because a joining operator stands where
+	// it would be: `for i in a b; | cat` pipes the loop rather than refusing
+	// a missing body (#3898). Measured with the rest of the panel on
+	// syntax.Dialect.ShortBodyEndsOnAJoiningOperator.
+	d.ShortBodyEndsOnAJoiningOperator = true
 	// A C-style `for` header may hold more than the two separators its three
 	// expressions need: everything past the second `;` is part of the third
 	// expression, semicolons and all, so `for ((;;;)); do echo body; break;

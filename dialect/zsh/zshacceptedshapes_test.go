@@ -3,7 +3,12 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"errors"
+	"testing"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // Five shapes real zsh accepts and runs were parse errors here, so the script
 // died at status 1 instead of running (#3898).
@@ -126,6 +131,56 @@ func TestASubstitutionBodyStillRefusesTheOtherOperators(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if _, st := runZsh(t, t.TempDir(), c.src); st == 0 {
 				t.Errorf("%q ran at 0, want the refusal zsh gives", c.src)
+			}
+		})
+	}
+}
+
+// Where a refusal *lands*, for the shapes that keep one. The short-body cause
+// moves the token a refusal names, and that is the half a parsed/refused table
+// cannot see — a row that goes on being refused for a different reason reads
+// exactly like a row that did not move.
+//
+// Measured 2026-09-20, same arrangement as the tables above, against zsh
+// 5.9.2. Each line is its own script file and the quoted word is the whole of
+// what zsh named:
+//
+//	while & do :; done      parse error near `&'
+//	until & do :; done      parse error near `&'
+//	while | do :; done      parse error near `do'
+//	while |& do :; done     parse error near `do'
+//	while && do :; done     parse error near `do'
+//	while || do :; done     parse error near `do'
+//
+// So the `&` rows name the operator where it stands and the four joining
+// operators do not: a loop written in front of one is its left-hand side, and
+// `do` is then a right-hand side that cannot begin a command. `&` terminates a
+// list rather than joining two commands, which is why it is the row that does
+// not move.
+//
+// The whole panel refuses all six — only zsh has the short form at all — so
+// this is a fact about the one column that has the grammar, and syntax's
+// TestAShortBodyRefusesTheTokenThatIsThere is the same question asked of a
+// grammar with [syntax.Dialect.ShortForm] and without
+// [syntax.Dialect.ShortBodyEndsOnAJoiningOperator], where the operator is
+// still refused where it stands.
+func TestWhereAShortBodyRefusalLands(t *testing.T) {
+	for _, c := range []struct{ src, token string }{
+		{`while & do :; done`, "&"},
+		{`until & do :; done`, "&"},
+		{`while | do :; done`, "do"},
+		{`while |& do :; done`, "do"},
+		{`while && do :; done`, "do"},
+		{`while || do :; done`, "do"},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			_, err := parseZsh(c.src)
+			var se *syntax.Error
+			if !errors.As(err, &se) {
+				t.Fatalf("%q: err = %v, want the refusal zsh gives", c.src, err)
+			}
+			if se.Token != c.token {
+				t.Errorf("%q named %q, want %q — the token zsh names", c.src, se.Token, c.token)
 			}
 		})
 	}

@@ -24,6 +24,9 @@ func shapesDialect() Dialect {
 	// and the second short-form loop.
 	d.PipeBothStreams = true
 	d.Repeat = true
+	// And the rule those rows are about, which is a dialect's to add rather
+	// than the core's to hold — see Dialect.ShortBodyEndsOnAJoiningOperator.
+	d.ShortBodyEndsOnAJoiningOperator = true
 	d.DeclarationUtilities = map[string]bool{"typeset": true, "export": true, "readonly": true}
 	return d
 }
@@ -164,5 +167,23 @@ func TestAShortFormBodyMayBeEmptyBeforeAJoiningOperator(t *testing.T) {
 	}
 	if _, err := Parse(`for i in a b; echo $i`, d); err != nil {
 		t.Errorf("a short body that is written: %v", err)
+	}
+	// And the flag is what it hangs on, which is what keeps this a dialect's
+	// addition rather than something the core grew. With it off the operator
+	// is refused where it stands, exactly as it was before #3898 — and that
+	// is the state TestAShortBodyRefusesTheTokenThatIsThere reads, since a
+	// grammar holding [Dialect.ShortForm] and not this one keeps naming the
+	// token in front of the stop word.
+	off := shapesDialect()
+	off.ShortBodyEndsOnAJoiningOperator = false
+	for _, src := range []string{
+		`for i in a b; | cat`,
+		`for i in a b; |& cat`,
+		`select o in a b c; && echo x`,
+		`repeat 2; || echo x`,
+	} {
+		if _, err := Parse(src, off); err == nil {
+			t.Errorf("with ShortBodyEndsOnAJoiningOperator off, %s parsed", src)
+		}
 	}
 }

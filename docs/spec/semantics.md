@@ -27478,6 +27478,79 @@ is no disagreement between real shells to record at a point. See the
 `declare/a-table-letter-over-a-compound-body` and
 `arrays/a-second-subscript-on-an-assignment` corpus rows (#2853).
 
+### A compound body inside an array literal
+
+The same value written from **inside the literal** rather than through a
+subscripted assignment — `a=([1]=(p=1 q=2))` and `a=(x (p=1 q=2))` — which is
+a second parse site and a second store site for one construct. The shape of
+the answer was already agreed before this: both columns make the name a table
+and put the body at the subscript. What was left was the nested value's
+reading.
+
+Measured on ksh93u+ 2012-08-01, 2026-09-20, each row its own script file under
+`env -i PATH=/usr/bin:/bin LC_ALL=C /bin/ksh x.sh` with standard input on
+`/dev/null` and the output read through `sed -n l`:
+
+| written | ksh93u+ |
+| --- | --- |
+| `a=([1]=(p=1 q=2)); typeset -p a` | `typeset -A a=([1]=(p=1;q=2))` |
+| `a=(x (p=1 q=2)); typeset -p a` | `typeset -A a=([0]=x [1]=(p=1;q=2))` |
+| `typeset -a c=([0]=(a=1;b=2)); typeset -p c` | `typeset -a c=((a=1;b=2))` |
+| `a=([1]=(p=1 q=2)); "${a[1].p}"` | `1` |
+| `a=( (p=1) ); typeset -p a[0]` | `typeset -C a[0]=(p=1)` |
+| `a=( (p=1) ); ${!a[0].@}` | `a[0].p` |
+| `a=( (p=1) ); a[0].q=7; typeset -p a` | `typeset -a a=((p=1;q=7))` |
+| `a=( (p=1 q=(r=2)) ); typeset -p a` | `typeset -a a=((p=1;q=(r=2)))` |
+| `a=( (typeset -i n=5) ); "${a[0].n}"` | `5` |
+
+The third row is the same gap read from the other end: a `;`-joined body is
+what the listing writes, so a shell that cannot parse one inside a literal
+cannot read back what it printed.
+
+**The first word decides, as it does everywhere else**, and the controls do
+not move: `d=([1]=(x y))` is `typeset -A d=([1]=(x y) )` and `m=(x (y z))` is
+`typeset -A m=([0]=x [1]=(y z) )`, both the nested array. A *quoted*
+assignment is not one either — `a=( ("a=1") )` is the nested array holding the
+one string, `${a[0][0]}` of `a=1`.
+
+An **empty** pair of parentheses is the compound here too, and only two of its
+three rows can see it: `a=( () ); typeset -p a` is `typeset -a a=(())` under
+either reading, while `typeset -p a[0]` is `typeset -C a[0]=()` and
+`a=( () ); a[0].p=3` is `typeset -a a=((p=3))`.
+
+The rule that retypes a literal holding an element of its own parentheses
+counts a compound exactly as it counts a nested array — the first element
+decides, and what the parentheses were found to hold does not:
+
+| written | ksh93u+ |
+| --- | --- |
+| `a=( (p=1) (q=2) )` | `typeset -a a=((p=1) (q=2))` |
+| `a=( () x )` | `typeset -a a=(() x)` |
+| `a=(x (p=1 q=2) y)` | `typeset -A a=([0]=x [1]=(p=1;q=2) [2]=y)` |
+| `a=([0]=(p=1) [1]=(q=2))` | `typeset -A a=([0]=(p=1) [1]=(q=2))` |
+
+**Two rows are recorded rather than reproduced.**
+
+An append writing a compound element into a literal is not a value at all
+there: `a=(x); a+=( (p=1) ); typeset -p a` gives `typeset -a a=(x $'[\xe2')`
+on one run and `$'[q\x01\x01'` on another — uninitialized bytes, which is a
+defect of the reference rather than an answer. Here it is the element the rest
+of the table says it should be, `typeset -a a=(x (p=1))`.
+
+A compound **deeper than one pair of parentheses** keeps the array reading
+here. `a=( ( (p=1) ) )` is `typeset -a a=(((p=1)) )` there with
+`${a[0][0].p}` of `1`, and `typeset -a a=(((p=1) ) )` here — the nested array
+of one string. The reason is the namespace: a compound element's members are
+ordinary names spelled with the element's own subscript in front, so the
+reading needs to know which element it lands in, and that is settled for the
+name's own literal and not for a literal standing inside another one. The
+element's own literal is the same case and takes the same answer —
+`a[1]=( (p=1) )` writes into `a[1]` and its nested element would be
+`a[1][0]`. See `syntax.Parser.nestedArrayLiteral`.
+
+Not an axis, for the reason the section above is not: no other column has a
+spelling that can put the question (#3864).
+
 ## The operand a short circuit already decided
 
 `&&` and `||` inside `$(( ))` stop as soon as the left operand settles the

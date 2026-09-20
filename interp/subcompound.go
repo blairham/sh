@@ -225,6 +225,36 @@ func (r *Runner) assignTableCompoundBase(ctx context.Context, a *syntax.Assign) 
 	r.storeAssocElement(a.Name, baseKey, Element{Kind: ElementHoldsACompound, Str: space})
 }
 
+// literalElementCompound is a compound body that stood where an element of a
+// **literal** goes — `a=(x (p=1 q=2))`, `a=([1]=(p=1 q=2))` — run into the
+// namespace that element's subscript spells, and the value the element then
+// holds.
+//
+// The same two pieces the subscripted assignment above uses, in the same
+// order, and deliberately the same two functions: a literal's element and
+// `a[1]=(p=1 q=2)` are one construct reached by two routes, so a second
+// filler here is how the two would come to disagree about what `+=` keeps or
+// which name the members hang under.
+//
+// The subscript arrives as text because the placement has already settled it —
+// the next position going for a bare element, the arithmetic's answer for a
+// subscripted one — where [Runner.assignSubscriptedCompound] resolves it
+// itself. That is the whole of the difference between the two callers.
+//
+// The context is the run's rather than a parameter, for the reason
+// Runner.ctx carries: a member's value may hold a command substitution, and
+// threading a context through the literal's placement to reach one call would
+// be worse. See Runner.ShellContext.
+func (r *Runner) literalElementCompound(name, sub string, members []*syntax.SimpleCmd) (Element, bool) {
+	space := elementNamespace(name, sub)
+	body := &syntax.Assign{Name: space, IsArray: true, Members: members}
+	if !r.fillElementCompound(r.ShellContext(), space, body) {
+		return Element{}, false
+	}
+	r.compoundVariables()[space] = true
+	return Element{Kind: ElementHoldsACompound, Str: space}, true
+}
+
 // fillElementCompound runs the body into the element's namespace and reports
 // whether the store that follows should happen.
 //

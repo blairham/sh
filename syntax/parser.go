@@ -3643,6 +3643,15 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// [Dialect.ArrayLiteralShapeFollowsTheFirstElement].
 		shaped := p.dialect.ArrayLiteralShapeFollowsTheFirstElement
 		subscripted := false
+		// Whether an element opening with `(` may be a **compound variable's
+		// body** rather than the nested array — the name's own literal alone,
+		// for the reason [Parser.nestedArrayLiteral] states: the members of
+		// such an element are ordinary names spelled with the element's own
+		// subscript in front, and the element is only known where the literal
+		// belongs to the name. `a[1]=( (p=1) )` writes into `a[1]` and its
+		// nested element's spelling would be `a[1][0]`, which is the deeper
+		// row recorded there.
+		elementCompound := a.Index == nil && len(a.Leading) == 0
 		for p.err == nil {
 			if p.dialect.NestedArrayLiteral && p.at(TokLeftParen) {
 				if shaped && subscripted {
@@ -3661,7 +3670,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 						p.failUnexpected("")
 						return a
 					}
-					head.Nested = p.nestedArrayLiteral()
+					head.Nested = p.nestedArrayLiteral(elementCompound)
 					if p.err != nil {
 						break
 					}
@@ -3676,7 +3685,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 				// front of a word: `a=( (1 2)x )` is two elements, the
 				// literal and `x`, so the close paren ends the element
 				// wherever it falls. See [Dialect.NestedArrayLiteral].
-				a.Elems = append(a.Elems, &ArrayElem{Nested: p.nestedArrayLiteral()})
+				a.Elems = append(a.Elems, &ArrayElem{Nested: p.nestedArrayLiteral(elementCompound)})
 				if p.err != nil {
 					break
 				}
@@ -3784,19 +3793,46 @@ func subscriptedHeadAwaitingALiteral(elems []*ArrayElem) *ArrayElem {
 // read — is already what a nested one wants, so nothing is saved or restored
 // here: the parentheses this reads are inside the ones that set it.
 //
-// No compound-variable reading is offered, which is measured rather than an
-// omission: `a=( (p=1 q=2) )` really does make a compound there, and it is the
-// construct #2853 is about — a compound has nowhere in this store to be read
-// back from yet, so the words are taken as an array's and the divergence is
-// recorded rather than half-built.
-func (p *Parser) nestedArrayLiteral() *Assign {
+// **The compound-variable reading is offered where the element is one of the
+// name's own** — `a=(x (p=1 q=2))` and `a=([1]=(p=1 q=2))` — and not deeper,
+// which is the whole of what offersACompound carries. The members of a
+// compound held in an element are ordinary names spelled with the element's
+// own subscript in front, `a[1].p`, so a reading has to know which element it
+// is being stored in; that is known for the name's own literal and is not
+// known for a literal standing inside another one. The deeper row is measured
+// and recorded rather than half-built: `a=( ( (p=1) ) )` is
+// `typeset -a a=(((p=1)) )` on ksh93u+ 2012-08-01 with `${a[0][0].p}` of `1`,
+// where this reads the inner parentheses as the nested array they were before
+// (#3864).
+func (p *Parser) nestedArrayLiteral(offersACompound bool) *Assign {
 	n := &Assign{IsArray: true, Start: p.tok.Pos}
 	p.next()
 	p.skipArrayElementSeparators(false)
+	if offersACompound && p.opensACompoundVariableBody(literalWordDecides) {
+		// The same two constructs the parentheses of a bare name hold, told
+		// apart by the same first word — see
+		// [Parser.opensACompoundVariableBody], which is called with no
+		// declaration letters because a body of its own is read by rules of
+		// its own. An empty pair is the compound here too, measured:
+		// `a=( () ); typeset -p 'a[0]'` is `typeset -C a1[0]=()` on ksh93u+
+		// and `a=( () ); a[0].p=3` is `typeset -a a=((p=3))`, neither of
+		// which the array reading can reach.
+		n.Members = p.compoundVariableBody()
+		if p.err == nil && !p.at(TokRightParen) {
+			p.failUnexpected(")")
+			return n
+		}
+		if p.err != nil {
+			return n
+		}
+		n.Stop = p.tok.End
+		p.next()
+		return n
+	}
 	for p.err == nil && !p.at(TokRightParen) {
 		switch {
 		case p.at(TokLeftParen):
-			n.Elems = append(n.Elems, &ArrayElem{Nested: p.nestedArrayLiteral()})
+			n.Elems = append(n.Elems, &ArrayElem{Nested: p.nestedArrayLiteral(false)})
 		case p.tok.Kind == TokWord:
 			el := p.word()
 			// An element is not a word a command takes, the same refusal the

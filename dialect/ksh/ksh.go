@@ -4293,6 +4293,14 @@ func Diagnostics() interp.Diagnostics {
 		// substrate's fallback is bash's wording.
 		NamerefBadTarget:     "%[1]s: invalid variable name",
 		NamerefSelfReference: "%[1]s: invalid self reference",
+		// And the third shape a target may take here, which the other
+		// columns have no variables for: a **compound member path**. The
+		// entry is the refusal of one whose base name is not there —
+		// measured 2026-09-20, `typeset -n c=qq.b` is `typeset: qq.b: no
+		// parent` at 1 with the script ending — and carrying it is what says
+		// this dialect admits the shape at all. See
+		// interp/namerefmember.go, where every row is.
+		NamerefTargetHasNoParent: "%[1]s: no parent",
 		// A `${!r}` over a reference with nothing to point at, which is the
 		// one indirection refusal this shell makes: IndirectionYieldsName
 		// sends the rest of that expansion somewhere else here, so the two

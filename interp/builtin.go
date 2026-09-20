@@ -3321,6 +3321,13 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		// The export attribute goes to what a reference points at, and this
 		// loop takes no scope, so there is never a fresh binding for it to be
 		// about instead. See interp/namerefattribute.go.
+		//
+		// The **value** on the same word does not go there. It parts from the
+		// attribute for one shape — a reference aimed at an *element* — and is
+		// read before the redirect below, because afterwards the subscript it
+		// belongs to is gone. The pair biDeclare keeps, under the third word
+		// of four. See Runner.referenceValueTarget.
+		valueTarget := r.referenceValueTarget(name, declareFlags{})
 		if target, follows := r.attributeFollowsTheReference(name, declareFlags{}); follows {
 			name = target
 		}
@@ -3339,11 +3346,11 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			// No shadow is taken here either, so the value it joins is the
 			// one the name already reads even inside a function.
 			if appends {
-				if !r.declarationAppend(name, value, false, false) {
+				if !r.declarationAppend(r.orName(valueTarget, name), value, false, false) {
 					return r.status
 				}
 			} else {
-				r.setVarAs(name, value, assignedByDeclaration)
+				r.setVarAs(r.orName(valueTarget, name), value, assignedByDeclaration)
 			}
 			if r.ctl == controlExit {
 				// The assignment ended the script, so the builtin has
@@ -6537,6 +6544,12 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		// a caller's variable and told to freeze it froze the reference, and
 		// the caller's variable stayed writable at status 0. See
 		// interp/namerefattribute.go.
+		//
+		// The **value** on the same word stays with the element, as it does
+		// under the other three words: read before the redirect replaces the
+		// name, since afterwards the subscript it belongs to is gone. See
+		// Runner.referenceValueTarget.
+		valueTarget := r.referenceValueTarget(name, f)
 		if target, follows := r.attributeFollowsTheReference(name, f); follows {
 			name = target
 		}
@@ -6568,7 +6581,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			// — over the standing value where this builtin took no scope,
 			// and over the fresh local's nothing where it did.
 			if appends {
-				if !r.declarationAppend(name, value, false, fresh) {
+				if !r.declarationAppend(r.orName(valueTarget, name), value, false, fresh) {
 					return r.status
 				}
 				if r.ctl == controlExit {
@@ -6583,7 +6596,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				}
 				continue
 			}
-			r.setVarAs(name, value, assignedByDeclaration)
+			r.setVarAs(r.orName(valueTarget, name), value, assignedByDeclaration)
 			if r.ctl == controlExit {
 				// See biExport.
 				return r.status

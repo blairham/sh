@@ -71,19 +71,49 @@ func TestAWholeArraySubscriptThroughAReferenceIsBad(t *testing.T) {
 func TestADeclarationsValueFollowsAReferenceToTheElement(t *testing.T) {
 	t.Parallel()
 	const decl = `a=(p q r); typeset -n b='a[1]'; `
-	for _, c := range []struct{ name, src, want string }{
-		{"a plain declaration", decl + `typeset b=Z; echo "[${a[*]}]"`, "[p Z r]\n"},
-		{"the global letter", decl + `f() { typeset -g b=G; }; f; echo "[${a[*]}]"`, "[p G r]\n"},
+	for _, c := range []struct {
+		name, src, want string
+		st              int
+	}{
+		{name: "a plain declaration", src: decl + `typeset b=Z; echo "[${a[*]}]"`, want: "[p Z r]\n"},
+		{name: "the global letter", src: decl + `f() { typeset -g b=G; }; f; echo "[${a[*]}]"`, want: "[p G r]\n"},
+		// The two words the first version of this left out, each of which
+		// went on writing element 0. Only the cell is asserted: this shell
+		// carries the attribute to the array here and says nothing, where
+		// bash withholds it and writes ``readonly: `a[1]': not a valid
+		// identifier`` at status 0 — a remainder of its own, and an axis
+		// rather than a defect, since ksh93u+ carries the attribute exactly
+		// as this does (#3886).
+		{name: "the readonly word", src: decl + `readonly b=Z; echo "[${a[*]}]"`, want: "[p Z r]\n"},
+		{name: "the export word", src: decl + `export b=Z; echo "[${a[*]}]"`, want: "[p Z r]\n"},
+		// A table's key through the same shape, which was worse than a wrong
+		// cell: the value went to a *new* key named `0` and `k` kept `v`.
 		{
-			"the control: a reference to a whole name is unchanged",
-			`typeset -n n=plain; typeset n=Z; echo "[$plain]"`, "[Z]\n",
+			name: "a table's key under the readonly word",
+			src:  `typeset -A m=([k]=v); typeset -n t='m[k]'; readonly t=T; echo "[${m[k]}]"`,
+			want: "[T]\n",
+		},
+		{
+			name: "the control: a reference to a whole name is unchanged",
+			src:  `typeset -n n=plain; typeset n=Z; echo "[$plain]"`,
+			want: "[Z]\n",
+		},
+		// And the same control under the word this change touched, which is
+		// what says the redirect was narrowed to an element and not removed:
+		// `readonly` through a reference to a plain name still writes and
+		// freezes the target.
+		{
+			name: "the control under the readonly word",
+			src:  `typeset -n n=plain; readonly n=Z; echo "[$plain]"; plain=9`,
+			want: "[Z]\nsh: line 1: plain: readonly variable\n",
+			st:   1,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			out, status := answersRun(t, c.src)
-			if out != c.want || status != 0 {
-				t.Errorf("wrote %q at %d, want %q at 0", out, status, c.want)
+			if out != c.want || status != c.st {
+				t.Errorf("wrote %q at %d, want %q at %d", out, status, c.want, c.st)
 			}
 		})
 	}

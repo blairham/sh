@@ -73,6 +73,38 @@ func (r *Runner) regexFold() string {
 	return ""
 }
 
+// regexDotAll is the prefix every expression this shell hands to the engine
+// carries, and it is what POSIX ERE means rather than a preference.
+//
+// A shell compiles with `regcomp` and **without** `REG_NEWLINE`, and that is
+// the flag that would make a newline special: without it a newline is an
+// ordinary character, so `.` and a negated bracket both pass over one, and
+// `^` and `$` stay at the ends of the *text*. Go's default is half of that
+// pair — the anchors are already at the text boundary and `.` alone excludes
+// newline — so the one flag that closes the gap is `(?s)`. `(?m)` is the
+// wrong half and would open a second gap in the other direction, since it
+// moves the anchors to line boundaries.
+//
+// Measured 2026-09-20 with `s=$'a\nb'`, in bash 5.3.20, bash 3.2.57, zsh
+// 5.9.2 and ksh93u+ alike:
+//
+//	[[ $s =~ a.b ]]        matches   — a newline is ordinary ground
+//	[[ $s =~ ^a.b$ ]]      matches   — and the anchors still reach over it
+//	[[ $s =~ ^b ]]         no        — `^` is the start of the text
+//	[[ $s =~ a$ ]]         no        — and `$` the end of it
+//	[[ $s =~ a[^x]+b ]]    matches   — a negated class already spanned here
+//
+// The two that answer `no` are the control: they are what says the flag is
+// `(?s)` and not `(?m)`, since they agree with the panel today and `(?m)`
+// would turn both of them into matches.
+//
+// It is one constant because there are two compile sites: this operator, and
+// ksh93's `~(E)` pattern flavor, which goes to the same engine and answers
+// the same three ways — measured the same day, `[[ $s == ~(E)a.b ]]` matches
+// there and `[[ $s == ~(E)^b ]]` does not. A second helper that omitted the
+// flag would be a divergence nobody looked for. #3892.
+const regexDotAll = "(?s)"
+
 // The block of characters the narrowing borrows to stand in for the ones the
 // engine must not fold. Plane 15 is private use throughout, so nothing in it
 // is a letter, nothing in it has a case, and `(?i)` leaves every one of them
@@ -186,15 +218,19 @@ func (m *standIns) pick(unit string) (rune, bool) {
 // bracket matches either of them, where this counts one character and answers
 // the second the other way. Both are that axis rather than this one — under a
 // UTF-8 locale, where the fold is the only thing in play, the bracket agrees.
+//
+// The expression comes back under regexDotAll whichever way the fold went,
+// because that flag is not an option a script turned on: it is what a POSIX
+// ERE is, and the fold's prefix composes with it rather than replacing it.
 func (r *Runner) regexOperands(pat, subject string) (expr, subj string, back []int) {
 	fold := r.regexFold()
 	if fold == "" || r.caseFoldReachesBeyondASCII(pat, subject) {
-		return fold + pat, subject, nil
+		return regexDotAll + fold + pat, subject, nil
 	}
 	stand := newStandIns(pat, subject)
 	subj, back = standInFor(subject, stand)
 	expr, _ = standInFor(pat, stand)
-	return fold + expr, subj, back
+	return regexDotAll + fold + expr, subj, back
 }
 
 // standInFor rewrites the cased characters above ASCII of s into private-use

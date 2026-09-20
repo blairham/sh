@@ -156,3 +156,45 @@ func TestATildeGroupMakesAFieldAPattern(t *testing.T) {
 		}
 	}
 }
+
+// A `~(E)` pattern goes to the same engine the `=~` operator uses and is the
+// same kind of expression, so a newline in the subject is ordinary ground
+// there too — and this is the site a fix for the operator alone would have
+// missed.
+//
+// The rows answering false are the control, exactly as they are for the
+// operator: an anchor is about the ends of the subject, and the other flag
+// that could have been chosen would turn both of them true. Measured
+// 2026-09-20 with `s=$'a\nb'` — `[[ $s == ~(E)a.b ]]` matches there and
+// `[[ $s == ~(E)^b ]]` does not. See regexDotAll.
+func TestATildeRegexReadsANewlineAsOrdinaryGround(t *testing.T) {
+	for _, c := range []struct {
+		letters string
+		pattern string
+		subject string
+		want    bool
+	}{
+		{"E", "a.b", "a\nb", true},
+		{"E", "^a.b$", "a\nb", true},
+		{"E", "a[^x]+b", "a\nb", true},
+		{"E", "^b", "a\nb", false},
+		{"E", "a$", "a\nb", false},
+		// The fold composes with the flag rather than replacing it, which is
+		// the same pair the operator's own rows pin.
+		{"Ei", "A.B", "a\nb", true},
+		// And a subject with no newline in it answers as it always did.
+		{"E", "a.c", "xabcx", true},
+	} {
+		m, unhonored := readTildeModifier(c.letters)
+		if unhonored != 0 {
+			t.Fatalf("~(%s) was refused at %c", c.letters, unhonored)
+		}
+		re, ok := m.tildeRegex(c.pattern, true)
+		if !ok {
+			t.Fatalf("~(%s)%s did not compile", c.letters, c.pattern)
+		}
+		if got := re.MatchString(c.subject); got != c.want {
+			t.Errorf("~(%s)%s over %q = %v, want %v", c.letters, c.pattern, c.subject, got, c.want)
+		}
+	}
+}

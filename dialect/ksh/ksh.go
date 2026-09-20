@@ -941,6 +941,12 @@ func Semantics() interp.Semantics {
 	// the line's letters — measured 2026-09-20 on ksh93u+ 2012-08-01. See
 	// interp/declareprintoperand.go.
 	s.DeclarePrintPerformsItsOperand = interp.DeclarePrintOperandIsAssignedPlainly
+	// The `-p` letter on `export` and `readonly` is inert once operands are
+	// written, which is bash's answer and not this shell's reading of
+	// `typeset -p`: measured 2026-09-20 on ksh93u+ 2012-08-01, `export -p
+	// w=8` writes nothing and leaves `w` at 8 and exported, and `export -p
+	// nosuch` declares `nosuch` exported. See interp/exportprintoperand.go.
+	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintLetterIsInert
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes

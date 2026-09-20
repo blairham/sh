@@ -1333,6 +1333,14 @@ func Semantics() interp.Semantics {
 	// way — measured 2026-09-20 on zsh 5.9.2. See
 	// interp/declareprintoperand.go.
 	s.DeclarePrintPerformsItsOperand = interp.DeclarePrintOperandIsANameAlone
+	// And `export -p` and `readonly -p` narrow to their operands here, which
+	// is the one column where those two words list at all once a name is
+	// written beside the letter: measured 2026-09-20 on zsh 5.9.2, `export
+	// a1=1; export a2=2; export -p a1` writes `export a1=1` alone and
+	// `readonly t=6; readonly -p t` writes `typeset -r t=6`. Nothing is
+	// declared — `export -p w=8` is `no such variable: w` at 1 with `w`
+	// still unset. See interp/exportprintoperand.go.
+	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintNarrowsToTheOperands
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
 	// Where it fired for a DEBUG or ERR body too: this shell names the
 	// firing line for every line of every body, so there is no second

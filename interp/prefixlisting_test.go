@@ -49,9 +49,15 @@ func TestAWholeTableListingCanAnswerFromBeforeThePrefix(t *testing.T) {
 	}
 	// And the *named* listing on the same vector still sees the prefix,
 	// which is the row that says this is about the operand-less shape.
-	out, _ = builtinPrefixRun(t, "export k=1\nk=9 export -p k", sem)
+	//
+	// `typeset -p k` and not `export -p k`: the named listing this file's
+	// table measures is the declaration utility's, and `export -p` with an
+	// operand is a different question in four columns of the panel — the
+	// letter is inert there and nothing is listed at all. See
+	// interp/exportprintoperand.go.
+	out, _ = builtinPrefixRun(t, "export k=1\nk=9 typeset -p k", sem)
 	if !strings.Contains(out, `k="9"`) {
-		t.Errorf("export -p k = %q, want the prefix's value", out)
+		t.Errorf("typeset -p k = %q, want the prefix's value", out)
 	}
 }
 

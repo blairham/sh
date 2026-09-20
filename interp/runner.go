@@ -5635,8 +5635,22 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// expand as ones, which is what keeps `typeset -i n=3*3` from being
 		// read as a pattern. Only after the first word is expanded is it
 		// known which utility this is, so the test is inside the loop.
-		if i > 0 && len(argv) > 0 && assignShaped(w) {
-			declaring := r.declarationCommand(c, argv)
+		// **Not `len(argv) > 0`.** What this asks is whether the word is the
+		// command word, and the command word is the *first written* one —
+		// `$e c=7` with `$e` empty leaves `c=7` an argument, not a command
+		// name. Reading it off argv instead made a word that nothing had yet
+		// expanded into the command, so `set -k` never saw it and the shell
+		// ran `c=7` and reported 127. Measured 2026-09-20 on bash 5.3.20,
+		// bash 3.2.57 and ksh93u+ 2012-08-01, which agree on every probe:
+		// `set -k; e=; $e c=7` is `st=0` with `c` holding 7, and `$e $e c=12`
+		// is the same (#3903).
+		//
+		// A declaration is still asked about only where there is a command
+		// word to be a declaration: with argv empty there is no utility yet,
+		// so the word is an ordinary promotion and the axis below is never
+		// reached.
+		if i > 0 && assignShaped(w) {
+			declaring := len(argv) > 0 && r.declarationCommand(c, argv)
 			// `set -k` takes the word before the declaration route can,
 			// where the dialect says it reaches that far. bash's does and
 			// ksh93's does not, which is measured and is why this is asked

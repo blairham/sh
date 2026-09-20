@@ -41,10 +41,18 @@ func TestArrayOperandIsStoredPastAFailedOpenAxis(t *testing.T) {
 			want: "[]\n",
 		},
 		{
-			// CONTROL. A scalar operand is not stored in bash either, so
-			// this row must stay empty at the answer that stores arrays. A
-			// reading that applied every operand passes the first row and
-			// fails here.
+			// A PIN, not a control, and the difference is worth stating
+			// because it is easy to mistake one for the other. It records
+			// bash's measured answer — a scalar operand is *not* stored
+			// there — so a future change to the scalar path is caught here.
+			//
+			// It does not discriminate against this implementation. I
+			// mutated the store to `assignOperands`, which applies every
+			// operand including scalars, and this row still passed: on a
+			// path whose redirection failed the scalar's own assign stores
+			// nothing anyway, so there is no reading of this function that
+			// can make the row fail. A row that cannot fail is not a
+			// control, whatever it is named.
 			name: "a scalar operand is not stored", answer: Yes,
 			src:  `export s=$(echo VAL) 2>/nope/x; echo "[${s}]"`,
 			want: "[]\n",

@@ -2659,6 +2659,18 @@ func Semantics() interp.Semantics {
 	// a[$k]=4; let "++a[$k]"` leaves 5 under the three-character key,
 	// where bash 5.3.20 calls the subscript bad and leaves 4 (#3796).
 	s.ArithSubscriptQuotationMustClose = interp.No
+	// A `let` operand's subscript is not a quoting context here, where the
+	// same brackets inside `(( … ))` are one — so this is the axis above's
+	// neighbor and not a second spelling of it. Measured 2026-09-20 on
+	// ksh93u+ from a script file with `typeset -A a; a[k]=1; a['"k"']=2`:
+	// `(( ++a["k"] ))` leaves the bare `k` at 2, with bash 5.3.20, and
+	// `let '++a["k"]'` leaves `k` at 1 and the three-character key at 3.
+	// `let '++a[\k]'` keeps the backslash the same way, so quote removal is
+	// not run over the operand rather than a character being spared. The
+	// shape a script meets is `k="q'r'z"; let "++a[$k]"`, where the
+	// apostrophes a value carried are two characters of the key here and
+	// bash's quotation to remove (#3871).
+	s.LetOperandSubscriptIsAQuotingContext = interp.No
 	// And the same for a subscript that expanded to nothing, which this
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.

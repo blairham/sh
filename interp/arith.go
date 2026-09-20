@@ -609,12 +609,10 @@ func (r *Runner) arithSubscriptQuotationRefused(x *syntax.ArithIndex) bool {
 // column writes it per subscript read, and `let "++a[$k]"`'s two lines are
 // that one read's pair rather than one line from each side of the operator.
 //
-// What the store contributes there instead is bash's third line,
-// “let: `a[q'r]': not a valid identifier“, which is `let`'s complaint
-// about its whole operand rather than the subscript's. It is deliberately
-// not carried — see #3796, where it is the stated remainder — so a pure
-// assignment through such a subscript is silent here and stores nothing,
-// which is the element bash leaves and one line short of what bash says.
+// What the store contributes there instead is a third line of its own —
+// “let: `a[q'r]': not a valid identifier“, `let`'s complaint about its whole
+// operand rather than the subscript's — which
+// reportArithSubscriptUnclosedQuoteTarget writes beside this one.
 func (r *Runner) reportArithSubscriptUnclosedQuote(x *syntax.ArithIndex) bool {
 	if !r.arithSubscriptQuotationRefused(x) {
 		return false
@@ -624,6 +622,46 @@ func (r *Runner) reportArithSubscriptUnclosedQuote(x *syntax.ArithIndex) bool {
 			"%[1]s[%[2]s]: bad array subscript", x.Name, x.Sub))
 	r.errf("%s\n%s\n", line, line)
 	return true
+}
+
+// reportArithSubscriptUnclosedQuoteTarget is the **store** half of the same
+// refusal: what the column that refuses says about the operand it would have
+// written through, rather than about the subscript it would have read.
+//
+// Once, and per store rather than per read, which is what parts it from the
+// pair above. Measured 2026-09-20 on bash 5.3.20 from a script file with
+// standard input on the null device, over `typeset -A a; k="q'r"; a[$k]=4`:
+//
+//	let "x = a[$k] + 1"	the read's sentence twice, this one never
+//	let "a[$k] = 9"    	this one once, the read's never
+//	let "++a[$k]"      	the read's twice and then this one — three lines
+//
+// So the two sentences count different things and neither is the other
+// written again, which row two settles on its own: a store with no read in it
+// was silent here and one line short of what that column says (#3870).
+//
+// Named through mathDiagf rather than written with a `let: ` in front of it,
+// because the name is the dialect's answer and not this site's. It is the
+// same naming Diagnostics.ArithErrorNamesTheBuiltin gives every other
+// complaint `let` raises about an expression, and the one column that words
+// none of its math failures after the builtin would otherwise have had this
+// sentence alone carrying a name.
+//
+// **Only an associative name**, and that is measured rather than a narrowing
+// for safety. On an indexed name, an unset one or a scalar, that column does
+// not write this sentence at all: it fails the *whole expression* as
+// unreadable arithmetic — `let: ++b[q'r]: bad array subscript (error token is
+// "b[q'r]")`, status 1, nothing stored — where every associative row above
+// keeps the expression's own value and its own status. That is a different
+// answer to a different question, which this shell already parts from on both
+// the sentence and the status; writing the association's sentence there would
+// be a second wrong answer rather than this one reaching further.
+func (r *Runner) reportArithSubscriptUnclosedQuoteTarget(name, sub string) {
+	if !r.assocDeclared(name) {
+		return
+	}
+	r.mathDiagf("%s", Wording(r.diag().ArithSubscriptUnclosedQuoteTarget,
+		"`%[1]s[%[2]s]': not a valid identifier", name, sub))
 }
 
 // wholeArrayElems is every element a name holds, whichever of the three
@@ -1205,10 +1243,12 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked,
 		Empty: p.empty, UnclosedQuote: p.unclosedQuote,
 	}) {
-		// Nothing written and nothing *said*: the sentence belongs to the
-		// read, which is where the column that refuses writes it, and an
-		// error here would fail the whole expression where that column lets
-		// it finish. See reportArithSubscriptUnclosedQuote.
+		// Nothing written, and the sentence is the *operand's* rather than
+		// the subscript's — the read's `bad array subscript` belongs to the
+		// read and is written there. No error either, which would fail the
+		// whole expression where the column that refuses lets it finish.
+		// See reportArithSubscriptUnclosedQuoteTarget.
+		r.reportArithSubscriptUnclosedQuoteTarget(p.name, p.sub)
 		return nil
 	}
 	if r.assocDeclared(p.name) {
@@ -3381,11 +3421,36 @@ func (r *Runner) arithAssocKey(sub string) string {
 	if !quoted {
 		return syntax.UnmarkArithValue(sub)
 	}
-	if r.ask(r.sem().SubscriptIsAQuotingContext,
+	if r.ask(r.subscriptQuotingAxis(),
 		"an array subscript written inside arithmetic being a quoting context") {
 		return bare
 	}
 	return syntax.UnmarkArithValue(sub)
+}
+
+// subscriptQuotingAxis is which of the two quoting answers this subscript
+// stands under: the expression's, or the one the `let` builtin gives the same
+// brackets.
+//
+// Two axes rather than one, because two real shells part here and agree one
+// construct over. `(( ++a["k"] ))` is the bare key in bash and in ksh93
+// alike, and `let '++a["k"]'` is the bare key in bash and the three
+// characters `"k"` in ksh93 — same text, same table, different answer. See
+// Semantics.LetOperandSubscriptIsAQuotingContext for the rows, and for why
+// zsh's answer there is a pin.
+//
+// Read off the builtin that is running, which is how `let`'s other
+// departures from the arithmetic command are already told apart —
+// Runner.refuseReadonlyInACommand and
+// Runner.storeWholeArraySubscriptThroughAReference both spell it out the
+// same way. Nothing else can stand in for it: the text a `let` operand
+// carries is the text `(( … ))` carries, quote characters and all, and by
+// the time a subscript is read the two are indistinguishable.
+func (r *Runner) subscriptQuotingAxis() Answer {
+	if r.inBuiltin == "let" {
+		return r.sem().LetOperandSubscriptIsAQuotingContext
+	}
+	return r.sem().SubscriptIsAQuotingContext
 }
 
 // subscriptQuoteRemoval performs quote removal on an arithmetic subscript and

@@ -17277,6 +17277,56 @@ type Semantics struct {
 	// remainder.
 	ArithSubscriptQuotationMustClose Answer
 
+	// LetOperandSubscriptIsAQuotingContext runs quote removal over an
+	// associative subscript written inside a `let` operand, as
+	// SubscriptIsAQuotingContext does for the same brackets inside
+	// `(( … ))`: bash. ksh93 takes a `let` operand's subscript exactly as
+	// written — every quote character and every backslash in it is a
+	// character of the key — while its `(( … ))` removes them.
+	//
+	// So this is not SubscriptIsAQuotingContext asked twice. That axis is
+	// **yes in both bash and ksh93**, and the two columns agree on
+	// `(( ++a["k"] ))`; they part on the identical text reached through the
+	// builtin. Measured 2026-09-20 from script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null
+	// device, over `typeset -A a; a[k]=1; a['"k"']=2`, reading back both
+	// keys afterwards:
+	//
+	//	                     bash 5.3.20  ksh93u+  zsh 5.9.2
+	//	(( ++a["k"] ))       k=2          k=2      k=1, '"k"'=2
+	//	let '++a["k"]'       k=2          k=1      k=1, '"k"'=2
+	//	let '++a[\k]'        k=2          k=1      k=1
+	//
+	// Row one is the control that says this is a second question and not
+	// the first one misanswered, and row three says what ksh93 keeps: the
+	// backslash as well as the quote, so it is quote removal that is not
+	// run there rather than one character being spared.
+	//
+	// The operand is single-quoted in the rows above so the shell's own
+	// word expansion hands the builtin the brackets a script wrote. The
+	// shape a script meets instead is a value carrying the quote —
+	// `k="q'r'z"; let "++a[$k]"` — where the same difference decides the
+	// key, because a `let` operand is word-expanded before the builtin sees
+	// it and nothing in it carries syntax.ArithValueMark by then. bash
+	// removes the two apostrophes and increments a key that is not there;
+	// ksh93 and zsh keep them and increment the element the script stored
+	// (#3871).
+	//
+	// zsh's answer is the same **no**, and it is a pin rather than a
+	// reading of its own: SubscriptIsAQuotingContext is already no there,
+	// so no subscript of that preset is ever a quoting context and the two
+	// routes cannot part. It is answered so that the builtin route cannot
+	// reach an unanswered axis.
+	//
+	// bash 3.2.57 has no associative array, and dash 0.5.12 and BusyBox ash
+	// 1.37.0 have neither arrays nor `let`, so three of the seven columns
+	// cannot be asked.
+	//
+	// Only an **associative** name puts the question. An indexed subscript
+	// is read as arithmetic rather than as a key, and `b=(10 20 30); let
+	// 'b["1"] = 9'` writes element one in bash and in ksh93 alike.
+	LetOperandSubscriptIsAQuotingContext Answer
+
 	// SubstringRangeQuotesPatternCharacters protects the pattern
 	// metacharacters in a substring's offset and length before the range is
 	// read as arithmetic, which turns every one of them into an arithmetic
@@ -22863,6 +22913,11 @@ func PosixSemantics() Semantics {
 		// columns that read the giving-up scan's text as a key. bash is the
 		// column that overrides it.
 		ArithSubscriptQuotationMustClose: No,
+		// The standard has neither arrays nor `let`, so there is no key here
+		// to take quotes off. This follows the two columns that read a `let`
+		// operand's subscript as written; bash is the column that overrides
+		// it.
+		LetOperandSubscriptIsAQuotingContext: No,
 		// The standard has no substrings, so this follows the three columns
 		// that have one and evaluate the range they were given. ksh93 is the
 		// column that overrides it.

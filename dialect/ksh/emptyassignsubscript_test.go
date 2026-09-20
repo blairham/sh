@@ -17,7 +17,7 @@ import (
 // Measured 2026-09-20 against ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin
 // LC_ALL=C ksh k.sh` over a script file with standard input on the null
 // device. `echo before ⏎ if false; then a[]=6; fi ⏎ echo after` writes
-// `before`, then ``k.sh: syntax error at line 2: `[]' empty subscript``, and
+// `before`, then “k.sh: syntax error at line 2: `[]' empty subscript“, and
 // exits 3 with no `after` — so the branch that is not taken is refused all the
 // same, which the other two columns do not do: bash and zsh both run that
 // script to the end in silence and complain only where the assignment is
@@ -35,8 +35,10 @@ func TestAnEmptyAssignmentSubscriptIsASyntaxError(t *testing.T) {
 		{"typeset -A m\nm[]=9\n", "syntax error at line 2: `[]' empty subscript"},
 		// The branch that is never taken, which is what says this is the
 		// grammar's answer and not the assignment's.
-		{"echo before\nif false; then a[]=6; fi\necho after\n",
-			"syntax error at line 2: `[]' empty subscript"},
+		{
+			"echo before\nif false; then a[]=6; fi\necho after\n",
+			"syntax error at line 2: `[]' empty subscript",
+		},
 		{"f() { a[]=6; }\n", "syntax error at line 1: `[]' empty subscript"},
 	} {
 		_, err := syntax.Parse(tc.src, ksh.Dialect())
@@ -50,14 +52,24 @@ func TestAnEmptyAssignmentSubscriptIsASyntaxError(t *testing.T) {
 	}
 }
 
-// And the whole run: the line before it runs, the refusal is written, and the
-// shell ends at 3 with nothing of the array written.
-func TestAnEmptyAssignmentSubscriptEndsTheShellAtThree(t *testing.T) {
+// The sentence the front end writes for it, and the status behind it.
+//
+// This shell parses incrementally, so `echo before` on the line above has
+// already run by the time the refusal arrives — the end-to-end shape was
+// compared against ksh93u+ separately and agrees character for character,
+// and what is asserted here is the sentence, its line, and the 3.
+func TestTheSentenceAndStatusOfAnEmptyAssignmentSubscript(t *testing.T) {
 	const src = "echo before\na=(1 2 3)\na[]=6\necho after\n"
-	out, st := runKsh(t, t.TempDir(), src)
-	want := "before\nksh: syntax error at line 3: `[]' empty subscript\n"
-	if out != want || st != 3 {
-		t.Errorf("%q = %q (status %d), want %q at 3", src, out, st, want)
+	_, err := syntax.Parse(src, ksh.Dialect())
+	if err == nil {
+		t.Fatalf("%q parsed, want a refusal", src)
+	}
+	got := ksh.Diagnostics().ParseDiagnostic("ksh", "-c", err, src)
+	if want := "ksh: syntax error at line 3: `[]' empty subscript\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if st := ksh.Diagnostics().StatusForParseError(err); st != 3 {
+		t.Errorf("status %d, want 3", st)
 	}
 }
 

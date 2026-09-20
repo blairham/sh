@@ -41,12 +41,18 @@ func TestAnEmptyAssignmentSubscriptWritesNothing(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		// A subshell takes the refusal, so the outer script lives to say
 		// what the name holds.
-		{`a=(1 2 3); ( a[]=6 ); echo "a=[${a[@]}] n=${#a[@]}"`,
-			"zsh:1: not an identifier: a[]\na=[1 2 3] n=3\n"},
-		{`( u[]=6 ); echo "set=[${u+yes}] u=[${u[@]}]"`,
-			"zsh:1: not an identifier: u[]\nset=[] u=[]\n"},
-		{`typeset -A m; m[k]=v; ( m[]=9 ); echo "keys=[${(k)m}] vals=[${(v)m}]"`,
-			"zsh:1: not an identifier: m[]\nkeys=[k] vals=[v]\n"},
+		{
+			`a=(1 2 3); ( a[]=6 ); echo "a=[${a[@]}] n=${#a[@]}"`,
+			"zsh:1: not an identifier: a[]\na=[1 2 3] n=3\n",
+		},
+		{
+			`( u[]=6 ); echo "set=[${u+yes}] u=[${u[@]}]"`,
+			"zsh:1: not an identifier: u[]\nset=[] u=[]\n",
+		},
+		{
+			`typeset -A m; m[k]=v; ( m[]=9 ); echo "keys=[${(k)m}] vals=[${(v)m}]"`,
+			"zsh:1: not an identifier: m[]\nkeys=[k] vals=[v]\n",
+		},
 	} {
 		out, st := runZsh(t, t.TempDir(), c.src)
 		if out != c.want || st != 0 {

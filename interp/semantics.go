@@ -20554,6 +20554,42 @@ type Semantics struct {
 	// parameters go in before the expression is read. See
 	// EmptyArithSubscriptPolicy.
 	EmptyArithSubscript EmptyArithSubscriptPolicy
+	// EmptySubscriptToAnAssignment is how much `a[]=v` — a plain assignment
+	// whose brackets were written with nothing at all between them — gives
+	// up in the columns that refuse it where it *runs*.
+	//
+	// Measured 2026-09-20 from a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with standard input on the null device, over `a=(1 2 3)`,
+	// `a[]=6; echo same-line` and a line reading the array back:
+	//
+	//	bash 5.3.20   `a[]: bad array subscript`, no `same-line`, the next
+	//	              top-level line reads 1, `a` still `(1 2 3)`
+	//	zsh 5.9.2     `not an identifier: a[]`, and the script ends at 1
+	//	ksh93u+       refused while the program is *read*, which is
+	//	              syntax.Dialect.EmptyAssignSubscriptIsASyntaxError and
+	//	              never reaches this
+	//	dash 0.5.12   no arrays, so `a[]=6` is a command word
+	//	BusyBox ash   the same
+	//
+	// The give-up policy alone, because the refusal itself is unanimous
+	// among the columns that get here: every shell with arrays refuses the
+	// brackets, and what they disagree about is how much of the program goes
+	// with the refusal. The *sentence* is Diagnostics.AssignEmptySubscript.
+	//
+	// It is the **written** brackets. `a[$i]=v` with an empty `$i` is a
+	// subscript whose text expanded to nothing, which is EmptyArithSubscript
+	// one construct over and a different answer — bash writes element zero
+	// there, silently, exactly as every dialect used to do here. And
+	// `a[""]=v` is a subscript holding the empty string. Neither reaches
+	// this axis; see syntax.Assign.EmptySubscript.
+	//
+	// The routes this is not. A builtin's output operand — `read 'a[]'` — is
+	// BadSubscriptToAnOutputOperand, and `unset 'a[]'` is BadSubscriptToUnset
+	// (#3513); an arithmetic write — `(( a[] = 4 ))` — is
+	// Diagnostics.ArithEmptySubscriptTarget; and a declaration's own operand
+	// — `declare a[]=v` — is refused as a bad *name*, sentence and all, one
+	// question further out (#3949).
+	EmptySubscriptToAnAssignment BadSubscriptPolicy
 	// PositionalListWithNoneIsSet calls `$@` — and `$*` — a **set** parameter
 	// when there are no positional parameters at all. `No` says the list is
 	// unset until something is in it, so a colon-less conditional fires.

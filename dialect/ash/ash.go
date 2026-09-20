@@ -751,6 +751,11 @@ func Semantics() interp.Semantics {
 	// variable name` — a name refused, with no subscript read. `export` is
 	// the same complaint at the same status.
 	//
+	// unanswered EmptySubscriptToAnAssignment: no arrays, so `a[]=6` is not
+	// an assignment at all here. Measured 2026-09-20: it is a command word,
+	// and the shell answers `a[]=6: not found` at 127 with the next line
+	// still running.
+	//
 	// unanswered BadSubscriptEscapesAnArithmeticCommand: no `(( ))`
 	// grammar here either, and no subscripts to fail inside one.
 	//

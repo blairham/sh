@@ -2728,6 +2728,11 @@ type assignHead struct {
 	// dialect lets a name carry several. Nil is the ordinary one subscript.
 	// See Assign.Leading and Dialect.ChainedAssignSubscript.
 	leading []assignSubscript
+	// subscripted says brackets were written after the name, which index
+	// cannot say on its own: `a[]=v` has brackets and no spans between them,
+	// and comes here indistinguishable from `a=v` without this. See
+	// Assign.EmptySubscript.
+	subscripted bool
 	// member is the dotted path written between the closing bracket and the
 	// `=`, leading dot and all. See Assign.Member.
 	member string
@@ -2738,6 +2743,44 @@ type assignHead struct {
 type assignSubscript struct {
 	spans    []Span
 	from, to Pos
+}
+
+// emptySubscriptWritten reports whether any of an assignment's subscripts was
+// written with nothing between its brackets — the last one, which the caller
+// has already decided, or any link in front of it.
+//
+// Every link and not only the last, which is measured: on ksh93u+
+// 2012-08-01, `a[][2]=6` and `a[2][]=6` are both “syntax error at line 1:
+// `[]' empty subscript“. A chain is the same subscript twice, so nothing
+// here may know less about a link than about the one it precedes.
+func emptySubscriptWritten(last bool, leading []assignSubscript) bool {
+	if last {
+		return true
+	}
+	for _, link := range leading {
+		if link.spans == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// failEmptyAssignSubscript records `a[]=v` in the grammar that refuses it
+// while reading — see [Dialect.EmptyAssignSubscriptIsASyntaxError].
+//
+// Its own recorder rather than the unexpected-token path's, because there is
+// no token to name: what is refused is a pair of brackets inside a word the
+// lexer has already taken whole, and the sentence that shell writes names
+// those two characters.
+func (p *Parser) failEmptyAssignSubscript(pos Pos) {
+	if p.err != nil {
+		return
+	}
+	p.err = &Error{
+		Pos: pos, Kind: ErrEmptyAssignSubscript,
+		Token: "[]",
+		Msg:   "`[]' empty subscript",
+	}
 }
 
 // isAssign reports whether a word is `name=…` written so the name is unquoted.
@@ -2873,6 +2916,7 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 			h.name = name
 			h.member = member
 			h.append = appends
+			h.subscripted = true
 			h.index = spanRange(t.Spans, startSpan, startOff, i, j)
 			// Just inside the brackets, in the input. Both ends land in an
 			// *unquoted literal* span — the `[` in the first one and the `]`
@@ -3559,6 +3603,20 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		a.Index = p.newWord(h.index, h.index[0].Pos, p.tok.End)
 		a.IndexFlags = p.assignIndexFlags(h.index)
 		a.IndexText = p.textBetween(h.from, h.to)
+	} else if h.subscripted {
+		// `a[]=v`: brackets were written and they hold nothing. The spans
+		// came to none, so without this the assignment arrives looking
+		// exactly like a bare `a=v` — which is a plausible wrong answer at
+		// status 0, since that spelling writes element zero in one dialect
+		// and replaces the whole name in another (#3949).
+		a.EmptySubscript = true
+	}
+	if p.dialect.EmptyAssignSubscriptIsASyntaxError && emptySubscriptWritten(a.EmptySubscript, h.leading) {
+		// One grammar refuses the brackets while the program is read, so
+		// the refusal reaches text that never runs. Recorded rather than
+		// returned on: the parser reads the rest of the word as it would
+		// have, and the first failure recorded is the one Parse reports.
+		p.failEmptyAssignSubscript(a.Start)
 	}
 	for _, link := range h.leading {
 		// Each link is read exactly as the final subscript is, flag group

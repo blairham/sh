@@ -24,20 +24,28 @@ func TestAnEmptyAssignmentSubscriptIsRefusedAndWritesNothing(t *testing.T) {
 		// The array is untouched — all three elements, in order, and no
 		// fourth. A check on element zero alone would pass while the value
 		// landed somewhere else.
-		{`a=(1 2 3); a[]=6; echo unreached; echo "a=[${a[@]}] n=${#a[@]}"`,
-			"bash: line 1: a[]: bad array subscript\na=[1 2 3] n=3\n"},
+		{
+			"a=(1 2 3); a[]=6; echo unreached\n" + `echo "a=[${a[@]}] n=${#a[@]}"`,
+			"bash: line 1: a[]: bad array subscript\na=[1 2 3] n=3\n",
+		},
 		// A name nothing has set stays unset, rather than being brought into
 		// being holding the value.
-		{`u[]=6; echo unreached; echo "set=[${u+yes}] u=[${u[@]}]"`,
-			"bash: line 1: u[]: bad array subscript\nset=[] u=[]\n"},
+		{
+			"u[]=6; echo unreached\n" + `echo "set=[${u+yes}] u=[${u[@]}]"`,
+			"bash: line 1: u[]: bad array subscript\nset=[] u=[]\n",
+		},
 		// The append spelling is the same refusal and not a different one.
-		{`b=(1 2 3); b[]+=6; echo unreached; echo "b=[${b[@]}]"`,
-			"bash: line 1: b[]: bad array subscript\nb=[1 2 3]\n"},
+		{
+			"b=(1 2 3); b[]+=6; echo unreached\n" + `echo "b=[${b[@]}]"`,
+			"bash: line 1: b[]: bad array subscript\nb=[1 2 3]\n",
+		},
 		// And a declared table, whose brackets hold a key rather than an
 		// expression, is refused before the key is looked at: no empty key
 		// is created, and the one the script did store is still there alone.
-		{`declare -A m; m[k]=v; m[]=9; echo unreached; echo "keys=[${!m[@]}] vals=[${m[@]}]"`,
-			"bash: line 1: m[]: bad array subscript\nkeys=[k] vals=[v]\n"},
+		{
+			"declare -A m; m[k]=v; m[]=9; echo unreached\n" + `echo "keys=[${!m[@]}] vals=[${m[@]}]"`,
+			"bash: line 1: m[]: bad array subscript\nkeys=[k] vals=[v]\n",
+		},
 	} {
 		out, st := runBash(t, t.TempDir(), c.src)
 		if out != c.want || st != 0 {
@@ -54,8 +62,10 @@ func TestAnEmptyAssignmentSubscriptLeavesOneAndGivesUpTheCommand(t *testing.T) {
 echo "st=$?"`, "bash: line 1: a[]: bad array subscript\nst=1\n"},
 		// The enclosing function goes with the line, and the script carries
 		// on at the next top-level command.
-		{`a=(1 2 3); f() { a[]=6; echo in-f; }; f; echo "st=$? a=[${a[@]}]"`,
-			"bash: line 1: a[]: bad array subscript\nst=1 a=[1 2 3]\n"},
+		{
+			"a=(1 2 3); f() { a[]=6; echo in-f; }; f\n" + `echo "st=$? a=[${a[@]}]"`,
+			"bash: line 1: a[]: bad array subscript\nst=1 a=[1 2 3]\n",
+		},
 	} {
 		out, st := runBash(t, t.TempDir(), c.src)
 		if out != c.want || st != 0 {

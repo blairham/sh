@@ -3084,6 +3084,14 @@ func Semantics() interp.Semantics {
 	// same shell ends the input, so the two constructs really do part here.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.No
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
+	// And a plain `a[]=6` ends it too, which is this column's answer
+	// wherever a write walks into brackets it cannot use. Measured
+	// 2026-09-20 on 5.9.2 from a script file: `a=(1 2 3); a[]=6; echo
+	// same-line` writes `not an identifier: a[]` and exits 1 with nothing
+	// after it reached, from the top level and from inside a function alike;
+	// a `( … )` around it takes the refusal and the outer script lives to
+	// read the array back untouched (#3949).
+	s.EmptySubscriptToAnAssignment = interp.BadSubscriptEndsTheScript
 	// And a valueless subscripted operand is the empty-value form under
 	// another spelling, which is measured and not inferred: `a=(1 2 3);
 	// typeset 'a[1]'` and `typeset 'a[1]='` both leave `( '' 2 3 )`,
@@ -3885,6 +3893,10 @@ func Diagnostics() interp.Diagnostics {
 		BadArraySubscript:         "%[1]s: assignment to invalid subscript range",
 		ArithEmptySubscript:       "invalid subscript",
 		ArithEmptySubscriptTarget: "not an identifier: %[1]s[]",
+		// A plain `a[]=6` gets that same sentence, which is measured and
+		// not inferred: 5.9.2 answers the assignment and the arithmetic
+		// write with one line, where bash words the two apart (#3949).
+		AssignEmptySubscript: "not an identifier: %[1]s[]",
 		// One sentence either way, which is the measurement rather than a
 		// copy: 2026-09-17, a script file, `typeset 'a[]'=v` and `typeset
 		// 'a[]'` both write `./f.sh:2: not an identifier: a[]` and the script

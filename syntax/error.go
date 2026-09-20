@@ -259,6 +259,18 @@ const (
 	// [Dialect.HeredocBodyMustBeInsideTheSubstitution], which carries the
 	// panel.
 	ErrHeredocOutsideSubstitution
+	// ErrEmptyAssignSubscript is `a[]=v` — an assignment whose brackets were
+	// written with nothing at all between them — in the one grammar that
+	// refuses it while reading. See
+	// [Dialect.EmptyAssignSubscriptIsASyntaxError] for the measurement, and
+	// interp.Semantics.EmptySubscriptToAnAssignment for the columns that
+	// answer the same text where it runs instead.
+	//
+	// Its own kind because the sentence is its own: that shell names the
+	// brackets rather than the word, and says `empty subscript` where every
+	// other refusal of a token it did not want says `unexpected`. Token is
+	// the two brackets.
+	ErrEmptyAssignSubscript
 )
 
 // TokenClass is what sort of thing a token is, for the dialect that words an

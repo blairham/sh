@@ -3263,6 +3263,13 @@ type Runner struct {
 	// compound may not be exported and an index array may. See
 	// Runner.exportRefusesACompound.
 	compoundOperands map[string]bool
+	// compoundOperandUnset is, for each of those names, whether it held no
+	// value when the command started. The declaration's own letters can give
+	// it one before the operand lands — `typeset -C c=(a=1)` marks the name
+	// a compound as it reads the letter — so the state a freeze is judged
+	// against has to be recorded in front of the builtin rather than read
+	// back after it. See interp/frozencompoundbody.go.
+	compoundOperandUnset map[string]bool
 	// heldListing is a `-p` listing this command is keeping back until its
 	// own operand assignments have landed — see interp/declareprintoperand.go,
 	// and Runner.assignOperands for why those run after the builtin at all.
@@ -6562,6 +6569,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.literalOperands = arrayLiteralOperands(c)
 		outerCompounds := r.compoundOperands
 		r.compoundOperands = compoundLiteralOperands(c)
+		outerCompoundUnset := r.compoundOperandUnset
+		r.compoundOperandUnset = r.compoundOperandsHoldingNothing()
 		// Recorded by the builtin as it reads its letters, and read by the
 		// operand assignments that run after it — so it is cleared here
 		// rather than seeded, and restored beside literalOperands for the
@@ -6665,6 +6674,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
 		r.compoundOperands = outerCompounds
+		r.compoundOperandUnset = outerCompoundUnset
 		r.indexedLetterHere = outerIndexed
 		r.tableLetterHere = outerTable
 		r.globalLetterHere = outerGlobal
@@ -9818,6 +9828,11 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		outer := r.retypingFrozen
 		r.retypingFrozen = a.Name
 		defer func() { r.retypingFrozen = outer }()
+	} else if r.frozenNameTakesACompoundBody(a) {
+		// A freeze over a name holding no value does not refuse the compound
+		// body that would first give it one. See
+		// interp/frozencompoundbody.go, where the state the rows part on is
+		// the one `${c+word}` answers.
 	} else if r.refuseReadonly(r.frozenNameOfAnAssignment(a.Name), assignedAlone) {
 		return
 	}

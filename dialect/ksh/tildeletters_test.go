@@ -221,3 +221,114 @@ func TestTheRegularExpressionLettersAreStillRefusedByName(t *testing.T) {
 		}
 	}
 }
+
+// A construct the engine underneath cannot express is refused by name too,
+// and `E` is the letter it reaches: it is **shipped** rather than refused, so
+// a pattern using a backreference or a lookaround used to be compiled, fail
+// to compile, and answer a confident `no` at status 0.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-20, `env -i` from a script file:
+//
+//	[[ abab == ~(E)(ab)\1 ]]    yes there; a silent no here
+//	[[ abcd == ~(E)(ab)\1 ]]    no there; a silent no here
+//	[[ abc == ~(E)a(?=b)bc ]]   yes there; a silent no here
+//	[[ abc == ~(E)a(?!b)bc ]]   no there; a silent no here
+//
+// The two rows that agreed agreed by accident: the pattern is the same
+// unwritable one and the subject is what differs, so our `no` was the compile
+// failing rather than the backreference being read. Both refuse now, which is
+// the honest form of the same answer — a script that stops can see the gap,
+// and one that reads `no` cannot (#3894).
+func TestARegularExpressionConstructTheEngineLacksIsRefusedByName(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{
+			`[[ abab == ~(E)(ab)\1 ]] && echo yes || echo no`,
+			"ksh: ~(E)(ab)\\1: the \\1 backreference is not implemented\n",
+		},
+		{
+			`[[ abcd == ~(E)(ab)\1 ]] && echo yes || echo no`,
+			"ksh: ~(E)(ab)\\1: the \\1 backreference is not implemented\n",
+		},
+		{
+			`[[ abab == ~(E)(ab)\9x ]] && echo yes || echo no`,
+			"ksh: ~(E)(ab)\\9x: the \\9 backreference is not implemented\n",
+		},
+		{
+			`[[ abc == ~(E)a(?=b)bc ]] && echo yes || echo no`,
+			"ksh: ~(E)a(?=b)bc: the (?= lookaround is not implemented\n",
+		},
+		{
+			`[[ abc == ~(E)a(?!b)bc ]] && echo yes || echo no`,
+			"ksh: ~(E)a(?!b)bc: the (?! lookaround is not implemented\n",
+		},
+		// A value is the other way a pattern arrives, and the one that can
+		// hold a lookbehind: `<` after `(?` is the shell's own redirection
+		// operator where it is written.
+		{
+			`p='a(?<=b)c'; [[ abc == ~(E)$p ]] && echo yes || echo no`,
+			"ksh: ~(E)a(?<=b)c: the (?<= lookaround is not implemented\n",
+		},
+		{
+			`p='a(?<!b)c'; [[ abc == ~(E)$p ]] && echo yes || echo no`,
+			"ksh: ~(E)a(?<!b)c: the (?<! lookaround is not implemented\n",
+		},
+		// A trim is the same reading through another surface, and it takes
+		// the same refusal rather than coming back with the value whole.
+		{
+			`v=abab; printf "[%s]" "${v#~(E)(ab)\1}"`,
+			"ksh: ~(E)(ab)\\1: the \\1 backreference is not implemented\n",
+		},
+	} {
+		out, st := kshOut(t, c.src)
+		if out != c.want || st != 1 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 1", c.src, out, st, c.want)
+		}
+	}
+}
+
+// The other half of the refusal, and the half that says the scan is not
+// over-broad: an ordinary `~(E)` pattern still matches, and so does one
+// holding the very characters the scan looks for in a position where the
+// engine reads them as ordinary.
+//
+// A scan that refused these would have traded a silent wrong answer for a
+// loud one, which is the risk this change actually carries. Every row is
+// measured on ksh93u+ 2012-08-01, 2026-09-20 and answers `yes` there.
+func TestAnOrdinaryRegularExpressionPatternStillMatches(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`[[ abc == ~(E)a.c ]] && echo yes || echo no`, "yes\n"},
+		{`[[ abc == ~(E)^a ]] && echo yes || echo no`, "yes\n"},
+		{`[[ abc == ~(E)a?c ]] && echo yes || echo no`, "yes\n"},
+		{`[[ a1 == ~(E)[a-z][0-9] ]] && echo yes || echo no`, "yes\n"},
+		{`[[ ab1 == ~(E)(ab)1 ]] && echo yes || echo no`, "yes\n"},
+		{`[[ ABC == ~(Ei)a.c ]] && echo yes || echo no`, "yes\n"},
+		// Inside a bracket expression the three characters are three
+		// characters, and the scan has to know it: `[(?=]` is a set holding
+		// a paren, a question mark and an equals sign.
+		{`p='a[(?=]b'; [[ 'a(b' == ~(E)$p ]] && echo yes || echo no`, "yes\n"},
+		// A `]` first in the set is a member rather than the close, and a
+		// `[:class:]` carries a `]` that does not close it either — both are
+		// ways a bracket scan ends early and then reads the rest of the set
+		// as though it were the pattern.
+		{`p='[]x](?)'; [[ ']' == ~(E)$p ]] && echo yes || echo no`, "yes\n"},
+		{`p='[[:alpha:]]c'; [[ ac == ~(E)$p ]] && echo yes || echo no`, "yes\n"},
+		// An escaped backslash is a backslash, so the digit behind it is a
+		// digit: the one spelling a scan that looked for the two characters
+		// `\1` would refuse and the engine reads perfectly well.
+		{`p='a\\1b'; [[ 'a\1b' == ~(E)$p ]] && echo yes || echo no`, "yes\n"},
+		// The literal flavors quote the whole pattern before it is compiled,
+		// so nothing in one is a construct at all — measured there, `~(F)a.c`
+		// matches the three characters and not `abc`.
+		{`[[ 'a.c' == ~(F)a.c ]] && echo yes || echo no`, "yes\n"},
+		{`[[ abc == ~(F)a.c ]] && echo yes || echo no`, "no\n"},
+		// And the glob flavor is this shell's own matcher, where a backslash
+		// before a digit is the digit and always was.
+		{`case a1 in a\1) echo yes;; *) echo no;; esac`, "yes\n"},
+		{`v=abXc; printf "[%s]" "${v/~(E)X/-}"`, "[ab-c]"},
+	} {
+		out, st := kshOut(t, c.src)
+		if out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}

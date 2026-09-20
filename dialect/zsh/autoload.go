@@ -809,19 +809,27 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases
 		if err != nil {
 			return autoloadFileNotFound(r, name, forCall)
 		}
-		text := string(body)
-		if inner, lone := autoloadLoneDefinition(name, text); lone {
-			text = inner
-		}
-		if !zshDefineFromText(r, name, text, path, keepAliases) {
-			r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
-			return 1
-		}
-		return 0
+		return autoloadDefineFile(r, name, path, string(body), keepAliases)
 	}
 	path, body, ok := autoloadFile(r, name)
 	if !ok {
 		return autoloadFileNotFound(r, name, forCall)
+	}
+	return autoloadDefineFile(r, name, path, body, keepAliases)
+}
+
+// autoloadDefineFile is what both routes into a function file do with the
+// text once they have it: one function rather than two copies, because this
+// file's recurring defect is a second route that omits what the first one
+// carries (#1993).
+func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases bool) int {
+	if autoloadSubstitutionSwallowsTheCloser(body) {
+		// A `$( … )` whose body leaves zsh's lexer reading a word where the
+		// closing parenthesis stands: the parenthesis is taken as that word,
+		// the substitution never closes, and the *file* does not parse. See
+		// the function for the panel.
+		r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
+		return 1
 	}
 	if inner, lone := autoloadLoneDefinition(name, body); lone {
 		body = inner
@@ -834,6 +842,136 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases
 		return 1
 	}
 	return 0
+}
+
+// autoloadSubstitutionSwallowsTheCloser reports a `$( … )` in an autoload
+// file whose body runs past its own closing parenthesis, which is the shape
+// where zsh never finishes reading the **file**.
+//
+// The question this answers is *when* the body is read, and for this engine
+// the answer is "at expansion" — see the note at the head of
+// [interp.Runner.subst] and syntax.Dialect.SubstitutionBodyRead. That is
+// right for zsh at the top level and it is what made an autoload file a
+// script-killer: a body that does not parse is fatal in this dialect, and
+// with the failure surfacing inside the *running* function rather than at the
+// load, the abandonment escaped the call and took the outer script with it
+// (#3895).
+//
+// zsh reaches the closing parenthesis with its lexer, so what decides its
+// answer is whether that parenthesis is where the body ends. Measured
+// 2026-09-20 on zsh 5.9.2, `env -i -u FPATH PATH=/usr/bin:/bin LC_ALL=C`,
+// each body written into `./fns/g` under `echo ok` and called from
+// `fpath=(./fns); autoload -Uz g; echo BEFORE; g; echo "call=$?"; echo AFTER`:
+//
+//	body                       zsh writes                         call
+//	v=$(for)                   BEFORE, parse errors, AFTER        1
+//	v=$(echo hi; for)          BEFORE, parse errors, AFTER        1
+//	v=$(for x in a)            BEFORE, parse errors, AFTER        1
+//	v=$(for x in a; do echo)   BEFORE, parse errors, AFTER        1
+//	v=$(select)                BEFORE, parse errors, AFTER        1
+//	v=$(foreach)               BEFORE, parse errors, AFTER        1
+//	v=$(repeat)                BEFORE, parse errors, AFTER        1
+//	v=$(case)                  BEFORE, parse errors, AFTER        1
+//	v=$(case x in)             BEFORE, parse errors, AFTER        1
+//	v=$(do)                    BEFORE, parse errors, AFTER        1
+//	v=$(then)                  BEFORE, parse errors, AFTER        1
+//	v=$(fi) $(esac) $(done)    BEFORE, parse errors, AFTER        1
+//	v=$(echo $(for))           BEFORE, parse errors, AFTER        1
+//	v=$(if)                    BEFORE, **ok**, parse errors       script ends
+//	v=`echo hi; for`           BEFORE, **ok**, parse errors       script ends
+//
+// **`ok` is the discriminator and it is what makes this a statement about
+// the parse moment rather than about containment.** Every row above the line
+// leaves `ok` unwritten: zsh never ran a command of the body, so the file was
+// refused at the load and the name was left an autoload stub — `whence -v g`
+// still answers `g is an autoload shell function` afterwards, and calling it
+// again reports the same thing again. The two rows below it *do* write `ok`
+// and then end the whole script, exactly as this shell already did — so a
+// containment boundary on the autoload call path, which was the fix the issue
+// proposed, would have made those two carry on where zsh does not.
+//
+// The split is the closing parenthesis. After `for`, `select`, `foreach`,
+// `repeat` and `case` zsh is reading a **word**, so the `)` is that word and
+// the substitution runs to the end of the file; after `if`, `while` and
+// `until` it is reading a command, where `)` ends the substitution and leaves
+// a body to fail later. A reserved word that cannot begin a command at all —
+// `do`, `then`, `else`, `fi`, `esac`, `done` — is refused where it stands.
+// The backquoted spelling is exempt and that is measured rather than
+// symmetry: its scan is delimiter to delimiter with no grammar in it, so
+// “ v=`echo hi; for` “ is the last row above and not the first.
+//
+// Two rows this deliberately does not claim. `v=$(if true; then)` is refused
+// by the load in zsh and is still read at expansion here, because the clause
+// was entered and the construct left open is `then` rather than `if`; and
+// `v=$(select y)` and `v=$(repeat 3)` are bodies zsh accepts outright and
+// this parser refuses, so they come through here as a refused file where zsh
+// runs the function. Both are narrower gaps than the one this closes and
+// neither is made worse by it.
+func autoloadSubstitutionSwallowsTheCloser(text string) bool {
+	d := Dialect()
+	// The bodies come from the parser rather than from a walk of the tree:
+	// asking for them with the line is what syntax.File.Substitutions is, and
+	// the older spelling is left out of the list by the same setting, which
+	// is the exemption the panel above measured.
+	d.SubstitutionBodyRead = syntax.NewerSubstitutionBodyReadWithItsLine
+	f, err := syntax.Parse(text, d)
+	if err != nil {
+		// A file that does not parse at all is already refused by the
+		// definition route this stands in front of, and refusing it here
+		// instead would only move the same answer.
+		return false
+	}
+	return autoloadSpansSwallowTheCloser(f.Substitutions, d)
+}
+
+// autoloadSpansSwallowTheCloser is that question over one list of bodies and
+// the bodies inside them.
+//
+// Recursive, because the nesting is: `v=$(echo $(for))` is refused by the
+// load in zsh, so it is the shape of **each** body and not of the outermost
+// one.
+func autoloadSpansSwallowTheCloser(spans []syntax.Span, d syntax.Dialect) bool {
+	for _, span := range spans {
+		if span.Kind != syntax.CommandSubst {
+			continue
+		}
+		inner, err := syntax.Parse(span.Value, d)
+		if err != nil {
+			if autoloadBodyRunsPastItsCloser(err) {
+				return true
+			}
+			continue
+		}
+		if autoloadSpansSwallowTheCloser(inner.Substitutions, d) {
+			return true
+		}
+	}
+	return false
+}
+
+// autoloadBodyRunsPastItsCloser reads one body's refusal for the two shapes
+// the panel in autoloadSubstitutionSwallowsTheCloser measured.
+func autoloadBodyRunsPastItsCloser(err error) bool {
+	e, ok := err.(*syntax.Error)
+	if !ok {
+		return false
+	}
+	if e.Kind == syntax.ErrUnexpected && e.Class == syntax.ClassReserved {
+		// `do`, `then`, `else`, `fi`, `esac`, `done`: a word the grammar
+		// reserves standing where a command was to begin, which zsh refuses
+		// where it stands rather than carrying to the closing parenthesis.
+		return true
+	}
+	// The construct left open, and **Innermost rather than Construct**: the
+	// question is what zsh is reading *at the parenthesis*, so a clause that
+	// has been entered is the answer and the construct it belongs to is not.
+	// `if true; then` is the row that parts them, and it is the one this
+	// leaves alone.
+	switch e.Innermost {
+	case "for", "select", "foreach", "repeat", "case":
+		return true
+	}
+	return false
 }
 
 // zshDefineFromText makes text a function body the way this shell reads one,

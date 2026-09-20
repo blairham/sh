@@ -373,16 +373,19 @@ func TestAGrammarReadingIsNotAMention(t *testing.T) {
 
 // TestEveryOperatorVocabularyHadItsZeroConsidered is a tripwire, and says so.
 // A walk over a node field cannot tell unset from the type's zero (#3258).
-// For the two vocabularies here that is sound: TokEOF, Kind's zero, is not a
-// redirection and is never an element, and ParamNone is what the parse
-// decides for an expansion with no operator. A new node field of a new named
+// For the three vocabularies here that is sound: TokEOF, Kind's zero, is not a
+// redirection and is never an element, ParamNone is what the parse
+// decides for an expansion with no operator, and TerminatedByNothing is what
+// it decides for a statement with no terminator — the last of a body, one
+// closed by the `}` or `)` around it, and one ended by a `&`, which is
+// recorded on Stmt.Background instead. A new node field of a new named
 // type needs the same question asked of its zero before this list grows.
 func TestEveryOperatorVocabularyHadItsZeroConsidered(t *testing.T) {
 	ops, err := coverage.OperatorTypes()
 	if err != nil {
 		t.Fatalf("OperatorTypes: %v", err)
 	}
-	if want := []string{"Kind", "ParamOp"}; !slices.Equal(ops, want) {
+	if want := []string{"Kind", "ParamOp", "Terminator"}; !slices.Equal(ops, want) {
 		t.Errorf("operator vocabularies are %v, want %v. For each new one: is its zero a value the parse "+
 			"decides, or what an unset field holds? If the second, a mention of it is false — see #3258", ops, want)
 	}

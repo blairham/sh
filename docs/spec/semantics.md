@@ -20098,6 +20098,38 @@ one: the scope stack and the frame stack are separate structures here, and
 an indexed read through the first is what #3115 needs and this shell has
 not got.
 
+**And the naming half and the scope half come apart under one rule**, which
+a reimplementation has to know before it starts, because the obvious reading
+of the symptom is wrong. Measured 2026-09-20 on ksh93u+ 2012-08-01 over
+script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on
+the null device, against the ladder `a`(1) → `b`(2) → `c`(3) with a distinct
+`v` in each and `G` in the globals:
+
+| the body of `c` | ksh93u+ |
+| --- | --- |
+| `for i in 1 2; do .sh.level=2; …; .sh.level=1; …; done` | `L2:[B] L1:[A]` on **both** iterations |
+| `for L in 2 1 0; do .sh.level=$L; …; done` | `2:[B] 1:[B] 0:[B]` |
+| `for L in 2 1 2 1; do .sh.level=$L; …; done` | `2:[B] 1:[B] 2:[B] 1:[B]` |
+| `L=1; .sh.level=$L`, no loop | `lv=1 v=[A]` |
+| `P=2; Q=1; .sh.level=$P; …; .sh.level=$Q`, no loop | `lv=2 v=[B]` then `lv=1 v=[A]` |
+
+The first row is what rules out "the first selection in a loop body moves the
+scope and every later one does not": two statements in one body both move it,
+on every iteration. What is left is
+
+> a `.sh.level=` assignment moves the variable scope **unless it is the same
+> statement that performed the last selection**; a statement repeating its own
+> selection moves the reported level and nothing else.
+
+Row three is the control: one statement alternating `2 1 2 1` never moves
+again after the first, so it is not the value changing that re-selects. Rows
+four and five say a loop is not special and the value's source is not either.
+
+The rule also explains the sharpest symptom without a second rule: a `while`
+counting down with a local counter dies after one pass, because the first
+selection moves the read of the counter to a frame that has no counter and
+the control expression then compares nothing.
+
 **`ReadRequiresAVariableName`** — bash no · dash yes · ksh93 no · zsh no
 
 Refuses a bare `read`: dash's "arg count" at 2, where the other three

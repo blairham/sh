@@ -271,12 +271,58 @@ import (
 // behind, a number standing in front of the names it stands for, and prose
 // that was right and read wrong.
 //
+// # The eighth pass, and the first live defect this campaign has produced
+//
+// 2026-09-20, six lines of diagnostics.go measured across all seven columns
+// with `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> case.sh` over a script
+// file, taking that file from 15 to 9. Four are corrected records — the
+// dialect value was right and the sentence was not — and **two are not**:
+//
+//   - **DuplicationSourceNotOpen is a defect, and the probe that hid it is
+//     the finding.** BusyBox ash writes `dup2(19,0): Bad file descriptor`
+//     for `cat <&19`: the syscall, the source *and the target*, where this
+//     field carries the source and the reason. dialect/ash leaves it empty,
+//     so this shell writes bash's sentence there — #3909. The earlier
+//     measurement was taken at descriptor **10**, and 10 is the one number
+//     that cannot answer the question: in a script file BusyBox answers
+//     `10: Bad file descriptor` there, bash's shape exactly, because 10 is
+//     where it keeps the script itself. Every other number, and 10 itself
+//     under `-c`, answers `dup2(N,M)`. A non-discriminating probe read the
+//     column as agreeing with bash for as long as the field has existed.
+//   - **ReadonlyVariableInDeclaration turned up a second one on the way
+//     past.** Two columns name the builtin and they name it in different
+//     places: dash in the sentence, which is this field, and BusyBox ash in
+//     its *location* — `export: line 2: q: is read only`. dialect/ash holds
+//     the right wording and the right BuiltinLocation, and `cd` reaches it
+//     byte for byte, but the readonly refusal raised from inside a
+//     declaration builtin does not — #3908.
+//
+// The four corrected records are the ordinary shape and two of them are
+// worth naming for the column they left out. FileSubstitutionReadError
+// listed the silent columns as bash 5.3, bash 3.2 and ksh93 and left out
+// **bash-as-`sh`** — a bash column again, the third time this campaign has
+// found the missing one there rather than in ash. And it is the field where
+// the status cannot decide the question: dash and BusyBox ash have no
+// `$(<file)` at all, but `v=$(<f)` is a command substitution holding nothing
+// but a redirection, so it runs, succeeds and produces the empty string — a
+// probe reading the status sees agreement and a probe reading the value sees
+// two columns that never had the construct.
+//
+// ArithBadOperator and UnmatchedNearMaxBytes were counts one dialect short,
+// and reasonText's was six columns short of the seven that capitalize a
+// reason. That last one had to be measured on `Permission denied` and could
+// not have been measured on a missing file: dash writes `No such file` and
+// BusyBox ash writes `no such file`, each its own sentence rather than the
+// errno, so ash reads as a second lowercasing column on that probe alone.
+// That is the same discrimination LowercaseReason itself needed two passes
+// ago, rediscovered from the other side.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
 	"semantics.go":   4,
-	"diagnostics.go": 15,
+	"diagnostics.go": 9,
 	filepath.Join("..", "syntax", "dialect.go"): 0,
 }
 

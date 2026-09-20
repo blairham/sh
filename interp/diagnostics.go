@@ -4432,8 +4432,11 @@ type Diagnostics struct {
 	// UnmatchedNearMaxBytes cuts the quoted text — %[3]s above, the word a
 	// construct ran out inside — to at most this many bytes, appending
 	// `...` where it is that long or longer. Zero prints the whole of it,
-	// which is what three of the four dialects want and is also right for
-	// the two that never render the text at all.
+	// which is what the other four dialects want — and for three of those
+	// four it is moot as well as right, because only zsh and ksh93 write
+	// the quoted text into a wording at all. bash names the delimiter it
+	// was looking for rather than the word, and dash and BusyBox ash name
+	// neither, so there is nothing for a ceiling to cut.
 	//
 	// Measured on the one dialect that elides, 2026-09-07, bisected by
 	// length: nineteen bytes come back whole, twenty come back with `...`
@@ -5255,9 +5258,30 @@ type Diagnostics struct {
 	// ReadonlyVariableInDeclaration replaces it when the assignment was made
 	// through a declaration utility. Two verbs: the name and the builtin.
 	//
-	// dash alone puts the builtin in front — `export: x: is read only` —
-	// where its plain form says only the name. Empty leaves the wording
-	// below standing for both, which is what the other three want here.
+	// dash alone puts the builtin in front of the sentence —
+	// `export: x: is read only` — where its plain form says only the name.
+	//
+	// Measured 2026-09-20 across all seven columns, `readonly q=1` and then
+	// each spelling of a second assignment:
+	//
+	//	                   readonly q=2         export q=3           q=4
+	//	bash 5.3, bash-    q: readonly variable q: readonly variable same
+	//	  as-`sh`, 3.2       (and `typeset q=2` is `typeset: q: readonly
+	//	                     variable` — the declaration utility proper is
+	//	                     the one spelling bash names)
+	//	dash               readonly: q: is …    export: q: is …      q: is …
+	//	BusyBox ash        readonly: line 2:    export: line 2:      line 2:
+	//	ksh93u+            q: is read only      q: is read only      same
+	//	zsh 5.9.2          read-only variable: q, for every spelling
+	//
+	// So two columns name the builtin and they name it in different places:
+	// dash in the sentence, which is this field, and BusyBox ash in its
+	// *location*, which is BuiltinLocation and leaves its wording here the
+	// plain one. zsh is the single column with nothing to replace, and it
+	// is the only dialect that leaves this empty.
+	//
+	// Empty leaves the wording below standing for both, which is what a
+	// dialect that words the two alike wants.
 	ReadonlyVariableInDeclaration string
 	// ReadonlyVariableInRead replaces that again for `read`, in the one
 	// dialect that words its own refusal differently from every other
@@ -5546,17 +5570,36 @@ type Diagnostics struct {
 	// not go through CannotOpen. Two verbs: %[1]s is the target and %[2]s the
 	// reason.
 	//
-	// Measured 2026-09-12, `cat <&10`:
+	// Re-measured 2026-09-20 across all seven columns, `cat <&19`:
 	//
-	//	bash 5.3, bash 3.2   10: Bad file descriptor
-	//	ksh93                10: cannot open [Bad file descriptor]
-	//	zsh 5.9.2            10: bad file descriptor
+	//	bash 5.3, bash-as-`sh`, bash 3.2   19: Bad file descriptor
+	//	ksh93u+                            19: cannot open [Bad file …]
+	//	zsh 5.9.2                          19: bad file descriptor
+	//	BusyBox ash 1.37.0                 dup2(19,0): Bad file descriptor
+	//	dash 0.5.12                        refused at parse — see
+	//	                                   Semantics.MultiDigit…IsAnError
 	//
-	// Empty is the shape three of the four take, `%[1]s: %[2]s`, with the
-	// reason cased by the dialect. ksh93 puts the errno in a bracket after a
-	// verb, which is the same sentence it uses for `.` and for an open —
-	// and CannotOpen cannot be reused for it, because zsh's names the reason
-	// *first* and would answer `bad file descriptor: 10` here (#734).
+	// Empty is the shape bash's three columns and zsh take, `%[1]s: %[2]s`,
+	// with the reason cased by the dialect. ksh93 puts the errno in a
+	// bracket after a verb, which is the same sentence it uses for `.` and
+	// for an open — and CannotOpen cannot be reused for it, because zsh's
+	// names the reason *first* and would answer `bad file descriptor: 19`
+	// here (#734).
+	//
+	// **BusyBox ash takes neither shape**, and this field as written cannot
+	// hold what it does: `dup2(source,target)` carries the descriptor the
+	// redirection was aiming at as well as the one it came from, and the
+	// target is not derivable from the source — 0 for `<&`, 1 for a bare
+	// `>&`, and the number in front of the operator otherwise. It is #3909,
+	// and it is a live defect rather than a corrected record: the field is
+	// empty for that dialect, so this shell writes bash's sentence there.
+	//
+	// **Descriptor 10 is not the probe to use.** In a script file BusyBox
+	// answers `10: Bad file descriptor` for `<&10` — bash's shape exactly —
+	// and `dup2(N,0): …` for 4, 9, 11 and 19, because 10 is where it keeps
+	// the script itself; under `-c` even 10 answers `dup2(10,0)`. The
+	// earlier measurement here was taken at 10, which is why this column
+	// read as agreeing with bash.
 	DuplicationSourceNotOpen string
 
 	// FdNumberOverCeiling is a duplication naming a descriptor number at or
@@ -6132,7 +6175,16 @@ type Diagnostics struct {
 	// ArithBadOperator is the reason when text where an operator belonged
 	// could not have been one — `1 @`. bash alone words it separately from an
 	// operand standing in an operator's place; empty falls back to
-	// ArithOperatorExpected, which is what the other three want.
+	// ArithOperatorExpected, which is what the other four dialects want.
+	//
+	// Measured 2026-09-20 across all seven columns, `$((1 @))` against
+	// `$((1 2))`: bash 5.3 and bash-as-`sh` say `invalid arithmetic
+	// operator` against `arithmetic syntax error in expression`, bash 3.2
+	// the same pair without the word `arithmetic` in front, and dash, ksh93
+	// and BusyBox ash answer both with one sentence. zsh answers both with
+	// `operator expected at …` — its `@` is the *illegal character*
+	// sentence, which is ArithIllegalByte and a third thing, so `1 #` and
+	// `1 $` are what tell that column apart.
 	ArithBadOperator string
 	// ArithConditionalThen and ArithConditionalElse are a conditional missing
 	// one of the two values it chooses between: `$(( 1 ? ))` and
@@ -6814,9 +6866,17 @@ type Diagnostics struct {
 	//
 	//	zsh    error when reading dir: is a directory
 	//
-	// Empty in the other three that have the form — bash 5.3, bash 3.2 and
-	// ksh93 all read a directory in silence. The status is the separate
-	// question; see Semantics.ReadFailureInAFileSubstitutionFailsIt (#1778).
+	// Empty in every other column that has the form — bash 5.3,
+	// bash-as-`sh`, bash 3.2 and ksh93 all read a directory in silence.
+	// Re-measured 2026-09-20: dash and BusyBox ash have no `$(<file)` at
+	// all, and say so quietly rather than by refusing — `v=$(<f)` there is
+	// a command substitution holding nothing but a redirection, so it runs,
+	// succeeds and produces the empty string whatever the file holds. A
+	// probe that only looks at the status cannot tell that from reading the
+	// file, which is why the row is `file=[hello]` against `file=[]`.
+	//
+	// The status is the separate question; see
+	// Semantics.ReadFailureInAFileSubstitutionFailsIt (#1778).
 	FileSubstitutionReadError string
 
 	// DirectoryNotFound is FileNotFound for a write rather than a read.
@@ -8760,8 +8820,17 @@ func (d Diagnostics) ulimitResourceName(res Resource) string {
 // reasonText renders a strerror string the way this dialect quotes one.
 //
 // The substrate capitalizes, because that is what the C string says and what
-// three of the four print. zsh lowercases everything, so it is one flag here
-// rather than a lowercase spelling in every format that carries a reason.
+// every column but zsh prints. zsh lowercases everything, so it is one flag
+// here rather than a lowercase spelling in every format that carries a
+// reason.
+//
+// Re-measured 2026-09-20 across all seven columns with a file whose
+// permissions are 000, because that is the one reason no column substitutes
+// a wording for: `Permission denied` in bash 5.3, bash-as-`sh`, bash 3.2,
+// dash, ksh93u+ and BusyBox ash, and `permission denied` in zsh 5.9.2.
+// A missing file cannot decide it — dash writes `No such file` and BusyBox
+// ash writes `no such file`, each its own sentence rather than the errno,
+// so ash reads as a second lowercasing column on that probe alone.
 func (d Diagnostics) reasonText(s string) string {
 	if !d.LowercaseReason || s == "" {
 		return s

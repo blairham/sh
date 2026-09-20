@@ -6400,6 +6400,16 @@ type Diagnostics struct {
 	// Semantics.ArithWholeArraySubscriptIsReportedAsBad has anything to put
 	// here.
 	ArithWholeArraySubscript string
+	// ArithSubscriptUnclosedQuote is the complaint about a subscript whose
+	// brackets were found only once the scan gave up on a quotation that
+	// never closed — `let "++a[$k]"` with a `$k` holding an apostrophe. Two
+	// verbs: the name and the subscript.
+	//
+	// Its own field rather than ArithWholeArraySubscript's, for that field's
+	// own reason one construct over: the sentences coincide in the column
+	// that writes both and the shapes do not. Only a dialect answering
+	// Semantics.ArithSubscriptQuotationMustClose has anything to put here.
+	ArithSubscriptUnclosedQuote string
 	// EmptySubscriptTextExpanded is the complaint about a subscript whose
 	// *text* came out empty — `${a[$w]}` with an empty `$w` — where a
 	// parameter expansion or an assignment reads it. No verbs: the one shell

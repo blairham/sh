@@ -1927,6 +1927,13 @@ func Semantics() interp.Semantics {
 	// that sentence is the tail of the key being named as a second array.
 	// Measured 2026-09-13 against zsh 5.9.2 (#2581).
 	s.ArithSubscriptRereadsItsExpandedText = interp.Yes
+	// And a subscript whose quotation never closes is still the key it
+	// looks like: measured 2026-09-20 on 5.9.2, `typeset -A a; k="q'r";
+	// a[$k]=4; let "++a[$k]"` leaves 5 under the three-character key, with
+	// ksh93u+ and against bash 5.3.20, which calls the subscript bad. The
+	// two axes are one mechanism and part here, which is what makes them
+	// two fields (#3796).
+	s.ArithSubscriptQuotationMustClose = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

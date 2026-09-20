@@ -2353,11 +2353,29 @@ func (l *Lexer) openBraceIsAWordOfItsOwn() bool {
 // 5.9.2 where `echo x=a}` is a parse error, so the carve-out is the
 // assignment rather than the characters. Measured 2026-09-12; see
 // [Dialect.CloseBraceAlwaysReserved].
+//
+// **A `case` pattern written in parentheses is the second.** Measured
+// 2026-09-20, each line its own script file under
+// `env -i -u FPATH PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	case x in (a}) print P;; (*) print D;; esac    D         zsh takes it
+//	case a} in (a}) print P;; (*) print D;; esac   P         and it matches
+//	case x in (a}|b) print P;; (*) print D;; esac  D
+//	case x in a}) print P;; *) print D;; esac      refused   the bare arm is not
+//
+// So it is the parentheses rather than the `case`, which is what the last row
+// separates: an arm written without them keeps the reserved reading in zsh and
+// here alike. The other four panel columns take every one of these, the brace
+// being an ordinary character everywhere but zsh — so a refusal here was this
+// preset alone against the whole panel (#3898).
 func (l *Lexer) closeBraceIsAWordOfItsOwn() bool {
 	if !l.dialect.CloseBraceAlwaysReserved {
 		return false
 	}
 	if l.off+1 < len(l.src) && !l.isWordEnd(l.src[l.off+1]) {
+		return false
+	}
+	if l.inCaseParenList {
 		return false
 	}
 	return !l.inAssignmentValue()
@@ -2370,9 +2388,35 @@ func (l *Lexer) closeBraceIsAWordOfItsOwn() bool {
 // answers it for the rest of the word, so the two share their shape: a name,
 // an optional subscript and an optional `+`, in a position where an
 // assignment may be written at all.
+//
+// **A declaration utility's operand is such a position**, which is the same
+// carve-out [Lexer.arrayLiteralCouldStandHere] makes and for the same reason:
+// an argument to `typeset`, `local`, `export`, `readonly` or `declare` is an
+// assignment however the grammar reached it, and nothing in the *word* says
+// so — the command's name does, which only the parser can see. Measured
+// 2026-09-20 on zsh 5.9.2, each line its own script file:
+//
+//	z=a}                       [a}]      the bare assignment, right before
+//	export z=a}                [a}]      and every declaration spelling
+//	typeset z=a}               [a}]
+//	local z=a}                 [a}]
+//	readonly z=a}              [a}]
+//	declare z=a}               [a}]
+//	export z=a} w=b}           [a}][b}]  every operand, not only the first
+//	export z=}                 [}]       the value may be nothing else
+//	export -- a}               refused   an operand that is not an assignment
+//	alias z=a}                 refused   a utility that takes no assignment
+//	x=1 print -r -- a}         refused   a prefix does not reach the argument
+//
+// The four refusing rows are what make this the assignment rather than the
+// command: `export` does not turn the brace into text, an operand shaped like
+// an assignment does.
 func (l *Lexer) inAssignmentValue() bool {
-	if l.inArgument || l.inCondition || l.inOperand || l.inCaseArm ||
+	if l.inCondition || l.inOperand || l.inCaseArm ||
 		l.inCaseParenList || l.inRawBody || l.noAssignment {
+		return false
+	}
+	if l.inArgument && !l.inDeclarationOperand {
 		return false
 	}
 	head, _, ok := strings.Cut(l.src[l.wordStart.Offset:l.off], "=")

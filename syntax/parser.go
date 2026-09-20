@@ -244,6 +244,12 @@ type Parser struct {
 	// [Parser.redundantFi].
 	shortBodyBraced bool
 
+	// substitutionBody says the text this parser was handed is the inside of
+	// a substitution, so the end of the input is that construct's closing
+	// delimiter. See [Parser.InsideASubstitution], which is the only thing
+	// that sets it.
+	substitutionBody bool
+
 	// separatorStood is where a `;` the dialect stepped over stands, while
 	// it is still the innermost thing the parse is inside.
 	//
@@ -459,6 +465,38 @@ func (p *Parser) SetDialect(d Dialect) {
 // not been tokenized yet.
 func (p *Parser) InsideProgramParentheses() { p.lex.inProgramParens = true }
 
+// InsideASubstitution tells this parser that the text it is about to read is a
+// substitution's body — the inside of a `$( )` or of a pair of backquotes,
+// already cut out of the script it came from — so that the end of this input
+// is that construct's closing delimiter rather than the end of a program.
+//
+// The distinction is only visible where a closing context is *lenient*.
+// [Dialect.OpenEndedAndOr] is the one that reaches it, and its own
+// documentation has always named "a command substitution's `)`" among the
+// places an and-or may end on its operator — which nothing could ever take,
+// because the parenthesis is cut off before this text is handed over and
+// [Parser.atListEnd] therefore sees the end of the input instead. Measured
+// 2026-09-20 on zsh 5.9.2 from script files:
+//
+//	v=$(echo x &&); print -r -- "[$v]"       [x]
+//	v=$(echo x ||); print -r -- "[$v]"       [x]
+//	v=$( : || );    print -r -- "[$v]"       []
+//	v=`echo x &&`;  print -r -- "[$v]"       [x]
+//	v=$(echo x |);  print -r -- "[$v]"       refused — the pipeline never takes it
+//	v=$(echo x ;;); print -r -- "[$v]"       refused — nor does a stray terminator
+//
+// Deliberately narrower than "the input cannot be extended". Whether the end
+// of a *script* or of a `-c` string ends such a list is a route question that
+// [Dialect.OpenEndedAndOr] parks — zsh takes `echo x &&` from a file and still
+// draws a continuation prompt for the same text typed at a terminal — and
+// nothing here answers it. A substitution's body has no such second reading:
+// its end is a delimiter the script wrote.
+//
+// The counterpart of [Parser.InsideProgramParentheses], and a separate fact
+// from it: that one is about `$( )` alone, for a here-document rule the
+// backquoted spelling measurably does not take, and this one is about both.
+func (p *Parser) InsideASubstitution() { p.substitutionBody = true }
+
 // Incomplete reports whether the input ended part-way through a construct that
 // could still be finished. A prompt should ask for another line.
 func (p *Parser) Incomplete() bool { return p.incomplete || p.lex.Incomplete() }
@@ -668,6 +706,19 @@ func (p *Parser) atListEnd() bool {
 		return true
 	}
 	return p.atStopWord()
+}
+
+// atASubstitutionCloser reports whether the end of this input is a
+// substitution's closing delimiter that was cut off before the text arrived.
+//
+// It is [Parser.atListEnd]'s missing row rather than a rule of its own: the
+// `)` of a `$( )` and the second backquote both close a list, and neither is
+// in the text a body is parsed from. It is asked beside atListEnd rather than
+// folded into it because only one caller has been measured — see
+// [Parser.InsideASubstitution] for the rows, and for why the end of a script
+// is a different question.
+func (p *Parser) atASubstitutionCloser() bool {
+	return p.substitutionBody && p.at(TokEOF)
 }
 
 // bareNegationStandsHere reports whether a `!` that has just been read may be
@@ -1904,7 +1955,7 @@ func (p *Parser) parseAndOr() Expr {
 				}
 				continue
 			}
-			if p.dialect.OpenEndedAndOr && p.atListEnd() {
+			if p.dialect.OpenEndedAndOr && (p.atListEnd() || p.atASubstitutionCloser()) {
 				// The right-hand side is absent and the list ends here, so
 				// the operator is dropped: `{ : || ⏎ }` is `{ : ⏎ }`.
 				//
@@ -5246,11 +5297,16 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 		p.ranOut()
 		return nil, p.tok.Pos
 	}
-	if p.atStopWord() || p.at(TokRightParen) {
+	if p.atStopWord() || p.at(TokRightParen) ||
+		(p.dialect.ShortBodyEndsOnAJoiningOperator && p.atAJoiningOperator()) {
 		// A stop word or a `)` is somebody else's, and it is *here*, so the
 		// input did not run out: the body is empty and the construct is
 		// finished. `while cond; { … }` is this, with the group taken as the
 		// condition and `}` left standing where a body could have been.
+		//
+		// A joining operator is the same answer arrived at from the other
+		// side: it cannot begin a command, so the body it stands after is
+		// empty and the loop it finishes is the operator's left-hand side.
 		return nil, p.tok.Pos
 	}
 	st := p.parseStmt()
@@ -5273,6 +5329,48 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 	// on after the loop where it could not after a `done` or a `}`.
 	p.bodyTookTerm, p.bodyTookKind = st.Semi, st.Term
 	return []*Stmt{st}, st.End()
+}
+
+// atAJoiningOperator reports whether the token is one that joins two commands
+// — the pipeline's bars and the and-or list's operators — and so can only
+// stand *after* one.
+//
+// It is what says a short-form body is empty rather than missing. Measured
+// 2026-09-20 on zsh 5.9.2, each line its own script file under
+// `env -i -u FPATH PATH=/usr/bin:/bin LC_ALL=C` with no standard input:
+//
+//	for i in a b; | cat; print T          `T`        the loop ran, piped, nothing
+//	for i in a b; |& cat; print T         `T`
+//	for i in a b; && print x              `x`        so the loop succeeded
+//	select o in a b; | cat; print T       menu, `T`
+//	repeat 2; | cat; print T              `T`
+//	for i in a b; & print x               refused    `&` is not one of them
+//	for i in a b; ;; print x              refused    nor is a case terminator
+//	for i in a b; do :; done; | cat       refused    nor is the long form lenient
+//
+// The last row is the control that makes this the *short* body's question:
+// the same `|` after a `done` is a syntax error in zsh and here alike, so
+// what moved is a body that was never written rather than what a bar may
+// follow.
+//
+// A `;` is deliberately not in the set, and that is measured rather than
+// tidied away: `for i in a b; ; print x` prints `x` twice in zsh, so the
+// second separator is stepped over and the `print` becomes the body — an
+// empty body there would run it once. That is
+// [Dialect.SeparatorWhereACommandBelongs]'s question and not this one.
+// Asked only where [Dialect.ShortBodyEndsOnAJoiningOperator] is on. The rows
+// above are all zsh, and the core is the language every panel shell accepts —
+// so this is added by a dialect rather than taken from one, the additive
+// direction [Dialect.EmptyCompoundBody] describes for a grammar flag. Ungated
+// it also reached the core, where it moved `while | do :; done` onto the stop
+// word `do` — the exact shape TestAShortBodyRefusesTheTokenThatIsThere exists
+// to refuse.
+func (p *Parser) atAJoiningOperator() bool {
+	switch p.tok.Kind {
+	case TokPipe, TokPipeAmp, TokAndAnd, TokOrOr:
+		return true
+	}
+	return false
 }
 
 // PartsAsWritten is the three parts with the blanks the script wrote around

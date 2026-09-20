@@ -687,6 +687,13 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 	// leaves bash's right. See
 	// `alias/nested-text-expands-where-the-command-string-did-not`.
 	p := r.ParseWithAliases(src, r.bodyDialect(span))
+	// The text is a substitution's body, so the end of it is the construct's
+	// closing delimiter rather than the end of a program, which one lenient
+	// closing context can tell apart. Told to both spellings, unlike the
+	// `$( )` fact just below: a closing parenthesis and a second backquote
+	// close a list alike, and zsh leaves both spellings of `echo x &&`
+	// holding `x`. See syntax.Parser.InsideASubstitution.
+	p.InsideASubstitution()
 	if !span.Backquoted && span.Kind == syntax.CommandSubst {
 		// The text is the inside of a `$( )`, cut out of the script by the
 		// lexer, and that is a fact only this call site still holds: the

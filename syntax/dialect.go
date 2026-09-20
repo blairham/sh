@@ -5129,6 +5129,42 @@ type Dialect struct {
 	// one and refuses `{ }`, so the two are measurably apart.
 	EmptyCompoundBody bool
 
+	// ShortBodyEndsOnAJoiningOperator lets a short form's body be empty
+	// because a joining operator stands where it would have been: `|`, `|&`,
+	// `&&` and `||` cannot begin a command, so the loop they follow is their
+	// left-hand side rather than a loop whose body is missing.
+	//
+	// Measured 2026-09-20 on zsh 5.9.2, each line its own script file under
+	// `env -i -u FPATH PATH=/usr/bin:/bin LC_ALL=C` with no standard input:
+	//
+	//	for i in a b; | cat; print T     `T`       the loop ran, piped, nothing
+	//	for i in a b; |& cat; print T    `T`
+	//	for i in a b; && print x         `x`       so the loop succeeded
+	//	select o in a b; | cat; print T  menu, `T`
+	//	repeat 2; | cat; print T         `T`
+	//	for i in a b; & print x          refused   `&` is not one of them
+	//	for i in a b; ;; print x         refused   nor is a case terminator
+	//	for i in a b; do :; done; | cat  refused   nor is the long form lenient
+	//
+	// The last row is the control that makes this the *short* body's
+	// question: the same `|` after a `done` is a syntax error in zsh and here
+	// alike, so what moved is a body that was never written rather than what
+	// a bar may follow.
+	//
+	// Off in the core, for the reason [Dialect.EmptyCompoundBody] gives: the
+	// rows above are zsh's and the core is the common denominator. Ungated it
+	// also answered for a dialect that had only switched [Dialect.ShortForm]
+	// on, and there it took `while | do :; done` — refused at the `|` before
+	// — all the way to the stop word `do`, which is precisely what
+	// TestAShortBodyRefusesTheTokenThatIsThere was written to catch.
+	//
+	// A `;` is deliberately not in the set, and that is measured rather than
+	// tidied away: `for i in a b; ; print x` prints `x` twice in zsh, so the
+	// second separator is stepped over and the `print` becomes the body — an
+	// empty body there would run it once. That is
+	// [Dialect.SeparatorWhereACommandBelongs]'s question and not this one.
+	ShortBodyEndsOnAJoiningOperator bool
+
 	// OpenEndedAndOr lets an and-or list end with its operator: the
 	// right-hand side of a `&&` or a `||` may be absent where the list it is
 	// in closes.

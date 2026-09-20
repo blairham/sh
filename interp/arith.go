@@ -921,10 +921,11 @@ func (r *Runner) emptyArithSubscriptTarget(name string) (handled bool, err error
 	case EmptyArithSubscriptIsReported:
 		// Reported and then dropped: the expression keeps going and keeps
 		// its value, which is why this writes here rather than returning an
-		// error for a caller to word.
-		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			Wording(r.diag().ArithEmptySubscriptTarget,
-				"`%[1]s[]': not a valid identifier", name)))
+		// error for a caller to word — and why the naming has to be done
+		// here too, through the one door every other math failure reaches by
+		// traveling back up. See Runner.mathReportf.
+		r.mathReportf("%s", Wording(r.diag().ArithEmptySubscriptTarget,
+			"`%[1]s[]': not a valid identifier", name))
 		return true, nil
 	case EmptyArithSubscriptIsInvalid:
 		// complete, for the reason the read's is: the sentence is the whole
@@ -2948,7 +2949,10 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			return nil
 		}
 		r.arithCommand++
+		outerConstruct := r.arithConstruct
+		r.arithConstruct = "(("
 		v, err := r.evalArithTruth(tree)
+		r.arithConstruct = outerConstruct
 		r.arithCommand--
 		if r.unspecified {
 			r.status = 2

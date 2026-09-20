@@ -167,6 +167,44 @@ func (r *Runner) mathWrite(write func(string, ...any), format string, args ...an
 	write(format+"\n", args...)
 }
 
+// mathReportf is mathDiagf for a math complaint the *expression carries on
+// from*, so the construct that raised it never sees it and cannot word it.
+//
+// There is one such sentence — the empty subscript of a write, which the
+// reporting column reports and then drops — and it was the only math failure
+// in the tree arriving with no name on it. The naming rule is not missing, it
+// was simply not applied here: `(( 1/0 ))` and `let "1/0"` are byte-identical
+// to bash because they travel back up as errors and are named at the
+// construct's own site, while this one is written where it is raised.
+//
+// Measured 2026-09-20, bash 5.3.20 over a script file with `m=(1 2 3)` above:
+//
+//	(( m[] = 4 ))              ((: `m[]': not a valid identifier
+//	let "m[] = 4"              let: `m[]': not a valid identifier
+//	for (( m[] = 4; 0; ))      ((: `m[]': not a valid identifier
+//	typeset -i q='m[]=4'       typeset: `m[]': not a valid identifier
+//	x=$(( m[] = 4 ))           `m[]': not a valid identifier
+//	declare -i y; y='m[]=4'    `m[]': not a valid identifier
+//	(( z = $(( m[] = 4 )) ))   `m[]': not a valid identifier
+//
+// The last three are the controls and they are what fixes the shape of this:
+// the expansion route names nothing, a plain assignment through the integer
+// attribute names nothing because no builtin is speaking, and a `$(( ))`
+// *inside* a `(( ))` names nothing because it is expanded before the
+// construct starts evaluating. zsh names neither a construct nor a builtin
+// anywhere, which the two existing flags already say (#3901).
+//
+// The construct wins over the builtin where both could be named, which is
+// what `eval '(( m[] = 4 ))'` measures: `((: `m[]'…`, not `eval: `.
+func (r *Runner) mathReportf(format string, args ...any) {
+	if r.arithConstruct != "" && r.diag().ArithErrorNamesTheConstruct {
+		defer r.builtinAsideForAMathFailure()()
+		r.diagf("%s: "+format+"\n", append([]any{r.arithConstruct}, args...)...)
+		return
+	}
+	r.mathDiagf(format, args...)
+}
+
 // builtinAsideForAMathFailure takes the builtin out of the *location* where
 // the dialect does not read a math failure as the builtin's, and returns what
 // puts it back.

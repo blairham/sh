@@ -220,6 +220,10 @@ func (m tildeModifier) tildeRegex(pattern string, whole bool) (*regexp.Regexp, b
 		pattern = regexp.QuoteMeta(pattern)
 	}
 	var b strings.Builder
+	// The same flag the `=~` operator compiles under, and for the same
+	// reason: this flavor is a POSIX ERE too, so a newline in the subject is
+	// ordinary ground. See regexDotAll.
+	b.WriteString(regexDotAll)
 	if m.fold {
 		b.WriteString("(?i)")
 	}

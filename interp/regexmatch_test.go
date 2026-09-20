@@ -121,3 +121,69 @@ echo "st=$? [$MATCH] [${match[0]}] [${MBEGIN-UNSET}]"`, nil)
 		t.Errorf("got %q, want the script's own values untouched", strings.TrimSpace(out))
 	}
 }
+
+// A newline in the subject is ordinary ground: `.` passes over one, and a
+// negated bracket does too.
+//
+// That is what a POSIX ERE is — the engine underneath is asked for it with a
+// flag, because Go's own default is the other reading. The two rows answering
+// `N` are the control and not decoration: they say the flag is the one that
+// moves `.` alone, since the flag that moves the anchors to line boundaries
+// instead would turn both of them into matches. Measured 2026-09-20 across
+// every column of the panel, which agrees with itself on all six. #3892.
+func TestARegexReadsANewlineAsOrdinaryGround(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a dot spans a newline", `[[ $'a\nb' =~ a.b ]] && echo Y || echo N`, "Y"},
+		{"and a dot between anchors spans one", `[[ $'a\nb' =~ ^a.b$ ]] && echo Y || echo N`, "Y"},
+		{"so does a negated bracket", `[[ $'a\nb' =~ a[^x]+b ]] && echo Y || echo N`, "Y"},
+		// The controls. An anchor is about the ends of the *subject*, so
+		// neither of these reaches the second line.
+		{"^ is the start of the subject", `[[ $'a\nb' =~ ^b ]] && echo Y || echo N`, "N"},
+		{"$ is the end of the subject", `[[ $'a\nb' =~ a$ ]] && echo Y || echo N`, "N"},
+		// The shape this is really about: a pattern over multi-line output,
+		// which is what most scripts write `=~` for. The failure it used to
+		// have was silent and status 0, so the script took the other branch
+		// and carried on.
+		{"a pattern over multi-line output", `out=$(printf 'version 1.2\nbuild 99\n')
+[[ $out =~ version.*build ]] && echo Y || echo N`, "Y"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, nil)
+			if strings.TrimSpace(out) != tc.want {
+				t.Errorf("got %q, want %q", strings.TrimSpace(out), tc.want)
+			}
+		})
+	}
+}
+
+// The captures come with it. A match that never happened has no groups to
+// record, so the span over a newline is the same defect read through the
+// record rather than a second one.
+func TestARegexCaptureSpansANewline(t *testing.T) {
+	out, _ := run(t, `[[ $'a\nb' =~ (a.b) ]]; printf '[%s]\n' "${M[1]}"`, rematch("M"))
+	if got := strings.TrimSpace(out); got != "[a\nb]" {
+		t.Errorf("got %q, want %q", got, "[a\nb]")
+	}
+}
+
+// The fold composes with it rather than replacing it, which is what says the
+// two flags are written as one prefix and not one overwriting the other.
+// Both halves are asserted: a folded match still spans the newline, and a
+// fold that reached no further than before would fail the first row here.
+func TestAFoldedRegexStillSpansANewline(t *testing.T) {
+	foldingRegex := func(r *Runner) { r.SetMatchOption(RegexFoldsCase, true) }
+	for _, tc := range []struct{ name, src, want string }{
+		{"the fold survives the flag", `[[ ABC =~ ^abc$ ]] && echo Y || echo N`, "Y"},
+		{"and the newline is still ordinary", `[[ $'A\nB' =~ a.b ]] && echo Y || echo N`, "Y"},
+		// The fold precedes the negation, which is the row that says the
+		// prefix is still being read as a prefix.
+		{"the fold still precedes a negation", `[[ A =~ ^[^a]$ ]] && echo Y || echo N`, "N"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, foldingRegex)
+			if strings.TrimSpace(out) != tc.want {
+				t.Errorf("got %q, want %q", strings.TrimSpace(out), tc.want)
+			}
+		})
+	}
+}

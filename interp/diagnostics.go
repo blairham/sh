@@ -6737,10 +6737,12 @@ type Diagnostics struct {
 	// refuses. Two verbs: the name without its `$`, and the expansion as it
 	// was written, quoting run and all.
 	//
-	// Four wordings, measured 2026-09-11 with `set --`:
+	// Four wordings, measured 2026-09-11 with `set --` and the ash column
+	// re-measured 2026-09-20:
 	//
 	//	bash 5.3 / as-sh / 3.2   $@: cannot assign in this way
 	//	dash                     @: bad variable name
+	//	BusyBox ash 1.37.0       @: bad variable name
 	//	ksh93                    ${@:=abc}: bad substitution
 	//	zsh 5.9.2                not an identifier: @
 	//
@@ -6766,7 +6768,11 @@ type Diagnostics struct {
 	// zsh's is the fallback because it is the one shell whose grammar has
 	// `${name::=word}`, the operator that reaches this question on every
 	// name. The conditional `${name:=word}` beside it is in every dialect,
-	// which is why the other three are filled in (#1541).
+	// which is why the other four are filled in (#1541).
+	//
+	// A fallback nobody sets is a sentence nobody measured, and `dialect/ash`
+	// went its whole life holding zsh's — the column furthest from BusyBox,
+	// since ash has no `${name::=word}` at all. Filling it in is #3910.
 	AssignThroughExpansionBadName string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string

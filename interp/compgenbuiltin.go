@@ -148,6 +148,11 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 	var word string
 	var opts compgenGenerating
 	asked := map[string]bool{}
+	// The action types bash has and this shell cannot generate, so that each
+	// is said once however many times it was asked for. bash itself folds a
+	// repeated action — `compgen -A alias -A alias` over one alias answers
+	// one name — so the set that reports follows the set that generates.
+	said := map[string]bool{}
 	generated, haveWord := false, false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -181,8 +186,18 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 							return 2
 						}
 						if _, ok := compgenActions[arg]; !ok {
-							r.diagf("compgen: %s: not implemented\n", arg)
-							return 2
+							// Said, and then contributed nothing. It used to
+							// end the call, which took the *implemented*
+							// action types down with it: `compgen -A builtin
+							// -A function -A alias -A keyword` answered
+							// nothing at all where bash answers everything
+							// but the gap. An action this shell cannot
+							// generate is one that produced no words, and
+							// bash's own answer for an action with no matches
+							// is exactly that (#3899).
+							r.compgenNotImplemented(arg, said)
+							generated = true
+							break
 						}
 						asked[arg], generated = true, true
 						break
@@ -207,18 +222,30 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 				name, ok := compgenActionLetters[a[j]]
 				if !ok {
 					if compgenLetters[a[j]] {
-						// bash has the letter and we do not generate it.
-						r.diagf("compgen: -%c: not implemented\n", a[j])
-					} else {
-						// bash does not have it either, so the script has a
-						// typo rather than a shell that is missing something.
-						// The usage line follows, as it does after a missing
-						// option argument — and unlike after an `-o` name or
-						// an action name that is not one, which are one line
-						// each. Measured, all four.
-						r.diagf("compgen: -%c: invalid option\n", a[j])
-						r.compgenUsage()
+						// bash has the letter and we do not generate it, so
+						// it contributes nothing and the rest of the cluster
+						// answers — the same door the long spelling goes
+						// through, because it is the same gap written the
+						// short way. `compgen -bv cd` is `cd` in bash, and
+						// two copies of this decision is how one of them
+						// comes to disagree with the other.
+						r.compgenNotImplemented("-"+string(a[j]), said)
+						generated = true
+						continue
 					}
+					// bash does not have it either, so the script has a
+					// typo rather than a shell that is missing something —
+					// and *that* still ends the call, in bash as here:
+					// measured, `compgen -z -b cd` writes the usage line and
+					// reports 2 with no listing. The two categories part
+					// exactly here.
+					//
+					// The usage line follows, as it does after a missing
+					// option argument — and unlike after an `-o` name or an
+					// action name that is not one, which are one line each.
+					// Measured, all four.
+					r.diagf("compgen: -%c: invalid option\n", a[j])
+					r.compgenUsage()
 					return 2
 				}
 				asked[name], generated = true, true
@@ -274,6 +301,27 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 		r.printf("%s\n", name)
 	}
 	return 0
+}
+
+// compgenNotImplemented says that an action bash has and this shell cannot
+// generate was asked for, once per spelling however many times it was asked.
+//
+// One door for the long `-A alias` and the short `-v`, because they are the
+// same gap written two ways and the two copies this replaced had already
+// begun to differ from each other in what they took down with them.
+//
+// It reports and returns, and the caller carries on: an action this shell
+// cannot generate is an action that produced no words, which is what bash's
+// own answer for an action with no matches already is — measured 2026-09-20,
+// `compgen -A alias zzz` on bash 5.3.20 is silence at 1. What must *not*
+// carry on is a name or letter bash does not have either: that is the
+// script's typo, and bash ends the call for it even in company (#3899).
+func (r *Runner) compgenNotImplemented(name string, said map[string]bool) {
+	if said[name] {
+		return
+	}
+	said[name] = true
+	r.diagf("compgen: %s: not implemented\n", name)
 }
 
 // compgenOptArg reads the argument of a letter that takes one, attached to the

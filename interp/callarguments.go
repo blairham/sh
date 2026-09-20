@@ -85,6 +85,50 @@ func (r *Runner) popCallArguments() {
 	}
 }
 
+// bottomFrame is the shell's own arguments, which sit under every call.
+//
+// Synthesized at the read rather than kept in the record, and only where the
+// record is empty **and the shell is at the top level**. Both halves of that
+// are measured, and so is what it holds. bash 5.3.20, each line its own run
+// under `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	bash -c 'declare -p BASH_ARGC BASH_ARGV'          ([0]="0")   ()
+//	bash f.sh p q r        (f.sh reads them)          ([0]="3")   (r q p)
+//	bash -c '…' nm a b     (reads them)               ([0]="2")   (b a)
+//	f.sh p q, `set -- x y z` above the read           ([0]="3")   (z y x)
+//	f.sh p q r, `shift` above the read                ([0]="2")   (r q)
+//	f(){ echo "[${BASH_ARGC[@]}]"; }; f a b           []
+//
+// So it is a **view of the positional parameters** and not a snapshot of the
+// invocation — `set --` and `shift` move it — and it is the *shell's*
+// parameters, so a call hides it rather than replacing it. BASH_ARGV is a
+// stack like the rest of the record, so the last parameter is element 0.
+//
+// One row of that shell is deliberately not reproduced. bash materializes
+// these two arrays on the first read and keeps what it built, so a `set --`
+// *after* something has read them leaves the old value standing — `declare -p
+// BASH_ARGC; set -- x y z; declare -p BASH_ARGC` answers the same line twice,
+// and the same caching is why the name reads non-empty inside a function once
+// anything has read it at the top level. Reproducing it would make a
+// parameter's value depend on whether some earlier command happened to look
+// at it, so the reading above is taken from the runs where nothing had (#3887).
+//
+// With the record on, none of this applies: `shopt -s extdebug` at the top
+// level pushes the shell's own frame for real, so the record is not empty and
+// `g(){…}; f(){ g x y z; }; f a b` still answers `3 2 0` with the trailing
+// zero the shell's own. And `f(){ shopt -s extdebug; … }; f a b` still answers
+// `2` alone, because the record is turned on inside a call and this is not
+// consulted there.
+func (r *Runner) bottomFrame() ([]string, bool) {
+	if len(r.callArgs) > 0 || len(r.frames) > 0 {
+		return nil, false
+	}
+	// Never nil, so that a shell started with no operands is "there, and
+	// empty" rather than "not there" — the difference between `([0]="0")` and
+	// `()`, which is the whole of the issue.
+	return append([]string{}, r.Params...), true
+}
+
 // CallArguments is the record, innermost call first.
 //
 // Two views are taken of it and they are different shapes, which is why this
@@ -93,6 +137,9 @@ func (r *Runner) popCallArguments() {
 // the innermost call's *last* argument is its first element — see
 // [Runner.CallArgumentsFlat].
 func (r *Runner) CallArguments() [][]string {
+	if bottom, only := r.bottomFrame(); only {
+		return [][]string{bottom}
+	}
 	out := make([][]string, 0, len(r.callArgs))
 	for i := len(r.callArgs) - 1; i >= 0; i-- {
 		out = append(out, r.callArgs[i].args)
@@ -107,6 +154,13 @@ func (r *Runner) CallArguments() [][]string {
 // measured on bash 5.3.15, `g(){ …; }; f(){ g x y z; }; f a b` with the
 // record on answers `z y x b a`.
 func (r *Runner) CallArgumentsFlat() []string {
+	if bottom, only := r.bottomFrame(); only {
+		out := make([]string, 0, len(bottom))
+		for j := len(bottom) - 1; j >= 0; j-- {
+			out = append(out, bottom[j])
+		}
+		return out
+	}
 	var out []string
 	for i := len(r.callArgs) - 1; i >= 0; i-- {
 		args := r.callArgs[i].args

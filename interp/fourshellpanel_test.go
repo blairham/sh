@@ -168,12 +168,40 @@ import (
 // the first two, and it is **with dash** on the third, exiting 2 where the
 // other five exit 1.
 //
+// # The fifth pass, and the two sentences that were one dialect short
+//
+// 2026-09-20, five more measured across all seven columns with `env -i
+// PATH=/usr/bin:/bin LC_ALL=C <shell> case.sh` over a script file, taking
+// diagnostics.go from 22 to 17. Every dialect value checked was right again,
+// so this pass too is a corrected record rather than a defect — but two of
+// the five were wrong about **membership** and not only about the count:
+//
+//   - SyntaxUnexpectedWord and SyntaxRedirectUnexpected each filed dash as
+//     the lone dissenter. BusyBox ash makes the same two distinctions with
+//     the words the other way round: `syntax error: unexpected word
+//     (expecting "do")` against dash's `Syntax error: word unexpected
+//     (expecting "do")`, and `syntax error: unexpected redirection` against
+//     `Syntax error: redirection unexpected`. dialect/ash has held both
+//     wordings since the column was written, so a reader consulting the
+//     sentence would have gone looking for a missing value that is there.
+//
+// ArithFailureStatus is this pass's count-wrong-about-bash: the sentence
+// credited the non-zero answer to bash alone, and **ksh93 sets it too** —
+// `echo $((1 @))` is status 1 there, where ksh93's general syntax-error
+// status is 3. So the column the count left out is the one that most needs
+// the field, and the sentence named it as one of the columns that do not.
+//
+// FunctionListingKeywordHeader and ForArithHeaderEcho are the ordinary shape:
+// the two dialects the count left out never reach either field at all — dash
+// and BusyBox ash have no `typeset` and no C-style `for` — which is a
+// different answer from agreeing with the group they had been filed under.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
 	"semantics.go":   14,
-	"diagnostics.go": 22,
+	"diagnostics.go": 17,
 	filepath.Join("..", "syntax", "dialect.go"): 0,
 }
 

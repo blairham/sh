@@ -118,7 +118,11 @@ func (r *Runner) exportPrintWithOperands(args []string) ([]string, bool) {
 	case ExportPrintLetterIsInert:
 		return nil, false
 	case ExportPrintNarrowsToTheOperands:
-		return args, true
+		// The operand's name and not the whole word, which is the same
+		// reading `typeset -p` takes in this column and the same stripper —
+		// see declarePrintOperandNames. `export e1=1; export -p e1=9` writes
+		// the row `export e1=1` rather than reporting `e1=9` missing (#3922).
+		return declarePrintOperandNames(args), true
 	case ExportPrintDropsTheOperands:
 		return nil, true
 	}

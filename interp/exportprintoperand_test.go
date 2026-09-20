@@ -98,6 +98,42 @@ func TestThePrintLetterCanNarrowToItsOperands(t *testing.T) {
 	}
 }
 
+// The operand's **name** is what the listing narrows to, and not the whole
+// word — which is the half that costs something, because a name the script
+// really has is then *listed* rather than reported missing (#3922).
+//
+// Measured 2026-09-20, zsh 5.9.2 at `/opt/homebrew`, a script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null
+// device: `export e1=1; export -p e1=9` writes `export e1=1` at 0, and
+// `readonly -p u=9` over a name nothing set is `no such variable: u` — the
+// name alone, with the value gone.
+//
+// The same reading and the same stripper as Semantics
+// .DeclarePrintPerformsItsOperand's DeclarePrintOperandIsANameAlone, because
+// it is one column saying one thing through two words.
+func TestThePrintLetterNarrowsToTheOperandsNameAndNotTheWholeWord(t *testing.T) {
+	t.Parallel()
+	out, errs := printOperandRun(t,
+		"export e=1\nexport -p e=9\necho \"[$e]\"", ExportPrintNarrowsToTheOperands)
+	if want := "export e=1\n[1]\n"; out != want {
+		t.Errorf("export -p e=9 = %q (err %q), want %q — the name is `e`, which the "+
+			"script has, so the listing writes its row and nothing is stored",
+			out, errs, want)
+	}
+	out, errs = printOperandRun(t,
+		"readonly r=6\nreadonly -p r=7\necho \"[$r]\"", ExportPrintNarrowsToTheOperands)
+	if want := "readonly r=6\n[6]\n"; out != want {
+		t.Errorf("readonly -p r=7 = %q (err %q), want %q", out, errs, want)
+	}
+	// And the control on the other side: a name the script does *not* have is
+	// still missing, reported under the name rather than under the word.
+	_, errs = printOperandRun(t,
+		"export -p w=8", ExportPrintNarrowsToTheOperands)
+	if strings.Contains(errs, "w=8") {
+		t.Errorf("export -p w=8 said %q, want the name alone and not the whole word", errs)
+	}
+}
+
 // The operands are dropped: the whole-table listing runs and the names are
 // neither listed nor declared — dash's reading, and the one the other two
 // cannot imitate. The discriminating row is the *unnamed* export appearing

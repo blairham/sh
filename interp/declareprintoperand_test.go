@@ -159,7 +159,14 @@ func TestDeclarePrintOperandIsANameAlone(t *testing.T) {
 
 // TestDeclarePrintOperandReportsTheNameItDidNotPerform: the reading that
 // performs nothing still reports the operand as a missing name where the
-// dialect reports one, and the status is that report's.
+// dialect reports one, and the status is that report's — under the **name**
+// it did not perform rather than under the whole word.
+//
+// It asserted `s=5` until #3922. The axis value says an operand is a name
+// alone, so the name is what the listing walks and what a report of a missing
+// one carries: measured, zsh 5.9.2 writes `no such variable: s` for `typeset
+// -p s=5`, and the row that costs something is `s=5; typeset -p s=7`, which
+// is a *listing* there because the name is `s`.
 func TestDeclarePrintOperandReportsTheNameItDidNotPerform(t *testing.T) {
 	reports := func(s *Semantics) {
 		s.DeclareListing = DeclareListingBareAssignments
@@ -168,9 +175,59 @@ func TestDeclarePrintOperandReportsTheNameItDidNotPerform(t *testing.T) {
 		s.DeclarePrintPerformsItsOperand = DeclarePrintOperandIsANameAlone
 	}
 	_, errs, st := declareRun(t, `typeset -p s=5`, reports, Diagnostics{})
-	if !strings.Contains(errs, "s=5: not found") || st != 1 {
-		t.Errorf("stderr %q status %d, want the whole operand reported at 1", errs, st)
+	if !strings.Contains(errs, "s: not found") || strings.Contains(errs, "s=5") || st != 1 {
+		t.Errorf("stderr %q status %d, want the name alone reported at 1", errs, st)
 	}
+}
+
+// TestDeclarePrintWalksTheOperandsNameNotTheWholeWord is the half that costs
+// something: a name the script really has is *listed*, at 0, because the name
+// is what the listing walks (#3922).
+//
+// Measured 2026-09-20, zsh 5.9.2 at `/opt/homebrew`, script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	typeset -p s=5           no such variable: s
+//	s=5; typeset -p s=7      typeset s=5            ← the row
+//	typeset -p q[2]=7        no such variable: q[2] ← the subscript stays
+//	typeset -p s+=5          no such variable: s+   ← and so does the `+`
+//	typeset -p a=b=c         no such variable: a    ← the *first* `=` cuts
+func TestDeclarePrintWalksTheOperandsNameNotTheWholeWord(t *testing.T) {
+	name := func(s *Semantics) {
+		s.DeclareListing = DeclareListingBareAssignments
+		s.DeclareValueQuoting = ListingQuoteWhenNeededDollar
+		s.DeclarePrintReportsAMissingName = Yes
+		s.DeclarePrintPerformsItsOperand = DeclarePrintOperandIsANameAlone
+	}
+	t.Run("a name the script has is listed", func(t *testing.T) {
+		out, errs, st := declareRun(t, `s=5; typeset -p s=7`, name, Diagnostics{})
+		if strings.TrimSuffix(out, "\n") != "s=5" || errs != "" || st != 0 {
+			t.Errorf("out %q stderr %q status %d, want %q at 0 with nothing on stderr "+
+				"— reporting the whole word made this a name that is not there",
+				out, errs, st, "s=5")
+		}
+	})
+	t.Run("the value is dropped and nothing else is", func(t *testing.T) {
+		for _, tc := range []struct{ src, want string }{
+			{`typeset -p q[2]=7`, "q[2]: not found"},
+			{`typeset -p s+=5`, "s+: not found"},
+			{`typeset -p a=b=c`, "a: not found"},
+			{`typeset -p s=`, "s: not found"},
+		} {
+			_, errs, _ := declareRun(t, tc.src, name, Diagnostics{})
+			if !strings.Contains(errs, tc.want) {
+				t.Errorf("%s = %q, want %q in it — the word is cut at the first "+
+					"`=` and not parsed as an assignment", tc.src, errs, tc.want)
+			}
+		}
+	})
+	t.Run("an operand with no value is untouched", func(t *testing.T) {
+		out, errs, st := declareRun(t, `v=1; typeset -p v`, name, Diagnostics{})
+		if strings.TrimSuffix(out, "\n") != "v=1" || errs != "" || st != 0 {
+			t.Errorf("out %q stderr %q status %d, want %q at 0 — the control, and "+
+				"the shape every script writes", out, errs, st, "v=1")
+		}
+	})
 }
 
 // TestAHeldListingReportsAfterItsOperandLanded is the same report on the

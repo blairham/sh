@@ -23,7 +23,7 @@ import "strings"
 //	typeset -p s=5          `s=5`, s is 5           `s=5: not found` at 1, s unset     `no such variable: s` at 1, s unset
 //	typeset -p e=(1 2)      `typeset -a e=(1 2)`    `declare -a e=([0]="1" [1]="2")`   `no such variable: e` at 1, e unset
 //	typeset -p c=(x=1)      `typeset -C c=(x=1)`    — no compound variable             `no such variable: c`
-//	typeset -p q[2]=7       `typeset -a q=([2]=7)`  `q[2]=7: not found`, q unset       `no such variable: q`
+//	typeset -p q[2]=7       `typeset -a q=([2]=7)`  `q[2]=7: not found`, q unset       `no such variable: q[2]`
 //
 // dash and BusyBox ash have neither word, so the question cannot be put to
 // them.
@@ -138,7 +138,13 @@ func (r *Runner) declarePrintPerformsItsOperands(name string, args []string, f d
 		r.status, r.unspecified = 2, true
 		return r.status, true
 	case DeclarePrintOperandIsANameAlone:
-		return 0, false
+		// The operand's **name** is the name the listing walks, so a name
+		// the script really has is listed rather than reported missing. This
+		// walked the whole operand word, which made every `name=value` a
+		// name that is not there: `s=5; typeset -p s=7` was `no such
+		// variable: s=7` where zsh writes the row `typeset s=5` at 0.
+		// See declarePrintOperandNames (#3922).
+		return r.declarePrint(declarePrintOperandNames(args)), true
 	case DeclarePrintOperandIsDeclaredWhereItIsALiteral:
 		if !literals {
 			// Every other operand shape is a name in this column, whatever
@@ -305,4 +311,48 @@ func (r *Runner) listingHeldForItsOperands() (int, bool) {
 	r.inBuiltin = held.builtin
 	defer func() { r.inBuiltin = outer }()
 	return r.declarePrint(held.names), true
+}
+
+// declarePrintOperandNames is the name half of each operand of a `-p`
+// listing, for the reading that an operand is a name and nothing is
+// performed — DeclarePrintOperandIsANameAlone, and the
+// ExportPrintNarrowsToTheOperands half of the axis beside it, which is the
+// same column saying the same thing through the two attribute words.
+//
+// One function for both, because they are one rule: the listing that walks
+// the operand as a name is the listing that has to take the name off it, and
+// a stripper written into one of them is the shape #3904 was.
+//
+// The cut is at the **first** `=` and nothing else is touched. Measured
+// 2026-09-20, zsh 5.9.2 at `/opt/homebrew`, `env -i PATH=/usr/bin:/bin
+// LC_ALL=C zsh z.sh` over a script file, standard input on the null device:
+//
+//	typeset -p s=5           no such variable: s
+//	typeset -p s=            no such variable: s
+//	typeset -p a=b=c         no such variable: a
+//	typeset -p s+=5          no such variable: s+
+//	typeset -p q[2]=7        no such variable: q[2]
+//	typeset -p s[1]+=x       no such variable: s[1]+
+//	export -p e1=9           no such variable: e1
+//	readonly -p u=9          no such variable: u
+//
+// So the **subscript stays** and so does an append's `+`: the word is cut at
+// a byte, not parsed as an assignment. This corrects the record — the table
+// at the top of this file said `typeset -p q[2]=7` was `no such variable: q`
+// in that column, and re-measuring it for this change says `q[2]`.
+//
+// And the rows that make it worth doing are the ones where the name *is*
+// there: `s=5; typeset -p s=7` writes `typeset s=5` at 0, and `export e1=1;
+// export -p e1=9` writes `export e1=1`. Reporting the whole word made every
+// such operand a name that is not there, so the listing failed exactly where
+// zsh writes a row.
+func declarePrintOperandNames(args []string) []string {
+	out := make([]string, 0, len(args))
+	for _, a := range args {
+		if i := strings.IndexByte(a, '='); i >= 0 {
+			a = a[:i]
+		}
+		out = append(out, a)
+	}
+	return out
 }

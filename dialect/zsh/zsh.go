@@ -1944,6 +1944,19 @@ func Semantics() interp.Semantics {
 	// is a refusal, and a reading this dialect cannot reach must not be
 	// able to produce one (#3796).
 	s.ArithSubscriptQuotationMustClose = interp.No
+	// A `let` operand's subscript is not a quoting context here either, and
+	// that is measured rather than inherited from the line above: on zsh
+	// 5.9.2 with `typeset -A a; a[k]=1; a['"k"']=2`, `let '++a["k"]'`
+	// leaves the bare `k` at 1 and the quoted key at 2, so it stored under
+	// a third key spelled with the quotes — which is what
+	// SubscriptIsAQuotingContext already answers for every other subscript
+	// of this preset.
+	//
+	// It is a pin, exactly as the axis above is: with no subscript here
+	// ever a quoting context, the builtin route cannot part from the
+	// expression's, and the answer exists so that route cannot reach an
+	// unanswered axis (#3871).
+	s.LetOperandSubscriptIsAQuotingContext = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

@@ -2380,6 +2380,16 @@ func Semantics() interp.Semantics {
 	// key, and `shopt -s assoc_expand_once` moves this column to 5 too —
 	// see interp.Runner.ExpandsAnOperandsSubscriptAgain (#3796).
 	s.ArithSubscriptQuotationMustClose = interp.Yes
+	// And a `let` operand's subscript is the same quoting context the
+	// expression's is here, which is the half ksh93 does not share:
+	// measured 2026-09-20 on 5.3.20 from a script file with
+	// `typeset -A a; a[k]=1; a['"k"']=2`, both `(( ++a["k"] ))` and
+	// `let '++a["k"]'` leave the bare `k` at 2 and the quoted key at 2,
+	// where ksh93u+ answers the first the same way and the second by
+	// incrementing the three-character key instead. `let '++a[\k]'` is the
+	// bare key here too, so it is quote removal rather than one character
+	// (#3871).
+	s.LetOperandSubscriptIsAQuotingContext = interp.Yes
 	// A subscript that *expanded* to nothing is the expression that is zero,
 	// so `${a[$w]}` with an empty `$w` is element zero — measured 2026-09-11
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
@@ -3264,7 +3274,14 @@ func Diagnostics() interp.Diagnostics {
 		SubscriptedPrefixIsNotAName:        "`%[1]s': not a valid identifier",
 		ArithWholeArraySubscript:           "%[1]s[%[2]s]: bad array subscript",
 		ArithSubscriptUnclosedQuote:        "%[1]s[%[2]s]: bad array subscript",
-		ArrayLiteralThroughASubscript:      "%[1]s[%[2]s]: cannot assign list to array member",
+		// The store's own sentence, which is the builtin's complaint about
+		// its whole operand and not the subscript's: measured 2026-09-20 on
+		// 5.3.20 from a script file with `typeset -A a; k="q'r"; a[$k]=4`,
+		// `let "a[$k] = 9"` writes this once and no `bad array subscript`
+		// at all, where `let "x = a[$k] + 1"` writes that one twice and
+		// this one never. The leading backquote is bash's own (#3870).
+		ArithSubscriptUnclosedQuoteTarget: "`%[1]s[%[2]s]': not a valid identifier",
+		ArrayLiteralThroughASubscript:     "%[1]s[%[2]s]: cannot assign list to array member",
 		// Through a literal the element is named as it stands between the
 		// parentheses, with no array name in front of it. bash 3.2 says the
 		// same and does not end the script, which is the one place the two

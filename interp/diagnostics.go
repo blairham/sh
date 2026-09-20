@@ -6467,6 +6467,24 @@ type Diagnostics struct {
 	// that writes both and the shapes do not. Only a dialect answering
 	// Semantics.ArithSubscriptQuotationMustClose has anything to put here.
 	ArithSubscriptUnclosedQuote string
+	// ArithSubscriptUnclosedQuoteTarget is the same bad subscript where the
+	// brackets name a place to **write** — `let "a[$k] = 9"` — which is a
+	// second sentence in the one column that writes either. Two verbs: the
+	// name and the subscript.
+	//
+	// The wording is the half that does not carry over, which is why there
+	// is a second field and no second axis, exactly as
+	// ArithEmptySubscript and ArithEmptySubscriptTarget stand beside each
+	// other one construct along: the same shell says `a[q'r]: bad array
+	// subscript` of a read and `` let: `a[q'r]': not a valid identifier ``
+	// of a store. The second is the builtin's complaint about its whole
+	// operand rather than the subscript's, so it is written through the
+	// naming rule Diagnostics.ArithErrorNamesTheBuiltin already holds and
+	// carries no builtin name of its own.
+	//
+	// Only a dialect answering Semantics.ArithSubscriptQuotationMustClose
+	// has anything to put here (#3870).
+	ArithSubscriptUnclosedQuoteTarget string
 	// EmptySubscriptTextExpanded is the complaint about a subscript whose
 	// *text* came out empty — `${a[$w]}` with an empty `$w` — where a
 	// parameter expansion or an assignment reads it. No verbs: the one shell

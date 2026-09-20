@@ -165,9 +165,11 @@ func TestAnUnansweredArithmeticSubscriptQuotationIsRefusedByName(t *testing.T) {
 // It is the nearest neighbor and the control that says the refusal turns on
 // the giving-up rather than on there being a quote in the key at all. Only
 // the refusal is asserted, because which element the two closed quotes name
-// is a second question this shell answers with bash and against ksh93 — the
-// `let` route carries no marks, so quote removal takes them off and the key
-// is `qrz` — and that is not moved by this axis in either direction.
+// is a second question and a second axis — the `let` route carries no marks,
+// so whether quote removal takes them off is
+// Semantics.LetOperandSubscriptIsAQuotingContext, pinned in
+// letoperandsubscriptquoting_test.go — and neither reading is moved by this
+// axis in either direction.
 func TestAQuotationTheKeyClosesIsNotRefused(t *testing.T) {
 	const src = `typeset -A a; k="q'r'z"; a[$k]=4; let "++a[$k]"; printf 'done'`
 	for _, a := range []Answer{Yes, No} {

@@ -2098,6 +2098,22 @@ type Runner struct {
 	// a builtin — see Runner.refuseReadonlyInACommand.
 	arithCommand      int
 	refusedInACommand bool
+	// arithConstruct is the spelling of the arithmetic *command* whose
+	// expression is being evaluated — `((` for both `(( ))` and the C-style
+	// `for` header — and empty everywhere else, which includes every
+	// expansion route.
+	//
+	// It exists for the one math complaint that is *written where it is
+	// raised* rather than returned for the construct to word: the empty
+	// subscript of a write, which the reporting column carries on from. Every
+	// other failure travels back up as an error and is named at the
+	// construct's own site through Diagnostics.arithConstructFailure, so
+	// nothing else needs to ask. See Runner.mathReportf (#3901).
+	//
+	// Set around the *evaluation* and not around the expansion that produces
+	// the text, which is what keeps `(( z = $(( m[] = 4 )) ))` naming no
+	// construct — measured, and bash's answer.
+	arithConstruct string
 	// Whether a pattern written into a redirection's target is matched.
 	// Saved like the rest: POSIX forbids it and both columns that do it were
 	// measured to stop in the mode, so the mode asserts the standard's answer

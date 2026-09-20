@@ -623,7 +623,10 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string, at syntax.Pos)
 		r.forHeaderArithFailed()
 		return 0, false
 	}
+	outerConstruct := r.arithConstruct
+	r.arithConstruct = "(("
 	v, err := r.evalArith(resolved)
+	r.arithConstruct = outerConstruct
 	if err != nil {
 		if r.badSubscript {
 			// A **subscript's** failure is not the header's, and it is given

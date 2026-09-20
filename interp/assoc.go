@@ -745,6 +745,19 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 	var pairs []string
 	for _, e := range parsed {
 		if e.subscripted {
+			if e.members != nil {
+				// The value under the key is a **compound variable's body** —
+				// `a=([1]=(p=1 q=2))` — which hangs its members under the
+				// element's own spelling. The same two pieces the indexed
+				// placement uses, through the same function; see
+				// Runner.literalElementCompound.
+				value, ok := r.literalElementCompound(name, e.sub, e.members)
+				if !ok {
+					return
+				}
+				r.storeAssocElement(name, e.sub, value)
+				continue
+			}
 			if e.nested != nil {
 				// The value under the key is a literal of its own —
 				// `a=( [0]=(1 2) )` — which the whole-element write stores

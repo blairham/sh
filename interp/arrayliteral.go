@@ -39,6 +39,18 @@ type literalElem struct {
 	// an array, which is the whole of what makes it a dimension rather than a
 	// splice.
 	nested *Element
+	// members is the **compound variable's body** a literal standing in an
+	// element's place was written as, and nil for every other element —
+	// `nested` included, since the same parentheses hold the two constructs
+	// and the first word decides which was written. See
+	// [syntax.Parser.nestedArrayLiteral].
+	//
+	// Carried rather than run, which is what separates it from `nested`: a
+	// compound's members are ordinary names spelled with the element's own
+	// subscript in front, so the body cannot be run until the placement below
+	// has said which element this is. `nested` has no such need and is built
+	// where it is read.
+	members []*syntax.SimpleCmd
 }
 
 // literalElems expands an array literal's elements once, and reports whether
@@ -91,6 +103,25 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts bool) (
 	out := make([]literalElem, 0, len(elems))
 	for _, el := range elems {
 		if el.Nested != nil {
+			if el.Nested.Members != nil {
+				// The parentheses held a compound variable's body rather than
+				// an array's elements. Carried to the placement, which is
+				// where the element it lands in — and so the name its members
+				// hang under — is known. See literalElem.members.
+				if el.Word == nil {
+					out = append(out, literalElem{members: el.Nested.Members})
+					continue
+				}
+				sub, _, appends, ok := r.assocElem(el.Word)
+				if !ok {
+					return nil, false
+				}
+				out = append(out, literalElem{
+					sub: sub, subscripted: true, appendValue: appends,
+					members: el.Nested.Members,
+				})
+				continue
+			}
 			// A literal of its own, which becomes one element holding what it
 			// built rather than words spliced in around it. Built through the
 			// same placement every literal uses, so a nested one with a
@@ -333,15 +364,28 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 //
 // No axis: only the dialect with nested literals can reach this at all.
 func nestingRetypesTheLiteral(parsed []literalElem) bool {
-	if len(parsed) == 0 || parsed[0].nested != nil {
+	if len(parsed) == 0 || elementIsAValueOfItsOwn(parsed[0]) {
 		return false
 	}
 	for _, e := range parsed {
-		if e.nested != nil {
+		if elementIsAValueOfItsOwn(e) {
 			return true
 		}
 	}
 	return false
+}
+
+// elementIsAValueOfItsOwn reports whether an element was written as its own
+// pair of parentheses, whichever of the two constructs they held.
+//
+// The rule above counts both, measured in the same run: `a=( x (p=1 q=2) )`
+// is `typeset -A a=([0]=x [1]=(p=1;q=2))` on ksh93u+ 2012-08-01 exactly as
+// `a=( x (1 2) )` is `typeset -A a=([0]=x [1]=(1 2) )`, and
+// `a=( (p=1) (q=2) )` stays `typeset -a` exactly as `a=( (1 2) (3 4) )` does.
+// So what retypes the literal is the parentheses and not what they were
+// found to hold (#3864).
+func elementIsAValueOfItsOwn(e literalElem) bool {
+	return e.nested != nil || e.members != nil
 }
 
 // storeRetypedNestedLiteral stores what the rule above decided: the same
@@ -519,6 +563,19 @@ func (r *Runner) keyedLiteralOverAScalar(name string) {
 // the script has already been ended and nothing should be stored.
 func (r *Runner) literalInto(name string, a Array, next int, parsed []literalElem) (Array, bool) {
 	for _, e := range parsed {
+		if e.members != nil && !e.subscripted {
+			// A compound variable's body standing where an element goes, at
+			// the next position going. The body is run only now, because the
+			// members hang under the element's own subscripted spelling and
+			// this is where the subscript is settled.
+			value, ok := r.literalElementCompound(name, itoa(next), e.members)
+			if !ok {
+				return nil, false
+			}
+			a[next] = value
+			next++
+			continue
+		}
 		if e.nested != nil {
 			// A literal of its own becomes **one** element holding what it
 			// built, wherever the next position is. Not spliced: that is the
@@ -532,6 +589,36 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			for _, f := range e.fields {
 				a[next] = Scalar(f)
 				next++
+			}
+			continue
+		}
+		if e.members != nil {
+			// A subscripted head whose value is a compound body — `a=([1]=(p=1
+			// q=2))` — placed where the subscript says. The same arithmetic
+			// the nested-array spelling below reads, so the two readings of
+			// one syntax cannot disagree about which element is meant.
+			idx, err := r.subscriptValue(e.sub)
+			if err != nil {
+				r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
+				return nil, false
+			}
+			pos, ok := r.elemPos(a, idx)
+			if !ok {
+				wording := r.diag().BadArrayLiteralSubscript
+				if wording == "" {
+					wording = r.diag().BadArraySubscript
+				}
+				r.failedSubscript("%s\n", Wording(wording,
+					"%[1]s[%[2]s]: bad array subscript", name, e.sub, ""))
+				return nil, false
+			}
+			value, ok := r.literalElementCompound(name, itoa(pos), e.members)
+			if !ok {
+				return nil, false
+			}
+			a[pos] = value
+			if pos >= next {
+				next = pos + 1
 			}
 			continue
 		}

@@ -2577,6 +2577,8 @@ func Semantics() interp.Semantics {
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// zsh 5.9.2 sends it: `kill -0 -- -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
+	// zsh 5.9.2 takes the word as a value.
+	s.DiagnosticWordIsFields = interp.No
 	// zsh 5.9.2 leaves the name unset.
 	s.ArrayOperandIsStoredPastAFailedOpen = interp.No
 	// zsh 5.9.2 reaches the target behind either spelling.

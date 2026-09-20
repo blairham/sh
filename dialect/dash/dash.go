@@ -917,6 +917,8 @@ func Semantics() interp.Semantics {
 	s.KillJobSpecAimsAtTheGroup = interp.Yes
 	// dash 0.5.12 sends it: `kill -0 -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
+	// dash 0.5.12 takes the word as a value.
+	s.DiagnosticWordIsFields = interp.No
 	// dash has no array literal, so the question cannot be put.
 	s.ArrayOperandIsStoredPastAFailedOpen = interp.No
 	// dash 0.5.12 reads it as a target behind `-0` (`Illegal number:

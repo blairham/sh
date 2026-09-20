@@ -5101,8 +5101,54 @@ func (r *Runner) joinWord(w *syntax.Word) string {
 // from the axis that owns it (#1500). A diagnostic's word is the same shape:
 // `${u?X[a-b]y}` names the word, not the files it would have found.
 func (r *Runner) substitutedWordText(w *syntax.Word) string {
+	if w == nil {
+		// `${v:=}` and `${v?}` carry no word at all, and the unsplit reading
+		// dereferences one. The fields reading this replaced went through
+		// expandWord, which tolerated the nil — so this guard is not a
+		// refinement, it is the half of the old behavior the new call does
+		// not have. expandAssignValue carries the same line for the same
+		// reason. CI caught its absence as a panic in `${v::=}`, and
+		// TestTheAlwaysAssignOperatorAssignsEveryTime's empty-word row is
+		// what fails without it — `${v:=}` cannot stand in, because that
+		// spelling carries an empty word rather than no word, so a row
+		// written with it passes whether the guard is here or not.
+		return ""
+	}
 	defer r.withoutGlobbing()()
-	return r.joinWord(w)
+	return r.wordTextUnsplit(w, nil, false, true)
+}
+
+// diagnosticWordText is the text `${x?word}` complains with.
+//
+// The same word as an assigning operator's, read one of two ways, and the
+// panel splits three to two. Measured 2026-09-20 from a script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+//
+//	set -- 'a:b' c
+//	IFS=:
+//	unset e1; echo ${e1?$*}
+//
+//	bash 5.3.20, bash 3.2.57   e1: a b c
+//	zsh 5.9.2, ksh93u+, dash   e1: a:b:c
+//
+// So the bash family takes the word as **fields** — expanded the way a
+// command line is, and the sentence made of them with a space between — and
+// the other three take it as a **value**, where `$*` joins on the first
+// character of IFS as it does everywhere else a value is wanted.
+//
+// Asked here and not in substitutedWordText, because the assigning forms
+// `:=` and `::=` do **not** split: `unset u; : ${u:=$*}` stores `a:b:c` in
+// all four columns, bash included. One word, two operators, and only this
+// one disagrees — which is exactly where the question belongs.
+//
+// **A probe that does not set IFS cannot tell the two apart**, because the
+// first character is then already the space the other reading supplies.
+func (r *Runner) diagnosticWordText(w *syntax.Word) string {
+	if r.ask(r.sem().DiagnosticWordIsFields, "`${x?word}` reading its word as fields") {
+		defer r.withoutGlobbing()()
+		return r.joinWord(w)
+	}
+	return r.substitutedWordText(w)
 }
 
 // replacementOf is the text a `${x/pat/rep}` substitutes.
@@ -5780,7 +5826,7 @@ func escapeAll(in []string) []string {
 // decides differently how to say so — two of them have a phrase covering
 // both, one says only "not set" either way, and one tells them apart.
 func (r *Runner) paramErrorWord(e *syntax.ParamExpr, set bool) string {
-	if w := r.substitutedWordText(e.Arg); w != "" {
+	if w := r.diagnosticWordText(e.Arg); w != "" {
 		return w
 	}
 	const notSet = "parameter not set"

@@ -2250,6 +2250,8 @@ func Semantics() interp.Semantics {
 	// `kill: -1: permission denied` at 1, where `-$$` is 0 and an
 	// absent group is `no such process`.
 	s.KillRefusesTheAllProcessesTarget = interp.Yes
+	// ksh93u+ takes the word as a value.
+	s.DiagnosticWordIsFields = interp.No
 	// Unreachable rather than measured: a failed redirection on a
 	// declaration utility ends ksh93, so nothing reads the name after.
 	s.ArrayOperandIsStoredPastAFailedOpen = interp.No

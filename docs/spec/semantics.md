@@ -2529,6 +2529,60 @@ option, which is the whole reason the spelling exists. `kill -TERM -- -$pgid`
 is the ordinary way to signal a process group, and it is the spelling the one
 real-world caller in #2145 writes.
 
+## The word `${x?…}` complains with, and the word `${x:=…}` stores
+
+One word, two operators, and only one of them splits (#3876).
+
+Measured 2026-09-20 from a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`:
+
+```sh
+set -- 'a:b' c
+IFS=:
+unset e1; echo ${e1?$*}
+```
+
+| column | sentence |
+| --- | --- |
+| bash 5.3.20 | `e1: a b c` |
+| bash 3.2.57 | `e1: a b c` |
+| zsh 5.9.2 | `e1: a:b:c` |
+| ksh93u+ | `e1: a:b:c` |
+| dash 0.5.12 | `e1: a:b:c` |
+
+The bash family expands the word the way a command line is expanded and makes
+the sentence of the fields; the other three take it as a **value**, where `$*`
+joins on the first character of `IFS` as it does everywhere else a value is
+wanted. That is `Semantics.DiagnosticWordIsFields`.
+
+### The assigning word does not split, in any column
+
+The same word reached through `:=` is unanimous:
+
+```sh
+set -- 'a:b' c
+IFS=:
+unset u; : ${u:=$*}; printf '[%s]' "$u"
+```
+
+is `[a:b:c]` in bash 5.3.20, zsh 5.9.2, ksh93u+ and dash 0.5.12 alike. So the
+question belongs to the `?` operator and not to the helper both share — asking
+it on the helper would record a disagreement where the panel has none, and is
+the mutation the `:=` row in the test exists to catch.
+
+**This shell answered fields for both**, which was right for one column of five
+on the diagnostic and wrong for every column on the assignment. The assigning
+half was a plain defect rather than a missing axis: `${u:=$*}` stored `a b c`
+where all four references store `a:b:c`. #1500 fixed this helper's *globbing*
+half and the joining half was never asked.
+
+### A probe without `IFS` cannot tell the readings apart
+
+With the default `IFS` the first character is already the space the fields
+reading supplies, so both answers produce the same string — `e1: a:b c` in
+every column. Any test of this needs a non-default `IFS`, and the default-`IFS`
+rows are kept in the test under **both** answers to say so.
+
 ## The all-processes target, and why signal 0 could measure it
 
 POSIX gives the pid `-1` a meaning no other number has: every process the

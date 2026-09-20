@@ -1926,6 +1926,8 @@ func Semantics() interp.Semantics {
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// bash 5.3.20 sends it: `kill -0 -- -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
+	// bash 5.3.20 and 3.2.57 both make the sentence of the fields.
+	s.DiagnosticWordIsFields = interp.Yes
 	// bash 5.3.20 and 3.2.57 both store it: `typeset a=(VAL) 2>/nope/x`
 	// leaves `a` holding VAL. A scalar operand is not stored, which is
 	// what keeps this to the array literal.

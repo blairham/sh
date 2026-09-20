@@ -3524,6 +3524,35 @@ type Semantics struct {
 	// every dialect.
 	KillRefusesTheAllProcessesTarget Answer
 
+	// DiagnosticWordIsFields reads the word of `${x?word}` as fields of a
+	// command line rather than as a value.
+	//
+	// Measured 2026-09-20 from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	set -- 'a:b' c
+	//	IFS=:
+	//	unset e1; echo ${e1?$*}
+	//
+	//	bash 5.3.20, bash 3.2.57   e1: a b c
+	//	zsh 5.9.2, ksh93u+, dash   e1: a:b:c
+	//
+	// The bash family expands the word the way a command line is expanded
+	// and makes the sentence of the fields with a space between; the other
+	// three take it as a value, where `$*` joins on the first character of
+	// IFS as it does everywhere else a value is wanted.
+	//
+	// **Asked of the `?` word alone.** The assigning forms `:=` and `::=`
+	// take the same word and are unanimous on the value reading — `unset u;
+	// : ${u:=$*}` stores `a:b:c` in all four columns, bash included — so
+	// putting the question on the shared helper would be recording a
+	// disagreement where there is none. See Runner.diagnosticWordText.
+	//
+	// **A probe that does not set IFS cannot tell the two readings apart**,
+	// because the first character is then already the space the fields
+	// reading supplies. Any test of this needs a non-default IFS.
+	DiagnosticWordIsFields Answer
+
 	// ArrayOperandIsStoredPastAFailedOpen stores a declaration utility's
 	// array-literal operand even though the command's redirection failed and
 	// the utility never ran.
@@ -21797,6 +21826,8 @@ func PosixSemantics() Semantics {
 		// The standard leaves `-1` to the kernel, and four of the five
 		// columns hand it straight there.
 		KillRefusesTheAllProcessesTarget: No,
+		// Three of the five columns read the word as a value.
+		DiagnosticWordIsFields: No,
 		// A command that did not run performed no assignment.
 		ArrayOperandIsStoredPastAFailedOpen: No,
 		// The standard says the marker ends the options wherever it stands.
@@ -22958,6 +22989,8 @@ func CoreSemantics() Semantics {
 		// The standard leaves `-1` to the kernel, and four of the five
 		// columns hand it straight there.
 		KillRefusesTheAllProcessesTarget: No,
+		// Three of the five columns read the word as a value.
+		DiagnosticWordIsFields: No,
 		// A command that did not run performed no assignment.
 		ArrayOperandIsStoredPastAFailedOpen: No,
 		// The standard says the marker ends the options wherever it stands.

@@ -86,6 +86,65 @@ func TestACompoundBodyThroughAReferenceLandsOnTheNameItPointsAt(t *testing.T) {
 			ref + `typeset c=(1 2); print -r -- "${zz[@]}"`,
 			"1 2\n",
 		},
+		// One call at each funnel covers every operator, because a member
+		// path is a plain name by the time it gets there. A row per operator,
+		// because "it is a plain name" is the claim and a list that checked
+		// one would pass for a version that had quietly stopped being true of
+		// the others.
+		{
+			"a member path takes every operator with it",
+			`typeset zz=(a=1 b=2); ` + ref +
+				`print -r -- "[${c.a:-D}][${c.nope:-D}][${#c.a}][${c.a+SET}][${c.nope+SET}]"`,
+			"[1][D][1][SET][]\n",
+		},
+		{
+			"appending to a member through the reference",
+			`typeset zz=(a=1); ` + ref + `c.a+=x; print -r -- "[${zz.a}]"`,
+			"[1x]\n",
+		},
+		{
+			"unsetting a member through the reference",
+			`typeset zz=(a=1 b=2); ` + ref + `unset c.a; print -r -- "[${zz.a}][${zz.b}]"`,
+			"[][2]\n",
+		},
+		{
+			"a prefix listing through the reference",
+			`typeset zz=(a=1 b=2); ` + ref + `print -r -- "[${!c.@}][${!c.*}]"`,
+			"[zz.a zz.b][zz.a zz.b]\n",
+		},
+		{
+			"a nested member read through the reference",
+			`typeset zz=(a=(y=7)); ` + ref + `print -r -- "[${c.a.y}]"`,
+			"[7]\n",
+		},
+		// The invariant the listing owes: a prefix reached through a
+		// reference answers exactly what the direct spelling answers. The
+		// *content* of the two halves is this shell's answer to
+		// Semantics.NamePrefixListingExcludesTheExactName, which disagrees
+		// with ksh93u+ for a member that is itself a compound — `zz.n` is
+		// listed there — and disagrees identically for both spellings, which
+		// is the point of this row. See #3936.
+		{
+			"a prefix listing through the reference matches the direct one",
+			`typeset zz=(a=1 n=(y=7 z=8)); ` + ref +
+				`print -r -- "[${!c.n@}][${!zz.n@}]"`,
+			"[zz.n.y zz.n.z][zz.n.y zz.n.z]\n",
+		},
+		// The control for the prefix listing: a prefix with no dot in it is
+		// not a member path and must not be rewritten. It must not move.
+		{
+			"the control: a prefix listing on a plain name",
+			`foo=1; foobar=2; print -r -- "[${!foo@}]"`,
+			"[foobar]\n",
+		},
+		// And the one route measured and deliberately not taken, pinned at
+		// what this shell answers. ksh93u+ leaves `HI` — the letter lands on
+		// the target's member there and on a name called `c.b` here.
+		{
+			"not reached: an attribute letter over a member path",
+			`typeset zz=(a=1 b=2); ` + ref + `typeset -u c.b; c.b=hi; print -r -- "[${zz.b}]"`,
+			"[hi]\n",
+		},
 		// A member path through a reference aimed at an **element**, which
 		// the read half does follow: a member of the compound an element
 		// holds is the plain name `a[1].x`, so the join is the whole of it.

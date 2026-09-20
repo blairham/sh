@@ -111,12 +111,31 @@ func (r *Runner) namerefCompoundBodyTarget(name string) string {
 //	    ${e.x}   1 there, and 1 here now; empty before
 //	    e.x=9    ${a[1].x} is 9 there, and 9 here now; 1 before
 //
-// Applied at the two funnels every name passes through, [Runner.storedValue]
-// and [Runner.setVarAs], rather than at the member paths themselves. There is
-// no one member path: `${c.a}`, `${c.a:-D}`, `${#c.a}`, `c.a=1`, `c.a+=x`,
-// `typeset c.a` and `unset c.a` are all the plain name `c.a` by the time they
-// get here, which is exactly the economy that made members work in the first
-// place.
+// # Where it is applied, and what that does and does not reach
+//
+// At the funnels that decide **which name** an act is about, rather than at
+// the member paths themselves: [Runner.storedValue] for a read,
+// [Runner.setVarAs] for a write, [Runner.unsetName] for a removal, and the
+// prefix listing in Runner.expandSpan. Each of those already resolves a whole
+// name through a reference and could not see a dotted one.
+//
+// One call at the read funnel covers every operator, because there is no one
+// member path — they are all the plain name `c.a` by the time they get there.
+// Measured against ksh93u+ over `typeset zz=(a=1 b=2); typeset -n c=zz`, and
+// each of these was empty or wrong before:
+//
+//	${c.a} ${c.b}     1 and 2            ${c.a:-D} ${c.nope:-D}  1 and D
+//	${#c.a}           1                  ${c.a+SET}              SET
+//	c.a=99            ${zz.a} is 99      c.a+=x                  ${zz.a} is 1x
+//	unset c.a         ${zz.a} empty, ${zz.b} still 2
+//	${!c.@}           zz.a zz.b          ${c.a.y}, nested        7
+//
+// **One route is measured and deliberately not taken**: an attribute letter
+// over a member path. `typeset -u c.b; c.b=hi` leaves `${zz.b}` as `HI` in
+// ksh93u+ and `hi` here, so the letter lands on a name called `c.b` and the
+// value lands on `zz.b`. That is the declaration builtin's operand loop, which
+// takes a shadow and consults [Runner.attributeFollowsTheReference] before any
+// of this — a different mechanism from the four funnels above, and its own row.
 //
 // A leading dot is not a base — `${.sh.level}` and a `namespace` member both
 // begin with one — so the empty base is declined rather than walked.

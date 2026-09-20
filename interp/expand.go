@@ -1410,10 +1410,24 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// `${!prefix@}` and `${!prefix*}` yield the *names* that begin with the
 	// prefix, and the two spellings differ exactly as `$@` and `$*` do.
 	if e.Prefix != 0 {
-		names := r.namesWithPrefix(e.Name)
+		// The prefix itself goes through a reference where its base is one:
+		// `${!c.@}` over `typeset -n c=zz` lists `zz.a zz.b` in ksh93u+ and
+		// listed nothing here, because no name begins with `c.`. The rewrite
+		// is the prefix `c.` becoming `zz.`, which is the same split every
+		// other member path takes. See Runner.compoundMemberThroughAReference.
+		prefix := r.compoundMemberThroughAReference(e.Name)
+		names := r.namesWithPrefix(prefix)
 		if r.ask(r.sem().NamePrefixListingExcludesTheExactName,
 			"a prefix listing leaving out the name that is the prefix") {
-			names = withoutTheExactName(names, e.Name)
+			// The *resolved* prefix, so that the name left out is one of the
+			// names the listing could have held. Excluding the written `c.`
+			// from a list of `zz.…` would be excluding nothing — and where
+			// the prefix is a whole member, `${!c.n@}` would then answer
+			// something `${!zz.n@}` does not. Measured: with the written name
+			// here, the two spellings part on `zz.n`. What they agree on is
+			// not yet ksh93's answer either; that is #3936, and it is the
+			// same in both spellings, which is what this keeps true.
+			names = withoutTheExactName(names, prefix)
 		}
 		ifs, set := r.ifs()
 		if e.Prefix == '*' {

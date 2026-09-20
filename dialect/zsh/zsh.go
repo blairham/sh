@@ -1930,9 +1930,14 @@ func Semantics() interp.Semantics {
 	// And a subscript whose quotation never closes is still the key it
 	// looks like: measured 2026-09-20 on 5.9.2, `typeset -A a; k="q'r";
 	// a[$k]=4; let "++a[$k]"` leaves 5 under the three-character key, with
-	// ksh93u+ and against bash 5.3.20, which calls the subscript bad. The
-	// two axes are one mechanism and part here, which is what makes them
-	// two fields (#3796).
+	// ksh93u+ and against bash 5.3.20, which calls the subscript bad.
+	//
+	// Unreachable from this preset and answered anyway: no quoting is read
+	// inside a subscript here — syntax.Dialect.ArithSubscriptQuoting is off
+	// — so no scan has a quotation to give up on. Answered for the reason
+	// ArithWholeArraySubscriptIsReportedAsBad above is: an unanswered axis
+	// is a refusal, and a reading this dialect cannot reach must not be
+	// able to produce one (#3796).
 	s.ArithSubscriptQuotationMustClose = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.

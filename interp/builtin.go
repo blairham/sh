@@ -2954,6 +2954,12 @@ func (r *Runner) unsetName(name string) {
 		r.warnAboutACycle(name)
 	}
 	name = r.throughNameref(name)
+	// And a member path whose base is a reference, which that walk cannot see
+	// — it is keyed on whole names and `c.a` is not one of them. Measured:
+	// `typeset zz=(a=1 b=2); typeset -n c=zz; unset c.a` leaves `${zz.a}`
+	// empty and `${zz.b}` as 2 in ksh93u+, where this removed a name called
+	// `c.a` that nothing held. See Runner.compoundMemberThroughAReference.
+	name = r.compoundMemberThroughAReference(name)
 	// The `.unset` discipline runs *before* the name goes, which is measured
 	// rather than convenient: `u=here; function u.unset { echo "$u"; };
 	// unset u` prints `here` there, so the hook reads the value it is about

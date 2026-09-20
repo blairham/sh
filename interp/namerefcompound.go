@@ -57,12 +57,22 @@ import "strings"
 // resolves `e.x` to `a[1].x` — so `${a[1].x}` is 1 there and here. It is the
 // element's own value that is left behind.
 //
-// There is deliberately **no guard for that shape here**: one was written and
-// it is dead, which mutation testing is what said. Removing it changes no
-// answer, because the members reach the element through the member path below
-// whichever name this hands back, and the element's value is not written
-// either way. A guard that cannot change an answer is worse than none — it
-// reads as a decision somebody made.
+// There is deliberately **no guard for that shape here**, and mutation testing
+// says so twice over, from both sides:
+//
+//   - A guard that declines an element **in this function** is *wrong*. The
+//     member path below shares this rule, so declining here would take the
+//     element's members away with it — four rows of
+//     dialect/ksh/namerefcompoundbody_test.go fail.
+//   - A guard that declines an element **at the one call site that stores a
+//     body** is *dead*. Nothing moves: the members reach the element through
+//     the member path whichever name this hands back, and the element's own
+//     value is not written either way.
+//
+// So the shape has no guard anywhere, which is the fold paying for itself: one
+// rule cannot hold two answers, and the answer it holds is the one both
+// entry points want. A guard that cannot change an answer is worse than none —
+// it reads as a decision somebody made.
 func (r *Runner) namerefCompoundBodyTarget(name string) string {
 	if !r.isNameref(name) {
 		return name

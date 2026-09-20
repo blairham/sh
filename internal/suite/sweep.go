@@ -93,6 +93,16 @@ type Result struct {
 	// means copying the text. It is a lower bound and it is never more than
 	// Longest-Common.
 	Prose int
+	// Reordered is how many of the differing lines go away when order is
+	// ignored — see reorder.go. An associative array has no order a script
+	// can ask for, and the reference lists its keys in its own hash order,
+	// which is in nothing but the source CLEANROOM.md's red list covers.
+	//
+	// An **upper** bound where Prose is a lower one, and for a different
+	// reason: this is a per-side canonicalisation, so a line whose order is
+	// genuinely ours to get right is inside it too. It corrects neither of
+	// the other figures and nothing subtracts it.
+	Reordered int
 }
 
 // Cause is one reason our parser refused a file, and how many files it
@@ -184,6 +194,11 @@ type Report struct {
 	// so are not available to be written here at all. Zero for a column with
 	// no [Suite.SelfDoc], where the question was never put.
 	Prose int64
+	// Reordered is the sum of [Result.Reordered]: how many of this column's
+	// differing lines go away when order is ignored. See reorder.go — it is
+	// an upper bound on the floor an associative array's hash order puts
+	// under this column, and it corrects nothing.
+	Reordered int64
 
 	OracleHung    int
 	DialectHung   int
@@ -429,6 +444,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 				rep.Refused.Longest += int64(res.Longest)
 			}
 			rep.Prose += int64(res.Prose)
+			rep.Reordered += int64(res.Reordered)
 			for phrase, n := range res.Excuses {
 				excused[phrase] += n
 			}
@@ -580,6 +596,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	res.OurLines, res.RefLines = len(ourLines), len(refLines)
 	res.Common, res.Longest, res.LineCapped = agreement(ourLines, refLines)
 	res.Prose = min(doc.Attribute(ourLines, refLines), res.Longest-res.Common)
+	res.Reordered = reordered(ourLines, refLines, res.Longest-res.Common)
 	res.Excuses = excuses(ourLines, refLines)
 	return res, ""
 }
@@ -624,7 +641,14 @@ func repeats(ctx context.Context, s Suite, tests, name, reference string, opts O
 		return false, "the second run of the reference was killed on the timeout"
 	}
 	got := normalize(again.Output, reference, again.Dir)
-	if got == want && again.Status == status {
+	// Steady up to an order neither run was asked for. One shell disagreeing
+	// with *itself* about the sequence of an associative array's keys is not
+	// a fact about either shell, and it is what made `assoc.tests` report
+	// unstable — so the file scored nothing at all on about half of all runs,
+	// over three lines out of some two hundred. See reorder.go for why the
+	// same canonicalisation is sound here and is deliberately not applied to
+	// the comparison against our own run.
+	if again.Status == status && sameButForOrder(got, want) {
 		return true, ""
 	}
 	return false, difference(s, want, status, got, again.Status)

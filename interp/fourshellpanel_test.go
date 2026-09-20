@@ -196,11 +196,49 @@ import (
 // and BusyBox ash have no `typeset` and no C-style `for` — which is a
 // different answer from agreeing with the group they had been filed under.
 //
+// # The sixth pass, the first on semantics.go since the third, and three
+// kinds of line
+//
+// 2026-09-20, the same day as the fifth and on the other file: seven lines,
+// taking semantics.go from 14 to 7. They fall into
+// three kinds, and saying which is which is the point of the section, because
+// only one of them is a measurement:
+//
+//   - **Measured, and the count was a dialect short.**
+//     InteractiveMonitorNeedsATerminal said a shell with no terminal does not
+//     report a monitor in three of four. Measured with `<shell> -i case.sh`
+//     and no terminal on any descriptor, the script reading its own `$-`:
+//     dash, bash 5.3, bash-as-`sh`, bash 3.2, zsh 5.9.2 and BusyBox ash
+//     report no `m` and **ksh93u+ reports one** — six columns against one, and
+//     dialect/ksh has held No since the field was written. Its note in the
+//     POSIX preset carried the same count and is corrected with it.
+//     ExportTakesTheAttributeOff's count was right and its members were not
+//     named: `export -n x` is `Illegal option -n` at 2 in dash, `-n: unknown
+//     option` with a usage line at 2 in ksh93u+, and `bad option: -n` at 1 in
+//     zsh with the next command run. HeredocBody said `all four columns of
+//     the panel print the body`; re-measured, `sh -c 'cat <&3' 3<<X` writes
+//     both lines in **all seven**.
+//
+//   - **The surrounding prose already named the columns**, so the number was
+//     redundant and wrong at once. KillSendsASignalNumberItCannotName's
+//     `#3139 was the other three` is followed in the same sentence by `ksh93,
+//     zsh and ash`, and the `command -v` note's `in all four dialects` is
+//     followed by `bash, zsh, dash and ash` and `ksh93`. Both are now written
+//     with the names alone. No measurement is claimed for either, because
+//     none was needed and claiming one would be the worse error.
+//
+//   - **Not a claim about the panel at all.** StartupFileOptions' `bash has
+//     three of the four` counts the *four fields of the struct*, which is the
+//     same false-positive class that took syntax/dialect.go from eleven to
+//     zero. Reworded so it stops reading as a panel count, rather than added
+//     to fourShellNotAPanel: a blocklist entry hides the sentence from the
+//     guard and leaves it reading the same way to a person.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
-	"semantics.go":   14,
+	"semantics.go":   7,
 	"diagnostics.go": 17,
 	filepath.Join("..", "syntax", "dialect.go"): 0,
 }

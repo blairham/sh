@@ -19568,8 +19568,12 @@ type Semantics struct {
 	//
 	// The companion question, how many digits may stand *before* the
 	// operator, is the grammar's and has the opposite dissenter: bash and
-	// BusyBox ash read `exec 10>f` as a redirection where the other three
-	// run a command called `10` (Dialect.MultiDigitFdNumber). Two questions
+	// BusyBox ash read `exec 10>f` as a redirection where dash, ksh93 and
+	// zsh run a command called `10` (Dialect.MultiDigitFdNumber) —
+	// re-measured 2026-09-20 over all seven columns, and the three bash
+	// columns answer alike. The count was right and the members were not
+	// named, which is the difference between a reader checking it and a
+	// reader taking it. Two questions
 	// that split the panel the other way round cannot be one flag read from
 	// both ends — and they do not even split it into the same *sizes*: ash
 	// is with bash there and with everyone else here.

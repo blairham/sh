@@ -4712,9 +4712,29 @@ type Diagnostics struct {
 	// operator that was waiting, and %[4]d the line.
 	//
 	// Empty means the dialect says what it says about any token the grammar
-	// did not want, which is three of the four: `\`(' unexpected`, with
-	// nothing about the condition. bash is the exception and words it as a
-	// statement about the operator rather than about the token.
+	// did not want, and bash is the exception: it words this as a statement
+	// about the operator rather than about the token.
+	//
+	// Measured 2026-09-20 across all seven columns, `[[ -n ]]` and
+	// `[[ $k == (a|b) ]]` in a script file:
+	//
+	//	bash 5.3, bash-as-`sh`, bash 3.2   unexpected argument `]]' to
+	//	                                   conditional unary operator
+	//	ksh93u+                            `]]' unexpected — the ordinary
+	//	                                   token complaint, which is what
+	//	                                   empty gives it
+	//	zsh 5.9.2                          unknown condition: -n, and it
+	//	                                   takes `(a|b)` without complaint
+	//	dash 0.5.12                        `[[: not found`, 127
+	//	BusyBox ash 1.37.0                 status 0, and nothing said
+	//
+	// So **two dialects never reach this field**, and neither of them by
+	// agreeing with the group empty puts them in. dash has no `[[` at all.
+	// BusyBox ash has one, and it is a *builtin* rather than a grammar
+	// construct — `type [[` says `shell builtin`, `[[ p q ]]` answers
+	// `q: unknown operand`, which is its `[` complaint, and `[[ -n ]]` is
+	// simply true. A probe that only reads the status there sees a shell
+	// that accepted the construct.
 	CondOperand string
 
 	// ConditionExpected is what one dialect says about a `[[ ]]` whose words
@@ -4757,8 +4777,12 @@ type Diagnostics struct {
 	// and three-word groups their words say they are. `[[ ( p q r ) ]]` is
 	// the same again inside the parentheses.
 	//
-	// Empty is the other three columns, which name the token the parser
-	// stopped on and say nothing about conditions (#2846).
+	// Empty is every other dialect. bash's three columns and ksh93 name the
+	// token the parser stopped on and say nothing about conditions (#2846) —
+	// `[[ p q r ]]` is `syntax error near `q'` in bash and
+	// `` `q' unexpected `` in ksh93, measured 2026-09-20 — and dash and
+	// BusyBox ash never reach the question, for the reason CondOperand
+	// above records.
 	ConditionExpected string
 
 	// ConditionExpectedPrefixed is the other of that pair — the same
@@ -6766,7 +6790,15 @@ type Diagnostics struct {
 	// zsh's is the fallback because it is the one shell whose grammar has
 	// `${name::=word}`, the operator that reaches this question on every
 	// name. The conditional `${name:=word}` beside it is in every dialect,
-	// which is why the other three are filled in (#1541).
+	// which is why bash, ksh93 and dash are filled in (#1541).
+	//
+	// **And why BusyBox ash has to be and is not**, which is #3910: it is
+	// the fourth dialect that reaches the question, it writes dash's
+	// sentence, and it sets nothing — so this shell answers `${@:=abc}`
+	// there with zsh's `not an identifier: @` against BusyBox's
+	// `@: bad variable name`, re-measured 2026-09-20 over all seven columns.
+	// The table above had the measurement right for as long as the field has
+	// existed; what nobody did was put the value in the vector.
 	AssignThroughExpansionBadName string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string
@@ -7351,9 +7383,15 @@ type TestUnknownOperatorReport int
 const (
 	// TestUnknownOperatorCounted reads the word as an ordinary operand and
 	// reports the argument count when the expression runs out with words
-	// left over: bash 5.3, and the substrate's own. It is the answer that
-	// hides which word was the problem, and it is bash's, so it must not be
-	// swept up by a fix aimed at the other three.
+	// left over: bash 5.3 and bash-as-`sh`, and the substrate's own. It is
+	// the answer that hides which word was the problem, and it is 5.3's
+	// alone, so it must not be swept up by a fix aimed at the other five
+	// columns — bash 3.2 included, which is the row the table above is for.
+	//
+	// BusyBox ash is the column re-measured 2026-09-20 and it is in the
+	// middle group: `[ -Q x -a -n x ]` there is `x: unknown operand`,
+	// naming the *second* of the two words as ksh93 does, with a word of
+	// its own where ksh93 says `operator`.
 	TestUnknownOperatorCounted TestUnknownOperatorReport = iota
 	// TestUnknownOperatorLeavesAnOperand also declines to read the word as
 	// an operator, but complains about the *primary* rather than the count:

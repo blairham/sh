@@ -346,7 +346,12 @@ func (h historyFile) trim(ctx context.Context) error {
 	lines = lines[len(lines)-h.file:]
 
 	dir := filepath.Dir(h.path)
-	tmp, err := os.CreateTemp(dir, ".sh_history-")
+	// dir is the history file's own directory and is never empty, which is
+	// the whole of what this pattern guards against: os.TempDir is
+	// os.Getenv("TMPDIR"), and CreateTemp consults it only for an empty
+	// first argument. The rewrite has to land beside the file it replaces
+	// anyway, or the rename across filesystems fails.
+	tmp, err := os.CreateTemp(dir, ".sh_history-") //nolint:forbidigo // dir is never empty, so TMPDIR is not consulted
 	if err != nil {
 		return err
 	}

@@ -101,7 +101,12 @@ func (s Shell) blockCwd() string {
 	if s.Runner.Dir != "" {
 		return s.Runner.Dir
 	}
-	dir, err := os.Getwd()
+	// The fallback the comment above describes, and the one place this
+	// package asks the process where it is. Kept rather than removed: a
+	// Runner that was never given a directory is the case where the two
+	// answers agree, and returning nothing there would lose a block's cwd
+	// for every embedder who builds a Runner by hand.
+	dir, err := os.Getwd() //nolint:forbidigo // the Runner has no Dir, so the process's answer is the right one
 	if err != nil {
 		return ""
 	}

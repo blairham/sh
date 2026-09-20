@@ -352,7 +352,7 @@ import (
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
-	"semantics.go":   4,
+	"semantics.go":   3,
 	"diagnostics.go": 3,
 	filepath.Join("..", "syntax", "dialect.go"): 0,
 }

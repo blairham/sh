@@ -210,6 +210,24 @@ func TestASubstitutionsBodyIsListedThisShellsWay(t *testing.T) {
 			want: "f () \n{ \n    echo ${v-`a;b`}\n}\n",
 		},
 		{
+			// And the same operand carrying one of each, which is the row
+			// that can *fail*: the one above is guarded by the cheap test
+			// for a `$(` anywhere in the text, so it comes back unchanged
+			// whatever the splice would have done with it. Here the text
+			// passes that test and the spelling is what decides — measured
+			// on bash 5.3.20, the two come back `$(a; b)` and `` `c;d` ``.
+			name: "both spellings in one operand",
+			src:  "f() { echo ${v-$(a;b)`c;d`}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-$(a; b)`c;d`}\n}\n",
+		},
+		{
+			// And in the other order, so the backquoted one is not merely
+			// the tail the splice never reached.
+			name: "both spellings, the backquoted one first",
+			src:  "f() { echo ${v-`c;d`$(a;b)}; }\ndeclare -f f",
+			want: "f () \n{ \n    echo ${v-`c;d`$(a; b)}\n}\n",
+		},
+		{
 			name: "an arithmetic expansion inside an expansion is untouched",
 			src:  "f() { echo ${v-$((1+ 2))}; }\ndeclare -f f",
 			want: "f () \n{ \n    echo ${v-$((1+ 2))}\n}\n",

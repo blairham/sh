@@ -2448,6 +2448,64 @@ reference has to match what it captured, so that flavor has
 refuses `(ab)\1` outright — so it cannot be written on the engine every other
 flavor here already uses, and the last two rows say it is `G`'s alone.
 
+### `E` refuses the same two constructs by name, rather than answering no
+
+`E` is **shipped** rather than refused, so the engine underneath it shows
+through on any pattern RE2 cannot express — and until #3894 it showed through
+as a confident `no` at status 0. Measured on ksh93u+ 2012-08-01, 2026-09-20,
+`env -i PATH=/usr/bin:/bin LC_ALL=C` from a script file:
+
+| written | ksh93u+ | here, before | here, now |
+| --- | --- | --- | --- |
+| `[[ abab == ~(E)(ab)\1 ]]` | **matches** | no, silently, at 0 | refused at 1 |
+| `[[ abcd == ~(E)(ab)\1 ]]` | no | no, silently, at 0 | refused at 1 |
+| `[[ abc == ~(E)a(?=b)bc ]]` | **matches** | no, silently, at 0 | refused at 1 |
+| `[[ abc == ~(E)a(?!b)bc ]]` | no | no, silently, at 0 | refused at 1 |
+
+The second and fourth rows are the controls in the issue that filed this, and
+what they show is worth stating plainly: **they agreed by accident.** The
+pattern is the same unwritable one in each pair and only the subject differs,
+so the `no` was the compile failing rather than the backreference being read.
+Both refuse now, and a pair that agreed for the wrong reason becoming a pair
+that refuses is the honest form of the same answer.
+
+The refusal is the one `G` already gives — `<pattern>: the \1 backreference is
+not implemented` and `<pattern>: the (?= lookaround is not implemented`, at
+status 1, naming the construct where the letter refusal names the letter. The
+scan runs before the compile and reads what the *engine* would read, so a
+backslash behind a backslash and a `(?=` inside a bracket expression are
+ordinary text: `~(E)a[(?=]b` matches `a(b` here and there, and `~(E)a\\1b`
+matches `a\1b`. Refusing either would trade a silent wrong answer for a loud
+one, which is the only real risk the scan carries.
+
+`\1` is refused wherever the digit run continues, because Go reads `\12` as the
+**octal** escape for a newline where ksh93 reads a backreference and a `2` — the
+one spelling a narrower scan would let through is the one whose silence is
+hardest to see.
+
+### A `~(E)` pattern's backslashes are the expression's, and only one of them survives quote removal here
+
+The shell removes a quoting backslash before the pattern is a pattern, and
+ksh93 does not do that inside a `~(E)` group: the backslash reaches the
+regular-expression engine. Measured the same day:
+
+| written | ksh93u+ | here |
+| --- | --- | --- |
+| `[[ abc == ~(E)a\.c ]]` | no | **matches** |
+| `[[ a.c == ~(E)a\.c ]]` | matches | matches |
+| `[[ 5 == ~(E)\d ]]` | matches | **no** |
+| `[[ a+b == ~(E)a\+b ]]` | matches | **no** |
+| `[[ y == ~(E)\y ]]` | matches | matches |
+
+So ksh93's engine agrees with RE2 about `\d`, `\w`, `\s`, `\.` and `\+`, and
+parts from it on `\y` — a literal letter there and a pattern RE2 refuses
+outright. Passing every backslash through would fix the first four rows and
+break the fifth, so what is modeled is **only the digits**: a `\1` to `\9`
+keeps its backslash, because dropping it turns the pattern into the perfectly
+ordinary `(ab)1` and hides from the scan the one construct this shell has to
+name. The rest of the table is a divergence of its own and wants its own
+measurement.
+
 ### A regular expression matches a substring, and that reaches the matcher
 
 This is the one property of the construct that the rest of the matcher cannot

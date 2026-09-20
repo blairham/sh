@@ -109,6 +109,9 @@ import (
 //     than about matching a component.
 //   - `G`, `P`, `V` and `X`, for the reason given above: one of them needs
 //     backreferences, which the engine the others would use does not have.
+//   - A backreference or a lookaround inside an `E` pattern, for that same
+//     reason — and **refused by name** rather than left to answer a quiet
+//     `no`, which is what it did until #3894. See unsupportedERE.
 
 // tildeFlavor is the pattern language a `~(…)` prefix selects.
 type tildeFlavor uint8
@@ -243,6 +246,105 @@ func (m tildeModifier) tildeRegex(pattern string, whole bool) (*regexp.Regexp, b
 	return re, true
 }
 
+// unsupportedERE names the first construct in an ERE that the engine
+// underneath cannot express, and is empty for a pattern it can take whole.
+//
+// `E` is the one regular-expression flavor this shell answers and Go's
+// `regexp` is RE2, which has **no backreferences and no lookaround** —
+// `regexp.Compile` refuses `(ab)\1`, `(?=`, `(?!` and `(?<` outright. What
+// that refusal bought before this was a `false` out of tildeRegex, so
+// measured against ksh93u+ 2012-08-01 on 2026-09-20:
+//
+//	[[ abab == ~(E)(ab)\1 ]]    ksh93 yes, this shell a silent no at 0
+//	[[ abc == ~(E)a(?=b)bc ]]   ksh93 yes, this shell a silent no at 0
+//
+// A wrong answer in silence is the shape this repository minds most, and the
+// four letters #3186 refuses by name are the precedent for what to do
+// instead: say which construct, and stop. A script that halts honestly is a
+// script whose author can see the gap; one that reads `no` cannot.
+//
+// The scan is over what the **engine** would read rather than over the
+// characters, because the two differ in exactly the places that decide this:
+// a `\` behind another `\` is a literal backslash and the digit after it is
+// an ordinary digit, and inside a bracket expression `[(?=]` is three
+// ordinary characters. Refusing either would be refusing a pattern RE2
+// compiles and answers correctly, which trades a silent wrong answer for a
+// loud one (#3894).
+//
+// `\1` is refused wherever the digit run goes on, and that is deliberate
+// rather than a rounding: Go reads `\12` as the **octal** escape for a
+// newline where ksh93 reads a backreference followed by a `2`, so the one
+// spelling this scan would otherwise let through is the one whose silence is
+// hardest to see.
+//
+// Not covered, and left as it was: a pattern the engine refuses for some
+// other reason — `[\1]`, an unclosed group — still answers a quiet no. That
+// is the general "the compile failed" silence rather than a construct this
+// shell declines to have, and naming a construct is what this is for.
+func unsupportedERE(pattern string) string {
+	for i := 0; i < len(pattern); {
+		switch pattern[i] {
+		case '\\':
+			if i+1 >= len(pattern) {
+				return ""
+			}
+			if d := pattern[i+1]; d >= '1' && d <= '9' {
+				return `\` + string(d) + " backreference"
+			}
+			i += 2
+		case '[':
+			i = skipBracketExpression(pattern, i)
+		case '(':
+			for _, look := range []string{"(?=", "(?!", "(?<=", "(?<!"} {
+				if strings.HasPrefix(pattern[i:], look) {
+					return look + " lookaround"
+				}
+			}
+			i++
+		default:
+			i++
+		}
+	}
+	return ""
+}
+
+// skipBracketExpression returns the index just past the bracket expression
+// opening at i, and i+1 where the `[` opens none the engine would close.
+//
+// A `]` first in the set is a member and not the close, `^` may precede it,
+// and a `[:class:]`, `[.collating.]` or `[=equivalence=]` carries a `]` of its
+// own that does not end the set. An unterminated `[` is treated as the one
+// character it is, which leaves the rest of the pattern scanned rather than
+// skipped — the engine will refuse such a pattern anyway, and stopping the
+// scan there would be the one way this could miss a construct that follows.
+func skipBracketExpression(pattern string, i int) int {
+	j := i + 1
+	if j < len(pattern) && pattern[j] == '^' {
+		j++
+	}
+	if j < len(pattern) && pattern[j] == ']' {
+		j++
+	}
+	for j < len(pattern) {
+		switch {
+		case pattern[j] == '\\' && j+1 < len(pattern):
+			j += 2
+		case pattern[j] == '[' && j+1 < len(pattern) &&
+			(pattern[j+1] == ':' || pattern[j+1] == '.' || pattern[j+1] == '='):
+			k := strings.Index(pattern[j+2:], string(pattern[j+1])+"]")
+			if k < 0 {
+				return i + 1
+			}
+			j += 2 + k + 2
+		case pattern[j] == ']':
+			return j + 1
+		default:
+			j++
+		}
+	}
+	return i + 1
+}
+
 // matchTilde answers a pattern carrying a `~(…)` prefix.
 //
 // The anchors are asked about the *subject* and not about the piece, which is
@@ -289,14 +391,28 @@ func (r *Runner) tildeModifierOpts(o patternOpts, pattern string) patternOpts {
 		return o
 	}
 	o.tilde = true
-	body, _, ok := splitTildeModifier(pattern)
+	body, rest, ok := splitTildeModifier(pattern)
 	if !ok {
 		return o
 	}
-	if _, unhonored := readTildeModifier(body); unhonored != 0 {
+	m, unhonored := readTildeModifier(body)
+	if unhonored != 0 {
 		r.diagf("%s: the ~(%c) pattern modifier is not implemented\n", pattern, unhonored)
 		r.status = 1
 		r.stopTheShell()
+		return o
+	}
+	// The same refusal for a construct rather than a letter, and in the same
+	// place on purpose: this is the one route a `~(…)` pattern takes to the
+	// matcher, so a second scan somewhere nearer the compile would be a
+	// second thing to keep in step. See unsupportedERE for what is refused
+	// and why a silent `no` was the wrong answer (#3894).
+	if m.flavor == tildeERE {
+		if bad := unsupportedERE(rest); bad != "" {
+			r.diagf("%s: the %s is not implemented\n", pattern, bad)
+			r.status = 1
+			r.stopTheShell()
+		}
 	}
 	return o
 }

@@ -184,8 +184,17 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	// that separates a live `|` from a written one. See markWrittenBars.
 	var fromValue [][2]int
 	spans := r.patternTilde(w, &b)
+	// Whether the word is the one flavor whose backslashes belong to a
+	// regular-expression engine rather than to this matcher. See
+	// backreferenceDigit for the single escape that reading reaches.
+	ere := r.ereTildePattern(spans)
 	for i, s := range spans {
 		r.expandingSpan = i
+		if ere && backreferenceDigit(s) {
+			b.WriteByte('\\')
+			b.WriteString(s.Value)
+			continue
+		}
 		// A pattern operand reads its spans the way a word does, and the
 		// readers of a subscript in one are the same readers. Held here so a
 		// `case` arm or a trim's pattern costs one run of a substitution
@@ -285,6 +294,60 @@ func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
 	}
 	b.WriteString(pattern[last:])
 	return b.String()
+}
+
+// ereTildePattern reports whether these pattern spans open with a `~(…)`
+// group naming the one regular-expression flavor this shell answers.
+//
+// Read off the **source** rather than off the finished pattern, because the
+// thing it decides has to be decided while a backslash is still a backslash:
+// quote removal turns a written `\1` into the span `1`, and by the time the
+// pattern is a string the two are the same text. The group is literal,
+// unquoted and at the front of the word, so the first span holds all of it.
+// See unsupportedERE and #3894.
+func (r *Runner) ereTildePattern(spans []syntax.Span) bool {
+	if !r.dialect().TildeGroup || len(spans) == 0 {
+		return false
+	}
+	s := spans[0]
+	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+		return false
+	}
+	body, _, ok := splitTildeModifier(s.Value)
+	if !ok {
+		return false
+	}
+	m, unhonored := readTildeModifier(body)
+	return unhonored == 0 && m.flavor == tildeERE
+}
+
+// backreferenceDigit reports whether this span is an unquoted backslash before
+// one of the digits `1` to `9` — a **backreference**, in the one flavor whose
+// backslashes reach a regular-expression engine.
+//
+// The span kind is the whole of the reading: a backslash written in front of
+// a character is its own [syntax.Quoting] rather than text, which is what
+// makes the construct visible here and invisible one step later. Measured on
+// ksh93u+ 2012-08-01, 2026-09-20: `[[ abab == ~(E)(ab)\1 ]]` matches there,
+// and the digit is a backreference rather than the character `1` —
+// `[[ ab1 == ~(E)(ab)\1 ]]` does **not** match, where `~(E)(ab)1` does.
+//
+// This shell cannot answer that, because Go's `regexp` is RE2 and RE2 has no
+// backreferences, and it is refused by name for exactly that reason. So the
+// backslash is kept rather than removed: dropped, the pattern becomes the
+// perfectly ordinary `(ab)1`, which compiles, matches nothing here, and hides
+// the construct from the scan that would have named it (#3894).
+//
+// **Only the digits.** A `~(E)` pattern's other escapes — `\.`, `\d`, `\y` —
+// part company with quote removal in the same way and are left exactly as
+// they were, because RE2 and ksh93's engine do not agree about all of them:
+// both read `\d` as a digit class and `\.` as a literal dot, and ksh93 reads
+// `\y` as the letter where RE2 refuses the pattern outright. Passing every
+// backslash through would trade this silence for a new one on the letters.
+// That is a divergence of its own and wants its own measurement.
+func backreferenceDigit(s syntax.Span) bool {
+	return s.Kind == syntax.Literal && s.Quoting == syntax.BackslashQuoted &&
+		len(s.Value) == 1 && s.Value[0] >= '1' && s.Value[0] <= '9'
 }
 
 // patternTilde expands a leading tilde into the builder and gives back the

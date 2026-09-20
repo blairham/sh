@@ -2412,11 +2412,25 @@ type Diagnostics struct {
 
 	// JobDoneNotice replaces JobDone when the shell is *reporting* that a job
 	// ended, rather than listing one that has. Empty uses JobDone for both,
-	// which is what three of the four want. No verbs.
+	// which is what the other four dialects want. No verbs.
 	//
 	// ksh93 needs the two: it announces `Done` and then lists the same job
 	// as `Running`, because its listing has not noticed what its reaper
 	// already said. Two statements about one job, and both are ksh's.
+	//
+	// Measured 2026-09-20 across all seven columns, `sleep 0.2 &` and then a
+	// `jobs` after it has ended:
+	//
+	//	bash 5.3, bash-as-`sh`, bash 3.2   [1]+  Done       sleep 0.2
+	//	dash, BusyBox ash                  [1] + Done
+	//	ksh93u+                            [1] +  Running   <command unknown>
+	//	zsh 5.9.2                          nothing
+	//
+	// So the four that word it at all word it once, and only ksh93 needs a
+	// second word. zsh is not a fifth answer: it has forgotten the job by
+	// the time the listing runs, so it has nothing to say rather than a
+	// different thing to say — which is what JobDone's own comment means by
+	// the listing that reports a job being the listing that forgets it.
 	JobDoneNotice string
 
 	// JobExited replaces JobDone where the job ended with a non-zero status.
@@ -2458,7 +2472,14 @@ type Diagnostics struct {
 	// Four verbs: the number, the marker, the command, and the state word —
 	// see Runner.resumeState, which is what the fourth one is for.
 	//
-	// Empty prints the command alone, which is what three of the four do.
+	// Empty prints the command alone, which is what the other four dialects
+	// do — re-measured 2026-09-20 through a pseudo-terminal with `sleep 0.4
+	// &` and then `fg`: `sleep 0.4` in bash 5.3, bash-as-`sh`, dash and
+	// BusyBox ash, and `sleep 0.4 ` with a trailing space in ksh93u+. bash
+	// 3.2 declines job control on that arrangement and answers `fg: no job
+	// control`, so it is a column with no row rather than a column that
+	// agrees.
+	//
 	// zsh prints a listing row, and the state in it is **not** always the
 	// same word. Measured 2026-09-15 through a pseudo-terminal, zsh 5.9.2:
 	//
@@ -7135,10 +7156,14 @@ type Diagnostics struct {
 	// many the **session** has read, rather than restarting at 1 for every
 	// construct.
 	//
-	// dash alone, and only because it is the only one of the four that names
-	// a line at a prompt at all — the other three name none, for a parse
+	// dash alone, and only because it is the only column in the panel that
+	// names a line at a prompt at all — the other six name none, for a parse
 	// failure and for a command that was not found alike, so nothing they
-	// write could show a number either way. Measured 2026-09-12, three lines
+	// write could show a number either way. Re-measured 2026-09-20 over all
+	// seven, `if; then` and `nosuchcmd_zz` twice: `dash: 2: Syntax error` and
+	// `dash: 1:`/`dash: 2: … not found` against a bare `bash:`, `sh:`,
+	// `ksh:`, `zsh:` and BusyBox's `/bin/sh:` with no number anywhere.
+	// Measured 2026-09-12, three lines
 	// piped into each shell under `-i` with a scratch HOME:
 	//
 	//	echo one / if; then / echo three
@@ -7161,8 +7186,8 @@ type Diagnostics struct {
 	PromptBuiltinLocation LocationStyle
 
 	// The wordings below replace their unprefixed namesakes for a line typed
-	// at a prompt. Empty — the common answer, and every field for three of
-	// the four dialects — leaves the wording alone.
+	// at a prompt. Empty — the common answer, and every field for the other
+	// four dialects — leaves the wording alone.
 	//
 	// They exist for one shell and one rule: ksh93 writes the line **inside**
 	// its sentence rather than in the location, so a route that names no line
@@ -8152,10 +8177,11 @@ func (d Diagnostics) ForStdin() Diagnostics {
 // general one and wrote a line number no shell in the panel writes there
 // (#1892).
 //
-// Two things change, and the second is why this is not only a location. Three
-// of the four dialects write no line at a prompt, which PromptLocation says;
-// the one that writes the line inside its own sentence needs the sentence
-// replaced, which the Prompt wordings say.
+// Two things change, and the second is why this is not only a location. Every
+// dialect but dash writes no line at a prompt, which PromptLocation says — six
+// of the seven columns, re-measured 2026-09-20 — and the one that writes the
+// line inside its own sentence needs the sentence replaced, which the Prompt
+// wordings say.
 func (d Diagnostics) ForPrompt() Diagnostics {
 	if d.PromptLocation != LocationNone {
 		d.Location = d.PromptLocation

@@ -317,12 +317,43 @@ import (
 // That is the same discrimination LowercaseReason itself needed two passes
 // ago, rediscovered from the other side.
 //
+// # The ninth pass, and the two routes the corpus cannot reach
+//
+// 2026-09-20, five lines of diagnostics.go taking it from 9 to 4. Every
+// dialect value checked was right, so this pass is a corrected record — but
+// it is the first one whose probes are not `-c` and not a script file, and
+// that is the part worth keeping:
+//
+//   - **The prompt route wanted `-i` with the program on a pipe.** Three
+//     lines — PromptCountsTheSessionsLines, the Prompt wordings' preamble
+//     and ForPrompt's own — each said three of four write no line at a
+//     prompt. Six of the seven columns write none, and dash is alone:
+//     `dash: 2: Syntax error` and `dash: 1: … not found` against a bare
+//     `bash:`, `sh:`, `ksh:`, `zsh:` and BusyBox's `/bin/sh:` with no number
+//     anywhere, on a parse failure and a missing command alike.
+//   - **The job-control route wanted a pseudo-terminal**, and BusyBox ash
+//     wanted a container with one — `docker run -t`. JobDoneNotice's four
+//     columns that word a finished job word it once and only ksh93 needs a
+//     second word, which is measured by `jobs` *after* the job has ended:
+//     `Done` in bash's three columns, dash and ash, and `Running` in ksh93,
+//     which is the whole reason the field exists. zsh is not a fifth answer
+//     there — it has forgotten the job by the time the listing runs, so it
+//     has nothing to say rather than a different thing to say.
+//
+// JobResumedInForeground is the one where a column produced **no row at
+// all**, and saying so is the point: `sleep 0.4 &` then `fg` is `sleep 0.4`
+// in bash 5.3, bash-as-`sh`, dash and BusyBox ash and `sleep 0.4 ` in
+// ksh93u+, while **bash 3.2 declines job control on that arrangement** and
+// answers `fg: no job control`. A column that cannot be asked is not a
+// column that agreed, and rolling it into the count is how a four-shell
+// sentence gets written in the first place.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
 	"semantics.go":   4,
-	"diagnostics.go": 9,
+	"diagnostics.go": 4,
 	filepath.Join("..", "syntax", "dialect.go"): 0,
 }
 

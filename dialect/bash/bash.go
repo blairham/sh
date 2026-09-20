@@ -795,6 +795,13 @@ func Semantics() interp.Semantics {
 	// s=5` is `s=5: not found` at 1 with nothing stored — measured
 	// 2026-09-20 on bash 5.3.20. See interp/declareprintoperand.go.
 	s.DeclarePrintPerformsItsOperand = interp.DeclarePrintOperandIsDeclaredWhereItIsALiteral
+	// And the `-p` letter on `export` and `readonly` is inert once operands
+	// are written: measured 2026-09-20 on bash 5.3.20 and on bash 3.2.57,
+	// `export -p w=8` writes nothing and leaves `w` at 8 and exported, and
+	// `readonly -p u=9` writes nothing and freezes `u` at 9. The `n` letter
+	// beside it still works, so it is this one letter that does nothing and
+	// not the option word. See interp/exportprintoperand.go.
+	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintLetterIsInert
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes

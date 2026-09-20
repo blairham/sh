@@ -1754,6 +1754,26 @@ type Semantics struct {
 	// row, which is where the two columns cost a script different things.
 	ExportOrReadonlyTakesAReferenceToAnElement Answer
 
+	// ExportOrReadonlyPrintWithOperands is what the `-p` letter on those two
+	// builtins does once the line carries operands — `export -p s=5`,
+	// `readonly -p t`. Three readings: the letter is inert and the operands
+	// are declared (bash, ksh93, ash), the listing narrows to the operands
+	// and nothing is declared (zsh), or the whole-table listing runs and the
+	// operands are dropped (dash). See ExportPrintOperandPolicy and
+	// interp/exportprintoperand.go, which carries the measurements and the
+	// two controls that say the letter is *read* and then does nothing.
+	//
+	// Asked only where operands were written. `export -p` and `readonly -p`
+	// alone are the spelling every script writes and every column answers
+	// them alike.
+	//
+	// Not the same question as DeclarePrintPerformsItsOperand, which is what
+	// a listing does with an operand carrying a value and presupposes a
+	// listing: four columns have no listing here at all, and the same bash
+	// that refuses `declare -p s=5` as a missing name exports `s=5` without
+	// a word.
+	ExportOrReadonlyPrintWithOperands ExportPrintOperandPolicy
+
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other

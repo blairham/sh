@@ -612,6 +612,14 @@ func Semantics() interp.Semantics {
 	s.ReadonlyOptions = "p"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
+	// The `-p` letter wins outright here and the operands beside it are
+	// dropped — not listed, not looked at, and not declared. Measured
+	// 2026-09-20 on dash 0.5.12 over a script file, `export -p s` writes
+	// every exported name and not `s` alone, and `export -p w=8` writes the
+	// same whole listing and leaves `w` unset. `readonly -p` answers both
+	// ways the same. This is the one column of the panel that reads the
+	// letter that way. See interp/exportprintoperand.go.
+	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintDropsTheOperands
 	// dash single-quotes every listed value; it has no declare, so this
 	// style exists for the two -p listings alone.
 	//

@@ -3255,9 +3255,22 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		// the leading `export` word for the bare form alone. That split is
 		// recorded in the corpus and left for a dialect to answer; the
 		// listing every shell has is worth more than the silence it replaces.
-		form, dashP := r.bareOrDashP(opts, r.sem().ExportListing)
-		return r.declarePrintForm(args, form, dashP,
-			func(d declaration) bool { return d.exported })
+		//
+		// And an operand beside the letter is its own question, which this
+		// spelling used to answer by listing whatever was written — so
+		// `export -p w=8` listed a name called `w=8` and stored nothing,
+		// where bash and ksh93 export `w` without a word. See
+		// interp/exportprintoperand.go; a false second result is the reading
+		// that the letter is inert, and the declaration loop below runs.
+		names, lists := r.exportPrintWithOperands(args)
+		if r.unspecified {
+			return r.status
+		}
+		if lists {
+			form, dashP := r.bareOrDashP(opts, r.sem().ExportListing)
+			return r.declarePrintForm(names, form, dashP,
+				func(d declaration) bool { return d.exported })
+		}
 	}
 	args, status, ended := r.builtinNames("export", args, false)
 	if r.unspecified {
@@ -6493,15 +6506,28 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		}
 		return r.freezeFunctions(names)
 	}
-	if (strings.ContainsRune(opts, 'p') || opts == "" || opts == "n") && len(args) == 0 {
+	if strings.ContainsRune(opts, 'p') || ((opts == "" || opts == "n") && len(args) == 0) {
 		// The listing: readonly names alone, in the dialect's shape. `-p` and
 		// nothing at all list alike, which is the same rule `export` follows
 		// and is measured the same way. The `n` letter with no operand lists
 		// too rather than declaring nothing: measured 2026-09-18, a bare
 		// `readonly -n` writes the same frozen names a bare `readonly` does.
-		form, dashP := r.bareOrDashP(opts, r.sem().ReadonlyListing)
-		return r.declarePrintForm(nil, form, dashP,
-			func(d declaration) bool { return d.readonly })
+		//
+		// With operands beside the letter it is the axis `export` asks on the
+		// same line of reasoning — see interp/exportprintoperand.go. This
+		// builtin answered it by never listing, which is right in four
+		// columns and silently wrong in the two that do, and it is the half
+		// of #3904 that made the two words disagree here for a difference the
+		// panel does not have.
+		names, lists := r.exportPrintWithOperands(args)
+		if r.unspecified {
+			return r.status
+		}
+		if lists {
+			form, dashP := r.bareOrDashP(opts, r.sem().ReadonlyListing)
+			return r.declarePrintForm(names, form, dashP,
+				func(d declaration) bool { return d.readonly })
+		}
 	}
 	args, status, ended := r.builtinNames("readonly", args, false)
 	if r.unspecified {

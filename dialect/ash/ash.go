@@ -651,6 +651,14 @@ func Semantics() interp.Semantics {
 	s.ExportCarriesFunctions = interp.No
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
+	// The `-p` letter is inert once operands are written, which is bash's
+	// and ksh93's answer and not dash's — the shell this dialect is
+	// otherwise closest to. Measured 2026-09-20 on BusyBox ash v1.37.0 in
+	// the pinned image: `export -p w=8` writes nothing and leaves `w` at 8
+	// and exported, `readonly -p u=9` writes nothing and freezes `u` at 9,
+	// and `export -p nosuch` declares `nosuch` exported where dash declares
+	// nothing. See interp/exportprintoperand.go.
+	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintLetterIsInert
 	// Every listed value is single-quoted with an embedded quote doubled out:
 	// `v="quo'te"; set` writes `v='quo'"'"'te'`, and `alias` writes its
 	// bodies the same way.

@@ -221,7 +221,7 @@ func (p procSubPipe) waitAndFlush() {
 // of them and a parse failure is reported the same way: the word produces
 // nothing and the expansion is in error.
 func (r *Runner) substBody(span syntax.Span) (*syntax.File, bool) {
-	f, perr := syntax.Parse(span.Value, r.bodyDialect(span))
+	f, perr := syntax.Parse(r.substSource(span), r.bodyDialect(span))
 	if perr != nil {
 		r.diagf("%s\n", r.diag().ParseFailure(perr))
 		r.expandErr = true

@@ -37,6 +37,11 @@ type Remark struct {
 	// was waited for, or the first of two operators written with no blank
 	// between them.
 	Token string
+	// Count is how many constructs this remark is about, and it is filled in
+	// for [RemarkHeredocCarriedOut] alone: the shell that says anything
+	// about that one writes the number and makes its noun agree with it, and
+	// one remark per document would have said it once per document.
+	Count int
 	// Next is the second of two operators written with no blank between
 	// them, and is empty for every other kind. Two spellings are needed
 	// because the one shell that says this names both of them in the
@@ -80,6 +85,15 @@ const (
 	// at the parentheses — which is the shape this channel exists for. See
 	// Dialect.AliasAtAFunctionName.
 	RemarkFunctionNameIsAnAlias
+	// RemarkHeredocCarriedOut is a here-document a substitution's own text
+	// opened and could not feed, whose body the lexer holding the enclosing
+	// command went on to read from the lines after it. One shell says so and
+	// names how many were carried; one does it silently.
+	//
+	// Count is how many, and its two positions are the same one: where the
+	// substitution opened, which is the enclosing command's line. See
+	// [Dialect.HeredocBodyFromAfterTheCommand].
+	RemarkHeredocCarriedOut
 )
 
 func (k RemarkKind) String() string {
@@ -92,6 +106,8 @@ func (k RemarkKind) String() string {
 		return "RemarkOperatorsNotSeparated"
 	case RemarkFunctionNameIsAnAlias:
 		return "RemarkFunctionNameIsAnAlias"
+	case RemarkHeredocCarriedOut:
+		return "RemarkHeredocCarriedOut"
 	}
 	return "RemarkNone"
 }

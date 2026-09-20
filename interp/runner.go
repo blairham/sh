@@ -2872,6 +2872,12 @@ type Runner struct {
 	// base moved both and made the first one wrong.
 	expansionBodyLine int
 
+	// carriedHeredocs is the file being run's list of here-document bodies
+	// its lexer read for substitutions whose own text could not feed them.
+	// Empty in every dialect but the two that read a body that way; see
+	// syntax.File.CarriedHeredocs and Runner.substSource (#3711).
+	carriedHeredocs []syntax.CarriedHeredoc
+
 	// running is the command the shell is running, for a dialect with a
 	// parameter naming it — see RunningCommand.
 	running RunningCommand
@@ -4462,6 +4468,16 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	// is put back afterwards for a caller that drives a runner both ways.
 	outerInputLine := r.inputLine
 	defer func() { r.inputLine = outerInputLine }()
+	// The here-document bodies this file's lexer read for substitutions that
+	// could not feed their own, in the two dialects that read one that way.
+	// Set here and put back, so that a body running as a file of its own is
+	// matched against its own list and never against the list of the file
+	// that holds it — the positions are per file and would otherwise
+	// collide. See Runner.substSource and syntax.File.CarriedHeredocs
+	// (#3711).
+	outerCarried := r.carriedHeredocs
+	r.carriedHeredocs = f.CarriedHeredocs
+	defer func() { r.carriedHeredocs = outerCarried }()
 	for i, st := range f.Stmts {
 		if abandoned != 0 && r.lineOf(st.Pos()) <= abandoned {
 			// The rest of the line the last statement gave up on goes with

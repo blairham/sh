@@ -474,6 +474,11 @@ func Dialect() syntax.Dialect {
 	// See syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution for the panel
 	// (#3361).
 	d.HeredocBodyMustBeInsideTheSubstitution = true
+	// And the process substitution is not refused but *read*: `cat <(cat
+	// <<EOF)` with the body after it prints the body there, silently, which
+	// is bash 5.3's answer without bash's warning. Measured 2026-09-20; see
+	// syntax.Dialect.HeredocBodyFromAfterTheCommand (#3711).
+	d.HeredocBodyFromAfterTheCommand = syntax.HeredocBodyAfterProcessSubstitution
 	// And a body line that took a continuation is never the delimiter here,
 	// however it joined — which is the core answer and is written out because
 	// it is measured rather than inherited (#2430). The measured build also

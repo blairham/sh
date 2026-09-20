@@ -57,6 +57,38 @@ type File struct {
 	// and a pointer taken here would name the copy that was left behind.
 	// Nothing writes through them; the list is an index, not a second tree.
 	Substitutions []Span
+
+	// CarriedHeredocs are the substitutions on this file's lines whose own
+	// text opened a here-document it could not feed, and the operators whose
+	// bodies the lexer holding the *enclosing* command went on to read from
+	// the lines after it.
+	//
+	// Empty in every dialect but the two that read a body that way; see
+	// [Dialect.HeredocBodyFromAfterTheCommand] for the panel and
+	// [Lexer.carryHeredocsOut] for the seam. A list beside the tree rather
+	// than a field on [Span], and that is a **size** decision and not a
+	// design preference: a Span is 64 bytes, which is a Go size class, and a
+	// startup keeps 185,000 of them — a slice header on it costs 3MB of
+	// resident memory to carry a list that is empty on all but a handful.
+	// See TestTheTwoShapesATreeIsMadeOfStayWithinTheirBudget.
+	CarriedHeredocs []CarriedHeredoc
+}
+
+// CarriedHeredoc is one substitution's carried here-document operators.
+//
+// The elements are pointers into a tree nobody keeps, and deliberately: a
+// body lands in `Redirect.Heredoc` at the newline that ends the enclosing
+// command, which is after the span has been copied into the word holding it,
+// and reading through the pointer is what makes the hand-off work at all.
+// Nothing here writes to them.
+type CarriedHeredoc struct {
+	// At is where the substitution opened, which is what matches this to a
+	// span at expansion time — a position rather than a pointer, for the
+	// reason [File.Substitutions] holds spans rather than pointers.
+	At Pos
+	// Redirs are the operators, in the order the text opened them, which is
+	// the order their bodies follow the enclosing command in.
+	Redirs []*Redirect
 }
 
 func (f *File) Pos() Pos {

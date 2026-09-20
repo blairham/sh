@@ -1479,24 +1479,50 @@ The quoted token is the operator with the delimiter's quoting off. `<<-EOF`,
 `<<"EOF"` and `<<\EOF` are each `<<EOF`, a descriptor in front of the
 operator is not written, and `<<'E O F'` is `<<E O F` with its blanks.
 
-**bash's leg is not modeled**, and it is a parser capability rather than a
-dialect's answer: the body has to reach the *outer* lexer's pending queue
-from inside a span that has already closed, which is the cost
-`docs/spec/grammar/substitutions.md` declines under *when a substitution's
-body is read*. Written as one axis with three values, bash's would be a value
-no code produces — the decoration `make axis-sweep` exists to find — so it is
-a flag over the quiet reading plus an issue of its own (#3711).
+**bash's leg is modeled too**, and it is
+`syntax.Dialect.HeredocBodyFromAfterTheCommand` (#3711). It is a parser
+capability rather than a dialect's answer to a question — the body has to
+reach the *outer* lexer's pending queue from inside a span that has already
+closed, and then travel back to the parse that runs the body — but the
+detection half of it was already being done: `Lexer.parseToClose` builds a
+real sub-parser to find the `)` on every `$( )`, and what that parse leaves
+queued and unfed is exactly the set this is about. What was added is the
+delivery. The operators are queued on the *outer* lexer, so the following
+lines are read as their bodies rather than run as commands, and the bodies
+travel to the substitution on `syntax.File.CarriedHeredocs` as **text**,
+which is put back where the substitution's own text would have held it. Text
+and not a tree, because the body is re-read against the alias table as it
+stands when the substitution runs.
 
-**Two shapes are outside the rule, and both are measured rather than
-reasoned.** The backquoted spelling is accepted — `` `cat <<EOF` `` with the
-body after it gives the four-column answer, a body being unable to hold the
-mark that would close it. And `cat <(cat <<EOF)` is accepted too, where that
-shell reads the body from the lines after the enclosing command, which is
-bash's reading of the `$( )` shape and is the same unmodeled capability. The
-`${ cat <<EOF; }` spelling **is** refused there with the same sentence, and
-is the one row of this not taken: that body ends at a token start rather than
-where a list ends, so it is scanned rather than parsed and nothing at scan
-time knows a here-document was opened.
+The value is an **enumeration and not a bool**, and each of its three legs is
+a row nobody would have guessed:
+
+| column | `$( )` | `<( )` | backquoted |
+| --- | --- | --- | --- |
+| bash 5.3.20 | body, warned | body, warned | quiet reading |
+| bash 3.2.57 | quiet | quiet | quiet |
+| ksh93u+ | refused | body, **silent** | quiet |
+| zsh 5.9.2, dash 0.5.12, BusyBox ash | quiet | quiet | quiet |
+
+Measured 2026-09-20, same environment. So it is a **version line inside one
+lineage** rather than a name's answer — bash 3.2 is on the quiet side, the
+shape `SubstitutionBodyRead` already has; it is **per spelling**, since
+ksh93 reads `<( )` this way while refusing `$( )` outright; and the
+**backquoted spelling is outside it in every column**, where bash 5.3 writes
+the ordinary `RemarkHeredocAtEOF` warning instead and then reads quietly.
+
+The warning is a separate question again: bash names how many documents were
+carried and makes its noun agree with the number — `warning: command
+substitution: 1 unterminated here-document`, and `2 unterminated
+here-documents` for two — while ksh93 says nothing at all. That is
+`syntax.RemarkHeredocCarriedOut` with
+`interp.Diagnostics.HeredocCarriedOutOfSubstitution`.
+
+**One shape stays outside the rule**, and it is measured rather than
+reasoned. The `${ cat <<EOF; }` spelling **is** refused in ksh93 with the
+uncontained sentence, and is the one row of this not taken: that body ends at
+a token start rather than where a list ends, so it is scanned rather than
+parsed and nothing at scan time knows a here-document was opened.
 
 ## `<<<` is a redirection, not a heredoc
 

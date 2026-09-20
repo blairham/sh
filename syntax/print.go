@@ -40,7 +40,7 @@ func PrintFileWith(f *File, l Layout) string {
 	if f == nil {
 		return ""
 	}
-	p := printer{layout: l}
+	p := printer{layout: l, carried: f.CarriedHeredocs}
 	if l.FileFollowsTheSourceUnits {
 		p.units(f.Stmts)
 	} else {
@@ -551,6 +551,11 @@ type printer struct {
 	// heredocs are the bodies owed by the statement being written, which go
 	// after it rather than where the operator is.
 	heredocs []*Redirect
+	// carried is the file's here-document bodies that belong to a
+	// substitution rather than to a redirection of the command — see
+	// [File.CarriedHeredocs]. Empty for every dialect but the two that read a
+	// body from after the enclosing command.
+	carried []CarriedHeredoc
 	// consumed is the last source line a written here-document body reached,
 	// which is the one thing a statement's own End cannot say — see units,
 	// its only reader.
@@ -1908,6 +1913,28 @@ func explicitDupTarget(w *Word) bool {
 	return true
 }
 
+// queueCarriedHeredocs puts a substitution's carried here-document bodies back
+// on the enclosing statement's queue, so that the lines the outer lexer read
+// as bodies are written back after the command that holds them.
+//
+// Without it the printer drops them: those redirections are on no node of the
+// tree — the sub-parse that found them is thrown away — so nothing else in
+// the walk would ever reach them, and `echo $(cat <<EOF)` came back with its
+// body and its delimiter gone and a blank line where they had been. See
+// [File.CarriedHeredocs] and [Dialect.HeredocBodyFromAfterTheCommand].
+//
+// Matched on the span's own position, which is how the runner matches them
+// too. The list is empty in every dialect that reads a body from between the
+// parentheses, so this is a length check on all but a handful of files.
+func (p *printer) queueCarriedHeredocs(s Span) {
+	for _, c := range p.carried {
+		if c.At == s.Pos {
+			p.heredocs = append(p.heredocs, c.Redirs...)
+			return
+		}
+	}
+}
+
 // flushHeredocs writes the bodies queued by the statement just printed.
 //
 // Neither newline around a body is the printer's to assume, and assuming each
@@ -2103,6 +2130,7 @@ func (p *printer) quoted(q Quoting, spans []Span) {
 
 // span writes one span, without the quotes a run of them shares.
 func (p *printer) span(s Span) {
+	p.queueCarriedHeredocs(s)
 	switch s.Kind {
 	case CommandSubst:
 		if s.CurrentShell {

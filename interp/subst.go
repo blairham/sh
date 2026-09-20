@@ -610,6 +610,50 @@ func (r *Runner) spanLineBase(span syntax.Span) int {
 	return r.lineBase + r.substFragmentLine + int(span.Pos.Line) - 1
 }
 
+// substSource is a substitution's body text as the parse that runs it should
+// see it: its own text, and then any here-document bodies the *outer* lexer
+// read for it put back where its own text would have held them.
+//
+// The second half is empty in every dialect but the two that read a body that
+// way — see syntax.Span.CarriedHeredocs and
+// syntax.Dialect.HeredocBodyFromAfterTheCommand (#3711).
+//
+// Text rather than a tree, and that is the shape both callers were already
+// built on: the lexer's sub-parse throws its tree away and a body is re-read
+// against the alias table as it stands when the substitution runs, so a tree
+// carried out of the lexer would answer the wrong column for
+// `alias t=echo; v=$(t hi)`. Handing back the text costs one re-parse that
+// was happening anyway.
+//
+// A delimiter line of its own after each body, so that the re-parse sees a
+// here-document which closes. Where the body ended is a question the outer
+// lexer has already answered; this is not a second reader of it.
+func (r *Runner) substSource(span syntax.Span) string {
+	var carried []*syntax.Redirect
+	for _, c := range r.carriedHeredocs {
+		if c.At == span.Pos {
+			carried = c.Redirs
+			break
+		}
+	}
+	if len(carried) == 0 {
+		return span.Value
+	}
+	var b strings.Builder
+	b.WriteString(span.Value)
+	for _, rd := range carried {
+		b.WriteString("\n")
+		if rd.Heredoc != nil {
+			for _, sp := range rd.Heredoc.Spans {
+				b.WriteString(sp.Value)
+			}
+		}
+		b.WriteString(rd.Word.Literal())
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
 // readSubstBody parses a substitution's body and reports the refusal where
 // this shell reports one, answering the tree, the offset the body's own lines
 // are counted from, and whether it read at all.
@@ -639,6 +683,7 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 	// it twice in both — which leaves dash's alias row where it was and
 	// leaves bash's right. See
 	// `alias/nested-text-expands-where-the-command-string-did-not`.
+	src = r.substSource(span)
 	p := r.ParseWithAliases(src, r.bodyDialect(span))
 	if !span.Backquoted && span.Kind == syntax.CommandSubst {
 		// The text is the inside of a `$( )`, cut out of the script by the

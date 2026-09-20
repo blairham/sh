@@ -32,7 +32,7 @@ import (
 // not a usable one — its Indent is empty and its MaxBlankLines is zero — so a
 // caller with no dialect in hand wants [syntax.CoreStyle].
 func Format(src string, f *syntax.File, cs []comments.Comment, st syntax.Style) string {
-	p := &printer{src: src, comments: cs, style: st}
+	p := &printer{src: src, comments: cs, style: st, carried: f.CarriedHeredocs}
 	p.stmtList(f.Stmts, int(f.Last.Offset))
 	p.ownLineComments(len(src) + 1)
 	out := p.b.String()
@@ -90,7 +90,14 @@ type printer struct {
 	indent   int
 	lastLine int
 	heredocs []*syntax.Redirect
-	rawTail  bool
+	// carried is the file's here-document bodies that belong to a
+	// substitution rather than to a redirection of the command that holds
+	// it — see syntax.File.CarriedHeredocs.
+	carried []syntax.CarriedHeredoc
+	// claimed is which of those a command has already queued, by the
+	// substitution's own offset.
+	claimed map[int32]bool
+	rawTail bool
 	// commandStart is where the command now being printed begins, which is
 	// what tells a redirection written in front of it from one written after
 	// it. See Printer.command.
@@ -168,6 +175,48 @@ func (p *printer) node(n syntax.Node) {
 func (p *printer) pad() {
 	for range p.indent {
 		p.b.WriteString(p.style.Indent)
+	}
+}
+
+// queueCarriedHeredocs queues the bodies of here-documents a substitution
+// *inside* this command opened and could not feed — the ones the lexer holding
+// this command read from the lines after it.
+//
+// Those redirections are on no node of the tree: the sub-parse that found them
+// is thrown away, so the walk in verbatim and the queue in redirect both miss
+// them, and the body and its delimiter were written back as nothing at all.
+// They are matched by extent rather than by a walk for the same reason — there
+// is nothing in the command to walk to. See syntax.File.CarriedHeredocs and
+// syntax.Dialect.HeredocBodyFromAfterTheCommand.
+//
+// **Once per document, and by the innermost command that holds it.** An extent
+// match is not exclusive: the substitution in `if true; then echo $(cat <<EOF);
+// fi` is inside the `if` as well as inside the `echo`, so a queue on the way in
+// wrote the body twice — and where the `if` spans several lines the outer
+// command flushed it after the header rather than after the line the
+// substitution is on. Called from a defer, so the innermost command returns
+// first and claims it.
+//
+// The list is empty for every dialect that reads a body from between the
+// parentheses, so this is a length check on all but a handful of files.
+func (p *printer) queueCarriedHeredocs(c syntax.Command) {
+	if len(p.carried) == 0 {
+		return
+	}
+	start, end := c.Pos().Offset, c.End().Offset
+	for _, h := range p.carried {
+		if h.At.Offset < start || h.At.Offset >= end || p.claimed[h.At.Offset] {
+			continue
+		}
+		if p.claimed == nil {
+			p.claimed = map[int32]bool{}
+		}
+		p.claimed[h.At.Offset] = true
+		for _, r := range h.Redirs {
+			if r.Heredoc != nil {
+				p.heredocs = append(p.heredocs, r)
+			}
+		}
 	}
 }
 
@@ -412,6 +461,9 @@ func redirsOf(c syntax.Command) []*syntax.Redirect {
 }
 
 func (p *printer) command(c syntax.Command) {
+	// On the way *out*, so that the innermost command holding the
+	// substitution is the one that claims it — see queueCarriedHeredocs.
+	defer p.queueCarriedHeredocs(c)
 	// Redirections written in **front** of a compound command go back in
 	// front of it: two dialects take them there, and this pass owns only the
 	// space between tokens. The command's own start is what tells them from

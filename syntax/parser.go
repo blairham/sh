@@ -1112,6 +1112,7 @@ func (p *Parser) Parse() *File {
 		}
 		f.Stmts = append(f.Stmts, line.Stmts...)
 		f.Substitutions = append(f.Substitutions, line.Substitutions...)
+		f.CarriedHeredocs = append(f.CarriedHeredocs, line.CarriedHeredocs...)
 	}
 	f.Last = p.tok.Pos
 	if p.err == nil && f.Refused != nil {
@@ -1184,6 +1185,7 @@ func (p *Parser) NextLine() (*File, bool) {
 	f.Last = p.lineEnd()
 	f.Refused, p.refused = p.refused, nil
 	f.Substitutions, p.lineSubsts = p.lineSubsts, nil
+	f.CarriedHeredocs, p.lex.carried = p.lex.carried, nil
 	if p.err != nil {
 		// The line did not read, so none of it runs. That is this function's
 		// own rule — everything up to the newline is parsed before any of it

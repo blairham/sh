@@ -665,7 +665,10 @@ func (r *Runner) substSource(span syntax.Span) string {
 // second moment. See Runner.readLineSubstitutions and
 // syntax.Dialect.SubstitutionBodyRead (#2857).
 func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
-	src := span.Value
+	// The body's own text, and any here-document bodies read for it from the
+	// lines after the enclosing command — see substSource, which is span.Value
+	// in every dialect but the two that read a body that way.
+	src := r.substSource(span)
 	// The alias tables go on it, because a substitution's commands are
 	// commands: `alias t=echo; v=$(t hi)` leaves `hi` in v in every shell of
 	// the panel that expands aliases at all, and left it empty here (#2096).
@@ -683,7 +686,6 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 	// it twice in both — which leaves dash's alias row where it was and
 	// leaves bash's right. See
 	// `alias/nested-text-expands-where-the-command-string-did-not`.
-	src = r.substSource(span)
 	p := r.ParseWithAliases(src, r.bodyDialect(span))
 	if !span.Backquoted && span.Kind == syntax.CommandSubst {
 		// The text is the inside of a `$( )`, cut out of the script by the

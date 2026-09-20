@@ -21818,6 +21818,74 @@ route and not on the expansion one, which is
 error, and would mean holding the report until the construct flushes it
 at every one of the five sites that word a math failure.
 
+## A plain assignment with an empty subscript
+
+`a[]=6` is the same emptiness on the route a script is most likely to
+write it: an assignment statement, brackets and all, with nothing
+between them. Every shell that has arrays refuses it, and they refuse it
+in three different places.
+
+**`EmptySubscriptToAnAssignment`** — bash the command · zsh the script ·
+ksh93 unanswered (refused while reading) · dash, ash unanswered (no
+arrays)
+
+Measured 2026-09-20, a script file under `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with standard input on the null device, over
+
+    a=(1 2 3)
+    a[]=6; echo same-line
+    echo "st=$? a=(${a[@]})"
+    echo after
+
+    bash 5.3.20   a[]: bad array subscript, no `same-line`,
+                  st=1, a still (1 2 3), `after` runs
+    zsh 5.9.2     not an identifier: a[], and the script ends at 1
+    ksh93u+       syntax error at line 2: `[]' empty subscript, exit 3
+    dash, ash     no arrays: `a[]=6` is a command word, 127
+
+So bash gives up the command and its line and carries on, which is
+`BadSubscriptAbandonsTheCommand`, and zsh ends the script. The refusal
+itself is unanimous among the columns that reach the runtime at all, so
+the axis is the give-up policy and nothing more; the sentence is
+`Diagnostics.AssignEmptySubscript`, and the two wordings are each that
+shell's own — bash's is not the ``\`a[]': not a valid identifier`` it
+gives a *declaration* operand, and zsh's is the sentence its arithmetic
+write already uses.
+
+**ksh93 answers in the grammar, and that is measured rather than
+assumed.** `echo before`, `if false; then a[]=6; fi`, `echo after`
+writes `before`, then the syntax error, and exits 3 with no `after` — so
+the refusal reaches a branch that is never taken. bash and zsh both run
+that same script to the end in silence. It is therefore
+`syntax.Dialect.EmptyAssignSubscriptIsASyntaxError` there, and every
+subscript of the assignment is looked at and not only the last:
+`a[][2]=6` and `a[2][]=6` are refused with the same sentence. Being a
+parse answer is also why that column has no value for the runtime axis —
+nothing with empty brackets survives to reach it.
+
+**It is the *written* brackets.** `i=; a[$i]=6` is a subscript whose
+text expanded to nothing, which is `EmptyArithSubscript` one construct
+over and a different answer: bash and ksh93 write element zero there, at
+status 0, and zsh gives the arithmetic reader's `bad math expression:
+empty string`. `a[""]=6` is a subscript holding the empty string, and
+bash writes element zero for it too. Neither is this axis, and a rule
+that answered both would have taken those rows with it.
+
+The value is expanded before the refusal, which is measured: `a[]=$(echo
+SUBRAN >&2; echo v)` writes `SUBRAN` and then the complaint in both
+columns, so the right-hand side runs and only the store is refused. And
+the refusal stands in front of the freeze — `readonly r; r[]=6` is the
+subscript complaint in both and not `r: readonly variable`.
+
+Before this the parser dropped the brackets outright: the subscript came
+to no spans, and the node was the one a bare `a=6` produces. So the
+assignment wrote element **zero** in bash and ksh93 and replaced the
+whole array with a scalar in zsh, at status 0 with nothing said — a cell
+the script never named, changed silently, which is the same shape #3513
+answered for `read "a[$i]"` on a route that change did not cover
+(#3949). The declaration's own operand — `declare a[]=(x y)` — is
+refused as a bad *name* one question further out and is not this axis.
+
 ## A builtin's output operand: the brackets, and the word in front of them
 
 `read 'r[2]'` and `printf -v 'r[2]'` hand a builtin one word where a

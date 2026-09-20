@@ -40,6 +40,13 @@ func TestAnEmptyAssignmentSubscriptIsASyntaxError(t *testing.T) {
 			"syntax error at line 2: `[]' empty subscript",
 		},
 		{"f() { a[]=6; }\n", "syntax error at line 1: `[]' empty subscript"},
+		// Every link of a chain and not only the last, which this grammar
+		// is the only one to have: measured, both spellings get the same
+		// sentence.
+		{"a[][2]=6\n", "syntax error at line 1: `[]' empty subscript"},
+		{"a[2][]=6\n", "syntax error at line 1: `[]' empty subscript"},
+		// A prefix assignment carries the brackets too.
+		{"a[]=6 true\n", "syntax error at line 1: `[]' empty subscript"},
 	} {
 		_, err := syntax.Parse(tc.src, ksh.Dialect())
 		if err == nil {
@@ -82,6 +89,9 @@ func TestTheSubscriptsThatAreNotWrittenEmpty(t *testing.T) {
 		{`c=(1 2 3); c[""]=6; echo "st=$? c=[${c[@]}]"`, "st=0 c=[6 2 3]\n"},
 		{`e=(1 2 3); i=; e[$i]=6; echo "st=$? e=[${e[@]}]"`, "st=0 e=[6 2 3]\n"},
 		{`g=(1 2 3); g[0]=6; echo "st=$? g=[${g[@]}]"`, "st=0 g=[6 2 3]\n"},
+		// A chain whose links all hold something is the nesting this
+		// grammar is for, and it still parses.
+		{`h[1][2]=v; typeset -p h`, "typeset -a h=([1]=([2]=v) )\n"},
 	} {
 		out, st := runKsh(t, t.TempDir(), c.src)
 		if out != c.want || st != 0 {

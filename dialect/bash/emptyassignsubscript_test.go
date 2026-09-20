@@ -3,7 +3,10 @@
 
 package bash_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // `a[]=6` — a plain assignment whose brackets hold nothing at all — is
 // refused, the name is left exactly as it was, and the rest of the line is
@@ -95,5 +98,40 @@ func TestTheSubscriptsThatAreNotWrittenEmpty(t *testing.T) {
 		if out != c.want || st != 0 {
 			t.Errorf("%s = %q (status %d), want %q at 0", c.src, out, st, c.want)
 		}
+	}
+}
+
+// Two orderings around the refusal, each measured against bash 5.3.20 on
+// 2026-09-20 and each one a place the refusal could plausibly have gone
+// instead.
+func TestWhatIsAnsweredBeforeAnEmptyAssignmentSubscript(t *testing.T) {
+	// The right-hand side runs first and its value is thrown away, so only
+	// the store is refused: `SUBRAN` reaches standard error ahead of the
+	// complaint.
+	src := "a=(1 2 3); a[]=$(echo SUBRAN >&2; echo v)\n" + `echo "a=[${a[@]}]"`
+	want := "SUBRAN\nbash: line 1: a[]: bad array subscript\na=[1 2 3]\n"
+	if out, st := runBash(t, t.TempDir(), src); out != want || st != 0 {
+		t.Errorf("%s = %q (status %d), want %q at 0", src, out, st, want)
+	}
+	// And the brackets are answered in front of the **freeze**: a frozen
+	// name gets the subscript complaint and not `r: readonly variable`, and
+	// the freeze alone leaves the name unset, so nothing was written.
+	src = "readonly r\nr[]=6\n" + `echo "st=$? set=[${r+yes}]"`
+	want = "bash: line 2: r[]: bad array subscript\nst=1 set=[]\n"
+	if out, st := runBash(t, t.TempDir(), src); out != want || st != 0 {
+		t.Errorf("%s = %q (status %d), want %q at 0", src, out, st, want)
+	}
+}
+
+// A declaration utility's own operand is a question one construct further
+// out, and it must not pick up this sentence: bash refuses `declare a[]=(x
+// y)` as a bad **name** — “\`a[]': not a valid identifier“ — which is the
+// wording its `declare 'a[b c]'=v` neighbor already carries. Asserted for
+// what it is not, because the operand's own answer is not this issue's.
+func TestADeclarationOperandDoesNotTakeTheAssignmentSentence(t *testing.T) {
+	src := `declare a[]=(9 9)`
+	out, _ := runBash(t, t.TempDir(), src)
+	if strings.Contains(out, "bad array subscript") {
+		t.Errorf("%s = %q, want the declaration's own refusal and not the assignment's", src, out)
 	}
 }

@@ -5149,7 +5149,7 @@ func (r *Runner) substitutedWordText(w *syntax.Word) string {
 // fields and the message made of them with a space between — where zsh 5.9.2,
 // ksh93u+ and dash 0.5.12 all say `e: a:b:c`, the value. One spelling, two
 // readings, so it is an axis rather than a bug; this answers bash's, which is
-// the answer this shell already gave, and #TBD holds the other three.
+// the answer this shell already gave, and #3876 holds the other three.
 func (r *Runner) diagnosticWordText(w *syntax.Word) string {
 	defer r.withoutGlobbing()()
 	return r.joinWord(w)

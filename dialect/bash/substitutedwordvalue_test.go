@@ -57,7 +57,12 @@ func TestASubstitutedWordIsAValueAndJoinsLikeOne(t *testing.T) {
 // and the sentence made of them with a space between — where zsh 5.9.2,
 // ksh93u+ and dash 0.5.12 all say `e: a:b:c`, the value. One spelling, two
 // readings. This preset answers bash's, which is what it answered before the
-// assigning and default words stopped taking that route.
+// assigning and default words stopped taking that route. #3876 holds the
+// other three columns, which this shell answers wrongly in every dialect.
+//
+// The control is in the measurement rather than in a row: under the default
+// IFS the two readings coincide, because the first character is already the
+// space the other reading supplies. A probe that does not set IFS is a pin.
 func TestTheDiagnosticWordKeepsTheSpaceJoin(t *testing.T) {
 	out, st := runBash(t, t.TempDir(), `set -- 'a:b' c; IFS=:; echo ${e?$*}`)
 	if !strings.Contains(out, "e: a b c") {

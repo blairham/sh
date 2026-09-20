@@ -6,6 +6,7 @@ package interp_test
 import (
 	"testing"
 
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -14,6 +15,16 @@ import (
 func substitutedValues(d *syntax.Dialect) {
 	d.ArrayLiteral = true
 	d.ArraySubscript = true
+}
+
+// rejoinsOnASpace answers UnsplitAtListJoinsOnIFS with No: a list this engine
+// has taken the fields of, and then decided not to keep them, is rejoined
+// with a space rather than with IFS.
+//
+// Stated rather than inherited, because it is the axis these rows depend on
+// and the default answer hides what they are for — see the test below.
+func rejoinsOnASpace(r *interp.Runner) {
+	r.Semantics.UnsplitAtListJoinsOnIFS = interp.No
 }
 
 // The word a substitution substitutes is a **value** wherever nothing is
@@ -28,8 +39,14 @@ func substitutedValues(d *syntax.Dialect) {
 // `*`, so it rejoined with a space.
 //
 // Only `*` is here. What `$@` and `${a[@]}` rejoin as in the same position is
-// an axis the panel splits on, so it is asked where a dialect can answer it —
-// see the bash preset's own case.
+// UnsplitAtListJoinsOnIFS, an axis the panel splits on, so it is asked where a
+// dialect can answer it — see the bash preset's own case.
+//
+// **That axis is set here, and the rows about the default word cannot see
+// this fault without it.** Answered Yes, the rejoin these rows are about uses
+// IFS anyway and every one of them passes with the fix taken out — a pin, not
+// a test. rejoinsOnASpace is the answer two of the panel's columns give, and
+// it is what makes the space this fault left visible.
 func TestAStarInASubstitutedWordJoinsOnIFSWhereNothingIsSplit(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -104,7 +121,7 @@ func TestAStarInASubstitutedWordJoinsOnIFSWhereNothingIsSplit(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runGrammar(t, tc.src, substitutedValues, nil)
+			out, st := runGrammar(t, tc.src, substitutedValues, rejoinsOnASpace)
 			if out != tc.want || st != 0 {
 				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}

@@ -104,6 +104,21 @@ func TestAReferenceIsAimedAtACompoundMember(t *testing.T) {
 			`a=(p q); typeset -n e='a[1]'; print -r -- "[${e}]"`,
 			"[q]\n",
 		},
+		// The whole of the issue's case, which needs the store to follow
+		// the reference as well as the declaration to let it be aimed —
+		// #3914 landed that half in #3944, and this row is the two
+		// together. It is the line a script would write.
+		{
+			"a compound body through a reference aimed at a member",
+			"typeset zz=(x=0)\ntypeset -n c=zz.b\ntypeset c=(y=2)\n" +
+				`print -r -- "zz.b.y=[${zz.b.y}]"`,
+			"zz.b.y=[2]\n",
+		},
+		{
+			"and the target lists with the member the body made",
+			"typeset zz=(x=0)\ntypeset -n c=zz.b\ntypeset c=(y=2)\ntypeset -p zz",
+			"typeset -C zz=(b=(y=2;)x=0)\n",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -171,12 +186,6 @@ func TestAMemberPathIsRefusedForItsShapeAndForItsParentSeparately(t *testing.T) 
 // answers so that a later change to either is one somebody made on purpose.
 // Neither is ksh93u+'s answer.
 //
-//   - A **compound body** assigned through a reference aimed at a member:
-//     `typeset -n c=zz.b; typeset c=(y=2)` leaves `${zz.b.y}` as 2 there and
-//     empty here. That is the store following the reference, which is #3914's
-//     question and not the declaration's — the declaration is what this
-//     change lets through, and the body then lands wherever that rule sends
-//     it.
 //   - A **subscript on the member**: `typeset -n c='zz.x[1]'` reads the
 //     element there and nothing here. The path is admitted — the declaration
 //     is taken — and it is the read that does not follow the subscript
@@ -193,11 +202,6 @@ func TestWhatAimingAtAMemberDoesNotReach(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
-			"a compound body through a reference aimed at a member",
-			`typeset zz=(x=0); typeset -n c=zz.b; typeset c=(y=2); print -r -- "[${zz.b.y}]"`,
-			"[]\n",
-		},
-		{
 			"a subscript on the member the reference names",
 			`typeset zz=(x=(1 2)); typeset -n c='zz.x[1]'; print -r -- "[${c}]"`,
 			"[]\n",
@@ -208,6 +212,33 @@ func TestWhatAimingAtAMemberDoesNotReach(t *testing.T) {
 			out, status := answersRun(t, c.src)
 			if out != c.want || status != 0 {
 				t.Errorf("wrote %q at %d, want %q at 0", out, status, c.want)
+			}
+		})
+	}
+	// The `no parent` sentence is written at the **declaration** and nowhere
+	// else. ksh93u+ refuses the other aiming routes too, and in a different
+	// location form — `typeset -n c=qq.b` is `t.sh[1]: typeset: qq.b: no
+	// parent` against `typeset -n c; c=qq.x`'s `t.sh: line 1: qq.x: no
+	// parent` — so the two are not one sentence in two places and the
+	// location form is its own question. Those routes keep the refusal they
+	// already made: the wrong noun at the right status, unchanged by this.
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"an assignment aiming at a parentless member",
+			`typeset -n c; c=qq.x`,
+			"sh: `qq.x': not a valid identifier\n",
+		},
+		{
+			"a parentless member value adopted by the valueless form",
+			`c=qq.x; typeset -n c`,
+			"sh: typeset: qq.x: invalid variable name\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			out, status := answersRun(t, c.src)
+			if out != c.want || status != 1 {
+				t.Errorf("wrote %q at %d, want %q at 1", out, status, c.want)
 			}
 		})
 	}

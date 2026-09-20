@@ -799,6 +799,26 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 		defer r.withoutGlobbing()()
 		return escapeAll(r.expandWord(e.Arg)), true
 	}
+	if sp == splitNever {
+		// Nothing here is going to be split, so the word is a *value* and
+		// its own joins are the ones that decide it. That is not the same as
+		// the fields below joined with a space afterwards, and the two part
+		// company on `$*`: measured 2026-09-20 with `set -- 'a:b' c` under
+		// `IFS=:`, `w=${nope-$*}` is `a:b:c` in bash 5.3.20, bash 3.2.57,
+		// ksh93u+, zsh 5.9.2 and dash 0.5.12 alike, and was `a b c` here.
+		// The list joined on the first character of IFS in the shell that
+		// produced it, and this path threw that away by handing back the
+		// elements and letting joinUnsplit rejoin them under the *outer*
+		// node — which is not the `*` and so joins with a space.
+		//
+		// The unsplit expansion is the one an assignment's right-hand side
+		// already goes through, and it answers this where the answer
+		// belongs: `$*` joins on IFS there, `$@` and `${a[@]}` rejoin on the
+		// dialect's separator, and the nested node is the one consulted.
+		// Marks kept, because the caller decides whether they come off — a
+		// `[[ … ]]` operand that goes on to match needs them.
+		return r.tildeFlagFields(s, head, []string{r.wordTextGlobMarked(e.Arg)}), true
+	}
 	// Unquoted, so the word's own metacharacters are live and its quoted
 	// ones are not — which is a distinction only the marked form can carry,
 	// and expandWord drops it. Both halves of that were wrong against all
@@ -5100,7 +5120,37 @@ func (r *Runner) joinWord(w *syntax.Word) string {
 // where every shell in the panel keeps the text — and took the question away
 // from the axis that owns it (#1500). A diagnostic's word is the same shape:
 // `${u?X[a-b]y}` names the word, not the files it would have found.
+// A *value*, so the joins inside it are the ones the shell that produced the
+// list would make and not a space put in afterwards. Measured 2026-09-20 with
+// `set -- 'a:b' c` under `IFS=:`: `${u=$*}` stores `a:b:c` in bash 5.3.20,
+// bash 3.2.57, ksh93u+, zsh 5.9.2 and dash 0.5.12, and stored `a b c` here,
+// because the word was expanded into fields and those were joined with a
+// space. The unsplit expansion is the same one an assignment's right-hand
+// side goes through, and `$*` joins on IFS there.
+//
+// Its own globbing suspension is what the unsplit path already promises, so
+// the `withoutGlobbing` this used to hold is not lost with the joinWord it
+// guarded.
 func (r *Runner) substitutedWordText(w *syntax.Word) string {
+	if w == nil {
+		// `${x:=}` and `${x::=}` have no word at all, and the unsplit path
+		// takes a word rather than the absence of one. joinWord answered
+		// this by way of expandWord's own nil test; here it is said out loud.
+		return ""
+	}
+	return r.wordTextNoSplit(w, nil)
+}
+
+// diagnosticWordText is the text a `?` complains with, and it is **not**
+// substitutedWordText: the panel splits here where it agrees above.
+//
+// Measured 2026-09-20, `set -- 'a:b' c` under `IFS=:`, `${e?$*}` in a script
+// file: bash 5.3.20 and bash 3.2.57 say `e: a b c` — the word expanded into
+// fields and the message made of them with a space between — where zsh 5.9.2,
+// ksh93u+ and dash 0.5.12 all say `e: a:b:c`, the value. One spelling, two
+// readings, so it is an axis rather than a bug; this answers bash's, which is
+// the answer this shell already gave, and #TBD holds the other three.
+func (r *Runner) diagnosticWordText(w *syntax.Word) string {
 	defer r.withoutGlobbing()()
 	return r.joinWord(w)
 }
@@ -5780,7 +5830,7 @@ func escapeAll(in []string) []string {
 // decides differently how to say so — two of them have a phrase covering
 // both, one says only "not set" either way, and one tells them apart.
 func (r *Runner) paramErrorWord(e *syntax.ParamExpr, set bool) string {
-	if w := r.substitutedWordText(e.Arg); w != "" {
+	if w := r.diagnosticWordText(e.Arg); w != "" {
 		return w
 	}
 	const notSet = "parameter not set"

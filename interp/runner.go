@@ -3267,6 +3267,10 @@ type Runner struct {
 	// own operand assignments have landed — see interp/declareprintoperand.go,
 	// and Runner.assignOperands for why those run after the builtin at all.
 	heldListing heldListing
+	// heldTrace is this command's own `set -x` line, kept back until the
+	// compound-variable operand that stands in front of it has been
+	// performed — see interp/compoundoperandorder.go.
+	heldTrace heldTrace
 	// declarationOperands is where in the command's expanded words the
 	// `name=value` operands stand — the positions the expansion routed
 	// through Runner.expandAssignArg rather than through word expansion.
@@ -3660,6 +3664,12 @@ func (r *Runner) clone() *Runner {
 	// reading turns it on rather than inheriting it. See
 	// Runner.unsetEmptiesAnUnwrittenArray.
 	c.subshellWroteArrays, c.arraysAreAView, c.forkedForABackgroundJob = nil, false, false
+	// A trace line a command is holding back belongs to the shell holding
+	// it: a subshell cloned while one waits — `typeset c=(b=$(echo two))`
+	// makes one for the member's value — must not write its parent's line
+	// into the middle of the operand it is waiting for. See
+	// interp/compoundoperandorder.go.
+	c.heldTrace = heldTrace{}
 	// A subshell body is not running inside the frames the copy inherited.
 	c.funcFloor = c.depth
 	// A pending process substitution belongs to the command being built in
@@ -3817,12 +3827,14 @@ func (emptyReader) Read([]byte) (int, error) { return 0, io.EOF }
 // builtins writing through here could do anything with it at the site: the
 // dispatcher folds it into the command's status once the builtin returns.
 func (r *Runner) printf(format string, args ...any) {
+	r.releaseHeldTraceBeforeWriting()
 	if _, err := fmt.Fprintf(r.stdout(), format, args...); err != nil {
 		r.writeFailed = err
 	}
 }
 
 func (r *Runner) errf(format string, args ...any) {
+	r.releaseHeldTraceBeforeWriting()
 	if r.printfOut != nil && r.printfOut.hold(fmt.Sprintf(format, args...)) {
 		// A `printf` conversion is being formatted, and what it says waits
 		// for it: the output in front of it is released first, or the pass
@@ -5999,6 +6011,23 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 	}
 	r.expandArrayOperands()
+	holdsItsLine := r.holdsItsLineForACompoundOperand()
+	if holdsItsLine {
+		// A compound operand's members are performed in front of the command
+		// they are written on, so the command's own line waits for them.
+		// Saved and put back for the reason every field beside it is: a
+		// builtin can run another command, and its line is not this one's.
+		// The release here is the backstop — a command that never reaches
+		// its operand, because a redirection would not open, still writes
+		// the line it would have written. See
+		// interp/compoundoperandorder.go.
+		outerHeldTrace := r.heldTrace
+		r.heldTrace = heldTrace{}
+		defer func() {
+			r.flushHeldCommandTrace()
+			r.heldTrace = outerHeldTrace
+		}()
+	}
 
 	tracesPrefix := r.tracesItsPrefix(c.Assigns, argv)
 	prefixFollows := tracesPrefix && r.tracePrefixFollowsTheCommand(argv)
@@ -6602,6 +6631,27 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// refusal already reports 1 — see biDeclare's own check.
 				st = 1
 			}
+		}
+		// The command's own trace line, now that the compound operand written
+		// in front of it has been performed — and thrown away rather than
+		// written where that operand was refused, which is the column's own
+		// answer: `typeset -r c=(z=9); typeset c=(a=2)` is the refusal alone
+		// there, with neither the member's line nor the command's. Already
+		// gone where the utility itself wrote something, since anything it
+		// writes releases the line first. See
+		// interp/compoundoperandorder.go.
+		//
+		// Asked of the local rather than of r.heldTrace, because a line that
+		// is waiting is not necessarily *this* command's: a builtin run from
+		// inside one — `echo` in a member's `$( … )` — reaches here too, and
+		// releasing the held line there wrote it in front of the operand it
+		// was being held for and then again at the end.
+		switch {
+		case !holdsItsLine:
+		case r.assignFailed || r.ctl == controlExit:
+			r.dropHeldCommandTrace()
+		default:
+			r.flushHeldCommandTrace()
 		}
 		r.applyDeferredFreeze()
 		// The listing a `-p` declaration held back, now that its own operands
@@ -9397,6 +9447,12 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 // assignOperands applies the array assignments a declaration utility was given
 // as operands, which the parser kept apart from the prefix ones.
 func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
+	// The one thing that goes in *front* of a held command line rather than
+	// behind it, which is the whole of what holding it was for. See
+	// interp/compoundoperandorder.go.
+	auto := r.heldTrace.auto
+	r.heldTrace.auto = false
+	defer func() { r.heldTrace.auto = auto }()
 	for _, a := range c.Assigns {
 		if !a.Operand {
 			continue

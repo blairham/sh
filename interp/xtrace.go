@@ -360,11 +360,20 @@ func (r *Runner) traceCommand(words []string) {
 		// it was written. See interp/xtracearrayoperand.go.
 		r.traceLine(line, d)
 	}
-	r.errf("%s%s\n", r.tracePrefix(), strings.Join(r.traceCommandWords(words, d), " "))
+	tail := []string{r.tracePrefix() + strings.Join(r.traceCommandWords(words, d), " ") + "\n"}
 	for _, line := range r.traceOperandsAfter(words, d) {
 		// And the column that leaves them where they were writes them again
 		// behind it, for two utilities and no others.
-		r.traceLine(line, d)
+		tail = append(tail, r.traceLineText(line, d))
+	}
+	if r.holdCommandTrace(tail) {
+		// A compound-variable operand is performed in front of the command
+		// rather than behind it, so the command's own line waits for it. See
+		// interp/compoundoperandorder.go.
+		return
+	}
+	for _, line := range tail {
+		r.errf("%s", line)
 	}
 }
 
@@ -891,13 +900,20 @@ func (r *Runner) traceCaseArm(subject string, patterns []string) {
 }
 
 func (r *Runner) traceLine(line string, d Diagnostics) {
+	r.errf("%s", r.traceLineText(line, d))
+}
+
+// traceLineText is the text traceLine would write, without choosing a moment
+// for it. Split out because a line that is held has to be rendered where it
+// stands and written somewhere else — see interp/compoundoperandorder.go.
+func (r *Runner) traceLineText(line string, d Diagnostics) string {
 	if d.TraceStyle == TraceNameLine {
 		// zsh puts a space after an assignment-only line and nowhere else.
 		// Measured rather than reasoned about; it is decoration, and this
 		// records it rather than tidying it away.
 		line += " "
 	}
-	r.errf("%s%s\n", r.tracePrefix(), line)
+	return r.tracePrefix() + line + "\n"
 }
 
 // tracePrefix renders what comes before the command.

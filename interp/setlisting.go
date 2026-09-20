@@ -106,7 +106,7 @@ func (r *Runner) setListing() int {
 // clusters, bare dense elements in the one that reaches for `$'...'`.
 func (r *Runner) setListedValue(d declaration) string {
 	quote := func(v string) string {
-		return r.quoteListedValue(r.sem().SetListingQuoting, "`set`", v)
+		return r.quoteListedValue(r.sem().SetListingQuoting, "`set`", v, ListedValueAlone)
 	}
 	switch {
 	case d.isAssoc:
@@ -128,7 +128,7 @@ func (r *Runner) setListedArray(d declaration) string {
 	case DeclareListingClustered:
 		elems := make([]string, 0, len(d.arr))
 		for _, i := range d.arr.subscripts() {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i], ListedValueAlone)))
 		}
 		return "(" + strings.Join(elems, " ") + ")"
 	case DeclareListingExportSpelled:
@@ -144,7 +144,7 @@ func (r *Runner) setListedTable(d declaration, quote func(string) string) string
 		var b strings.Builder
 		b.WriteString("(")
 		for _, k := range d.assoc.keys() {
-			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.listedElement(d.assoc[k]) + " ")
+			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.listedElement(d.assoc[k], ListedValueAlone) + " ")
 		}
 		b.WriteString(")")
 		return b.String()
@@ -161,7 +161,7 @@ func (r *Runner) quotedArrayElems(d declaration) []string {
 	elems := r.readArray(d.arr)
 	quoted := make([]string, len(elems))
 	for i, v := range elems {
-		quoted[i] = r.declareQuoted(v)
+		quoted[i] = r.declareQuoted(v, ListedValueInAList)
 	}
 	return quoted
 }
@@ -170,7 +170,7 @@ func (r *Runner) quotedArrayElems(d declaration) []string {
 func (r *Runner) quotedTablePairs(d declaration, key func(string) string) []string {
 	pairs := make([]string, 0, len(d.assoc))
 	for _, k := range d.assoc.keys() {
-		pairs = append(pairs, "["+key(k)+"]="+r.listedElement(d.assoc[k]))
+		pairs = append(pairs, "["+key(k)+"]="+r.listedElement(d.assoc[k], ListedValueAlone))
 	}
 	return pairs
 }

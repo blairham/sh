@@ -502,7 +502,7 @@ func (r *Runner) compoundMemberListing(full string, last bool) string {
 		return ""
 	}
 	d.name = short
-	text := r.bareAssignmentDeclaration(d)
+	text := r.bareAssignmentDeclaration(d, ListedValueInAList)
 	if d.isArr || d.isAssoc || !last {
 		return text + ";"
 	}
@@ -583,7 +583,7 @@ func (r *Runner) compoundTreeInto(b *strings.Builder, name string, depth int) {
 			b.WriteString(pad + ")\n")
 			continue
 		}
-		b.WriteString(pad + r.bareAssignmentDeclaration(d) + "\n")
+		b.WriteString(pad + r.bareAssignmentDeclaration(d, ListedValueInAList) + "\n")
 	}
 }
 

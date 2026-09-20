@@ -201,7 +201,7 @@ func (r *Runner) AliasSentence(display, value string, kind AliasKind) string {
 		// One dialect quotes the body here the way its listing does, so
 		// `alias a='echo hi'` and `a is an alias for 'echo hi'` agree about
 		// what would have to be typed.
-		value = r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value)
+		value = r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value, ListedValueAlone)
 	}
 	return Wording(format, fallback, display, value)
 }
@@ -230,7 +230,7 @@ func (r *Runner) commandVAliasLine(display, value string, kind AliasKind) string
 		display = "-g " + display
 	}
 	return Wording(r.diag().CommandVAlias, "alias %[1]s=%[2]s", display,
-		r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value))
+		r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value, ListedValueAlone))
 }
 
 // LookupGlobalAlias answers only for the global kind, for the parser's other
@@ -1015,7 +1015,7 @@ func (r *Runner) aliasLine(name string, form aliasForm) string {
 		value = r.aliases[name].value
 	}
 	return prefix + r.listedAliasName(name) + "=" +
-		r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value)
+		r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value, ListedValueAlone)
 }
 
 // listedAliasName spells an alias's name for a listing that would define the
@@ -1040,7 +1040,7 @@ func (r *Runner) listedAliasName(name string) string {
 	if !r.ask(r.sem().AliasListingQuotesTheName, "an alias listing spelling a name that needs quoting") {
 		return name
 	}
-	return r.quoteListedValue(r.sem().AliasQuoting, "`alias`", name)
+	return r.quoteListedValue(r.sem().AliasQuoting, "`alias`", name, ListedValueAlone)
 }
 
 // ExpandingAlias is the parser's hook: what a name stands for when this shell

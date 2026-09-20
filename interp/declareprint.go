@@ -711,7 +711,7 @@ func (r *Runner) listedDeclaration(form DeclarationListingForm, d declaration) s
 	case DeclareListingExportSpelled:
 		return r.exportSpelledDeclaration(d)
 	case DeclareListingBareAssignments:
-		return r.bareAssignmentDeclaration(d)
+		return r.bareAssignmentDeclaration(d, ListedValueAlone)
 	case DeclareListingCommandWord:
 		return r.commandWordDeclaration(d)
 	case DeclareListingPlainAssignment:
@@ -784,7 +784,7 @@ func (r *Runner) plainAssignmentDeclaration(d declaration) string {
 // that shell's own `-p`, which is what this claims to be.
 func (r *Runner) listedDeclarationValue(d declaration) string {
 	if r.sem().DeclareListing == DeclareListingBareAssignments {
-		value, _ := r.bareAssignmentValue(d)
+		value, _ := r.bareAssignmentValue(d, ListedValueAlone)
 		return value
 	}
 	switch {
@@ -809,13 +809,15 @@ func (r *Runner) listedDeclarationValue(d declaration) string {
 		// and not in the number.
 		return r.listedInDecimal(d)
 	}
-	return r.declareQuoted(d.value)
+	return r.declareQuoted(d.value, ListedValueAlone)
 }
 
 // declareQuoted spells one listed value in the dialect's declaration style,
-// which its other listings do not decide.
-func (r *Runner) declareQuoted(v string) string {
-	return r.quoteListedValue(r.sem().DeclareValueQuoting, "`declare -p`", v)
+// which its other listings do not decide. Where the value stands is the
+// caller's to say — see ListedValuePlace, and listedAssignmentHead for the one
+// thing it changes.
+func (r *Runner) declareQuoted(v string, place ListedValuePlace) string {
+	return r.quoteListedValue(r.sem().DeclareValueQuoting, "`declare -p`", v, place)
 }
 
 // clusteredDeclaration is DeclareListingClustered — see the constant.
@@ -850,7 +852,7 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 			// Sorted keys are this implementation's choice: the shells
 			// promise no order at all, and a deterministic listing is worth
 			// having. See AssocArray.keys.
-			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.listedElement(d.assoc[k]) + " ")
+			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.listedElement(d.assoc[k], ListedValueAlone) + " ")
 		}
 		b.WriteString(")")
 		return b.String()
@@ -863,11 +865,11 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 		}
 		elems := make([]string, 0, len(d.arr))
 		for _, i := range d.arr.subscripts() {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i], ListedValueAlone)))
 		}
 		return head + "=(" + strings.Join(elems, " ") + ")"
 	case d.hasValue:
-		return head + "=" + r.declareQuoted(d.value)
+		return head + "=" + r.declareQuoted(d.value, ListedValueAlone)
 	}
 	return head
 }
@@ -1053,11 +1055,11 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		elems, _ := r.arrayElems(d.tied.array)
 		quoted := make([]string, len(elems))
 		for i, v := range elems {
-			quoted[i] = r.declareQuoted(v)
+			quoted[i] = r.declareQuoted(v, ListedValueInAList)
 		}
 		out := head + " " + d.tied.array + "=( " + strings.Join(quoted, " ") + " )"
 		if d.tied.sep != defaultTieSeparator {
-			out += " " + r.declareQuoted(d.tied.sep)
+			out += " " + r.declareQuoted(d.tied.sep, ListedValueAlone)
 		}
 		return out
 	}
@@ -1078,8 +1080,8 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 			// Keys never reach `$'...'` in this engine even where its values
 			// do, which is the trap listing's style rather than the alias
 			// one — measured, not assumed.
-			key := r.quoteListedValue(ListingQuoteWhenNeededPlain, "`typeset -p`", k)
-			pairs = append(pairs, "["+key+"]="+r.listedElement(d.assoc[k]))
+			key := r.quoteListedValue(ListingQuoteWhenNeededPlain, "`typeset -p`", k, ListedValueAlone)
+			pairs = append(pairs, "["+key+"]="+r.listedElement(d.assoc[k], ListedValueAlone))
 		}
 		return head + "=( " + strings.Join(pairs, " ") + " )"
 	case d.isArr:
@@ -1088,7 +1090,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		elems := r.readArray(d.arr)
 		quoted := make([]string, len(elems))
 		for i, v := range elems {
-			quoted[i] = r.declareQuoted(v)
+			quoted[i] = r.declareQuoted(v, ListedValueInAList)
 		}
 		return head + "=( " + strings.Join(quoted, " ") + " )"
 	case d.hasValue:
@@ -1098,7 +1100,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		// base from an `0x10`. What the *shell* holds is the based text —
 		// every read sees it and a child is told it — and only this listing
 		// writes the number.
-		return head + "=" + r.declareQuoted(r.listedInDecimal(d))
+		return head + "=" + r.declareQuoted(r.listedInDecimal(d), ListedValueAlone)
 	}
 	return head
 }
@@ -1109,7 +1111,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 // word* writes in this dialect — `g=([3]=x)` for a bare `export` and for
 // `typeset -a` — and a second spelling of them beside plainAssignmentDeclaration
 // is how the two would come to disagree about a gap or a based number.
-func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
+func (r *Runner) bareAssignmentValue(d declaration, place ListedValuePlace) (string, bool) {
 	switch {
 	case d.compoundVar:
 		// A compound's members are not in the declaration at all — they are
@@ -1170,7 +1172,7 @@ func (r *Runner) bareAssignmentValue(d declaration) (string, bool) {
 		// and is the part this change measured. The wider rule is #1271.
 		return d.value, true
 	case d.hasValue:
-		return r.declareQuoted(d.value), true
+		return r.declareQuoted(d.value, place), true
 	}
 	return "", false
 }
@@ -1188,7 +1190,7 @@ func (r *Runner) bareAssignmentElements(d declaration) ([]string, bool) {
 		pairs := make([]string, 0, len(d.assoc))
 		for _, k := range d.assoc.keys() {
 			// Keys quote the way values do here, `$'...'` included.
-			pairs = append(pairs, "["+r.declareQuoted(k)+"]="+r.listedElement(d.assoc[k]))
+			pairs = append(pairs, "["+r.declareQuoted(k, ListedValueAlone)+"]="+r.listedElement(d.assoc[k], ListedValueAlone))
 		}
 		return pairs, true
 	case d.isArr:
@@ -1207,9 +1209,9 @@ func (r *Runner) bareAssignmentElements(d declaration) ([]string, bool) {
 			// so does one the letter declared: `typeset -a c=()` is an
 			// empty array in that shell too.
 			if r.arrayHasGaps(d.arr) {
-				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i])))
+				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i], ListedValueAlone)))
 			} else {
-				elems = append(elems, r.listedElement(d.arr[i]))
+				elems = append(elems, r.listedElement(d.arr[i], ListedValueInAList))
 			}
 		}
 		return elems, true
@@ -1219,9 +1221,9 @@ func (r *Runner) bareAssignmentElements(d declaration) ([]string, bool) {
 
 // bareAssignmentDeclaration is DeclareListingBareAssignments — see the
 // constant.
-func (r *Runner) bareAssignmentDeclaration(d declaration) string {
+func (r *Runner) bareAssignmentDeclaration(d declaration, place ListedValuePlace) string {
 	flags := bareAssignmentFlags(d)
-	value, hasValue := r.bareAssignmentValue(d)
+	value, hasValue := r.bareAssignmentValue(d, place)
 	head := bareAssignmentHead(flags, d.name)
 	if len(flags) == 0 {
 		// No attributes: a bare assignment, with no command word at all. A

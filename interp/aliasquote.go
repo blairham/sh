@@ -107,10 +107,39 @@ func (a ListingQuotingStyle) String() string {
 	return "ListingQuotingUnspecified"
 }
 
+// ListedValuePlace says where a listed value stands, because the dialect that
+// writes a bare `name=` head writes that head's `=` differently inside a
+// parenthesized body than outside one. Every other question a listing asks is
+// about the value; this one is about the position, so it is a parameter rather
+// than a field of the value.
+type ListedValuePlace int
+
+const (
+	// ListedValueAlone is a value with nothing around it that could read it
+	// as an assignment: a scalar's own `=`, a key inside brackets, the value
+	// after a subscripted element's `]=`.
+	ListedValueAlone ListedValuePlace = iota
+
+	// ListedValueInAList is a value written as a **bare word inside
+	// parentheses** — an index array literal's element, a nested array's
+	// element, and the value half of a compound body's member. There a bare
+	// `name=` head would re-read as an element of its own, so the dialect
+	// that writes it bare backslashes the `=`.
+	ListedValueInAList
+)
+
+func (p ListedValuePlace) String() string {
+	if p == ListedValueInAList {
+		return "ListedValueInAList"
+	}
+	return "ListedValueAlone"
+}
+
 // quoteListedValue spells a value the way this dialect lists it back, in the
 // style the calling builtin uses. What is being listed is named so the
-// refusal can say which question went unanswered.
-func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) string {
+// refusal can say which question went unanswered, and where it stands decides
+// the one thing the style does not — see ListedValuePlace.
+func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string, place ListedValuePlace) string {
 	// A value that opens with `name=` is written with that much bare and the
 	// rest quoted on its own, in the one dialect that does it. Ahead of the
 	// styles rather than inside one, because the split is about the *value*
@@ -118,7 +147,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 	// on ksh93u+, `a=b` lists as `a=b`, `a=b c` as `a='b c'`, and a tail with
 	// a tab in it as `a=$'b\tc'`, which is the same three answers the style
 	// gives a whole value. See Semantics.ListedAssignmentPrefixIsBare.
-	if head, tail, split := r.listedAssignmentHead(v); split {
+	if head, tail, split := r.listedAssignmentHead(v, place); split {
 		if tail == "" {
 			return head
 		}
@@ -144,7 +173,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 // back as the value, which is what the listing is for; the rule that produces
 // the shell's own spelling there is not one three probes could state, and the
 // shapes it covers are keys and values no script writes.
-func (r *Runner) listedAssignmentHead(v string) (head, tail string, split bool) {
+func (r *Runner) listedAssignmentHead(v string, place ListedValuePlace) (head, tail string, split bool) {
 	if r.sem().ListedAssignmentPrefixIsBare != Yes {
 		return "", "", false
 	}
@@ -152,7 +181,37 @@ func (r *Runner) listedAssignmentHead(v string) (head, tail string, split bool) 
 	if eq <= 0 || !isNameLike(v[:eq]) {
 		return "", "", false
 	}
-	return v[:eq+1], v[eq+1:], true
+	sep := "="
+	if place == ListedValueInAList {
+		// Inside parentheses the head's `=` carries a backslash, and only
+		// there. Measured 2026-09-20 on ksh93u+ 2012-08-01, a script file
+		// under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on
+		// /dev/null, read through `sed -n l`:
+		//
+		//	typeset -a c=(a=1 b=2)       typeset -a c=(a\=1 b\=2)
+		//	typeset -a g=("a=1 b")       typeset -a g=(a\='1 b')
+		//	n1[0]=('a=1' x)              typeset -a n1=((a\=1 x) )
+		//	typeset -C co=(q='a=1')      typeset -C co=(q=a\=1)
+		//	typeset -a y=('a=1'); set    y=(a\=1)
+		//
+		// and the positions that do **not** take it, which are what says
+		// this is the bare-word position rather than the `=`:
+		//
+		//	v=a=1                        v=a=1
+		//	export v9='a=1'; export -p   export v9=a=1
+		//	typeset -A m=([k]='a=1')     typeset -A m=([k]=a=1)
+		//	typeset -A t=(['j=2']=v)     typeset -A t=([j=2]=v)
+		//	e=(x y z); unset 'e[1]'      typeset -a e=([0]=x [2]=z [5]=a=1)
+		//	  e[5]='a=1'
+		//
+		// The rule has a reason and the reason is the position: an index
+		// array's elements are written as bare words, so an unescaped `a=1`
+		// among them re-reads as the keyed element `[a]=1` — or, under the
+		// compound reading, as a body. A key inside brackets and a value
+		// after `]=` are already unambiguous and take no backslash (#3863).
+		sep = `\=`
+	}
+	return v[:eq] + sep, v[eq+1:], true
 }
 
 // quoteListedValueBody is the style's own answer, with no assignment head

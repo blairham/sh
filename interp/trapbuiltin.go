@@ -432,7 +432,7 @@ func (r *Runner) trapActionRefused(body string) (int, bool) {
 // which is not always the way its `alias` does: zsh writes a tab as `$'a\tb'`
 // in an alias and as a plainly quoted `'a<tab>b'` in a trap.
 func (r *Runner) quotedTrapAction(action string) string {
-	return r.quoteListedValue(r.sem().TrapQuoting, "`trap`", action)
+	return r.quoteListedValue(r.sem().TrapQuoting, "`trap`", action, ListedValueAlone)
 }
 
 // printedSignalName is how this dialect spells a signal when printing what

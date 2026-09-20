@@ -4672,6 +4672,34 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			if l.skipSubstitution() {
 				continue
 			}
+			if l.dialect.DollarSingleQuote && l.peekAt(1) == '\'' && (brace || q != DoubleQuoted) {
+				// `$'…'` is one construct and not a `$` beside a quote, so a
+				// backslash inside it quotes the byte behind it and the `'`
+				// that ends the run is the first *unescaped* one. Left to the
+				// `'` branch below — which reads a plain `'…'` run, where a
+				// backslash is ordinary — the run ends at the backslashed
+				// quote of `$'\''`, the quote after it opens a second run,
+				// and the scan walks off the end of the input: `echo
+				// ${x:-$'\''}` was fatal in every dialect while `'` alone
+				// printed, which is #3896.
+				//
+				// Measured 2026-09-20, `echo ${x:-$'\''}` prints `'` in bash
+				// 5.3.20, bash 3.2.57, zsh 5.9.2 and ksh93u+, and
+				// `echo ${x:-$'a}b'}` prints `a}b` in all four — so the run
+				// hides its `}` as well as its `\'`.
+				//
+				// Double-quoted is the case that is *not* this one, and it is
+				// measured rather than assumed: inside `"${…}"` the panel
+				// stops reading `$'` as a construct at all, and
+				// `echo "${x:-$'\''}"` is the literal `$'\''` in zsh 5.9.2
+				// and ksh93u+ — which is what the `'` branch below already
+				// produces through Dialect.QuoteProtectsTheClosingBrace. The
+				// command form keeps the construct, because its body is a
+				// program rather than an operand of the enclosing quote.
+				l.advance() // $
+				l.skipQuoted('\'', true)
+				continue
+			}
 			l.advance() // $
 			if !l.eof() && l.peek() == '{' {
 				depth++

@@ -314,7 +314,17 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	}
 	// The leading rows first and once — every redraw after this rewrites only
 	// the last row. See drawnPrompt.
-	e.write(prompt.lead + prompt.text)
+	var opening strings.Builder
+	opening.WriteString(prompt.lead)
+	opening.WriteString(prompt.text)
+	if writeRightPrompt(&opening, prompt, 0, e.cols()) {
+		// The carriage return writeRightPrompt ends with put the cursor back
+		// at column zero, and the line starts after the prompt.
+		opening.WriteString("\x1b[")
+		opening.WriteString(itoa(prompt.cells))
+		opening.WriteString("C")
+	}
+	e.write(opening.String())
 	e.promptDrawn(prompt)
 	if len(e.line) > 0 {
 		// A line that starts with something on it has to be drawn before the
@@ -805,6 +815,14 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	styled := e.styled()
 	b.WriteString(onScreen(styled))
 
+	// After the line and before the cursor is placed, because it is drawn
+	// from where the line ends and the placement below counts from column
+	// zero — which is where the carriage return inside it leaves the cursor.
+	// It draws nothing when it does not fit, and the erase above has already
+	// taken off whatever was there.
+	lineCells := cells(e.line)
+	drewRight := writeRightPrompt(&b, prompt, lineCells, cols)
+
 	curRow, curCol, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
 	if endCol == cols {
 		// The line ends exactly at the right-hand edge. A terminal does not
@@ -839,6 +857,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		prompt: prompt.text,
 		cells:  prompt.cells,
 		cols:   cols,
+		right:  drewRight,
 		row:    curRow, col: curCol,
 		endRow: endRow, endCol: endCol,
 	}
@@ -884,6 +903,27 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 		// what every shell shows and what toLastRow below needs anyway: the
 		// row it counts from is only accurate once the line has been drawn.
 		e.redraw(prompt)
+	}
+	// Off the row before anything else touches it, so a right prompt is not
+	// left in scrollback. This is the one thing zsh does that we do not, and
+	// rightprompt.go says why.
+	//
+	// **Before the trim rather than after**, and the ordering is the whole of
+	// the interaction between the two. A transient prompt erases to the end
+	// of the screen from the top of the prompt, so when one is configured it
+	// takes the right prompt with it and this writes a handful of redundant
+	// bytes on an accepted line. Doing it the other way round would be
+	// correct only for as long as trimPrompt keeps returning a prompt with no
+	// right half of its own — an implicit coupling between two features that
+	// have no other reason to know about each other. The bytes are the
+	// cheaper half of that trade.
+	if cols := e.cols(); cols > 0 {
+		_, curCol, _, _ := place(prompt.cells, e.line, e.pos, cols)
+		var erase strings.Builder
+		rightPromptErase(&erase, prompt, cells(e.line), cols, curCol)
+		if erase.Len() > 0 {
+			e.write(erase.String())
+		}
 	}
 	// The trim goes here: in front of toLastRow, and never between toLastRow
 	// and the mark that may follow it — markUnfinished pads a partial row

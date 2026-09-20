@@ -85,7 +85,7 @@ func (r *Runner) nestedLiteral(name string, elems []*syntax.ArrayElem) (Element,
 	if !ok {
 		return Element{}, false
 	}
-	built, ok := r.literalInto(name, Array{}, 0, parsed)
+	built, ok := r.literalInto(name, Array{}, 0, parsed, false)
 	if !ok {
 		return Element{}, false
 	}

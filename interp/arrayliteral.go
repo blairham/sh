@@ -324,7 +324,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 			a, next = r.appendedOverAScalar(name)
 		}
 	}
-	built, ok := r.literalInto(name, a, next, parsed)
+	built, ok := r.literalInto(name, a, next, parsed, true)
 	if !ok {
 		return
 	}
@@ -561,7 +561,25 @@ func (r *Runner) keyedLiteralOverAScalar(name string) {
 //
 // The second result is false where the placement was refused, in which case
 // the script has already been ended and nothing should be stored.
-func (r *Runner) literalInto(name string, a Array, next int, parsed []literalElem) (Array, bool) {
+func (r *Runner) literalInto(name string, a Array, next int, parsed []literalElem, folds bool) (Array, bool) {
+	// The positions this literal writes, which are not always every position
+	// the array ends up with: an *appending* literal is handed the elements
+	// the name is already holding and adds to them. The name's folding
+	// attributes reach what a write introduces and leave the rest alone —
+	// measured 2026-09-20, `b=(p q r); typeset -i b; b+=(7)` is `p q r 7` in
+	// bash 5.3.20 and was `0 0 0 7` here, because the fold used to be taken
+	// at the store over whatever array it was handed (#3888). See the loop
+	// at the end, and elementValueFolded, which is the same question the
+	// one-element spelling asks.
+	//
+	// **folds is false where the literal is not a write to this name.** A
+	// nested literal and a splice's word list are built through here too,
+	// and a nested literal's words are measurably not values the name's
+	// attribute reaches: `typeset -i a; a[1]=(5+5)` is
+	// `typeset -a -i a=([1]=(5+5) )` on ksh93u+, unevaluated, where the same
+	// attribute *arriving* over it folds to `([1]=(10) )`. The splice hands
+	// its words back to a store that asks for itself.
+	wrote := map[int]bool{}
 	for _, e := range parsed {
 		if e.members != nil && !e.subscripted {
 			// A compound variable's body standing where an element goes, at
@@ -572,7 +590,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			if !ok {
 				return nil, false
 			}
-			a[next] = value
+			a[next], wrote[next] = value, true
 			next++
 			continue
 		}
@@ -581,13 +599,13 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// built, wherever the next position is. Not spliced: that is the
 			// whole of what makes `a=( (1 2) (3 4) )` two elements rather
 			// than four, and `${a[1][0]}` reach the `3`.
-			a[next] = *e.nested
+			a[next], wrote[next] = *e.nested, true
 			next++
 			continue
 		}
 		if !e.subscripted {
 			for _, f := range e.fields {
-				a[next] = Scalar(f)
+				a[next], wrote[next] = Scalar(f), true
 				next++
 			}
 			continue
@@ -616,7 +634,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			if !ok {
 				return nil, false
 			}
-			a[pos] = value
+			a[pos], wrote[pos] = value, true
 			if pos >= next {
 				next = pos + 1
 			}
@@ -641,7 +659,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 					"%[1]s[%[2]s]: bad array subscript", name, e.sub, ""))
 				return nil, false
 			}
-			a[pos] = nestedAppended(a[pos], *e.nested, e.appendValue)
+			a[pos], wrote[pos] = nestedAppended(a[pos], *e.nested, e.appendValue), true
 			if pos >= next {
 				next = pos + 1
 			}
@@ -691,13 +709,37 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			}
 			value = v
 		}
-		a[pos] = Scalar(value)
+		a[pos], wrote[pos] = Scalar(value), true
 		// A bare element after a subscripted one continues from there rather
 		// than from where the count had reached: `a=(x [3]=y z)` puts z at 4.
 		// Measured in both shells that accept the mixture, and it follows the
 		// *written* subscript through the base, so the same literal fills the
 		// same positions whichever number the first element answers to.
 		next = pos + 1
+	}
+	// And what the name's attributes make of each value this literal put
+	// there. Here rather than at the store, which is handed the elements the
+	// name was already holding as well: a fold taken there re-read them, so
+	// one appended word zeroed an array of text under `typeset -i` (#3888).
+	//
+	// A nested array is passed over for the reason compoundElemsFolded gives:
+	// a literal's words are not the name's values on a *write*, measured
+	// `typeset -i a; a[1]=(5+5)` keeping `5+5` on ksh93u+ where the same
+	// attribute *arriving* over it folds.
+	if !folds {
+		return a, true
+	}
+	for pos := range wrote {
+		if a[pos].Nested != nil || a[pos].Kind == ElementHoldsACompound {
+			continue
+		}
+		v, ok := r.elementValueFolded(name, a[pos].scalar())
+		if !ok {
+			// The evaluation failed and has said so, or the axis went
+			// unanswered. Either way nothing is stored.
+			return nil, false
+		}
+		a[pos] = Scalar(v)
 	}
 	return a, true
 }

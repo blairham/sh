@@ -300,11 +300,19 @@ func (a Array) pastTheEnd() int {
 // a subscript and where one is read back — and not in the store, because
 // `a=(one two)` says nothing about which number the first element answers to
 // and must not have to ask.
+// Every element is a value this store is introducing — the name keeps none of
+// what it was holding — so this is one of the two places the name's folding
+// attributes reach a whole array at once. See compoundElemsFolded, and
+// storeArray, which does not ask.
 func (r *Runner) setArray(name string, elems []string) {
 	name = r.throughNameref(name)
 	a := make(Array, len(elems))
 	for i, v := range elems {
 		a[i] = Scalar(v)
+	}
+	a = r.compoundElemsFolded(name, a)
+	if r.unspecified {
+		return
 	}
 	r.storeArray(name, a)
 }
@@ -348,14 +356,18 @@ func (r *Runner) storeArray(name string, a Array) {
 	if r.unique[name] {
 		a = r.uniqueElems(a)
 	}
-	// And what the name's other attributes make of each element, for the
-	// same reason and at the same one place: a write is a write however it
-	// was spelled, so an element assignment, an append and a literal all
-	// come here and all fold. See compoundElemsFolded.
-	a = r.compoundElemsFolded(name, a)
-	if r.unspecified {
-		return
-	}
+	// What the name's other attributes make of an element is **not** asked
+	// here, and that is measured rather than tidied: the fold belongs to the
+	// value being written and never to the ones already standing. This used
+	// to fold every element of whatever array it was handed, so a write to
+	// one element re-read the rest — measured 2026-09-20, `b=(p q r);
+	// typeset -i b; b[0]=5` is `5 q r` in bash 5.3.20 and was `5 0 0` here,
+	// and `b+=(7)` left `0 0 0 7` for the same reason (#3888). The keyed
+	// spelling was right throughout, because setAssocElem folds the one
+	// value it writes and never walks the table — which is the shape the
+	// indexed side takes now. See elementValueFolded, which every element
+	// write goes through, and compoundElemsFolded, which is what a store
+	// replacing the whole name asks.
 	r.Arrays[name] = a
 	// And the members of a compound no element holds any more, which is the
 	// same one chokepoint reached from the other side: an element write

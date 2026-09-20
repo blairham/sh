@@ -156,6 +156,14 @@ func TestATypeLetterIsNotAPlainWordOverACompound(t *testing.T) {
 			s.TypesetLocalNeedsKeywordFunction = No
 			s.ScalarAssignedOverACompoundReplacesTheName = Yes
 			s.ScalarOverACompoundIsAnInconsistentType = inconsistent
+			// The letter is arriving over a name already holding an array,
+			// which is CompoundAttribute's question whether or not the same
+			// word carries a value — the valueless spelling always asked it
+			// and the valued one now does too (#3888). Answered with the
+			// reading that keeps the elements, because this row is about
+			// ScalarOverACompoundIsAnInconsistentType and an unanswered axis
+			// refuses before that one is reached.
+			s.CompoundAttribute = CompoundAttributeKeepsTheElements
 		}, Diagnostics{InconsistentType: "%s: inconsistent type for assignment"})
 	}
 	out, errs, st := run(`typeset -ga q=(a); typeset -gi q=4; typeset -p q; echo tail`, Yes)

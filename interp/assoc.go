@@ -659,7 +659,7 @@ func (r *Runner) indexArrayIntoATable(name string, parsed []literalElem, appendT
 	}
 	if r.tableBecomesAnIndexArray(name, appendTo) {
 		r.compoundKindEmptied(name, false)
-		if a, ok := r.literalInto(name, Array{}, 0, parsed); ok {
+		if a, ok := r.literalInto(name, Array{}, 0, parsed, true); ok {
 			r.storeArray(name, a)
 		}
 		return true

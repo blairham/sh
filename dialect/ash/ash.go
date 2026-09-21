@@ -1571,6 +1571,12 @@ func Semantics() interp.Semantics {
 	// the script here and is `not found` in dash. Inherited from the preset
 	// as `No` until now (#3248's class).
 	s.DotFallsBackToCurrentDirectory = interp.Yes
+	// And nothing takes it away, because there is no mode here to enter.
+	// This shell reaches SetPosixMode through the `sh` name, which is the
+	// only name BusyBox ash has, so the answer that leaves its reading
+	// alone is the one that matches the shell. Same shape as this
+	// dialect's DotWithNoOperandIsFatalInPosixMode.
+	s.DotFallsBackToCurrentDirectoryInPosixMode = interp.Yes
 	// Words after the filename become the sourced file's own positional
 	// parameters, and the caller's come back afterwards. This is the panel's
 	// six-to-one split rather than its sibling's answer: dash alone ignores

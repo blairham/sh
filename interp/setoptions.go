@@ -641,6 +641,8 @@ func (r *Runner) SetPosixMode(on bool) {
 	bareListing := r.posixSavedBareListing
 	badOption := r.posixSavedBadOption
 	dotNoOperand := r.posixSavedDotNoOperand
+	dotFallback, dotMissingFatal := r.posixSavedDotFallback, r.posixSavedDotMissingFatal
+	dotSearchOnly := false
 	badSetName, badSetLetter := r.posixSavedBadSetName, r.posixSavedBadSetLetter
 	assignPrefix := r.posixSavedAssignPrefix
 	aliasReserved := r.posixSavedAliasReserved
@@ -669,6 +671,39 @@ func (r *Runner) SetPosixMode(on bool) {
 		badOption = r.sem().BadOptionToSpecialBuiltinFatalInPosixMode
 		r.posixSavedDotNoOperand = r.sem().DotWithNoOperandIsFatal
 		dotNoOperand = r.sem().DotWithNoOperandIsFatalInPosixMode
+		// The two `.` axes that take the standard's own answer, measured
+		// 2026-09-21 under the `sh` name and under `set -o posix`.
+		//
+		// The current directory is not on the standard's search: POSIX gives
+		// `.` `$PATH` and nothing else, and bash drops the addition in the
+		// mode — `echo 'echo hi' > f; set -o posix; . f` reads the file
+		// under bash's own name and is `.: f: file not found` at 1 in the
+		// mode.
+		//
+		// Asked of the dialect rather than written in, because the other
+		// column with a fallback is BusyBox ash and ash has no POSIX mode to
+		// enter: it arrives here only because `sh` is the one name it has.
+		// See Semantics.DotFallsBackToCurrentDirectoryInPosixMode.
+		//
+		// Asked only of a shell that has a fallback to lose, which is the
+		// rule the listings above keep: the mode moves an answer and does
+		// not invent one, so the three columns that never look in the
+		// current directory are not handed an unanswered axis in place of
+		// their own No.
+		r.posixSavedDotFallback = r.sem().DotFallsBackToCurrentDirectory
+		dotFallback = r.posixSavedDotFallback
+		if dotFallback == Yes {
+			dotFallback = r.sem().DotFallsBackToCurrentDirectoryInPosixMode
+		}
+		dotSearchOnly = r.posixSavedDotFallback == Yes && dotFallback != Yes
+		// And a file it could not find ends a non-interactive shell, which
+		// POSIX requires and every column in the panel was measured to do
+		// under the `sh` name: bash 5.3.20, bash 3.2.57, dash 0.5.12 and
+		// zsh 5.9.2 all leave the line after the failed `.` unrun, where
+		// plain bash and plain zsh run it. dash, ksh93 and BusyBox ash
+		// already answer Yes outside the mode, so this moves bash and zsh.
+		r.posixSavedDotMissingFatal = r.sem().DotMissingFileFatal
+		dotMissingFatal = Yes
 		r.posixSavedFuncSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionName
 		funcSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionNameInPosixMode
 		r.posixSavedBadSetName = r.sem().BadSetOptionNameFatal
@@ -768,6 +803,15 @@ func (r *Runner) SetPosixMode(on bool) {
 		// declines to bind. Saved and restored the same way, since a script
 		// may enter the mode, define nothing, and leave it (#2987).
 		s.SpecialBuiltinNameIsNotAFunctionName = funcSpecial
+		// And the two about `.` reading a file, which move together because
+		// the mode's one change is what makes the other visible: with the
+		// current directory off the search there is nothing left for a bare
+		// operand but PATH, and a PATH miss is then the failure POSIX makes
+		// fatal. A shell that entered the mode with a file in the current
+		// directory sourced it and carried on; in the mode it finds nothing
+		// and the script ends.
+		s.DotFallsBackToCurrentDirectory = dotFallback
+		s.DotMissingFileFatal = dotMissingFatal
 		// The fifth, sixth and seventh, and the first the mode moves that
 		// are about what a builtin *writes* rather than about what ends a
 		// script. Measured 2026-09-12 on bash 5.3.15 and the 3.2.57 macOS
@@ -893,6 +937,7 @@ func (r *Runner) SetPosixMode(on bool) {
 		r.Dialect = &d
 	}
 	r.posixMode = on
+	r.posixDotSearchOnly = dotSearchOnly
 	// The standard has aliases expand in a script, so the mode turns the
 	// switch on and leaving it puts back the answer the *route* gave rather
 	// than whatever was set before entering — measured in bash 5.3, where

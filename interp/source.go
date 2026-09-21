@@ -1024,6 +1024,20 @@ func (r *Runner) resolveDotPath(name string, currentDirectoryFirst bool, search 
 			return name, candidate, nil
 		}
 	}
+	if r.posixDotSearchOnly {
+		// POSIX mode took the fallback away, so PATH was the whole of the
+		// search and the miss is a search miss — the sentence `-p` already
+		// reaches, and the one bash writes here. Measured 2026-09-21 on bash
+		// 5.3.20: `. notthere` is `notthere: No such file or directory`
+		// under bash's own name and `.: notthere: file not found` under
+		// `set -o posix`, with `source` naming itself in place of the dot.
+		//
+		// Gated on the fallback having been *taken away* rather than on the
+		// mode, so a shell that never had one keeps its own wording for a
+		// PATH miss: dash as `sh` still writes `.: notthere: not found`
+		// through Diagnostics.DotNotFound, which this route would step over.
+		return "", "", fmt.Errorf("%w", errNotOnSearchPath)
+	}
 	return "", "", fmt.Errorf("%w", errNotOnPath)
 }
 

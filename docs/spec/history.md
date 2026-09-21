@@ -1102,6 +1102,34 @@ nothing else. It carried a lister of its own for a while, which knew about no
 range, no `-n` and no `-r`, so `fc -l 1 2` reached the core and the core
 printed nothing.
 
+**`fc -R` reads a file under the encodings this dialect states**, which is
+the same decoder the session's own reader calls rather than a second reading
+of the same file. Both encodings are zsh's own — the `: <start>:<elapsed>;`
+header on the front of a command and the trailing backslash that joins a
+multi-line command across physical lines — and `fc -R` applied neither for as
+long as it split the text on newlines and put the pieces straight in the list
+(#4028). Measured 2026-09-21 on zsh 5.9.2, `env -i` with a scratch `HOME`,
+one file at a time through `HISTSIZE=100; fc -R f; fc -l 1`:
+
+| the file | the list |
+| --- | --- |
+| `echo one`, `for i in 1 2\`, `do\`, `echo $i\`, `done`, `echo two` | `echo one`, the loop as one entry, `echo two` |
+| `: 1700000000:0;echo a`, `: 1700000001:0;echo b` | `echo a`, `echo b` |
+| `echo a`, ``, `echo b` | all three, the blank an entry |
+| `: 1700000000:0;echo a`, `: 1700000001:0;` | `echo a`, and an empty entry |
+
+**The route the file arrives by does not change the answer.** Every shape
+above was read a second time through the file `$HISTFILE` names — under a
+pseudo-terminal, since that read happens at an interactive shell's startup
+and neither `-i -c` nor `-i` on a pipe reaches it — and zsh listed the same
+entries both ways. The header goes on the **first** physical line of a
+multi-line entry only, which is what `fc -W` writes and `fc -R` reads back:
+the entry is gathered across its continuation lines first and the header
+comes off what that produced, so the order inside the decoder is the file's
+own rather than a choice. The last row is what makes that visible — a header
+with nothing after it leaves an empty entry, which this dialect keeps because
+a blank line is an entry here (#4024).
+
 ### `cur`, and why the default range stops one short
 
 Call `cur` the history number of the `fc` command itself. It is the newest

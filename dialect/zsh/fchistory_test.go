@@ -4,11 +4,15 @@
 package zsh_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/dialecttest"
+	"github.com/blairham/sh/repl"
 )
 
 // `fc`'s file letters, measured 2026-09-12 against zsh 5.9.2 with a scratch
@@ -222,5 +226,117 @@ func TestFcLeavesEveryOtherLetterToTheCoreBuiltin(t *testing.T) {
 	// way it must not be this file's listing of an empty store.
 	if out == "    1  \n" {
 		t.Errorf("out = %q: the empty store was listed as an entry", out)
+	}
+}
+
+// `fc -R` reads a file under the encodings **this dialect states**, and the
+// three tests below are the three things a physical line can turn out to be.
+//
+// Measured 2026-09-21, zsh 5.9.2 at `/opt/homebrew/bin/zsh`, `env -i` with a
+// scratch `HOME`, each file read by `HISTSIZE=100; fc -R f; fc -l 1` — and
+// read again through the file `$HISTFILE` names, under a pseudo-terminal,
+// which answers every one of these shapes identically. So there is one answer
+// about the file rather than one per route, which is the whole point of #4028:
+// `fc -R` split the text on newlines and applied neither encoding, while the
+// session's reader applied both to the same file.
+//
+// A note about the listings below, so the expectations are not mistaken for a
+// second measurement: real zsh writes an entry's embedded newline as a literal
+// `\n` in `fc -l`, and this shell writes the newline itself, so the loop
+// spreads over four lines here and over one there. That is the *listing* and
+// not the load — the numbering is what says the loop is one entry — and it is
+// filed on its own.
+
+// A command stored across backslash-continued lines is one entry.
+func TestFcReadJoinsAContinuedCommandIntoOneEntry(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	file := "echo one\nfor i in 1 2\\\ndo\\\necho $i\\\ndone\necho two\n"
+	if err := os.WriteFile(filepath.Join(dir, "seed"), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := fcRun(t, dir, "fc -R seed\nfc -l 1\n")
+	want := "    1  echo one\n" +
+		"    2  for i in 1 2\ndo\necho $i\ndone\n" +
+		"    3  echo two\n"
+	if out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+}
+
+// An `EXTENDED_HISTORY` header is a time the shell wrote and not part of the
+// command, so it comes off the front.
+func TestFcReadTakesTheTimestampHeaderOffTheCommand(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	file := ": 1700000000:0;echo a\n: 1700000001:0;echo b\n"
+	if err := os.WriteFile(filepath.Join(dir, "seed"), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := fcRun(t, dir, "fc -R seed\nfc -l 1\n")
+	if want := "    1  echo a\n    2  echo b\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+}
+
+// And the decoder arriving on this route does not cost the blank line its
+// entry, which is the rule #4024 measured for this dialect.
+//
+// Two shapes in one case because they are one question asked twice: a line
+// with nothing on it is an entry, and so is a header with nothing after it —
+// the second only because the header comes off *before* anything looks at
+// what is left. A decoder that dropped empties first would answer the first
+// shape right and swallow the second.
+func TestFcReadKeepsABlankLineAndAHeaderWithNoCommand(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	file := "echo a\n\necho b\n: 1700000000:0;\n"
+	if err := os.WriteFile(filepath.Join(dir, "seed"), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := fcRun(t, dir, "fc -R seed\nfc -l 1\n")
+	want := "    1  echo a\n    2  \n    3  echo b\n    4  \n"
+	if out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+}
+
+// The route answers whatever the **one** decoder answers, which is the
+// assertion the three above cannot make.
+//
+// Each of those pins one rule, so a `fc -R` that spelled the rules out for
+// itself would pass all three for as long as its copy happened to agree — and
+// the way these go wrong is not a rule stated wrongly, it is a rule stated in
+// one place and missing from the other. That has now happened three times in
+// this tree: #4013 for the `#` time line, #4024 for the blank, and #4028 here
+// for both of this dialect's own encodings.
+//
+// So the expectation is computed from `repl.HistoryEntries` against this
+// dialect's own `HistoryStyle`, over a file holding every shape at once. A
+// route that decodes differently from the decoder fails whatever either of
+// them says, including on a rule added tomorrow that only one of them learns.
+func TestFcReadAnswersWhatTheOneDecoderAnswers(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	lines := []string{
+		": 1700000000:0;echo a",
+		"for i in 1 2\\",
+		"do\\",
+		"done",
+		"",
+		": 1700000001:0;echo b",
+		"echo c",
+	}
+	file := strings.Join(lines, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "seed"), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var want strings.Builder
+	for i, entry := range repl.HistoryEntries(zsh.HistoryStyle(), lines) {
+		fmt.Fprintf(&want, "%5d  %s\n", i+1, entry)
+	}
+	out, st := fcRun(t, dir, "fc -R seed\nfc -l 1\n")
+	if out != want.String() || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want.String())
 	}
 }

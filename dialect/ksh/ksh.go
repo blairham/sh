@@ -1444,6 +1444,13 @@ func Semantics() interp.Semantics {
 	// typeset -g q=(b)` is `q: is read only` at 1, where zsh replaces the
 	// scalar with an array and carries on.
 	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.No
+	// A declaration's value that came out as `( … )` stays the characters
+	// here. Measured 2026-09-21 under `env -i` on ksh93u+, `typeset -a
+	// a="(1 2)"` then `echo "n=${#a[@]} zero=[${a[0]}]"` is `n=1
+	// zero=[(1 2)]`, and `typeset -A m="([k]=v)"` lists as
+	// `typeset -A m=([0]='([k]=v)')` — one element holding the text, with no
+	// diagnostic either way (#2298).
+	s.DeclarationRereadsAParenthesizedValue = interp.No
 	// The letter half of the same rule, and the same answer — which is the
 	// column #2539 was filed not knowing, since the word `integer` is this
 	// shell's own and nothing had asked it. Measured 2026-09-12 under

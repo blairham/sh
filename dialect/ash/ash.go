@@ -1956,6 +1956,11 @@ func Semantics() interp.Semantics {
 	// utility and no array literal here either. Measured 2026-09-12 on
 	// BusyBox, `readonly q=1; typeset -g q=(b)` is `syntax error: unexpected
 	// "("` at 2 — the same wall dash meets, and for the same reason (#2250).
+	// unanswered DeclarationRereadsAParenthesizedValue: no declaration
+	// utility to hand a `( … )` value to either. Measured 2026-09-21 on
+	// BusyBox in the pinned image, `typeset -a a="(1 2)"` is `typeset: not
+	// found` and `readonly -a a="(1 2)"` is `readonly: unrecognized option`,
+	// which is the same wall dash meets (#2298).
 	// unanswered NumericTypeLetterRetypesAFrozenName: no numeric type letter
 	// either. Measured 2026-09-12 on BusyBox in a container, `typeset` is
 	// `not found` and `export -i q=4` is `illegal option -i` — the same two

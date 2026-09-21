@@ -6361,6 +6361,14 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			continue
 		}
 		switch {
+		case hasValue && r.arrayLiteralHiddenByQuoting(name, value, appends):
+			// `local -a q="(1 2)"` is the same operand `typeset -a q="(1 2)"`
+			// carries, and the word does not change what the text means —
+			// measured, bash leaves two elements under either spelling. Ahead
+			// of both stores below for the reason it is ahead of biDeclare's:
+			// they would put the characters in element 0. This builtin has a
+			// loop of its own, so the rule has to be asked in both places or
+			// the shell answers one spelling and not the other.
 		case hasValue && appends:
 			// `local a+=2` joins what the *local* is holding, which the
 			// shadow above has already made: with no outer value carried

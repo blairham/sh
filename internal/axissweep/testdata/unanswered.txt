@@ -84,6 +84,7 @@ ash   DebugTrapRefiresOnEnteringAFunction
 ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
+ash   DeclarationRereadsAParenthesizedValue
 ash   DeclarationThroughAReferenceNamesTheOperand
 ash   DeclareGlobalReachesPastALocal
 ash   DeclareHideInScopeLetter
@@ -342,6 +343,7 @@ dash  DebugTrapRefiresOnEnteringAFunction
 dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter
+dash  DeclarationRereadsAParenthesizedValue
 dash  DeclarationThroughAReferenceNamesTheOperand
 dash  DeclareGlobalReachesPastALocal
 dash  DeclareHideInScopeLetter
@@ -567,6 +569,7 @@ ksh   UnsetEndsTheProducedPipelineStatus
 
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
+zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ExportOrReadonlyTakesAReferenceToAnElement

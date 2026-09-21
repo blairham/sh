@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1194,11 +1195,18 @@ func historyWriteFile(r *interp.Runner, name string, entries []string, appendTo,
 		return 1
 	}
 	defer func() { _ = f.Close() }()
-	for _, entry := range entries {
-		if _, err := fmt.Fprintf(f, "%s\n", entry); err != nil {
-			historyFileComplaint(r, quiet, name, err)
-			return 1
-		}
+	// The encoder is `repl`'s, against this dialect's own HistoryStyle — the
+	// mirror of the decoder historyLoadLines reads with, and the same call
+	// the session's writer and `dialect/zsh`'s make. This dialect's file
+	// states no continuation, so what it writes is an entry and a newline
+	// exactly as it always was, and an entry holding a newline goes down as
+	// two physical lines and reads back as two: that is the shell's own
+	// answer and is measured, not a gap left here. Going through the one
+	// encoder is what stops the next fact about the file from landing in one
+	// writer and not the others (#4034).
+	if _, err := io.WriteString(f, repl.HistoryText(HistoryStyle(), entries)); err != nil {
+		historyFileComplaint(r, quiet, name, err)
+		return 1
 	}
 	return 0
 }

@@ -106,12 +106,47 @@ func TestDecodingAHistoryFile(t *testing.T) {
 			[]string{"echo one\n: 200:0;still the same entry"},
 		},
 		{
-			// A session killed mid-write, or a trim that cut inside an entry.
-			// What there is of it is an entry rather than nothing.
-			"a file ending mid-entry keeps what there is",
+			// A session killed mid-write, or a trim that cut inside an entry:
+			// the last line promised another and there is none, so the entry
+			// goes and what there was of it goes with it. This used to keep
+			// the half, which is the substrate's own answer and is not the
+			// one the dialect that reaches this rule gives (#4033).
+			"a file ending mid-entry keeps nothing of it",
 			continued,
 			[]string{"echo one", `echo half\`},
-			[]string{"echo one", "echo half"},
+			[]string{"echo one"},
+		},
+		{
+			// And a file that is nothing else holds nothing at all.
+			"a file of one dangling continuation is empty",
+			continued,
+			[]string{`echo half\`},
+			nil,
+		},
+		{
+			// The encoder's guard coming back off: an entry whose own last
+			// character is a backslash is written with a space after it, so
+			// that this newline is not a promise. Exactly one space, and
+			// only where a backslash is in front of it — see HistoryText.
+			"a backslash and one space is a backslash",
+			continued,
+			[]string{`echo x\ `, "echo tail"},
+			[]string{`echo x\`, "echo tail"},
+		},
+		{
+			"one of two spaces after a backslash comes off",
+			continued,
+			[]string{`echo x\  `},
+			[]string{`echo x\ `},
+		},
+		{
+			// And a trailing space with no backslash in front of it is the
+			// command's own, which is what says the rule is the guard's and
+			// not a trim.
+			"a trailing space with no backslash stays",
+			continued,
+			[]string{"echo a  "},
+			[]string{"echo a  "},
 		},
 		{
 			// A file that says entries do not continue reads the backslash as
@@ -201,7 +236,7 @@ func TestDecodingAHistoryFile(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := decodeEntries(tc.in, tc.enc)
+			got := decodeEntries(tc.in, tc.enc, true)
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("decoded %q, want %q", got, tc.want)
 			}
@@ -213,34 +248,34 @@ func TestDecodingAHistoryFile(t *testing.T) {
 // entries may continue. Each answer moves on its own.
 func TestEachEncodingAnswerMovesOnItsOwn(t *testing.T) {
 	stamped := []string{": 100:0;echo one"}
-	if got := decodeEntries(stamped, plainFile); !slices.Equal(got, stamped) {
+	if got := decodeEntries(stamped, plainFile, true); !slices.Equal(got, stamped) {
 		t.Errorf("decoded %q with no timestamp answer, want it left alone", got)
 	}
-	if got, want := decodeEntries(stamped, stampedOnly), []string{"echo one"}; !slices.Equal(got, want) {
+	if got, want := decodeEntries(stamped, stampedOnly, true), []string{"echo one"}; !slices.Equal(got, want) {
 		t.Errorf("decoded %q, want %q", got, want)
 	}
 	joined := []string{`echo one\`, "two"}
-	if got := decodeEntries(joined, stampedOnly); !slices.Equal(got, joined) {
+	if got := decodeEntries(joined, stampedOnly, true); !slices.Equal(got, joined) {
 		t.Errorf("decoded %q with no continuation answer, want it left alone", got)
 	}
 	// The third answer likewise: a file of `#` time lines is a file of
 	// commands beginning with `#` to anything that was not told otherwise,
 	// and the other two answers do not imply it.
 	hashed := []string{"#100", "echo one"}
-	if got := decodeEntries(hashed, zshLikeFile); !slices.Equal(got, hashed) {
+	if got := decodeEntries(hashed, zshLikeFile, true); !slices.Equal(got, hashed) {
 		t.Errorf("decoded %q with no hash answer, want it left alone", got)
 	}
-	if got, want := decodeEntries(hashed, hashLines), []string{"echo one"}; !slices.Equal(got, want) {
+	if got, want := decodeEntries(hashed, hashLines, true), []string{"echo one"}; !slices.Equal(got, want) {
 		t.Errorf("decoded %q, want %q", got, want)
 	}
 	// And the fourth answer moves on its own in the other direction: the
 	// empty line goes unless the style asks for it to stay, so a shell that
 	// has the other two encodings does not thereby keep blanks.
 	blanked := []string{"echo one", "", "echo two"}
-	if got, want := decodeEntries(blanked, zshLikeFile), []string{"echo one", "echo two"}; !slices.Equal(got, want) {
+	if got, want := decodeEntries(blanked, zshLikeFile, true), []string{"echo one", "echo two"}; !slices.Equal(got, want) {
 		t.Errorf("decoded %q with no empty-line answer, want %q", got, want)
 	}
-	if got := decodeEntries(blanked, keepEmpties); !slices.Equal(got, blanked) {
+	if got := decodeEntries(blanked, keepEmpties, true); !slices.Equal(got, blanked) {
 		t.Errorf("decoded %q, want the blank kept", got)
 	}
 }
@@ -300,7 +335,7 @@ func TestTheEncodingComesOffTheStatedStyle(t *testing.T) {
 //
 // Dropping them first would join the halves into a line nobody typed.
 func TestABlankLineInsideAnEntrySurvives(t *testing.T) {
-	got := decodeEntries([]string{`for i in 1 2\`, `\`, "done"}, continued)
+	got := decodeEntries([]string{`for i in 1 2\`, `\`, "done"}, continued, true)
 	if want := []string{"for i in 1 2\n\ndone"}; !slices.Equal(got, want) {
 		t.Errorf("decoded %q, want %q", got, want)
 	}
@@ -343,5 +378,132 @@ func TestLoadDropsBlanksAfterDecodingAndNotBefore(t *testing.T) {
 	want := []string{"echo one", "for i in 1 2\n", "echo two"}
 	if !slices.Equal(got, want) {
 		t.Errorf("load = %q, want %q", got, want)
+	}
+}
+
+// Where the file **stops** is part of the decoding, and it is a question only
+// the text can answer.
+//
+// Measured 2026-09-21, zsh 5.9.2 under `env -i` with a scratch `HOME`, one
+// file at a time through `fc -R` and `fc -l 1`. The middle two rows are the
+// pair that says the rule is about the end of the file rather than about a
+// dangling backslash: the same bytes are an entry that goes and a command
+// ending in a backslash, and the newline after them is the whole difference.
+// The last row is the shortest file there is (#4033).
+func TestAFilesEndDecidesWhatADanglingContinuationIs(t *testing.T) {
+	style := HistoryStyle{EntriesContinueOnABackslash: true, EmptyLinesAreEntries: true}
+	for _, tc := range []struct {
+		name string
+		text string
+		want []string
+	}{
+		{"a promise with a newline after it drops the entry", "echo a\necho b\\\n", []string{"echo a"}},
+		{"a file of nothing else holds nothing", "echo b\\\n", nil},
+		{"with no newline the backslash is a character", `echo b\`, []string{`echo b\`}},
+		{"a file of one newline is one empty entry", "\n", []string{""}},
+		{"a file of no bytes at all holds nothing", "", nil},
+		{"an unterminated plain file keeps its last line", "echo a\necho b", []string{"echo a", "echo b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := HistoryEntriesIn(style, tc.text); !slices.Equal(got, tc.want) {
+				t.Errorf("decoded %q as %q, want %q", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
+// The encoder, which is the mirror of the decoder and was missing entirely:
+// every writer in the tree put an entry down followed by a newline, so an
+// entry holding a newline became two lines of the file (#4034).
+//
+// Measured 2026-09-21, zsh 5.9.2 under a pseudo-terminal, entries planted and
+// written with `fc -W`. The guard row is the one that is not cosmetic: with
+// no space after the backslash the newline ending the entry is read as a
+// promise, and the entry after it is swallowed.
+func TestEncodingAHistoryFile(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		enc     historyEncoding
+		entries []string
+		want    string
+	}{
+		{
+			"a file that states no continuation writes lines",
+			plainFile,
+			[]string{"echo one", "a\nb"},
+			"echo one\na\nb\n",
+		},
+		{
+			"an entry's newline becomes a backslash and a newline",
+			continued,
+			[]string{"a\nb", "echo tail"},
+			"a\\\nb\necho tail\n",
+		},
+		{
+			"an entry ending in a backslash is guarded with a space",
+			continued,
+			[]string{`echo x\`, "echo tail"},
+			"echo x\\ \necho tail\n",
+		},
+		{
+			"an entry of nothing is a line of nothing",
+			continued,
+			[]string{""},
+			"\n",
+		},
+		{
+			"a tab is written as itself",
+			continued,
+			[]string{"a\tb"},
+			"a\tb\n",
+		},
+		{
+			"no entries is no text",
+			continued,
+			nil,
+			"",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := encodeEntries(tc.entries, tc.enc); got != tc.want {
+				t.Errorf("encoded %q as %q, want %q", tc.entries, got, tc.want)
+			}
+		})
+	}
+}
+
+// And the two close over each other, which is the property the pair exists
+// for: what the encoder writes, the decoder reads back unchanged.
+//
+// Asserted over the shapes that have a rule each rather than over one string,
+// because the guard and the join are separate answers and a round trip that
+// exercised only one would pass with the other missing.
+func TestTheEncoderAndTheDecoderCloseOverEachOther(t *testing.T) {
+	style := HistoryStyle{EntriesContinueOnABackslash: true, EmptyLinesAreEntries: true}
+	entries := []string{
+		"echo plain",
+		"for i in 1 2\ndo\necho $i\ndone",
+		`echo x\`,
+		"a\tb",
+		"",
+		"echo last",
+	}
+	text := HistoryText(style, entries)
+	if got := HistoryEntriesIn(style, text); !slices.Equal(got, entries) {
+		t.Errorf("round trip through %q gave %q, want %q", text, got, entries)
+	}
+	// The shape where this encoder and the real shell's part: a backslash
+	// immediately *before* an embedded newline. The real shell writes one
+	// backslash for the two facts and reads the entry back without the
+	// character somebody typed; this writes both and keeps it. Measured
+	// 2026-09-21, and the choice is safe rather than only nicer — the real
+	// shell reads the two-backslash file to the same entry this does, so a
+	// file written here is one it understands.
+	awkward := []string{"a\\\nb"}
+	if got := HistoryEntriesIn(style, HistoryText(style, awkward)); !slices.Equal(got, awkward) {
+		t.Errorf("round trip of %q gave %q, want it kept", awkward, got)
+	}
+	if got, want := HistoryText(style, awkward), "a\\\\\nb\n"; got != want {
+		t.Errorf("encoded %q as %q, want %q", awkward, got, want)
 	}
 }

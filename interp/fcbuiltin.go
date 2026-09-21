@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/internal/histjoin"
 	"github.com/blairham/sh/syntax"
@@ -99,6 +100,10 @@ import (
 type fcListingLayout struct {
 	numbered string
 	bare     string
+	// shown says a character an entry holds that would not survive being
+	// written as itself is spelled out instead. See
+	// [Runner.SetHistoryListingShowsControlCharacters].
+	shown bool
 }
 
 // fcBaseLayout is the core's, which is bash's and POSIX's shape: the history
@@ -115,7 +120,77 @@ var fcBaseLayout = fcListingLayout{numbered: "%d\t %s\n", bare: "\t %s\n"}
 // compared over. Empty formats leave the core's, which is the shape POSIX
 // describes and bash writes.
 func (r *Runner) SetHistoryListingLayout(numbered, bare string) {
-	r.fcLayout = fcListingLayout{numbered: numbered, bare: bare}
+	r.fcLayout.numbered, r.fcLayout.bare = numbered, bare
+}
+
+// SetHistoryListingShowsControlCharacters says `fc -l` spells out a
+// character an entry holds that would not survive being written as itself,
+// so that one entry is one row of the listing however it was typed.
+//
+// An entry of a history list may hold a newline — a multi-line command
+// somebody typed, a planted one, or one read back from a file that stored it
+// across continued lines — and the panel parts on what a listing does with
+// it. Measured 2026-09-21: zsh 5.9.2 writes `    1  a\nb` where bash 5.3.20
+// writes `    1  a` and then `b`, so one shell keeps the numbering meaningful
+// and the other lets an entry occupy as many rows as it has lines.
+//
+// Stated beside the layout rather than being a third format, because a
+// format string cannot express it: this is a transformation of the entry and
+// the layout is the arrangement around it. `-n`, which drops the number,
+// spells the same characters out — measured.
+//
+// The whole set, measured a character at a time on 2026-09-21 by planting an
+// entry holding each one with `print -rs` and reading `fc -ln` back through
+// `od -c`, which is the part that had to be done that way: a listing written
+// through `cat -A` renders a real carriage return as `^M` and cannot be told
+// from a listing that wrote the two characters.
+//
+//	newline                 `\n`
+//	tab                     `\t`
+//	any other C0 control    `^` and the character 0x40 above it — `^M`, `^G`, `^[`, `^@`
+//	delete                  `^?`
+//	a byte that is no character of its own    `\M-` and that byte's own spelling
+//	everything else, a backslash and a multibyte character included, itself
+//
+// So `\n` in a listing is ambiguous — an entry holding the two characters
+// `\` and `n` prints exactly as one holding a newline — and that is the
+// shell's own answer rather than a gap here.
+//
+// What is **not** done is the rest of the locale's business: the shell
+// measured writes a valid multibyte character as itself under a UTF-8 locale
+// and byte by byte under `LC_ALL=C`, and this always writes the character.
+// A listing is for a person to read and the bytes are the same either way.
+func (r *Runner) SetHistoryListingShowsControlCharacters(yes bool) {
+	r.fcLayout.shown = yes
+}
+
+// entry is one entry as this listing writes it.
+func (l fcListingLayout) entry(s string) string {
+	if !l.shown {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if c := s[i]; c < utf8.RuneSelf {
+			writeShown(&b, c)
+			i++
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size == 1 {
+			// A byte that is no character of its own — half of something,
+			// or a stray from another encoding. Spelled as the meta of the
+			// character seven bits of it name: measured, `0xe9` is `\M-i`,
+			// `0x80` is `\M-^@` and `0xff` is `\M-^?`.
+			b.WriteString(`\M-`)
+			writeShown(&b, s[i]&0x7f)
+			i++
+			continue
+		}
+		b.WriteString(s[i : i+size])
+		i += size
+	}
+	return b.String()
 }
 
 func (r *Runner) fcListing() fcListingLayout {
@@ -127,6 +202,23 @@ func (r *Runner) fcListing() fcListingLayout {
 		l.bare = fcBaseLayout.bare
 	}
 	return l
+}
+
+// writeShown spells out one character of the ASCII range.
+func writeShown(b *strings.Builder, c byte) {
+	switch {
+	case c == '\n':
+		b.WriteString(`\n`)
+	case c == '\t':
+		b.WriteString(`\t`)
+	case c < 0x20:
+		b.WriteByte('^')
+		b.WriteByte(c ^ 0x40)
+	case c == 0x7f:
+		b.WriteString("^?")
+	default:
+		b.WriteByte(c)
+	}
 }
 
 // fcHistory is the list as one `fc` call sees it: the entries, the history
@@ -494,10 +586,10 @@ func (h fcHistory) list(r *Runner, rest []string, bare, reverse bool) int {
 	layout := r.fcListing()
 	for _, n := range nums {
 		if bare {
-			_, _ = fmt.Fprintf(r.Out(), layout.bare, h.at(n))
+			_, _ = fmt.Fprintf(r.Out(), layout.bare, layout.entry(h.at(n)))
 			continue
 		}
-		_, _ = fmt.Fprintf(r.Out(), layout.numbered, n, h.at(n))
+		_, _ = fmt.Fprintf(r.Out(), layout.numbered, n, layout.entry(h.at(n)))
 	}
 	return 0
 }

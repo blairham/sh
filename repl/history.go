@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -109,7 +110,99 @@ func historyEncodingFrom(style HistoryStyle) historyEncoding {
 // session's reader dropped a blank and a script's `history -r` kept one, out
 // of the same file (#4024).
 func HistoryEntries(style HistoryStyle, lines []string) []string {
-	return decodeEntries(lines, historyEncodingFrom(style))
+	return decodeEntries(lines, historyEncodingFrom(style), true)
+}
+
+// HistoryEntriesIn turns a history file's **text** into the entries it holds.
+//
+// The text rather than the lines a reader already split, because one of the
+// answers is about where the file *stops*. A style that joins entries on a
+// backslash has to know whether the last line had a newline after it, and a
+// reader that split the text first has thrown that away: `echo b\` with a
+// newline after it is a promise of another line that never came and the
+// entry goes, and the same bytes with no newline are a command ending in a
+// backslash somebody typed. Measured 2026-09-21, zsh 5.9.2, one file at a
+// time under `env -i` with a scratch `HOME`:
+//
+//	echo a ⏎ echo b\ ⏎          echo a — the second entry is dropped
+//	echo b\ ⏎                   nothing at all
+//	echo b\  (no newline)       echo b\ — the backslash is a character
+//	one newline and nothing else an entry, empty
+//
+// [HistoryEntries] is the same decoder for a caller that has only lines, and
+// it reads them as a file that ended with a newline. A style stating no
+// continuation cannot tell the two apart, so that caller loses nothing.
+func HistoryEntriesIn(style HistoryStyle, text string) []string {
+	return decodeText(text, historyEncodingFrom(style))
+}
+
+// decodeText is HistoryEntriesIn against an encoding already read off a
+// style, and is where a file's text becomes its physical lines.
+func decodeText(text string, enc historyEncoding) []string {
+	if text == "" {
+		// No file at all, which is not the same as a file holding a newline
+		// — that one is an entry. See the table above.
+		return nil
+	}
+	terminated := strings.HasSuffix(text, "\n")
+	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
+	return decodeEntries(lines, enc, terminated)
+}
+
+// HistoryText is the **encoder**: the text a history file holds for these
+// entries, under the encoding the dialect stated.
+//
+// The mirror of [HistoryEntriesIn], and it exists for the same reason the
+// decoder does — one answer per file rather than one per writer. Every
+// writer in this tree put each entry down followed by a newline, so an entry
+// holding a newline became two physical lines and reading the file back gave
+// two entries, in the one dialect whose own file closes that round trip
+// (#4034).
+//
+// Measured 2026-09-21, zsh 5.9.2 under a pseudo-terminal, entries planted
+// and written with `fc -W`:
+//
+//   - an entry's newline is written as a backslash and a newline, which is
+//     exactly what the decoder reads back;
+//   - an entry whose last character is a backslash gets a **space** after
+//     it, so that the newline ending it is not read as a promise of another
+//     line — and the reader takes that one space back off, measured a
+//     variant at a time: `echo x\ ` reads as `echo x\` and `echo x\  `
+//     keeps one of the two;
+//   - a tab, a carriage return and a backslash in the middle of an entry are
+//     all written as themselves.
+//
+// One shape is written differently here on purpose. A backslash immediately
+// *before* an embedded newline is one character in the real shell's file —
+// the same backslash doing both jobs — so the character somebody typed is
+// gone when the entry is read back. This writes both, which is the exact
+// mirror of a decoder that strips one, and it is safe rather than only
+// nicer: measured 2026-09-21, the real shell reads the two-backslash file to
+// the same entry this does, so a file written here is one it understands.
+//
+// Nothing writes a timestamp header, with the option or without, because
+// nothing in this shell keeps the times an entry would need. When something
+// does, the header belongs here beside the continuation and not in a second
+// writer — which is the shape this change exists to stop happening again.
+func HistoryText(style HistoryStyle, entries []string) string {
+	return encodeEntries(entries, historyEncodingFrom(style))
+}
+
+// encodeEntries is HistoryText against an encoding already read off a style.
+func encodeEntries(entries []string, enc historyEncoding) string {
+	var b strings.Builder
+	for _, entry := range entries {
+		if enc.continuesOnABackslash {
+			entry = strings.ReplaceAll(entry, "\n", "\\\n")
+			if strings.HasSuffix(entry, `\`) {
+				// The guard, so the newline below is not a continuation.
+				entry += " "
+			}
+		}
+		b.WriteString(entry)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 // historyFrom reads the settings a session should use.
@@ -180,19 +273,20 @@ func (h historyFile) load(ctx context.Context) []string {
 	}
 	defer func() { _ = f.Close() }()
 
-	var lines []string
-	sc := bufio.NewScanner(f)
-	// A line longer than the scanner's default is not a reason to lose the
-	// file; a pasted command can be very long.
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for sc.Scan() {
-		lines = append(lines, sc.Text())
-	}
+	// The whole text rather than a line at a time, because whether the file
+	// ended with a newline is one of the things the decoder asks — and a
+	// scanner cannot say. It used to be a bufio.Scanner with a four-megabyte
+	// line bound, which answered a different worry (a pasted command can be
+	// very long) and threw this one away before the decoder could reach it.
+	// See HistoryEntriesIn. A read failure part-way through reads as the
+	// bytes that did arrive, for the reason a missing file reads as no
+	// history: there is nobody to tell at startup.
+	data, _ := io.ReadAll(f)
 	// One decoder, and it is the same call `history -r` makes — whether an
 	// empty line is an entry included. This used to drop the blanks itself,
 	// which made the session's reading of a file differ from a script's
 	// reading of the very same file (#4024).
-	entries := decodeEntries(lines, h.encoding)
+	entries := decodeText(string(data), h.encoding)
 	if len(entries) > h.size {
 		entries = entries[len(entries)-h.size:]
 	}
@@ -206,7 +300,12 @@ func (h historyFile) load(ctx context.Context) []string {
 // lines *first*, and the timestamp header comes off the front of what that
 // produced. Doing it the other way round would strip a header, then join, and
 // a continuation line that happened to begin `: 1:0;` would lose its text.
-func decodeEntries(lines []string, enc historyEncoding) []string {
+//
+// terminated is whether the file ended with a newline, which only a style
+// that continues on a backslash can ask about — see HistoryEntriesIn, where
+// the four rows are, and where the reason it is the *text* and not the lines
+// that is decoded is written down.
+func decodeEntries(lines []string, enc historyEncoding, terminated bool) []string {
 	var out []string
 	var held strings.Builder
 	continuing := false
@@ -214,20 +313,40 @@ func decodeEntries(lines []string, enc historyEncoding) []string {
 	// their own, which is decided once by the first line and not per line.
 	// See EntriesMayCarryAHashTimestampLine, where the measurement is.
 	hashed := enc.mayCarryAHashLine && len(lines) > 0 && isHashTimestampLine(lines[0])
-	for _, line := range lines {
+	for i, line := range lines {
 		if hashed && isHashTimestampLine(line) {
 			// The header is not part of any entry and there is nothing here
 			// that keeps a time, so it goes. A dangling one at the end of the
 			// file goes with the rest.
 			continue
 		}
-		if enc.continuesOnABackslash && strings.HasSuffix(line, `\`) {
+		if enc.continuesOnABackslash && strings.HasSuffix(line, `\`) && (terminated || i < len(lines)-1) {
 			// The backslash is the mark and not part of the command: what was
 			// typed had a newline there.
+			//
+			// Not on the file's last line where the file did not end with a
+			// newline: there is no line after it to join to, and the shell
+			// reads the backslash as a character somebody typed rather than
+			// as a mark. That row and the one under it are what say the rule
+			// is about where the **file** stops.
 			held.WriteString(strings.TrimSuffix(line, `\`))
 			held.WriteByte('\n')
 			continuing = true
 			continue
+		}
+		if enc.continuesOnABackslash {
+			// A line whose trailing run of spaces has a backslash in front
+			// of it loses exactly one of them: that space is the encoder's
+			// guard around an entry whose own last character is a
+			// backslash, and taking it off is what closes the round trip.
+			// Measured a variant at a time: `echo x\ ` reads as `echo x\`,
+			// `echo x\  ` keeps one of the two, `echo x \ ` reads as
+			// `echo x \`, and `echo a  ` keeps both — so it is the
+			// backslash and not the space that makes the rule. See
+			// HistoryText.
+			if bare := strings.TrimRight(line, " "); len(bare) < len(line) && strings.HasSuffix(bare, `\`) {
+				line = line[:len(line)-1]
+			}
 		}
 		if continuing {
 			held.WriteString(line)
@@ -239,10 +358,18 @@ func decodeEntries(lines []string, enc historyEncoding) []string {
 		out = append(out, withoutTimestamp(line, enc))
 	}
 	if continuing {
-		// A file whose last line ends in a backslash — a session killed
-		// mid-write, or a trim that cut inside an entry. What there is of it
-		// is an entry rather than nothing.
-		out = append(out, withoutTimestamp(strings.TrimSuffix(held.String(), "\n"), enc))
+		// A file whose last line promised another line and did not have one
+		// — a session killed mid-write, or a trim that cut inside an entry.
+		// The entry goes, and what there was of it goes with it: measured, a
+		// file holding `echo a` and `echo b\` reads as `echo a` alone, and
+		// one holding `echo b\` by itself reads as nothing at all.
+		//
+		// The other reading — keep what there is — was this decoder's before
+		// the file's end was a question it could ask, and it is reachable by
+		// exactly one dialect, so it is stated here rather than carried as a
+		// field nothing else would ever set. A fifth dialect that wanted the
+		// salvage is where the field belongs.
+		_ = held
 	}
 	if !enc.emptyIsAnEntry {
 		// Last, and the ordering is the point: an empty line at the end of a
@@ -355,11 +482,11 @@ func (h historyFile) save(ctx context.Context, added []string) error {
 	if err != nil {
 		return err
 	}
+	// One encoder, and it is the same one a dialect's `history -w` and
+	// `fc -W` reach: an entry holding a newline is the file's business and
+	// not each writer's. See HistoryText.
 	w := bufio.NewWriter(f)
-	for _, line := range added {
-		_, _ = w.WriteString(line)
-		_ = w.WriteByte('\n')
-	}
+	_, _ = w.WriteString(encodeEntries(added, h.encoding))
 	if err := w.Flush(); err != nil {
 		_ = f.Close()
 		return err

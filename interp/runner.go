@@ -9964,8 +9964,26 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// Through a reference where the name written is one, which the
 		// array-literal branch below already did for its own shape and this
 		// one did not — see Runner.namerefCompoundBodyTarget for the rows.
+		// The store's own question is asked here and not by that rule, which
+		// the read shares: a reference aimed at **nothing** has no name to
+		// carry a body to, and the one column with the construct refuses
+		// rather than storing under the name written. See
+		// Runner.namerefCompoundBodyStore.
+		target, store := r.namerefCompoundBodyStore(a.Name)
+		if !store {
+			return
+		}
 		body := *a
-		body.Name = r.namerefCompoundBodyTarget(a.Name)
+		body.Name = target
+		if base, sub, element := r.indirectElement(target); element {
+			// And a reference aimed at an **element**, where the element
+			// then holds the compound. The members land in its namespace
+			// either way — that is the member path again — so what this
+			// adds is the element's own value. See
+			// Runner.assignCompoundBodyIntoElement.
+			r.assignCompoundBodyIntoElement(ctx, &body, base, sub)
+			return
+		}
 		r.assignCompoundVariable(ctx, &body)
 		return
 	case a.IsArray && a.Index != nil:

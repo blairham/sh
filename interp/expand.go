@@ -6923,7 +6923,42 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 // A filter over the finished list rather than a condition inside
 // namesWithPrefix, because the two readings differ only in this one name and
 // the sources, the skips and the ordering are the same question under both.
+//
+// # A member path keeps its own name
+//
+// The axis was measured over plain names, and the exclusion is a rule about
+// plain names: a prefix with a **dot** in it lists the name it spells.
+// Measured 2026-09-20 against AT&T ksh93u+ 2012-08-01 (`/bin/ksh`), script
+// files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the
+// null device, over `typeset zz=(a=1 ab=2 n=(y=7))`:
+//
+//	written        ksh93u+                 here, before
+//	${!zz.a@}      zz.a zz.ab              zz.ab
+//	${!zz.n@}      zz.n zz.n.y             zz.n.y
+//	${!zz.n.y@}    zz.n.y                  (nothing)
+//	${!zz@}        zz.a zz.ab zz.n zz.n.y  the same — `zz` itself is dropped
+//	${!zz.@}       the same four           the same four
+//
+// So it is not "a compound is listed": the compound `zz` is left out of the
+// fourth row exactly as a scalar is, and the member `zz.a` is listed in the
+// first exactly as the nested compound `zz.n` is in the second. The dot is
+// the whole of the split, and the last two rows are the controls that say the
+// listing itself was never the wrong half.
+//
+// Not an axis, for the reason a compound variable is not one: a name with a
+// dot in it is one column's construct, so the other columns cannot answer
+// this and a flip could not move them. The plain-name reading they *do* split
+// on is untouched — `foo=1; foobar=2; ${!foo@}` is `foobar` here and `foo
+// foobar` in bash, which is Semantics.NamePrefixListingExcludesTheExactName
+// and stays there.
+//
+// A namespace is spelled with a dot too and lands on the same side of it:
+// `namespace ns { x=1; }` then `${!.ns.x@}` answers `.ns.x` there, where the
+// exclusion would have answered nothing.
 func withoutTheExactName(names []string, prefix string) []string {
+	if strings.Contains(prefix, memberSep) {
+		return names
+	}
 	out := names[:0:0]
 	for _, name := range names {
 		if name == prefix {

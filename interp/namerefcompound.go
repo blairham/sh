@@ -89,6 +89,54 @@ func (r *Runner) namerefCompoundBodyTarget(name string) string {
 	return target
 }
 
+// namerefCompoundBodyStore is the rule above at the one site that **stores** a
+// body, and it differs from the read in exactly one state: a reference with
+// nothing to point at is refused there rather than storing under the name
+// that was written.
+//
+// Measured 2026-09-20 against AT&T ksh93u+ 2012-08-01 (`/bin/ksh`), script
+// files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the
+// null device:
+//
+//	written                          ksh93u+                    here, before
+//	typeset -n u; typeset u=(a=1)    u: no reference name, 1    st=0, a `u`
+//	typeset -n u; u=(a=1)            the same                   the same
+//	typeset -n u; u+=(a=1)           the same                   the same
+//	f(){ typeset -n u; typeset u=(a=1); }; f   the same, and no line
+//	                                 of the script after the call runs
+//
+// and the two controls that say it is the compound body alone, both of which
+// agreed before this and must go on agreeing: `typeset -n u; typeset u=plain`
+// is silent at 0 with `$u` empty, and `typeset -n u; typeset u=(1 2)` stores
+// the array under `u` itself — which is what [Runner.namerefArrayLiteralTarget]
+// already does, warning wording and all. So an unaimed reference is not a
+// refusal in general there; the parenthesized body is the one operand shape
+// that will not take one.
+//
+// **Not folded into [Runner.namerefCompoundBodyTarget].** That rule is shared
+// with the member path below, and a refusal there would fire on every read
+// through the same reference — which is the fold this file exists to keep. It
+// is also *not* the whole of ksh93's rule: `${u}`, `${u.a}`, `u.a=5` and
+// `unset u.a` through an unaimed reference are each `no reference name` there
+// too, where this shell answers them at 0. That is wider than the store and
+// is its own row (#3955).
+//
+// The fatality is not written in as a number: the refusal ends the script
+// through [Runner.fatalQuiet], so the status is Semantics.FatalErrorStatusIsOne's
+// like every other fatal error's. What gates the whole refusal is the
+// Diagnostics wording being set, which is the shape a refusal only one column
+// makes takes everywhere in this tree — see Runner.refuseNamerefAim.
+func (r *Runner) namerefCompoundBodyStore(name string) (string, bool) {
+	if w := r.diag().NamerefCompoundBodyUnaimed; w != "" && r.isNameref(name) {
+		if _, cycle, aimed := r.namerefWalk(name); !cycle && !aimed {
+			r.diagf("%s\n", Wording(w, "", name))
+			r.fatalQuiet()
+			return "", false
+		}
+	}
+	return r.namerefCompoundBodyTarget(name), true
+}
+
 // compoundMemberThroughAReference is the rule above at a **member path**: the
 // name `c.a` denotes where `c` is a reference is `zz.a`.
 //

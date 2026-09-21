@@ -5438,6 +5438,20 @@ type Diagnostics struct {
 	// `warning: u: removing nameref attribute` and leaves `declare -a
 	// u=([0]="a" [1]="b")`. Empty where the dialect says nothing.
 	NamerefArrayLiteralDropsTheAttribute string
+	// NamerefCompoundBodyUnaimed is the same state under a **compound
+	// variable's body**, where the one column that has the construct refuses
+	// instead of storing anything at all: `typeset -n u; typeset u=(a=1)` is
+	// `u: no reference name` at 1 in AT&T ksh93u+ 2012-08-01, and the script
+	// ends there. One verb: the name as written. Empty is the reading with no
+	// refusal, which is every other column — none of them parses a compound
+	// body, so none of them can reach this.
+	//
+	// Its own field rather than IndirectionUnaimedReference's, though ksh93
+	// writes the same words for both: that one is `${!r}`'s and bash answers
+	// it with a sentence of its own, so folding them would make one dialect's
+	// two unrelated refusals move together. See
+	// Runner.namerefCompoundBodyStore.
+	NamerefCompoundBodyUnaimed string
 
 	// NamerefDepthWarning is what a *write* through a self reference says in
 	// the same dialect, which is a different sentence from the read's: bash

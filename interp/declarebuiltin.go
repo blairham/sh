@@ -1480,6 +1480,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		// A **member path** whose base is a reference is a member of the name
+		// the reference points at, and the whole operand is about that cell.
+		// Here rather than beside attributeFollowsTheReference below, which
+		// runs *after* the scope is taken: that rule is keyed on whole names
+		// and never saw a dotted one, and redirecting after the shadow would
+		// leave the copy standing over `c.b` — a binding nothing reads, with
+		// this line's letter recorded on it and given back at the return. See
+		// Runner.compoundMemberThroughAReference.
+		name = r.compoundMemberThroughAReference(name)
 		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
 			// Ahead of everything else this operand would do, because the
 			// shell that refuses declares nothing: the name is not brought

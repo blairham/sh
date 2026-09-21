@@ -4321,6 +4321,15 @@ func Diagnostics() interp.Diagnostics {
 		// `env -i`: `typeset -n u; echo "[${!u}]"` writes `u: no reference
 		// name` and the script is over, at 1.
 		IndirectionUnaimedReference: "%[1]s: no reference name",
+		// The same words for a compound variable's **body** written through
+		// the same unaimed reference, which is a different route and is this
+		// shell's alone — no other column parses a body to store. Measured
+		// 2026-09-20 from a script file under `env -i PATH=/usr/bin:/bin
+		// LC_ALL=C` with stdin on /dev/null: `typeset -n u; typeset u=(a=1)`
+		// and the bare `u=(a=1)` both write `<file>: line N: u: no reference
+		// name` and end the script at 1, where the scalar `typeset u=plain`
+		// and the array literal `typeset u=(1 2)` beside them are silent.
+		NamerefCompoundBodyUnaimed: "%[1]s: no reference name",
 		// The one nameref sentence this shell and bash write identically,
 		// measured on both: `r: reference variable cannot be an array`.
 		NamerefCannotBeAnArray: "%[1]s: reference variable cannot be an array",

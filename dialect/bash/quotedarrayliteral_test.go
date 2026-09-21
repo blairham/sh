@@ -109,3 +109,142 @@ func TestLetTakesACompoundAssignmentOperand(t *testing.T) {
 		})
 	}
 }
+
+// A `( … )` value that **will not parse** is the other half, and it is not
+// the fallback the shape test is: a text with no closing parenthesis never
+// reaches the re-read, while one that reaches it and fails is this shell
+// writing a diagnostic of its own and giving up the rest of the line. See
+// Diagnostics.QuotedArrayLiteralFailureNames (#4035).
+//
+// Measured 2026-09-21 on bash 5.3.20 and 3.2.57, `env -i PATH=/usr/bin:/bin
+// LC_ALL=C`, each row as its own `-c` and again from a script file.
+
+func TestAParenthesizedValueThatWillNotParseIsRefused(t *testing.T) {
+	for _, c := range []struct {
+		name, src, out, errs string
+		code                 int
+	}{
+		// The issue's own three rows. The location is `array assign` rather
+		// than `-c`, and the quoted text is the **inside** of the
+		// parentheses with the outer pair taken off.
+		{
+			"a parenthesis too many", `declare -a x="(a))"; declare -p x; echo "st=$?"`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `)'\n" +
+				"bash: array assign: line 1: `a)'\n", 1,
+		},
+		{
+			"a redirection operator", `declare -a x="(<)"; declare -p x`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `<'\n" +
+				"bash: array assign: line 1: `<'\n", 1,
+		},
+		{
+			"a separator inside", `declare -a x="(a;b)"; declare -p x`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 1,
+		},
+		// An input that ran out writes one line and no quote, which is the
+		// same rule every other refusal in this shell follows.
+		{
+			"an unclosed quote", `declare -a x="(a 'b)"; declare -p x`, "",
+			"bash: array assign: line 1: unexpected EOF while looking for matching `''\n", 1,
+		},
+		// The table letter reaches the same re-read, so it reaches the same
+		// refusal.
+		{
+			"a table's text", `declare -A m="([k]=v;)"; declare -p m`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `[k]=v;'\n", 1,
+		},
+		// Both other spellings of the same operand, because each has a loop
+		// of its own and a fix in one of them is not a fix in the other.
+		{
+			"the typeset word", `typeset -a x="(a;b)"; echo ran`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 1,
+		},
+		{
+			"local's own loop", `f(){ local -a q="(a;b)"; echo in; }; f; echo after`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 1,
+		},
+		// The appending spelling is the same re-read and the same refusal.
+		{
+			"an append", `declare -a x=(q); declare x+="(a;b)"; echo ran`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 1,
+		},
+		// The operands behind the refused one are never reached, which is
+		// what makes this a give-up rather than a failed operand.
+		{
+			"the operands behind it", `declare -a x="(a;b)" y=1; declare -p y`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 1,
+		},
+		// A closing parenthesis in the middle: the shape test passes, the
+		// re-read finds a second command behind the literal, and the token
+		// blamed is the one that closed it early.
+		{
+			"a second command behind it", `declare -a x="(a)&&(b)"; echo ran`, "",
+			"bash: array assign: line 1: syntax error near unexpected token `)'\n" +
+				"bash: array assign: line 1: `a)&&(b'\n", 1,
+		},
+		// **What it costs is the line and not the script.** The one-line
+		// `-c` above reads as "the script ends" only because everything
+		// else is on that line; with a newline the next command runs and
+		// the shell exits 0.
+		{
+			"the next line still runs", "declare -a x=\"(a;b)\"\necho three", "three\n",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 0,
+		},
+		{
+			"and it leaves 1 behind", "declare -a x=\"(a;b)\"\necho \"st=$?\"", "st=1\n",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 0,
+		},
+		{
+			"a subshell contains it", `( declare -a x="(a;b)"; echo in ); echo after`, "after\n",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 0,
+		},
+		// A loop is one command, so the whole of it goes.
+		{
+			"a loop goes with it", "for i in 1 2; do declare -a x=\"(a;b)\"\necho body\ndone\necho after",
+			"after\n",
+			"bash: array assign: line 1: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 1: `a;b'\n", 0,
+		},
+		// The line is counted from where the declaration was written, with
+		// the failure's line *inside* the text added to it — not restarted
+		// at 1.
+		{
+			"a newline inside the text", "declare -a x=$'(a\nb;c)'; echo ran", "",
+			"bash: array assign: line 2: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 2: `b;c'\n", 1,
+		},
+		// And the two numbers add: a declaration on line 2 whose text
+		// fails on its own second line is `line 3`. The row above cannot
+		// tell that from a restart, because there the declaration is on
+		// line 1 and the two readings agree.
+		{
+			"the two lines add", "echo one\ndeclare -a x=$'(a\nb;c)'\necho three", "one\nthree\n",
+			"bash: array assign: line 3: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 3: `b;c'\n", 0,
+		},
+		// And the controls: a text the shape test turns away still keeps
+		// its characters and still runs on, which is the distinction the
+		// whole of this turns on.
+		{"no closing parenthesis", `declare -a x="(a b"; declare -p x`, `declare -a x=([0]="(a b")` + "\n", "", 0},
+		{"a space outside", `declare -a x=" (a;b) "; declare -p x`, `declare -a x=([0]=" (a;b) ")` + "\n", "", 0},
+		{"no array attribute", `declare x="(a;b)"; declare -p x`, `declare -- x="(a;b)"` + "\n", "", 0},
+		{"no declaration word", `declare -a x; x="(a;b)"; declare -p x`, `declare -a x=([0]="(a;b)")` + "\n", "", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, code := runQuotedLiteral(t, c.src)
+			if out != c.out || errs != c.errs || code != c.code {
+				t.Errorf("%s\n got %q %q %d\nwant %q %q %d",
+					c.src, out, errs, code, c.out, c.errs, c.code)
+			}
+		})
+	}
+}

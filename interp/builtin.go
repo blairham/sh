@@ -2751,31 +2751,12 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		if !subscripted {
 			base = name
 		}
-		// In front of every reading of the brackets below, for the reason
-		// storeThroughOperand gives: what the subscript *is* decides which
-		// element the freeze, the emptiness refusal and the arithmetic are
-		// about. A text a second round turns into `x y` names that key from
-		// here on.
+		// What the subscript *is* decides which element the arithmetic, the
+		// flag group and the emptiness refusal below are about: a text a
+		// second round turns into `x y` names that key from here on. The
+		// round itself is further down, behind the name — see the note
+		// there.
 		//
-		// Semantics.UnsetExpandsAFlatSubscript is whether this shell rounds
-		// and Runner.ExpandsAnOperandsSubscriptAgain whether the session
-		// still permits it — this is one of the four surfaces `shopt -s
-		// assoc_expand_once` names (#3298).
-		if subscripted && !lexed {
-			// A subscript the parser read is not read again: it reached
-			// `unset` as a word and was expanded once, which is the
-			// measurement in subscriptOperandRead — `unset m[$b]` with
-			// `b='x$y'` and a table holding both `x$y` and `xZZZ` takes the
-			// literal key away in bash 5.3.20, where `unset "m[$b]"` takes
-			// the expanded one. The axis below is about the *text* shape and
-			// the switch beside it is a script turning that round off; a
-			// lexed subscript never reaches either.
-			sub = r.operandSubscriptText(base, sub, r.sem().UnsetExpandsAFlatSubscript,
-				"`unset` expanding a subscript that reached it as text")
-			if r.unspecified {
-				return r.status
-			}
-		}
 		// The operand's own text is deliberately *not* rewritten with the
 		// key the round found. What a diagnostic quotes is what the script
 		// wrote — `unset 'a[(r)$k]'` names the flag group the script typed —
@@ -2834,6 +2815,46 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			// stands behind it.
 			if r.sem().UnsetSubscriptSkippedWhenNameUnset == Yes && !r.nameIsSet(base) {
 				continue
+			}
+			// **And the round is here, behind the name**, because it is an
+			// expansion and an expansion in a subscript can run a command.
+			// A script passing text it did not write into `unset` — `v='a[$(
+			// … )]'; unset "$v"` — had that command run here where bash
+			// never reaches it, which is the defect and not an edge (#4037).
+			//
+			// Measured 2026-09-21, bash 5.3.20 and 3.2.57 alike, with
+			// `$(echo INJECTION! >&2 ; echo 0)` as the subscript's text:
+			//
+			//	unset "$v", no variable of that name   nothing runs, status 0
+			//	unset "$v", `a` readonly               refused, nothing runs
+			//	unset "$v", `a=(x y z)`                it runs, element gone
+			//	read "$v" / printf -v "$v" / declare "$v=hi" / test -v "$v"
+			//	                                       it runs, in both shells
+			//
+			// So it is the **route** that decides and not the text, and this
+			// route's answer is "only once the name is there". The two
+			// refusals above — an absent parameter and a frozen one — are
+			// measured ahead of it in the same sweep and were already
+			// written ahead of it here; what stood in the wrong place was
+			// this round alone, which ran before either of them could
+			// answer. Semantics.UnsetExpandsAFlatSubscript is whether this
+			// shell rounds and Runner.ExpandsAnOperandsSubscriptAgain
+			// whether the session still permits it — one of the four
+			// surfaces `shopt -s assoc_expand_once` names (#3298).
+			if !lexed {
+				// A subscript the parser read is not read again: it reached
+				// `unset` as a word and was expanded once, which is the
+				// measurement in subscriptOperandRead — `unset m[$b]` with
+				// `b='x$y'` and a table holding both `x$y` and `xZZZ` takes
+				// the literal key away in bash 5.3.20, where `unset "m[$b]"`
+				// takes the expanded one. The axis is about the *text* shape
+				// and the switch beside it is a script turning that round
+				// off; a lexed subscript never reaches either.
+				sub = r.operandSubscriptText(base, sub, r.sem().UnsetExpandsAFlatSubscript,
+					"`unset` expanding a subscript that reached it as text")
+				if r.unspecified {
+					return r.status
+				}
 			}
 			// `unset a[1]` is about one element and not about the array.
 			// The subscript was read as part of the name, so the whole thing
@@ -6377,6 +6398,13 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// they would put the characters in element 0. This builtin has a
 			// loop of its own, so the rule has to be asked in both places or
 			// the shell answers one spelling and not the other.
+			//
+			// And the give-up with it: `local -a x="(a;b)"` is refused
+			// inside the re-read and costs the rest of the line, exactly as
+			// the other word's operand does.
+			if r.unspecified || r.operandGaveUpTheBuiltin() {
+				return r.status
+			}
 		case hasValue && appends:
 			// `local a+=2` joins what the *local* is holding, which the
 			// shadow above has already made: with no outer value carried

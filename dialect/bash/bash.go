@@ -3341,6 +3341,13 @@ func Diagnostics() interp.Diagnostics {
 		// the word's rather than the script's — see
 		// interp.Semantics.SubstitutionParseErrorIsFatal (#2703).
 		SubstitutionParseFailureNamesTheConstruct: true,
+		// And a declaration's quoted `( … )` value that will not come out as
+		// an array literal is named the same way, for the same reason: the
+		// re-read is its own input, so the script's line is no longer the
+		// whole story. This column alone re-reads such a text at all — see
+		// interp.Semantics.DeclarationRereadsAParenthesizedValue — so the
+		// wording is the switch as well as the sentence (#4035).
+		QuotedArrayLiteralFailureNames: "array assign",
 		// A script operand it could not read, worded the same way as `.` and
 		// as a redirection: the path, then the operating system's own text.
 		// The two numbers are the measurement — 127 for a path that names

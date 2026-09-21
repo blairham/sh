@@ -4110,6 +4110,47 @@ type Diagnostics struct {
 	// file, which it reads with the script and stops on.
 	SubstitutionParseFailureNamesTheConstruct bool
 
+	// QuotedArrayLiteralFailureNames is what a declaration's quoted `( … )`
+	// value is called in the location when the text **will not parse** as an
+	// array literal — and, by being written at all, that this dialect refuses
+	// such a text rather than keeping its characters.
+	//
+	// The re-read itself is [Semantics.DeclarationRereadsAParenthesizedValue]
+	// and only one column has it, so the wording is a value here rather than
+	// an axis: ksh93u+ keeps the characters because it never re-reads, and
+	// zsh refuses the assignment before anything asks what the text means.
+	//
+	// Measured 2026-09-21, bash 5.3.20 and 3.2.57, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, each line its own `-c`:
+	//
+	//	declare -a x="(a))"    bash: array assign: line 1: syntax error near unexpected token `)'
+	//	                       bash: array assign: line 1: `a)'
+	//	declare -a x="(a;b)"   … unexpected token `;' … `a;b'
+	//	declare -a x="(a 'b)"  … unexpected EOF while looking for matching `''
+	//
+	// Three things are in that and only the first is obvious. The name goes
+	// where a script's path or the `-c` would have gone, exactly as
+	// SubstitutionParseFailureNamesTheConstruct's does — it is the *re-read*
+	// naming itself. The quoted text is the **inside** of the parentheses
+	// with the outer pair taken off, which is the re-read's own input and not
+	// the script's line, so it is passed to Diagnostics.offendingLine in
+	// place of the program text. And the line is counted from where the
+	// declaration was written, not from 1: measured on a script file with the
+	// declaration on line 3, `array assign: line 3`, and a text carrying a
+	// newline reports the line *inside* it added to that — `declare -a
+	// x=$'(a\nb;c)'` on line 1 of a `-c` is `array assign: line 2`.
+	//
+	// What the failure costs is the rest of the input line and no more, which
+	// is controlAbandon and is measured rather than assumed. The one-line
+	// `-c` of the issue reads as "the script ends" only because everything
+	// else on it shares that line:
+	//
+	//	-c 'declare -a x="(a;b)"; declare -p x; echo r'   nothing after, exit 1
+	//	-c $'declare -a x="(a;b)"\necho three'            `three` runs, exit 0
+	//	a script file, the declaration on its own line    the next line runs, $? is 1
+	//	( declare -a x="(a;b)"; echo in ); echo after     `after` runs
+	QuotedArrayLiteralFailureNames string
+
 	// MissingFuncBodyCountsFromItsParens locates a parse failure where a
 	// function's body was expected and never began by counting lines from
 	// the parentheses rather than from the top of the input. A distance of

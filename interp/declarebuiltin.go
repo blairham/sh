@@ -1818,7 +1818,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// operand read as a different thing: the branches there would put
 			// the characters in element 0 and the name would look populated
 			// while holding one string. See interp/quotedarrayliteral.go.
-			if r.unspecified || r.ctl == controlExit {
+			//
+			// operandGaveUpTheBuiltin and not controlExit alone: a text that
+			// reached the re-read and would not parse is refused there and
+			// gives up the rest of the line, so the operands behind it are
+			// never reached. Reading only the exit ran on to the next one.
+			if r.unspecified || r.operandGaveUpTheBuiltin() {
 				return r.status
 			}
 			r.declarationAssignmentExport(name, df.export)

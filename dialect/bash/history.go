@@ -203,7 +203,13 @@ func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		return historyPrint(r, rest)
 	}
 	if flags.store {
-		historyAdd(r, strings.Join(rest, " "))
+		// Through the same gate the reader's lines pass rather than straight
+		// into the list: HISTIGNORE and HISTCONTROL are consulted for an
+		// operand too, which is #4057. See historyWanted for what each of
+		// them was measured to do to one.
+		if line := strings.Join(rest, " "); historyWanted(r, line) {
+			historyAdd(r, line)
+		}
 		return 0
 	}
 
@@ -643,23 +649,77 @@ func historyHasOwnLine(r *interp.Runner) bool {
 	return own == "1"
 }
 
-// historyRecord is a command the reader hands over, which joins the list unless
-// HISTCONTROL or HISTIGNORE leaves it out — the same rules a prompt reads, see
-// repl.HistoryIgnores.
-//
-// `erasedups` is the one word of HISTCONTROL a prompt does not read here, and
-// a script's list does: measured, `echo a`, `echo b`, `echo a` under
-// `HISTCONTROL=erasedups` lists `echo b` and then `echo a`, the earlier copy
-// gone and the new one kept at the end.
+// historyRecord is a command the reader hands over, which joins the list
+// unless HISTCONTROL or HISTIGNORE leaves it out — and remembers whether it
+// did, because that answer is what makes the builtin's own line droppable.
 func historyRecord(r *interp.Runner, line string) {
+	if historyWanted(r, line) {
+		historyAdd(r, line)
+		r.SetVar(historyOwnLine, "1")
+		return
+	}
+	r.SetVar(historyOwnLine, "0")
+}
+
+// historyWanted asks whether an entry joins the list at all, and erases the
+// earlier copies of it where it does. One question asked in one place,
+// because **an entry offered to the list is an entry offered to the list
+// however it arrived**.
+//
+// It arrives two ways: the reader hands over a command it has just run, and
+// `history -s` is handed one nobody ran. Those were two answers until #4057,
+// the newer route going straight to historyAdd — the shape this tree keeps
+// rediscovering, a second helper missing the rule the first one carries.
+//
+// Measured on bash 5.3.20 with the reader silenced by `HISTIGNORE='history*'`
+// set *before* `set -o history`, so that nothing the instrument itself runs
+// is an entry — the trap #4031 fell into, and worth naming because the
+// silencer is the feature under test:
+//
+//   - `HISTIGNORE='…:secret*'` then `history -s secretline`, `history -s
+//     keepme` lists `1 keepme`, so the patterns reach `-s`; they are globs
+//     matched against the whole entry, anchored — `HISTIGNORE=echo` drops
+//     `echo` and keeps `echo one`;
+//   - `HISTIGNORE='…:&'` over `-s x`, `-s x`, `-s y`, `-s y` lists `1 x`,
+//     `2 y`, so `&` reads the entry the list already ends with, which for
+//     `-s` is a well-defined thing even though no line was read;
+//   - `HISTCONTROL=ignorespace` then `history -s " hidden"`, `history -s
+//     kept` lists `1 kept`: a leading blank hides an operand exactly as it
+//     hides a typed line, though `-s` is not a typed line;
+//   - `HISTCONTROL=ignoredups` over `-s one`, `-s one`, `-s two` lists
+//     `1 one`, `2 two`, and an unknown word in the value is simply not one
+//     of the four — `bogus:ignoredups:alsobogus` still ignores dups;
+//   - `HISTCONTROL=erasedups` over `-s a`, `-s b`, `-s a`, `-s c`, `-s a`
+//     lists `1 b`, `2 c`, `3 a`: every earlier copy gone, and what survives
+//     **renumbered from the front** rather than keeping the numbers it had.
+//     Erasing is not HISTSIZE dropping entries off the front, and the
+//     numbers say which happened: with `HISTSIZE=3` over `-s a`…`-s d` then
+//     `-s b`, the list reads `2 c`, `3 d`, `4 b` — the one entry HISTSIZE
+//     dropped still counts against the numbering and the copy erasedups
+//     removed does not;
+//   - and where both would reject, either alone is enough:
+//     `HISTIGNORE='…:zap*'` with `HISTCONTROL=ignorespace` over `-s ' zapper'`,
+//     `-s zapper`, `-s ' plain'`, `-s plain` lists `1 plain`.
+//
+// The duplicate rules read the entry the list already ends with, which for
+// `-s` is what is left after the builtin's own line is dropped and not that
+// line: measured, `history -s alpha`, `HISTCONTROL=ignoredups`, `history -s
+// alpha` records the second `alpha`, because what stood before it was the
+// assignment.
+//
+// What does **not** come through here is a file. Measured, `HISTIGNORE`
+// matching a line of the file and `HISTCONTROL=ignoredups:erasedups` both
+// leave `history -r` loading every line of it, so historyLoad sits beside
+// this rather than under it: reading a file back is not the shell being
+// offered a command.
+func historyWanted(r *interp.Runner, line string) bool {
 	entries := historyEntries(r)
 	previous := ""
 	if len(entries) > 0 {
 		previous = entries[len(entries)-1]
 	}
 	if repl.HistoryIgnores(HistoryStyle(), r, line, previous) {
-		r.SetVar(historyOwnLine, "0")
-		return
+		return false
 	}
 	if historyErasesDups(r) {
 		kept := entries[:0]
@@ -672,8 +732,7 @@ func historyRecord(r *interp.Runner, line string) {
 			r.SetArray(historyStore, kept)
 		}
 	}
-	historyAdd(r, line)
-	r.SetVar(historyOwnLine, "1")
+	return true
 }
 
 // historyErasesDups reports `erasedups` in HISTCONTROL's colon-separated words.

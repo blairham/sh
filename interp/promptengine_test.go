@@ -130,6 +130,9 @@ func TestWithNoEngineInstalledTheWordIsNotACommand(t *testing.T) {
 // HasPromptEngine answers what a front end composing a prelude asks: is
 // there anything behind the function worth defining?
 func TestHasPromptEngineAnswersWhetherOneIsWired(t *testing.T) {
+	// testrunner:bare — the unset field *is* the subject: a runner nobody
+	// has wired an engine onto is exactly the library case this answers
+	// about, and it runs nothing, so it needs no directory of its own.
 	r := &Runner{}
 	if r.HasPromptEngine() {
 		t.Error("a fresh runner claims a prompt engine")

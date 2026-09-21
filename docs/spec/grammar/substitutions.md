@@ -789,11 +789,27 @@ that load, and in 4 of 60 of the test covering it (#2183).
 
 **Where that join sits is the axis**, and it is
 `Semantics.WritingSubstitutionIsWaitedForAtTheCommand`: zsh yes · bash
-no · ksh93 no · dash and ash unanswered, having no `>(cmd)` at all. Yes
+no · ksh93 no · ash no · dash unanswered, having no `>(cmd)` at all. Yes
 holds the command that named the body until the body is done — the
 `[PIPE]AFTER` ordering. No lets the command finish and moves the join
 out to the scope that owns the stream the body is writing into, which
 delivers `AFTER[PIPE]`.
+
+**ash is on that panel and was not always counted there.** It was left
+unanswered alongside dash, on the reading that BusyBox has no `>(cmd)`
+and `echo >(:)` is the two characters as written — which is not true of
+it. Measured 2026-09-21 in the pinned image, BusyBox v1.37.0: `echo >(:)`
+and `echo <(true)` are both `/dev/fd/64` at 0, the three duration rows
+are 0s, and the graded ordering is `AFTER[PIPE]`. bash's answer on every
+row, so ash answers **no** (#4002, after #3986).
+
+That ordering row has a trap worth naming, because the issue was filed on
+it. The body sleeps 0.3s before it writes, so a probe whose script ends
+first shows `AFTER` alone and no `[PIPE]` — which reads as a *third*
+answer, one in which the body's bytes never arrive, rather than as either
+of the two the axis has. The bytes are not lost; they land once the shell
+has moved on, which is what no means. Give the body room to finish before
+the script exits, or the probe cannot tell the readings apart.
 
 The **duration** rows above are not reproducible under either answer and
 are not what the axis moves. A real shell's body is a process that

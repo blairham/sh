@@ -180,17 +180,32 @@ func Semantics() interp.Semantics {
 	// nested subshell running a command named `1+1`, since this shell has no
 	// arithmetic command either (#3364).
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
-	// unanswered WritingSubstitutionIsWaitedForAtTheCommand: recorded as
-	// `echo >(:)` being the two characters as written (#2197). That reading
-	// does not survive the measurement below — BusyBox is built with the
-	// construct and `echo >(:)` is `/dev/fd/64` at 0 — so the entry stays
-	// unanswered on a reason that has to be re-measured rather than on this
-	// one. #4002 tracks it; the axis is read as `!= Yes`, so nothing ships
-	// differently in the meantime.
+	// This shell is built with process substitution, so the axis is ash's to
+	// answer after all. The reading it was left unanswered on — that
+	// `echo >(:)` is the two characters as written — was never true of
+	// BusyBox (#4002, after #3986). Measured 2026-09-21 in the pinned image,
+	// BusyBox v1.37.0, against the panel's two answers:
 	//
-	// The directory that path is named after is answerable now, and it is
-	// /dev/fd: measured 2026-09-21 in the same image, where /proc/self/fd
-	// exists and /dev/fd is a symlink to it, `echo <(true)` and
+	//	probe                                   ash          bash 5.3     zsh 5.9
+	//	printf x | tee >(sleep 3) >/dev/null    0s           0s           3s
+	//	echo >(sleep 3)                         0s           0s           3s
+	//	echo hi > >(sleep 3)                    0s           0s           3s
+	//	…; printf AFTER after the first row     AFTER[PIPE]  AFTER[PIPE]  [PIPE]AFTER
+	//
+	// bash's answer on every row, and No is what that ordering is.
+	//
+	// The ordering row only reads that way if the body's own 0.3s is allowed
+	// to land: a probe whose script ends first writes `AFTER` alone, which
+	// looks like a third answer in which the bytes are lost rather than like
+	// either of the two the axis has. They are not lost — they arrive once
+	// the shell has moved on, which is exactly what No claims. #4002 was
+	// filed on that truncated reading.
+	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
+
+	// The directory a substitution's path is named after is answerable for
+	// the same reason, and it is /dev/fd: measured 2026-09-21 in the same
+	// image, where /proc/self/fd exists and /dev/fd is a symlink to it,
+	// `echo <(true)` and
 	// `echo >(true)` are both `/dev/fd/64` at 0. bash's answer and not
 	// zsh's, which is the only shell in the panel that writes the target
 	// (#3986).

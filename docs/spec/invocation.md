@@ -1001,6 +1001,67 @@ output is not the same twice. The evidence is the table above, the per-dialect
 answers in `dialect/*/`, and the front end's own test that the invocation
 chooses between the two vectors.
 
+### An interactive shell says a word on its way out, and only on some routes
+
+One shell in the panel writes a word as an interactive shell goes, and where
+it writes it is a fact about the **route** rather than about the shell having
+been interactive.
+
+Measured 2026-09-21, `env -i` with a scratch `HOME` and **no terminal on any
+of the three standard streams**:
+
+| route | bash 5.3.20 | bash 3.2.57 | zsh 5.9.2 | ksh93u+ | dash |
+| --- | --- | --- | --- | --- | --- |
+| `-i -c 'exit 3'` | `exit` | `exit` | nothing | nothing | nothing |
+| `-i` on a pipe, `exit 3` typed | `exit` | `exit` | nothing | nothing | nothing |
+| `-i` on a pipe, the input runs out | `exit` | `exit` | nothing | nothing | nothing |
+| `-i script.sh` whose script runs `exit 3` | **nothing** | nothing | nothing | nothing | nothing |
+| no `-i` at all, any route | nothing | nothing | nothing | nothing | nothing |
+
+To the error stream, after everything else the shell wrote.
+
+**The fourth row is why this is not "an interactive shell says so on the way
+out".** The same binary is interactive there — `$-` has `i` — and runs the
+same `exit`, and says nothing. Rows two and three are the prompt session's own
+word and are `Diagnostics.LeavingAPromptSession`; row one draws no prompt at
+all, so the routes that say it are named separately by
+`Diagnostics.LeavingIsAlsoSaidOnTheseRoutes`, which is the command string
+alone for bash and empty for everybody else.
+
+#### What the shell has to have done, which is run `exit`
+
+The route is a gate on the word and not the whole of it. Measured the same
+day, each probe behind `-i -c`:
+
+| the string | bash 5.3.20 and 3.2.57 |
+| --- | --- |
+| `exit 3` | `exit` |
+| `f() { exit 3; }; f` | `exit` |
+| `eval exit 3` | `exit` |
+| `. defines.sh` and then the function it defined | `exit` |
+| `true` | nothing |
+| `set -e; false` | nothing |
+| `set -u; echo $nope` | nothing |
+| `(exit 3)` | nothing |
+| `. quits.sh`, whose own line runs `exit 3` | nothing |
+| an rc file whose own line runs `exit 3` | nothing |
+
+So it is not "the shell ended", not "the shell ended through `exit`", and not
+where the *text* came from — the last two rows end through `exit` and say
+nothing, while a function body read from a sourced file says the word when the
+call is made outside it. **What the shell is reading when the word runs** is
+the whole of it, which is `Runner.ExitRanOutsideAFile`.
+
+The word comes before the EXIT trap's own output — `-i -c 'trap "echo BYE"
+EXIT; exit 3'` writes `exit` and then `BYE` — so it belongs to the `exit` that
+ran rather than to the end of the process, and the front end writes it before
+it finishes the shell.
+
+One further row is measured and not carried: bash writes the word for `exit
+foo` too, *before* complaining about the operand, so it is written as the
+builtin starts rather than once it has decided to go. This shell does not end
+on that operand at all, which is a different gap and not this one.
+
 ### The order of the letters is the shell's, and it is not the order they were set in
 
 Everything above reads `$-` as *membership*, which is what a script does

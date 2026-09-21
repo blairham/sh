@@ -6158,9 +6158,41 @@ type Diagnostics struct {
 	// It is the *prompt session* and not every exit of an interactive shell:
 	// measured the same day, `bash -i script.sh` whose script runs `exit 3`
 	// writes nothing, where `bash -i -c 'exit 3'` writes the line. The
-	// second of those is the front end's own route rather than the prompt's
-	// and is not carried here; #4008 records it.
+	// second of those is the front end's own route rather than the prompt's,
+	// and LeavingIsAlsoSaidOnTheseRoutes is what carries it.
 	LeavingAPromptSession string
+
+	// LeavingIsAlsoSaidOnTheseRoutes names the invocation routes that write
+	// LeavingAPromptSession's word without ever drawing a prompt: an
+	// interactive shell reached by one of them says it as `exit` runs.
+	//
+	// The same word and a second question, because the panel splits the two
+	// apart. Measured 2026-09-21, `env -i` with a scratch HOME and no
+	// terminal on any of the three standard streams:
+	//
+	//	route                                 bash 5.3.20 and 3.2.57
+	//	-i -c 'exit 3'                        exit
+	//	-i on a pipe, `exit 3` typed          exit
+	//	-i on a pipe, the input runs out      exit
+	//	-i script.sh whose script exits       nothing
+	//	no -i at all, any route               nothing
+	//
+	// zsh 5.9.2, ksh93u+ and dash write nothing on any of the five, which is
+	// the empty set and the base's answer.
+	//
+	// The fourth row is why this is a set of routes rather than "an
+	// interactive shell says so on the way out": the same binary is
+	// interactive there — `$-` has `i` — and runs the same `exit`, and says
+	// nothing. bash's answer is the command string alone: the prompt's two
+	// rows are the session's own word and belong to LeavingAPromptSession,
+	// and a named script is silent.
+	//
+	// **Which routes**, and not how the shell ended. `-i -c true` says
+	// nothing, so the route is a gate on the word and not the whole of it:
+	// what the shell has to have done is run `exit`, outside any file it was
+	// reading. See Runner.ExitRanOutsideAFile, which is the other half and
+	// carries what was measured for it.
+	LeavingIsAlsoSaidOnTheseRoutes syntax.ProgramRoutes
 
 	// FcNoSuchEvent is `fc` with no history, in the dialect that reports
 	// it. No verbs.

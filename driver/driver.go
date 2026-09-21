@@ -2769,6 +2769,10 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 		// at the end of both.
 		status, how = sh.executeLines(ctx, r, sh.stdinAfterCommandString(r), in.asStandardInput(sh))
 	}
+	// Before Finish, which is measured: `-i -c 'trap "echo BYE" EXIT; exit
+	// 3'` writes the word and then the trap's output, so the word belongs to
+	// the `exit` that was run and not to the end of the process.
+	sh.sayLeaving(r, in)
 	switch how {
 	case endingParseFailure, endingRefused:
 		// The EXIT trap fires even when the last thing read would not parse,
@@ -2781,6 +2785,37 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 		return status
 	}
 	return r.Finish(ctx)
+}
+
+// sayLeaving writes the word an interactive shell says on its way out, on the
+// routes that say it without ever drawing a prompt.
+//
+// The prompt's own routes are not reached from here — a session hands off to
+// interactive long before run is called, and repl writes the word there for
+// both ways a session can end. This is the route that is interactive and
+// draws no prompt, which is `-i -c`: measured, bash writes `exit` for it and
+// nothing at all for `-i script.sh` whose script runs the same `exit`, so the
+// split is by route and the dialect names the routes rather than this front
+// end reading "was it interactive" (#4008).
+//
+// Three questions and all three have to hold. The word is the dialect's and
+// is bash's alone; the route is the dialect's too, since nothing derives one
+// shell's split from the other four's silence; and *this shell ran `exit`,
+// outside any file it was reading* is the runner's, because `-i -c true` says
+// nothing and neither does an `exit` in a sourced file. See
+// Diagnostics.LeavingIsAlsoSaidOnTheseRoutes and Runner.ExitRanOutsideAFile,
+// which carry what was measured for each.
+func (sh Shell) sayLeaving(r *interp.Runner, in source) {
+	if !in.interactive || in.dg.LeavingAPromptSession == "" {
+		return
+	}
+	if !in.dg.LeavingIsAlsoSaidOnTheseRoutes.Has(in.programRoute()) {
+		return
+	}
+	if !r.ExitRanOutsideAFile() {
+		return
+	}
+	sh.errf("%s\n", in.dg.LeavingAPromptSession)
 }
 
 // stdinAfterCommandString is the program the standard-input half reads, which

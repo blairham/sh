@@ -6832,7 +6832,7 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 		// Unanswered: the shell stops rather than leaving with a status it
 		// has just refused to read, which is what the unreadable operand
 		// below does too.
-		r.stopTheShell()
+		r.stopTheShellForExit()
 		return r.status
 	}
 	if len(args) > 0 {
@@ -6852,7 +6852,7 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 			// No dialect answered; statusArgument has already said so, and
 			// the script stops rather than exiting with a status it just
 			// refused to choose.
-			r.stopTheShell()
+			r.stopTheShellForExit()
 			return r.status
 		default:
 			return r.badStatusArg("exit", args[0])
@@ -6876,7 +6876,7 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 	// producer a try-always block has to tell that one apart from, and the
 	// two reach the same field. `exit` runs the cleanup halves it unwinds
 	// through and `set -e` does not (#1238).
-	r.stopTheShell()
+	r.stopTheShellForExit()
 	return r.status
 }
 

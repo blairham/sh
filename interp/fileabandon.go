@@ -105,6 +105,48 @@ func (r *Runner) stopTheShell() {
 	r.ctl, r.errexitStopped = controlExit, false
 }
 
+// stopTheShellForExit is `exit` raising the controlExit, which is
+// stopTheShell plus the one note only this producer can take: whether a file
+// was being read when the word ran. See Runner.ExitRanOutsideAFile.
+func (r *Runner) stopTheShellForExit() {
+	r.exitRanOutsideAFile = r.sourceDepth == 0
+	r.stopTheShell()
+}
+
+// ExitRanOutsideAFile reports whether the shell stopped because `exit` ran,
+// and ran somewhere other than in a file this shell was reading — a file `.`
+// opened, or a startup file.
+//
+// For a front end, and for one question: one shell in the panel writes a word
+// on its way out of an interactive invocation, and *this* is the property
+// that decides it. Measured 2026-09-21 on bash 5.3.20 and 3.2.57, `env -i`
+// with a scratch HOME and no terminal on any of the three standard streams,
+// each probe behind `-i -c`:
+//
+//	exit 3                              exit
+//	f(){ exit 3; }; f                   exit
+//	eval exit 3                         exit
+//	. defines.sh; the function it made  exit
+//	true                                nothing — no `exit` ran
+//	set -e; false                       nothing
+//	set -u; echo $nope                  nothing
+//	(exit 3)                            nothing — a subshell, not this shell
+//	. quits.sh, whose own line exits    nothing
+//	an rc file whose own line exits     nothing
+//
+// So it is not "the shell ended", not "the shell ended through `exit`", and
+// not where the *text* came from — the last two rows exit through `exit` and
+// say nothing, while a function body read from the same sourced file says the
+// word when the call is made outside it. What the shell is reading when the
+// word runs is the whole of it.
+//
+// False for every other way a shell stops, which is what the four quiet rows
+// above are: the input running out, `set -e` firing, a fatal error, a
+// subshell's own exit.
+func (r *Runner) ExitRanOutsideAFile() bool {
+	return r.ctl == controlExit && r.exitRanOutsideAFile
+}
+
 // takeFileError consumes a caught error, putting the runner back into ordinary
 // flow so the file that reached this one carries on at the next command.
 //

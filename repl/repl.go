@@ -545,7 +545,17 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	s.Runner.TakeInterrupt = sig.take
 	defer func() { s.Runner.TakeInterrupt = nil }()
 
+	// The wake an asynchronous segment publishes on, open for the length of
+	// this session and taken down with it. Nothing at all in a session whose
+	// theme does not publish, which is every session until one has a segment
+	// that computes its answer somewhere else. See promptasync.go.
+	signal, stopPublishing := s.publishing()
+	defer stopPublishing()
+
 	ed := s.newEditor(ctx, state)
+	if signal != nil {
+		ed.wake, ed.woke = signal.fd, signal.drain
+	}
 	ed.history = earlier
 	// And the seam that runs from the shell *to* the editor, which is this
 	// one and no other: a command that hands a person a line to edit. Cleared
@@ -567,6 +577,10 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	}()
 	record := s.recording(ed, &added)
 	var pending strings.Builder
+	// And what the editor draws again when the wake fires. After `pending`
+	// exists, because a re-render has to know whether it is drawing the
+	// prompt for a new command or for the rest of an unfinished one.
+	ed.rerender = s.rerender(&pending)
 	for {
 		if pending.Len() == 0 {
 			// The last thing done about the previous command's output, and
@@ -926,25 +940,65 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 	// is a column" have to be taken out of both and the count has to cover
 	// both. Two drawnPrompts added together would be a text of two halves and
 	// a width of one.
-	if themed, right, drawing := s.themed(continuing, cols); drawing {
-		// The whole prompt, so neither the parameter nor a contribution is
-		// consulted. One drawPrompt all the same: the markers still have to
-		// come out and the width still has to be counted.
-		drawn := drawPrompt(themed)
-		if right != "" {
-			// The same treatment and for the same reason — a right prompt is
-			// mostly escapes, and the editor places it by its *cells*. It has
-			// no rows of its own: it is drawn on the row being typed on or it
-			// is not drawn.
-			measured := drawPrompt(right)
-			drawn.right, drawn.rightCells = measured.text, measured.cells
-		}
+	if drawn, drawing := s.themedPrompt(continuing, cols); drawing {
 		return drawn
 	}
 	if continuing {
 		return drawPrompt(s.contributed(true, cols) + s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
 	}
 	return drawPrompt(s.contributed(false, cols) + s.prompt("PS1", or(s.Style.Default, "$ ")))
+}
+
+// themedPrompt is the prompt half of beforeReading: what the theme draws,
+// measured, with no hook fired and no window asked about.
+//
+// Split out because it is also what an asynchronous segment's arrival needs.
+// A prompt redrawn because something published must not fire a person's
+// `precmd` a second time — the hooks belong to the prompt *line* and this
+// belongs to the prompt — so the two halves of beforeReading had to stop
+// being one function before a redraw could use the second on its own. See
+// Shell.rerender and reprompt.go.
+func (s Shell) themedPrompt(continuing bool, cols int) (drawnPrompt, bool) {
+	themed, right, drawing := s.themed(continuing, cols)
+	if !drawing {
+		return drawnPrompt{}, false
+	}
+	// The whole prompt, so neither the parameter nor a contribution is
+	// consulted. One drawPrompt all the same: the markers still have to come
+	// out and the width still has to be counted.
+	drawn := drawPrompt(themed)
+	if right != "" {
+		// The same treatment and for the same reason — a right prompt is
+		// mostly escapes, and the editor places it by its *cells*. It has no
+		// rows of its own: it is drawn on the row being typed on or it is
+		// not drawn.
+		measured := drawPrompt(right)
+		drawn.right, drawn.rightCells = measured.text, measured.cells
+	}
+	return drawn, true
+}
+
+// rerender is how the editor draws the prompt again part-way through a line,
+// or nil in a session with no theme to draw one.
+//
+// It reads `pending` for the same reason beforeReading does — a construct
+// still asking for more text is a continuation and a theme draws something
+// else for one — and it is handed the width by the editor rather than asking
+// the terminal again: the editor already knows, and `trackWindowSize` writes
+// `$COLUMNS`, which is a prompt-line event and not a redraw one.
+//
+// The one thing it shares with beforeReading that looks like state is
+// promptInfo's record of the previous directory, and it is idempotent
+// part-way through a line: the working directory cannot move while somebody
+// is typing, so a re-render writes back the value beforeReading already
+// wrote.
+func (s Shell) rerender(pending *strings.Builder) func(cols int) (drawnPrompt, bool) {
+	if s.Theme == nil {
+		return nil
+	}
+	return func(cols int) (drawnPrompt, bool) {
+		return s.themedPrompt(pending.Len() > 0, cols)
+	}
 }
 
 // themed is what this session's theme draws, if it is drawing.

@@ -418,9 +418,15 @@ func (s Shell) watchedDescriptors() func() []int {
 // the fourth until a startup file arms one. That is the property worth stating
 // plainly: with nothing to watch, a keystroke is read exactly the way it was
 // read before this file existed, with no extra call in front of it.
-func (e *editor) serveDescriptors(prompt drawnPrompt) {
-	if e.watch == nil || e.descriptorReady == nil {
-		return
+// It also answers the prompt that is on the screen when it returns, which is
+// the one it was given except where a publisher woke it: a segment whose
+// answer has arrived is drawn by re-rendering the prompt in place, and
+// everything after this counts rows from the prompt's width. See reprompt.go.
+func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
+	watching := e.watch != nil && e.descriptorReady != nil
+	waking := e.wake != nil
+	if !watching && !waking {
+		return prompt
 	}
 	if e.inputPending() {
 		// Input this editor has already taken off the terminal is input
@@ -430,12 +436,26 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) {
 		// readable — the case this file exists for — is served for ever while
 		// a whole line sits unread in hand, which is the very "never sees a
 		// key" failure the descriptor is meant to be gotten past.
-		return
+		return prompt
 	}
 	for {
-		fds := e.watch()
+		var fds []int
+		if watching {
+			fds = e.watch()
+		}
+		// The publisher's wake goes into the same set, because there is one
+		// place in a shell that is idle with a descriptor in its hand and
+		// this is it. Negative until a theme has something to publish, and
+		// fdset.Wait drops that entry rather than failing the call — which is
+		// what lets a session arm one part-way through a line.
+		wake := -1
+		if waking {
+			if wake = e.wake(); wake >= 0 {
+				fds = append(fds, wake)
+			}
+		}
 		if len(fds) == 0 {
-			return
+			return prompt
 		}
 		terminal := -1
 		if e.inFd != nil {
@@ -448,7 +468,7 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) {
 			// fires — which the dialect that arms one has to say for itself,
 			// because this package cannot tell a caller anything from inside
 			// a read.
-			return
+			return prompt
 		}
 		if terminalReady || len(ready) == 0 {
 			// A key is waiting, or nothing is. Either way the read comes
@@ -456,9 +476,18 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) {
 			// after the keystroke has been dealt with, and letting the key
 			// go first is what keeps a prompt usable when a descriptor is
 			// permanently readable. See the file comment.
-			return
+			return prompt
 		}
 		for _, fd := range ready {
+			if fd == wake {
+				// Something a segment draws has arrived. The prompt is drawn
+				// again from the facts as they now stand, which is the whole
+				// of what a publisher buys — it published, and nothing here
+				// knows or cares what.
+				e.woke()
+				prompt = e.reprompt(prompt)
+				continue
+			}
 			e.serveDescriptor(fd, prompt)
 		}
 	}

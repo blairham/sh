@@ -5,6 +5,7 @@ package repl
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"github.com/blairham/sh/internal/prompttheme"
@@ -56,6 +57,42 @@ type Theme struct {
 	// by the default and has to say so.
 	iconSet  *prompttheme.IconSet
 	iconName string
+
+	// published is how a segment that computes its answer somewhere else
+	// tells the session to draw the prompt again, or nil between sessions.
+	// Written by the session that owns the theme and read by whatever
+	// goroutine did the computing, which is what the lock is for.
+	mu        sync.Mutex
+	published func()
+}
+
+// PublishTo satisfies PromptPublisher: a session hands the theme the way to
+// say that a redraw would differ, and takes it back when the session ends.
+//
+// Nothing about an asynchronous segment reaches this package's own segments
+// through here. They are given Publish below and know nothing of sessions,
+// which is what keeps a segment the same thing whether it computes its
+// answer here or somewhere else.
+func (t *Theme) PublishTo(publish func()) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.published = publish
+}
+
+// Publish says that what this theme would draw has changed.
+//
+// Safe from any goroutine, and nothing at all when no session is listening —
+// a scanner that finishes after the shell has gone is an ordinary outcome and
+// not an error. It is a statement rather than a request: the session decides
+// whether anything is actually redrawn, and a prompt that renders the same is
+// not written to the screen.
+func (t *Theme) Publish() {
+	t.mu.Lock()
+	publish := t.published
+	t.mu.Unlock()
+	if publish != nil {
+		publish()
+	}
 }
 
 // NewTheme returns a theme reading its settings through get, which is a

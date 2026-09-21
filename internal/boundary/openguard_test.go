@@ -211,7 +211,13 @@ var exempt = map[string]string{
 		"remove because this shell still held a descriptor onto them, removed when the " +
 		"shell itself ends (#2198).",
 	"interp.CleanUp": "the same directory, removed when this shell stops being one (#1284).",
-
+	"interp.procFdDirExists": "/proc/self/fd, stat'd once to learn whether this kernel has it " +
+		"— the question Semantics.SubstitutionPathPrefersProcSelfFd asks before a substitution's " +
+		"path is spelled. A fixed name this shell chose, asked of the machine and not of any " +
+		"file: nothing is opened, nothing is read, and the answer is the same for every script " +
+		"that ever runs here. A refusal could only make the shell spell its own pipe " +
+		"`/dev/fd/N` instead of `/proc/self/fd/N`, which is the same descriptor under the other " +
+		"name and protects nothing (#3986).",
 	// dialect/zsh. filesgate.go is the module's gate — every call in it is
 	// behind the consultation above it — and the rest are the mutating system
 	// calls, each one behind a fileMayModify about that exact path (#1819).

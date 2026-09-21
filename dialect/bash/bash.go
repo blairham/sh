@@ -1546,6 +1546,12 @@ func Semantics() interp.Semantics {
 	// "PIPE\n" | tee >(read -r v; sleep 0.3; printf "[%s]" "$v") >/dev/null;
 	// printf AFTER` is `AFTER[PIPE]` here and `[PIPE]AFTER` in zsh (#2197).
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
+	// And the path it expands to is `/dev/fd/N` on both platforms, even
+	// where /proc/self/fd is there and /dev/fd is a symlink to it: measured
+	// 2026-09-21, `echo <(true)` is `/dev/fd/63` in the pinned Linux image
+	// and on the panel machine alike, where zsh in that same image writes
+	// the symlink's target instead (#3986).
+	s.SubstitutionPathPrefersProcSelfFd = interp.No
 	s.ReadonlyReassignmentByDeclarationFatal = interp.No
 	// And `export x=2` and `readonly x=2` carry on too, until `set -o posix`
 	// moves this one — see interp.Semantics.ReadonlyReassignmentBySpecialBuiltinFatal.

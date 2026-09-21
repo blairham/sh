@@ -709,6 +709,48 @@ on the filesystem for anything to remove: `p=$(echo <(true)); [ -e "$p" ]` is
 false afterwards because the number is closed, not because a file was
 unlinked.
 
+### Which directory the path names
+
+The number is the shell's own and is not promised, but the **directory** in
+front of it is a disagreement. Measured 2026-09-21 with `echo <(true)` and
+`echo >(true)`, in the pinned images and on the panel machine:
+
+| shell | Linux | macOS |
+| --- | --- | --- |
+| zsh 5.9.2 | **`/proc/self/fd/11`** | `/dev/fd/11` |
+| bash 5.3.20 | `/dev/fd/63` | `/dev/fd/63` |
+| ksh93u+ | `/dev/fd/3` | `/dev/fd/3` |
+| BusyBox ash 1.37.0 | `/dev/fd/64` | — |
+
+It is the **shell's** rule and not the platform's, and the Linux column is
+what says so: one image, one `/dev/fd` symlink pointing at `/proc/self/fd`,
+and one shell writes the target where the other three write the link. Where
+both names are there they open the same descriptor, so nothing functional
+moves — `test -r <(true)`, the bytes, the reuse of the number — and what a
+script sees differently is the string it prints, logs, compares or takes
+apart.
+
+That is `Semantics.SubstitutionPathPrefersProcSelfFd`: zsh yes · bash no ·
+ksh93 no · ash no · dash unanswered, having no `<(cmd)` at all. `/dev/fd` is
+the fallback, so No is an answer rather than an absence — it is what the
+other three write on both platforms and what zsh itself writes wherever
+`/proc` is not.
+
+**The directory is looked for rather than assumed**, and the reason is that
+zsh settles this when it is *built*. With `/proc` lazily unmounted out from
+under it in the same image, zsh 5.9.2 still answers `/proc/self/fd/11` — a
+name that no longer resolves, and one `/dev/fd` cannot rescue there because
+`/dev/fd` is a symlink into the directory that went away. A build-time answer
+is not something a semantics vector can hold, so this shell stats the
+directory instead: that agrees with every zsh anybody runs, since a zsh built
+on Linux has `/proc` and one built on a BSD does not, and it differs only in
+the configuration where zsh's own answer is a broken path.
+
+Before this the path was hard-wired to `/dev/fd`, which is right on macOS and
+wrong on Linux — and Linux is where every gated column runs, so
+`ext/procsub.tests` was the one `ext/` file failing in a gated column, on the
+two rows that print the name and on neither of the two that use it (#3986).
+
 ### When a writing body's output lands
 
 `>(cmd)` is the direction whose body has nobody waiting for it. `<(cmd)`

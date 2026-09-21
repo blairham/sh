@@ -8188,6 +8188,47 @@ type Semantics struct {
 	// never reaches this.
 	WritingSubstitutionIsWaitedForAtTheCommand Answer
 
+	// SubstitutionPathPrefersProcSelfFd names a `<(cmd)` or a `>(cmd)` under
+	// /proc/self/fd where that directory is there, rather than under /dev/fd.
+	//
+	// Only the name moves. On a system that has both, /dev/fd is a symlink to
+	// /proc/self/fd, so the two spellings open the same descriptor and every
+	// functional question about a substitution — is it readable, is it
+	// writable, what comes out of it — is answered identically either way.
+	// What differs is the string the word expands to, which is what a script
+	// that prints, logs, compares or re-derives the path sees.
+	//
+	// Measured 2026-09-21 with `echo <(true)` and `echo >(true)`, in the
+	// pinned Linux images and on the panel machine:
+	//
+	//	shell        Linux                macOS
+	//	zsh 5.9.2    /proc/self/fd/11     /dev/fd/11
+	//	ksh93u+      /dev/fd/3            /dev/fd/3
+	//	bash 5.3.20  /dev/fd/63           /dev/fd/63
+	//
+	// So it is the shell's rule and not the platform's, and the Linux column
+	// is what says so: one image, one /dev/fd symlink, and zsh writes the
+	// target where the other two write the link.
+	//
+	// # Why the directory is stat'd rather than assumed
+	//
+	// zsh settles this when it is *built*, not when it runs: with /proc
+	// lazily unmounted out from under it in the same image, zsh 5.9.2 still
+	// answers /proc/self/fd/11 — a name that no longer resolves. A build-time
+	// answer is not a thing a vector can hold, so the directory is looked for
+	// at run time instead. That agrees with every zsh anybody runs, because a
+	// zsh built on Linux has /proc and one built on a BSD does not, and it
+	// differs only where /proc went away after the build — the one
+	// configuration in which zsh's own answer is a broken path.
+	//
+	// /dev/fd is the fallback, so a No here is not an absence: it is the
+	// answer bash and ksh93 give on both platforms and the answer zsh gives
+	// wherever /proc is not. Read rather than asked, and the reading is
+	// `== Yes`, so a preset with no process substitution at all never reaches
+	// it — see WritingSubstitutionIsWaitedForAtTheCommand, which is the same
+	// shape for the same reason (#3986).
+	SubstitutionPathPrefersProcSelfFd Answer
+
 	// AssignThroughExpansionMayNameAPositional lets `${1:=word}` assign to a
 	// positional parameter. zsh alone, and it is a real disagreement rather
 	// than a wording one — the other five refuse the expansion fatally.

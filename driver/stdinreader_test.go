@@ -171,6 +171,35 @@ func TestAReaderIsReadOnAChildsBehalfWhetherOrNotTheChildReads(t *testing.T) {
 	}
 }
 
+// TestTheChildsInputIsTheOneTheCallerNamed: the other half of the row above,
+// and the thing that makes the tripwire survivable. A front end whose input
+// is a *question* fills ChildStdin in, and the child then reads that instead
+// of the shell's own — one field carried to the Runner, which is #934's
+// decision.
+//
+// The reader that counts is the shell's, so this asserts a zero against the
+// row above's non-zero: same snippet, same shell, one field apart. Without
+// that pairing a count of nothing says only that the command did not read.
+func TestTheChildsInputIsTheOneTheCallerNamed(t *testing.T) {
+	in := &countingReader{}
+	sh := shell()
+	sh.Semantics = interp.PosixSemantics()
+	sh.Stdin = in
+	sh.ChildStdin = &countingReader{}
+	var o, e bytes.Buffer
+	sh.Stdout, sh.Stderr = &o, &e
+	if code := driver.MainArgs(sh, []string{"testsh", "-c", "/bin/echo hi"}); code != 0 {
+		t.Fatalf("status %d, stderr %q", code, e.String())
+	}
+	if o.String() != "hi\n" {
+		t.Fatalf("output %q, want %q", o.String(), "hi\n")
+	}
+	if n := in.reads.Load(); n != 0 {
+		t.Errorf("the shell's own input was read %d times, want none: the caller named "+
+			"another stream for the child, and interp.Runner.ChildStdin is what carries it", n)
+	}
+}
+
 // countingReader is empty and counts who asked.
 type countingReader struct{ reads atomic.Int64 }
 

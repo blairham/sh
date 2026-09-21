@@ -289,6 +289,25 @@ type Shell struct {
 	// end's default and not interp's, where nil is an empty stream — #480.
 	Stdin io.Reader
 
+	// ChildStdin is what an external command inherits in place of Stdin.
+	// Nil — the default — is inheritance, which is what a shell means.
+	//
+	// It is the other half of the widening above, and the half that was
+	// missing. A front end whose input is a *question* cannot simply put the
+	// asking reader in Stdin: interp hands a command the shell's input, and
+	// os/exec reads a non-file one on the child's behalf whether or not the
+	// child ever reads it — so the question would be put once per external
+	// command rather than once per `read`. The tripwire for that is
+	// TestAReaderIsReadOnAChildsBehalfWhetherOrNotTheChildReads in this
+	// package, and this field is what it is a tripwire for.
+	//
+	// Carried straight to [interp.Runner.ChildStdin], which is where the
+	// rule lives and where the one thing it must not do is written down: it
+	// replaces the shell's own input and never a stream a script asked for,
+	// so `cat < f` and `echo x | cat` are unaffected. See internal/acp,
+	// which is the caller, and docs/design/acp.md (#934).
+	ChildStdin io.Reader
+
 	// Stdout and Stderr default to the process's. Tests set them; a binary
 	// leaves them alone.
 	Stdout, Stderr io.Writer
@@ -2087,9 +2106,10 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// tests silently read the *test binary's* input instead. It matters
 		// twice over on the standard-input route, where this descriptor is
 		// also where the rest of the program is coming from.
-		Stdin:  sh.Stdin,
-		Stdout: sh.Stdout,
-		Stderr: sh.Stderr,
+		Stdin:      sh.Stdin,
+		ChildStdin: sh.ChildStdin,
+		Stdout:     sh.Stdout,
+		Stderr:     sh.Stderr,
 		// The policy and the observer, carried straight through. Both are
 		// nil for every shell that has not asked for one, which is the
 		// behavior every binary had before this field existed and costs a

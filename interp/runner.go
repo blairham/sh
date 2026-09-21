@@ -106,6 +106,44 @@ type Runner struct {
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 
+	// ChildStdin is what an external command this shell starts inherits in
+	// place of the shell's own standard input. Nil — the default — is
+	// inheritance, which is what a shell means: `cat` with nothing in front
+	// of it reads what the shell reads.
+	//
+	// It exists because **a shell's standard input is inherited by every
+	// command it runs, and os/exec reads a non-file one on the child's
+	// behalf whether or not the child ever reads it.** A child is connected
+	// straight to an *os.File and handed a pipe for anything else, filled by
+	// a copying goroutine that starts when the command does — so
+	// `/bin/echo hi`, which reads nothing, causes one Read.
+	// driver's TestAReaderIsReadOnAChildsBehalfWhetherOrNotTheChildReads is
+	// the tripwire for that, and this field is what it is a tripwire *for*.
+	//
+	// The caller that needs it is a front end whose standard input is a
+	// *question* rather than a stream: an Agent Client Protocol session can
+	// put a `read` to a person over the connection, and a reader that
+	// performs that round trip would be asked once per external command
+	// rather than once per `read` — a form for `echo`. With this, the
+	// eliciting reader is the shell's own input and a child keeps the empty
+	// stream every child in such a session gets today. See
+	// docs/design/acp.md and internal/acp (#934).
+	//
+	// **The cost is that "the shell's input" then means two things**, which
+	// is a change to what a shell *is* rather than to its wiring, and it is
+	// accepted rather than hidden. What keeps it from meaning three is that
+	// this replaces the shell's own input and nothing else: a redirection, a
+	// pipeline's pipe, a here-document, a process substitution's end — every
+	// stream a *script* put there — reaches a child untouched, because the
+	// script asked for it by name. `cat < f` reads `f` in a session whose
+	// shell elicits, and so does `echo x | cat`.
+	//
+	// It is deliberately not a way to give children a *different* stream in
+	// general. The one question it answers is whether a child inherits, and
+	// the shells have no disagreement to record about that — so this is a
+	// field on the Runner rather than an axis on Semantics.
+	ChildStdin io.Reader
+
 	// AxisRemedy is what a caller wants said to a person who has just run
 	// into an axis no dialect answered: the words that turn "the shells
 	// disagree here and no dialect was chosen" from a statement of the
@@ -1373,6 +1411,20 @@ type Runner struct {
 	// See Semantics.ProcessSubstitutionBodyReadsTheShellsInput, which is
 	// where the panel split is written down, and procSub, which reads it.
 	shellStdin io.Reader
+	// ownStdin is what Stdin held when this shell started running, which is
+	// how ChildStdin is applied to the shell's own input and to nothing
+	// else. Every stream a script installs — a redirection, a pipeline's
+	// pipe, a here-document, a substitution's end — is a different value, so
+	// the comparison is the whole of the rule and there is no second flag to
+	// keep in step with the half-dozen places that assign Stdin.
+	//
+	// Recorded once, and only where the value can be compared at all: an
+	// io.Reader whose dynamic type is not comparable would panic on `==`, so
+	// an uncomparable one is simply never matched and a child inherits, which
+	// is the answer a Runner without this field gives. A clone copies it, so
+	// a subshell's own input is still the shell's.
+	ownStdin    io.Reader
+	ownStdinSet bool
 	// midPipeline says this runner is an element of a pipeline whose status
 	// it does not decide — everything but the last. Kept because a signal
 	// that ends such an element is announced by one dialect and passed over
@@ -4495,6 +4547,9 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	// hands. Once per process in a binary that is a shell: a clone inherits
 	// the answer, and a second call does nothing. See umaskscope.go.
 	r.ensureUmask()
+	// And what this shell's own standard input is, before anything a script
+	// writes can redirect it — see Runner.ownStdin and Runner.ChildStdin.
+	r.ensureOwnStdin()
 	// Before the descriptors are published, because publishing them is itself
 	// an action and the first one this session records.
 	r.ensureActionIDs()
@@ -7035,7 +7090,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// A stream the script *closed* is the one thing that must not arrive as
 	// that emptiness, and childIn and childOut are where the difference is
 	// kept: an empty descriptor reads end-of-file and a closed one fails.
-	cmd.Stdin = childIn(r.Stdin)
+	cmd.Stdin = r.childStdin()
 	cmd.Stdout = childOut(r.Stdout)
 	cmd.Stderr = childOut(r.Stderr)
 	// The descriptors past the three named streams, rebuilt into the child's

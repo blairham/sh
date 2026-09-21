@@ -243,7 +243,11 @@ func (r *Runner) replacementFiles() []*os.File {
 	extra := r.childFiles()
 	files := make([]*os.File, firstExtraFd+len(extra))
 	copy(files[firstExtraFd:], extra)
-	files[0] = streamFile(r.Stdin)
+	// The child's answer and not the shell's, for the reason every other
+	// route into a process takes it: a replacement *is* an external command,
+	// and a front end whose own input is a question has none to hand one.
+	// See Runner.ChildStdin.
+	files[0] = streamFile(r.inheritedStdin())
 	files[1] = streamFile(r.Stdout)
 	files[2] = streamFile(r.Stderr)
 	return files

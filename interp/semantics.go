@@ -17488,6 +17488,56 @@ type Semantics struct {
 	// cannot be asked.
 	WrittenSubscriptQuotationStopsItsExpansion Answer
 
+	// SubscriptQuotationEndsTheKey ends an associative key at the
+	// apostrophe-quoted run that performed an expansion in it, dropping
+	// whatever a script wrote after that run: ksh93.
+	//
+	// It is the other half of what a column that *performs* the expansion
+	// an apostrophe holds does with the text around it, so it only ever
+	// arises where WrittenSubscriptQuotationStopsItsExpansion is no. bash
+	// does not perform that expansion at all and zsh performs it and keeps
+	// every character, so both keep the whole subscript.
+	//
+	// Measured 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> f.sh`
+	// over a script file with standard input on the null device, storing
+	// through the subscript and listing the key the table ended up holding —
+	// `typeset -A m; kq=q` and one store:
+	//
+	//	written         bash 5.3.20  ksh93u+    zsh 5.9.2
+	//	m['$kq']        $kq          q          'q'
+	//	m['$kq'z]       $kqz         (empty)    'q'z
+	//	m[q'$kq'z]      q$kqz        q          q'q'z
+	//	m[q'$kq']       q$kq         qq         q'q'
+	//	m['$kq'$kq]     $kqq         (empty)    'q'q
+	//	m[$kq'$kq']     q$kq         qq         q'q'
+	//	m['$kq'z'$kq']  $kqz$kq      q          'q'z'q'
+	//	m[a'$kq'b'$kq'c] a$kqb$kqc   a          a'q'b'q'c
+	//
+	// Three controls say what it is not. A run with **no expansion** in it
+	// is not one of these — `m['q'z]` is `qz` in every column — so it is the
+	// performing and not the quotation. A run inside a **double quotation**
+	// is not one either — `m["'$kq'"]` is `'q'` there, with nothing dropped
+	// — so the apostrophes have to be quotation in their own right. And a
+	// subscript that **arrived** already word-expanded is untouched:
+	// `e="m['\$kq'z]"; (( $e = 42 ))` is the key `$kqz` in that column as
+	// well as in bash, because the apostrophes stop the expansion there and
+	// there is no expansion performed for a key to end at.
+	//
+	// The rows part on *where* the last such run sits, which is why the rule
+	// is not "drop everything after the first quotation": the run's own value
+	// is part of the key where it ends the subscript and is dropped where a
+	// script wrote anything after it, and the text in front of it is read by
+	// the same rule again. `m['$kq'z'$kq']` is the row that needs all three.
+	//
+	// It reaches an **indexed** subscript too, by reaching the text before
+	// anything reads it: `b=(10 20 30); i=1; (( b['$i'x] = 9 ))` writes
+	// element *zero* there, the brackets having been left holding nothing.
+	//
+	// bash 3.2.57 has no associative array, and dash 0.5.12 and BusyBox ash
+	// 1.37.0 have no array of either kind, so three of the seven columns
+	// cannot be asked.
+	SubscriptQuotationEndsTheKey Answer
+
 	// SubstringRangeQuotesPatternCharacters protects the pattern
 	// metacharacters in a substring's offset and length before the range is
 	// read as arithmetic, which turns every one of them into an arithmetic
@@ -23122,6 +23172,10 @@ func PosixSemantics() Semantics {
 		// quotation. This follows the two columns that perform what one
 		// holds; bash is the column that overrides it.
 		WrittenSubscriptQuotationStopsItsExpansion: No,
+		// The standard has no arrays, so no key here can end early. This
+		// follows the two columns that keep the whole subscript; ksh93 is
+		// the column that overrides it.
+		SubscriptQuotationEndsTheKey: No,
 		// The standard has no substrings, so this follows the three columns
 		// that have one and evaluate the range they were given. ksh93 is the
 		// column that overrides it.

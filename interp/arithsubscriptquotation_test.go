@@ -46,6 +46,13 @@ func quotedKeyAxis(a Answer, stopped bool) func(*Runner) {
 		// axis. See Semantics.ArithSubscriptRereadsItsExpandedText.
 		s.ArithSubscriptRereadsItsExpandedText = No
 		s.SubscriptIsAQuotingContext = Yes
+		// And an arrived subscript is one too, which is not a free choice:
+		// a quotation that never closes is only a quotation at all where
+		// the arrived text is read as quoting. Answer it no and there is no
+		// quotation here to leave unclosed, so every row below would find
+		// the element for a reason that is not this axis. See
+		// Semantics.ArrivedSubscriptIsAQuotingContext.
+		s.ArrivedSubscriptIsAQuotingContext = Yes
 		r.Semantics = &s
 		if stopped {
 			r.SetExpandsAnOperandsSubscriptAgain(false)

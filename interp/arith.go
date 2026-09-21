@@ -3258,7 +3258,21 @@ func (r *Runner) expandArithText(text string) string {
 	if !read {
 		return text
 	}
-	out, _, _ := r.expandSpansWith(spans, func(literal bool, part string) string {
+	// Where each subscript the *source* wrote lands in the output, collected
+	// here because nothing in the finished text says which brackets were the
+	// script's: an arrived bracket is the same byte. One reader wants it —
+	// see Runner.truncateSubscriptsAtAQuotedExpansion — and it is recorded
+	// on the way past rather than searched for afterwards.
+	var subs []sourceSubscript
+	// at is where the next part lands in the output, open where the subscript
+	// being scanned began, quoteOpen where the apostrophe it is inside began,
+	// and runs the quoted runs that have performed an expansion so far.
+	at, open, quoteOpen := 0, -1, -1
+	var runs []int
+	out, _, _ := r.expandSpansWith(spans, func(literal bool, part string) (wrote string) {
+		// The *written* length, since a marked part is longer than the one
+		// that came in and every later extent is measured from the output.
+		defer func() { at += len(wrote) }()
 		if literal {
 			// Quoting and all: a `]` the source wrote inside a quotation
 			// closes no subscript, so it must not close one for the depth
@@ -3266,14 +3280,25 @@ func (r *Runner) expandArithText(text string) string {
 			// quotation a span opens can hold the next expansion. The
 			// parser draws the same boundary with the same type.
 			for i := 0; i < len(part); i++ {
+				was := scan.Quote()
 				switch b := part[i]; {
 				case quoted && scan.Content(b):
+					if was == 0 && scan.Quote() == '\'' {
+						quoteOpen = at + i
+					}
 				case b == '[':
 					scan.Depth++
+					if scan.Depth == 1 {
+						open, runs = at+i+1, nil
+					}
 				case b == ']':
 					scan.Depth--
 					if scan.Depth < 0 {
 						balanced = false
+					}
+					if scan.Depth == 0 && open >= 0 {
+						subs = append(subs, sourceSubscript{open, at + i, runs})
+						open, runs = -1, nil
 					}
 				}
 			}
@@ -3288,6 +3313,15 @@ func (r *Runner) expandArithText(text string) string {
 			// Runner.markArrivedSubscriptQuoting.
 			return r.markArrivedSubscriptQuoting(part)
 		}
+		if scan.Quote() == '\'' && quoteOpen >= open && open >= 0 &&
+			(len(runs) == 0 || runs[len(runs)-1] != quoteOpen) {
+			// An expansion performed inside an apostrophe run the source
+			// wrote, which is what one dialect ends the key at. Recorded
+			// rather than looked for afterwards: an expansion whose result
+			// holds no syntax character is marked nowhere, so the finished
+			// text cannot say a run performed one.
+			runs = append(runs, quoteOpen)
+		}
 		if !strings.ContainsAny(part, arithValueMarked) {
 			return part
 		}
@@ -3301,6 +3335,12 @@ func (r *Runner) expandArithText(text string) string {
 		}
 		return markArithValue(part)
 	}, r.stoppedArithSpans(text, spans))
+	if scan.Depth == 0 && balanced && !scan.Unclosed() {
+		// A key that ends at the run which performed an expansion in it,
+		// where the dialect says so. Over the subscripts a script wrote and
+		// nothing else, which is what the extents above are for.
+		out = r.truncateSubscriptsAtAQuotedExpansion(out, subs)
+	}
 	if scan.Depth != 0 || !balanced || scan.Unclosed() {
 		// The source never closed the bracket it opened, so there is no
 		// bracket of the script's for a value's to be distinguished from —

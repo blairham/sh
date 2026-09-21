@@ -2700,6 +2700,13 @@ func Semantics() interp.Semantics {
 	// two agree on `$kq`, which is what makes the written spelling its own
 	// question (#3942).
 	s.WrittenSubscriptQuotationStopsItsExpansion = interp.No
+	// And performing it ends the key there: measured in the same run,
+	// `typeset -A m; kq=q; (( m[q'$kq'z] = 42 ))` stores under `q` here —
+	// the `z` a script wrote after the run is gone — where bash 5.3.20
+	// keeps `q$kqz` and zsh 5.9.2 `q'q'z`. `(( m['$kq'z] = 42 ))` beside it
+	// leaves the key empty, and `(( m['q'z] = 42 ))` with no expansion in
+	// the run is `qz` in every column, which is the control (#3968).
+	s.SubscriptQuotationEndsTheKey = interp.Yes
 	// And the same for a subscript that expanded to nothing, which this
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.

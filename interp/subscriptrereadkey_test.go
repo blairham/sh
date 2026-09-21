@@ -40,6 +40,13 @@ func rereadKeyAxis(a Answer) func(*Runner) {
 	return func(r *Runner) {
 		s := *r.Semantics
 		s.SubscriptIsAQuotingContext = a
+		// And the same answer for a subscript whose brackets arrived out of
+		// a value, which is the axis the rows with no expansion in them
+		// really turn on — the two real columns that read a subscript as a
+		// quoting context part there, and this file's rows are written
+		// against one reading at a time. See
+		// Semantics.ArrivedSubscriptIsAQuotingContext.
+		s.ArrivedSubscriptIsAQuotingContext = a
 		// Whether a value's *bracket* is read back as subscript syntax is a
 		// different question with a different consumer, and no row here
 		// holds a bracket in a value. Answered so nothing below can be

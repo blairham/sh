@@ -1977,6 +1977,12 @@ func Semantics() interp.Semantics {
 	// SubscriptIsAQuotingContext's `no` showing through beside this one
 	// (#3942).
 	s.WrittenSubscriptQuotationStopsItsExpansion = interp.No
+	// And the expansion being performed does not end the key: measured in
+	// the same run, `(( m[q'$kq'z] = 42 ))` is `q'q'z` here — every
+	// character kept, quotation included — where ksh93u+ 2012-08-01 keeps
+	// only `q`. A reading of its own rather than a pin: this column
+	// performs the expansion, so it reaches the question (#3968).
+	s.SubscriptQuotationEndsTheKey = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

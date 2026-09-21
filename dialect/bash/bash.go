@@ -2428,6 +2428,11 @@ func Semantics() interp.Semantics {
 	// every column, which is the control that says this is the apostrophe
 	// and not quoting in general (#3942).
 	s.WrittenSubscriptQuotationStopsItsExpansion = interp.Yes
+	// So no key here ends at such a run: there is no expansion performed in
+	// one for it to end at. Measured in the same run, `(( m[q'$kq'z] = 42 ))`
+	// is the whole of `q$kqz` here where ksh93u+ 2012-08-01 keeps only `q`
+	// (#3968).
+	s.SubscriptQuotationEndsTheKey = interp.No
 	// A subscript that *expanded* to nothing is the expression that is zero,
 	// so `${a[$w]}` with an empty `$w` is element zero — measured 2026-09-11
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`

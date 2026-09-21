@@ -18444,6 +18444,16 @@ echo "st=$? alive"`,
 		Why:     "which key a subscript names when a quotation a script *wrote* between its brackets holds an expansion, read back under all three spellings the panel can produce. bash leaves the expansion unperformed and stores under the three characters `$kq`; ksh93 performs it and takes the apostrophes off, storing under `q`; zsh performs it and keeps them, storing under `'q'` — which is Semantics.SubscriptIsAQuotingContext showing through beside this one. The read-backs go through values so that the spelling this case is about is the one inside the arithmetic and not the one in the probe. See Semantics.WrittenSubscriptQuotationStopsItsExpansion; `arith/an-arrived-subscripts-apostrophe` is the same characters reached the other way, where bash and ksh93 agree",
 	},
 	{
+		ID: "arith/a-key-ending-at-a-quoted-expansion", Category: "semantics axes",
+		Snippet: `typeset -A m; kq=q; b='q$kqz'; c="q'q'z"; (( m[q'$kq'z] = 42 )); printf "[%s][%s][%s]\n" "${m[q]}" "${m[$b]}" "${m[$c]}"`,
+		Why:     "whether a key ends at the apostrophe-quoted run that performed an expansion in it, dropping what a script wrote after that run. ksh93 stores under `q` — the `z` is gone — where bash 5.3.20 never performs the expansion and keeps `q$kqz`, and zsh performs it and keeps `q'q'z`. The three read-backs are exactly those three keys, each reached through a value so the probe's own spelling is never the thing being measured, and each column finds one of them. See Semantics.SubscriptQuotationEndsTheKey; `arith/a-quoted-run-with-no-expansion-ends-nothing` is the control",
+	},
+	{
+		ID: "arith/a-quoted-run-with-no-expansion-ends-nothing", Category: "arithmetic",
+		Snippet: `typeset -A m; (( m[q'r'z] = 42 )); printf "[%s]\n" "${m[qrz]}"`,
+		Why:     "the control for the row above: the same shape with nothing to expand inside the apostrophes, and every column keeps the whole subscript. So it is the expansion being performed that ends the key and not the quotation",
+	},
+	{
 		ID: "arith/an-arrived-subscripts-apostrophe", Category: "arithmetic",
 		Snippet: `typeset -A m; kq=q; a='$kq'; b="'q'"; e="m['\$kq']"; (( $e = 42 )); printf "[%s][%s][%s]\n" "${m[$kq]}" "${m[$a]}" "${m[$b]}"`,
 		Why:     "the control that makes the row above an axis rather than one column being wrong: the identical brackets reached through a value, where bash and ksh93 both leave the expansion unperformed and store under `$kq`. So a written apostrophe and an arrived one are two questions, and only the first splits those two columns",

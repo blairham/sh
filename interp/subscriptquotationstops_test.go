@@ -36,6 +36,13 @@ func quotationRun(t *testing.T, src string, quoting interp.Answer) (string, int)
 	t.Helper()
 	return axisRun(t, src, func(s *interp.Semantics) {
 		s.SubscriptIsAQuotingContext = quoting
+		// Every row here holds an **expansion** inside the brackets, and
+		// that is what decides the other quoting axis out of the question:
+		// a subscript still holding one is unmarked before it is read
+		// again, so the two answers cannot part on these rows. Answered
+		// the harder way — the marking on — so that they have to prove it.
+		// See Semantics.ArrivedSubscriptIsAQuotingContext.
+		s.ArrivedSubscriptIsAQuotingContext = interp.No
 	})
 }
 

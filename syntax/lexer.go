@@ -46,6 +46,40 @@ type Lexer struct {
 	// parentheses was inside when it ran out, waiting for scanParens to run
 	// out of the same input.
 	lastInner string
+	// lastBodyStop is how far into this source the most recent failed read
+	// of a program between parentheses got before it stopped, waiting for
+	// scanParens the way lastInner does. Zero where there was no such read.
+	//
+	// It bounds the counting loop that is the older answer for where a body
+	// ends: the grammar's read is authoritative as far as it got, so a `)`
+	// it consumed and went past is not a closer and must not be counted as
+	// one. `v=$(echo hi; case x in y)` is the shape — the parenthesis is the
+	// pattern's, the grammar reads on to the end of the input, and counting
+	// then closed the substitution at a parenthesis the reader had already
+	// spent. bash 5.3.20, dash 0.5.12 and zsh 5.9.2 all take that script as
+	// a substitution that never closes, measured 2026-09-21 (#3961).
+	//
+	// **Set only where that read *refused* the text**, which is the line
+	// between a grammar that has judged the parenthesis and one that merely
+	// did not reach a verdict. A here-document whose delimiter never came
+	// runs to the end of the text and the read then finds no `)` — with
+	// nothing wrong with the program, no refusal, and a recovery at the end
+	// of the substitution's text waiting for exactly the parenthesis the
+	// counting loop finds. See Dialect.HeredocLastLineIsADelimiterPrefix,
+	// whose cases are what caught this.
+	lastBodyStop int
+	// lastBodyRefusal is what the most recent failed read of a program
+	// between parentheses had to say for itself, waiting for scanParens to
+	// run out of the same input. Nil where that read raised nothing — a body
+	// the grammar simply did not finish, or no such read at all.
+	//
+	// Kept beside lastInner and cleared the same way, because it answers the
+	// same moment: the grammar read the rest of the input as a program and
+	// the caller is about to decide there is no closing parenthesis. One
+	// dialect writes that program's own refusal in front of its complaint
+	// about the substitution — see Error.BodyRefusal — and the read that
+	// found it has already happened.
+	lastBodyRefusal *Error
 
 	// wordStart is where the word being read began, kept for the diagnostic
 	// that quotes it back.
@@ -3592,7 +3626,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// and the refusal landed 214 lines from the cause (#1397). Reading
 		// them here is the fold: one scanner, one comment rule, one answer
 		// to where a body ends, for all three kinds that hold a program.
-		l.lastInner = ""
+		l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
 		if end, remarks, ok := l.parseToClose(start); ok {
 			// What that read had to say comes back with it. A parse inside a
 			// parse otherwise says nothing — the reason takeRemarks exists
@@ -3631,7 +3665,15 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// which is what an unfinished substitution is.
 	}
 	inner := l.lastInner
-	l.lastInner = ""
+	// What the grammar's own read of the rest of the input said, which is the
+	// answer only if this construct now runs out too: a `)` the counting loop
+	// below finds means the body ended there and had no chance to speak.
+	refusal := l.lastBodyRefusal
+	// How far the grammar's read got, so that the counting below does not
+	// spend a parenthesis that read has already spent. See
+	// Lexer.lastBodyStop.
+	spent := l.lastBodyStop
+	l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
 	joined := l.collectContinuations()
 	for depth > 0 {
 		if l.eof() {
@@ -3639,8 +3681,16 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				l.innerOpen = inner
 			}
 			l.ranOut(openingOf(kind))
-			l.failedToClose(open, kind)
+			l.failedToClose(open, kind, refusal)
 			break
+		}
+		if l.off < spent {
+			// Text the grammar already read as part of the body. Whatever
+			// stands here — a parenthesis, a quote, a comment — that read
+			// accounted for, so stepping over it is the whole of what is
+			// left to do with it. See Lexer.lastBodyStop.
+			l.advance()
+			continue
 		}
 		switch c := l.peek(); c {
 		case '\'':
@@ -3766,7 +3816,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				l.advance()
 			}
 			l.ranOut(openingOf(kind))
-			l.failedToClose(open, kind)
+			l.failedToClose(open, kind, nil)
 		}
 	}
 	// Trim the closing delimiters the loop consumed, reaching back over a
@@ -3827,8 +3877,14 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 // needed no new switch at all, and adding `$((` to the first set is the
 // mistake that would have moved the line: measured per dialect afterwards,
 // all four agree with the panel unchanged.
-func (l *Lexer) failedToClose(open Pos, kind SpanKind) {
+// body is what the grammar's own read of the contents had to say for itself,
+// or nil where it said nothing. One dialect writes it in front of this
+// complaint; see Error.BodyRefusal for the rows.
+func (l *Lexer) failedToClose(open Pos, kind SpanKind, body *Error) {
 	l.failUnmatched(open, openingOf(kind), closingOf(kind), "unterminated "+kind.String())
+	if se, ok := l.err.(*Error); ok && se.Kind == ErrUnmatched && se.Pos == open {
+		se.BodyRefusal = body
+	}
 }
 
 // collectContinuations starts recording the line continuations of an
@@ -4139,6 +4195,20 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 	lex.line = l.line
 	lex.inProgramParens = true
 	sub := newParserOn(lex, l.dialect)
+	// The text begins a substitution's contents, so the end of it is that
+	// construct's closing delimiter rather than the end of a program — the
+	// same thing Runner.readSubstBody tells the read that *runs* the body,
+	// and told here so that the two readers cannot disagree about what the
+	// body's complaint is.
+	//
+	// Inert on the success path by construction: a read that found the `)`
+	// stopped at TokRightParen and never asked what the end of input means.
+	// What it changes is the refusal this keeps below — `v=$(echo hi; echo x
+	// &&` is a body one dialect accepts and no message at all there, where
+	// reading the rest of the file as a *program* refused the dangling
+	// operator and would have written a refusal the reference does not
+	// (#3961). See Parser.InsideASubstitution.
+	sub.InsideASubstitution()
 	sub.parseList()
 	l.bodyPending, l.bodyPendingQuoted = sub.lex.pending, sub.lex.pendingQuoted
 	l.noteHeredocOutside(sub)
@@ -4148,6 +4218,13 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 		l.lastInner = ""
 		if sub.lex.incomplete {
 			l.lastInner = sub.lex.OpenInnermost()
+		}
+		// And what this read had to say, and how far it got, for the same
+		// caller and the same moment. See Lexer.lastBodyRefusal and
+		// Lexer.lastBodyStop.
+		l.lastBodyRefusal, _ = sub.err.(*Error)
+		if sub.err != nil {
+			l.lastBodyStop = from + int(sub.tok.Pos.Offset)
 		}
 		return 0, nil, false
 	}
@@ -5491,6 +5568,32 @@ func (l *Lexer) peekIsRightParen() bool {
 // blanks *inside* the pair are skipped as they are above, because no
 // measurement puts them in the rule: `zz( ) { :; }` is the same answer as
 // `zz() { :; }` in the column that has it.
+
+// peekIsRightParenAdjacent is peekIsRightParen with the blanks between the
+// two parentheses counting, which is the whole of what tells an anonymous
+// function from an empty subshell.
+//
+// Measured 2026-09-21 on zsh 5.9.2 — the one shell in the panel with the
+// construct — from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`
+// with standard input on the null device:
+//
+//	`()` and a newline          parse error near `\n' — a body never came
+//	`()` ⏎ `echo $0`            (anon) — the next line *is* the body
+//	`() { echo $0; }`           (anon)
+//	`( )`                       accepted, and runs nothing
+//	`( )` ⏎ `echo $0`           s.sh — a subshell and then a command
+//	`( ) { echo $0; }`          parse error near `{'
+//	`(` ⏎ `)`                   accepted
+//
+// So the pair is the anonymous function's empty parameter list only when
+// nothing at all stands between them. The blanks *inside* a named
+// definition's parentheses do not count the same way — `zz( ) { :; }` is
+// `zz() { :; }` there — which is why this is its own question rather than
+// peekIsFuncParens' rule read one parenthesis at a time.
+func (l *Lexer) peekIsRightParenAdjacent() bool {
+	return l.off < len(l.src) && l.src[l.off] == ')'
+}
+
 func (l *Lexer) peekIsFuncParensAdjacent() bool {
 	if l.off >= len(l.src) || l.src[l.off] != '(' {
 		return false

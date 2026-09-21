@@ -141,7 +141,7 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			// the sweep where the line is dropped rather than moved: the body
 			// ran out where a function's body was due, which is the single
 			// failure this dialect locates by the shell's name alone — see
-			// Diagnostics.MissingFuncBodyOmitsTheLine and
+			// Diagnostics.MissingFuncBodyCountsFromItsParens and
 			// Runner.substFailureLocatedByNameAlone.
 			//
 			// Measured 2026-09-21, zsh 5.9.2, from a script file whose line 1

@@ -2896,7 +2896,7 @@ type Runner struct {
 	// locatedByNameAlone drops the line from the one message it is set
 	// around, for a refusal the dialect locates by the shell's name and
 	// nothing else. See Runner.substFailureLocatedByNameAlone and
-	// Diagnostics.MissingFuncBodyOmitsTheLine.
+	// Diagnostics.MissingFuncBodyCountsFromItsParens.
 	//
 	// A flag around one write rather than an answer read at the prefix,
 	// because the message *after* it keeps a line — zsh writes

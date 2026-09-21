@@ -2158,10 +2158,17 @@ func (p *Parser) parseCommand() Command {
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():
 		return nil
-	case p.at(TokLeftParen) && p.dialect.AnonymousFunction && p.peekIsRightParen():
+	case p.at(TokLeftParen) && p.dialect.AnonymousFunction && p.peekIsRightParenAdjacent():
 		// `()` where a command begins is an empty parameter list rather than
 		// a subshell with nothing in it — which every dialect refuses, so
 		// nothing is taken away by reading it this way.
+		//
+		// Adjacent, because the blank is the whole of the difference: `( )`
+		// is an empty subshell in the one shell that has both readings and
+		// `()` is the function. Asking the lenient question read `( ) { echo
+		// hi; }` as a function with a body where that shell refuses the
+		// brace, and left `()` alone accepted in silence (#3961). See
+		// Parser.peekIsRightParenAdjacent.
 		return p.withRedirs(p.parseAnonFunc(false))
 	case p.at(TokLeftParen):
 		return p.withRedirs(p.parseSubshell())
@@ -4347,6 +4354,21 @@ func (p *Parser) peekIsRightParen() bool {
 	return p.lex.peekIsRightParen()
 }
 
+// peekIsRightParenAdjacent is peekIsRightParen with nothing allowed between
+// the two parentheses, which is what tells an anonymous function's empty
+// parameter list from an empty subshell. See [Lexer.peekIsRightParenAdjacent]
+// for the seven measured rows.
+//
+// A pending token carries no blank between it and the one before it, so an
+// alias whose body ends at the parentheses is adjacent by construction — the
+// same answer peekIsFuncParensAdjacent gives for the other seam.
+func (p *Parser) peekIsRightParenAdjacent() bool {
+	if len(p.pending) > 0 {
+		return p.pending[0].Kind == TokRightParen
+	}
+	return p.lex.peekIsRightParenAdjacent()
+}
+
 // peekIsFuncParens is the `()` lookahead of a function definition, asked of
 // whatever this parser reads next — which is not always the lexer.
 //
@@ -4478,11 +4500,11 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 		// is the last thing seen.
 		p.lastText = "()"
 	}
-	// Whether the body was allowed to start on a later line, which one dialect
-	// reports differently from a body that never started at all.
+	// The line the parentheses stand on, because one dialect numbers a body
+	// that never came from them rather than from the top of the file. See
+	// Error.FuncBodyLines.
 	atParens := p.tok.Pos.Line
 	p.skipNewlines()
-	sameLine := p.tok.Pos.Line == atParens
 	// The body's first token, kept before the body is read. Both ways of
 	// refusing a body below name it, and neither can be decided until the
 	// parser has moved on: `f() >out` is only known not to be compound once
@@ -4492,8 +4514,8 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 	if fn.Body = p.parseCommand(); fn.Body == nil {
 		hadError := p.err != nil
 		p.failUnexpectedAt(body, "", false)
-		if se, ok := p.err.(*Error); ok && !hadError && sameLine {
-			se.FuncBody = true
+		if se, ok := p.err.(*Error); ok && !hadError {
+			p.noteMissingFuncBody(se, atParens)
 		}
 		return fn
 	}
@@ -4513,6 +4535,32 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 		}
 	}
 	return fn
+}
+
+// noteMissingFuncBody marks a refusal as the one raised where a function's
+// body was due and never began, and records how far from the parentheses it
+// was found.
+//
+// The distance rather than a same-line flag, because the one dialect that
+// treats this failure specially counts it: nought is the reading that omits
+// the line altogether and anything above it is the line that dialect writes.
+// See Error.FuncBodyLines for the four measured rows.
+//
+// at is the line the parentheses stand on. A failure that somehow precedes
+// them leaves the distance at nought rather than going negative, which is the
+// same answer as a body refused on the parentheses' own line.
+//
+// The refused token's own position, and deliberately not Error.EndLine's
+// convention that an input stopping mid-line ends on the line after: the
+// distance counts the newlines that were *written* between the parentheses
+// and the failure, so `f()` with no newline after it is nought and `f()` with
+// one is one. Measured on the dialect that reads it — `zsh -c 'f()'` has no
+// line at all and `f()` alone in a file is `s.sh:1:`.
+func (p *Parser) noteMissingFuncBody(se *Error, at int32) {
+	se.FuncBody = true
+	if n := se.Pos.Line - at; n > 0 {
+		se.FuncBodyLines = int(n)
+	}
 }
 
 // parseFuncPosixNames is parseFuncPosix where the words already read are the
@@ -4799,12 +4847,25 @@ func (p *Parser) peekIsAnonBody() bool {
 func (p *Parser) parseAnonFunc(keyword bool) Command {
 	fn := &AnonFunc{Keyword: keyword, Start: p.tok.Pos}
 	p.next()
+	// The line the parameter list closes on, which is what a body that never
+	// came is counted from. See Error.FuncBodyLines.
+	atParens := fn.Start.Line
 	if !keyword {
 		if !p.at(TokRightParen) {
 			p.failUnexpectedOperand(")")
 			return fn
 		}
+		atParens = p.tok.Pos.Line
 		p.next()
+		if p.dialect.EmptyParensAreOneToken {
+			// The pair is one token to a refusal that names the last thing
+			// read, exactly as it is for a named definition: measured
+			// 2026-09-21, `v=$(echo hi; ()` with no newline after it is
+			// ``parse error near `()' `` on zsh 5.9.2 where this named the
+			// closing parenthesis alone. See Parser.parseFuncPosix, which
+			// has said so since the flag existed.
+			p.lastText = "()"
+		}
 	}
 	p.skipAnonBodySeparators()
 	// A nameless function's body is a function body, which is what says the
@@ -4814,19 +4875,34 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 	// as *arguments* to the call, which is what the word loop below already
 	// does. Without saying so here, the brace group is offered the keyword
 	// the way one standing as a command is (#1216).
+	// The body's first token, kept before the body is read, because the
+	// refusal below names it and the parser has moved on by then. The named
+	// spelling keeps it for the same reason — see Parser.parseFuncPosix.
+	body := p.tok
 	p.funcBody = true
 	fn.Body = p.parseCommand()
 	if fn.Body == nil {
+		hadError := p.err != nil
 		if keyword {
 			p.fail("expected a body after `function`")
 			return fn
 		}
-		// `()` with nothing after it is the empty subshell it has always
-		// been rather than a function with no body — measured, `( ); echo
-		// ok` prints `ok` in the shell that has both readings, which is the
-		// EmptyCompoundBody rule and not this one. The parentheses have been
-		// consumed, so the node is built here rather than parsed again.
-		return &Subshell{Start: fn.Start, Stop: p.tok.Pos}
+		// `()` with nothing after it is a function whose body never came,
+		// and the reference says so: `()` alone at the end of a file is
+		// ``parse error near `\n' `` on zsh 5.9.2 where this accepted it in
+		// silence, and `()` with a command under it makes that command the
+		// *body* rather than a second statement — `()` ⏎ `echo $0` answers
+		// `(anon)` there (#3961).
+		//
+		// The empty subshell is the other spelling and reaches this function
+		// no longer: `( )` is one blank away and is read as a subshell above,
+		// which is where the `( ); echo ok` measurement this used to cite
+		// belongs. See Parser.peekIsRightParenAdjacent.
+		p.failUnexpectedAt(body, "", false)
+		if se, ok := p.err.(*Error); ok && !hadError {
+			p.noteMissingFuncBody(se, atParens)
+		}
+		return fn
 	}
 	for p.tok.Kind == TokWord && !p.atStopWord() {
 		fn.Args = append(fn.Args, p.word())

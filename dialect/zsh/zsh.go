@@ -184,6 +184,12 @@ func Dialect() syntax.Dialect {
 	d.TryAlways = true
 	d.AnonymousFunction = true
 	d.BareFunctionKeyword = true
+	// A token no command could begin with, standing where an `if` or `elif`
+	// clause's first command is due, is stepped over and the one after it is
+	// refused: `if true; then ) echo X; fi` is `parse error near `echo''
+	// here and names the parenthesis in the other four. See
+	// syntax.Parser.clauseStepsOverWhatItCannotUse for the twelve rows.
+	d.IfClauseStepsOverWhatItCannotUse = true
 	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
 	// cond; do done`, and a condition too. Every shape, and this shell alone.
 	d.EmptyCompoundBody = true

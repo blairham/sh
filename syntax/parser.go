@@ -5774,6 +5774,7 @@ func (p *Parser) parseIf() Command {
 	p.opensClause("then")
 	p.expectWord("then")
 	c.Then = p.parseBody()
+	p.clauseStepsOverWhatItCannotUse()
 	p.longIfTail(c)
 	return c
 }
@@ -5809,6 +5810,7 @@ func (p *Parser) longIfTail(c *IfClause) {
 		p.requireSep("then")
 		p.expectWord("then")
 		e.Then = p.parseBody()
+		p.clauseStepsOverWhatItCannotUse()
 		c.Elifs = append(c.Elifs, e)
 	}
 	if p.atWord("else") {
@@ -5819,6 +5821,95 @@ func (p *Parser) longIfTail(c *IfClause) {
 	}
 	c.Stop = p.tok.End
 	p.expectWord("fi")
+}
+
+// clauseStepsOverWhatItCannotUse steps over a token standing where an `if` or
+// `elif` clause could still go on that no command could begin with, and
+// refuses the one after it.
+//
+// One dialect does this and it is not about `$( … )`, though that is where it
+// was found: at the top level, with no substitution anywhere,
+// `if true; then ) echo X; fi` is “parse error near `echo' “ on zsh 5.9.2 —
+// the parenthesis is gone and the **next** token is what is named. Measured
+// 2026-09-21 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C zsh -f
+// s.sh` with standard input on the null device:
+//
+//	if true; then ) echo X; fi                      near `echo'
+//	if true; then ) ; fi                            near `fi'
+//	if true; then ) ; ; fi                          near `fi'
+//	if true; then ) )                               near `)'
+//	if true; then } echo X; fi                      near `echo'
+//	if true; then done; fi                          near `fi'
+//	if true; then do X; fi                          near `X'
+//	case x in a) if true; then ;; esac              near `esac'
+//	f() { if true; then } ; }                       near `}' — the second
+//	if true; then :; elif true; then ) echo X; fi   near `echo'
+//	if true; then :; ) echo X; fi                   near `echo'
+//	case x in a) if true; then : ;; esac            near `esac'
+//	if true; then echo a; done; fi                  near `fi'
+//
+// So the separators after it are stepped over with it, and the refusal lands
+// on whatever comes next, end of input included: `if true; then )` alone is
+// “parse error near `\n' “ at the line after.
+//
+// **The clause need not be empty**, which the last three rows are: the
+// question is asked wherever the clause could still go on, not only where it
+// never began. `if true; then :; fi echo X` names `echo` in every shell for
+// an unrelated reason and is not this.
+//
+// Three tokens are outside it and each is measured, not assumed. `fi`, `else`
+// and `elif` are the clause's legal continuations — `if true; then fi`,
+// `if true; then; fi` and `if true; then else echo X; fi` all run — so
+// nothing is refused there to step over. `&` is refused where it stands:
+// `if true; then & echo X; fi` is “parse error near `&' “, which is the
+// same boundary that shell draws for a bare `!`.
+//
+// **The pipeline and and-or operators are in the reference's set and not in
+// this one**, and that is a limit rather than a reading: `if true; then |
+// echo X; fi` names `echo` there and `|` here. They are refused where the
+// body is *read* rather than where the clause ends, so the refusal is
+// already raised by the time this is asked — and taking a refusal that has
+// been raised as leave to step over the token the parser is standing on
+// swallows a `)` the **condition** refused, which turns
+// `if ) echo X; then :; fi` into `echo` where every shell in the panel names
+// the parenthesis. The keyword-standing-next half of that set is answered:
+// `if :; then | fi` is `fi` through Diagnostics.EmptyBodyBlame, which
+// arrives at the same answer this would. See #3961 for the measured rows.
+//
+// **Not a message, and that is why it is here rather than in Diagnostics.**
+// The token is *consumed*, so it is no longer available to close anything
+// around it — which is what makes `v=$(echo hi; if true; then)` a
+// substitution that never closes there, against a body that ends at that
+// parenthesis in bash and dash. The counting loop under Lexer.parseToClose
+// agrees by construction, because its bound is how far this read got; see
+// Lexer.lastBodyStop (#3961).
+func (p *Parser) clauseStepsOverWhatItCannotUse() {
+	if !p.dialect.IfClauseStepsOverWhatItCannotUse || p.err != nil {
+		return
+	}
+	if !p.clauseCannotUse() {
+		return
+	}
+	p.next()
+	for p.at(TokNewline) || p.at(TokSemi) {
+		p.next()
+	}
+	p.failUnexpected("")
+}
+
+// clauseCannotUse reports whether the token the parser is on is one an `if`
+// or `elif` clause has no use for where the clause could still go on. See
+// [Parser.clauseStepsOverWhatItCannotUse] for the measured rows and for the
+// three words that are its legal continuations.
+func (p *Parser) clauseCannotUse() bool {
+	if !p.atListEnd() {
+		return false
+	}
+	switch p.tok.Literal() {
+	case "fi", "else", "elif":
+		return false
+	}
+	return true
 }
 
 // shortIf reads the body of an `if` whose condition ended itself, where the

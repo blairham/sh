@@ -120,11 +120,11 @@ func (pr *program) recordHistory() {
 // openQuote is what the parser is still inside, which is what the next
 // physical line begins inside. Empty where there is no parser yet or where it
 // finished what it was given.
-func (pr *program) openQuote() string {
+func (pr *program) openQuote() (open string, heredocExpands bool) {
 	if pr.p == nil {
-		return ""
+		return "", false
 	}
-	return pr.p.OpenQuote()
+	return pr.p.OpenQuote(), pr.p.OpenHeredocExpands()
 }
 
 // wholeProgram is a program whose text is already in hand.
@@ -227,7 +227,7 @@ func (pr *program) fill(retire bool) bool {
 		// What the next physical line begins inside, and whether the line
 		// before it finished a command. The gate is the program's `more` at
 		// this point, so both reach it before it reads anything.
-		pr.gate.open = pr.openQuote()
+		pr.gate.open, pr.gate.heredocExpands = pr.openQuote()
 		pr.gate.flush = retire
 		pr.gate.dialect = pr.dialect
 	}
@@ -276,7 +276,7 @@ func (pr *program) fill(retire bool) bool {
 			// inside a double-quoted string and a here-document body are
 			// four answers the lexer already has. Only ever reached by a
 			// line ending in a backslash.
-			pr.gate.open = openIn(pr.pending, pr.dialect)
+			pr.gate.open, pr.gate.heredocExpands = openIn(pr.pending, pr.dialect)
 		}
 		next, ok := pr.more()
 		if !ok {
@@ -290,10 +290,10 @@ func (pr *program) fill(retire bool) bool {
 }
 
 // openIn is what a parser is still inside having read this much text.
-func openIn(text string, d syntax.Dialect) string {
+func openIn(text string, d syntax.Dialect) (open string, heredocExpands bool) {
 	p := syntax.NewParser(text, d)
 	p.Parse()
-	return p.OpenQuote()
+	return p.OpenQuote(), p.OpenHeredocExpands()
 }
 
 func (pr *program) take(text string) {

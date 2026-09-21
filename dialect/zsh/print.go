@@ -175,7 +175,32 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		// the dialect's rather than the prompt's — see fchistory.go, and
 		// #2283 for why a script has one at all — and `fc -W` is what writes
 		// it out. Nothing is written to the output.
-		fcRemember(r, strings.Join(rest, " "))
+		//
+		// The operands are **expanded** on the way, exactly as they are on
+		// every other road out of this builtin, and `-r` turns that off here
+		// too. Measured 2026-09-21 on zsh 5.9.2: `print -s 'g\ch' 'i'`
+		// remembers `g` alone, so `\c` ends the entry and takes the operand
+		// after it; `print -s 'e\ax'` remembers the bell; `print -sP '%%/'`
+		// remembers `%/`; and `print -rs 'e\tf'` remembers the two
+		// characters. This used to join the operands as they were written,
+		// so the list held the text from before the expansion (#4104).
+		//
+		// The space is the separator whatever else was asked for — measured,
+		// `-l`, `-N` and `-n` change nothing here — and there is no
+		// terminator, so an entry never ends in a newline of its own.
+		entry, ok, _, refused := printJoined(r, opts, rest, " ")
+		if !ok {
+			return 1
+		}
+		if refused {
+			// Reported before the entry joins the list, which is the order
+			// the writing road has for the same pair.
+			r.RefuseCodePoint()
+		}
+		fcRemember(r, entry)
+		if refused {
+			return r.ExitStatus()
+		}
 		return 0
 	case opts.editor:
 		// A line editor that is not running: the operands are consumed and
@@ -267,37 +292,58 @@ func printWriteFailed(r *interp.Runner, fd int, err error) int {
 // wrote the operands it managed and then complained would leave a script
 // holding a line it could not tell apart from a whole one.
 func printText(r *interp.Runner, opts printOptions, words []string) (text string, ok, refused bool) {
+	text, ok, stopped, refused := printJoined(r, opts, words, opts.separator())
+	if !ok {
+		return "", false, false
+	}
+	if stopped && !refused {
+		// `\c` ends the output where it stands, terminator and all.
+		return text, true, false
+	}
+	// A refusal keeps the terminator: measured 2026-09-11 under `LC_ALL=C`,
+	// `print -- 'a\u00e9Z'` leaves `61 0a` and abandons the script.
+	return text + opts.terminator(), true, refused
+}
+
+// printJoined expands the operands and joins them with sep.
+//
+// The whole of what this builtin's two roads share: one writes the result and
+// `-s` remembers it. One helper and not two, because what goes wrong here is
+// not a rule written wrongly — it is a rule written in one place and missing
+// from the other, which is exactly what `-s` was (#4104).
+//
+// stopped says a `\c` ended the text where it stands, which is what decides
+// whether a terminator follows it; refused says an escape named a character
+// this locale cannot represent, which the caller reports once and which
+// abandons the script. The text before either is still the text.
+func printJoined(r *interp.Runner, opts printOptions, words []string, sep string) (text string, ok, stopped, refused bool) {
 	var b strings.Builder
 	for i, w := range words {
 		if i > 0 {
-			b.WriteString(opts.separator())
+			b.WriteString(sep)
 		}
-		expanded, stopped, no := w, false, false
+		expanded, stop, no := w, false, false
 		if !opts.raw {
-			expanded, stopped, no = expandPrintEscapes(r, w)
+			expanded, stop, no = expandPrintEscapes(r, w)
 		}
 		if no {
-			// The text before the escape, with the terminator this `print`
-			// would have written: measured 2026-09-11 under `LC_ALL=C`,
-			// `print -- 'a\u00e9Z'` leaves `61 0a` and abandons the script.
-			// The refusal itself is the caller's to report, once.
+			// The text before the escape. The refusal itself is the
+			// caller's to report, once.
 			b.WriteString(expanded)
-			b.WriteString(opts.terminator())
-			return b.String(), true, true
+			return b.String(), true, false, true
 		}
 		if opts.prompt {
 			var ok bool
 			if expanded, ok = r.PromptExpand(expanded); !ok {
-				return "", false, false
+				return "", false, false, false
 			}
 		}
 		b.WriteString(expanded)
-		if stopped {
-			return b.String(), true, false
+		if stop {
+			return b.String(), true, true, false
 		}
 	}
-	b.WriteString(opts.terminator())
-	return b.String(), true, false
+	return b.String(), true, false, false
 }
 
 // printMatching is `-m`: the first operand is a pattern and the rest are kept

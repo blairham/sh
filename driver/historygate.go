@@ -96,6 +96,11 @@ type histGate struct {
 	// backslash makes the reader take the next one without going back to
 	// the parser.
 	open string
+	// heredocExpands is the second half of open where it is a
+	// here-document: the delimiter was not quoted, so the body is shell
+	// text and the reader resolved a line continuation in it. Set by
+	// program.fill beside open. See syntax.Parser.OpenHeredocExpands.
+	heredocExpands bool
 	// dialect is the grammar the lines are being read under, which is what
 	// says whether a `#` opens a comment. Set by program.fill beside open,
 	// because a builtin on one line can change it for the next.
@@ -253,7 +258,13 @@ func (g *histGate) take() (string, bool) {
 
 // keep adds one physical line to the command being read, with what the parser
 // was still inside when it asked for it.
-func (g *histGate) keep(line string) { g.cur.Add(line, g.open, g.dialect) }
+func (g *histGate) keep(line string) {
+	g.cur.Add(line, histjoin.At{
+		Open:           g.open,
+		HeredocExpands: g.heredocExpands,
+		Dialect:        g.dialect,
+	})
+}
 
 // record puts the command that has been collected into the list.
 func (g *histGate) record() {

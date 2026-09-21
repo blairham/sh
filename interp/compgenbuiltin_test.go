@@ -56,7 +56,11 @@ func TestCompgenGeneratesWhatThisShellKnows(t *testing.T) {
 			// something and this is a typo.
 			"a name that is no action", "compgen -A nosuch\n", "invalid action name", "not implemented", 2,
 		},
-		{"an option letter we do not generate", "compgen -v\n", "not implemented", "", 1},
+		// `-u` is user names in bash and this shell does not generate them.
+		// It was `-v` until #4069 gave that letter an answer, which is the
+		// same shape the row above warns about: a row naming a specific gap
+		// stops testing the rule the moment the gap is filled.
+		{"an option letter we do not generate", "compgen -u\n", "not implemented", "", 1},
 		{
 			// bash has no short letter for the function action at all — `-u`
 			// is user names there — so a function is not what this answers.
@@ -272,4 +276,25 @@ func TestCompgenCompletesFilenames(t *testing.T) {
 			}
 		})
 	}
+}
+
+// compgenRunEnv is compgenRun with an environment the shell was launched
+// with, for the one row that is about a name the script never assigned.
+func compgenRunEnv(t *testing.T, env []string, src string) (string, int) {
+	t.Helper()
+	var buf strings.Builder
+	sem := PosixSemantics()
+	r := newTestRunner(t, &Runner{
+		Env: env, Stdout: &buf, Stderr: &buf,
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+	})
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := r.Run(context.Background(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return buf.String(), st
 }

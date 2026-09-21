@@ -1205,7 +1205,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// 5.3.15, `shopt -s extdebug; declare -F g` is `g 1 ./lib2.sh` and
 		// `declare -Fp g` is `declare -f g` with no location in it at all.
 		return r.declareFunctions(args, narrowed, namesOnly, f.funcNames,
-			r.LocatesFunctions() && !f.print)
+			r.LocatesFunctions() && !f.print, f.print)
 	}
 
 	if f.tie {
@@ -3329,7 +3329,7 @@ func withoutListingLetters(f declareFlags) declareFlags {
 // name, and it is the caller's to decide rather than read here because the
 // same option is off for the shape `-p` asks for — see LocatesFunctions and
 // the call in declareBuiltin.
-func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclarations, locates bool) int {
+func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclarations, locates, print bool) int {
 	named := len(names) > 0 || narrowed
 	// Whether a *name* asked, which is not the same question and decides two
 	// other things: `declare -F f` is the bare name where `declare -F` is a
@@ -3351,7 +3351,26 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 		fn, ok := r.reportedFunc(name)
 		if !ok {
 			// Silent, and 1 stands however many other names printed —
-			// measured in both shells that can be asked.
+			// measured in both shells that can be asked. The **`-p` word**
+			// is what may report instead, and it is a question of its own:
+			// see Semantics.DeclarePrintReportsAMissingFunctionName, where
+			// the panel splits differently from the variable spelling's.
+			//
+			// Asked only for a name an operand named, because that is where
+			// the two readings differ: a whole-table listing collected the
+			// names itself and has nobody's operand to report.
+			if print && byOperand && r.ask(r.sem().DeclarePrintReportsAMissingFunctionName,
+				"`-p` reporting a name that is not there beside the function letter") {
+				// The variable spelling's sentence and deliberately the same
+				// one, with this builtin's own word in front of it: measured,
+				// `declare -pf g nosuch` writes `g`'s body and then the same
+				// `declare: nosuch: not found` a `declare -p nosuch` writes.
+				r.diagf("%s: %s\n", r.inBuiltin,
+					Wording(r.diag().DeclareNoSuchVariable, "%[1]s: not found", name))
+			}
+			if r.unspecified {
+				return r.status
+			}
 			status = 1
 			continue
 		}
@@ -3370,7 +3389,15 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 			// anywhere, and this shell already kept both halves.
 			r.printf("%s %d %s\n", name, r.functionDefinitionLine(name, fn),
 				r.functionDefinitionFile(name))
-		case byOperand || !asDeclarations:
+		case (byOperand && !print) || !asDeclarations:
+			// The bare name, which is what a names-only listing writes for a
+			// name an operand asked about — and the `-p` word takes that
+			// back, because it asks for the shape the line could be reissued
+			// in. Measured 2026-09-21 on bash 5.3.20: `declare -F g` is `g`,
+			// `declare -Fp g` is `declare -f g`, and `declare -F` with no
+			// operand is `declare -f g` too. The call site below already
+			// said so about the location this form leaves out; the branch
+			// did not, so `-Fp` wrote the bare name (#4065).
 			r.printf("%s\n", r.listedFunctionNameOnly(name, fn))
 		default:
 			r.printf("declare -f%s %s\n", r.functionAttributes(name), name)

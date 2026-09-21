@@ -227,7 +227,13 @@ func TestExtdebugLocatesAFunctionDefinition(t *testing.T) {
 	out, errs, code := runTraced(t, src)
 	// Line 2, because the definition is on the second line of the file and
 	// not on the line the file was sourced from.
-	want := "g\ng 2 " + lib + "\ng\ng\n"
+	//
+	// The third row is `declare -Fp g` and it is a **declaration line**
+	// rather than the bare name: the `-p` word asks for the shape the line
+	// could be reissued in, and the location extended debugging adds is left
+	// out of it. Measured 2026-09-21 on bash 5.3.20, with and without the
+	// option on. This test asserted the bare name until #4065.
+	want := "g\ng 2 " + lib + "\ndeclare -f g\ng\n"
 	if out != want || errs != "" || code != 0 {
 		t.Errorf("ran %q: out %q errs %q status %d, want %q", src, out, errs, code, want)
 	}

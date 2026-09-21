@@ -5639,6 +5639,11 @@ echo "st=$?"`,
 		Why:     "`local -` is the operand that is not a name: bash 5.3, dash and BusyBox ash put the `set` table back when the function returns, bash 3.2 refuses the operand as a bad name, ksh93 has no `local` at all, and zsh reads `-` as a parameter and declares it. The case asks by presence rather than by printing $-, because the startup letters differ per shell and per route — and the declaration is silenced, because the shell that takes `-` as a name answers it with a listing of every parameter it has, which is this machine's environment rather than a fact about the shell",
 	},
 	{
+		ID: "local/dash-lists-as-one-of-the-locals", Category: "shell options",
+		Snippet: "f() { local - >/dev/null 2>&1; out=`local 2>/dev/null`; case $out in *\"local -\"*) echo yes ;; *) echo no ;; esac; }; f",
+		Why:     "the save `local -` makes is a row in the call's own listing, written with the word `local` rather than the `declare` a name carries — it is not a declaration of a parameter called `-`, it is the save saying it happened. Asked of a captured listing rather than printed, and the request itself silenced, for the reason the neighboring case gives: the listing is three different things across the panel, and one of them is this machine's environment. bash 5.3 writes the call's locals and the row is among them; dash and BusyBox ash write nothing for a bare `local`; zsh reads the lone `-` as the end of the options, so the request is a listing of every parameter it has and no save is made; bash 3.2 refuses the operand; ksh93 has no `local` to reach (#4048)",
+	},
+	{
 		ID: "errexit/negation-is-exempt", Category: "shell options",
 		Snippet: `set -e; ! true; echo reached`,
 		Why:     "`!` tests a status rather than requiring success, so a failing negation is not a failure",
@@ -19301,6 +19306,21 @@ echo after`,
 		ID: "compgen/names-of-the-defined-functions", Category: "builtins",
 		Snippet: `f1() { :; }; f2() { :; }; compgen -A function f; echo "st=$?"`,
 		Why:     "the second thing this shell can generate from what it knows, and the one whose contents a case can fix: the functions are defined in the snippet, so the answer does not depend on the build the way the builtin list does",
+	},
+	{
+		ID: "compgen/variable-names-hold-a-value", Category: "builtins",
+		Snippet: `zzs=1; zzd=(); declare zzn; declare -a zza; for n in zzs zzd zzn zza; do printf '%s=%s\n' "$n" "$(compgen -v | grep -c "^$n\$")"; done; echo "st=$?"`,
+		Why:     "what makes a name a completion candidate is a **value** and not a declaration, which is the whole of what separates `compgen -v` from the `declare -p` listing: `declare zzn` and `declare -a zza` are rows there and are not candidates here, while `zzd=()` — an empty literal, so something assigned — is. Counted rather than printed, because the rest of the list is the machine's environment. One shell has the command; the other three answer 127 and the counts are 0, which is the shape every compgen row here has (#4069)",
+	},
+	{
+		ID: "compgen/variable-names-reach-a-displaced-value", Category: "builtins",
+		Snippet: `zzv=global; f() { local zzv=L; unset zzv; compgen -v | grep -c '^zzv$'; }; f; g() { local zznov=L; unset zznov; compgen -v | grep -c '^zznov$'; }; g`,
+		Why:     "a value a declaration displaced is still the shell's, so the name is still a candidate — and the record an `unset` leaves on the local is not one. The two lines are the discriminator: with a global underneath the answer is 1 and with nothing underneath it is 0, so what the first line lists is the global rather than the placeholder. #4069 was filed reading that pair the other way round, and the second line is what separates them",
+	},
+	{
+		ID: "declare/print-with-the-function-letter-on-a-missing-name", Category: "builtins",
+		Snippet: `g() { :; }; typeset -pf nosuchzz 2>&1 | sed 's/.*typeset/typeset/;s/.*declare/declare/'; echo "st=$?"; typeset -f nosuchzz 2>&1; echo "plain=$?"`,
+		Why:     "it is the `-p` **word** that reports a name that is not there and not the function letter: without it every column is silent at 1, and with it the columns split — one names the missing operand, two say nothing. The field that answers the variable spelling cannot answer this, because one shell reports a missing variable and not a missing function. The location prefix is cut off because it carries the shell's own name and the script's path (#4065)",
 	},
 	{
 		ID: "compgen/there-is-no-short-letter-for-function", Category: "builtins",

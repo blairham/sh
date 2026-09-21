@@ -279,7 +279,10 @@ func (r *Runner) setFunctionAttributes(builtin string, names []string, letters, 
 // 5.3.20 answers `readonly -f`, `readonly -pf` and `declare -fr` with the
 // same bytes.
 func (r *Runner) attributedFunctionListing(letter rune) int {
-	return r.declareFunctions(r.functionsHoldingAttributes(string(letter)), true, false, false, false)
+	// Never the `-p` report: this listing collected its own names, so
+	// there is no operand for a missing name to be — which is the
+	// condition declareFunctions asks the axis behind.
+	return r.declareFunctions(r.functionsHoldingAttributes(string(letter)), true, false, false, false, false)
 }
 
 // functionAttributeLine is the row a body listing writes under a function

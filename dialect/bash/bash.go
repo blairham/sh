@@ -824,6 +824,7 @@ func Semantics() interp.Semantics {
 	// the array that is also an integer and `declare -aA` writes nothing.
 	s.DeclarationListingFilter = interp.DeclarationFilterKindNarrowsAny
 	s.DeclarePrintReportsAMissingName = interp.Yes
+	s.DeclarePrintReportsAMissingFunctionName = interp.Yes
 	// `declare -p e=(1 2)` lists the array it has just made and `declare -p
 	// s=5` is `s=5: not found` at 1 with nothing stored — measured
 	// 2026-09-20 on bash 5.3.20. See interp/declareprintoperand.go.
@@ -1415,6 +1416,28 @@ func Semantics() interp.Semantics {
 	// The export letter says nothing about scope here: `declare -x v=1`
 	// inside a function is an ordinary local.
 	s.ExportLetterDeclaresAGlobal = interp.No
+	// The two **container** letters and nothing else: measured 2026-09-21,
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME, from a
+	// script file, on bash 5.3.20 — `export -a ea=(asdf fdsa)` is 0 and
+	// lists as `declare -ax ea=([0]="asdf" [1]="fdsa")`, `export -A
+	// m=([k]=v)` is 0 and lists as `declare -Ax m=([k]="v" )`, and `-i`,
+	// `-r` and `-l` are each `export: -X: invalid option` with the usage
+	// line at 2. bash 3.2.57 takes `-a` and has no `-A` to take.
+	//
+	// So this word is not reading every declaration letter here: what it
+	// takes is the pair that names a *container*, which is what its own
+	// listing writes back for such a name — `declare -ax`. See
+	// Semantics.ExportOptions (#4089).
+	//
+	// Two neighboring rows measured in the same run and left where they
+	// are, both narrower than the form the issue is about. A **valueless**
+	// `export -a b` or `export -A n` records no container letter there —
+	// `declare -x b`, `declare -x n` — where this shell keeps the letter
+	// the word carried. And `export -a` with **no operands at all** is a
+	// listing filtered to the arrays, where this shell still refuses the
+	// letter: the filtered form is DeclarationListingFilter's question and
+	// `export` does not reach it.
+	s.ExportOptions = "aA"
 	// And a valueless declaration of a standing name is silent.
 	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
 	// A plain word declared over a name holding an array replaces it and

@@ -6104,6 +6104,64 @@ type Diagnostics struct {
 	// same way is not evidence that they are one question.
 	NoJobControlAtStartupNamesTheScript bool
 
+	// NoJobControlAtStartupNamesTheBaseName writes the last element of the
+	// path the shell was invoked by rather than the path itself, for those
+	// two remarks and for nothing else.
+	//
+	// bash and only bash, and it is the one place bash does it: measured
+	// 2026-09-21, `/opt/homebrew/bin/bash -i -c true` with no terminal
+	// writes `bash: cannot set terminal process group …` and `bash: no job
+	// control in this shell`, while `/opt/homebrew/bin/bash -c nosuchcmd`
+	// from the same directory writes `/opt/homebrew/bin/bash: line 1:
+	// nosuchcmd: command not found`. So it is not a general reading of how
+	// this shell names itself and cannot be one — the same binary writes
+	// both spellings within one run.
+	//
+	// The base name and nothing more: invoked through a link named
+	// `mybash` it writes `mybash`, and as a login shell with an argv[0] of
+	// `-bash` it writes `-bash`, leading dash and all.
+	//
+	// dash, the only other column that speaks here, writes the path as it
+	// was given — `/bin/dash: 0: can't access tty; job control turned off`
+	// — so this is a field rather than a rule, and it is a different field
+	// from the one above it: which *name* is written and which name is
+	// *shortened* are two questions, and dash answers the first one way and
+	// the second the other.
+	//
+	// It shows wherever a shell is started by an absolute path with no
+	// terminal, which is every suite file that drives `$THIS_SH -i` from a
+	// here-document — two lines per inner shell, and fourteen of them in
+	// one file of bash's own suite (#2298).
+	NoJobControlAtStartupNamesTheBaseName bool
+
+	// LeavingAPromptSession is what an interactive shell writes as its
+	// prompt session ends, on the error stream, after the last prompt it
+	// drew. No verbs.
+	//
+	// Measured 2026-09-21 two ways per column — a `^D` at a pseudo-terminal,
+	// and `-i` on a pipe both with a trailing `exit 3` and without one, each
+	// under `env -i` with a scratch HOME and no startup files:
+	//
+	//	bash 5.3.20   exit
+	//	bash 3.2.57   exit
+	//	zsh 5.9.2     nothing
+	//	ksh93u+       nothing
+	//	dash          nothing
+	//
+	// The two routes are one answer and not two: the line appears once
+	// whether the session ended because the input ran out or because `exit`
+	// ran, so it is the session ending that is reported rather than either
+	// way of ending it.
+	//
+	// Empty says nothing, which is four of the five and is the base's answer.
+	//
+	// It is the *prompt session* and not every exit of an interactive shell:
+	// measured the same day, `bash -i script.sh` whose script runs `exit 3`
+	// writes nothing, where `bash -i -c 'exit 3'` writes the line. The
+	// second of those is the front end's own route rather than the prompt's
+	// and is not carried here; #4008 records it.
+	LeavingAPromptSession string
+
 	// FcNoSuchEvent is `fc` with no history, in the dialect that reports
 	// it. No verbs.
 	FcNoSuchEvent string

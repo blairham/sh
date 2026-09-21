@@ -3068,6 +3068,11 @@ func Semantics() interp.Semantics {
 	s.UnsetExpandsAFlatSubscript = interp.Yes
 	s.OutputOperandExpandsAFlatSubscript = interp.Yes
 	s.TestIsSetExpandsAFlatSubscript = interp.Yes
+	// And a prompt whose input is not a terminal writes each line it read
+	// back, behind the prompt it was read at, because nothing else will.
+	// The one dialect in the panel that does — see
+	// Semantics.PromptEchoesTheLineWhereThereIsNoTerminal.
+	s.PromptEchoesTheLineWhereThereIsNoTerminal = true
 	return s
 }
 
@@ -3137,6 +3142,16 @@ func Diagnostics() interp.Diagnostics {
 		// no terminal, so the failure it describes is always the same one.
 		// See Diagnostics.CannotSetTerminalProcessGroup (#1036).
 		CannotSetTerminalProcessGroup: "cannot set terminal process group (%[1]d): Inappropriate ioctl for device",
+		// And the word it writes as a prompt session ends, which is this
+		// shell alone in the panel — measured at a pseudo-terminal on `^D`
+		// and on a pipe with and without a trailing `exit`, the same line
+		// each way. See Diagnostics.LeavingAPromptSession.
+		LeavingAPromptSession: "exit",
+		// And those two lines alone name this shell by the last element
+		// of the path it was started by, where every other diagnostic it
+		// writes names the path — measured within one run of one binary.
+		// See Diagnostics.NoJobControlAtStartupNamesTheBaseName.
+		NoJobControlAtStartupNamesTheBaseName: true,
 		// One sentence for both ends of the range, naming the word as
 		// written. The difference between them is not the wording: a count
 		// below zero is always complained about, and a count above `$#` is

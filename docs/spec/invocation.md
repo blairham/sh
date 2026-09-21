@@ -1657,6 +1657,33 @@ directory, depending on the installation". The *slot* each occupies is
 measured, because the two system files that do exist each land first in
 theirs; what is taken on the manual's word is the name.
 
+#### Which directory, and it is not `/etc` for zsh
+
+`/etc` for four of the five, and for zsh it is whatever zsh was built with.
+The directory is a configure-time choice (`--enable-etcdir`), which is why
+zsh's manual hedges the paths above — the files "may be in another directory,
+depending on the installation" — and the two platforms this is run on answer
+it differently. Measured 2026-09-21:
+
+| platform | zsh 5.9.2's system files | `/etc/zsh` |
+| --- | --- | --- |
+| macOS 26 | `/etc/zprofile`, `/etc/zshrc` | absent |
+| Debian sid | `/etc/zsh/{zshenv,zprofile,zshrc,zlogin}` | the directory |
+
+On Debian `zsh -o sourcetrace -c :` opens with `+/etc/zsh/zshenv:1>
+<sourcetrace>`, and nothing named `/etc/zsh*` exists beside the directory.
+So a shell that looks in `/etc` there reads the administrator's files in
+**none** of the four slots, which is what ours did until #3987 — and
+`/etc/zsh/zshenv` is where `$PATH` is set for a shell started without one, so
+the gap was a startup gap rather than a traced line.
+
+It is answered by a **probe** and not by a build tag: `/etc/zsh` when that is
+a directory, `/etc` otherwise. `GOOS` is the wrong question, because Debian
+and Arch package zsh one way and Fedora and macOS the other, and a binary
+built on one machine runs on another. `driver.Shell.SystemStartupDirectory`
+holds the answer, `zsh.SystemStartupDirectory` computes it, and the other
+four binaries still name `/etc`.
+
 #### The system file comes first in its own slot
 
 Not before every slot. Measured with `setopt sourcetrace`, which names each
@@ -1714,9 +1741,12 @@ theirs.
 `/etc` is on the front end, as `driver.Shell.SystemStartupDirectory`, and the
 names are on `Semantics`. Two reasons, and the second is the load-bearing one.
 
-It is the same directory for every dialect, so it records no disagreement and
-does not belong on a vector whose fields are disagreements — zsh's manual says
-as much from the other side.
+It records no disagreement between shells, which is what a field on the
+vector is for. It is a fact about the **install** — zsh's manual says as much
+from the other side — so the same shell answers it two ways on two machines,
+which is a shape a field with one value per dialect cannot hold. The section
+above has the measurement: `/etc` for zsh on macOS and `/etc/zsh` for zsh on
+Debian, decided by looking.
 
 And it puts the safe answer in the zero value. These are absolute paths into a
 real machine with no environment variable in front of them, so a scratch
@@ -1725,7 +1755,8 @@ that read them would be measuring `/etc/profile` on whichever runner it
 happened to be on, which is exactly the failure that guard exists to prevent.
 With the directory on the front end, a `Shell` value a test built by hand
 reaches for nothing until it says otherwise, and the six shipped binaries say
-so in one line each.
+so in one line each — four of them naming `/etc`, and `zsh` asking
+`zsh.SystemStartupDirectory` which of the two this machine has.
 
 #### What no corpus row can reach
 

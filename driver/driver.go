@@ -66,16 +66,24 @@ type Shell struct {
 	Prelude string
 
 	// SystemStartupDirectory is where this machine keeps the startup files
-	// its administrator owns — `/etc` on every Unix anyone runs this on.
-	// The empty default reads none of them.
+	// its administrator owns — `/etc` on every Unix anyone runs this on,
+	// except for zsh, which is where the field earns its keep. The empty
+	// default reads none of them.
 	//
 	// Which files are read out of it, and in which slot, is the dialect's
-	// and is Semantics.SystemStartupFiles. Only *where* is here, for two
-	// reasons. It is the same directory for every dialect, so it records no
-	// disagreement and does not belong on a vector whose fields are
-	// disagreements; and zsh's manual says outright that the files "may be
-	// in another directory, depending on the installation", which makes it
-	// a fact about the install rather than about the shell.
+	// and is Semantics.SystemStartupFiles. Only *where* is here, because
+	// zsh's manual says outright that the files "may be in another
+	// directory, depending on the installation", which makes it a fact
+	// about the install rather than about the shell — and a vector whose
+	// fields are measured disagreements between shells is the wrong place
+	// for an answer that differs between two machines running the same one.
+	//
+	// It is **not** one constant for all five binaries, and reading it as
+	// one was #3987: zsh's system directory is chosen when zsh is built,
+	// so it is `/etc` on macOS and `/etc/zsh` on Debian, and our `zsh` on
+	// Linux read the administrator's files in none of its four slots. Four
+	// of the binaries name `/etc` and zsh asks its dialect; see
+	// zsh.SystemStartupDirectory.
 	//
 	// The default is empty rather than `/etc` because these are absolute
 	// paths into a real machine. A suite that read them would be measuring

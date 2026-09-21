@@ -21354,12 +21354,16 @@ type Semantics struct {
 //
 // # Names, and not paths
 //
-// Where the directory *is* is not here, and that is deliberate. It is the same
-// `/etc` for every dialect, so it records no disagreement and is not an axis;
-// zsh's manual says as much in the other direction — "files listed above as
-// being in /etc may be in another directory, depending on the installation".
-// It lives on the front end as driver.Shell.SystemStartupDirectory, where the
-// binary that is being installed can say so.
+// Where the directory *is* is not here, and that is deliberate. It is not a
+// disagreement between shells, which is what an axis records: it is a fact
+// about the *install*, and zsh's manual says so outright — "files listed
+// above as being in /etc may be in another directory, depending on the
+// installation". So the same shell answers it two ways on two machines —
+// `/etc` where zsh was built one way and `/etc/zsh` where it was built the
+// other — and a field with one value per dialect could not hold that. It
+// lives on the front end as driver.Shell.SystemStartupDirectory, where the
+// binary that is being installed can say so, and zsh's binary asks its own
+// dialect rather than naming a constant (#3987).
 //
 // The split also puts the safe answer in the zero value, which matters more
 // here than anywhere else in this struct. These are absolute paths into a real

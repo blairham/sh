@@ -341,7 +341,14 @@ Four slots, each with the machine's own file in front of the person's:
 | unconditional | always | — | `/etc/zshenv`, `$ZDOTDIR/.zshenv` |
 | profile | login | `/etc/profile`, then the first of `~/.bash_profile`, `~/.bash_login`, `~/.profile` | `/etc/zprofile`, `$ZDOTDIR/.zprofile` |
 | run-commands | interactive | `~/.bashrc` | `/etc/zshrc`, `$ZDOTDIR/.zshrc` |
-| late profile | login, after the run-commands file | — | `$ZDOTDIR/.zlogin` |
+| late profile | login, after the run-commands file | — | `/etc/zlogin`, `$ZDOTDIR/.zlogin` |
+
+The `/etc` half of the zsh column is **`/etc/zsh` where zsh was built that
+way**, which is every Debian and Ubuntu and is not macOS. It is decided by
+looking, not by the platform: `/etc/zsh` when that is a directory, `/etc`
+otherwise. Before [#3987][3987] our `zsh` named `/etc` on both and so read
+none of the administrator's four files on Linux — including the `zshenv` that
+sets `$PATH` for a shell started without one.
 
 `~/.bashrc` and `~/.zshrc` were the subject of [#807][807] and are read.
 The system-wide files were [#1717][1717]; before that a login shell read
@@ -417,5 +424,6 @@ apart, and the pty run is what corrected it.
 
 [1717]: https://github.com/blairham/sh/issues/1717
 [807]: https://github.com/blairham/sh/issues/807
+[3987]: https://github.com/blairham/sh/issues/3987
 [2770]: https://github.com/blairham/sh/issues/2770
 [2771]: https://github.com/blairham/sh/issues/2771

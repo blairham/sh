@@ -49,8 +49,21 @@ func scratchShell(t *testing.T) driver.Shell {
 // TestTheBinaryNamesTheMachinesStartupDirectory keeps the line above honest.
 // Every test here runs with the directory moved, so nothing else would notice
 // if the shipped value went missing.
+//
+// It is the one test in the tree that reads the runner's own `/etc`, and it
+// reads only whether `/etc/zsh` is a directory — which is the whole of the
+// question, and is what makes the assertion the same on both platforms
+// without being written twice. `/etc` on macOS, `/etc/zsh` on Debian, where a
+// shipped `/etc` read the administrator's files in none of the four slots
+// (#3987). The want is computed here rather than taken from
+// zsh.SystemStartupDirectory, so that a rule inverted at the source fails
+// rather than agreeing with itself.
 func TestTheBinaryNamesTheMachinesStartupDirectory(t *testing.T) {
-	if got := shell().SystemStartupDirectory; got != "/etc" {
-		t.Errorf("SystemStartupDirectory = %q, want /etc", got)
+	want := "/etc"
+	if info, err := os.Stat("/etc/zsh"); err == nil && info.IsDir() {
+		want = "/etc/zsh"
+	}
+	if got := shell().SystemStartupDirectory; got != want {
+		t.Errorf("SystemStartupDirectory = %q, want %q", got, want)
 	}
 }

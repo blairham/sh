@@ -8321,6 +8321,61 @@ with a slash in it never went through PATH and is never in it. An assignment
 to PATH empties the table outright: a remembered answer is an answer to a
 search nobody would run again.
 
+### `hash /bin/ls`: the operand that is a path, and the three answers
+
+That rule is about the table filling itself. Asking `hash` for a word with a
+slash in it is a separate question, and it is the one this shell got wrong in
+every column at once (#4064): the operand was searched for, resolved to
+itself, and remembered. Measured 2026-09-21, `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, one probe at a time, with `hash /bin/ls; hash` and again with
+`hash /nosuchfile` — **the file being there moves no column**, which is what
+makes this a question about the operand as written rather than about a search
+that failed:
+
+| | said | status | table afterwards |
+| --- | --- | --- | --- |
+| bash 5.3.20 | nothing | 0 | empty |
+| bash 3.2.57 | nothing | 0 | empty |
+| dash | nothing | 0 | empty |
+| BusyBox ash | nothing | 0 | empty |
+| zsh 5.9.2 | `no such command: /bin/ls` | 1 | empty |
+| ksh93u+ | nothing | 0 | `/bin/ls=/bin/ls` |
+
+Three readings, and the interesting part is that the silence is not the
+absence of a report. bash, dash and ash all answer `hash nosuchcmd` with
+`not found` at 1, so saying nothing about `/bin/ls` is a decision about the
+*operand* and not a search they happen to be quiet about.
+`Semantics.HashIgnoresAnOperandWithASlash` is that decision, and it is asked
+only when the operand actually holds a slash, so `hash`, `hash -r` and
+`hash name` stay the unanimous calls a shell with no dialect can run.
+
+The other two are **one reading of an axis that was already there**.
+`Semantics.HashSearchesPathAlone` says the search counts only what PATH
+holds; a written pathname is the third thing PATH does not hold, beside a
+builtin and a function. zsh answers Yes, so the operand cannot be reached and
+falls to `HashReportsAMissingName`, which is Yes there — hence the complaint.
+ksh93 answers No, so the path it was handed is a command name it can resolve
+without PATH, and the tracked alias points at itself. A second axis asking the
+same question about a different kind of non-PATH operand would have been two
+names for one measurement.
+
+### `hash -p` and a directory
+
+The path `-p` is handed is taken as written, and exactly one thing is checked.
+Measured 2026-09-21 on bash 5.3.20 and bash 3.2.57, the only column with the
+letter:
+
+    hash -p /nosuchfile cat    remembered, silent, 0
+    hash -p /dev/null cat      remembered, silent, 0
+    hash -p relfile cat        remembered, silent, 0
+    hash -p /tmp cat           hash: /tmp: Is a directory, 1, nothing remembered
+    hash -p . cat              hash: .: Is a directory, 1, nothing remembered
+
+So neither existing nor being executable is asked about — only directoryness —
+and the complaint is **per name**: `hash -p /tmp a b` prints it twice and
+leaves the table empty. `Diagnostics.HashPathIsADirectory` is the wording.
+
+
 **A lookup that only *reports* where a command is splits the panel**, and this
 section said it did not until the probe was widened past bash:
 
@@ -8376,6 +8431,21 @@ one shell that needs it.
 A probe that deleted the *only* copy cannot tell the readings apart: all four
 fail there and only the wording moves. Two copies is the arrangement that
 discriminates.
+
+**The same axis decides the *report*, and the report is not the run.**
+Measured 2026-09-21: after `hash -p /nosuchfile cat`, bash's `type cat` is
+`cat is hashed (/nosuchfile)` at 0 and `command -v cat` is `/nosuchfile`,
+while running `cat` is `/nosuchfile: No such file or directory` at 127 — and
+zsh, whose answer is No, re-searches and says `zzc not found` for an entry
+whose file has been removed. Two details are measured rather than tidy: the
+path comes back **as it was written** and not absolutised (`hash -p relfile
+cat; command -v cat` is `relfile`), and the report **counts as a hit** the way
+a report of a live entry already does. And `shopt -s checkhash` does not move
+it: with the option on, `type` still writes the remembered path, so the switch
+is about the shell looking before it *runs* and the reporting route does not
+read it. Before #4064 this shell answered `not found` there, which made
+`hash -p` leave a name worse off than it found it — `type cat` had a perfectly
+good `/bin/cat` to give before the call and none after.
 
 bash has one switch over it. `shopt -s checkhash` makes bash look before it
 leaps, and then it runs the second copy exactly as the other three do — so the
@@ -8496,7 +8566,7 @@ at all:
 | letter | bash | what it does |
 | --- | --- | --- |
 | `-l` | yes | the table as the `builtin hash -p …` commands that would rebuild it; an empty table prints *nothing*, unlike the bare listing |
-| `-p pathname` | yes | an entry by hand, the path taken as written and never checked |
+| `-p pathname` | yes | an entry by hand, the path taken as written and checked for one thing only — see below |
 | `-d name` | yes | one entry out, where `-r` is all of them |
 | `-t name` | yes | what the table holds: the path alone for one name, `name<TAB>path` for two or more |
 
@@ -8578,6 +8648,15 @@ for it to be a view of.
 - **`hash -p ./name`.** bash stores an entry whose path begins with `./` and
   then reports `not found` for `hash -t` on it, while `hash -p ../name` and
   `hash -p name` both read back. This shell reads every `-p` path back.
+
+  Re-measured 2026-09-21 against 5.3.20, and the shape is narrower than the
+  bullet implied: it is `./` followed by **one** component. `hash -p
+  ./nosuchfile cat; type cat` re-searches and answers `cat is /bin/cat`,
+  where `./bin/x`, `../nosuchfile`, `d/nosuchfile`, `relfile` and
+  `/nosuchfile` are all reported back as hashed. So the entry bash rechecks
+  is the one naming a file in the current directory, which is the entry a
+  `cd` would invalidate — still a bug to imitate rather than a rule, and
+  still not built.
 - **zsh's `$commands`.** It is that shell's `BASH_CMDS`, and it removes an
   entry where bash's does not: `unset "commands[ls]"` really takes `ls` out.
   The read side is the command hash first and a PATH search only for a name

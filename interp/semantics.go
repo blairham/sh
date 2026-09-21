@@ -3265,11 +3265,22 @@ type Semantics struct {
 	// range, and any position a shell's own table skips.
 	//
 	// The number is written back in every column but one, at status 0. bash
-	// writes an **empty line** there, also at 0: measured 2026-09-17 in the
+	// writes **nothing at all** there, also at 0: measured 2026-09-17 in the
 	// panel's Alpine image with Debian-built bash 5.3 beside BusyBox 1.37.0,
 	// dash 0.5.12 and zsh 5.9, where `kill -l 32` is `32` in dash, zsh and
 	// ash and nothing at all in bash, and `kill -l 160` — the same row after
 	// the one unanimous subtraction of 128 — moves with it.
+	//
+	// **Nothing at all is not an empty line**, and this comment said blank
+	// while the code wrote a newline for a year. Re-measured 2026-09-21 in
+	// the pinned image: `kill -l 32` in bash 5.3.20 writes zero bytes, so
+	// `bash/builtins.tests` carried an extra line the reference never wrote
+	// (#3984).
+	//
+	// The blank is the answer for the number the **kernel** has, so a column
+	// that prints a number it cannot name never reaches it after the one
+	// subtraction: zsh's `kill -l 160` is `160` and not the `32` that 160
+	// less 128 lands on. See Runner.killListName, where the two are ordered.
 	//
 	// It is reachable on a machine with no real-time signals too, through a
 	// shell whose own table is short of the platform's: ksh93 on macOS has no

@@ -114,6 +114,12 @@ func TestFcAnswersFromItsEmptyHistory(t *testing.T) {
 	out, st = run(t, `fc -l`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.FcEmptyHistoryIsAnError = Yes
+		// The two readings of an operand are asked before the list is,
+		// because they decide what an empty list is a case of: the shell
+		// that refuses an event out of range refuses this one from its
+		// operands rather than from a wording of its own.
+		sem.FcEventOutOfRangeIsAnError = No
+		sem.FcRelativeEventNeedsTheShellsOwnEventNumber = No
 		r.Semantics = &sem
 		dg := Diagnostics{FcNoSuchEvent: "fc: no such event: 1"}
 		r.Diagnostics = &dg

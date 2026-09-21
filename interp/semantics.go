@@ -16588,6 +16588,72 @@ type Semantics struct {
 	// the test (#4017).
 	FcEmptyEditIsAnError Answer
 
+	// FcEventOutOfRangeIsAnError refuses an `fc` operand the list cannot
+	// reach instead of bringing it to the nearest end — zsh; bash clamps.
+	//
+	// The two answers are a conflict and not a subset: bash's `fc -l 99` on
+	// a five-entry list writes all five at 0 and zsh's writes `fc: no such
+	// event: 99` at 1, and neither is the other with a step added.
+	//
+	// Where it refuses, the two ends are resolved, the *range* is brought
+	// inside the list, and a range that meets no entry is what is refused —
+	// so an operand out of range on one side of a range that still reaches
+	// the list is not refused at all. Measured 2026-09-21 against zsh 5.9.2,
+	// `zsh -f` on a script file under `env -i` with a scratch `HOME`, the
+	// list planted with five `print -s` lines:
+	//
+	//	fc -l 6 3     `5 4 3` — the 6 is clamped, nothing is said
+	//	fc -l 99 0    `5 4 3 2 1` — both ends are outside, the range is not
+	//	fc -l 3 99    `3 4 5`
+	//	fc -l 6 6     `fc: no such event: 6` at 1
+	//	fc -l 99      `fc: no such event: 99` at 1, an absent `last` being
+	//	              the later of the newest entry and `first`
+	//	fc -l 6 7     `fc: no events in that range` at 1
+	//
+	// The last pair is why Diagnostics.FcNoEventsInRange is beside
+	// Diagnostics.FcNoSuchEvent rather than standing in for it: a refused
+	// range whose ends resolved to one number names that number, and a
+	// refused range whose ends differ names neither.
+	//
+	// unpinned: never reached from the corpus. `fc` reads a list, no corpus
+	// row plants one, and a dialect with no list answers every `fc` before
+	// any operand is read. interp/fclisting_test.go asserts both answers
+	// over the same list (TestAnEventOutOfRangeIsRefusedOrClamped).
+	FcEventOutOfRangeIsAnError Answer
+
+	// FcRelativeEventNeedsTheShellsOwnEventNumber counts an `fc` operand
+	// written as a minus sign and a number back from the number the shell's
+	// *own* command has — which a shell reading a script has none of, so
+	// every such operand lands before the oldest entry. bash counts back
+	// from the end of the list instead, where `-1` is the newest entry.
+	//
+	// Measured 2026-09-21 on the same lists as the axis above. zsh writes
+	// the whole list for `fc -l -1`, for `fc -l -2` and for `fc -l -20`
+	// alike, on a list of five and on a list of thirty — the three cannot be
+	// told apart, which is what "there is nothing to count back from" looks
+	// like from outside. bash's `fc -l -1` writes the newest entry and its
+	// `fc -l -2` the newest two.
+	//
+	// The count back is floored where it runs out rather than going
+	// negative, and that is visible rather than an implementation detail:
+	// `fc -l -2 -2` refuses with `fc: no such event: 0` and not `-2`.
+	//
+	// It is the same fact that decides the *default* range, which is why one
+	// axis answers both: a shell with a current event to count from takes
+	// the sixteen events below it, and this one takes the newest seventeen
+	// entries of the list — `fc -l` on thirty writes 14 through 30, and on
+	// seventeen or fewer writes all of them.
+	//
+	// An interactive zsh does have a current event — its own line is in the
+	// list — and counts back from it there. That route is not this shell's
+	// yet: the list a dialect registers is the one `print -s` fills, and
+	// nothing records a typed line into it.
+	//
+	// unpinned: never reached from the corpus, for the reason above.
+	// interp/fclisting_test.go asserts both answers over the same list
+	// (TestARelativeOperandCountsFromTheEndOrFromNothing).
+	FcRelativeEventNeedsTheShellsOwnEventNumber Answer
+
 	// TestBuiltinComparisonOperandsAreArithmetic reads the operands of
 	// `test`'s and `[`'s word-spelled comparisons as arithmetic
 	// expressions, the way `[[ ]]` reads its own. ksh93 alone; dash, bash
@@ -23451,10 +23517,17 @@ func PosixSemantics() Semantics {
 		TerminalTestMinusOneIsATerminal:              No,
 		// POSIX gives the one-argument form of `test` to the string rule
 		// with no exception in it, which is dash's reading and bash's.
-		BareTerminalTestIsDescriptorOne:  No,
-		FcEmptyHistoryIsAnError:          No,
-		FcEmptyEditIsAnError:             No,
-		JobControlAbsenceIsReportedFirst: No,
+		BareTerminalTestIsDescriptorOne: No,
+		FcEmptyHistoryIsAnError:         No,
+		FcEmptyEditIsAnError:            No,
+		// POSIX has `fc -l` list "the commands" a range names and says
+		// nothing about refusing one that runs past the list, and `-1` is
+		// the previous command in the standard's own examples — so the base
+		// clamps and counts back from the end of the list, which is bash's
+		// reading of both.
+		FcEventOutOfRangeIsAnError:                  No,
+		FcRelativeEventNeedsTheShellsOwnEventNumber: No,
+		JobControlAbsenceIsReportedFirst:            No,
 		// POSIX has `( )` run "in a subshell environment" and describes that
 		// environment as a copy, which is the forking reading: the copy is
 		// not the process the signal was aimed at, so it finishes its body.

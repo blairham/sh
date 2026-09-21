@@ -6198,13 +6198,26 @@ type Diagnostics struct {
 	// carries what was measured for it.
 	LeavingIsAlsoSaidOnTheseRoutes syntax.ProgramRoutes
 
-	// FcNoSuchEvent is `fc` with no history, in the dialect that reports
-	// it. No verbs.
+	// FcNoSuchEvent is the `fc` event this shell cannot reach: an empty list
+	// in the dialect that reports one at all, and — where
+	// Semantics.FcEventOutOfRangeIsAnError says so — a range whose two ends
+	// resolved to one number the list does not hold. One verb, the event
+	// number, which a wording that names no event may ignore.
 	FcNoSuchEvent string
+
+	// FcNoEventsInRange is the other half of that refusal: a range that
+	// misses the list and whose two ends are *different* numbers, so there
+	// is no one event to name. No verbs.
+	//
+	// Two wordings rather than one because the shell that refuses has two:
+	// `fc -l 6 6` on a five-entry list says `no such event: 6` and
+	// `fc -l 6 7` says `no events in that range`, measured together.
+	FcNoEventsInRange string
 
 	// FcNoCommandFound is `fc` given an operand that names nothing: a word
 	// no entry begins with, or — under `-s` — an event that would be the
-	// `fc` call itself. No verbs.
+	// `fc` call itself. One verb, the operand as it was written, which
+	// bash's wording names no operand and ignores.
 	FcNoCommandFound string
 
 	// FcOutOfRange is `fc` on its way to an editor, given an event past the

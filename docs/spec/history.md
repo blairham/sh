@@ -1165,6 +1165,71 @@ turns whatever order that produced around again.
 
 A word no entry begins with is `fc: no command found` at 1.
 
+### The other reading: no current event, and no clamp
+
+Everything above is bash's, and two of its questions have a second answer.
+Both are on the semantics vector, because neither is decided by naming a
+shell: `FcEventOutOfRangeIsAnError` and
+`FcRelativeEventNeedsTheShellsOwnEventNumber`.
+
+Measured 2026-09-21 against zsh 5.9.2, `zsh -f` on a **script file** under
+`env -i` with a scratch `HOME`, the list planted with `print -s` lines — this
+shell records nothing a script runs, so the `fc` line is never in the list and
+there is no current event to count an operand back from.
+
+**A relative operand comes to the same place whatever its magnitude.** On five
+entries and on thirty alike, `fc -l -1`, `fc -l -2` and `fc -l -20` each write
+the **whole** list. `0` is that same place written down, and the floor is
+visible in a refusal: `fc -l -2 -2` says `no such event: 0` and not `-2`.
+
+`-0` is not a relative operand here at all. It is a word, and no entry begins
+with it: `fc -l -0` is `event not found: -0`, where bash reads the same
+operand as the `fc` line itself.
+
+The same fact decides the **default** range: with nothing to take sixteen off,
+it is the newest **seventeen** entries of the list. `fc -l` on thirty writes 14
+through 30, on eighteen writes 2 through 18, and on seventeen or fewer writes
+all of them.
+
+**An event the list cannot reach is refused rather than clamped**, and the
+refusal is a statement about the *range*:
+
+| written, on a five-entry list | said |
+| --- | --- |
+| `fc -l 99`, `fc -l 6`, `fc -l 6 6` | `no such event: 99` / `: 6` at 1 |
+| `fc -l 6 7`, `fc -l 7 6` | `no events in that range` at 1 |
+| `fc -l 0 0`, `fc -l -1 -1`, `fc -l -1 -2` | `no such event: 0` at 1 |
+| `fc -l zzz` | `event not found: zzz` at 1 |
+| `fc -l 6 3` | `5 4 3` — silence at 0 |
+| `fc -l 99 0`, `fc -l 99 -1` | the whole list, newest first, at 0 |
+| `fc -l 3 99`, `fc -l 1 99` | `3 4 5` / the whole list, at 0 |
+
+The last three rows are the half a status check would miss: an operand the
+list does not hold, in a range that still meets it, is clamped and nothing is
+said. So the order is fixed — resolve both ends, refuse the range, *then*
+clamp. Refusing before resolving would refuse rows nothing is said about, and
+clamping first would refuse nothing at all.
+
+Two wordings rather than one because the shell has two: where the ends
+resolved to a single number there is an event to name, and where they differ
+there is not. `Diagnostics.FcNoSuchEvent` takes the number and
+`Diagnostics.FcNoEventsInRange` takes nothing;
+`Diagnostics.FcNoCommandFound` takes the word, which bash's wording ignores.
+
+**An empty list is not a case of its own here.** Every range misses a list
+with nothing in it, so the refusal is worded from the operands and the same
+empty list answers four ways — `fc -l` is `no such event: 1`, `fc -l -1` is
+`no such event: 0`, `fc -l 2 5` is `no events in that range` and `fc -l zzz`
+is `event not found: zzz`. `FcEmptyHistoryIsAnError` still decides whether an
+empty list is refused *at all*, which is the question bash and dash answer
+with silence at 0.
+
+The panel splits three ways rather than two, which is why the reading is an
+axis and not a bash exception. ksh93u+ keeps its list in a file and a script's
+own commands never reach it, so `fc -l` there is `hist: 1-0: invalid range` —
+recorded as a divergence rather than reproduced, as the rest of ksh93's
+history file is.
+
 ### `-s`, and the entry it leaves behind
 
 `fc -s [pat=rep …] [event]` runs an entry again. The line goes to standard
@@ -1211,7 +1276,13 @@ second copy.
 The editor. `fc` with neither `-l` nor `-s` writes the entry to a file, runs
 `${FCEDIT:-${EDITOR:-…}}` over it and runs what comes back; what is here is
 the refusal that comes before it, which is the half a script can see without
-an editor. zsh's own reading of the operands — a relative one counts over the
-whole list rather than back from `cur`, and out of range is `no such event`
-at 1 rather than a clamp — is measured and not modeled; the core's answer
-stands there until it is.
+an editor.
+
+Two things on the `-s` and editor roads of the shell that refuses, measured
+2026-09-21 and not modeled. An event **at or past the newest entry** is
+refused there rather than run — `fc -s 5` on a five-entry list, `fc -s 99` and
+`fc 99` are all `current history line would recurse endlessly, aborted` at 1,
+and so is `fc -s` on a list of one, where the default *is* the newest entry.
+And the operand spelling is read with a `strtol`-style prefix in both shells,
+which neither models: `fc -l 2x` starts at 2 and `fc -l 0x2` reads a zero, on
+bash as well as here, where this reads both as words. Filed.

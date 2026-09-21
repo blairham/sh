@@ -89,6 +89,108 @@ func (r *Runner) namerefCompoundBodyTarget(name string) string {
 	return target
 }
 
+// namerefCompoundBodyStore is the rule above at the one site that **stores** a
+// body, and it differs from the read in exactly one state: a reference with
+// nothing to point at is refused there rather than storing under the name
+// that was written.
+//
+// Measured 2026-09-20 against AT&T ksh93u+ 2012-08-01 (`/bin/ksh`), script
+// files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the
+// null device:
+//
+//	written                          ksh93u+                    here, before
+//	typeset -n u; typeset u=(a=1)    u: no reference name, 1    st=0, a `u`
+//	typeset -n u; u=(a=1)            the same                   the same
+//	typeset -n u; u+=(a=1)           the same                   the same
+//	f(){ typeset -n u; typeset u=(a=1); }; f   the same, and no line
+//	                                 of the script after the call runs
+//
+// and the two controls that say it is the compound body alone, both of which
+// agreed before this and must go on agreeing: `typeset -n u; typeset u=plain`
+// is silent at 0 with `$u` empty, and `typeset -n u; typeset u=(1 2)` stores
+// the array under `u` itself — which is what [Runner.namerefArrayLiteralTarget]
+// already does, warning wording and all. So an unaimed reference is not a
+// refusal in general there; the parenthesized body is the one operand shape
+// that will not take one.
+//
+// **Not folded into [Runner.namerefCompoundBodyTarget].** That rule is shared
+// with the member path below, and the costs differ: a read through the same
+// reference refuses as an *expansion* and an `unset` of it refuses without
+// ending the script, so one rule cannot carry all three. The state they share
+// is [Runner.unaimedReferenceBase]; what it costs is each site's own (#3955).
+//
+// The fatality is not written in as a number: the refusal ends the script
+// through [Runner.fatalQuiet], so the status is Semantics.FatalErrorStatusIsOne's
+// like every other fatal error's. What gates the whole refusal is the
+// Diagnostics wording being set, which is the shape a refusal only one column
+// makes takes everywhere in this tree — see Runner.refuseNamerefAim.
+func (r *Runner) namerefCompoundBodyStore(name string) (string, bool) {
+	if aimless, unaimed := r.unaimedReferenceBase(name); unaimed {
+		r.refuseUnaimedReference(aimless, "")
+		r.fatalQuiet()
+		return "", false
+	}
+	return r.namerefCompoundBodyTarget(name), true
+}
+
+// unaimedReferenceBase reports the reference a name is read or written
+// *through* where that reference has nothing to point at, and answers no
+// where the dialect has nothing to say about it.
+//
+// The base and not the whole name, because a member path is a use of the
+// reference its base is: `${u.a}` is refused in the words `${u}` is, naming
+// `u`. A leading dot is not a base — `${.sh.level}` and a namespace's member
+// both begin with one — so the empty base is declined, exactly as
+// [Runner.compoundMemberThroughAReference] declines it.
+//
+// The rows, the states that stay silent, and why each site answers the cost
+// itself are in Diagnostics.NamerefUnaimedUse.
+func (r *Runner) unaimedReferenceBase(name string) (string, bool) {
+	if r.diag().NamerefUnaimedUse == "" {
+		return "", false
+	}
+	base := name
+	if dot := strings.IndexByte(name, '.'); dot > 0 {
+		base = name[:dot]
+	}
+	if !r.isNameref(base) {
+		return "", false
+	}
+	if _, cycle, aimed := r.namerefWalk(base); cycle || aimed {
+		// A cycle has already been reported where a read of it would report
+		// one, and an aimed reference is the ordinary case.
+		return "", false
+	}
+	return base, true
+}
+
+// refuseUnaimedReference writes the sentence and leaves the cost to the
+// caller, which is the whole reason it is not one function with the check.
+// Five sites ask [Runner.unaimedReferenceBase] and they hold three answers
+// between them: an expansion sets expandErr and lets
+// Semantics.FailedExpansionAbandonsTheLine say what that costs, a write and a
+// compound body end the script, and `unset` reports at 1 and lets the next
+// line run. One function with the cost inside it could only have held one of
+// the three.
+//
+// The speaker is the builtin whose sentence this is, and it is "" for the two
+// sites that have none — an expansion runs in no builtin, and a compound
+// body is stored after the declaration has returned. `unset` is the one that
+// names itself: measured, `typeset -n u; unset u` is `unset: u: no reference
+// name` where `${u}` on the line above it is `u: no reference name`.
+//
+// Written into the sentence rather than taken from the location, because
+// that is where this shell's other `unset` refusals put it — see
+// Diagnostics.BuiltinBadName, whose `unset` entry is `%[1]s: %[2]s: invalid
+// variable name`.
+func (r *Runner) refuseUnaimedReference(name, speaker string) {
+	line := Wording(r.diag().NamerefUnaimedUse, "", name)
+	if speaker != "" {
+		line = speaker + ": " + line
+	}
+	r.diagf("%s\n", line)
+}
+
 // compoundMemberThroughAReference is the rule above at a **member path**: the
 // name `c.a` denotes where `c` is a reference is `zz.a`.
 //

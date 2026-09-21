@@ -114,11 +114,72 @@ var dottedNameRefusers = map[string]bool{"export": true}
 // with a dotted name at all: the other four dialects never read one as a name
 // in the first place, so a `.` in an operand there is a bad name exactly as it
 // was.
+//
+// # Two letters refuse one where the word would have taken it
+//
+// The set above is keyed on the *word*, and that is not the whole of the
+// split: the `x` and `n` letters carry `export`'s refusal onto `typeset`.
+// Measured 2026-09-20 on ksh93u+ 2012-08-01, `-c` under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null device, each
+// over `typeset zz=(a=1)`:
+//
+//	written              ksh93u+                                here, before
+//	typeset -x zz.a      typeset: zz.a: is not an identifier    st=0
+//	typeset +x zz.a      the same — the sign does not matter    st=0
+//	typeset -xr zz.a     the same — one letter is enough        st=0
+//	typeset -x .foo      typeset: .foo: is not an identifier    st=0
+//	typeset -n zz.q      typeset: zz.q: is not an identifier    st=0
+//	typeset -n zz.q=zz   zz.q=zz: is not an identifier          st=0
+//
+// and the controls, which say it is those two letters and not the dot: a
+// bare `typeset zz.a`, `typeset -u zz.a`, `typeset -i zz.a`, `typeset -r
+// zz.a` and `readonly zz.a` are all taken at 0 there and here, and
+// `typeset -x a[1]` — a subscript rather than a member — is taken too.
+//
+// The last row is the same with-a-value wording the word already answers
+// (`export .foo=1` is `.foo=1: is not an identifier`, no builtin named), so
+// it falls out of reaching the one refusal rather than needing its own.
+//
+// # And the word takes a member that stands
+//
+// `export` does not refuse every dotted operand: where the name is a member
+// of a compound that stands, it is a **name**, and the refusal it then meets
+// is the compound's. Measured the same day and the same way:
+//
+//	written                  ksh93u+
+//	typeset zz=(a=1); export zz.a     export: zz.a: only simple variables
+//	                                  can be exported
+//	typeset zz=(a=1); export zz.a=v   the same, and it names `zz.a` rather
+//	                                  than the whole operand
+//	typeset zz=(a=1); export zz.nope  export: zz.nope: is not an identifier
+//	typeset zz=(a=1 n=(y=1)); export zz.n
+//	                                  export: zz.n: is not an identifier
+//	zz=plain; export zz.a             export: zz.a: is not an identifier
+//
+// So the exception is exactly a member that is **set** and is **not itself a
+// compound** — the last three rows are what narrow it, and each of them is a
+// dotted operand this shell already answered correctly. See
+// [Runner.exportRefusesACompound], which is where such a name lands.
 func (r *Runner) dottedBuiltinName(builtin, name string) bool {
-	if dottedNameRefusers[builtin] {
+	if !r.dottedName(name) {
 		return false
 	}
-	return r.dottedName(name)
+	if r.dottedOperandRefusedByALetter {
+		return false
+	}
+	if dottedNameRefusers[builtin] {
+		return r.scalarMemberStands(name)
+	}
+	return true
+}
+
+// scalarMemberStands reports whether the name is a member of a compound that
+// is there, holds something, and is not a compound in its own right.
+//
+// The three conditions are the three rows above that keep `export`'s
+// exception from widening into "any dotted operand under a compound".
+func (r *Runner) scalarMemberStands(name string) bool {
+	return r.memberOfACompoundVariable(name) && !r.isCompoundVariable(name) && r.nameIsSet(name)
 }
 
 // dottedName reports whether the text is a name with a `.` in it and this
@@ -484,6 +545,13 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 			r.inBuiltin = ""
 			defer func() { r.inBuiltin = outer }()
 		}
+	}
+	// And a dotted operand carrying a value is the one shape the refusing
+	// dialect leaves its own name out of the sentence — last, so that it
+	// wins over the two overrides above where a name is both. See
+	// Diagnostics.BadNameOfADottedOperandWithAValue.
+	if w := d.BadNameOfADottedOperandWithAValue; w != "" && operand != name && strings.Contains(name, ".") {
+		wording = w
 	}
 	line := Wording(wording, "%[1]s: `%[2]s': not a valid identifier", builtin, shown)
 	if d.BadNameRefusalOmitsTheLine[builtin] {

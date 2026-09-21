@@ -4251,6 +4251,12 @@ func Diagnostics() interp.Diagnostics {
 		// `invalid variable name`. See
 		// Diagnostics.ExportLetterTakesExportsBadName.
 		ExportLetterTakesExportsBadName: true,
+		// And a dotted operand that carries a value is the one bad name this
+		// shell does not put its builtin in front of: `export .foo=1` is
+		// `.foo=1: is not an identifier` where `export .foo` and `export
+		// 1x=v` both say `export:`. See
+		// Diagnostics.BadNameOfADottedOperandWithAValue.
+		BadNameOfADottedOperandWithAValue: "%[2]s: is not an identifier",
 		BuiltinBadName: map[string]string{
 			"export":   "%[1]s: %[2]s: is not an identifier",
 			"readonly": "%[1]s: %[2]s: invalid variable name",
@@ -4321,6 +4327,12 @@ func Diagnostics() interp.Diagnostics {
 		// `env -i`: `typeset -n u; echo "[${!u}]"` writes `u: no reference
 		// name` and the script is over, at 1.
 		IndirectionUnaimedReference: "%[1]s: no reference name",
+		// The same words for every other way through an unaimed reference —
+		// a read, a write to one of its members, a compound body, an
+		// `unset` — which this shell refuses and bash answers with the
+		// empty string. Measured 2026-09-20; the rows and the states that
+		// stay silent are in Diagnostics.NamerefUnaimedUse.
+		NamerefUnaimedUse: "%[1]s: no reference name",
 		// The one nameref sentence this shell and bash write identically,
 		// measured on both: `r: reference variable cannot be an array`.
 		NamerefCannotBeAnArray: "%[1]s: reference variable cannot be an array",

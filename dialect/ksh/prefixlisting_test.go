@@ -41,6 +41,41 @@ func TestAPrefixListingLeavesOutTheNameThatIsThePrefix(t *testing.T) {
 	}
 }
 
+// A prefix with a **dot** in it lists the name it spells, which is the one
+// shape the exclusion above does not reach.
+//
+// The axis was measured over plain names and is a rule about plain names.
+// Measured 2026-09-20 against ksh93u+ 2012-08-01, script files under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null
+// device, over `typeset zz=(a=1 ab=2 n=(y=7 z=8))` — every row below was
+// short by the exact name here, at status 0 (#3936).
+func TestAPrefixListingKeepsAMemberPathsOwnName(t *testing.T) {
+	const zz = `typeset zz=(a=1 ab=2 n=(y=7 z=8)); `
+	for _, c := range []struct{ src, want string }{
+		// A member that is a scalar, and one that is itself a compound.
+		{zz + `printf "[%s]" "${!zz.a@}"`, `[zz.a][zz.ab]`},
+		{zz + `printf "[%s]" "${!zz.n@}"`, `[zz.n][zz.n.y][zz.n.z]`},
+		// One link further down, where the exact name was the only match:
+		// the answer was nothing at all before.
+		{zz + `printf "[%s]" "${!zz.n.y@}"`, `[zz.n.y]`},
+		// The `*` spelling is the same list joined, not a second rule.
+		{zz + `printf "[%s]" "${!zz.a*}"`, `[zz.a zz.ab]`},
+		// The controls, and they are what say the dot is the whole of the
+		// split rather than "a compound is listed": the compound `zz` is
+		// left out of its own listing exactly as a scalar is, and a prefix
+		// ending at the dot has no exact name to hold either way.
+		{zz + `printf "[%s]" "${!zz@}"`, `[zz.a][zz.ab][zz.n][zz.n.y][zz.n.z]`},
+		{zz + `printf "[%s]" "${!zz.@}"`, `[zz.a][zz.ab][zz.n][zz.n.y][zz.n.z]`},
+		// And a namespace, which is spelled with a dot and lands on the
+		// same side of it.
+		{`namespace zqns { zqx=1; }; printf "[%s]" "${!.zqns.zqx@}"`, `[.zqns.zqx]`},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s = %q status %d, want %q at 0", c.src, out, st, c.want)
+		}
+	}
+}
+
 // The axis and not the code: a preset that stopped holding it would answer
 // bash's way with every test above still passing against a hand-written
 // filter somewhere else.

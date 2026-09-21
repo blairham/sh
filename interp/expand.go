@@ -1451,6 +1451,25 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// Only when the word is what the expansion came to. When the *parameter*
 	// is what it came to, the array path below is the one that gives its
 	// fields.
+	// A read **through** a reference with nothing to point at, in front of
+	// the word a `-` substitutes. The scalar path in expandParam makes the
+	// same refusal and every other operator reaches it there; this one pair
+	// never does, because the word is expanded here and the parameter is
+	// never read. Measured: `${u-D}` and `${u:-D}` are `u: no reference
+	// name` in the refusing column exactly as `${u}` is, so the word behind
+	// the operator does not stand in for the value — the same thing
+	// Diagnostics.IndirectionUnaimedReference records for `${!u-DEF}`.
+	//
+	// Behind the prefix listing above, which is not a read through the
+	// reference and answers nothing at 0 there. See
+	// Diagnostics.NamerefUnaimedUse.
+	if !e.Indirect {
+		if aimless, unaimed := r.unaimedReferenceBase(e.Name); unaimed {
+			r.refuseUnaimedReference(aimless, "")
+			r.expandErr = true
+			return nil, true
+		}
+	}
 	if fields, ok := r.substitutedWordFields(s, sp, head); ok {
 		return fields, true
 	}
@@ -2748,6 +2767,23 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// behind the read: a circular reference is not an aimed one, so the
 		// refusal saw it first.
 		circular = cycle
+	}
+	if !e.Indirect {
+		// A read **through** a reference with nothing to point at, which is
+		// the plain spelling of the refusal the indirection above makes and
+		// is in front of the read for the same reason: it never reads the
+		// value, and it is ahead of the operators because the reference is
+		// measured refusing `${u:-D}` and `${#u}` as squarely as `${u}`. A
+		// member path is a use of its base, so `${u.a}` is refused naming
+		// `u`. See Diagnostics.NamerefUnaimedUse.
+		if aimless, unaimed := r.unaimedReferenceBase(e.Name); unaimed {
+			r.refuseUnaimedReference(aimless, "")
+			// What it costs is FailedExpansionAbandonsTheLine's question,
+			// which expandErr puts to it — exactly as the indirection's
+			// refusal above does.
+			r.expandErr = true
+			return ""
+		}
 	}
 	if !circular {
 		value, set, subscript = r.paramSource(e)
@@ -6923,7 +6959,42 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 // A filter over the finished list rather than a condition inside
 // namesWithPrefix, because the two readings differ only in this one name and
 // the sources, the skips and the ordering are the same question under both.
+//
+// # A member path keeps its own name
+//
+// The axis was measured over plain names, and the exclusion is a rule about
+// plain names: a prefix with a **dot** in it lists the name it spells.
+// Measured 2026-09-20 against AT&T ksh93u+ 2012-08-01 (`/bin/ksh`), script
+// files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the
+// null device, over `typeset zz=(a=1 ab=2 n=(y=7))`:
+//
+//	written        ksh93u+                 here, before
+//	${!zz.a@}      zz.a zz.ab              zz.ab
+//	${!zz.n@}      zz.n zz.n.y             zz.n.y
+//	${!zz.n.y@}    zz.n.y                  (nothing)
+//	${!zz@}        zz.a zz.ab zz.n zz.n.y  the same — `zz` itself is dropped
+//	${!zz.@}       the same four           the same four
+//
+// So it is not "a compound is listed": the compound `zz` is left out of the
+// fourth row exactly as a scalar is, and the member `zz.a` is listed in the
+// first exactly as the nested compound `zz.n` is in the second. The dot is
+// the whole of the split, and the last two rows are the controls that say the
+// listing itself was never the wrong half.
+//
+// Not an axis, for the reason a compound variable is not one: a name with a
+// dot in it is one column's construct, so the other columns cannot answer
+// this and a flip could not move them. The plain-name reading they *do* split
+// on is untouched — `foo=1; foobar=2; ${!foo@}` is `foobar` here and `foo
+// foobar` in bash, which is Semantics.NamePrefixListingExcludesTheExactName
+// and stays there.
+//
+// A namespace is spelled with a dot too and lands on the same side of it:
+// `namespace ns { x=1; }` then `${!.ns.x@}` answers `.ns.x` there, where the
+// exclusion would have answered nothing.
 func withoutTheExactName(names []string, prefix string) []string {
+	if strings.Contains(prefix, memberSep) {
+		return names
+	}
 	out := names[:0:0]
 	for _, name := range names {
 		if name == prefix {

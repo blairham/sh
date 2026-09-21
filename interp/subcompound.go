@@ -117,13 +117,78 @@ func (r *Runner) elementAddress(name string, index *syntax.Word, written string)
 		return elementAddress{sub: key, assoc: true}, true
 	}
 	text := r.joinWord(index)
-	subject := subscriptSubject(written, text)
+	return r.indexedElementAddress(subscriptSubject(written, text), text)
+}
+
+// indexedElementAddress is the indexed half of the above, taken on its own so
+// that a caller holding the subscript as **text** can reach it.
+func (r *Runner) indexedElementAddress(subject, text string) (elementAddress, bool) {
 	idx, err := r.subscriptValueAsWritten(subject, text)
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(text, err))
 		return elementAddress{}, false
 	}
 	return elementAddress{sub: itoa(idx), subject: subject, idx: idx}, true
+}
+
+// resolvedElementAddress is [Runner.elementAddress] for an element named by a
+// **resolved text** rather than by a parsed subscript — `a[1]` as a name
+// reference holds it, which is the only way a subscript reaches this shell
+// without a [syntax.Word] behind it.
+//
+// The two routes are the same two, asked of the base in the same order. A
+// table's key is the text as it stands, which is how every other write
+// through a reference to an element already keys one — see
+// [Runner.storeThroughNamerefElement], whose pair of stores this address is
+// resolved to reach.
+func (r *Runner) resolvedElementAddress(base, sub string) (elementAddress, bool) {
+	if r.assocDeclared(base) {
+		return elementAddress{sub: sub, assoc: true}, true
+	}
+	return r.indexedElementAddress(sub, sub)
+}
+
+// assignCompoundBodyIntoElement is a compound variable's body written through
+// a name reference **aimed at an element**: the members go into the element's
+// namespace, as they already did, and the element itself is made to hold the
+// compound.
+//
+// Measured 2026-09-20 against AT&T ksh93u+ 2012-08-01 (`/bin/ksh`), script
+// files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the
+// null device, over `a=(p q r); typeset -n e='a[1]'`:
+//
+//	written        typeset -p a                  "${a[1]}"        ${a[1].x}
+//	typeset e=(x=1)   typeset -a a=(p (x=1) r)   the body, over   1
+//	                                             three lines
+//
+// The third column was already right — the members reach `a[1].x` because
+// [Runner.compoundMemberThroughAReference] resolves `e.x` to it — and the
+// first two were the element keeping its old `q`. So the whole of what was
+// missing is the element's own value, which is [Element] of kind
+// [ElementHoldsACompound] pointing at the namespace the members are already
+// under.
+//
+// The control that must not move: `typeset e=Z` through the same reference is
+// `typeset -a a=(p Z r)` in both, so it is the compound body alone and not
+// the element redirect. That one goes through [Runner.setVarAs], which
+// resolves the reference and reaches [Runner.storeThroughNamerefElement] —
+// the scalar store this is the compound's counterpart of.
+//
+// **The address is resolved again rather than taken from the target's text.**
+// `space` is built from what the arithmetic makes of the subscript, which is
+// the same rule `a[1+1]=(x=1)` follows, so the members and the element cannot
+// hang under two spellings of one cell — the failure interp/subcompound.go's
+// [elementAddress] exists to prevent, arrived at from a third caller.
+func (r *Runner) assignCompoundBodyIntoElement(ctx context.Context, a *syntax.Assign, base, sub string) {
+	at, ok := r.resolvedElementAddress(base, sub)
+	if !ok {
+		return
+	}
+	space := elementNamespace(base, at.sub)
+	if !r.fillElementCompound(ctx, space, a) {
+		return
+	}
+	r.storeElementCompound(base, at, space)
 }
 
 // storeElementCompound puts the element that holds the compound at that

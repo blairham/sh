@@ -173,3 +173,40 @@ func TestAnUnterminatedNamespaceNamesTheConstruct(t *testing.T) {
 		t.Errorf("got %q, want the construct named", got)
 	}
 }
+
+// A prefix listing whose prefix a namespace's **own name** extends answers
+// with that name and then with everything the region reads through.
+//
+// Measured 2026-09-20 against AT&T ksh93u+ 2012-08-01 (`/bin/ksh` here),
+// script files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input
+// on the null device, over `namespace zqns { zqx=1; }`. The spelling with the
+// separator already answered the fall-through and the one without it reached
+// none of it — `.zqns.zqx` alone, at status 0, with the namespace's own name
+// in no source (#3957).
+//
+// The two lists are compared with each other rather than written out,
+// because their *contents* are which ordinary parameters this shell has —
+// which is not this rule, and is a list that grows. What is the rule is that
+// the short spelling is the long one with the name in front, and that a
+// prefix no namespace extends still answers nothing.
+func TestANamespacePrefixWithoutItsSeparatorListsTheWholeRegion(t *testing.T) {
+	const ns = "namespace zqns { zqx=1; }\n"
+	full, st := answersRun(t, ns+`print -r -- "${!.zqns.@}"`)
+	if st != 0 || full == "" {
+		t.Fatalf("the separator spelling = %q at %d, want a listing at 0", full, st)
+	}
+	for _, c := range []struct{ name, src, want string }{
+		{"the whole name", ns + `print -r -- "${!.zqns@}"`, ".zqns " + full},
+		{"a head of it", ns + `print -r -- "${!.zq@}"`, ".zqns " + full},
+		{"the `*` spelling likewise", ns + `print -r -- "${!.zqns*}"`, ".zqns " + full},
+		// The control: a prefix no namespace's name extends answers nothing,
+		// which is what says the listing did not simply stop filtering.
+		{"a prefix nothing extends", ns + `print -r -- "[${!.zqnsz@}]"`, "[]\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if out, st := answersRun(t, c.src); out != c.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", c.src, out, st, c.want)
+			}
+		})
+	}
+}

@@ -1116,6 +1116,12 @@ func Semantics() interp.Semantics {
 	// hash is an alias for `alias -t` here, and a name that resolves to
 	// nothing is a silent success.
 	s.HashReportsAMissingName = interp.No
+	// And an operand written with a slash is not passed over: it is a
+	// command name this shell can resolve without PATH, so the tracked
+	// alias it makes points at itself. Measured 2026-09-21: `hash /bin/ls;
+	// hash` is `/bin/ls=/bin/ls` at 0, alone in the panel — bash, dash and
+	// BusyBox ash remember nothing and say nothing, zsh complains (#4064).
+	s.HashIgnoresAnOperandWithASlash = interp.No
 	// And a `PATH=… cmd` prefix leaves the table alone: the new PATH goes
 	// to the child and to the search this shell makes, and never to the
 	// shell's own PATH, so nothing empties the table. Measured 2026-09-13

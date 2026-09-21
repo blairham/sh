@@ -695,6 +695,11 @@ type Diagnostics struct {
 	// HashNotFound is a hashed name that resolves to nothing. One verb: the
 	// name. Empty means the substrate's own wording.
 	HashNotFound string
+	// HashPathIsADirectory is `hash -p` handed a path that is a directory,
+	// which is the one thing the letter checks the path for. One verb: the
+	// path as it was written. Empty means the substrate's own wording. Only
+	// the dialect with Semantics.HashTakesAPathToRemember reaches it.
+	HashPathIsADirectory string
 	// HashListing is the shape a bare `hash` prints the table in. See
 	// HashListingForm.
 	HashListing HashListingForm

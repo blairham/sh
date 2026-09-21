@@ -1870,8 +1870,15 @@ func Semantics() interp.Semantics {
 	s.PrefixRefusalFatality = interp.PrefixRefusalFatalOnACommandThisShellRuns
 	s.PrefixRefusalCostsTheCommand = interp.Yes
 	// hash counts only what PATH holds: a builtin or a function is "no
-	// such command" to it.
+	// such command" to it — and so is a pathname it was handed. Measured
+	// 2026-09-21: `hash /bin/ls` is `no such command: /bin/ls` at 1 with the
+	// table left empty, where three of the panel say nothing at all and
+	// ksh93 remembers the path as written.
 	s.HashSearchesPathAlone = interp.Yes
+	// Which is the same answer said from the other side: the operand is not
+	// passed over in silence here, it is searched for the only way this
+	// shell searches and reported when the search cannot have it (#4064).
+	s.HashIgnoresAnOperandWithASlash = interp.No
 	// `hash -d` here is not bash's "forget one name": it is the table of
 	// **named directories** that `~name` reads back, written as an
 	// assignment. `hash -d a=/tmp; print -r -- ~a` is `/tmp`, `hash -d`

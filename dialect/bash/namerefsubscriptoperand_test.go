@@ -102,3 +102,68 @@ func TestAReferenceAimedAtAnElementExpandsItsSubscriptOnRead(t *testing.T) {
 		})
 	}
 }
+
+// The write half of the same reference. `declare -n r="a[$i]"` stores the
+// subscript as live text whichever way the reference is later used, so the
+// round it is owed is owed at the **store** as much as at the read — and the
+// two branches move together because a reference does not know which
+// container it will land in.
+//
+// Measured 2026-09-21, bash 5.3.20, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+// each line its own `-c`. The keyed row is the sharper of the two: it was a
+// silent wrong answer, the script exiting 0 with `m[k]` still holding `v` and
+// a junk key spelled `$(echo k)` added beside it, where the indexed row at
+// least stopped with `arithmetic syntax error: operand expected` (#4085).
+//
+// The command substitution is the discriminator rather than dressing, for
+// the reason it is one above: with `i=0` the declaration's own word expands
+// the subscript and both readings reach the same element, so a row without
+// one cannot tell the fix from its absence.
+func TestAReferenceAimedAtAnElementExpandsItsSubscriptOnWrite(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"an index expands, and the substitution in it runs",
+			"a=(x y)\ni='$(echo RAN >&2 ; echo 0)'\ndeclare -n r=\"a[$i]\"\nr=Z\ndeclare -p a\n",
+			"RAN\ndeclare -a a=([0]=\"Z\" [1]=\"y\")\n",
+		},
+		{
+			"a key expands, and the element it names is the one overwritten",
+			"declare -A m=([k]=v)\ni='$(echo k)'\ndeclare -n r=\"m[$i]\"\nr=Z\ndeclare -p m\n",
+			"declare -A m=([k]=\"Z\" )\n",
+		},
+		{
+			"and what was written is what reads back through the reference",
+			"declare -A m=([k]=v)\ni='$(echo k)'\ndeclare -n r=\"m[$i]\"\nr=Z\necho \"[$r]\"\n",
+			"[Z]\n",
+		},
+		{
+			"the control: a literal index is unmoved",
+			"a=(x y)\ndeclare -n r=\"a[1]\"\nr=Z\ndeclare -p a\n",
+			"declare -a a=([0]=\"x\" [1]=\"Z\")\n",
+		},
+		{
+			"the control: a literal key is unmoved",
+			"declare -A m=([k]=v)\ndeclare -n r=\"m[k]\"\nr=Z\ndeclare -p m\n",
+			"declare -A m=([k]=\"Z\" )\n",
+		},
+		{
+			"an expression around the substitution is still an expression",
+			"a=(x y z)\ni='$(echo 1)+1'\ndeclare -n r=\"a[$i]\"\nr=Z\ndeclare -p a\n",
+			"declare -a a=([0]=\"x\" [1]=\"y\" [2]=\"Z\")\n",
+		},
+		{
+			"the whole-array brackets are still refused, and nothing is stored",
+			"a=(p q r)\ndeclare -n b=\"a[@]\"\nb=Z\necho \"st=$?\"\ndeclare -p a\n",
+			"sh: line 3: a[@]: bad array subscript\nst=1\ndeclare -a a=([0]=\"p\" [1]=\"q\" [2]=\"r\")\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			out, _ := answersRun(t, c.src)
+			if out != c.want {
+				t.Errorf("wrote %q, want %q", out, c.want)
+			}
+		})
+	}
+}

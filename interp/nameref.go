@@ -337,6 +337,33 @@ func (r *Runner) readThroughNamerefElement(base, sub string) (string, bool) {
 // `(P)` flag's assignment is for the same reason: the two questions a
 // subscript raises — which container, and what the text evaluates to — have
 // one answer each and both are already settled elsewhere.
+//
+// Including the round the subscript is owed. The aim is **text the
+// declaration stored** rather than a word the parser read — `i='$(echo 0)';
+// declare -n r="a[$i]"` aims the reference at the nine characters `$(echo
+// 0)`, because the quotes are what kept the `$` from the round that expanded
+// the declaration's own word — so the substitution in it is performed when
+// the reference is *used*, and a write uses it exactly as a read does. This
+// is [Runner.readThroughNamerefElement]'s sentence said on the store, and
+// the two are one rule rather than two: a reference does not know which
+// container it will land in, and it does not know whether it is about to be
+// read or written either.
+//
+// Measured 2026-09-21, bash 5.3.20, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+// each line its own `-c`:
+//
+//	a=(x y); i='$(echo RAN >&2; echo 0)'; declare -n r="a[$i]"; r=Z
+//	                     `RAN`, then `declare -a a=([0]="Z" [1]="y")`, at 0 —
+//	                     here it was `arithmetic syntax error: operand
+//	                     expected`, at 1
+//	declare -A m=([k]=v); i='$(echo k)'; declare -n r="m[$i]"; r=Z
+//	                     `declare -A m=([k]="Z" )` — the key is overwritten —
+//	                     where here the unexpanded text became a key of its
+//	                     own beside the untouched `k`, at status 0
+//
+// The keyed row is the sharper one and is why both branches move together:
+// it was a **silent wrong answer**, the script exiting 0 with the element it
+// meant to write still holding its old value (#4085).
 func (r *Runner) storeThroughNamerefElement(base, sub, value string, form assignForm) {
 	if r.storeWholeArraySubscriptThroughAReference(base, sub, value, form) {
 		// `declare -n b='a[@]'; b=Z` — brackets that name the whole array
@@ -348,10 +375,13 @@ func (r *Runner) storeThroughNamerefElement(base, sub, value string, form assign
 		return
 	}
 	if r.assocDeclared(base) {
+		if key, again := r.expandedSubscriptText(base + "[" + sub + "]"); again {
+			sub = key
+		}
 		r.setAssocElem(base, sub, value)
 		return
 	}
-	idx, err := r.subscriptValue(sub)
+	idx, err := r.subscriptValueOfReference(sub)
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(sub, err))
 		return

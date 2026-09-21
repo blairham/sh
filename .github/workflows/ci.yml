@@ -716,11 +716,43 @@ jobs:
     # anybody actually reads them.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    # The one job in this workflow that runs in a container, and it is not
-    # about which bash is graded -- Ubuntu 24.04 is what `runs-on:
-    # ubuntu-latest` already provides, so the reference build, the numbers and
-    # the delta a burndown reads are all exactly what they were. It is about
-    # what a signal can reach.
+    # The one job in this workflow that runs in a container, and it now
+    # answers two questions rather than one: what a signal can reach, and
+    # **which bash is graded**. The second is #4106 and is the reason the
+    # image is no longer `ubuntu:24.04`.
+    #
+    # # Which bash is graded
+    #
+    # This column grades `cmd/bash` against the build named in
+    # `suite.Panel`'s bash entry -- `Against: GNU bash 5.3`, because the suite
+    # being run is bash 5.3's own `tests/`. Ubuntu 24.04 ships **5.2.21**, so
+    # every run on it printed a `WRONG BUILD` banner over the figure and an
+    # unquantified share of the `0 / 0` block was a 5.2-to-5.3 difference
+    # scored against us. #2298 closes on that count, so the count has to be
+    # about this shell.
+    #
+    # `debian:sid-slim` carries **GNU bash 5.3.15**, which is what
+    # `AgainstReport: "version 5.3"` asks for, and it is `apt` and glibc, so
+    # the step list below and `setup-go` are untouched. The digest is the one
+    # `images/zsh-5.9.2/Dockerfile` already pins: **one pin for debian sid in
+    # this tree**, not a second one that can drift from it. Pinned by an
+    # *index* digest and never by the tag, for the reason `internal/suite`'s
+    # `Suite.Image` states at length -- sid moves, and a column pinned to a
+    # tag reports a shell that changed with nothing able to tell that from a
+    # shell that behaved differently.
+    #
+    # This is the same move #3480 made for the gated references of `make
+    # suite`, taken by the route this job already has. It cannot take the
+    # other one: `suite.RunContained` drives a container from the host, and
+    # there is no docker client inside a job container.
+    #
+    # The absolute numbers move with the image, and that is the point --
+    # coreutils and libc differ from 24.04's too, but **both shells run in
+    # here on one copy of the files**, which is the cancellation
+    # `RunContained` already argues. What does not cancel is the bash
+    # version, and that is what this removes.
+    #
+    # # What a signal can reach
     #
     # This job was cancelled on **31.1% of main runs** (14 of 45, measured
     # 2026-09-19; 37.5% and 37.3% on the two days before), always the same
@@ -744,9 +776,26 @@ jobs:
     # and `internal/cmd/suiteinside` already make one layer in, for the same
     # reason.
     #
+    # **That worked, and a different kill is left.** Five of the six most
+    # recent completed main runs read 2026-09-21 end the step with `signal:
+    # killed` and `make: *** [Makefile:340: bash-suite] Error 1` 219-294s in,
+    # and then the job carries on to post-job cleanup and goes green. Nothing
+    # is cancelled and the runner agent is alive: `make` survived to print its
+    # own error and the step shell survived to return, so this is **one
+    # process** taking a SIGKILL -- `go run`'s way of saying the program it
+    # started died on a signal -- and not the uid-wide broadcast above, which
+    # would have taken make and the step shell with it. The green run in the
+    # same window ran 371s, past every one of those kills, so it is not a wall
+    # either.
+    #
+    # What kills one process and leaves its parent is the OOM killer, and
+    # nothing in the log says so, so the verdict step below reads the cgroup's
+    # own counters after a run that printed nothing rather than a remedy being
+    # guessed at here. #4106.
+    #
     # It is reversible: the diff is this key and the apt line below.
     container:
-      image: ubuntu:24.04
+      image: debian:sid-slim@sha256:ec3fa4e0b2987ae47be353f56854191e300261915470e40165b1c906d22a65db
     timeout-minutes: 30
     steps:
     # A job container starts from the image and nothing else, so what the
@@ -761,6 +810,12 @@ jobs:
     # came back with -- green, in 21 seconds, having measured nothing.
     - name: What a bare image does not have
       if: needs.changes.outputs.code == 'true'
+      # Debian sid is a moving archive, so an `apt-get` here can fail on a day
+      # the index is mid-publish. That must not redden a report-only job: the
+      # run then reaches the verdict step with no table, which is exactly the
+      # thing #4106 made legible, rather than with a red X that reads like a
+      # defect in this shell.
+      continue-on-error: true
       run: |
         apt-get update -qq
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
@@ -798,10 +853,11 @@ jobs:
       # Nothing here can print a line of it. That is the same rule the local
       # target follows, and putting the run on a runner does not relax it.
       #
-      # Report-only. The runner's bash is Ubuntu's build and the maintainer's
-      # is Homebrew's 5.3, so the absolute counts here will not match a figure
-      # quoted from that machine -- the useful reading is the delta across one
-      # pull request on one runner. It needs the network to fetch, so a fetch
+      # Report-only. Since #4106 the reference here is the container's bash
+      # 5.3, which is the build this column names, so the figure is no longer
+      # a fact about the runner's distribution -- what still differs from the
+      # maintainer's machine is the surrounding system, not the shell. It
+      # needs the network to fetch, so a fetch
       # failure must not fail the build either; suitecheck already reports
       # that as a skip rather than a crash, and `|| true` covers the rest.
       # `-timeout 30s` matches what the `suite` target already passes, and it
@@ -836,4 +892,72 @@ jobs:
       # broadcast kills. Holding it to the shell the job has always used keeps
       # the container the only thing this change moves.
       shell: bash -e {0}
-      run: make bash-suite ARGS="-timeout 30s" || true
+      # Teed rather than only printed, so the step after this one can say
+      # whether a table was produced without scraping the job's log back out
+      # of the API. The pipeline's status is tee's, which is why `|| true`
+      # stays: it is covering the fetch failure it always covered, not this.
+      run: make bash-suite ARGS="-timeout 30s" 2>&1 | tee "$RUNNER_TEMP/bash-suite.log" || true
+    # The other half of #4106, and the half that is not about bash at all.
+    #
+    # `continue-on-error: true` above is right and has a cost: the job is
+    # green whether the step printed a table or died 240s in having measured
+    # nothing, and from outside those are **the same green job**. Five of the
+    # six most recent completed main runs read on 2026-09-21 were the second
+    # kind, including the one a naive "latest run on main" query lands on --
+    # so a reader refreshing #2298's count is as likely as not to get no
+    # number, and a scraper gets whatever its last successful parse left
+    # behind.
+    #
+    # This says which happened, in three places a reader or a script can tell
+    # apart: a marker line in the log, a line in the job summary, and a
+    # warning annotation when there is no report. It makes nothing blocking --
+    # the job stays report-only and stays off the required list, because a
+    # count that jitters by a couple of files run to run is not a gate.
+    - name: Say whether this run produced a report
+      if: always() && needs.changes.outputs.code == 'true'
+      # No `-e`, and it is the one step here where that is deliberate: a grep
+      # that matches nothing is an answer rather than an error, and a
+      # report-only job turning red over its own bookkeeping would be a new
+      # version of the confusion this step exists to remove.
+      shell: bash {0}
+      run: |
+        log="$RUNNER_TEMP/bash-suite.log"
+        say() { echo "$1"; echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+
+        if [ -s "$log" ] && grep -q "^bash's own suite" "$log"; then
+          say "BASH-SUITE: report present"
+          {
+            echo '```'
+            grep -E "^bash's own suite|^  (oracle|static read|strict|line agreement|not scored) +[0-9/]|^ +[0-9]+  0 / 0$" "$log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q 'WRONG BUILD' "$log"; then
+            say "BASH-SUITE: WRONG BUILD -- the oracle is not the build this column names"
+            echo "::warning title=bash-suite::graded against a bash this column does not name; see #4106"
+          fi
+          exit 0
+        fi
+
+        say "BASH-SUITE: NO REPORT -- this run measured nothing, and is not a count for #2298"
+        echo "::warning title=bash-suite::no report was produced; this run is not a count for #2298"
+        echo "the last lines the step printed:"
+        tail -n 5 "$log" 2>/dev/null
+
+        # Whether the run was killed for memory, asked of the kernel instead
+        # of guessed at. The kill that is left after the container fix takes
+        # one process and leaves make and the step shell alive, which is the
+        # OOM killer's shape and nothing in the log confirms it -- so
+        # `oom_kill` in memory.events is the discriminator, and memory.peak
+        # against memory.max says how close a run that did finish came.
+        # Narrowing the run and raising a bound are different remedies and
+        # this is what picks between them; #4106 stops here on purpose rather
+        # than guessing at a number.
+        for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.peak \
+                 /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.events; do
+          if [ -r "$f" ]; then
+            echo "--- $f"
+            cat "$f"
+          fi
+        done
+        grep -E '^Mem(Total|Available)' /proc/meminfo 2>/dev/null
+        exit 0

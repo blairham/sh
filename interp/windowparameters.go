@@ -100,22 +100,14 @@ import (
 // than `scalar`.
 func (r *Runner) ProvideWindowSize() {
 	r.providesWindowSize = true
-	if r.integer == nil {
-		r.integer = map[string]bool{}
-	}
-	if r.integerBase == nil {
-		r.integerBase = map[string]int{}
-	}
 	for _, name := range []string{"COLUMNS", "LINES"} {
-		r.integer[name] = true
-		// And the base written down, which is what separates a special
+		// With the base written down, which is what separates a special
 		// integer from one a script declared. Measured: `typeset -p COLUMNS`
 		// is `typeset -i10 COLUMNS=0` and a plain listing writes `integer 10
 		// COLUMNS=0`, where the same shell's `typeset -i x=5; typeset -p x`
-		// is `typeset -i x=5` with no base at all. Ten is the base nothing is
-		// *written* in, so it marks nothing about the value; it is part of
-		// how the name describes itself.
-		r.integerBase[name] = 10
+		// is `typeset -i x=5` with no base at all. See markIntegerParameter,
+		// which is the one place the two tables are written.
+		r.markIntegerParameter(name, 10)
 	}
 	r.SetDynamic("COLUMNS", func(r *Runner) string { return r.windowSizeValue("COLUMNS") })
 	r.SetDynamic("LINES", func(r *Runner) string { return r.windowSizeValue("LINES") })

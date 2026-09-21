@@ -128,6 +128,11 @@ func registerFcHistory(r *interp.Runner) {
 	// interp.Runner.SetAssignmentAction for why a stored name needs a seam
 	// rather than a producer's writer.
 	r.SetAssignmentAction("HISTSIZE", fcSizeAssigned)
+	// And the parameter itself, which is this shell's own rather than
+	// something a script has to set: an integer with a default. See
+	// fcStartSize, and note that the action above is registered first so
+	// that what this lays down is the first size in force.
+	fcStartSize(r)
 	r.Register("fc", func(r *interp.Runner, ctx context.Context, args []string) int {
 		if letter, rest, found := fcFileLetter(args); found {
 			return fcFile(r, letter, rest)
@@ -320,26 +325,68 @@ func fcRemember(r *interp.Runner, line string) {
 // fcSizeAssigned is the HISTSIZE assignment seam: it records the size now in
 // force and trims a list already longer than it.
 func fcSizeAssigned(r *interp.Runner, value string) {
-	n := fcAssignedSize(r, value)
+	n := fcCountFloored(value)
 	r.SetVar(fcHistorySizeInForce, strconv.Itoa(n))
 	fcTrimToSize(r, n)
+	// And the floor written back into the parameter, because zsh's HISTSIZE
+	// *is* the floored value and not merely bounded by it: measured,
+	// `HISTSIZE=0` then `echo $HISTSIZE` answers `1`, as do `-1` and a word.
+	//
+	// The arithmetic above it is the **integer attribute's** and not this
+	// function's — fcStartSize declares the name, so `1+1` arrives here as
+	// `2` and `2x` never arrives at all, having been the bad-math error that
+	// ends the shell. One reader of one rule, and it is the core's.
+	//
+	// The guard is what ends the recursion rather than a flag beside the
+	// store: writing the name sends this same message again, and the second
+	// time the value already is the floor, so it stops. A flag would have to
+	// be right about re-entry from a nested assignment as well.
+	if text := strconv.Itoa(n); value != text {
+		r.SetVar("HISTSIZE", text)
+	}
 }
 
-// fcAssignedSize is a HISTSIZE an assignment wrote, as a count of entries:
-// **arithmetic**, with a floor of one.
+// fcCountFloored is a HISTSIZE as a count of entries, with zsh's floor of one.
 //
-// Through the runner's own arithmetic rather than a numeric parse beside it,
-// which is what makes `1+1` two and `0x2` two and ` 2 ` two without three
-// rules being written down here. A value that is not an expression at all is
-// what zsh reports and refuses — `HISTSIZE=2x` writes `bad math expression`
-// and ends a non-interactive shell — and ArithValue is the call that both
-// reports and refuses, so the failure is passed on rather than swallowed.
-func fcAssignedSize(r *interp.Runner, value string) int {
-	n, ok := r.ArithValue(value)
-	if !ok {
-		return fcHistorySizeDefault
+// The value arrives already evaluated — see fcSizeAssigned — so this is a
+// decimal integer in every reachable case; the scan is what answers for a
+// name something put a value on before the attribute was declared.
+func fcCountFloored(value string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return fcImportedSize(value)
 	}
 	return max(n, 1)
+}
+
+// fcStartSize lays HISTSIZE down as the parameter zsh carries rather than a
+// name a script has to invent.
+//
+// Measured 2026-09-21 on zsh 5.9.2 under `zsh -f -c`, in a shell that has
+// never mentioned the name: `typeset -p HISTSIZE` writes `typeset -i10
+// HISTSIZE=30` and `echo "[${HISTSIZE-U}]"` writes `[30]`. So it is set, it
+// is an integer, and thirty is its value.
+//
+// The **attribute is what does the arithmetic**, which is why it is declared
+// here rather than the reading being written out twice: with it, `HISTSIZE=1+1`
+// stores two, `HISTSIZE=" 2 "` stores two, `HISTSIZE=abc` stores nothing at
+// all and `HISTSIZE=2x` is `bad math expression` and the end of a
+// non-interactive shell — every row of that measured identical to zsh's
+// before this, because the core already had the attribute (#4093).
+//
+// The **order is load-bearing**: an inherited value is scanned *before* the
+// attribute goes on. zsh reads what the environment handed it rather than
+// evaluating it — `HISTSIZE=2x` in the environment is two and no complaint,
+// where the same text assigned is the error above — and declaring the
+// attribute first would make a shell that dies at startup over a variable
+// somebody exported years ago.
+func fcStartSize(r *interp.Runner) {
+	start := fcHistorySizeDefault
+	if value, ok := r.GetVar("HISTSIZE"); ok {
+		start = fcImportedSize(value)
+	}
+	r.SetIntegerParameter("HISTSIZE", 10)
+	r.SetVar("HISTSIZE", strconv.Itoa(start))
 }
 
 // fcImportedSize is a HISTSIZE the shell was **handed**, which is a different
@@ -358,10 +405,10 @@ func fcAssignedSize(r *interp.Runner, value string) int {
 // used one for both would either refuse `2x` at startup — which zsh does not
 // — or let `1+1` through as one.
 //
-// What the *parameter* reads back as is not modeled: zsh rewrites it, so
-// `echo $HISTSIZE` answers `2` for an inherited `2x` and `1` for an assigned
-// `abc`, which is HISTSIZE being a `typeset -i10` special rather than
-// anything about the list.
+// The scan is also what the **parameter** ends up holding, because zsh
+// rewrites it: `echo $HISTSIZE` answers `2` for an inherited `2x`. See
+// fcStartSize, which stores what this answered before the attribute that
+// would have evaluated it goes on.
 func fcImportedSize(value string) int {
 	text := strings.TrimSpace(value)
 	for end := len(text); end > 0; end-- {
@@ -374,23 +421,21 @@ func fcImportedSize(value string) int {
 
 // fcHistorySize is the size the list is held at.
 //
-// The value in force where something has set one, and otherwise the
-// parameter scanned once and remembered — which is what lets a HISTSIZE
-// inherited from the environment bound a list no assignment ever reached.
-// Absent both, the default above.
+// The parameter, which fcStartSize keeps as a floored integer, so there is
+// nothing to work out here. Only where `unset` has taken it away does this
+// fall back to the size that was last in force — measured, `HISTSIZE=2;
+// unset HISTSIZE` leaves the list held at two — and to the default where
+// nothing ever set one.
 func fcHistorySize(r *interp.Runner) int {
+	if value, ok := r.GetVar("HISTSIZE"); ok {
+		return fcCountFloored(value)
+	}
 	if held, ok := r.GetVar(fcHistorySizeInForce); ok {
 		if n, err := strconv.Atoi(held); err == nil {
 			return max(n, 1)
 		}
 	}
-	value, ok := r.GetVar("HISTSIZE")
-	if !ok {
-		return fcHistorySizeDefault
-	}
-	n := fcImportedSize(value)
-	r.SetVar(fcHistorySizeInForce, strconv.Itoa(n))
-	return n
+	return fcHistorySizeDefault
 }
 
 // fcTrimToSize drops the oldest entries over the size, counting them so that

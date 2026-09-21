@@ -17838,11 +17838,16 @@ a scratch HOME:
 | shell | what the trap read |
 | --- | --- |
 | bash 5.3.20 | `v=inner` |
-| bash 3.2.57 | `v=inner` |
+| bash 3.2.57 | `v=inner` from a script file, `v=global` under `-c` |
 | dash 0.5.12 | `v=inner` |
 | BusyBox ash 1.37.0 | `v=inner` |
 | zsh 5.9.2 | `v=global` |
 | ksh93u+ 2012-08-01 | no `local`; see below |
+
+**bash 3.2.57 answers by the route**, which is the one row that is not a
+single value: a trailing command after the call does not move it, so it is
+not the last-command optimization, and 5.3.20 is `v=inner` on both routes.
+The preset is 5.3.
 
 ksh93 has no `local`, so it is probed with `function g { typeset v=…; }`
 — where `typeset` *is* local, controlled beside it — and with

@@ -3444,7 +3444,7 @@ type Semantics struct {
 	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME:
 	//
 	//	bash 5.3.20        v=inner
-	//	bash 3.2.57        v=inner
+	//	bash 3.2.57        v=inner from a script file, v=global under `-c`
 	//	dash 0.5.12        v=inner
 	//	BusyBox ash 1.37.0 v=inner
 	//	zsh 5.9.2          v=global
@@ -3463,6 +3463,14 @@ type Semantics struct {
 	// because the call really has returned before the shell ends. Only the
 	// `exit` route runs the trap from inside, which is why the axis is read
 	// where `exit` raises the stop and not where the trap fires.
+	//
+	// **bash 3.2.57 answers by the route it was invoked on**, which is the
+	// one row above that is not a single value and is why the corpus cell
+	// for that column reads the other way: from a script file it is
+	// `v=inner` with 5.3.20, and under `-c` it is `v=global`. A trailing
+	// command after the call does not move it, so it is not the
+	// last-command optimization. 5.3.20 is `v=inner` on both routes, and
+	// this preset is 5.3.
 	ExitTrapRunsInsideTheExitingCall Answer
 
 	// QuitIgnoredWhenNotInteractive makes an untrapped SIGQUIT do nothing at

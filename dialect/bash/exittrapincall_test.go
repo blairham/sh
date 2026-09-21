@@ -11,8 +11,9 @@ import (
 // `exit` inside a function fires the EXIT trap from inside the call here, so
 // the body reads the function's own locals and the running function's name.
 //
-// Measured 2026-09-21 on bash 5.3.20 and 3.2.57, script files under
-// `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME. See
+// Measured 2026-09-21 on bash 5.3.20 under `-c` and from a script file
+// alike, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME — 3.2.57
+// agrees from a script file and not under `-c`, which the axis records. See
 // interp.Semantics.ExitTrapRunsInsideTheExitingCall for the whole panel and
 // for the control — the same function left by falling off its end reads the
 // global here too.

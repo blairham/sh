@@ -206882,6 +206882,57 @@
         "TimedOut": false
       }
     },
+    "trap/a-function-that-returned-leaves-no-call-for-the-exit-trap": {
+      "ash": {
+        "Stdout": "v=global",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "v=global",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v=global",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v=global",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v=global",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v=global",
+        "Stderr": "\u003cshell\u003e: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v=global",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/a-handler-and-a-reset-leave-a-child-the-default": {
       "ash": {
         "Stdout": "st=143",
@@ -208008,6 +208059,57 @@
         "Stdout": "caught",
         "Stderr": "",
         "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/an-exit-inside-a-function-fires-the-trap-from-inside-the-call": {
+      "ash": {
+        "Stdout": "v=inner",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "v=inner",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v=inner",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v=global",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v=inner",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v=global",
+        "Stderr": "\u003cshell\u003e: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v=global",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

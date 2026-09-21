@@ -4,6 +4,8 @@
 package interp_test
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -60,5 +62,70 @@ func TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild(t *testing.T) {
 	want := []string{dir, "/h", "/h"}
 	if got := strings.Split(strings.TrimSpace(out), "\n"); !slices.Equal(got, want) {
 		t.Errorf("the three tildes read %q, want %q", got, want)
+	}
+}
+
+// TestEveryTildeRoadReadsTheOneCurrentHome: a tilde is reached from an
+// ordinary word, from an assignment's value, from the tilde an assignment
+// adds after each unquoted colon, from an array literal's element, from a
+// redirection's target and from a `cd` operand — and there is **one** home
+// behind all six.
+//
+// The panel says so: measured 2026-09-21 and recorded as
+// `expand/tilde-after-a-home-assignment-reaches-every-road`, all seven
+// columns answer the assignment, the colon and `cd ~` the same way they
+// answer a bare word, whichever way that is. bash 5.3 says its cached home
+// three times and the other six say the current variable three times; no
+// column mixes them.
+//
+// So this is a guard against the shape rather than against a behavior that
+// is currently wrong. There are two places in this package that turn a `~`
+// into a home — the word road and the assignment's colon road — and a fix
+// written into one of them and not the other would produce a shell no
+// column has, silently, on lines as ordinary as `PATH=~/bin:~/sbin`. The
+// second helper carrying a different answer from the first is how that goes
+// wrong in practice, so the test asks every road in one place.
+//
+// Each road is read three times, for the reason the test above it is: at
+// startup, after the script assigns, and after a child has been built. A
+// probe with fewer readings cannot tell the variable from a home frozen at
+// startup or from a cache a child refreshes, and #4039 is the second issue
+// filed here from one that could not.
+func TestEveryTildeRoadReadsTheOneCurrentHome(t *testing.T) {
+	first := t.TempDir()
+	second := filepath.Join(t.TempDir(), "second")
+	if err := os.MkdirAll(second, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Both homes are real directories, because one of the roads is `cd` and
+	// a road that cannot complete is a road that pins nothing.
+	for _, road := range []struct{ name, read string }{
+		{"an ordinary word", `echo ~`},
+		{"an assignment's value", `x=~; echo "$x"`},
+		{"a tilde after a colon in an assignment", `v=a:~; echo "${v#a:}"`},
+		{"an array literal's element", `a=(~); echo "${a[0]}"`},
+		{"a redirection's target", `: >~/mark; echo ~`},
+		{"a cd operand", `cd ~; pwd`},
+	} {
+		t.Run(road.name, func(t *testing.T) {
+			src := road.read + "\nHOME=" + second + "\n" + road.read +
+				"\n/usr/bin/true\n" + road.read + "\n"
+			out, st := run(t, src, func(r *Runner) {
+				sem := CoreSemantics()
+				// One axis is answered, and it is not this test's subject:
+				// an array literal cannot be read back without saying where
+				// its subscripts start, and a core vector refuses by name.
+				sem.ArrayBaseIsZero = Yes
+				r.Semantics, r.Dir = &sem, first
+				r.Vars = map[string]string{"HOME": first, "PATH": "/usr/bin:/bin"}
+			})
+			if st != 0 {
+				t.Fatalf("status = %d, want 0; out = %q", st, out)
+			}
+			want := []string{first, second, second}
+			if got := strings.Split(strings.TrimSpace(out), "\n"); !slices.Equal(got, want) {
+				t.Errorf("the three reads gave %q, want %q", got, want)
+			}
+		})
 	}
 }

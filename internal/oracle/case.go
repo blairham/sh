@@ -929,6 +929,21 @@ var Corpus = []Case{
 		Snippet: `echo ~nosuchuser12345; echo "st=$?"`,
 		Why:     "what a `~name` the user database has no entry for costs. bash, bash 3.2, bash-as-sh, ksh93 and dash leave the word exactly as written at status 0; zsh refuses it — `no such user or named directory` — and the refusal ends the line, so the `echo` behind it never runs. The *hit* is deliberately not recorded here: `~root` is `/var/root` on this machine and `/root` on a Linux one, so a row naming a real user would pin the machine rather than the shell. See `expand/tilde-naming-a-named-directory` for the half that is a table the shell owns",
 	},
+	{
+		ID: "expand/tilde-after-a-home-assignment", Category: "expansion",
+		Snippet: `HOME=/zz; case ~ in /zz) echo before=live;; *) echo before=other;; esac; /bin/echo >/dev/null; case ~ in /zz) echo after=live;; *) echo after=other;; esac`,
+		Why:     "whether a bare `~` reads the `HOME` the script has just assigned. Six of the seven columns answer `before=live after=live` — the tilde is the variable, every time. bash 5.3 and the same binary as `sh` answer `before=other after=live`, and the pair of cells is what makes this row worth having: the word alone reads as a home frozen at startup and is not, because the second reading moves. What moves it is the external command between them, so the divergent reading is a **cached** home that building an environment for a child refreshes. bash 3.2 is on the other side of its own 5.3. Recorded and not modeled, and `expand/tilde-after-a-home-assignment-reaches-every-road` and `expand/tilde-with-no-home-at-all` are the other two thirds of the measurement — see docs/spec/grammar/expansion.md, #3484 and #4039",
+	},
+	{
+		ID: "expand/tilde-after-a-home-assignment-reaches-every-road", Category: "expansion",
+		Snippet: `mkdir d; HOME=$PWD/d; x=~; case $x in */d) echo assign=live;; *) echo assign=other;; esac; v=a:~; case $v in a:*/d) echo colon=live;; *) echo colon=other;; esac; cd ~ && case $PWD in */d) echo cd=live;; *) echo cd=other;; esac`,
+		Why:     "the three roads into tilde expansion that are not an ordinary word — an assignment's value, the tilde an assignment adds after each unquoted colon, and a `cd` operand — all take the row above's answer, in every column. So a shell needs **one** home for the tilde and not three: six columns say `live` three times and bash 5.3 says `other` three times. It is the tilde and not `cd`: a bare `cd` with no operand goes to the current `$HOME` in all seven, which is why this asks `cd ~` and not `cd`. Written as a subdirectory of the case's own `$HOME` so the row says the same thing on every machine",
+	},
+	{
+		ID: "expand/tilde-with-no-home-at-all", Category: "expansion",
+		Snippet: `h=$HOME; unset HOME; t=~; case $t in "$h") echo before=startup;; "~") echo before=literal;; "") echo before=empty;; *) echo before=other;; esac; /bin/echo >/dev/null; t=~; case $t in "$h") echo after=startup;; "~") echo after=literal;; "") echo after=empty;; *) echo after=other;; esac`,
+		Why:     "what a bare `~` is worth with no `HOME` set at all, which is a second question and has a four-way answer: dash and BusyBox ash leave the word as written, zsh expands it to nothing, ksh93 and bash 3.2 answer from somewhere else, and bash 5.3 answers `before=startup after=other` — the stale cache first and the password database once a child has refreshed it. The classification is printed rather than the path, because a real home directory is this machine's and not the shell's. This shell leaves the word as written",
+	},
 
 	// --- semantics axes --------------------------------------------------
 	{

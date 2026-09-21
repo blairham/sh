@@ -275,15 +275,56 @@ and it is the tilde alone: a bare `cd` in that shell goes to the current
 `~+` and `~-` all answer from the database and from `PWD`/`OLDPWD` as
 usual.
 
+**What refreshes it is the child's *environment*, not the child**, and that
+is the measurement that settles what this is. Re-measured 2026-09-21 on bash
+5.3.20, taking the exported attribute off `HOME` rather than changing its
+value:
+
+    HOME in env at startup:
+      HOME=/h; /usr/bin/true; echo ~                  /h
+      HOME=/h; export -n HOME; /usr/bin/true; echo ~  the password database
+      unset HOME; /usr/bin/true; echo ~               the password database
+
+    no HOME in env at startup:
+      HOME=/h; /usr/bin/true; echo ~                  the password database
+      export HOME=/h; /usr/bin/true; echo ~           /h
+      HOME=/h; export HOME; /usr/bin/true; echo ~     /h
+
+The second line is the one to read: `export -n` changes nothing whatever
+about `$HOME` — the shell still reads `/h` from it — and it moves what `~`
+expands to. So the refresh reads the block of `NAME=value` strings the shell
+has just built for a child, and falls back to the password database when
+that block has no `HOME` in it. Neither "the variable" nor "the value at
+startup" can produce that row.
+
 **Recorded and not modeled**, which is a decision and not an omission. Two
 readings are available and both are worse than answering `$HOME`:
 freezing the value at startup contradicts six of the rows above, and
 reproducing the cache means reproducing an invalidation that is incidental
 to building a child's environment — a `HOME=/x; cd ~` that goes to the old
-home for as long as the script runs only builtins. It is also one build
-against its own 3.2, so it is a candidate upstream regression rather than a
-family rule. The cost of not taking it is countable and small: seven lines
-of one fetched suite file (#3484).
+home for as long as the script runs only builtins, and a `~` that moves when
+a name's export attribute does. It is also one build against its own 3.2, so
+it is a candidate upstream regression rather than a family rule. The cost of
+not taking it is countable and small: seven lines of one fetched suite file
+(#3484), and eight of two more (#4039).
+
+**Three corpus rows hold it, and the split between them is the point.**
+`expand/tilde-after-a-home-assignment` asks the word before *and* after a
+child, so the row cannot be read as a freeze;
+`expand/tilde-after-a-home-assignment-reaches-every-road` asks the same
+question of an assignment's value, of the tilde after an unquoted colon in
+one, and of a `cd` operand, and every column answers all three alike — which
+is why there is one home for the tilde here and not three;
+`expand/tilde-with-no-home-at-all` records the second question, what a `~`
+is worth with nothing to expand it against, where the panel splits four ways.
+`TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild` and
+`TestEveryTildeRoadReadsTheOneCurrentHome` are the Go side.
+
+**This has now been filed twice from the same one-line probe** — #3484 and
+#4039 — and both times as a home frozen at startup, because `HOME=/h; echo ~`
+and `unset HOME; echo ~` are exactly the two lines a freeze and a stale cache
+answer identically. A third reading of the panel starts by putting an
+external command in the middle.
 
 ### `~+` and `~-`
 

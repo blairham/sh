@@ -9086,6 +9086,48 @@ type Semantics struct {
 	// wider reading would take the attribute off a table no shell takes it
 	// off.
 	ArrayLiteralAssignmentStartsTheNameOver Answer
+	// DeclarationRereadsAParenthesizedValue makes a declaration utility read
+	// a value of the form `( … )` again as an **array literal**, where
+	// quoting hid the parentheses from the parser: `typeset -a a="(1 2)"` is
+	// two elements rather than one word of five characters.
+	//
+	// Measured 2026-09-21 from script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, `typeset -a a="(1 2)"` followed
+	// by `echo "n=${#a[@]} zero=[${a[0]}]"`:
+	//
+	//	bash 5.3.20   n=2 zero=[1]        read again
+	//	bash 3.2.57   n=2 zero=[1]        read again
+	//	bash-as-sh    n=2 zero=[1]        read again
+	//	ksh93u+       n=1 zero=[(1 2)]    the characters, at 0
+	//	zsh 5.9.2     `a: inconsistent type for assignment` — the line is
+	//	              refused before anything asks what the text means
+	//	dash 0.5.12   `typeset: not found`
+	//
+	// The re-read is a **full** one and not a split of the text. Measured
+	// beside it on bash 5.3.20, `declare -p` behind each: `declare -ai
+	// n="(1+1 2*2)"` folds to 2 and 4, `x="a b"; declare -a d="($x)"` is two
+	// elements, `declare -a e="($(echo Darwin))"` runs the substitution, and
+	// `declare -a a=(x); declare a+="(y z)"` appends. So what the elements
+	// get is exactly what a written literal's elements get.
+	//
+	// Four conditions, each of them a measurement. The word has to be a
+	// declaration utility's — `declare -a a; a="(1 2)"` keeps the characters.
+	// The name has to be an array or a table, by this line's letter or by a
+	// standing attribute — `declare a="(1 2)"` is a scalar. The operand may
+	// carry no subscript — `declare a[1]="(var)"` stores five characters at 1
+	// in bash as here. And the text has to be a literal as written:
+	// `declare -a x="(a b"` and `declare -a x=" (a b) "` both keep their
+	// characters, so a missing parenthesis or a space outside one is not a
+	// literal that lost its quotes.
+	//
+	// It is worth a field because the shape is what a script writes when the
+	// literal came from somewhere else — a captured `declare -p`, a value
+	// read out of a file — and the two answers are not degrees of the same
+	// thing: one is an array of two and the other is a scalar of five
+	// characters, at 0, with no diagnostic either way (#2298).
+	//
+	// See interp/quotedarrayliteral.go for the store.
+	DeclarationRereadsAParenthesizedValue Answer
 	// ScalarAppendedToAnArrayBecomesANewElement decides where `a+=x` puts
 	// the value when the name is holding an *array*: after the last element,
 	// or joined onto the first one.

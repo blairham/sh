@@ -1478,6 +1478,12 @@ func Semantics() interp.Semantics {
 	// a table refuses the same operand — so it is the retype and not the
 	// write. See the axis for the rows (#2250).
 	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.Yes
+	// unanswered DeclarationRereadsAParenthesizedValue: this shell refuses
+	// the assignment before anything asks what the text means. Measured
+	// 2026-09-21 under `env -i` on zsh 5.9.2, `typeset -a a="(1 2)"` is
+	// `a: inconsistent type for assignment` and `typeset -A m="([k]=v)"` is
+	// the same sentence for `m`, so neither the array nor the table route
+	// reaches the question (#2298).
 	// The letter half of the same rule: a numeric type letter that moves the
 	// name to a type it does not already hold carries out its own
 	// assignment over the freeze, and the freeze stays on. Not one field

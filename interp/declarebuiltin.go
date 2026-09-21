@@ -1811,6 +1811,20 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			continue
 		}
 		switch {
+		case hasValue && r.arrayLiteralHiddenByQuoting(name, value, appends):
+			// The operand's value came out as `( … )`, and in one column a
+			// declaration reads that text again as a literal rather than
+			// storing it. Ahead of every store below because it is the same
+			// operand read as a different thing: the branches there would put
+			// the characters in element 0 and the name would look populated
+			// while holding one string. See interp/quotedarrayliteral.go.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.declarationAssignmentExport(name, df.export)
+			if r.unspecified {
+				return r.status
+			}
 		case hasValue && df.compoundVar:
 			// The value on a `-C` operand is the *name of a variable to copy
 			// from* rather than a value to store, and the kind travels with

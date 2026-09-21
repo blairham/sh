@@ -105,6 +105,16 @@ func Dialect() syntax.Dialect {
 		// class. What the word does with the operand is the other half, and
 		// it is registered on the runner: see interp.Runner.RejoinArrayOperand.
 		"eval": true,
+		// The seventh, and the second that declares nothing: `let x=(2 + 3)`
+		// leaves `x` at 5 in bash 5.3.20 and in 3.2.57, where ksh93u+, zsh
+		// 5.9.2 and dash 0.5.12 each refuse the parenthesis while reading the
+		// line. Measured 2026-09-21 from script files under `env -i
+		// PATH=/usr/bin:/bin LC_ALL=C`. The refusal is a **parse** failure, so
+		// a `let` line written this way used to cost every later line of the
+		// file rather than one answer (#2298). `command let x=(1)` is a
+		// syntax error in bash too, which is the list saying it is about the
+		// word and not about what the word resolves to.
+		"let": true,
 	}
 	d.CaseContinue = true
 	// A subscript written at command position runs to its matching `]`, so
@@ -1561,6 +1571,14 @@ func Semantics() interp.Semantics {
 	// declare -g q=(b)` is `q: readonly variable` and the name is untouched,
 	// where zsh retypes it. Both builds, so it is not a version's answer.
 	s.ArrayLiteralOperandRetypesAFrozenScalar = interp.No
+	// A declaration's value that came out as `( … )` is read again as an
+	// array literal here, which is this column's answer alone among the
+	// three that have the construct. Measured 2026-09-21 from script files
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C`, `typeset -a a="(1 2)"`
+	// then `echo "n=${#a[@]} zero=[${a[0]}]"` is `n=2 zero=[1]` in 5.3.20,
+	// in 3.2.57 and under an argv[0] of `sh`, against `n=1 zero=[(1 2)]` on
+	// ksh93u+. See the axis for the rest of the rows (#2298).
+	s.DeclarationRereadsAParenthesizedValue = interp.Yes
 	// And the letter half of the same rule is refused too. Measured
 	// 2026-09-12 under `env -i`, `readonly q=1; typeset -i q=4` is
 	// `typeset: q: readonly variable` in both builds and the name is left at
@@ -3992,6 +4010,14 @@ func Apply(r *interp.Runner) {
 	// operand reaches it as one word holding the assignment with its elements
 	// expanded. See interp/rejoinedoperand.go for the measurements.
 	r.RejoinArrayOperand("eval")
+	// `let` is the second word on that list and takes its operand the same
+	// way: what reaches the builtin is one word holding the assignment with
+	// its elements expanded, which `let` then evaluates as arithmetic — so
+	// `let a=(1 2)` is `a=(1 2): missing `)'` at 1, where `let x=(2 + 3)` is
+	// the parenthesized expression and leaves 5. Measured 2026-09-21 on bash
+	// 5.3.20 with a shell function standing in for the builtin, which prints
+	// the words it was given: `let a=(1 2)` is the single word `a=(1 2)`.
+	r.RejoinArrayOperand("let")
 	// The `set -o` names this shell has and the others do not all have,
 	// measured by asking each of the four to turn every name off. This one
 	// has the most, and five of them belong to it alone.

@@ -515,6 +515,11 @@ func Semantics() interp.Semantics {
 	// unexpected` at 2 — the parenthesis is refused before anything has a
 	// frozen name to think about, so neither half of the question can be put
 	// to this shell (#2250).
+	// unanswered DeclarationRereadsAParenthesizedValue: there is no
+	// declaration utility to hand a `( … )` value to. Measured 2026-09-21
+	// under `env -i`, `typeset -a a="(1 2)"` is `typeset: not found` at 127
+	// and `readonly -a a="(1 2)"` is `Illegal option -a` at 2, so no word
+	// here can be asked what the text means (#2298).
 	// unanswered NumericTypeLetterRetypesAFrozenName: there is no numeric
 	// type letter to write. Measured 2026-09-12, `typeset` is `not found`
 	// here and `export -i q=4` is `Illegal option -i`, so the only two words

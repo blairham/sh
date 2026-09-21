@@ -920,6 +920,91 @@ timeout on the in-process seam:
 3. what is drawn in the meantime is stated per segment, per the rule
    above.
 
+### Built, 2026-09-21
+
+`repl.PromptPublisher` is the second shape of the seam, and the sentence
+that separates it from the refusal above is short: **a provider is asked,
+and a publisher tells.** Nothing is waited for, so nothing is abandoned
+and no deadline has to report something other than what happened.
+
+A session hands a publishing theme one function at the start and takes it
+back at the end. Calling it says *a redraw would differ*; it is not a
+request for one, and the session decides — a prompt that renders the same
+is not written to the screen at all. That is what makes a publisher which
+cannot tell whether anything changed a cheap thing to be rather than a
+flickering one.
+
+**The wake is a descriptor because of where the session waits.** An editor
+between keystrokes is blocked in `select(2)` on the terminal and on
+whatever the shell armed, and a Go channel cannot wake that. So `repl`
+owns a pipe for the length of a session and hands a *function* out for it;
+nothing outside `repl` learns a descriptor is involved, which is what keeps
+the engine free of the editor. It goes into the same set `zle -F`'s
+descriptors go into, because there is one place in a shell that is idle
+with a descriptor in its hand and that is it.
+
+**The redraw goes up past the rows a keystroke never touches.** The leading
+rows are written once — every redraw after that rewrites the last row
+alone, which is what stops an Up arrow leaving a ladder of prompts behind
+it — and a segment on the upper row is exactly the case those rows are not
+left alone in. It is the same arithmetic `trimPrompt` does for the
+transient prompt, in the same direction, and it is why the test for it is
+driven through a pseudo-terminal with a **two-row** prompt: with one row
+the pieces can each be right while the nesting is wrong, and only the
+screen shows it.
+
+**And the hooks do not fire again.** `precmd` and its neighbors belong to
+the prompt *line*; a prompt redrawn because a segment arrived must not fire
+a person's hooks a second time. So the prompt half of `beforeReading` is
+its own function and the redraw uses that half alone.
+
+### What a not-yet-ready segment draws: nothing, and the source decides
+
+Settled 2026-09-21, and this is the answer to the first of the open
+questions below.
+
+`repl` invents no placeholder, no spinner and no ellipsis. A segment draws
+**what it has**, which before its answer arrives is usually nothing, and
+the layout is a separate pass over whatever rendered — so an unanswered
+segment costs no space, exactly as an absent tool does.
+
+Three reasons, and the first is the one that decides it:
+
+- **There is nothing to measure.** zsh has no asynchronous prompt segments
+  of its own; every async prompt in the wild is user code. A placeholder
+  invented here would be this implementation's taste presented as behavior.
+- **It is the line `PromptProvider` already draws.** The text is drawn as
+  it stands and no separator is added, because something that wanted one
+  would have no way to take it back. A placeholder is a separator with a
+  glyph on it.
+- **It halves the number of times the prompt moves.** A segment arriving
+  changes the prompt's width once. A placeholder changes it twice, and the
+  second change is the one nobody asked for.
+
+A source that *wants* to say "working on it" says so by rendering that
+text — it is the source's answer, in the source's words, and the engine
+neither supplies it nor knows about it.
+
+### What a chatty publisher costs
+
+The other open question below, answered by construction rather than by a
+measurement, because the bound is in the mechanism:
+
+- **At most one byte is ever in the wake.** A publisher that fires a
+  thousand times while a command runs writes one byte and the other 999
+  are free, because the editor re-renders the prompt from scratch rather
+  than applying what was published. Publishing is idempotent and
+  coalescing.
+- **So the redraw rate is the editor's, not the publisher's.** A wake is
+  served where a keystroke would have been read, one per pass, and a
+  publish that arrives during a redraw is served by the next pass.
+- **A publish that changes nothing writes nothing.** The rendered prompt
+  is compared with the one on the screen and an identical one is dropped
+  before any escape sequence is emitted.
+
+What is *not* bounded, deliberately, is how long a publisher takes to have
+an answer. That is the point of it not being asked.
+
 ## Presets
 
 A preset is a set of assignments, so it is data. The layout pass spans
@@ -1001,22 +1086,23 @@ prompt costs one variable lookup per prompt and nothing else.
 Written down rather than assumed, because a spec entry that presents a
 guess as a fact is worse than an absent entry:
 
-1. What an async segment draws before its answer arrives.
-2. Containment for a segment function that does not terminate.
-3. What a plugin segment costs when it is *publishing* rather than being
-   asked — the redraw rate a chatty plugin can force, and what bounds
-   it.
-4. **The fidelity claim itself.** Until the cell-grid comparison exists
+1. Containment for a segment function that does not terminate.
+2. **The fidelity claim itself.** Until the cell-grid comparison exists
    and runs against a real configuration, "draws what it draws" is
    asserted and not shown — and it is the one claim in this document a
    person can check by looking.
-5. The per-prompt cost of the render itself, against the plain prompt it
+3. The per-prompt cost of the render itself, against the plain prompt it
    replaces, on a cold page cache as well as a warm one.
 
 Two came off this list on 2026-09-19 and are written up where they
 belong rather than here: right-prompt behavior is under *The right
 prompt is new here*, and the transient redraw's interaction with
 `groundForPrompt` and the blocks store is under *Transient prompt*.
+
+Two more came off on 2026-09-21, and both are under *Async segments*:
+what a not-yet-ready segment draws is **nothing, and the source decides**,
+and what a chatty publisher costs is bounded by the mechanism rather than
+by a measurement — one byte in the wake, however often it is raised.
 
 Each of these is a measurement to run before the code that depends on it
 is written.

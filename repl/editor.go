@@ -243,6 +243,16 @@ type editor struct {
 	descriptorReady func(fd int, in Line, ed Actions) (Line, bool)
 	inFd            func() int
 
+	// wake is a descriptor that becomes readable when something a theme
+	// draws has arrived, woke takes that readiness back off it, and rerender
+	// draws the prompt again from the facts as they now stand. All three nil
+	// in a session whose prompt nothing publishes to, which is every session
+	// until a theme has an asynchronous segment in it. See promptasync.go and
+	// reprompt.go.
+	wake     func() int
+	woke     func()
+	rerender func(cols int) (drawnPrompt, bool)
+
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which
 	// screen row the last draw left the cursor on, counted from the row the
@@ -347,7 +357,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// for a key's *first* byte is an idle moment. It costs nothing in a
 		// session with no descriptor armed, which is every session that has
 		// not asked; see watchfd.go.
-		e.serveDescriptors(prompt)
+		prompt = e.serveDescriptors(prompt)
 		n, err := e.nextByte(buf[:])
 		if err != nil {
 			return "", err

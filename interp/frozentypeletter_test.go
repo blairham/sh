@@ -158,3 +158,27 @@ func TestTheWideAttributeRefusalOutranksTheTypeLetterOne(t *testing.T) {
 		t.Errorf("got %q stderr %q, want the wide axis's refusal", out, errs)
 	}
 }
+
+// An operand that also **assigns** is not this axis: it is decided at the
+// store, and this refusal must not reach it. The discriminating form of that
+// is the wording, which this vector does not separate — dialect/ksh's
+// frozentypeletter_test asks it where the two refusals are worded apart.
+// What is checkable here is the *literal* spelling, since an array or
+// compound literal reaches the declaration loop as a bare name and a guard
+// reading only `name=value` would call it valueless.
+func TestAnArrayLiteralOperandIsOutsideTheTypeLetterRefusal(t *testing.T) {
+	out, errs, _ := frozenTypeLetterRun(t,
+		`readonly q; typeset -gia q=(1 2); echo st=$?`, Yes)
+	if strings.Contains(errs, "q: readonly variable") && strings.Contains(out, "st=1") {
+		// Only this refusal is ruled out; whether the *store* refuses the
+		// literal is the assignment's own rule and another suite's subject.
+		// Told apart by the letter never landing, which is what this one
+		// does and the store's refusal does not.
+		out2, _, _ := frozenTypeLetterRun(t,
+			`readonly q; typeset -gia q=(1 2); typeset -p q`, Yes)
+		if !strings.Contains(out2, "-i") {
+			t.Errorf("got %q, want the literal operand decided at the store rather "+
+				"than refused for its letter", out2)
+		}
+	}
+}

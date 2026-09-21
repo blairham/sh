@@ -1108,7 +1108,8 @@ func baseFlags(flags string) string {
 func (r *Runner) namedBase(name, flags string) (words []string, set, isList bool) {
 	switch name {
 	case "@", "*":
-		return append([]string(nil), r.Params...), len(r.Params) > 0, true
+		p := r.params()
+		return append([]string(nil), p...), len(p) > 0, true
 	case "":
 		return []string{""}, false, false
 	}

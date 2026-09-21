@@ -1648,7 +1648,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// to not land either, and a gate inside the store leaves a name
 			// carrying a letter the shell being imitated never gave it
 			// (#2561). See attributeOverFrozenRefused.
-			if r.attributeOverFrozenRefused(name, df) {
+			if r.attributeOverFrozenRefused(name, df, hasValue) {
 				if r.unspecified || r.ctl == controlExit {
 					return r.status
 				}
@@ -2879,7 +2879,15 @@ func (f declareFlags) namesAValueBearingType() bool {
 // is worded as an attribute's rather than as an assignment's, which is what
 // the form says; the first keeps the declaration's wording it was measured
 // with.
-func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags) bool {
+//
+// The narrow one is the **valueless** form only, and `assigns` is what says
+// so. The wide axis deliberately reaches an operand that also assigns — that
+// is the shape #2561 is about — and the narrow one must not, because an
+// operand carrying a value is decided at the store: measured 2026-09-20,
+// `readonly c; typeset -i c=4` is the plain assignment refusal there, and
+// `readonly c; typeset -C c=(a=1)` is **taken**, which is the rule #3915
+// records. Refusing here would take that one back.
+func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags, assigns bool) bool {
 	if !r.readonly[name] {
 		return false
 	}
@@ -2898,6 +2906,15 @@ func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags) bool {
 		}
 	}
 	if !f.namesAValueBearingType() || r.nameHoldsSomething(name) {
+		return false
+	}
+	if assigns || r.literalOperands[name] {
+		// The operand carries a value, so the store decides it. Both halves
+		// of that question, because an array or compound literal is not a
+		// `name=value` word: `typeset -C c=(a=1)` reaches the loop as the
+		// bare name with the parentheses held aside, so `assigns` alone
+		// would read it as carrying nothing — the same pair
+		// compoundKindChanged reads, for the same reason.
 		return false
 	}
 	if !r.ask(r.sem().TypeLetterOverAFrozenNameWithNoValueIsRefused,

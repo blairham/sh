@@ -208,6 +208,14 @@ type Semantics struct {
 	// first character is then already the space the fields reading supplies,
 	// so both answers give `e1: a:b c` in every column. Any test of this
 	// keeps a default-IFS row to say so.
+	//
+	// **Read rather than asked.** The operator fires either way and at the
+	// same status in every column, so an unanswered vector has no behavior
+	// to refuse — only two spellings of one word, which coincide under every
+	// IFS beginning with a space. Refusing would stop a core run over
+	// `${x?word}`, a construct that has nothing to do with the disagreement.
+	// Unspecified therefore reads as the value, which is the answer five of
+	// the six columns give.
 	DiagnosticWordIsFields Answer
 
 	// TrailingSeparatorEndsAField makes the non-whitespace IFS separator that
@@ -7909,6 +7917,14 @@ type Semantics struct {
 	// which is what this axis asks; that it is *also* refused over a name
 	// with one is a fact this field does not carry, and that column is left
 	// as it was rather than guessed at.
+	//
+	// **The valueless form of the declaration only.** An operand that also
+	// assigns is decided at the store and never reaches here: measured, that
+	// shell answers `readonly c; typeset -i c=4` with the plain assignment
+	// refusal and **takes** `readonly c; typeset -C c=(a=1)`, which is the
+	// rule interp/frozencompoundbody.go records (#3915). The wide axis above is
+	// the opposite way round — the assigning form is where it reaches
+	// furthest — so the two guards are not the same guard.
 	//
 	// The refusal is worded as an attribute's rather than as an assignment's
 	// — `<file>[2]: typeset: c: is read only`, the shape `typeset +r c`

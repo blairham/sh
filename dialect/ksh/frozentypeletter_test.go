@@ -104,3 +104,28 @@ func TestTheLettersOutsideTheTypeSetAreTakenOverAValuelessFrozenNameHere(t *test
 		})
 	}
 }
+
+// The assigning form is not this axis, and the pair below is what says so.
+// An operand carrying a value is decided at the store, which parts the two
+// letters that this axis treats alike:
+//
+//	readonly c; typeset -i c=4      `c: is read only`, the plain line form
+//	readonly c; typeset -C c=(a=1)  taken — interp/frozencompoundbody.go
+//
+// Measured 2026-09-20. A refusal here keyed on the letter and the missing
+// value alone, with nothing said about the operand, takes the second row
+// back — and the second row is #3915's whole subject.
+func TestAnAssigningDeclarationOverAValuelessFrozenNameIsNotThisAxis(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), "readonly c\ntypeset -i c=4\necho never")
+	if strings.Contains(out, "typeset: c") {
+		t.Errorf("`typeset -i c=4` = %q, want the builtin *not* named — an operand "+
+			"with a value is refused as an assignment", out)
+	}
+	if !strings.Contains(out, "c: is read only") || strings.Contains(out, "never") || st != 1 {
+		t.Errorf("out = %q (status %d), want the assignment refusal and the script to end", out, st)
+	}
+	out, st = runKsh(t, t.TempDir(), "readonly c\ntypeset -C c=(a=1)\nprint -r -- \"[${c.a}]\"")
+	if out != "[1]\n" || st != 0 {
+		t.Errorf("`typeset -C c=(a=1)` = %q (status %d), want the body stored", out, st)
+	}
+}

@@ -61,13 +61,19 @@ func (r *Runner) markFrameScopeBase() {
 	}
 }
 
-// selectedScopeBase is the first scope index inner to the frame a script has
-// selected, and whether a selection is moving the scope at all.
+// divertingSelection is the level a script has selected, where the selection
+// is live and names a frame other than the one the shell is standing in.
 //
 // False for the overwhelmingly common case of no selection, and false as well
 // where a selection names the frame the shell is already standing in: that is
-// the live tables, so there is nothing to divert and no walk to pay for.
-func (r *Runner) selectedScopeBase() (int, bool) {
+// the live state, so there is nothing to divert and no walk to pay for.
+//
+// One function rather than a guard per reader, because everything that moves
+// with a selection — the variable scope here, the positional parameters and
+// `$0` in interp/frameparams.go — has to agree about *when* it moves. Two
+// copies of these four tests are two chances for one of them to keep
+// answering after the other has stopped.
+func (r *Runner) divertingSelection() (int, bool) {
 	if !r.frameSelected {
 		return 0, false
 	}
@@ -82,25 +88,41 @@ func (r *Runner) selectedScopeBase() (int, bool) {
 	if r.selectedFrame == depth {
 		return 0, false
 	}
-	if r.selectedFrame <= 0 {
+	if r.selectedFrame > depth {
+		// A level the stack has no frame at. The selection was refused when
+		// it was made, so reaching here means the stack has shrunk under it;
+		// the live state is the honest answer.
+		return 0, false
+	}
+	if r.selectedFrame < 0 {
+		// Only reachable from the top level, where any number is kept — see
+		// SelectCallFrame. Read as the top level, which is what the number
+		// is below.
+		return 0, true
+	}
+	return r.selectedFrame, true
+}
+
+// selectedScopeBase is the first scope index inner to the frame a script has
+// selected, and whether a selection is moving the scope at all.
+func (r *Runner) selectedScopeBase() (int, bool) {
+	level, ok := r.divertingSelection()
+	if !ok {
+		return 0, false
+	}
+	if level == 0 {
 		// The top level, where every scope on the stack was opened by
 		// something the script called.
 		return 0, true
 	}
-	if r.selectedFrame > depth {
-		// A level the stack has no frame at. The selection was refused when
-		// it was made, so reaching here means the stack has shrunk under it;
-		// the live tables are the honest answer.
-		return 0, false
-	}
 	// CallStack is innermost first, so the innermost function stands at the
 	// current depth and each one further out is a level lower.
-	at := depth
+	at := r.FunctionDepth()
 	for _, f := range r.CallStack() {
 		if !f.IsFunction() {
 			continue
 		}
-		if at == r.selectedFrame {
+		if at == level {
 			return f.scopeBase, true
 		}
 		at--

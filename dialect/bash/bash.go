@@ -1572,6 +1572,13 @@ func Semantics() interp.Semantics {
 	// because it was measured, though the axis above refuses first here and
 	// this one is never reached (#3937).
 	s.TypeLetterOverAFrozenNameWithNoValueIsRefused = interp.Yes
+	// And a keyed letter over a frozen name holding a value, which bash
+	// 5.3.20 refuses like every other attribute over a frozen name:
+	// `c=1; readonly c; declare -A c` is `declare: c: readonly variable`
+	// at 1. Never reached, the wide axis above refusing it first, and
+	// answered rather than left silent for the same reason as the axis
+	// before it (#3965).
+	s.KeyedLetterOverAFrozenNameHoldingAValueIsRefused = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
 	// An error inside a file `.` read ends the shell here, not just the file:
 	// measured, a sourced file whose third line is `echo X${NOPE}` under

@@ -524,6 +524,10 @@ func Semantics() interp.Semantics {
 	// does over a frozen name holding nothing, and this shell has no letter
 	// and no word to write one with — measured 2026-09-20, `readonly c;
 	// typeset -i c` is `typeset: not found` at 127 (#3937).
+	// unanswered KeyedLetterOverAFrozenNameHoldingAValueIsRefused: the same
+	// wall again. There is no keyed table in this shell to declare, and no
+	// declaration utility to declare one with — `c=1; readonly c; typeset
+	// -A c` is `typeset: not found` at 127 (#3965).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: there is no
 	// declaration command, so neither case letter can be written at all.

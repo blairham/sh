@@ -136,6 +136,7 @@ ash   InteractiveStartupFileWhenLogin
 ash   JobsListsWhatChangedSinceTheLastReport
 ash   JobsStateFiltersAccumulate
 ash   KeptTrapListingIncludesExit
+ash   KeyedLetterOverAFrozenNameHoldingAValueIsRefused
 ash   KeyedLiteralAppendJoinsTheReplacedValue
 ash   KeyedTableScalarIsTheFirstValue
 ash   KeywordPromotesADeclarationsOperand
@@ -411,6 +412,7 @@ dash  InteractiveStartupFileWhenLogin
 dash  JobsListsWhatChangedSinceTheLastReport
 dash  JobsStateFiltersAccumulate
 dash  KeptTrapListingIncludesExit
+dash  KeyedLetterOverAFrozenNameHoldingAValueIsRefused
 dash  KeyedLiteralAppendJoinsTheReplacedValue
 dash  KeyedTableScalarIsTheFirstValue
 dash  KeywordPromotesADeclarationsOperand

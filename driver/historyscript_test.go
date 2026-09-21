@@ -174,3 +174,79 @@ func TestAProgramOnStandardInputExpandsToo(t *testing.T) {
 		t.Errorf("ran %q, want the reference expanded", out.String())
 	}
 }
+
+// A line the parser got no command out of is not a line of the entry, and
+// what stands between two lines of one says so in three spellings.
+//
+// The whole table is measured on the panel's one column that answers Yes to
+// Semantics.HistoryExpansionInAScript, 2026-09-21, a script file under `env
+// -i` with a scratch `HOME` and `TMPDIR`. A comment line ran nothing, so
+// keeping it would record text that is commented out — `for i in a b` and
+// then nothing, which hangs waiting for a `do` when it is run again. A blank
+// line is an empty line of the entry, but only the first of a run. And
+// whichever of the two came last decides the separator.
+func TestALineThatRanNothingIsNotAlwaysALineOfTheEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		lines string
+		want  string
+	}{
+		{"a comment inside a command", "for i in a b\n# mid\ndo\necho $i\ndone", "for i in a b\ndo echo $i; done"},
+		{"two comments are one newline", "for i in a b\n# one\n# two\ndo\necho $i\ndone", "for i in a b\ndo echo $i; done"},
+		{"a comment before the closing word", "for i in a b\ndo\necho $i\n# tail\ndone", "for i in a b; do echo $i\ndone"},
+		{"a comment after text on the line", "if true # c\nthen\necho hi\nfi", "if true # c\nthen echo hi; fi"},
+		{"a blank line is an empty line", "if true\n\nthen\necho hi\nfi", "if true;  then echo hi; fi"},
+		{"a run of blank lines is one", "if true\n\n\nthen\necho hi\nfi", "if true;  then echo hi; fi"},
+		{"a blank after a comment", "if true\n# c\n\nthen\necho hi\nfi", "if true then echo hi; fi"},
+		{"a comment after a blank", "if true\n\n# c\nthen\necho hi\nfi", "if true; \nthen echo hi; fi"},
+		{"a blank on each side of a comment", "if true\n\n# c\n\nthen\necho hi\nfi", "if true;  then echo hi; fi"},
+		{"a hash inside a quote is text", "if true\nthen\necho \"a # b\"\nfi", "if true; then echo \"a # b\"; fi"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errs strings.Builder
+			src := "set -o history\n" + tc.lines + "\nshowlist\n"
+			if code := driver.MainArgs(historyShell(&out, &errs, interp.Yes), []string{"testsh", "-c", src}); code != 0 {
+				t.Fatalf("status %d (stderr %q)", code, errs.String())
+			}
+			want := "1[" + tc.want + "]\n"
+			if got := out.String(); !strings.Contains(got, want) {
+				t.Errorf("listed %q, want an entry %q", got, want)
+			}
+		})
+	}
+}
+
+// A line the reader joined to the next one before the parser saw either is
+// **one** line of the entry: the backslash and the newline are gone and
+// nothing stands in their place, so what the list holds is what ran.
+//
+// Inside a quote the reader resolves nothing of the sort — the backslash and
+// the newline are both still there — which is the row that says the answer
+// is the quote state at the end of the line and not the character.
+func TestAContinuationIsOneLineOfTheEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		lines string
+		want  string
+	}{
+		{"a word on the next line", "echo \\\nA", "echo A"},
+		{"two continuations running", "echo \\\n\\\nA", "echo A"},
+		{"text on both sides", "echo one \\\ntwo three", "echo one two three"},
+		{"inside a command", "if true\nthen\necho \\\nhi\nfi", "if true; then echo hi; fi"},
+		{"an escaped backslash is not one", "echo a\\\\", "echo a\\\\"},
+		{"inside a double quote it stays", "echo \"a\\\nb\"", "echo \"a\\\nb\""},
+		{"inside a single quote it stays", "echo 'a\\\nb'", "echo 'a\\\nb'"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errs strings.Builder
+			src := "set -o history\n" + tc.lines + "\nshowlist\n"
+			if code := driver.MainArgs(historyShell(&out, &errs, interp.Yes), []string{"testsh", "-c", src}); code != 0 {
+				t.Fatalf("status %d (stderr %q)", code, errs.String())
+			}
+			want := "1[" + tc.want + "]\n"
+			if got := out.String(); !strings.Contains(got, want) {
+				t.Errorf("listed %q, want an entry %q", got, want)
+			}
+		})
+	}
+}

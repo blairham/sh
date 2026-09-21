@@ -10,6 +10,7 @@ import (
 	"github.com/blairham/sh/internal/histexpand"
 	"github.com/blairham/sh/internal/histjoin"
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // The history gate: how a shell that parses a program whole comes to expand
@@ -90,8 +91,15 @@ type histGate struct {
 	more func() (string, bool)
 
 	// open is what the parser was still inside when it asked for this line,
-	// as syntax.Parser.OpenQuote spells it. Set by program.fill.
+	// as syntax.Parser.OpenQuote spells it. Set by program.fill — which
+	// also sets it a second time inside one read, where a line ending in a
+	// backslash makes the reader take the next one without going back to
+	// the parser.
 	open string
+	// dialect is the grammar the lines are being read under, which is what
+	// says whether a `#` opens a comment. Set by program.fill beside open,
+	// because a builtin on one line can change it for the next.
+	dialect syntax.Dialect
 	// flush says the parser finished a logical line before asking for this
 	// one, so what has been collected is a command and belongs in the list.
 	flush bool
@@ -245,7 +253,7 @@ func (g *histGate) take() (string, bool) {
 
 // keep adds one physical line to the command being read, with what the parser
 // was still inside when it asked for it.
-func (g *histGate) keep(line string) { g.cur.Add(line, g.open) }
+func (g *histGate) keep(line string) { g.cur.Add(line, g.open, g.dialect) }
 
 // record puts the command that has been collected into the list.
 func (g *histGate) record() {

@@ -229,6 +229,7 @@ func (pr *program) fill(retire bool) bool {
 		// this point, so both reach it before it reads anything.
 		pr.gate.open = pr.openQuote()
 		pr.gate.flush = retire
+		pr.gate.dialect = pr.dialect
 	}
 	// Read first and retire second. Retiring hands the parser's remarks to
 	// carried, and a retire that then finds no more input leaves the same
@@ -262,6 +263,21 @@ func (pr *program) fill(retire bool) bool {
 	// Asked before anything is parsed, because a command that looks finished
 	// would otherwise run before the line completing it was read.
 	for syntax.EndsWithContinuation(pr.pending) {
+		if pr.gate != nil {
+			// The line about to be read is joined to the one before it here
+			// and not by the parser, so nothing else will tell the gate what
+			// that line begins inside — and the answer decides how the
+			// history entry joins the pair. Measured: bash 5.3.20 records
+			// `echo \` / `A` as the one line `echo A` and `echo "a\` / `b"`
+			// as the two the file holds, backslash and all.
+			//
+			// Asked of a parser over the text in hand, for the reason the
+			// gate states for the whole question: `$'`, a backquote, a `'`
+			// inside a double-quoted string and a here-document body are
+			// four answers the lexer already has. Only ever reached by a
+			// line ending in a backslash.
+			pr.gate.open = openIn(pr.pending, pr.dialect)
+		}
 		next, ok := pr.more()
 		if !ok {
 			pr.more = nil
@@ -271,6 +287,13 @@ func (pr *program) fill(retire bool) bool {
 	}
 	pr.p = nil
 	return true
+}
+
+// openIn is what a parser is still inside having read this much text.
+func openIn(text string, d syntax.Dialect) string {
+	p := syntax.NewParser(text, d)
+	p.Parse()
+	return p.OpenQuote()
 }
 
 func (pr *program) take(text string) {

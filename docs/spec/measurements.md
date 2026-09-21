@@ -3678,6 +3678,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `read/with-no-variable-diverges` | `r=2 REPLY=[]` **2>** `<shell>: 1: read: arg count` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` |
 | `builtin/ksh93s-registers-names` | `st=127` **2>** `<shell>: 1: builtin: not found` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `st=1` **2>** `builtin: hi: not found` | `hi~st=0` | `st=127` **2>** `<shell>: builtin: not found` |
 | `fc/with-no-history` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>: hist: 1-0: invalid range` | `st=1` **2>** `<shell>:fc:1: no such event: 1` | `st=127` **2>** `<shell>: fc: not found` |
+| `fc/a-comment-inside-a-command-is-no-part-of-the-entry` | *(no output, status 2)* | `a~b~1	 for i in a b~do echo $i; done` | `a~b~1	for i in a b~do echo $i; done` | `a~b~1	 for i in a b do echo $i; done` | *(no output, status 2)* | *(no output, status 1)* | `a~b~<script>: line 7: fc: not found` *(status 127)* |
+| `fc/a-continuation-is-one-line-of-the-entry` | *(no output, status 2)* | `one two~1	 echo one two` | `one two~1	echo one two` | `one two~1	 echo one two` | *(no output, status 2)* | *(no output, status 1)* | `one two~<script>: line 4: fc: not found` *(status 127)* |
 | `cd/no-operand-with-a-home-that-is-not-there` | `st=2` **2>** `<shell>: 1: cd: can't cd to /nonexistent-dir` | `st=1` **2>** `<shell>: line 1: cd: /nonexistent-dir: No such file or directory` | `st=1` **2>** `<shell>: line 1: cd: /nonexistent-dir: No such file or directory` | `st=1` **2>** `<shell>: line 0: cd: /nonexistent-dir: No such file or directory` | `st=1` **2>** `<shell>: cd: /nonexistent-dir: [No such file or directory]` | `st=1` **2>** `<shell>:cd:1: no such file or directory: /nonexistent-dir` | `st=2` **2>** `<shell>: cd: line 0: can't cd to /nonexistent-dir: No such file or directory` |
 | `return/a-marker-in-front-of-the-status` | **2>** `<shell>: 1: return: Illegal number: --` *(status 2)* | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | **2>** `<shell>: return: line 0: Illegal number: --` *(status 2)* |
 | `shift/past-the-end-with-a-count` | **2>** `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1 n=2 rest=[a b]` | `st=1 n=2 rest=[a b]` **2>** `<shell>: line 1: shift: 5: shift count out of range` | `st=1 n=2 rest=[a b]` | **2>** `<shell>: shift: 5: bad number` *(status 1)* | `st=1 n=2 rest=[a b]` **2>** `<shell>:shift:1: shift count must be <= $#` | `st=1 n=2 rest=[a b]` |
@@ -5283,6 +5285,23 @@ grades it and nothing drift-checks it either, for the same reason.
 - `fc/with-no-history` — the name must exist — builtin fc was reporting something untrue — and with no history bash and dash answer silence at 0, zsh no-such-event at 1, and ksh93 reads a history file this shell keeps no equivalent of
   ```sh
   fc -l; echo "st=$?"
+  ```
+- `fc/a-comment-inside-a-command-is-no-part-of-the-entry` — a comment line read while a compound command is still open ran nothing, and the one column that records in a script writes a newline where it stood rather than keeping it — keeping it joined with a `;` records `for i in a b` followed by text that is commented out, which hangs waiting for a `do` when it is run again (#4077). From a file because that is the route the list is filled on
+  ```sh
+  set -o history 2>/dev/null
+  for i in a b
+  # mid
+  do
+  echo $i
+  done
+  fc -l 2>&1
+  ```
+- `fc/a-continuation-is-one-line-of-the-entry` — the reader joins the two physical lines before the parser sees either, so the entry is the one line `echo one two`; joining them with a `;` records `echo one \` and then `two`, which is two commands and not the one that ran (#4076). From a file for the reason the row above is
+  ```sh
+  set -o history 2>/dev/null
+  echo one \
+  two
+  fc -l 2>&1
   ```
 - `cd/no-operand-with-a-home-that-is-not-there` — unanimous, and the shape of a crash rather than of a disagreement: every column names the *value of HOME* and none of them names nothing, because the place a `cd` was asked for is the place it reports. Ours indexed an empty operand list to write that sentence and took the shell down with it — `sudo -i`, a container, a home that has been removed. The statuses split the way a failed `cd` always splits here, which is the second thing the row pins
   ```sh

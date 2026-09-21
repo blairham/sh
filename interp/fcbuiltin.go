@@ -762,7 +762,7 @@ func (r *Runner) fcRead(b borrowedLines) {
 		if i > b.body {
 			open = openAfter(lines[b.body:i], b.dialect)
 		}
-		entry.Add(line, open)
+		entry.Add(line, open, b.dialect)
 	}
 	if entry.Len() > 0 {
 		r.RecordHistoryEntry(entry.Take())

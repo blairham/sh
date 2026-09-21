@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -121,5 +122,43 @@ ICONS = none
 	}
 	if !strings.Contains(grid.Text(0), "42") {
 		t.Errorf("the pinned status is not on the prompt:\n%s", grid.String())
+	}
+}
+
+// A pinned job count reaches the prompt, and nothing the harness started is
+// still running afterwards.
+//
+// The second half is the one that needed writing. Job control puts a
+// background job in a process group of its own, so killing the shell's
+// group leaves one process per job per render behind — measured, four
+// orphans at ppid 1 after a single run with one job. An instrument that
+// leaks a process per row is the thing this repository's own rules were
+// most recently tightened about.
+func TestAPinnedJobCountReachesThePromptAndLeavesNothingBehind(t *testing.T) {
+	dir := t.TempDir()
+	config := filepath.Join(dir, "prompt.conf")
+	const conf = `
+LEFT_ELEMENTS = background_jobs newline prompt_char
+ICONS = none
+`
+	if err := os.WriteFile(config, []byte(conf), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ours := Ours{Binary: buildShell(t), Config: config}
+	grid, err := ours.Render(Context{Dir: dir, Home: dir, Jobs: 2, Columns: 60})
+	if err != nil {
+		t.Fatalf("rendering: %v", err)
+	}
+	if !strings.Contains(grid.Text(0), "2") {
+		t.Errorf("the pinned job count is not on the prompt:\n%s", grid.String())
+	}
+	for _, pid := range startedJobs {
+		if err := syscall.Kill(pid, 0); err == nil {
+			t.Errorf("process %d is still running after the render", pid)
+		}
+	}
+	if len(startedJobs) != 2 {
+		t.Errorf("%d jobs were started, want 2 — this proves nothing otherwise", len(startedJobs))
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -36,7 +37,10 @@ type ptySession struct {
 	// whether anything has happened since it last looked rather than
 	// sleeping for a fixed time.
 	drawn int
-	done  chan struct{}
+	// jobs is every background process this session was asked to start,
+	// by pid. See background, and close, which kills them by name.
+	jobs []int
+	done chan struct{}
 }
 
 // startPty launches a program on a terminal of the pinned width.
@@ -103,6 +107,62 @@ func (s *ptySession) read() {
 // line types one command and a return.
 func (s *ptySession) line(text string) {
 	_, _ = s.control.WriteString(text + "\r")
+}
+
+// background starts a job that will still be running when the prompt is
+// drawn, and remembers its pid.
+//
+// **Remembered, because killing the shell's process group does not reach
+// it.** Job control is exactly the arrangement that puts a background job
+// in a process group of its own, so a kill at the shell's group leaves one
+// process per job per render behind — measured, four orphans at ppid 1
+// after a single run with one job. The pid is the only handle that works,
+// and the shell is the only thing that knows it.
+//
+// The pid it prints is erased along with everything else before the screen
+// is read, so nothing about this reaches the comparison.
+func (s *ptySession) background(deadline time.Duration) error {
+	mark := "job-" + strconv.Itoa(len(s.jobs)) + "-is"
+	s.line("sleep 600 & printf '" + mark + "[%s]\\n' $!")
+	if err := s.await(mark+"[", deadline); err != nil {
+		return err
+	}
+	pid, err := s.pidAfter(mark + "[")
+	if err != nil {
+		return err
+	}
+	s.jobs = append(s.jobs, pid)
+	startedJobs = append(startedJobs, pid)
+	return nil
+}
+
+// startedJobs is every background process any session here has started, so
+// a test can ask whether they are gone.
+//
+// A package variable and not a return value, because the question is about
+// the *instrument* rather than about one session: an orphan left behind is
+// a process nobody is holding a handle to, which is exactly why it has to
+// be recorded somewhere a caller does not have to remember to look.
+var startedJobs []int
+
+// pidAfter reads the number the shell printed after a mark.
+func (s *ptySession) pidAfter(mark string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := bytes.LastIndex(s.bytes, []byte(mark))
+	if i < 0 {
+		return 0, errors.New("the shell did not say what it started")
+	}
+	rest := s.bytes[i+len(mark):]
+	end := bytes.IndexByte(rest, ']')
+	if end < 0 {
+		return 0, errors.New("the shell did not finish saying what it started")
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(rest[:end])))
+	if err != nil || pid <= 1 {
+		return 0, errors.New("the shell named no usable process")
+	}
+	return pid, nil
 }
 
 // settle waits until nothing has been drawn for settleFor, or the deadline
@@ -188,6 +248,11 @@ func (s *ptySession) screen(cols int) *cellgrid.Grid {
 // left a `sleep` per row behind would be the thing this repository's own
 // rules were most recently tightened about.
 func (s *ptySession) close() {
+	// The jobs first and by pid, because job control put each of them in a
+	// process group of its own and the group kill below cannot reach them.
+	for _, pid := range s.jobs {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+	}
 	if s.cmd.Process != nil {
 		if pgid, err := syscall.Getpgid(s.cmd.Process.Pid); err == nil {
 			_ = syscall.Kill(-pgid, syscall.SIGKILL)

@@ -101,8 +101,10 @@ func (o Ours) Render(ctx Context) (*cellgrid.Grid, error) {
 	if err := session.ready(startupWait); err != nil {
 		return nil, err
 	}
-	for i := 0; i < ctx.Jobs; i++ {
-		session.line("sleep 60 &")
+	for range ctx.Jobs {
+		if err := session.background(drawWait); err != nil {
+			return nil, err
+		}
 	}
 	session.line("cd " + shellQuoted(ctx.Dir))
 	session.line(pinning(ctx))
@@ -317,8 +319,10 @@ func (p *Powerlevel10k) Render(ctx Context) (*cellgrid.Grid, error) {
 	if err := session.ready(startupWait); err != nil {
 		return nil, err
 	}
-	for i := 0; i < ctx.Jobs; i++ {
-		session.line("sleep 60 &")
+	for range ctx.Jobs {
+		if err := session.background(drawWait); err != nil {
+			return nil, err
+		}
 	}
 	session.line("cd " + shellQuoted(ctx.Dir))
 	session.line(pinning(ctx))

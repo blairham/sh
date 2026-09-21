@@ -163,6 +163,14 @@ func (c *Runner) ownTables(r *Runner) {
 	// it travels with fds or it describes the wrong table.
 	c.fds = maps.Clone(r.fds)
 	c.execFds = maps.Clone(r.execFds)
+	// The commands started beside the shell under a name, on the terms the
+	// jobs slice is on and for a measured reason rather than a symmetrical
+	// one: the *table* is the subshell's and the commands in it are shared.
+	// A subshell that deletes one reaches the running command and forgets
+	// only its own copy of the name, which is what the four rows at the top
+	// of concurrentcommand.go record. Sharing the map would take the name out
+	// of the parent too; copying the values would leave the command running.
+	c.concurrent = maps.Clone(r.concurrent)
 	// And on the same terms, for the same reason: a subshell's `sysopen -o
 	// cloexec` must not decide what the parent hands to a child.
 	c.cloexecFds = maps.Clone(r.cloexecFds)

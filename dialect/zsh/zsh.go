@@ -5076,6 +5076,11 @@ func Apply(r *interp.Runner) {
 	// And `zsh/zselect`'s one: the wait on descriptors that the same prompt
 	// theme's worker uses as its only sleep. See zselect.go.
 	registerZselectModule(r)
+	// And `zsh/zpty`'s one: a command run on a pseudo-terminal of its own,
+	// which is the last module of #1320's table and the first thing in this
+	// dialect that needed a new seam on the substrate before it could exist
+	// at all. See zpty.go and interp.Runner.StartConcurrent.
+	registerZptyModule(r)
 	// And `zsh/mathfunc`'s forty-seven, which are the C math library under
 	// names arithmetic can call. See mathmodule.go.
 	registerMathFuncModule(r)

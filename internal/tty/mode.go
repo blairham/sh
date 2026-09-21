@@ -80,6 +80,27 @@ func (m *Mode) Restore() error {
 // caller cannot reason about.
 func TranslatesNewlines(f *os.File) bool { return postProcessesOutput(f) }
 
+// SetEcho turns a terminal's echo of what is typed at it on or off, and
+// nothing else.
+//
+// The third setting, and the one neither [Raw] nor [Cbreak] is: echo off with
+// the output post-processing left alone. Raw clears both and Cbreak clears
+// neither, and a terminal a *program* is being driven through wants exactly
+// this pair — measured 2026-09-20 against zsh 5.9.2, where `zpty` starts a
+// command with echo **off** by default and `zpty -e` is the flag that turns
+// it on, while what the command writes still comes back with its newlines
+// turned into a carriage return and a newline. See docs/spec/pty.md.
+//
+// The discriminating probe is worth naming here, because the obvious one
+// cannot tell the two apart: `cat` echoes what it is given either way, and so
+// does `read`, which puts the terminal into a mode of its own. A command that
+// neither reads nor writes — a `sleep` — is what makes the terminal's own
+// echo the only thing that could have answered.
+//
+// Not spelled as a [Mode], for the reason [RawOutput] is not: the caller owns
+// the terminal it is setting up and there is nothing to put back.
+func SetEcho(f *os.File, on bool) error { return setEcho(f, on) }
+
 // RawOutput turns off a terminal's output post-processing and nothing else.
 //
 // Only the output flags. Where this is used the terminal has no reader, so its

@@ -139,3 +139,64 @@ func TestAnOrdinaryLocalNeverAsks(t *testing.T) {
 		t.Errorf("the operand: %q does not name the axis", out)
 	}
 }
+
+// The save is a row in the call's own listing.
+//
+// A bare `local` lists what this call made local, and the option table it
+// saved is one of them — measured 2026-09-21, `env -i PATH=/usr/bin:/bin
+// LC_ALL=C` with a scratch HOME, from a script file, on bash 5.3.20. See
+// localDashListingRow for the rows, and BareLocalListing for whose listing
+// this is: the answer that writes the call's locals is the only one that
+// reaches the row at all, because the shell that lists every parameter reads
+// `-` as a parameter name and never makes the save (#4048).
+func TestLocalDashListsAsOneOfTheCallsLocals(t *testing.T) {
+	listsLocals := func(r *Runner) {
+		sem := permissive()
+		sem.LocalDashSavesTheShellOptions = Yes
+		sem.BareLocalListing = BareLocalListsLocals
+		sem.DeclareListing = DeclareListingClustered
+		sem.DeclareValueQuoting = ListingQuoteAlwaysDouble
+		r.Semantics = &sem
+	}
+	for _, tc := range []struct {
+		name, src, want string
+	}{
+		{
+			"on its own it is the whole listing",
+			`f() { local -; local; }; f`,
+			"local -\n",
+		},
+		{
+			"and beside a name it is the first row",
+			`g() { local -; local x=1; local; }; g`,
+			"local -\ndeclare -- x=\"1\"\n",
+		},
+		{
+			"written after the name, and still first",
+			`g() { local x=1; local -; local; }; g`,
+			"local -\ndeclare -- x=\"1\"\n",
+		},
+		{
+			"asked for twice, it is one row",
+			`g() { local -; local -; local x=1; local; }; g`,
+			"local -\ndeclare -- x=\"1\"\n",
+		},
+		{
+			"the save belongs to the call that made it and not to one it calls",
+			`g() { local -; h; }; h() { local; }; g`,
+			"",
+		},
+		{
+			"a call that saved nothing writes no row",
+			`g() { local x=1; local; }; g`,
+			"declare -- x=\"1\"\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, listsLocals)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}

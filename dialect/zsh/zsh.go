@@ -1351,6 +1351,7 @@ func Semantics() interp.Semantics {
 	// under both signs.
 	s.DeclarationListingFilter = interp.DeclarationFilterAnyLetter
 	s.DeclarePrintReportsAMissingName = interp.Yes
+	s.DeclarePrintReportsAMissingFunctionName = interp.No
 	// `typeset -p s=5` performs nothing there: it is `no such variable: s`
 	// at 1 with `s` still unset, and `typeset -p e=(1 2)` answers the same
 	// way — measured 2026-09-20 on zsh 5.9.2. See
@@ -1528,6 +1529,10 @@ func Semantics() interp.Semantics {
 	// there. Answered rather than left unanswered because that route is a
 	// spelling this shell has.
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// The name is there and the listing writes nothing for it — the third
+	// state the field above cannot spell. See Semantics.ValuelessRecordIsStillAName
+	// for the rows (#4053).
+	s.ValuelessRecordIsStillAName = interp.Yes
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still
 	// does, and a name this scope has already made local stays local.

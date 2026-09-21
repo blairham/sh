@@ -231,9 +231,21 @@ func TestPrintHistoryExpandsItsOperands(t *testing.T) {
 			"g\n",
 		},
 		{
+			// The listing writes a control character in **caret form**, so
+			// what proves the escape was expanded is `^G` and not a bare
+			// BEL. Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+			// with a scratch HOME, from a script file: zsh 5.9.2 answers
+			// `print -s 'e\ax'; fc -ln 1` with the five bytes
+			// `e ^ G x \n`, and this shell already answers the same.
+			//
+			// The row asserted a raw BEL when it landed, which is a shape
+			// neither shell writes, so the test failed on `main` rather than
+			// on the change under it. The `-r` row two below is what keeps
+			// the pair discriminating — unexpanded is `e\ax` there, in the
+			// same run.
 			"an ordinary escape is the character it names",
 			"print -s 'e\\ax'\nfc -ln 1",
-			"e\ax\n",
+			"e^Gx\n",
 		},
 		{
 			"a doubled backslash is one",

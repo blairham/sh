@@ -48229,6 +48229,108 @@
         "TimedOut": false
       }
     },
+    "compgen/variable-names-hold-a-value": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "zzs=1~zzd=1~zzn=0~zza=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "zzs=1~zzd=1~zzn=0~zza=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "zzs=1~zzd=1~zzn=1~zza=1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "zzs=0~zzd=0~zzn=0~zza=0~st=0",
+        "Stderr": "\u003cshell\u003e: declare: not found~\u003cshell\u003e: declare: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "zzs=0~zzd=0~zzn=0~zza=0~st=0",
+        "Stderr": "\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "compgen/variable-names-reach-a-displaced-value": {
+      "ash": {
+        "Stdout": "0~0",
+        "Stderr": "\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "1~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1~0",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0~0",
+        "Stderr": "\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0~0",
+        "Stderr": "\u003cshell\u003e: local: not found~\u003cshell\u003e: compgen: not found~\u003cshell\u003e: local: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0~0",
+        "Stderr": "f: command not found: compgen~g: command not found: compgen",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "complete/an-option-and-its-argument": {
       "ash": {
         "Stdout": "st=127~n=127",
@@ -67099,6 +67201,57 @@
         "TimedOut": false
       }
     },
+    "declare/a-declaration-over-the-calls-own-reference": {
+      "ash": {
+        "Stdout": "in=[U]~out=[SEED]",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "in=[4]~out=[SEED]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[4]~out=[SEED]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[4]~out=[SEED]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -n: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=[U]~out=[SEED]",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[4]~out=[4]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[4]~out=[SEED]",
+        "Stderr": "f:typeset: bad option: -n",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-declaration-with-no-letters-and-no-value": {
       "ash": {
         "Stdout": "none=127~st=127~[unset]",
@@ -70051,6 +70204,57 @@
       },
       "zsh": {
         "Stdout": "\u003cshell\u003e:typeset:1: bad option: -n~bare=1~aimed=[v]~typeset r=v",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-refused-literal-conversion-inside-a-function": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~after",
+        "Stderr": "\u003cshell\u003e: line 1: eee: u: cannot convert indexed to associative array~\u003cshell\u003e: line 1: typeset: u: cannot convert indexed to associative array",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~after",
+        "Stderr": "\u003cshell\u003e: line 1: eee: u: cannot convert indexed to associative array~\u003cshell\u003e: line 1: typeset: u: cannot convert indexed to associative array",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~after",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~after",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -74081,6 +74285,57 @@
       "zsh": {
         "Stdout": "typeset -i16 a=255~typeset -i8 d=64",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-unset-local-is-a-name-the-shell-still-has": {
+      "ash": {
+        "Stdout": "st=127~[UNSET]~e=127",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -- v~st=0~[UNSET]~e=1",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: nosuchzz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -- v~st=0~[UNSET]~e=1",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: nosuchzz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~[UNSET]~e=1",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: v: not found~\u003cshell\u003e: line 0: typeset: nosuchzz: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~[UNSET]~e=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~[UNSET]~e=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~[UNSET]~e=1",
+        "Stderr": "\u003cshell\u003e:typeset:1: no such variable: nosuchzz",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -78823,6 +79078,57 @@
       },
       "zsh": {
         "Stdout": "typeset -a arr=( x y )~typeset -A m=( [k]='a b' )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/print-with-the-function-letter-on-a-missing-name": {
+      "ash": {
+        "Stdout": "typeset: not found~st=0~\u003cshell\u003e: typeset: not found~plain=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "typeset: nosuchzz: not found~st=0~plain=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "typeset: nosuchzz: not found~st=0~plain=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "typeset: nosuchzz: not found~st=0~plain=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "typeset: not found~st=0~\u003cshell\u003e: 1: typeset: not found~plain=127",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~plain=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~plain=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -119531,6 +119837,57 @@
       },
       "zsh": {
         "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "local/dash-lists-as-one-of-the-locals": {
+      "ash": {
+        "Stdout": "no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "yes",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

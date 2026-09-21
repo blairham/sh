@@ -731,6 +731,18 @@ func (r *Runner) declarePrintFiltered(names []string, form DeclarationListingFor
 				// and is written as nothing, in silence.
 				continue
 			}
+			if r.valuelessRecordIsStillAName(name) {
+				// The name is one this shell *has* — a local whose value an
+				// `unset` took, in a dialect whose listing writes no row for
+				// it — so it is written as nothing at 0 rather than reported
+				// as missing. Ahead of the refusal below, because that one
+				// is about a name the shell has never heard of. See
+				// interp/baredeclaration.go.
+				continue
+			}
+			if r.unspecified {
+				return r.status
+			}
 			// A missing name is reported or passed over in silence, and the
 			// silence is measured rather than a shortcut: one shell prints
 			// nothing and answers 0 however many names were missing.

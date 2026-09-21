@@ -3170,13 +3170,17 @@ func (r *Runner) unsetName(name string) int {
 		}
 		r.unsetOneName(other)
 	}
+	// Read before the removal, which is what clears the record: it says
+	// whether an earlier `unset` in this call had already left the name
+	// declared, and the placeholder's one letter turns on it.
+	again := r.unsetLeftItDeclared[name]
 	r.unsetOneName(name)
 	// And a local of the scope that is *running* is left declared where the
 	// column says so — the value and the letters go, the shadow stays, and
 	// the name is still a row in a listing. After the removal, because the
 	// removal is what clears the record. See
 	// interp/unsetenclosinglocal.go.
-	r.unsetLeavesARunningScopesLocalDeclared(name)
+	r.unsetLeavesARunningScopesLocalDeclared(name, again)
 	// And the message that the name has gone, for a dialect keeping state
 	// beside it that the name's removal is about. After the removal, so that
 	// an action reading the name back sees it gone, and for a name nothing
@@ -6415,6 +6419,12 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		if target, follows := r.attributeFollowsTheReference(name, f); follows {
 			name = target
 			wasExported = r.isExported(name)
+			// **The binding this word makes is the target's.** `local`
+			// declares, and what it declares through a reference is the name
+			// the reference points at — so the shadow is taken there too, and
+			// what the line writes goes away with the call like any other
+			// local. See Runner.aDeclarationThroughAReferenceIsTheTargets.
+			fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh, r.shadow)
 		}
 		// After the shadow, for the reason biDeclare gives: the cell this
 		// declaration writes is a fresh binding, and an attribute applied

@@ -8547,6 +8547,34 @@ type Semantics struct {
 	// which is no column's answer, since the two that record say 0 with a
 	// row and the one that does not says 0 with silence.
 	ValuelessDeclarationRecordsTheName Answer
+
+	// ValuelessRecordIsStillAName is asked where the field above said **no**
+	// and a `-p` names the record anyway: is the name one the shell still
+	// has — written as nothing, at 0 — or one it has never heard of, which
+	// is DeclarePrintReportsAMissingName's question.
+	//
+	// A second field rather than a third value on the one above, because the
+	// two answer different things: that one says what the **listing writes**
+	// and this says whether the **name is there**. A dialect can write no row
+	// and still have the name, which is exactly the state one column is in.
+	//
+	// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
+	// scratch HOME, from a script file, over
+	// `f() { local v; unset v; typeset -p v; echo "st=$?"; }`:
+	//
+	//	zsh 5.9.2    nothing, st=0 — and `typeset -p nosuchvar` on the next
+	//	             line is `no such variable: nosuchvar` at 1, so the shell
+	//	             tells the two apart
+	//	ksh93u+      nothing, st=0 — and it answers the same way for a name
+	//	             it has never heard of, so either answer here is right
+	//	             for it and `No` is the one that says what it holds
+	//	bash 5.3.20  never reaches this: it answers the field above `Yes`,
+	//	             so the record is a row and the listing is what writes it
+	//
+	// Asked only for a name that really has such a record, so a dialect that
+	// makes none is never asked at all. See interp/baredeclaration.go
+	// (#4053).
+	ValuelessRecordIsStillAName Answer
 	// PrefixListingNamesADeclaredOnlyCompound lists, among the names
 	// `${!prefix@}` and `${!prefix*}` come to, a compound that a declaration
 	// brought into being and that nothing has written to.
@@ -10461,6 +10489,41 @@ type Semantics struct {
 	// Diagnostics.DeclareNoSuchVariable) and answer 1 even when other names
 	// listed fine; ksh93 prints nothing for the missing name and answers 0.
 	DeclarePrintReportsAMissingName Answer
+
+	// DeclarePrintReportsAMissingFunctionName is the same question asked of a
+	// `-p` that carries the **function** letter — `typeset -pf nosuch` — and
+	// it is a second field because the panel splits differently over it.
+	//
+	// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
+	// scratch HOME, from a script file, with a function `g` defined:
+	//
+	//	line                 bash 5.3.20                     zsh 5.9.2        ksh93u+
+	//	`-p nosuch`          declare: nosuch: not found, 1   no such variable, 1   silent, 0
+	//	`-pf nosuch`         declare: nosuch: not found, 1   silent, 1        silent, 1
+	//	`-f nosuch`          silent, 1                       silent, 1        silent, 1
+	//	`-pf g`              the body, 0                     the body, 0      the body, 0
+	//
+	// So it is the **`-p` word** that reports and not the function letter:
+	// without it every column is silent, and with it one column names every
+	// missing operand and two name none. The field above cannot answer both,
+	// because zsh reports for a variable and not for a function — which is
+	// the whole reason this is a field rather than a reading of that one.
+	//
+	// The wording is the same sentence, with this builtin's own word in
+	// front: `declare -pf g nosuch` in bash 5.3.20 prints `g`'s body and then
+	// reports `nosuch` alone.
+	//
+	// `-F` is asked here only where the dialect reads that letter as the
+	// function-names letter. It is the **float** letter in zsh and in ksh93,
+	// so `typeset -pF nosuch` there is a variable listing and the field above
+	// answers it — measured in the same run: zsh writes `no such variable`
+	// for it and is silent for `-pf`.
+	//
+	// unexhibited: bash 3.2.57 is a third answer again, and it is not this
+	// field's — it reports a function that **is** there as `not found` under
+	// `-pf`, so its `-p` and `-f` do not combine at all. There is no bash 3.2
+	// dialect here to hold it (#4065).
+	DeclarePrintReportsAMissingFunctionName Answer
 
 	// DeclarePrintPerformsItsOperand is what a `-p` listing does with an
 	// operand that carries a value — `typeset -p s=5`, `typeset -p e=(1 2)`.

@@ -458,3 +458,159 @@ typeset -p v`
 			out, errs, st)
 	}
 }
+
+// The one shape where the placeholder carries a letter: the binding the
+// `local` displaced was the running call's own **assignment prefix**, and
+// the export attribute stays on the record the `unset` leaves.
+//
+// See Runner.theRunningCallsPrefixHolds for the rows, and
+// TestUnsetOfALocalDropsItsLettersAndKeepsTheRecord just above for the
+// controls that say every other displaced binding leaves the placeholder
+// bare — an exported global, an integer global, and the export letter the
+// declaration wrote itself (#4050).
+func TestThePlaceholderKeepsTheExportACallPrefixGaveIt(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the prefix's export stays on the record",
+			"c() { local foo; unset foo; typeset -p foo; }\nfoo=abc c",
+			"declare -x foo\n",
+		},
+		{
+			"whatever letters the declaration wrote",
+			"c() { local -i foo; unset foo; typeset -p foo; }\nfoo=abc c",
+			"declare -x foo\n",
+		},
+		{
+			"and whatever value it wrote",
+			"c() { local foo=L; unset foo; typeset -p foo; }\nfoo=abc c",
+			"declare -x foo\n",
+		},
+		{
+			"a prefix an enclosing call wrote is not this call's",
+			"d() { local foo; unset foo; typeset -p foo; }\nc() { d; }\nfoo=abc c",
+			"declare -- foo\n",
+		},
+		{
+			"and a second unset has been through it",
+			"c() { local foo; unset foo; unset foo; typeset -p foo; }\nfoo=abc c",
+			"declare -- foo\n",
+		},
+		{
+			"an exported global underneath is not a prefix",
+			"export gg=G\nc() { local gg; unset gg; typeset -p gg; }\nc",
+			"declare -- gg\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, st := declRun(t, tc.src, records(Yes), Diagnostics{})
+			if out != tc.want || st != 0 || errs != "" {
+				t.Errorf("got %q (stderr %q, status %d), want %q", out, errs, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the letter is not only a listing: what the placeholder hides from the
+// script it hides from a child too, and a value written over it afterwards
+// reaches one.
+//
+// The first row is the half that was wrong in both directions at once — the
+// record read as unexported *and* the prefix's own value went on reaching
+// every command the call ran. Read through a real child rather than through
+// a listing, for the reason declarationexport_test.go gives. See
+// hiddenExports.
+func TestThePlaceholderOverACallPrefixIsWhatAChildIsTold(t *testing.T) {
+	const probe = `/usr/bin/env | /usr/bin/grep '^foo=' || echo "(none)"`
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the prefix's value stops reaching a child",
+			"c() { local foo; unset foo; " + probe + "; }\nfoo=abc c",
+			"(none)\n",
+		},
+		{
+			"and so it does after a second unset",
+			"c() { local foo; unset foo; unset foo; " + probe + "; }\nfoo=abc c",
+			"(none)\n",
+		},
+		{
+			"a value written over the placeholder reaches one",
+			"c() { local foo; unset foo; foo=zz; " + probe + "; }\nfoo=abc c",
+			"foo=zz\n",
+		},
+		{
+			"a prefix nothing has unset reaches one, which is the control",
+			"c() { local foo; " + probe + "; }\nfoo=abc c",
+			"foo=abc\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, st := declRun(t, tc.src, records(Yes), Diagnostics{})
+			if out != tc.want || st != 0 || errs != "" {
+				t.Errorf("got %q (stderr %q, status %d), want %q", out, errs, st, tc.want)
+			}
+		})
+	}
+}
+
+// A dialect whose listing writes **no row** for the record still has the
+// name: a `-p` naming it is silence at 0 rather than the missing-name
+// refusal — see Semantics.ValuelessRecordIsStillAName, which carries the
+// rows, and note that its two answers are told apart only where the
+// missing-name axis says something, which is why that one is Yes here.
+func TestAValuelessRecordCanStillBeANameTheShellHas(t *testing.T) {
+	const src = `v=GLOBAL
+f() { local v=L; unset v; typeset -p v; echo "st=$?"; echo "[${v-UNSET}]"; }
+f`
+	out, errs, st := declRun(t, src, func(s *Semantics) {
+		records(No)(s)
+		s.ValuelessRecordIsStillAName = Yes
+	}, Diagnostics{})
+	want := "st=0\n[UNSET]\n"
+	if out != want || errs != "" || st != 0 {
+		t.Errorf("still a name = %q (stderr %q, status %d), want %q with nothing said", out, errs, st, want)
+	}
+
+	// The other answer is the missing-name route, which this dialect's own
+	// axis then reports — the reading this shell had for every column.
+	out, errs, st = declRun(t, src, func(s *Semantics) {
+		records(No)(s)
+		s.ValuelessRecordIsStillAName = No
+	}, Diagnostics{})
+	if want := "st=1\n[UNSET]\n"; out != want || st != 0 {
+		t.Errorf("not a name = %q (status %d), want %q", out, st, want)
+	}
+	if !strings.Contains(errs, "v: not found") {
+		t.Errorf("not a name: stderr %q, want the missing-name sentence", errs)
+	}
+}
+
+// A name the shell has never heard of is still missing under either answer,
+// which is the control that keeps the axis from being read as "`-p` never
+// reports".
+func TestANameWithNoRecordIsStillMissing(t *testing.T) {
+	for _, answer := range []Answer{Yes, No} {
+		out, errs, st := declRun(t, "typeset -p nosuchzz\necho \"st=$?\"", func(s *Semantics) {
+			records(No)(s)
+			s.ValuelessRecordIsStillAName = answer
+		}, Diagnostics{})
+		if want := "st=1\n"; out != want || st != 0 {
+			t.Errorf("answer %v: %q (status %d), want %q", answer, out, st, want)
+		}
+		if !strings.Contains(errs, "nosuchzz: not found") {
+			t.Errorf("answer %v: stderr %q, want the missing-name sentence", answer, errs)
+		}
+	}
+}
+
+// And a dialect whose listing *does* write a row never reaches the axis at
+// all: the row is what the name being known then means.
+func TestAListedRecordNeverAsksWhetherTheNameIsThere(t *testing.T) {
+	out, errs, st := declRun(t, "v=GLOBAL\nf() { local v=L; unset v; typeset -p v; }\nf",
+		func(s *Semantics) {
+			records(Yes)(s)
+			s.ValuelessRecordIsStillAName = Unspecified
+		}, Diagnostics{})
+	if want := "declare -- v\n"; out != want || errs != "" || st != 0 {
+		t.Errorf("= %q (stderr %q, status %d), want %q — the axis must not be reached", out, errs, st, want)
+	}
+}

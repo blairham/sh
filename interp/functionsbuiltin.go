@@ -177,7 +177,7 @@ func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 		// has no extended debugging, so LocatesFunctions is off here in
 		// every dialect that reaches this builtin. Written out rather than
 		// asked, so a dialect adding the capability has to come and look.
-		return r.declareFunctions(nil, false, namesOnly, false, false)
+		return r.declareFunctions(nil, false, namesOnly, false, false, false)
 	}
 	for _, pattern := range patterns {
 		o := r.patternOpts(pattern)

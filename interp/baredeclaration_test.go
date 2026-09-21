@@ -35,6 +35,12 @@ func withBareRecord(records Answer) func(*Semantics) {
 		// A name with no record draws the complaint, which is the control
 		// the listing rows lean on.
 		s.DeclarePrintReportsAMissingName = Yes
+		// And where the record is kept but not listed, whether the shell
+		// still has the name — the third state, which is its own axis and
+		// its own suite. Answered `No` here so these rows stay about the
+		// record: the `No` answer is the missing-name route the control
+		// above then reports. See Semantics.ValuelessRecordIsStillAName.
+		s.ValuelessRecordIsStillAName = No
 	}
 }
 

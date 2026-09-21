@@ -94,6 +94,7 @@ ash   DeclareMappingLetter
 ash   DeclareMatchingLetter
 ash   DeclareNumberDetachedOnlyAtTheWordEnd
 ash   DeclarePrintPerformsItsOperand
+ash   DeclarePrintReportsAMissingFunctionName
 ash   DeclarePrintReportsAMissingName
 ash   DeclareTypeLetter
 ash   DeclareZeroFillLetter
@@ -354,6 +355,7 @@ dash  DeclareMappingLetter
 dash  DeclareMatchingLetter
 dash  DeclareNumberDetachedOnlyAtTheWordEnd
 dash  DeclarePrintPerformsItsOperand
+dash  DeclarePrintReportsAMissingFunctionName
 dash  DeclarePrintReportsAMissingName
 dash  DeclareTypeLetter
 dash  DeclareZeroFillLetter

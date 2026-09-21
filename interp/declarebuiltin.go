@@ -1205,7 +1205,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// 5.3.15, `shopt -s extdebug; declare -F g` is `g 1 ./lib2.sh` and
 		// `declare -Fp g` is `declare -f g` with no location in it at all.
 		return r.declareFunctions(args, narrowed, namesOnly, f.funcNames,
-			r.LocatesFunctions() && !f.print)
+			r.LocatesFunctions() && !f.print, f.print)
 	}
 
 	if f.tie {
@@ -1663,6 +1663,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// — what the *shadowed* name carried before this line — is about
 			// the cell the attributes are going to land on.
 			wasExported = r.isExported(name)
+			if !df.global {
+				// And the binding is the target's, for the reason
+				// aDeclarationThroughAReferenceIsTheTargets gives. Behind
+				// the global letter, which is the one spelling that makes no
+				// binding at all — `typeset -g v=4` through a reference
+				// really does write the shell's own cell, in bash and here
+				// alike.
+				fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh, r.shadowTypeset)
+			}
 		}
 		// Attributes after the shadow, and ahead of the value: `-i` changes
 		// what the assignment on the same line *means*, so it cannot wait
@@ -2114,14 +2123,18 @@ func (r *Runner) compoundKindChanged(name string, f declareFlags, hasValue bool)
 	case f.array && r.assocDeclared(name):
 		return r.changeCompoundKind(name, r.sem().TableUnderAnArrayDeclaration,
 			"an array declaration over a name already declared a table",
-			r.diag().CannotConvertTableToArray,
-			"%[2]s: %[1]s: cannot convert associative to indexed array",
+			compoundKindRefusal{
+				atTheAssignment: r.diag().CannotConvertTableToArray,
+				fallback:        "%[2]s: %[1]s: cannot convert associative to indexed array",
+			},
 			func() { r.tableBecomesAnArray(name) })
 	case f.assoc && r.arrayDeclared(name):
 		return r.changeCompoundKind(name, r.sem().ArrayUnderATableDeclaration,
 			"a table declaration over a name already holding an array",
-			r.diag().CannotConvertArrayToTable,
-			"%[2]s: %[1]s: cannot convert indexed to associative array",
+			compoundKindRefusal{
+				atTheAssignment: r.diag().CannotConvertArrayToTable,
+				fallback:        "%[2]s: %[1]s: cannot convert indexed to associative array",
+			},
 			func() { r.arrayBecomesATable(name) })
 	}
 	return true
@@ -2147,14 +2160,24 @@ func (r *Runner) compoundKindChangedByALiteral(name string, f declareFlags) bool
 	case f.array && r.assocDeclared(name):
 		return r.changeCompoundKind(name, r.sem().TableUnderAnArrayLiteralDeclaration,
 			"an array literal declaration over a name already declared a table",
-			r.diag().CannotConvertTableToArrayAtTheAssignment,
-			"%[1]s: cannot convert associative to indexed array",
+			compoundKindRefusal{
+				atTheAssignment: r.diag().CannotConvertTableToArrayAtTheAssignment,
+				fallback:        "%[1]s: cannot convert associative to indexed array",
+				// The builtin's own sentence behind the assignment's, for
+				// the one shape that writes both — see changeCompoundKind.
+				underTheBuiltin: r.diag().CannotConvertTableToArray,
+				builtinFallback: "%[2]s: %[1]s: cannot convert associative to indexed array",
+			},
 			func() { r.compoundKindEmptied(name, false) })
 	case f.assoc && r.arrayDeclared(name):
 		return r.changeCompoundKind(name, r.sem().ArrayUnderATableLiteralDeclaration,
 			"a table literal declaration over a name already holding an array",
-			r.diag().CannotConvertArrayToTableAtTheAssignment,
-			"%[1]s: cannot convert indexed to associative array",
+			compoundKindRefusal{
+				atTheAssignment: r.diag().CannotConvertArrayToTableAtTheAssignment,
+				fallback:        "%[1]s: cannot convert indexed to associative array",
+				underTheBuiltin: r.diag().CannotConvertArrayToTable,
+				builtinFallback: "%[2]s: %[1]s: cannot convert indexed to associative array",
+			},
 			func() { r.compoundKindEmptied(name, true) })
 	}
 	return true
@@ -2176,11 +2199,32 @@ func (r *Runner) compoundKindEmptied(name string, toTable bool) {
 	r.markIndexed(name)
 }
 
+// compoundKindRefusal is what a refused conversion writes. Two sentences,
+// because the *literal* form's refusal is two inside a function and the
+// valueless form's is one everywhere — see changeCompoundKind's
+// CompoundKindChangeAbandonsTheLine branch, which is the only reader of the
+// second pair.
+//
+// A struct rather than four more parameters, because the two pairs are the
+// same shape and a caller passing them positionally is a caller that can swap
+// them silently: what it costs is a sentence under the wrong name, which is
+// exactly the class of mistake the wordings exist to prevent.
+type compoundKindRefusal struct {
+	// atTheAssignment is the sentence the *assignment* raises, and fallback
+	// is the substrate's own wording for it.
+	atTheAssignment, fallback string
+	// underTheBuiltin is the sentence the *builtin* raises afterwards, which
+	// the valueless form has as its only sentence and the literal form has
+	// as its second one. Empty where there is no second sentence to write.
+	underTheBuiltin, builtinFallback string
+}
+
 // changeCompoundKind resolves one of the two axes and does what it says,
 // reporting whether the declaration survives it.
 func (r *Runner) changeCompoundKind(name string, p CompoundKindChangePolicy,
-	what, wording, fallback string, convert func(),
+	what string, say compoundKindRefusal, convert func(),
 ) bool {
+	wording, fallback := say.atTheAssignment, say.fallback
 	switch p {
 	case CompoundKindChangeRefused:
 		r.diagf("%s\n", Wording(wording, fallback, name, r.inBuiltin))
@@ -2193,6 +2237,35 @@ func (r *Runner) changeCompoundKind(name string, p CompoundKindChangePolicy,
 		r.fatal("%s\n", Wording(wording, fallback, name, r.inBuiltin))
 		return false
 	case CompoundKindChangeAbandonsTheLine:
+		if fn := r.inFunc; fn != "" && say.underTheBuiltin != "" {
+			// **Inside a function it is two sentences and the line is not
+			// given up.** Measured 2026-09-21, `env -i PATH=/usr/bin:/bin
+			// LC_ALL=C` with a scratch HOME, from a script file, on bash
+			// 5.3.20, with `declare -a u=(1 2)` already in place:
+			//
+			//	declare -A u=([k]=v)                one sentence, no word in
+			//	                                    front, the line given up
+			//	eee() { declare -gA u=([k]=v); }    eee: u: cannot convert …
+			//	                                    declare: u: cannot convert …
+			//	                                    and `echo` behind the `;`
+			//	                                    runs, at 1
+			//	the same from a nested call          the **innermost**
+			//	                                    function's name
+			//	the same inside `( … )`              the same two sentences
+			//
+			// So the word in front of the assignment's sentence is the
+			// running function's — the same slot the builtin's name fills
+			// in the valueless form's wording, which is why one template
+			// serves both — and the builtin then raises its own refusal
+			// behind it. The line is given up at the top level and not in a
+			// function, which #4049 recorded the other way round: it read
+			// the `echo` behind the `;` as not running in either shell, and
+			// it runs in bash.
+			r.diagf("%s: %s\n", fn, Wording(wording, fallback, name, r.inBuiltin))
+			r.diagf("%s\n", Wording(say.underTheBuiltin, say.builtinFallback, name, r.inBuiltin))
+			r.status, r.assignFailed = 1, true
+			return false
+		}
 		// The refusal costs the operand, the status and the rest of the
 		// command list — and not the input. Measured 2026-09-12, the same
 		// four commands after this one print nothing when they are separated
@@ -3344,7 +3417,7 @@ func withoutListingLetters(f declareFlags) declareFlags {
 // name, and it is the caller's to decide rather than read here because the
 // same option is off for the shape `-p` asks for — see LocatesFunctions and
 // the call in declareBuiltin.
-func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclarations, locates bool) int {
+func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclarations, locates, print bool) int {
 	named := len(names) > 0 || narrowed
 	// Whether a *name* asked, which is not the same question and decides two
 	// other things: `declare -F f` is the bare name where `declare -F` is a
@@ -3366,7 +3439,26 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 		fn, ok := r.reportedFunc(name)
 		if !ok {
 			// Silent, and 1 stands however many other names printed —
-			// measured in both shells that can be asked.
+			// measured in both shells that can be asked. The **`-p` word**
+			// is what may report instead, and it is a question of its own:
+			// see Semantics.DeclarePrintReportsAMissingFunctionName, where
+			// the panel splits differently from the variable spelling's.
+			//
+			// Asked only for a name an operand named, because that is where
+			// the two readings differ: a whole-table listing collected the
+			// names itself and has nobody's operand to report.
+			if print && byOperand && r.ask(r.sem().DeclarePrintReportsAMissingFunctionName,
+				"`-p` reporting a name that is not there beside the function letter") {
+				// The variable spelling's sentence and deliberately the same
+				// one, with this builtin's own word in front of it: measured,
+				// `declare -pf g nosuch` writes `g`'s body and then the same
+				// `declare: nosuch: not found` a `declare -p nosuch` writes.
+				r.diagf("%s: %s\n", r.inBuiltin,
+					Wording(r.diag().DeclareNoSuchVariable, "%[1]s: not found", name))
+			}
+			if r.unspecified {
+				return r.status
+			}
 			status = 1
 			continue
 		}
@@ -3385,7 +3477,15 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 			// anywhere, and this shell already kept both halves.
 			r.printf("%s %d %s\n", name, r.functionDefinitionLine(name, fn),
 				r.functionDefinitionFile(name))
-		case byOperand || !asDeclarations:
+		case (byOperand && !print) || !asDeclarations:
+			// The bare name, which is what a names-only listing writes for a
+			// name an operand asked about — and the `-p` word takes that
+			// back, because it asks for the shape the line could be reissued
+			// in. Measured 2026-09-21 on bash 5.3.20: `declare -F g` is `g`,
+			// `declare -Fp g` is `declare -f g`, and `declare -F` with no
+			// operand is `declare -f g` too. The call site below already
+			// said so about the location this form leaves out; the branch
+			// did not, so `-Fp` wrote the bare name (#4065).
 			r.printf("%s\n", r.listedFunctionNameOnly(name, fn))
 		default:
 			r.printf("declare -f%s %s\n", r.functionAttributes(name), name)

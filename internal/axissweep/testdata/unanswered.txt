@@ -499,6 +499,7 @@ dash  SubscriptedOperandTakesALocalDeclaration
 dash  SubscriptedOperandTakesTheContainerAttribute
 dash  SubscriptedOperandTakesTheIntegerAttribute
 dash  SubscriptedPrefixIsTakenBack
+dash  SubstitutionPathPrefersProcSelfFd
 dash  SubstringRangeThirdColonIsABadSubstitution
 dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration

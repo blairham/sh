@@ -89,6 +89,11 @@ func Semantics() interp.Semantics {
 	// unanswered WritingSubstitutionIsWaitedForAtTheCommand: this shell has
 	// no process substitution, so there is no `>(cmd)` body for a command to
 	// wait for or not. `echo >(:)` is the two characters as written (#2197).
+	//
+	// unanswered SubstitutionPathPrefersProcSelfFd: the same absence seen
+	// from the other end — with no substitution there is no path for a
+	// directory to be chosen for. `echo <(true)` is `Syntax error: "("
+	// unexpected` at 2 (#3986).
 	// `export a+=2` is `a+: bad variable name` here, so the append operator
 	// is not an operand this shell's declarations take.
 	s.DeclarationTakesAnAppendOperand = interp.No

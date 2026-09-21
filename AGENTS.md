@@ -44,8 +44,9 @@ non-POSIX features. Excluding it yields a core containing arrays,
 
 All of those are implemented, process substitution last: `<(cmd)` needs
 a path the child can *open*, which is plumbing rather than grammar. It
-expands to `/dev/fd/N`, as it does in every shell in the panel that has
-the construct. It was a named pipe under `$TMPDIR` for a while, on the
+expands to a descriptor's own name — `/dev/fd/N`, or `/proc/self/fd/N`
+in the one dialect and on the one platform that prefer it (#3986) — as it
+does in every shell in the panel that has the construct. It was a named pipe under `$TMPDIR` for a while, on the
 reasoning that `/dev/fd` needs the descriptor to survive `exec` and that
 clearing Go's close-on-exec flag leaks it into every later command — a
 `sleep` after the substitution holds the pipe open and the reader never

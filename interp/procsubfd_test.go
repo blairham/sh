@@ -210,3 +210,61 @@ printf hi > >(tr a-z A-Z)`, nil)
 		t.Errorf("out = %q, want %q — the second pipe was taken for the first", out, "HI")
 	}
 }
+
+// Which directory the path is named after, which is
+// Semantics.SubstitutionPathPrefersProcSelfFd.
+//
+// Measured 2026-09-21: zsh 5.9.2 writes `/proc/self/fd/11` in the pinned
+// Linux image and `/dev/fd/11` on the panel machine, while bash 5.3.20,
+// ksh93u+ and BusyBox ash write `/dev/fd/N` in both — so in one image, with
+// one /dev/fd symlink pointing at /proc/self/fd, one shell writes the target
+// and the rest write the link. The axis carries the rest of the measurement,
+// including why the directory is looked for at run time.
+//
+// Only the string moves, and the rows say so: each one opens the path it was
+// given and reads the body's output through it. A reading that named a
+// directory the command cannot open would pass an assertion on the prefix
+// alone.
+func TestWhichDirectoryAProcessSubstitutionIsNamedAfter(t *testing.T) {
+	// The preferred answer is only reachable where the directory is, which
+	// is the platform half of the question and not the shell's.
+	preferred := "/dev/fd/"
+	if info, err := os.Stat("/proc/self/fd"); err == nil && info.IsDir() {
+		preferred = "/proc/self/fd/"
+	}
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"preferring /proc/self/fd", Yes, preferred},
+		{"naming /dev/fd", No, "/dev/fd/"},
+		// Unanswered reads as /dev/fd, which is the fallback every shell in
+		// the panel takes and the answer four of the five take everywhere.
+		{"unanswered", Unspecified, "/dev/fd/"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prefer := func(r *Runner) {
+				sem := *r.Semantics
+				sem.SubstitutionPathPrefersProcSelfFd = tc.answer
+				r.Semantics = &sem
+			}
+			out, st := run(t, `printf '%s' <(true)`, prefer)
+			if st != 0 {
+				t.Fatalf("status %d, want 0", st)
+			}
+			if !strings.HasPrefix(out, tc.want) {
+				t.Errorf("the word expanded to %q, want a path under %s", out, tc.want)
+			}
+			if _, err := strconv.Atoi(strings.TrimPrefix(out, tc.want)); err != nil {
+				t.Errorf("the word expanded to %q, want %s and a descriptor number", out, tc.want)
+			}
+			// And the name still names the pipe: the axis is the string and
+			// the descriptor is untouched by it.
+			body, st := run(t, `cat <(echo hi)`, prefer)
+			if body != "hi\n" || st != 0 {
+				t.Errorf("cat through the path gave %q at %d, want %q at 0", body, st, "hi\n")
+			}
+		})
+	}
+}

@@ -770,6 +770,12 @@ func Semantics() interp.Semantics {
 	// what makes `printf x | tee >(sleep 3) >/dev/null` take three seconds
 	// in this shell and none in bash and ksh93 (#2197).
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.Yes
+	// And it names the path after /proc/self/fd where that directory is
+	// there: measured 2026-09-21, `echo <(true)` is `/proc/self/fd/11` in
+	// the pinned Linux image and `/dev/fd/11` on the panel machine, while
+	// bash and ksh93 write `/dev/fd/N` in both. One image, one /dev/fd
+	// symlink, and this shell alone writes the target (#3986).
+	s.SubstitutionPathPrefersProcSelfFd = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.No
 	// A numeric signal goes to `kill(2)` unchecked here, so `kill -99 $$` is
 	// `kill <pid> failed: invalid argument` at 1 — the errno, printed —

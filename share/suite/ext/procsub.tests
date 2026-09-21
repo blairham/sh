@@ -64,8 +64,12 @@ printf ']\n'
 # What `<(…)` expands to is a path, and the number in it is the shell's
 # business — so the digits are replaced before anything is compared. What
 # survives is the shape, which is the part a script can depend on: it is a
-# name under /dev/fd on every column here, not a file in a temporary
-# directory, which is why nothing has to clean it up.
+# name for a descriptor, not a file in a temporary directory, which is why
+# nothing has to clean it up. The directory in front of the number is the
+# shell's business too, and the columns disagree about it: zsh names
+# /proc/self/fd where that directory is there and every other column here
+# names /dev/fd, which is why this file is the one place the two rows below
+# can fail in a gated column while the two after them pass.
 
 printf 'the reading form: [%s]\n' "$(printf '%s' <(true) | sed 's/[0-9][0-9]*/N/g')"
 printf 'the writing form: [%s]\n' "$(printf '%s' >(true) | sed 's/[0-9][0-9]*/N/g')"

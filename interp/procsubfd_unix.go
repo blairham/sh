@@ -8,6 +8,7 @@ package interp
 import (
 	"os"
 	"strconv"
+	"sync"
 	"syscall"
 )
 
@@ -91,13 +92,47 @@ type procSubEnds struct {
 // iteration order.
 const firstProcSubFd = 10
 
+// devFdDir and procFdDir are the two directories a substitution's path can be
+// named after. Both are the process's own descriptor table under another
+// name, and where both exist the first is a symlink to the second.
+const (
+	devFdDir  = "/dev/fd"
+	procFdDir = "/proc/self/fd"
+)
+
+// procFdDirExists is whether /proc/self/fd is there on this machine.
+//
+// Asked once: it is a property of the kernel the process is running on, and a
+// shell that stat'd it per substitution would be asking the same question
+// thousands of times to get the same answer. A read of the filesystem rather
+// than a build tag, because a Linux kernel without /proc mounted is a real
+// configuration and GOOS cannot see it.
+var procFdDirExists = sync.OnceValue(func() bool {
+	info, err := os.Stat(procFdDir)
+	return err == nil && info.IsDir()
+})
+
+// procSubFdDir is the directory this shell names its substitutions after.
+//
+// Semantics.SubstitutionPathPrefersProcSelfFd carries the measurement and the
+// reason the directory is looked for rather than assumed. /dev/fd is the
+// fallback every preset takes where /proc is not, which is every preset on
+// this machine's own platform.
+func (r *Runner) procSubFdDir() string {
+	if r.sem().SubstitutionPathPrefersProcSelfFd == Yes && procFdDirExists() {
+		return procFdDir
+	}
+	return devFdDir
+}
+
 // newProcSubPipe makes a substitution's pipe and parks the end the command
 // will open.
 //
 // childWrites says which way round the ends go, and it is the only difference
 // between the two spellings: `>(cmd)` hands the command the writing end and
-// keeps the reading one, `<(cmd)` the other way about.
-func newProcSubPipe(childWrites bool) (procSubEnds, error) {
+// keeps the reading one, `<(cmd)` the other way about. dir is the directory
+// the path is named after — see Runner.procSubFdDir.
+func newProcSubPipe(childWrites bool, dir string) (procSubEnds, error) {
 	rd, wr, err := os.Pipe()
 	if err != nil {
 		return procSubEnds{}, err
@@ -106,7 +141,7 @@ func newProcSubPipe(childWrites bool) (procSubEnds, error) {
 	if childWrites {
 		shell, child = rd, wr
 	}
-	parked, err := parkDescriptor(child)
+	parked, err := parkDescriptor(child, dir)
 	// The original is closed either way: on success the parked duplicate is
 	// the one the path names, and on failure there is nothing to hand over.
 	_ = child.Close()
@@ -127,10 +162,12 @@ func newProcSubPipe(childWrites bool) (procSubEnds, error) {
 // number, and a descriptor that also leaked through the kernel behind that
 // table's back would be open in every command the shell runs.
 //
-// The name is `/dev/fd/N` because that is what the command is going to be
-// handed, and *os.File carries its name for whoever asks — which is what lets
+// The name is the path the command is going to be handed — `/dev/fd/N`, or
+// `/proc/self/fd/N` in the dialect and on the platform that prefer it — and
+// *os.File carries its name for whoever asks, which is what lets
 // holdsDescriptorOnto recognize a descriptor the script has since taken onto
-// the same pipe.
+// the same pipe. Both spellings are the same number in the same table, so the
+// choice reaches nothing but the string.
 //
 // # And the blocking mode is put back
 //
@@ -145,7 +182,7 @@ func newProcSubPipe(childWrites bool) (procSubEnds, error) {
 // Cleared on the duplicate, which is the end nothing in this process reads or
 // writes through: the shell's own end is the pipe's *other* description and
 // keeps the mode Go gave it, so the poller is untouched.
-func parkDescriptor(f *os.File) (*os.File, error) {
+func parkDescriptor(f *os.File, dir string) (*os.File, error) {
 	conn, err := f.SyscallConn()
 	if err != nil {
 		return nil, err
@@ -164,7 +201,7 @@ func parkDescriptor(f *os.File) (*os.File, error) {
 		_ = syscall.Close(parked)
 		return nil, err
 	}
-	return os.NewFile(uintptr(parked), "/dev/fd/"+strconv.Itoa(parked)), nil
+	return os.NewFile(uintptr(parked), dir+"/"+strconv.Itoa(parked)), nil
 }
 
 // fcntlInt is the one fcntl this package needs, with the errno turned into an

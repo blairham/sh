@@ -180,9 +180,21 @@ func Semantics() interp.Semantics {
 	// nested subshell running a command named `1+1`, since this shell has no
 	// arithmetic command either (#3364).
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
-	// unanswered WritingSubstitutionIsWaitedForAtTheCommand: this shell has
-	// no process substitution, so there is no `>(cmd)` body for a command to
-	// wait for or not. `echo >(:)` is the two characters as written (#2197).
+	// unanswered WritingSubstitutionIsWaitedForAtTheCommand: recorded as
+	// `echo >(:)` being the two characters as written (#2197). That reading
+	// does not survive the measurement below — BusyBox is built with the
+	// construct and `echo >(:)` is `/dev/fd/64` at 0 — so the entry stays
+	// unanswered on a reason that has to be re-measured rather than on this
+	// one. #4002 tracks it; the axis is read as `!= Yes`, so nothing ships
+	// differently in the meantime.
+	//
+	// The directory that path is named after is answerable now, and it is
+	// /dev/fd: measured 2026-09-21 in the same image, where /proc/self/fd
+	// exists and /dev/fd is a symlink to it, `echo <(true)` and
+	// `echo >(true)` are both `/dev/fd/64` at 0. bash's answer and not
+	// zsh's, which is the only shell in the panel that writes the target
+	// (#3986).
+	s.SubstitutionPathPrefersProcSelfFd = interp.No
 
 	// ---- expansion and words ----
 

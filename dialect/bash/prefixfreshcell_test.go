@@ -221,13 +221,19 @@ func TestAnAppendedPrefixJoinsTheDisplacedBindingIntoTheFreshCell(t *testing.T) 
 	}
 }
 
-// A prefix over a **name reference** is deliberately not this question and is
-// left where it is. bash 5.3.20 keeps the reference and bash 3.2.57 writes a
-// plain scalar, so the one column that agreed with itself on every other row
-// does not agree here, and it wants its own measurement (#4087).
+// A prefix over a **name reference** keeps the reference, because the fresh
+// cell is made on the name the prefix's write *lands* on and nothing of the
+// prefix lands on the reference itself. #4110 is the rest of that row — the
+// export attribute belongs to the target too, and so does the take-back — and
+// dialect/bash/namerefprefix_test.go holds it.
 //
-// Pinned so that a change to the fresh cell cannot quietly take the reference
-// away as well: what this asserts is that the letter is still on the name.
+// Left here unchanged as the narrow guard it was written to be: whatever the
+// fresh cell does, the letter is still on the name (#4087).
+//
+// bash 3.2.57 cannot be asked — `declare -n` is `invalid option` there, so the
+// outer declaration never happens — which makes this a 5.3-only question and
+// not a split between the two builds. #4087's discussion read it as a second
+// column; it is not one.
 func TestAPrefixOverANameReferenceIsNotTheFreshCellQuestion(t *testing.T) {
 	t.Parallel()
 	out, st := runBash(t, t.TempDir(),

@@ -6562,13 +6562,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// here evaluates the subscript or the right-hand side.
 				continue
 			}
+			// The name the prefix's entry is made on, which a **name
+			// reference** makes different from the word the script wrote:
+			// the store follows the reference, so the save, the fresh cell,
+			// the export attribute and the take-back have to follow it too
+			// or the write lands on a name the call never held. See
+			// interp/namerefprefix.go (#4110).
+			held := r.prefixEntryName(a.Name)
 			fresh := false
 			if r.subscriptedPrefixTakenBack(a) || scoped {
-				undo = append(undo, r.saveVar(a.Name))
+				undo = append(undo, r.saveVar(held))
 				// The prefix's own cell, asked once the binding it displaces
 				// is safely saved — and only where there is a take-back to
 				// put that binding back. See interp/prefixfreshcell.go.
-				if fresh = r.prefixEntryIsFresh(a.Name); fresh {
+				if fresh = r.prefixEntryIsFresh(held); fresh {
 					undo[len(undo)-1].freshened = true
 				}
 			}
@@ -6578,7 +6585,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// why `s+=5` in front of one shows the body `5` and not
 				// `base5`. Emptied after the name has been saved, so the
 				// take-back below puts the shell's own back.
-				r.hideVar(a.Name)
+				r.hideVar(held)
 			}
 			// A prefix to a function persists here, so it is a store and
 			// fires the discipline a store fires — with `.append` for `+=`,
@@ -6586,8 +6593,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// interp/prefixdiscipline.go. A scoped prefix stores into a cell
 			// the call just made, which no hook is watching — see
 			// Runner.prefixScopedToTheCall.
-			r.prefixStore(ctx, a, !scoped, fresh)
-			callHeld = append(callHeld, a.Name)
+			r.prefixStore(ctx, a, held, !scoped, fresh)
+			callHeld = append(callHeld, held)
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
 			// alone: where the prefix is the command's *environment* the name
@@ -6608,7 +6615,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// Recorded as `false` rather than deleted, because deleting
 				// it only makes the name unspoken and an unspoken name the
 				// shell was born with is still exported. See isExported.
-				r.exported[a.Name] = on
+				//
+				// On the name the entry was made on, so that a prefix over a
+				// reference exports the **target** and leaves the reference
+				// carrying no `x` of its own — `declare -n foo=target;
+				// foo=bar ff` lists `declare -n foo="target"` and `declare
+				// -x target="bar"` in bash 5.3.20. See
+				// interp/namerefprefix.go.
+				r.exported[held] = on
 			}
 		}
 		// The names this call's prefix is holding, for a valueless
@@ -6737,6 +6751,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				_ = r.prefixExpansion(a)
 				continue
 			}
+			// The name this prefix's entry is made on, which a reference
+			// moves off the word the script wrote — the same rule the
+			// function route above follows, and the same reason. See
+			// interp/namerefprefix.go (#4110).
+			landsOn := r.prefixEntryName(a.Name)
 			fresh := false
 			persists := r.prefixPersistsAtThisBuiltin(argv[0], kind)
 			if !persists &&
@@ -6747,12 +6766,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// `alias` and `hash` while answering no to the specialness
 				// question above, for `:` and `shift` included. See
 				// Semantics.BuiltinsKeepingAnAssignmentPrefix.
-				undo = append(undo, r.saveVar(a.Name))
+				undo = append(undo, r.saveVar(landsOn))
 				// And the prefix's own cell, asked only where the binding it
 				// displaces has just been saved: a prefix this shell *keeps*
 				// has nothing to give back and is an ordinary assignment to
 				// the name as it stands. See interp/prefixfreshcell.go.
-				if fresh = r.prefixEntryIsFresh(a.Name); fresh {
+				if fresh = r.prefixEntryIsFresh(landsOn); fresh {
 					undo[len(undo)-1].freshened = true
 				}
 			}
@@ -6760,7 +6779,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// And a value this shell keeps is not an enclosing call's to
 				// give back. See Runner.callPrefixesLetTheNameGo, which is
 				// the other end of the frames an `unset` reaches into.
-				r.callPrefixesLetTheNameGo(a.Name)
+				r.callPrefixesLetTheNameGo(landsOn)
 			}
 			// Whether a discipline hears about it is whether there is a
 			// store for it to hear about. A *regular* builtin's prefix is the
@@ -6769,8 +6788,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// the name's owner is told of; a special builtin's persists, and
 			// a prefix that reached here through `command` before an
 			// external is the child's store. See interp/prefixdiscipline.go.
-			r.prefixStore(ctx, a, kind.kind != prefixBeforeRegularBuiltin, fresh)
-			held = append(held, a.Name)
+			r.prefixStore(ctx, a, landsOn, kind.kind != prefixBeforeRegularBuiltin, fresh)
+			held = append(held, landsOn)
 			if kind.throughCommand {
 				// `command` is a precommand word rather than a command, so
 				// the prefix in front of it belongs to whatever it goes on
@@ -6794,7 +6813,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				if r.exported == nil {
 					r.exported = map[string]bool{}
 				}
-				r.exported[a.Name] = true
+				r.exported[landsOn] = true
 			} else if on, moves := r.prefixExportAtABuiltin(); moves {
 				// Every other builtin, where the panel does split and the
 				// attribute moves in both directions: bash hands the builtin
@@ -6805,7 +6824,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				if r.exported == nil {
 					r.exported = map[string]bool{}
 				}
-				r.exported[a.Name] = on
+				r.exported[landsOn] = on
 			}
 		}
 		// The names this command's prefix is holding, for the declaration
@@ -7075,13 +7094,22 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// what the hook leaves is what the child is handed.
 			value = child.prefixStoredForAChild(a, part)
 		}
-		if a.Name == "PATH" {
+		// The entry is named for where the value landed and not for the word
+		// in front of the command, which a **name reference** makes two
+		// different names: `target=T; declare -n foo=target; foo=bar env`
+		// hands the child `target=bar` in bash 5.3.20 and ksh93u+ alike, and
+		// this shell handed it `foo=bar` — a name holding the *target's*
+		// name everywhere else. Unanimous in the two columns that have
+		// references, so it is done here and not asked. See
+		// interp/namerefprefix.go (#4110).
+		landsOn := r.prefixEntryName(a.Name)
+		if landsOn == "PATH" {
 			// The last one wins, the same way the child's environment
 			// resolves `PATH=/a PATH=/b cmd`: what is appended last is what
 			// reaches it.
 			prefixPath, pathFromPrefix = value, true
 		}
-		prefixEnv = append(prefixEnv, a.Name+"="+value)
+		prefixEnv = append(prefixEnv, landsOn+"="+value)
 	}
 	// Read after the stores above rather than before them, so a hook that
 	// wrote some *other* exported name is answered by the environment the
@@ -9290,8 +9318,16 @@ func (r *Runner) refuseReadonlyInACommand(name string) bool {
 	return true
 }
 
-// frozenNameOfAnAssignment is the name a plain assignment's freeze is asked
-// about, which is **where the value lands** and not what was written.
+// assignmentLandsOn is **where an assignment's value lands** rather than what
+// was written: a reference is followed to the name it points at, and a
+// reference that points nowhere — or at an *element* — is its own answer.
+//
+// Two questions ask it and both are the same question. A plain assignment's
+// **freeze** is asked about the name the write arrives at, which is what this
+// was written for. A call's **assignment prefix** makes its entry on that same
+// name — the save, the fresh cell, the export attribute and the take-back all
+// belong to it — which is interp/namerefprefix.go, and folded in here rather
+// than restated there so the two cannot drift apart.
 //
 // A reference and what it points at are frozen separately, and only the
 // second one can refuse a write through it: measured 2026-09-16 on bash
@@ -9314,7 +9350,7 @@ func (r *Runner) refuseReadonlyInACommand(name string) bool {
 // frozenNameOfAnUnset is the name whose freeze can refuse an `unset`, which is
 // **where the unset lands** rather than what the script wrote.
 //
-// The same rule frozenNameOfAnAssignment states for a write, and it was
+// The same rule assignmentLandsOn states for a write, and it was
 // missing from the other half: the store followed a reference for the *delete*
 // while the refusal above was asked against the written name, so the two read
 // different names and both directions were wrong. Measured 2026-09-17 on bash
@@ -9347,7 +9383,7 @@ func (r *Runner) frozenNameOfAnUnset(name string, subscripted bool) string {
 	return name
 }
 
-func (r *Runner) frozenNameOfAnAssignment(name string) string {
+func (r *Runner) assignmentLandsOn(name string) string {
 	target, aimed := r.namerefTarget(name)
 	if !aimed {
 		return name
@@ -10216,7 +10252,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// body that would first give it one. See
 		// interp/frozencompoundbody.go, where the state the rows part on is
 		// the one `${c+word}` answers.
-	} else if r.refuseReadonly(r.frozenNameOfAnAssignment(a.Name), assignedAlone) {
+	} else if r.refuseReadonly(r.assignmentLandsOn(a.Name), assignedAlone) {
 		return
 	}
 	if r.unspecified {

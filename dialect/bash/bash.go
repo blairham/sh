@@ -4097,6 +4097,15 @@ func Apply(r *interp.Runner) {
 		"posix",
 		"privileged",
 	)
+	// And the one of those names that is also a parameter. `IGNOREEOF` and
+	// `ignoreeof` are two spellings of one state here: an assignment turns
+	// the option on whatever it assigns, `unset` turns it off, `set -o
+	// ignoreeof` writes `10` over whatever the parameter held, and `set +o
+	// ignoreeof` takes the name away. Measured 2026-09-21 on bash 5.3.20 —
+	// see interp/tiedoption.go, which carries the eight rows. It is `set -o`
+	// and not `shopt`: `shopt ignoreeof` is `invalid shell option name` in
+	// that shell and in this one (#4047).
+	r.TieOptionToParameter("ignoreeof", "IGNOREEOF", "10")
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("PIPESTATUS")

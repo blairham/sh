@@ -148,26 +148,85 @@ type fcHistory struct {
 	// read once: `-k` counts back from the shell's own event number, which a
 	// script has none of, rather than from the end of the list.
 	ownEvent bool
+	// newestIsCurrent is Semantics.FcNewestEntryIsTheCurrentLine, read once:
+	// the newest entry is the line this shell is running, so the roads that
+	// run one cannot reach it.
+	newestIsCurrent bool
+	// loose is Semantics.FcNumericOperandSkipsBlanksAndASign, read once: an
+	// operand's digits may have whitespace and a `+` in front of them.
+	loose bool
 }
 
-func (r *Runner) fcHistory(entries []string) fcHistory {
+func (r *Runner) fcHistory(entries []string, rest []string) fcHistory {
 	h := fcHistory{entries: entries, first: r.HistoryFirst()}
 	h.cur = h.first + len(entries)
 	if r.HistoryHasOwnLine() {
 		h.cur--
 	}
-	// Both are asked once per call rather than at each operand, and both are
-	// asked on every road: the reading of an operand is the same reading
-	// whether `-l`, `-s` or an editor is what the entry is wanted for.
+	// The three below are asked once per call rather than at each operand,
+	// and all three are asked on every road: the reading of an operand is
+	// the same reading whether `-l`, `-s` or an editor is what the entry is
+	// wanted for, and each of them decides what a default comes to as well
+	// as what a written operand does.
 	h.refuse = r.ask(r.sem().FcEventOutOfRangeIsAnError,
 		"`fc` given an event the history list does not hold")
 	h.ownEvent = r.ask(r.sem().FcRelativeEventNeedsTheShellsOwnEventNumber,
 		"`fc` given an event counted back from the current one")
+	h.newestIsCurrent = r.ask(r.sem().FcNewestEntryIsTheCurrentLine,
+		"`fc` asked to run the newest entry of the list")
+	// The fourth is asked only where an operand puts the question, which is
+	// the difference between it and the three above: those decide what every
+	// operand and every default come to, and this one decides nothing at all
+	// unless a word was written with whitespace or a `+` in front of its
+	// digits. See fcOperandWantsTheLooseReading.
+	for _, spec := range rest {
+		if !fcOperandWantsTheLooseReading(spec) {
+			continue
+		}
+		h.loose = r.ask(r.sem().FcNumericOperandSkipsBlanksAndASign,
+			"`fc` given an operand with whitespace or a `+` in front of its digits")
+		break
+	}
 	return h
+}
+
+// fcOperandWantsTheLooseReading reports a word the two readings of an
+// operand's number disagree about: one whose digits stand behind whitespace
+// or a `+`, so that one reading has a number there and the other has a word
+// to search for.
+//
+// A word with neither is read the same way by both — `2x` is the event 2 and
+// `abc` is a search in each — and a word with one of them but no digits
+// behind it is a search in both.
+func fcOperandWantsTheLooseReading(spec string) bool {
+	s := strings.TrimLeft(spec, " \t\n\v\f\r")
+	if s == spec && !strings.HasPrefix(s, "+") {
+		return false
+	}
+	s = strings.TrimPrefix(s, "+")
+	s = strings.TrimPrefix(s, "-")
+	return s != "" && isDigit(s[0])
 }
 
 // last is the history number of the newest entry the list holds.
 func (h fcHistory) last() int { return h.first + len(h.entries) - 1 }
+
+// currentLine is the history number of the line this shell is running now,
+// and it is the first number no re-run and no edit may reach.
+//
+// `cur` where the list numbers the `fc` call itself past its newest entry,
+// and one below that where the newest entry *is* that line. See
+// [Semantics.FcNewestEntryIsTheCurrentLine].
+func (h fcHistory) currentLine() int {
+	if h.newestIsCurrent {
+		return h.cur - 1
+	}
+	return h.cur
+}
+
+// reachable is the newest event a re-run, an edit or a word operand's search
+// may come to.
+func (h fcHistory) reachable() int { return h.currentLine() - 1 }
 
 // at is the entry that number names.
 func (h fcHistory) at(n int) string { return h.entries[n-h.first] }
@@ -219,7 +278,8 @@ func (h fcHistory) resolveWith(spec string, absent, outOfRange int) fcEvent {
 	if e, ok := h.countedBack(spec); ok {
 		return e
 	}
-	if n, err := strconv.Atoi(spec); err == nil && n >= 0 {
+	if num := h.number(spec); num.ok && !num.dashed {
+		n := num.n
 		// The upper bound is cur-2 and not the newest entry, measured on
 		// three list lengths: the command before this one cannot be named
 		// by its number, only counted back to. Both bounds belong to the
@@ -256,11 +316,12 @@ func (h fcHistory) resolveWith(spec string, absent, outOfRange int) fcEvent {
 //     `fc -l -0` is `event not found: -0` where bash reads the same operand
 //     as the `fc` line itself.
 func (h fcHistory) countedBack(spec string) (fcEvent, bool) {
+	num := h.number(spec)
 	if h.ownEvent {
-		if !isDashNumber(spec) {
+		if !num.ok || !num.dashed {
 			return fcEvent{}, false
 		}
-		if k, _ := strconv.Atoi(spec[1:]); k != 0 {
+		if num.n != 0 {
 			// The floor rather than cur-k: there is no current event to
 			// count back from, so every relative operand lands here, below
 			// the oldest event this shell numbers.
@@ -268,11 +329,10 @@ func (h fcHistory) countedBack(spec string) (fcEvent, bool) {
 		}
 		return h.search(spec), true
 	}
-	if isDashNumber(spec) {
-		k, _ := strconv.Atoi(spec[1:])
-		return fcEvent{num: h.cur - k, found: true}, true
+	if num.dashed && num.ok {
+		return fcEvent{num: h.cur - num.n, found: true}, true
 	}
-	if n, err := strconv.Atoi(spec); err == nil && n == 0 {
+	if num.ok && num.n == 0 {
 		// Zero is not a history number and is not read as one: it comes to
 		// the command before this one, which is what an operand that was
 		// never written comes to under `-s`. Measured, and it is the one
@@ -283,6 +343,73 @@ func (h fcHistory) countedBack(spec string) (fcEvent, bool) {
 	return fcEvent{}, false
 }
 
+// fcOperandNumber is one operand read as a number: the digits, whether a
+// minus sign stood in front of them, and whether there was a number there at
+// all.
+type fcOperandNumber struct {
+	n      int
+	dashed bool
+	ok     bool
+}
+
+// number reads the number at the front of an operand.
+//
+// It is a **prefix** and not the whole word, in both readings and unasked:
+// measured 2026-09-21, `fc -l 2x` starts at entry 2 in bash 5.3.20 and in
+// zsh 5.9.2 alike, `fc -l 3abc` starts at 3 in both, and `fc -l 0x2` is the
+// number zero in both — base ten, so the `x2` is what the digits stopped
+// before rather than a radix. The core read the whole word with a strict
+// parse until #4058 and so agreed with neither.
+//
+// What may stand in *front* of the digits is the conflict, and it is
+// [Semantics.FcNumericOperandSkipsBlanksAndASign]: one reading takes the
+// sign or the first digit at the front of the word, the other skips
+// whitespace and takes a `+` as well.
+//
+// A number too large for an int is no number, which leaves the operand to
+// the search the way a word with no digits at all does.
+func (h fcHistory) number(spec string) fcOperandNumber {
+	s := spec
+	if h.loose {
+		s = strings.TrimLeft(s, " \t\n\v\f\r")
+	}
+	var dashed bool
+	switch {
+	case strings.HasPrefix(s, "-"):
+		dashed, s = true, s[1:]
+	case h.loose && strings.HasPrefix(s, "+"):
+		s = s[1:]
+	}
+	digits := 0
+	for digits < len(s) && isDigit(s[digits]) {
+		digits++
+	}
+	if digits == 0 {
+		return fcOperandNumber{}
+	}
+	n, err := strconv.Atoi(s[:digits])
+	if err != nil {
+		return fcOperandNumber{}
+	}
+	return fcOperandNumber{n: n, dashed: dashed, ok: true}
+}
+
+// refuseTheCurrentLine is [Semantics.FcNewestEntryIsTheCurrentLine] applied
+// to an event a road is about to run or edit: the line this shell is standing
+// on cannot be re-run, and neither can anything past it.
+//
+// Asked before the range refusal and not after, which is measured rather than
+// tidy: `fc -s 99` on a five-entry list says this and not `no such event: 99`
+// in the shell that says both.
+func (h fcHistory) refuseTheCurrentLine(r *Runner, n int) (code int, ok bool) {
+	if !h.newestIsCurrent || n < h.currentLine() {
+		return 0, true
+	}
+	r.diagf("%s\n", Wording(r.diag().FcCurrentLineRecurses,
+		"fc: the current history line would run itself again"))
+	return 1, false
+}
+
 // fcBeforeTheOldest is the number a relative operand comes to where there is
 // no current event to count back from. Below every history number a shell
 // gives out, so a range that reaches the list clamps to its oldest entry and
@@ -291,8 +418,15 @@ const fcBeforeTheOldest = 0
 
 // search is the word operand: the newest entry that begins with it, and no
 // event at all when none does.
+//
+// It stops below the current line rather than at the newest entry, which is
+// the same threshold the roads that run one use and is visible on `-l` too:
+// measured 2026-09-21 on `ax bx ay by az`, zsh 5.9.2 answers `fc -l a` with
+// `ay` onwards and not with `az` alone. See
+// [Semantics.FcNewestEntryIsTheCurrentLine], and reachable, which is the
+// newest entry in the other reading.
 func (h fcHistory) search(spec string) fcEvent {
-	for n := min(h.cur-1, h.last()); n >= h.first; n-- {
+	for n := min(h.reachable(), h.last()); n >= h.first; n-- {
 		if strings.HasPrefix(h.at(n), spec) {
 			return fcEvent{num: n, found: true}
 		}
@@ -435,7 +569,7 @@ func biFc(r *Runner, ctx context.Context, args []string) int {
 		}
 		return 0
 	}
-	h := r.fcHistory(entries)
+	h := r.fcHistory(entries, rest)
 	if len(entries) == 0 && !h.refuse {
 		// Where an operand out of range is refused, an empty list is not a
 		// case of its own: every range misses a list with nothing in it, and
@@ -512,6 +646,13 @@ func (h fcHistory) rerun(r *Runner, ctx context.Context, rest []string) int {
 	e := h.resolve(spec, h.oneDefault())
 	if !e.found {
 		return h.noCommand(r, spec)
+	}
+	// Ahead of everything below, because the shell that has this threshold
+	// answers with it whatever else the operand was: the event written down,
+	// the event past the end of the list, and the default on a list with
+	// nothing below the line all come to the one sentence.
+	if code, ok := h.refuseTheCurrentLine(r, e.num); !ok {
+		return code
 	}
 	if h.refuse {
 		if code, ok := h.refuseOutsideTheList(r, e.num, e.num); !ok {
@@ -647,6 +788,17 @@ func (h fcHistory) edit(r *Runner, ctx context.Context, rest []string, editor st
 	to := h.resolveWith(lastOp, from.num, h.cur-1)
 	if !to.found {
 		return h.noCommand(r, lastOp)
+	}
+	// `first` at or past the current line is refused; `last` past it is
+	// brought under it and nothing is said. Measured 2026-09-21 on zsh
+	// 5.9.2 over five entries: `fc 5` and `fc 5 5` are the refusal, `fc 1 5`
+	// and `fc 1 99` and `fc 4 99` each edit up to entry 4. See
+	// Semantics.FcNewestEntryIsTheCurrentLine.
+	if code, ok := h.refuseTheCurrentLine(r, from.num); !ok {
+		return code
+	}
+	if h.newestIsCurrent {
+		to.num = min(to.num, h.reachable())
 	}
 	if h.refuse {
 		// The other reading refuses the range rather than the line it would

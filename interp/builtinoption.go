@@ -404,12 +404,14 @@ func (r *Runner) builtinUsageLine(name string) {
 // either as options makes the line `fc: -2: invalid option` and a refusal
 // where bash runs it.
 //
-// The rule is exact and it is the whole word: a dash followed by nothing but
-// digits is an operand, and a dash followed by anything else is options all
-// the way. Measured on the same shell, `fc -s -1x` is `fc: -1: invalid
-// option` — so `-1x` is a bundle whose first letter is not a letter, and not
-// a malformed number. A `--` before the number ends the options first and
-// reaches the same place: `fc -s -- -42` runs an event and refuses nothing.
+// The rule is the whole word in one reading and a prefix in the other, which
+// is [Semantics.FcOptionsEndAtADashAndADigit]. Measured on the same shell,
+// `fc -s -1x` is `fc: -1: invalid option` and its usage line at 2 — so `-1x`
+// is a bundle whose first letter is not a letter there, and not a malformed
+// number; measured on zsh 5.9.2, `fc -l -1x` is the operand `-1x` and writes
+// the whole list at 0. A `--` before the number ends the options first and
+// reaches the same place under either: `fc -s -- -42` runs an event and
+// refuses nothing.
 //
 // Scanning ahead rather than teaching the reader a new letter shape, because
 // the question is where the options *end* and not what any of them mean: the
@@ -424,6 +426,15 @@ func (r *Runner) builtinOptionsCountingBack(name string, args []string, known st
 			break
 		}
 		if isDashNumber(a) {
+			cut = i
+			break
+		}
+		// And the word the two readings disagree about, which is asked
+		// about only where one stands: a dash and a digit that goes on into
+		// something else. Every other word is options or an operand under
+		// both readings and nothing is asked of a shell about it.
+		if isDigit(a[1]) && r.ask(r.sem().FcOptionsEndAtADashAndADigit,
+			"a word that is a dash and a digit and then goes on") {
 			cut = i
 			break
 		}

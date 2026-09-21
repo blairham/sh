@@ -16882,6 +16882,100 @@ type Semantics struct {
 	// (TestARelativeOperandCountsFromTheEndOrFromNothing).
 	FcRelativeEventNeedsTheShellsOwnEventNumber Answer
 
+	// FcNewestEntryIsTheCurrentLine reads the newest entry of the history
+	// list as the line the shell is running *now*, so `fc -s` and the editor
+	// road refuse to reach it and say why. bash's newest entry is the
+	// command before this one and re-running it is what `fc -s` is for.
+	//
+	// It is the same fact as the axis above seen from the other side — a
+	// shell whose own line is the newest entry has no current event *beyond*
+	// the list to count back from — and it is a second axis rather than a
+	// reading of that one because the two are separable: a shell could
+	// number its own line and still let `fc -s` name the entry below it, and
+	// answering both from one field would make the refusal below a
+	// consequence of a question about `-1` rather than a measurement.
+	//
+	// Measured 2026-09-21 against zsh 5.9.2, `zsh -f` on a script file under
+	// `env -i` with a scratch `HOME`, the list planted with five `print -s`
+	// lines, beside bash 5.3.20 on the same shapes:
+	//
+	//	fc -s 5        the newest entry itself is refused
+	//	fc -s 99       the same refusal, not `no such event: 99`
+	//	fc 99          the same, on the editor road
+	//	fc -s          on a list of one, the same: the default is the
+	//	               oldest entry and the oldest is also the newest
+	//	fc -s          on an empty list, the same
+	//	fc -s          on two or more, the oldest entry runs and nothing
+	//	               is said — so this is a threshold and not a default
+	//	fc -s 4        the entry below the newest runs
+	//	fc -e ed 1 5   entries 1 to **4**: a range's far end is brought
+	//	               under the threshold silently
+	//	fc -e ed 4 99  entry 4 alone, the same clamp
+	//	fc -s a        on `ax bx ay by az`, the entry `ay` — a word
+	//	               operand's search stops below the threshold too
+	//	fc -l 5        entry 5, listed: `-l` reaches it
+	//	fc -l a        `ay` onwards: the search stops below it on `-l` as
+	//	               well, so the threshold is the operand's and the
+	//	               listing's range is not
+	//
+	// The refusal is worded unlike the three `fc` already had, which is why
+	// Diagnostics.FcCurrentLineRecurses is a fourth field: it is a sentence
+	// about what running the line would do rather than about an operand that
+	// named nothing.
+	//
+	// unpinned: never reached from the corpus, for the reason the two axes
+	// above give — no corpus row plants a list. interp/fclisting_test.go
+	// asserts both answers over the same list
+	// (TestTheNewestEntryIsReachableOrIsTheCurrentLine).
+	FcNewestEntryIsTheCurrentLine Answer
+
+	// FcNumericOperandSkipsBlanksAndASign reads an `fc` operand's number
+	// past leading whitespace and a leading `+` — zsh; bash wants the sign
+	// or the first digit at the front of the word.
+	//
+	// The **prefix** itself is not this axis and is not a conflict: both
+	// shells read the digits at the front of an operand and ignore what
+	// follows them, so `fc -l 2x` starts at 2 in each and the core does
+	// that unasked. What they disagree about is only what may stand in
+	// front of the digits.
+	//
+	// Measured 2026-09-21 on a five-entry list, bash 5.3.20 beside
+	// zsh 5.9.2:
+	//
+	//	fc -l ' -1'    bash: `fc: no command found` at 1 — a space is not
+	//	               part of a number, so the word is a search and no
+	//	               entry begins with it. zsh: the whole list, the space
+	//	               skipped and the `-1` read
+	//	fc -l ' 2'     bash: the same refusal. zsh: from entry 2
+	//	fc -l +3       bash: the same refusal. zsh: from entry 3
+	//
+	// A tab is skipped where a space is, so this is whitespace rather than
+	// the one character: `fc -l "<tab>2"` starts at 2 in zsh.
+	//
+	// unpinned: never reached from the corpus, for the reason the axes above
+	// give. interp/fclisting_test.go asserts both answers over the same list
+	// (TestAnOperandsNumberIsReadWithOrWithoutWhatStandsInFrontOfIt).
+	FcNumericOperandSkipsBlanksAndASign Answer
+
+	// FcOptionsEndAtADashAndADigit ends `fc`'s options at the first word
+	// that is a dash and then a digit, however the word goes on — zsh;
+	// bash ends them only at a word that is a dash and nothing but digits,
+	// and reads `-1x` as options.
+	//
+	// The two shells' own readings of the operand agree that `-1x` is the
+	// event `-1` (see the axis above, whose prefix half is the core's), so
+	// this is a disagreement about where the *operand list* starts and not
+	// about what the operand means. It is visible as two different
+	// refusals: measured 2026-09-21, `fc -s -1x` is `fc: -1: invalid
+	// option` and the usage block at 2 in bash 5.3.20, where zsh 5.9.2
+	// reads `fc -l -1x` as the operand `-1x` and writes the whole list at
+	// 0.
+	//
+	// unpinned: never reached from the corpus, for the reason the axes above
+	// give. interp/fclisting_test.go asserts both answers over the same list
+	// (TestADashWordThatIsNotANumberIsStillOptions).
+	FcOptionsEndAtADashAndADigit Answer
+
 	// TestBuiltinComparisonOperandsAreArithmetic reads the operands of
 	// `test`'s and `[`'s word-spelled comparisons as arithmetic
 	// expressions, the way `[[ ]]` reads its own. ksh93 alone; dash, bash
@@ -23796,7 +23890,18 @@ func PosixSemantics() Semantics {
 		// reading of both.
 		FcEventOutOfRangeIsAnError:                  No,
 		FcRelativeEventNeedsTheShellsOwnEventNumber: No,
-		JobControlAbsenceIsReportedFirst:            No,
+		// POSIX has `fc -s` re-execute "the command", the previous one by
+		// default, and describes no line the shell may not reach — so the
+		// base reaches the newest entry, which is bash's reading and the
+		// standard's own example.
+		FcNewestEntryIsTheCurrentLine: No,
+		// And the standard says nothing about what may stand in front of an
+		// operand's digits, so the base takes the sign or the first digit at
+		// the front of the word — bash's reading, and the stricter of the
+		// two.
+		FcNumericOperandSkipsBlanksAndASign: No,
+		FcOptionsEndAtADashAndADigit:        No,
+		JobControlAbsenceIsReportedFirst:    No,
 		// POSIX has `( )` run "in a subshell environment" and describes that
 		// environment as a copy, which is the forking reading: the copy is
 		// not the process the signal was aimed at, so it finishes its body.

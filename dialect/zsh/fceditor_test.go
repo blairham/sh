@@ -14,7 +14,16 @@ import (
 // Measured 2026-09-21 against zsh 5.9.2 under `env -i` with a scratch `HOME`
 // and `TMPDIR`, the list seeded with `print -s` (which is what fills it in a
 // shell nobody is sitting at), and the editor `cp /dev/null`, which truncates
-// what it is handed:
+// what it is handed.
+//
+// **Two entries and not one**, which is a property of the fixture rather than
+// of what is being asserted: the newest entry is the line this shell reads as
+// its own, so a bare `fc` on a one-entry list is
+// `current history line would recurse endlessly, aborted` at 1 and the editor
+// is never reached at all — measured the same day, on `print -s 'echo one'`
+// alone, and the same for `fc -s` (see interp.Semantics.FcNewestEntryIsThe-
+// CurrentLine, #4058). With a second entry the default lands on the oldest
+// and the road below is reachable:
 //
 //	fc -e trunc; print after        `read error on /tmp/zsh…`, 1, no `after`
 //	fc -e trunc || print caught     the same: `||` does not catch it
@@ -34,7 +43,7 @@ func TestAnEditorThatEmptiesTheFileEndsTheShell(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshOnPath(t, dir,
-		"TMPDIR="+dir+"\nprint -s 'echo one'\nfc -e 'cp /dev/null'\nprint after\n")
+		"TMPDIR="+dir+"\nprint -s 'echo one'\nprint -s 'echo two'\nfc -e 'cp /dev/null'\nprint after\n")
 	if st != 1 {
 		t.Errorf("out = %q status = %d, want 1", out, st)
 	}
@@ -47,7 +56,7 @@ func TestAnEditorThatEmptiesTheFileEndsTheShell(t *testing.T) {
 	// And it is not caught by `||` either, which is what says this is a
 	// fatal error rather than a non-zero status a script can read.
 	out, st = runZshOnPath(t, dir,
-		"TMPDIR="+dir+"\nprint -s 'echo one'\nfc -e 'cp /dev/null' || print caught\n")
+		"TMPDIR="+dir+"\nprint -s 'echo one'\nprint -s 'echo two'\nfc -e 'cp /dev/null' || print caught\n")
 	if st != 1 || strings.Contains(out, "caught") {
 		t.Errorf("out = %q status = %d, want it uncaught at 1", out, st)
 	}
@@ -60,7 +69,7 @@ func TestAnEditorThatEmptiesTheFileInASubshellEndsOnlyIt(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshOnPath(t, dir,
-		"TMPDIR="+dir+"\nprint -s 'echo one'\n( fc -e 'cp /dev/null' )\nprint \"after=$?\"\n")
+		"TMPDIR="+dir+"\nprint -s 'echo one'\nprint -s 'echo two'\n( fc -e 'cp /dev/null' )\nprint \"after=$?\"\n")
 	if st != 0 {
 		t.Errorf("out = %q status = %d, want 0 — the parent survives", out, st)
 	}

@@ -94,13 +94,32 @@ func TestAnOperandCountingBackIsNotAnOption(t *testing.T) {
 }
 
 // And a dash-word that is not all digits is still options, so a real typo is
-// still refused.
+// still refused — in the reading where the options end only at a word that
+// is a dash and nothing but digits. The other reading ends them at a dash and
+// a digit however the word goes on, so the very same word is an operand
+// there: [Semantics.FcOptionsEndAtADashAndADigit], and the two are asserted
+// together because each alone reads as a shell that could not tell an option
+// from an event.
 func TestADashWordThatIsNotANumberIsStillOptions(t *testing.T) {
-	list := &fcList{entries: []string{"alpha"}}
-	out, st := fcRun(t, list, "fc -l -2x")
+	out, st := fcCutRun(t, &fcList{entries: []string{"alpha"}}, "fc -l -2x", No)
 	if !strings.Contains(out, "invalid option") || st == 0 {
 		t.Errorf("out = %q status = %d, want a refusal at nonzero", out, st)
 	}
+	out, st = fcCutRun(t, fcFive(), "fc -l -2x", Yes)
+	if want := "4\t delta\n5\t epsilon\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+}
+
+// fcCutRun answers where this shell's `fc` stops reading options.
+func fcCutRun(t *testing.T, list *fcList, src string, prefix Answer) (string, int) {
+	t.Helper()
+	return run(t, src, func(r *Runner) {
+		list.install(r)
+		sem := *r.Semantics
+		sem.FcOptionsEndAtADashAndADigit = prefix
+		r.Semantics = &sem
+	})
 }
 
 // A range written backwards prints backwards, which is not the same question
@@ -221,11 +240,20 @@ func TestFcOnAShellWithNoListSaysNothing(t *testing.T) {
 // value would be measuring the pair rather than the half it names.
 func fcReadingRun(t *testing.T, list *fcList, src string, refuse, ownEvent Answer) (string, int) {
 	t.Helper()
+	return fcThresholdRun(t, list, src, refuse, ownEvent, No)
+}
+
+// fcThresholdRun is fcReadingRun with the third reading written too: whether
+// the newest entry is the line this shell is standing on, which is the one
+// the roads that *run* an entry stop at.
+func fcThresholdRun(t *testing.T, list *fcList, src string, refuse, ownEvent, newest Answer) (string, int) {
+	t.Helper()
 	return run(t, src, func(r *Runner) {
 		list.install(r)
 		sem := *r.Semantics
 		sem.FcEventOutOfRangeIsAnError = refuse
 		sem.FcRelativeEventNeedsTheShellsOwnEventNumber = ownEvent
+		sem.FcNewestEntryIsTheCurrentLine = newest
 		r.Semantics = &sem
 	})
 }
@@ -373,4 +401,180 @@ func TestAnEmptyListIsRefusedFromTheOperandsThatMissedIt(t *testing.T) {
 			t.Errorf("%s: out = %q status = %d, want %q at 1", c.src, out, st, c.want)
 		}
 	}
+}
+
+// The threshold the roads that *run* an entry stop at: the newest entry is
+// reachable, or it is the line this shell is standing on and running it
+// would be running this very command again.
+//
+// Every row below moves one axis and nothing else, and the `-s` road is
+// where the two answers are visible without an editor. The default is in the
+// table beside the written operands on purpose: a threshold that only
+// refused what somebody wrote down would leave `fc -s` on a one-entry list
+// re-running the line it is on, which is the case the refusal exists for.
+func TestTheNewestEntryIsReachableOrIsTheCurrentLine(t *testing.T) {
+	const refusal = "sh: fc: the current history line would run itself again\n"
+	five := func() *fcList {
+		return &fcList{entries: []string{
+			"echo one", "echo two", "echo three", "echo four", "echo five",
+		}}
+	}
+	for _, c := range []struct {
+		newest Answer
+		src    string
+		want   string
+		status int
+	}{
+		{No, "fc -s 5", "echo five\nfive\n", 0},
+		{Yes, "fc -s 5", refusal, 1},
+		// The entry below it is reachable under both, so this is a
+		// threshold and not a road that was switched off.
+		{No, "fc -s 4", "echo four\nfour\n", 0},
+		{Yes, "fc -s 4", "echo four\nfour\n", 0},
+		// And the default lands on it, so an operand nobody wrote is
+		// refused exactly as one somebody did.
+		{No, "fc -s", "echo five\nfive\n", 0},
+		{Yes, "fc -s", refusal, 1},
+	} {
+		out, st := fcThresholdRun(t, five(), c.src, No, No, c.newest)
+		if out != c.want || st != c.status {
+			t.Errorf("%s under %v: out = %q status = %d, want %q at %d",
+				c.src, c.newest, out, st, c.want, c.status)
+		}
+	}
+	// A list of one is where the default and the threshold are the same
+	// entry, which is the row that says the refusal is not about the
+	// operand: there is nothing below the line to fall back to.
+	out, st := fcThresholdRun(t, &fcList{entries: []string{"echo only"}}, "fc -s", Yes, Yes, Yes)
+	if out != refusal || st != 1 {
+		t.Errorf("one entry: out = %q status = %d, want %q at 1", out, st, refusal)
+	}
+	// And it is answered ahead of the range refusal, which the same operand
+	// tells apart: an event past the end of the list is this sentence in the
+	// shell that has the threshold and is named as an event in the one that
+	// only refuses the range.
+	out, st = fcThresholdRun(t, five(), "fc -s 99", Yes, Yes, Yes)
+	if out != refusal || st != 1 {
+		t.Errorf("past the end: out = %q status = %d, want %q at 1", out, st, refusal)
+	}
+	out, st = fcThresholdRun(t, five(), "fc -s 99", Yes, Yes, No)
+	if want := "sh: fc: no such event: 99\n"; out != want || st != 1 {
+		t.Errorf("past the end without the threshold: out = %q status = %d, want %q at 1", out, st, want)
+	}
+}
+
+// The same threshold stops a word operand's search, and that reaches `-l` —
+// so the listing road, which can still *list* the newest entry, cannot
+// *find* it by a prefix.
+//
+// The pair is the assertion. A run that only asked the shell with the
+// threshold would read as a search that works, since `ay` is a perfectly
+// good answer to `a` until you know `az` was there too.
+func TestAWordOperandsSearchStopsAtTheCurrentLine(t *testing.T) {
+	entries := func() *fcList {
+		return &fcList{entries: []string{"ax", "bx", "ay", "by", "az"}}
+	}
+	out, st := fcThresholdRun(t, entries(), "fc -l a", No, No, No)
+	if want := "5\t az\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+	out, st = fcThresholdRun(t, entries(), "fc -l a", No, No, Yes)
+	if want := "3\t ay\n4\t by\n5\t az\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+}
+
+// On the editor road the two ends answer the threshold differently, which is
+// measured and is the one place a single rule would have been wrong: `first`
+// at or past the current line is the refusal, and `last` past it is brought
+// under it with nothing said.
+func TestTheEditorRoadRefusesFirstAndClampsLastAtTheCurrentLine(t *testing.T) {
+	five := func() *fcList {
+		return &fcList{entries: []string{": one", ": two", ": three", ": four", ": five"}}
+	}
+	// `cat` prints the file it is handed, so what the editor saw is in the
+	// output, and the shell then echoes each line back — twice for a line
+	// that made it into the range and never for one that did not.
+	for _, c := range []struct {
+		newest Answer
+		five   int
+	}{{No, 2}, {Yes, 0}} {
+		out, st := fcThresholdRun(t, five(), "fc -e cat 1 5", No, No, c.newest)
+		if got := strings.Count(out, ": five"); got != c.five || st != 0 {
+			t.Errorf("under %v the range held the newest entry %d times, want %d (out = %q, status %d)",
+				c.newest, got, c.five, out, st)
+		}
+		if !strings.Contains(out, ": four") {
+			t.Errorf("under %v the range lost the entry below the line: %q", c.newest, out)
+		}
+	}
+	// And the same number written as `first` is the refusal rather than a
+	// range brought under the line. Asserted in the reading that *keeps* an
+	// out-of-range absolute, because the other one clamps the 5 to the
+	// oldest entry before the threshold is ever consulted — so the pair
+	// below is over the threshold alone and the run is otherwise the same.
+	out, st := fcThresholdRun(t, five(), "fc -e cat 5", Yes, Yes, No)
+	if want := ": five\n: five\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+	out, st = fcThresholdRun(t, five(), "fc -e cat 5", Yes, Yes, Yes)
+	if want := "sh: fc: the current history line would run itself again\n"; out != want || st != 1 {
+		t.Errorf("out = %q status = %d, want %q at 1", out, st, want)
+	}
+}
+
+// An operand's number is the digits at the *front* of the word in both
+// readings, and what may stand in front of those digits is the one thing
+// they disagree about.
+//
+// The first two rows are the shared half and are asserted under both
+// answers, because a fix that only reached the shell with the looser reading
+// would leave `fc -l 2x` refused in the other and look right from either
+// side alone.
+func TestAnOperandsNumberIsReadWithOrWithoutWhatStandsInFrontOfIt(t *testing.T) {
+	const noCommand = "sh: fc: no command found\n"
+	for _, c := range []struct {
+		loose  Answer
+		src    string
+		want   string
+		status int
+	}{
+		// The prefix, which neither shell disputes and no axis governs.
+		{No, "fc -l 2x", "2\t beta\n3\t gamma\n4\t delta\n5\t epsilon\n", 0},
+		{Yes, "fc -l 2x", "2\t beta\n3\t gamma\n4\t delta\n5\t epsilon\n", 0},
+		{No, "fc -l 0x2", "5\t epsilon\n", 0},
+		{Yes, "fc -l 0x2", "5\t epsilon\n", 0},
+		// Whitespace in front of the digits: part of the number, or the
+		// start of a word no entry begins with.
+		{No, "fc -l ' 2'", noCommand, 1},
+		{Yes, "fc -l ' 2'", "2\t beta\n3\t gamma\n4\t delta\n5\t epsilon\n", 0},
+		{No, "fc -l ' -1'", noCommand, 1},
+		{Yes, "fc -l ' -1'", "5\t epsilon\n", 0},
+		// And a leading `+`, which is the same disagreement without any
+		// whitespace in it.
+		{No, "fc -l +3", noCommand, 1},
+		{Yes, "fc -l +3", "3\t gamma\n4\t delta\n5\t epsilon\n", 0},
+		// A word with one of them and no digits behind it is a search in
+		// both, so the looser reading is not "anything goes".
+		{No, "fc -l ' zz'", noCommand, 1},
+		{Yes, "fc -l ' zz'", noCommand, 1},
+	} {
+		out, st := fcLooseRun(t, fcFive(), c.src, c.loose)
+		if out != c.want || st != c.status {
+			t.Errorf("%s under %v: out = %q status = %d, want %q at %d",
+				c.src, c.loose, out, st, c.want, c.status)
+		}
+	}
+}
+
+// fcLooseRun answers whether this shell's `fc` reads an operand's digits past
+// whitespace and a `+`.
+func fcLooseRun(t *testing.T, list *fcList, src string, loose Answer) (string, int) {
+	t.Helper()
+	return run(t, src, func(r *Runner) {
+		list.install(r)
+		sem := *r.Semantics
+		sem.FcNumericOperandSkipsBlanksAndASign = loose
+		r.Semantics = &sem
+	})
 }

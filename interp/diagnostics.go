@@ -6292,6 +6292,15 @@ type Diagnostics struct {
 	// the same list and the same operand. No verbs.
 	FcOutOfRange string
 
+	// FcCurrentLineRecurses is `fc -s` or the editor road given the entry
+	// this shell reads as the line it is running now. A sentence about what
+	// running it would do rather than about an operand, and it names no
+	// operand at all — the same words answer the event written down, the
+	// event past the end of the list and the default on a list too short to
+	// have anything below the threshold. Reached only where
+	// Semantics.FcNewestEntryIsTheCurrentLine is yes.
+	FcCurrentLineRecurses string
+
 	// FcEmptyEdit is what the dialect that complains about an emptied
 	// editor file says. `%[1]s` is the file's name, which is the only thing
 	// in the sentence: zsh writes `read error on /tmp/zsh…`, naming a path

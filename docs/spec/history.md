@@ -807,6 +807,26 @@ status 1, and `true; history -p x; history -s b; history -s c` leaves the list
 empty at status 0 — the operands of a `-s` that found nothing to take are
 dropped, and the mark it never took is still there for the one behind it.
 
+**`-s` and `-p` with no operands are no-ops**, and it is the operand *count*
+that says so rather than emptiness. Measured 2026-09-21 on bash 5.3.20 from a
+script file with `set -o history` written:
+
+| written | the list afterwards |
+| --- | --- |
+| `history -s a` | `a`, and the builtin's own line gone from it |
+| `history -s` | unchanged — **and its own line still in it** |
+| `history -s ''` | an empty entry, and its own line gone |
+| `history -s '   '` | the three spaces, an entry |
+| `history -s --` | unchanged, as no operands: the `--` is the option reader's |
+| `history -p` | nothing printed, own line kept |
+| `history -p ''` | an empty line printed, own line gone |
+
+Both at 0 and with no diagnostic either way. The own line is the half that
+decides where the rule goes: it stands in front of the take above rather than
+inside the store, since a rule written there would have consumed the mark on
+the way to doing nothing — and `history -s` joining no words came to an empty
+entry where bash stores none (#4068).
+
 **HISTSIZE bounds the list and the numbers go on.** `HISTSIZE=2` after three
 commands lists `3 HISTSIZE=2` and `4 history`; `0` keeps nothing, a negative
 value keeps everything. Every entry pushed off a full list moves the numbering
@@ -1226,6 +1246,27 @@ turns whatever order that produced around again.
 
 A word no entry begins with is `fc: no command found` at 1.
 
+**A number is the digits at the front of the word**, and what follows them is
+ignored. Measured 2026-09-21 on a five-entry list, in bash 5.3.20 and in
+zsh 5.9.2 alike: `fc -l 2x` starts at entry 2, `fc -l 3abc` at 3, and
+`fc -l 0x2` is the number **zero** rather than 2 — the reading is base ten, so
+the `x2` is where the digits stopped and not a radix. `fc -l -- -1x` is the
+relative operand `-1` for the same reason.
+
+What may stand in **front** of the digits is where the two shells part, which
+is `FcNumericOperandSkipsBlanksAndASign`. bash wants the sign or the first
+digit at the front of the word; zsh skips leading whitespace and takes a `+`:
+
+| written, five entries | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- |
+| `fc -l ' 2'` | `fc: no command found` at 1 | from entry 2 |
+| `fc -l ' -1'` | the same refusal | the whole list |
+| `fc -l +3` | the same refusal | from entry 3 |
+
+A tab is skipped where a space is. A word with whitespace or a `+` and no
+digits behind it is a search in both, so the looser reading is a reading of a
+number rather than a permission to take anything.
+
 ### The other reading: no current event, and no clamp
 
 Everything above is bash's, and two of its questions have a second answer.
@@ -1291,6 +1332,54 @@ own commands never reach it, so `fc -l` there is `hist: 1-0: invalid range` —
 recorded as a divergence rather than reproduced, as the rest of ksh93's
 history file is.
 
+### The other reading, continued: the newest entry is the line itself
+
+`FcNewestEntryIsTheCurrentLine`. In the shell with no current event *beyond*
+the list, the newest entry **is** the line it is standing on, so the roads
+that run an entry stop below it and say so in words `fc` uses nowhere else.
+Measured 2026-09-21 on the same lists and the same invocation:
+
+| written, five entries | zsh 5.9.2 | bash 5.3.20 |
+| --- | --- | --- |
+| `fc -s 5` | `current history line would recurse endlessly, aborted` at 1 | runs entry 5 |
+| `fc -s 99` | the same sentence, not `no such event: 99` | runs entry 5 |
+| `fc 99` | the same, on the editor road | runs entry 5 |
+| `fc -s`, on a list of one | the same | runs the one entry |
+| `fc -s`, on an empty list | the same | — |
+| `fc -s`, on two or more | runs the **oldest** entry, silently | runs the newest |
+| `fc -s 4` | runs entry 4 | runs entry 4 |
+
+The last two rows are what make it a threshold rather than a default gone
+missing: with something below the line there is an entry to run and nothing is
+said.
+
+It is asked **before** the range refusal above, which `fc -s 99` is the
+discriminating case for: the same operand is this sentence here and
+`no such event: 99` in a shell that refuses a range and reaches its newest
+entry.
+
+The threshold reaches three more places, each measured:
+
+- a range's far end is brought **under** it with nothing said, where `first`
+  is refused — `fc -e ed 1 5`, `fc -e ed 1 99` and `fc -e ed 4 99` each edit
+  up to entry 4, and `fc -e ed 5 5` is the refusal;
+- a word operand's search stops below it, on **every** road including `-l` —
+  on `ax bx ay by az`, `fc -l a` writes `ay` onwards and not `az` alone;
+- and `-l` itself still **lists** the newest entry: `fc -l 5` writes it, so
+  the threshold is the operand's rather than the listing's.
+
+`Diagnostics.FcCurrentLineRecurses` is the wording, and it is a fourth field
+beside `FcNoSuchEvent`, `FcNoEventsInRange` and `FcNoCommandFound` because it
+is a sentence about what running the line would do rather than about an
+operand that named nothing — one sentence answering the event written down,
+the event past the end of the list and the default alike.
+
+One neighboring refusal is measured and deliberately **not** modeled yet: on
+the editor road this shell answers `fc -e ed 3 1` and `fc -r -e ed 1 3` with
+`history events can't be executed backwards, aborted` at 1, where `fc -l 3 1`
+lists backwards at 0 and bash edits backwards at 0. Written down here so the
+next pass does not re-measure it.
+
 ### `-s`, and the entry it leaves behind
 
 `fc -s [pat=rep …] [event]` runs an entry again. The line goes to standard
@@ -1320,11 +1409,18 @@ the same operand:
 
 `fc -l -2`, `fc -s -1`, `fc -0` and `fc -s -0` are all **operands**, and the
 option reader used to take them: the line was `fc: -2: invalid option` where
-bash lists two entries. The rule is the whole word — a dash and then nothing
-but digits — and it is exact rather than lenient: `fc -s -1x` is
-`fc: -1: invalid option` on bash too, so a word mixing digits with letters is
-a bundle whose first letter is not a letter. `fc -s -- -42` reaches the same
-place through the ordinary separator.
+bash lists two entries. bash's rule is the whole word — a dash and then
+nothing but digits — and it is exact rather than lenient: `fc -s -1x` is
+`fc: -1: invalid option` and the usage block at 2 there, so a word mixing
+digits with letters is a bundle whose first letter is not a letter.
+`fc -s -- -42` reaches the same place through the ordinary separator.
+
+zsh ends them one character earlier, which is `FcOptionsEndAtADashAndADigit`:
+a dash and a digit is an operand however the word goes on, so `fc -l -1x` is
+the operand `-1x` there and writes the whole list at 0. Both shells then
+*read* that operand the same way — the prefix rule above — so the
+disagreement is about where the operand list starts and not about what the
+operand means.
 
 `interp.Runner.builtinOptionsCountingBack` is where that lives, and it is a
 scan for where the options **end** rather than a second option reader: the

@@ -6209,6 +6209,13 @@ type Diagnostics struct {
 	// the same list and the same operand. No verbs.
 	FcOutOfRange string
 
+	// FcEmptyEdit is what the dialect that complains about an emptied
+	// editor file says. `%[1]s` is the file's name, which is the only thing
+	// in the sentence: zsh writes `read error on /tmp/zsh…`, naming a path
+	// it chose and the person never saw. Reached only where
+	// Semantics.FcEmptyEditIsAnError is yes.
+	FcEmptyEdit string
+
 	// OptionListingHeader opens `set -o`'s table where the dialect has one:
 	// dash and ksh93 write "Current option settings" first.
 	OptionListingHeader string

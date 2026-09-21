@@ -22942,6 +22942,42 @@ the shape #3179 established.
 Has `fc` report the event it cannot find — zsh; bash and dash answer a
 script with silence at 0.
 
+**`FcEmptyEditIsAnError`** — bash no · dash no · ksh93 no · zsh yes
+
+`fc` with neither `-l` nor `-s` writes the chosen entries to a temporary
+file, runs an editor over it, and runs what comes back. What it does when
+the editor left the file **empty** — quit without saving, or truncated —
+is the one place the two columns that have the construct disagree.
+Measured 2026-09-21 under `env -i` with a scratch `HOME` and `TMPDIR`,
+the editor a stand-in that truncates the file it is handed:
+
+| | what it writes | status | how far it unwinds |
+| --- | --- | --- | --- |
+| bash 5.3.20 | nothing | 0 | nothing: the next command runs |
+| zsh 5.9.2 | `read error on /tmp/zsh…` | 1 | ends the shell |
+
+zsh's is fatal and not merely a failure, measured three ways: `fc -e trunc
+\|\| print caught` prints nothing, a function around it does not catch it
+either, and inside `( )` it ends the subshell alone while the parent
+carries on at 1. That is the same unwinding `NULLCMD=; >f` has in this
+dialect, so it is [`Runner.fatal`] rather than a status.
+
+ksh93 cannot be asked at all: nothing fills its list in a shell nobody is
+sitting at, so `fc` there is `hist: 0-0: invalid range` before an editor
+is chosen. dash and BusyBox ash have no `fc` builtin — both resolve an
+external — so the base answer covers them.
+
+The rest of the editor road is **not** an axis, because both columns agree
+on all of it. The editor is the `-e` operand, then `FCEDIT`, then
+`EDITOR`, then `vi` — not the `ed` the manuals suggest, and `ed` only
+while bash's `set -o posix` is on, an option zsh does not have. The word
+is split and the file appended after the split, so `fc -e 'cat -n'` runs
+`cat -n <file>`. The entries go in unnumbered, one per line. The edited
+text is echoed to standard **error** and then run, and it takes the `fc`
+call's own place in the history list. An editor that exits non-zero, and
+one that cannot be run at all, are both 1 with nothing echoed and nothing
+run.
+
 **OPTIND is 1 before `getopts` has ever run.** Not an axis — every shell
 in the panel initializes it at startup rather than when the builtin first
 executes (`getopts/optind-starts-at-one`), so a script that reads it

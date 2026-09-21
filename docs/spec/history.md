@@ -783,9 +783,44 @@ of its own to drop, and the entry before it survives.
 **HISTSIZE bounds the list and the numbers go on.** `HISTSIZE=2` after three
 commands lists `3 HISTSIZE=2` and `4 history`; `0` keeps nothing, a negative
 value keeps everything. Every entry pushed off a full list moves the numbering
-on by one; a list already longer than a newly assigned size loses the excess at
-once and moves on by one fewer than it lost; an entry read from a file moves
-nothing. `!n` and `history -d n` both take the number as it is listed.
+on by one, and an entry read from a file moves nothing. `!n` and `history -d n`
+both take the number as it is listed.
+
+**Assigning HISTSIZE trims a list already longer than it, where it stands, and
+that is a second rule rather than the same one seen late** (#4031). Measured
+2026-09-21 on bash 5.3.20 with `HISTIGNORE` keeping the reader's own lines out,
+so that what the assignment did is what the next listing shows:
+
+| written | listed |
+| --- | --- |
+| three entries, `HISTSIZE=2` | `1 b` · `2 c` |
+| nine entries, `HISTSIZE=5` | `4 e` … `8 i` |
+| nine entries, `HISTSIZE=8` | `1 b` … `8 i` |
+| nine, `HISTSIZE=5` then `=2` | `3 h` · `4 i` |
+| `HISTSIZE=3`, five entries, then `=2` | `1 d` · `2 e` |
+| two entries, `=0`, `=9`, one more | `2 c` |
+
+**The numbering it leaves is absolute rather than a step**: the oldest entry a
+trim keeps is numbered by *how many it dropped*, whatever the numbers were
+before — the fifth row comes off a list the insert path had already numbered
+3, 4, 5. So the two routes to a two-entry list are told apart by their numbers,
+since the same pair reached by an insert keeps the ones it had. `HISTSIZE=0` is
+that rule at its limit and not a case of its own: the list empties and the
+count still says where the numbering resumes.
+
+A list **at** the new size or under it is left alone, numbers included. So is
+one whose value is not a count — `-1`, an empty value, `abc`, `2x`, `0x2` and
+a number too large to hold — where whitespace around the digits is not part of
+the value (`" 2 "` and a leading tab trim as `2` does) and a sign is read
+(`+2` is two, `-0` is zero). Every way of writing the assignment does it:
+`export`, `declare`, `typeset -i`, a command prefix, `((HISTSIZE=2))`,
+`printf -v`, and `local`, whose trim outlives the call because the list is the
+shell's rather than the frame's.
+
+zsh 5.9.2 and ksh93u+ trim on the assignment too and **keep the numbers** —
+zsh over `print -s a b c` with `HISTSIZE=2` lists `2 b`, `3 c` where bash
+lists `1 b`, `2 c` — so the numbering is a per-dialect answer rather than a
+property of the trim (#4043).
 
 **The builtin's three refusals are three different costs**, measured
 2026-09-18 with `; echo a=$?` behind the call and `echo b=$?` on the next line

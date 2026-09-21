@@ -900,7 +900,64 @@ constrain what the prompt may draw:
 - What a not-yet-ready segment draws is a behavior question to settle,
   not to invent. Options are: nothing, the previous value marked stale,
   or a placeholder. Settle it against a measured prompt, and write the
-  answer here.
+  answer here. *(Settled 2026-09-21 — see* Async segments*: nothing, and
+  the source decides.)*
+
+### Built, 2026-09-21
+
+`internal/repostatus` is the capability and `internal/fswatch` is the
+watch under it. A cache per session, an answer per repository **root**
+rather than per directory — moving between two directories of one
+repository does not change the answer and must not cost a second read.
+
+**The watch is written rather than imported**, and that is the answer to
+the dependency question #1314 raised. There is no filesystem watch in the
+standard library, and the obvious package would be this module's *first*
+runtime dependency, against an `internal/depsurface` list that is empty
+and an argument that rests on its being empty. So the watch is `kqueue`
+and `inotify` through `syscall`, waited on with `internal/fdset`'s own
+`select` wrapper — the same habit `internal/eastasian` and
+`internal/unorm` already follow, and the same one `AGENTS.md` states as
+"generate, do not import". Nothing about the dependency surface changes.
+
+It is small because the question is small: nothing reports *what*
+changed, which is where a general watcher's complexity lives, and the one
+caller's question is "is what I computed still good".
+
+**Where a watch cannot be had, the degradation is stated.** Every lookup
+re-stats the two files that would change the answer — the repository
+directory, whose time moves when a branch is renamed into place, and the
+head itself — so a change is seen at the **next prompt** rather than
+immediately, and `prompt show` names the reason. One prompt late is a
+different thing from wrong, and the difference is what the report is for.
+
+**Nothing is published for a change that draws the same.** A repository
+writes an index, a log and a lock constantly and almost none of it moves
+what a prompt says, so the background refresh compares the answer and
+publishes only on a difference.
+
+**What is read**, and it is two files and a few stats: the head — a
+branch, or the short commit of a detached one — and whether an operation
+is half-finished, which is the state a person most needs a prompt to tell
+them about because it is the one they can forget they are in. A rebase
+keeps the branch it is putting back, because a prompt that said
+"detached" through one would be telling a person they had lost their
+place. A `.git` that is a *file* is followed, which is how a linked
+working tree and a submodule say where their repository is.
+
+**What is not read: the counts.** Modified, untracked, ahead and behind
+need the index-versus-working-tree walk this section already calls the
+expensive half. A prompt with no scanner attached shows the branch and no
+counts, which is what this document already said it would do — and the
+scanner is the first real job for the plugin segment role, because a
+walk of that size belongs outside this process and arrives asynchronously
+or not at all.
+
+**The budget**, in a benchmark rather than a test as this document asks:
+`BenchmarkStatusFromTheCache`. A warm lookup is the upward walk, two
+stats and a map lookup — measured at **4.9 µs** on the maintainer's
+machine, against the ~50 ms the issue states as the budget. The cold case
+is that plus one small read, once per repository per session.
 
 ## Async segments
 

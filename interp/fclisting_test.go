@@ -578,3 +578,187 @@ func fcLooseRun(t *testing.T, list *fcList, src string, loose Answer) (string, i
 		r.Semantics = &sem
 	})
 }
+
+// An operand written as the empty string is a **search**, not an absent
+// operand — and every entry begins with the empty string, so it names the
+// newest entry the search is allowed to reach.
+//
+// One rule in both readings, which is why no axis is moved below: what
+// differs is only where the search stops, and that is the threshold above.
+// The absent operand is asserted beside each empty one, because the bug this
+// holds off is exactly the two being read alike — a run that only checked
+// `fc -l ”` against a listing could not tell "the empty word searched" from
+// "the empty word was ignored" on a short list.
+func TestAnEmptyOperandIsASearchAndNotAnAbsentOne(t *testing.T) {
+	const whole = "1\t alpha\n2\t beta\n3\t gamma\n4\t delta\n5\t epsilon\n"
+	for _, c := range []struct{ src, want string }{
+		// `first` written empty is the newest entry; absent it is the
+		// sixteen-back window, which on five entries is the whole list.
+		{"fc -l ''", "5\t epsilon\n"},
+		{"fc -l", whole},
+		// `last` written empty ends the range at that same entry; absent
+		// it ends at cur-1, which here is the same place — so the pair
+		// that separates them is the one above and not this one.
+		{"fc -l 2 ''", "2\t beta\n3\t gamma\n4\t delta\n5\t epsilon\n"},
+		{"fc -l '' ''", "5\t epsilon\n"},
+	} {
+		out, st := fcThresholdRun(t, fcFive(), c.src, No, No, No)
+		if out != c.want || st != 0 {
+			t.Errorf("%s: out = %q status = %d, want %q at 0", c.src, out, st, c.want)
+		}
+	}
+	// And where the search stops below the current line, the empty word
+	// stops with it — the same one rule, read through the other threshold.
+	out, st := fcThresholdRun(t, fcFive(), "fc -l ''", No, No, Yes)
+	if want := "4\t delta\n5\t epsilon\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+}
+
+// The `-s` road reads its operand through a second splitter, which had the
+// same bug for the same reason: an empty word and no word at all were one
+// state there too.
+func TestAnEmptyOperandUnderRerunIsASearch(t *testing.T) {
+	five := func() *fcList {
+		return &fcList{entries: []string{
+			"echo one", "echo two", "echo three", "echo four", "echo five",
+		}}
+	}
+	// Written empty: the newest entry. Absent: the same here, which is why
+	// the row below it — a substitution in front of the empty word — is the
+	// one that separates the two states.
+	out, st := fcThresholdRun(t, five(), "fc -s ''", No, No, No)
+	if want := "echo five\nfive\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+	// A `pat=rep` operand is not the command word, so the empty word behind
+	// it is still the operand and the substitution still applies to what it
+	// found.
+	out, st = fcThresholdRun(t, five(), "fc -s five=FIVE ''", No, No, No)
+	if want := "echo FIVE\nFIVE\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+	// And the same word where the search stops below the current line.
+	out, st = fcThresholdRun(t, five(), "fc -s ''", No, No, Yes)
+	if want := "echo four\nfour\n"; out != want || st != 0 {
+		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
+	}
+}
+
+// A range whose entries would run newest first: run in that order, or
+// refused.
+//
+// The judgement is on the order they would **run** in, which `-r` is what
+// separates — so the four rows below are two pairs rather than four cases,
+// and a rule written on the two operands passes the first pair and fails the
+// second.
+func TestARangeThatWouldRunBackwardsIsRunOrRefused(t *testing.T) {
+	const refusal = "sh: fc: a range of history events cannot be run newest first\n"
+	five := func() *fcList {
+		return &fcList{entries: []string{": one", ": two", ": three", ": four", ": five"}}
+	}
+	for _, c := range []struct {
+		refuse Answer
+		src    string
+		file   string
+		status int
+	}{
+		// Written backwards, with nothing turning it around.
+		{No, "fc -e cat 3 1", ": three\n: two\n: one\n", 0},
+		{Yes, "fc -e cat 3 1", "", 1},
+		// Written forwards and turned around by `-r`, which is the same
+		// run order reached the other way.
+		{No, "fc -r -e cat 1 3", ": three\n: two\n: one\n", 0},
+		{Yes, "fc -r -e cat 1 3", "", 1},
+		// Written backwards and turned around again, which runs forwards
+		// and is refused by neither.
+		{No, "fc -r -e cat 3 1", ": one\n: two\n: three\n", 0},
+		{Yes, "fc -r -e cat 3 1", ": one\n: two\n: three\n", 0},
+		// A single event is not a backwards range under either.
+		{No, "fc -e cat 2 2", ": two\n", 0},
+		{Yes, "fc -e cat 2 2", ": two\n", 0},
+	} {
+		out, st := fcBackwardsRun(t, five(), c.src, c.refuse)
+		if c.file == "" {
+			if out != refusal || st != c.status {
+				t.Errorf("%s under %v: out = %q status = %d, want %q at %d",
+					c.src, c.refuse, out, st, refusal, c.status)
+			}
+			continue
+		}
+		// `cat` prints the file, and the shell then echoes each line back,
+		// so what the editor saw is the front of the output.
+		if !strings.HasPrefix(out, c.file) || st != c.status {
+			t.Errorf("%s under %v: out = %q status = %d, want it to open with %q at %d",
+				c.src, c.refuse, out, st, c.file, c.status)
+		}
+	}
+}
+
+// fcBackwardsRun answers whether this shell runs a range newest first.
+func fcBackwardsRun(t *testing.T, list *fcList, src string, refuse Answer) (string, int) {
+	t.Helper()
+	return run(t, src, func(r *Runner) {
+		list.install(r)
+		sem := *r.Semantics
+		sem.FcBackwardsRangeIsAnError = refuse
+		r.Semantics = &sem
+	})
+}
+
+// The three refusals the editor road can give, in the order a matrix put
+// them in: both ends past the current line is the recursion sentence, one
+// end past it is the backwards one, and both ends below the list is the
+// range one.
+//
+// They are asserted together because each was measured by the case that
+// tells it from the one beside it — `5 5` against `5 4` is the whole of why
+// the recursion check reads both ends rather than `first`.
+func TestTheEditorRoadsThreeRefusalsAreOrdered(t *testing.T) {
+	five := func() *fcList {
+		return &fcList{entries: []string{": one", ": two", ": three", ": four", ": five"}}
+	}
+	for _, c := range []struct{ src, want string }{
+		{"fc -e cat 5 5", "sh: fc: the current history line would run itself again\n"},
+		{"fc -e cat 6 7", "sh: fc: the current history line would run itself again\n"},
+		{"fc -e cat 7 6", "sh: fc: the current history line would run itself again\n"},
+		{"fc -e cat 5 4", "sh: fc: a range of history events cannot be run newest first\n"},
+		{"fc -e cat 99 1", "sh: fc: a range of history events cannot be run newest first\n"},
+		{"fc -e cat 0 0", "sh: fc: no such event: 0\n"},
+	} {
+		out, st := run(t, c.src, func(r *Runner) {
+			list := five()
+			list.install(r)
+			sem := *r.Semantics
+			sem.FcEventOutOfRangeIsAnError = Yes
+			sem.FcRelativeEventNeedsTheShellsOwnEventNumber = Yes
+			sem.FcNewestEntryIsTheCurrentLine = Yes
+			sem.FcBackwardsRangeIsAnError = Yes
+			r.Semantics = &sem
+		})
+		if out != c.want || st != 1 {
+			t.Errorf("%s: out = %q status = %d, want %q at 1", c.src, out, st, c.want)
+		}
+	}
+	// And the range that reaches the newest entry only through `-r`, which
+	// is the pair that says the bound is the operand's place and not the
+	// range's: `4 5` edits one entry and `-r 5 4` edits two.
+	for _, c := range []struct{ src, file string }{
+		{"fc -e cat 4 5", ": four\n"},
+		{"fc -r -e cat 5 4", ": four\n: five\n"},
+	} {
+		out, st := run(t, c.src, func(r *Runner) {
+			list := five()
+			list.install(r)
+			sem := *r.Semantics
+			sem.FcEventOutOfRangeIsAnError = Yes
+			sem.FcRelativeEventNeedsTheShellsOwnEventNumber = Yes
+			sem.FcNewestEntryIsTheCurrentLine = Yes
+			sem.FcBackwardsRangeIsAnError = Yes
+			r.Semantics = &sem
+		})
+		if !strings.HasPrefix(out, c.file) || st != 0 {
+			t.Errorf("%s: out = %q status = %d, want it to open with %q at 0", c.src, out, st, c.file)
+		}
+	}
+}

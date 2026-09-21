@@ -16929,6 +16929,38 @@ type Semantics struct {
 	// (TestTheNewestEntryIsReachableOrIsTheCurrentLine).
 	FcNewestEntryIsTheCurrentLine Answer
 
+	// FcBackwardsRangeIsAnError refuses an `fc` editor road whose entries
+	// would run newest first, rather than running them that way — zsh; bash
+	// edits and runs a descending range at 0.
+	//
+	// The judgement is on the order the entries would **run** in and not on
+	// the two operands, which `-r` separates. Measured 2026-09-21, zsh 5.9.2
+	// on a script file under `env -i` with a scratch `HOME`, five entries
+	// planted with `print -s`, the editor a stand-in printing the file it
+	// was handed:
+	//
+	//	fc -e ed 3 1     `history events can't be executed backwards, aborted`
+	//	fc -e ed 4 2     the same
+	//	fc -r -e ed 1 3  the same — `-r` is applied before the judgement
+	//	fc -r -e ed 3 1  edits 1, 2, 3 at 0
+	//	fc -e ed 2 4     edits 2, 3, 4 at 0
+	//	fc -e ed 4 4     edits 4 at 0 — a single event is not backwards
+	//
+	// It is the **editor road alone**. `fc -l 3 1` and `fc -lr 1 3` each
+	// list backwards at 0 in the same shell, so this is about running
+	// entries and not about a range, and `-s` takes one event and never
+	// reaches it.
+	//
+	// It sits behind FcNewestEntryIsTheCurrentLine's refusal and in front of
+	// the range refusal, which one pair fixes: `fc -e ed 5 5` on five
+	// entries is the recursion sentence and `fc -e ed 5 4` is this one.
+	//
+	// unpinned: never reached from the corpus — `fc` reads a list no corpus
+	// row plants, and the editor road needs a program to stand in for an
+	// editor. interp/fclisting_test.go asserts both answers over the same
+	// list (TestARangeThatWouldRunBackwardsIsRunOrRefused).
+	FcBackwardsRangeIsAnError Answer
+
 	// FcNumericOperandSkipsBlanksAndASign reads an `fc` operand's number
 	// past leading whitespace and a leading `+` — zsh; bash wants the sign
 	// or the first digit at the front of the word.
@@ -23895,6 +23927,10 @@ func PosixSemantics() Semantics {
 		// base reaches the newest entry, which is bash's reading and the
 		// standard's own example.
 		FcNewestEntryIsTheCurrentLine: No,
+		// POSIX has `fc` edit "the commands" a range names and says nothing
+		// about the order they may be given in, so the base runs whichever
+		// order the operands produced — bash's reading.
+		FcBackwardsRangeIsAnError: No,
 		// And the standard says nothing about what may stand in front of an
 		// operand's digits, so the base takes the sign or the first digit at
 		// the front of the word — bash's reading, and the stricter of the

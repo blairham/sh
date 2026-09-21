@@ -342,8 +342,8 @@ type fcEvent struct {
 // anything else is the newest command that *begins* with the word —
 // measured, `fc -l echo\ a` on `echo ax`, `echo bx`, `echo ay` starts at
 // `echo ay`, so it is the newest match and a prefix rather than a substring.
-func (h fcHistory) resolve(spec string, def int) fcEvent {
-	return h.resolveWith(spec, def, def)
+func (h fcHistory) resolve(op fcOperand, def int) fcEvent {
+	return h.resolveWith(op, def, def)
 }
 
 // resolveWith is the same reading with the two fallbacks told apart: what an
@@ -363,10 +363,11 @@ func (h fcHistory) resolve(spec string, def int) fcEvent {
 // So `first` absent is cur-1 and `first` out of range is the oldest, and
 // `last` absent is whatever `first` came to and `last` out of range is cur-1.
 // Four answers out of two operands, and a single `def` can carry two of them.
-func (h fcHistory) resolveWith(spec string, absent, outOfRange int) fcEvent {
-	if spec == "" {
+func (h fcHistory) resolveWith(op fcOperand, absent, outOfRange int) fcEvent {
+	if !op.written {
 		return fcEvent{num: absent, found: true}
 	}
+	spec := op.word
 	if e, ok := h.countedBack(spec); ok {
 		return e
 	}
@@ -603,13 +604,33 @@ func (h fcHistory) span(from, to int, reverse bool) []int {
 	return nums
 }
 
+// fcOperand is one of `fc`'s operands: the word, and whether it was written
+// at all.
+//
+// The two are told apart because an **empty** operand is not an absent one.
+// Measured 2026-09-21 on a five-entry list, in bash 5.3.20 and zsh 5.9.2
+// alike: `fc -l ”` writes the newest entry the shell can reach where `fc -l`
+// writes the default window, `fc -l 2 ”` ends the range at that same entry
+// where `fc -l 2` ends it at cur-1, and `fc -s ”` re-runs it where `fc -s`
+// takes each shell's own default. One rule in both columns and no axis in it:
+// the empty word goes through search, and **every** entry begins with it, so
+// it names the newest one the search is allowed to reach — which is where the
+// two columns then differ, on the threshold the axis above already carries.
+//
+// A single string carried both until #4101, so the absent road answered for
+// the empty word on all four of its defaults.
+type fcOperand struct {
+	word    string
+	written bool
+}
+
 // fcOperands splits the words after the options into `first` and `last`.
-func fcOperands(rest []string) (first, last string) {
+func fcOperands(rest []string) (first, last fcOperand) {
 	if len(rest) > 0 {
-		first = rest[0]
+		first = fcOperand{word: rest[0], written: true}
 	}
 	if len(rest) > 1 {
-		last = rest[1]
+		last = fcOperand{word: rest[1], written: true}
 	}
 	return first, last
 }
@@ -623,14 +644,14 @@ type fcSubstitution struct{ pat, rep string }
 // Every occurrence is replaced and not only the first — measured, `echo aaa`
 // re-run as `fc -s a=x` writes `xxx` — and several substitutions apply in the
 // order they were written, each to what the one before it left.
-func fcRerunOperands(rest []string) (subs []fcSubstitution, spec string) {
+func fcRerunOperands(rest []string) (subs []fcSubstitution, spec fcOperand) {
 	for _, word := range rest {
-		if i := strings.IndexByte(word, '='); i > 0 && spec == "" {
+		if i := strings.IndexByte(word, '='); i > 0 && !spec.written {
 			subs = append(subs, fcSubstitution{pat: word[:i], rep: word[i+1:]})
 			continue
 		}
-		if spec == "" {
-			spec = word
+		if !spec.written {
+			spec = fcOperand{word: word, written: true}
 		}
 	}
 	return subs, spec
@@ -695,7 +716,7 @@ func (h fcHistory) list(r *Runner, rest []string, bare, reverse bool) int {
 	firstOp, lastOp := fcOperands(rest)
 	from := h.resolve(firstOp, h.defaultFirst())
 	if !from.found {
-		return h.noCommand(r, firstOp)
+		return h.noCommand(r, firstOp.word)
 	}
 	// An absent `last` never falls before `first`: measured, `fc -l -0` on a
 	// list whose newest entry is this very command writes that one entry and
@@ -705,7 +726,7 @@ func (h fcHistory) list(r *Runner, rest []string, bare, reverse bool) int {
 	// running a range backwards from it.
 	to := h.resolve(lastOp, max(h.cur-1, from.num))
 	if !to.found {
-		return h.noCommand(r, lastOp)
+		return h.noCommand(r, lastOp.word)
 	}
 	if h.refuse {
 		// Asked of the range and applied before the clamp, which is the one
@@ -737,7 +758,7 @@ func (h fcHistory) rerun(r *Runner, ctx context.Context, rest []string) int {
 	subs, spec := fcRerunOperands(rest)
 	e := h.resolve(spec, h.oneDefault())
 	if !e.found {
-		return h.noCommand(r, spec)
+		return h.noCommand(r, spec.word)
 	}
 	// Ahead of everything below, because the shell that has this threshold
 	// answers with it whatever else the operand was: the event written down,
@@ -753,7 +774,7 @@ func (h fcHistory) rerun(r *Runner, ctx context.Context, rest []string) int {
 	} else if e.num >= h.cur || h.cur-1 < h.first {
 		// Naming this very command is refused rather than run, which is
 		// what `fc -s -0` is: `-0` counts back none of the way.
-		return h.noCommand(r, spec)
+		return h.noCommand(r, spec.word)
 	}
 	line := h.at(h.clamp(e.num))
 	for _, s := range subs {
@@ -867,6 +888,71 @@ func (h fcHistory) rerun(r *Runner, ctx context.Context, rest []string) int {
 // internal/histjoin's rule, shared with the history gate `driver` reads a
 // script through. bash reaches both through one input stream, so there is
 // one rule and not two.
+// editThreshold applies [Semantics.FcNewestEntryIsTheCurrentLine] to the two
+// ends of an editor road's range, moving them where it brings one in.
+//
+// Three rules, and the order between them is measured rather than derived. A
+// 26-cell matrix over `{1,2,4,5,6,99} x {plain, -r}` on zsh 5.9.2, five
+// entries planted with `print -s`, script file, `env -i` with a scratch
+// `HOME`, the editor a stand-in printing the file it was handed (#4100):
+//
+//   - **Both ends at or past the current line is the recursion refusal**,
+//     and it is asked of the ends as they were written, before anything
+//     below moves them: `fc -e ed 5 5`, `fc -e ed 99 99`, `fc -e ed 6 7` and
+//     `fc -e ed 7 6` are all that sentence, where `fc -e ed 5 4` — one end
+//     inside — is the backwards one. A single operand is both ends, which is
+//     what makes `fc -e ed 5` and `fc -e ed 99` the same answer as `fc -s 5`.
+//   - **Each end is then bounded by its position**, `first` at the current
+//     line and `last` one below it. The asymmetry is one measured pair:
+//     `fc -e ed 4 5` edits entry 4 alone and `fc -r -e ed 5 4` edits 4 and 5,
+//     the same two events named the same two ways. So it is a property of
+//     the operand's place rather than of the range, and the editor road
+//     brings an end in rather than refusing it — `fc -e ed 1 99` edits 1
+//     through 4.
+//   - The **order** of the pair is the third rule and is refuseBackwards'.
+//
+// The other reading has no current line beyond the list, so none of this
+// fires there and bash's answers are unchanged: it edits `1 99` as the whole
+// range and `3 1` backwards at 0.
+func (h fcHistory) editThreshold(r *Runner, from, to *fcEvent) (code int, ok bool) {
+	if !h.newestIsCurrent {
+		return 0, true
+	}
+	if min(from.num, to.num) >= h.currentLine() {
+		return h.refuseTheCurrentLine(r, from.num)
+	}
+	from.num = min(from.num, h.currentLine())
+	to.num = min(to.num, h.reachable())
+	return 0, true
+}
+
+// refuseBackwards is [Semantics.FcBackwardsRangeIsAnError]: a range whose
+// entries would run newest first is refused rather than run that way.
+//
+// The judgement is on the order they would **run** in and not on the two
+// operands, which `-r` is what separates: measured 2026-09-21 on zsh 5.9.2,
+// `fc -e ed 3 1` and `fc -r -e ed 1 3` are both the refusal and
+// `fc -r -e ed 3 1` edits 1, 2, 3 at 0. It is the editor road alone —
+// `fc -l 3 1` and `fc -lr 1 3` each list backwards at 0 in the same shell,
+// so this is about running entries rather than about a range — and `-s`
+// takes one event and never reaches it.
+//
+// bash runs a descending range, which is why this is an axis: `fc -e cat 3 1`
+// there edits and runs 3, 2, 1 at 0.
+func (h fcHistory) refuseBackwards(r *Runner, from, to int, reverse bool) (code int, ok bool) {
+	a, b := from, to
+	if reverse {
+		a, b = b, a
+	}
+	if a <= b || !r.ask(r.sem().FcBackwardsRangeIsAnError,
+		"`fc` asked to run a range of entries newest first") {
+		return 0, true
+	}
+	r.diagf("%s\n", Wording(r.diag().FcBackwardsRange,
+		"fc: a range of history events cannot be run newest first"))
+	return 1, false
+}
+
 func (h fcHistory) edit(r *Runner, ctx context.Context, rest []string, editor string, reverse bool) int {
 	firstOp, lastOp := fcOperands(rest)
 	// An absent `first` is the previous command and an out-of-range absolute
@@ -875,22 +961,19 @@ func (h fcHistory) edit(r *Runner, ctx context.Context, rest []string, editor st
 	// resolveWith for the four measurements.
 	from := h.resolveWith(firstOp, h.oneDefault(), h.first)
 	if !from.found {
-		return h.noCommand(r, firstOp)
+		return h.noCommand(r, firstOp.word)
 	}
 	to := h.resolveWith(lastOp, from.num, h.cur-1)
 	if !to.found {
-		return h.noCommand(r, lastOp)
+		return h.noCommand(r, lastOp.word)
 	}
-	// `first` at or past the current line is refused; `last` past it is
-	// brought under it and nothing is said. Measured 2026-09-21 on zsh
-	// 5.9.2 over five entries: `fc 5` and `fc 5 5` are the refusal, `fc 1 5`
-	// and `fc 1 99` and `fc 4 99` each edit up to entry 4. See
-	// Semantics.FcNewestEntryIsTheCurrentLine.
-	if code, ok := h.refuseTheCurrentLine(r, from.num); !ok {
+	// The threshold, in the order a 26-cell matrix put it in — see
+	// editThreshold, which is where the measurements are.
+	if code, ok := h.editThreshold(r, &from, &to); !ok {
 		return code
 	}
-	if h.newestIsCurrent {
-		to.num = min(to.num, h.reachable())
+	if code, ok := h.refuseBackwards(r, from.num, to.num, reverse); !ok {
+		return code
 	}
 	if h.refuse {
 		// The other reading refuses the range rather than the line it would

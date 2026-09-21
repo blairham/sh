@@ -6899,7 +6899,30 @@ func (p *Parser) ParseArithFor(src string, at Pos) ArithExpr {
 // because resolving a name is the evaluator's job rather than a second round
 // of expansion.
 func (p *Parser) ParseArithExpanded(src string, at Pos) ArithExpr {
-	return p.parseArithIn(src, at, true)
+	return p.parseArithIn(src, at, true, false)
+}
+
+// ParseArithSubscript is ParseArithExpanded for the text between an *index's*
+// brackets, which is a fresh arithmetic read and so takes the dialect's
+// double-quote removal where ParseArithExpanded does not.
+//
+// The two part because the quotes are asked about twice and the answers
+// differ. Measured 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell>
+// f.sh` over a script file with standard input on the null device, against
+// `a=(9 8 7)`:
+//
+//	e='a["1"]'; printf '%s' "$(( $e ))"    bash 5.3.20 8    ksh93u+ 8
+//	e="a['1']"; printf '%s' "$(( $e ))"    bash refuses `'1'` as an operand
+//
+// The brackets came out of a value in both rows, so neither is text bash's
+// removal is otherwise for — and yet the double quotation comes off and the
+// apostrophes do not, which is the removal running over a subscript's text
+// when it is read as an expression rather than word quote removal running
+// over the subscript. A key is the other reading and takes neither: the same
+// brackets on an associative name keep `"q'r'z"` whole, which is what
+// [Parser.ParseArithExpanded]'s own rows are about (#3941).
+func (p *Parser) ParseArithSubscript(src string, at Pos) ArithExpr {
+	return p.parseArithIn(src, at, true, true)
 }
 
 // readsBodyWithItsLine reports whether span is a command substitution whose

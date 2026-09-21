@@ -20,7 +20,7 @@ import "testing"
 // same apostrophes spelled in the re-read text — `g="m[q'r'z]"; $(( $g ))` —
 // are 4 in ksh93u+ and 0 in this column, because a subscript that arrived
 // already expanded is no quoting context in that shell. That is
-// Semantics.LetOperandSubscriptIsAQuotingContext's question reached without
+// Semantics.ArrivedSubscriptIsAQuotingContext's question reached without
 // the builtin, it is measured and filed rather than folded in here, and
 // nothing about it moves with this rule.
 func TestASubscriptReReadOutOfAValueKeepsItsExpansionsQuotes(t *testing.T) {

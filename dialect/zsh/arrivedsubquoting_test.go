@@ -10,8 +10,9 @@ import (
 	"github.com/blairham/sh/interp"
 )
 
-// A `let` operand's subscript is not a quoting context here either, and that
-// is measured rather than inherited from the expression's answer.
+// A subscript whose brackets arrived already word-expanded is not a quoting
+// context here either, and that is measured rather than inherited from the
+// written spelling's answer.
 //
 // Measured 2026-09-20 against zsh 5.9.2 from a script file under
 // `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null device,
@@ -27,10 +28,10 @@ import (
 // two routes cannot part. It is answered rather than left open because an
 // unanswered axis is a refusal, and a reading a dialect cannot reach must not
 // be able to produce one. See
-// interp.Semantics.LetOperandSubscriptIsAQuotingContext (#3871).
-func TestTheLetOperandsSubscriptQuotingIsAnswered(t *testing.T) {
-	if got := zsh.Semantics().LetOperandSubscriptIsAQuotingContext; got != interp.No {
-		t.Errorf("LetOperandSubscriptIsAQuotingContext = %v, want no", got)
+// interp.Semantics.ArrivedSubscriptIsAQuotingContext (#3871).
+func TestTheArrivedSubscriptQuotingIsAnswered(t *testing.T) {
+	if got := zsh.Semantics().ArrivedSubscriptIsAQuotingContext; got != interp.No {
+		t.Errorf("ArrivedSubscriptIsAQuotingContext = %v, want no", got)
 	}
 	// The answer this pin follows, so that a preset moving the reachable one
 	// without the other is what fails rather than a silent split.

@@ -1981,7 +1981,20 @@ func Semantics() interp.Semantics {
 	// ever a quoting context, the builtin route cannot part from the
 	// expression's, and the answer exists so that route cannot reach an
 	// unanswered axis (#3871).
-	s.LetOperandSubscriptIsAQuotingContext = interp.No
+	s.ArrivedSubscriptIsAQuotingContext = interp.No
+	// And an apostrophe written inside a subscript stops nothing here
+	// either: measured 2026-09-20 on 5.9.2 from a script file,
+	// `typeset -A m; kq=q; (( m['$kq'] = 42 ))` stores under `'q'` — the
+	// expansion performed and the apostrophes kept, which is
+	// SubscriptIsAQuotingContext's `no` showing through beside this one
+	// (#3942).
+	s.WrittenSubscriptQuotationStopsItsExpansion = interp.No
+	// And the expansion being performed does not end the key: measured in
+	// the same run, `(( m[q'$kq'z] = 42 ))` is `q'q'z` here — every
+	// character kept, quotation included — where ksh93u+ 2012-08-01 keeps
+	// only `q`. A reading of its own rather than a pin: this column
+	// performs the expansion, so it reaches the question (#3968).
+	s.SubscriptQuotationEndsTheKey = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

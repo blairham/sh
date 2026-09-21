@@ -715,7 +715,11 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	marked := r.arithSubscriptRead(x.SubMarked, subscriptAsExpression)
 	sub := stripArithValueMarks(marked)
 	p := syntax.NewParser("", r.dialect())
-	tree := p.ParseArithExpanded(marked, syntax.Pos{})
+	// The subscript's own read rather than the expression's: a double
+	// quotation between an index's brackets comes off wherever the brackets
+	// came from, which is not true of the expression around them. See
+	// syntax.Parser.ParseArithSubscript.
+	tree := p.ParseArithSubscript(marked, syntax.Pos{})
 	err := unmarkArithFailure(p.Err())
 	if err == nil && tree == nil {
 		// Brackets holding only space, which is the shape `a[$w]` takes once
@@ -3141,7 +3145,10 @@ func (r *Runner) arithTreeRead(text string) (syntax.ArithExpr, error) {
 	p := syntax.NewParser("", r.dialect())
 	out := p.ParseArithExpanded(text, syntax.Pos{})
 	if err := p.Err(); err != nil {
-		return nil, err
+		// Worded about the text a script wrote: the marks are this
+		// implementation's bookkeeping and a refusal carrying one prints a
+		// stray NUL into a log. See stripArithValueMarks.
+		return nil, unmarkArithFailure(err)
 	}
 	return out, nil
 }
@@ -3245,7 +3252,27 @@ func (r *Runner) expandArithText(text string) string {
 	// same expression, so a dialect that has not chosen has nothing to be
 	// refused over.
 	asked, protect := false, false
-	out, _, _ := r.expandRawSpansWith(text, func(literal bool, part string) string {
+	// Read before anything is expanded, because an expansion an apostrophe
+	// stops must not be performed at all. See Runner.stoppedArithSpans.
+	spans, read := r.rawSpans(text)
+	if !read {
+		return text
+	}
+	// Where each subscript the *source* wrote lands in the output, collected
+	// here because nothing in the finished text says which brackets were the
+	// script's: an arrived bracket is the same byte. One reader wants it —
+	// see Runner.truncateSubscriptsAtAQuotedExpansion — and it is recorded
+	// on the way past rather than searched for afterwards.
+	var subs []sourceSubscript
+	// at is where the next part lands in the output, open where the subscript
+	// being scanned began, quoteOpen where the apostrophe it is inside began,
+	// and runs the quoted runs that have performed an expansion so far.
+	at, open, quoteOpen := 0, -1, -1
+	var runs []int
+	out, _, _ := r.expandSpansWith(spans, func(literal bool, part string) (wrote string) {
+		// The *written* length, since a marked part is longer than the one
+		// that came in and every later extent is measured from the output.
+		defer func() { at += len(wrote) }()
 		if literal {
 			// Quoting and all: a `]` the source wrote inside a quotation
 			// closes no subscript, so it must not close one for the depth
@@ -3253,20 +3280,49 @@ func (r *Runner) expandArithText(text string) string {
 			// quotation a span opens can hold the next expansion. The
 			// parser draws the same boundary with the same type.
 			for i := 0; i < len(part); i++ {
+				was := scan.Quote()
 				switch b := part[i]; {
 				case quoted && scan.Content(b):
+					if was == 0 && scan.Quote() == '\'' {
+						quoteOpen = at + i
+					}
 				case b == '[':
 					scan.Depth++
+					if scan.Depth == 1 {
+						open, runs = at+i+1, nil
+					}
 				case b == ']':
 					scan.Depth--
 					if scan.Depth < 0 {
 						balanced = false
 					}
+					if scan.Depth == 0 && open >= 0 {
+						subs = append(subs, sourceSubscript{open, at + i, runs})
+						open, runs = -1, nil
+					}
 				}
 			}
 			return part
 		}
-		if scan.Depth <= 0 || !strings.ContainsAny(part, arithValueMarked) {
+		if scan.Depth <= 0 {
+			// Outside any bracket the source wrote, so a bracket in here is
+			// the value's own and the subscript it opens arrived whole. Its
+			// quoting is the one thing that needs saying; the bracket itself
+			// must keep delimiting and a `$` must keep waiting, which is why
+			// nothing else here is touched. See
+			// Runner.markArrivedSubscriptQuoting.
+			return r.markArrivedSubscriptQuoting(part)
+		}
+		if scan.Quote() == '\'' && quoteOpen >= open && open >= 0 &&
+			(len(runs) == 0 || runs[len(runs)-1] != quoteOpen) {
+			// An expansion performed inside an apostrophe run the source
+			// wrote, which is what one dialect ends the key at. Recorded
+			// rather than looked for afterwards: an expansion whose result
+			// holds no syntax character is marked nowhere, so the finished
+			// text cannot say a run performed one.
+			runs = append(runs, quoteOpen)
+		}
+		if !strings.ContainsAny(part, arithValueMarked) {
 			return part
 		}
 		if !asked {
@@ -3278,7 +3334,13 @@ func (r *Runner) expandArithText(text string) string {
 			return part
 		}
 		return markArithValue(part)
-	})
+	}, r.stoppedArithSpans(text, spans))
+	if scan.Depth == 0 && balanced && !scan.Unclosed() {
+		// A key that ends at the run which performed an expansion in it,
+		// where the dialect says so. Over the subscripts a script wrote and
+		// nothing else, which is what the extents above are for.
+		out = r.truncateSubscriptsAtAQuotedExpansion(out, subs)
+	}
 	if scan.Depth != 0 || !balanced || scan.Unclosed() {
 		// The source never closed the bracket it opened, so there is no
 		// bracket of the script's for a value's to be distinguished from —
@@ -3514,36 +3576,11 @@ func (r *Runner) arithAssocKey(sub string) string {
 	if !quoted {
 		return syntax.UnmarkArithValue(sub)
 	}
-	if r.ask(r.subscriptQuotingAxis(),
+	if r.ask(r.sem().SubscriptIsAQuotingContext,
 		"an array subscript written inside arithmetic being a quoting context") {
 		return bare
 	}
 	return syntax.UnmarkArithValue(sub)
-}
-
-// subscriptQuotingAxis is which of the two quoting answers this subscript
-// stands under: the expression's, or the one the `let` builtin gives the same
-// brackets.
-//
-// Two axes rather than one, because two real shells part here and agree one
-// construct over. `(( ++a["k"] ))` is the bare key in bash and in ksh93
-// alike, and `let '++a["k"]'` is the bare key in bash and the three
-// characters `"k"` in ksh93 — same text, same table, different answer. See
-// Semantics.LetOperandSubscriptIsAQuotingContext for the rows, and for why
-// zsh's answer there is a pin.
-//
-// Read off the builtin that is running, which is how `let`'s other
-// departures from the arithmetic command are already told apart —
-// Runner.refuseReadonlyInACommand and
-// Runner.storeWholeArraySubscriptThroughAReference both spell it out the
-// same way. Nothing else can stand in for it: the text a `let` operand
-// carries is the text `(( … ))` carries, quote characters and all, and by
-// the time a subscript is read the two are indistinguishable.
-func (r *Runner) subscriptQuotingAxis() Answer {
-	if r.inBuiltin == "let" {
-		return r.sem().LetOperandSubscriptIsAQuotingContext
-	}
-	return r.sem().SubscriptIsAQuotingContext
 }
 
 // subscriptQuoteRemoval performs quote removal on an arithmetic subscript and

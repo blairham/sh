@@ -46,6 +46,13 @@ func quotedKeyAxis(a Answer, stopped bool) func(*Runner) {
 		// axis. See Semantics.ArithSubscriptRereadsItsExpandedText.
 		s.ArithSubscriptRereadsItsExpandedText = No
 		s.SubscriptIsAQuotingContext = Yes
+		// And an arrived subscript is one too, which is not a free choice:
+		// a quotation that never closes is only a quotation at all where
+		// the arrived text is read as quoting. Answer it no and there is no
+		// quotation here to leave unclosed, so every row below would find
+		// the element for a reason that is not this axis. See
+		// Semantics.ArrivedSubscriptIsAQuotingContext.
+		s.ArrivedSubscriptIsAQuotingContext = Yes
 		r.Semantics = &s
 		if stopped {
 			r.SetExpandsAnOperandsSubscriptAgain(false)
@@ -167,7 +174,7 @@ func TestAnUnansweredArithmeticSubscriptQuotationIsRefusedByName(t *testing.T) {
 // the refusal is asserted, because which element the two closed quotes name
 // is a second question and a second axis — the `let` route carries no marks,
 // so whether quote removal takes them off is
-// Semantics.LetOperandSubscriptIsAQuotingContext, pinned in
+// Semantics.ArrivedSubscriptIsAQuotingContext, pinned in
 // letoperandsubscriptquoting_test.go — and neither reading is moved by this
 // axis in either direction.
 func TestAQuotationTheKeyClosesIsNotRefused(t *testing.T) {

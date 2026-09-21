@@ -10,21 +10,26 @@ import (
 	. "github.com/blairham/sh/interp"
 )
 
-// Whether quote removal runs over an associative subscript written inside a
-// `let` operand, which is a second question from the one the same brackets
-// pose inside `(( … ))`: one column removes the quoting in both places and
-// another removes it only in the expression, so the identical text names two
-// different keys. See Semantics.LetOperandSubscriptIsAQuotingContext.
+// Whether quote removal runs over an associative subscript whose brackets
+// arrived already word-expanded, which is a second question from the one the
+// same brackets pose when a script writes them inside `(( … ))`: one column
+// removes the quoting in both places and another removes it only where the
+// brackets are the source's, so the identical text names two different keys.
+// See Semantics.ArrivedSubscriptIsAQuotingContext.
+//
+// Two constructs reach it and the axis is read from the text rather than from
+// either of them — a builtin operand, and an expression whose subscript came
+// out of a value — so both routes are driven here.
 //
 // Tests name axes and wordings, never shells.
 
 // letQuotingAxis answers the two quoting axes independently, so a probe can
 // say which of them decided the key it reached.
-func letQuotingAxis(inLet, inArith Answer) func(*Runner) {
+func letQuotingAxis(arrived, written Answer) func(*Runner) {
 	return func(r *Runner) {
 		s := *r.Semantics
-		s.LetOperandSubscriptIsAQuotingContext = inLet
-		s.SubscriptIsAQuotingContext = inArith
+		s.ArrivedSubscriptIsAQuotingContext = arrived
+		s.SubscriptIsAQuotingContext = written
 		r.Semantics = &s
 	}
 }
@@ -173,5 +178,75 @@ func TestASubscriptWithNoQuotingAsksNeitherQuotingAxis(t *testing.T) {
 	out, st := runGrammar(t, src, quotedKeyGrammar, letQuotingAxis(Unspecified, Unspecified))
 	if out != "[2]" || st != 0 {
 		t.Errorf("%q (status %d), want %q at 0", out, st, "[2]")
+	}
+}
+
+// The second route to the same axis: the brackets came out of a **value**,
+// with no builtin in sight.
+//
+// This is the discriminating half of the axis's scope. A reading taken from
+// which construct asked — the builtin's name — and a reading taken from where
+// the bracketed text came from agree on every probe that drives only `let`,
+// so a test that stopped there could not tell one from the other.
+func TestAnArrivedSubscriptsQuotingIsTheAxisWhateverBroughtIt(t *testing.T) {
+	// The table holds one element under the bare key and one under the same
+	// key with its apostrophes, both stored through a value so the two
+	// spellings stay put while the axis moves. The subscript under test
+	// arrives whole, in `$e`.
+	const src = `typeset -A a; a[qrz]=1; q="q'r'z"; a[$q]=2; e="a[q'r'z]"; ` +
+		`(( ++$e )); printf '[%s][%s]' "${a[qrz]}" "${a[$q]}"`
+	for _, tc := range []struct {
+		name string
+		axis Answer
+		want string
+	}{
+		// Quote removal ran over the arrived brackets, so they named the
+		// bare key and it is the one that moved.
+		{"a quoting context", Yes, "[2][2]"},
+		// Taken as written, so the five characters between the brackets are
+		// the key and the quoted element is the one that moved.
+		{"taken as written", No, "[1][3]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, src, quotedKeyGrammar, letQuotingAxis(tc.axis, Yes))
+			if out != tc.want || st != 0 {
+				t.Errorf("%q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The control beside it: the same five characters in the same brackets, this
+// time the source's own, answer the *other* axis and do not move with this
+// one.
+func TestASourcesOwnBracketsDoNotTakeTheArrivedAnswer(t *testing.T) {
+	const src = `typeset -A a; a[qrz]=1; q="q'r'z"; a[$q]=2; ` +
+		`(( ++a[q'r'z] )); printf '[%s][%s]' "${a[qrz]}" "${a[$q]}"`
+	for _, axis := range []Answer{Yes, No} {
+		out, st := runGrammar(t, src, quotedKeyGrammar, letQuotingAxis(axis, Yes))
+		if out != "[2][2]" || st != 0 {
+			t.Errorf("arrived %v: %q (status %d), want %q at 0", axis, out, st, "[2][2]")
+		}
+	}
+}
+
+// An arrived subscript that still holds an expansion has its quoting removed
+// under either answer, because performing the expansion is what removes it.
+//
+// The row that separates the two readings the axis could have had: "an
+// arrived subscript is never a quoting context" and "quote removal on one
+// happens as part of performing an expansion in it" agree everywhere except
+// here.
+func TestAnArrivedSubscriptStillHoldingAnExpansionIsRemovedEitherWay(t *testing.T) {
+	// The expansion is outside the apostrophes, because one *inside* them is
+	// stopped rather than performed — that is the neighboring axis and it is
+	// what the last probe in this file holds still.
+	const src = `typeset -A a; a[qrz]=1; q="qr'z'"; a[$q]=2; r=r; e="a[q\$r'z']"; ` +
+		`(( ++$e )); printf '[%s][%s]' "${a[qrz]}" "${a[$q]}"`
+	for _, axis := range []Answer{Yes, No} {
+		out, st := runGrammar(t, src, quotedKeyGrammar, letQuotingAxis(axis, Yes))
+		if out != "[2][2]" || st != 0 {
+			t.Errorf("arrived %v: %q (status %d), want %q at 0", axis, out, st, "[2][2]")
+		}
 	}
 }

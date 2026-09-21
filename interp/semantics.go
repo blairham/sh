@@ -17524,55 +17524,170 @@ type Semantics struct {
 	// remainder.
 	ArithSubscriptQuotationMustClose Answer
 
-	// LetOperandSubscriptIsAQuotingContext runs quote removal over an
-	// associative subscript written inside a `let` operand, as
-	// SubscriptIsAQuotingContext does for the same brackets inside
-	// `(( … ))`: bash. ksh93 takes a `let` operand's subscript exactly as
-	// written — every quote character and every backslash in it is a
-	// character of the key — while its `(( … ))` removes them.
+	// ArrivedSubscriptIsAQuotingContext runs quote removal over an
+	// associative subscript whose **brackets arrived already
+	// word-expanded**, as SubscriptIsAQuotingContext does for the same
+	// brackets a script wrote inside `(( … ))`: bash. ksh93 takes an
+	// arrived subscript exactly as written — every quote character and
+	// every backslash in it is a character of the key — while its `(( … ))`
+	// removes them.
 	//
 	// So this is not SubscriptIsAQuotingContext asked twice. That axis is
 	// **yes in both bash and ksh93**, and the two columns agree on
-	// `(( ++a["k"] ))`; they part on the identical text reached through the
-	// builtin. Measured 2026-09-20 from script files under
-	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null
-	// device, over `typeset -A a; a[k]=1; a['"k"']=2`, reading back both
-	// keys afterwards:
+	// `(( ++a["k"] ))`; they part on the identical text once it has been
+	// through a word expansion. Measured 2026-09-20, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C <shell> f.sh` over a script file with
+	// standard input on the null device, storing through the subscript and
+	// then listing the key the table ended up holding — `typeset -A m`, and
+	// the bracketed text reached three ways:
 	//
-	//	                     bash 5.3.20  ksh93u+  zsh 5.9.2
-	//	(( ++a["k"] ))       k=2          k=2      k=1, '"k"'=2
-	//	let '++a["k"]'       k=2          k=1      k=1, '"k"'=2
-	//	let '++a[\k]'        k=2          k=1      k=1
+	//	text        written           let 'm[…] = 42'   e='m[…]'; (( $e = 42 ))
+	//	            bash  ksh  zsh    bash  ksh   zsh   bash  ksh    zsh
+	//	q'r'z       qrz   qrz  q'r'z  qrz   q'r'z q'r'z qrz   q'r'z  q'r'z
+	//	'q'         q     q    'q'    q     'q'   'q'   q     'q'    'q'
+	//	a\c         ac    ac   a\c    ac    a\c   a\c   ac    a\c    a\c
+	//	"k"         k     k    "k"    k     "k"   "k"   k     "k"    "k"
 	//
-	// Row one is the control that says this is a second question and not
-	// the first one misanswered, and row three says what ksh93 keeps: the
-	// backslash as well as the quote, so it is quote removal that is not
-	// run there rather than one character being spared.
+	// The **written** block is the control and it is what says this is a
+	// second question rather than the first one misanswered: bash and ksh93
+	// agree there, on every row. The other two blocks are the same
+	// characters in the same brackets, reached once the text has been
+	// through a word expansion — a builtin's operand, or a value whose
+	// brackets came with it — and ksh93 keeps every one of them.
 	//
-	// The operand is single-quoted in the rows above so the shell's own
-	// word expansion hands the builtin the brackets a script wrote. The
-	// shape a script meets instead is a value carrying the quote —
-	// `k="q'r'z"; let "++a[$k]"` — where the same difference decides the
-	// key, because a `let` operand is word-expanded before the builtin sees
-	// it and nothing in it carries syntax.ArithValueMark by then. bash
-	// removes the two apostrophes and increments a key that is not there;
-	// ksh93 and zsh keep them and increment the element the script stored
-	// (#3871).
+	// **Whichever construct brought it**, which is what makes it one axis
+	// and not two. `let` and `$(( $e ))` are the same reading, row for row,
+	// and nothing about the builtin decides it: the discriminator is where
+	// the bracketed text came from. That is why it is read from the text
+	// itself rather than from `r.inBuiltin` — see
+	// Runner.markArrivedSubscriptQuoting, which is the one place this is
+	// asked (#3917).
+	//
+	// **Only where no expansion is performed in the subscript at this
+	// reading**, and that is measured rather than a simplification. An
+	// arrived subscript that still holds one — `'$kq'`, `"$kq"` — has its
+	// quoting removed in ksh93 exactly as bash removes it, with `kq=q`:
+	//
+	//	text        bash 5.3.20  ksh93u+  zsh 5.9.2
+	//	'$kq'       $kq          $kq      'q'
+	//	"$kq"       q            q        "q"
+	//	$kq'r'      qr           qr       q'r'
+	//	"q'$kq'z"   q'q'z        q'q'z    "q'q'z"
+	//
+	// So the rule ksh93 follows is that quote removal on an arrived
+	// subscript happens **as part of performing an expansion in it** and
+	// not otherwise, and the marks are how the two are told apart: a
+	// subscript still holding an expansion is unmarked before it is read
+	// again, so it reaches the word reading with its quoting intact.
 	//
 	// zsh's answer is the same **no**, and it is a pin rather than a
 	// reading of its own: SubscriptIsAQuotingContext is already no there,
 	// so no subscript of that preset is ever a quoting context and the two
-	// routes cannot part. It is answered so that the builtin route cannot
-	// reach an unanswered axis.
+	// routes cannot part. It is answered so that the arrived route cannot
+	// reach an unanswered axis, and it is never asked, because a dialect
+	// whose subscript is no quoting context has no quoting to keep.
 	//
 	// bash 3.2.57 has no associative array, and dash 0.5.12 and BusyBox ash
-	// 1.37.0 have neither arrays nor `let`, so three of the seven columns
+	// 1.37.0 have no array of either kind, so three of the seven columns
 	// cannot be asked.
 	//
 	// Only an **associative** name puts the question. An indexed subscript
 	// is read as arithmetic rather than as a key, and `b=(10 20 30); let
 	// 'b["1"] = 9'` writes element one in bash and in ksh93 alike.
-	LetOperandSubscriptIsAQuotingContext Answer
+	ArrivedSubscriptIsAQuotingContext Answer
+
+	// WrittenSubscriptQuotationStopsItsExpansion leaves an expansion an
+	// apostrophe holds unperformed, where the apostrophe was **written in
+	// the source** between a subscript's brackets: bash. ksh93 and zsh
+	// perform it and remove or keep the apostrophes by their own answer to
+	// SubscriptIsAQuotingContext.
+	//
+	// Measured 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> f.sh`
+	// over a script file with standard input on the null device, storing
+	// through the subscript and then listing the key the table ended up
+	// holding — `typeset -A m; kq=q`, then one store:
+	//
+	//	written                 bash 5.3.20  ksh93u+  zsh 5.9.2
+	//	(( m['$kq'] = 42 ))     $kq          q        'q'
+	//	(( m["$kq"] = 42 ))     q            q        "q"
+	//	(( m[$kq] = 42 ))       q            q        q
+	//	(( m["'$kq'"] = 42 ))   'q'          'q'      "'q'"
+	//
+	// Rows two and three are the controls and they are what make this one
+	// question rather than two: a double quotation performs what it holds in
+	// every column, and an unquoted expansion is performed in every column,
+	// so the split is the apostrophe alone. Row four is the second control
+	// and it says the rule is about *which* quotation rather than about
+	// being quoted at all — an apostrophe inside a double quotation stops
+	// nothing, in the one column that stops anything.
+	//
+	// **Not SubscriptIsAQuotingContext**, which is yes in bash and ksh93
+	// alike: the same apostrophes reached through a subscript that arrived
+	// already word-expanded stop the expansion in *both* those columns —
+	// `e="m['\$kq']"; (( $e = 42 ))` is the key `$kq` in each — and the
+	// columns part only on the spelling a script wrote. So a written
+	// quotation and an arrived one are two answers to two questions, and
+	// this is the first of them (#3942, #3918).
+	//
+	// **The expansion is not performed**, rather than performed and
+	// discarded, which is measurable and not only tidy: a `$( )` in there is
+	// a command that does not run. That is why it is decided from the spans
+	// before any of them is expanded — see Runner.stoppedArithSpans.
+	//
+	// bash 3.2.57 has no associative array, and dash 0.5.12 and BusyBox ash
+	// 1.37.0 have no array of either kind, so three of the seven columns
+	// cannot be asked.
+	WrittenSubscriptQuotationStopsItsExpansion Answer
+
+	// SubscriptQuotationEndsTheKey ends an associative key at the
+	// apostrophe-quoted run that performed an expansion in it, dropping
+	// whatever a script wrote after that run: ksh93.
+	//
+	// It is the other half of what a column that *performs* the expansion
+	// an apostrophe holds does with the text around it, so it only ever
+	// arises where WrittenSubscriptQuotationStopsItsExpansion is no. bash
+	// does not perform that expansion at all and zsh performs it and keeps
+	// every character, so both keep the whole subscript.
+	//
+	// Measured 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> f.sh`
+	// over a script file with standard input on the null device, storing
+	// through the subscript and listing the key the table ended up holding —
+	// `typeset -A m; kq=q` and one store:
+	//
+	//	written         bash 5.3.20  ksh93u+    zsh 5.9.2
+	//	m['$kq']        $kq          q          'q'
+	//	m['$kq'z]       $kqz         (empty)    'q'z
+	//	m[q'$kq'z]      q$kqz        q          q'q'z
+	//	m[q'$kq']       q$kq         qq         q'q'
+	//	m['$kq'$kq]     $kqq         (empty)    'q'q
+	//	m[$kq'$kq']     q$kq         qq         q'q'
+	//	m['$kq'z'$kq']  $kqz$kq      q          'q'z'q'
+	//	m[a'$kq'b'$kq'c] a$kqb$kqc   a          a'q'b'q'c
+	//
+	// Three controls say what it is not. A run with **no expansion** in it
+	// is not one of these — `m['q'z]` is `qz` in every column — so it is the
+	// performing and not the quotation. A run inside a **double quotation**
+	// is not one either — `m["'$kq'"]` is `'q'` there, with nothing dropped
+	// — so the apostrophes have to be quotation in their own right. And a
+	// subscript that **arrived** already word-expanded is untouched:
+	// `e="m['\$kq'z]"; (( $e = 42 ))` is the key `$kqz` in that column as
+	// well as in bash, because the apostrophes stop the expansion there and
+	// there is no expansion performed for a key to end at.
+	//
+	// The rows part on *where* the last such run sits, which is why the rule
+	// is not "drop everything after the first quotation": the run's own value
+	// is part of the key where it ends the subscript and is dropped where a
+	// script wrote anything after it, and the text in front of it is read by
+	// the same rule again. `m['$kq'z'$kq']` is the row that needs all three.
+	//
+	// It reaches an **indexed** subscript too, by reaching the text before
+	// anything reads it: `b=(10 20 30); i=1; (( b['$i'x] = 9 ))` writes
+	// element *zero* there, the brackets having been left holding nothing.
+	//
+	// bash 3.2.57 has no associative array, and dash 0.5.12 and BusyBox ash
+	// 1.37.0 have no array of either kind, so three of the seven columns
+	// cannot be asked.
+	SubscriptQuotationEndsTheKey Answer
 
 	// SubstringRangeQuotesPatternCharacters protects the pattern
 	// metacharacters in a substring's offset and length before the range is
@@ -23200,11 +23315,18 @@ func PosixSemantics() Semantics {
 		// columns that read the giving-up scan's text as a key. bash is the
 		// column that overrides it.
 		ArithSubscriptQuotationMustClose: No,
-		// The standard has neither arrays nor `let`, so there is no key here
-		// to take quotes off. This follows the two columns that read a `let`
-		// operand's subscript as written; bash is the column that overrides
-		// it.
-		LetOperandSubscriptIsAQuotingContext: No,
+		// The standard has no arrays, so there is no key here to take quotes
+		// off. This follows the two columns that read an arrived subscript
+		// as written; bash is the column that overrides it.
+		ArrivedSubscriptIsAQuotingContext: No,
+		// The standard has no arrays, so no subscript here holds a
+		// quotation. This follows the two columns that perform what one
+		// holds; bash is the column that overrides it.
+		WrittenSubscriptQuotationStopsItsExpansion: No,
+		// The standard has no arrays, so no key here can end early. This
+		// follows the two columns that keep the whole subscript; ksh93 is
+		// the column that overrides it.
+		SubscriptQuotationEndsTheKey: No,
 		// The standard has no substrings, so this follows the three columns
 		// that have one and evaluate the range they were given. ksh93 is the
 		// column that overrides it.

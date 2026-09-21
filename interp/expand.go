@@ -5779,11 +5779,28 @@ func (r *Runner) expandRawSpans(text string) (out, head string, ok bool) {
 // part in order, with whether the span it came from was literal, and returns
 // what to write. See expandArithText, the one caller that passes one.
 func (r *Runner) expandRawSpansWith(text string, hook func(literal bool, part string) string) (out, head string, ok bool) {
-	var b, h strings.Builder
 	spans, ok := r.rawSpans(text)
 	if !ok {
 		return "", "", false
 	}
+	return r.expandSpansWith(spans, hook, nil)
+}
+
+// expandSpansWith is that walk over spans somebody else has already read, and
+// with a second hook that can hand back a span's text *instead of running it*.
+//
+// The split exists for one caller and for one reason: an expansion a quotation
+// stops must not be performed at all. Deciding that needs the spans before any
+// of them has run — the quotation is bytes of a literal span and the expansion
+// it holds is the span after it — and a hook called with a result is a hook
+// called too late, because running the substitution *is* the side effect. See
+// Runner.expandArithText and Semantics.WrittenSubscriptQuotationStopsItsExpansion.
+//
+// raw is indexed by span so that a caller can answer from the positions it
+// worked the protection out from; nil means nothing is protected, which is
+// every caller but that one.
+func (r *Runner) expandSpansWith(spans []syntax.Span, hook func(literal bool, part string) string, raw func(i int) (string, bool)) (out, head string, ok bool) {
+	var b, h strings.Builder
 	// Whether an expansion had already failed before this text, which is not
 	// this text's doing — the same comparison expandWord makes, and for the
 	// same reason.
@@ -5797,9 +5814,16 @@ func (r *Runner) expandRawSpansWith(text string, hook func(literal bool, part st
 	// the same handoff a word goes through. splitNever: a here-document's
 	// body is one blob of input rather than fields, in every shell in the
 	// panel, so the splitting axis has nothing to ask.
-	for _, s := range spans {
+	for i, s := range spans {
 		if stopped() {
 			return b.String(), h.String(), false
+		}
+		if raw != nil {
+			if text, protected := raw(i); protected {
+				b.WriteString(text)
+				literal = false
+				continue
+			}
 		}
 		// head is false, and it is the belt to the quoting's braces: a
 		// here-document's spans are marked double-quoted — which is what

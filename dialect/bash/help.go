@@ -183,7 +183,7 @@ func helpTopics(r *interp.Runner) map[string]string {
 		topics[name] = synopsis
 	}
 	for name, line := range builtinHelp() {
-		if _, ok := r.Builtin(name); !ok {
+		if !r.KnownBuiltin(name) {
 			// A builtin another dialect took away. Documenting it would be
 			// documenting a shell this is not.
 			continue
@@ -191,6 +191,31 @@ func helpTopics(r *interp.Runner) map[string]string {
 		topics[name] = strings.TrimPrefix(line, name+": ")
 	}
 	return topics
+}
+
+// disabledTopics are the topics `enable -n` has switched off.
+//
+// A switched-off builtin is **still a topic**, which is the whole reason the
+// gate above asks [interp.Runner.KnownBuiltin] rather than whether the word
+// would find a builtin today. Measured 2026-09-21 on bash 5.3.20: after
+// `enable -n kill`, `help -s kill` still writes the synopsis at 0 and the
+// listing still carries a `kill` cell — with a `*` in front of it, which is
+// what the listing's own header sentence is about. Reading it the other way
+// took the topic out of the table altogether, so the listing lost a row and
+// every row after it moved.
+//
+// It is the one state a topic has, so it is a set rather than a flag on the
+// synopsis: nothing else about the entry changes.
+func disabledTopics(r *interp.Runner) map[string]bool {
+	off := r.DisabledBuiltins()
+	if len(off) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(off))
+	for _, name := range off {
+		set[name] = true
+	}
+	return set
 }
 
 // biHelp is the builtin.
@@ -374,17 +399,37 @@ func writeHelpListing(r *interp.Runner, topics map[string]string) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	off := disabledTopics(r)
 
 	half := helpListingWidth(r) / 2
 	rows := (len(names) + 1) / 2
 	for row := 0; row < rows; row++ {
-		line := " " + helpCell(topics[names[row]], half-2)
+		left := helpCell(topics[names[row]], half-2)
+		line := helpMark(off, names[row]) + left
 		if right := row + rows; right < len(names) {
-			line += strings.Repeat(" ", half-2-len(helpCell(topics[names[row]], half-2))) +
-				"  " + helpCell(topics[names[right]], half-3)
+			line += strings.Repeat(" ", half-2-len(left)) +
+				" " + helpMark(off, names[right]) + helpCell(topics[names[right]], half-3)
 		}
 		_, _ = fmt.Fprintf(r.Out(), "%s\n", line)
 	}
+}
+
+// helpMark is the one character in front of a cell: `*` for a topic `enable
+// -n` has switched off, and a space for every other.
+//
+// It is what the listing's header sentence describes, and it is a **column
+// of its own** rather than something prepended to the text. Measured
+// 2026-09-21 on bash 5.3.20 at COLUMNS 40 and 80 with `.` switched off: the
+// left cell's mark takes the single space every row opens with, the right
+// cell's takes the second of the two spaces that separate the columns, and
+// the cell itself is cut to exactly the width it would have had. A marker
+// written into the text would push a synopsis one character further into
+// its own truncation.
+func helpMark(off map[string]bool, name string) string {
+	if off[name] {
+		return "*"
+	}
+	return " "
 }
 
 // helpCell is one synopsis in a column, with `>` where the cell ran out.

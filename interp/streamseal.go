@@ -14,8 +14,6 @@ package interp
 // cover it either. So a `<(cmd)` written on the script's own line is never
 // waited for, and anything it writes to the shell's standard error reached
 // the embedder's io.Writer with **no happens-before edge to Run returning**.
-// A background job left running at the end is the same hole by a different
-// road.
 //
 // lockedWriter serializes the shell's own writers against each other and says
 // nothing about a reader outside the runner. In a shell binary both ends are
@@ -64,6 +62,27 @@ package interp
 // A write still in flight at the seal is covered by the first of those: the
 // seal waits on the lock the write is holding.
 //
+// # Bodies only, and that boundary is a measurement too
+//
+// **It is over a substitution's body and nothing else.** The first version of
+// this sealed the streams outright, and CI said no: a background job writes
+// to the caller's stream after the run returns as well, and
+// TestTheHelperReadsTheBufferOnlyOnceTheJobsHaveStoppedWriting read back
+// `done` without `from-the-job`. That test is right and the blanket seal was
+// wrong, because the two cases differ in the one way that decides this —
+// **a background job is joinable and a substitution's body is not.** An
+// embedder walks Runner.Jobs() and calls Job.Wait(), which is a channel close
+// and so an edge of its own; the interp tests' own `settle` helper is exactly
+// that, and it is why a job's late output is expected rather than a hazard.
+// A `<(cmd)` body has no such handle anywhere in the API — not in Jobs(), not
+// through `wait`, not through anything a caller can hold. So the seal is over
+// the writers handed to bodies, which is precisely the set with no join. A
+// coprocess and a pipeline element are on the job's side of that line.
+//
+// bodyWriter is what marks one, and such a writer is a *sibling* of the
+// shell's rather than a layer over it: the same lock and the same
+// destination, sealable where the shell's own is not.
+//
 // **A stream that is an *os.File is not sealed, because it is not wrapped.**
 // lockWriter leaves a file alone — the kernel is already the guard — so a
 // shell binary, whose streams are os.Stdout and os.Stderr, behaves exactly as
@@ -92,8 +111,9 @@ package interp
 // the caller handing the streams *back*, which is the same boundary in the
 // other direction, so both entry points clear it.
 
-// sealStreams hands the caller's streams back: nothing this shell started may
-// write to them again, and everything it already wrote is visible.
+// sealStreams hands the caller's streams back: no substitution body this
+// shell started may write to them again, and everything one already wrote is
+// visible.
 //
 // Only on the shell at the top. A clone reaches Finish too — a subshell, a
 // command substitution's body, a `<(cmd)` body — and it shares these locks
@@ -119,5 +139,5 @@ func (r *Runner) setStreamSeal(sealed bool) {
 	}
 	r.streams.write.Lock()
 	defer r.streams.write.Unlock()
-	r.streams.sealed = sealed
+	r.streams.bodiesSealed = sealed
 }

@@ -47,18 +47,47 @@ import (
 type lockedWriter struct {
 	locks *streamLocks
 	w     io.Writer
+	// body marks a writer handed to a *substitution's body*, which is the
+	// one thing writing to a caller's stream that the caller has no way to
+	// join. It is what the seal is over; see streamseal.go, and bodyWriter
+	// below for how one is made.
+	body bool
 }
 
 func (l *lockedWriter) Write(p []byte) (int, error) {
 	l.locks.write.Lock()
 	defer l.locks.write.Unlock()
-	if l.locks.sealed {
-		// The shell this stream was handed to has finished and the caller
-		// has it back. See streamseal.go for why the bytes are dropped here
-		// rather than written, and why the answer is a success.
+	if l.body && l.locks.bodiesSealed {
+		// The shell that named this substitution has finished and the caller
+		// has its stream back. See streamseal.go for why the bytes are
+		// dropped here rather than written, and why the answer is a success.
 		return len(p), nil
 	}
 	return l.w.Write(p)
+}
+
+// bodyWriter is a guarded stream again, marked as a substitution body's.
+//
+// A **sibling** of the guard rather than a layer over it, sharing its lock
+// and its destination: the body and the shell that named it must still
+// exclude each other, and only one of the two may be sealed. Taking them
+// apart is what the seal needs, and what it costs is the identity
+// substRunner used to rely on — the shell's writer and the body's were one
+// object so the guard would be recognized rather than taken twice. guardedBy
+// answers that by the lock rather than by the object, so the two can differ.
+//
+// A stream that is not guarded is handed back as it is. An *os.File is the
+// case that matters: the kernel already serializes it, so lockWriter never
+// wrapped it, and a body writing to a descriptor after the shell has gone is
+// exactly what the panel does. Anything else unguarded is a stream nothing
+// here wrapped either, and wrapping it only to seal it would put a lock on a
+// stream the shell had decided not to guard.
+func bodyWriter(w io.Writer) io.Writer {
+	l, ok := w.(*lockedWriter)
+	if !ok || l.body {
+		return w
+	}
+	return &lockedWriter{locks: l.locks, w: l.w, body: true}
 }
 
 // streamLocks is the locks over the streams the shell was handed, shared by a
@@ -69,9 +98,10 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 // lockedWriter, where the reason is the whole point of the type.
 type streamLocks struct {
 	write, in sync.Mutex
-	// sealed says the shell has handed these streams back to whoever gave
-	// them to it, and is read and written under write. See streamseal.go.
-	sealed bool
+	// bodiesSealed says the shell has handed these streams back to whoever
+	// gave them to it, so a substitution's body may no longer write to one.
+	// Read and written under write. See streamseal.go.
+	bodiesSealed bool
 }
 
 // lockedReader serializes reads from a stream the shell was handed, for the

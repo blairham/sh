@@ -36,11 +36,11 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	if !ok {
 		return nil
 	}
+	// A coprocess is a subshell too, and startBeside is where it ends — see
+	// concurrentcommand.go, which ends every command run beside the shell in
+	// one place rather than once per caller.
 	job, err := r.startCoproc(ctx, name, func(sub *Runner) error {
-		err := sub.command(ctx, c.Cmd)
-		// A coprocess is a subshell too, and this is where it ends.
-		sub.endSubshell(ctx)
-		return err
+		return sub.command(ctx, c.Cmd)
 	})
 	if err != nil || job == nil {
 		return err
@@ -153,6 +153,14 @@ func (r *Runner) coprocStmt(ctx context.Context, st *syntax.Stmt) error {
 // command's named streams, the far ends handed to a background job and the
 // near ends kept in the shell's own descriptor table.
 //
+// The far ends and the goroutine are [Runner.startBeside]'s, which is the same
+// arrangement with the pipe-making left out — see concurrentcommand.go, where
+// that half was lifted out so a dialect could reach it with a pseudo-terminal
+// instead. What stays here is everything about *pipes* and everything about a
+// coprocess being a **job**, which a command started through the public seam
+// is not: measured 2026-09-20 on zsh 5.9.2, `zpty -b P 'sleep 2'` leaves
+// `jobs` empty and `$!` at 0.
+//
 // It returns the job so the caller that has a name to publish can read its
 // process, and a nil job with a nil error when the pipes could not be made —
 // which is already reported and already status 1.
@@ -174,76 +182,14 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 		return nil, nil
 	}
 
-	job := &Job{
-		done:     make(chan struct{}),
-		ready:    make(chan struct{}),
-		started:  make(chan struct{}),
-		stopNote: make(chan struct{}),
-		// And the number a script names it by where the body never reaches a
-		// program, which `NAME_PID` reads as `$!` does. See jobident.go.
-		ident: r.inventJobIdent(),
-		// The body itself, released when its pid settles either way — the
-		// same count `&` keeps, for the same reason. See Job.expectPart.
-		parts:   1,
-		Command: name,
-	}
-	sub := r.clone()
-	sub.inheritJobs(jobBoundaryBackground)
-	sub.retagTrapBoundary(trapContextBackground)
-	sub.bg = job
-	sub.inJob = job
-	sub.part = nil
-	// Its own copy of the descriptor table, as a background job takes: a
-	// coprocess runs beside the shell that started it, and a descriptor the
-	// script parks and then drops is dropped underneath it otherwise. See
-	// ownDescriptors.
-	releaseFds := sub.ownDescriptors()
-	sub.Stdin = childIn
-	sub.Stdout = childOut
-	// Only the two named streams go through the pipes; complaints still
-	// reach whoever is watching the shell.
-	//
-	// Both sides, as background() and procSub do, and for the reason
-	// background() states: the shell carries straight on while the coprocess
-	// runs, so a lock only the coprocess takes excludes nothing — and a child
-	// the shell runs next is copied into the caller's writer by os/exec on a
-	// goroutine with no share of it. See #735.
-	sub.Stderr = r.lockedStderr()
-	r.Stderr, r.Stdout = sub.Stderr, r.lockedStdout()
-	// Handed over however the goroutine ended, for the reason a background
-	// job's status is: the shell waits below for this job to report its
-	// process, and a coprocess whose ends stayed open is a shell reading a
-	// stream that will never finish. An interpreter bug here has to cost the
-	// coprocess and no more.
-	status := internalErrorStatus
-	r.spawn(func() {
-		if err := run(sub); err != nil {
-			sub.diagf("%v\n", err)
-		}
-		status = sub.status
-	}, func() {
-		releaseFds()
-		job.finish(status)
-		// **Finished first, and then the ends.** Closing them is what turns
-		// the command's exit into end-of-file for whoever reads NAME[0], so
-		// in this order a script that has read the near end dry *knows* the
-		// job has ended — the reaping has something to find, and the notice
-		// the next reap point delivers is not a race the script has to win.
-		// See retireCoproc, which gates on exactly this, and
-		// TestASubshellDeliversTheReapNotice, which is written against the
-		// invariant: with the closes first, that test was asserting a reap
-		// whose precondition nothing in the script had established, and it
-		// lost under load on the runner three times in a day (#2661).
-		//
-		// Nothing reaches these two but this goroutine — ownDescriptors was
-		// taken before either was installed, so releaseFds does not hold
-		// them — and the shell's own ends are not these, so a `wait` that
-		// returns a moment earlier has nothing it can race with here.
-		_ = childIn.Close()
-		_ = childOut.Close()
-	})
-	<-job.ready
-	<-job.started
+	// Only the two named streams go through the pipes; complaints still reach
+	// whoever is watching the shell, which is what a nil Err means to the
+	// seam. The ordering of the closes, the descriptor table the body gets
+	// and the handing over of the status are all startBeside's now, and the
+	// reasons are written down there.
+	job := r.startBeside(ctx, name,
+		concurrentStreams{in: childIn, out: childOut, closeEnds: true}, true,
+		func(_ context.Context, sub *Runner) error { return run(sub) })
 
 	r.addJob(job)
 	r.setLastJob(job)

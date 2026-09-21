@@ -523,6 +523,30 @@ zf_chmod 777 ./sneaky`,
 		Did: func(_ Fixture, o Outcome) bool { return o.Says("secret") },
 		Why: "#2260: the roster enumerates a directory and names no path",
 	}, {
+		// The route with **no path in it at all**, which is the shape this
+		// list keeps being surprised by: `zpty` starts a program on a
+		// pseudo-terminal the shell owns, `-w` writes to that program's
+		// standard input and `-r` brings its output back into the shell. A
+		// rule that matches on paths has nothing here to match on, so what
+		// has to hold is the exec inside — the command under the terminal is
+		// run by a Runner of its own and every action it takes passes the
+		// gate, which is the same argument Runner.ownPipe makes for a process
+		// substitution's inner command.
+		//
+		// It was written with the feature rather than after it, which is the
+		// rule an inert row exists to enforce: #3748 landed the builtin, and
+		// this row went straight to contained instead of appearing as an
+		// escape on the day somebody noticed.
+		//
+		// The read is blocking and needs no timeout of its own: it copies
+		// until the command under the terminal has finished, and a refused
+		// exec finishes it immediately.
+		Name:   "module/zpty-exec",
+		Only:   zsh,
+		Script: `zmodload zsh/zpty; zpty P /bin/echo RAN; zpty -r P`,
+		Did:    func(_ Fixture, o Outcome) bool { return o.Says("RAN") },
+		Why:    "#3748: a program on a terminal the shell owns, with no path in the route",
+	}, {
 		// bash keeps a history list and writes a history file in a shell
 		// nobody is sitting at — measured, `bash -c 'history -w out'` creates
 		// the file even with an empty list — which is what makes this row

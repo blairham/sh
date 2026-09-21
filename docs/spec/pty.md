@@ -1,22 +1,20 @@
 # Running a command under a pseudo-terminal
 
-`zsh/zpty` is the one module of #1320's table this shell still refuses.
-It offers one builtin, `zpty`, which runs a command with a
-pseudo-terminal of its own so that a program insisting on an interactive
-environment can be driven from a script.
+`zsh/zpty` was the last module of #1320's table this shell refused. It
+offers one builtin, `zpty`, which runs a command with a pseudo-terminal
+of its own so that a program insisting on an interactive environment can
+be driven from a script.
 
-This is the **spec half** of that work. Nothing here is implemented yet;
-it is written down first because `CLEANROOM.md` says the wall comes
-before the code, and because the demand for the module turned out to be
-different from what the issue that asked for it recorded — see *What the
-module is worth here*, and then *The one thing that has to be decided
-before any of it is written*, which are the two parts to read before
-starting.
+**It is implemented as of #3748**, on a new public seam on the substrate
+— see *The decision that had to be made first*, which is the part to read
+before the rest. This document stays what it was: a behavioral contract
+measured from the reference and written in our own words. What changed is
+that there is now code answering to it.
 
-Sources: `zshmodules(1)`, section *THE ZSH/ZPTY MODULE*, and an oracle
-run against zsh 5.9.2 (`/opt/homebrew/bin/zsh`, aarch64-apple-darwin25)
-on 2026-09-19, extended on 2026-09-20 with the probes that carry that
-date. Every table below is the first run unless it says otherwise.
+Sources: `zshmodules(1)`, section *THE ZSH/ZPTY MODULE*, and oracle runs
+against zsh 5.9.2 (`/opt/homebrew/bin/zsh`, aarch64-apple-darwin25) on
+2026-09-19, 2026-09-20 and 2026-09-21. Every table below is the first run
+unless it says otherwise.
 
 ## The forms
 
@@ -139,20 +137,34 @@ is written against, which reads until `*\0*\0`.
 | state | status |
 | --- | --- |
 | something was read | 0 |
-| nothing could be read | non-zero |
 | nothing, **because the command has finished** | 2 |
-| non-blocking, nothing available yet | 1 |
+| nothing, and the command is still running | 1 |
 
-Measured, and the 1-versus-2 split is finer than the manual's sentence:
+**Re-measured 2026-09-21, and this table replaces a finer split that does
+not reproduce.** The earlier reading here was that a read with no pattern
+against a spent, exited command answers 1 and a read with a pattern in
+the same state answers 2. Six reads, every one of them *without* a
+pattern so that nothing could hang:
 
-    zpty P "print -n hi"
-    zpty -r P l "*hi*"      first=0
-    zpty -r P l2            second=1      no pattern
-    zpty -r P l3 "*x*"      third=2       with a pattern
+    zpty -b G 'print -n hi'
+    zpty -r G a     0, a = hi
+    zpty -r G b     2      nothing left, and no pattern anywhere in the row
+    zpty -r G c     2
+    zpty -b H true
+    zpty -r H d     2      the command wrote nothing at all
+    zpty -b I 'sleep 1'
+    zpty -r I f     1      still running
+    …after it exits…
+    zpty -r I g     2
 
-So a read with no pattern against an exited command whose output is
-spent answers **1**, and a read with a pattern in the same state answers
-**2**. A non-blocking read with nothing available is 1:
+So it is the **command** that decides between the two failures and not
+the pattern. The one row that gave 1 where this table says 2 —
+`zpty -r A l2` after a *pattern* read had drained the same pty — is
+sequence-dependent and is not modeled; it is the same build whose pattern
+reads against a spent command hang outright, recorded below.
+
+A non-blocking read with nothing available is 1, which both readings
+agree on:
 
     zpty -b P cat; zpty -r P line     →  status 1, line unset
 
@@ -216,6 +228,28 @@ The listing writes the pid, the name and the command as it was given;
     (76813) P: 'print -n hi'
     zpty P 'print -n hi'
 
+**Newest first, and a command that has ended prints `(finished)` where a
+pid would go.** Measured 2026-09-20, three commands started as P, Q and R
+and then both spellings asked:
+
+    (finished) R: true
+    (65093) Q: cat
+    (65091) P: 'print -n hi'
+
+    zpty R true
+    zpty -e -b Q cat
+    zpty -b P 'print -n hi'
+
+Three things come out of that one run. The order is the reverse of the
+order they were started in, under both spellings. `-L` writes the flags,
+`-e` before `-b`. And the command is quoted only where it needs quoting —
+`cat` bare, `print -n hi` in single quotes.
+
+`(finished)` is a state and not a number, and *which* commands are in it
+is that build's reaping rather than a contract: R had ended and said so
+while P had ended and still showed a pid. Here it is answered from the
+command itself, so one that has ended says `finished` every time.
+
 A name nobody started is `no such pty command: name` at status 1 from
 `-r`, `-w`, `-d` and `-t` alike.
 
@@ -254,68 +288,126 @@ What does use it on this machine is zsh's own shipped `nslookup` and
 smaller and more honest demand than the issue states, and it is a demand
 for the **whole** builtin rather than for a subset.
 
-**So a subset chosen to make those two plugins take their good path is
-an empty subset**, and building one anyway would be worse than the
-refusal: `zsh-autosuggestions`' capture function needs `vared`,
-`zle -N`, `comppostfuncs`, `compstate[insert]` and the shipped
-`_main_complete` before it can produce the null-delimited output the
-read waits for. The refusal a script can act on — pinned by
-`dialect/zsh/zmodload_test.go` — is the right answer until that is true.
+**So a subset chosen to make those two plugins take their good path was
+an empty subset**, and that is why the whole builtin is what landed:
+`zsh-autosuggestions`' capture function needs `vared`, `zle -N`,
+`comppostfuncs`, `compstate[insert]` and the shipped `_main_complete`
+before it can produce the null-delimited output its read waits for.
 
-**The order of work, therefore:** the completion system first, this
-module after it, and the whole builtin rather than a part of it.
-
-**Re-checked 2026-09-20 and unchanged.** Three of the prerequisites that
-sentence rests on have since arrived as builtins — `vared`, `zle -N` and
-`compstate` are all answered here now — so the claim is worth re-testing
-rather than restating. It survives: `comppostfuncs` is nowhere in this
-tree, and the shipped completion system does not load, measured with the
-host's own `FPATH` rather than an empty one:
+**Re-checked 2026-09-20 and again on 2026-09-21.** Three of the
+prerequisites that sentence rests on have arrived as builtins — `vared`,
+`zle -N` and `compstate` are all answered here now — so the claim was
+worth re-testing rather than restating. It survives: `comppostfuncs` is
+nowhere in this tree, and the shipped completion system does not load,
+measured with the host's own `FPATH` rather than an empty one:
 
     autoload -Uz compinit; compinit -u -d …; whence -w _main_complete
     _main_complete: none        and `compdef: none` beside it
 
-## The one thing that has to be decided before any of it is written
+That is an argument about which *plugin* starts working, and it is not
+an argument about this module: `nslookup` and `run-help` drive an
+interactive program through a pty and need nothing of the completion
+system, and the guard both plugins write — `zmodload zsh/zpty
+2>/dev/null || return` — now answers 0 because the builtin is really
+there rather than because a table entry says so.
+
+## The decision that had to be made first
 
 `zpty NAME cmd` runs a command **on a goroutine with the pseudo-terminal
 as its three descriptors, under a handle the shell keeps**. That is a
 subshell boundary, and this package reconstructs those by hand because
 its subshells are cloned Runners in one process rather than forks — see
-`interp/concurrent.go` and `interp/coproc.go`, which is the same shape
-with pipes instead of a terminal and runs to 741 lines.
+`interp/concurrent.go` and `interp/coproc.go`, which was the same shape
+with pipes instead of a terminal.
 
-**No dialect can reach it.** The three extension points a dialect has
-are the vectors, a registered builtin and a sourced prelude; a builtin
-is handed an `*interp.Runner` and there is nothing public on it that
-starts a command concurrently with descriptors of the caller's choosing.
-`startCoproc` is unexported, `Jobs` only lists, and `Runner.Run` is
-synchronous. So `zsh/zpty` is not a builtin somebody can write against
-today — **it needs a new public seam on the substrate**, and what shape
-that seam takes is a design decision rather than an implementation
-detail. That, and not the size of the builtin, is what this issue is
-waiting on.
+**No dialect could reach it.** The three extension points a dialect has
+are the vectors, a registered builtin and a sourced prelude; a builtin is
+handed an `*interp.Runner` and there was nothing public on it that
+started a command concurrently with descriptors of the caller's choosing.
+`startCoproc` was unexported, `Jobs` only lists, and `Runner.Run` is
+synchronous. So this was not a builtin anybody could sit down and write:
+it needed **a new public seam on the substrate**, and what shape that
+seam took was a design decision rather than an implementation detail.
 
-## What an implementation will need besides that
+### What was decided
 
-Recorded so the size is visible rather than discovered:
+The seam goes in the substrate and is `startCoproc` **generalized**
+rather than a second mechanism beside it — both because a dialect may
+never own a capability the core lacks, and because a boundary written
+twice is a boundary whose next fix lands in one copy. `interp/coproc.go`
+is now the pipe-making half of it.
 
-- A **pseudo-terminal pair**, which `internal/pty` already opens, plus
-  a line discipline with echo off by default and output post-processing
-  left on — `internal/tty` has `Raw` and `Cbreak` and neither is that
-  pair of settings. The measurement that pins the default is in
-  *Starting* above.
-- **Per-runner state holding an `*os.File` and a live child**, which no
-  dialect keeps: `zmodload`, `sched` and `zstyle` all keep theirs in a
-  shell parameter under a name no script can reach, and a descriptor
-  cannot go in one. `$REPLY` being the master's descriptor number is a
-  hint that the master wants registering with `Runner.SetDescriptor`,
-  which would leave only the name-to-descriptor map in a parameter.
-- An answer for **subshells** matching the rows in *Deleting, testing
-  and listing* above: the table is visible in one and a delete there
-  reaches the process while the parent keeps the name.
-- A **sandbox row before the feature**, per `AGENTS.md`. `zpty NAME cmd`
+    interp.ConcurrentCommand   what to run: a name, the command's own
+                               three descriptors, whether those close
+                               with the command, and the body
+    interp.Concurrent          the handle: Name, Ident, Running, Stop
+    Runner.StartConcurrent     start one and keep it under its name
+    Runner.ConcurrentNamed     find one again
+    Runner.ForgetConcurrent    take a name out of *this* runner's table
+    Runner.OpenNearEnd         put the shell's own end of it in the
+                               descriptor table, as plumbing rather than
+                               as a file the script opened
+
+Four things about that shape are answers to measurements rather than
+taste, and each is written up where it lives:
+
+- **A pty command is not a job.** `zpty -b P 'sleep 2'` leaves `jobs`
+  empty and `$!` at 0, so the seam keeps a table of its own and settles
+  the job with no process at once — a body made only of builtins never
+  reaches the point where a background job's pid would settle, so waiting
+  for one would have made `zpty` block until its command had finished.
+- **The table is the subshell's and the command in it is shared**, which
+  is exactly the four rows under *Deleting, testing and listing*.
+- **The command's ends do not always close with the command.** A pipe's
+  far end must, or a coprocess that has exited leaves its reader waiting.
+  A pseudo-terminal's must not: measured on macOS 2026-09-21, closing the
+  terminal side **discards whatever the control side has not read**, so a
+  command that printed and exited would read back empty. `zpty` keeps
+  both ends until the entry is deleted and stops its reads on the command
+  having finished instead.
+- **The shell's own end is plumbing.** Registered with
+  `Runner.OpenDescriptor` it is duplicated into the next shell started
+  beside this one, and the pair then stops answering — three ptys started
+  in a row all read back nothing. `OpenNearEnd` is the same registration
+  with the two exclusions a coprocess's near ends already had.
+
+## What it needed besides the seam, and where each of those landed
+
+- A **pseudo-terminal pair**, which `internal/pty` already opened, plus a
+  line discipline with echo off by default and output post-processing
+  left on — `internal/tty` had `Raw` and `Cbreak` and neither is that
+  pair of settings. `internal/tty.SetEcho` is the third, and the probe
+  that discriminates is in *Starting* above.
+- **Per-runner state holding an `*os.File` and a live command.** The
+  files are in the runner's descriptor table, which is `zsystem flock`'s
+  arrangement; the names, the numbers, the flags and the command text are
+  in a shell parameter no script can spell, which is `sched`'s and
+  `zstyle`'s; and the live command is the seam's table. All three are
+  copied by a subshell, which is what the rows below want.
+- An answer for **subshells** matching the rows in *Deleting, testing and
+  listing*: the table is visible in one and a delete there reaches the
+  command while the parent keeps the name.
+- A **sandbox row with the feature**, per `AGENTS.md`. `zpty NAME cmd`
   starts a program on a terminal the shell owns, `-w` writes to its
-  standard input and `-r` reads its output, and there is no path
-  anywhere in it — the `${(k)mapfile}` shape the ledger keeps missing. A
-  row in `internal/sandboxcheck` that lands `inert` and moves to
-  `contained` is what keeps it from landing as `ESCAPED`.
+  standard input and `-r` reads its output, and there is no path anywhere
+  in it — the `${(k)mapfile}` shape the ledger keeps missing.
+  `module/zpty-exec` in `internal/sandboxcheck` grades `contained` under
+  both policy shapes, because the command under the terminal runs in a
+  Runner of its own and its exec passes the gate like any other.
+
+## What is deliberately not reproduced
+
+- **The three hangs** recorded above are faults in that build, and a
+  shell that reproduced them would be choosing to hang.
+- **`(zpty)` as a source in a parse error's location.** The reference
+  sites a parse failure of the joined command at a source of its own —
+  `(zpty):3: parse error near ...` — and this shell has no second source
+  to site it in, so the name is written where a builtin's name goes and
+  the line is the caller's.
+- **The pid in a listing.** A command here is a goroutine rather than a
+  process, so the number beside a live one is the identity the substrate
+  invented for it.
+- **A read's leftovers on failure.** That build leaves an argument word or
+  a previous read's text in the parameter of a read that failed; the
+  parameter is left exactly as it was found, which is what `-t` is
+  measured to do and what the manual says.

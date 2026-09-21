@@ -103,3 +103,24 @@ func ioctl(fd uintptr, req uintptr, t *syscall.Termios) error {
 	}
 	return nil
 }
+
+// setEcho answers SetEcho: the one line-discipline flag, and nothing beside
+// it. ECHONL goes with ECHO because a terminal that echoed only the newline
+// would still put the caller's input in the command's output, which is the
+// whole of what a probe for this can see.
+func setEcho(f *os.File, on bool) error {
+	if f == nil {
+		return ErrUnsupported
+	}
+	fd := f.Fd()
+	var t syscall.Termios
+	if err := ioctl(fd, tcGets, &t); err != nil {
+		return err
+	}
+	if on {
+		t.Lflag |= syscall.ECHO | syscall.ECHONL
+	} else {
+		t.Lflag &^= syscall.ECHO | syscall.ECHONL
+	}
+	return ioctl(fd, tcSets, &t)
+}

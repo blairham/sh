@@ -259,27 +259,31 @@ print -r -- "X=$?"`)
 // `command not found: zmodload`, which is not something that script can act
 // on at all.
 //
-// `zsh/zpty` rather than `zsh/zutil` or `zsh/parameter`, because both of those
-// load now — the plugin manager's lines 231 and 232 go through — and no longer
-// `zsh/terminfo`, which loads since #1388, nor `zsh/system`, which loads since
-// #1618. `zmodload zsh/zpty zsh/system 2>/dev/null` is a line that file really
-// writes, in this shape, by a script that expects the module to be missing on
-// plenty of machines; half of it still is.
+// **The module this names has been moved four times and this is the fourth**,
+// which is the test working rather than the test rotting: it has to name a
+// module this shell has *no part of*, and the list of those shrinks with every
+// module that lands. It was `zsh/zutil` and `zsh/parameter`, which load now; it
+// was `zsh/terminfo`, which loads since #1388; it was `zsh/system`, which loads
+// since #1618; and it was `zsh/zpty`, which loads since #3748 put the builtin
+// and the table entry in together.
+//
+// `zsh/pcre` now. Measured 2026-09-21 — refused here with the same sentence,
+// alongside `zsh/zprof`, `zsh/curses`, `zsh/net/tcp`, `zsh/db/gdbm` and
+// `zsh/attr`, any of which would serve when this one lands too.
 //
 // A module this shell has *no part of* rather than one short of a feature,
 // which is the other half of what a script sees. Both are one status and one
 // silenced line to the caller, and the branch it takes is the same.
 //
-// **This is the answer that keeps that plugin working**, which is worth
-// saying where somebody would otherwise reach for the table entry: both real
-// callers on this machine guard with `|| return`, so a `zmodload` that
-// answered 0 without the builtin would send them past their own guard. See
-// zmodloadFeatures for why `zsh/zpty` stays out of the table and
-// docs/spec/pty.md for the measured contract the builtin will be written
-// from (#3748).
+// **The shape is a real one and the reason to keep pinning it has not
+// changed.** `zmodload zsh/zpty zsh/system 2>/dev/null` is a line a plugin
+// manager on this machine really writes, by a script that expects the module
+// to be missing on plenty of machines; a shell that answered `command not
+// found: zmodload` gave it nothing it could act on. That both halves of that
+// particular line load today is why the module here had to move again.
 func TestZmodloadRefusalReachesTheScriptsOwnBranch(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
-		`zmodload zsh/zpty 2>/dev/null || { print -r -- "aborting"; }
+		`zmodload zsh/pcre 2>/dev/null || { print -r -- "aborting"; }
 print -r -- "st=$?"`)
 	want := "aborting\nst=0\n"
 	if out != want || st != 0 {

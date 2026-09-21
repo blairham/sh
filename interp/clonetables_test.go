@@ -320,6 +320,7 @@ func seedTables(r *Runner) {
 	r.defaultOnOptions = map[string]bool{"seed": true}
 	r.recordedOptions = map[string]bool{"seed": true}
 	r.fds = map[int]any{7: nil}
+	r.concurrent = map[string]*Concurrent{"seed": {name: "seed"}}
 	r.freezing = map[string]bool{"seed": true}
 	r.literalOperands = map[string]bool{"seed": true}
 	r.compoundOperands = map[string]bool{"seed": true}

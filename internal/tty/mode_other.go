@@ -18,3 +18,5 @@ func putMode(*os.File, modeState) error { return ErrUnsupported }
 func postProcessesOutput(*os.File) bool { return false }
 
 func clearOutputPostProcessing(*os.File) error { return ErrUnsupported }
+
+func setEcho(*os.File, bool) error { return ErrUnsupported }

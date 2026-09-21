@@ -2242,6 +2242,12 @@ type Runner struct {
 	// publish them in, because one of the two shells with a coprocess
 	// publishes no array and reaches them by a letter — see coproc.go.
 	coproc *coprocEnds
+	// concurrent are the commands this shell has started *beside* itself
+	// under a name, through [Runner.StartConcurrent]. Not the job table:
+	// measured, a command started this way is not a job — see
+	// concurrentcommand.go, which also has the subshell rows the cloning of
+	// this table is arrived at from.
+	concurrent map[string]*Concurrent
 	// execFds are the numbers in that table that `exec`'s own redirection
 	// list opened, which one dialect keeps to itself when it runs anything.
 	// A per-command redirection on the same number takes the mark off for

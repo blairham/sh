@@ -145,17 +145,16 @@ const zmodloadAlwaysLoaded = "zsh/main"
 // rather than as a command, so `f` is the math functions and there is no
 // separate letter for them.
 //
-// **`zsh/zpty` is deliberately not in this table**, and putting it in would
-// be the wrong kind of quick win. Its one feature is a builtin, a missing
-// builtin never holds a module shut — see zmodloadHolds — so an entry would
-// make `zmodload zsh/zpty` answer 0 while `zpty` itself is `command not
-// found`. The two real callers on this machine are both written as
-// `zmodload zsh/zpty 2>/dev/null || return`, so that 0 is exactly the answer
-// that walks them past their own guard and into a call that cannot work. The
-// module stays absent until the builtin exists; docs/spec/pty.md is the
-// measured contract it will be written from, and #3748 is the issue (#3042
-// is the companion case where the answer was to implement the features
-// instead).
+// **`zsh/zpty` was deliberately kept out of this table until the builtin
+// existed**, and the reason is worth keeping now that it is in. Its one
+// feature is a builtin, and a missing builtin never holds a module shut — see
+// zmodloadHolds — so an entry alone would have made `zmodload zsh/zpty`
+// answer 0 while `zpty` itself was `command not found`. Both real callers on
+// this machine are written `zmodload zsh/zpty 2>/dev/null || return`, so that
+// 0 is exactly the answer that walks them past their own guard and into a
+// call that cannot work. #3748 landed the builtin and the entry in one
+// change, which is the same rule the sandbox ledger states for a gate: the
+// entry lands *with* the feature, never in front of it.
 var zmodloadFeatures = map[string][]string{
 	zmodloadAlwaysLoaded: nil,
 	"zsh/zutil":          {"b:zformat", "b:zparseopts", "b:zregexparse", "b:zstyle"},
@@ -226,6 +225,12 @@ var zmodloadFeatures = map[string][]string{
 	// One builtin, and a Unix-domain socket is the whole of it. See
 	// socketmodule.go.
 	"zsh/net/socket": {"b:zsocket"},
+	// One builtin, and a command on a pseudo-terminal of its own is the
+	// whole of it. Measured — `zmodload -lF zsh/zpty` is `+b:zpty` and
+	// nothing else. See zpty.go, and note that on a platform with no
+	// pseudo-terminal the builtin is not registered and this module refuses
+	// with it.
+	"zsh/zpty": {"b:zpty"},
 	// One parameter and the whole of the module: the filesystem read and
 	// written as an association. Measured — `zmodload -lF zsh/mapfile` is
 	// `+p:mapfile` and nothing else. See mapfile.go, where the gates are,

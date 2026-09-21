@@ -216,8 +216,38 @@ func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	// followed by `history -s b` in a shell with no list leaves both, because
 	// neither line was ever recorded and there is nothing of the builtin's
 	// own to drop.
+	//
+	// The line is taken **once by `-s`** and every time by `-p`, which is
+	// the difference #4072 was about and is not what either letter's wording
+	// suggests. Measured 2026-09-21 on bash 5.3.20, list emptied by
+	// `HISTIGNORE` so only the operands show:
+	//
+	//   - `true; history -s a; history -s b; history -s c` lists `a`, `b`,
+	//     `c`. Only the first `-s` takes the line the three are written on;
+	//     a shell taking it again would answer `c` alone, the later calls
+	//     each eating the entry before them.
+	//   - `history -s pre` then `true; history -p pp; history -s b` lists
+	//     `b` alone, so the `-s` after a `-p` took `pre` — `-p` leaves the
+	//     line marked as still there.
+	//   - `history -s pre1; history -s pre2` then `true; history -p x;
+	//     history -p y` lists `pre1` alone: two `-p` on one line take two
+	//     entries.
+	//   - `history -s pre` then `true; history -s a; history -p x` lists
+	//     `pre` and `a`, so the `-s` cleared the mark for the `-p` too.
+	//
+	// And where the mark is set with nothing left to take, the builtin does
+	// not fall through to its own work: `true; history -p x; history -p y`
+	// prints `x` and then nothing at status 1, and `true; history -p x;
+	// history -s b; history -s c` leaves the list empty at status 0 — the
+	// operands of a `-s` that found nothing to replace are dropped, and the
+	// mark it never took survives for the next one.
 	if flags.print || flags.store {
-		historyDropOwnLine(r)
+		if !historyTakeOwnLine(r, flags.store) {
+			if flags.print {
+				return 1
+			}
+			return 0
+		}
 	}
 	if flags.print {
 		return historyPrint(r, rest)
@@ -637,18 +667,39 @@ func historyEntries(r *interp.Runner) []string {
 	return append([]string(nil), entries...)
 }
 
-// historyDropOwnLine removes the line the builtin was written on, which the
-// front end reading the program has already recorded.
-func historyDropOwnLine(r *interp.Runner) {
+// historyTakeOwnLine removes the line the builtin was written on, which the
+// front end reading the program has already recorded, and answers whether the
+// builtin may go on to its own work.
+//
+// It may not where the list says the line is there and the list is empty:
+// bash's `-p` and `-s` both stop rather than carry on against a list they
+// could not take from — see the rows written down in historyBuiltin, where
+// `history -s b` after the line has already gone stores nothing.
+//
+// take says the caller consumes the mark rather than merely reading it, which
+// is `history -s` and not `history -p`: only the first `-s` on a line takes
+// the line, while every `-p` on it takes an entry. Measured, not derived —
+// the rows are in historyBuiltin.
+func historyTakeOwnLine(r *interp.Runner, take bool) bool {
 	if !historyHasOwnLine(r) {
-		return
+		return true
 	}
 	entries := historyEntries(r)
 	if len(entries) == 0 {
-		return
+		return false
 	}
 	r.SetArray(historyStore, entries[:len(entries)-1])
 	historySetUnwritten(r, historyUnwrittenCount(r)-1)
+	if take {
+		r.SetVar(historyOwnLine, "0")
+	}
+	return true
+}
+
+// historyDropOwnLine is the seam the core holds for `fc`, which reads the
+// line rather than consuming it, exactly as `history -p` does.
+func historyDropOwnLine(r *interp.Runner) {
+	historyTakeOwnLine(r, false)
 }
 
 // historyHasOwnLine reports that the list holds the line the builtin now

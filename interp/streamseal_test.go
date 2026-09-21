@@ -120,41 +120,92 @@ func TestAnAbandonedBodyCannotWriteToTheCallersStreamAfterTheRunReturns(t *testi
 	})
 }
 
-// And the seal does not eat what the body wrote in time.
+// And the seal does not eat what the shell wrote in time.
 //
-// The other half of #3969, and the shape CI actually reported: the body here
-// finishes *before* the run does — the `while` loop reads its pipe to
-// end-of-file, which only comes when the body has returned — so its
-// diagnostic belongs in what the caller reads back. What was missing was the
-// edge saying so, which is why the race detector named a goroutine it also
-// reported as finished.
+// The other half of #3969, in two shapes.
 //
-// Read from the bare writer above with nothing synchronizing it, because that
-// is the whole question. Under `-race` this is the case that reported
+// The first is what CI actually reported: the body finishes *before* the run
+// does — the `while` loop reads its pipe to end-of-file, which only comes
+// when the body has returned — so its diagnostic belongs in what the caller
+// reads back, and the seal must be what orders it rather than what drops it.
+// It is read from the bare writer above with nothing synchronizing it,
+// because that is the question. Under `-race` this is the case that reported
 // `strings.(*Builder).String()` against `strings.(*Builder).Write()` under
-// interp.(*lockedWriter).Write on run 35555666048; with the seal, the lock
-// the seal takes is the edge and there is nothing to report.
-func TestABodyThatFinishedInTimeIsVisibleAndOrderedWhenTheRunReturns(t *testing.T) {
-	f, err := syntax.Parse("while read -r l; do :; done < <(v=$(echo hi; for))\n", syntax.Core())
-	if err != nil {
-		t.Fatal(err)
-	}
-	w := &bareWriter{}
-	sem := testSemantics()
-	dg := PosixDiagnostics()
-	r := newTestRunner(t, &Runner{
-		Stdout: w, Stderr: w, Semantics: &sem, Diagnostics: &dg, Env: testPATH(),
-	})
-	deadline(t, "the run", func() {
-		if _, err := r.Run(context.Background(), f); err != nil {
-			t.Error(err)
+// interp.(*lockedWriter).Write on run 35555666048.
+//
+// **It is the weaker of the two and it is worth saying which way.** Take the
+// seal out entirely and this still passes on a laptop: the shell read that
+// body's pipe to end-of-file, and the descriptor machinery underneath that
+// read carries enough of an edge for the detector on this machine. It is the
+// literal regression shape and it is the case CI's Linux leg tripped over,
+// so it is kept as the shape; what it cannot be is the proof. The proof that
+// nothing reaches the caller after the run is the test above, which fails on
+// the content with no detector at all.
+//
+// The second shape is the seal coming *off* again, and that one discriminates
+// on its own. A Runner is not always used once — RunPart is a chunk at a time
+// and a caller may reach an end and carry on — so a seal that stayed on would
+// leave the rest of the session writing into nothing. Nothing else in the
+// tree would notice: every other test builds a Runner, runs it once and reads
+// the buffer, which is precisely the shape a permanent seal is invisible to.
+func TestTheSealDoesNotEatWhatTheShellWroteInTime(t *testing.T) {
+	t.Run("a body that finished before the run did", func(t *testing.T) {
+		f, err := syntax.Parse("while read -r l; do :; done < <(v=$(echo hi; for))\n", syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := &bareWriter{}
+		sem := testSemantics()
+		dg := PosixDiagnostics()
+		r := newTestRunner(t, &Runner{
+			Stdout: w, Stderr: w, Semantics: &sem, Diagnostics: &dg, Env: testPATH(),
+		})
+		deadline(t, "the run", func() {
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Error(err)
+			}
+		})
+		if t.Failed() {
+			return
+		}
+		// Unsynchronized, on purpose. See above.
+		if got := w.String(); got == "" {
+			t.Error("the caller's stream is empty: the body's diagnostic was written on its goroutine and the run has to hand it over")
 		}
 	})
-	if t.Failed() {
-		return
-	}
-	// Unsynchronized, on purpose. See above.
-	if got := w.String(); got == "" {
-		t.Error("the caller's stream is empty: the body's diagnostic was written on its goroutine and the run has to hand it over")
-	}
+
+	t.Run("a runner driven on past an end", func(t *testing.T) {
+		f, err := syntax.Parse("echo again\n", syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := syntax.Parse(": <(:)\n", syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := &bareWriter{}
+		sem := testSemantics()
+		dg := PosixDiagnostics()
+		r := newTestRunner(t, &Runner{
+			Stdout: w, Stderr: w, Semantics: &sem, Diagnostics: &dg, Env: testPATH(),
+		})
+		deadline(t, "two runs", func() {
+			// The first one wraps the streams — a substitution is what puts
+			// a guard over them — and then ends, which is what arms the
+			// seal. Without it there would be no lockedWriter to read one.
+			if _, err := r.Run(context.Background(), first); err != nil {
+				t.Error(err)
+				return
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Error(err)
+			}
+		})
+		if t.Failed() {
+			return
+		}
+		if got := w.String(); !strings.Contains(got, "again") {
+			t.Errorf("the second run wrote %q, want it to contain %q: a shell asked for more work has its caller's streams back", got, "again")
+		}
+	})
 }

@@ -139,3 +139,43 @@ func TestBareHelpListsEveryTopic(t *testing.T) {
 		}
 	}
 }
+
+// The topic list has **77 names**, and the one that made it 76 is the reason
+// this is a test rather than a table.
+//
+// `variables` is the one topic whose line is a sentence about what the topic
+// covers rather than a synopsis of a construct, so the real shell's wording is
+// CLEANROOM.md's red list and this shell writes its own. It was left out
+// entirely for that reason, and leaving it out was the more expensive of the
+// two choices: the bare listing is laid out **column-major**, so the topic
+// count decides how many rows there are and which pair of names each row
+// holds. One short of 77 moves every row of a 39-row listing, and a listing
+// differing in a single cell was instead differing in all of them — 76 lines
+// of one suite file where 2 was available (#2298).
+//
+// So the count is asserted, not just the membership: a topic quietly added or
+// dropped is a listing that stops lining up, and the cell is the smaller half
+// of what goes wrong.
+func TestEveryTopicIsListedIncludingTheOneWrittenInOurOwnWords(t *testing.T) {
+	bare, st := runBash(t, t.TempDir(), `help -s ''`)
+	if st != 0 {
+		t.Fatalf("help exited %d", st)
+	}
+	lines := strings.Split(strings.TrimRight(bare, "\n"), "\n")
+	// Measured 2026-09-21 on bash 5.3.20 with `help -s ''` in `env -i`.
+	if want := 77; len(lines) != want {
+		t.Errorf("%d topics, want %d — the listing's geometry is the count", len(lines), want)
+	}
+	if !strings.Contains(bare, "variables: variables - ") {
+		t.Error("no `variables` topic, which is the name whose absence moves every row of the listing")
+	}
+	// And it answers, at 0, the way every other topic does. The wording is
+	// ours; that it is a topic at all is the real shell's.
+	out, st := runBash(t, t.TempDir(), `help variables`)
+	if st != 0 {
+		t.Errorf("help variables exited %d, want 0", st)
+	}
+	if !strings.HasPrefix(out, "variables: variables - ") {
+		t.Errorf("help variables wrote %q", out)
+	}
+}

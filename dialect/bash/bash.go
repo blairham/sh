@@ -1643,6 +1643,14 @@ func Semantics() interp.Semantics {
 	// PATH has missed. Measured: `PATH=/usr/bin:/bin; . f.sh` finds an f.sh in
 	// the current directory here, and is "not found" in the other three.
 	s.DotFallsBackToCurrentDirectory = interp.Yes
+	// And POSIX mode takes it away, which is the standard's own search:
+	// measured 2026-09-21 on bash 5.3.20, `echo 'echo hi' > f; . f` reads
+	// the file here and is `.: f: file not found` at 1 after `set -o
+	// posix`, under `bash --posix` and under the `sh` name alike, and `set
+	// +o posix` puts the reading back. The mode words the miss differently
+	// too — the search sentence rather than the errno one — which follows
+	// from the reading rather than being a second answer.
+	s.DotFallsBackToCurrentDirectoryInPosixMode = interp.No
 	// `. -p list file`, which is a 5.x addition: bash 3.2 calls the letter
 	// an invalid option and prints a usage line without it.
 	s.DotReadsOptions = interp.Yes
@@ -3604,7 +3612,13 @@ func Diagnostics() interp.Diagnostics {
 		DotCannotOpen: "%[1]s: %[2]s",
 		// `. -p list f` whose list missed, which is not the sentence a file
 		// that would not open gets: lower case, and naming the builtin.
-		DotSearchPathMiss:   ".: %[1]s: file not found",
+		// The invoked word and not a written-in dot: `.` and `source` are
+		// one builtin and each names itself here, measured 2026-09-21 on
+		// bash 5.3.20 — `source -p /tmp nope` is `source: nope: file not
+		// found` where `. -p /tmp nope` is `.: nope: file not found`. The
+		// same verb DotIsADirectory takes, and it was the one dot sentence
+		// still spelling the name out.
+		DotSearchPathMiss:   "%[3]s: %[1]s: file not found",
 		DotCannotOpenStatus: 1,
 		// The one `.` failure bash gives a sentence of its own, and the one
 		// it names the builtin in — `source ./` says `source:` where `. ./`

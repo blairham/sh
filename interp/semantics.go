@@ -19097,6 +19097,33 @@ type Semantics struct {
 	// Runner.DotLooksInCurrentDirectoryFirst.
 	DotFallsBackToCurrentDirectory Answer
 
+	// DotFallsBackToCurrentDirectoryInPosixMode is the axis above as POSIX
+	// mode leaves it, which is a state rather than a preset:
+	// [Runner.SetPosixMode] swaps this value in on the way in and puts the
+	// answer above back on the way out. The shape is
+	// DotWithNoOperandIsFatalInPosixMode's.
+	//
+	// It is an axis and not the standard's answer written in, and BusyBox
+	// ash is the whole reason. POSIX gives `.` `$PATH` and nothing else, and
+	// bash drops the addition in the mode — measured 2026-09-21 on bash
+	// 5.3.20, `echo 'echo hi' > f; . f` reads the file under bash's own name
+	// and is `.: f: file not found` at 1 after `set -o posix`, with `set +o
+	// posix` putting the reading back. ash is the other column with the
+	// fallback and it has **no POSIX mode at all**; it is reached through
+	// this shell's `sh` name because that is the only name it has, so a
+	// written-in No would take a real reading away from the one shell whose
+	// mode does not exist. It answers Yes here, which is the mode moving
+	// nothing — the same shape its DotWithNoOperandIsFatalInPosixMode has.
+	//
+	// The wording follows the reading rather than being asked separately.
+	// Where the mode takes the fallback away, PATH was the whole of the
+	// search and a miss is a **search** miss — the sentence `. -p list f`
+	// already reaches, and the one bash writes in the mode. See
+	// Runner.resolveDotPath, which is gated on the fallback having been
+	// taken away rather than on the mode, so a shell that never had one
+	// keeps its own wording.
+	DotFallsBackToCurrentDirectoryInPosixMode Answer
+
 	// DotReadsOptions lets `.` and `source` read a leading dash-word as an
 	// option rather than as the name of the file to read.
 	//
@@ -23241,6 +23268,11 @@ func PosixSemantics() Semantics {
 		// as a fallback.
 		DotPassesArguments:             No,
 		DotFallsBackToCurrentDirectory: No,
+		// And there is nothing for POSIX mode to take away, which is what
+		// the three columns with no fallback answer: the mode is only ever
+		// asked of a shell that has one. See
+		// DotFallsBackToCurrentDirectoryInPosixMode.
+		DotFallsBackToCurrentDirectoryInPosixMode: No,
 		// The standard says a special builtin's failure is fatal and says
 		// nothing about a trap on the way out; dash, the panel's
 		// POSIX-faithful member, runs it, so the preset follows the shell

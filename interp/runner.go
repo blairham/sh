@@ -2207,6 +2207,27 @@ type Runner struct {
 	// ksh93's own Yes back and not the standard's answer. See
 	// Semantics.DotWithNoOperandIsFatalInPosixMode.
 	posixSavedDotNoOperand Answer
+	// And the two the mode asserts the standard's own answer to: `.` looking
+	// in the current directory once PATH has missed, which POSIX does not
+	// have and only bash does, and a file it could not find being fatal,
+	// which POSIX requires of a non-interactive shell and which every column
+	// was measured to do under the `sh` name. Saved all the same, because
+	// leaving the mode has to reach the dialect's answer and not the
+	// standard's opposite — the same reason posixSavedTargetPattern is saved.
+	posixSavedDotFallback     Answer
+	posixSavedDotMissingFatal Answer
+	// posixDotSearchOnly says the mode is what took the current-directory
+	// fallback away, so what is left for a bare operand is a **search** and a
+	// miss is a search miss rather than a file that would not open.
+	//
+	// It is a flag rather than a third saved axis because it is not a second
+	// question: bash words the two misses differently — `.: f: file not
+	// found` where the operand was searched for, `f: No such file or
+	// directory` where a named file would not open — and `. -p list f`
+	// already reaches the first sentence for exactly this reason. A shell
+	// that never had a fallback never sets this, so its own wording for a
+	// PATH miss is untouched. See Runner.resolveDotPath.
+	posixDotSearchOnly bool
 	// And whether a special builtin's name may be a function's, which the
 	// mode moves at the definition rather than at the parse — so a script
 	// may enter the mode, define nothing, and leave it, and the dialect's

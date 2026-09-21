@@ -1002,11 +1002,11 @@ func (r *Runner) fcRead(b borrowedLines) {
 			r.RecordHistoryEntry(line)
 			continue
 		}
-		open := ""
+		at := histjoin.At{Dialect: b.dialect}
 		if i > b.body {
-			open = openAfter(lines[b.body:i], b.dialect)
+			at.Open, at.HeredocExpands = openAfter(lines[b.body:i], b.dialect)
 		}
-		entry.Add(line, open, b.dialect)
+		entry.Add(line, at)
 	}
 	if entry.Len() > 0 {
 		r.RecordHistoryEntry(entry.Take())
@@ -1024,10 +1024,10 @@ func (r *Runner) fcRead(b borrowedLines) {
 // one parser over the whole of it, so the question goes to a second parser
 // over the lines before the boundary. The text is one person's edit buffer,
 // which is what makes reading it again affordable.
-func openAfter(lines []string, d syntax.Dialect) string {
+func openAfter(lines []string, d syntax.Dialect) (open string, heredocExpands bool) {
 	p := syntax.NewParser(strings.Join(lines, "\n")+"\n", d)
 	p.Parse()
-	return p.OpenQuote()
+	return p.OpenQuote(), p.OpenHeredocExpands()
 }
 
 // fcSpoolSeq numbers the files this builtin writes, so that two `fc` calls in

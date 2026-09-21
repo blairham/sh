@@ -105,10 +105,38 @@ const (
 	joinNewline
 )
 
-// Add takes one physical line, with what the parser was still inside when it
-// asked for it — [syntax.Parser.OpenQuote]'s spelling, empty for a line that
-// begins a command or continues one outside any quote — and the grammar it
-// was read under, which is what says whether a `#` opens a comment at all.
+// At is what the reader was inside when it took one physical line, and the
+// grammar it was reading under.
+//
+// A struct rather than three parameters, so that the next fact about a line
+// has one place to go: this already grew one — the second half of the
+// here-document question — and the growth was a signature change at every
+// caller.
+type At struct {
+	// Open is [syntax.Parser.OpenQuote]'s spelling of what the parser was
+	// still inside when it asked for this line. Empty for a line that
+	// begins a command or continues one outside any quote.
+	Open string
+	// HeredocExpands is [syntax.Parser.OpenHeredocExpands]: the
+	// here-document Open names was opened with an unquoted delimiter, so
+	// its body is shell text and the reader resolves a line continuation in
+	// it. Measured, the entry holds what the reader made of it — `cat
+	// <<EOD` / `x\` / `y` / `EOD` comes back with `xy` on one line — where
+	// the same document under `<<'EOD'` keeps both lines and the backslash.
+	HeredocExpands bool
+	// Dialect is the grammar this line was read under, which is what says
+	// whether a `#` opens a comment at all.
+	Dialect syntax.Dialect
+}
+
+// resolvesAContinuation reports whether the reader joined a line ending in a
+// backslash to the one after it, rather than leaving both as they were.
+func (a At) resolvesAContinuation() bool {
+	return a.Open == "" || a.Open == heredocOpen && a.HeredocExpands
+}
+
+// Add takes one physical line, with what the reader was inside when it took
+// it.
 //
 // A line the parser got no command out of is not always a line of the entry.
 // A **comment** inside a compound command is dropped and leaves a newline
@@ -119,12 +147,12 @@ const (
 // is run again. A comment standing where a command could begin is an entry of
 // its own and reaches this as the first line of one, so it is only dropped
 // with a command already collected. See [join] for the blank-line rows.
-func (e *Entry) Add(line, open string, d syntax.Dialect) {
+func (e *Entry) Add(line string, at At) {
 	kind := lineOrdinary
-	if open == "" {
+	if at.Open == "" {
 		// Inside a quote or a here-document body a `#` is text and a blank
 		// line is body, so neither question is asked there.
-		kind = classify(line, d)
+		kind = classify(line, at.Dialect)
 	}
 	if len(e.lines) > 0 {
 		switch kind {
@@ -137,12 +165,12 @@ func (e *Entry) Add(line, open string, d syntax.Dialect) {
 				return
 			}
 		}
-		e.seps = append(e.seps, e.separator(open))
+		e.seps = append(e.seps, e.separator(at))
 	}
 	e.lines = append(e.lines, line)
 	// A line read inside a here-document is the one kind that ends an entry
 	// with a newline, and only where the command *ends* there.
-	e.endsInBody = open == heredocOpen
+	e.endsInBody = at.Open == heredocOpen
 	switch kind {
 	case lineBlank:
 		e.pending = joinSpace
@@ -246,8 +274,8 @@ func (e *Entry) Take() string {
 const heredocOpen = "<<"
 
 // separator is what goes between the line already collected and the one
-// arriving, which open says was read inside a quote or a here-document.
-func (e *Entry) separator(open string) string {
+// arriving, which at says was read inside a quote or a here-document.
+func (e *Entry) separator(at At) string {
 	if e.spaceNext {
 		e.spaceNext = false
 		return " "
@@ -258,23 +286,26 @@ func (e *Entry) separator(open string) string {
 	case joinNewline:
 		return "\n"
 	}
-	if open == "" && syntax.EndsWithContinuation(e.lines[len(e.lines)-1]) {
+	if at.resolvesAContinuation() && syntax.EndsWithContinuation(e.lines[len(e.lines)-1]) {
 		// The reader joined these two physical lines into one before the
 		// parser saw either, so the entry holds one line and not two:
 		// measured, bash 5.3.20 records `echo \` / `A` as `echo A` and `echo
 		// one \` / `two three` as `echo one two three`. Joining them with a
 		// `;` records a command nobody ran — `echo \` and then `A`.
 		//
-		// Only outside a quote, which is where the reader resolves it.
-		// Inside one the backslash and the newline both stay: `echo "a\` /
-		// `b"` comes back over two lines with the backslash still on the
-		// first, in a shell that nonetheless prints `ab`.
+		// Only where the reader resolves it, which is outside a quote and
+		// inside a here-document whose delimiter was not quoted. Inside a
+		// quote the backslash and the newline both stay: `echo "a\` / `b"`
+		// comes back over two lines with the backslash still on the first,
+		// in a shell that nonetheless prints `ab`. A here-document under a
+		// **quoted** delimiter keeps them for the same reason — the reader
+		// resolved nothing there either (#4103).
 		last := e.lines[len(e.lines)-1]
 		e.lines[len(e.lines)-1] = last[:len(last)-1]
 		return ""
 	}
-	if open != "" {
-		if open == heredocOpen {
+	if at.Open != "" {
+		if at.Open == heredocOpen {
 			e.heredoc = true
 		}
 		return "\n"

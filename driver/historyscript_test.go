@@ -250,3 +250,33 @@ func TestAContinuationIsOneLineOfTheEntry(t *testing.T) {
 		})
 	}
 }
+
+// A here-document's body is shell text where its delimiter was not quoted,
+// so the reader resolves a continuation in it and the entry holds what ran —
+// and it is literal lines where the delimiter was quoted, so both the
+// backslash and the newline stay.
+//
+// Both were measured on the panel's one column that records in a script,
+// 2026-09-21: `cat <<EOD` / `x\` / `y` / `EOD` lists the body as `xy` on one
+// line and prints `xy`, and the same document under `<<'EOD'` lists `x\` and
+// `y` and prints them. The pair is the case — `OpenQuote` spells both
+// delimiters `<<`, so an entry told only that much gets one of the two wrong
+// whichever answer it picks (#4103).
+func TestAHereDocumentsBodyResolvesAContinuationOnlyWhereItIsShellText(t *testing.T) {
+	for _, tc := range []struct{ name, delim, want string }{
+		{"an unquoted delimiter joins the body's lines", "EOD", "cat <<EOD\nxy\nEOD\n"},
+		{"a quoted delimiter keeps them", "'EOD'", "cat <<'EOD'\nx\\\ny\nEOD\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errs strings.Builder
+			src := "set -o history\ncat <<" + tc.delim + "\nx\\\ny\nEOD\nshowlist\n"
+			if code := driver.MainArgs(historyShell(&out, &errs, interp.Yes), []string{"testsh", "-c", src}); code != 0 {
+				t.Fatalf("status %d (stderr %q)", code, errs.String())
+			}
+			want := "1[" + tc.want + "]\n"
+			if got := out.String(); !strings.Contains(got, want) {
+				t.Errorf("listed %q, want an entry %q", got, want)
+			}
+		})
+	}
+}

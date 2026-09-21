@@ -36,16 +36,29 @@ type Lexer struct {
 	// expansion, a here-document. The first one wins: a quote inside a
 	// substitution ends the input once, and it is the quote that is waiting.
 	openWord string
+	// openHeredocExpands says the here-document openWord names has an
+	// **unquoted** delimiter, so its body is shell text: expansions happen
+	// in it and a line ending in a backslash is joined to the next. Both
+	// delimiters are spelled `<<` by OpenInnermost, and the difference is
+	// one a reader taking a line at a time has to know — see
+	// internal/histjoin, where a continuation the reader resolved is one
+	// line of a history entry and one the reader left alone is two.
+	openHeredocExpands bool
 	// innerOpen is what a program between parentheses was itself still
 	// inside when the input ran out there — the here-document or quote a
 	// `$(` holds — which openWord cannot say, because the read of that
 	// program is a lexer of its own and its running out never reaches this
 	// one. Empty where nothing was open inside. See Lexer.OpenInnermost.
 	innerOpen string
+	// innerHeredocExpands is openHeredocExpands for that inner read.
+	innerHeredocExpands bool
 	// lastInner is what the most recent failed read of a program between
 	// parentheses was inside when it ran out, waiting for scanParens to run
 	// out of the same input.
 	lastInner string
+	// lastInnerHeredocExpands is openHeredocExpands for that read, carried
+	// beside lastInner and cleared with it.
+	lastInnerHeredocExpands bool
 	// lastBodyStop is how far into this source the most recent failed read
 	// of a program between parentheses got before it stopped, waiting for
 	// scanParens the way lastInner does. Zero where there was no such read.
@@ -600,6 +613,22 @@ func (l *Lexer) OpenInnermost() string {
 		return l.innerOpen
 	}
 	return l.openWord
+}
+
+// OpenHeredocExpands reports whether the here-document [Lexer.OpenInnermost]
+// names was opened with an **unquoted** delimiter, so that its body is shell
+// text rather than literal lines.
+//
+// False for every other answer, and for a quoted delimiter. Both spellings
+// are `<<` to OpenInnermost, because what the *next line begins inside* is
+// the same either way; this is the second half of that question, and it is
+// asked by a reader that has to know whether it resolved a line continuation
+// in the body it just took.
+func (l *Lexer) OpenHeredocExpands() bool {
+	if l.innerOpen != "" {
+		return l.innerHeredocExpands
+	}
+	return l.openHeredocExpands
 }
 
 // ranOut records that the input ended inside something, and what.
@@ -3627,6 +3656,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// them here is the fold: one scanner, one comment rule, one answer
 		// to where a body ends, for all three kinds that hold a program.
 		l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
+		l.lastInnerHeredocExpands = false
 		if end, remarks, ok := l.parseToClose(start); ok {
 			// What that read had to say comes back with it. A parse inside a
 			// parse otherwise says nothing — the reason takeRemarks exists
@@ -3665,6 +3695,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// which is what an unfinished substitution is.
 	}
 	inner := l.lastInner
+	innerExpands := l.lastInnerHeredocExpands
 	// What the grammar's own read of the rest of the input said, which is the
 	// answer only if this construct now runs out too: a `)` the counting loop
 	// below finds means the body ended there and had no chance to speak.
@@ -3674,11 +3705,12 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	// Lexer.lastBodyStop.
 	spent := l.lastBodyStop
 	l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
+	l.lastInnerHeredocExpands = false
 	joined := l.collectContinuations()
 	for depth > 0 {
 		if l.eof() {
 			if !l.incomplete && inner != "" && inner != openingOf(kind) {
-				l.innerOpen = inner
+				l.innerOpen, l.innerHeredocExpands = inner, innerExpands
 			}
 			l.ranOut(openingOf(kind))
 			l.failedToClose(open, kind, refusal)
@@ -4218,6 +4250,7 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 		l.lastInner = ""
 		if sub.lex.incomplete {
 			l.lastInner = sub.lex.OpenInnermost()
+			l.lastInnerHeredocExpands = sub.lex.OpenHeredocExpands()
 		}
 		// And what this read had to say, and how far it got, for the same
 		// caller and the same moment. See Lexer.lastBodyRefusal and
@@ -4401,7 +4434,8 @@ func (l *Lexer) noteHeredocInsideASkippedSubstitution(from int) {
 		return
 	}
 	inner := l.lastInner
-	defer func() { l.lastInner = inner }()
+	expands := l.lastInnerHeredocExpands
+	defer func() { l.lastInner, l.lastInnerHeredocExpands = inner, expands }()
 	l.parseToClose(from)
 }
 
@@ -5692,6 +5726,11 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			// when the line ends should ask for another line rather than run
 			// with what it has. The parser reports both, and each front end
 			// reads the one it needs.
+			if !l.incomplete {
+				// Beside ranOut and guarded the same way, because the first
+				// call is the one that wins there too.
+				l.openHeredocExpands = !quoted
+			}
 			l.ranOut("<<")
 			// Said out loud by one shell and passed over by three, so it is
 			// recorded here and worded — or not — by the front end.

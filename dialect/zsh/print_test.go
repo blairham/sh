@@ -212,3 +212,60 @@ func TestPrintDescriptorFormatAndEnders(t *testing.T) {
 		}
 	}
 }
+
+// `-s` expands its operands on the way to the list, exactly as every other
+// road out of this builtin expands them — and `-r` turns that off here too.
+//
+// Measured 2026-09-21 on zsh 5.9.2, `env -i` with a scratch `HOME`, the list
+// planted and read back with `fc -ln 1` through `od -c`. The bytes matter:
+// a listing escapes a stored tab as `\t` and a stored newline as `\n`, so a
+// `\t` probe cannot tell an expanded entry from an unexpanded one. `\c` and
+// `\a` can — the first ends the entry and takes the operand after it with it,
+// and the second is a character no listing spells with a backslash. This used
+// to join the operands as they were written (#4104).
+func TestPrintHistoryExpandsItsOperands(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"an escape that ends the text takes the operand after it",
+			"print -s 'g\\ch' 'i'\nfc -ln 1",
+			"g\n",
+		},
+		{
+			"an ordinary escape is the character it names",
+			"print -s 'e\\ax'\nfc -ln 1",
+			"e\ax\n",
+		},
+		{
+			"a doubled backslash is one",
+			"print -s 'r\\\\s'\nfc -ln 1",
+			"r\\s\n",
+		},
+		{
+			"-r leaves the operands as they were written",
+			"print -rs 'e\\ax'\nfc -ln 1",
+			"e\\ax\n",
+		},
+		{
+			// `-P` reaches the list too, which is the second expansion this
+			// road was skipping.
+			"a prompt escape is expanded",
+			"print -sP '%%/'\nfc -ln 1",
+			"%/\n",
+		},
+		{
+			// And the separator is a space whatever else was asked for:
+			// measured, `-l`, `-N` and `-n` change nothing here, and an
+			// entry never ends in a newline of its own.
+			"the operands are joined with a space whatever the options say",
+			"print -sl a b\nprint -sN c d\nfc -ln 1",
+			"a b\nc d\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), "HISTSIZE=100\n"+tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("out %q status %d, want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}

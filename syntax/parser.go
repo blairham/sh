@@ -889,6 +889,19 @@ func (p *Parser) Open() []Open {
 // silence expansion inside every `if`.
 func (p *Parser) OpenQuote() string { return p.lex.OpenInnermost() }
 
+// OpenHeredocExpands reports whether the here-document [Parser.OpenQuote]
+// names was opened with an **unquoted** delimiter, so that its body is shell
+// text rather than literal lines.
+//
+// The second half of OpenQuote's question, and false for every answer but a
+// here-document's. Both delimiters are spelled `<<` there because what the
+// next physical line *begins inside* is the same either way; what differs is
+// what the reader does to that line before anything else sees it, and a
+// reader recording what it read has to know. See driver's history gate and
+// internal/histjoin, where a continuation the reader resolved is one line of
+// a history entry and one it left alone is two.
+func (p *Parser) OpenHeredocExpands() bool { return p.lex.OpenHeredocExpands() }
+
 // Open is one thing the parser is inside.
 type Open struct {
 	// Word is the keyword that opened it: `if`, `for`, `case`, `{`, or a

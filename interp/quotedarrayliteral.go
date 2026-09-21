@@ -43,7 +43,11 @@ import (
 //     or by a standing attribute. `declare a="(1 2)"` with no array anywhere is
 //     `declare -- a="(1 2)"`.
 //   - The operand may carry **no subscript**. `declare a[1]="(var)"` stores the
-//     five characters at 1, in bash as here.
+//     five characters at 1, in bash as here — with a sentence beside it, which
+//     is Runner.warnQuotedCompoundAtASubscript. **Unless the array letter is
+//     written on the same line**, where the subscript is dropped instead and
+//     the value comes here after all: see Runner.letterDropsTheSubscript
+//     (#4105).
 //   - The text has to be a literal **as written**: `declare -a x="(a b"` and
 //     `declare -a x=" (a b) "` both keep their characters, so a missing
 //     parenthesis or a space outside one is not a literal that lost its quotes.

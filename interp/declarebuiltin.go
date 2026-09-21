@@ -1529,7 +1529,16 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if r.unspecified {
 			return r.status
 		}
-		if base, subs, subscripted := r.operandSubscripts(r.inBuiltin, name); subscripted {
+		if base, subs, subscripted := r.operandSubscripts(r.inBuiltin, name); subscripted &&
+			hasValue && r.letterDropsTheSubscript(value, df) {
+			// The array letter is on this very line and the value is
+			// parenthesized, and there the subscript decides nothing: not
+			// where the value goes, not whether it appends, and not whether
+			// the value is re-read. The operand is the base name with the
+			// text, which is what the branch below this one already does
+			// with it. See interp/subscriptedcompound.go.
+			name, appends = base, false
+		} else if subscripted {
 			sub := subs[len(subs)-1]
 			if hasValue {
 				// A parenthesized value under a subscript is the one shape

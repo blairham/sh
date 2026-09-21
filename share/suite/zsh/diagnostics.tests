@@ -109,12 +109,39 @@ say 'text that will not parse, through eval'
 # altogether — refused before anything is sent, in this shell's own words and
 # with the hint after it. #3139 was the number taking the name's route and,
 # worse, being read as an unknown option first.
+# The process id is taken out of what is compared, because this shell writes
+# it into the sentence and it differs on every run.
+#
+# **Masked by its role and not by its digits**, which is #3988. This file
+# said `sed "s/$$/<pid>/g"` and that mask is unanchored: this shell's
+# diagnostic prefix is `file:kill:LINENO:`, so every one of these rows writes
+# the line it lands on, and a run whose pid *equalled* that line number had
+# the mask eat the line number too — the file answered two different ways and
+# the whole zsh column came back non-deterministic. Pids start at 1 inside a container,
+# so a three-digit collision with a three-digit line number is ordinary
+# rather than remote, and it happened on the first scoped run of the pass
+# that found it.
+#
+# Bounding the digits by non-digits — which is what #3456 gave the bash and
+# dash copies of this file — does not close it: `:121:` is a digit run
+# bounded by non-digits on both sides. Only the *role* distinguishes them, so
+# the mask matches the two sentences that carry a pid, zsh's `kill <pid>
+# failed: …` and ksh93's `kill: <pid>: no such process`, and nothing else.
+# ksh93's `kill: 99: unknown signal name` is why the second is a phrase and
+# not a `kill: N:` shape: that row wears the same shape and holds a signal
+# number.
+#
+# One shape in all three copies. internal/suite/pidmask_test.go is the guard
+# that it does not over-match, and the reason the helper is written here as a
+# function rather than inline.
+nopid() { sed -e "s/kill $$ failed/kill <pid> failed/g" -e "s/kill: $$: no such process/kill: <pid>: no such process/g"; }
+
 say 'a signal number out of range'
-( kill -99 $$ ) 2>&1 > /dev/null | sed "s/$$/<pid>/g"
+( kill -99 $$ ) 2>&1 > /dev/null | nopid
 ( kill -99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
 
 say 'the same number written to the option that takes one'
-( kill -n 99 $$ ) 2>&1 > /dev/null | sed "s/$$/<pid>/g"
+( kill -n 99 $$ ) 2>&1 > /dev/null | nopid
 ( kill -n 99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
 
 say 'and to the option that takes a name, which does not send'

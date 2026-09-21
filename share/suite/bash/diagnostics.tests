@@ -112,13 +112,31 @@ say 'text that will not parse, through eval'
 # core/, and it is what a fix for #3139 had to leave alone.
 #
 # The process id is taken out of what is compared, because two of the
-# references write it into the sentence (`kill 386 failed`, `kill: 694: no such
-# process`) and it differs on every run — which made this whole file an answer
-# the tier check could not repeat. bash does not name it, so bash's rows are
-# unchanged. Bounded by non-digits on both sides so that a short process id
-# cannot rewrite part of a line number.
+# references write it into a sentence and it differs on every run — which
+# made this whole file an answer the tier check could not repeat.
+#
+# **Masked by its role and not by its digits.** The two sentences that carry
+# it are zsh's `kill <pid> failed: …` and ksh93's `kill: <pid>: no such
+# process`, and the mask matches those phrases and nothing else. A mask that
+# matched the digits alone also ate a number that merely *equalled* the pid,
+# and both of the numbers in reach are ordinary three-digit values inside a
+# container: the line number in zsh's `file:kill:113:` prefix, and the signal
+# `99` in ksh93's `kill: 99: unknown signal name`, which wears the same
+# `kill: N:` shape as the pid does. Bounding the digits by non-digits does
+# not close either hole — `:113:` and `: 99:` are both digit runs bounded by
+# non-digits. So the phrase is the anchor. #3988, and
+# internal/suite/pidmask_test.go is the guard that the mask does not
+# over-match.
+#
+# One shape in all three copies of this file. The bounded form reached two of
+# the three in #3456 and not the third, which is how the zsh column came back
+# non-deterministic five months later.
+#
+# bash names it in none of the rows below, so bash's own output is unchanged
+# either way; the mask is here for the references this file is cross-run
+# under.
 say 'a signal number out of range, three ways'
-nopid() { sed "s/\([^0-9]\)$$\([^0-9]\)/\1<pid>\2/g"; }
+nopid() { sed -e "s/kill $$ failed/kill <pid> failed/g" -e "s/kill: $$: no such process/kill: <pid>: no such process/g"; }
 ( kill -99 $$ ) 2>&1 > /dev/null | nopid
 ( kill -n 99 $$ ) 2>&1 > /dev/null | nopid
 ( kill -s 99 $$ ) 2>&1 > /dev/null | nopid

@@ -117,12 +117,31 @@ mark() { sed -e 's/.*nosuchcommand_zz.*/<a diagnostic>/' -e 's/.*nosuchdir_zz.*/
 # out of range is a different route and is refused before anything is sent,
 # with a different wording and a different status, which is what #3139 was:
 # the number was read as the option letter `-9` and refused at 2.
+# The process id is taken out of what is compared, because this shell writes
+# it into the sentence and it differs on every run.
+#
+# **Masked by its role and not by its digits**, which is #3988 — filed
+# against the zsh copy of this file and true of this one, which nobody had
+# looked at. The mask was `sed "s/$$/<pid>/g"`, and the `99` three rows down
+# is the collision: `kill: 99: unknown signal name` wears exactly the shape
+# `kill: <pid>: no such process` does, so a run whose pid happened to be 99
+# had the signal number masked as a pid and the file answered two different
+# ways. Bounding the digits by non-digits does not close it — `: 99:` is a
+# digit run bounded by non-digits — so the mask matches the two *sentences*
+# that carry a pid and nothing else.
+#
+# One shape in all four copies of this file, and
+# internal/suite/pidmask_test.go is the guard that it does not over-match.
+# That test is what found this copy: #3456 fixed two of the four by hand and
+# #3988 was filed about a third.
+nopid() { sed -e "s/kill $$ failed/kill <pid> failed/g" -e "s/kill: $$: no such process/kill: <pid>: no such process/g"; }
+
 say 'a signal number out of range'
-( kill -99 $$ ) 2>&1 > /dev/null | sed "s/$$/<pid>/g"
+( kill -99 $$ ) 2>&1 > /dev/null | nopid
 ( kill -99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
 
 say 'the same number written to the option that takes one'
-( kill -n 99 $$ ) 2>&1 > /dev/null | sed "s/$$/<pid>/g"
+( kill -n 99 $$ ) 2>&1 > /dev/null | nopid
 ( kill -n 99 $$ ) > /dev/null 2>&1; printf 'status %s\n' "$?"
 
 say 'and to the option that takes a name, which does not send'

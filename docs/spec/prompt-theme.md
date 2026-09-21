@@ -641,6 +641,33 @@ That list is written down in the code and shrinks as things are
 implemented. It is the same silent-wrong-answer rule the rest of this
 repository holds to, applied to a prompt.
 
+#### Where it is said, built 2026-09-21
+
+**At the prompt, on standard error, once each.** The same place and the
+same reason an unfired hook is reported: a startup file is read before
+there is anywhere to say anything and the person is not looking yet, and
+the prompt is the first moment there is a session to complain to. Once
+each, because a prompt is drawn every line and a complaint repeated every
+line is a broken shell rather than a report.
+
+**Before the prompt is drawn rather than after**, so a finding that comes
+*out of* drawing — an element nothing answers — is said at the next
+prompt rather than this one. That is the right way round: the prompt goes
+on the screen last, and a diagnostic written after it would land
+underneath it in raw mode, where a newline moves down without returning
+the carriage. One prompt late and legible beats immediate and smeared.
+
+Everything the engine can report goes through it: a line in a
+configuration file that is not a setting, a named file that is not there,
+a preset that is neither carried nor a path, an element nothing draws, an
+icon table that is not carried, and a repository that cannot be watched.
+
+This is **not** `prompt show`, which is the other half and does not exist
+yet: what a setting resolves to and which layer it came from, printed on
+request rather than volunteered. The two answer different questions — "is
+anything wrong" is volunteered because nobody thinks to ask it, and "what
+is my configuration" is asked.
+
 ## Extending it without building the shell
 
 This is a requirement, so it gets a section rather than a paragraph.

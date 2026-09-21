@@ -697,3 +697,70 @@ func TestASegmentFunctionsOutputDoesNotReachTheTerminal(t *testing.T) {
 		t.Error("the session's streams were not put back")
 	}
 }
+
+// What a theme read and did not honor reaches the person, once each.
+//
+// Everything this engine reports — a line in a file that is not a setting, a
+// preset nobody has, an element nothing draws, an icon table that is not
+// carried, a repository that cannot be watched — went into a method nothing
+// called until this. A report that only a Go caller can reach is the silent
+// half of the failure it exists to prevent.
+func TestWhatTheThemeCouldNotHonorIsSaidOnce(t *testing.T) {
+	var errs strings.Builder
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "kubernetes prompt_char",
+		"SH_PROMPT_PRESET":        "not-a-look",
+	})
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+	s := Shell{
+		Runner: runner, Err: &errs, Name: "sh",
+		Theme: theme,
+		hooks: &hookState{reported: map[string]bool{}, themeReported: map[string]bool{}},
+	}
+
+	// The preset is known before anything is drawn; the element nothing
+	// answers is known only once a prompt has been drawn, which is why the
+	// report is before the draw and one prompt behind it.
+	s.reportThemeProblems()
+	if _, drawing := theme.DrawPrompt(PromptInfo{}); !drawing {
+		t.Fatal("the theme did not draw")
+	}
+	s.reportThemeProblems()
+
+	said := errs.String()
+	for _, want := range []string{"not-a-look", "kubernetes"} {
+		if !strings.Contains(said, want) {
+			t.Errorf("nothing said about %q:\n%s", want, said)
+		}
+	}
+	if !strings.Contains(said, "sh: prompt: ") {
+		t.Errorf("the report is not worded as the shell's:\n%s", said)
+	}
+
+	// And again, because a prompt is drawn every line and a complaint
+	// repeated every line is a broken shell rather than a report.
+	before := errs.Len()
+	s.reportThemeProblems()
+	s.reportThemeProblems()
+	if errs.Len() != before {
+		t.Errorf("the report repeated itself:\n%s", strings.TrimPrefix(errs.String(), said))
+	}
+}
+
+// A theme with nothing to say says nothing.
+func TestAThemeWithNothingToReportIsSilent(t *testing.T) {
+	var errs strings.Builder
+	runner := newTestRunner(map[string]string{"SH_PROMPT_LEFT_ELEMENTS": "dir prompt_char"})
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+	s := Shell{
+		Runner: runner, Err: &errs, Name: "sh", Theme: theme,
+		hooks: &hookState{reported: map[string]bool{}, themeReported: map[string]bool{}},
+	}
+	theme.DrawPrompt(PromptInfo{Dir: t.TempDir()})
+	s.reportThemeProblems()
+	if errs.Len() != 0 {
+		t.Errorf("a theme with nothing wrong said %q", errs.String())
+	}
+}

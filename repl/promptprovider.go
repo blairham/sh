@@ -200,3 +200,22 @@ type PromptThemeFunc func(PromptInfo) (ThemedPrompt, bool)
 
 // DrawPrompt calls f.
 func (f PromptThemeFunc) DrawPrompt(info PromptInfo) (ThemedPrompt, bool) { return f(info) }
+
+// PromptThemeProblems is a theme that can say what it read and did not honor.
+//
+// A setting has three states — absent, honored, and **set and ignored** — and
+// the third is the one that is invisible by default: the person configured
+// something, the tool accepted it, and the prompt quietly did something else.
+// That is the silent-wrong-answer class this repository treats as its worst,
+// applied to the most visible line on the screen, so a theme that can name
+// its own findings is asked for them and they are said out loud.
+//
+// Optional. A theme with nothing to report does not implement it, and a
+// session with such a theme costs nothing.
+type PromptThemeProblems interface {
+	// Problems is what was read and not honored, in whatever order the theme
+	// found them. Each is a whole sentence: it is printed as it stands, so a
+	// theme that returns a bare key name has said nothing a person can act
+	// on.
+	Problems() []string
+}

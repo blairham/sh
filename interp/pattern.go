@@ -184,13 +184,13 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	// that separates a live `|` from a written one. See markWrittenBars.
 	var fromValue [][2]int
 	spans := r.patternTilde(w, &b)
-	// Whether the word is the one flavor whose backslashes belong to a
-	// regular-expression engine rather than to this matcher. See
-	// backreferenceDigit for the single escape that reading reaches.
-	ere := r.ereTildePattern(spans)
+	// Which regular-expression flavor the word's backslashes belong to, if
+	// any: they are the expression's there rather than this matcher's. See
+	// tildeKeepsBackslash for which of them the reading reaches.
+	flavor := r.tildeRegexFlavor(spans)
 	for i, s := range spans {
 		r.expandingSpan = i
-		if ere && backreferenceDigit(s) {
+		if tildeKeepsBackslash(flavor, s) {
 			b.WriteByte('\\')
 			b.WriteString(s.Value)
 			continue
@@ -296,58 +296,95 @@ func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
 	return b.String()
 }
 
-// ereTildePattern reports whether these pattern spans open with a `~(…)`
-// group naming the one regular-expression flavor this shell answers.
+// tildeRegexFlavor reports which regular-expression language these pattern
+// spans open in, and is tildeGlob for spans that open in none.
 //
 // Read off the **source** rather than off the finished pattern, because the
 // thing it decides has to be decided while a backslash is still a backslash:
 // quote removal turns a written `\1` into the span `1`, and by the time the
 // pattern is a string the two are the same text. The group is literal,
 // unquoted and at the front of the word, so the first span holds all of it.
-// See unsupportedERE and #3894.
-func (r *Runner) ereTildePattern(spans []syntax.Span) bool {
+// See tildeKeepsBackslash and #3894.
+func (r *Runner) tildeRegexFlavor(spans []syntax.Span) tildeFlavor {
 	if !r.dialect().TildeGroup || len(spans) == 0 {
-		return false
+		return tildeGlob
 	}
 	s := spans[0]
 	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
-		return false
+		return tildeGlob
 	}
 	body, _, ok := splitTildeModifier(s.Value)
 	if !ok {
-		return false
+		return tildeGlob
 	}
 	m, unhonored := readTildeModifier(body)
-	return unhonored == 0 && m.flavor == tildeERE
+	if unhonored != 0 {
+		return tildeGlob
+	}
+	return m.flavor
 }
 
-// backreferenceDigit reports whether this span is an unquoted backslash before
-// one of the digits `1` to `9` — a **backreference**, in the one flavor whose
-// backslashes reach a regular-expression engine.
+// tildeKeepsBackslash reports whether this span is a quoting backslash that
+// belongs to the regular expression rather than to the shell — one to write
+// back into the pattern rather than to let quote removal take.
 //
 // The span kind is the whole of the reading: a backslash written in front of
 // a character is its own [syntax.Quoting] rather than text, which is what
-// makes the construct visible here and invisible one step later. Measured on
-// ksh93u+ 2012-08-01, 2026-09-20: `[[ abab == ~(E)(ab)\1 ]]` matches there,
-// and the digit is a backreference rather than the character `1` —
-// `[[ ab1 == ~(E)(ab)\1 ]]` does **not** match, where `~(E)(ab)1` does.
+// makes the construct visible here and invisible one step later.
 //
-// This shell cannot answer that, because Go's `regexp` is RE2 and RE2 has no
-// backreferences, and it is refused by name for exactly that reason. So the
-// backslash is kept rather than removed: dropped, the pattern becomes the
-// perfectly ordinary `(ab)1`, which compiles, matches nothing here, and hides
-// the construct from the scan that would have named it (#3894).
+// **The reference shell keeps a different set per flavor, and that is
+// measured rather than tidied.** ksh93u+ 2012-08-01, 2026-09-20, each row
+// with the control that separates the two readings:
 //
-// **Only the digits.** A `~(E)` pattern's other escapes — `\.`, `\d`, `\y` —
-// part company with quote removal in the same way and are left exactly as
-// they were, because RE2 and ksh93's engine do not agree about all of them:
-// both read `\d` as a digit class and `\.` as a literal dot, and ksh93 reads
-// `\y` as the letter where RE2 refuses the pattern outright. Passing every
-// backslash through would trade this silence for a new one on the letters.
-// That is a divergence of its own and wants its own measurement.
-func backreferenceDigit(s syntax.Span) bool {
-	return s.Kind == syntax.Literal && s.Quoting == syntax.BackslashQuoted &&
-		len(s.Value) == 1 && s.Value[0] >= '1' && s.Value[0] <= '9'
+//	[[ aXb == ~(E)a\.b ]]        no      so `E` keeps the backslash
+//	[[ aXb == ~(G)a\.b ]]        yes     and `G` does not
+//	[[ abcd == ~(E)\(ab\)cd ]]   no      `E` keeps it here too
+//	[[ abc == ~(G)a\(b\)c ]]     yes     and `G` keeps this one
+//	[[ aab == ~(G)a\+b ]]        no      while dropping this one
+//	[[ ab == ~(G)ax\?b ]]        yes     and keeping this one
+//
+// So the extended flavors keep every backslash there and the basic ones keep
+// only some. What is modeled is narrower than either, and deliberately:
+//
+//   - For the extended flavors, **only the digits**, which is what #3894
+//     settled and is unchanged. A `\1` to `\9` keeps its backslash because
+//     dropping it turns the pattern into the perfectly ordinary `(ab)1` and
+//     hides from unsupportedERE the one construct this shell has to name.
+//     The rest are left to quote removal because RE2 and ksh93's engine do
+//     not agree about all of them — both read `\d` as a digit class and `\.`
+//     as a literal dot, and ksh93 reads `\y` as the letter where RE2 refuses
+//     the pattern outright. Passing every backslash through would trade this
+//     silence for a new one on the letters.
+//   - For `X` the ampersand as well, because there it is an **operator**:
+//     dropping the backslash would turn the literal `a\&b` into the
+//     conjunction `a&b`, which is a wrong answer rather than a narrower one.
+//     Measured, `[[ "a&b" == ~(X)a\&b ]]` matches and `[[ ab == … ]]` does
+//     not. See tildeConjunction, which undoes the spelling for the engine.
+//   - For the **basic** flavors, the characters the rows above and their
+//     siblings show kept — `(`, `)`, `|`, `?`, `*`, `[`, `^`, `<`, `>` and
+//     the digits — and no others. Those are the ones whose backslash decides
+//     whether the character is an operator, so dropping one changes the
+//     expression rather than narrowing it; `.`, `+`, `{` and `}` are
+//     measured **dropped** there and are dropped here for the same reason
+//     the digits are kept, which is that the reference is what is being
+//     reproduced.
+func tildeKeepsBackslash(flavor tildeFlavor, s syntax.Span) bool {
+	if s.Kind != syntax.Literal || s.Quoting != syntax.BackslashQuoted ||
+		len(s.Value) != 1 {
+		return false
+	}
+	c := s.Value[0]
+	if c >= '1' && c <= '9' {
+		return flavor == tildeERE || flavor == tildeAugERE ||
+			flavor == tildePerl || flavor == tildeBRE
+	}
+	switch flavor {
+	case tildeAugERE:
+		return c == '&'
+	case tildeBRE:
+		return strings.IndexByte(`()|?*[^<>`, c) >= 0
+	}
+	return false
 }
 
 // patternTilde expands a leading tilde into the builder and gives back the

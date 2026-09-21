@@ -196,28 +196,57 @@ func TestATildeGroupOverSeveralComponentsIsLeftAsWritten(t *testing.T) {
 	}
 }
 
-// The regular-expression letters stay refused, and the reason is not effort.
+// The four regular-expression letters each read a language of their own, and
+// a row per letter is what says so: reading any of them as `E` would pass a
+// test that only asked whether the letter is accepted.
 //
-// Measured on ksh93u+ 2012-08-01, 2026-09-18: `[[ abab == ~(G)\(ab\)\1 ]]`
-// matches and `[[ abcd == ~(G)\(ab\)\1 ]]` does not, with
-// `[[ abcd == ~(G)\(ab\)cd ]]` as the control that says the group parses. So
-// that flavor has **backreferences**, Go's `regexp` is RE2 and has none —
-// `regexp.Compile` refuses `(ab)\1` outright — and the same two probes answer
-// no under `~(E)` and `~(X)`, which says it is `G`'s alone.
-//
-// Refused by name rather than matched without them: a pattern using a
-// backreference would answer a plausible `no`, which is the wrong-and-silent
-// shape this repository minds most (#3186).
-func TestTheRegularExpressionLettersAreStillRefusedByName(t *testing.T) {
-	for _, c := range []struct{ src, want string }{
-		{`[[ abc == ~(G)abc ]]`, "ksh: ~(G)abc: the ~(G) pattern modifier is not implemented\n"},
-		{`[[ abc == ~(P)abc ]]`, "ksh: ~(P)abc: the ~(P) pattern modifier is not implemented\n"},
-		{`[[ abc == ~(V)abc ]]`, "ksh: ~(V)abc: the ~(V) pattern modifier is not implemented\n"},
-		{`[[ abc == ~(X)abc ]]`, "ksh: ~(X)abc: the ~(X) pattern modifier is not implemented\n"},
+// Measured on ksh93u+ 2012-08-01, 2026-09-20, every pattern supplied through
+// a variable so that the shell's own quote removal and its `&` operator
+// cannot reach it first. The rows answering 1 are the controls, and they are
+// what separates each letter from the one beside it — `~(G)a?c` is a literal
+// `?` where `~(X)a?c` is an optional character, `~(X)a.c&abc` is a
+// conjunction where `~(E)a&b` is three characters, and `~(P)a\d` is a class
+// where `~(E)a\d` is not reached at all (#3186).
+func TestEachRegularExpressionLetterReadsItsOwnLanguage(t *testing.T) {
+	for _, c := range []struct {
+		src    string
+		status int
+	}{
+		// `G` and `V` are basic: a backslashed paren groups and a bare one
+		// is the character, a bare `+` and `?` are characters too.
+		{`p='~(G)a\(b\)c'; [[ abc == $p ]]`, 0},
+		{`p='~(G)a(b)c'; [[ 'a(b)c' == $p ]]`, 0},
+		{`p='~(G)a?c'; [[ 'a?c' == $p ]]`, 0},
+		{`p='~(G)a?c'; [[ abc == $p ]]`, 1},
+		{`p='~(G)a+b'; [[ 'a+b' == $p ]]`, 0},
+		{`p='~(G)a\+b'; [[ aab == $p ]]`, 0},
+		{`p='~(V)a\(b\)c'; [[ abc == $p ]]`, 0},
+		{`p='~(V)a\{3\}'; [[ aaa == $p ]]`, 0},
+		{`p='~(V)a\{3\}'; [[ aa == $p ]]`, 1},
+		// `X` is the extended one plus the conjunction, whose operands take
+		// the same span rather than the same subject.
+		{`p='~(X)a.c&abc'; [[ abc == $p ]]`, 0},
+		{`p='~(X)a.c&axc'; [[ abc == $p ]]`, 1},
+		{`p='~(X)a&c'; [[ abc == $p ]]`, 1},
+		{`p='~(E)a&b'; [[ 'a&b' == $p ]]`, 0},
+		{`p='~(X)a?c'; [[ abc == $p ]]`, 0},
+		// `P` is Perl's, which is the escape set rather than a new engine.
+		{`p='~(P)a\d'; [[ a1 == $p ]]`, 0},
+		{`p='~(P)a\d'; [[ ab == $p ]]`, 1},
+		{`p='~(P)^a.*?Xb'; [[ aXbXc == $p ]]`, 0},
+		{`p='~(P)^a.*Xb$'; [[ aXbXc == $p ]]`, 1},
+		// And the letters that are still refused by name, which is what
+		// keeps the reading honest: `A` and `B` agree with `E` on every
+		// probe written, and that is not evidence that they are `E`.
+		{`[[ abc == ~(A)abc ]]`, 1},
+		{`[[ abc == ~(B)abc ]]`, 1},
 	} {
 		out, st := kshOut(t, c.src)
-		if out != c.want || st != 1 {
-			t.Errorf("%s\n got %q at %d\nwant %q at 1", c.src, out, st, c.want)
+		wantOut := ""
+		if st != c.status {
+			t.Errorf("%s\n got %q at %d\nwant %q at %d", c.src, out, st, wantOut, c.status)
+		} else if c.status != 1 && out != wantOut {
+			t.Errorf("%s\n got %q, want %q", c.src, out, wantOut)
 		}
 	}
 }
@@ -277,6 +306,44 @@ func TestARegularExpressionConstructTheEngineLacksIsRefusedByName(t *testing.T) 
 		{
 			`v=abab; printf "[%s]" "${v#~(E)(ab)\1}"`,
 			"ksh: ~(E)(ab)\\1: the \\1 backreference is not implemented\n",
+		},
+		// The same two constructs in the letters #3186 added, because the
+		// refusal is the reason they could land: the engine is one engine
+		// and its two absences are the same two whatever the flavor.
+		{
+			`p='~(X)(ab)\1'; [[ abab == $p ]]`,
+			"ksh: ~(X)(ab)\\1: the \\1 backreference is not implemented\n",
+		},
+		{
+			`p='~(P)(ab)\1'; [[ abab == $p ]]`,
+			"ksh: ~(P)(ab)\\1: the \\1 backreference is not implemented\n",
+		},
+		{
+			`p='~(G)\(ab\)\1'; [[ abab == $p ]]`,
+			"ksh: ~(G)\\(ab\\)\\1: the \\1 backreference is not implemented\n",
+		},
+		{
+			`p='~(V)\(ab\)\1'; [[ abab == $p ]]`,
+			"ksh: ~(V)\\(ab\\)\\1: the \\1 backreference is not implemented\n",
+		},
+		{
+			`p='~(X)a(?=b)bc'; [[ abc == $p ]]`,
+			"ksh: ~(X)a(?=b)bc: the (?= lookaround is not implemented\n",
+		},
+		{
+			`p='~(P)(?<=a)bc'; [[ abc == $p ]]`,
+			"ksh: ~(P)(?<=a)bc: the (?<= lookaround is not implemented\n",
+		},
+		// The word edge is the basic flavors' own, and RE2 has only the
+		// two-sided `\b`: measured, `[[ "ab cd" == ~(G)\<cd ]]` matches
+		// there and `[[ abcd == ~(G)\<cd ]]` does not.
+		{
+			`p='~(G)\<cd'; [[ 'ab cd' == $p ]]`,
+			"ksh: ~(G)\\<cd: the \\< word edge is not implemented\n",
+		},
+		{
+			`p='~(V)cd\>'; [[ 'ab cd' == $p ]]`,
+			"ksh: ~(V)cd\\>: the \\> word edge is not implemented\n",
 		},
 	} {
 		out, st := kshOut(t, c.src)

@@ -1147,7 +1147,13 @@ func (r *Runner) popScope(sc *scope) {
 	// shadow, and this unwind is exactly the shape a second copy goes stale
 	// in: it grew from two tables to thirteen an assignment at a time, and
 	// every one of those additions would have had to be made twice.
-	for _, name := range sc.shadowedNames() {
+	shadowed := sc.shadowedNames()
+	// And what those names resolve to *before* the unwind, for the ones
+	// whose assignment does something: the restore moves a value with
+	// nothing being written, and that is a message the store cannot send.
+	// See interp/restoredassignment.go.
+	beforeRestore := r.restoredActionValues(shadowed)
+	for _, name := range shadowed {
 		r.restoreShadowedName(sc, name)
 	}
 	// And the half of the `getopts` position a declaration of OPTIND
@@ -1192,6 +1198,10 @@ func (r *Runner) popScope(sc *scope) {
 	// caller's again before the caller's is put back over it.
 	r.unsealCallerLocals(sc)
 	r.scopes = r.scopes[:len(r.scopes)-1]
+	// And the message for every name the unwind moved, last of all: an
+	// action that reads the name back has to see what the caller sees, and
+	// the enclosing declarations above are the final word on that.
+	r.speakRestoredAssignments(beforeRestore, shadowed)
 }
 
 // shadowedNames is every name this scope has a record of, taken before any of

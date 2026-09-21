@@ -695,6 +695,39 @@ The other shell with a text history file spells its times differently — zsh's
 ksh93 has no text encoding to ask the question of: its `$HISTFILE` is a binary
 format, and pointing it at a file of lines overwrites it.
 
+**An empty line is a gap in the file, not an entry.** bash drops it wherever
+it falls — first, last, between two commands, two in a row, and among `#` time
+lines — on all three read routes. Measured 2026-09-21 on bash 5.3.20, `env -i`
+with a scratch `HOME` (#4024):
+
+| the file | the list |
+| --- | --- |
+| ``, `echo a` | `echo a` |
+| `echo a`, ``, `echo b` | `echo a`, `echo b` |
+| `echo a`, ``, ``, `echo b`, `` | `echo a`, `echo b` |
+| `#1`, `echo a`, ``, `#2`, `echo b` | `echo a`, `echo b` |
+| ``, `` | nothing |
+
+**Empty, not blank**, and the distinction is bash's own rather than a
+convenience: a line of spaces and a line of one tab come back as entries of
+their own. That is the same line bash draws for the lines a script *runs* —
+see above, where a line of blanks joins the list and a truly empty one does
+not — so one rule covers both routes.
+
+This is where the panel parts. zsh keeps a blank line as an entry, measured
+through `fc -R` and through the file `$HISTFILE` names, with and without
+`EXTENDED_HISTORY` headers on the lines around it; ksh93 has no text encoding
+to ask. So this shell states it per dialect rather than reading it off the
+decoder, and the substrate's own answer — a blank is what a history file is
+most often cluttered with — happens to be bash's.
+
+The rule runs **after** the continuation lines are joined, never before. An
+empty line at the end of a multi-line command is part of that command, and
+dropping it first leaves the backslash in front of it dangling and swallows
+the entry after. It costs bash nothing, since bash has no continuation
+encoding — but there is one decoder for every reader of a history file here,
+and the shell it would break is the one that has one.
+
 **The shell's ending appends to `$HISTFILE`** — the one it names then — what
 `history -a` would: the entries this session added that no `-a` has written,
 counted from the end of the list. A line the reader recorded and an entry `-s`

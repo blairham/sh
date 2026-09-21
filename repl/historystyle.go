@@ -134,6 +134,46 @@ type HistoryStyle struct {
 	// against. The file's own shape is the whole of what is read here.
 	EntriesMayCarryAHashTimestampLine bool
 
+	// EmptyLinesAreEntries says a physical line with nothing on it is a
+	// command of its own rather than a gap in the file, so reading the file
+	// back puts an empty entry in the list.
+	//
+	// The panel parts over it, which is the only reason this is a field.
+	// Measured 2026-09-21, `env -i` with a scratch HOME, the same files read
+	// by each shell:
+	//
+	//	bash 5.3.20   drops the blank, wherever it falls — first, last,
+	//	              between two commands, two in a row, and inside a file
+	//	              of `#` time lines. All three read routes agree: `-r`,
+	//	              `-n`, and the read at the first `set -o history`.
+	//	zsh 5.9.2     keeps it, through `fc -R` and through the file
+	//	              `$HISTFILE` names, with and without EXTENDED_HISTORY
+	//	              headers on the lines around it.
+	//	ksh93u+       no text encoding to ask: `$HISTFILE` is a binary
+	//	              format, and pointing it at a file of lines overwrote it
+	//	              with a two-byte magic mid-probe.
+	//
+	// So the zero value — an empty line is not an entry — is bash's answer
+	// and also the substrate's own, which has dropped blanks since the first
+	// read: a blank is what a history file is most often cluttered with and
+	// is never worth walking back through. zsh is the one that has to say
+	// something, and it says it rather than inheriting bash's (#4024).
+	//
+	// **Empty, not blank**, wherever this is false. bash lists a line of
+	// spaces and a line of one tab as entries of their own — measured — and
+	// it is the same line bash draws for the lines a script *runs*, where a
+	// line of blanks joins the list and a truly empty one does not. Testing
+	// a trimmed line here, which this shell used to, is a rule wider than
+	// any shell's and drops what bash keeps.
+	//
+	// The drop happens **after** the continuation lines have been joined,
+	// never before: an empty line at the end of a multi-line command is part
+	// of that command, and removing it first would leave the backslash in
+	// front of it dangling and swallow the entry after. That ordering costs
+	// bash nothing — it has no continuation encoding — but there is one
+	// decoder, and the shell it would break is the shell that has one.
+	EmptyLinesAreEntries bool
+
 	// Control names the variable holding a colon-separated list of what not
 	// to record — `ignorespace`, `ignoredups`, `ignoreboth`. bash calls it
 	// HISTCONTROL. zsh spells the same two rules as options rather than as a

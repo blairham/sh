@@ -74,6 +74,7 @@ type historyEncoding struct {
 	continuesOnABackslash bool
 	mayCarryATimestamp    bool
 	mayCarryAHashLine     bool
+	emptyIsAnEntry        bool
 }
 
 // historyEncodingFrom reads the encoding off the style a dialect stated.
@@ -88,6 +89,7 @@ func historyEncodingFrom(style HistoryStyle) historyEncoding {
 		continuesOnABackslash: style.EntriesContinueOnABackslash,
 		mayCarryATimestamp:    style.EntriesMayCarryATimestampHeader,
 		mayCarryAHashLine:     style.EntriesMayCarryAHashTimestampLine,
+		emptyIsAnEntry:        style.EmptyLinesAreEntries,
 	}
 }
 
@@ -101,8 +103,11 @@ func historyEncodingFrom(style HistoryStyle) historyEncoding {
 // builtins read the same way, and an encoding learned for one is not a rule
 // the other is missing.
 //
-// Blank entries are left in: what to do with one is the caller's, and the
-// session drops them while a script's list keeps the shape of its file.
+// Whether an empty line in the file is an entry is part of that decoding and
+// not a policy left to whoever called — see EmptyLinesAreEntries, where
+// the panel's disagreement is. It used to be the caller's, which meant the
+// session's reader dropped a blank and a script's `history -r` kept one, out
+// of the same file (#4024).
 func HistoryEntries(style HistoryStyle, lines []string) []string {
 	return decodeEntries(lines, historyEncodingFrom(style))
 }
@@ -183,11 +188,11 @@ func (h historyFile) load(ctx context.Context) []string {
 	for sc.Scan() {
 		lines = append(lines, sc.Text())
 	}
-	// Blank lines are dropped *after* the decoding and not before it, because
-	// a blank line can be the inside of a multi-line entry — a `for` loop with
-	// an empty line in it is one command — and dropping it first would join
-	// the halves into a line the person never typed.
-	entries := nonBlank(decodeEntries(lines, h.encoding))
+	// One decoder, and it is the same call `history -r` makes — whether an
+	// empty line is an entry included. This used to drop the blanks itself,
+	// which made the session's reading of a file differ from a script's
+	// reading of the very same file (#4024).
+	entries := decodeEntries(lines, h.encoding)
 	if len(entries) > h.size {
 		entries = entries[len(entries)-h.size:]
 	}
@@ -238,6 +243,13 @@ func decodeEntries(lines []string, enc historyEncoding) []string {
 		// mid-write, or a trim that cut inside an entry. What there is of it
 		// is an entry rather than nothing.
 		out = append(out, withoutTimestamp(strings.TrimSuffix(held.String(), "\n"), enc))
+	}
+	if !enc.emptyIsAnEntry {
+		// Last, and the ordering is the point: an empty line at the end of a
+		// multi-line command is part of that command, so a file whose
+		// encoding joins on a backslash would lose the join if the empties
+		// went first. See EmptyLinesAreEntries.
+		out = withoutEmpty(out)
 	}
 	return out
 }
@@ -294,12 +306,16 @@ func allDigits(s string) bool {
 	return true
 }
 
-// nonBlank drops the entries that are only whitespace, which is what the read
-// has always done and is now done last. See load.
-func nonBlank(entries []string) []string {
+// withoutEmpty drops the entries with nothing in them at all.
+//
+// Nothing at all, rather than nothing but whitespace: a line of spaces is a
+// command as far as every shell measured is concerned, and this used to trim
+// before testing, which dropped an entry bash keeps. See
+// EmptyLinesAreEntries.
+func withoutEmpty(entries []string) []string {
 	out := entries[:0]
 	for _, e := range entries {
-		if strings.TrimSpace(e) != "" {
+		if e != "" {
 			out = append(out, e)
 		}
 	}

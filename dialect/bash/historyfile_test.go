@@ -304,3 +304,77 @@ func TestEveryRouteIntoTheListReadsTheHeadersAlike(t *testing.T) {
 		})
 	}
 }
+
+// An empty line in a history file is a gap and not an entry, which bash drops
+// on the way in and this shell kept (#4024).
+//
+// Measured 2026-09-21 on bash 5.3.20 with `env -i`, a scratch HOME and the
+// same files read by both shells. Every want is the whole listing bash
+// printed, because the defect *adds* an entry — an assertion that only looked
+// for the commands would have passed before the fix as well as after it.
+func TestAnEmptyLineInAHistoryFileIsNotAnEntry(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		lines []string
+		want  string
+	}{{
+		// The issue's own case.
+		name:  "a blank first line",
+		lines: []string{"", "echo a"},
+		want:  "    1  history -r \"$F\"\n    2  echo a\n    3  history\n",
+	}, {
+		name:  "a blank between two commands",
+		lines: []string{"echo a", "", "echo b"},
+		want:  "    1  history -r \"$F\"\n    2  echo a\n    3  echo b\n    4  history\n",
+	}, {
+		name:  "two blanks in a row, and one at the end",
+		lines: []string{"echo a", "", "", "echo b", ""},
+		want:  "    1  history -r \"$F\"\n    2  echo a\n    3  echo b\n    4  history\n",
+	}, {
+		// Empty, not blank: bash lists a line of spaces and a line of one
+		// tab, so the test is for nothing at all rather than for whitespace.
+		name:  "a line of whitespace stays",
+		lines: []string{"echo a", "   ", "\t", "echo b"},
+		want: "    1  history -r \"$F\"\n    2  echo a\n    3     \n    4  \t\n" +
+			"    5  echo b\n    6  history\n",
+	}, {
+		// The two file answers meet here: the `#` lines go because the file
+		// opens with one, and the blank goes on its own account.
+		name:  "a blank among hash time lines",
+		lines: []string{"#1", "echo a", "", "#2", "echo b"},
+		want:  "    1  history -r \"$F\"\n    2  echo a\n    3  echo b\n    4  history\n",
+	}, {
+		name:  "a file of nothing but blanks reads as nothing",
+		lines: []string{"", ""},
+		want:  "    1  history -r \"$F\"\n    2  history\n",
+	}} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := historyFileRun(t, "F=$F\nset -o history\nhistory -r \"$F\"\nhistory\n", c.lines...)
+			if out != c.want {
+				t.Errorf("listing %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// And every route into the list drops them alike, because they go through one
+// decoder rather than each holding the rule — the shape #4013 put in place and
+// the reason this fix went to `repl.HistoryEntries` rather than to `history -r`.
+func TestEveryRouteIntoTheListDropsBlanksAlike(t *testing.T) {
+	seed := []string{"", "echo one", "", "echo two"}
+	for _, c := range []struct{ name, src, want string }{{
+		name: "the read at the first set -o history",
+		src:  "HISTFILE=$F\nset -o history\nhistory\n",
+		want: "    1  echo one\n    2  echo two\n    3  history\n",
+	}, {
+		name: "the -n letter",
+		src:  "F=$F\nset -o history\nhistory -n \"$F\"\nhistory\n",
+		want: "    1  history -n \"$F\"\n    2  echo one\n    3  echo two\n    4  history\n",
+	}} {
+		t.Run(c.name, func(t *testing.T) {
+			if out, _ := historyFileRun(t, c.src, seed...); out != c.want {
+				t.Errorf("listing %q, want %q", out, c.want)
+			}
+		})
+	}
+}

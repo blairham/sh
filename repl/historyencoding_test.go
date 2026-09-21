@@ -22,6 +22,7 @@ var (
 	stampedOnly = historyEncoding{mayCarryATimestamp: true}
 	zshLikeFile = historyEncoding{continuesOnABackslash: true, mayCarryATimestamp: true}
 	hashLines   = historyEncoding{mayCarryAHashLine: true}
+	keepEmpties = historyEncoding{emptyIsAnEntry: true}
 )
 
 func TestDecodingAHistoryFile(t *testing.T) {
@@ -165,6 +166,39 @@ func TestDecodingAHistoryFile(t *testing.T) {
 			[]string{"#1"},
 			nil,
 		},
+		{
+			// The fourth answer: an empty line is a gap in the file and not
+			// a command. bash's, wherever the blank falls — this is the
+			// issue's own case with the rest of the positions beside it.
+			"an empty line is not an entry",
+			plainFile,
+			[]string{"", "echo one", "", "", "echo two", ""},
+			[]string{"echo one", "echo two"},
+		},
+		{
+			// Empty, not blank. bash lists a line of spaces and a line of
+			// one tab, so a TrimSpace test here would drop what it keeps.
+			"a line of whitespace is an entry",
+			plainFile,
+			[]string{"echo one", "   ", "\t", "echo two"},
+			[]string{"echo one", "   ", "\t", "echo two"},
+		},
+		{
+			// And it holds inside a file of time lines, which is where the
+			// two answers meet: the headers go for their reason and the
+			// blank for its own.
+			"an empty line among hash time lines goes too",
+			hashLines,
+			[]string{"#1", "echo one", "", "#2", "echo two"},
+			[]string{"echo one", "echo two"},
+		},
+		{
+			// A file of nothing but blanks holds nothing.
+			"a file of only empty lines is empty",
+			plainFile,
+			[]string{"", ""},
+			nil,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := decodeEntries(tc.in, tc.enc)
@@ -199,6 +233,16 @@ func TestEachEncodingAnswerMovesOnItsOwn(t *testing.T) {
 	if got, want := decodeEntries(hashed, hashLines), []string{"echo one"}; !slices.Equal(got, want) {
 		t.Errorf("decoded %q, want %q", got, want)
 	}
+	// And the fourth answer moves on its own in the other direction: the
+	// empty line goes unless the style asks for it to stay, so a shell that
+	// has the other two encodings does not thereby keep blanks.
+	blanked := []string{"echo one", "", "echo two"}
+	if got, want := decodeEntries(blanked, zshLikeFile), []string{"echo one", "echo two"}; !slices.Equal(got, want) {
+		t.Errorf("decoded %q with no empty-line answer, want %q", got, want)
+	}
+	if got := decodeEntries(blanked, keepEmpties); !slices.Equal(got, blanked) {
+		t.Errorf("decoded %q, want the blank kept", got)
+	}
 }
 
 // The encoding a reader uses comes off the style the dialect stated, and
@@ -217,8 +261,14 @@ func TestTheEncodingComesOffTheStatedStyle(t *testing.T) {
 		EntriesContinueOnABackslash:       true,
 		EntriesMayCarryATimestampHeader:   true,
 		EntriesMayCarryAHashTimestampLine: true,
+		EmptyLinesAreEntries:              true,
 	}
-	want := historyEncoding{continuesOnABackslash: true, mayCarryATimestamp: true, mayCarryAHashLine: true}
+	want := historyEncoding{
+		continuesOnABackslash: true,
+		mayCarryATimestamp:    true,
+		mayCarryAHashLine:     true,
+		emptyIsAnEntry:        true,
+	}
 	if got := historyEncodingFrom(all); got != want {
 		t.Errorf("historyEncodingFrom = %+v, want %+v", got, want)
 	}
@@ -232,6 +282,17 @@ func TestTheEncodingComesOffTheStatedStyle(t *testing.T) {
 	if got := HistoryEntries(none, lines); !slices.Equal(got, lines) {
 		t.Errorf("HistoryEntries with a silent style = %q, want %q", got, lines)
 	}
+	// The empty-line answer reaches the exported decoder by the same route,
+	// which is what stops the session's reader and a script's `history -r`
+	// from parting over a blank in one file (#4024).
+	blanked := []string{"echo one", "", "echo two"}
+	if got := HistoryEntries(none, blanked); !slices.Equal(got, []string{"echo one", "echo two"}) {
+		t.Errorf("HistoryEntries = %q, want the blank dropped", got)
+	}
+	got = HistoryEntries(HistoryStyle{EmptyLinesAreEntries: true}, blanked)
+	if !slices.Equal(got, blanked) {
+		t.Errorf("HistoryEntries = %q, want the blank kept", got)
+	}
 }
 
 // A blank line inside a multi-line entry is part of the entry, which is why
@@ -243,10 +304,10 @@ func TestABlankLineInsideAnEntrySurvives(t *testing.T) {
 	if want := []string{"for i in 1 2\n\ndone"}; !slices.Equal(got, want) {
 		t.Errorf("decoded %q, want %q", got, want)
 	}
-	// And a blank line that is an entry of its own is still dropped.
-	if got, want := nonBlank([]string{"echo one", "", "   ", "echo two"}),
-		[]string{"echo one", "echo two"}; !slices.Equal(got, want) {
-		t.Errorf("nonBlank = %q, want %q", got, want)
+	// An entry of nothing at all goes; one of whitespace is a command.
+	if got, want := withoutEmpty([]string{"echo one", "", "   ", "echo two"}),
+		[]string{"echo one", "   ", "echo two"}; !slices.Equal(got, want) {
+		t.Errorf("withoutEmpty = %q, want %q", got, want)
 	}
 }
 
@@ -271,7 +332,10 @@ func TestLoadDropsBlanksAfterDecodingAndNotBefore(t *testing.T) {
 	}
 	h := historyFile{
 		path: path, size: 50, file: 50,
-		encoding: historyEncoding{continuesOnABackslash: true},
+		// Both answers on, because the ordering is only a question for a
+		// file whose encoding joins lines *and* whose shell drops empties.
+		// With the empty answer off there is nothing to order.
+		encoding: continued,
 	}
 	got := h.load(t.Context())
 	// Three entries. Dropping the blank first gives two, the second of which

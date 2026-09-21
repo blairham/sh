@@ -1462,6 +1462,14 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		return nil
 	}
 	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
+	// The list the body is given is a list of its own, so what a `set` in
+	// the body replaces is that one — which is why the mark travels with the
+	// list rather than standing for the shell. Measured on both bash builds:
+	// a sourced file whose `set` runs inside a function it calls gets the
+	// caller's parameters back, where the same `set` at the file's own level
+	// stands. See Semantics.DotSetCancelsTheRestore.
+	savedReplaced := r.paramsReplacedBySet
+	r.paramsReplacedBySet = false
 	// Entered before the location moves into the body, because the frame
 	// records where the call was made *and what it was made inside* — see
 	// pushFrame, and Runner.LocatedAtTheCall for what reads it back. A push
@@ -1686,6 +1694,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		exitTrapReturned = r.runFunctionExitTrap(ctx, body)
 	}
 	r.Params, r.inFunc, r.funcLine = saved, savedIn, savedLine
+	r.paramsReplacedBySet = savedReplaced
 	// The RETURN trap, if this call's own body set one. After the locals
 	// and parameters are back — the action runs in the caller — and before
 	// controlReturn is cleared, so an explicit `return` still fires it.

@@ -85,3 +85,20 @@ printf 'the caller still has n=%s [%s] [%s]\n' "$#" "$1" "$2"
 # It takes its words the way `.` does, and it restores the same way.
 source ./args.sh
 printf 'and with none n=%s [%s]\n' "$#" "$1"
+
+# A `set` the dot script runs itself is put back with everything else —
+# #4063. The words after the filename give the script parameters of its own,
+# and when it returns the caller's are back whatever the script did to them.
+# bash is the one column where such a replacement stands.
+printf -- '--- a set inside the dot script\n'
+printf 'set -- m n o p\n' > setter.sh
+set -- a b c; . ./setter.sh p q; printf 'after a set -> [%s]\n' "$*"
+
+# An empty replacement is put back the same way, which says the row above is
+# not about the script leaving something behind.
+printf 'set --\n' > clearer.sh
+set -- a b c; . ./clearer.sh p q; printf 'after set -- -> [%s] n=%s\n' "$*" "$#"
+
+# And `shift` is the control every column agrees on.
+printf 'shift\n' > shifter.sh
+set -- a b c; . ./shifter.sh p q; printf 'after a shift -> [%s]\n' "$*"

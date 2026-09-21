@@ -2338,6 +2338,11 @@ func Semantics() interp.Semantics {
 	// being a constant inside the mode (#3818).
 	s.DotWithNoOperandIsFatalInPosixMode = interp.No
 	s.DotPassesArguments = interp.Yes
+	// And the caller's come back over whatever the file did to them, `set`
+	// included: measured 2026-09-21 on zsh 5.9.2, `set -- a b c; . ./g p q;
+	// echo "$@"` with `set -- m n o p` in the file is `a b c`, where bash
+	// lets the `set` stand (#4063).
+	s.DotSetCancelsTheRestore = interp.No
 	// A leading dash-word is the file here, so `. -p dir f` is a complaint
 	// about a file called `-p` and not about an option.
 	s.DotReadsOptions = interp.No

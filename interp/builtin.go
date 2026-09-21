@@ -1028,6 +1028,13 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 	// explicit `--`, or operands after the options, replaces them.
 	if i == 0 || (i <= len(args) && args[min(i-1, len(args)-1)] == "--") || i < len(args) {
 		r.Params = append([]string(nil), args[i:]...)
+		// And the replacement is remembered, because one dialect lets a
+		// sourced file's own `set` stand where the caller's parameters
+		// would otherwise come back — see Semantics.DotSetCancelsTheRestore.
+		// Here rather than anywhere else that writes r.Params: measured on
+		// both bash builds, `set -x`, a bare `set` and `shift` all leave
+		// that restore alone, and only a replacement cancels it.
+		r.paramsReplacedBySet = true
 	}
 	if r.setSortsOperands {
 		// With operands they are sorted as they arrive, and with none the

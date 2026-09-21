@@ -15542,6 +15542,57 @@ type Semantics struct {
 	// there are some.
 	DotPassesArguments Answer
 
+	// DotSetCancelsTheRestore lets a `set` run by the sourced file itself
+	// stand, rather than putting the caller's positional parameters back
+	// over it when the file ends.
+	//
+	// The restore DotPassesArguments promises is not unconditional. Measured
+	// 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C`, with a file `g`
+	// holding the single line `set -- m n o p` and a file `gs` holding
+	// `shift`:
+	//
+	//	                 . ./g p q    . ./gs p q
+	//	bash 5.3.20      m n o p      a b c
+	//	bash 3.2.57      m n o p      a b c
+	//	zsh 5.9.2        a b c        a b c
+	//	ksh93u+          a b c        a b c
+	//	BusyBox ash      a b c        a b c
+	//	dash 0.5.12      m n o p      b c
+	//
+	// each run as `set -- a b c; . ./FILE p q; echo "$@"`.
+	//
+	// `shift` is the control and it is what makes this an axis rather than a
+	// question about whether the restore happens at all: every column that
+	// passes the words restores over a `shift`, and only bash lets a `set`
+	// through. dash's column is not a third answer — it ignores the words,
+	// so there is no second list to put back and both of its cells are the
+	// caller's own parameters being changed in place.
+	//
+	// It is a *replacement* that cancels it, not the `set` word: measured on
+	// both bash builds, `set -x` and a bare `set` leave the restore alone,
+	// `set --` stands with the list emptied, and `set -- m n; shift` stands
+	// as `n`. And it is the sourced file's own list that has to be replaced
+	// — a `set` inside a function the file calls, or inside a subshell it
+	// opens, is about that call's parameters and the caller's still come
+	// back.
+	//
+	// unpinned bash: no corpus row reaches the pair. A row needs a second
+	// file to source, `set` inside it and a read of `$@` after the `.`
+	// returns, and every corpus case about `.` stops at what the sourced
+	// file *sees*. TestASetInASourcedFileStandsHere pins it in Go, against
+	// the measurement above.
+	// unpinned zsh: the same reach problem, and pinned by dialect/zsh's
+	// TestASetInASourcedFileIsRestoredOverHere.
+	// unpinned ksh: as zsh, and pinned by dialect/ksh's
+	// TestASetInASourcedFileDoesNotSurviveTheDotHere.
+	// unpinned ash: as zsh, and pinned by dialect/ash's
+	// TestASetInASourcedFileIsRestoredOverInBusyBox.
+	// unpinned dash: the axis is never consulted in that column at all —
+	// DotPassesArguments is No there, so nothing is saved and there is no
+	// restore for a `set` to cancel. See the `unanswered` note in
+	// dialect/dash.
+	DotSetCancelsTheRestore Answer
+
 	// ExecFailureRunsExitTrap runs a `trap … EXIT` handler when `exec` was
 	// given a bare name and the PATH search found nothing at all. True in
 	// dash, bash and BusyBox ash, false in ksh93 and zsh.
@@ -23468,7 +23519,11 @@ func PosixSemantics() Semantics {
 		// the five dialects grew — dash alone ignores the words. And it
 		// reads the file from PATH, with no mention of the current directory
 		// as a fallback.
-		DotPassesArguments:             No,
+		DotPassesArguments: No,
+		// And with no second list there is nothing for a `set` in the
+		// sourced file to cancel, so DotSetCancelsTheRestore is a question
+		// the standard's `.` is never asked — see the axis, where the
+		// column that ignores the words is not a third answer.
 		DotFallsBackToCurrentDirectory: No,
 		// And there is nothing for POSIX mode to take away, which is what
 		// the three columns with no fallback answer: the mode is only ever

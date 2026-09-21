@@ -166,3 +166,34 @@ eval --; printf 'the marker alone -> %s\n' "$?"
 
 # And a word with no dash reaches none of this.
 eval echo plain; printf 'plain -> %s\n' "$?"
+
+# A `set` the dot script runs itself is *not* put back — #4063. The words
+# after the filename give the script parameters of its own and the caller's
+# come back when it returns, which is ext/'s question; what is bash's alone
+# is that a replacement made inside the script survives the return. zsh,
+# ksh93 and BusyBox ash all put the caller's back over it.
+printf -- '--- a set inside the dot script\n'
+printf 'set -- m n o p\n' > setter.sh
+set -- a b c; . ./setter.sh p q; printf 'after a set -> [%s]\n' "$*"
+
+# `shift` is the control, and it is the row that says the restore still
+# happens: only a replacement cancels it.
+printf 'shift\n' > shifter.sh
+set -- a b c; . ./shifter.sh p q; printf 'after a shift -> [%s]\n' "$*"
+
+# An empty replacement stands too, so the caller is left with none at all.
+printf 'set --\n' > clearer.sh
+set -- a b c; . ./clearer.sh p q; printf 'after set -- -> [%s] n=%s\n' "$*" "$#"
+
+# And an option letter is not a replacement.
+printf 'set -f\nset +f\n' > opter.sh
+set -- a b c; . ./opter.sh p q; printf 'after an option -> [%s]\n' "$*"
+
+# The replacement has to be the dot script's own: a `set` inside a function
+# it calls is about that call's parameters, and the caller's still come back.
+printf 'f() { set -- z; }\nf\n' > infn.sh
+set -- a b c; . ./infn.sh p q; printf 'after a set in a function -> [%s]\n' "$*"
+
+# A subshell's copy is nobody else's either.
+printf '( set -- z )\n' > insub.sh
+set -- a b c; . ./insub.sh p q; printf 'after a set in a subshell -> [%s]\n' "$*"

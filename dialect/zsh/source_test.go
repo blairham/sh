@@ -817,3 +817,31 @@ func TestSourceNamesItselfWhenItCannotOpen(t *testing.T) {
 		t.Errorf("failures = %q at %d, want %q at 0", out, st, want)
 	}
 }
+
+// TestASetInASourcedFileIsRestoredOverHere is the other side of the split
+// bash is on: the caller's positional parameters come back whatever the
+// sourced file did to its own.
+//
+// Measured 2026-09-21 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+// with `set -- a b c; . ./g p q; echo "$@"`. A file holding `set -- m n o p`
+// answers `a b c` here and `m n o p` on both bash builds; a file holding
+// `shift` answers `a b c` in both columns, which is the control that says
+// the restore itself is not what the shells disagree about.
+func TestASetInASourcedFileIsRestoredOverHere(t *testing.T) {
+	for _, body := range []string{"set -- m n o p", "set --", "shift"} {
+		t.Run(body, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "g.sh")
+			if err := os.WriteFile(path, []byte(body+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out, st := runZsh(t, dir, `set -- a b c; . `+path+` p q; echo "after=[$@]"`)
+			if st != 0 {
+				t.Errorf("status %d, want 0; output %q", st, out)
+			}
+			if got := strings.TrimSpace(out); got != "after=[a b c]" {
+				t.Errorf("output = %q, want the caller's parameters back", got)
+			}
+		})
+	}
+}

@@ -78,6 +78,7 @@ first word that is not one of them belongs to the shell.
 	-acp-connect CMD ...   drive an ACP agent, under the same policy
 	-acp-allow             answer the agent's permission requests with yes
 	-acp-auth METHOD       sign in with one of the methods the agent offers
+	-mcp                   serve the Model Context Protocol on standard input
 	-highlight             color a quotation left open, while it is typed
 
 A plugin's path must be absolute and there is no search: a plugin named by a
@@ -90,6 +91,13 @@ allowed to start.
 A policy reaches an ACP session too: -acp -policy p governs every session a
 client opens, its refusal is final, and nobody is asked about an action the
 policy already refused. -audit and -trace-events keep recording under -acp.
+
+-mcp is the same offer to the other protocol, and it is the one a coding agent
+is configured with by a command line somebody writes: an MCP server is added
+as: sh -mcp -dialect bash -policy p — so the policy rides along where $SHELL -c
+has nowhere to put it. A command arrives as a tool call, is gated and recorded
+exactly as a script's is, and is held as a handle rather than answered with a
+string — so tail -f streams instead of blocking forever.
 
 A policy on an agent reaches what the agent asks this shell for: the files it
 reads and writes, and the commands it asks us to run. A command it runs in its

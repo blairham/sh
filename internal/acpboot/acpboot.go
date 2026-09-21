@@ -29,11 +29,6 @@ import (
 // disagree about what failure looks like.
 const serveFailure = 2
 
-// devVersion is what a build from a checkout reports to a client. Not a
-// placeholder to be filled in — a client asking a development build what it is
-// should be told that it is one.
-const devVersion = "0.0.0-dev"
-
 // ServeAs builds the hook for a binary that announces itself by the given
 // name.
 //
@@ -68,7 +63,7 @@ func serve(name string, sh driver.Shell) int {
 	agent := acp.NewAgent(sh, acp.Implementation{
 		Name:    name,
 		Title:   name,
-		Version: reported(sh.Version),
+		Version: sh.ReportedVersion(),
 	})
 	ctx := context.Background()
 	// Standard output is the protocol's and nothing else may be written
@@ -87,12 +82,4 @@ func serve(name string, sh driver.Shell) int {
 		return serveFailure
 	}
 	return 0
-}
-
-// reported is what to tell a client when the build stamped nothing.
-func reported(v string) string {
-	if v == "" {
-		return devVersion
-	}
-	return v
 }

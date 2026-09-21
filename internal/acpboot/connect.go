@@ -21,6 +21,7 @@ import (
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/event"
+	"github.com/blairham/sh/internal/termhost"
 	"github.com/blairham/sh/repl"
 )
 
@@ -99,7 +100,7 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod strin
 	tty := repl.IsTerminal(os.Stdin) && repl.IsTerminal(os.Stderr)
 
 	client := &acp.Client{
-		Info: acp.Implementation{Name: self, Title: self, Version: reported(sh.Version)},
+		Info: acp.Implementation{Name: self, Title: self, Version: sh.ReportedVersion()},
 		// The point of the exercise: the agent's file access is ours to
 		// gate, and only if we offer to do it for them.
 		Files: true,
@@ -139,52 +140,13 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod strin
 	return status
 }
 
-// interpreter runs one command line on a shell built like this one.
+// Interpreter runs one command line on a shell built like this one.
 //
-// The Shell is copied and three fields are written over — where its output
-// goes, where it starts, and what it starts with — and everything else comes
-// across untouched, which is the part that matters: the dialect, the gate and
-// the event sink are the session's own, so a line an agent asks us to run is
-// gated and recorded exactly as a line a person typed would be. Building a
-// fresh Shell here instead would be a second shell with none of that, wearing
-// the same name.
-//
-// Output and diagnostics go to the same writer because a terminal has one
-// stream; the protocol has no second one to put them in.
-//
-// Stdin is emptied rather than inherited. This process's standard input is the
-// prompt loop's — it is where a person answers permission questions — and
-// handing it to a command an agent asked for would let that command eat the
-// answers. A terminal the protocol describes has no input anyway: there is no
-// method for writing to one.
-func Interpreter(sh driver.Shell) func(context.Context, acp.TerminalCommand, io.Writer) int {
-	return func(ctx context.Context, cmd acp.TerminalCommand, out io.Writer) int {
-		run := sh
-		run.Context = ctx
-		run.Stdin = strings.NewReader("")
-		run.Stdout, run.Stderr = out, out
-		if cmd.Dir != "" {
-			run.Dir = cmd.Dir
-		}
-		run.Env = cmd.Env
-		// The one thing a shell binary wants that this route must not have.
-		// The field is negative so that the zero value suits a binary being a
-		// shell — and here the zero value is exactly backwards: an `exec`
-		// inside the agent's line would replace *this* process, which is the
-		// one serving the connection the agent is talking on, and which is
-		// the process that *is* the boundary. Every gate consultation and
-		// every audit record for the session comes from it, so a replaced one
-		// is not a crashed session but a program of the agent's choosing
-		// holding this process's descriptors with nothing left to consult
-		// (#1795).
-		//
-		// The line still gets its `exec`, as a child — which is what every
-		// other embedder of interp gets by default — and the session survives
-		// it.
-		run.KeepProcess = true
-		return driver.RunCommand(run, cmd.Line, nil)
-	}
-}
+// An alias of the shared one rather than a second copy: the ACP client and
+// the MCP server both wire it, and the KeepProcess line inside it is exactly
+// the kind of rule this tree has watched drift between two copies. See
+// internal/termhost.
+var Interpreter = termhost.Interpreter
 
 // runID is what this run of the shell is called in the record.
 //

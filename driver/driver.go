@@ -322,6 +322,12 @@ type Shell struct {
 	// one, and `--acp` says so rather than accepting the word silently.
 	ServeACP func(Shell) int
 
+	// ServeMCP serves the Model Context Protocol on this shell's own streams,
+	// and is what `--mcp` reaches. Nil in a library and filled in by a binary,
+	// for every reason ServeACP is — see driver/mcp.go, and #1338 for why a
+	// shell speaks a second protocol at all.
+	ServeMCP func(Shell) int
+
 	// ConnectACP is the other direction: this shell drives an agent rather
 	// than being one, and `--acp-connect` reaches it. Nil for the same reason
 	// ServeACP is, and refused the same way.
@@ -565,6 +571,10 @@ func MainArgs(sh Shell, argv []string) int {
 		// more: standard input is the protocol's, so a shell that decided to
 		// prompt on it would be reading the client's messages as keystrokes.
 		return sh.runACP()
+	}
+	if in.mcp {
+		// The second protocol, on the same footing and for the same reasons.
+		return sh.runMCP()
 	}
 	if in.prompt {
 		// A prompt rather than a script, and reached from here so that every
@@ -904,6 +914,9 @@ type source struct {
 	// travels here, beside version, because both end the invocation: there is
 	// nothing to parse and nothing to run.
 	acp bool
+	// mcp is the same for the Model Context Protocol, and travels beside acp
+	// because it ends the invocation the same way.
+	mcp bool
 	// acpConnect and its three companions are the client direction, carried
 	// the same way and for the same reason.
 	acpConnect bool
@@ -1177,6 +1190,9 @@ type invocation struct {
 	// because the boundary the same line may have asked for has to be
 	// installed first — a policy governs every session the client opens.
 	acp bool
+	// mcp is `--mcp`, recorded and acted on later for the same reason: a
+	// policy on the same line governs every command a client asks for.
+	mcp bool
 	// acpConnect is `--acp-connect`, and acpArgv is the command that starts
 	// the agent: every word after the flag, which is why the flag ends option
 	// reading. acpAllow and acpAuth are `--acp-allow` and `--acp-auth`, and
@@ -1408,6 +1424,19 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 		}
 		return sh, source{acp: true}, closer, nil
 	}
+	if inv.mcp {
+		// The same place and the same rule: after the gate, before the
+		// operands, and any word left over is somebody expecting something to
+		// run. A tool call names its own command and its own directory, so
+		// there is nothing on the line for the protocol to read.
+		if len(rest) > 0 {
+			if closer != nil {
+				_ = closer.Close()
+			}
+			return sh, source{}, nil, fmt.Errorf("--mcp takes no operands: %v", rest)
+		}
+		return sh, source{mcp: true}, closer, nil
+	}
 	in, err := sh.operands(rest, inv)
 	if err != nil {
 		if closer != nil {
@@ -1557,6 +1586,9 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			return rest, err
 		}
 		if rest, matched, err = acpOption(a, args, inv); matched {
+			return rest, err
+		}
+		if rest, matched, err = mcpOption(a, args, inv); matched {
 			return rest, err
 		}
 		if rest, matched, err = connectOption(a, args, inv); matched {

@@ -20,6 +20,7 @@ import (
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acpboot"
+	"github.com/blairham/sh/internal/mcpboot"
 )
 
 // shell is the whole of "which shell am I", as data.
@@ -31,6 +32,7 @@ func shell() driver.Shell {
 		// driver cannot import it back — see driver/acp.go.
 		ServeACP:   acpboot.ServeAs("zsh"),
 		ConnectACP: acpboot.ConnectAs("zsh", "--"),
+		ServeMCP:   mcpboot.ServeAs("zsh"),
 		Version:    version,
 		// Where this machine keeps the administrator's startup files. It
 		// is the install's answer rather than the dialect's, which is why

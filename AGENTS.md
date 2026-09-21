@@ -1331,16 +1331,36 @@ reference: a suite file calls programs, so grading BusyBox-in-Alpine against
 in there, on one copy of the files, graded by `suite.Sweep` cross-compiled
 from this tree.
 
-**The bash column is pinned the same way, and it is the reason the two halves
-of "contained" had to be told apart.** On a runner the reference used to be
-whatever bash `apt` had — 5.2.21 against the 5.3 the cases were measured
-against — so the report printed a `WRONG BUILD` banner over the figure and
-#2291's per-column bar could not be met there by any amount of correct work.
-Both shells now run inside a digest-pinned `bash` image at 5.3.20, patch for
-patch the build the cases name, so the number is the same on a runner as on a
-laptop (#3480). ksh93 is deliberately **not** pinned this way and stays
-report-only: no distribution packages AT&T's 2012 build, and grading `cmd/ksh`
-against ksh93u+m would measure the fork.
+**The bash, zsh and dash columns are pinned the same way, and bash is the
+reason the two halves of "contained" had to be told apart.** On a runner the
+reference used to be whatever `apt` had — bash 5.2.21 against the 5.3 the cases
+were measured against, zsh 5.9 against 5.9.2, a patched dash against an
+unpatched one — so the report printed a `WRONG BUILD` banner over each figure
+and #2291's per-column bar could not be met there by any amount of correct
+work. All three now run inside digest-pinned images at the build their cases
+name, so the numbers are the same on a runner as on a laptop (#3480). ksh93 is
+deliberately **not** pinned this way and stays report-only: no distribution
+packages AT&T's 2012 build, and grading `cmd/ksh` against ksh93u+m would
+measure the fork.
+
+**Two of the three references had to be built, and `images/` is where.** bash
+was off the shelf. Nothing public reports `zsh 5.9.2`, and 5.9 is not a
+substitute — it answers two of that column's own files differently — and
+nothing public is an unpatched dash, whose patch is the whole of that column's
+gap on a runner. So `images/zsh-5.9.2` and `images/dash-0.5.12` are recipes
+published by `.github/workflows/reference-images.yml` to `ghcr.io`, and each
+**asserts at build time that what it holds is the build the column names**:
+an image that is not the reference fails to build rather than being discovered
+later through a banner. Publishing is a deliberate act on a `refimages/`
+branch, never a merge, because the recipes are not reproducible byte for byte
+and a rebuild under the same tag would leave a pinned digest untagged.
+`images/README.md` has the measurements and how to republish.
+
+**`make suite` can be scoped to a column.** `ARGS='-column zsh,dash'` runs only
+those, which is what a change to how one column reaches its reference actually
+needs; the cross-check, the only-here checks and the cell roll-up are left out
+of a scoped run and the report says so, because each is a claim over every
+column. A `-column` naming nothing is an error rather than an empty sweep.
 
 The digest is the pin, never the tag: `bash:5.3` moved twice in the two days
 this column was argued about — 5.3.15 to 5.3.20 to a new index digest at the
@@ -1465,11 +1485,12 @@ so the choice can be re-argued if it ever stops being true.
 
 So a cell is closed only where the column is **gated** — its reference pinned
 inside a digest-pinned image, so the figure is the same on a runner as on a
-laptop (#3480). Today that is 50 of 125: bash and ash closed, zsh and dash open
-pending #3480's two remaining questions, and ksh93's 25 **closed by
-measurement** — no distribution packages AT&T's 2012 build and grading
-`cmd/ksh` against ksh93u+m measures the fork, so those cells are not waiting on
-work anybody can do.
+laptop (#3480). Today that is **100 of 125 closed and 0 open**: bash, zsh, dash
+and ash gated, and ksh93's 25 **closed by measurement** — no distribution
+packages AT&T's 2012 build and grading `cmd/ksh` against ksh93u+m measures the
+fork, so those cells are not waiting on work anybody can do. An empty open
+count is the state to hold rather than a finish: a column added tomorrow opens
+25 of them.
 
 **The ledger is the deliverable and the staleness test is what makes it one.**
 It is kept on `coverage.UnreachableByConstruction`'s terms: an entry is not a
@@ -1490,13 +1511,12 @@ one graded against a pin. `suite.Suite.Ungated` carries what was measured when
 somebody asked why, `UngatedReason` falls back to the ledger entry where one
 covers the column — one sentence, one place, so ksh93's cannot drift into two —
 and `TestAnUngatedColumnSaysWhy` makes the two states exclusive and both
-stated. The zsh and dash columns carry #3480's measurements: no public image
-reports `zsh 5.9.2` and the 5.9 images differ from it on two of that column's
-own files (`kill -L`, and `kill -l` of an out-of-range number), and no public
-image is an unpatched dash — every distribution answers `esc=3`, which is the
-whole of that column's gap on a runner (67/67 strict here against 64/67 there).
-Both stay **open** rather than ledgered, because building and publishing those
-images is work somebody can do.
+stated. ksh93 is the only column left on the second side of it, and its
+sentence comes from the ledger rather than from the column. The zsh and dash
+columns carried #3480's measurements there until the images those measurements
+called for were built — which is the mechanism working as intended: both were
+kept **open** rather than ledgered precisely because building and publishing
+those images was work somebody could do, and somebody did it.
 
 A second, smaller ledger holds the two files no area claims, and they are the
 finding rather than the leftovers: `boundary.tests` is about a **tier

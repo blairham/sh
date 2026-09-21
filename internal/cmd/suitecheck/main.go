@@ -72,6 +72,12 @@ func main() {
 				"measurement — and stop. Starts no shell.")
 		own = flag.Bool("own", false,
 			"grade our own committed suite instead of a fetched one, every column at once")
+		ownColumn = flag.String("column", "",
+			"with -own, run only these columns, comma-separated. A change to how one "+
+				"column reaches its reference is then exercised without the whole sweep, "+
+				"which is four dialect binaries over every file under two shells each. The "+
+				"cross-check, the only-here checks and the cell roll-up are left out of a "+
+				"scoped run: each of those is a claim over every column")
 		ownRoot = flag.String("root", suite.OurRoot,
 			"where our own suite lives in the tree")
 		ownBins = binSet{}
@@ -101,7 +107,7 @@ func main() {
 	defer stop()
 
 	if *own {
-		if code := runOwn(ctx, *ownRoot, ownBins, *timeout, *jobs, *only); code != 0 {
+		if code := runOwn(ctx, *ownRoot, ownBins, *timeout, *jobs, *only, names(*ownColumn)); code != 0 {
 			os.Exit(code)
 		}
 		return

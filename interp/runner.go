@@ -1374,6 +1374,10 @@ type Runner struct {
 	// while a script's own text runs, which is every other moment. See
 	// prelude.go for the rule and for why the *outermost* such call owns it.
 	speaker string
+	// promptEngine is what the prelude's `prompt` function runs, or nil in a
+	// library. A front end fills it in; nothing here does. See
+	// promptengine.go, and Runner.ReplaceProcess for the shape.
+	promptEngine Builtin
 	// speakerLine is where the script called that function — a builtin has
 	// no lines of its own, so the location names the call rather than the
 	// body.

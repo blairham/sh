@@ -262,11 +262,19 @@ func TestTheLineFileIsUntouched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Still plain lines, and still the ones that were there. This session has
-	// no editor — it is reading a file — so it adds nothing, which is exactly
-	// the property being checked: the block store did not write here.
-	if string(b) != "earlier one\nearlier two\n" {
-		t.Errorf("the line file is now %q, want it untouched and still plain lines", b)
+	// Still plain lines, and still the ones that were there, with this
+	// session's own line appended as any session appends its own. The
+	// property being checked is the format and not the length: the index is
+	// a second file beside this one, so nothing the block store keeps — a
+	// record, a status, a captured stream — may appear here.
+	//
+	// It used to assert the file byte-for-byte unchanged, on the reasoning
+	// that a session reading a file has no editor and so adds nothing. That
+	// was true of this loop and was never the claim; the loop keeps a
+	// history now (#4007) and the file grew by exactly the line that was
+	// read, which is the store staying out of it.
+	if string(b) != "earlier one\nearlier two\n:\n" {
+		t.Errorf("the line file is now %q, want plain lines and this session's own", b)
 	}
 	if got := read(t, store); len(got) != 1 {
 		t.Errorf("the index holds %d records, want the one block", len(got))

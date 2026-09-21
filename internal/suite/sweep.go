@@ -649,14 +649,16 @@ func repeats(ctx context.Context, s Suite, tests, name, reference string, opts O
 		return false, "the second run of the reference was killed on the timeout"
 	}
 	got := normalize(again.Output, reference, again.Dir)
-	// Steady up to an order neither run was asked for. One shell disagreeing
-	// with *itself* about the sequence of an associative array's keys is not
-	// a fact about either shell, and it is what made `assoc.tests` report
-	// unstable — so the file scored nothing at all on about half of all runs,
-	// over three lines out of some two hundred. See reorder.go for why the
-	// same canonicalisation is sound here and is deliberately not applied to
-	// the comparison against our own run.
-	if again.Status == status && sameButForOrder(got, want) {
+	// Steady up to the two things neither run was asked for. One shell
+	// disagreeing with *itself* about the sequence of an associative array's
+	// keys is not a fact about either shell, and it is what made
+	// `assoc.tests` report unstable — so the file scored nothing at all on
+	// about half of all runs, over three lines out of some two hundred. The
+	// process group a shell with no terminal names is the other, and it cost
+	// `history.tests` every run rather than half of them. See reorder.go and
+	// pid.go for why each canonicalisation is sound here and is deliberately
+	// not applied to the comparison against our own run.
+	if again.Status == status && reproduced(got, want) {
 		return true, ""
 	}
 	return false, difference(s, want, status, got, again.Status)

@@ -13449,6 +13449,50 @@ type Semantics struct {
 	// (TestAPromptKeepsAskingAfterARefusedToken) (#2058).
 	PromptAsksAgainAfterARefusedToken bool
 
+	// PromptEchoesTheLineWhereThereIsNoTerminal writes each line the prompt
+	// read back to the error stream, behind the prompt it was read at, for a
+	// session whose input is a pipe or a file rather than a terminal.
+	//
+	// A terminal echoes a keystroke itself, so the question only arises where
+	// there is nothing to do it — `shell -i` with its input redirected, which
+	// is how a test suite drives a shell and how a here-document does. What
+	// the line editor would have put on the screen is then written by the
+	// shell or not written at all, and the panel splits on it.
+	//
+	// Measured 2026-09-21, `printf 'echo 1\necho 2\n'` into each shell under
+	// `-i` with `env -i`, a scratch HOME, `PS1='P> '` and no startup files,
+	// standard error and standard output kept apart:
+	//
+	//	bash 5.3.20   P> echo 1 / 1 / P> echo 2 / 2 — the line on stderr,
+	//	              behind the prompt, before the command's own output
+	//	bash 3.2.57   the same
+	//	zsh 5.9.2     the prompt and the output, and no line
+	//	ksh93u+       no prompt at all without a terminal, and no line
+	//	dash          the same as ksh93
+	//
+	// So it is the one dialect that echoes, and it is not the prompt's own
+	// doing: the two shells that draw a prompt here disagree about the line
+	// while agreeing about the prompt.
+	//
+	// Read by the front end rather than by the interpreter, for the reason
+	// PromptAsksAgainAfterARefusedToken above it is, and a plain bool for the
+	// same reason.
+	//
+	// The cost of answering no where the shell answers yes is silent and is
+	// large in one particular place: a suite file that drives an interactive
+	// shell from a here-document loses every line it typed from what the run
+	// printed, so two shells that ran the same commands and printed the same
+	// answers compare as disagreeing on half the file (#2298).
+	//
+	// unpinned: reached, and the corpus cannot discriminate. Every case runs
+	// under `-c` or a script file with no prompt drawn at all, so no row has
+	// a line that was read at a prompt to echo. repl/promptecho_test.go
+	// drives a session on a pipe and pins both answers
+	// (TestAPromptEchoesTheLineWhereThereIsNoTerminal), and
+	// driver/promptecho_test.go carries it to the front end
+	// (TestTheFrontEndCarriesWhetherAPromptEchoesTheLine).
+	PromptEchoesTheLineWhereThereIsNoTerminal bool
+
 	// PromptCommentsNeedTheOption names the option a `#` typed at this
 	// shell's prompt has to have on before it opens a comment. Empty is
 	// "nothing has to be on", which is what four of the five say.

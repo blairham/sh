@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -980,6 +981,13 @@ func (r *Runner) SetInteractiveMonitor() {
 	name := r.Invocation
 	if name == "" || r.diag().NoJobControlAtStartupNamesTheScript {
 		name = r.name()
+	}
+	// And one of the two shortens it to the last element of the path, here
+	// and nowhere else in its own output — see
+	// Diagnostics.NoJobControlAtStartupNamesTheBaseName, which is why this
+	// is applied to the name these two lines carry rather than to `$0`.
+	if r.diag().NoJobControlAtStartupNamesTheBaseName {
+		name = filepath.Base(name)
 	}
 	// The shell that names the process group it could not hand the terminal
 	// to says so first, above the line below. Its process group is read here

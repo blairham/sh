@@ -148,6 +148,26 @@ type Shell struct {
 	// both (#2022).
 	CountSessionLines bool
 
+	// EchoTheLineWithoutATerminal writes each line this session read back to
+	// the error stream, behind the prompt it was read at, where the input is
+	// not a terminal.
+	//
+	// A terminal echoes a keystroke itself, so this is never read by the
+	// editor's loop — only by the one that reads a pipe or a file, where the
+	// line would otherwise never appear at all. The dialect's answer, since
+	// the two shells that draw a prompt without a terminal disagree about
+	// it: see interp.Semantics.PromptEchoesTheLineWhereThereIsNoTerminal.
+	EchoTheLineWithoutATerminal bool
+
+	// Leaving is what this session writes as it ends, after the last prompt
+	// it drew and on the error stream. Empty writes nothing, which is what a
+	// caller with no dialect gets and what four of the five panel shells do.
+	//
+	// Written for either way of ending — the input ran out, or a line ran
+	// `exit` — because the shell that has one writes it for both, and both
+	// loops do it through [Shell.leaving] so they cannot come to differ.
+	Leaving string
+
 	// Style is what this dialect does to a prompt parameter's value before
 	// it is drawn. The zero value draws it as it stands.
 	Style PromptStyle
@@ -508,7 +528,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// in the panel, given `-i` on a pipe, still prints a prompt and runs
 		// the lines — it only says that job control is off. The *editor* is
 		// what needs a terminal, and it is the editor that goes away.
-		return s.runPlain(ctx, store, capture)
+		return s.runPlain(ctx, store, capture, hist, earlier)
 	}
 	state, err := makeRaw(s.inFile())
 	if err != nil {
@@ -524,6 +544,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// (those are written with the terminal in its own discipline, where the
 	// kernel is still translating) and off the shell the caller handed in.
 	s.Out, s.Err = translating(s.Out), translating(s.Err)
+	// Registered after that, so the word this writes on the way out is
+	// written through the same translation every other line of this loop is:
+	// raw mode took the kernel's newline handling with it, and a bare line
+	// feed would leave the shell's last word starting wherever the prompt
+	// ended. After makeRaw too, so a session that never began says nothing.
+	defer s.leaving()
 
 	// A command runs with the terminal back in its own line discipline, so
 	// ^C then reaches the foreground process group as a signal — and this
@@ -805,6 +831,25 @@ func (s Shell) heldForJobsAtExit(state *terminalState) bool {
 	var held bool
 	s.inLineDiscipline(state, func() { held = s.Runner.HoldsExitForJobs() })
 	return held
+}
+
+// leaving writes the dialect's word for the end of a prompt session, on the
+// error stream and after the last prompt the session drew.
+//
+// One function for both loops, deferred in each, because the two ways a
+// session ends are not two answers: measured, the shell that writes a word
+// here writes the same one whether the input ran out or a line ran `exit`.
+// Writing it at each return instead would be five sites in one loop and four
+// in the other, and the first one anybody forgot would be a session that
+// ended quietly for a reason nobody could see from the code.
+//
+// Nothing at all for a dialect with no word for it, which is four of the five
+// and the zero value — so a caller with no dialect pays a compare.
+func (s Shell) leaving() {
+	if s.Leaving == "" {
+		return
+	}
+	s.errf("%s\n", s.Leaving)
 }
 
 // runStmts executes the statements of one accepted line, reporting whether the
@@ -1217,7 +1262,26 @@ func (s Shell) reportFinishedJobs(continuing bool) {
 // ash 1.37.0 all write every row, at the first prompt and at the second. The
 // continuation prompt is the same: with `PS2=$'B1\nB2> '`, zsh writes both of
 // its rows before each continued line and this wrote `B2> `.
-func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outputCapture) (int, error) {
+func (s Shell) runPlain(
+	ctx context.Context, store *blocks.Store, capture *outputCapture,
+	hist historyFile, earlier []string,
+) (int, error) {
+	defer s.leaving()
+	// This loop keeps a history too, and until #4007 it kept none at all.
+	// The list and the file are the editor's in the other loop, so an
+	// editor-less session recalled nothing, recorded nothing and wrote
+	// nothing — and the one that showed it is the shape a test suite uses:
+	// `shell -i` on a here-document, whose HISTFILE the next command reads.
+	// There is no editor here to hold the list, so the list is its own type
+	// and the recorder, the rules and the file are the same ones (#2298).
+	recall := &lineList{lines: earlier}
+	var added []string
+	defer func() {
+		if err := hist.save(ctx, added); err != nil {
+			s.errf("%v\n", err)
+		}
+	}()
+	record := s.recording(recall, &added)
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
@@ -1231,6 +1295,18 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 		s.errf("%s", drawn.lead+drawn.text)
 
 		line, err := in.ReadString('\n')
+		// And the line itself, where the dialect writes one. Only this loop
+		// ever does: the editor's input is a terminal, which echoes a
+		// keystroke on its own. Before anything looks at the line, because
+		// what is being reproduced is a read and not a decision — a line that
+		// does not parse, one that is only a comment and one that finishes a
+		// construct all appear the same way.
+		if line != "" && s.EchoTheLineWithoutATerminal {
+			// With the newline the read may not have found: the input ending
+			// without one still gave the shell a line, and a line written
+			// back without its ending would put the next thing on it.
+			s.errf("%s\n", strings.TrimSuffix(line, "\n"))
+		}
 		if line == "" && err != nil {
 			// End of input ends the session, exactly as ^D does at a
 			// terminal. A final line without a newline is still a line,
@@ -1257,7 +1333,7 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 		}
 		line = strings.TrimSuffix(line, "\n")
 
-		stmts, text, perr, ready := s.take(&pending, nil, line)
+		stmts, text, perr, ready := s.take(&pending, record, line)
 		if !ready {
 			// Nothing to run yet. take returns no statements and no error in
 			// that case, so this guard cannot change an outcome — it says
@@ -1812,8 +1888,8 @@ func (s Shell) take(pending *strings.Builder, remember func(string), line string
 // its own reasons — so the two paths look alike here and are decided
 // separately, which is why they are written separately rather than folded
 // together.
-func (s Shell) recording(ed *editor, added *[]string) func(string) {
-	if ed == nil {
+func (s Shell) recording(recall recalls, added *[]string) func(string) {
+	if recall == nil {
 		return nil
 	}
 	return func(line string) {
@@ -1831,22 +1907,61 @@ func (s Shell) recording(ed *editor, added *[]string) func(string) {
 		rules := s.historyRules()
 		if rule, found := secret.Default().Match(line); found {
 			s.errf("%s: history: not saving this line (matched %s)\n", or(s.Name, "sh"), rule)
-			ed.remember(line)
+			recall.remember(line)
 			return
 		}
-		if ignored, recallable := rules.ignored(line, ed.newest()); ignored {
+		if ignored, recallable := rules.ignored(line, recall.newest()); ignored {
 			if recallable {
-				ed.remember(line)
+				recall.remember(line)
 			}
 			return
 		}
-		ed.remember(line)
+		recall.remember(line)
 		// Past every rule the file's contents depend on, so this is exactly
 		// what the session will write — which is what makes a recorder
 		// protected by the credential check above rather than obliged to
 		// repeat it.
 		s.recorded(sessionRecorder{added: added}, line)
 	}
+}
+
+// recalls is where a session puts a line it will be able to recall, and what
+// it reads back to decide whether the next one repeats it.
+//
+// An interface with two methods and two implementations, because there are
+// two loops and only one of them has an editor. It exists so that the rules
+// above run once: a second copy of them for the editor-less loop is exactly
+// the shape this tree keeps finding — a helper beside a helper, one of them
+// missing a fix the other carries.
+type recalls interface {
+	// remember adds a line to what can be recalled.
+	remember(line string)
+	// newest is the last line remembered, or nothing at all. What "a
+	// duplicate" is measured against; see (*editor).newest for why it is the
+	// list rather than the file.
+	newest() string
+}
+
+// lineList is [recalls] for a session with no editor: the list and nothing
+// else, since nothing here draws it.
+//
+// Seeded with what earlier sessions wrote, exactly as the editor's is, so
+// that a duplicate of the last line in the file is judged the same way in
+// both loops.
+type lineList struct{ lines []string }
+
+func (l *lineList) remember(line string) {
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+	l.lines = append(l.lines, line)
+}
+
+func (l *lineList) newest() string {
+	if len(l.lines) == 0 {
+		return ""
+	}
+	return l.lines[len(l.lines)-1]
 }
 
 // sessionRecorder is the substrate's own: what this session will write to its

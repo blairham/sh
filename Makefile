@@ -335,18 +335,21 @@ suite-panel: ## List the shells whose own suite this can run, and what the unbui
 
 bash-suite: ## Run bash's own tests/ through real bash and through cmd/bash, and report where they part
 	@mkdir -p $(BINDIR)
-	@go build -o $(BINDIR)/suite-bash ./cmd/bash
-	@go run ./internal/cmd/suitecheck -dialect bash -bin $(BINDIR)/suite-bash -build $(BINDIR) $(ARGS)
+	@mkdir -p $(BINDIR)/shells
+	@go build -o $(BINDIR)/shells/bash ./cmd/bash
+	@go run ./internal/cmd/suitecheck -dialect bash -bin $(BINDIR)/shells/bash -build $(BINDIR) $(ARGS)
 
 zsh-suite: ## Run zsh's own Test/ through real zsh and through cmd/zsh (not yet a column; prints why)
 	@mkdir -p $(BINDIR)
-	@go build -o $(BINDIR)/suite-zsh ./cmd/zsh
-	@go run ./internal/cmd/suitecheck -dialect zsh -bin $(BINDIR)/suite-zsh -build $(BINDIR) $(ARGS)
+	@mkdir -p $(BINDIR)/shells
+	@go build -o $(BINDIR)/shells/zsh ./cmd/zsh
+	@go run ./internal/cmd/suitecheck -dialect zsh -bin $(BINDIR)/shells/zsh -build $(BINDIR) $(ARGS)
 
 ksh-suite: ## Run ksh93's own tests through real ksh93 and through cmd/ksh (not yet a column; prints why)
 	@mkdir -p $(BINDIR)
-	@go build -o $(BINDIR)/suite-ksh ./cmd/ksh
-	@go run ./internal/cmd/suitecheck -dialect ksh -bin $(BINDIR)/suite-ksh -build $(BINDIR) $(ARGS)
+	@mkdir -p $(BINDIR)/shells
+	@go build -o $(BINDIR)/shells/ksh ./cmd/ksh
+	@go run ./internal/cmd/suitecheck -dialect ksh -bin $(BINDIR)/shells/ksh -build $(BINDIR) $(ARGS)
 
 dash-suite: ## dash has no suite of its own; prints why
 	@go run ./internal/cmd/suitecheck -dialect dash $(ARGS)

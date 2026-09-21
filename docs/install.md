@@ -221,6 +221,23 @@ launchers exec the value directly — write a two-line script and point
 `--audit FILE` beside it writes every action the shell took as JSON, one
 record per line, appended.
 
+### Or add it as an MCP server, where the command line is yours
+
+An agent that speaks the Model Context Protocol is configured with a
+command line you write, so there is somewhere to put the policy without
+touching `$SHELL` at all:
+
+    claude mcp add shell -- /usr/local/libexec/sh/sh -mcp -dialect bash \
+        -policy "$HOME/.config/agent.policy"
+
+The agent then runs commands as tool calls rather than through `$SHELL
+-c`, and every one of them crosses the same gate. A command is a handle:
+starting one answers a terminal id, and the agent reads its output, waits
+for it or kills it by that id — so a long-running command streams instead
+of blocking. `docs/design/mcp.md` has the whole of it. The dialect
+binaries serve it too, as `bash --mcp`; only `sh` takes the one-dash
+spelling, because real bash reads `-mcp` as `-m -c -p`.
+
 ### What it refuses, measured
 
 With a policy denying `/usr/bin/curl`, every way of spelling the command

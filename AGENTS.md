@@ -87,6 +87,14 @@ refuses what every real shell accepts is a core nobody can write against.
                       a digest-pinned alpine image rather than through a path
     cmd/shfmt         the formatter: the first thing that consumes the
                       parser as a product rather than as test scaffolding
+    internal/acp      the Agent Client Protocol, both roles
+    internal/mcp      the Model Context Protocol, as a server (#1338)
+    internal/termhost the terminal verbs both protocols serve — create,
+                      output, wait, kill, release — one implementation with
+                      two front doors, because writing them twice is how
+                      they drift. docs/design/mcp.md argues it
+    internal/gateguard reads a front end's source and says, per served verb,
+                      whether it reaches a gate that can refuse
     internal/cmd/     the instruments: not shipped, and under internal/
                       so nothing outside the module can import them
       oracle          records what real shells do
@@ -955,6 +963,12 @@ Not a gate, for the reasons `make wild-run` is not one and one more: it
 asserts on a job actually resuming, which is timing. `go test` covers the
 instrument's own machinery — the wait discipline, the scratch home, the
 grading — and the session it drives is a target you run.
+
+There is deliberately no `mcp` report target yet, and that is a gap rather
+than a decision: `internal/mcp` is tested end to end over a `net.Pipe` and
+through `run()` in `cmd/sh`, which is the inside view, and the argument under
+`make acp` — that a protocol tested only from inside is not tested — applies
+to the second protocol exactly as it does to the first.
 
 `make acp` drives the Agent Client Protocol front end the way an editor
 does — as a subprocess, JSON-RPC on a pipe — and prints three things: every

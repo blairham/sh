@@ -17,6 +17,7 @@ import (
 	"github.com/blairham/sh/interp"
 
 	"github.com/blairham/sh/internal/jsonrpc"
+	"github.com/blairham/sh/internal/termhost"
 )
 
 // The shell as an ACP Client: it launches a coding agent and *is* the
@@ -115,17 +116,16 @@ type Client struct {
 	conn  *jsonrpc.Conn
 	agent InitializeResponse
 
-	// mu guards the terminals this client is running for the agent. They are
-	// reached from more than one goroutine by construction: every inbound
-	// request is handled on its own, so an agent may be creating one while it
-	// waits on another.
-	mu           sync.Mutex
-	running      map[string]*terminal
-	nextTerminal int
+	// The terminals this client is running for the agent, and the machinery
+	// that runs them — shared with the MCP server front end rather than
+	// written twice. See terminals, and internal/termhost.
+	once sync.Once
+	host *termhost.Host
 
-	// What this client knows about the commands the agent ran. Two counts and
-	// no attempt to join them: see Commands.
-	asked     int
+	// What this client knows about the commands the agent announced having
+	// run. The other half of the pair lives on the host, and there is no
+	// attempt to join them: see Commands.
+	mu        sync.Mutex
 	announced int
 }
 
@@ -152,7 +152,7 @@ type Client struct {
 func (c *Client) Commands() (asked, announced int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.asked, c.announced
+	return c.terminals().Asked(), c.announced
 }
 
 // Connect wires this client to an agent's streams.
@@ -478,24 +478,10 @@ func (c *Client) readFile(ctx context.Context, params json.RawMessage) (any, err
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: no such file or directory", req.Path)
 	}
 	if err != nil {
-		c.failed(ctx, interp.Action{Kind: interp.ActionOpen, Path: req.Path}, err)
+		c.Boundary.Failed(ctx, interp.Action{Kind: interp.ActionOpen, Path: req.Path}, err)
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", req.Path, err)
 	}
 	return ReadTextFileResponse{Content: window(string(b), req.Line, req.Limit)}, nil
-}
-
-// failed records an access that was allowed and then did not work.
-//
-// The boundary records the *attempt*, because out here a failure is often not
-// an error — a startup file that is not there is the normal case. An access
-// the agent asked for and that then failed is worth the second record: the
-// agent will be told, and an audit trail that saw only the attempt would show
-// a read that never happened as one that did.
-func (c *Client) failed(ctx context.Context, a interp.Action, err error) {
-	if c.Boundary.Events == nil {
-		return
-	}
-	c.Boundary.Events.Emit(ctx, interp.Event{Kind: interp.EventError, Action: a, Err: err})
 }
 
 // window is the slice of a file the agent asked for: from Line, counted in
@@ -550,7 +536,7 @@ func (c *Client) writeFile(ctx context.Context, params json.RawMessage) (any, er
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: permission denied", req.Path)
 	}
 	if err != nil {
-		c.failed(ctx, interp.Action{Kind: interp.ActionOpen, Path: req.Path, Write: true}, err)
+		c.Boundary.Failed(ctx, interp.Action{Kind: interp.ActionOpen, Path: req.Path, Write: true}, err)
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", req.Path, err)
 	}
 	return WriteTextFileResponse{}, nil

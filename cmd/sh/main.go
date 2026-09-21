@@ -31,6 +31,7 @@
 //	sh -policy p.policy script.sh  # run it under a declarative policy
 //	sh -audit log.jsonl script.sh  # record every action as JSON, one per line
 //	sh -acp                        # serve the Agent Client Protocol on stdio
+//	sh -mcp                        # serve the Model Context Protocol on stdio
 //	sh -plugin /opt/x/p script.sh  # a builtin whose process is not ours
 //	sh -acp-connect npx pkg --acp  # drive an ACP agent, under the same policy
 //	sh -blocks-list                # the recent blocks: what ran, and how it went
@@ -128,6 +129,7 @@ import (
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acpboot"
+	"github.com/blairham/sh/internal/mcpboot"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -182,6 +184,9 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// why the dialect binaries needed the long form at all.
 	sh.ServeACP = acpboot.ServeAs("sh")
 	sh.ConnectACP = acpboot.ConnectAs("sh", "-")
+	// And the second protocol, on the same footing: the front end's own
+	// `--mcp` and this binary's `-mcp` reach one implementation.
+	sh.ServeMCP = mcpboot.ServeAs("sh")
 	sh.Version = version
 	if err != nil {
 		return fail(stderr, err)
@@ -277,6 +282,16 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		done()
 		return code
 	}
+	if own.mcp {
+		// The second protocol, reached the same way and for the same reasons:
+		// not a shell invocation, no argument vector for it to read, and the
+		// seams already installed so that a policy handed to `-mcp` governs
+		// every command a client asks for. That last one is the whole reason
+		// this flag exists — see mcp.go.
+		code := serveMCP(sh, rest, stdin, stdout)
+		done()
+		return code
+	}
 	if own.blocksList > 0 || own.blocksShow != "" {
 		// Reading a store is not running a shell, so this ends the invocation
 		// before the front end is reached. The seams are already installed,
@@ -338,6 +353,9 @@ type ownFlags struct {
 	policy      string
 	audit       string
 	acp         bool
+	// mcp is the Model Context Protocol, served on this process's own streams.
+	// It ends the invocation exactly as acp does.
+	mcp bool
 	// blocksList is how many recent blocks to print, and blocksShow names one
 	// to print in full. Both end the invocation: they read a store rather than
 	// running a shell.
@@ -406,6 +424,8 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 			own.traceEvents = true
 		case "acp":
 			own.acp = true
+		case "mcp":
+			own.mcp = true
 		case "acp-connect":
 			own.acpConnect = true
 		case "acp-allow":

@@ -420,6 +420,21 @@ func (b Boundary) Record(ctx context.Context, a interp.Action) {
 	b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
 }
 
+// Failed records an access that was allowed and then did not work.
+//
+// The three above record the *attempt*, because out here a failure is often
+// not an error — a startup file that is not there is the normal case. An
+// access a peer asked for and that then failed is worth the second record: the
+// peer will be told, and an audit trail that saw only the attempt would show a
+// read that never happened as one that did.
+//
+// One implementation rather than one per front end. Both protocol front ends
+// want it, for the same reason, about the same events — and a five-line helper
+// copied twice is the shape a fix lands in one of and not the other.
+func (b Boundary) Failed(ctx context.Context, a interp.Action, err error) {
+	b.emit(ctx, interp.Event{Kind: interp.EventError, Action: a, Err: err})
+}
+
 // ask is the whole of Exec and Signal: consult, record, answer.
 //
 // An open does not come through here, and the difference is one line: it has

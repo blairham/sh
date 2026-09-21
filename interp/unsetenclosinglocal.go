@@ -298,5 +298,5 @@ func (r *Runner) unsetLeavesARunningScopesLocalDeclared(name string) {
 		// and is not this one.
 		return
 	}
-	r.recordBareDeclaration(name)
+	setBool(&r.unsetLeftItDeclared, name, true)
 }

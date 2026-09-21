@@ -401,6 +401,30 @@ typeset -p v`
 	}
 }
 
+// The record is a row in a listing and **not** a parameter: a second `unset`
+// of the same name falls through to the function table, where the first one
+// took the local. The two records are two fields for exactly this reader —
+// a bare declaration nothing has unset *is* a parameter and takes the turn.
+func TestThePlaceholderIsNotAParameterTheFunctionTableHidesBehind(t *testing.T) {
+	const src = `wrap() {
+f() { echo "f ran"; }
+local f
+unset f
+f 2>/dev/null; echo "one=$?"
+unset f
+f 2>/dev/null; echo "two=$?"
+}
+wrap`
+	out, _, st := declRun(t, src, func(s *Semantics) {
+		records(Yes)(s)
+		s.UnsetReachesTheFunctionTable = Yes
+	}, Diagnostics{})
+	want := "f ran\none=0\ntwo=127\n"
+	if out != want || st != 0 {
+		t.Errorf("two unsets over a local and a function = %q (status %d), want %q", out, st, want)
+	}
+}
+
 // The letters go with the value, which is what says the record is the bare
 // one rather than the declaration the scope started with.
 func TestUnsetOfALocalDropsItsLettersAndKeepsTheRecord(t *testing.T) {

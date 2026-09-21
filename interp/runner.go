@@ -1111,6 +1111,11 @@ type Runner struct {
 	// See baredeclaration.go for the measurement, and for why the record is
 	// carried by nameAttributes rather than saved and restored again here.
 	declaredBare map[string]bool
+	// unsetLeftItDeclared are names whose binding an `unset` emptied while
+	// the scope that declared them was running — the same state a bare
+	// declaration leaves and the same listing, reached the other way. See
+	// interp/unsetenclosinglocal.go.
+	unsetLeftItDeclared map[string]bool
 
 	// compoundVariable is the set of names that are ksh93 compound
 	// variables — `c=(a=1 b=2)` and `typeset -C c`, the fourth kind of thing

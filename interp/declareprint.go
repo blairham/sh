@@ -522,6 +522,16 @@ func (r *Runner) declarableNames() []string {
 			seen[name] = true
 		}
 	}
+	for name := range r.unsetLeftItDeclared {
+		// The same record reached the other way, and in the walk for the
+		// same reason: measured 2026-09-21 on bash 5.3.20, a whole-table
+		// `declare -p` inside `f() { local v; unset v; … }` writes the row
+		// `declare -- v`, and so does a bare `local`. Asked through the
+		// same gate, so a dialect with no row for it collects nothing.
+		if r.bareDeclarationListed(name) {
+			seen[name] = true
+		}
+	}
 	for name := range r.nameref {
 		// A reference is a name the shell has rather than a value it stored,
 		// so it is in none of the value tables and in none of the attribute

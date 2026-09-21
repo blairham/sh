@@ -43,6 +43,17 @@ package interp
 // without a line there: it is remembered in one place and forgotten in the
 // other. The listing is the only reader either way.
 //
+// # Two records, one state
+//
+// `unset` of a local the running scope declared arrives at the same state
+// from the other side — the binding stands, its value and its letters are
+// gone — so it is the same listing and the same axis, and
+// Runner.unsetLeftItDeclared is where that route's record lives. A second
+// bool rather than a second write of the one above, because one reader has
+// to tell them apart: the `unset` that falls through to the *function* table
+// counts a declaration as a parameter and does not count this. Everything
+// else here is shared, the scope's save and restore included.
+//
 // It is not written back as a letter. attributeLetters and every listing form
 // read the fields beside it and none of them read this one, which is what
 // makes the row `declare -- xyz` rather than a letter nobody spells.
@@ -68,7 +79,7 @@ func (r *Runner) recordBareDeclaration(name string) {
 // The `&&` is load-bearing: the ask only happens for a name that has such a
 // record, so a dialect that never makes one is never asked.
 func (r *Runner) bareDeclarationListed(name string) bool {
-	return r.declaredBare[name] &&
+	return (r.declaredBare[name] || r.unsetLeftItDeclared[name]) &&
 		r.ask(r.sem().ValuelessDeclarationRecordsTheName,
 			"what a listing does with a name declared with neither a value nor an attribute")
 }

@@ -2238,6 +2238,19 @@ func (r *Runner) parameterNamespaceHolds(name string) bool {
 	}
 	a := r.captureAttributes(name)
 	a.nameref, a.isNameref = "", false
+	// The record an `unset` of this scope's own local leaves behind is the
+	// one piece of captureAttributes that does **not** count as a parameter
+	// here, and it is measured rather than reasoned: with `wrap() { f() {
+	// …; }; local f; unset f; unset f; }`, the *first* `unset` takes the
+	// local and the *second* reaches the function in bash 5.3.20. So the
+	// placeholder is a row in a listing and is not a parameter this table
+	// holds — where a bare `local f` that nothing has unset is one, which
+	// is the row above it in the same measurement.
+	//
+	// See interp/unsetenclosinglocal.go, and nameAttributes, where the two
+	// records are two fields precisely so that this line can tell them
+	// apart.
+	a.unsetLeftItDeclared = false
 	return a != nameAttributes{}
 }
 

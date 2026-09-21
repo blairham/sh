@@ -77,17 +77,26 @@ const fcHistoryStore = ".zsh.history"
 // the core's and stay the core's, and a dialect that copied them would be a
 // second answer to maintain. [interp.Runner.Register] is documented to let a
 // registration win over the built-in table for exactly this.
+//
+// It did copy one of them for a while. `-l` was answered here, because the
+// core had no list to read; the copy knew nothing of ranges, of `-n` or of
+// `-r`, so `fc -l 1 2` reached the core and the core printed nothing. The
+// list is handed over instead now, and the two things that really are this
+// shell's about a listing — the `%5d  %s` shape and the `-n` shape, which
+// drops the whitespace bash keeps — are handed over with it. #4009.
 func registerFcHistory(r *interp.Runner) {
 	core, ok := r.Builtin("fc")
 	if !ok {
 		return
 	}
+	// The reader is given nothing: this list is filled by `print -s` and by
+	// `fc -R`, which is what zsh's own script-level list is filled by, and a
+	// front end that recorded into it would be modeling bash's answer.
+	r.SetHistoryStore(fcEntries, nil)
+	r.SetHistoryListingLayout("%5d  %s\n", "%s\n")
 	r.Register("fc", func(r *interp.Runner, ctx context.Context, args []string) int {
 		if letter, rest, found := fcFileLetter(args); found {
 			return fcFile(r, letter, rest)
-		}
-		if entries := fcEntries(r); len(entries) > 0 && fcIsBareList(args) {
-			return fcList(r, entries)
 		}
 		return core(r, ctx, args)
 	})
@@ -121,21 +130,6 @@ func fcFileLetter(args []string) (letter byte, rest []string, found bool) {
 		}
 	}
 	return 0, nil, false
-}
-
-// fcIsBareList reports `fc -l` with no other letter, which is the one reading
-// this file answers for that the core cannot: the core has no list.
-func fcIsBareList(args []string) bool {
-	return len(args) == 1 && args[0] == "-l"
-}
-
-// fcList writes the list the way zsh writes it, `%5d  %s` and numbered from
-// one — the same shape bash's `history` uses, measured on both.
-func fcList(r *interp.Runner, entries []string) int {
-	for i, entry := range entries {
-		_, _ = fmt.Fprintf(r.Out(), "%5d  %s\n", i+1, entry)
-	}
-	return 0
 }
 
 // fcFile is `-W`, `-A` and `-R`.

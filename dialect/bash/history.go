@@ -118,6 +118,13 @@ func registerHistory(r *interp.Runner) {
 	// than closures over this one — see interp.Runner.SetHistoryStore, where
 	// the subshell reason is written down.
 	r.SetHistoryStore(historyEntries, historyRecord)
+	// And whether the list already holds the line the builtin now running is
+	// written on, which three builtins need and used to be read by one:
+	// `history -s` and `history -p` drop it, and the core's `fc` both ends
+	// its default range before it and replaces it with what `-s` re-runs.
+	// One answer registered here rather than a second one in the core — see
+	// interp.Runner.SetHistoryOwnLine.
+	r.SetHistoryOwnLine(historyHasOwnLine, historyDropOwnLine)
 	r.SetHistoryFile(historyStartFile, historyFinishFile)
 	r.SetHistoryNumbering(historyFirst)
 	// And the parameter whose assignment truncates the file where it
@@ -462,10 +469,7 @@ func historyEntries(r *interp.Runner) []string {
 // historyDropOwnLine removes the line the builtin was written on, which the
 // front end reading the program has already recorded.
 func historyDropOwnLine(r *interp.Runner) {
-	if !r.HistoryListFilledByTheReader() {
-		return
-	}
-	if own, _ := r.GetVar(historyOwnLine); own != "1" {
+	if !historyHasOwnLine(r) {
 		return
 	}
 	entries := historyEntries(r)
@@ -474,6 +478,24 @@ func historyDropOwnLine(r *interp.Runner) {
 	}
 	r.SetArray(historyStore, entries[:len(entries)-1])
 	historySetUnwritten(r, historyUnwrittenCount(r)-1)
+}
+
+// historyHasOwnLine reports that the list holds the line the builtin now
+// running is written on — the reader put it there and no HISTCONTROL or
+// HISTIGNORE rule kept it out.
+//
+// Both halves matter and neither implies the other: a prompt records into the
+// editor's history rather than into this list, so a planted entry would be
+// dropped by a builtin whose own line nothing had pushed in front of it; and
+// measured 2026-09-16 on bash 5.3.20 with `HISTIGNORE='history*'`, `history
+// -p x` and `history -s z` are not recorded and the entries before them
+// survive both calls.
+func historyHasOwnLine(r *interp.Runner) bool {
+	if !r.HistoryListFilledByTheReader() {
+		return false
+	}
+	own, _ := r.GetVar(historyOwnLine)
+	return own == "1"
 }
 
 // historyRecord is a command the reader hands over, which joins the list unless

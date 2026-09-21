@@ -910,3 +910,125 @@ expansion is the same in both; what differs is that this shell hands the
 expanded text to the parser whole. Modeling bash's answer would mean
 modeling its push-back buffer, which is a property of its reader rather than
 of the language.
+
+## `fc`: listing the list, and running an entry again
+
+`fc` is the POSIX name for the two things a person does with a history: look
+at it (`-l`) and run one of it again (`-s`). It reads the same list the
+`history` builtin keeps and the same list the designators index; it had been
+a stub whose comment said it was "honest about the history this shell does
+not keep", which stopped being true the day the list landed (#4009).
+
+Measured 2026-09-21 against bash 5.3.20, script files under `env -i` with a
+scratch `HOME`, `HISTFILE=/dev/null` and `--norc --noprofile`, with
+`set -o history` written and the entries either planted with `history -s` or
+run outright. Two shapes of every case, because `HISTIGNORE` decides whether
+the list holds the `fc` line itself and the answers differ by one.
+
+### Where it lives
+
+In the core, and the layout is the dialect's. The **questions** — which entry
+an operand names, where a default range starts and ends, what an out-of-range
+operand comes to, whether `-r` turns the range or the printing around — are
+answered by no shell's name, so they are answered once in `interp`. The list
+comes through `Runner.SetHistoryStore`, which history expansion already reads
+the same list through.
+
+What is genuinely a dialect's is two format strings, and
+`Runner.SetHistoryListingLayout` is where they go:
+
+| | numbered | `-n` |
+| --- | --- | --- |
+| bash 5.3.20 | `1\t echo one` | `\t echo one` |
+| zsh 5.9.2 | `    1  echo one` | `echo one` |
+
+zsh's `fc` registration keeps the three file letters (`-W`, `-A`, `-R`) and
+nothing else. It carried a lister of its own for a while, which knew about no
+range, no `-n` and no `-r`, so `fc -l 1 2` reached the core and the core
+printed nothing.
+
+### `cur`, and why the default range stops one short
+
+Call `cur` the history number of the `fc` command itself. It is the newest
+entry where the reader recorded that line and one past the newest where
+`HISTCONTROL` or `HISTIGNORE` kept it out — which the core asks the dialect
+through `Runner.SetHistoryOwnLine`, the same pair `history -s` and
+`history -p` have always used to drop their own line.
+
+For listing, `last` defaults to `cur-1` and `first` to `cur-16`. So on a
+four-entry list `fc -l` writes all four under `HISTIGNORE='fc*'` and three
+without it, which is the sharpest measurement of the pair.
+
+### Operands
+
+| written | comes to |
+| --- | --- |
+| `-k` | `cur - k`, clamped into the list |
+| `0` | `cur-1`, which is **not** what `-0` comes to |
+| `n` | the history number `n`, and only while `first <= n <= cur-2` |
+| a word | the newest entry **beginning** with it |
+
+Two of those are not in any manual. An absolute number is in range only up to
+`cur-2` — measured on three list lengths, `fc -l 25` on a list whose newest
+addressable entry is 25 writes the whole list rather than that one entry. And
+an absolute out of range does not clamp the way a relative one does: as
+`first` it comes to the oldest entry the list holds, and as `last` it comes to
+`cur-1`.
+
+An absent `last` never falls before `first`, which is why `fc -l -0` writes
+one line rather than a two-line range running backwards. A `last` that was
+**written** does run the range backwards: `fc -l 3 1` writes 3, 2, 1, and `-r`
+turns whatever order that produced around again.
+
+A word no entry begins with is `fc: no command found` at 1.
+
+### `-s`, and the entry it leaves behind
+
+`fc -s [pat=rep …] [event]` runs an entry again. The line goes to standard
+**error** before it runs — measured, `fc -s >/dev/null` still writes it and
+`fc -s 2>/dev/null` does not — and the status is the status of what ran.
+
+Each `pat=rep` replaces **every** occurrence, left to right, and several apply
+in turn to what the one before them left: `echo aaa` under `fc -s a=x` is
+`echo xxx`.
+
+The line takes the `fc` call's **place** in the list rather than joining it
+after: `echo one`, `fc -s`, `history` lists `echo one` twice and no `fc` at
+all.
+
+An event that resolves to the `fc` call itself is refused rather than run, and
+the two roads word it differently — measured together, on the same list and
+the same operand:
+
+| written | said |
+| --- | --- |
+| `fc -s -0` | `fc: no command found` at 1 |
+| `fc -0` | `fc: history specification out of range` at 1 |
+
+`fc -e -` is `-s` spelled the POSIX way and reaches the same road.
+
+### An operand is not an option
+
+`fc -l -2`, `fc -s -1`, `fc -0` and `fc -s -0` are all **operands**, and the
+option reader used to take them: the line was `fc: -2: invalid option` where
+bash lists two entries. The rule is the whole word — a dash and then nothing
+but digits — and it is exact rather than lenient: `fc -s -1x` is
+`fc: -1: invalid option` on bash too, so a word mixing digits with letters is
+a bundle whose first letter is not a letter. `fc -s -- -42` reaches the same
+place through the ordinary separator.
+
+`interp.Runner.builtinOptionsCountingBack` is where that lives, and it is a
+scan for where the options **end** rather than a second option reader: the
+words in front of the first such operand go to the ordinary one, so the
+bundling, `--`, `--help`, the refusal wording and its usage line have no
+second copy.
+
+### Not implemented
+
+The editor. `fc` with neither `-l` nor `-s` writes the entry to a file, runs
+`${FCEDIT:-${EDITOR:-…}}` over it and runs what comes back; what is here is
+the refusal that comes before it, which is the half a script can see without
+an editor. zsh's own reading of the operands — a relative one counts over the
+whole list rather than back from `cur`, and out of range is `no such event`
+at 1 rather than a clamp — is measured and not modeled; the core's answer
+stands there until it is.

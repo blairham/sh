@@ -1453,6 +1453,13 @@ func Semantics() interp.Semantics {
 	// `typeset -a c` are taken over the valueless frozen name, so it is the
 	// type letters alone (#3937).
 	s.TypeLetterOverAFrozenNameWithNoValueIsRefused = interp.Yes
+	// And the mirror of it: a keyed cell over a frozen name that *does*
+	// hold a value. Measured 2026-09-20, `c=1; readonly c; typeset -A c`
+	// and the same with `-C` are `typeset: c: is read only` at 1 and the
+	// script ends, where `typeset -a c` and `typeset -i c` beside them are
+	// taken — an indexed array can keep the scalar and a keyed cell cannot
+	// (#3965).
+	s.KeyedLetterOverAFrozenNameHoldingAValueIsRefused = interp.Yes
 	// An exported name whose declaration named a numeric type reaches a
 	// child as `0`, even though the shell itself reads the name as unset:
 	// `typeset -ix Z; env` hands over `Z=0` where `${Z+set}` is empty.

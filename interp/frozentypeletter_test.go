@@ -182,3 +182,82 @@ func TestAnArrayLiteralOperandIsOutsideTheTypeLetterRefusal(t *testing.T) {
 		}
 	}
 }
+
+// The mirror image, and the reason the two are two fields: the letters whose
+// cell cannot *hold* what a frozen name already has are refused where there
+// is a value, which is exactly the column the axis above leaves alone. See
+// Semantics.KeyedLetterOverAFrozenNameHoldingAValueIsRefused and #3965.
+//
+// One control carries this one: the **indexed** array letter is taken under
+// both answers, on the same frozen name holding the same value. A refusal
+// reading "a container letter" instead of "a keyed one" passes the headline
+// and fails that row.
+
+// frozenKeyedRun is frozenTypeLetterRun with the other narrow axis moved and
+// this one's own answer held at No, so a failure names one field.
+func frozenKeyedRun(t *testing.T, src string, a Answer) (string, string, int) {
+	t.Helper()
+	return declRun(t, src, func(s *Semantics) {
+		s.DeclareOptions = "aACFgiprxultLRZ"
+		s.DeclareOptionsTakingANumber = "FiLRZ"
+		s.TypesetLocalNeedsKeywordFunction = No
+		s.AttributeRereadsTheValueItFinds = Yes
+		s.NumericTypeLetterRetypesAFrozenName = No
+		s.AttributeOverAFrozenNameIsRefused = No
+		s.TypeLetterOverAFrozenNameWithNoValueIsRefused = No
+		s.ReadonlyReassignmentByDeclarationFatal = No
+		s.ReadonlyReassignmentBySpecialBuiltinFatal = No
+		// A container letter over a name already holding a scalar asks two
+		// further questions of its own, and a run that leaves them
+		// unanswered refuses before this one is reached. Answered the same
+		// way under both legs, which is what keeps the rows comparable.
+		s.ScalarUnderAnArrayDeclaration = ScalarUnderACompoundStaysAScalar
+		s.ScalarUnderATableDeclaration = ScalarUnderACompoundStaysAScalar
+		s.KeyedLetterOverAFrozenNameHoldingAValueIsRefused = a
+	}, Diagnostics{ReadonlyVariable: "%s: readonly variable"})
+}
+
+func TestAKeyedLetterOverAFrozenNameHoldingAValueIsAnAxis(t *testing.T) {
+	const src = `q=1; readonly q; typeset -gA q; echo st=$?`
+	out, errs, _ := frozenKeyedRun(t, src, No)
+	if !strings.Contains(out, "st=0") || errs != "" {
+		t.Errorf("no: got %q stderr %q, want the letter taken in silence", out, errs)
+	}
+	out, errs, _ = frozenKeyedRun(t, src, Yes)
+	if !strings.Contains(errs, "q: readonly variable") || !strings.Contains(out, "st=1") {
+		t.Errorf("yes: got %q stderr %q, want the refusal at 1", out, errs)
+	}
+}
+
+// The indexed array letter is outside the set, and an empty value is still a
+// value. Both under either answer.
+func TestTheIndexedArrayLetterIsOutsideTheKeyedRefusal(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"indexed over a value", `q=1; readonly q; typeset -ga q; echo st=$?`},
+		{"indexed over an empty value", `q=; readonly q; typeset -ga q; echo st=$?`},
+		{"integer over a value", `q=1; readonly q; typeset -gi q; echo st=$?`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, a := range []Answer{Yes, No} {
+				out, errs, _ := frozenKeyedRun(t, tc.src, a)
+				if !strings.Contains(out, "st=0") || errs != "" {
+					t.Errorf("%v: got %q stderr %q, want it taken", a, out, errs)
+				}
+			}
+		})
+	}
+}
+
+// And the column this one does not speak for: a keyed letter over a frozen
+// name holding **nothing** is taken whichever way it is answered, which is
+// what makes it the complement of the axis above rather than a widening of
+// it.
+func TestAKeyedLetterOverAValuelessFrozenNameIsOutsideTheRefusal(t *testing.T) {
+	const src = `readonly q; typeset -gA q; echo st=$?`
+	for _, a := range []Answer{Yes, No} {
+		out, errs, _ := frozenKeyedRun(t, src, a)
+		if !strings.Contains(out, "st=0") || errs != "" {
+			t.Errorf("%v: got %q stderr %q, want it taken", a, out, errs)
+		}
+	}
+}

@@ -129,3 +129,62 @@ func TestAnAssigningDeclarationOverAValuelessFrozenNameIsNotThisAxis(t *testing.
 		t.Errorf("`typeset -C c=(a=1)` = %q (status %d), want the body stored", out, st)
 	}
 }
+
+// The mirror image of the axis above, in the column it leaves alone: a
+// **keyed** cell over a frozen name that holds a value is refused here,
+// where the same letter over a frozen name holding nothing is taken.
+//
+// Measured on the same run, 2026-09-20:
+//
+//	                  no value           after `c=1`      after `c=`
+//	typeset -A        after=0            is read only, 1  is read only, 1
+//	typeset -C        is read only, 1    is read only, 1  is read only, 1
+//	typeset -a        after=0            after=0          after=0
+//	typeset -i        is read only, 1    after=0          after=0
+//
+// The `-a` row is the control and the reason this is not "a container
+// letter": the indexed array letter is taken in every one of those columns.
+// An indexed array can keep the scalar as element zero and a keyed cell
+// cannot. The `-A` row read across is the other one — taken with nothing to
+// rehouse and refused with something — which is what makes this a question
+// about the value rather than about the letter.
+//
+// `-C` is refused in every column, which is why it is in both sets: the
+// valueless half belongs to the axis above and the valued half to this one.
+func TestAKeyedLetterOverAFrozenNameHoldingAValueIsRefusedHere(t *testing.T) {
+	if got := ksh.Semantics().KeyedLetterOverAFrozenNameHoldingAValueIsRefused; got != interp.Yes {
+		t.Errorf("KeyedLetterOverAFrozenNameHoldingAValueIsRefused = %v, want Yes", got)
+	}
+	for _, tc := range []struct{ pre, decl string }{
+		{"c=1", "typeset -A c"},
+		{"c=", "typeset -A c"},
+		{"c=1", "typeset -C c"},
+		{"c=", "typeset -C c"},
+	} {
+		t.Run(tc.pre+" "+tc.decl, func(t *testing.T) {
+			out, st := runKsh(t, t.TempDir(), tc.pre+"\nreadonly c\n"+tc.decl+"\necho never")
+			if !strings.Contains(out, "typeset: c: is read only") {
+				t.Errorf("= %q, want the refusal with the builtin named", out)
+			}
+			if strings.Contains(out, "never") || st != 1 {
+				t.Errorf("out = %q (status %d), want the script to end and exit 1", out, st)
+			}
+		})
+	}
+}
+
+// The two controls, in the real shell: the indexed array letter over the same
+// frozen name holding the same value, and the keyed letter over a frozen name
+// holding nothing.
+func TestTheRowsOutsideTheKeyedRefusalAreTakenHere(t *testing.T) {
+	for _, src := range []string{
+		"c=1\nreadonly c\ntypeset -a c\necho after",
+		"c=\nreadonly c\ntypeset -a c\necho after",
+		"readonly c\ntypeset -A c\necho after",
+	} {
+		out, st := runKsh(t, t.TempDir(), src)
+		if !strings.Contains(out, "after") || st != 0 {
+			t.Errorf("%q = %q (status %d), want it taken", src, out, st)
+		}
+	}
+}

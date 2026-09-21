@@ -7933,6 +7933,48 @@ type Semantics struct {
 	// (#3937).
 	TypeLetterOverAFrozenNameWithNoValueIsRefused Answer
 
+	// KeyedLetterOverAFrozenNameHoldingAValueIsRefused refuses a declaration
+	// that would make a **frozen name holding a value** a cell addressed by
+	// name — a keyed table or a compound — where the same letter over a
+	// frozen name holding nothing is taken.
+	//
+	// The complement of the axis above in both halves at once: that one is
+	// the letters a value has to be *built* for, refused where there is no
+	// value, and this is the letters whose cell cannot *hold* the value
+	// there, refused where there is one. The two cannot both fire on one
+	// declaration, which is why they are two fields and not one with a sign.
+	//
+	// Measured 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> x.sh
+	// </dev/null` over a script file, each row a `readonly c` with the state
+	// named in front of it:
+	//
+	//	                  ksh93u+            bash 5.3.20      zsh 5.9.2
+	//	c=1; typeset -A   is read only, 1    readonly var, 1  taken
+	//	c=;  typeset -A   is read only, 1    readonly var, 1  taken
+	//	     typeset -A   taken              readonly var, 1  taken
+	//	c=1; typeset -C   is read only, 1    no such letter   no such letter
+	//	c=1; typeset -a   taken              readonly var, 1  taken
+	//	c=1; typeset -i   taken              readonly var, 1  taken
+	//
+	// The **indexed** array letter is the discriminator and the reason this
+	// is not "a container letter": it is taken in the column that refuses
+	// the other two, on the same frozen name holding the same value. An
+	// indexed array can keep a scalar as element zero and a keyed cell
+	// cannot, which is the shape the rows draw. The third row is the other
+	// discriminator — the same `-A` with nothing to rehouse is taken there,
+	// which is what makes this a question about the value rather than about
+	// the letter.
+	//
+	// bash answers Yes and never reaches it: the wide axis above refuses
+	// every one of its rows first, `-a` and `-i` included. The value is
+	// measured rather than inherited all the same, so that a dialect built
+	// on this one does not read a silence as an answer.
+	//
+	// The **valueless operand** only, like the axis above and for the same
+	// reason: `typeset -A m=(p=1)` over a frozen name is decided at the
+	// store. See Runner.attributeOverFrozenRefused (#3965).
+	KeyedLetterOverAFrozenNameHoldingAValueIsRefused Answer
+
 	// SetArrayBadNameLeavesZero makes `set -A` refuse a name that is not one
 	// and leave **0** behind, where every other refusal that shell makes
 	// leaves 1.

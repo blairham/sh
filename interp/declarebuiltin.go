@@ -2879,6 +2879,20 @@ func (f declareFlags) namesAValueBearingType() bool {
 	return f.integer || f.float || f.widthLetter != 0 || f.compoundVar
 }
 
+// namesAKeyedCell is the other narrow list that one dialect refuses over a
+// frozen name, and it is the complement of the one above in both halves: the
+// letters that make the name a cell addressed **by name** rather than by
+// number, refused where the frozen name *holds* something.
+//
+// The indexed array letter is deliberately not here and is the
+// discriminator: `c=1; readonly c; typeset -a c` is taken in that shell,
+// where the two beside it are refused. An indexed array can keep a scalar as
+// element zero and a keyed one cannot, which is the shape the measurement
+// draws. See Semantics.KeyedLetterOverAFrozenNameHoldingAValueIsRefused.
+func (f declareFlags) namesAKeyedCell() bool {
+	return f.assoc || f.compoundVar
+}
+
 // attributeOverFrozenRefused reports whether this operand is refused for
 // naming an attribute over a frozen name, having said so.
 //
@@ -2898,22 +2912,30 @@ func (f declareFlags) namesAValueBearingType() bool {
 // numericTypeLetterRetypesFrozen is asked by the caller first and takes its
 // own names out, so a dialect that exempts a retype never arrives here.
 //
-// **Two axes and not one**, because one dialect's answer is not a constant.
-// The wide one above is asked first and is what bash answers yes to; where it
-// says no, a *narrower* set of letters over a frozen name that holds nothing
-// is still refused in one column, and that is the second question — see
-// Semantics.TypeLetterOverAFrozenNameWithNoValueIsRefused. The second refusal
-// is worded as an attribute's rather than as an assignment's, which is what
-// the form says; the first keeps the declaration's wording it was measured
-// with.
+// **Three axes and not one**, because one dialect's answer is not a constant:
+// it turns on what the frozen name holds, and it turns the *opposite* way for
+// two different sets of letters.
 //
-// The narrow one is the **valueless** form only, and `assigns` is what says
-// so. The wide axis deliberately reaches an operand that also assigns — that
-// is the shape #2561 is about — and the narrow one must not, because an
-// operand carrying a value is decided at the store: measured 2026-09-20,
-// `readonly c; typeset -i c=4` is the plain assignment refusal there, and
-// `readonly c; typeset -C c=(a=1)` is **taken**, which is the rule #3915
-// records. Refusing here would take that one back.
+//   - The wide one is asked first and is what bash answers yes to. It covers
+//     every value-shaping letter over any frozen name, assigning operand
+//     included, which is the shape #2561 is about.
+//   - Where that says no, a frozen name **holding nothing** still refuses the
+//     letters a value has to be built for — see
+//     Semantics.TypeLetterOverAFrozenNameWithNoValueIsRefused (#3937).
+//   - And a frozen name **holding something** still refuses the letters whose
+//     cell cannot hold what is there — see
+//     Semantics.KeyedLetterOverAFrozenNameHoldingAValueIsRefused (#3965).
+//
+// The last two are complements and cannot both fire, which is what the one
+// `holds` below says out loud. Both are worded as an attribute's refusal
+// rather than as an assignment's, which is what the form says; the wide one
+// keeps the declaration's wording it was measured with.
+//
+// Both narrow ones are the **valueless operand** only, and `assigns` is what
+// says so. An operand carrying a value is decided at the store: measured
+// 2026-09-20, `readonly c; typeset -i c=4` is the plain assignment refusal
+// there, and `readonly c; typeset -C c=(a=1)` is **taken**, which is the rule
+// #3915 records. Refusing here would take that one back.
 func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags, assigns bool) bool {
 	if !r.readonly[name] {
 		return false
@@ -2932,9 +2954,6 @@ func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags, assigns
 			return false
 		}
 	}
-	if !f.namesAValueBearingType() || r.nameHoldsSomething(name) {
-		return false
-	}
 	if assigns || r.literalOperands[name] {
 		// The operand carries a value, so the store decides it. Both halves
 		// of that question, because an array or compound literal is not a
@@ -2944,8 +2963,19 @@ func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags, assigns
 		// compoundKindChanged reads, for the same reason.
 		return false
 	}
-	if !r.ask(r.sem().TypeLetterOverAFrozenNameWithNoValueIsRefused,
-		"a type letter over a frozen name that holds nothing being refused") {
+	var axis Answer
+	var why string
+	switch holds := r.nameHoldsSomething(name); {
+	case !holds && f.namesAValueBearingType():
+		axis = r.sem().TypeLetterOverAFrozenNameWithNoValueIsRefused
+		why = "a type letter over a frozen name that holds nothing being refused"
+	case holds && f.namesAKeyedCell():
+		axis = r.sem().KeyedLetterOverAFrozenNameHoldingAValueIsRefused
+		why = "a keyed-cell letter over a frozen name that holds a value being refused"
+	default:
+		return false
+	}
+	if !r.ask(axis, why) {
 		return false
 	}
 	if r.unspecified {

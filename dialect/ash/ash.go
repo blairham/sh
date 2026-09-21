@@ -1934,6 +1934,11 @@ func Semantics() interp.Semantics {
 	// wall one question further in. Measured 2026-09-20 in the pinned
 	// image, `readonly c; typeset -i c` is `typeset: not found` at 127, so
 	// no letter ever meets the frozen name (#3937).
+	// unanswered KeyedLetterOverAFrozenNameHoldingAValueIsRefused: the
+	// same wall, and this shell has no keyed table either. There is no
+	// `typeset` in the pinned image at all — measured 2026-09-20, the
+	// word is `not found` at 127 whatever letter follows it — so no
+	// declaration of any kind meets a frozen name here (#3965).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
 	// command here either. Measured 2026-09-12 on BusyBox in a container,

@@ -1479,6 +1479,10 @@ func Semantics() interp.Semantics {
 	// -i c` is taken at 0 here, exactly as the same line over a frozen name
 	// holding a value is (#3937).
 	s.TypeLetterOverAFrozenNameWithNoValueIsRefused = interp.No
+	// Nor a keyed one over a frozen name holding a value: measured
+	// 2026-09-20, `c=1; readonly c; typeset -A c` is taken at 0 here
+	// (#3965).
+	s.KeyedLetterOverAFrozenNameHoldingAValueIsRefused = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is no
 	// `${!prefix@}` in this shell at all — `typeset -A q1; echo "${!q@}"` is

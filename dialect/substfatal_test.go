@@ -304,35 +304,29 @@ func TestASubstitutionRefusedInsideAnotherBodyEndsTheScriptToo(t *testing.T) {
 //
 // Measured 2026-09-20 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C
 // <shell> s.sh` with standard input on the null device, over `printf 'one\n'`
-// and then `while read -r l; do :; done < <(v=$(echo hi; for))`:
+// and then `v=$(echo hi; for) | :`:
 //
 //	                     output   status
 //	zsh 5.9.2            one      1
 //	bash 5.3.20          one      2
+//	dash 0.5.12          one      2
 //	bash 3.2.57          one      0
 //	ksh93u+ 2012-08-01   one      0
 //
-// A process substitution because that is the shape that reaches it: every
-// other spelling's body runs in this shell's own call stack and hands its
-// stop back through the return, where this one runs in a shell of its own.
-// Nothing about the number is racy — the reader does not see end of file
-// until the body has finished — and a loop that ends on end of input is 0,
-// which is exactly what was left behind.
-//
-// **bash is left out of the rows and that is a gap rather than an omission.**
-// It stops the *script* at this line, before `while` runs at all, because it
-// reads a `$( … )` body with the line that holds it — and this engine reads
-// the body when the word is expanded and so leaves 0 where bash leaves 2. It
-// is unchanged by the fix here, reproduces on `main`, and is a question about
-// when a body is read rather than about who takes the stop. The two messages
-// are already byte-identical in that column.
+// A **pipeline element** because that is a shell of its own whose stop has to
+// travel in the box, and because the pipeline is waited for — so the number
+// is the same every run. It is also the shape scriptStop.status was written
+// for: the pipeline's own status is `:`'s, and reporting that instead of the
+// failure's is exactly the 0 this leaves.
 func TestASubstitutionRefusedInTheLastStatementStillSetsTheStatus(t *testing.T) {
-	const src = "printf 'one\\n'\nwhile read -r l; do :; done < <(v=$(echo hi; for))\n"
+	const src = "printf 'one\\n'\nv=$(echo hi; for) | :\n"
 	for _, c := range []struct {
 		preset string
 		status int
 	}{
+		{"bash", 2},
 		{"zsh", 1},
+		{"dash", 2},
 		{"ksh", 0},
 	} {
 		t.Run(c.preset, func(t *testing.T) {

@@ -14,8 +14,10 @@ import (
 // The line editor completes a command word from every function callable, and
 // a dialect written as shell has `dirs`, `popd` and `pushd` among them — so
 // narrowing the accessor it reads would take those three off Tab, silently,
-// at a prompt where nothing else offers them either (`BuiltinNames` does not
-// name them).
+// at a prompt. `BuiltinNames` does name them since #1117, so Tab would
+// survive that narrowing today; this stays because the accessor's contract
+// is "everything callable" and a prelude's *private* helpers are callable
+// and are in no listing at all.
 //
 // That is why #1081 was two sets rather than one filter: `compgen -A function`
 // asks the script's own functions and this asks everything callable. The test

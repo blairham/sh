@@ -303,7 +303,7 @@ func (r *Runner) typePath(name string, m typeMode) int {
 		if _, ok := r.reportedFunc(name); ok && !m.noFuncs {
 			return 0
 		}
-		if _, ok := r.lookupBuiltin(name); ok {
+		if r.presentsAsBuiltin(name) {
 			return 0
 		}
 		if r.reservedWord(name) {
@@ -475,7 +475,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			}
 		}
 	}
-	if _, ok := r.lookupBuiltin(name); ok {
+	if r.presentsAsBuiltin(name) {
 		found = true
 		if !r.sayKind(m.asked(), name, "builtin", NamedKindWord(NameBuiltin)) {
 			line := r.BuiltinSentence(name)
@@ -680,7 +680,7 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 		r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
 		return 0
 	}
-	if _, ok := r.lookupBuiltin(name); ok {
+	if r.presentsAsBuiltin(name) {
 		if r.sayKind(kind, name, "builtin", NamedKindWord(NameBuiltin)) {
 			return 0
 		}

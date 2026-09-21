@@ -13882,10 +13882,12 @@ rather than a shortcut: bash locates only the first line, so
 `dirs: usage: dirs [-clpv] [+N] [-N]` follows the located complaint with
 no prefix of its own.
 
-What this does not do is make such a function a builtin in any other
-respect. `type pushd` still answers `function`, because it is one; the
-question the seam answers is whose diagnostic it is, which is the
-question a location already asks.
+What this does not decide is whether such a function is a *builtin*.
+That is the next question over, and it is answered under "What a
+prelude presents" below: since #1117 `type pushd` answers
+`pushd is a shell builtin`, because a prelude function is how a dialect
+written as shell spells one. The seam here is about whose diagnostic it
+is, which is the question a location already asks.
 
 **Whose function a listing is asking about** (#1035). The same fact is
 what a *listing* needs, and it was needed second: `declare -F` against
@@ -13909,13 +13911,15 @@ The rule is the one above, asked by name instead of by declaration:
   function is its own, by the same rule that moves the diagnostic's
   voice back to it. An empty listing is 0, not the 1 a name that is no
   function answers.
-- **A name asked for is still answered.** `declare -F pushd` writes the
-  name and `declare -f pushd` writes the body, because there is a
-  function there and `type pushd` already says so. Real bash refuses
-  both with 1, having a builtin instead, and this is the divergence
-  taken knowingly: the alternative makes the prelude's implementation
-  unreachable by name and gives the shell two answers to whether
-  `pushd` is a function. One notion of prelude-ness, one answer.
+- **A name asked for is answered as a builtin, not as a function**
+  (#1117). `declare -F pushd` and `declare -f pushd` write nothing at
+  status 1, which is what real bash writes, because there is a builtin
+  of that name and no function. This paragraph used to record the
+  opposite — the body written back, as a divergence taken knowingly to
+  keep the prelude's implementation reachable by name — and see "What a
+  prelude presents" below for why that was overturned: the reachability
+  it bought is itself the divergence, and nothing else in the panel has
+  it. One notion of prelude-ness, one answer, unchanged.
 - **A name the prelude never presented is not answered** (#2464). The
   exception the paragraph above has to carry, and it is not a second
   notion of prelude-ness but a narrower reading of the same one: `pushd`
@@ -14021,17 +14025,82 @@ never defined.
   answered" is about an operand naming one thing, not about a prefix
   that happens to spell one.
 
-Measured and deliberately **not** changed: `compgen -A builtin pushd`
-answers `pushd` at 0 in real bash and nothing at 1 here, and
-`compgen -A builtin` names `dirs`, `popd` and `pushd` there and none of
-them here. Adding them would match bash on that row and give this shell
-two answers to whether `pushd` is a builtin, since `type pushd` says
-`function` — which is the one thing the rule above exists to prevent. A
-miss at 1 is `compgen`'s own "nothing to offer" rather than a fabricated
-name, and the divergence is the same one `type` already carries. Whether
-a dialect should instead hold a table of the names it *presents* as
-builtins — which would move `type` too, and is therefore not a local
-change — is left open.
+### What a prelude presents
+
+**A name the prelude presents is a builtin** (#1117). The four cases
+above are all about *functions*, and each of them narrows a listing
+while leaving the name a function to whatever asked. That left one
+question open and this answers it: a prelude function is how a dialect
+written as shell spells a builtin, so every surface that reports on a
+name says `builtin` and none of them says `function`.
+
+The table is not a new one. `speaksForTheShell` already records which
+declarations the prelude made, and `__` already marks the ones it does
+not present, so the set is the record it already keeps minus the
+machinery — `dirs`, `popd` and `pushd` in the two dialects that write
+a directory stack as shell. Every surface reads that one table, which
+is "one notion of prelude-ness, one answer" kept rather than broken.
+
+Measured 2026-09-20 with `env -i PATH=/usr/bin:/bin LC_ALL=C` and a
+scratch `HOME`, against bash 5.3.20 under `--norc --noprofile` and zsh
+5.9.2 under `-f`. `popd` and `dirs` answer as `pushd` does on every
+row.
+
+| snippet | the shell | ours before | ours now |
+| --- | --- | --- | --- |
+| `compgen -A builtin pushd` | `pushd`, 0 | nothing, 1 | `pushd`, 0 |
+| `type pushd` | `pushd is a shell builtin` | `pushd is a function` and the body | as the shell |
+| `type -t pushd` | `builtin` | `function` | `builtin` |
+| `declare -f pushd` | nothing, 1 | the body, 0 | nothing, 1 |
+| `command -V pushd` | `pushd is a shell builtin` | `pushd is a function` | as the shell |
+| `builtin pushd /tmp` | pushes, 0 | `not a shell builtin`, 1 | pushes, 0 |
+| `command pushd /tmp` | pushes, 0 | `command not found`, 127 | pushes, 0 |
+| `enable pushd` | silent, 0 | `not a shell builtin`, 1 | silent, 0 |
+| zsh `whence -w pushd` | `pushd: builtin` | `pushd: function` | as the shell |
+| zsh `which pushd` | `pushd: shell built-in command` | the body | as the shell |
+
+Three of those are not listings at all. `builtin NAME` is the defensive
+spelling a script writes to get past a user function of that name, and
+`command NAME` is the other; both simply did not run, in both dialects.
+Leaving the names out of a listing would have left those two broken for
+good.
+
+**Losing `declare -f pushd` is conformance and not a cost**, which is
+the measurement that settled this. The paragraph above records the
+reachability of the prelude's implementation as bought deliberately —
+but real bash refuses `declare -f pushd` with 1 as well, because there
+is a builtin of that name and no function to print. So the body this
+shell used to write back was itself an unmeasured divergence, and it is
+the one this change removes rather than the one it costs.
+
+**A function shadows one of these rather than replacing it**, which is
+the line between the two tables and is where a rule keyed on the live
+function table would go wrong. Measured on bash 5.3.20 after
+`pushd() { echo mine; }`: `type pushd` is the function and writes its
+body, `declare -f pushd` writes it too, `compgen -A builtin pushd`
+still answers `pushd`, `type -a pushd` writes the function and then the
+builtin, and `builtin pushd /tmp` pushes. zsh agrees on all of them. A
+shell with a builtin table and a function table gets that for free; a
+dialect written as shell has one table, so the boundary is
+reconstructed from the prelude's own record — the same record a removal
+puts the declaration back from, above.
+
+**Switching one off is real.** A builtin that is switched off stops
+resolving, and a presented name is a builtin: measured,
+`disable pushd; pushd /tmp` on zsh is `command not found: pushd` at 127
+and `whence -w pushd` is `pushd: none`, and bash after `enable -n pushd`
+answers `type: pushd: not found` and `pushd: command not found`. The
+implementation is still in the one function table this shell has, so
+the dispatcher is told about it by name; without that, `enable`
+accepting the name would have made the switch a silent no-op. A script
+that writes its own `pushd` *after* the switch has written an ordinary
+function and it runs, in bash and here, because the switch was over the
+builtin.
+
+This overturns #603's recorded call, deliberately. That call was "a
+prelude function is the shell speaking and not a builtin in any other
+respect", and every row above is a respect in which the panel says
+otherwise.
 
 ### Where a coprocess's near ends are numbered
 

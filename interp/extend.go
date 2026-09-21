@@ -387,6 +387,15 @@ func (r *Runner) BuiltinNames() []string {
 	if r.dialect().DoubleBracketIsACommand {
 		seen["[["] = true
 	}
+	// And the names the dialect's prelude presents, which are builtins to
+	// every question asked about them: real bash names `dirs`, `popd` and
+	// `pushd` here and this shell named none of them, while `type` called
+	// all three functions — two answers to one question, from two lookups.
+	// See Runner.presentedBuiltin, which is the one table both now read
+	// (#1117).
+	for _, name := range r.presentedBuiltinNames() {
+		seen[name] = true
+	}
 	// A registration wins, and a nil one is a removal rather than an entry.
 	for name, fn := range r.custom {
 		if fn == nil {
@@ -452,16 +461,27 @@ func (r *Runner) KnownBuiltin(name string) bool {
 	if fn, ok := r.custom[name]; ok {
 		return fn != nil
 	}
-	_, ok := builtins[name]
-	return ok
+	if _, ok := builtins[name]; ok {
+		return true
+	}
+	// A name the prelude presents is one of them, switched off or not —
+	// which is what lets `enable pushd` and zsh's `disable pushd` act on it
+	// rather than answering that the shell has no such thing. See
+	// Runner.presentedPreludeName, and note that it is the *un*narrowed one:
+	// this question is about the table and not about what the word finds
+	// today (#1117).
+	return r.presentedPreludeName(name)
 }
 
 // FuncNames is every function this runner has defined, sorted.
 //
 // Every function *callable*, including the ones a dialect's prelude defined,
-// which is what an embedder completing a command word wants: the line editor
-// builds its command list from this and [Runner.BuiltinNames], and `pushd`
-// is in neither if this one narrows. A *listing* of "what functions exist"
+// which is what an embedder wants that is not asking a shell question: a
+// caller enumerating what it can invoke. A command-word completer reaches
+// `pushd` through [Runner.BuiltinNames] now, which names what the prelude
+// presents (#1117) — but a private helper is callable and is in no listing
+// at all, so this stays the set that answers "is there a body behind this
+// name". A *listing* of "what functions exist"
 // wants the other set — the script's own, with the shell's left out — and
 // that is scriptFuncNames, which every listing and `compgen -A function` ask
 // instead (#1035, #1081). Two callers want two sets; the predicate behind
@@ -638,7 +658,7 @@ func (r *Runner) ResolveName(name string) (NameKind, string) {
 	if r.reservedWord(name) {
 		return NameReserved, ""
 	}
-	if _, ok := r.lookupBuiltin(name); ok {
+	if r.presentsAsBuiltin(name) {
 		return NameBuiltin, ""
 	}
 	if r.reservedBuiltin(name) {
@@ -673,7 +693,7 @@ func (r *Runner) NameKinds(name string) []NameKind {
 	if _, ok := r.reportedFunc(name); ok {
 		kinds = append(kinds, NameFunction)
 	}
-	if _, ok := r.lookupBuiltin(name); ok {
+	if r.presentsAsBuiltin(name) {
 		kinds = append(kinds, NameBuiltin)
 	}
 	return kinds

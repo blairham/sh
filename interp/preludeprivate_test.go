@@ -28,6 +28,10 @@ func answered(s *Semantics) {
 // gives — a parallel record has to be cleared on every route a redefinition
 // can arrive by, and this package does not see those from one place.
 //
+// The mark decides *which* answer a name gets rather than whether it gets
+// one, which is #1117: a presented name is a builtin and a private helper is
+// nothing at all. Neither is a function.
+//
 // These name a *rule* and no shell, which is the substrate's side of it. What
 // the dialects' own helpers are called is asserted under dialect/bash and
 // dialect/zsh.
@@ -43,10 +47,16 @@ func TestAPrivatePreludeFunctionIsNotAName(t *testing.T) {
 		{src: "command -v __helper", status: 1},
 		{src: "typeset -f __helper", status: 1},
 		{src: "typeset -F __helper", status: 1},
-		// The presented ones are unchanged: `type` has called a prelude
-		// function a function since #603 and still does.
-		{src: "type p", out: "p is a function\n"},
+		// The presented ones get the other answer, which is a builtin's:
+		// they are how a dialect written as shell spells one, and since
+		// #1117 every report says so. `command -v` names the word either
+		// way, which is why it is here as well — a row that could not
+		// change is what would make the rest of this table look like a
+		// rule when it is a coincidence.
+		{src: "type p", out: "p is a shell builtin\n"},
 		{src: "command -v q", out: "q\n"},
+		{src: "typeset -f p", status: 1},
+		{src: "typeset -F q", status: 1},
 	} {
 		out, errs, st := preludeListingRun(t, listingPrelude, tc.src, answered)
 		if out != tc.out || errs != tc.errs || st != tc.status {

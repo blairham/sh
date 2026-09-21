@@ -15621,7 +15621,45 @@ type Semantics struct {
 	// among them, at status 0 — accept a builtin or a function as hashable. Measured with `shift`, which no
 	// PATH carries — `cd` was the contaminated probe, macOS ships
 	// /usr/bin/cd. Recorded as `hash/a-builtin-counts-except-in-zsh`.
+	//
+	// **A written pathname is the third thing PATH does not hold**, and the
+	// axis decides it too, for the two dialects that reach the question at
+	// all — HashIgnoresAnOperandWithASlash settles it first for the other
+	// three. Measured 2026-09-21 with `hash /bin/ls`, which every column can
+	// run: zsh answers `no such command: /bin/ls` at 1 and remembers
+	// nothing, where ksh93u+ remembers `/bin/ls=/bin/ls` at 0. So the shell
+	// that searches PATH alone will not take a path it was handed, and the
+	// shell that does not takes it as written — one reading of one axis,
+	// rather than a second axis asking the same thing about a different kind
+	// of non-PATH operand.
 	HashSearchesPathAlone Answer
+
+	// HashIgnoresAnOperandWithASlash passes over `hash /bin/ls` entirely:
+	// nothing is searched for, nothing is remembered, nothing is said and
+	// the status is 0 — even where the same shell reports a plain name that
+	// resolves to nothing.
+	//
+	// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C`, one probe at
+	// a time, with `hash /bin/ls; hash` and again with `hash /nosuchfile`:
+	//
+	//	bash 5.3.20   silent, 0, `hash table empty`
+	//	bash 3.2.57   silent, 0, `hash table empty`
+	//	dash          silent, 0, nothing listed
+	//	BusyBox ash   silent, 0, nothing listed
+	//	zsh 5.9.2     `no such command: /bin/ls` at 1, nothing listed
+	//	ksh93u+       silent, 0, and the table holds `/bin/ls=/bin/ls`
+	//
+	// Three of the five, so the preset says Yes and the two that reach the
+	// operand override. The existence of the file does not move any column:
+	// `hash /nosuchfile` and `hash /bin/ls` read the same in each, which is
+	// what makes this a question about the *operand as written* rather than
+	// about a search that failed.
+	//
+	// It is asked ahead of HashSearchesPathAlone and only when the operand
+	// actually holds a slash, because it is the one thing that separates a
+	// shell that says nothing from one whose HashReportsAMissingName is Yes
+	// and that says `not found` about every other name it cannot resolve.
+	HashIgnoresAnOperandWithASlash Answer
 
 	// CommandHashIsTrusted runs the path the command hash holds without
 	// asking whether it is still there.
@@ -23471,6 +23509,11 @@ func PosixSemantics() Semantics {
 		// counts builtins and functions too, and reports a missing name.
 		HashReportsAMissingName: Yes,
 		HashSearchesPathAlone:   No,
+		// POSIX hashes what a PATH search finds, and a command name holding
+		// a slash is the one kind of name the standard says is not searched
+		// for at all; the three dialects closest to that reading — dash,
+		// BusyBox ash and bash — pass it over without a word.
+		HashIgnoresAnOperandWithASlash: Yes,
 		// POSIX says a shell "shall remember" the location and says nothing
 		// about re-checking it; the majority of the panel looks again, and
 		// the one that does not overrides. The letters past `-r` are bash's

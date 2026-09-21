@@ -58,10 +58,26 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 			r.builtinUsageLine("hash")
 			return orDefault(r.diag().BuiltinBadOptionStatus, 2)
 		}
+		status := 0
 		for _, name := range args {
+			// The path is taken as written, and a *directory* is the one
+			// thing that stops it. Measured 2026-09-21 on bash 5.3.20 and
+			// bash 3.2.57, the only column with the letter: `-p /nosuchfile`
+			// and `-p /dev/null` are both remembered in silence at 0, so
+			// neither existing nor being executable is asked about, while
+			// `-p /tmp` and `-p .` are `hash: /tmp: Is a directory` at 1
+			// with the table left empty. The complaint is per name —
+			// `hash -p /tmp a b` prints it twice — which is why it is inside
+			// the loop rather than in front of it (#4064).
+			if r.hashPathIsADirectory(optArg['p']) {
+				r.diagf("%s\n", Wording(r.diag().HashPathIsADirectory,
+					"hash: %[1]s: Is a directory", optArg['p']))
+				status = 1
+				continue
+			}
 			r.putHashedCommand(name, optArg['p'], 0)
 		}
-		return 0
+		return status
 	case strings.ContainsRune(opts, 't'):
 		// `-t` before `-d`, measured: `hash -d -t ls` reports the path and
 		// leaves the entry where it was. `-l` beside it is not a second
@@ -94,10 +110,23 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 	}
 	status := 0
 	for _, name := range args {
-		if !r.ask(r.sem().HashSearchesPathAlone, "`hash` counting only what PATH holds") {
-			if r.unspecified {
-				return r.status
-			}
+		// An operand written with a slash is not a name PATH could hold, and
+		// what a shell does with one is its own question — asked only when
+		// the operand really has a slash, because everything else here is
+		// unanimous. See Semantics.HashIgnoresAnOperandWithASlash.
+		pathname := strings.ContainsRune(name, '/')
+		if pathname && r.ask(r.sem().HashIgnoresAnOperandWithASlash,
+			"`hash` passing over an operand written with a slash") {
+			continue
+		}
+		if r.unspecified {
+			return r.status
+		}
+		pathAlone := r.ask(r.sem().HashSearchesPathAlone, "`hash` counting only what PATH holds")
+		if r.unspecified {
+			return r.status
+		}
+		if !pathAlone {
 			// A builtin or a function could run, so it hashes — and there is
 			// no path to remember for either.
 			if _, ok := r.lookupBuiltin(name); ok {
@@ -107,14 +136,17 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 				continue
 			}
 		}
-		if r.unspecified {
-			return r.status
-		}
-		if path, err := r.lookPath(name); err == nil {
-			// Zero hits, not one: an explicit `hash ls` after `ls` has run
-			// puts the count back to 0 in the one dialect that shows it.
-			r.putHashedCommand(name, path, 0)
-			continue
+		// A shell that searches PATH alone has no way to reach a written
+		// pathname, so the operand falls through to the missing-name
+		// question rather than being remembered as itself.
+		if !pathname || !pathAlone {
+			if path, err := r.lookPath(name); err == nil {
+				// Zero hits, not one: an explicit `hash ls` after `ls` has
+				// run puts the count back to 0 in the one dialect that shows
+				// it.
+				r.putHashedCommand(name, path, 0)
+				continue
+			}
 		}
 		if r.ask(r.sem().HashReportsAMissingName, "`hash` reporting a name that resolves to nothing") {
 			r.diagf("%s\n", Wording(r.diag().HashNotFound, "hash: %[1]s: not found", name))
@@ -125,6 +157,22 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 		}
 	}
 	return status
+}
+
+// hashPathIsADirectory is the one check `hash -p` makes on the path it was
+// handed.
+//
+// Against the runner's own directory rather than the process's, because a
+// relative path is measurably taken relative to the shell's cwd — `hash -p .`
+// blames `.` — and interp may not read a process-wide one. A stat that fails
+// for any other reason is not a directory, which is the same reading the
+// measurement gives a path that is simply not there.
+func (r *Runner) hashPathIsADirectory(path string) bool {
+	if path == "" {
+		return false
+	}
+	st, err := r.stat(r.absolute(path))
+	return err == nil && st.IsDir()
 }
 
 // hashOptionLetters is the set `hash` takes in this dialect, the paired half

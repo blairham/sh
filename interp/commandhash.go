@@ -267,6 +267,44 @@ func (r *Runner) hashBuiltinIsRefused() bool {
 // printed rather than here, because `type -t ./x` writes `file` in every
 // column and must not be refused for an axis it cannot show.
 func (r *Runner) lookPathReporting(name string) (string, error) {
+	// **The table is the answer here even when what it holds has gone**, in
+	// the dialect that trusts it. Measured 2026-09-21 on bash 5.3.20:
+	// `hash -p /nosuchfile cat; type cat` is `cat is hashed (/nosuchfile)`
+	// at 0 and `command -v cat` is `/nosuchfile`, while *running* `cat` is
+	// `/nosuchfile: No such file or directory` at 127 — so the report and
+	// the run part company, and before this the report answered `not found`
+	// about a name that had a perfectly good `/bin/cat` behind it (#4064).
+	//
+	// `shopt -s checkhash` does not move it: measured with the option on,
+	// `type` still writes the remembered path. That is why this does not
+	// read Runner.checksHashedCommand the way the execution path does — the
+	// option is about the shell looking before it *runs*.
+	//
+	// Semantics.CommandHashIsTrusted is the axis because it is the same
+	// disagreement: measured the same day, zsh hashes `zzc`, the file is
+	// removed, and `whence -v zzc` is `zzc not found` at 1 where bash's
+	// `type` names the path it remembered.
+	//
+	// Asked only once the remembered path has actually gone, which is the
+	// one arrangement that tells the readings apart — an entry that still
+	// runs is answered by the search below with nothing extra consulted, so
+	// this adds no question to a report that was unanimous.
+	if hashed, ok := r.hashedCommandPath(name); ok && r.rememberingLookups() {
+		if r.runnable(r.absolute(hashed)) != nil &&
+			r.ask(r.sem().CommandHashIsTrusted, "a hashed path reported without looking for it again") {
+			// The entry **as it was written**, not absolutised: measured,
+			// `hash -p relfile cat; type cat` is `cat is hashed (relfile)`
+			// and `command -v cat` is `relfile`. The run of the same name
+			// resolves it against the shell's directory and says so, which
+			// is lookPath's job and not this one's.
+			//
+			// And it counts, the way a report of an entry that still runs
+			// already did: measured, two reports of a `hash -p` entry leave
+			// the count at 2 whether or not the file is there.
+			r.hashCommandHit(name)
+			return hashed, nil
+		}
+	}
 	path, err := r.lookPath(name)
 	if err != nil {
 		return path, err

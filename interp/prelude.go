@@ -36,10 +36,10 @@ import (
 // the `__dirs_rotate` that found the index out of range, which is what the
 // shells with the builtin say.
 //
-// What it deliberately does not do is make such a function a builtin in any
-// other respect. `type pushd` still answers `function`, because it is one —
-// this is about whose diagnostic it is, which is the question the location
-// already asks.
+// What it deliberately does not decide is whether such a function is a
+// *builtin*. That is the next question over, and [Runner.presentedBuiltin]
+// is where it is answered: a name the dialect's prelude presents is one this
+// shell has, and every surface that reports on a name says so (#1117).
 
 // diagnoseCommand is the seam's name in shell.
 //
@@ -127,13 +127,13 @@ func (r *Runner) speaksForTheShell(fn *syntax.FuncDecl) bool {
 // definition time would have to be cleared on every route a redefinition can
 // arrive by, and this package does not see those from one place (#603).
 //
-// A name *asked for* is still answered: `declare -f pushd` says the prelude's
-// function back, because there is one and `type pushd` already says so. That
-// is the same call #603 made — a prelude function is the shell speaking, and
-// not a builtin in any other respect — rather than a second answer to whether
-// the name is a function. Real bash has the three as builtins and refuses
-// `declare -f pushd` with 1; the divergence is recorded in
-// docs/spec/semantics.md, where the reachability it buys is written down.
+// A name *asked for* is answered the way this shell answers for a builtin,
+// which since #1117 is not the same thing as answering for a function:
+// `declare -f pushd` writes nothing at status 1, because there is no function
+// called `pushd` here any more than there is one in real bash. The lookup
+// that says so is [Runner.reportedFunc], and the table it reads is
+// [Runner.presentedBuiltin] — one table, read by `type` and by
+// `compgen -A builtin` alike, which is #1035's rule kept rather than broken.
 func (r *Runner) scriptFuncNames() []string {
 	names := make([]string, 0, len(r.funcs))
 	for name, fn := range r.funcs {
@@ -168,28 +168,137 @@ func (r *Runner) scriptFuncNames() []string {
 // voice — [Runner.speaksForTheShell] is what both ask.
 const preludePrivatePrefix = "__"
 
-// hiddenPreludeFunc reports whether name is one the prelude uses rather than
-// one it presents.
-func (r *Runner) hiddenPreludeFunc(name string, fn *syntax.FuncDecl) bool {
-	return r.speaksForTheShell(fn) && strings.HasPrefix(name, preludePrivatePrefix)
+// presentedPreludeName reports whether name is one the prelude *presents* as
+// a command of this shell's own, rather than machinery it runs.
+//
+// This is the table #1117 asked for, and the point is that it is not a new
+// one: the prelude's declarations are already recorded, and
+// [preludePrivatePrefix] already splits the ones a shell has from the ones it
+// is built out of. Nothing is written down twice, so nothing can drift.
+//
+// The two halves of the split answer a name differently and neither answers
+// it as a function. A private helper is nothing at all — real bash says
+// `type: __dirs_rotate: not found` (#2464). A presented name is a builtin —
+// real bash says `pushd is a shell builtin`, and measured 2026-09-20 on bash
+// 5.3.20 it refuses `declare -f pushd` with 1, so the implementation being
+// unreachable by name is conformance here rather than a cost (#1117).
+//
+// **It asks the prelude's own record and not the live function table**,
+// which is the difference between a builtin and a function and is measured:
+// `pushd() { echo mine; }` in real bash leaves `compgen -A builtin pushd`
+// answering `pushd`, `builtin pushd /tmp` pushing, and `type -a pushd`
+// writing the function *and* the builtin, because a function shadows a
+// builtin rather than replacing it. A dialect written as shell has one table
+// where those shells have two, so the boundary is reconstructed from the
+// record the runner already keeps — the same record removeFunctionQuietly
+// puts the declaration back from when the shadowing function goes. Which of
+// the two a *report* names is still the declaration comparison's answer, and
+// that is [Runner.reportedFunc].
+func (r *Runner) presentedPreludeName(name string) bool {
+	return r.preludeFuncs[name] != nil &&
+		!strings.HasPrefix(name, preludePrivatePrefix)
+}
+
+// presentedBuiltin is presentedPreludeName narrowed to what running the word
+// would actually find, which is the same narrowing [Runner.lookupBuiltin]
+// makes for a builtin proper.
+//
+// Switched off is switched off whichever table the name is in. Measured
+// 2026-09-20: `disable pushd; pushd /tmp` on zsh 5.9.2 is
+// `command not found: pushd` at 127 and `whence -w pushd` is `pushd: none`,
+// and bash 5.3.20 answers `type: pushd: not found` and
+// `pushd: command not found` after `enable -n pushd`. A presented name that
+// accepted the switch and went on running would be the silent wrong answer
+// this project exists to avoid.
+func (r *Runner) presentedBuiltin(name string) bool {
+	return r.presentedPreludeName(name) &&
+		!r.disabledBuiltins[name] && !r.withdrawnBuiltins[name]
+}
+
+// presentedButSwitchedOff is the state the dispatcher has to know about: the
+// word would reach the shell's own implementation of a presented name, and
+// the name has been switched off, so it must not. The shells with the
+// builtin have two tables and get this for free.
+//
+// The declaration comparison is the first half on purpose. A script that
+// writes its own `pushd` after switching the name off has written an
+// ordinary function and it runs — measured 2026-09-20, `enable -n pushd;
+// pushd() { echo mine; }; pushd` prints `mine` in bash 5.3.20, because the
+// switch was over the builtin and the function is not one.
+func (r *Runner) presentedButSwitchedOff(name string) bool {
+	return r.speaksForTheShell(r.funcs[name]) &&
+		r.presentedPreludeName(name) && !r.presentedBuiltin(name)
+}
+
+// presentsAsBuiltin is the question every report about a name asks: would
+// this word run a command of the shell's own?
+//
+// One predicate for the two tables, so `type`, `command -v`, `command -V`,
+// zsh's `whence -w` and its `which` cannot answer it one way while
+// `compgen -A builtin` answers it the other — which is exactly the split
+// #1117 reports and #1035's rule forbids.
+func (r *Runner) presentsAsBuiltin(name string) bool {
+	if _, ok := r.lookupBuiltin(name); ok {
+		return true
+	}
+	return r.presentedBuiltin(name)
+}
+
+// presentedBuiltinNames is every name the prelude presents and has not had
+// switched off, for the listings that name what this shell has.
+func (r *Runner) presentedBuiltinNames() []string {
+	var names []string
+	for name := range r.preludeFuncs {
+		if r.presentedBuiltin(name) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// presentedPreludeDecl is the declaration behind a presented name, for the
+// two words that ask for the shell's own command and get a function here
+// because a dialect written as shell has nowhere else to put one: `builtin
+// pushd /tmp` and, in the dialect whose `command` reaches a builtin at all,
+// `command pushd /tmp`. Both push in real bash and both were refused here.
+// The prelude's own declaration, not whatever the function table holds: a
+// script that wraps `pushd` and calls `builtin pushd` from inside the
+// wrapper must reach the shell's implementation and not itself, which is the
+// entire reason the spelling exists.
+func (r *Runner) presentedPreludeDecl(name string) (*syntax.FuncDecl, bool) {
+	if !r.presentedBuiltin(name) {
+		return nil, false
+	}
+	fn := r.preludeFuncs[name]
+	return fn, fn != nil
 }
 
 // reportedFunc is the function table as a question *about a name* sees it:
-// the private prelude helpers are not there.
+// nothing the dialect's prelude defined is in it.
 //
 // Every builtin that answers "what is this name" goes through it — `type`,
-// `command -v`, `whence`, and a named `declare -f` — so the shell gives one
-// answer to whether a name exists rather than one per builtin, which is the
-// split #2464 reports: `compgen -A function __dirs_rotate` was already right
-// while `type __dirs_rotate` was not, from two lookups of one table.
+// `command -v`, `whence`, `which`, and a named `declare -f` — so the shell
+// gives one answer to whether a name exists rather than one per builtin,
+// which is the split #2464 reports: `compgen -A function __dirs_rotate` was
+// already right while `type __dirs_rotate` was not, from two lookups of one
+// table.
 //
-// Calling is deliberately untouched. A private helper is machinery the
-// presented functions run, and hiding it from a *report* is not the same as
-// taking it away — `pushd +9` still reaches `__dirs_rotate`, which is what
-// makes the name worth having at all.
+// **Every prelude declaration and not only the private ones**, which is
+// #1117's change and the point where #603's call was overturned. A prelude
+// function is how a dialect written as shell spells a builtin, and neither
+// half of the prelude is a function to a shell that is asked: a presented
+// name is reported as a builtin by [Runner.presentsAsBuiltin], and a private
+// helper is reported as nothing. Real bash refuses `declare -f pushd` with 1
+// for precisely this reason — there is a builtin of that name and no
+// function — so the body this used to write back was itself the divergence.
+//
+// Calling is deliberately untouched, and it is what makes the name worth
+// having: `pushd +9` still reaches `__dirs_rotate`, and `pushd /tmp` still
+// runs the prelude's implementation.
 func (r *Runner) reportedFunc(name string) (*syntax.FuncDecl, bool) {
 	fn, ok := r.funcs[name]
-	if !ok || r.hiddenPreludeFunc(name, fn) {
+	if !ok || r.speaksForTheShell(fn) {
 		return nil, false
 	}
 	return fn, true

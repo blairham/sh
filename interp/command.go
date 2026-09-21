@@ -181,6 +181,9 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 	}
 	fn, ok := r.lookupBuiltin(args[0])
 	if !ok {
+		if st, ran := r.runPresentedPrelude(ctx, args); ran {
+			return st
+		}
 		// The location does not name the builtin here, in the dialect that
 		// names it everywhere else: this message is *about* a name that is
 		// not one, so there is no builtin speaking. Measured — `zsh:cd:1:`
@@ -335,7 +338,7 @@ func (r *Runner) reportWhatRuns(name string) int {
 		r.printf("%s\n", name)
 		return 0
 	}
-	if _, ok := r.lookupBuiltin(name); ok {
+	if r.presentsAsBuiltin(name) {
 		r.printf("%s\n", name)
 		return 0
 	}
@@ -400,6 +403,17 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string, default
 	// to reach the PATH search and come back `command not found: set`, which
 	// is the answer measured, and a builtin found here would never get
 	// there. See Semantics.CommandReachesABuiltin.
+	if _, presented := r.presentedPreludeDecl(args[0]); presented &&
+		r.ask(r.sem().CommandReachesABuiltin, "`command` in front of a builtin running that builtin") {
+		// A name the prelude presents is one of the shell's own commands, so
+		// the word reaches it exactly where it reaches a builtin proper:
+		// measured 2026-09-20, `command pushd /tmp` pushes in bash 5.3.20
+		// and is `command not found: pushd` in zsh 5.9.2, which is the axis
+		// below answering for both rather than a rule of its own (#1117).
+		if st, ran := r.runPresentedPrelude(ctx, args); ran {
+			return st
+		}
+	}
 	if fn, ok := r.lookupBuiltin(args[0]); ok &&
 		r.ask(r.sem().CommandReachesABuiltin, "`command` in front of a builtin running that builtin") {
 		outer := r.inBuiltin
@@ -499,4 +513,36 @@ func (r *Runner) takeSpecialBuiltinFailure() {
 		r.ask(r.sem().FatalErrorEndsAtTheCommandWord, "`command` ending a fatal error raised inside the builtin it ran") {
 		r.takeFileError()
 	}
+}
+
+// runPresentedPrelude runs the function behind a name the dialect's prelude
+// presents as one of the shell's own commands, for the two words that ask
+// for a builtin and refuse a function.
+//
+// `builtin pushd /tmp` is the defensive spelling a script writes to get past
+// a user function of that name, and `command pushd /tmp` is the other. Both
+// push in real bash 5.3.20, measured 2026-09-20, and both answered
+// `not a shell builtin` at 1 here while the implementation sat in the one
+// function table this shell has (#1117). A shell with a builtin table and a
+// function table gets this for free; a dialect written as shell has to say
+// it.
+//
+// The body is the script's and not this word's, so the builtin's name is out
+// of the way for the length of the call — the rule `command` and `.` already
+// follow for the text they run. An error is a fatal one rather than a status
+// and a builtin has an int to answer with, so it is reported and answered 1,
+// which is what dialect/zsh's autoloadRunResolved does with the same problem.
+func (r *Runner) runPresentedPrelude(ctx context.Context, args []string) (int, bool) {
+	fn, ok := r.presentedPreludeDecl(args[0])
+	if !ok {
+		return 0, false
+	}
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	if err := r.callFunc(ctx, fn, args[1:]); err != nil {
+		r.diagf("%s: %v\n", args[0], err)
+		return 1, true
+	}
+	return r.status, true
 }

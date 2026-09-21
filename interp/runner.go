@@ -6292,7 +6292,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// holds nothing for falls through to the plain name, which is what lets a
 	// function defined outside be called from inside. See
 	// interp/namespace.go.
-	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok {
+	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok && !r.presentedButSwitchedOff(argv[0]) {
+		// A name the dialect's prelude presents is a builtin to every
+		// question asked about it, so switching it off has to stop the word
+		// finding it — and the implementation is a function in the one table
+		// this shell has, so nothing else would. Measured 2026-09-20:
+		// `disable pushd; pushd /tmp` on zsh 5.9.2 and `enable -n pushd;
+		// pushd /tmp` on bash 5.3.20 are both `command not found` at 127.
+		// See Runner.presentedButSwitchedOff (#1117).
+		//
 		// A name the shell is still waiting to read a body for is read now,
 		// and the definition the file leaves is what runs. Here rather than
 		// inside the call, because the call is handed the declaration it

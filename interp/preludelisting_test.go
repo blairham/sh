@@ -108,21 +108,21 @@ func TestAnEmptyFunctionListingIsStillZero(t *testing.T) {
 	}
 }
 
-// TestAPreludeFunctionAnswersWhenItIsNamed: hidden from the listing is not
-// hidden from the shell. `type` already calls such a name a function (#603),
-// and asking for it by name gets the same answer rather than a second one.
-func TestAPreludeFunctionAnswersWhenItIsNamed(t *testing.T) {
-	out, errs, st := preludeListingRun(t, listingPrelude, "typeset -F p", nil)
-	if out != "p\n" || errs != "" || st != 0 {
-		t.Errorf("stdout %q stderr %q status %d, want %q and 0", out, errs, st, "p\n")
-	}
-
-	out, errs, st = preludeListingRun(t, listingPrelude, "typeset -f q", nil)
-	if want := "q () \n{ \n  echo q\n}\n"; out != want {
-		t.Errorf("stdout = %q, want exactly %q", out, want)
-	}
-	if errs != "" || st != 0 {
-		t.Errorf("stderr %q status %d, want a silent 0", errs, st)
+// TestAPreludeFunctionIsNoFunctionWhenItIsNamed: the listing and the named
+// operand give one answer, which is #1035's rule, and since #1117 the answer
+// is the builtin's rather than the function's. Real bash refuses
+// `declare -f pushd` and `declare -F pushd` with 1 — measured 2026-09-20 on
+// 5.3.20 — because there is a builtin of that name and no function, and a
+// prelude function is how a dialect written as shell spells a builtin.
+func TestAPreludeFunctionIsNoFunctionWhenItIsNamed(t *testing.T) {
+	for _, src := range []string{"typeset -F p", "typeset -f q"} {
+		out, errs, st := preludeListingRun(t, listingPrelude, src, nil)
+		if out != "" || errs != "" {
+			t.Errorf("%q wrote %q / %q, want nothing", src, out, errs)
+		}
+		if st != 1 {
+			t.Errorf("%q status = %d, want 1", src, st)
+		}
 	}
 }
 

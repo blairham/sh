@@ -112,8 +112,14 @@ func (r *Runner) isBuiltin(name string) bool {
 	if r.disabledBuiltins[name] {
 		return true
 	}
-	_, ok := r.lookupBuiltin(name)
-	return ok
+	if _, ok := r.lookupBuiltin(name); ok {
+		return true
+	}
+	// A name the dialect's prelude presents is one of the shell's own
+	// commands: `enable pushd` is silent at 0 in real bash and was
+	// `enable: pushd: not a shell builtin` at 1 here, which is the same
+	// wrong answer `type` gave from the same missing table (#1117).
+	return r.presentedPreludeName(name)
 }
 
 func containsByte(s string, c byte) bool {

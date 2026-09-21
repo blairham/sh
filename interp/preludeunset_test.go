@@ -143,16 +143,20 @@ func TestUnsettingAPreludeFunctionChangesNoListing(t *testing.T) {
 	}
 }
 
-// TestAPreludeFunctionStillAnswersByNameAfterUnset: the decision #1035 took
-// and this must not contradict. A named operand is answered, so `typeset -f p`
-// says the prelude's function back after `unset -f p` exactly as it does
-// before — one answer to "is this a function", not two.
-func TestAPreludeFunctionStillAnswersByNameAfterUnset(t *testing.T) {
-	out, errs, st := preludeListingRun(t, listingPrelude, "unset -f p\ntypeset -f p\n", nil)
-	if want := "p () \n{ \n  __helper\n}\n"; out != want {
-		t.Errorf("stdout = %q, want exactly %q", out, want)
-	}
-	if errs != "" || st != 0 {
-		t.Errorf("stderr %q status %d, want a silent 0", errs, st)
+// TestAPreludeFunctionAnswersTheSameByNameAfterUnset: the decision #1035 took
+// and this must not contradict — one answer to "is this a function", not two,
+// and the removal does not change which answer it is. Since #1117 that answer
+// is "no function of that name", which is what real bash says to
+// `declare -f pushd` both before and after an `unset -f pushd` it treats as a
+// no-op. The name still runs, which the case above this one asserts.
+func TestAPreludeFunctionAnswersTheSameByNameAfterUnset(t *testing.T) {
+	for _, src := range []string{"typeset -f p\n", "unset -f p\ntypeset -f p\n"} {
+		out, errs, st := preludeListingRun(t, listingPrelude, src, nil)
+		if out != "" || errs != "" {
+			t.Errorf("%q wrote %q / %q, want nothing", src, out, errs)
+		}
+		if st != 1 {
+			t.Errorf("%q status = %d, want 1 — there is no function called p", src, st)
+		}
 	}
 }

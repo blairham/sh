@@ -88,12 +88,16 @@ echo "n=${#functions}"`)
 // notion of whose a function is (#1035, #1081, #1082): the predicate is
 // speaksForTheShell, reached through ListedFuncNames, and it is the one
 // `declare -f` and the `set` listing already ask.
+//
+// What `type` says about it is a builtin's sentence since #1117, which is
+// what real zsh 5.9.2 says: `type pushd` there is `pushd is a shell
+// builtin`, and `${(k)functions}` names none of the three.
 func TestFunctionsLeavesOutTheFunctionsThatAreTheShell(t *testing.T) {
 	out, st := runZshPrelude(t, t.TempDir(), `mine(){ :; }
 echo "listed=[${(k)functions}]"
 type pushd
 echo "declared=[$(declare -f)]"`)
-	want := "listed=[mine]\npushd is a shell function from zsh\n" +
+	want := "listed=[mine]\npushd is a shell builtin\n" +
 		"declared=[mine () {\n\t:\n}]\n"
 	if out != want || st != 0 {
 		t.Errorf("$functions with a prelude = %q (status %d), want %q", out, st, want)
@@ -128,7 +132,7 @@ echo "after=[${(k)functions}]"
 type pushd
 unset "functions[pushd]"
 echo "again=[${(k)functions}]"`)
-	want := "listed=[pushd]\nafter=[]\npushd is a shell function from zsh\nagain=[]\n"
+	want := "listed=[pushd]\nafter=[]\npushd is a shell builtin\nagain=[]\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting a redefined prelude function = %q (status %d), want %q", out, st, want)
 	}

@@ -698,8 +698,9 @@ format, and pointing it at a file of lines overwrites it.
 **The shell's ending appends to `$HISTFILE`** — the one it names then — what
 `history -a` would: the entries this session added that no `-a` has written,
 counted from the end of the list. A line the reader recorded and an entry `-s`
-stored each count one; an entry `-r` or `-n` read counts nothing; `-d` and the
-builtin's own line that `-p` and `-s` drop each take one off; `-c` puts the
+stored each count one; an entry `-r` or `-n` read counts nothing; `-d` takes off
+what it removed — one entry, or the whole span of a range — and the
+builtin's own line that `-p` and `-s` drop takes one off; `-c` puts the
 count back to nothing; `-w` does not touch it. Nothing is written by a shell
 that turned the list off again, unset HISTFILE, was replaced by `exec`, was
 killed by a signal, or is a subshell or command substitution ending. The file
@@ -774,6 +775,55 @@ The count is checked **after** the first operand has been read as a number, so
 `history x 1` is the numeric complaint and `history 1 x` is the operand-count
 one. A letter that takes the operands for itself ignores what is left:
 `history -c 1 2` is silent at 0.
+
+**`-d` is a fourth refusal and takes a *range*.** Measured 2026-09-21 on bash
+5.3.20, `env -i`, no startup files, a nine-entry list built with `history -s`
+(#4010):
+
+| written | said | status |
+| --- | --- | --- |
+| `history -d 2-4` | *nothing* — the three entries are gone | 0 |
+| `history -d 6--1` | the span to the newest entry is gone | 0 |
+| `history -d -1` | the newest entry alone | 0 |
+| `history -d 16-40` | `history: 16: history position out of range` | 1 |
+| `history -d 1-200` | `history: 200: history position out of range` | 1 |
+| `history -d -20-50` | `history: -20: history position out of range` | 1 |
+| `history -d 5-0xaf` | `history: 5-0xaf: history position out of range` | 1 |
+| `history -d 4-2` | *nothing at all* | 1 |
+| `history -d 0` | `history: 0: history position out of range` | 1 |
+| `history -d @42` | `history: @42: invalid number` | 1 |
+| `history -d 0x9` | `history: 0x9: invalid hex number` | 1 |
+
+So the operand has **three wordings of its own and none of them carries the
+usage block**, which is the same line `history x` draws above: a complaint
+about an operand is not a complaint about how the builtin was called.
+
+The **separator is the first `-` after the first character** of the operand as
+written, so a leading `-` is a sign and never a separator — `-1--1` is the
+newest entry alone, `--1` is a range whose start is the word `-`, and a *space*
+in front of the sign is not skipped, so ` -1` splits into ` ` and `1` and is
+refused where `-1` is taken. Whitespace inside a side is fine (` 16 - 40 `).
+
+An out-of-range range names **the end that is out of range** rather than the
+operand, and checks the start first — `16-40` has both ends out and names
+`16`. A side that is not a number at all falls back to naming the whole
+operand at the same wording.
+
+The two ends are not bounded alike at the **low** end, and the pair `0` against
+`0-3` is the discriminator: a lone `0` is out of range, while a non-negative
+range end below the oldest entry is clamped to it, so `0-0` and `1-0` each take
+the oldest entry alone. A *negative* is never clamped — it counts back from the
+newest, `-1` being the newest — and one counting back past the oldest is
+refused even where it lands on zero, so `-10-9` on a nine-entry list is refused
+and `-9-9` deletes the lot. A range whose start is after its end deletes
+nothing, **says nothing**, and is 1.
+
+A number is decimal whatever it starts with: `007` is seven, `08` is eight and
+`010` is ten. Only one prefix has a wording of its own, and a sign or a capital
+`X` is not it — `0x9` and `0x` are `invalid hex number` where `0X9`, `+0x9`,
+`0b101` and `9abc` are all plain `invalid number`.
+
+`-d` takes the span it removed off the unwritten count, not one.
 
 ### Words, ranges and substitutions
 

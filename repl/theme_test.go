@@ -538,3 +538,162 @@ func TestTheEndOfASessionStopsTheRepositoryWatch(t *testing.T) {
 		t.Error("the theme stopped drawing when the session ended")
 	}
 }
+
+// A preset is a set of assignments, so it is data — and a session that names
+// one gets a whole look for a variable.
+func TestAPresetIsALookForOneSetting(t *testing.T) {
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_PRESET": "lean",
+		"SH_PROMPT_ICONS":  "none",
+		"HOME":             "/home/p",
+	})
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+
+	drawn, drawing := theme.DrawPrompt(PromptInfo{Dir: "/home/p/work", Columns: 80})
+	if !drawing {
+		t.Fatal("naming a preset drew nothing")
+	}
+	// The preset's own elements: the directory on the upper row and the
+	// prompt character on the row being typed on.
+	if !strings.Contains(drawn.Text, "~/work") {
+		t.Errorf("the preset drew %q", drawn.Text)
+	}
+	if !strings.Contains(drawn.Text, "\n") {
+		t.Errorf("the preset drew one row: %q", drawn.Text)
+	}
+	if len(theme.Problems()) != 0 {
+		t.Errorf("a carried preset was reported as a problem: %v", theme.Problems())
+	}
+
+	// And the session's own setting still wins over it, which is the layer
+	// order: a preset is what somebody started from.
+	runner.SetVar("SH_PROMPT_LEFT_ELEMENTS", "prompt_char")
+	plain, _ := theme.DrawPrompt(PromptInfo{Dir: "/home/p/work", Columns: 80})
+	if strings.Contains(plain.Text, "~/work") {
+		t.Errorf("a session setting did not win over the preset: %q", plain.Text)
+	}
+}
+
+// A preset that is neither carried nor a file is named rather than ignored.
+func TestAPresetNobodyHasIsNamed(t *testing.T) {
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "prompt_char",
+		"SH_PROMPT_PRESET":        "not-a-look",
+	})
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+	if _, drawing := theme.DrawPrompt(PromptInfo{}); !drawing {
+		t.Fatal("a misspelled preset stopped the prompt drawing")
+	}
+	found := false
+	for _, problem := range theme.Problems() {
+		if strings.Contains(problem, "not-a-look") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the missing preset was not named: %v", theme.Problems())
+	}
+}
+
+// A segment written as a shell function in the session, called in-process
+// with no fork, in whatever dialect that session is running.
+func TestASessionFunctionIsASegment(t *testing.T) {
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "my_thing prompt_char",
+		"SH_PROMPT_ICONS":         "none",
+		"PROJECT":                 "atlas",
+	})
+	if !runner.DefineFunction("my_thing", `printf '[%s]' "$PROJECT"`) {
+		t.Fatal("the function would not define")
+	}
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+	theme.useSession(Shell{Runner: runner}.segmentFunctions(t.Context()))
+
+	drawn, drawing := theme.DrawPrompt(PromptInfo{})
+	if !drawing || !strings.Contains(drawn.Text, "[atlas]") {
+		t.Errorf("the session's function drew %q", drawn.Text)
+	}
+}
+
+// And what it must not do: change what `$?` says about the command that ran.
+func TestASegmentFunctionLeavesTheStatusAlone(t *testing.T) {
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "my_thing",
+		"SH_PROMPT_ICONS":         "none",
+	})
+	if !runner.DefineFunction("my_thing", `printf x; return 0`) {
+		t.Fatal("the function would not define")
+	}
+	runner.SetExitStatus(7)
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+	theme.useSession(Shell{Runner: runner}.segmentFunctions(t.Context()))
+
+	if _, drawing := theme.DrawPrompt(PromptInfo{Status: 7}); !drawing {
+		t.Fatal("the theme did not draw")
+	}
+	if got := runner.ExitStatus(); got != 7 {
+		t.Errorf("drawing a prompt changed $? to %d", got)
+	}
+}
+
+// A function that fails costs its segment and nothing else.
+func TestAFailingSegmentFunctionCostsOnlyItsSegment(t *testing.T) {
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "broken prompt_char",
+		"SH_PROMPT_ICONS":         "none",
+	})
+	if !runner.DefineFunction("broken", `printf half; return 3`) {
+		t.Fatal("the function would not define")
+	}
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+	theme.useSession(Shell{Runner: runner}.segmentFunctions(t.Context()))
+
+	drawn, drawing := theme.DrawPrompt(PromptInfo{})
+	if !drawing {
+		t.Fatal("a failing segment took the whole prompt with it")
+	}
+	if strings.Contains(drawn.Text, "half") {
+		t.Errorf("a failing segment drew anyway: %q", drawn.Text)
+	}
+	if !strings.Contains(drawn.Text, "$") {
+		t.Errorf("the rest of the prompt did not survive: %q", drawn.Text)
+	}
+}
+
+// What a segment function writes goes into the prompt and never onto the
+// terminal, because a prompt is drawn in raw mode where a newline moves down
+// without returning the carriage.
+func TestASegmentFunctionsOutputDoesNotReachTheTerminal(t *testing.T) {
+	var out, errs strings.Builder
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "noisy",
+		"SH_PROMPT_ICONS":         "none",
+	})
+	runner.Stdout, runner.Stderr = &out, &errs
+	if !runner.DefineFunction("noisy", `printf mine; printf oops >&2`) {
+		t.Fatal("the function would not define")
+	}
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+	theme.useSession(Shell{Runner: runner}.segmentFunctions(t.Context()))
+
+	drawn, _ := theme.DrawPrompt(PromptInfo{})
+	if out.Len() != 0 || errs.Len() != 0 {
+		t.Errorf("a segment function wrote to the session's streams: %q / %q", out.String(), errs.String())
+	}
+	// And the complaint is drawn rather than dropped: a diagnostic nobody
+	// sees is the silent half of the failure this repository treats as its
+	// worst.
+	if !strings.Contains(drawn.Text, "mine") || !strings.Contains(drawn.Text, "oops") {
+		t.Errorf("the prompt drew %q", drawn.Text)
+	}
+	// The streams are the session's again afterwards.
+	if runner.Stdout != &out || runner.Stderr != &errs {
+		t.Error("the session's streams were not put back")
+	}
+}

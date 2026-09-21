@@ -161,6 +161,7 @@ type Roster struct {
 	compiled map[string]Segment
 	outside  []Resolver
 	unknown  []string
+	shadowed []string
 }
 
 // Resolver finds a segment that is not compiled in — one defined as a shell
@@ -202,9 +203,21 @@ func (r *Roster) Consult(resolver Resolver) {
 func (r *Roster) Resolve(element string) (Segment, bool) {
 	name := strings.ToLower(strings.TrimSpace(element))
 	for i := len(r.outside) - 1; i >= 0; i-- {
-		if segment, ok := r.outside[i].Resolve(name); ok {
-			return segment, true
+		segment, ok := r.outside[i].Resolve(name)
+		if !ok {
+			continue
 		}
+		if _, also := r.compiled[name]; also && !slices.Contains(r.shadowed, name) {
+			// A collision is named rather than quietly resolved. Somebody
+			// whose segment stopped drawing because a release added a
+			// built-in of the same name has been silently overruled by their
+			// own shell, and the reverse — a built-in that stopped drawing
+			// because a startup file defined a function — is the same
+			// surprise from the other side. The local one still wins; what
+			// changes is that it is said out loud.
+			r.shadowed = append(r.shadowed, r.outside[i].Name()+" "+name)
+		}
+		return segment, true
 	}
 	if segment, ok := r.compiled[name]; ok {
 		return segment, true
@@ -218,3 +231,8 @@ func (r *Roster) Resolve(element string) (Segment, bool) {
 // NotYet names every element a configuration asked for that nothing answered,
 // in the order they were first asked for.
 func (r *Roster) NotYet() []string { return slices.Clone(r.unknown) }
+
+// Shadowed names every element an outside resolver answered that a
+// compiled-in segment also answers, as the resolver's own name and the
+// element.
+func (r *Roster) Shadowed() []string { return slices.Clone(r.shadowed) }

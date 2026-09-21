@@ -552,6 +552,15 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	signal, stopPublishing := s.publishing()
 	defer stopPublishing()
 
+	// And the session's own shell functions, reachable as prompt segments for
+	// the length of this session. Here rather than where the theme is built,
+	// because calling a function needs a context and a front end wiring a
+	// theme has no moment with one in it.
+	if theme, ok := s.Theme.(*Theme); ok {
+		theme.useSession(s.segmentFunctions(ctx))
+		defer theme.useSession(nil, nil)
+	}
+
 	ed := s.newEditor(ctx, state)
 	if signal != nil {
 		ed.wake, ed.woke = signal.fd, signal.drain

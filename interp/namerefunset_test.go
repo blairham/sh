@@ -16,7 +16,7 @@ import (
 // a dozen lines earlier against the name the script wrote, so the two halves
 // read different names and both directions were wrong.
 //
-// It is the rule Runner.frozenNameOfAnAssignment already states for a write:
+// It is the rule Runner.assignmentLandsOn already states for a write:
 // a reference and what it points at are frozen separately, and only the second
 // one can refuse what goes through it.
 func TestUnsetThroughAReferenceAsksTheTargetsFreeze(t *testing.T) {

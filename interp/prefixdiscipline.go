@@ -148,7 +148,15 @@ func (r *Runner) prefixStoredForAChild(a *syntax.Assign, part string) string {
 // applied between the join and the store, not before both: an append joins
 // what the displaced binding was showing and lands in the fresh cell. See
 // interp/prefixfreshcell.go.
-func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, stores, fresh bool) {
+//
+// `landsOn` is the name that cell belongs to, which a **name reference** makes
+// different from `a.Name`: the store below goes through the reference and so
+// is written as the script wrote it, while the cell it lands in is the
+// target's and has to be emptied by its own name. Emptying the reference
+// instead took the `n` letter off and turned the store into an ordinary write
+// to the reference, leaving the target holding the binding the prefix was
+// supposed to displace. See interp/namerefprefix.go (#4110).
+func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, landsOn string, stores, fresh bool) {
 	value := r.prefixExpansion(a)
 	if prefixIsSubscripted(a) {
 		// The subscript names where the value goes, so the store is the
@@ -174,7 +182,7 @@ func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, stores, fres
 		defer r.suppressDiscipline(a.Name, disciplineAppend)()
 		joined := r.prefixJoined(a, value)
 		if fresh {
-			r.emptyPrefixEntry(a.Name)
+			r.emptyPrefixEntry(landsOn)
 		}
 		r.setVar(a.Name, joined)
 		return
@@ -193,7 +201,7 @@ func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, stores, fres
 	}
 	joined := r.prefixJoined(a, value)
 	if fresh {
-		r.emptyPrefixEntry(a.Name)
+		r.emptyPrefixEntry(landsOn)
 	}
 	r.setVar(a.Name, joined)
 }

@@ -81,7 +81,7 @@ func (r *Runner) frozenNameTakesACompoundBody(a *syntax.Assign) bool {
 		// in front of the builtin.
 		return unset
 	}
-	return !r.elementIsSet(r.frozenNameOfAnAssignment(a.Name), "", false)
+	return !r.elementIsSet(r.assignmentLandsOn(a.Name), "", false)
 }
 
 // compoundOperandsHoldingNothing records, for each name this command carries a
@@ -95,7 +95,7 @@ func (r *Runner) compoundOperandsHoldingNothing() map[string]bool {
 	}
 	unset := make(map[string]bool, len(r.compoundOperands))
 	for name := range r.compoundOperands {
-		unset[name] = !r.elementIsSet(r.frozenNameOfAnAssignment(name), "", false)
+		unset[name] = !r.elementIsSet(r.assignmentLandsOn(name), "", false)
 	}
 	return unset
 }

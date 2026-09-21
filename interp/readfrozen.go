@@ -81,11 +81,11 @@ func (r *Runner) frozenReadName(name string) string {
 			// in zsh 5.9.2, neither of them `a: readonly variable`, where
 			// ksh93 reads element zero and does refuse it by the freeze. The
 			// store answers it a step below; see storeOperandEmptySubscript.
-			return r.frozenNameOfAnAssignment(name)
+			return r.assignmentLandsOn(name)
 		}
 		return base
 	}
-	return r.frozenNameOfAnAssignment(name)
+	return r.assignmentLandsOn(name)
 }
 
 // readRefusalEndsTheBuiltin reports whether a refused write stops `read` where

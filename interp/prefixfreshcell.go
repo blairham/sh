@@ -34,12 +34,14 @@ package interp
 // and ash have no way to make a binding that could reach it and so answer
 // nothing rather than refusing on a construct they do have.
 //
-// A **name reference** takes the question away rather than answering it. bash
-// 5.3.20 answers `foo=bar ff` over a `declare -n foo=target` with `declare -n
-// foo="target"`, keeping the reference, where bash 3.2.57 writes the plain
-// scalar every other row gets — so the one column that agrees with itself
-// everywhere else does not agree here, and it is a second measurement rather
-// than a row of this one.
+// **Asked about the name the entry is made on**, which a caller that followed
+// a **name reference** has already resolved: a prefix over `declare -n
+// foo=target` puts the question to `target`, and `foo` is never asked because
+// nothing of the prefix lands on it. The two shapes that point at no name a
+// write can reach — a reference aimed at nothing, and one aimed at an
+// *element* — are their own answer and so arrive here still carrying the `n`
+// letter, which is a letter like any other and is what the fresh cell takes
+// off. See interp/namerefprefix.go (#4110).
 func (r *Runner) prefixEntryIsFresh(name string) bool {
 	if !r.prefixDisplacesAKindOrALetter(name) {
 		return false
@@ -58,11 +60,15 @@ func (r *Runner) prefixEntryIsFresh(name string) bool {
 // the runner without a line here would be one the fresh cell silently kept.
 // See Runner.captureAttributes and Runner.dropNameAttributes, which is the
 // other end of the same list.
+//
+// The name-reference letter is in that struct and so is one of them, which is
+// what makes `declare -n foo; foo=bar ff` show the body `declare -x foo="bar"`
+// in the column that makes a fresh cell: the letter comes off, so the store
+// that follows is an ordinary store rather than the assignment that would
+// have *aimed* the reference. The column that makes no fresh cell keeps the
+// letter and so aims it: ksh93u+ 2012 answers the same line `typeset -n
+// foo=bar`. See interp/namerefprefix.go (#4110).
 func (r *Runner) prefixDisplacesAKindOrALetter(name string) bool {
-	if _, isRef := r.nameref[name]; isRef {
-		// Not this question — see prefixEntryIsFresh.
-		return false
-	}
 	if _, inArray := r.Arrays[name]; inArray {
 		return true
 	}

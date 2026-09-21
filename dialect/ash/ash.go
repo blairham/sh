@@ -565,6 +565,11 @@ func Semantics() interp.Semantics {
 	// never happens. `export` over a `readonly` name — the only attribute
 	// this shell does have — is taken at 0, which is a different question
 	// and not this one (#2561).
+	// unanswered DeclarePrintReportsAMissingFunctionName: the same wall, and
+	// both halves of it. Measured 2026-09-21 under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, `typeset -pf nosuch` and `declare -pf
+	// nosuch` are each `not found` at 127 here, so there is no `-p` word to
+	// report with and no function letter to put beside it (#4065).
 	// unanswered DeclarePrintPerformsItsOperand: the axis is what a `-p`
 	// listing does with an operand carrying a value, and BusyBox ash has no
 	// declaration utility to write one on. Measured 2026-09-20 in the pinned
@@ -739,6 +744,8 @@ func Semantics() interp.Semantics {
 	// record back with. Answered rather than left unanswered because `local
 	// x` reaches the axis (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// No declaration listing to ask it with.
+	s.ValuelessRecordIsStillAName = interp.No
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: dash's reason
 	// exactly — no `${!prefix@}` and no compound for a declaration to bring
 	// into being, so the axis is never asked.

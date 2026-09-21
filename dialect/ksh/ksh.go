@@ -1402,6 +1402,10 @@ func Semantics() interp.Semantics {
 	// so this is the unattributed one alone. Measured 2026-09-15 on ksh93u+
 	// under `env -i PATH=/usr/bin:/bin` (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// Either answer is right here: this shell says nothing at 0 for a name
+	// it has never heard of either, so the missing-name route and the
+	// silent one meet. `No` is the one that says what it holds.
+	s.ValuelessRecordIsStillAName = interp.No
 	// A table the letters merely declared *is* among the names a prefix
 	// listing comes to: `typeset -A q1; typeset -a q2; echo "[${!q@}]"` is
 	// `[q1 q2]` here, where bash 5.3 answers `[]`. Measured 2026-09-16 on

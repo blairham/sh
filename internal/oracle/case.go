@@ -19374,6 +19374,21 @@ echo after`,
 		Why:     "the second thing this shell can generate from what it knows, and the one whose contents a case can fix: the functions are defined in the snippet, so the answer does not depend on the build the way the builtin list does",
 	},
 	{
+		ID: "declare/a-refused-literal-conversion-inside-a-function", Category: "variables",
+		Snippet: `typeset -a u=(1 2); eee() { typeset -gA u=([k]=v); echo "st=$?"; }; eee; echo after`,
+		Why:     "a refused array-literal conversion writes **two** sentences inside a function and one at the top level, and the line is given up only at the top level: the assignment's sentence takes the running function's name where the top-level form carries no word at all, and the builtin then raises its own refusal behind it. #4049 recorded the line as given up in both, and the `echo` behind the `;` runs. The converting columns say nothing and carry on, which is what makes the two sentences a property of the refusal rather than of the shape (#4049)",
+	},
+	{
+		ID: "declare/an-unset-local-is-a-name-the-shell-still-has", Category: "variables",
+		Snippet: `v=global; f() { typeset v=L; unset v; typeset -p v; echo "st=$?"; echo "[${v-UNSET}]"; }; f; typeset -p nosuchzz; echo "e=$?"`,
+		Why:     "three answers to what a declaration listing does with a local whose value an `unset` took, and the second line is the discriminator: one column writes a row at 0, one writes nothing at 0 while still refusing a name it has never heard of at 1, and one treats the two alike. Without the control the middle column reads as the third, which is the reading this shell had for it — a name it plainly still has, reported as missing (#4053)",
+	},
+	{
+		ID: "declare/a-declaration-over-the-calls-own-reference", Category: "variables",
+		Snippet: `g=SEED; f() { typeset -n v=g; typeset v=4; echo "in=[${v-U}]"; }; f; echo "out=[${g-U}]"`,
+		Why:     "a declaration making the running call's binding for a name that call already aimed takes the reference out of the way rather than writing through it — so the value stays in the call and the caller's name is untouched. Performed through the reference it is a local leaking its value to the caller, which is what this shell did. The control is one line up in the same file: a plain assignment through the same reference does go through (#4088)",
+	},
+	{
 		ID: "compgen/variable-names-hold-a-value", Category: "builtins",
 		Snippet: `zzs=1; zzd=(); declare zzn; declare -a zza; for n in zzs zzd zzn zza; do printf '%s=%s\n' "$n" "$(compgen -v | grep -c "^$n\$")"; done; echo "st=$?"`,
 		Why:     "what makes a name a completion candidate is a **value** and not a declaration, which is the whole of what separates `compgen -v` from the `declare -p` listing: `declare zzn` and `declare -a zza` are rows there and are not candidates here, while `zzd=()` — an empty literal, so something assigned — is. Counted rather than printed, because the rest of the list is the machine's environment. One shell has the command; the other three answer 127 and the counts are 0, which is the shape every compgen row here has (#4069)",

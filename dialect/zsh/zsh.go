@@ -1529,6 +1529,10 @@ func Semantics() interp.Semantics {
 	// there. Answered rather than left unanswered because that route is a
 	// spelling this shell has.
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// The name is there and the listing writes nothing for it — the third
+	// state the field above cannot spell. See Semantics.ValuelessRecordIsStillAName
+	// for the rows (#4053).
+	s.ValuelessRecordIsStillAName = interp.Yes
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still
 	// does, and a name this scope has already made local stays local.

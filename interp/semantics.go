@@ -8547,6 +8547,34 @@ type Semantics struct {
 	// which is no column's answer, since the two that record say 0 with a
 	// row and the one that does not says 0 with silence.
 	ValuelessDeclarationRecordsTheName Answer
+
+	// ValuelessRecordIsStillAName is asked where the field above said **no**
+	// and a `-p` names the record anyway: is the name one the shell still
+	// has — written as nothing, at 0 — or one it has never heard of, which
+	// is DeclarePrintReportsAMissingName's question.
+	//
+	// A second field rather than a third value on the one above, because the
+	// two answer different things: that one says what the **listing writes**
+	// and this says whether the **name is there**. A dialect can write no row
+	// and still have the name, which is exactly the state one column is in.
+	//
+	// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
+	// scratch HOME, from a script file, over
+	// `f() { local v; unset v; typeset -p v; echo "st=$?"; }`:
+	//
+	//	zsh 5.9.2    nothing, st=0 — and `typeset -p nosuchvar` on the next
+	//	             line is `no such variable: nosuchvar` at 1, so the shell
+	//	             tells the two apart
+	//	ksh93u+      nothing, st=0 — and it answers the same way for a name
+	//	             it has never heard of, so either answer here is right
+	//	             for it and `No` is the one that says what it holds
+	//	bash 5.3.20  never reaches this: it answers the field above `Yes`,
+	//	             so the record is a row and the listing is what writes it
+	//
+	// Asked only for a name that really has such a record, so a dialect that
+	// makes none is never asked at all. See interp/baredeclaration.go
+	// (#4053).
+	ValuelessRecordIsStillAName Answer
 	// PrefixListingNamesADeclaredOnlyCompound lists, among the names
 	// `${!prefix@}` and `${!prefix*}` come to, a compound that a declaration
 	// brought into being and that nothing has written to.

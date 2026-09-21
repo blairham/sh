@@ -6419,6 +6419,12 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		if target, follows := r.attributeFollowsTheReference(name, f); follows {
 			name = target
 			wasExported = r.isExported(name)
+			// **The binding this word makes is the target's.** `local`
+			// declares, and what it declares through a reference is the name
+			// the reference points at — so the shadow is taken there too, and
+			// what the line writes goes away with the call like any other
+			// local. See Runner.aDeclarationThroughAReferenceIsTheTargets.
+			fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh)
 		}
 		// After the shadow, for the reason biDeclare gives: the cell this
 		// declaration writes is a fresh binding, and an attribute applied

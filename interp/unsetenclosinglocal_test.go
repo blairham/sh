@@ -551,3 +551,66 @@ func TestThePlaceholderOverACallPrefixIsWhatAChildIsTold(t *testing.T) {
 		})
 	}
 }
+
+// A dialect whose listing writes **no row** for the record still has the
+// name: a `-p` naming it is silence at 0 rather than the missing-name
+// refusal — see Semantics.ValuelessRecordIsStillAName, which carries the
+// rows, and note that its two answers are told apart only where the
+// missing-name axis says something, which is why that one is Yes here.
+func TestAValuelessRecordCanStillBeANameTheShellHas(t *testing.T) {
+	const src = `v=GLOBAL
+f() { local v=L; unset v; typeset -p v; echo "st=$?"; echo "[${v-UNSET}]"; }
+f`
+	out, errs, st := declRun(t, src, func(s *Semantics) {
+		records(No)(s)
+		s.ValuelessRecordIsStillAName = Yes
+	}, Diagnostics{})
+	want := "st=0\n[UNSET]\n"
+	if out != want || errs != "" || st != 0 {
+		t.Errorf("still a name = %q (stderr %q, status %d), want %q with nothing said", out, errs, st, want)
+	}
+
+	// The other answer is the missing-name route, which this dialect's own
+	// axis then reports — the reading this shell had for every column.
+	out, errs, st = declRun(t, src, func(s *Semantics) {
+		records(No)(s)
+		s.ValuelessRecordIsStillAName = No
+	}, Diagnostics{})
+	if want := "st=1\n[UNSET]\n"; out != want || st != 0 {
+		t.Errorf("not a name = %q (status %d), want %q", out, st, want)
+	}
+	if !strings.Contains(errs, "v: not found") {
+		t.Errorf("not a name: stderr %q, want the missing-name sentence", errs)
+	}
+}
+
+// A name the shell has never heard of is still missing under either answer,
+// which is the control that keeps the axis from being read as "`-p` never
+// reports".
+func TestANameWithNoRecordIsStillMissing(t *testing.T) {
+	for _, answer := range []Answer{Yes, No} {
+		out, errs, st := declRun(t, "typeset -p nosuchzz\necho \"st=$?\"", func(s *Semantics) {
+			records(No)(s)
+			s.ValuelessRecordIsStillAName = answer
+		}, Diagnostics{})
+		if want := "st=1\n"; out != want || st != 0 {
+			t.Errorf("answer %v: %q (status %d), want %q", answer, out, st, want)
+		}
+		if !strings.Contains(errs, "nosuchzz: not found") {
+			t.Errorf("answer %v: stderr %q, want the missing-name sentence", answer, errs)
+		}
+	}
+}
+
+// And a dialect whose listing *does* write a row never reaches the axis at
+// all: the row is what the name being known then means.
+func TestAListedRecordNeverAsksWhetherTheNameIsThere(t *testing.T) {
+	out, errs, st := declRun(t, "v=GLOBAL\nf() { local v=L; unset v; typeset -p v; }\nf",
+		func(s *Semantics) {
+			records(Yes)(s)
+			s.ValuelessRecordIsStillAName = Unspecified
+		}, Diagnostics{})
+	if want := "declare -- v\n"; out != want || errs != "" || st != 0 {
+		t.Errorf("= %q (stderr %q, status %d), want %q — the axis must not be reached", out, errs, st, want)
+	}
+}

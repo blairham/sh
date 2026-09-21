@@ -374,6 +374,8 @@ func Semantics() interp.Semantics {
 	// is still answered rather than left out, because `local x` reaches it
 	// and an unanswered axis refuses at run time (#2272, #2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// No declaration listing to ask it with.
+	s.ValuelessRecordIsStillAName = interp.No
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is neither a
 	// `${!prefix@}` nor a compound to declare — `${!q@}` is `Bad
 	// substitution` — so nothing here can reach the axis. Measured
@@ -471,6 +473,11 @@ func Semantics() interp.Semantics {
 	// found` at 127, so there is no builtin here to read the letter either
 	// way (#2419).
 	// unanswered DeclareHideValueLetter: the same, for `typeset -H h=hid`.
+	// unanswered DeclarePrintReportsAMissingFunctionName: the same wall, and
+	// both halves of it. Measured 2026-09-21 under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, `typeset -pf nosuch` and `declare -pf
+	// nosuch` are each `not found` at 127 here, so there is no `-p` word to
+	// report with and no function letter to put beside it (#4065).
 	// unanswered DeclarePrintPerformsItsOperand: the axis is what a `-p`
 	// listing does with an operand carrying a value, and there is no listing
 	// and no operand. Measured 2026-09-20, `typeset -p s=5` and `declare -p

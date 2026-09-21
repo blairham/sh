@@ -298,3 +298,81 @@ func TestALiteralOverTheSameKindAsksNothing(t *testing.T) {
 		}
 	}
 }
+
+// abandonsInAFunction is runKindLiteral's pair of answers with the global
+// letter read on the word, which is what a declaration inside a function
+// needs to reach a conversion at all: without it the line declares a local
+// and there is nothing to convert.
+func abandonsInAFunction(s *Semantics) {
+	s.TableUnderAnArrayLiteralDeclaration = CompoundKindChangeAbandonsTheLine
+	s.ArrayUnderATableLiteralDeclaration = CompoundKindChangeAbandonsTheLine
+	s.DeclareOptions = "aAgip"
+}
+
+// Inside a function the refusal is **two sentences** and the line is not
+// given up — see changeCompoundKind's CompoundKindChangeAbandonsTheLine
+// branch, which carries the rows.
+//
+// The two sentences come from two sites and say so: the assignment's carries
+// the running function's name where the top-level form carries nothing, and
+// the builtin's is the one the *valueless* form writes, under the word the
+// line was invoked with. So this pins the pair rather than a string, and the
+// top-level row above is the control that keeps it from being "the refusal
+// always says two things".
+func TestALiteralConversionRefusedInsideAFunctionSaysTwoThings(t *testing.T) {
+	const src = `typeset -a u=(1 2)
+eee() { typeset -gA u=([k]=v); echo "st=$?"; }
+eee
+echo after`
+	out, st := runKindWith(t, src, abandonsInAFunction)
+	if !strings.Contains(out, "eee: u: cannot convert indexed to associative array") {
+		t.Errorf("= %q, want the assignment's sentence with the function's name in front", out)
+	}
+	if !strings.Contains(out, "typeset: u: cannot convert indexed to associative array") {
+		t.Errorf("= %q, want the builtin's own sentence behind it", out)
+	}
+	// The line runs on, which is the half #4049 recorded the other way
+	// round — it read the `echo` behind the `;` as not running.
+	if !strings.Contains(out, "st=1") {
+		t.Errorf("= %q, want the rest of the line to run, at 1", out)
+	}
+	if !strings.Contains(out, "after") || st != 0 {
+		t.Errorf("= %q (status %d), want the script to carry on", out, st)
+	}
+}
+
+// The **innermost** function is the one named, which is what says the word in
+// front is read off the stack rather than off the call the script wrote.
+func TestTheRefusalNamesTheInnermostFunction(t *testing.T) {
+	const src = `typeset -a u=(1 2)
+inner() { typeset -gA u=([k]=v); }
+outer() { inner; }
+outer`
+	out, _ := runKindWith(t, src, abandonsInAFunction)
+	if !strings.Contains(out, "inner: u: cannot convert") {
+		t.Errorf("= %q, want the innermost function named", out)
+	}
+	if strings.Contains(out, "outer: u:") {
+		t.Errorf("= %q, want the calling function not named", out)
+	}
+}
+
+// And the **valueless** form is one sentence inside a function as much as
+// outside it: it is the literal that adds the second, which is why the two
+// wordings are two fields.
+func TestTheValuelessFormStaysOneSentenceInsideAFunction(t *testing.T) {
+	const src = `typeset -A h; h[k]=v
+eee() { typeset -ga h; echo "st=$?"; }
+eee`
+	out, _ := runKindWith(t, src, func(s *Semantics) {
+		s.TableUnderAnArrayDeclaration = CompoundKindChangeRefused
+		s.ArrayUnderATableDeclaration = CompoundKindChangeRefused
+		s.DeclareOptions = "aAgip"
+	})
+	if !strings.Contains(out, "typeset: h: cannot convert associative to indexed array") {
+		t.Errorf("= %q, want the builtin's sentence", out)
+	}
+	if strings.Contains(out, "eee: h:") {
+		t.Errorf("= %q, want no function name on the valueless form", out)
+	}
+}

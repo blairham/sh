@@ -1324,3 +1324,60 @@ func (r *Runner) refuseNameref(builtin, wording string) int {
 // above and ksh93's for none. It is the corner of a corner — no script in the
 // wild writes a reference and an attribute on one word — and it is written
 // down here so the next reader does not have to measure it again.
+
+// A declaration performed **through a reference** declares the name the
+// reference points at, and the binding it makes is that name's — so inside a
+// function the target is made local, and what the line wrote goes away with
+// the call.
+//
+// This is the seam #4088 is about. The redirect was already here: a
+// declaration over a name holding a reference puts its letters and its value
+// on the target, which is attributeFollowsTheReference. What was missing is
+// the **scope**. The shadow was taken on the name the script wrote, the write
+// then landed on a target nothing had saved, and a `local` of the call's own
+// name wrote a global that stayed written — a local leaking its value out of
+// the call that made it.
+//
+// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch
+// HOME, from a script file, on bash 5.3.20. The target is a global in the
+// first block and a local of the same call in the second:
+//
+//	g=SEED
+//	f() { local -n v=g; local v=4; declare -p v g; }; f
+//	                          declare -n v="g"      the reference stands
+//	                          declare -- g="4"      the write is the target's
+//	   g afterwards           SEED                  and it was local
+//	the same with `local v`   g is unset inside and SEED again afterwards
+//	the same with `local -i v=4`, then g   SEED
+//	the same, then `v=9`                   SEED — a later write is the
+//	                                       local target's too
+//	the same, then `unset v`               SEED — and so is a removal
+//
+//	f() { local u=1; local -n s=u; local s=9; declare -p s u; }; f
+//	                          declare -n s="u"
+//	                          declare -- u="9"      already local, so the
+//	                                                shadow is a no-op and the
+//	                                                value simply lands
+//
+// The second block is why this is a shadow of the target rather than a
+// refusal to follow the reference: bash plainly *does* follow it — the letter
+// and the value reach `u` — and the only question is whose binding is written.
+// Reading the first block alone as "the declaration replaces the reference"
+// fits every row of it and breaks the second, which is the reading this was
+// written with and the test above that caught it.
+//
+// Three shapes make no binding and so are not this, each measured in the same
+// run and each unchanged: `typeset -g v=4` and `export v=4` write the shell's
+// own cell through the reference, and so does a declaration at the top level,
+// where there is no scope to shadow into. A **callee** declaring a name its
+// caller aimed is not this either — the fresh cell has already dropped the
+// reference, so there is nothing to follow.
+//
+// It reports the fresh flag the caller should carry on with, because the
+// question "did this line make the cell" is now about the target's cell.
+func (r *Runner) declarationThroughAReferenceShadowsTheTarget(target string, fresh bool) bool {
+	if len(r.scopes) == 0 {
+		return fresh
+	}
+	return r.shadow(target)
+}

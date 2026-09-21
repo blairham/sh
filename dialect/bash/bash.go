@@ -1380,6 +1380,10 @@ func Semantics() interp.Semantics {
 	// through `-c` and from a file. ksh93 is the column that parts here,
 	// which is what makes it a question of its own (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.Yes
+	// Never reached: the record is a row here, so a `-p` naming it is a
+	// listing rather than a missing name. Answered so that no route can
+	// refuse it, and answered `No` because it is the row that speaks.
+	s.ValuelessRecordIsStillAName = interp.No
 	// A table the letters merely declared is not among the names a prefix
 	// listing comes to: `declare -A q1; echo "[${!q@}]"` is `[]`, and the
 	// same declaration with `=()` behind it is `[q1]`. Measured 2026-09-16 on

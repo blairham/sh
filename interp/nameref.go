@@ -283,16 +283,34 @@ func (r *Runner) namerefSplicesItsArray(e *syntax.ParamExpr) (*syntax.ParamExpr,
 
 // readThroughNamerefElement reads the one element a reference to `a[2]` is
 // aimed at, through whichever of the two containers the base is.
+//
+// The subscript is **text the declaration stored**, not a word the parser
+// read: `i='$(echo 0)'; declare -n r="a[$i]"` aims the reference at the six
+// characters `$(echo 0)`, because the quotes are what kept the `$` from the
+// round that expanded the declaration's word. So it is expanded here, when
+// the reference is read, which is the same rule
+// [Runner.subscriptValueOfReference] writes down for every other resolved
+// text and the same one the declaration's own settling already used.
+//
+// Measured 2026-09-21, bash 5.3.20, with `$(echo RAN >&2 ; echo 0)` as the
+// subscript's text and `a=(x y)`: `RAN` on stderr and then `x`, where this
+// shell ran nothing and read empty (#4071). The keyed half is the same
+// sentence — `declare -A m=([k]=v); i='$(echo k)'; declare -n r="m[$i]"`
+// reads `v` there and read nothing here — and it is one function because a
+// reference does not know which container it will land in.
 func (r *Runner) readThroughNamerefElement(base, sub string) (string, bool) {
 	if r.assocDeclared(base) {
 		a, ok := r.assocFor(base)
 		if !ok {
 			return "", false
 		}
+		if key, again := r.expandedSubscriptText(base + "[" + sub + "]"); again {
+			sub = key
+		}
 		v, there := a[sub]
 		return v.Str, there
 	}
-	idx, err := r.subscriptValue(sub)
+	idx, err := r.subscriptValueOfReference(sub)
 	if err != nil {
 		if r.arithNounsetNamedTheParameter {
 			// `set -u` naming a name the *subscript* read, which is the one

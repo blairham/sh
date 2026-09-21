@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/prompttheme"
+	"github.com/blairham/sh/interp"
 )
 
 // The prompt theme engine, wired to a session.
@@ -48,6 +49,13 @@ type Theme struct {
 
 	settings *prompttheme.Settings
 	engine   *prompttheme.Engine
+
+	// iconSet is the table SH_PROMPT_ICONS last named, kept so that a render
+	// costs a lookup rather than a parse. The name it was asked for is kept
+	// beside it because a table that was named and is not carried is served
+	// by the default and has to say so.
+	iconSet  *prompttheme.IconSet
+	iconName string
 }
 
 // NewTheme returns a theme reading its settings through get, which is a
@@ -61,6 +69,9 @@ type Theme struct {
 func NewTheme(get func(name string) (string, bool)) *Theme {
 	t := &Theme{Char: "$", Continued: "> ", get: get}
 	t.roster = prompttheme.NewRoster()
+	for element, segment := range prompttheme.CoreSegments() {
+		t.roster.Compile(element, segment)
+	}
 	// Through a closure rather than PromptChar(t.Char) directly, so that a
 	// front end setting Char after this returns gets the character it set
 	// rather than the one that was there when the roster was built.
@@ -68,6 +79,11 @@ func NewTheme(get func(name string) (string, bool)) *Theme {
 		func(settings *prompttheme.Settings, ctx *prompttheme.Context) (prompttheme.Rendered, bool) {
 			return prompttheme.PromptChar(t.Char).Render(settings, ctx)
 		}))
+	// The interpreter's strftime, which is the same one `printf '%(fmt)T'`
+	// and zsh's `strftime` builtin write through. One reader of a format
+	// language, for the reason that one is exported: two would drift the
+	// first time a conversion was fixed in either.
+	t.roster.Compile("time", prompttheme.Clock(interp.Strftime))
 	t.engine = &prompttheme.Engine{
 		Roster: t.roster,
 		Screen: prompttheme.Screen{
@@ -102,6 +118,7 @@ func (t *Theme) DrawPrompt(info PromptInfo) (ThemedPrompt, bool) {
 	}
 
 	t.engine.Settings = settings
+	t.engine.Icons = t.icons(settings).Glyph
 	t.engine.Bare = t.Char + " "
 	t.engine.Continued = t.Continued
 	drawn := t.engine.Render(t.context(info))
@@ -123,7 +140,22 @@ func (t *Theme) Problems() []string {
 	for _, element := range t.roster.NotYet() {
 		problems = append(problems, "no segment draws "+element)
 	}
+	if set := t.icons(t.resolve()); !set.Carried() {
+		// Silently substituting a different glyph set is how a prompt ends up
+		// full of boxes with no explanation. The table still draws — a person
+		// who named one wanted icons — and the substitution is named.
+		problems = append(problems, "icon table "+set.Name+" is not carried; served by "+set.Served)
+	}
 	return problems
+}
+
+// icons is the table this configuration asked for, parsed once per name.
+func (t *Theme) icons(settings *prompttheme.Settings) *prompttheme.IconSet {
+	name := settings.Str("ICONS", "")
+	if t.iconSet == nil || name != t.iconName {
+		t.iconName, t.iconSet = name, prompttheme.LoadIcons(name)
+	}
+	return t.iconSet
 }
 
 // resolve builds the layer stack for this prompt, earliest layer first.

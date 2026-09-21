@@ -574,6 +574,60 @@ therefore render nothing there, which is what an absent reading should
 look like. Interface enumeration costs more than a whole plain prompt, so
 it reads a short-TTL cache rather than the kernel per prompt.
 
+### What the first set reads, beyond the settings every segment has
+
+Built rather than proposed, so the names are written down: these are on top
+of the per-segment `FOREGROUND`, `BACKGROUND`, `BOLD`, `UNDERLINE`,
+`WHITESPACE`, `PREFIX`, `SUFFIX`, `ICON` and `CONTENT` every segment
+resolves through the chain.
+
+| setting | segment | what it decides |
+| --- | --- | --- |
+| `DIR_MAX_DEPTH` | `dir` | how many trailing components survive; `0`, the default, is no truncation |
+| `DIR_TRUNCATION` | `dir` | what stands in for what was dropped, `…` by default |
+| `STATUS_OK` | `status` | whether the segment draws after a success; off by default |
+| `COMMAND_EXECUTION_TIME_THRESHOLD` | `command_execution_time` | seconds below which nothing is drawn, `3` by default |
+| `COMMAND_EXECUTION_TIME_PRECISION` | `command_execution_time` | digits after the seconds, `0` by default |
+| `BACKGROUND_JOBS_ALWAYS` | `background_jobs` | whether a zero is drawn; off by default |
+| `CONTEXT_ALWAYS` | `context` | whether an ordinary local session draws one; off by default |
+| `TIME_FORMAT` | `time` | a POSIX date format, `%H:%M:%S` by default |
+
+Three of those defaults are the same decision written three times, and it is
+worth naming once: **a segment whose answer is the same every day declines**.
+The status after a success, the job count when there are none, and the
+context of an ordinary local session are all facts the person already has, so
+each is off until a configuration asks — and each asks through a setting
+rather than through a second element name, because a segment that draws under
+two names is two things to configure.
+
+The clock's format language is **the interpreter's own strftime**, which is
+what `printf '%(fmt)T'` writes through. One reader of a format language, for
+the reason that function is exported at all: two would drift the first time a
+conversion was fixed in either, and no test on either side could see it.
+
+A segment offers what it computed to the content template by name —
+`${FULL}` and `${LAST}` beside the directory's `${CONTENT}`, `${USER}` and
+`${HOST}` beside the context's, `${CODE}` beside the status's. That is the
+`${NAME}` substitution above, and it is what keeps the arrangement the
+configuration's rather than the segment's.
+
+### Icons, as carried
+
+Three tables: `nerdfont`, which is the default, `ascii`, and `none`. They are
+written in the configuration file's own format and read by its own reader,
+which is what makes "a shipped table and a downloaded one are the same
+format" checkable rather than asserted — a compiled table that were a Go map
+would be an arrangement a downloaded one could not express.
+
+`nerdfont` carries a glyph only where the codepoint is one of the
+long-standing positions a font patch fixes. Where it is not, the entry is the
+`ascii` spelling rather than a guess: a glyph this tree is not sure of is a
+box on somebody's screen, and a box says nothing about what the segment is.
+
+A configuration may name a glyph itself through `ICON`, which resolves
+through the same three-step chain — so the bare key is a global override, and
+setting one to empty suppresses a single icon without turning the table off.
+
 ### An element with no implementation says so by name
 
 A configured element that has no segment renders **nothing**, and is

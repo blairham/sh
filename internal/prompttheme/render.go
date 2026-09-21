@@ -248,8 +248,16 @@ func (e *Engine) body(p placed) string {
 	prefix := e.Settings.Param(p.name, p.out.State, "PREFIX", "")
 	suffix := e.Settings.Param(p.name, p.out.State, "SUFFIX", "")
 
+	// A configuration may name a segment's glyph itself, and that setting
+	// wins over the table: it resolves through the same three-step chain, so
+	// the bare ICON key is the global override the table has to be able to
+	// default to, and setting it to empty is how a single icon is suppressed
+	// without turning the whole table off.
 	icon := ""
-	if e.Icons != nil && p.out.Icon != "" {
+	switch {
+	case e.Settings.ParamSet(p.name, p.out.State, "ICON"):
+		icon = e.Settings.Param(p.name, p.out.State, "ICON", "")
+	case e.Icons != nil && p.out.Icon != "":
 		if glyph, ok := e.Icons(p.out.Icon); ok {
 			icon = glyph
 		}
@@ -263,7 +271,10 @@ func (e *Engine) body(p placed) string {
 		case "STATE":
 			return p.out.State
 		}
-		return ""
+		// What the segment computed, which the layout does not read and the
+		// template may. After the three above rather than before, so a
+		// segment cannot redefine what CONTENT means.
+		return p.out.Fields[name]
 	}
 	return e.expand(p.style, lookup, space+prefix+template+suffix+space)
 }

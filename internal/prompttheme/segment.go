@@ -117,6 +117,20 @@ type Rendered struct {
 	// not writable and one that is are the same segment in two states, and
 	// each takes its own colors.
 	State string
+
+	// Fields are the pieces the segment computed, reachable from the content
+	// template as ${NAME}.
+	//
+	// The template is the configuration's and not the segment's, so a segment
+	// that computed two things — a user and a host, a path and its last
+	// component — has to offer both or the template can only ever draw the
+	// arrangement the segment chose. CONTENT, ICON and STATE are provided by
+	// the layout and win over anything a segment puts here, so a segment
+	// cannot redefine what those three mean.
+	//
+	// Values are substituted and never expanded, exactly as Content is: a
+	// directory holding a percent sign is drawn rather than read.
+	Fields map[string]string
 }
 
 // Segment computes one element of a prompt.

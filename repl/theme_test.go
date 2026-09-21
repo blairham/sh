@@ -6,6 +6,7 @@ package repl
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -355,5 +356,100 @@ func TestAnEmptiedElementsListIsAThemeAndAnAbsentOneIsNot(t *testing.T) {
 	absent := NewTheme(newTestRunner(map[string]string{}).GetVar)
 	if _, drawing := absent.DrawPrompt(PromptInfo{}); drawing {
 		t.Error("a session that named no elements at all drew a theme")
+	}
+}
+
+// The roster a session gets is the compiled-in one, and it draws from the
+// facts the front end already knows rather than from anything a segment goes
+// and asks the process for.
+func TestASessionsThemeDrawsTheCompiledInRoster(t *testing.T) {
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "dir status background_jobs prompt_char",
+		"SH_PROMPT_ICONS":         "none",
+		"SH_PROMPT_WHITESPACE":    " ",
+		"HOME":                    "/home/p",
+	})
+	theme := NewTheme(runner.GetVar)
+
+	drawn, drawing := theme.DrawPrompt(PromptInfo{Dir: "/home/p/work", Status: 3, Jobs: 2})
+	if !drawing {
+		t.Fatal("a configuration naming four elements did not draw")
+	}
+	for _, want := range []string{"~/work", "3", "2", "$"} {
+		if !strings.Contains(drawn.Text, want) {
+			t.Errorf("the prompt %q is missing %q", drawn.Text, want)
+		}
+	}
+
+	// And a segment that has nothing to say costs no space: the same
+	// configuration after a success and with no jobs draws neither.
+	quiet, _ := theme.DrawPrompt(PromptInfo{Dir: "/home/p/work"})
+	if strings.Contains(quiet.Text, "0") {
+		t.Errorf("a quiet prompt drew an empty box: %q", quiet.Text)
+	}
+}
+
+// The clock is the interpreter's own strftime, so a conversion fixed there is
+// fixed here — which is the reason the engine takes the formatter instead of
+// carrying a second copy of the format language.
+func TestTheClockIsTheInterpretersFormatLanguage(t *testing.T) {
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "time",
+		"SH_PROMPT_ICONS":         "none",
+		"SH_PROMPT_TIME_FORMAT":   "%Y",
+	})
+	drawn, drawing := NewTheme(runner.GetVar).DrawPrompt(PromptInfo{})
+	if !drawing {
+		t.Fatal("a configuration naming the clock did not draw")
+	}
+	year := strconv.Itoa(time.Now().Year())
+	if !strings.Contains(drawn.Text, year) {
+		t.Errorf("the clock drew %q, want the year %s in it", drawn.Text, year)
+	}
+}
+
+// A table named and not carried is served by the default and said out loud.
+func TestAnUncarriedIconTableIsNamedAsAProblem(t *testing.T) {
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "prompt_char",
+		"SH_PROMPT_ICONS":         "a-font-nobody-here-has",
+	})
+	theme := NewTheme(runner.GetVar)
+	if _, drawing := theme.DrawPrompt(PromptInfo{}); !drawing {
+		t.Fatal("a misspelled icon table stopped the prompt drawing")
+	}
+	found := false
+	for _, problem := range theme.Problems() {
+		if strings.Contains(problem, "a-font-nobody-here-has") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the substitution was not named: %v", theme.Problems())
+	}
+}
+
+// The icon table reaches the render. A segment names a key and the table
+// answers it, which is the whole reason a segment never draws a glyph.
+func TestTheIconTableReachesTheDrawnPrompt(t *testing.T) {
+	glyph, ok := prompttheme.LoadIcons("nerdfont").Glyph("STATUS_ERROR")
+	if !ok || glyph == "" {
+		t.Fatalf("the default table has no failure icon: %q %v", glyph, ok)
+	}
+	runner := newTestRunner(map[string]string{"SH_PROMPT_LEFT_ELEMENTS": "status"})
+	drawn, drawing := NewTheme(runner.GetVar).DrawPrompt(PromptInfo{Status: 1})
+	if !drawing {
+		t.Fatal("a configuration naming the status did not draw")
+	}
+	if !strings.Contains(drawn.Text, glyph) {
+		t.Errorf("the prompt %q does not carry the table's failure icon %q", drawn.Text, glyph)
+	}
+
+	// And a table that draws nothing draws nothing, so turning icons off is
+	// a thing a person can actually do.
+	runner.SetVar("SH_PROMPT_ICONS", "none")
+	off, _ := NewTheme(runner.GetVar).DrawPrompt(PromptInfo{Status: 1})
+	if strings.Contains(off.Text, glyph) {
+		t.Errorf("ICONS=none still drew %q", glyph)
 	}
 }

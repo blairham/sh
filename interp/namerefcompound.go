@@ -114,12 +114,10 @@ func (r *Runner) namerefCompoundBodyTarget(name string) string {
 // that will not take one.
 //
 // **Not folded into [Runner.namerefCompoundBodyTarget].** That rule is shared
-// with the member path below, and a refusal there would fire on every read
-// through the same reference — which is the fold this file exists to keep. It
-// is also *not* the whole of ksh93's rule: `${u}`, `${u.a}`, `u.a=5` and
-// `unset u.a` through an unaimed reference are each `no reference name` there
-// too, where this shell answers them at 0. That is wider than the store and
-// is its own row (#3955).
+// with the member path below, and the costs differ: a read through the same
+// reference refuses as an *expansion* and an `unset` of it refuses without
+// ending the script, so one rule cannot carry all three. The state they share
+// is [Runner.unaimedReferenceBase]; what it costs is each site's own (#3955).
 //
 // The fatality is not written in as a number: the refusal ends the script
 // through [Runner.fatalQuiet], so the status is Semantics.FatalErrorStatusIsOne's
@@ -127,14 +125,70 @@ func (r *Runner) namerefCompoundBodyTarget(name string) string {
 // Diagnostics wording being set, which is the shape a refusal only one column
 // makes takes everywhere in this tree — see Runner.refuseNamerefAim.
 func (r *Runner) namerefCompoundBodyStore(name string) (string, bool) {
-	if w := r.diag().NamerefCompoundBodyUnaimed; w != "" && r.isNameref(name) {
-		if _, cycle, aimed := r.namerefWalk(name); !cycle && !aimed {
-			r.diagf("%s\n", Wording(w, "", name))
-			r.fatalQuiet()
-			return "", false
-		}
+	if aimless, unaimed := r.unaimedReferenceBase(name); unaimed {
+		r.refuseUnaimedReference(aimless, "")
+		r.fatalQuiet()
+		return "", false
 	}
 	return r.namerefCompoundBodyTarget(name), true
+}
+
+// unaimedReferenceBase reports the reference a name is read or written
+// *through* where that reference has nothing to point at, and answers no
+// where the dialect has nothing to say about it.
+//
+// The base and not the whole name, because a member path is a use of the
+// reference its base is: `${u.a}` is refused in the words `${u}` is, naming
+// `u`. A leading dot is not a base — `${.sh.level}` and a namespace's member
+// both begin with one — so the empty base is declined, exactly as
+// [Runner.compoundMemberThroughAReference] declines it.
+//
+// The rows, the states that stay silent, and why each site answers the cost
+// itself are in Diagnostics.NamerefUnaimedUse.
+func (r *Runner) unaimedReferenceBase(name string) (string, bool) {
+	if r.diag().NamerefUnaimedUse == "" {
+		return "", false
+	}
+	base := name
+	if dot := strings.IndexByte(name, '.'); dot > 0 {
+		base = name[:dot]
+	}
+	if !r.isNameref(base) {
+		return "", false
+	}
+	if _, cycle, aimed := r.namerefWalk(base); cycle || aimed {
+		// A cycle has already been reported where a read of it would report
+		// one, and an aimed reference is the ordinary case.
+		return "", false
+	}
+	return base, true
+}
+
+// refuseUnaimedReference writes the sentence and leaves the cost to the
+// caller, which is the whole reason it is not one function with the check.
+// Five sites ask [Runner.unaimedReferenceBase] and they hold three answers
+// between them: an expansion sets expandErr and lets
+// Semantics.FailedExpansionAbandonsTheLine say what that costs, a write and a
+// compound body end the script, and `unset` reports at 1 and lets the next
+// line run. One function with the cost inside it could only have held one of
+// the three.
+//
+// The speaker is the builtin whose sentence this is, and it is "" for the two
+// sites that have none — an expansion runs in no builtin, and a compound
+// body is stored after the declaration has returned. `unset` is the one that
+// names itself: measured, `typeset -n u; unset u` is `unset: u: no reference
+// name` where `${u}` on the line above it is `u: no reference name`.
+//
+// Written into the sentence rather than taken from the location, because
+// that is where this shell's other `unset` refusals put it — see
+// Diagnostics.BuiltinBadName, whose `unset` entry is `%[1]s: %[2]s: invalid
+// variable name`.
+func (r *Runner) refuseUnaimedReference(name, speaker string) {
+	line := Wording(r.diag().NamerefUnaimedUse, "", name)
+	if speaker != "" {
+		line = speaker + ": " + line
+	}
+	r.diagf("%s\n", line)
 }
 
 // compoundMemberThroughAReference is the rule above at a **member path**: the

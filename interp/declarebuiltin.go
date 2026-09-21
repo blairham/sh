@@ -1401,18 +1401,36 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	// refusal that has to say which word was written cannot reach the
 	// parameter any more once the shadowing begins.
 	complaintName := r.builtinComplaintName(name)
-	if f.export && r.diag().ExportLetterTakesExportsBadName {
-		// The export letter brings `export`'s own sentence about a bad name
-		// with it: measured 2026-09-14 on ksh93u+ 2012-08-01, `typeset -x 3`
-		// is `typeset: 3: is not an identifier` where `typeset -r 3`,
-		// `typeset -l 3` and a bare `typeset 3` are all `invalid variable
-		// name`. The builtin still names *itself* in every one of them, so
-		// only the reason moves — which is why this re-keys the wording and
-		// does not rename the builtin. See
-		// Diagnostics.ExportLetterTakesExportsBadName.
-		outer := r.badNameWordedAs
-		r.badNameWordedAs = "export"
-		defer func() { r.badNameWordedAs = outer }()
+	// The two letters that carry `export`'s own refusals onto whatever word
+	// the line was written with — the export letter and the reference
+	// letter, under either sign. One condition, because the two refusals
+	// travel together and a line that earns one earns the other.
+	if f.export || f.nameref || f.namerefOff {
+		// The **reason** a bad name is refused for: measured 2026-09-14 on
+		// ksh93u+ 2012-08-01, `typeset -x 3` is `typeset: 3: is not an
+		// identifier` where `typeset -r 3`, `typeset -l 3` and a bare
+		// `typeset 3` are all `invalid variable name`. The builtin still
+		// names *itself* in every one of them, so only the reason moves —
+		// which is why this re-keys the wording and does not rename the
+		// builtin. See Diagnostics.ExportLetterTakesExportsBadName.
+		//
+		// The reference letter says the same, under either sign: `typeset -n
+		// 1x`, `typeset -n 1x=v` and `typeset +n 1x` are all `is not an
+		// identifier` there. It was one row and recorded rather than modeled
+		// while the only way to reach it was a name beginning with a digit;
+		// the dotted operand below is what gave it three.
+		if r.diag().ExportLetterTakesExportsBadName {
+			outer := r.badNameWordedAs
+			r.badNameWordedAs = "export"
+			defer func() { r.badNameWordedAs = outer }()
+		}
+		// And **which** names are bad: neither letter will take one with a
+		// dot in it, where every other letter on this word takes a compound
+		// member. The company the letter keeps does not matter either —
+		// `-xr` refuses as `-x` does. See Runner.dottedBuiltinName.
+		outer := r.dottedOperandRefusedByALetter
+		r.dottedOperandRefusedByALetter = true
+		defer func() { r.dottedOperandRefusedByALetter = outer }()
 	}
 	args, code, ended := r.builtinNames(complaintName, args, false)
 	if r.unspecified {
@@ -3556,7 +3574,14 @@ func (r *Runner) exportRefusesACompound(name string, f declareFlags) bool {
 	if !f.export || f.remove || r.diag().CompoundIsNotExportable == "" {
 		return false
 	}
-	if !r.isCompoundVariable(name) && !f.compoundVar && !r.compoundOperands[name] {
+	if !r.isCompoundVariable(name) && !f.compoundVar && !r.compoundOperands[name] &&
+		// And a **member** of a compound that stands, which is a name the
+		// word takes and then refuses in these same words: `typeset
+		// zz=(a=1); export zz.a` is `export: zz.a: only simple variables can
+		// be exported`, and with a value it names `zz.a` rather than the
+		// whole operand. See Runner.scalarMemberStands, where the rows that
+		// narrow it are.
+		!r.scalarMemberStands(name) {
 		return false
 	}
 	r.fatal("%s\n", Wording(r.diag().CompoundIsNotExportable,

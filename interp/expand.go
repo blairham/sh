@@ -1451,6 +1451,25 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// Only when the word is what the expansion came to. When the *parameter*
 	// is what it came to, the array path below is the one that gives its
 	// fields.
+	// A read **through** a reference with nothing to point at, in front of
+	// the word a `-` substitutes. The scalar path in expandParam makes the
+	// same refusal and every other operator reaches it there; this one pair
+	// never does, because the word is expanded here and the parameter is
+	// never read. Measured: `${u-D}` and `${u:-D}` are `u: no reference
+	// name` in the refusing column exactly as `${u}` is, so the word behind
+	// the operator does not stand in for the value — the same thing
+	// Diagnostics.IndirectionUnaimedReference records for `${!u-DEF}`.
+	//
+	// Behind the prefix listing above, which is not a read through the
+	// reference and answers nothing at 0 there. See
+	// Diagnostics.NamerefUnaimedUse.
+	if !e.Indirect {
+		if aimless, unaimed := r.unaimedReferenceBase(e.Name); unaimed {
+			r.refuseUnaimedReference(aimless, "")
+			r.expandErr = true
+			return nil, true
+		}
+	}
 	if fields, ok := r.substitutedWordFields(s, sp, head); ok {
 		return fields, true
 	}
@@ -2748,6 +2767,23 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// behind the read: a circular reference is not an aimed one, so the
 		// refusal saw it first.
 		circular = cycle
+	}
+	if !e.Indirect {
+		// A read **through** a reference with nothing to point at, which is
+		// the plain spelling of the refusal the indirection above makes and
+		// is in front of the read for the same reason: it never reads the
+		// value, and it is ahead of the operators because the reference is
+		// measured refusing `${u:-D}` and `${#u}` as squarely as `${u}`. A
+		// member path is a use of its base, so `${u.a}` is refused naming
+		// `u`. See Diagnostics.NamerefUnaimedUse.
+		if aimless, unaimed := r.unaimedReferenceBase(e.Name); unaimed {
+			r.refuseUnaimedReference(aimless, "")
+			// What it costs is FailedExpansionAbandonsTheLine's question,
+			// which expandErr puts to it — exactly as the indirection's
+			// refusal above does.
+			r.expandErr = true
+			return ""
+		}
 	}
 	if !circular {
 		value, set, subscript = r.paramSource(e)

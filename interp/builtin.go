@@ -2564,7 +2564,9 @@ func (r *Runner) unsetMatching(patterns []string) int {
 				}
 				continue
 			}
-			r.unsetName(name)
+			if code := r.unsetName(name); code != 0 {
+				status = code
+			}
 		}
 	}
 	if !matched && status == 0 {
@@ -2924,7 +2926,9 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		r.unsetName(name)
+		if code := r.unsetName(name); code != 0 {
+			status = r.carryUnsetStatus(status, code)
+		}
 	}
 	if ended {
 		// The names that were names are removed first and the script stops
@@ -2935,12 +2939,30 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 	return status
 }
 
-// unsetName removes one whole parameter, whatever kind it is.
+// unsetName removes one whole parameter, whatever kind it is, and reports the
+// status the operand leaves behind.
 //
 // Extracted so that the pattern form and the name form remove alike: the two
 // entered the builtin by different doors and would otherwise have been two
 // copies of this, which is how one of them ends up forgetting a table.
-func (r *Runner) unsetName(name string) {
+//
+// The status is 0 for every removal and 1 for the one refusal this makes —
+// an unaimed reference, below. A `return` rather than a field for the reason
+// the loops above keep their own: the builtin's status is the operands' and
+// not the runner's, and a removal that happened must not overwrite a refusal
+// that came before it.
+func (r *Runner) unsetName(name string) int {
+	// An `unset` **through** a reference with nothing to point at, which is
+	// the one route of the three that does not end the script: the sentence
+	// is written, the status is 1, and the next line runs. Measured — and
+	// the plain `unset u` says it too, where the plain `u=5` and `${u}` part
+	// company over whether the reference is being aimed. Ahead of the walk,
+	// which answers nothing for an unaimed reference.
+	// See Diagnostics.NamerefUnaimedUse.
+	if aimless, unaimed := r.unaimedReferenceBase(name); unaimed {
+		r.refuseUnaimedReference(aimless, r.builtinComplaintName("unset"))
+		return 1
+	}
 	if r.selfNameref(name) {
 		// A plain `unset` of a reference aimed at its own name says the same
 		// sentence the read says, **twice**, and then removes the binding it
@@ -3005,7 +3027,7 @@ func (r *Runner) unsetName(name string) {
 	// hidden-name parameter is *restored* rather than unset — the undo does
 	// that itself, through the same restore a call's exit runs.
 	if r.unsetTakesAnEnclosingLocal(name) {
-		return
+		return 0
 	}
 	// And the parameter whose patterns take names out of a pathname
 	// expansion stops where it is unset — taking the hidden-name switch back
@@ -3038,6 +3060,7 @@ func (r *Runner) unsetName(name string) {
 		r.unsetOneName(other)
 	}
 	r.unsetOneName(name)
+	return 0
 }
 
 // unsetOneName is unsetName for a name whose tie, if it had one, has already

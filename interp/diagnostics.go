@@ -1870,9 +1870,9 @@ type Diagnostics struct {
 	// `export` and `readonly` and after it for `unset`.
 	BuiltinBadName map[string]string
 
-	// ExportLetterTakesExportsBadName gives a declaration carrying `-x` the
-	// sentence [BuiltinBadName] holds for `export`, in place of the one it
-	// holds for the word the line was written with.
+	// ExportLetterTakesExportsBadName gives a declaration carrying `-x` or
+	// `-n` the sentence [BuiltinBadName] holds for `export`, in place of the
+	// one it holds for the word the line was written with.
 	//
 	// One dialect, and it is the letter and not the word: measured
 	// 2026-09-14 on ksh93u+ 2012-08-01,
@@ -1883,7 +1883,16 @@ type Diagnostics struct {
 	//	typeset 3      typeset: 3: invalid variable name
 	//	export 3       export: 3: is not an identifier
 	//
-	// The builtin still names itself in all five, so only the reason moves.
+	// The reference letter is the second one and took until 2026-09-20 to be
+	// modeled, because for a while it had a single row and reading one row as
+	// a rule is how a table of one gets built. It has three now, and the
+	// sign does not matter:
+	//
+	//	typeset -n 1x     typeset: 1x: is not an identifier
+	//	typeset -n 1x=v   typeset: 1x=v: is not an identifier
+	//	typeset +n 1x     typeset: 1x: is not an identifier
+	//
+	// The builtin still names itself in all eight, so only the reason moves.
 	// Reachable more often than it looks: `typeset -Fx 3 a=1.5` puts a `3`
 	// where a name belongs in the dialect that will not read a detached
 	// number behind a letter, which is how it was found (#2419).
@@ -1891,6 +1900,33 @@ type Diagnostics struct {
 	// False everywhere else, which is every dialect with one sentence for a
 	// bad name whatever letters the line carried.
 	ExportLetterTakesExportsBadName bool
+
+	// BadNameOfADottedOperandWithAValue replaces [BuiltinBadName]'s sentence
+	// where the operand has a `.` in its name **and** carries a value, which
+	// is the one shape the refusing dialect leaves its own builtin out of.
+	// Two verbs, as BuiltinBadName has them, so a dialect that wanted the
+	// builtin could still write it.
+	//
+	// Measured 2026-09-20 on ksh93u+ 2012-08-01, `-c` under `env -i`:
+	//
+	//	export .foo=1        .foo=1: is not an identifier
+	//	export nosuch.x=1    nosuch.x=1: is not an identifier
+	//	export a.b=1 c.d=2   a.b=1: is not an identifier — the first alone
+	//	typeset -n zz.q=zz   zz.q=zz: is not an identifier
+	//
+	// and the controls that make it the pair of conditions rather than
+	// either one: `export .foo` and `export nosuch.x` name `export:`, and so
+	// does `export 1x=v`, which carries a value over a name with no dot in
+	// it. Empty is every other dialect, where the builtin names itself
+	// whatever the operand looks like.
+	//
+	// One row of the family is **recorded rather than modeled**: `typeset -x
+	// nosuch.x=1` is `nosuch.x=1: no parent` there — the same prefixless
+	// shape with a different reason, on a path the valueless `typeset -x
+	// nosuch.x` does not take. A second wording for one letter with a value
+	// is a table of its own for one row, which is the trade
+	// ExportLetterTakesExportsBadName above states.
+	BadNameOfADottedOperandWithAValue string
 
 	// BuiltinBadNameNumeric is that wording where the operand begins with a
 	// digit, for the one dialect that tells the two apart: zsh says `not an
@@ -5438,20 +5474,41 @@ type Diagnostics struct {
 	// `warning: u: removing nameref attribute` and leaves `declare -a
 	// u=([0]="a" [1]="b")`. Empty where the dialect says nothing.
 	NamerefArrayLiteralDropsTheAttribute string
-	// NamerefCompoundBodyUnaimed is the same state under a **compound
-	// variable's body**, where the one column that has the construct refuses
-	// instead of storing anything at all: `typeset -n u; typeset u=(a=1)` is
-	// `u: no reference name` at 1 in AT&T ksh93u+ 2012-08-01, and the script
-	// ends there. One verb: the name as written. Empty is the reading with no
-	// refusal, which is every other column — none of them parses a compound
-	// body, so none of them can reach this.
+	// NamerefUnaimedUse is what a shell says when something **reads through
+	// or writes through** a reference with nothing to point at, which one
+	// column refuses everywhere the other two that spell a reference answer
+	// with the empty string. One verb: the reference's own name.
+	//
+	// Measured 2026-09-20 on AT&T ksh93u+ 2012-08-01 (`/bin/ksh`), `-c` and
+	// script files alike under `env -i PATH=/usr/bin:/bin LC_ALL=C` with
+	// standard input on the null device, every row over `typeset -n u`:
+	//
+	//	${u}  ${u:-D}  ${#u}   u: no reference name, 1, and the script ends
+	//	${u.a}                 the same — ahead of the operators, as the
+	//	                       indirection's refusal is
+	//	u.a=5                  the same
+	//	typeset u=(a=1)        the same, and so does the bare `u=(a=1)`
+	//	unset u  unset u.a     unset: u: no reference name, 1, and the
+	//	                       script **carries on**
+	//
+	// and the states that are *not* this, each of which must stay silent:
+	// `typeset -p u` lists `typeset -n u`, `[[ -v u ]]` is 1 with nothing
+	// said, `${!u@}` is empty, `for u in a b` re-aims the reference, and
+	// `typeset u=plain`, `typeset u=(1 2)` and `u=5` all aim it or store
+	// under its own name. So the rule is a read or a write *through* one,
+	// and not every mention of it.
+	//
+	// The builtin's name comes from the location rather than from the
+	// wording, which is why `unset`'s row carries one and the others do not:
+	// the compound body is stored after the declaration builtin has
+	// returned, and an expansion is in no builtin at all.
 	//
 	// Its own field rather than IndirectionUnaimedReference's, though ksh93
 	// writes the same words for both: that one is `${!r}`'s and bash answers
 	// it with a sentence of its own, so folding them would make one dialect's
-	// two unrelated refusals move together. See
-	// Runner.namerefCompoundBodyStore.
-	NamerefCompoundBodyUnaimed string
+	// two unrelated refusals move together. Empty is the reading with no
+	// refusal. See Runner.unaimedReferenceBase.
+	NamerefUnaimedUse string
 
 	// NamerefDepthWarning is what a *write* through a self reference says in
 	// the same dialect, which is a different sentence from the read's: bash

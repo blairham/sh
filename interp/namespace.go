@@ -313,10 +313,50 @@ func (r *Runner) namespaceUnsetTarget(name string) (string, bool) {
 //
 // Empty for every prefix that is not a namespace's, which is every prefix in
 // five of the six columns and nearly all of them in the sixth.
+//
+// # A prefix that stops short of the separator
+//
+// `${!.ns@}` is the same listing with the namespace's **own name** in front
+// of it, and so is any shorter prefix a namespace's name begins with.
+// Measured 2026-09-20 on AT&T ksh93u+ 2012-08-01 (`/bin/ksh`), script files
+// under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null
+// device, over `namespace ns { x=1; }`:
+//
+//	written      ksh93u+                              here, before
+//	${!.ns@}     `.ns` and then 23 `.ns.…` names      `.ns.x` alone
+//	${!.n@}      the same list                        `.ns.x` alone
+//	${!.ns.@}    the same list without `.ns`          the fall-through ✅
+//	${!.nsz@}    nothing                              nothing ✅
+//
+// The third row is the control and it says the fall-through was already
+// built: only the spelling without the separator reached none of it, and the
+// namespace's own name was in no source at all. The contents of the lists
+// differ by which ordinary parameters each shell has, which is not this
+// rule; what is, is that a prefix finding a namespace finds the whole of it.
+//
+// One row is **recorded rather than reproduced**: the reference writes `.ns`
+// *twice* for the shorter prefix `.n` and once for the exact `.ns`. A name
+// listed twice is that shell's bookkeeping about which source offered it
+// rather than a rule a shell could state, so the name is contributed once
+// here (#3957).
 func (r *Runner) namespaceKeys(prefix string) []string {
-	if len(r.namespaces) == 0 || len(prefix) < 3 || prefix[0] != '.' ||
-		prefix[len(prefix)-1] != '.' {
+	if len(r.namespaces) == 0 || len(prefix) < 2 || prefix[0] != '.' {
 		return nil
+	}
+	if prefix[len(prefix)-1] != '.' {
+		// A prefix a namespace's own name *extends* — its whole name, or any
+		// head of it — answers with that name and then with everything the
+		// separator spelling answers.
+		var out []string
+		for ns := range r.namespaces {
+			named := "." + ns
+			if strings.ContainsRune(ns, '.') || !strings.HasPrefix(named, prefix) {
+				continue
+			}
+			out = append(out, named)
+			out = append(out, r.namespaceKeys(named+".")...)
+		}
+		return out
 	}
 	ns := prefix[1 : len(prefix)-1]
 	if !r.namespaces[ns] || strings.ContainsRune(ns, '.') {

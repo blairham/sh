@@ -92,8 +92,16 @@ func TestACycleIsRefusedAtTheDeclaration(t *testing.T) {
 			// too, which is what says the word is a front rather than a
 			// builtin of its own. It ends the script here as every bad name
 			// on a declaration does.
+			//
+			// The **reason** is the reference letter's own and not the
+			// declaration's: `nameref 1x=v` and `typeset -n 1x=v` are both
+			// `is not an identifier` in ksh93u+ where the plain `typeset
+			// 1x=v` is `invalid variable name`. This row pinned the plain
+			// wording until 2026-09-20 — the letter's sentence was recorded
+			// beside BuiltinBadName and not modeled, and the pin was this
+			// shell's answer rather than the reference's (#3956).
 			name: "a bad name speaks as typeset", src: `nameref 1x=v; echo after`,
-			want: "ksh: typeset: 1x=v: invalid variable name\n", status: 1,
+			want: "ksh: typeset: 1x=v: is not an identifier\n", status: 1,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

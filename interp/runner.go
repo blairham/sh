@@ -3341,6 +3341,13 @@ type Runner struct {
 	// now in progress borrows, while still naming itself. Empty is the
 	// ordinary case. See Diagnostics.ExportLetterTakesExportsBadName.
 	badNameWordedAs string
+	// dottedOperandRefusedByALetter is set while a declaration carrying the
+	// export or reference letter is checking its operands, which is where a
+	// name with a dot in it stops being a name. Its own flag rather than an
+	// argument for badNameWordedAs's reason: the check runs inside
+	// Runner.builtinNames, several calls below the loop that read the
+	// letters. See Runner.dottedBuiltinName for the measurement.
+	dottedOperandRefusedByALetter bool
 	// indexedLetterHere is the subset of those names whose declaration also
 	// carried the *indexed* container letter — `typeset -a a=([5]=q)` and not
 	// `typeset -a a` followed by the assignment on the next line.
@@ -9092,6 +9099,19 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// of the region that keeps `x=IN` from leaving it. Ahead of the reference
 	// handling, for the reason storedValue's copy of this is.
 	name = r.namespaceWriteName(name)
+	// A write **through** a reference with nothing to point at, where the
+	// name written is one of its members. Ahead of the member path below,
+	// which would hand back the name as written and store under it — and
+	// only for a member path, because a plain `u=5` *aims* the reference
+	// rather than writing through it, which is namerefAssignmentTarget's
+	// job further down. See Diagnostics.NamerefUnaimedUse.
+	if strings.Contains(name, memberSep) {
+		if aimless, unaimed := r.unaimedReferenceBase(name); unaimed {
+			r.refuseUnaimedReference(aimless, "")
+			r.fatalQuiet()
+			return
+		}
+	}
 	// The write half of the member path above, and in the same place relative
 	// to the reference handling that storedValue puts it.
 	name = r.compoundMemberThroughAReference(name)

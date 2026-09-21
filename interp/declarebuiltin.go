@@ -1670,7 +1670,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				// binding at all — `typeset -g v=4` through a reference
 				// really does write the shell's own cell, in bash and here
 				// alike.
-				fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh)
+				fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh, r.shadowTypeset)
 			}
 		}
 		// Attributes after the shadow, and ahead of the value: `-i` changes

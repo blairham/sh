@@ -1373,11 +1373,24 @@ func (r *Runner) refuseNameref(builtin, wording string) int {
 // caller aimed is not this either — the fresh cell has already dropped the
 // reference, so there is nothing to follow.
 //
+// **The word's own shadow is what is re-asked**, rather than a scope test
+// written again here, and that is the third state rather than a tidiness
+// argument: a word may make no binding at all where a scope exists. ksh93's
+// POSIX-form function has a scope on the stack and `typeset` inside one
+// declares a global there — `u=1; typeset -n s=u; f() { typeset -i s; }; f`
+// leaves `typeset -i u=1`, so the letter has to reach the target untouched.
+// A test of `r.scopes` alone answers that row wrongly, which is what
+// dialect/ksh's own
+// TestAnAttributeLetterLandsOnWhatTheReferencePointsAt/inside_a_function_with_no_scope_of_its_own
+// says. So the caller hands in the same function it shadowed the written
+// name with — `shadow` for `local`, `shadowTypeset` for the declaration
+// utilities — and this asks it about the target.
+//
 // It reports the fresh flag the caller should carry on with, because the
 // question "did this line make the cell" is now about the target's cell.
-func (r *Runner) declarationThroughAReferenceShadowsTheTarget(target string, fresh bool) bool {
+func (r *Runner) declarationThroughAReferenceShadowsTheTarget(target string, fresh bool, shadow func(string) bool) bool {
 	if len(r.scopes) == 0 {
 		return fresh
 	}
-	return r.shadow(target)
+	return shadow(target)
 }

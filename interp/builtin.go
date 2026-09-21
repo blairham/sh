@@ -6424,7 +6424,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// the reference points at — so the shadow is taken there too, and
 			// what the line writes goes away with the call like any other
 			// local. See Runner.aDeclarationThroughAReferenceIsTheTargets.
-			fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh)
+			fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh, r.shadow)
 		}
 		// After the shadow, for the reason biDeclare gives: the cell this
 		// declaration writes is a fresh binding, and an attribute applied

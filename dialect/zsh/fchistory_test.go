@@ -240,12 +240,12 @@ func TestFcLeavesEveryOtherLetterToTheCoreBuiltin(t *testing.T) {
 // `fc -R` split the text on newlines and applied neither encoding, while the
 // session's reader applied both to the same file.
 //
-// A note about the listings below, so the expectations are not mistaken for a
-// second measurement: real zsh writes an entry's embedded newline as a literal
-// `\n` in `fc -l`, and this shell writes the newline itself, so the loop
-// spreads over four lines here and over one there. That is the *listing* and
-// not the load — the numbering is what says the loop is one entry — and it is
-// filed on its own.
+// A note about the listings below: an entry's embedded newline is written as
+// the two characters `\n`, so a loop stored across four lines of the file is
+// one row of the listing. That is the *listing* and not the load — see
+// Runner.SetHistoryListingShowsControlCharacters, where the measurement is
+// (#4032). These expectations used to hold the newline itself, with a comment
+// saying so.
 
 // A command stored across backslash-continued lines is one entry.
 func TestFcReadJoinsAContinuedCommandIntoOneEntry(t *testing.T) {
@@ -257,7 +257,7 @@ func TestFcReadJoinsAContinuedCommandIntoOneEntry(t *testing.T) {
 	}
 	out, st := fcRun(t, dir, "fc -R seed\nfc -l 1\n")
 	want := "    1  echo one\n" +
-		"    2  for i in 1 2\ndo\necho $i\ndone\n" +
+		"    2  for i in 1 2\\ndo\\necho $i\\ndone\n" +
 		"    3  echo two\n"
 	if out != want || st != 0 {
 		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
@@ -331,12 +331,140 @@ func TestFcReadAnswersWhatTheOneDecoderAnswers(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "seed"), []byte(file), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// The listing escapes what an entry holds, so the expectation does too —
+	// the rule is interp's and is spelled a second time here on purpose,
+	// because what this test is about is the **decoding** and a want built
+	// from the shell's own listing code would assert nothing about it.
 	var want strings.Builder
-	for i, entry := range repl.HistoryEntries(zsh.HistoryStyle(), lines) {
-		fmt.Fprintf(&want, "%5d  %s\n", i+1, entry)
+	shown := strings.NewReplacer("\n", `\n`, "\t", `\t`)
+	for i, entry := range repl.HistoryEntriesIn(zsh.HistoryStyle(), file) {
+		fmt.Fprintf(&want, "%5d  %s\n", i+1, shown.Replace(entry))
 	}
 	out, st := fcRun(t, dir, "fc -R seed\nfc -l 1\n")
 	if out != want.String() || st != 0 {
 		t.Errorf("out = %q status = %d, want %q at 0", out, st, want.String())
+	}
+}
+
+// What this shell's `fc -W` writes, its own `fc -R` reads back — which it did
+// not, because nothing encoded an entry holding a newline and every writer
+// put one down as two physical lines (#4034).
+//
+// The file's bytes are asserted beside the round trip rather than only the
+// entries, because the round trip alone closes over any pair of rules that
+// agree with each other. `for i in 1 2\` ⏎ `do\` ⏎ `echo $i\` ⏎ `done` is
+// what real zsh leaves, measured 2026-09-21 under a pseudo-terminal.
+func TestWhatFcWritesFcReadsBackAsTheSameEntries(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := "HISTFILE=saved\nSAVEHIST=10\n" +
+		"print -s $'for i in 1 2\\ndo\\necho $i\\ndone'\n" +
+		"print -s 'echo tail'\n" +
+		"fc -W\n"
+	fcRun(t, dir, src)
+	data, err := os.ReadFile(filepath.Join(dir, "saved"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "for i in 1 2\\\ndo\\\necho $i\\\ndone\necho tail\n"
+	if got := string(data); got != want {
+		t.Errorf("wrote %q, want %q", got, want)
+	}
+	out, st := fcRun(t, dir, "fc -R saved\nfc -l 1\n")
+	wantList := "    1  for i in 1 2\\ndo\\necho $i\\ndone\n    2  echo tail\n"
+	if out != wantList || st != 0 {
+		t.Errorf("read back %q status = %d, want %q at 0", out, st, wantList)
+	}
+}
+
+// An entry whose own last character is a backslash is written with a space
+// after it, so the newline ending it is not read as a promise of another
+// line — without the guard the entry after it is swallowed.
+func TestAnEntryEndingInABackslashDoesNotSwallowTheNextOne(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := "HISTFILE=saved\nSAVEHIST=10\nprint -rs 'echo x\\'\nprint -s 'echo tail'\nfc -W\n"
+	fcRun(t, dir, src)
+	data, err := os.ReadFile(filepath.Join(dir, "saved"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "echo x\\ \necho tail\n"; string(data) != want {
+		t.Errorf("wrote %q, want %q", string(data), want)
+	}
+	out, st := fcRun(t, dir, "fc -R saved\nfc -l 1\n")
+	if want := "    1  echo x\\\n    2  echo tail\n"; out != want || st != 0 {
+		t.Errorf("read back %q status = %d, want %q at 0", out, st, want)
+	}
+}
+
+// Where the file stops decides what a trailing backslash is, and the pair is
+// what says so: the same bytes with a newline after them are an entry this
+// shell drops and without one are a command ending in a backslash.
+//
+// Measured 2026-09-21, zsh 5.9.2 under `env -i` with a scratch `HOME`, one
+// file at a time. The third row is the shortest file there is — one newline,
+// which is an empty entry and used to read as no file at all (#4033).
+func TestWhereTheFileStopsDecidesWhatATrailingBackslashIs(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, file, want string }{
+		{"a promise with a newline after it", "echo a\necho b\\\n", "    1  echo a\n"},
+		{"a promise and nothing else", "echo b\\\n", ":fc:2: no such event: 1\n"},
+		{"no newline, so the backslash is a character", `echo b\`, "    1  echo b\\\n"},
+		{"a file of one newline", "\n", "    1  \n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "seed"), []byte(c.file), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out, _ := fcRun(t, dir, "fc -R seed\nfc -l 1\n")
+			if !strings.HasSuffix(out, c.want) {
+				t.Errorf("listed %q, want it to end %q", out, c.want)
+			}
+		})
+	}
+}
+
+// An entry holding a newline is one row of the listing, written `\n` — and
+// every other character that would not survive being written as itself is
+// spelled out beside it.
+//
+// The panel parts on it — measured 2026-09-21, zsh 5.9.2 writes
+// `    1  a\nb` where bash 5.3.20 writes `    1  a` and then `b` — so a shell
+// that printed the newline would be giving this dialect the other one's
+// answer, and the numbering would be the only thing saying where an entry
+// ended (#4032).
+//
+// The rest of the set was measured a character at a time through `od -c`,
+// which is the part that could not be done any other way: a listing read
+// through `cat -A` renders a real carriage return as `^M` and cannot be told
+// from one that wrote the two characters. A backslash somebody typed and a
+// multibyte character are both written as themselves.
+func TestAListedEntryIsOneRowWhateverItHolds(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := "print -rs $'nl[\\n]'\n" +
+		"print -rs $'tab[\\t]'\n" +
+		"print -rs $'cr[\\r]'\n" +
+		"print -rs $'bel[\\a]'\n" +
+		"print -rs $'esc[\\e]'\n" +
+		"print -rs $'nul[\\x00]'\n" +
+		"print -rs $'del[\\x7f]'\n" +
+		"print -rs $'bslash[\\\\]'\n" +
+		"print -rs 'acc[é]'\n" +
+		"print -rs $'hi[\\xe9]'\n" +
+		"fc -ln 1\n"
+	out, st := fcRun(t, dir, src)
+	want := "nl[\\n]\ntab[\\t]\ncr[^M]\nbel[^G]\nesc[^[]\n" +
+		"nul[^@]\ndel[^?]\nbslash[\\]\nacc[é]\nhi[\\M-i]\n"
+	if out != want || st != 0 {
+		t.Errorf("listed %q status = %d, want %q at 0", out, st, want)
+	}
+	// And the numbered layout spells the same characters out, which is what
+	// says the rule is the entry's and not the bare format's.
+	out, st = fcRun(t, dir, "print -rs $'a\\nb'\nfc -l 1\n")
+	if want := "    1  a\\nb\n"; out != want || st != 0 {
+		t.Errorf("listed %q status = %d, want %q at 0", out, st, want)
 	}
 }

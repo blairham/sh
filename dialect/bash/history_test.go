@@ -238,3 +238,34 @@ func TestASubshellsHistoryDoesNotReachTheParent(t *testing.T) {
 		t.Errorf("out = %q status = %d, want %q at 0", out, st, want)
 	}
 }
+
+// This shell's history file states **no** continuation, so an entry holding a
+// newline goes down as two physical lines and reads back as two entries.
+//
+// The other half of the pair #4034 landed: one encoder, and what it writes is
+// the dialect's answer rather than each writer's. Measured 2026-09-21 on bash
+// 5.3.20 — `history -s $'a\nb'` then `history -w` leaves `a` and `b` on lines
+// of their own, and `history -r` over that file lists two entries. The loss is
+// the shell's own and is not a gap here, which is exactly why it is asserted:
+// an encoder that quietly learned the other dialect's continuation would
+// change a file this one has always written flat.
+func TestAnEntryHoldingANewlineIsTwoLinesOfThisShellsFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	out, st := runBash(t, dir, "set -o history\nhistory -s 'echo one'\nhistory -s $'a\\nb'\nhistory -w saved\n")
+	if out != "" || st != 0 {
+		t.Errorf("out = %q status = %d, want silence at 0", out, st)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "saved"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "echo one\na\nb\n"; string(data) != want {
+		t.Errorf("wrote %q, want %q", string(data), want)
+	}
+	out, st = runBash(t, dir, "set -o history\nhistory -c\nhistory -r saved\nhistory\n")
+	want := "    1  echo one\n    2  a\n    3  b\n"
+	if !strings.HasSuffix(out, want) || st != 0 {
+		t.Errorf("listed %q status = %d, want it to end %q at 0", out, st, want)
+	}
+}

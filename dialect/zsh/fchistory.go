@@ -5,7 +5,7 @@ package zsh
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -118,6 +118,14 @@ func registerFcHistory(r *interp.Runner) {
 	// front end that recorded into it would be modeling bash's answer.
 	r.SetHistoryStore(fcEntries, nil)
 	r.SetHistoryListingLayout("%5d  %s\n", "%s\n")
+	// An entry holding a newline is still one row: this dialect writes the
+	// two characters `\n` where bash writes the newline itself and lets the
+	// entry run over several rows, and it spells out every other control
+	// character the same way. Measured 2026-09-21, zsh 5.9.2 against bash
+	// 5.3.20, the same planted two-line entry listed in each, and then one
+	// character at a time — see SetHistoryListingShowsControlCharacters for
+	// the set and for why `cat -A` could not have measured it.
+	r.SetHistoryListingShowsControlCharacters(true)
 	// The numbers, which are this dialect's own answer and not the core's
 	// default of one: an entry keeps the number it was given, so the oldest
 	// the list still holds is numbered by everything the size has dropped.
@@ -183,11 +191,11 @@ func fcFile(r *interp.Runner, letter byte, rest []string) int {
 		if name == "" {
 			return 1
 		}
-		lines, ok := fcReadFile(r, name)
+		text, ok := fcReadFile(r, name)
 		if !ok {
 			return 1
 		}
-		fcLoadLines(r, lines)
+		fcLoadText(r, text)
 		return 0
 	}
 	// A write that zsh would not perform is not an error and says nothing —
@@ -266,8 +274,8 @@ func fcEntries(r *interp.Runner) []string {
 // Every route a file reaches this list by goes through here, which today is
 // `-R` alone: `print -s` is a line the script typed rather than a file, and
 // this dialect deliberately has no startup read into a script's list.
-func fcLoadLines(r *interp.Runner, lines []string) {
-	r.SetArray(fcHistoryStore, append(fcEntries(r), repl.HistoryEntries(HistoryStyle(), lines)...))
+func fcLoadText(r *interp.Runner, text string) {
+	r.SetArray(fcHistoryStore, append(fcEntries(r), repl.HistoryEntriesIn(HistoryStyle(), text)...))
 	fcTrimToSize(r, fcHistorySize(r))
 }
 
@@ -494,37 +502,44 @@ func fcWriteFile(r *interp.Runner, name string, entries []string, appendTo bool)
 		return 1
 	}
 	defer func() { _ = f.Close() }()
-	for _, entry := range entries {
-		if _, err := fmt.Fprintf(f, "%s\n", entry); err != nil {
-			r.Diagnosef("fc: %s: %s\n", name, err)
-			return 1
-		}
+	// The encoder is `repl`'s, against this dialect's own HistoryStyle — the
+	// mirror of the decoder `fc -R` reads with, and the same call the
+	// session's writer and `dialect/bash`'s make. An entry holding a newline
+	// used to go down as two physical lines here, which read back as two
+	// entries and lost one every time the file went round (#4034).
+	if _, err := io.WriteString(f, repl.HistoryText(HistoryStyle(), entries)); err != nil {
+		r.Diagnosef("fc: %s: %s\n", name, err)
+		return 1
 	}
 	return 0
 }
 
-// fcReadFile reads a history file's **physical lines**, having asked whether
-// the script may read that path.
+// fcReadFile reads a history file's **text**, having asked whether the script
+// may read that path.
 //
-// Lines and not entries: what a line means is the dialect's encoding, which
-// fcLoadLines asks the one decoder about. Keeping the two apart is what stops
+// Text and not entries: what the bytes mean is the dialect's encoding, which
+// fcLoadText asks the one decoder about. Keeping the two apart is what stops
 // the gate and the encoding from having to be right in the same place.
+//
+// And text rather than the lines it used to split into, because one of the
+// encoding's answers is about where the file stops — a trailing backslash
+// with a newline after it is an entry this dialect drops and the same bytes
+// without one are a command ending in a backslash. Splitting here threw that
+// away, and trimming the last newline lost the shortest file there is: one
+// holding a single newline, which is an empty entry and used to read as no
+// file at all (#4033).
 //
 // A refused read is reported by AllowReadPath the way a refused redirection's
 // is — reading a file's contents is an open, and answering with an empty list
 // and saying nothing would leave a script believing the file was empty.
-func fcReadFile(r *interp.Runner, name string) ([]string, bool) {
+func fcReadFile(r *interp.Runner, name string) (string, bool) {
 	path := shellPath(r, name)
 	if !r.AllowReadPath(r.ShellContext(), path) {
-		return nil, false
+		return "", false
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, false
+		return "", false
 	}
-	text := strings.TrimSuffix(string(data), "\n")
-	if text == "" {
-		return nil, true
-	}
-	return strings.Split(text, "\n"), true
+	return string(data), true
 }

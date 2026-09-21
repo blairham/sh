@@ -42,7 +42,15 @@ func (b binSet) Set(v string) error {
 
 // runOwn grades every native column and then asks whether the references
 // agree about core/.
-func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration, jobs int, only string) int {
+//
+// columns, when it holds anything, is the subset of column names to run. It
+// exists so that a change to how *one* column reaches its reference can be
+// exercised without a full sweep: the whole run is four dialect binaries over
+// 236 files under two shells each, and the working agreements in this tree
+// forbid an agent starting one of those on the maintainer's machine. A scoped
+// run is a handful of container starts instead, and it answers the question a
+// column change actually asks. #3480.
+func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration, jobs int, only string, columns map[string]bool) int {
 	fmt.Printf("our own suite — %s, committed and readable\n", root)
 	fmt.Println("  The reference shell on this machine is the expectation; no expected output")
 	fmt.Println("  is checked in. A .right file of ours would let us record our own bug as")
@@ -55,6 +63,25 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	fmt.Println("  not only the ones the two shells answered differently.")
 	fmt.Println()
 
+	// A name nothing matches runs nothing and says so, rather than reporting
+	// a scoped sweep of the empty set as a clean one. This tree has been
+	// caught by a silently-matching selector before.
+	for _, name := range sortedSet(columns) {
+		if !isColumn(name) {
+			fmt.Fprintf(os.Stderr, "suitecheck: -column %s: no column of that name; the columns are %s\n",
+				name, strings.Join(columnNames(), ", "))
+			return 1
+		}
+	}
+	if len(columns) > 0 {
+		fmt.Printf("  SCOPED to %s. The other columns were not run, so nothing here is the\n",
+			strings.Join(sortedSet(columns), ", "))
+		fmt.Println("  baseline: a per-column figure is still that column's own, and the")
+		fmt.Println("  cross-check, the only-here checks and the cell roll-up are left out")
+		fmt.Println("  below rather than printed from a subset of the references.")
+		fmt.Println()
+	}
+
 	opts := suite.Options{Timeout: timeout, Jobs: jobs, Only: names(only)}
 	code := 0
 	var refs []suite.Reference
@@ -64,6 +91,9 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	var crossless []string
 
 	for _, s := range suite.OurColumns() {
+		if len(columns) > 0 && !columns[s.Name] {
+			continue
+		}
 		if s.NotYet != "" {
 			skipped = append(skipped, fmt.Sprintf("%s — %s", s.Name, s.NotYet))
 			continue
@@ -150,6 +180,15 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 		}
 	}
 	printOwnTable(reports)
+	if len(columns) > 0 {
+		// Everything below here is a claim over every column, and the run
+		// held a subset. Printed as a line rather than as nothing, so the
+		// absence is a statement.
+		fmt.Println("  The cross-check, the only-here checks and the roll-up are not in this")
+		fmt.Println("  run: each is a claim over every column, and this one was scoped.")
+		fmt.Println()
+		return code
+	}
 	fmt.Println("  A tier is a claim, not filing. core/ is what a script may assume in any of")
 	fmt.Println("  these shells. A cross-check runs a tier through the references alone and")
 	fmt.Println("  asks whether they agree, which is the half no fetched suite can have:")
@@ -172,6 +211,9 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	fmt.Println()
 
 	for _, name := range suite.Tiers {
+		if len(columns) > 0 {
+			break
+		}
 		cross, err := suite.CrossCheck(ctx, root, name, refs, opts)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "suitecheck: the %s cross-check: %v\n", name, err)
@@ -189,7 +231,7 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 		// so the condition that matters is already the one it applies —
 		// and where a contained column kept a reference on this machine,
 		// its dialect tier keeps the check it had before it was pinned.
-		if col.DialectTier() == "" {
+		if col.DialectTier() == "" || len(columns) > 0 {
 			continue
 		}
 		own, err := suite.OnlyHere(ctx, root, col, refs, opts)
@@ -213,14 +255,19 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 	// number nobody meets beside the figures it summarizes is a number that
 	// gets quoted from memory, which is how leg 2's first count came to
 	// reconstruct from nothing (#3481).
-	if roll, err := suite.RollUp(root); err != nil {
-		fmt.Fprintf(os.Stderr, "suitecheck: the cell roll-up: %v\n", err)
-		code = 1
-	} else {
-		fmt.Print(roll.Report())
-		fmt.Println()
-		if len(roll.Stale) > 0 {
+	// Left out on a scoped run, deliberately: the roll-up counts the whole
+	// space, and a campaign figure printed under a subset of the columns is
+	// exactly the number that later gets quoted from memory.
+	if len(columns) == 0 {
+		if roll, err := suite.RollUp(root); err != nil {
+			fmt.Fprintf(os.Stderr, "suitecheck: the cell roll-up: %v\n", err)
 			code = 1
+		} else {
+			fmt.Print(roll.Report())
+			fmt.Println()
+			if len(roll.Stale) > 0 {
+				code = 1
+			}
 		}
 	}
 
@@ -235,6 +282,35 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 		fmt.Println()
 	}
 	return code
+}
+
+// columnNames is every native column's name, for a diagnostic that has to
+// tell the reader what they could have typed.
+func columnNames() []string {
+	out := make([]string, 0, len(suite.OurColumns()))
+	for _, s := range suite.OurColumns() {
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+func isColumn(name string) bool {
+	for _, s := range suite.OurColumns() {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// sortedSet is a set's members in a stable order, for a line a person reads.
+func sortedSet(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for n := range set {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // printOwnColumn is one native column, and it names the cases that failed.

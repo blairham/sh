@@ -83,7 +83,15 @@ func sweep(dialect, root, bin string, timeout time.Duration, jobs int, only stri
 	}
 
 	ctx := context.Background()
-	version := suite.Version(ctx, reference)
+	// Identify rather than Version, which is what the host half has always
+	// called: a shell that answers no version probe is identified by its
+	// column's own fingerprint instead. This said Version for as long as ash
+	// was the only contained column, and ash answers a version probe, so the
+	// difference was invisible — until #3480 gated dash, which answers none.
+	// A contained dash would then have been refused by the check below for
+	// not identifying itself, and its report would have printed `could not
+	// determine` beside a reference that had just been measured.
+	version := s.Identify(ctx, reference)
 	// Before anything is measured. A path that resolved to some other shell
 	// would produce a whole healthy-looking column about the wrong binary,
 	// and /bin/sh being BusyBox in one image and dash in another is exactly

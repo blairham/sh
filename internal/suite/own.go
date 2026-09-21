@@ -129,6 +129,15 @@ const OurExt = ".tests"
 // own name in every column — without printing a path that differs per run.
 const OurShellVar = "SUITE_SHELL"
 
+// DashFingerprint is what an unpatched dash answers to the dash column's
+// AgainstProbe, and it is both that column's expected build and the fragment
+// its reference has to report to be believed at all.
+//
+// Those are normally two different questions — [Suite.MustReport] asks which
+// shell and [Suite.Against] asks which build — and for this column they are
+// one, because dash names itself in no spelling. See the column's entry.
+const DashFingerprint = "esc=4 pipefail-listed=n"
+
 // Ours is one column per dialect binary under cmd/.
 //
 // Five rows from the first commit, for the reason the fetched panel has four:
@@ -182,51 +191,48 @@ var Ours = []Suite{
 		Ext:      OurExt,
 		ShellVar: OurShellVar,
 		Lookup:   []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
-		// Homebrew's 5.9.2 against Ubuntu's 5.9: the smallest skew of the
-		// three, and named for the same reason as the largest. A column is
-		// discounted or it is not; which of them it is is not for a reader
-		// to guess from the runner's package list.
-		Against:       "zsh 5.9.2",
-		AgainstReport: "zsh 5.9.2",
-		// #3480 asked whether to loosen this to `zsh 5.9` — every
-		// distribution that has 5.9 reports exactly that, and 5.9.2 is a
-		// build string no public image carries — or to publish an image
-		// reporting 5.9.2. It was put as a question about what the column
-		// claims. **It is answerable by measurement, and the measurement
-		// says do not loosen.**
+		// Homebrew's 5.9.2 is the build these cases were measured against,
+		// and for three sweeps over #3480 no image anywhere reported it —
+		// every distribution that had 5.9 reported exactly `zsh 5.9`. So this
+		// column was graded against whatever zsh the machine happened to have
+		// and printed a WRONG BUILD banner over the figure, which is a number
+		// #2291's bar cannot be met over by any amount of correct work.
 		//
-		// Measured 2026-09-19, this column's 81 files run under two builds
-		// on one machine, each in a directory of its own, the shell's path
-		// normalized out: 79 are byte-identical under Homebrew's 5.9.2 and
-		// Apple's 5.9, and **two are not** — zsh/builtins.tests and
-		// zsh/diagnostics.tests. Both differences are `kill`:
+		// **5.9 was never a substitute, and that is a measurement rather than
+		// a preference.** Over this column's 81 files under two builds on one
+		// machine, each in a directory of its own and the shell's path
+		// normalized out, 79 are byte-identical and two are not —
+		// zsh/builtins.tests and zsh/diagnostics.tests — and both differences
+		// are `kill`:
 		//
 		//	kill -L        5.9.2 has the letter; 5.9 has not, and its usage
 		//	               line says `type kill -l for a list of signals`
 		//	kill -l 160    `160` in 5.9.2; `32` in 5.9
 		//	kill -l 257    `257` in 5.9.2; `HUP` in 5.9
 		//
-		// A second 5.9 confirms it is the release rather than one vendor's
-		// patch: a Linux zsh 5.9 image answers exactly as Apple's does on
-		// all three probes, so two independent 5.9 builds agree with each
-		// other and differ from 5.9.2. Loosening would gate this column
-		// against a shell that answers two of its own files differently,
-		// which is a pinned figure bought with a false claim — the trade
-		// #3797 refused for bash and refused correctly.
+		// Apple's /bin/zsh and a Linux zsh:5.9 image answer alike on all
+		// three, so it is the release and not one vendor's patch. Loosening
+		// AgainstReport to `zsh 5.9` — the other half of the question #3480
+		// put — would have pinned the figure and recorded a claim the
+		// measurement contradicts, which is the trade #3797 refused for bash
+		// and refused correctly.
 		//
-		// So the column stays ungated until an image of the build it names
-		// exists. The 25 cells that leaves are **open** and not ledgered:
-		// building and publishing that image is work somebody can do, which
-		// is the line between this and the ksh93 entry in
-		// [UnclosableByConstruction].
-		Ungated: "no public image reports zsh 5.9.2, and the 5.9 images are not a " +
-			"substitute: measured 2026-09-19 over this column's 81 files on one " +
-			"machine, two of them differ between 5.9.2 and 5.9 — `kill -L` exists " +
-			"in 5.9.2 and not in 5.9, and `kill -l` of an out-of-range number " +
-			"answers the number rather than wrapping. Two independent 5.9 builds " +
-			"agree with each other against 5.9.2, so it is the release and not a " +
-			"vendor patch. Gating against 5.9 would pin the figure and record a " +
-			"claim the measurement contradicts (#3480)",
+		// **So the build was put in an image rather than the claim loosened.**
+		// Debian sid packages 5.9.2 as of 2026-09-20, which none of the
+		// earlier sweeps found; images/zsh-5.9.2 is that package over a
+		// digest-pinned base, and it runs the two kill probes above at build
+		// time, so an image that is not this reference fails to build rather
+		// than being discovered later through a banner. #3480.
+		//
+		// CrossHere for the reason the bash column carries it: grading wants a
+		// pinned reference and the cross-check wants every reference in one
+		// place, and those are two different questions. See [Suite.CrossHere].
+		Image:         "ghcr.io/blairham/sh/zsh",
+		Digest:        "sha256:aab8255c80faec9f34386c1c5e200a2d7875ade79077f00ced3ac3b1be5fb9b7",
+		MustReport:    "zsh",
+		CrossHere:     true,
+		Against:       "zsh 5.9.2",
+		AgainstReport: "zsh 5.9.2",
 	},
 	{
 		Name:     "ksh93",
@@ -289,39 +295,52 @@ var Ours = []Suite{
 		ShellVar: OurShellVar,
 		Lookup:   []string{"/bin/dash", "/usr/bin/dash", "/opt/homebrew/bin/dash"},
 		Against: "an unpatched dash: upstream 0.5.12 and Apple's dash-16 both answer " +
-			"esc=4 pipefail-listed=n",
-		AgainstReport: "esc=4 pipefail-listed=n",
+			DashFingerprint,
+		// The one column where "is this dash" and "is this the right dash"
+		// are the same question, because dash answers no version probe and
+		// the fingerprint is the only identification there is. One constant
+		// read twice rather than the same string written out twice: a
+		// MustReport that drifted from AgainstReport would clear a shell the
+		// lineage notice then complained about.
+		AgainstReport: DashFingerprint,
+		MustReport:    DashFingerprint,
 		AgainstProbe: `e=$(printf 'a\eZ'); case $(set -o) in *pipefail*) p=y ;; *) p=n ;; esac; ` +
 			`printf 'esc=%s pipefail-listed=%s\n' "${#e}" "$p"`,
-		// And the fingerprint is why this column cannot be gated either.
-		// Measured 2026-09-19 across five images: debian:bookworm-slim,
+		// And the fingerprint is why this column could not be gated off the
+		// shelf. Measured 2026-09-19 across five images: debian:bookworm-slim,
 		// debian:trixie-slim, ubuntu:24.04 and ubuntu:22.04 all answer
-		// `esc=3`, trixie adding `pipefail-listed=y`, and Alpine has no dash
-		// at all. **Not one public image is the build this column names.**
+		// `esc=3`, trixie adding `pipefail-listed=y`, and Alpine has no dash at
+		// all. Sid's is 0.5.12-12+b1 and answers `esc=3 pipefail-listed=y` —
+		// the same upstream version, patched. **Not one public image is the
+		// build this column names.**
 		//
-		// What the patch costs is measured rather than assumed, and it is
-		// the whole of this column's gap on a runner. On the panel build
-		// here the column is **67/67 strict**; on `ubuntu-latest` it reads
-		// 64/67, and the three are dash/printf.tests (`printf 'a\eZ'` writes
-		// the escape), dash/builtins.tests (`privileged` in the `set -o`
-		// listing) and dash/variables.tests (`LINENO` present upstream,
-		// absent in Debian's). Three files, three patch points, and every
-		// one of them is the distribution rather than us.
+		// What the patch costs is measured rather than assumed, and it is the
+		// whole of this column's gap on a runner. On the panel build here the
+		// column is 67/67 strict; on `ubuntu-latest` it read 64/67, and the
+		// three are dash/printf.tests (`printf 'a\eZ'` writes the escape),
+		// dash/builtins.tests (`privileged` in the `set -o` listing) and
+		// dash/variables.tests (`LINENO` present upstream, absent in
+		// Debian's). Three files, three patch points, every one of them the
+		// distribution rather than us — so restating this column against a
+		// build that exists, which is the other half of the question #3480
+		// put, would grade cmd/dash against a shell answering three of its own
+		// cases differently from the one they were written beside.
 		//
-		// So restating the column against a build that exists would grade
-		// `cmd/dash` against a shell answering three of its own cases
-		// differently from the one the cases were written beside. Ungated is
-		// the honest state, and its 25 cells stay **open**.
-		Ungated: "no public image is an unpatched dash: measured 2026-09-19, " +
-			"debian:bookworm-slim, debian:trixie-slim, ubuntu:24.04 and " +
-			"ubuntu:22.04 all answer esc=3 where this column is graded against " +
-			"esc=4, and Alpine ships no dash. The patch is not cosmetic — it is " +
-			"the whole of this column's gap on a runner: 67/67 strict on the " +
-			"panel build here against 64/67 there, the three being `printf " +
-			"'a\\eZ'`, `privileged` in the `set -o` listing, and `LINENO`. " +
-			"Restating the column against a patched build would grade cmd/dash " +
-			"against a shell that answers three of its own cases differently " +
-			"(#3480)",
+		// **So the build is made rather than found.** images/dash-0.5.12
+		// compiles upstream's tarball — pinned by content, since the
+		// distribution mirror's orig archive and upstream's own host serve the
+		// same 241KB byte for byte — over a digest-pinned base, and puts it at
+		// /bin/dash over the distribution's own so the image holds one dash and
+		// a lookup cannot pick the wrong one. It runs AgainstProbe above
+		// verbatim at build time, so an image that is not this reference fails
+		// to build. #3480.
+		//
+		// CrossHere for the reason the bash column carries it: the cross-check
+		// asks whether the references on one machine agree with each other,
+		// which is not a question a pin answers. See [Suite.CrossHere].
+		Image:     "ghcr.io/blairham/sh/dash",
+		Digest:    "sha256:9285b2b39165beeadc16f13b1223b9766febda492eafe7c9908b54d07c7a6d4c",
+		CrossHere: true,
 	},
 	{
 		// The column that was a row until now. There is no BusyBox on a

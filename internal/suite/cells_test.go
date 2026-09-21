@@ -174,8 +174,12 @@ func TestTheLedgerIsCheckedAgainstTheColumns(t *testing.T) {
 	}
 
 	// An entry with no evidence is a forgiveness, which is not what a ledger
-	// is for.
-	if s := staleWith(t, roll.Cells, suite.Unclosable{Column: "zsh"}); !strings.Contains(s, "without the measurement") {
+	// is for. It has to name a column that is **not** gated, since the check
+	// above this one fires first and would answer for it: zsh stood here
+	// until #3480 pinned it, and the mutation then proved the gated rule
+	// twice and the evidence rule not at all. ksh93 is the column that stays
+	// ungated for good, which is what makes it the right one to mutate.
+	if s := staleWith(t, roll.Cells, suite.Unclosable{Column: "ksh93"}); !strings.Contains(s, "without the measurement") {
 		t.Errorf("a ledger entry carrying no measurement is not reported stale: %q", s)
 	}
 

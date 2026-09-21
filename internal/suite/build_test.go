@@ -268,3 +268,39 @@ func TestTheDashOnThisMachineAnswersTheFingerprint(t *testing.T) {
 		t.Fatalf("%s answered %q, which is not this probe's shape at all", path, got.Version)
 	}
 }
+
+// A reference that answers no version probe can only be confirmed by its
+// column's own fingerprint, so the confirmation has to be taken from
+// [Suite.Identify] and never from [Version].
+//
+// Both halves are asserted, because either alone proves nothing: Version's
+// answer has to fail the check and Identify's has to clear it. The first half
+// was live rather than hypothetical. `internal/cmd/suiteinside` called Version
+// for as long as ash was the only contained column — and ash answers a version
+// probe, so nothing in the tree could see the difference. Gating a column that
+// answers none would have refused it at the door, before a file was run, with
+// "it answers no version probe" against a shell that had just identified
+// itself by measurement (#3480).
+func TestAReferenceIdentifiedOnlyByMeasurementIsBelievable(t *testing.T) {
+	s, ok := FindOurs("dash")
+	if !ok {
+		t.Fatal("there is no native dash column")
+	}
+	if s.MustReport == "" {
+		t.Fatal("the column names nothing its reference must report, so this proves nothing")
+	}
+	unpatched := fingerprintShell(t, s.AgainstReport)
+	if err := s.Believable(Version(context.Background(), unpatched)); err == nil {
+		t.Error("a reference identified only by measurement was believed from a version probe alone")
+	}
+	if err := s.Believable(s.Identify(context.Background(), unpatched)); err != nil {
+		t.Errorf("the fingerprint this column identifies by does not clear its own MustReport: %v", err)
+	}
+
+	// And the check still refuses the wrong build, which is the half that
+	// makes the one above a check rather than a formality.
+	patched := fingerprintShell(t, "esc=3 pipefail-listed=y")
+	if err := s.Believable(s.Identify(context.Background(), patched)); err == nil {
+		t.Error("a reference answering a different fingerprint was believed")
+	}
+}

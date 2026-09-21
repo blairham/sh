@@ -136,6 +136,24 @@ func TestASubscriptedOperandHoldingACompoundIsDeprecated(t *testing.T) {
 			`declare a[1]=" (v) "; declare -p a`,
 			`declare -a a=([1]=" (v) ")`,
 		},
+		{
+			// And the letter on the same line takes the subscript out of
+			// the operand altogether: the value is re-read into the base
+			// name, replacing what stood there, and nothing is said. #4105.
+			"the array letter drops the subscript",
+			`declare -a a=(z); declare -a a[1]="(v w)"; declare -p a`,
+			`declare -a a=([0]="v" [1]="w")`,
+		},
+		{
+			"the append spelling is dropped with it",
+			`declare -a a[1]+="(v)"; declare -p a`,
+			`declare -a a=([0]="v")`,
+		},
+		{
+			"but an ordinary value keeps its subscript",
+			`declare -a a[1]=plain; declare -p a`,
+			`declare -a a=([1]="plain")`,
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := answersRun(t, c.src)

@@ -67,3 +67,57 @@ func TestADialectWithNoWordingSaysNothingAboutASubscriptedCompound(t *testing.T)
 		t.Errorf("a dialect with no wording said something:\n%s", out)
 	}
 }
+
+// The array letter written on the same line takes the subscript out of the
+// operand: the value is re-read into the base name, and neither the
+// subscript nor the append spelling decides anything. See
+// Runner.letterDropsTheSubscript for the panel.
+func TestAnArrayLetterDropsASubscriptedCompound(t *testing.T) {
+	// Read back through the elements rather than through a listing, which is
+	// a question of its own with axes of its own.
+	const read = `; echo "[${a[0]-}] [${a[1]-}] [${a[2]-}] n=${#a[@]}"`
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		{"the value lands from the base", `typeset -a a[1]="(v)"`, `[v] [] [] n=1`},
+		{"as a whole literal", `typeset -a a[1]="(v w)"`, `[v] [w] [] n=2`},
+		{"whatever the subscript was", `typeset -a a[2]="(v)"`, `[v] [] [] n=1`},
+		{"replacing what stood there", `typeset -a a=(z); typeset -a a[1]="(v)"`, `[v] [] [] n=1`},
+		{"the append spelling too", `typeset -a a[1]+="(v)"`, `[v] [] [] n=1`},
+		// The controls: an ordinary value keeps its subscript, and so does a
+		// parenthesized one with no letter on the line.
+		{"an ordinary value keeps it", `typeset -a a[1]=plain`, `[] [plain] [] n=1`},
+		{"and so does one with no letter", `typeset a[1]="(v)"`, `[] [(v)] [] n=1`},
+		{"the shape test still applies", `typeset -a a[1]=" (v) "`, `[] [ (v) ] [] n=1`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src+read, func(r *Runner) {
+				s := declareElementSemantics()
+				s.DeclarationTakesASubscriptedAppendOperand = Yes
+				s.DeclarationRereadsAParenthesizedValue = Yes
+				s.ScalarOverACompoundIsAnInconsistentType = No
+				r.Semantics = &s
+				r.Diagnostics = &Diagnostics{}
+			})
+			if got := strings.TrimSpace(out); got != c.want {
+				t.Errorf("output %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// And nothing is dropped in a dialect that does not re-read a parenthesized
+// value at all: there is nothing for the letter to drop the subscript *for*,
+// so the characters go where the subscript says.
+func TestADialectThatDoesNotRereadKeepsTheSubscript(t *testing.T) {
+	out, _ := run(t, `typeset -a a[1]="(v)"; echo "[${a[0]-}] [${a[1]-}]"`, func(r *Runner) {
+		s := declareElementSemantics()
+		s.DeclarationRereadsAParenthesizedValue = No
+		s.ScalarOverACompoundIsAnInconsistentType = No
+		r.Semantics = &s
+		r.Diagnostics = &Diagnostics{}
+	})
+	if want := `[] [(v)]`; strings.TrimSpace(out) != want {
+		t.Errorf("output %q, want %q", strings.TrimSpace(out), want)
+	}
+}

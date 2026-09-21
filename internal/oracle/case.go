@@ -12702,6 +12702,16 @@ echo "st=$?"`,
 		Why:     "a subscript is the one condition the re-read of a quoted `( … )` value excludes — the characters are stored at 1 in every column that reaches the question — and one column **says so** on the way past, at status 0. So the row is about a sentence rather than a value: the store is unanimous among the shells that get there and only one of them writes a line about it",
 	},
 	{
+		ID: "decl/an-array-letter-beside-a-subscripted-compound", Category: "parameter expansion",
+		Snippet: `typeset -a a=(z); typeset -a a[1]="(v w)"; echo "[${a[0]-}] [${a[1]-}] n=${#a[@]}"`,
+		Why:     "the array letter written on the same line as a subscripted operand whose value is parenthesized. In the one column that re-reads such a value the subscript decides nothing — not where the value goes, not whether it appends, and not that it is a value at all: the text is read again as a literal and replaces what the name held. The row is written so the answer is elements rather than a listing, which is a question of its own",
+	},
+	{
+		ID: "decl/an-array-letter-over-an-ordinary-subscripted-value", Category: "parameter expansion",
+		Snippet: `typeset -a a[1]=plain; echo "[${a[0]-}] [${a[1]-}] n=${#a[@]}"`,
+		Why:     "the control for the row above: with the same letter and the same subscript but an ordinary value, the subscript is honored everywhere. So what the letter reaches is the parenthesized shape and not the subscript, which a shell dropping subscripts under the letter would fail here and pass there",
+	},
+	{
 		ID: "decl/a-parenthesized-value-under-a-subscript-of-an-array", Category: "parameter expansion",
 		Snippet: `typeset -a a; typeset a[1]="(var)"; typeset -p a 2>&1; echo "st=$?"`,
 		Why:     "the control for the row above, and what keeps it from being read as \"a subscript always earns the sentence\": with the name already an array the same line is silent in the column that writes one. Without this row a shell that wrote the warning unconditionally would pass the row above",

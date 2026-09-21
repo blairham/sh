@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -990,12 +991,56 @@ func (r *Runner) SetInteractiveMonitor() {
 		name = filepath.Base(name)
 	}
 	// The shell that names the process group it could not hand the terminal
-	// to says so first, above the line below. Its process group is read here
-	// the way `$$` reads its process id — see the `$` case in expand.go: a
-	// fact about this process, asked for at the moment it is printed, and
-	// wanted by nothing else.
-	r.errf("%s", r.diag().TerminalProcessGroupDiagnostic(name, syscall.Getpgrp()))
+	// to says so first, above the line below. Both facts about this process
+	// are read here the way `$$` reads its process id — see the `$` case in
+	// expand.go: asked for at the moment they are printed, and wanted by
+	// nothing else.
+	r.errf("%s", r.diag().TerminalProcessGroupDiagnostic(name,
+		terminalProcessGroup(os.Getpid(), syscall.Getpgrp())))
 	r.errf("%s", r.diag().JobControlDiagnostic(name))
+}
+
+// noProcessGroupToName is what the one shell that names a process group here
+// writes when there is none to name: the value of asking a thing that is not
+// a terminal which process group it is showing, which is the same failed
+// question the fixed errno half of the wording reports.
+const noProcessGroupToName = -1
+
+// terminalProcessGroup is the number that remark carries, and it is two
+// answers rather than one.
+//
+// It is only ever reached with no terminal anywhere — SetInteractiveMonitor
+// has already returned for every shell that has one — so what varies is not
+// the terminal but *this* shell's standing in its own session.
+//
+// Measured 2026-09-21 against bash 5.3.20 at /opt/homebrew/bin/bash, with no
+// controlling terminal and nothing but a pipe or a file on any stream. One
+// binary, one command string, one instant, and the single variable is whether
+// the shell was started into a process group of its own:
+//
+//	started into its own group (pid == pgid)   cannot set terminal process group (-1)
+//	started into the caller's group            cannot set terminal process group (78796)
+//
+// 78796 is the group, not the caller: a run with a wrapper between the group
+// leader and the shell — leader 84507, wrapper 84516, shell in 84507 — writes
+// 84507. Three repeats of the pair, alternating, gave the same two answers
+// every time, so neither branch is a race.
+//
+// This shell wrote its own process group on both branches, which is right on
+// the second and wrong on the first, and #4012 is where that was found. The
+// first branch is the one a `-ic` gets from a caller that puts its children
+// in groups of their own; the second is the one every inner `$THIS_SH -i` of
+// a suite file gets, because the harness gives the *file's* shell the new
+// group and the inner shells inherit it.
+//
+// A pure function of the two numbers so that both branches are tested
+// without a test having to arrange its own process group, which a test
+// binary cannot do to itself.
+func terminalProcessGroup(pid, pgid int) int {
+	if pid == pgid {
+		return noProcessGroupToName
+	}
+	return pgid
 }
 
 // SetInteractiveJobNotices gives this shell somebody to tell about its jobs

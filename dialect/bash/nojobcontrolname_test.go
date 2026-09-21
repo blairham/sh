@@ -5,9 +5,8 @@ package bash_test
 
 import (
 	"bytes"
-	"strconv"
+	"regexp"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -59,10 +58,15 @@ func TestTheJobControlRemarksNameTheBaseNameOfThePath(t *testing.T) {
 			if len(lines) != 2 {
 				t.Fatalf("wrote %q, want two lines", errs.String())
 			}
-			want := c.want + ": cannot set terminal process group (" +
-				strconv.Itoa(syscall.Getpgrp()) + "): Inappropriate ioctl for device"
-			if lines[0] != want {
-				t.Errorf("the first line was %q, want %q", lines[0], want)
+			// The name is what this test is about, so the number is
+			// matched by shape. It is two answers rather than one — the
+			// group the shell is in, or -1 where it already leads that
+			// group — and both are measured and asserted where the rule
+			// lives, in interp's terminalProcessGroup.
+			want := regexp.MustCompile(`^` + regexp.QuoteMeta(c.want) +
+				`: cannot set terminal process group \(-?\d+\): Inappropriate ioctl for device$`)
+			if !want.MatchString(lines[0]) {
+				t.Errorf("the first line was %q, want %v", lines[0], want)
 			}
 			// Both lines, because they are two fields and only one of them
 			// would be noticed by eye: a run naming the path on the second

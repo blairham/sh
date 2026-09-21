@@ -6088,6 +6088,10 @@ type Diagnostics struct {
 	// the harness began masking it: `process group (N)`, masked rather than
 	// dropped, because *that it named one* is part of the complaint.
 	//
+	// Which number goes in it is the caller's — see terminalProcessGroup,
+	// which measures the two answers bash gives: the group it is in, and -1
+	// where it already leads that group.
+	//
 	// Empty says nothing, which is five of the six columns and the base's
 	// answer.
 	CannotSetTerminalProcessGroup string

@@ -103,6 +103,13 @@ type Result struct {
 	// genuinely ours to get right is inside it too. It corrects neither of
 	// the other figures and nothing subtracts it.
 	Reordered int
+	// ProcessGroups is how many of the differing lines are the two shells
+	// naming their own process groups — see pid.go. A shell told to be
+	// interactive with no terminal reports the group it could not hand the
+	// terminal to, by number, and the two runs are two processes, so the
+	// numbers differ however right both shells are. A floor, and like
+	// Reordered it corrects nothing and nothing subtracts it.
+	ProcessGroups int
 }
 
 // Cause is one reason our parser refused a file, and how many files it
@@ -199,6 +206,12 @@ type Report struct {
 	// an upper bound on the floor an associative array's hash order puts
 	// under this column, and it corrects nothing.
 	Reordered int64
+	// ProcessGroups is the sum of [Result.ProcessGroups]: how many of this
+	// column's differing lines are a shell naming its own process group
+	// because it was told to be interactive with no terminal. See pid.go —
+	// it is the floor two different processes put under this column, and it
+	// corrects nothing.
+	ProcessGroups int64
 
 	OracleHung    int
 	DialectHung   int
@@ -445,6 +458,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			}
 			rep.Prose += int64(res.Prose)
 			rep.Reordered += int64(res.Reordered)
+			rep.ProcessGroups += int64(res.ProcessGroups)
 			for phrase, n := range res.Excuses {
 				excused[phrase] += n
 			}
@@ -605,6 +619,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	res.Common, res.Longest, res.LineCapped = agreement(ourLines, refLines)
 	res.Prose = min(doc.Attribute(ourLines, refLines), res.Longest-res.Common)
 	res.Reordered = reordered(ourLines, refLines, res.Longest-res.Common)
+	res.ProcessGroups = processGroups(ourLines, refLines, res.Longest-res.Common)
 	res.Excuses = excuses(ourLines, refLines)
 	return res, ""
 }

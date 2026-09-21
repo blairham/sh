@@ -1337,8 +1337,8 @@ that have nothing to do with us.** Without `recho`, `zecho` and `printenv` the
 calls fail under both shells and the two failures match, so the run reads as
 *agreement on an error message*. They are compiled, never read.
 
-**Two floors sit under the differing-line count, and they are bounds in
-opposite directions.** The first is the reference quoting its **own
+**Three floors sit under the differing-line count, and the first two are
+bounds in opposite directions.** The first is the reference quoting its **own
 documentation** — help text, a usage block, a version, a license — which
 matching would mean copying, so it is counted by asking the shell for its help
 and testing membership. That one is a *lower* bound. The second is an
@@ -1347,8 +1347,28 @@ reference lists its keys in its own hash table's order, which is in nothing but
 the source `CLEANROOM.md`'s red list covers (#3304). That one is an *upper*
 bound, because it is computed by canonicalising each side independently and a
 per-side canonicalisation cannot tell an order nobody was asked for from an
-order that is ours to get right. **Neither figure is subtracted from anything**
-— the raw count stays what the two runs did.
+order that is ours to get right.
+
+The third is an **identity**, and it is the only one of the three that is
+neither bound nor closable. A shell told to be interactive with no terminal
+names the process group it could not hand the terminal to, by number; the
+harness gives each suite file's shell a group of its own and every inner
+`$THIS_SH -i` inherits it, so both shells name their own group, both are
+right, and the two numbers differ because they are two processes (#4012).
+Seven lines of `history.tests`, counted on every run rather than estimated.
+It is the figure and not a bound, because it is anchored on the role — only a
+line where both runs wrote that remark in the same place can be reached.
+
+**None of the three is subtracted from anything** — the raw count stays what
+the two runs did.
+
+The route mattered, and measuring it is what turned the third one from a
+suspected parity bug into a floor. bash writes **two** numbers there: the
+group it is in, and `-1` where it already leads its own group. The `-1` was a
+real disagreement and it is fixed; it is also on the route a shell started
+into a group of its own takes, which is not the route the suite's inner shells
+are on, so closing it removed a parity bug and did not remove one of the seven
+lines. `docs/spec/invocation.md` has the measurement.
 
 The same canonicalisation *is* applied where it is sound: to the reference
 against its **own second run**. One shell disagreeing with itself about the

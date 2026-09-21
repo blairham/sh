@@ -775,10 +775,50 @@ process group and empty in five of the six columns, written above
 writes the second alone, and two write neither, so a dialect has to be able to
 answer them apart.
 
-The number this shell writes is its own process group. Measured, bash writes
-the group it is in when it is not that group's leader, and `-1` when it
-already is one; the leader case is not what the corpus records and not what a
-caller of `-ic` produces, and it is left unmodelled rather than guessed at.
+#### Which number goes in the parentheses, which is two answers
+
+It was recorded here once as one: *"the number this shell writes is its own
+process group"*, with the leader case noted as unmodelled on the grounds that
+it is "not what a caller of `-ic` produces". The second half of that is wrong
+— a `-ic` produces it whenever the caller starts the shell in a process group
+of its own — and the first is only half of what bash does.
+
+Measured 2026-09-21 against bash 5.3.20 at `/opt/homebrew/bin/bash`, with no
+controlling terminal and nothing but a pipe or a file on any of the three
+streams. One harness, one binary, one command string, one instant, and the
+single variable is whether the child was put into a process group of its own:
+
+| how the shell was started | what it writes |
+| --- | --- |
+| into a process group of its own (`pid == pgid`) | `cannot set terminal process group (-1)` |
+| into the group its caller was in | `cannot set terminal process group (78796)` |
+
+78796 is the **group** and not the caller: a run with a wrapper process
+between the group leader and the shell — leader 84507, wrapper 84516, shell in
+84507 — writes 84507. Three alternating repeats of the pair gave the same two
+answers every time, so neither branch is a race, and a shell that *has* a
+controlling terminal writes neither line: it gets the monitor and says
+nothing.
+
+So this shell answers both, in `interp`'s `terminalProcessGroup`: the group it
+is in, and `-1` where it already leads that group. `-1` is what asking a thing
+that is not a terminal which group it is showing returns, which is the same
+failed question the fixed errno half of the wording reports — the number and
+the errno are two halves of one answer, and the argument for the errno being
+fixed text is the argument for this.
+
+**Both spellings mask alike.** `normalize` rewrites `process group (-?\d+)` to
+`process group (N)`, so a case records the same cell whichever way the runner
+happened to start it; a mask over the digits alone would make the record move
+with how it was collected, which cannot be told from a shell that changed.
+
+**And the suite's inner shells are on the second branch, which is where the
+floor comes from.** `make bash-suite` gives each suite file's shell a process
+group of its own so the run can be ended as a group, and every inner
+`$THIS_SH -i` a file starts inherits that group rather than leading one. Both
+shells therefore name their own group, both are right, and the two numbers
+still differ, because they are two processes. That is seven lines of one file
+that no change here can close — see `internal/suite/pid.go` and #4012.
 
 #### What the corpus says about this
 

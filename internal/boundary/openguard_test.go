@@ -280,6 +280,20 @@ var exempt = map[string]string{
 	"dialect/zsh.mapfileNames": "the listing behind `${(k)mapfile}`, after AllowList on the " +
 		"shell's own directory. It is the route with no path in it to hang a check on, which is " +
 		"why the roster has a sandboxcheck row of its own.",
+	// dialect/zsh. etcdir.go is not a builtin at all, which is why its
+	// reason is the first one on the list above rather than the second.
+	"dialect/zsh.SystemStartupDirectory": "the one stat that says whether this machine keeps " +
+		"zsh's system-wide startup files in `/etc` or in `/etc/zsh`, which is a build-time " +
+		"choice of zsh's and so differs between macOS and Debian (#3987). It is read by this " +
+		"guard because it lives in a dialect package, and it is outside the boundary for two " +
+		"reasons that each stand alone. The path is `/etc/zsh` and nothing else: the front " +
+		"end hands it the fixed `/etc` the binary names, and no script, variable or operand " +
+		"reaches it. And it runs while `driver.Shell` is being built, before there is a " +
+		"runner, a policy or a line to run — so there is nothing a refusal could protect, " +
+		"which is the argument driver.holdLowDescriptors already makes. The startup files " +
+		"this names the directory of are opened by driver through the gate, exactly as they " +
+		"were when the directory was a constant.",
+
 	// dialect/bash. history.go is the whole of the `history` builtin's gate.
 	// bash keeps a history list and writes a history file with no terminal
 	// anywhere, so `-w`, `-a`, `-r` and `-n` are four letters that reach a

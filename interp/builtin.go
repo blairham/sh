@@ -2764,6 +2764,40 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		if !subscripted {
 			base = name
 		}
+		// A reference aimed at a **name**, with the brackets on the operand:
+		// `a=(x y); declare -n r=a; unset "r[0]"`. The rewrite above is the
+		// other way round — the reference itself carries the subscript — and
+		// cannot see this one, because `r[0]` is not a name the reference
+		// table holds. So the base is followed here, after the operand has
+		// been taken apart and before anything reads either half.
+		//
+		// Measured 2026-09-21, bash 5.3.20, where every one of these is the
+		// answer `a` would have given to the operand written with its own
+		// name, and none of them was the answer here:
+		//
+		//	a=(x y); unset "r[0]"              the element goes, `a` stays
+		//	a=(x y); readonly a; unset "r[0]"  `unset: a: …: readonly`, at 1
+		//	a=(x y z); unset "r[@]"            every element goes
+		//	declare -A m=([k]=v [j]=w); unset "r[k]"   the key goes
+		//
+		// The first is the one that mattered: an index of 0 over a name
+		// holding no array is a whole parameter's removal, so the removal
+		// landed on the *reference*, followed it, and took the entire array
+		// away where bash took one element (#4071).
+		//
+		// **Only a target that is a plain name.** A reference aimed at an
+		// element and then subscripted again — `declare -n r=a[1]; unset
+		// "r[0]"` — is silent at 0 in bash with the array untouched, which
+		// is what leaving the base as written already does here.
+		//
+		// The base alone, never the operand's text: what a diagnostic quotes
+		// is the name the *removal* lands on, which is why the freeze below
+		// reads `base` and says `a`.
+		if subscripted {
+			if aimed, is := r.namerefTarget(base); is && isNameLike(aimed) {
+				base = aimed
+			}
+		}
 		// What the subscript *is* decides which element the arithmetic, the
 		// flag group and the emptiness refusal below are about: a text a
 		// second round turns into `x y` names that key from here on. The

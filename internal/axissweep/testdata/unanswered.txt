@@ -146,6 +146,7 @@ ash   ListedBangIsOrdinary
 ash   ListedCaretIsOrdinary
 ash   ListedEqualsIsOrdinary
 ash   ListedNonAsciiIsOrdinary
+ash   LocalListingIsTheRunningCallsOwn
 ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
@@ -422,6 +423,7 @@ dash  ListedBangIsOrdinary
 dash  ListedCaretIsOrdinary
 dash  ListedEqualsIsOrdinary
 dash  ListedNonAsciiIsOrdinary
+dash  LocalListingIsTheRunningCallsOwn
 dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
@@ -543,6 +545,7 @@ ksh   BareSubscriptIsASubscript
 ksh   BuiltinReadsOptions
 ksh   CompoundPipelineStatusRecord
 ksh   CoprocEndsInAnArray
+ksh   DeclarationMayShadowAnEnclosingScopesReadonly
 ksh   DeclareGlobalReachesPastALocal
 ksh   EchoLastEscapeFlagWins
 ksh   EmptySubscriptToAnAssignment
@@ -550,6 +553,7 @@ ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin
 ksh   JobsStateFiltersAccumulate
 ksh   LocalDashSavesTheShellOptions
+ksh   LocalListingIsTheRunningCallsOwn
 ksh   LocalOutsideAFunctionIsFatal
 ksh   LocalThroughCommandDeclaresNothing
 ksh   LongOptionNameIgnoresHyphens
@@ -569,6 +573,7 @@ ksh   UnsetEndsTheProducedPipelineStatus
 
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
+zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ExpansionResultSuppliesGroupSyntax
@@ -615,4 +620,3 @@ zsh   TrapPrintsWithP
 zsh   TrapSingleUnknownConditionIsUsage
 zsh   UmaskPermissionCopyBesideLetters
 zsh   UnsetReferenceLetterRemovesANonReference
-zsh   ValuelessDeclarationRecordsTheName

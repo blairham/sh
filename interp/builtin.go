@@ -3060,6 +3060,12 @@ func (r *Runner) unsetName(name string) int {
 		r.unsetOneName(other)
 	}
 	r.unsetOneName(name)
+	// And a local of the scope that is *running* is left declared where the
+	// column says so — the value and the letters go, the shadow stays, and
+	// the name is still a row in a listing. After the removal, because the
+	// removal is what clears the record. See
+	// interp/unsetenclosinglocal.go.
+	r.unsetLeavesARunningScopesLocalDeclared(name)
 	// And the message that the name has gone, for a dialect keeping state
 	// beside it that the name's removal is about. After the removal, so that
 	// an action reading the name back sees it gone, and for a name nothing
@@ -6160,7 +6166,12 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// Bare `local` is a listing, and the shells do not agree what of —
 		// see BareLocalListingForm. `local -p` is the same listing spelled
 		// as a letter, except when operands narrow it to named declarations.
+		//
+		// Narrowed to the running call's own names in the dialect that reads
+		// the word that way — the *listing* is `declare -p`'s, and which
+		// names are in it is this word's. See Runner.localListingSkipsAName.
 		if len(args) > 0 {
+			defer r.localListingIsTheRunningCallsOwn()()
 			return r.declarePrint(args)
 		}
 		return r.bareLocalListing()

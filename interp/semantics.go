@@ -8359,6 +8359,56 @@ type Semantics struct {
 	// frozen, so nothing else reaches the question.
 	DeclarationMayShadowAReadonly Answer
 
+	// DeclarationMayShadowAnEnclosingScopesReadonly asks the same question
+	// of a narrower case, and it is the case the field above cannot see:
+	// the freeze is not the shell's, it is a *calling* function's, held by a
+	// binding a declaration of its own put there.
+	//
+	//	inner() { local x=I; echo "inner=[$x]"; }
+	//	outer() { local -r x=O; inner; echo "outer=[$x]"; }
+	//	outer
+	//
+	// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
+	// scratch HOME, from a script file, each shell asked in the words it
+	// has — `readonly` where there is no `-r` on the declaration, and a
+	// keyword-defined function for ksh93:
+	//
+	//	bash 5.3.20   inner=[I]   and outer=[O] afterwards
+	//	bash 3.2.57   inner=[I]
+	//	zsh 5.9.2     inner=[I]
+	//	ksh93u+       inner=[I]
+	//	dash          `local: x: is read only`, and the script ends
+	//	BusyBox ash   the same, and the script ends
+	//
+	// Asked only where DeclarationMayShadowAReadonly already said **no**, so
+	// zsh and ksh93 — which take every shadow — never arrive: what is left
+	// is bash against dash and ash, which is the split this field is.
+	//
+	// Two controls say the question is about *whose* binding is frozen and
+	// not about depth, both bash 5.3.20:
+	//
+	//   - the running scope's own freeze is still a refusal. `a() { local -r
+	//     x=1; local x=2; }` is `local: x: readonly variable` — the second
+	//     declaration is writing the cell the first one froze, so there is
+	//     no enclosing binding for it to stand in front of.
+	//   - a freeze at the top level is still a refusal at every depth.
+	//     `readonly g=G; p1(){ local g=L1; }; p2(){ local g=L2; p1; }; p2`
+	//     refuses in both, because the first refusal made no shadow for the
+	//     second to be enclosed by.
+	//
+	// And it is a **declaration**. A plain assignment to the same name under
+	// the same frozen enclosing local — `inner() { x=Q; }` — is `x:
+	// readonly variable` in bash as well, and fatal; that is
+	// ReadonlyReassignmentFatal and is not this.
+	//
+	// unpinned bash: no row of the corpus declares a name a calling function
+	// froze, so nothing objects when the answer moves.
+	// TestADeclarationMayShadowACallersFrozenLocal is what pins it.
+	// unpinned dash: the same row is missing on the other side of the axis —
+	// TestADeclarationIsRefusedOverACallersFrozenLocal pins it.
+	// unpinned ash: the same, and through the same pair of tests.
+	DeclarationMayShadowAnEnclosingScopesReadonly Answer
+
 	// ReadonlyAttributeCanBeRemoved lets a plus form take the readonly
 	// attribute off a name — `typeset +r x` — leaving it writable again.
 	//
@@ -11771,6 +11821,54 @@ type Semantics struct {
 	// shapes from the three shells that can reach it, so it is a form
 	// rather than a flag. See BareLocalListingForm.
 	BareLocalListing BareLocalListingForm
+
+	// LocalListingIsTheRunningCallsOwn is whose names `local -p name` can
+	// write: the ones the **running call** declared, or every name the call
+	// can see.
+	//
+	// The listing itself is the declaration builtin's, identically — the row
+	// for a name the call did own is `declare -p`'s row, letter for letter —
+	// so what this decides is the *set*, and it is asked only of a name the
+	// running call did not declare. A `local -p` over the call's own locals
+	// never reaches it.
+	//
+	// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
+	// scratch HOME, from a script file:
+	//
+	//	string=global
+	//	f() { local -p string; echo "st=$?"; local y=Y; local -p y; }
+	//	f
+	//
+	//	bash 5.3.20   `local: string: not found` at 1, then `declare -- y="Y"`
+	//	zsh 5.9.2     `typeset -g string=global` at 0, then `typeset y=Y`
+	//	bash 3.2.57   nothing at all, at 0, for either name — the letter is
+	//	              not read there, so this is a fact about the version and
+	//	              the preset models 5.3, which is the bash column
+	//	ksh93u+       no `local` builtin at all
+	//	dash, ash     `local` takes no option letters, so `-p` is a name and
+	//	              is refused as the bad one it is
+	//
+	// zsh's row is the discriminator rather than the status: it writes the
+	// global *and marks it* `-g`, so the name is not being mistaken for a
+	// local — the word simply lists whatever the name reaches.
+	//
+	// Both halves of bash's answer are this one axis and not two. The name
+	// is absent from the set, so the sentence and the status are the ones
+	// `declare -p nosuchthing` already writes through
+	// DeclarePrintReportsAMissingName, with this builtin's own word in
+	// front of them.
+	//
+	// The two dialects with the form are the two that answer it; ksh93 has
+	// no `local` builtin at all and dash and BusyBox ash give theirs no
+	// option letters, so each of those three carries an `unanswered` note of
+	// its own rather than a value.
+	//
+	// unpinned bash: no row of the corpus writes `local -p` over a name the
+	// running call did not declare, so nothing objects when the answer
+	// moves. TestLocalPrintNamesOnlyTheRunningCallsLocals is what pins it.
+	// unpinned zsh: the same row is missing on the other side of the axis —
+	// TestLocalPrintListsANameThisCallDidNotDeclare pins it.
+	LocalListingIsTheRunningCallsOwn Answer
 
 	// BareTypesetListing is what `typeset` or `declare` with no operands
 	// and no letters writes.

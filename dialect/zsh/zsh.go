@@ -1464,6 +1464,10 @@ func Semantics() interp.Semantics {
 	// 1 is back — and frozen again — when it returns. bash refuses every
 	// spelling of it.
 	s.DeclarationMayShadowAReadonly = interp.Yes
+	// unanswered DeclarationMayShadowAnEnclosingScopesReadonly: that
+	// narrower question is asked only where the one above said no, and this
+	// shell takes every shadow — a caller's frozen local included, measured
+	// 2026-09-21 — so there is no route by which it is put here.
 	// And this is the one shell in the panel where `typeset +r` takes the
 	// attribute back off: `typeset -r s=1; typeset +r s; s=9` leaves 9
 	// there, silently and with status 0. `declare +r` is the same word. A
@@ -1512,12 +1516,18 @@ func Semantics() interp.Semantics {
 	// `${!prefix@}` in this shell at all — `typeset -A q1; echo "${!q@}"` is
 	// `bad substitution` — so no listing of that shape ever reaches the axis
 	// to be asked. Measured 2026-09-16 on zsh 5.9.2.
-	// unanswered ValuelessDeclarationRecordsTheName: that answer is yes, so
-	// a declaration without a value leaves the name holding the empty string
-	// and `typeset xyz; typeset -p xyz` writes `typeset xyz=''`. The axis
-	// asks what is recorded where the name is left *unset*, which is a state
-	// this shell's valueless declaration never produces, so it is never
-	// asked here (#2999).
+	// A declaration without a value leaves the name holding the empty string
+	// here, so `typeset xyz; typeset -p xyz` writes `typeset xyz=''` and the
+	// record below is not what that shape reaches (#2999). It is reached
+	// from the other side: `unset` of a local the running call declared
+	// leaves the name unset with the shadow still standing, which is the
+	// same state, and this shell writes **nothing** for it. Measured
+	// 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME,
+	// `v=global; f() { local v; unset v; typeset -p v; }; f` — no output, at
+	// 0, with `${v-UNSET}` firing its default. bash writes `declare -- v`
+	// there. Answered rather than left unanswered because that route is a
+	// spelling this shell has.
+	s.ValuelessDeclarationRecordsTheName = interp.No
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still
 	// does, and a name this scope has already made local stays local.
@@ -3764,6 +3774,10 @@ func Semantics() interp.Semantics {
 	// returns.
 	s.LocalDashSavesTheShellOptions = interp.No
 	s.BareLocalListing = interp.BareLocalListsEveryParameter
+	// And `local -p name` lists whatever the name reaches, marking a global
+	// as one: measured 2026-09-21, `string=global; f() { local -p string; }`
+	// writes `typeset -g string=global` at 0 here where bash refuses it.
+	s.LocalListingIsTheRunningCallsOwn = interp.No
 	// The same table for the other word, which is what zsh writes for it.
 	s.BareTypesetListing = interp.BareLocalListsEveryParameter
 	// The listing is `name=value` in the same shape dash and ksh93 write,

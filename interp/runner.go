@@ -946,6 +946,12 @@ type Runner struct {
 	// interp/prefixlisting.go. Not cloned, for the reason above it: it is
 	// live only inside one listing.
 	listingWalksTheWholeTable bool
+	// listingIsALocalsOwn is set while the listing the `local` word asked
+	// for is building its rows, which is the one shape that answers
+	// differently about a name the running call did not declare — see
+	// interp/localbuiltin.go. Not cloned, for the reason above it: it is
+	// live only inside one listing.
+	listingIsALocalsOwn bool
 
 	// producedReading is the value a produced parameter last gave a *script*,
 	// kept for the one listing form that writes the reading rather than

@@ -366,3 +366,71 @@ echo "top=[${w-UNSET}]"`
 		}
 	}
 }
+
+// records is the answer that keeps a name a declaration brought into being
+// with no value — Semantics.ValuelessDeclarationRecordsTheName, which is
+// what `unset` of a running scope's own local leaves behind as well.
+func records(yes Answer) func(*Semantics) {
+	return func(s *Semantics) {
+		s.ValuelessDeclarationRecordsTheName = yes
+		// The letters `local` reads, so a suite about what survives an
+		// `unset` can write a declaration that carries one, and the
+		// sentence a listing gives a name that is not there, which is the
+		// control below rather than this suite's subject.
+		s.LocalOptions = "agiprux"
+		s.DeclarePrintReportsAMissingName = Yes
+	}
+}
+
+// TestUnsetOfTheRunningScopesOwnLocalLeavesItDeclared is the half beside the
+// control above: the name is unset either way, and in the column that keeps
+// the record it is still a row in a listing.
+func TestUnsetOfTheRunningScopesOwnLocalLeavesItDeclared(t *testing.T) {
+	const src = `v=GLOBAL
+f() { local v=L; unset v; typeset -p v; echo "st=$?"; echo "f=[${v-UNSET}]"; }
+f
+typeset -p v`
+	out, errs, st := declRun(t, src, records(Yes), Diagnostics{})
+	want := "declare -- v\nst=0\nf=[UNSET]\ndeclare -- v=\"GLOBAL\"\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("a recorded local = %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+	out, _, _ = declRun(t, src, records(No), Diagnostics{})
+	if strings.Contains(out, "declare -- v\n") {
+		t.Errorf("an unrecorded local = %q, want no row for the name the unset took", out)
+	}
+}
+
+// The letters go with the value, which is what says the record is the bare
+// one rather than the declaration the scope started with.
+func TestUnsetOfALocalDropsItsLettersAndKeepsTheRecord(t *testing.T) {
+	for _, tc := range []struct{ name, decl string }{
+		{"the export letter", "local -x v"},
+		{"the integer letter", "local -i v"},
+		{"a value", "local v=zz"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "v=GLOBAL\nf() { " + tc.decl + "; unset v; typeset -p v; }\nf"
+			out, errs, st := declRun(t, src, records(Yes), Diagnostics{})
+			want := "declare -- v\n"
+			if out != want || st != 0 || errs != "" {
+				t.Errorf("%s = %q (stderr %q, status %d), want %q", tc.decl, out, errs, st, want)
+			}
+		})
+	}
+}
+
+// And a name no scope shadows keeps nothing: the removal clears the record
+// with the attributes, so this is about the binding rather than about
+// `unset`.
+func TestUnsetAtTheTopLevelLeavesNoRecord(t *testing.T) {
+	const src = `typeset v
+v=1
+unset v
+typeset -p v`
+	out, errs, st := declRun(t, src, records(Yes), Diagnostics{})
+	if out != "" || st == 0 || !strings.Contains(errs, "v: not found") {
+		t.Errorf("unset at the top level = %q (stderr %q, status %d), want the missing-name refusal",
+			out, errs, st)
+	}
+}

@@ -356,6 +356,12 @@ func Semantics() interp.Semantics {
 	// question looked out of reach — it was reached with the shell's own
 	// spelling of the freeze rather than with bash's.
 	s.DeclarationMayShadowAReadonly = interp.No
+	// And a freeze a *calling* function's own `local` earned is refused
+	// exactly as the shell's is, which is where bash parts company:
+	// measured 2026-09-21, `outer() { local x=O; readonly x; inner; }` with
+	// `inner() { local x=I; }` is `local: x: is read only` and the script
+	// ends, where bash takes the deeper declaration.
+	s.DeclarationMayShadowAnEnclosingScopesReadonly = interp.No
 	// ReadonlyAttributeCanBeRemoved stays unanswered: there is no `typeset`
 	// or `declare` here to write a plus form with, and `readonly +r x` is a
 	// bad variable name rather than an option — so nothing can ask it, and
@@ -1558,6 +1564,11 @@ func Semantics() interp.Semantics {
 	// f; echo $-` comes back without the letter.
 	s.LocalDashSavesTheShellOptions = interp.Yes
 	s.BareLocalListing = interp.BareLocalListsNothing
+	// unanswered LocalListingIsTheRunningCallsOwn: there are no option
+	// letters here, so `-p` is a name rather than a listing and the question
+	// of whose names such a listing writes is never put. Measured
+	// 2026-09-21: `f() { local -p x; }; f` is ``local: -p: bad variable
+	// name`` at 2, which is the name check answering and not a listing.
 	s.SetListing = interp.SetListingAssignments
 	s.SetListingQuoting = interp.ListingQuoteAlwaysDoubled
 	// A descriptor number the process cannot hold is not checked here: with

@@ -691,6 +691,24 @@ func (r *Runner) declarePrintFiltered(names []string, form DeclarationListingFor
 	}
 	for _, name := range names {
 		d, known := r.listedDeclarationOf(name, produced[name], listing)
+		if known && r.listingIsALocalsOwn {
+			// The `local` word's own listing, in the dialect where it answers
+			// for the running call rather than for the shell: a name this
+			// call did not declare is not there to be written, so it takes
+			// the missing-name route below rather than a second refusal of
+			// its own. See interp/localbuiltin.go.
+			//
+			// The refusal check is inside this branch rather than after it,
+			// because the ask only happens here: a listing no `local`
+			// asked for must not be ended by a flag some earlier line set.
+			skip := r.localListingSkipsAName(name)
+			if r.unspecified {
+				return r.status
+			}
+			if skip {
+				known = false
+			}
+		}
 		if known && filtered && !keep(d) && !keep(r.prefixCountsAsExportedInAFilteredListing(name, d)) {
 			continue
 		}

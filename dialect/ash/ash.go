@@ -724,6 +724,11 @@ func Semantics() interp.Semantics {
 	// `local` reads no options: `local -r x` declares a variable named `-r`
 	// and then refuses it as the bad name it is, so LocalOptions stays empty.
 	//
+	// unanswered LocalListingIsTheRunningCallsOwn: dash's reason exactly —
+	// with no option letters `-p` is a name and never becomes a listing, so
+	// whose names such a listing would write is not a question this shell
+	// can be asked.
+	//
 	// A valueless declaration leaves the name unset and hides the outer
 	// value: `x=outer; f(){ local x; echo "[$x]"; }; f` is `[]` here and
 	// `[outer]` in dash. That pairing is bash's, and it is the sharpest of
@@ -1875,6 +1880,12 @@ func Semantics() interp.Semantics {
 	// which is dash's and bash's answer rather than ksh93's and zsh's
 	// (#2272).
 	s.DeclarationMayShadowAReadonly = interp.No
+	// Nor one a *calling* function's own `local` earned, which is dash's
+	// answer again and not bash's: measured 2026-09-21 in the pinned Alpine
+	// image, `outer() { local x=O; readonly x; inner; }` with `inner() {
+	// local x=I; }` is `local: line 1: x: is read only` and the script
+	// ends.
+	s.DeclarationMayShadowAnEnclosingScopesReadonly = interp.No
 	// A valueless declaration of a name its own scope already holds lists
 	// nothing: `f() { local v=1; local v; }` is silent at 0, and the value
 	// stays — `local FOO=x; local FOO` still reads `x`. zsh is the column

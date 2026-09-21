@@ -4670,6 +4670,21 @@ func (r *Runner) declarationShadowRefused(name string) bool {
 	if r.unspecified {
 		return true
 	}
+	if _, enclosing := r.enclosingShadowOf(name); enclosing {
+		// The freeze is a *calling* function's, held by a binding that
+		// call's own declaration put there — which the check above cannot
+		// see, because it reads the attribute off the name. A second
+		// question, asked only here, and the column that refuses a frozen
+		// shadow at all still splits on it. See
+		// Semantics.DeclarationMayShadowAnEnclosingScopesReadonly.
+		if r.ask(r.sem().DeclarationMayShadowAnEnclosingScopesReadonly,
+			"a declaration shadowing a freeze a calling function's own declaration holds") {
+			return false
+		}
+		if r.unspecified {
+			return true
+		}
+	}
 	return r.refuseReadonly(name, assignedByDeclaration)
 }
 

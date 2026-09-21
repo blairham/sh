@@ -1272,6 +1272,10 @@ func Semantics() interp.Semantics {
 	// it made a keyword function refuse a declaration this shell takes
 	// (#1177).
 	s.DeclarationMayShadowAReadonly = interp.Yes
+	// unanswered DeclarationMayShadowAnEnclosingScopesReadonly: zsh's reason
+	// exactly — the narrower question is behind a `no` to the one above, and
+	// this shell takes every shadow. Measured 2026-09-21 with a keyword
+	// function, which is the spelling that declares a local here.
 	// And the keyword is what carries `$0` too. Measured 2026-09-15 from a
 	// script, and each line is a separate claim:
 	//
@@ -3181,6 +3185,11 @@ func Semantics() interp.Semantics {
 
 	// The letters `typeset` reads here. `-g` it simply does not have, and
 	// there is no `local` (see Register), so LocalOptions stays empty.
+	//
+	// unanswered LocalListingIsTheRunningCallsOwn: whose names `local -p`
+	// writes is a question about a builtin this shell has not got, so there
+	// is no spelling of it to put here either. Measured 2026-09-21: `local
+	// -p x` inside a function is `local: not found`.
 	//
 	// unanswered LocalDashSavesTheShellOptions: `local -` is an operand of a
 	// builtin this shell does not have, so there is no spelling of the

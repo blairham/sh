@@ -1352,6 +1352,13 @@ func Semantics() interp.Semantics {
 	// `local y=1 x=5 z=2`, all five refused here and all five taken there,
 	// which is what makes it one field rather than five.
 	s.DeclarationMayShadowAReadonly = interp.No
+	// Unless the freeze is a *calling* function's own local, which this
+	// shell lets a deeper declaration shadow: measured 2026-09-21,
+	// `outer() { local -r x=O; inner; }` with `inner() { local x=I; }`
+	// leaves `inner` holding `I` and `outer` still holding `O`. A freeze
+	// this scope put there, and a freeze at the top level, are both still
+	// refused — see the axis for the two controls.
+	s.DeclarationMayShadowAnEnclosingScopesReadonly = interp.Yes
 	// And the attribute cannot be taken off again: `typeset +r x` on a
 	// frozen name is refused with the builtin named, reports 1 and leaves
 	// the freeze standing. True of bash 3.2 and of the same binary under
@@ -2992,6 +2999,12 @@ func Semantics() interp.Semantics {
 	// survives the return.
 	s.LocalDashSavesTheShellOptions = interp.Yes
 	s.BareLocalListing = interp.BareLocalListsLocals
+	// And `local -p name` answers for the running call rather than for the
+	// shell: a name the call did not declare is `local: name: not found` at
+	// 1, whatever the shell holds under it. Measured 2026-09-21 — a global
+	// and a caller's local are both refused, and the call's own local writes
+	// the row `declare -p` writes.
+	s.LocalListingIsTheRunningCallsOwn = interp.Yes
 	// The *declaration* word lists something else again, and it is this
 	// shell's `set` listing exactly: every variable as an assignment, then
 	// every function. Measured 2026-09-12 with a scrubbed environment,

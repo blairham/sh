@@ -6,6 +6,7 @@ package repl
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -134,16 +135,27 @@ func TestHistoryTurnedOff(t *testing.T) {
 	}
 }
 
-// Blank lines are not kept — they are what a history is most often cluttered
-// with and are never worth walking back through.
+// Empty lines are not kept — they are what a history is most often cluttered
+// with and are never worth walking back through. A line of *whitespace* is
+// kept, which is not a hair being split: bash lists one, and the reader used
+// to trim before testing and so dropped an entry bash keeps (#4024).
+//
+// Which of the two a shell wants is EmptyLinesAreEntries, and this is the
+// session read taking the same answer a script's `history -r` takes, out of
+// one decoder.
 func TestHistorySkipsBlankLines(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
 	if err := os.WriteFile(path, []byte("one\n\n   \ntwo\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got := historyFile{path: path, size: 100, file: 100}.load(t.Context())
-	if len(got) != 2 || got[0] != "one" || got[1] != "two" {
-		t.Errorf("loaded %q, want the two real lines", got)
+	if want := []string{"one", "   ", "two"}; !slices.Equal(got, want) {
+		t.Errorf("loaded %q, want %q", got, want)
+	}
+	// And the shell that says an empty line is an entry gets all four.
+	h := historyFile{path: path, size: 100, file: 100, encoding: historyEncoding{emptyIsAnEntry: true}}
+	if want := []string{"one", "", "   ", "two"}; !slices.Equal(h.load(t.Context()), want) {
+		t.Errorf("loaded %q, want %q", h.load(t.Context()), want)
 	}
 }
 

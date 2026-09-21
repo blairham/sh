@@ -24,6 +24,17 @@ import "github.com/blairham/sh/repl"
 // colon-separated list of patterns matched against the whole line: measured,
 // `HISTIGNORE=ls*:pwd` drops `ls -la` and `pwd` and keeps `pwd x`.
 //
+// An **empty line** in a history file is a gap rather than a command, and
+// EmptyLinesAreEntries is left off for it. Measured 2026-09-21 on bash
+// 5.3.20 with `env -i` and a scratch HOME: a blank first, last, between two
+// commands, two in a row, and among `#` time lines is dropped every time, on
+// all three read routes — `-r`, `-n`, and the read at the first `set -o
+// history`. Empty and not blank: a line of spaces and a line of one tab come
+// back as entries of their own, which is the same line bash draws for the
+// lines a script *runs*. zsh is the shell that keeps the blank, so it is zsh
+// that states something and bash that leaves the substrate's answer alone
+// (#4024).
+//
 // And an ignored line is *gone*, which is the half zsh does not agree with.
 // Measured with `HISTCONTROL=ignorespace`: after ` echo hidden`, the up arrow
 // at the next prompt recalls the line before it, and bash's own `history`

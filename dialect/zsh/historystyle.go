@@ -62,10 +62,20 @@ func HistoryStyle() repl.HistoryStyle {
 		// the last line of a `for` loop as an entry of its own (#2452).
 		EntriesContinueOnABackslash:     true,
 		EntriesMayCarryATimestampHeader: true,
-		IgnoreSpaceOption:               "HIST_IGNORE_SPACE",
-		IgnoreDupsOption:                "HIST_IGNORE_DUPS",
-		Ignore:                          "HISTORY_IGNORE",
-		IgnoreIsOnePattern:              true,
-		PatternIgnoredStaysInSession:    true,
+		// The third answer about the same file, and the one zsh is alone
+		// in: an empty line is an entry. Measured 2026-09-21 on zsh 5.9.2,
+		// `env -i` with a scratch HOME — a file read through `fc -R` and a
+		// file `$HISTFILE` named, with the blank first, in the middle, and
+		// among EXTENDED_HISTORY headers — and every one of them lists the
+		// blank as an entry of its own. bash drops it, and the substrate
+		// drops it, so this is said here rather than inherited: a preset
+		// that took bash's answer for a question zsh answers differently is
+		// the mistake this project exists to avoid (#4024).
+		EmptyLinesAreEntries:         true,
+		IgnoreSpaceOption:            "HIST_IGNORE_SPACE",
+		IgnoreDupsOption:             "HIST_IGNORE_DUPS",
+		Ignore:                       "HISTORY_IGNORE",
+		IgnoreIsOnePattern:           true,
+		PatternIgnoredStaysInSession: true,
 	}
 }

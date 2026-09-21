@@ -47,6 +47,7 @@ ash   ArrayScalarIsTheWholeArray
 ash   ArrayUnderATableDeclaration
 ash   ArrayUnderATableLiteralDeclaration
 ash   ArraysAreSparse
+ash   AssignmentPrefixMakesAFreshCell
 ash   AssignmentUpdatesPipelineStatus
 ash   AttributeOverAFrozenNameIsRefused
 ash   AttributeRereadsTheValueItFinds
@@ -309,6 +310,7 @@ dash  ArrayScalarIsTheWholeArray
 dash  ArrayUnderATableDeclaration
 dash  ArrayUnderATableLiteralDeclaration
 dash  ArraysAreSparse
+dash  AssignmentPrefixMakesAFreshCell
 dash  AssignmentUpdatesPipelineStatus
 dash  AttributeOverAFrozenNameIsRefused
 dash  AttributeRereadsTheValueItFinds

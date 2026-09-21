@@ -6562,8 +6562,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// here evaluates the subscript or the right-hand side.
 				continue
 			}
+			fresh := false
 			if r.subscriptedPrefixTakenBack(a) || scoped {
 				undo = append(undo, r.saveVar(a.Name))
+				// The prefix's own cell, asked once the binding it displaces
+				// is safely saved — and only where there is a take-back to
+				// put that binding back. See interp/prefixfreshcell.go.
+				if fresh = r.prefixEntryIsFresh(a.Name); fresh {
+					undo[len(undo)-1].freshened = true
+				}
 			}
 			if scoped {
 				// The cell is the call's own, so it starts from **nothing**
@@ -6579,7 +6586,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// interp/prefixdiscipline.go. A scoped prefix stores into a cell
 			// the call just made, which no hook is watching — see
 			// Runner.prefixScopedToTheCall.
-			r.prefixStore(ctx, a, !scoped)
+			r.prefixStore(ctx, a, !scoped, fresh)
 			callHeld = append(callHeld, a.Name)
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
@@ -6730,6 +6737,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				_ = r.prefixExpansion(a)
 				continue
 			}
+			fresh := false
 			persists := r.prefixPersistsAtThisBuiltin(argv[0], kind)
 			if !persists &&
 				!r.builtinKeepsAnAssignmentPrefix(argv[0]) &&
@@ -6740,6 +6748,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// question above, for `:` and `shift` included. See
 				// Semantics.BuiltinsKeepingAnAssignmentPrefix.
 				undo = append(undo, r.saveVar(a.Name))
+				// And the prefix's own cell, asked only where the binding it
+				// displaces has just been saved: a prefix this shell *keeps*
+				// has nothing to give back and is an ordinary assignment to
+				// the name as it stands. See interp/prefixfreshcell.go.
+				if fresh = r.prefixEntryIsFresh(a.Name); fresh {
+					undo[len(undo)-1].freshened = true
+				}
 			}
 			if persists {
 				// And a value this shell keeps is not an enclosing call's to
@@ -6754,7 +6769,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// the name's owner is told of; a special builtin's persists, and
 			// a prefix that reached here through `command` before an
 			// external is the child's store. See interp/prefixdiscipline.go.
-			r.prefixStore(ctx, a, kind.kind != prefixBeforeRegularBuiltin)
+			r.prefixStore(ctx, a, kind.kind != prefixBeforeRegularBuiltin, fresh)
 			held = append(held, a.Name)
 			if kind.throughCommand {
 				// `command` is a precommand word rather than a command, so
@@ -8442,6 +8457,14 @@ type savedVar struct {
 	// both, so a prefix on one of them has changed two cells and giving one
 	// back is giving half of it back.
 	partner *savedVar
+	// freshened is whether the prefix this saved was given a cell of its own
+	// — the elements and the letters taken off, so the command sees a plain
+	// scalar. Recorded because one reader has to get the displaced binding
+	// back *early*: a declaration that keeps the entry writes the prefix's
+	// value into it through the ordinary rules. See
+	// Semantics.AssignmentPrefixMakesAFreshCell and
+	// Runner.prefixEntryTakesTheDisplacedShapeBack.
+	freshened bool
 }
 
 // saveVar takes the whole of a name's state, for a prefix that will give it

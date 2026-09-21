@@ -130,13 +130,24 @@ func TestTheScalarLandsAtTheBaseOfASparseArray(t *testing.T) {
 // element it wrote was still there.
 //
 // `true` is a builtin, which is what makes the prefix transient at all.
+//
+// Swept over the *fresh cell* answer as well, and that is the point of the
+// second loop rather than tidiness: whether the prefix wrote over the array
+// or was given a plain cell of its own with the array taken off it, what the
+// name held comes back. See Semantics.AssignmentPrefixMakesAFreshCell — the
+// two readings part over what the command is shown and not over the
+// take-back.
 func TestAPrefixAssignmentGivesBackTheCompound(t *testing.T) {
 	for _, replaces := range []Answer{Yes, No} {
-		out, st := run(t, `a=(p q); a=x true; typeset -p a`,
-			withSem(scalarOverCompoundSem(replaces)))
-		const want = `declare -a a=([0]="p" [1]="q")`
-		if got := strings.TrimSpace(out); got != want || st != 0 {
-			t.Errorf("replaces=%v: got %q status %d, want %q", replaces, got, st, want)
+		for _, fresh := range []Answer{Yes, No} {
+			sem := scalarOverCompoundSem(replaces)
+			sem.AssignmentPrefixMakesAFreshCell = fresh
+			out, st := run(t, `a=(p q); a=x true; typeset -p a`, withSem(sem))
+			const want = `declare -a a=([0]="p" [1]="q")`
+			if got := strings.TrimSpace(out); got != want || st != 0 {
+				t.Errorf("replaces=%v fresh=%v: got %q status %d, want %q",
+					replaces, fresh, got, st, want)
+			}
 		}
 	}
 }

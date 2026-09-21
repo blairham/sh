@@ -141,7 +141,14 @@ func (r *Runner) prefixStoredForAChild(a *syntax.Assign, part string) string {
 // x`, and this shell shows it the value by assigning it and taking it back —
 // so what a prefix that does not store suppresses is the event and not the
 // write.
-func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, stores bool) {
+//
+// `fresh` is whether the entry is a cell of the prefix's own rather than a
+// write over the binding the name already had, which the caller decides
+// because it is the caller that knows the binding is being saved. It is
+// applied between the join and the store, not before both: an append joins
+// what the displaced binding was showing and lands in the fresh cell. See
+// interp/prefixfreshcell.go.
+func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, stores, fresh bool) {
 	value := r.prefixExpansion(a)
 	if prefixIsSubscripted(a) {
 		// The subscript names where the value goes, so the store is the
@@ -165,7 +172,11 @@ func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, stores bool)
 	if !stores {
 		defer r.suppressDiscipline(a.Name, disciplineSet)()
 		defer r.suppressDiscipline(a.Name, disciplineAppend)()
-		r.setVar(a.Name, r.prefixJoined(a, value))
+		joined := r.prefixJoined(a, value)
+		if fresh {
+			r.emptyPrefixEntry(a.Name)
+		}
+		r.setVar(a.Name, joined)
 		return
 	}
 	if a.Append {
@@ -180,5 +191,9 @@ func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, stores bool)
 		}
 		defer r.suppressDiscipline(a.Name, disciplineSet)()
 	}
-	r.setVar(a.Name, r.prefixJoined(a, value))
+	joined := r.prefixJoined(a, value)
+	if fresh {
+		r.emptyPrefixEntry(a.Name)
+	}
+	r.setVar(a.Name, joined)
 }

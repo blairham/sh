@@ -979,6 +979,15 @@ func Semantics() interp.Semantics {
 	// shows the body `base5`, which is the append reading the shell's value
 	// (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.No
+	// The cell that prefix writes is the prefix's own, though, and not the
+	// binding the name already had: `foo=(asdf fdsa); ff() { declare -p foo;
+	// }; foo=bar ff` lists `declare -x foo="bar"` — a plain exported scalar,
+	// with the array, the table and every letter gone for the length of the
+	// call. Measured 2026-09-21 in 5.3.20 and in 3.2.57 on every row 3.2 can
+	// be asked, so the two builds do not split. The body's readings move with
+	// it: `${#foo[@]}` is 1, and `declare -i foo=7; foo=bar ff` hands the body
+	// `bar` rather than reading the word as arithmetic (#4087).
+	s.AssignmentPrefixMakesAFreshCell = interp.Yes
 	// And a prefix to a *builtin* is exported too, which is the reading that
 	// makes it the command's environment rather than a value this shell holds
 	// for one line: `v=1; v=9 eval 'env | grep "^v="'` hands the child `v=9`

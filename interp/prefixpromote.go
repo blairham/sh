@@ -93,6 +93,12 @@ func (r *Runner) keepThePrefixEntry(name string) {
 		return
 	}
 	r.prefixKeptNames = append(r.prefixKeptNames, name)
+	// And what is kept is the prefix's *value*, written into the binding the
+	// prefix displaced through the ordinary rules — not the fresh cell the
+	// command was shown. Here rather than at the take-back because the
+	// caller is about to record an attribute that would refuse the write.
+	// See Runner.prefixEntryTakesTheDisplacedShapeBack.
+	r.prefixEntryTakesTheDisplacedShapeBack(name)
 }
 
 // prefixEntryShadowed records that a declaration has taken a fresh scope for a
@@ -121,6 +127,13 @@ func (r *Runner) prefixEntryShadowed(name string) (savedVar, bool) {
 	if !held && !slices.Contains(r.functionPrefixNames, name) {
 		return savedVar{}, false
 	}
+	// The cell about to be saved is the scope's to give back, so the fresh
+	// cell the prefix made has to have gone by now: a scope that saved a
+	// plain scalar would hand the shell one on return where its array had
+	// been. Ahead of everything the caller saves, which is why this stands
+	// in the first lines of shadow. See
+	// Runner.prefixEntryTakesTheDisplacedShapeBack.
+	r.prefixEntryTakesTheDisplacedShapeBack(name)
 	if !slices.Contains(r.prefixShadowed, name) {
 		r.prefixShadowed = append(r.prefixShadowed, name)
 	}

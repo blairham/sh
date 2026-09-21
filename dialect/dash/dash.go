@@ -120,6 +120,12 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// unanswered AssignmentPrefixMakesAFreshCell: the question is what a
+	// prefix does to the *kind* and the *letters* of the name it displaces,
+	// and this shell has neither — no arrays, no `typeset`, and so no binding
+	// a prefix could overlay that a fresh cell would not match exactly. The
+	// axis is asked only where a name carries one of them, so nothing here
+	// reaches it (#4087).
 	// Not at a builtin, though: `v=1; v=9 eval 'env | grep "^v="'` shows the
 	// child nothing, and the attribute this shell already had is left where it
 	// was. Measured 2026-09-16 (#3437).

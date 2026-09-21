@@ -1274,6 +1274,15 @@ func (r *Runner) killList(args []string) int {
 			if !ok {
 				return r.killReport(killListNumberNotASignal, a)
 			}
+			if name == "" {
+				// The blank answer is **no output at all** and not an empty
+				// line. Measured 2026-09-21 in the panel's pinned image,
+				// GNU bash 5.3.20 on Linux: `kill -l 32` and `kill -l 160`
+				// each write zero bytes and exit 0, where this wrote a
+				// newline and lost `bash/builtins.tests` over it (#3984).
+				// See Semantics.KillListLeavesAnUnnamedSignalBlank.
+				continue
+			}
 			_, _ = fmt.Fprintln(r.stdout(), name)
 			continue
 		}
@@ -1319,11 +1328,13 @@ func (r *Runner) killList(args []string) int {
 // The first subtraction is not one of them. It is unanimous, so it is core
 // and asks nobody; the axes begin where the references stop agreeing.
 //
-// The number printed back is the reduced one, which is the same thing as the
-// number as written in every column that reaches here: the two shells that
-// reduce repeatedly print the reduction, and zsh — the one that prints a
-// number it did not reduce — only ever reaches this with the original,
-// because the one subtraction it makes is kept only when it names a signal.
+// The number printed back is the number **as written**. The two shells that
+// reduce repeatedly have already walked it down by the time they reach the
+// printing, and zsh — the one that prints a number it did not reduce — keeps
+// its single subtraction only where it names a signal. That sentence was
+// here before the code said it: the reduced number was offered the
+// unnamed-in-range answer first, so zsh's `kill -l 160` came back `32`
+// where the shell writes `160` (#3984).
 func (r *Runner) killListName(n int) (string, bool) {
 	if name, ok := r.killSignalName(n); ok {
 		return name, true
@@ -1335,17 +1346,29 @@ func (r *Runner) killListName(n int) (string, bool) {
 	// the seven columns — bash 5.3, bash-as-`sh`, bash 3.2, zsh, ksh93, dash
 	// and BusyBox ash all answer `kill -l 129` with `HUP` and `kill -l 159`
 	// with the last signal on the table — so it is core and asks nobody.
-	//
-	// The subtraction has to be followed by the same unnamed-in-range answer
-	// the whole number got, and that is measured rather than symmetry: dash
-	// on Linux answers `kill -l 160` with `32`, which is 160 less 128 landing
-	// on a signal it has no name for.
 	if n >= 128 {
 		if name, ok := r.killSignalName(n - 128); ok {
 			return name, true
 		}
-		if name, ok, answered := r.killListUnnamedInRange(n - 128); answered {
-			return name, ok
+		// The reduction landed on a signal the kernel has and this shell has
+		// no name for, and that is where the columns part. Measured
+		// 2026-09-21 in the panel's pinned images, `kill -l 160` on the
+		// kernel whose real-time range starts at 32: dash answers `32` and
+		// bash answers nothing at all, both of them taking the *reduction's*
+		// own answer, where zsh 5.9.2 answers `160` — the number as written.
+		//
+		// So the road belongs to the columns that refuse a number they
+		// cannot name, and the axis is read rather than asked because the
+		// columns it is Yes for have an answer of their own below: zsh's is
+		// the written number and ksh93's and BusyBox ash's is the repeated
+		// reduction, which lands back here on a number under 128. A shell
+		// that has chosen neither reaches those asks and is refused there,
+		// which is right — the four columns really do give three answers to
+		// this row (#3984).
+		if r.sem().KillListPrintsANumberItCannotName == No {
+			if name, ok, answered := r.killListUnnamedInRange(n - 128); answered {
+				return name, ok
+			}
 		}
 	}
 	// Past here the panel parts, and each question is asked only where the
@@ -1370,6 +1393,14 @@ func (r *Runner) killListName(n int) (string, bool) {
 		}
 	}
 	if r.ask(r.sem().KillListPrintsANumberItCannotName, "`kill -l 160` answered with the number") {
+		// The number **as written**, which is why this is asked before the
+		// reduced number gets a second chance below: zsh 5.9.2 answers
+		// `kill -l 160` with `160` and not with the `32` that 160 less 128
+		// lands on, measured 2026-09-21 in the panel's pinned image beside
+		// `kill -l 191` giving `RTMAX-1` — so the one subtraction this
+		// column makes is kept only where it names a signal (#3984). The
+		// two columns that reduce repeatedly reach here with a number the
+		// loop above has already walked down, which is the same rule.
 		return strconv.Itoa(n), true
 	}
 	return "", false
@@ -1382,7 +1413,9 @@ func (r *Runner) killListName(n int) (string, bool) {
 // The panel writes the number back at status 0 — dash included, which refuses
 // a number *outside* the range at 2. Those are two questions and running them
 // together is what made dash's row read as a dialect answer (#3287). bash is
-// the one column that answers with an empty line, which is the axis.
+// the one column that answers with **nothing at all**, which is the axis: not
+// an empty line, zero bytes. Measured 2026-09-21 in the panel's pinned image,
+// `kill -l 32 | od -c` in bash 5.3.20 is an empty file at status 0 (#3984).
 //
 // Nothing on a platform whose whole range the table names can reach this
 // through a number alone; on macOS it is reached through a shell whose own

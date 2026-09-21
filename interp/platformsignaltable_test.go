@@ -126,7 +126,7 @@ func TestANameTheVectorLacksIsNotANameAndTheNumberStillIs(t *testing.T) {
 // axis beside it.
 //
 // A signal the kernel has and the table cannot name is written back as its
-// number at status 0 — and as an empty line where the vector says so, which
+// number at status 0 — and as nothing at all where the vector says so, which
 // is the one column that answers that way. Reached here through a vector
 // missing a name rather than through a real-time signal, so the case asks the
 // same question on a kernel that has none.
@@ -150,9 +150,59 @@ func TestKillListWritesTheNumberForASignalItCannotName(t *testing.T) {
 
 	blank := sem
 	blank.KillListLeavesAnUnnamedSignalBlank = Yes
-	out, _, st = killRun(t, "kill -l "+strconv.Itoa(n)+"\n", blank, Diagnostics{})
-	if st != 0 || out != "\n" {
-		t.Errorf("blank answer: status %d, stdout %q, want one empty line", st, out)
+	// **Nothing at all, and not an empty line.** Measured 2026-09-21 in the
+	// panel's pinned image: `kill -l 32 | od -c` in GNU bash 5.3.20 is an
+	// empty file at status 0. This asserted one newline for as long as the
+	// code wrote one, and `bash/builtins.tests` lost the file over it
+	// (#3984).
+	for _, src := range []string{
+		"kill -l " + strconv.Itoa(n) + "\n",
+		// And through the one subtraction of 128 every column makes, which
+		// is the shape the suite file writes.
+		"kill -l " + strconv.Itoa(n+128) + "\n",
+	} {
+		out, _, st = killRun(t, src, blank, Diagnostics{})
+		if st != 0 || out != "" {
+			t.Errorf("blank answer for %q: status %d, stdout %q, want no output at all", src, st, out)
+		}
+	}
+}
+
+// TestAColumnThatPrintsANumberPrintsTheOneItWasGiven is the zsh half of
+// #3984.
+//
+// The one subtraction of 128 is kept only where what is left **names** a
+// signal. Where it does not, the column that writes a number back writes the
+// number as it was written: measured 2026-09-21 in the panel's pinned image,
+// zsh 5.9.2 answers `kill -l 160` with `160` where dash on the same kernel
+// answers `32`, because 160 less 128 is a real-time signal neither can name.
+//
+// Reached through a vector missing a name rather than through a real-time
+// signal, so the case asks the same question on a kernel that has none.
+func TestAColumnThatPrintsANumberPrintsTheOneItWasGiven(t *testing.T) {
+	n := numberOf(t, "USR1")
+	written := strconv.Itoa(n + 128)
+
+	sem := signalTableSem()
+	sem.SignalNamesTheShellLacks = "USR1"
+
+	// zsh's shape: one subtraction, and a number it cannot name printed back.
+	prints := sem
+	prints.KillListPrintsANumberItCannotName = Yes
+	prints.KillListReducesRepeatedly = No
+	out, errs, st := killRun(t, "kill -l "+written+"\n", prints, Diagnostics{})
+	if st != 0 || out != written+"\n" {
+		t.Errorf("printed back: status %d, stdout %q, stderr %q, want %q — the number as written, not the reduction",
+			st, out, errs, written+"\n")
+	}
+
+	// The control, and the reason the reduced number still has a road: dash
+	// refuses a number it cannot name and yet answers `kill -l 160` with
+	// `32`, so the column that does not print the written number falls to
+	// the reduction. Without this row, deleting that road would pass.
+	out, _, st = killRun(t, "kill -l "+written+"\n", sem, Diagnostics{})
+	if st != 0 || out != strconv.Itoa(n)+"\n" {
+		t.Errorf("reduced: status %d, stdout %q, want %q", st, out, strconv.Itoa(n)+"\n")
 	}
 }
 

@@ -8110,6 +8110,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/a-function-s-own-exit-trap-reads-the-call-s-status` | `n -> 7~sees [0]` | `n -> 7~sees [0]` | `n -> 7~sees [0]` | `n -> 7~sees [0]` | `n -> 7~sees [0]` | `sees [7]~n -> 7` | `n -> 7~sees [0]` |
 | `trap/a-function-s-own-exit-trap-may-name-a-status-outright` | `after` *(status 4)* | `after` *(status 4)* | `after` *(status 4)* | `after` *(status 4)* | `after` *(status 4)* | *(no output, status 4)* | `after` *(status 4)* |
 | `trap/exit-trap-can-override-the-status` | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* |
+| `trap/an-exit-inside-a-function-fires-the-trap-from-inside-the-call` | `v=inner` | `v=inner` | `v=inner` | `v=global` | `v=global` **2>** `<shell>: local: not found` | `v=global` | `v=inner` |
+| `trap/a-function-that-returned-leaves-no-call-for-the-exit-trap` | `v=global` | `v=global` | `v=global` | `v=global` | `v=global` **2>** `<shell>: local: not found` | `v=global` | `v=global` |
 | `exit-hook/the-named-function-and-its-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `named st=4~z2 st=4~z3 st=4` *(status 4)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `exit-hook/runs-after-the-exit-trap` | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap` *(status 3)* | `trap~hook` *(status 3)* | `trap` *(status 3)* |
 | `exit-hook/an-exit-inside-it-wins-and-stops-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | *(no output, status 4)* | `a~b` *(status 9)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
@@ -8548,6 +8550,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `trap/exit-trap-can-override-the-status` — the trap's own exit wins over the one that triggered it
   ```sh
   trap 'echo bye; exit 7' EXIT; exit 2
+  ```
+- `trap/an-exit-inside-a-function-fires-the-trap-from-inside-the-call` — whether `exit` runs the EXIT trap where it was written, with the call still standing, or after the stack has unwound. A local is the probe because it is the one every column can answer — only two of them name the running function at all, and in a third the thing that looks like a name reads the last function that ran whether it exited or returned, so it cannot tell the two readings apart. `v=inner` is the call still up and `v=global` is the call gone; ksh93 has no `local` and its cell is the complaint, which is the same answer read off a different word
+  ```sh
+  v=global; g() { local v=inner; trap 'echo "v=$v"' EXIT; exit 0; }; g
+  ```
+- `trap/a-function-that-returned-leaves-no-call-for-the-exit-trap` — the control for the row above, and what makes it about `exit` rather than about the trap. The same function left by falling off its end has really returned before the shell ends, so every column reads the global — including the ones that read `inner` when the `exit` fired the trap from inside. Without this row a shell that simply never unwound anything would pass the row above
+  ```sh
+  v=global; g() { local v=inner; trap 'echo "v=$v"' EXIT; }; g
   ```
 - `exit-hook/the-named-function-and-its-list` — the hook a plugin tears itself down in — gitstatus registers its daemon's cleanup here and powerlevel10k its async worker's. One shell in the panel has it: the named function runs, then every name in the list, in the order the list holds them, and each is told the status the shell is leaving with. The other five define a function called `zshexit`, exit 4, and call nothing, which is the whole of what the column difference is. Each hook prints `$?` rather than a bare marker because the status is the half a chain that ran the items in the right order could still get wrong
   ```sh

@@ -6948,7 +6948,7 @@ func (r *Runner) readonlyScopesItsOperands() bool {
 // A bare `exit` reports what the last command did, and a status is taken
 // modulo 256 because that is all a process can carry — `exit 300` is 44 in
 // every shell measured.
-func biExit(r *Runner, _ context.Context, args []string) int {
+func biExit(r *Runner, ctx context.Context, args []string) int {
 	// Asked before the operand is read, because the shell is not going
 	// anywhere: `exit 3` with a job the shell is checking for stays, and the
 	// 3 is never used.
@@ -7007,6 +7007,12 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 	// two reach the same field. `exit` runs the cleanup halves it unwinds
 	// through and `set -e` does not (#1238).
 	r.stopTheShellForExit()
+	// Before the unwinding, in the dialects whose EXIT trap is fired from
+	// where the word was written rather than from the end of the shell. The
+	// stop above is raised first so that the note only this producer can
+	// take — whether a file was being read — is the `exit` word's own and not
+	// something the trap body's own `.` overwrote.
+	r.runExitTrapInsideTheExitingCall(ctx)
 	return r.status
 }
 

@@ -1847,6 +1847,7 @@ func Semantics() interp.Semantics {
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	s.ExitTrapRunsInsideTheExitingCall = interp.Yes
 	// 5.3 ignores an untrapped QUIT when it is not interactive, where 3.2
 	// dies by it — a divergence between two builds of the same shell, and
 	// this preset is 5.3.

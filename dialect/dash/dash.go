@@ -815,6 +815,7 @@ func Semantics() interp.Semantics {
 	// silent at status 0, which zsh agrees with and bash and ksh93 do not.
 	s.DotDirectoryOperandIsAnError = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.No
+	s.ExitTrapRunsInsideTheExitingCall = interp.Yes
 	s.QuitIgnoredWhenNotInteractive = interp.No
 	// unanswered QuitResetRestoresTheDefault: that axis is what a reset does
 	// to the *ignore* above, and this shell has no ignore to take away — an

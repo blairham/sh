@@ -4585,6 +4585,16 @@ echo "reached-after st=$?"`,
 		Why:     "the trap's own exit wins over the one that triggered it",
 	},
 	{
+		ID: "trap/an-exit-inside-a-function-fires-the-trap-from-inside-the-call", Category: "traps and exit",
+		Snippet: `v=global; g() { local v=inner; trap 'echo "v=$v"' EXIT; exit 0; }; g`,
+		Why:     "whether `exit` runs the EXIT trap where it was written, with the call still standing, or after the stack has unwound. A local is the probe because it is the one every column can answer — only two of them name the running function at all, and in a third the thing that looks like a name reads the last function that ran whether it exited or returned, so it cannot tell the two readings apart. `v=inner` is the call still up and `v=global` is the call gone; ksh93 has no `local` and its cell is the complaint, which is the same answer read off a different word",
+	},
+	{
+		ID: "trap/a-function-that-returned-leaves-no-call-for-the-exit-trap", Category: "traps and exit",
+		Snippet: `v=global; g() { local v=inner; trap 'echo "v=$v"' EXIT; }; g`,
+		Why:     "the control for the row above, and what makes it about `exit` rather than about the trap. The same function left by falling off its end has really returned before the shell ends, so every column reads the global — including the ones that read `inner` when the `exit` fired the trap from inside. Without this row a shell that simply never unwound anything would pass the row above",
+	},
+	{
 		ID: "exit-hook/the-named-function-and-its-list", Category: "traps and exit",
 		Snippet: `zshexit() { echo "named st=$?"; }; zshexit_functions=(z2 z3); z2() { echo "z2 st=$?"; }; z3() { echo "z3 st=$?"; }; exit 4`,
 		Why:     "the hook a plugin tears itself down in — gitstatus registers its daemon's cleanup here and powerlevel10k its async worker's. One shell in the panel has it: the named function runs, then every name in the list, in the order the list holds them, and each is told the status the shell is leaving with. The other five define a function called `zshexit`, exit 4, and call nothing, which is the whole of what the column difference is. Each hook prints `$?` rather than a bare marker because the status is the half a chain that ran the items in the right order could still get wrong",

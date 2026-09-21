@@ -1380,6 +1380,7 @@ func Semantics() interp.Semantics {
 	// An EXIT trap does not run when a signal kills the shell: `trap 'echo
 	// bye' EXIT; kill -TERM $$` writes nothing and dies at 143.
 	s.ExitTrapRunsOnSignalDeath = interp.No
+	s.ExitTrapRunsInsideTheExitingCall = interp.Yes
 	// BusyBox ash sides with bash here rather than with dash, which is what
 	// this line said until it was measured: `kill -QUIT $$; echo after`
 	// prints after and exits 0, an external SIGQUIT is survived too, and

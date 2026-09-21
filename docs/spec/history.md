@@ -1271,12 +1271,24 @@ words in front of the first such operand go to the ordinary one, so the
 bundling, `--`, `--help`, the refusal wording and its usage line have no
 second copy.
 
-### Not implemented
+### The editor
 
-The editor. `fc` with neither `-l` nor `-s` writes the entry to a file, runs
-`${FCEDIT:-${EDITOR:-…}}` over it and runs what comes back; what is here is
-the refusal that comes before it, which is the half a script can see without
-an editor.
+`fc` with neither `-l` nor `-s` writes the chosen entries to a file, runs
+`${FCEDIT:-${EDITOR:-…}}` over it and runs what comes back. That landed in
+#4041 and the measurements are in `docs/spec/semantics.md` beside
+`FcEmptyEditIsAnError`: which of the four names chooses the editor, that the
+editor is a command **line** rather than a program name, what each of the
+three ways out reports, and how the text that comes back is read.
+
+The last of those is where this road meets the list. bash reads the edited
+text a line at a time and records each command it finds as an entry of its
+own; a shell that reads the text whole records it whole. The unit is the
+**line** and not the statement — an editor leaving a four-line `for` loop is
+one entry, `for i in a b; do echo $i; done`, and two commands on one line are
+one entry as well — so the lines are joined by the same rule `internal/histjoin`
+joins the lines of a command the shell read from its own input. See #4030.
+
+### Not implemented
 
 Two things on the `-s` and editor roads of the shell that refuses, measured
 2026-09-21 and not modeled. An event **at or past the newest entry** is

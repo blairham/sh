@@ -106,18 +106,17 @@ func TestFcEditorRoadPutsWhatRanWhereTheFcCallWas(t *testing.T) {
 func TestFcEditorRoadWritesARangeInTheOrderItWasAskedFor(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		// Written forwards, and `cat` echoes the file before the shell
-		// echoes it back and runs it.
+		// reads it back. The echo and the run interleave because the text
+		// is read a line at a time — see fceditorlines_test.go, which is
+		// where that is the subject rather than a consequence.
 		{"fc -e cat 1 3", "echo one\necho two\necho three\n" +
-			"echo one\necho two\necho three\n" +
-			"one\ntwo\nthree\n"},
+			"echo one\none\necho two\ntwo\necho three\nthree\n"},
 		// Written backwards, which runs backwards.
 		{"fc -e cat 3 1", "echo three\necho two\necho one\n" +
-			"echo three\necho two\necho one\n" +
-			"three\ntwo\none\n"},
+			"echo three\nthree\necho two\ntwo\necho one\none\n"},
 		// And `-r` on top of the forward range gives the backward one.
 		{"fc -r -e cat 1 3", "echo three\necho two\necho one\n" +
-			"echo three\necho two\necho one\n" +
-			"three\ntwo\none\n"},
+			"echo three\nthree\necho two\ntwo\necho one\none\n"},
 		// An absent `last` is `first` and not the end of the list, which is
 		// where this road parts company with `-l`.
 		{"fc -e cat 1", "echo one\necho one\none\n"},

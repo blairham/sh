@@ -9647,6 +9647,39 @@ echo "st=$?"`,
 			"the paren and zsh reads `~` as its exclusion operator (#2716)",
 	},
 	{
+		ID: "pattern/a-basic-regular-expression-flavor", Category: "patterns",
+		Snippet: `G='~(G)a\(b\)c'; L='~(G)a+b'; I='~(G)a\{3\}'; Q='~(G)ax\?b'; ` +
+			`[[ abc == $G ]] && printf '[group]'; [[ a+b == $L ]] && printf '[plus-literal]'; ` +
+			`[[ aaa == $I ]] && printf '[interval]'; [[ ab == $Q ]] && printf '[optional]'; echo`,
+		Why: "the `~(G)` flavor is a **basic** regular expression, which is the " +
+			"mirror of the `~(E)` one already recorded: a backslashed `(`, `{` and " +
+			"`?` are the operators and a bare `+` is the character. All four " +
+			"markers together are the claim, because any one alone is also what a " +
+			"literal reading would answer for some subject. The patterns come " +
+			"through a variable rather than written into the condition, and that " +
+			"is load-bearing: the shell's own quote removal reaches a written one " +
+			"and keeps a different set of backslashes per flavor, so a written " +
+			"probe measures the word and not the expression. The other columns " +
+			"have no `~(…)` at all — bash and zsh read the whole thing as ordinary " +
+			"text and dash has no `[[` — which is what makes this a ksh93 row " +
+			"(#3186)",
+	},
+	{
+		ID: "pattern/a-conjunction-in-an-augmented-regular-expression", Category: "patterns",
+		Snippet: `C='~(X)a.c&abc'; N='~(X)a.c&axc'; S='~(X)a&c'; B='~(E)a&b'; ` +
+			`[[ abc == $C ]] && printf '[conj]'; [[ abc == $N ]] || printf '[one-fails]'; ` +
+			`[[ abc == $S ]] || printf '[same-span]'; [[ a'&'b == $B ]] && printf '[plain-literal]'; echo`,
+		Why: "`&` is what the augmented flavor `~(X)` adds to `~(E)`, and it is a " +
+			"**conjunction** whose operands have to describe the same span rather " +
+			"than two searches of the subject. The third marker is the one that " +
+			"says so: `a` and `c` are each in `abc` and `~(X)a&c` still does not " +
+			"match. The fourth is the control that keeps the letter honest — the " +
+			"same character under `~(E)` is ordinary text — and the second is the " +
+			"control that says a conjunction can fail. Nine other probes separate " +
+			"the two letters on nothing, so this operator is the whole of the " +
+			"difference between them (#3186)",
+	},
+	{
 		ID: "pattern/a-top-level-bar-against-the-filesystem", Category: "patterns",
 		Snippet: `setopt globsubst 2>/dev/null
 mkdir -p bd; : > bd/aa; : > bd/ab; cd bd

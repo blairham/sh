@@ -87,9 +87,36 @@ func TestATildeModifierReads(t *testing.T) {
 		// name. Silently taking it and matching as though it were absent is
 		// the failure this avoids: `~(G)` is grep's basic syntax, where
 		// `a?c` is a literal `?`, so reading it as ERE would be a wrong
-		// answer at status 0.
-		{`[[ abc == ~(G)abc ]]`, "ksh: ~(G)abc: the ~(G) pattern modifier is not implemented\n", 1},
-		{`[[ abc == ~(P)abc ]]`, "ksh: ~(P)abc: the ~(P) pattern modifier is not implemented\n", 1},
+		// answer at status 0. `A` and `B` are what is left of that set —
+		// each agrees with `E` on every probe written, which is not evidence
+		// that it *is* `E`.
+		{`[[ abc == ~(A)abc ]]`, "ksh: ~(A)abc: the ~(A) pattern modifier is not implemented\n", 1},
+		{`[[ abc == ~(M)abc ]]`, "ksh: ~(M)abc: the ~(M) pattern modifier is not implemented\n", 1},
+		// The four regular-expression letters are answered now, and each
+		// reads its own language rather than `E`'s: `~(G)a?c` is the literal
+		// `?` that made the refusal above worth having, `~(X)` takes the
+		// conjunction `E` reads as text, and `~(P)` takes Perl's classes.
+		{`[[ abc == ~(G)abc ]]`, "", 0},
+		{`[[ 'a?c' == ~(G)a?c ]]`, "", 0},
+		{`[[ abc == ~(G)a?c ]]`, "", 1},
+		{`[[ abc == ~(V)a.c ]]`, "", 0},
+		// Through a variable, and that is not shorthand: a written `&` is
+		// the shell's async operator and a written `\d` loses its backslash
+		// to quote removal, so either probe would measure the word rather
+		// than the expression.
+		{`p='~(X)a.c&abc'; [[ abc == $p ]]`, "", 0},
+		{`p='~(X)a.c&axc'; [[ abc == $p ]]`, "", 1},
+		{`p='~(X)a&c'; [[ abc == $p ]]`, "", 1},
+		{`p='~(E)a&b'; [[ 'a&b' == $p ]]`, "", 0},
+		{`p='~(P)a\d'; [[ a1 == $p ]]`, "", 0},
+		{`p='~(P)a\d'; [[ ab == $p ]]`, "", 1},
+		// And what each of them refuses is a **construct** rather than the
+		// letter, which is the shape #3894 settled for `E`: the engine
+		// underneath has no backreference and no lookaround, and a word edge
+		// is the basic flavors' own.
+		{`p='~(G)\(ab\)\1'; [[ abab == $p ]]`, "ksh: ~(G)\\(ab\\)\\1: the \\1 backreference is not implemented\n", 1},
+		{`p='~(G)\<cd'; [[ 'ab cd' == $p ]]`, "ksh: ~(G)\\<cd: the \\< word edge is not implemented\n", 1},
+		{`p='~(X)a(?=b)bc'; [[ abc == $p ]]`, "ksh: ~(X)a(?=b)bc: the (?= lookaround is not implemented\n", 1},
 		// `g` is answered now, and it is a glob rather than a refusal — see
 		// TestTheGreedyLetterLengthensAPrefixTrim for what it does.
 		{`[[ abc == ~(g)abc ]]`, "", 0},

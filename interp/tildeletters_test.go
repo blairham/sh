@@ -6,6 +6,8 @@ package interp
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // The three classes a `~(…)` letter can fall into, pinned against each other.
@@ -189,12 +191,252 @@ func TestATildeRegexReadsANewlineAsOrdinaryGround(t *testing.T) {
 		if unhonored != 0 {
 			t.Fatalf("~(%s) was refused at %c", c.letters, unhonored)
 		}
-		re, ok := m.tildeRegex(c.pattern, true)
+		x, ok := m.tildeRegex(c.pattern, true)
 		if !ok {
 			t.Fatalf("~(%s)%s did not compile", c.letters, c.pattern)
 		}
-		if got := re.MatchString(c.subject); got != c.want {
+		if got := x.match(c.subject); got != c.want {
 			t.Errorf("~(%s)%s over %q = %v, want %v", c.letters, c.pattern, c.subject, got, c.want)
+		}
+	}
+}
+
+// The basic flavor's operators, which are the mirror of the extended one's:
+// a backslashed `(`, `{`, `|`, `+` and `?` is the operator and a bare one is
+// the character. Read through the translation rather than through a shell
+// probe, because the shell's own quote removal reaches a written pattern and
+// keeps a different set of backslashes per flavor — so a probe written into a
+// condition measures the word as much as the expression, which is the trap
+// tildeKeepsBackslash is about.
+//
+// Every row is measured on ksh93u+ 2012-08-01, 2026-09-20, with the pattern
+// supplied through a variable so that nothing reaches it first. See breToRE2
+// for the rows in the reference shell's own spelling.
+func TestABasicRegularExpressionTranslates(t *testing.T) {
+	for _, c := range []struct {
+		pattern string
+		subject string
+		want    bool
+	}{
+		// The five operators the backslash turns on.
+		{`a\(b\)c`, "abc", true},
+		{`a(b)c`, "a(b)c", true},
+		{`a\{3\}`, "aaa", true},
+		{`a\{3\}`, "aa", false},
+		{`a{3}`, "a{3}", true},
+		{`a\|b`, "ab", true},
+		{`a\|b`, "b", true},
+		{`a|b`, "a|b", true},
+		{`a\+b`, "aab", true},
+		{`a+b`, "a+b", true},
+		{`ax\?b`, "ab", true},
+		{`a?b`, "a?b", true},
+		{`\(a\)\{3\}`, "aaa", true},
+		{`a\{2,\}`, "aaa", true},
+		// What reads as it does anywhere.
+		{`a.c`, "abc", true},
+		{`a.c`, "xabcx", true},
+		{`a\.b`, "a.b", true},
+		{`a\.b`, "aXb", false},
+		{`[[:alpha:]]*`, "abc", true},
+		{`a[]]b`, "a]b", true},
+		{`a[a-]b`, "a-b", true},
+		{`a[^.]b`, "axb", true},
+		{`a\*b`, "a*b", true},
+		{`aaa`, "aa", false},
+		// The anchors, which are positional: live at the ends and just past
+		// a `\(`, and the character anywhere else. The row that pins the
+		// last one is `^a\|^b` over `b`, which does **not** match there —
+		// so a caret past a `\|` is the character.
+		{`^abc`, "xabc", false},
+		{`^abc`, "abc", true},
+		{`x^y`, "x^y", true},
+		{`abc$`, "abcx", false},
+		{`abc$`, "abc", true},
+		{`x$y`, "x$y", true},
+		{`\(^a\)b`, "ab", true},
+		{`\(^a\)b`, "xab", false},
+		{`a\(b$\)`, "ab", true},
+		{`a\(b$\)`, "abx", false},
+		{`^a\|^b`, "ab", true},
+		{`^a\|^b`, "b", false},
+	} {
+		for _, letters := range []string{"G", "V"} {
+			m, unhonored := readTildeModifier(letters)
+			if unhonored != 0 {
+				t.Fatalf("~(%s) was refused at %c", letters, unhonored)
+			}
+			if bad := m.unsupportedTilde(c.pattern); bad != "" {
+				t.Fatalf("~(%s)%s: refused for the %s", letters, c.pattern, bad)
+			}
+			x, ok := m.tildeRegex(c.pattern, true)
+			if !ok {
+				t.Fatalf("~(%s)%s did not compile", letters, c.pattern)
+			}
+			if got := x.match(c.subject); got != c.want {
+				t.Errorf("~(%s)%s over %q = %v, want %v", letters, c.pattern, c.subject, got, c.want)
+			}
+		}
+	}
+}
+
+// The conjunction, whose operands describe the **same span** rather than the
+// same subject — which is the reading a plain `a && b` over the whole string
+// would get wrong, and the rows answering false are what separate them.
+//
+// Measured 2026-09-20 on ksh93u+: `[[ abc == ~(X)a&c ]]` does not match even
+// though `a` and `c` are each in the subject, and `[[ abcabc ==
+// ~(X)^abc&abc$ ]]` does not either, with `[[ abab == ~(X)^ab&ab ]]` and
+// `[[ abab == ~(X)ab&ab$ ]]` as the controls that say each anchor alone is
+// satisfiable.
+func TestAConjunctionTakesOneSpan(t *testing.T) {
+	for _, c := range []struct {
+		pattern string
+		subject string
+		want    bool
+	}{
+		{`a.c&abc`, "abc", true},
+		{`a.c&axc`, "abc", false},
+		{`(a.c)&(abc)`, "abc", true},
+		{`a.&.b`, "ab", true},
+		{`b&b`, "ab", true},
+		{`ab&b`, "ab", false},
+		{`a&c`, "abc", false},
+		{`^a&c$`, "abc", false},
+		{`^abc&abc$`, "abcabc", false},
+		{`^ab&ab`, "abab", true},
+		{`ab&ab$`, "abab", true},
+		// `&` binds tighter than `|`, which is the one thing here a reader
+		// is likely to have the other way round.
+		{`a&b|c`, "c", true},
+		{`a&(b|c)`, "c", false},
+		// An operand with nothing in it describes only the empty span, and
+		// no other operand of the same alternative can.
+		{`abc&`, "abc", false},
+		{`&abc`, "abc", false},
+		// A `&` that is not the operator: inside a group, inside a bracket
+		// expression, and written `\&`.
+		{`(a&b)`, "abc", false},
+		{`[&]b`, "a&b", true},
+		{`a\&b`, "a&b", true},
+		{`a\&b`, "ab", false},
+	} {
+		m, unhonored := readTildeModifier("X")
+		if unhonored != 0 {
+			t.Fatalf("~(X) was refused at %c", unhonored)
+		}
+		x, ok := m.tildeRegex(c.pattern, true)
+		if !ok {
+			t.Fatalf("~(X)%s did not compile", c.pattern)
+		}
+		if got := x.match(c.subject); got != c.want {
+			t.Errorf("~(X)%s over %q = %v, want %v", c.pattern, c.subject, got, c.want)
+		}
+		// The same characters under `E`, where `&` is ordinary text. The
+		// control that says the operator belongs to the letter.
+		if !strings.ContainsAny(c.pattern, "()[\\|") {
+			e, _ := readTildeModifier("E")
+			if x, ok := e.tildeRegex(c.pattern, true); ok && len(x.alts) != 0 {
+				t.Errorf("~(E)%s was read as a conjunction", c.pattern)
+			}
+		}
+	}
+}
+
+// What each flavor refuses by name, and — the half that is easy to lose — what
+// it does not. A scan that refused everything would pass a test listing only
+// refusals, so every row carries the pattern that is the same shape and is
+// taken.
+func TestAFlavorRefusesTheConstructsItsEngineLacks(t *testing.T) {
+	for _, c := range []struct {
+		letters string
+		pattern string
+		want    string
+	}{
+		{"E", `(ab)\1`, `\1 backreference`},
+		{"X", `(ab)\1`, `\1 backreference`},
+		{"P", `(ab)\1`, `\1 backreference`},
+		{"G", `\(ab\)\1`, `\1 backreference`},
+		{"V", `\(ab\)\1`, `\1 backreference`},
+		{"E", `a(?=b)bc`, `(?= lookaround`},
+		{"X", `a(?=b)bc`, `(?= lookaround`},
+		{"P", `(?<=a)bc`, `(?<= lookaround`},
+		// The word edges are the basic flavors' own, since RE2 has `\b` and
+		// no way to take one side of it. `\<` is measured live there:
+		// `[[ 'ab cd' == ~(G)\<cd ]]` matches and `[[ abcd == … ]]` does not.
+		{"G", `\<cd`, `\< word edge`},
+		{"V", `cd\>`, `\> word edge`},
+		// And what is taken. A bare `(?=` is not a lookaround in a basic
+		// expression — every character of it is ordinary there — and a
+		// `\1` inside a bracket expression is not a backreference anywhere.
+		{"G", `a(?=b)c`, ""},
+		{"V", `a(?=b)c`, ""},
+		{"E", `a[(?=]b`, ""},
+		{"X", `a.c&abc`, ""},
+		{"P", `a\d\w\s`, ""},
+		{"G", `a\(b\)c`, ""},
+		{"V", `a\{3\}`, ""},
+		{"K", `a\1`, ""},
+		{"F", `a\1`, ""},
+	} {
+		m, unhonored := readTildeModifier(c.letters)
+		if unhonored != 0 {
+			t.Fatalf("~(%s) was refused at %c", c.letters, unhonored)
+		}
+		if got := m.unsupportedTilde(c.pattern); got != c.want {
+			t.Errorf("~(%s)%s: refused %q, want %q", c.letters, c.pattern, got, c.want)
+		}
+	}
+}
+
+// Which backslashes are the expression's rather than the shell's, per flavor.
+//
+// The set differs by flavor because the reference shell's does — see
+// tildeKeepsBackslash for the measured rows. The rows answering false are
+// what make this a reading rather than a list: a span that is not a
+// backslash-quoted single character is never one of these, whatever the
+// flavor, and a glob has no engine for a backslash to reach.
+func TestWhichBackslashesBelongToTheExpression(t *testing.T) {
+	backslashed := func(v string) syntax.Span {
+		return syntax.Span{Kind: syntax.Literal, Quoting: syntax.BackslashQuoted, Value: v}
+	}
+	for _, c := range []struct {
+		flavor tildeFlavor
+		span   syntax.Span
+		want   bool
+	}{
+		{tildeERE, backslashed("1"), true},
+		{tildeERE, backslashed("9"), true},
+		{tildeERE, backslashed("0"), false},
+		{tildeERE, backslashed("."), false},
+		{tildeERE, backslashed("&"), false},
+		{tildeAugERE, backslashed("1"), true},
+		// `X`'s one exception, because there the character is an operator.
+		{tildeAugERE, backslashed("&"), true},
+		{tildePerl, backslashed("1"), true},
+		{tildePerl, backslashed("&"), false},
+		{tildeBRE, backslashed("1"), true},
+		{tildeBRE, backslashed("("), true},
+		{tildeBRE, backslashed(")"), true},
+		{tildeBRE, backslashed("|"), true},
+		{tildeBRE, backslashed("?"), true},
+		{tildeBRE, backslashed("<"), true},
+		// Measured dropped by that shell, and dropped here for the same
+		// reason the others are kept: the reference is what is reproduced.
+		{tildeBRE, backslashed("+"), false},
+		{tildeBRE, backslashed("{"), false},
+		{tildeBRE, backslashed("."), false},
+		// No engine, so no backslash of the expression's.
+		{tildeGlob, backslashed("1"), false},
+		{tildeLiteral, backslashed("1"), false},
+		{tildeNever, backslashed("1"), false},
+		// And a span that is not one backslash-quoted character.
+		{tildeERE, syntax.Span{Kind: syntax.Literal, Value: "1"}, false},
+		{tildeERE, syntax.Span{Kind: syntax.Literal, Quoting: syntax.BackslashQuoted, Value: "12"}, false},
+		{tildeBRE, syntax.Span{Kind: syntax.ParamExp, Quoting: syntax.BackslashQuoted, Value: "1"}, false},
+	} {
+		if got := tildeKeepsBackslash(c.flavor, c.span); got != c.want {
+			t.Errorf("flavor %d, span %#v = %v, want %v", c.flavor, c.span, got, c.want)
 		}
 	}
 }

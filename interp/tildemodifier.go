@@ -6,6 +6,7 @@ package interp
 import (
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // ksh93's `~(…)` pattern-modifier prefix: a letter set in front of a pattern
@@ -27,9 +28,18 @@ import (
 //
 //	letter  what the probes say
 //	E       ERE, matching a substring: both probes true, `~(E)a?c` true too
-//	G       a regular expression that is not ERE — `^a.c$` and `a.c` both
-//	        match and `a?c` does not, which is grep's basic syntax
-//	A B P V X  each behaves as E does on every probe written here
+//	G V     a **basic** regular expression — `^a.c$` and `a.c` both match and
+//	        `a?c` does not, which is grep's basic syntax. Re-measured a
+//	        pattern at a time on 2026-09-20 and the two letters part on none
+//	        of eighteen probes. See breToRE2
+//	X       the ERE plus one operator, `&`, which is a conjunction over the
+//	        same span — `[[ abc == ~(X)a.c&abc ]]` matches and
+//	        `[[ abc == ~(X)a&c ]]` does not. Nine further probes separate it
+//	        from `E` on nothing. See tildeConjunction
+//	P       a Perl regular expression: `\d`, `\w`, `\s`, a lazy `.*?` and an
+//	        inline `(?i)` are each read, and each the way Go's `regexp` reads
+//	        it
+//	A B     each behaves as E does on every probe written here
 //	F       a literal string, matching a substring: `~(F)a.c` matches the
 //	        three characters `a.c` and does not match `abc`
 //	L       a literal string as well, and no probe here separates it from F
@@ -67,26 +77,28 @@ import (
 //
 // # What this shell honors
 //
-// `E`, `F`, `L`, `K`, `N`, `g`, `i`, `l`, `p`, `r`, `s`, the `+`/`-` toggles
-// and the empty group. The regular-expression flavors go to Go's `regexp`,
-// which is the engine this shell already compiles `=~` with.
+// `E`, `F`, `G`, `K`, `L`, `N`, `P`, `V`, `X`, `g`, `i`, `l`, `p`, `r`, `s`,
+// the `+`/`-` toggles and the empty group. Every regular-expression flavor
+// goes to Go's `regexp`, which is the engine this shell already compiles `=~`
+// with: `E`, `X` and `P` are compiled as written and `G` and `V` are
+// translated from basic syntax first, which is breToRE2.
 //
-// The rest are **refused by name rather than accepted and ignored**. `A`, `B`,
-// `P`, `V` and `X` each agree with `E` on every probe above, which is not
-// evidence that they *are* `E`; and no probe here gives `M`, `O`, `S`, `U`,
-// `a`, `m` or `x` anything to do. A flag taken and dropped is worse than one
-// refused, because a pattern that silently means something else is a wrong
-// answer at status 0.
+// The rest are **refused by name rather than accepted and ignored**. `A` and
+// `B` agree with `E` on every probe above, which is not evidence that they
+// *are* `E`; and no probe here gives `M`, `O`, `S`, `U`, `a`, `m` or `x`
+// anything to do. A flag taken and dropped is worse than one refused, because
+// a pattern that silently means something else is a wrong answer at status 0.
 //
-// `G` and `V` are refused for a reason of a different kind, and it is the one
-// thing here that is not a matter of effort. Measured 2026-09-18,
+// **What is refused inside the four new letters is a construct rather than
+// the letter**, which is the posture #3894 settled for `E` and is the whole
+// reason they could land at all. Measured 2026-09-20,
 // `[[ abab == ~(G)\(ab\)\1 ]]` matches there and `[[ abcd == ~(G)\(ab\)\1 ]]`
 // does not, with `[[ abcd == ~(G)\(ab\)cd ]]` as the control that says the
-// group parses: the flavor has **backreferences**. Go's `regexp` is RE2 and
-// has none — `regexp.Compile` refuses `(ab)\1` outright — so that flavor
-// cannot be written on the engine every other one here already uses, and the
-// same two probes answer `no` under `~(E)` and `~(X)`, which says it is `G`'s alone.
-// See #3186.
+// group parses: the flavor has **backreferences**, and so does every other
+// one that shell has, `E` included once the probe is written unescaped. Go's
+// `regexp` is RE2 and has none — `regexp.Compile` refuses `(ab)\1` outright —
+// so a pattern using one stops with the construct named, and every pattern
+// that does not use one is answered. See #3186.
 //
 // # What is not modeled
 //
@@ -107,11 +119,19 @@ import (
 //     letters was read, which is the one answer here that cannot be a new
 //     wrong one. `N` is the exception, because it is about the word rather
 //     than about matching a component.
-//   - `G`, `P`, `V` and `X`, for the reason given above: one of them needs
-//     backreferences, which the engine the others would use does not have.
-//   - A backreference or a lookaround inside an `E` pattern, for that same
-//     reason — and **refused by name** rather than left to answer a quiet
-//     `no`, which is what it did until #3894. See unsupportedERE.
+//   - A backreference or a lookaround inside any regular-expression flavor,
+//     and a `\<` or `\>` word edge inside a basic one — **refused by name**
+//     rather than left to answer a quiet `no`, which is what an `E` pattern
+//     did until #3894. See unsupportedTilde.
+//   - The rest of the escapes the extended flavors take. ksh93 keeps every
+//     backslash in an `E`, `X` or `P` pattern and this shell keeps only the
+//     digits, which is a divergence #3894 named and measured and this change
+//     inherits unchanged for the two new extended letters. See
+//     tildeKeepsBackslash for the rows and for the one exception, `X`'s `\&`.
+//   - A `^` or `$` buried inside one operand of a conjunction. The two at the
+//     ends of an operand are read against the subject, which is what ksh93
+//     does; one in the middle of an alternation inside an operand is read
+//     against the span. See tildeOperand.
 
 // tildeFlavor is the pattern language a `~(…)` prefix selects.
 type tildeFlavor uint8
@@ -121,6 +141,28 @@ const (
 	tildeGlob tildeFlavor = iota
 	// tildeERE is `E`: the pattern is a POSIX extended regular expression.
 	tildeERE
+	// tildeAugERE is `X`: the extended regular expression plus one operator,
+	// and finding which one took nine probes that separate it from nothing.
+	// `&` is a **conjunction** there and an ordinary character in `E`:
+	// measured 2026-09-20, `[[ abc == ~(X)a.c&abc ]]` matches and
+	// `[[ abc == ~(X)a.c&axc ]]` does not, where `[[ "a&b" == ~(E)a&b ]]`
+	// matches the three characters. See tildeConjunction for what the
+	// operands have to agree about, which is not what it first looks like.
+	tildeAugERE
+	// tildePerl is `P`: a Perl regular expression. `\d`, `\w`, `\s`, a lazy
+	// quantifier and an inline `(?i)` are all read there and all read the
+	// same way by Go's `regexp`, so the flavor is the ERE compile with a
+	// wider escape set rather than a second engine — measured 2026-09-20,
+	// `[[ a1 == ~(P)a\d ]]` matches with `[[ ab == ~(P)a\d ]]` as the
+	// control, and `[[ aXbXc == ~(P)^a.*?Xb ]]` matches where
+	// `[[ aXbXc == ~(P)^a.*Xb$ ]]` does not.
+	tildePerl
+	// tildeBRE is `G` and `V`: a **basic** regular expression, where the
+	// backslash turns a grouping, an interval, an alternation and the two
+	// one-character repetitions on rather than off. No probe written here
+	// separates the two letters — eighteen were tried — so they compile
+	// alike. See breToRE2.
+	tildeBRE
 	// tildeLiteral is `F` and `L`: the pattern is the characters it is
 	// written with, and no character is a metacharacter.
 	tildeLiteral
@@ -153,7 +195,7 @@ type tildeModifier struct {
 const kshTildeLetters = "ABEFGKLMNOPSUVXaglimprsx"
 
 // honoredTildeLetters are the ones this shell answers.
-const honoredTildeLetters = "EFKLNgilprs"
+const honoredTildeLetters = "EFGKLNPVXgilprs"
 
 // splitTildeModifier peels a `~(…)` prefix off the front of p.
 //
@@ -184,6 +226,12 @@ func readTildeModifier(body string) (m tildeModifier, unhonored byte) {
 			on = false
 		case 'E':
 			m.flavor = tildeERE
+		case 'X':
+			m.flavor = tildeAugERE
+		case 'P':
+			m.flavor = tildePerl
+		case 'G', 'V':
+			m.flavor = tildeBRE
 		case 'F', 'L':
 			m.flavor = tildeLiteral
 		case 'K', 'p', 's':
@@ -210,6 +258,41 @@ func readTildeModifier(body string) (m tildeModifier, unhonored byte) {
 	return m, 0
 }
 
+// tildeExpr is a compiled `~(…)` pattern.
+//
+// Two shapes, because one flavor has an operator no single expression can
+// carry: everything but a conjunction is one [regexp.Regexp], and a
+// conjunction is the alternatives of the whole pattern, each holding the
+// operands that have to describe the **same** span. See tildeConjunction.
+type tildeExpr struct {
+	re   *regexp.Regexp
+	alts [][]tildeOperand
+	// left and right say the span is pinned to an end of the piece, which a
+	// conjunction has to enforce for itself: its operands are each compiled
+	// anchored, so the anchors cannot ride on the expression the way they do
+	// for the single-expression shape.
+	left, right bool
+}
+
+// tildeOperand is one operand of a conjunction, and the two things about it
+// that the span search rather than the engine has to answer.
+//
+// `^` and `$` inside an operand are about the **subject** and not about the
+// span the operator is choosing, which is the one place the two readings come
+// apart — measured 2026-09-20, `[[ abcabc == ~(X)^abc&abc$ ]]` does not match
+// there even though `abc` sits at each end, with `[[ abab == ~(X)^ab&ab ]]`
+// and `[[ abab == ~(X)ab&ab$ ]]` as the controls that say each anchor alone
+// is satisfiable. Matching an anchored expression against the span's own text
+// would answer yes to all three, because the span's start is the text's.
+type tildeOperand struct {
+	re *regexp.Regexp
+	// atSubjectStart and atSubjectEnd are a leading `^` and a trailing `$`,
+	// which is where both anchors are written in practice. One buried in an
+	// alternation inside an operand is read against the span and is a limit
+	// rather than a reading; see the flavor's notes.
+	atSubjectStart, atSubjectEnd bool
+}
+
 // tildeRegex compiles the pattern for a flavor that is a regular expression.
 //
 // whole says the caller is asking about a whole subject rather than choosing
@@ -218,32 +301,368 @@ func readTildeModifier(body string) (m tildeModifier, unhonored byte) {
 // themselves and hand this one span to compare. Measured both ways —
 // `[[ xabcx == ~(E)a.c ]]` matches, and `s=aXbXc; ${s//~(E)X/-}` is `a-b-c`
 // rather than `-c`, which it would be if each span were searched.
-func (m tildeModifier) tildeRegex(pattern string, whole bool) (*regexp.Regexp, bool) {
-	if m.flavor == tildeLiteral {
+func (m tildeModifier) tildeRegex(pattern string, whole bool) (tildeExpr, bool) {
+	switch m.flavor {
+	case tildeLiteral:
 		pattern = regexp.QuoteMeta(pattern)
+	case tildeBRE:
+		expr, unsupported := breToRE2(pattern)
+		if unsupported != "" {
+			// Named and refused by Runner.tildeModifierOpts before the match
+			// is ever asked for. Reaching here means a caller that did not
+			// go through it, and a false is the answer it already had.
+			return tildeExpr{}, false
+		}
+		pattern = expr
 	}
+	x := tildeExpr{left: !whole || m.left, right: !whole || m.right}
+	if m.flavor == tildeAugERE {
+		if alts, ok := tildeConjunction(pattern); ok {
+			for _, alt := range alts {
+				group := make([]tildeOperand, 0, len(alt))
+				for _, operand := range alt {
+					re, err := regexp.Compile(m.wrapRegex(operand, true, true))
+					if err != nil {
+						return tildeExpr{}, false
+					}
+					group = append(group, tildeOperand{
+						re:             re,
+						atSubjectStart: strings.HasPrefix(operand, "^"),
+						atSubjectEnd: strings.HasSuffix(operand, "$") &&
+							!strings.HasSuffix(operand, `\$`),
+					})
+				}
+				x.alts = append(x.alts, group)
+			}
+			return x, true
+		}
+	}
+	re, err := regexp.Compile(m.wrapRegex(pattern, x.left, x.right))
+	if err != nil {
+		return tildeExpr{}, false
+	}
+	x.re = re
+	return x, true
+}
+
+// wrapRegex puts the flags and the anchors the letters asked for around one
+// expression.
+func (m tildeModifier) wrapRegex(pattern string, left, right bool) string {
 	var b strings.Builder
 	// The same flag the `=~` operator compiles under, and for the same
-	// reason: this flavor is a POSIX ERE too, so a newline in the subject is
-	// ordinary ground. See regexDotAll.
+	// reason: these flavors are regular expressions too, so a newline in the
+	// subject is ordinary ground. Measured for all five ksh93 has, 2026-09-20:
+	// `[[ $'a\nc' == ~(F)a.c ]]` aside, every one of `E`, `X`, `P`, `V` and
+	// `G` matches `a.c` against a subject whose middle character is a
+	// newline. See regexDotAll.
 	b.WriteString(regexDotAll)
 	if m.fold {
 		b.WriteString("(?i)")
 	}
-	if !whole || m.left {
+	if left {
 		b.WriteString(`\A`)
 	}
 	b.WriteString("(?:")
 	b.WriteString(pattern)
 	b.WriteString(")")
-	if !whole || m.right {
+	if right {
 		b.WriteString(`\z`)
 	}
-	re, err := regexp.Compile(b.String())
-	if err != nil {
-		return nil, false
+	return b.String()
+}
+
+// match answers a compiled pattern against one piece of the subject.
+func (x tildeExpr) match(piece string) bool {
+	if x.re != nil {
+		return x.re.MatchString(piece)
 	}
-	return re, true
+	// A conjunction. Its operands are compiled anchored at both ends, so the
+	// search this does by hand is the one the engine does for the ordinary
+	// shape: find a span every operand of some alternative describes.
+	//
+	// The span is what makes it a search rather than a conjunction of
+	// searches, and the two differ — measured 2026-09-20 on ksh93u+,
+	// `[[ abc == ~(X)a&c ]]` does **not** match even though `a` and `c` are
+	// each in the subject, and `[[ abcabc == ~(X)^abc&abc$ ]]` does not
+	// either. The controls that say the operator works at all are
+	// `[[ abc == ~(X)(a.c)&(abc) ]]` and `[[ ab == ~(X)a.&.b ]]`, which do.
+	for start := 0; start <= len(piece); start++ {
+		if x.left && start != 0 {
+			break
+		}
+		for end := start; end <= len(piece); end++ {
+			if x.right && end != len(piece) {
+				continue
+			}
+			if x.matchesSpan(piece, start, end) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// matchesSpan reports whether some alternative's every operand describes the
+// span of piece between start and end.
+func (x tildeExpr) matchesSpan(piece string, start, end int) bool {
+	span := piece[start:end]
+	for _, alt := range x.alts {
+		all := true
+		for _, operand := range alt {
+			if operand.atSubjectStart && start != 0 {
+				all = false
+			} else if operand.atSubjectEnd && end != len(piece) {
+				all = false
+			} else if !operand.re.MatchString(span) {
+				all = false
+			}
+			if !all {
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+// tildeConjunction cuts an augmented ERE into the operands `&` joins, and is
+// false for a pattern holding no such operator — which is nearly all of them,
+// and is the shape that compiles to one expression.
+//
+// The cut is at the top level only: a `&` inside a group or a bracket
+// expression is the ordinary character, and so is one written `\&`, which is
+// why the operands come back with that spelling undone. Measured 2026-09-20:
+// `[[ "a&b" == ~(X)[&]b ]]` and `[[ "a&b" == ~(X)a\&b ]]` both match, and
+// `[[ abc == ~(X)(a&b) ]]` does not.
+//
+// **`&` binds tighter than `|`**, which is the one thing here a reader is
+// likely to get the other way round, so the alternatives are the outer split:
+// `[[ c == ~(X)a&b|c ]]` matches and `[[ c == ~(X)a&(b|c) ]]` does not.
+func tildeConjunction(pattern string) (alts [][]string, ok bool) {
+	var alt []string
+	var b strings.Builder
+	depth := 0
+	cut := func(alternative bool) {
+		alt = append(alt, b.String())
+		b.Reset()
+		if alternative {
+			alts = append(alts, alt)
+			alt = nil
+		}
+	}
+	for i := 0; i < len(pattern); {
+		switch c := pattern[i]; c {
+		case '\\':
+			if i+1 < len(pattern) && pattern[i+1] == '&' {
+				// An escaped ampersand is the character, and Go's `regexp`
+				// has no such escape — so the operator's own spelling is
+				// what is dropped rather than passed on.
+				b.WriteByte('&')
+				i += 2
+				continue
+			}
+			b.WriteString(pattern[i:min(i+2, len(pattern))])
+			i += 2
+		case '[':
+			j := skipBracketExpression(pattern, i)
+			b.WriteString(pattern[i:j])
+			i = j
+		case '(':
+			depth++
+			b.WriteByte(c)
+			i++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+			b.WriteByte(c)
+			i++
+		case '&', '|':
+			if depth > 0 {
+				b.WriteByte(c)
+				i++
+				continue
+			}
+			cut(c == '|')
+			ok = ok || c == '&'
+			i++
+		default:
+			b.WriteByte(c)
+			i++
+		}
+	}
+	cut(true)
+	return alts, ok
+}
+
+// breToRE2 rewrites a basic regular expression as one Go's `regexp` can read,
+// and names the first construct that has no reading there.
+//
+// BRE is the mirror of ERE for five operators: a **backslashed** `(`, `)`,
+// `{`, `}`, `|`, `+` and `?` is the operator and a bare one is the character,
+// where ERE has it the other way round. Measured on ksh93u+ 2012-08-01,
+// 2026-09-20, with the pattern supplied through a variable so that the
+// shell's own quote removal cannot reach it:
+//
+//	[[ abc == ~(G)a\(b\)c ]]        matches — `\(…\)` groups
+//	[[ 'a(b)c' == ~(G)a(b)c ]]      matches — a bare paren is the character
+//	[[ aaa == ~(G)a\{3\} ]]         matches — `\{…\}` is the interval
+//	[[ 'a{3}' == ~(G)a{3} ]]        matches — a bare brace is the character
+//	[[ ab == ~(G)a\|b ]]            matches — `\|` alternates
+//	[[ 'a|b' == ~(G)a|b ]]          matches — a bare bar is the character
+//	[[ aab == ~(G)a\+b ]]           matches — `\+` repeats
+//	[[ 'a+b' == ~(G)a+b ]]          matches — a bare plus is the character
+//	[[ ab == ~(G)ax\?b ]]           matches — `\?` is zero or one
+//	[[ 'a?b' == ~(G)a?b ]]          matches — a bare question is the character
+//
+// `.`, `*`, `[…]` and the anchors read as they do anywhere, and the anchors
+// are positional rather than always live — the same rule POSIX states and one
+// a translation has to carry, because RE2 would take every one of them:
+//
+//	[[ 'x^y' == ~(G)x^y ]]          matches — a caret inside is the character
+//	[[ 'x$y' == ~(G)x$y ]]          matches — and so is a dollar inside
+//	[[ ab == ~(G)\(^a\)b ]]         matches — a caret just past `\(` anchors
+//	[[ xab == ~(G)\(^a\)b ]]        does not — the control for the row above
+//	[[ ab == ~(G)a\(b$\) ]]         matches — a dollar just before `\)` anchors
+//	[[ abx == ~(G)a\(b$\) ]]        does not
+//	[[ ab == ~(G)^a\|^b ]]          matches — on the first branch's anchor
+//	[[ b == ~(G)^a\|^b ]]           does **not**, so a caret just past a `\|`
+//	                                is the character rather than an anchor
+//
+// **`V` is not distinguished from `G` by any of the eighteen probes written
+// here**, the four rows above included, so the two letters compile alike and
+// the pair is recorded rather than guessed at: `[[ 'a+b' == ~(V)a+b ]]`,
+// `[[ abc == ~(V)a\(b\)c ]]`, `[[ aaa == ~(V)a\{3\} ]]` and
+// `[[ ab == ~(V)a\|b ]]` all answer as `G` does.
+//
+// Two constructs are named and refused rather than translated, which is the
+// posture #3894 settled for `E` and this inherits:
+//
+//	[[ abab == ~(G)\(ab\)\1 ]]      matches there — a **backreference**
+//	[[ abcd == ~(G)\(ab\)\1 ]]      does not — the control
+//	[[ abcd == ~(G)\(ab\)cd ]]      matches — the control that says it groups
+//	[[ 'ab cd' == ~(G)\<cd ]]       matches there — a one-sided **word** edge
+//	[[ abcd == ~(G)\<cd ]]          does not — the control
+//
+// RE2 has neither: no backreferences at all, and `\b` only, which is both
+// edges at once and cannot be narrowed without a lookaround it also lacks.
+//
+// A `*` with nothing in front of it is left as the operator rather than
+// escaped into a character, and that is measured rather than lazy: ksh93
+// matches **neither** subject for `~(G)*ab` — not `*ab` and not `ab` — and a
+// `*` RE2 refuses to compile answers the same way, where escaping it would
+// make the first match and invent a reading.
+func breToRE2(pattern string) (expr, unsupported string) {
+	var b strings.Builder
+	// atStart is where there is nothing yet for a repetition to take and a
+	// `^` is the anchor rather than the character: the front of the
+	// expression, and just past a `\(` or a `\|`.
+	atStart := true
+	// re2Meta is what has to be escaped to reach RE2 as a character.
+	const re2Meta = `\.+*?()|[]{}^$`
+	for i := 0; i < len(pattern); {
+		switch c := pattern[i]; c {
+		case '\\':
+			if i+1 >= len(pattern) {
+				b.WriteString(`\\`)
+				i++
+				continue
+			}
+			d := pattern[i+1]
+			switch {
+			case d >= '1' && d <= '9':
+				return "", `\` + string(rune(d)) + " backreference"
+			case d == '<' || d == '>':
+				return "", `\` + string(rune(d)) + " word edge"
+			case strings.IndexByte(`(){}|+?`, d) >= 0:
+				b.WriteByte(d)
+				atStart = d == '('
+			default:
+				// The character it is written as, which RE2 spells with a
+				// backslash for its own operators and without one for
+				// everything else — `\y` there is an error rather than the
+				// letter. A rune rather than a byte, so that a backslash in
+				// front of a multi-byte character does not split it.
+				_, size := utf8.DecodeRuneInString(pattern[i+1:])
+				if size == 1 && strings.IndexByte(re2Meta, d) >= 0 {
+					b.WriteByte('\\')
+				}
+				b.WriteString(pattern[i+1 : i+1+size])
+				atStart = false
+				i += 1 + size
+				continue
+			}
+			i += 2
+		case '[':
+			j := skipBracketExpression(pattern, i)
+			b.WriteString(pattern[i:j])
+			atStart = false
+			i = j
+		case '^':
+			if atStart {
+				b.WriteByte('^')
+			} else {
+				b.WriteString(`\^`)
+			}
+			i++
+		case '$':
+			if breAnchorsHere(pattern, i+1) {
+				b.WriteByte('$')
+			} else {
+				b.WriteString(`\$`)
+			}
+			atStart = false
+			i++
+		case '(', ')', '{', '}', '|', '+', '?':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+			atStart = false
+			i++
+		case '.', '*':
+			b.WriteByte(c)
+			atStart = false
+			i++
+		default:
+			if strings.IndexByte(re2Meta, c) >= 0 {
+				b.WriteByte('\\')
+			}
+			b.WriteByte(c)
+			atStart = false
+			i++
+		}
+	}
+	return b.String(), ""
+}
+
+// breAnchorsHere reports whether a `$` ending at i is the end-of-subject
+// anchor rather than the character — true at the end of the expression, and
+// before the `\)` or `\|` that ends the branch it is in.
+func breAnchorsHere(pattern string, i int) bool {
+	if i >= len(pattern) {
+		return true
+	}
+	return pattern[i] == '\\' && i+1 < len(pattern) && pattern[i+1] == ')'
+}
+
+// unsupportedTilde names the first construct in this pattern that the engine
+// underneath the flavor cannot express, and is empty for one it can take
+// whole — a glob or a literal always, since neither reaches an engine.
+//
+// One function per *flavor family* rather than one per letter: the three
+// extended flavors share a scan because they share RE2's two absences, and
+// the basic one is answered by the translation that has to read the pattern
+// anyway. A second scan beside either is how the two would come to disagree.
+func (m tildeModifier) unsupportedTilde(pattern string) string {
+	switch m.flavor {
+	case tildeERE, tildeAugERE, tildePerl:
+		return unsupportedERE(pattern)
+	case tildeBRE:
+		_, unsupported := breToRE2(pattern)
+		return unsupported
+	}
+	return ""
 }
 
 // unsupportedERE names the first construct in an ERE that the engine
@@ -373,11 +792,11 @@ func matchTilde(m tildeModifier, pattern, piece, subject string, base int, o pat
 		o.foldClass = o.foldClass || m.fold
 		return matchPatternIn(pattern, piece, subject, base, o)
 	}
-	re, ok := m.tildeRegex(pattern, o.whole)
+	x, ok := m.tildeRegex(pattern, o.whole)
 	if !ok {
 		return false, matchReport{}
 	}
-	return re.MatchString(piece), matchReport{}
+	return x.match(piece), matchReport{}
 }
 
 // tildeModifierOpts turns the reading on for a dialect that has the construct,
@@ -405,14 +824,12 @@ func (r *Runner) tildeModifierOpts(o patternOpts, pattern string) patternOpts {
 	// The same refusal for a construct rather than a letter, and in the same
 	// place on purpose: this is the one route a `~(…)` pattern takes to the
 	// matcher, so a second scan somewhere nearer the compile would be a
-	// second thing to keep in step. See unsupportedERE for what is refused
+	// second thing to keep in step. See unsupportedTilde for what is refused
 	// and why a silent `no` was the wrong answer (#3894).
-	if m.flavor == tildeERE {
-		if bad := unsupportedERE(rest); bad != "" {
-			r.diagf("%s: the %s is not implemented\n", pattern, bad)
-			r.status = 1
-			r.stopTheShell()
-		}
+	if bad := m.unsupportedTilde(rest); bad != "" {
+		r.diagf("%s: the %s is not implemented\n", pattern, bad)
+		r.status = 1
+		r.stopTheShell()
 	}
 	return o
 }

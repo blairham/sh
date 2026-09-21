@@ -2371,8 +2371,10 @@ whole-string one.
 | letter | what the probes say |
 | --- | --- |
 | `E` | an extended regular expression, matching a substring |
-| `G` | a regular expression that is not ERE: `^a.c$` and `a.c` match and `a?c` does not, which is grep's *basic* syntax |
-| `A` `B` `P` `V` `X` | each answers as `E` does on every probe written here |
+| `G` `V` | a **basic** regular expression: `^a.c$` and `a.c` match and `a?c` does not, which is grep's *basic* syntax. Eighteen probes separate the two letters on nothing |
+| `X` | the extended one plus a single operator — `&`, a conjunction over the same span. Nine further probes separate it from `E` on nothing |
+| `P` | a Perl regular expression: `\d`, `\w`, `\s`, a lazy `.*?` and an inline `(?i)` are each read |
+| `A` `B` | each answers as `E` does on every probe written here |
 | `F` | a literal string, matching a substring: `~(F)a.c` is the three characters |
 | `L` | a literal string as well, and no probe here separates it from `F` |
 | `K` | the ksh glob, which is what a pattern with no prefix already is |
@@ -2420,33 +2422,123 @@ The anchors:
 
 ### What this shell honors, and what it refuses by name
 
-Honored: `E`, `F`, `L`, `K`, `N`, `g`, `i`, `l`, `p`, `r`, `s`, the `+`/`-`
-toggles and the empty group. The regular-expression flavors are compiled by
-Go's `regexp`, which is the engine `=~` already uses here.
+Honored: `E`, `F`, `G`, `K`, `L`, `N`, `P`, `V`, `X`, `g`, `i`, `l`, `p`, `r`,
+`s`, the `+`/`-` toggles and the empty group. Every regular-expression flavor
+is compiled by Go's `regexp`, which is the engine `=~` already uses here —
+`E`, `X` and `P` as written, `G` and `V` translated from basic syntax first.
 
-The rest are **refused by name rather than accepted and ignored** — `<pattern>:
-the ~(G) pattern modifier is not implemented`, at status 1. `A`, `B`, `P`, `V`
-and `X` agreeing with `E` on the probes above is not evidence that they *are*
-`E`, and no probe gives `M`, `O`, `S`, `U`, `a`, `m` or `x` anything to do. A
-flag taken and dropped is a wrong answer at status 0, which is worse than a
-refusal.
+`A`, `B`, `M`, `O`, `S`, `U`, `a`, `m` and `x` are **refused by name rather
+than accepted and ignored** — `<pattern>: the ~(A) pattern modifier is not
+implemented`, at status 1. `A` and `B` agreeing with `E` on the probes above
+is not evidence that they *are* `E`, and no probe gives the rest anything to
+do. A flag taken and dropped is a wrong answer at status 0, which is worse
+than a refusal.
 
-`G` and `V` are refused for a reason of a different kind, and it is not a
-matter of effort. Measured 2026-09-18:
+### The four regular-expression letters, and what each is
+
+They were all four refused until #3186, on a reading that turned out to be
+wrong twice over: that they behaved as `E` did, and that one of them alone
+needed something the engine here lacks. Re-measured a pattern at a time on
+2026-09-20 with the pattern supplied **through a variable**, since the shell's
+own quote removal reaches a written one and a written `&` is its async
+operator.
+
+`G` and `V` are a **basic** regular expression, which is the mirror of `E` for
+seven operators — a backslashed `(`, `)`, `{`, `}`, `|`, `+` and `?` is the
+operator and a bare one is the character:
+
+| written | ksh93u+ | reading |
+| --- | --- | --- |
+| `a\(b\)c` over `abc` | matches | `\(…\)` groups |
+| `a(b)c` over `a(b)c` | matches | a bare paren is the character |
+| `a\{3\}` over `aaa` | matches | `\{…\}` is the interval |
+| `a{3}` over `a{3}` | matches | a bare brace is the character |
+| `a\|b` over `ab` | matches | `\|` alternates |
+| `a|b` over `a|b` | matches | a bare bar is the character |
+| `a\+b` over `aab` | matches | `\+` repeats |
+| `a+b` over `a+b` | matches | a bare plus is the character |
+| `ax\?b` over `ab` | matches | `\?` is zero or one |
+| `a?b` over `a?b` | matches | a bare question is the character |
+
+The anchors there are positional rather than always live, and one of the four
+rows is the one a translation is most likely to get wrong:
+
+| written | ksh93u+ | reading |
+| --- | --- | --- |
+| `x^y` over `x^y` | matches | a caret inside is the character |
+| `x$y` over `x$y` | matches | and so is a dollar inside |
+| `\(^a\)b` over `ab` | matches | a caret just past `\(` anchors |
+| `\(^a\)b` over `xab` | no | the control for the row above |
+| `a\(b$\)` over `ab` | matches | a dollar just before `\)` anchors |
+| `a\(b$\)` over `abx` | no | the control |
+| `^a\|^b` over `ab` | matches | on the first branch's anchor |
+| `^a\|^b` over `b` | **no** | so a caret just past a `\|` is the character |
+
+**`V` is not distinguished from `G` by any of the eighteen probes written**,
+those rows included, so the two compile alike here and the pair is recorded
+rather than guessed at.
+
+`X` is `E` plus exactly one operator, and finding which one took nine probes
+that separate the two letters on nothing — `.` spanning a newline, `(?i)`,
+`.*?`, `[[:alpha:]]`, the anchors, groups, alternation, `+` and `\<`, which
+neither has:
+
+| written | `~(E)` | `~(X)` |
+| --- | --- | --- |
+| `a.c&abc` over `abc` | no | **matches** |
+| `a.c&axc` over `abc` | no | no — the control |
+| `a&b` over `a&b` | matches | no |
+
+So `&` is a conjunction there. Its operands describe the **same span** rather
+than the same subject, which is the reading a pair of independent searches
+would get wrong:
+
+| written | ksh93u+ | reading |
+| --- | --- | --- |
+| `a&c` over `abc` | **no** | `a` and `c` are each in the subject and there is no span holding both |
+| `(a.c)&(abc)` over `abc` | matches | the control that says the operator works |
+| `a.&.b` over `ab` | matches | one span, described twice |
+| `ab&b` over `ab` | no | no span is both |
+| `^abc&abc$` over `abcabc` | **no** | the anchors are the subject's, not the span's |
+| `^ab&ab` over `abab` | matches | the control for the caret half |
+| `ab&ab$` over `abab` | matches | and for the dollar half |
+| `a&b|c` over `c` | matches | `&` binds **tighter** than `|` |
+| `a&(b|c)` over `c` | no | the control that says which way round |
+
+`P` is a Perl regular expression, and everything measured about it is
+something Go's `regexp` already reads — so it is the same compile with a wider
+escape set rather than a second engine:
+
+| written | ksh93u+ | control |
+| --- | --- | --- |
+| `a\d` over `a1` | matches | `a\d` over `ab` — no |
+| `a\wc` over `abc`, `a\sc` over `a c` | matches | |
+| `^a.*?Xb` over `aXbXc` | matches | `^a.*Xb$` over `aXbXc` — no, so the lazy quantifier is doing it |
+| `(?i)abc` over `ABC` | matches | |
+
+### What the four refuse, and why that is what let them land
+
+Not the letter — the **construct**, which is the posture #3894 settled for
+`E`. Every flavor ksh93 has carries backreferences, `E` included once the
+probe is written unescaped, and RE2 has none:
 
 | written | ksh93u+ |
 | --- | --- |
-| `[[ abab == ~(G)\(ab\)\1 ]]` | **matches** |
-| `[[ abcd == ~(G)\(ab\)\1 ]]` | no |
-| `[[ abcd == ~(G)\(ab\)cd ]]` | matches — the control that says the group parses |
-| `[[ abab == ~(X)\(ab\)\1 ]]` | no |
-| `[[ abab == ~(E)\(ab\)\1 ]]` | no |
+| `\(ab\)\1` over `abab` under `~(G)` | **matches** |
+| `\(ab\)\1` over `abcd` under `~(G)` | no |
+| `\(ab\)cd` over `abcd` under `~(G)` | matches — the control that says the group parses |
 
-The first two rows together are the claim: the group is captured and the
-reference has to match what it captured, so that flavor has
-**backreferences**. Go's `regexp` is RE2 and has none — `regexp.Compile`
-refuses `(ab)\1` outright — so it cannot be written on the engine every other
-flavor here already uses, and the last two rows say it is `G`'s alone.
+So a pattern using one stops with `<pattern>: the \1 backreference is not
+implemented` at status 1, and every pattern that does not use one is
+answered. The lookarounds are refused the same way, and the basic flavors add
+a third: a **one-sided word edge**, which RE2 has no spelling for at all since
+its `\b` is both sides at once and narrowing it would need the lookaround it
+also lacks.
+
+| written | ksh93u+ | here |
+| --- | --- | --- |
+| `\<cd` over `ab cd` under `~(G)` | matches | `the \< word edge is not implemented`, at 1 |
+| `\<cd` over `abcd` under `~(G)` | no | the control |
 
 ### `E` refuses the same two constructs by name, rather than answering no
 
@@ -2504,7 +2596,34 @@ break the fifth, so what is modeled is **only the digits**: a `\1` to `\9`
 keeps its backslash, because dropping it turns the pattern into the perfectly
 ordinary `(ab)1` and hides from the scan the one construct this shell has to
 name. The rest of the table is a divergence of its own and wants its own
-measurement.
+measurement. `X` and `P` inherit it unchanged.
+
+**And the set ksh93 itself keeps differs by flavor**, which a written probe
+cannot see past and which is why every measurement in the section above is
+made through a variable. Measured 2026-09-20, each row with the control that
+separates the two readings:
+
+| written | ksh93u+ | what it says |
+| --- | --- | --- |
+| `[[ aXb == ~(E)a\.b ]]` | no | `E` keeps the backslash |
+| `[[ aXb == ~(G)a\.b ]]` | **matches** | `G` does not |
+| `[[ abcd == ~(E)\(ab\)cd ]]` | no | `E` keeps it here too |
+| `[[ abc == ~(G)a\(b\)c ]]` | matches | and `G` keeps this one |
+| `[[ aab == ~(G)a\+b ]]` | no | while dropping this one |
+| `[[ ab == ~(G)ax\?b ]]` | matches | and keeping this one |
+
+So the extended flavors keep every backslash there and the basic ones keep
+only some. What is modeled is narrower than either and reproduces each row
+above: the digits for every flavor, and for a **basic** one the characters
+whose backslash decides whether they are an operator — `(`, `)`, `|`, `?`,
+`*`, `[`, `^`, `<`, `>`. `.`, `+`, `{` and `}` are measured dropped there and
+are dropped here.
+
+`X` has one exception of its own, because there `&` is an **operator**:
+`[[ "a&b" == ~(X)a\&b ]]` matches and `[[ ab == ~(X)a\&b ]]` does not, so
+dropping the backslash would turn a literal into a conjunction. The backslash
+is kept through quote removal and undone again when the operands are cut, so
+the engine sees the character.
 
 ### A regular expression matches a substring, and that reaches the matcher
 
@@ -2539,6 +2658,10 @@ each candidate span would have given.
   read whatever the remainder holds, because it is about the **word** rather
   than about matching a component.
 - **`${.sh.match}` after an ERE with capture groups.**
+- **A `^` or `$` buried inside one operand of a conjunction.** The two at the
+  ends of an operand are read against the subject, which is what ksh93 does
+  and is what the `^abc&abc$` row above pins; one inside an alternation
+  within an operand is read against the span the operator is choosing.
 
 ## One shell's extended pattern operators, and the option that gates them
 

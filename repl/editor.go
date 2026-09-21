@@ -101,6 +101,26 @@ type editor struct {
 	// which is what two of the four dialects do.
 	interrupt string
 
+	// leaving is what marks a read the end-of-input key ended, and it is the
+	// word the session leaves with — the other half of the pair interrupt is
+	// one of. Empty draws nothing, which is what four of the five dialects do
+	// and what a read a *command* asked for gets whatever the dialect says:
+	// `vared` ending on ^D is not the session ending. See readValue, and
+	// stopped for the measurement.
+	//
+	// Given per read by the loop rather than once by newEditor, because it is
+	// only the read at a **fresh** prompt that this word belongs to — see the
+	// loop in repl.go.
+	leaving string
+
+	// wroteLeaving records that the read that just ended wrote it, so that
+	// the session does not write it a second time under the row it is
+	// already on. Cleared at the top of every read, so it always speaks for
+	// the last one and never for an earlier one — a ^D a stopped job held the
+	// session through wrote the word and did not end the session, and the
+	// line typed after it has not written anything.
+	wroteLeaving bool
+
 	// bracketedPaste says this dialect asks the terminal to wrap pasted text
 	// in markers, and pastedStyle and pastedStyleEnd are what a run that
 	// arrived that way is drawn in. pastedFrom and pastedTo are the run
@@ -282,6 +302,10 @@ type editor struct {
 // exit — and ErrInterrupted for ^C, which abandons the line without exiting.
 func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	e.line, e.pos = e.line[:0], 0
+	// Nothing has been written on the way out of this read yet. Here rather
+	// than where the word is written, so that the answer belongs to the read
+	// being started and not to whichever earlier one last ended in ^D.
+	e.wroteLeaving = false
 	if e.lineStart.seeded {
 		// A command handed over the line rather than asking for a fresh one,
 		// so the text it supplied is what is on it and the cursor is after
@@ -443,8 +467,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			case viAbandoned:
 				return e.abandon(prompt)
 			case viStopped:
-				e.endLine(prompt, "")
-				return "", io.EOF
+				return e.stopped(prompt)
 			}
 			continue
 		}
@@ -459,8 +482,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 				// falls through to the delete below, which on an empty line
 				// does nothing; see lineStart.endOnEndOfInput for what the
 				// shell being modeled does there instead.
-				e.endLine(prompt, "")
-				return "", io.EOF
+				return e.stopped(prompt)
 			}
 			// With something typed, ^D deletes forwards instead — which is
 			// what it means everywhere but on an empty line.
@@ -647,6 +669,35 @@ func (e *editor) inputPending() bool { return len(e.pushed) > 0 || e.heldPos < e
 func (e *editor) abandon(prompt drawnPrompt) (string, error) {
 	e.endLine(prompt, e.interrupt)
 	return "", ErrInterrupted
+}
+
+// stopped ends a read the end-of-input key ended, with the word the session
+// leaves with on the row the prompt is on.
+//
+// The same shape as abandon above, and that is the whole of the argument: ^C
+// puts its mark on the row it abandons rather than on the row below, and the
+// other way out of a read is not different. It was, and only here — the piped
+// loop, which has no editor and writes the prompt itself, has always put the
+// word on the last prompt's row.
+//
+// Measured 2026-09-21 through a pseudo-terminal, `env -i`, `PS1='P> '`, one
+// `echo 1` and then ^D:
+//
+//	bash 5.3.20  'P> echo 1\r\n1\r\nP> exit\r\n'
+//	this editor  '…P> echo 1\r\n…1\r\n…P> \r\n…exit\r\n'
+//
+// So a person leaving a session saw an empty-looking prompt and then a word
+// on a row of its own with nothing on the screen attaching it to the prompt
+// above (#4011). Invisible to the suite, every file of which runs without a
+// terminal.
+//
+// A dialect with no word ends the row exactly as before, which is measured
+// too: dash and ksh93 end it on ^D, and so does zsh, which has an editor and
+// no word.
+func (e *editor) stopped(prompt drawnPrompt) (string, error) {
+	e.endLine(prompt, e.leaving)
+	e.wroteLeaving = e.leaving != ""
+	return "", io.EOF
 }
 
 // readRune completes a UTF-8 sequence whose first byte has arrived.

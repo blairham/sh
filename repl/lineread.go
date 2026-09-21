@@ -72,9 +72,18 @@ func (e *editor) readValue(prompt drawnPrompt, req interp.LineEdit) (string, err
 	if !req.History {
 		e.history = nil
 	}
+	// And the word the session leaves with is not this read's to write. ^D
+	// here ends the read the command asked for and the command goes on
+	// running — the session is not ending, so there is nothing to say about
+	// it, and the row is ended the way it is for a dialect that has no word.
+	// Taken away and given back for the reason the history is: the next read
+	// is the prompt's again. See editor.stopped.
+	leaving := e.leaving
+	e.leaving = ""
 	defer func() {
 		e.lineStart = lineStart{}
 		e.history, e.browsing = history, browsing
+		e.leaving = leaving
 	}()
 	return e.readLine(prompt)
 }

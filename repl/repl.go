@@ -549,7 +549,20 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// raw mode took the kernel's newline handling with it, and a bare line
 	// feed would leave the shell's last word starting wherever the prompt
 	// ended. After makeRaw too, so a session that never began says nothing.
-	defer s.leaving()
+	//
+	// Skipped where the *editor* already wrote it, which is every session a
+	// person ends with ^D: measured, the word goes on the row the last
+	// prompt is on rather than under it, and the only place with the cursor
+	// still on that row is the key that ended the read. See editor.stopped.
+	// This is still the one site the word is decided at — the editor is
+	// handed the same string — and every other way a session ends comes
+	// through here.
+	var wroteLeaving bool
+	defer func() {
+		if !wroteLeaving {
+			s.leaving()
+		}
+	}()
 
 	// A command runs with the terminal back in its own line discipline, so
 	// ^C then reaches the foreground process group as a signal — and this
@@ -623,6 +636,16 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// see markUnfinished. A continuation prompt marks nothing: the
 			// newline the terminal echoed already ended the row.
 			ed.markUnfinished()
+			// And the word this session leaves with is this read's to write,
+			// because ^D here is the end of the session.
+			ed.leaving = s.Leaving
+		} else {
+			// At a continuation prompt it is not. Measured 2026-09-21,
+			// `PS1='P> '` and `PS2='> '`, `for i in 1` and then ^D: bash
+			// 5.3.20 writes the complaint about the construct the input ran
+			// out inside first and the word after it, so the word is not
+			// what ends this row.
+			ed.leaving = ""
 		}
 		drawn := s.beforeReading(ctx, state, &pending)
 		if s.Runner.Exited() {
@@ -631,6 +654,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			return s.status(), nil
 		}
 		line, err := ed.readLine(drawn)
+		// Whether that read wrote the word this session leaves with, which
+		// is the end-of-input key and nothing else. Taken per read rather
+		// than accumulated: a ^D a stopped job held the session through
+		// wrote it and left the session running, and the `exit` typed
+		// afterwards has its own word to write.
+		wroteLeaving = ed.wroteLeaving
 		// A seed belongs to the read it was set for and to no later one: the
 		// next prompt after a verified line is an empty one whichever way
 		// this read ended, ^C included. Cleared here rather than on each way

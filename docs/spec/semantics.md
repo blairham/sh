@@ -17816,6 +17816,58 @@ handler for killed it, rather than because it reached the end or ran
 prints bye in bash and ksh93 and prints nothing in dash and zsh, and all
 four report 130. A two-two split on whether dying counts as exiting.
 
+**`ExitTrapRunsInsideTheExitingCall`** — bash yes · dash yes · ksh93 no ·
+zsh no · ash yes
+
+Runs the EXIT trap at the point `exit` was written, with the call that
+ran it still standing, rather than after the stack has unwound. The body
+runs either way, with the same status and the same output; what changes
+is what it can see of the call it was fired from — the function's locals,
+its positional parameters, and whatever name the dialect gives the
+running function.
+
+A **local** is the probe, because it is the one every column can answer:
+only two of the six name the running function at all. Measured
+2026-09-21, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with
+a scratch HOME:
+
+    v=global
+    g() { local v=inner; trap 'echo "v=$v"' EXIT; exit 0; }
+    g
+
+| shell | what the trap read |
+| --- | --- |
+| bash 5.3.20 | `v=inner` |
+| bash 3.2.57 | `v=inner` |
+| dash 0.5.12 | `v=inner` |
+| BusyBox ash 1.37.0 | `v=inner` |
+| zsh 5.9.2 | `v=global` |
+| ksh93u+ 2012-08-01 | no `local`; see below |
+
+ksh93 has no `local`, so it is probed with `function g { typeset v=…; }`
+— where `typeset` *is* local, controlled beside it — and with
+`${.sh.level}`. Both read the top: `v` is the global and the level is 1,
+on the `exit` route as on the fallthrough. So ksh93 answers **no**.
+
+**`${.sh.fun}` looks like a third probe and is not.** It reads `g` in
+ksh93 whether the function exited or fell off its end, so it cannot tell
+the two readings apart — a shell whose stack has unwound still names the
+last function that ran. #4046 was filed with that reading and the axis's
+ksh93 row is the corrected one.
+
+**The control that says this is about `exit` and not about the trap.**
+The same function left by falling off its end —
+`g() { local v=inner; trap '…' EXIT; }; g` — reads `v=global` in every
+column, bash included, because the call really has returned by the time
+the shell ends. Only the `exit` route runs the trap from inside, which is
+why the axis is read where `exit` raises the stop and not where the trap
+fires.
+
+Asked only inside a call. At the top level the two readings cannot be
+told apart, and an unanswered axis is a refusal — asking there would
+refuse the ordinary `trap … EXIT; exit` of a shell whose dialect had not
+answered.
+
 **`LoopControlOutsideALoopIsFatal`** — bash no · dash no · ksh93 no · zsh
 yes
 

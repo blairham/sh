@@ -3432,6 +3432,39 @@ type Semantics struct {
 	// PID 1 and every shell it starts is a child of that; a hand probe is.
 	ExitTrapRunsOnSignalDeath Answer
 
+	// ExitTrapRunsInsideTheExitingCall runs the EXIT trap at the point `exit`
+	// was written, with the call that ran it still standing, rather than
+	// after the stack has unwound.
+	//
+	//	g() { local v=inner; trap 'echo "v=$v"' EXIT; exit 0; }
+	//	g
+	//
+	// prints `v=inner` where the call is still up and `v=global` where it has
+	// gone. Measured 2026-09-21, script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME:
+	//
+	//	bash 5.3.20        v=inner
+	//	bash 3.2.57        v=inner
+	//	dash 0.5.12        v=inner
+	//	BusyBox ash 1.37.0 v=inner
+	//	zsh 5.9.2          v=global
+	//	ksh93u+            — no `local`; probed with `function g { typeset … }`
+	//	                     and `${.sh.level}`, both of which read the top
+	//
+	// A local rather than a call-stack parameter, because it is the one probe
+	// every column can answer: only two of the six name the running function
+	// at all. `${.sh.fun}` looks like a third and is not — it reads `g` in
+	// ksh93 whether the function exited or fell off its end, so it cannot
+	// tell the two readings apart; `${.sh.level}` can, and says 1.
+	//
+	// **The control that says this is about `exit` and not about the trap.**
+	// The same function left by falling off the end — `g() { local v=inner;
+	// trap '…' EXIT; }; g` — reads `v=global` in every column, bash included,
+	// because the call really has returned before the shell ends. Only the
+	// `exit` route runs the trap from inside, which is why the axis is read
+	// where `exit` raises the stop and not where the trap fires.
+	ExitTrapRunsInsideTheExitingCall Answer
+
 	// QuitIgnoredWhenNotInteractive makes an untrapped SIGQUIT do nothing at
 	// all rather than end the shell.
 	//

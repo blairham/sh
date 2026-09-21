@@ -2063,6 +2063,7 @@ func Semantics() interp.Semantics {
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	s.ExitTrapRunsInsideTheExitingCall = interp.No
 	s.QuitIgnoredWhenNotInteractive = interp.No
 	// unanswered BuiltinReadsOptions: ksh93's `builtin` is another command,
 	// one that registers builtins from a library, and is not the one this

@@ -94,7 +94,15 @@ func TestTheResumeNoticeCarriesTheJobsState(t *testing.T) {
 		t.Errorf("fg on a stopped job said %q, want its last line to be %q", out, want)
 	}
 	// And one that never stopped, which it only has to put back in front.
-	out, _, _ = jobSession(t, &fakeJobs{}, echoCmd+" &\nfg", true, zshShaped)
+	//
+	// Held running until `fg` sends the continue, rather than left to finish
+	// on its own. `echoCmd` is `/usr/bin/true`, which exits about as fast as
+	// a process can, so a `&` job nothing holds open is reaped before `fg`
+	// reads its state better than a fifth of the time and the notice says
+	// `Done` — a correct word for a job that is genuinely over, and not the
+	// one this test exists to grade. The subject of an assertion has to be
+	// held still to be measured (#4021).
+	out, _, _ = jobSession(t, heldJobs(), echoCmd+" &\nfg", true, zshShaped)
 	if want := "[1]  + running    " + echoCmd; lastLine(out) != want {
 		t.Errorf("fg on a running job said %q, want its last line to be %q", out, want)
 	}

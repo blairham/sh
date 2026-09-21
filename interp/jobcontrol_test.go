@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -58,6 +59,34 @@ type fakeJobs struct {
 	// waitFor and reapSaidStopped: the claim is a lie about a process that
 	// has in fact exited, and something has to reap it.
 	saidStopped []int
+	// held, where non-nil, is what a wait blocks on once it has nothing
+	// left to report: the job goes on running until something continues it.
+	//
+	// This is how a test asks for a job that is *still running* when the
+	// thing it grades looks at it. Every command these tests start is
+	// `/usr/bin/true`, which is gone within microseconds, so a `&` job that
+	// nothing holds open is a job whose state at any later line is a
+	// coin toss — see heldJobs and #4021.
+	//
+	// Released by SIGCONT rather than by a timer, so the test asserts the
+	// causal order instead of racing it: the wait returns only once `fg`
+	// has sent the continue, which is after the notice it grades was
+	// printed. A hold nothing ever continues is let go at cleanup, so a
+	// regression fails an assertion rather than hanging the package.
+	held    chan struct{}
+	release sync.Once
+}
+
+// heldJobs is a fake whose jobs keep running until something continues them.
+func heldJobs() *fakeJobs {
+	return &fakeJobs{held: make(chan struct{})}
+}
+
+// releaseHeld lets go of a held job, once and from any goroutine.
+func (f *fakeJobs) releaseHeld() {
+	if f.held != nil {
+		f.release.Do(func() { close(f.held) })
+	}
 }
 
 // waitFor is this fake standing in for the front end's `waitpid`.
@@ -84,6 +113,12 @@ func (f *fakeJobs) waitFor(pid int) (Wait, error) {
 	w := f.next()
 	if w.Stopped {
 		f.saidStopped = append(f.saidStopped, pid)
+		return w, nil
+	}
+	if f.held != nil {
+		// Nothing to report and the job is not over: it runs until
+		// something continues it. See fakeJobs.held.
+		<-f.held
 	}
 	return w, nil
 }
@@ -207,6 +242,9 @@ func jobRunShaped(t *testing.T, f *fakeJobs, src string, atAPrompt bool, tweak .
 				pgid int
 				sig  syscall.Signal
 			}{pgid, sig})
+			if sig == syscall.SIGCONT {
+				f.releaseHeld()
+			}
 			return nil
 		}
 		r.Foreground = func(pgid int) error {

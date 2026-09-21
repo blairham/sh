@@ -121,10 +121,27 @@ func (s *ptySession) line(text string) {
 //
 // The pid it prints is erased along with everything else before the screen
 // is read, so nothing about this reaches the comparison.
+//
+// **The marks are printf's answer and never its format**, which is the rule
+// await states and which this was the one caller breaking: with the mark
+// spelled out in the format string, the terminal's echo of the typed line
+// contained `job-0-is[%s]` and answered the wait by itself. `pidAfter` then
+// read the last `job-0-is[` in the stream, which was the echo whenever the
+// real output had not landed yet, and parsed `%s` as a pid — measured on CI
+// as `the shell named no usable process`, twice on main in one window
+// (#4021). Written with the number as an argument, the echo carries
+// `job-%s-is[` and cannot be mistaken for the answer.
+//
+// The wait is on the *second* line rather than on the pid's, because a
+// terminal is an ordered stream: `job-0-said` having been drawn is proof the
+// whole of `job-0-is[<pid>]` was drawn before it. Waiting on the opening
+// bracket would leave the field half-written, which is the same race one
+// step further along.
 func (s *ptySession) background(deadline time.Duration) error {
-	mark := "job-" + strconv.Itoa(len(s.jobs)) + "-is"
-	s.line("sleep 600 & printf '" + mark + "[%s]\\n' $!")
-	if err := s.await(mark+"[", deadline); err != nil {
+	n := strconv.Itoa(len(s.jobs))
+	mark, said := "job-"+n+"-is", "job-"+n+"-said"
+	s.line("sleep 600 & printf 'job-%s-is[%s]\\njob-%s-said\\n' " + n + " $! " + n)
+	if err := s.await(said, deadline); err != nil {
 		return err
 	}
 	pid, err := s.pidAfter(mark + "[")

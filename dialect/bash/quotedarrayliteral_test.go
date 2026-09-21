@@ -222,6 +222,15 @@ func TestAParenthesizedValueThatWillNotParseIsRefused(t *testing.T) {
 			"bash: array assign: line 2: syntax error near unexpected token `;'\n" +
 				"bash: array assign: line 2: `b;c'\n", 1,
 		},
+		// And the two numbers add: a declaration on line 2 whose text
+		// fails on its own second line is `line 3`. The row above cannot
+		// tell that from a restart, because there the declaration is on
+		// line 1 and the two readings agree.
+		{
+			"the two lines add", "echo one\ndeclare -a x=$'(a\nb;c)'\necho three", "one\nthree\n",
+			"bash: array assign: line 3: syntax error near unexpected token `;'\n" +
+				"bash: array assign: line 3: `b;c'\n", 0,
+		},
 		// And the controls: a text the shape test turns away still keeps
 		// its characters and still runs on, which is the distinction the
 		// whole of this turns on.

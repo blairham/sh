@@ -6925,8 +6925,8 @@ func (p *Parser) ParseArithSubscript(src string, at Pos) ArithExpr {
 	return p.parseArithIn(src, at, true, true)
 }
 
-// readsBodyWithItsLine reports whether span is a command substitution whose
-// body this dialect parses while the line that holds it is read.
+// readsBodyWithItsLine reports whether span is a substitution whose body this
+// dialect parses while the line that holds it is read.
 //
 // The spelling decides, because the panel splits on it: bash 5.3 reads a
 // `$( … )` body with the line and leaves the older spelling to the run, where
@@ -6934,8 +6934,38 @@ func (p *Parser) ParseArithSubscript(src string, at Pos) ArithExpr {
 // — no column that has them reads one with the line — and a body that ran out
 // with the input is left alone, since there is no line for it to belong to
 // yet. See [Dialect.SubstitutionBodyRead].
+//
+// **A process substitution's body is read the same way**, and it was left out
+// while every column that reads one at all reads it. Measured 2026-09-20 from
+// a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C bash s.sh` with standard
+// input on the null device, bash 5.3.20, each line written after a
+// `printf 'one\n'` and before a `printf 'two\n'`:
+//
+//	cat <(for)                              refused at the line, `two` absent
+//	false && cat <(for)                     the same
+//	false && cat <(v=$(echo hi; for))       the same
+//	false && echo hi > >(for)               the same
+//	false && echo hi > >(v=$(echo hi; for)) the same
+//
+// The `false &&` rows are the control that makes it a statement about
+// *reading*: the substitution is never reached and the line is refused all
+// the same. Without this the body was read only by the shell that runs it, so
+// `while read -r l; do :; done < <(v=$(echo hi; for))` on the last line of a
+// script wrote both of bash's messages and still left 0 (#3962).
+//
+// `=( … )` goes with them rather than being measured: no column that reads a
+// body with its line has the spelling, so the branch is a statement of scope
+// — a dialect that gained both would want the same answer — and nothing in
+// the panel exercises it.
 func (p *Parser) readsBodyWithItsLine(span Span) bool {
-	if span.Kind != CommandSubst || span.CurrentShell {
+	switch span.Kind {
+	case ProcSubstIn, ProcSubstOut, ProcSubstFile:
+		return true
+	case CommandSubst:
+	default:
+		return false
+	}
+	if span.CurrentShell {
 		return false
 	}
 	if !span.Backquoted {

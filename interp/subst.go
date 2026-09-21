@@ -6,6 +6,7 @@ package interp
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -595,12 +596,37 @@ func (r *Runner) substParseErrorAtItsCloser(span syntax.Span, src string, err er
 	if span.Backquoted || span.CurrentShell {
 		return err
 	}
+	// A body that ran out with a condition still open is the one shape where
+	// the reference does **not** name the closer: it names the last token it
+	// read and follows with a sentence about the substitution. Showing the
+	// parser the `)` there would answer the right question for a body that
+	// met it and the wrong one for a body that never did. See
+	// Diagnostics.SubstitutionParseFailureSentence for the ten rows and for
+	// the pair one token apart that separates them.
+	if r.diag().SubstitutionParseFailureSentence != "" && ranOutInACondition(err) {
+		return err
+	}
 	p := r.ParseWithAliases(src+")", r.bodyDialect(span))
 	p.Parse()
 	if closed := p.Err(); closed != nil {
 		return closed
 	}
 	return err
+}
+
+// ranOutInACondition reports whether a parse failure is the input running out
+// while an `if` or `elif` condition was still being read.
+//
+// The keyword the reader was inside rather than the one that opened the
+// construct, which is the difference the rows turn on: `if true; then` is
+// inside the `then` clause of an `if` and is answered the other way. See
+// syntax.Error.Innermost.
+func ranOutInACondition(err error) bool {
+	var se *syntax.Error
+	if !errors.As(err, &se) || se.Kind != syntax.ErrUnterminated {
+		return false
+	}
+	return se.Innermost == "if" || se.Innermost == "elif"
 }
 
 // leadingNewlines counts the newlines a substitution's body opens with, which

@@ -146,6 +146,25 @@ func (r *Runner) substFailureAtItsLine(span syntax.Span, body string, failure er
 // same refusal in the body's own.
 func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure error, failureBase int) (string, int) {
 	d := r.diag()
+	// The sentence about the substitution, where the dialect writes one in
+	// place of the quote. See Diagnostics.SubstitutionParseFailureSentence
+	// for the rows and for the pair one token apart that separates the
+	// second occasion from the quote.
+	//
+	// Before the kind is asked, and that is the point of it: every row it
+	// covers is an input that **ran out**, where the quote below is written
+	// only for a token the grammar did not want.
+	//
+	// It stands at the line the **substitution opened on** and not at the
+	// failure's, which is the one thing about it a one-line body cannot
+	// show. Measured 2026-09-20 on zsh 5.9.2 from script files whose line 2
+	// opens the substitution: `` v=`echo hi ⏎ for` `` is `:3:` and then
+	// `:2:`, a three-line backquoted body failing on its second is `:4:`
+	// then `:2:`, and `v=$(echo hi ⏎ echo b ⏎ if)` is `:4:` then `:2:`.
+	if d.SubstitutionParseFailureSentence != "" && (span.Backquoted || ranOutInACondition(raw)) {
+		return Wording(d.SubstitutionParseFailureSentence,
+			"parse error in command substitution") + "\n", failureBase + 1
+	}
 	var se *syntax.Error
 	if !errors.As(failure, &se) || se.Kind != syntax.ErrUnexpected {
 		return "", 0
@@ -196,6 +215,11 @@ func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure er
 // text's start: `echo $(( $(for) + 1 ))` is quoted whole by the dialect that
 // echoes the line, and it is the right line with the wrong column.
 //
+// The opener is the span's own and not always `$(`: a process substitution's
+// body is refused through the same two messages and opens `<(` or `>(`, and
+// a check written for one spelling reads as "this is not the text" for the
+// others and writes nothing at all (#3962).
+//
 // start is the span's line in the text, one-based.
 func substTextLines(span syntax.Span, body, text string, start int) []string {
 	if text == "" {
@@ -206,10 +230,29 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 		return nil
 	}
 	first, _, _ := strings.Cut(body, "\n")
-	if !strings.Contains(lines[start-1], "$("+first) {
+	if !strings.Contains(lines[start-1], substOpener(span)+first) {
 		return nil
 	}
 	return lines
+}
+
+// substOpener is the two characters a substitution's text begins with, for
+// the spellings that have a body a refusal is written about.
+//
+// `$(` for a command substitution however it is written — the current-shell
+// spellings open `${ ` and `${|` and are one character longer, so the pair is
+// still what stands before the body — and the direction's own bracket for a
+// process substitution.
+func substOpener(span syntax.Span) string {
+	switch span.Kind {
+	case syntax.ProcSubstIn:
+		return "<("
+	case syntax.ProcSubstOut:
+		return ">("
+	case syntax.ProcSubstFile:
+		return "=("
+	}
+	return "$("
 }
 
 // substLevel is what one lexing level still has open when the input runs out.

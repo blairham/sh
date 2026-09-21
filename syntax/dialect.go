@@ -306,8 +306,9 @@ const (
 // and ends the document there; zsh and ksh93 strip only the tabs the logical
 // line opens with, leaving `<tab>EOF` as body, which is what this
 // implementation does; dash and BusyBox ash keep the backslash-newline
-// outright and join nothing. Two of the five columns agree with what is here
-// and a rule for the other three would be three rules.
+// outright and join nothing. Two of the five dialects agree with what is here
+// and the remaining three hold two further readings between them, so a rule
+// covering them would be two more rules.
 type ContinuedHeredocDelimiter uint8
 
 const (
@@ -1914,8 +1915,8 @@ type Dialect struct {
 	// One shell in the panel does this and no other, and the split is not
 	// only over whether it works — it is over *when* they say so, which is
 	// why the answer is here rather than in Diagnostics. Measured 2026-09-08,
-	// `sh -c "function '' { echo b; }; echo done"`, and the same six answers
-	// come back for every name below:
+	// `sh -c "function '' { echo b; }; echo done"`, and the same seven
+	// answers come back for every name below:
 	//
 	//	zsh 5.9.2   done, status 0, nothing on stderr, and `functions`
 	//	            lists the definition under that name
@@ -1927,12 +1928,18 @@ type Dialect struct {
 	//	ksh93       `: invalid function name`, status 1, nothing after
 	//	dash        `Syntax error: "}" unexpected` — no `function` keyword
 	//	            at all, so the refusal is about the brace
+	//	BusyBox ash `done`, status 0, nothing on stderr — and nothing
+	//	            defined either: `function 'a b' { echo B; }` is
+	//	            followed by `a b: not found`, where `function f { … }`
+	//	            defines perfectly well. It has the keyword and drops
+	//	            the definition without a word (re-measured 2026-09-21)
 	//
-	// So four of the six parse the construct and refuse the *name*, and only
-	// dash refuses to parse it. This parser has no separate definition-time
-	// name check, and building one for a construct four shells refuse and one
-	// accepts would be a lot of machinery to arrive at the same diagnostic
-	// those four already print. The flag says whether the word is a name; the
+	// So four of the seven parse the construct and refuse the *name*, dash
+	// alone refuses to parse it, and ash parses it and quietly defines
+	// nothing. This parser has no separate definition-time name check, and
+	// building one for a construct four columns refuse and one accepts would
+	// be a lot of machinery to arrive at the same diagnostic those four
+	// already print. The flag says whether the word is a name; the
 	// four that refuse it keep refusing it here, at their own wording, which
 	// is where they refused it before this flag existed.
 	//
@@ -4736,7 +4743,9 @@ type Dialect struct {
 	// reached, and one inside a subshell ends the subshell alone. Which is
 	// why this field carries no stage of its own.
 	//
-	// Nil for the four columns that refuse nothing, which is also what a
+	// Nil for the five columns that refuse nothing — the three bash columns,
+	// zsh, and BusyBox ash, where `printf a; export() { :; }; printf b`
+	// prints `ab` at 0 (measured 2026-09-21) — which is also what a
 	// hand-built dialect has.
 	FunctionNamesRefused map[string]bool
 
@@ -6751,19 +6760,24 @@ func (p ArithPrecedencePolicy) String() string {
 // ArithDoubleQuotePolicy is what a `"` inside an arithmetic expression is.
 //
 // Three readings rather than two, and the third is measured rather than
-// invented: the four shells that read *through* a double quote do not agree
-// about a quote standing in the middle of a token. `$(( 1"0" ))` is 10 in
-// bash 5.3 — the quotes are gone before anything reads the text, so the two
-// digits are one number — and an arithmetic syntax error in ksh93u+ and zsh
-// 5.9.2, where the quote ends the number and leaves a second operand behind.
-// Measured 2026-09-10 (#1223).
+// invented: the four *columns* that read past a double quote at all do not
+// agree about one standing in the middle of a token. `$(( 1"0" ))` is 10 in
+// bash 5.3 and in the same build named `sh` — the quotes are gone before
+// anything reads the text, so the two digits are one number — and an
+// arithmetic syntax error in ksh93u+ and zsh 5.9.2, where the quote ends the
+// number and leaves a second operand behind. Measured 2026-09-10 (#1223).
+//
+// The other three columns take none of the three readings and refuse the
+// quote outright, which is the first constant below: bash 3.2.57, dash and
+// BusyBox ash, the last re-measured 2026-09-21 in the pinned image, where
+// both `$(( "1" + 1 ))` and `$(( 1"0" ))` are `arithmetic syntax error`.
 type ArithDoubleQuotePolicy int
 
 const (
 	// ArithDoubleQuoteRefused is no part of any token: the quote is where a
 	// value should be, and the expression is refused for wanting an operand.
-	// bash 3.2.57 and dash, and the core, which refuses what the panel
-	// disagrees about.
+	// bash 3.2.57, dash and BusyBox ash, and the core, which refuses what
+	// the panel disagrees about.
 	ArithDoubleQuoteRefused ArithDoubleQuotePolicy = iota
 	// ArithDoubleQuoteSkipped passes over the byte wherever a token may
 	// begin, so `"1" + 1` is 2 and `"n" + 1` reads the parameter n — but a

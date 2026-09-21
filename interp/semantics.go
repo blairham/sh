@@ -48,9 +48,10 @@ func (a Answer) String() string {
 // `&>` or does not depending on which build is installed, twelve years apart
 // under the same name, so a field called `Ksh` could not be given a value.
 //
-// The axes were measured across four shells and produced groupings that
-// overlap and contradict — no ordering of the shells explains the data,
-// which is why this is a vector and not a level.
+// The axes were measured across the panel's seven columns — five dialects,
+// with bash counted three times over for its two builds and its `sh` name —
+// and produced groupings that overlap and contradict: no ordering of the
+// shells explains the data, which is why this is a vector and not a level.
 type Semantics struct {
 	// SplitParamExpansion field-splits the result of an unquoted parameter
 	// expansion. False in zsh, and narrower than "word splitting": zsh still
@@ -1815,7 +1816,9 @@ type Semantics struct {
 	//
 	// Not the same question as DeclarePrintPerformsItsOperand, which is what
 	// a listing does with an operand carrying a value and presupposes a
-	// listing: four columns have no listing here at all, and the same bash
+	// listing: two columns have no listing here at all — dash and BusyBox
+	// ash have neither `typeset` nor `declare`, measured 2026-09-21 — and
+	// the same bash
 	// that refuses `declare -p s=5` as a missing name exports `s=5` without
 	// a word.
 	ExportOrReadonlyPrintWithOperands ExportPrintOperandPolicy
@@ -3101,8 +3104,11 @@ type Semantics struct {
 	// rather than an error.
 	//
 	// Read without asking. A shell that has chosen nothing runs the trap,
-	// which is what the other four columns do and what a cleanup handler is
-	// written expecting.
+	// which is what the other six columns do and what a cleanup handler is
+	// written expecting. BusyBox ash is one of them and had gone unnamed:
+	// re-measured 2026-09-21 in the pinned image, `trap 'echo TRAP' EXIT;
+	// set -e` followed by a refused `set -o`, a readonly reassignment or a
+	// division by zero prints `TRAP` there every time.
 	FatalErrorUnderErrexitSkipsTheExitTrap Answer
 
 	// SubshellExitTrapAfterAGiveUp is the same question at the subshell
@@ -5388,9 +5394,12 @@ type Semantics struct {
 	// run that names the value exactly.
 	//
 	// Asked only where PrintfC99FloatConversions has already said yes and a
-	// `%a` or `%A` carries no precision, so the four dialects without the
+	// `%a` or `%A` carries no precision, so the two dialects without the
 	// conversion and every conversion that states its precision never reach
-	// it.
+	// it. Those two are zsh and BusyBox ash, measured 2026-09-21: `printf
+	// '%a' 1.5` is `%a: invalid directive` in zsh 5.9.2 and `%a: invalid
+	// format` in BusyBox ash, while bash, dash and ksh93 all write a
+	// hexadecimal float.
 	//
 	// Measured 2026-09-14 under `LC_ALL=C`: `printf '%a' 1.5` is `0x1.8p+0`
 	// in bash 5.3.15 and dash and `0x1.800000000000p+0` in ksh93u+, and
@@ -7559,8 +7568,10 @@ type Semantics struct {
 	// a job is still running when the shell has not been asked to watch its
 	// children. True in ksh93 alone.
 	//
-	// The other four columns know a background job has ended whether or not
-	// `set -m` is on, and say so. ksh93 reaps a `&` job only under the
+	// The other six columns know a background job has ended whether or not
+	// `set -m` is on, and say so — BusyBox ash included, re-measured
+	// 2026-09-21: `sleep 0 & wait; jobs` writes its `Done` row there like
+	// the rest. ksh93 reaps a `&` job only under the
 	// monitor, so without one the listing reports what the shell last knew
 	// rather than what is true — and it keeps saying it after a `wait` that
 	// reaped the job, which is what makes this a statement about the listing
@@ -11648,7 +11659,9 @@ type Semantics struct {
 	//	               and the options are untouched
 	//
 	// A conflict rather than a gap: two characters that mean a save in three
-	// shells and a declaration in the fourth. What is saved is the `set`
+	// of the four dialects with the builtin and a declaration in the fourth.
+	// ksh93 is the fifth and has no `local` at all, which the verdict below
+	// records. What is saved is the `set`
 	// table alone — measured the same day, a `shopt -s nullglob` inside such
 	// a function survives the return where a `set -o pipefail` does not.
 	//
@@ -12037,8 +12050,8 @@ type Semantics struct {
 	// The separator rows are the control that says it is the letter: `--`
 	// ends the options and leaves the operand exactly as a bare call does.
 	//
-	// The other four columns answer No, and three of them cannot be asked at
-	// all: zsh 5.9.2 has no `-p` and refuses it (`alias: bad option: -p`, 1),
+	// The other four dialects answer No, and three of them cannot be asked
+	// at all: zsh 5.9.2 has no `-p` and refuses it (`alias: bad option: -p`, 1),
 	// dash and BusyBox ash read no options for `alias` so `-p` is a *name*
 	// there, and ksh93u+ answers AliasOptionEndsTheLookup above, which is a
 	// different rule reaching the same silence for a *missing* name and a
@@ -14432,10 +14445,12 @@ type Semantics struct {
 	//
 	// Measured 2026-09-05 with `s=héllo; echo ${#s}` under
 	// `LC_ALL=en_US.UTF-8`: bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93u+
-	// and zsh 5.9.2 all answer 5, and dash answers 6. Under `LC_ALL=C` every
-	// one of them answers 6, dash included — so this is not "four shells
-	// count characters", it is "four shells honor the encoding the locale
-	// names and one has no multibyte decoder at all". `s=日本語; echo ${#s}`
+	// and zsh 5.9.2 all answer 5, and dash answers 6. BusyBox ash answers 5
+	// as well — re-measured 2026-09-21 in the pinned image under
+	// `LC_ALL=C.UTF-8`, which is the UTF-8 locale musl has — so the split is
+	// six columns against one. It is therefore not "the shells count
+	// characters", it is "six columns honor the encoding the locale names
+	// and one has no multibyte decoder at all". `s=日本語; echo ${#s}`
 	// separates them further: 3 against 9.
 	//
 	// Which encoding is in force is **not** a second axis. It is state read
@@ -16551,22 +16566,24 @@ type Semantics struct {
 	// `read`, an external command, or anything else the script points at
 	// standard input finds only what had not arrived yet.
 	//
-	// dash alone, measured: `printf 'read x\necho "[$x]"\nDATA\n' | sh`
-	// prints `[]` there and then runs `DATA` as a command, where bash,
-	// ksh93 and zsh hand the second line to `read` and never parse it.
+	// dash and BusyBox ash, measured: `printf 'read x\necho "[$x]"\nDATA\n' | sh`
+	// prints `[]` in both and then runs `DATA` as a command, where bash,
+	// ksh93 and zsh hand the second line to `read` and never parse it. ash
+	// had been recorded with bash's answer and was re-measured 2026-09-21 in
+	// the pinned image, which is where that came from (#3228).
 	// docs/spec/invocation.md has the grid, including the case that shows
 	// what the difference really is — `exec 0< file` mid-program replaces
 	// the *rest of the program* in the three, and only what follows the
 	// block in dash.
 	//
-	// A bool rather than an Answer, and deliberately: the panel is four to
-	// one, so a common denominator exists, and "refuse to read a piped
+	// A bool rather than an Answer, and deliberately: the panel is three to
+	// two, so a common denominator exists, and "refuse to read a piped
 	// script at all" is not an answer any shell could ship. False is
 	// reading by the line, which is what the substrate does.
 	//
 	// It is the standard-input route's question alone. A script named as an
 	// operand is opened separately from standard input, so nothing is
-	// shared and all four behave the same way; `-c` reads no descriptor at
+	// shared and all five behave the same way; `-c` reads no descriptor at
 	// all. The sibling question for a command string is
 	// Diagnostics.CommandStringParsedWhole.
 	StdinProgramReadInBlocks bool
@@ -16679,8 +16696,10 @@ type Semantics struct {
 	// shell" does, and the question is only what that then means for a
 	// shell that is not going to prompt.
 	//
-	// dash, ksh93 and zsh read theirs; bash alone reads nothing. Measured
-	// 2026-09-05 with a scratch HOME, on all four of the script-operand,
+	// dash, ksh93, zsh and BusyBox ash read theirs; bash alone reads
+	// nothing — ash re-measured 2026-09-21 in the pinned image, where
+	// `ash -l script` and `ash -l -c cmd` both run `~/.profile` first.
+	// Measured 2026-09-05 with a scratch HOME, on all four of the script-operand,
 	// `-c`, standard-input and `-s` routes, and the answer is the same on
 	// every one of them — this is a fact about the shell rather than about
 	// the route. docs/spec/invocation.md has the grid, including the two
@@ -18489,15 +18508,17 @@ type Semantics struct {
 	//
 	// The rule the answer qualifies is unanimous and is not an axis. Measured
 	// 2026-09-05 on `-i script.sh` with a scratch HOME and a pseudo-terminal:
-	// bash 5.3.15, dash, ksh93u+ and zsh 5.9.2 all report `monitor on` and
-	// all four put `m` in `$-`. So an interactive shell runs the monitor, and
+	// bash 5.3.15, dash, ksh93u+, zsh 5.9.2 and BusyBox ash all report
+	// `monitor on` and all five put `m` in `$-` — ash re-measured
+	// 2026-09-21 in the pinned image, where `$-` is `mi`. So an interactive shell runs the monitor, and
 	// a front end that leaves it off is wrong on every route rather than in
 	// one dialect.
 	//
 	// What splits is the same invocation with no terminal anywhere: ksh93
-	// still reports `monitor on` and `imBE`, and bash, dash and zsh all
-	// report it off and leave `m` out. True in bash, dash and zsh; false in
-	// ksh93.
+	// still reports `monitor on` and `imBE`, and bash, dash, zsh and
+	// BusyBox ash all report it off and leave `m` out — ash says so out
+	// loud, `can't access tty; job control turned off`, and answers `i`.
+	// True in bash, dash, zsh and ash; false in ksh93.
 	//
 	// The terminal that counts is a terminal on any of the three standard
 	// streams, and that is measured rather than assumed. A controlling
@@ -20033,7 +20054,7 @@ type Semantics struct {
 	// refusal splits.
 	//
 	// A field of its own rather than BadNameToUnsetFatal, which it agrees
-	// with on all four dialect defaults. They are separable because bash's
+	// with on all five dialect defaults. They are separable because bash's
 	// POSIX mode moves this one and not that one: `set -o posix` makes bash
 	// 5.3 stop here, and it makes no difference to `unset 1x` — a name bash
 	// 5.3 accepts in silence whatever the mode. That is the shape
@@ -20055,8 +20076,10 @@ type Semantics struct {
 	// `readonly` want a name, beyond a plain name itself.
 	//
 	// zsh is the only one that takes anything more: the special parameters
-	// are names to it, which is why `export -` is a complaint in three of the
-	// four and not in the fourth.
+	// are names to it, which is why `export -` is a complaint in four of the
+	// five and not in the fifth. BusyBox ash is one of the four —
+	// re-measured 2026-09-21, `export '-'`, `export '1'`, `export '12'` and
+	// `export '?'` are each `bad variable name` at status 2 there.
 	//
 	// unexhibited NamesAndPositionals: UnsetNameOperands holds it, for
 	// zsh. Re-measured 2026-09-12 **with the operands quoted**, because an
@@ -20125,7 +20148,8 @@ type Semantics struct {
 	// A separate question from the name strictness above, because the answer
 	// is per builtin: bash refuses it here and takes it for `unset`, and the
 	// two builtins sit on different strictnesses in every shell, so no rule
-	// over that strictness gives all four.
+	// over that strictness gives all five. BusyBox ash refuses it too,
+	// measured 2026-09-21: `export a[0]` is `a[0]: bad variable name`.
 	DeclarationTakesASubscript Answer
 
 	// TypesetTakesASubscript is that same question for `typeset`, `declare`
@@ -23147,8 +23171,10 @@ func PosixSemantics() Semantics {
 		// The standard says nothing about announcing a job to a shell that
 		// was handed a script to run, so the preset claims less and says
 		// nothing. It is the intersection as well: bash is silent here and
-		// the other three are not, and a core made of what they all do is
-		// the quiet one.
+		// the other four are not, and a core made of what they all do is
+		// the quiet one. BusyBox ash is the fourth, re-measured 2026-09-21
+		// on a pseudo-terminal in the pinned image: it writes the `Done`
+		// row and no start, which is dash's answer.
 		InteractiveScriptAnnouncesJobs: No,
 		// A table that hands out the lowest free number remembers nothing
 		// about the jobs that have left it, which is the answer that claims
@@ -23343,8 +23369,9 @@ func PosixSemantics() Semantics {
 		// beside it. dash and ash never reach it.
 		ListSliceNegativeLengthIsAnError: No,
 		// The standard has no modifiers and no history syntax, so a range is
-		// the arithmetic it looks like — which is also what three of the four
-		// do with it.
+		// the arithmetic it looks like — which is also what four of the five
+		// do with it: BusyBox ash reads `${x:h}` as an offset of the unset
+		// `h`, measured 2026-09-21, so zsh is alone.
 		SubstringRangeReadsModifiers: No,
 		LinenoCountsFromTheFunction:  No,
 		// The standard has no produced parameters at all — no RANDOM, no
@@ -23442,12 +23469,12 @@ func CoreSemantics() Semantics {
 		// themselves. See interp/prefixredirorder.go.
 		PrefixExpandedBeforeTheRedirections: PrefixExpandedBeforeRedirectionsNever,
 		// And the operand of a declaration utility is expanded before the
-		// prefix, which is four of the six columns and is the order the
+		// prefix, which is five of the seven columns and is the order the
 		// standard's own steps give — XCU 2.9.1 expands the command's words
 		// in step 1 and the assignments in step 4. Answered here rather than
 		// left to refuse for the reason above it: the question is asked of
 		// every `x=1 typeset s=2`, so a refusal would be the substrate
-		// refusing a shape four shells agree about. ksh93 and zsh are the
+		// refusing a shape five columns agree about. ksh93 and zsh are the
 		// departures and say so themselves. See interp/prefixoperandorder.go.
 		PrefixExpandedBeforeADeclarationsOperand: No,
 		// A clustered `-abc` leaves OPTIND naming the word until its last
@@ -23534,7 +23561,7 @@ func CoreSemantics() Semantics {
 		// vector nobody filled in reaches for nothing — which matters more
 		// here than it does above, because the file is root's.
 		SystemStartupFiles: SystemStartupFiles{Login: "profile"},
-		// And a way to say so. All four shells in the panel take `-l`, so
+		// And a way to say so. All five shells in the panel take `-l`, so
 		// the common denominator has it even though the standard does not
 		// — which is the one respect in which this differs from
 		// PosixSemantics here. Without it the only way to start a login
@@ -25655,7 +25682,7 @@ type WholeArraySubscriptAssignPolicy int
 const (
 	// WholeArraySubscriptAssignUnspecified is no answer, and it is refused
 	// rather than guessed at: one column writes every element, one writes a
-	// key, and the other three refuse in three different ways at two
+	// key, and the other three answers refuse in three different ways at two
 	// different costs.
 	WholeArraySubscriptAssignUnspecified WholeArraySubscriptAssignPolicy = iota
 	// WholeArraySubscriptNamesEveryElement replaces the whole array with the

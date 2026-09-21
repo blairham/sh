@@ -123,6 +123,25 @@ func TestTheEditedTextIsReadTheWayTheDialectReadsBorrowedText(t *testing.T) {
 				"1\t echo one\n2\t echo A\n3\t echo B\n",
 		},
 		{
+			// A comment line *inside* a command ran nothing, so it is no
+			// line of the entry — and a `;` after it would comment out the
+			// rest. Both readers reach one join rule; see internal/histjoin.
+			"a comment inside a command is echoed and is no line of the entry",
+			"for i in a b\n# mid\ndo\necho $i\ndone\n",
+			"for i in a b\n# mid\ndo\necho $i\ndone\na\nb\n" +
+				"1\t echo one\n2\t for i in a b\ndo echo $i; done\n",
+		},
+		{
+			// A line the reader joined to the next one is one line of the
+			// entry, backslash and newline gone: an editor leaving `echo \`
+			// / `A` records `echo A` and not `echo \; A`, which would run
+			// two commands when it is run again.
+			"a continuation is echoed as two lines and recorded as one",
+			"echo \\\nA\n",
+			"echo \\\nA\nA\n" +
+				"1\t echo one\n2\t echo A\n",
+		},
+		{
 			// A here-document is the one command whose entry keeps its
 			// newlines, and it ends with one. Measured: `fc -l` writes the
 			// three lines and a blank one after them.

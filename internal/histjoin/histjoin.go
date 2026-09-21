@@ -20,6 +20,17 @@
 // or a here-document at takes a newline, because a `;` there would be text
 // rather than a separator.
 //
+// Two of the physical lines are not lines of the entry at all. A line the
+// reader **joined to the next one** — one ending in a backslash, outside a
+// quote — is half of one line and not a line of its own, so the pair is
+// written with the backslash, the newline and any separator all gone: `echo
+// \` / `A` is `echo A`. And a line that is only a **comment** ran nothing, so
+// it is dropped and leaves a newline behind it for the line after: `for i in
+// a b` / `# mid` / `do` is `for i in a b` ⏎ `do`. Both were measured against
+// the real list, and both matter beyond the cosmetic — `echo \; A` and `for
+// i in a b; # mid; do …` are each an entry that does something other than
+// what ran when it is run again.
+//
 // # Why this is a package and not a method on the gate
 //
 // Two readers arrive at the same question. `driver`'s history gate feeds the
@@ -31,7 +42,11 @@
 // one of them and not the other.
 package histjoin
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // Entry collects the physical lines of one command.
 //
@@ -51,19 +66,137 @@ type Entry struct {
 	endsInBody bool
 	// spaceNext makes the next separator a space, whatever the text says.
 	spaceNext bool
+	// pending is what a line that ran nothing left behind for the next
+	// separator to use. See join.
+	pending join
 }
+
+// join is the separator a line contributing no command leaves behind it.
+//
+// A comment line and a blank line are both lines the parser got no command
+// out of, and the panel writes a different separator for each — measured on
+// bash 5.3.20, one `for` loop at a time with the lines between `for i in a b`
+// and `do` varied:
+//
+//	(blank)                 -> `for i in a b;  do …`
+//	(blank) (blank)         -> `for i in a b;  do …`
+//	# c                     -> `for i in a b` ⏎ `do …`
+//	# c  # c                -> `for i in a b` ⏎ `do …`
+//	# c  (blank)            -> `for i in a b do …`
+//	(blank) # c             -> `for i in a b; ` ⏎ `do …`
+//	(blank) # c (blank)     -> `for i in a b;  do …`
+//
+// Seven rows and one rule: the **first** blank of a run is an empty line in
+// the entry and the ones after it are not, a comment is never a line of the
+// entry at all, and whichever kind came last decides the separator the next
+// real line is written with. A model where a comment leaves a newline that
+// the following blank then overrides is the only one all seven agree with —
+// rows five and six are the pair that rules out both "collapse the run" and
+// "each line writes its own separator".
+type join uint8
+
+const (
+	// joinNone is the ordinary state: the separator comes from the text.
+	joinNone join = iota
+	// joinSpace is what a blank line leaves.
+	joinSpace
+	// joinNewline is what a comment leaves — a `;` after a comment would be
+	// commented out, so it cannot be one.
+	joinNewline
+)
 
 // Add takes one physical line, with what the parser was still inside when it
 // asked for it — [syntax.Parser.OpenQuote]'s spelling, empty for a line that
-// begins a command or continues one outside any quote.
-func (e *Entry) Add(line, open string) {
+// begins a command or continues one outside any quote — and the grammar it
+// was read under, which is what says whether a `#` opens a comment at all.
+//
+// A line the parser got no command out of is not always a line of the entry.
+// A **comment** inside a compound command is dropped and leaves a newline
+// behind it: measured, `for i in a b` / `# mid` / `do` / `echo $i` / `done`
+// is `for i in a b` ⏎ `do echo $i; done` in bash 5.3.20, where keeping the
+// comment and joining it with a `;` would record `for i in a b` followed by
+// text that is commented out — an entry that hangs waiting for a `do` when it
+// is run again. A comment standing where a command could begin is an entry of
+// its own and reaches this as the first line of one, so it is only dropped
+// with a command already collected. See [join] for the blank-line rows.
+func (e *Entry) Add(line, open string, d syntax.Dialect) {
+	kind := lineOrdinary
+	if open == "" {
+		// Inside a quote or a here-document body a `#` is text and a blank
+		// line is body, so neither question is asked there.
+		kind = classify(line, d)
+	}
 	if len(e.lines) > 0 {
+		switch kind {
+		case lineCommentOnly:
+			e.pending = joinNewline
+			return
+		case lineBlank:
+			if e.pending != joinNone {
+				e.pending = joinSpace
+				return
+			}
+		}
 		e.seps = append(e.seps, e.separator(open))
 	}
 	e.lines = append(e.lines, line)
 	// A line read inside a here-document is the one kind that ends an entry
 	// with a newline, and only where the command *ends* there.
 	e.endsInBody = open == heredocOpen
+	switch kind {
+	case lineBlank:
+		e.pending = joinSpace
+	case lineCommentOnly, lineEndsInComment:
+		e.pending = joinNewline
+	default:
+		e.pending = joinNone
+	}
+}
+
+// lineKind is what one physical line contributes to the entry.
+type lineKind uint8
+
+const (
+	// lineOrdinary is a line carrying text a command is made of.
+	lineOrdinary lineKind = iota
+	// lineBlank is a line of nothing but blanks.
+	lineBlank
+	// lineCommentOnly is a line that is a comment and nothing else.
+	lineCommentOnly
+	// lineEndsInComment is a line carrying text with a comment after it —
+	// `if true # c`. The text is the entry's; the comment is why the line
+	// after it cannot be joined with a `;`. Measured: bash 5.3.20 records
+	// `if true # c` ⏎ `then echo hi; fi`.
+	lineEndsInComment
+)
+
+// classify reads one line the way the shell read it.
+//
+// Asked of [syntax.ShellWords] rather than answered here, which is the rule
+// the gate already states for the quote a line begins inside: a `#` is a
+// comment only where a word could begin, so `a#b` is one word and `echo "a #
+// b"` is two, and a scanner written here would be a second answer to a
+// question the lexer already has. The `#` test in front of it is not a second
+// answer — a line holding no `#` anywhere cannot hold a comment, and that is
+// almost every line.
+func classify(line string, d syntax.Dialect) lineKind {
+	if strings.TrimRight(line, " \t") == "" {
+		return lineBlank
+	}
+	if !strings.Contains(line, "#") || d.Comments == syntax.CommentsOrdinaryText {
+		return lineOrdinary
+	}
+	words := syntax.ShellWords(line, d, syntax.ShellSplit{
+		Comments:       syntax.CommentsKept,
+		NewlineIsBlank: true,
+	})
+	if len(words) == 0 || !strings.HasPrefix(words[len(words)-1], "#") {
+		return lineOrdinary
+	}
+	if len(words) == 1 {
+		return lineCommentOnly
+	}
+	return lineEndsInComment
 }
 
 // SpaceNext makes the separator before the next line a space.
@@ -119,20 +252,36 @@ func (e *Entry) separator(open string) string {
 		e.spaceNext = false
 		return " "
 	}
+	switch e.pending {
+	case joinSpace:
+		return " "
+	case joinNewline:
+		return "\n"
+	}
+	if open == "" && syntax.EndsWithContinuation(e.lines[len(e.lines)-1]) {
+		// The reader joined these two physical lines into one before the
+		// parser saw either, so the entry holds one line and not two:
+		// measured, bash 5.3.20 records `echo \` / `A` as `echo A` and `echo
+		// one \` / `two three` as `echo one two three`. Joining them with a
+		// `;` records a command nobody ran — `echo \` and then `A`.
+		//
+		// Only outside a quote, which is where the reader resolves it.
+		// Inside one the backslash and the newline both stay: `echo "a\` /
+		// `b"` comes back over two lines with the backslash still on the
+		// first, in a shell that nonetheless prints `ab`.
+		last := e.lines[len(e.lines)-1]
+		e.lines[len(e.lines)-1] = last[:len(last)-1]
+		return ""
+	}
 	if open != "" {
 		if open == heredocOpen {
 			e.heredoc = true
 		}
 		return "\n"
 	}
+	// A blank line does not reach here — it leaves joinSpace behind it, and
+	// the switch above is what answers for it.
 	last := strings.TrimRight(e.lines[len(e.lines)-1], " \t")
-	if last == "" {
-		// A blank line inside a command contributes nothing that a `;` could
-		// follow. Measured: `if true` / (blank) / `then` / `echo hi` / `fi`
-		// comes back as `if true;  then echo hi; fi`, with the two spaces
-		// that says the blank was kept and the semicolon was not doubled.
-		return " "
-	}
 	if strings.HasSuffix(last, ")") && e.unclosedParen() {
 		// A `case` pattern, which is the one `)` that is still waiting for a
 		// command. Measured: `case foo in` / `foo)` / `echo one two` / `;;` /

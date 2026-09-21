@@ -18209,6 +18209,27 @@ echo "st=$? alive"`,
 		Why:     "the name must exist — builtin fc was reporting something untrue — and with no history bash and dash answer silence at 0, zsh no-such-event at 1, and ksh93 reads a history file this shell keeps no equivalent of",
 	},
 	{
+		ID: "fc/a-comment-inside-a-command-is-no-part-of-the-entry", Category: "builtins",
+		Snippet: `set -o history 2>/dev/null
+for i in a b
+# mid
+do
+echo $i
+done
+fc -l 2>&1`,
+		Script: true,
+		Why:    "a comment line read while a compound command is still open ran nothing, and the one column that records in a script writes a newline where it stood rather than keeping it — keeping it joined with a `;` records `for i in a b` followed by text that is commented out, which hangs waiting for a `do` when it is run again (#4077). From a file because that is the route the list is filled on",
+	},
+	{
+		ID: "fc/a-continuation-is-one-line-of-the-entry", Category: "builtins",
+		Snippet: `set -o history 2>/dev/null
+echo one \
+two
+fc -l 2>&1`,
+		Script: true,
+		Why:    "the reader joins the two physical lines before the parser sees either, so the entry is the one line `echo one two`; joining them with a `;` records `echo one \\` and then `two`, which is two commands and not the one that ran (#4076). From a file for the reason the row above is",
+	},
+	{
 		ID: "opt/set-o-noglob-is-unanimous", Category: "shell options",
 		Snippet: `touch a.txt b.txt; set -o noglob; echo *.txt`,
 		Why:     "the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis",

@@ -76,8 +76,10 @@ const (
 	//     then `history` leaves the file with `gamma three` and `history`,
 	//     the newest two entries, because two lines were recorded and the
 	//     three read are older than neither;
-	//   - `-d` takes one off, whichever entry it removed: three `history -d 1`
-	//     after `echo q` leave only the last `history -d 1` appended;
+	//   - `-d` takes off what it removed, whichever entries those were: three
+	//     `history -d 1` after `echo q` leave only the last `history -d 1`
+	//     appended, and `history -d 2-3` over four entries takes three off
+	//     rather than one;
 	//   - the builtin's own line that `-p` and `-s` drop takes one off;
 	//   - `-c` puts it back to nothing.
 	historyUnwritten = ".bash.history.unwritten"
@@ -341,29 +343,166 @@ func historyList(r *interp.Runner, rest []string) int {
 	return 0
 }
 
-// historyDelete removes one entry, counting from one.
+// historyDelete removes one entry, or the whole span of a range, counting
+// from one.
 //
-// Out of range is `history: 9: history position out of range` at 1, and zero
-// is out of range too — the list is one-based at both ends, measured.
+// Measured 2026-09-21 against bash 5.3.20, `env -i` and no startup files,
+// over a nine-entry list built with `history -s` (#4010). The operand is one
+// of three shapes and each has its **own wording**, which is the whole of
+// what made this row expensive: a refusal here costs two lines rather than
+// one wherever this shell prints the usage block bash does not.
+//
+//   - a lone offset the list holds — `3`, `+3`, `007`, `-1` — deletes it;
+//   - a lone offset it does not hold is `history: 0: history position out of
+//     range` at 1, the number **as it was written**: `-0` and `0777` and
+//     `+50` are each echoed back unchanged;
+//   - a lone operand that is not a number at all is a third wording,
+//     `history: @42: invalid number`, also at 1;
+//   - and neither of the two carries the usage block. That block belongs to a
+//     complaint about how the builtin was *called* — the invalid letter, the
+//     missing `-d` argument — and not to one about an operand. See
+//     historyList, which already draws the same line for `history x`.
+//
+// A **range** is the fourth shape and the reason for the rest of this: bash
+// takes `history -d 2-4` and deletes all three. Out of range, it names the
+// end that is out of range rather than the operand — `16-40` on a nine-entry
+// list is `history: 16: …` and `1-200` is `history: 200: …`, the start being
+// checked first — and where a side is not a number at all it falls back to
+// naming the whole operand at the same wording: `5-0xaf` and `@42-3` and
+// `2-4-6` are each `history: <operand>: history position out of range`.
 func historyDelete(r *interp.Runner, offset string) int {
-	entries := historyEntries(r)
-	n, err := strconv.Atoi(offset)
-	if err != nil {
-		r.Diagnosef("history: %s: numeric argument required\n", offset)
-		historyWriteUsage(r)
-		return 2
+	if start, end, ok := historyRange(offset); ok {
+		return historyDeleteRange(r, offset, start, end)
+	}
+	n, ok := historyNumber(offset)
+	if !ok {
+		// A fourth wording, and the one prefix that earns it: measured,
+		// `0x9` and `0x` are `invalid hex number` where `0X9`, `+0x9`,
+		// `0b101` and `9abc` are all plain `invalid number`.
+		if strings.HasPrefix(strings.TrimSpace(offset), "0x") {
+			r.Diagnosef("history: %s: invalid hex number\n", offset)
+		} else {
+			r.Diagnosef("history: %s: invalid number\n", offset)
+		}
+		return 1
 	}
 	// A history number, so counted from wherever HISTSIZE left the front of
 	// the list: measured, after `HISTSIZE=3` has dropped the first entry,
 	// `history -d 1` is out of range.
-	i := n - historyFirst(r)
-	if i < 0 || i >= len(entries) {
-		r.Diagnosef("history: %d: history position out of range\n", n)
+	first, last := historyBounds(r)
+	num, inRange := historyPosition(n, first, last)
+	if !inRange || num < first {
+		r.Diagnosef("history: %s: history position out of range\n", offset)
 		return 1
 	}
-	r.SetArray(historyStore, append(entries[:i:i], entries[i+1:]...))
-	historySetUnwritten(r, historyUnwrittenCount(r)-1)
+	historyRemove(r, num-first, num-first)
 	return 0
+}
+
+// historyDeleteRange is `-d N-M`, whose two ends are read the way one offset
+// is and then bounded differently at the **low** end.
+//
+// A lone `0` is out of range; `0-3` is not, and deletes the first three.
+// Measured, and the pair is the discriminator: a non-negative end below the
+// first entry is clamped to it rather than refused, so `1-0` and `0-0` each
+// take the oldest entry alone. A *negative* end is not clamped — it counts
+// back from the newest, and one that counts back past the oldest is refused
+// even where it lands on zero, so `-10-9` on a nine-entry list is
+// `history: -10: history position out of range` while `-9-9` deletes the lot.
+//
+// A range whose start is after its end deletes nothing, says nothing, and is
+// 1 — measured on `4-2` and on `3-0`, the second being a range whose end was
+// clamped underneath its start.
+func historyDeleteRange(r *interp.Runner, offset, start, end string) int {
+	first, last := historyBounds(r)
+	from, ok := historyNumber(start)
+	if !ok {
+		r.Diagnosef("history: %s: history position out of range\n", offset)
+		return 1
+	}
+	to, ok := historyNumber(end)
+	if !ok {
+		r.Diagnosef("history: %s: history position out of range\n", offset)
+		return 1
+	}
+	fromNum, inRange := historyPosition(from, first, last)
+	if !inRange {
+		r.Diagnosef("history: %s: history position out of range\n", start)
+		return 1
+	}
+	toNum, inRange := historyPosition(to, first, last)
+	if !inRange {
+		r.Diagnosef("history: %s: history position out of range\n", end)
+		return 1
+	}
+	i, j := max(fromNum-first, 0), max(toNum-first, 0)
+	if i > j {
+		return 1
+	}
+	historyRemove(r, i, j)
+	return 0
+}
+
+// historyRange splits an operand at its range separator, which is the first
+// `-` **after the first character** of the operand as written.
+//
+// A leading `-` is therefore a sign and never a separator, so `-1--1` is the
+// newest entry alone and `--1` is a range whose start is the word `-`. The
+// first character is the whole of the exception and nothing else is skipped:
+// measured, a *space* in front of the sign is not, so ` -1` splits into ` `
+// and `1` and is refused where `-1` is taken. Whitespace inside a side is
+// fine — ` 16 - 40 ` is the range 16 to 40.
+func historyRange(offset string) (start, end string, ok bool) {
+	if len(offset) < 2 {
+		return "", "", false
+	}
+	i := strings.IndexByte(offset[1:], '-')
+	if i < 0 {
+		return "", "", false
+	}
+	return offset[:i+1], offset[i+2:], true
+}
+
+// historyNumber reads one written offset. Surrounding whitespace is allowed
+// and a leading zero is not an octal prefix: measured, `007` is seven, `08`
+// is eight and `010` is ten.
+func historyNumber(token string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimSpace(token))
+	return n, err == nil
+}
+
+// historyBounds is the history numbers of the oldest and newest entries. An
+// empty list leaves last below first, which refuses every offset.
+func historyBounds(r *interp.Runner) (first, last int) {
+	first = historyFirst(r)
+	return first, first + len(historyEntries(r)) - 1
+}
+
+// historyPosition turns a written offset into a history number. A negative
+// counts back from the newest, `-1` being the newest itself, and one that
+// counts back past the oldest entry is out of range.
+//
+// A non-negative below the oldest is *not* refused here, because a range
+// clamps it and a lone offset does not; historyDelete adds that check. An
+// **empty** list is the exception at that end and refuses every offset,
+// which is where the two disagree: measured, `0-3` takes the first three of
+// a nine-entry list and is `history: 0: history position out of range`
+// against no list at all.
+func historyPosition(n, first, last int) (num int, inRange bool) {
+	if n < 0 {
+		num = last + 1 + n
+		return num, num >= first
+	}
+	return n, n <= last && last >= first
+}
+
+// historyRemove takes entries i through j out of the list, inclusive, and
+// takes the same number off the unwritten count — which is what `-d` does to
+// it whichever entries it removed, and which never goes below nothing.
+func historyRemove(r *interp.Runner, i, j int) {
+	entries := historyEntries(r)
+	r.SetArray(historyStore, append(entries[:i:i], entries[j+1:]...))
+	historySetUnwritten(r, historyUnwrittenCount(r)-(j-i+1))
 }
 
 // historyPrint is `-p`: each operand after history expansion, one per line.

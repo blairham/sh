@@ -1324,6 +1324,15 @@ type Runner struct {
 	// cleanup halves it unwinds through, which is what a site that has not
 	// thought about it should get.
 	errexitStopped bool
+	// exitRanOutsideAFile says the controlExit being carried came from
+	// `exit` running somewhere other than in a file this shell was reading,
+	// which is the question a front end asks on its way out — see
+	// Runner.ExitRanOutsideAFile for what is measured on it.
+	//
+	// Recorded where the request is made rather than read afterwards,
+	// because by the time anyone asks, every file the shell was reading has
+	// been unwound and the answer would always be "not in a file".
+	exitRanOutsideAFile bool
 	// loopDepth is how many loops execution is inside right now, which is
 	// what a ^Z has to break out of — see breakLoopsForAStop. Dynamic rather
 	// than lexical: a loop that calls a function that loops is two, because

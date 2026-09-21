@@ -3147,6 +3147,12 @@ func Diagnostics() interp.Diagnostics {
 		// and on a pipe with and without a trailing `exit`, the same line
 		// each way. See Diagnostics.LeavingAPromptSession.
 		LeavingAPromptSession: "exit",
+		// And the one route that says the same word with no prompt drawn at
+		// all: `-i -c 'exit 3'` writes it and `-i script.sh` whose script
+		// runs the same `exit` writes nothing, measured on 5.3.20 and
+		// 3.2.57 alike. See Diagnostics.LeavingIsAlsoSaidOnTheseRoutes
+		// (#4008).
+		LeavingIsAlsoSaidOnTheseRoutes: syntax.RouteFromCommandString,
 		// And those two lines alone name this shell by the last element
 		// of the path it was started by, where every other diagnostic it
 		// writes names the path — measured within one run of one binary.

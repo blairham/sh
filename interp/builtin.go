@@ -2888,6 +2888,27 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			// shell rounds and Runner.ExpandsAnOperandsSubscriptAgain
 			// whether the session still permits it — one of the four
 			// surfaces `shopt -s assoc_expand_once` names (#3298).
+			//
+			// The whole-array reading is about the **token the operand
+			// carried**, so it is read here, in front of the round. `@` and
+			// `*` name every element when they are what the subscript says;
+			// an `@` a round *produces* is an operand the arithmetic reader
+			// has no value for, and the array is left standing. Measured
+			// 2026-09-21 from a directory holding three files, bash 5.3.20
+			// and 3.2.57 alike, over `a=(x y)`:
+			//
+			//	unset "a[@]"                       the array is emptied
+			//	w='a[$(echo @)]'; unset "$w"       `@: operand expected`, 1
+			//	k=@; w='a[$k]'; unset "$w"         the same sentence
+			//	unset "a[*]" / the arrived `*`     the same pair of answers
+			//
+			// Both columns agree, so this is not a version's quirk; and the
+			// two spellings of the arrival agree with each other, so it is
+			// the *provenance* and not the substitution. Read off the text
+			// rather than off a flag because that is what the round moves:
+			// `sub` after it is the key, and this is the question about what
+			// was written (#4070).
+			everyElement := sub == "@" || sub == "*"
 			if !lexed {
 				// A subscript the parser read is not read again: it reached
 				// `unset` as a word and was expanded once, which is the
@@ -2914,7 +2935,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				r.unsetAssocElem(base, sub)
 				continue
 			}
-			if sub == "@" || sub == "*" {
+			if everyElement {
 				// Every element rather than one, in two of the three shells
 				// with arrays. The third reads the brackets as an expression
 				// here as everywhere else, and falls through to it.

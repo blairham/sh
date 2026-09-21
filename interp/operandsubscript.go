@@ -67,6 +67,10 @@ func (r *Runner) operandBracketsBalance(text string, lexed bool) bool {
 // Only the constructs this dialect steps over are removed — a quote it does
 // not read is an ordinary character of the key, which is what keeps the two
 // halves of one answer from disagreeing.
+//
+// A **substitution** in the text is stepped over whole rather than read: the
+// quoting inside `$( … )` is the quoting of the commands in it. See
+// substitutionSpan.
 func (r *Runner) operandSubscriptUnquoted(sub string) string {
 	q := r.operandSubscriptQuoting()
 	if q == 0 || !strings.ContainsAny(sub, `\'"`) {
@@ -74,6 +78,21 @@ func (r *Runner) operandSubscriptUnquoted(sub string) string {
 	}
 	var b strings.Builder
 	for i := 0; i < len(sub); i++ {
+		if n := substitutionSpan(sub, i); n > 0 {
+			// A substitution's own text, copied across whole. The quoting
+			// inside `$( … )` belongs to the commands in it and not to the
+			// subscript around them, and taking it off here is how a
+			// subscript came to be matched against the working directory:
+			// `w='a[$(echo "*")]'; unset "$w"` lost the quotes, ran `echo *`
+			// instead, and the sentence a script got back named the files in
+			// the directory. Measured 2026-09-21, bash 5.3.20 and 3.2.57
+			// alike, the quoted body is one asterisk and the unquoted body
+			// `a[$(echo *)]` is the listing in both — so the body globs, and
+			// what must not happen is this scan deciding for it (#4070).
+			b.WriteString(sub[i : i+n])
+			i += n - 1
+			continue
+		}
 		switch c := sub[i]; c {
 		case '\\':
 			if q.Has(syntax.SubscriptBackslashQuotes) && i+1 < len(sub) {
@@ -103,4 +122,63 @@ func (r *Runner) operandSubscriptUnquoted(sub string) string {
 		}
 	}
 	return b.String()
+}
+
+// substitutionSpan is the length of the substitution that starts at i, or 0
+// where nothing does.
+//
+// The three spellings a subscript can carry — `$( … )`, `${ … }` and a
+// backquoted body — read as one region each so that the scan above steps over
+// them rather than through them. Nesting is counted for the brace and paren
+// forms, which is what makes `$(( … ))` and `$(f $(g))` one region apiece,
+// and a quote inside the body is stepped over as well: `$(echo ")")` closes
+// at the last paren and not at the quoted one.
+//
+// An **unterminated** region is not one. It returns 0, and the byte is read
+// as the ordinary character it is — the same standing the scan above gives an
+// unterminated quote, and the reason a lone `$` or a stray backquote in a key
+// is left exactly where it was written.
+func substitutionSpan(text string, i int) int {
+	switch {
+	case text[i] == '`':
+		for j := i + 1; j < len(text); j++ {
+			switch text[j] {
+			case '\\':
+				j++
+			case '`':
+				return j - i + 1
+			}
+		}
+		return 0
+	case text[i] != '$' || i+1 >= len(text):
+		return 0
+	}
+	opener := text[i+1]
+	var closer byte
+	switch opener {
+	case '(':
+		closer = ')'
+	case '{':
+		closer = '}'
+	default:
+		return 0
+	}
+	depth := 0
+	for j := i + 1; j < len(text); j++ {
+		switch c := text[j]; c {
+		case opener:
+			depth++
+		case closer:
+			if depth--; depth == 0 {
+				return j - i + 1
+			}
+		case '\\':
+			j++
+		case '\'', '"':
+			if end := strings.IndexByte(text[j+1:], c); end >= 0 {
+				j += end + 1
+			}
+		}
+	}
+	return 0
 }

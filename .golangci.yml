@@ -36,12 +36,20 @@ run:
   # machine's total CPU spent linting while everything else waited. A commit
   # is not the only thing happening on a developer's laptop.
   #
-  # Four is chosen so that the realistic worst case stays near the core count
-  # rather than five times over it, and because the tax is small: linting is
-  # dominated by loading and typechecking the package graph, which is where
-  # the shared warm cache above already does the work. CI runners have fewer
-  # cores than this anyway, so it changes nothing there.
-  concurrency: 4
+  # Two is chosen so that the realistic worst case stays near the core count
+  # rather than over it, and because the tax is small: linting is dominated by
+  # loading and typechecking the package graph, which is where the shared warm
+  # cache above already does the work. CI runners have fewer cores than this
+  # anyway, so it changes nothing there.
+  #
+  # Four was the previous value and it was still too generous. Measured on
+  # 2026-09-21 with five agents committing against the same tree: eighteen
+  # runners alive at once, six of them resident on CPU at 240-300% apiece —
+  # roughly sixteen of the machine's eighteen cores spent linting — and a
+  # one-minute load average of 41 while an editor and a VM were also running.
+  # The realistic worst case is not two concurrent commits, it is as many as
+  # there are agents, so the per-run cap has to be sized against that.
+  concurrency: 2
 
 linters:
   settings:

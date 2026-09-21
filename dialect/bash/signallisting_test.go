@@ -55,16 +55,22 @@ func TestTrapListsTheSameNumberedTableKillLists(t *testing.T) {
 }
 
 // TestThisPresetWritesNothingForASignalItCannotName is the one column that
-// answers `kill -l N` for an unnamed signal with an empty line rather than
-// with the number.
+// answers `kill -l N` for an unnamed signal with **nothing at all** rather
+// than with the number.
+//
+// Nothing at all, and not an empty line — which is what this test and the
+// axis comment both said while the code wrote a newline, and what cost
+// `bash/builtins.tests` the whole file (#3984). Re-measured 2026-09-21 in
+// the panel's pinned image, `kill -l 32 | od -c` under GNU bash 5.3.20 is an
+// empty file.
 //
 // Measured 2026-09-17 in the panel's Alpine image with Debian-built bash 5.3
 // beside dash 0.5.12, zsh 5.9 and BusyBox v1.37.0, which is where the
 // question arises at all — Linux has 64 signals and names for 33 of them:
 //
-//	kill -l 32     (an empty line)   status 0   here
+//	kill -l 32     (no output)       status 0   here
 //	kill -l 32     32                status 0   dash, zsh, BusyBox ash
-//	kill -l 160    (an empty line)   status 0   here — the same row less 128
+//	kill -l 160    (no output)       status 0   here — the same row less 128
 //	kill -l 65     invalid signal specification, 1 — outside the kernel's range
 //
 // The last row is the reason this is not KillListPrintsANumberItCannotName:
@@ -83,7 +89,13 @@ func TestThisPresetWritesNothingForASignalItCannotName(t *testing.T) {
 		t.Skipf("no unnamed signal in range on %s", runtime.GOOS)
 	}
 	out, st := answersRun(t, `kill -l 32; echo "st=$?"`)
-	if out != "\nst=0\n" {
-		t.Errorf("kill -l 32 wrote %q at %d, want one empty line at 0", out, st)
+	if out != "st=0\n" {
+		t.Errorf("kill -l 32 wrote %q at %d, want no output at all at 0", out, st)
+	}
+	// And the same row reached through the one subtraction of 128, which is
+	// the shape `bash/builtins.tests` writes and the one that was failing.
+	out, st = answersRun(t, `kill -l 160; echo "st=$?"`)
+	if out != "st=0\n" {
+		t.Errorf("kill -l 160 wrote %q at %d, want no output at all at 0", out, st)
 	}
 }

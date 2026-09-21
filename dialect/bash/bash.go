@@ -1817,10 +1817,13 @@ func Semantics() interp.Semantics {
 	s.KillListReducesRepeatedly = interp.No
 	s.KillListPrintsANumberItCannotName = interp.No
 	s.KillListNamesZeroAsExit = interp.Yes
-	// The one column that writes an empty line for a signal it has no name
-	// for, rather than the number. Measured 2026-09-17 on Linux, where the
-	// question arises: `kill -l 32` is a blank line at 0 here and `32` in
-	// dash, zsh and BusyBox ash (#3287).
+	// The one column that writes **nothing at all** for a signal it has no
+	// name for, rather than the number. Measured 2026-09-17 on Linux, where
+	// the question arises, and re-measured 2026-09-21 in the panel's pinned
+	// image with `od -c` after "blank line" had been read as "empty line"
+	// for long enough to put a newline in the code: `kill -l 32` here is an
+	// empty file at status 0, where dash, zsh and BusyBox ash write `32`
+	// (#3287, #3984).
 	s.KillListLeavesAnUnnamedSignalBlank = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.No

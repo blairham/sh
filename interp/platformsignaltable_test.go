@@ -126,7 +126,7 @@ func TestANameTheVectorLacksIsNotANameAndTheNumberStillIs(t *testing.T) {
 // axis beside it.
 //
 // A signal the kernel has and the table cannot name is written back as its
-// number at status 0 — and as an empty line where the vector says so, which
+// number at status 0 — and as nothing at all where the vector says so, which
 // is the one column that answers that way. Reached here through a vector
 // missing a name rather than through a real-time signal, so the case asks the
 // same question on a kernel that has none.

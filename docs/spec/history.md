@@ -780,6 +780,33 @@ list; and a backslash quotes a colon inside a pattern. A builtin whose own line
 was left out — `HISTIGNORE='history*'` and then `history -p x` — has nothing
 of its own to drop, and the entry before it survives.
 
+**`-s` takes that line once; `-p` reads it every time**, which is the
+difference a line carrying several of them shows and neither letter's wording
+predicts (#4072). Measured 2026-09-21 on bash 5.3.20 with `HISTIGNORE`
+keeping the reader's other lines out, so that the line under test is the only
+one the list holds of its own:
+
+| written on one recorded line | listed |
+| --- | --- |
+| `history -s a`, `-s b`, `-s c` | `1 a` · `2 b` · `3 c` |
+| the same three in a `for` body | `1 a` · `2 b` · `3 c` |
+| `pre` already stored, then those three | `1 pre` · `2 a` · `3 b` · `4 c` |
+| `pre` stored, then `-p pp`, `-s b` | `1 b` |
+| `pre1`, `pre2` stored, then `-p x`, `-p y` | `1 pre1` |
+| `pre` stored, then `-s a`, `-p x` | `1 pre` · `2 a` |
+
+Rows four and five are the ones that refuse the simpler rule: the `-s` behind
+a `-p` took `pre`, and two `-p` took two entries, so the mark saying the list
+holds this line is **consumed by `-s` and left standing by `-p`**. Row six is
+the same asymmetry from the other side — once `-s` has taken the line, a `-p`
+behind it on that line finds nothing marked.
+
+And a builtin that finds the mark set with an **empty list** stops rather than
+carrying on: `true; history -p x; history -p y` prints `x` and then nothing at
+status 1, and `true; history -p x; history -s b; history -s c` leaves the list
+empty at status 0 — the operands of a `-s` that found nothing to take are
+dropped, and the mark it never took is still there for the one behind it.
+
 **HISTSIZE bounds the list and the numbers go on.** `HISTSIZE=2` after three
 commands lists `3 HISTSIZE=2` and `4 history`; `0` keeps nothing, a negative
 value keeps everything. Every entry pushed off a full list moves the numbering

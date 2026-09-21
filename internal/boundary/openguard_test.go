@@ -301,6 +301,16 @@ var exempt = map[string]string{
 	"dialect/zsh.fcReadFile": "the history file `fc -R` takes entries from, after AllowReadPath " +
 		"on the path. It is the letter with no write in it and it still crosses the boundary: " +
 		"the lines land in a list `fc -l` will print.",
+	// repl. themeimport.go is the whole of `prompt import`'s gate, and the
+	// two files are the two directions: a person names a configuration to
+	// read and a file to write it into, both at a prompt, which is exactly
+	// the case a policy is about.
+	"repl.harvest": "the other program's configuration, after AllowReadPath on the path and " +
+		"AllowProbe before the stat — so a refused read is reported and a hidden file reads " +
+		"back as one that is not there, which is the split the two calls exist for.",
+	"repl.importConfig": "the starship configuration after AllowReadPath, and the file the " +
+		"conversion is written into after AllowModify. 0600, because an imported configuration " +
+		"is the person's own and nothing else needs to read it.",
 	// The smoke suite is in scope because it holds a Boundary to read a block
 	// store back — and it is the one package here that is not the shell. The
 	// rest of this list explains a path the shell reaches; these two explain

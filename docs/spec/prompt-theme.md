@@ -930,6 +930,58 @@ Where a configuration's code cannot be carried, the setting is **named
 at import** rather than dropped silently or half-interpreted into
 something that looks nearly right.
 
+#### Built, 2026-09-21
+
+`internal/promptimport` is the converters and `prompt import` is the word.
+Both rules the section opens with are properties of where the code sits
+rather than promises: the package is imported from `repl/themeimport.go`
+and from nowhere else, and that file is reached only from the `prompt`
+prelude function, so **nothing on the render path can reach another
+project's format**.
+
+**It is sourced rather than parsed-and-run**, and the difference is the
+gate. `return` means "stop reading this file" only inside a file the
+shell is reading, so running the parsed program directly carries on past
+the version check and converts a configuration the shell would never
+have applied. That is the silent wrong answer at the one point the whole
+file hangs on, and it is what the first run of the harness did.
+
+**In a child of the session, seeded from it.** A child, because sourcing
+280 settings and a handful of functions into somebody's live shell is
+not what they asked for when they asked to convert a file — and the test
+for it types `echo ${POWERLEVEL9K_DIR_FOREGROUND-}` at the prompt
+afterwards and requires nothing. Seeded from the session, because the
+gate reads a variable: a child with an empty namespace applies **none**
+of the configuration and produces an empty import that looks exactly
+like a file with nothing in it.
+
+**The dialect is the session's, and that is a limit rather than a
+decision.** `repl` imports no dialect package — the property this
+document says must survive the work — so there is no zsh in reach to
+build a runner from. Run the import from a zsh session, which is where
+the file's author already is; a file that will not parse is refused with
+that named, because "it did not work" and "you are in bash" are
+different sentences and only one is actionable.
+
+**Most of the namespace passes through, and that is not a coincidence.**
+This engine's shape — a flat keyed store, `<SEGMENT>_<STATE>_<KEY>`,
+colors as xterm-256 indices — is what a rich prompt's configuration
+surface has to be. So the converter is a rename table for the names that
+differ, a value translation for the languages that differ, and a rule:
+**carry a name this engine reads and name one it does not.**
+
+What "this engine reads" means is asked of the **roster**, not of a list
+— so a segment somebody already wrote as a shell function takes its
+settings like any other, and an element nothing here draws is left out
+of the elements list and named. An imported configuration naming forty
+elements this shell has no segment for would be a prompt that reported
+forty problems on its first line, about names the person never wrote.
+
+Measured against the real configuration on this machine, 2026-09-21: an
+88KB generated file, 278 assignments, **63 settings carried and 283
+named**. The 283 is the honest number and is most of what the section
+below is about.
+
 ### starship: a second converter, not the same one
 
 starship's configuration is TOML with a different model — per-module
@@ -942,6 +994,37 @@ because the two together are most of the themed prompts in the world, and
 because one of them being a hand translation of the other is a fixture
 we already have: the same prompt from two sources is a stronger test than
 either alone.
+
+#### Built, 2026-09-21
+
+The TOML reader is **written and not imported**, which is
+`internal/depsurface`'s zero pinned at the one place a converter would
+have broken it: a library for a command a person runs once would be this
+module's first runtime dependency. A subset, stated rather than
+discovered — comments, tables, basic and literal strings, multi-line
+basic strings, numbers read as their text, booleans, flat arrays — and
+everything outside it is an **error** rather than a silent skip, because
+a reader that quietly ignored a construct would produce a configuration
+missing something.
+
+What it carries is the module order out of `format` — where a newline is
+this engine's `newline` and a `$fill` is the split between the two sides
+of a line — the per-module colors, the symbol, and the settings that are
+the same question in both.
+
+What it does **not** carry is the one to be clear about. A module's own
+`format` is starship's markup and this engine's content template is a
+different one; translating between them is where a converter stops being
+a converter and starts being a reimplementation of somebody's renderer,
+which is the thing `docs/design/plugins.md`'s bridge argument says not
+to take on. So a module format is named. The exception is the prompt
+character, whose value is a single `[text](style)` and is translated
+exactly or named — it is the most visible glyph on the screen and losing
+it is the difference between an imported prompt that looks right and one
+that does not.
+
+Measured against the hand-translated configuration on this machine,
+2026-09-21: **22 settings carried and 54 named**.
 
 ### What cannot be identical, said before anyone is surprised
 

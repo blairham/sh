@@ -33,7 +33,7 @@ import (
 // What the function does decide is the usage line and the status of a word
 // it does not know, because those are located and named the dialect's way
 // and only a prelude function can be.
-func (t *Theme) Engine(r *interp.Runner, _ context.Context, args []string) int {
+func (t *Theme) Engine(r *interp.Runner, ctx context.Context, args []string) int {
 	if len(args) == 0 {
 		return t.engineUsage(r)
 	}
@@ -51,6 +51,8 @@ func (t *Theme) Engine(r *interp.Runner, _ context.Context, args []string) int {
 			_, _ = fmt.Fprintln(r.Out(), line)
 		}
 		return 0
+	case "import":
+		return t.importConfig(r, ctx, args[1:])
 	default:
 		r.DiagnoseAsf(promptName, "%s: %s: no such subcommand\n", promptName, args[0])
 		return t.engineUsage(r)
@@ -71,7 +73,7 @@ const promptName = "prompt"
 // person sees is their own line and the word they typed, worded the way the
 // shell they are running words a builtin's complaint.
 func (t *Theme) engineUsage(r *interp.Runner) int {
-	r.DiagnoseAsf(promptName, "usage: %s show\n", promptName)
+	r.DiagnoseAsf(promptName, "usage: %s show\n       %s\n", promptName, importUsage)
 	return 2
 }
 

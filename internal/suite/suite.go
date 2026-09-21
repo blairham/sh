@@ -302,9 +302,15 @@ var Panel = []Suite{
 		Helpers:  []string{"support/recho.c", "support/zecho.c", "support/printenv.c"},
 		ShellVar: "THIS_SH",
 		Lookup:   []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
-		// bash 5.3's own suite, so the reference has to be a 5.3. Ubuntu
-		// 24.04's is 5.2.21 and the `bash's own suite` job runs there, which
-		// is a column measuring a version difference and calling it ours.
+		// bash 5.3's own suite, so the reference has to be a 5.3. It was not
+		// on CI for as long as the `bash's own suite` job ran in an
+		// `ubuntu:24.04` container, whose bash is 5.2.21 — a column measuring
+		// a version difference and calling it ours, and an unquantified share
+		// of the `0 / 0` block #2298 is counted from. The job's container is
+		// a digest-pinned `debian:sid-slim` since #4106 and its bash is
+		// 5.3.15, so the banner these two fields raise is now raised by a
+		// machine that has the wrong bash rather than by the runner every
+		// time.
 		Against:       "GNU bash 5.3",
 		AgainstReport: "version 5.3",
 		// Every builtin's help, three ways, plus the topic list. The suite

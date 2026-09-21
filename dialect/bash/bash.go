@@ -347,6 +347,11 @@ func Semantics() interp.Semantics {
 	// `[[ ]]` operand and a here-document body. The `*` spelling is core and
 	// does not come through here — `v=${a[*]}` is `x-y-z` in this shell.
 	s.UnsplitAtListJoinsOnIFS = interp.No
+	// bash 5.3.20 and bash 3.2.57 both print `e1: a b c` for `${e1?$*}`
+	// under `IFS=:`: the word is expanded as an argument list would be and
+	// the sentence made of the fields. The only column in the panel that
+	// reads it this way.
+	s.DiagnosticWordIsFields = interp.Yes
 	// The panel's holdout on the login profile, measured on all four
 	// non-interactive routes and in both bash 5.3 and the 3.2 macOS ships:
 	// `exec -a -bash bash script.sh` reads neither ~/.bash_profile nor

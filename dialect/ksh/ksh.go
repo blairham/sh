@@ -665,6 +665,8 @@ func Semantics() interp.Semantics {
 	// `x-y-z`. The two axes partition the panel differently, which is why
 	// neither can stand in for the other.
 	s.UnsplitAtListJoinsOnIFS = interp.No
+	// ksh93u+ prints `e1: a:b:c` for `${e1?$*}` under `IFS=:`.
+	s.DiagnosticWordIsFields = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	// The one shell in the panel that does what POSIX asks of `command -v`
 	// for a pathname operand: `command -v ./bb/tool` is the working directory

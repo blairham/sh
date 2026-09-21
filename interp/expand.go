@@ -5218,10 +5218,18 @@ func (r *Runner) substitutedWordText(w *syntax.Word) string {
 // Measured 2026-09-20, `set -- 'a:b' c` under `IFS=:`, `${e?$*}` in a script
 // file: bash 5.3.20 and bash 3.2.57 say `e: a b c` — the word expanded into
 // fields and the message made of them with a space between — where zsh 5.9.2,
-// ksh93u+ and dash 0.5.12 all say `e: a:b:c`, the value. One spelling, two
-// readings, so it is an axis rather than a bug; this answers bash's, which is
-// the answer this shell already gave, and #3876 holds the other three.
+// ksh93u+, dash 0.5.12 and BusyBox ash all say `e: a:b:c`, the value. One
+// spelling, two readings, so it is an axis rather than a bug.
+//
+// The axis is here and not on the shared helper because the *assigning* forms
+// are unanimous: `${u:=$*}` stores the value in every column including bash,
+// so a switch one level up would record a disagreement the panel does not
+// have. See Semantics.DiagnosticWordIsFields for the whole table (#3876).
 func (r *Runner) diagnosticWordText(w *syntax.Word) string {
+	if !r.ask(r.sem().DiagnosticWordIsFields,
+		"the word of a `?` operator being read as fields rather than as a value") {
+		return r.substitutedWordText(w)
+	}
 	defer r.withoutGlobbing()()
 	return r.joinWord(w)
 }

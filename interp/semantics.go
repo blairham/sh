@@ -172,6 +172,44 @@ type Semantics struct {
 	// than two elements, which uses no separator at all.
 	UnsplitAtListJoinsOnIFS Answer
 
+	// DiagnosticWordIsFields reads the word of `${x?word}` as **fields** of a
+	// command line — expanded the way an argument list is and the sentence
+	// made of them with one space between — rather than as a value, where a
+	// `$*` in it joins on the first character of IFS like it does everywhere
+	// else a value is wanted.
+	//
+	// Measured 2026-09-20 from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, with `set -- 'a:b' c` and `IFS=:` in
+	// front of `unset e1; echo ${e1?$*}`:
+	//
+	//	bash 5.3.20   e1: a b c
+	//	bash 3.2.57   e1: a b c
+	//	zsh 5.9.2     e1: a:b:c
+	//	ksh93u+       e1: a:b:c
+	//	dash 0.5.12   e1: a:b:c
+	//	BusyBox ash   e1: a:b:c
+	//
+	// So it is the bash family alone, and the split is the wording only: the
+	// status is the shell's ordinary one for the operator in every column —
+	// 1 in bash, zsh and ksh93, 2 in dash and BusyBox ash — and the word is
+	// never matched against the filesystem in any of them, `${e1?*}` being
+	// the literal `*` in a directory holding files.
+	//
+	// **Asked at the `?` operator and nowhere else**, which is the whole
+	// reason it is a field of its own rather than a question on the helper
+	// the assigning forms share. The *same word* reached through `:=` is
+	// unanimous — `unset u; : ${u:=$*}` stores `a:b:c` in every column,
+	// bash included — so putting the switch on substitutedWordText would
+	// record a disagreement the panel does not have. See
+	// Runner.diagnosticWordText, and #3884 for the round of this that got
+	// the placement right and the axis wrong.
+	//
+	// A probe that leaves IFS alone cannot tell the two readings apart: the
+	// first character is then already the space the fields reading supplies,
+	// so both answers give `e1: a:b c` in every column. Any test of this
+	// keeps a default-IFS row to say so.
+	DiagnosticWordIsFields Answer
+
 	// TrailingSeparatorEndsAField makes the non-whitespace IFS separator that
 	// closes a value open one last empty field, rather than being absorbed.
 	//

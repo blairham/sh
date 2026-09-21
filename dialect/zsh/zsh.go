@@ -1713,6 +1713,10 @@ func Semantics() interp.Semantics {
 	// give `x y z`. With IFS set and empty it is `xy`, which is what says
 	// the separator is read from IFS rather than defaulted to a space.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
+	// zsh 5.9.2 prints `e1: a:b:c` for `${e1?$*}` under `IFS=:`. Worth
+	// stating that this shell answered neither reading before the axis: with
+	// zsh's own no-split rule over the fields path it made `a:b c`.
+	s.DiagnosticWordIsFields = interp.No
 	// The separator that closes a value delimits here rather than being
 	// absorbed, so every such split has one more field than it does in the
 	// rest of the panel: `IFS=:; v='a:'` under `shwordsplit` is `[a][]` where

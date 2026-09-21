@@ -242,6 +242,9 @@ func Semantics() interp.Semantics {
 	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split, and
 	// this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
+	// BusyBox ash 1.37 prints `e1: a:b:c` for `${e1?$*}` under `IFS=:`,
+	// so the word is a value here as it is in dash.
+	s.DiagnosticWordIsFields = interp.No
 	// An empty positional list is a set parameter: `set --; "${@-word}"` is
 	// empty and `"${@+word}"` is `word`.
 	// unanswered ConditionWholeArraySubscript: this applet has no `-v`

@@ -173,6 +173,9 @@ func Semantics() interp.Semantics {
 	// here and in zsh, against `x y z` in bash and ksh93. It has no arrays,
 	// so the positional spelling is the whole of the question here.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
+	// dash 0.5.12 prints `e1: a:b:c` for `${e1?$*}` under `IFS=:`, the
+	// ordinary unsplit reading of a word wanted as a value.
+	s.DiagnosticWordIsFields = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	// `command -v ./bb/tool` is `./bb/tool` here: the operand back, not the
 	// absolute path POSIX asks for. Measured 2026-09-14 against 0.5.12, the

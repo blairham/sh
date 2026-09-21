@@ -103,10 +103,27 @@ func (sh Shell) session(argv []string, in source) int {
 	// undo it. The Runner remembers that a script moved the state and this
 	// leaves it alone when one has.
 	r.StartInteractiveHistory()
+	// The theme is built before the prelude rather than with the rest of the
+	// front end, because the prelude's `prompt` function is defined only
+	// where there is an engine behind it and a startup file may call it. It
+	// costs a session that never configures a prompt one struct: nothing is
+	// read, no file is opened and no watch is started until something asks
+	// the theme a question.
+	theme := repl.NewTheme(r.GetVar)
+	r.SetPromptEngine(theme.Engine)
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code
 		}
+	}
+	// And the substrate's own prelude after the dialect's. The order is
+	// stated rather than incidental: no dialect defines `prompt` and none
+	// should, since the engine is the substrate's, so a dialect that took the
+	// name would be a language owning a capability the core provides — the
+	// inversion AGENTS.md bars. See promptprelude.go for why there are two
+	// preludes at all and why this one is interactive-only.
+	if code := sh.sourcePromptPrelude(r, name); code != 0 {
+		return code
 	}
 	// The invocation's options come before the startup files, which is
 	// where the panel has them: what `-x` traces includes what the rc file
@@ -143,7 +160,7 @@ func (sh Shell) session(argv []string, in source) int {
 		// run before the mode is on.
 		r.SetPosixMode(true)
 	}
-	s := sh.frontEnd(r, name, dg)
+	s := sh.frontEndWith(r, name, dg, theme)
 	ctx := context.Background()
 	status, err := s.Run(ctx)
 	if err != nil {
@@ -348,6 +365,15 @@ func (sh Shell) stdinFile() *os.File {
 // dialect's answer dropped on the floor here looks exactly like a dialect
 // that did not answer.
 func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) repl.Shell {
+	return sh.frontEndWith(r, name, dg, repl.NewTheme(r.GetVar))
+}
+
+// frontEndWith is frontEnd with the session's theme supplied, which the
+// session route does because it built one before the prelude — the `prompt`
+// function is defined only where there is an engine behind it, and a startup
+// file may call it. Everything else builds a theme here and never touches it
+// again, which is what a session that configures no prompt costs.
+func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostics, theme *repl.Theme) repl.Shell {
 	return repl.Shell{
 		Runner:  r,
 		Dialect: sh.Dialect,
@@ -421,7 +447,7 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// and in an rc file like everything else, and it draws nothing until
 		// something is configured. That is what makes wiring it here cost a
 		// session that never configures one exactly nothing.
-		Theme: repl.NewTheme(r.GetVar),
+		Theme: theme,
 		// And what else keeps this session's history, which is nothing unless
 		// the binary attached a tool. The file is told either way.
 		HistoryRecorders: sh.HistoryRecorders,

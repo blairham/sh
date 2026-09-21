@@ -228,6 +228,31 @@ func (r *Roster) Resolve(element string) (Segment, bool) {
 	return nil, false
 }
 
+// Source names what would draw an element, without drawing it and without
+// recording anything.
+//
+// Both halves of that sentence are the point. A report that found out by
+// *rendering* would run a person's shell functions because they typed
+// `prompt show`, which is a command with side effects wearing the name of a
+// question. And a report is not a prompt: an element nothing answers must not
+// be added to the "not yet" list by somebody asking about it, or a
+// configuration would grow a complaint the prompt never had.
+//
+// The order is Resolve's, most local first, because a report that named a
+// different source from the one that draws would be worse than no report.
+func (r *Roster) Source(element string) (string, bool) {
+	name := strings.ToLower(strings.TrimSpace(element))
+	for i := len(r.outside) - 1; i >= 0; i-- {
+		if _, ok := r.outside[i].Resolve(name); ok {
+			return r.outside[i].Name(), true
+		}
+	}
+	if _, ok := r.compiled[name]; ok {
+		return builtInSource, true
+	}
+	return "", false
+}
+
 // NotYet names every element a configuration asked for that nothing answered,
 // in the order they were first asked for.
 func (r *Roster) NotYet() []string { return slices.Clone(r.unknown) }

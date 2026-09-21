@@ -2,7 +2,26 @@
 version: "2"
 
 run:
-  timeout: 10m
+  # A wedged run is what this bounds, not a slow one. golangci-lint grades a
+  # run against a fixed wall clock, so anything that makes a run slower eats
+  # into it — and `concurrency` below deliberately makes each run slower in
+  # order to leave the machine usable. The two settings therefore move against
+  # each other, and sizing this one for an idle laptop is what produced #4094:
+  # under seven concurrent committers the hook reported `0 issues` and
+  # `Timeout exceeded` in the same breath and refused a clean commit, because
+  # the grading had finished but the ten minutes had not.
+  #
+  # That failure is worse than a slow hook. It is indistinguishable from a real
+  # lint failure at a glance, the recorded response to a failing hook is to go
+  # find the defect, and the defect does not exist — which is the shortest path
+  # there is to somebody reaching for `--no-verify`.
+  #
+  # Thirty minutes is chosen because the cost of being generous here is close to
+  # zero: a genuinely hung run is hung forever, so it is noticed by the machine
+  # being busy rather than by this clock, and every other run finishes in
+  # seconds against a warm shared cache. The only thing a tight value buys is
+  # false failures under exactly the load this repo is normally worked under.
+  timeout: 30m
   tests: true
   modules-download-mode: readonly
   # Several worktrees of this module are linted at once, and by default the

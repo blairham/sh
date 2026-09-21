@@ -195,3 +195,29 @@ func TestAShellFunctionDrawsInARealSession(t *testing.T) {
 	waitFor(t, s.ran, "one-two", "the command's output")
 	s.end()
 }
+
+// And what the theme could not honor reaches a real session's stderr.
+//
+// The unit test beside this one calls the reporter directly, which says
+// nothing about whether a session ever calls it — the same gap the session
+// function's test closes, one report along.
+func TestWhatTheThemeCouldNotHonorReachesARealSession(t *testing.T) {
+	s := newSessionWith(t, func(sh *Shell) {
+		line := 0
+		sh.StartLine = func() {
+			line++
+			sh.Runner.SetVar("PROMPTS", itoa(line))
+		}
+		sh.Runner.SetVar("SH_PROMPT_LEFT_ELEMENTS", "mark prompt_char")
+		sh.Runner.SetVar("SH_PROMPT_PRESET", "not-a-look")
+		if !sh.Runner.DefineFunction("mark", `printf '[%s]' "$PROMPTS"`) {
+			t.Fatal("the function would not define")
+		}
+		sh.Theme = NewTheme(sh.Runner.GetVar)
+	})
+
+	s.typeLine("echo one-two\n")
+	waitFor(t, s.ran, "one-two", "the command's output")
+	waitFor(t, s.errs, "not-a-look", "the preset nobody has")
+	s.end()
+}

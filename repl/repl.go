@@ -487,7 +487,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	hist := s.historyFile()
 	earlier := s.recalled(ctx, hist)
 	s.counts = &counts{history: len(earlier)}
-	s.hooks = &hookState{reported: map[string]bool{}}
+	s.hooks = &hookState{reported: map[string]bool{}, themeReported: map[string]bool{}}
 	// Where this session records a command and what came of it. Opened here
 	// rather than in either loop so the two cannot disagree about whether a
 	// session keeps blocks, which is the mistake beforeReading already
@@ -940,6 +940,7 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 	// last one ended.
 	s.inLineDiscipline(state, func() {
 		s.reportUnfiredHooks()
+		s.reportThemeProblems()
 		s.runElapsed(ctx)
 		s.fireBeforePrompt(ctx, continuing)
 		s.settled()

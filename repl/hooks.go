@@ -191,6 +191,14 @@ type HookStyle struct {
 // has to stay given.
 type hookState struct {
 	reported map[string]bool
+
+	// themeReported is the same question for the prompt theme's own
+	// findings, kept beside this one because they are reported at the same
+	// moment and for the same reason. Two maps rather than one, because a
+	// hook is named once by its name and a theme's finding is a whole
+	// sentence: a shared map would make `precmd` and "no segment draws
+	// precmd" the same key.
+	themeReported map[string]bool
 }
 
 // fireBeforePrompt runs the prompt hooks this dialect has: the function it
@@ -329,4 +337,38 @@ func (s Shell) hookIsDefined(name string) bool {
 		}
 	}
 	return false
+}
+
+// reportThemeProblems names what this session's theme read and did not honor
+// — once each, the first time it is seen.
+//
+// At the prompt, and for the reason reportUnfiredHooks is at the prompt: a
+// startup file is read before there is anywhere to say anything and the
+// person is not looking yet. The prompt is the first moment there is a
+// session to complain to.
+//
+// **Before the prompt is drawn rather than after**, which means a finding
+// that comes out of drawing — an element nothing answers — is reported at the
+// next prompt rather than this one. That is the right way round: the prompt
+// goes on the screen last, and a diagnostic written after it would be written
+// underneath it in raw mode, where a newline moves down without returning the
+// carriage. One prompt late and legible beats immediate and smeared.
+//
+// Once each, because a prompt is drawn every line and a complaint repeated
+// every line is a broken shell rather than a report.
+func (s Shell) reportThemeProblems() {
+	reporter, ok := s.Theme.(PromptThemeProblems)
+	if !ok || s.hooks == nil {
+		return
+	}
+	for _, problem := range reporter.Problems() {
+		if s.hooks.themeReported[problem] {
+			continue
+		}
+		if s.hooks.themeReported == nil {
+			s.hooks.themeReported = map[string]bool{}
+		}
+		s.hooks.themeReported[problem] = true
+		s.errf("%s: prompt: %s\n", or(s.Name, "sh"), problem)
+	}
 }

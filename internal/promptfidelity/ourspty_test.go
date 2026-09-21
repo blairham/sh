@@ -4,12 +4,14 @@
 package promptfidelity
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 // The source half, against a real binary on a real terminal.
@@ -134,6 +136,28 @@ ICONS = none
 // orphans at ppid 1 after a single run with one job. An instrument that
 // leaks a process per row is the thing this repository's own rules were
 // most recently tightened about.
+// awaitGone waits for a pid to stop existing.
+//
+// A wait and not a question, because signal 0 cannot tell a **zombie**
+// from a running process: a killed job's parent is the shell, which this
+// killed in the same breath, so the job is reparented and reaped by init
+// whenever init gets to it. Measured — the check passed on macOS and
+// failed on Linux against the same tree, which is the shape of a reaping
+// race and not of a leak.
+//
+// Bounded, because the claim is still that the process goes: one that is
+// there after this is one nothing is going to reap.
+func awaitGone(pid int) error {
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(pid, 0); err != nil {
+			return nil
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return errors.New("still there after the render")
+}
+
 func TestAPinnedJobCountReachesThePromptAndLeavesNothingBehind(t *testing.T) {
 	dir := t.TempDir()
 	config := filepath.Join(dir, "prompt.conf")
@@ -146,6 +170,10 @@ ICONS = none
 	}
 
 	ours := Ours{Binary: buildShell(t), Config: config}
+	// The ledger accumulates for the life of the process, so what this
+	// render started is the tail of it. Reading the whole thing would make
+	// the test fail under `-count` for a reason that is not a leak.
+	before := len(startedJobs)
 	grid, err := ours.Render(Context{Dir: dir, Home: dir, Jobs: 2, Columns: 60})
 	if err != nil {
 		t.Fatalf("rendering: %v", err)
@@ -153,12 +181,13 @@ ICONS = none
 	if !strings.Contains(grid.Text(0), "2") {
 		t.Errorf("the pinned job count is not on the prompt:\n%s", grid.String())
 	}
-	for _, pid := range startedJobs {
-		if err := syscall.Kill(pid, 0); err == nil {
-			t.Errorf("process %d is still running after the render", pid)
+	started := startedJobs[before:]
+	for _, pid := range started {
+		if err := awaitGone(pid); err != nil {
+			t.Errorf("process %d: %v", pid, err)
 		}
 	}
-	if len(startedJobs) != 2 {
-		t.Errorf("%d jobs were started, want 2 — this proves nothing otherwise", len(startedJobs))
+	if len(started) != 2 {
+		t.Errorf("%d jobs were started, want 2 — this proves nothing otherwise", len(started))
 	}
 }

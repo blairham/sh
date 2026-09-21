@@ -143,6 +143,11 @@ func (s *ptySession) background(deadline time.Duration) error {
 // the *instrument* rather than about one session: an orphan left behind is
 // a process nobody is holding a handle to, which is exactly why it has to
 // be recorded somewhere a caller does not have to remember to look.
+//
+// It **accumulates** for the life of the process and is never trimmed, so a
+// reader of it takes the tail from wherever it was before the render they
+// are asking about. Trimming would be the wrong fix: the ledger is about
+// everything this package has ever started.
 var startedJobs []int
 
 // pidAfter reads the number the shell printed after a mark.

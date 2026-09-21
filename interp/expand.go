@@ -5663,7 +5663,7 @@ func (r *Runner) dollarZero() (string, bool) {
 	// selected level answers with the keyword function below it, exactly as
 	// it does with no selection. See interp/frameparams.go.
 	frames := r.framesInSelectedFrame()
-	if held, ok := r.heldDollarZeroIn(frames); ok {
+	if held, ok := r.heldDollarZero(frames); ok {
 		// A value this frame was *given*, which answers before any of the
 		// three readings and without consulting the axis: a stored `$0` is
 		// not a question about where the name comes from, it is a name that
@@ -5672,8 +5672,8 @@ func (r *Runner) dollarZero() (string, bool) {
 		// frame it was written on is the only one that answers with it.
 		return held, true
 	}
-	call, inCall := r.innermostCallIn(frames)
-	keyword, inKeyword := r.innermostKeywordFunctionIn(frames)
+	call, inCall := r.innermostCall(frames)
+	keyword, inKeyword := r.innermostKeywordFunction(frames)
 	if !inCall && !inKeyword {
 		// Nothing on the stack could answer, so the axis is not consulted:
 		// a core that refuses every unanswered axis must not refuse `echo

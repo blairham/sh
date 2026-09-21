@@ -210,14 +210,12 @@ func (r *Runner) pushFrame(f Frame) {
 // The script's own level is not in r.frames — it is the shell rather than a
 // call — so the runner carries that one itself and this is the single place
 // that knows which of the two answers.
-func (r *Runner) heldDollarZero() (string, bool) {
-	return r.heldDollarZeroIn(r.frames)
-}
-
-// heldDollarZeroIn is that question asked of a *view* of the stack, which is
-// what a frame selection hands it: the selected frame's own stored `$0`
+//
+// It takes the stack as a parameter rather than reading r.frames, because
+// the one reader has a *view* of it to ask: a frame selection cuts the stack
+// at the selected frame, and the answer is then that frame's stored `$0`
 // rather than the running frame's. See interp/frameparams.go.
-func (r *Runner) heldDollarZeroIn(frames []Frame) (string, bool) {
+func (r *Runner) heldDollarZero(frames []Frame) (string, bool) {
 	if n := len(frames); n > 0 {
 		f := frames[n-1]
 		return f.zeroName, f.zeroNameHeld
@@ -258,15 +256,12 @@ func (r *Runner) popFrame() {
 //
 // A sourced file answers with the operand rather than the file, which is not
 // the same string for a file found on PATH. See Frame.Operand.
-func (r *Runner) innermostCall() (string, bool) {
-	return r.innermostCallIn(r.frames)
-}
-
-// innermostCallIn is that question asked of a *view* of the stack. `$0` is
-// the one reader that has a second view to ask it of — a frame selection cuts
-// the stack at the selected frame — and a diagnostic's location is not: that
-// has a selection mechanism of its own. See interp/frameparams.go.
-func (r *Runner) innermostCallIn(frames []Frame) (string, bool) {
+//
+// The stack is a parameter because `$0` has a *view* of it to ask — a frame
+// selection cuts it at the selected frame — and a diagnostic's location does
+// not: that has a selection mechanism of its own, and passes r.frames. See
+// interp/frameparams.go.
+func (r *Runner) innermostCall(frames []Frame) (string, bool) {
 	if len(frames) == 0 {
 		return "", false
 	}
@@ -297,13 +292,9 @@ func (r *Runner) innermostCallIn(frames []Frame) (string, bool) {
 // A startup file stops the walk. It is read by the shell rather than called
 // by a script — see [Frame.Startup] — so there is nothing below it a script
 // named, and a function it happens to be running is the shell's own.
-func (r *Runner) innermostKeywordFunction() (string, bool) {
-	return r.innermostKeywordFunctionIn(r.frames)
-}
-
-// innermostKeywordFunctionIn is that walk over a *view* of the stack, for the
-// one reader that has a second view — see innermostCallIn.
-func (r *Runner) innermostKeywordFunctionIn(frames []Frame) (string, bool) {
+//
+// The stack is a parameter for the reason innermostCall's is.
+func (r *Runner) innermostKeywordFunction(frames []Frame) (string, bool) {
 	for i := len(frames) - 1; i >= 0; i-- {
 		f := frames[i]
 		if f.Startup {
@@ -390,7 +381,7 @@ func (r *Runner) locationFile() string {
 		return r.frames[n-1].File
 	}
 	if r.outsideCall > 0 && r.scriptFile != "" && r.sem().DollarZeroNames == DollarZeroIsTheInnermostCall {
-		if in, ok := r.innermostCall(); ok {
+		if in, ok := r.innermostCall(r.frames); ok {
 			return in
 		}
 	}

@@ -74,6 +74,26 @@ import (
 // fcHistoryStore is the list, an indexed array oldest-first.
 const fcHistoryStore = ".zsh.history"
 
+const (
+	// fcHistoryDropped is how many entries the size has taken off the front
+	// of the list since the shell started. The numbers an entry is given
+	// here are **absolute** and never change, so this is a running total
+	// rather than a figure an assignment overwrites — see fcTrimToSize.
+	fcHistoryDropped = ".zsh.history.dropped"
+	// fcHistorySizeInForce is the size the list is capped at, which outlives
+	// the variable: measured, `HISTSIZE=2; unset HISTSIZE` leaves the list
+	// held at two, where an `unset` before any assignment leaves the default
+	// of thirty. So the cap is state beside the list and not a reading of
+	// the parameter.
+	fcHistorySizeInForce = ".zsh.history.size"
+)
+
+// fcHistorySizeDefault is the size a list has before anything sets one.
+// Measured 2026-09-21 on zsh 5.9.2, `zsh -f -c`: `typeset -p HISTSIZE` writes
+// `typeset -i10 HISTSIZE=30` with nothing having referred to it, and forty
+// `print -s` lines into an untouched shell leave thirty entries.
+const fcHistorySizeDefault = 30
+
 // registerFcHistory replaces the core `fc` with one that knows the file
 // letters, delegating everything else back to it.
 //
@@ -98,6 +118,16 @@ func registerFcHistory(r *interp.Runner) {
 	// front end that recorded into it would be modeling bash's answer.
 	r.SetHistoryStore(fcEntries, nil)
 	r.SetHistoryListingLayout("%5d  %s\n", "%s\n")
+	// The numbers, which are this dialect's own answer and not the core's
+	// default of one: an entry keeps the number it was given, so the oldest
+	// the list still holds is numbered by everything the size has dropped.
+	// See fcTrimToSize.
+	r.SetHistoryNumbering(fcFirst)
+	// And the parameter that bounds the list, which trims it where it
+	// stands. See fcTrimToSize for the rows, and
+	// interp.Runner.SetAssignmentAction for why a stored name needs a seam
+	// rather than a producer's writer.
+	r.SetAssignmentAction("HISTSIZE", fcSizeAssigned)
 	r.Register("fc", func(r *interp.Runner, ctx context.Context, args []string) int {
 		if letter, rest, found := fcFileLetter(args); found {
 			return fcFile(r, letter, rest)
@@ -233,12 +263,161 @@ func fcEntries(r *interp.Runner) []string {
 // this dialect deliberately has no startup read into a script's list.
 func fcLoadLines(r *interp.Runner, lines []string) {
 	r.SetArray(fcHistoryStore, append(fcEntries(r), repl.HistoryEntries(HistoryStyle(), lines)...))
+	fcTrimToSize(r, fcHistorySize(r))
 }
 
 // fcRemember appends one line to the list. `print -s` is the caller, which is
 // how a script puts something in this shell's history at all.
 func fcRemember(r *interp.Runner, line string) {
 	r.SetArray(fcHistoryStore, append(fcEntries(r), line))
+	fcTrimToSize(r, fcHistorySize(r))
+}
+
+// The size of the list, and the trim an assignment to it does.
+//
+// Both were missing entirely: nothing here read HISTSIZE, so the list grew
+// without bound and an assignment to it did nothing at all (#4043).
+//
+// Measured 2026-09-21 on zsh 5.9.2, `env -i` with a scratch HOME, over lists
+// built with `print -s` and read with `fc -l`:
+//
+//	three adds, no assignment            1 a · 2 b · 3 c
+//	three adds, then HISTSIZE=2          2 b · 3 c
+//	HISTSIZE=2 first, then three adds    2 b · 3 c
+//	three adds, then HISTSIZE=3          1 a · 2 b · 3 c
+//	three adds, then HISTSIZE=0          3 c
+//	three adds, then HISTSIZE=abc        3 c
+//	three adds, then HISTSIZE=-1         3 c
+//	five adds, HISTSIZE=2, then a sixth  5 e · 6 f
+//	HISTSIZE=2, unset HISTSIZE, 3 adds   5 e · 6 f
+//	HISTSIZE=2, =9, then a fourth add    2 b · 3 c · 4 d
+//	HISTSIZE=2, then `fc -R` of 4 lines  6 z · 7 w
+//
+// # The numbers are the entries' own
+//
+// **This is where the dialect parts company with bash**, and it is the half a
+// fix that took bash's rule across would get wrong. bash renumbers what a
+// trim keeps from the count it dropped, so the same three entries under
+// `HISTSIZE=2` list as `1 b`, `2 c` there and `2 b`, `3 c` here. An entry's
+// number is settled when it joins the list and nothing moves it afterwards,
+// which is one running total rather than a figure each assignment rewrites.
+//
+// The rule is stated here rather than as a field on repl.HistoryStyle for the
+// reason the bash side gives: there is no second reader of it, and a named
+// field nothing else consults is a switch without a disagreement behind it.
+//
+// # A value that is not a count is not "keep everything"
+//
+// The other half of the same measurement: `abc`, `-1` and `0` all leave
+// **one** entry, where bash leaves the list alone for the first two and
+// empties it for the third. The parameter is an integer with a floor rather
+// than a word this shell reads three ways — `typeset -p HISTSIZE` after
+// `HISTSIZE=abc` writes `typeset -i10 HISTSIZE=1`, after `HISTSIZE=" 2 "`
+// writes `2`, and `HISTSIZE=1+1` is two — so the value is arithmetic and the
+// floor is one. What the *parameter* reads back as is not modeled here; this
+// is the list's size, and `echo $HISTSIZE` still answers what was written.
+
+// fcSizeAssigned is the HISTSIZE assignment seam: it records the size now in
+// force and trims a list already longer than it.
+func fcSizeAssigned(r *interp.Runner, value string) {
+	n := fcAssignedSize(r, value)
+	r.SetVar(fcHistorySizeInForce, strconv.Itoa(n))
+	fcTrimToSize(r, n)
+}
+
+// fcAssignedSize is a HISTSIZE an assignment wrote, as a count of entries:
+// **arithmetic**, with a floor of one.
+//
+// Through the runner's own arithmetic rather than a numeric parse beside it,
+// which is what makes `1+1` two and `0x2` two and ` 2 ` two without three
+// rules being written down here. A value that is not an expression at all is
+// what zsh reports and refuses — `HISTSIZE=2x` writes `bad math expression`
+// and ends a non-interactive shell — and ArithValue is the call that both
+// reports and refuses, so the failure is passed on rather than swallowed.
+func fcAssignedSize(r *interp.Runner, value string) int {
+	n, ok := r.ArithValue(value)
+	if !ok {
+		return fcHistorySizeDefault
+	}
+	return max(n, 1)
+}
+
+// fcImportedSize is a HISTSIZE the shell was **handed**, which is a different
+// reading of the same parameter and not a second copy of the one above.
+//
+// Measured 2026-09-21, zsh 5.9.2, `env -i HISTSIZE=<value> zsh -f -c` over
+// three entries, as the list the shell ends up holding:
+//
+//	2x, " 2 ", 0x2          two — a leading integer, base prefix and all
+//	1+1                     one: the scan stops at the operator
+//	abc, -1, 0, empty       one, the floor
+//	99                      ninety-nine
+//
+// So an inherited value is scanned and an assigned one is evaluated, and
+// `1+1` is the row that says so: two ways in, two readings, and a shell that
+// used one for both would either refuse `2x` at startup — which zsh does not
+// — or let `1+1` through as one.
+//
+// What the *parameter* reads back as is not modeled: zsh rewrites it, so
+// `echo $HISTSIZE` answers `2` for an inherited `2x` and `1` for an assigned
+// `abc`, which is HISTSIZE being a `typeset -i10` special rather than
+// anything about the list.
+func fcImportedSize(value string) int {
+	text := strings.TrimSpace(value)
+	for end := len(text); end > 0; end-- {
+		if n, err := strconv.ParseInt(text[:end], 0, 64); err == nil {
+			return max(int(n), 1)
+		}
+	}
+	return 1
+}
+
+// fcHistorySize is the size the list is held at.
+//
+// The value in force where something has set one, and otherwise the
+// parameter scanned once and remembered — which is what lets a HISTSIZE
+// inherited from the environment bound a list no assignment ever reached.
+// Absent both, the default above.
+func fcHistorySize(r *interp.Runner) int {
+	if held, ok := r.GetVar(fcHistorySizeInForce); ok {
+		if n, err := strconv.Atoi(held); err == nil {
+			return max(n, 1)
+		}
+	}
+	value, ok := r.GetVar("HISTSIZE")
+	if !ok {
+		return fcHistorySizeDefault
+	}
+	n := fcImportedSize(value)
+	r.SetVar(fcHistorySizeInForce, strconv.Itoa(n))
+	return n
+}
+
+// fcTrimToSize drops the oldest entries over the size, counting them so that
+// the ones left keep the numbers they had.
+func fcTrimToSize(r *interp.Runner, keep int) {
+	entries := fcEntries(r)
+	if len(entries) <= keep {
+		return
+	}
+	fcSetDropped(r, fcDropped(r)+len(entries)-keep)
+	r.SetArray(fcHistoryStore, entries[len(entries)-keep:])
+}
+
+// fcFirst is the history number of the oldest entry the list holds.
+func fcFirst(r *interp.Runner) int { return fcDropped(r) + 1 }
+
+func fcDropped(r *interp.Runner) int {
+	value, _ := r.GetVar(fcHistoryDropped)
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func fcSetDropped(r *interp.Runner, n int) {
+	r.SetVar(fcHistoryDropped, strconv.Itoa(max(n, 0)))
 }
 
 // Every system call this file makes about a path a script named, with the

@@ -670,6 +670,34 @@ The compiled-in presets are seeded from exactly the same format, so
 there is no arrangement a shipped preset can express and a downloaded
 one cannot.
 
+#### Built, 2026-09-21
+
+`SH_PROMPT_PRESET` names a look this binary carries or a path to a file,
+and the two are read by the same reader — the carried ones are const
+text in the configuration file's own format, parsed at first use. A
+preset kept in a file is re-read when it changes, on the same terms the
+configuration file is, because a preset somebody is writing is a file
+they are editing.
+
+Two are carried, **`lean` and `frame`**, and carrying both is the
+structural claim being cashed rather than a pair of conveniences: they
+name the same elements and differ only in their settings, so the same
+layout loop draws a two-row prompt with a space between segments and a
+framed one with a background each and powerline arrows. *If a third look
+ever needs code, the loop has stopped being generic and that is the bug
+rather than the look.*
+
+Named for what they look like and never for another project. A preset
+named after somebody else's theme is a claim about fidelity, and the only
+honest way to make one is the cell-grid comparison below, which does not
+exist yet.
+
+The same treatment for icon tables: `nerdfont`, `ascii` and `none`, in
+the same format through the same reader. A name that is neither carried
+nor a readable file is **named rather than ignored** — the difference
+between "there is no such preset" and "presets do not work" is the whole
+of what a report is for.
+
 ### A segment can be a shell function
 
 The interpreter is in this process. So a segment's content may be
@@ -696,9 +724,40 @@ Constrained accordingly:
 - **A function that fails or is missing costs its segment and nothing
   else.** The provider's panic guard covers a panic; a non-zero return
   and an unset name are ordinary outcomes and render nothing.
-- **A function that does not terminate is the hard case**, and the
-  honest answer is the async contract below rather than a timeout
-  invented here **(unmeasured — settle before implementing)**.
+- **A function that does not terminate blocks the prompt**, and that is
+  stated rather than guarded against. It is the same sentence
+  `repl/promptprovider.go` already writes about a provider, for the same
+  two reasons: a deadline would report something other than what
+  happened, and abandoning the work would leak the goroutine doing it.
+  The route for something that may take a while is the async contract —
+  publish rather than be asked — and inventing a timeout here would let
+  the in-process seam claim a property it cannot keep. *(Settled
+  2026-09-21.)*
+
+#### Built, 2026-09-21
+
+An element resolves to a shell function in the session before it resolves
+to anything compiled in, and the function is called in-process through
+the interpreter that is already here. What it writes is the segment's
+content; what it writes to standard error is written **into the prompt
+beside it**, because a prompt is drawn in raw mode where a newline moves
+down without returning the carriage, and a diagnostic dropped on the
+floor is the silent half of the failure this repository treats as its
+worst.
+
+Three things the call does that a caller would otherwise get wrong. The
+**exit status is put back**, because a segment drawn between two commands
+must not change what `$?` says about the one that ran — the same thing
+the hook chain does. A **function that fails or is missing costs its
+segment and nothing else**, a non-zero return and an unset name being
+ordinary outcomes. And it runs behind the **panic guard** a provider and
+a theme run behind.
+
+**A collision is named.** The session still wins — the person who wrote
+it is the most present author — but somebody whose segment stopped
+drawing because a release added a built-in of the same name has been
+silently overruled by their own shell, and the report says which element
+a session function is drawing in place of a built-in.
 
 ### A segment can be a plugin, and it is async by construction
 
@@ -1143,12 +1202,11 @@ prompt costs one variable lookup per prompt and nothing else.
 Written down rather than assumed, because a spec entry that presents a
 guess as a fact is worse than an absent entry:
 
-1. Containment for a segment function that does not terminate.
-2. **The fidelity claim itself.** Until the cell-grid comparison exists
+1. **The fidelity claim itself.** Until the cell-grid comparison exists
    and runs against a real configuration, "draws what it draws" is
    asserted and not shown — and it is the one claim in this document a
    person can check by looking.
-3. The per-prompt cost of the render itself, against the plain prompt it
+2. The per-prompt cost of the render itself, against the plain prompt it
    replaces, on a cold page cache as well as a warm one.
 
 Two came off this list on 2026-09-19 and are written up where they
@@ -1156,10 +1214,13 @@ belong rather than here: right-prompt behavior is under *The right
 prompt is new here*, and the transient redraw's interaction with
 `groundForPrompt` and the blocks store is under *Transient prompt*.
 
-Two more came off on 2026-09-21, and both are under *Async segments*:
-what a not-yet-ready segment draws is **nothing, and the source decides**,
-and what a chatty publisher costs is bounded by the mechanism rather than
-by a measurement — one byte in the wake, however often it is raised.
+Three more came off on 2026-09-21. Two are under *Async segments*: what
+a not-yet-ready segment draws is **nothing, and the source decides**, and
+what a chatty publisher costs is bounded by the mechanism rather than by
+a measurement — one byte in the wake, however often it is raised. The
+third is under *A segment can be a shell function*: a function that does
+not terminate blocks the prompt, stated rather than guarded against, and
+the route for slow work is to publish rather than be asked.
 
 Each of these is a measurement to run before the code that depends on it
 is written.

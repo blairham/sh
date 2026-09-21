@@ -166,3 +166,32 @@ func TestPublishingWithNothingNewWritesNothing(t *testing.T) {
 	s.typeKeys("\n")
 	s.end()
 }
+
+// A segment written as a shell function, in a real session, through the
+// wiring a session actually does.
+//
+// The unit tests beside this one hand the theme a resolver directly, which
+// says nothing about whether a session ever installs one — and a segment that
+// works in a test and not in a shell is the blind spot this package has had
+// before. So the prompt here *is* the function's output: the mark the fixture
+// waits for is drawn by shell code, and nothing else draws it.
+func TestAShellFunctionDrawsInARealSession(t *testing.T) {
+	s := newSessionWith(t, func(sh *Shell) {
+		line := 0
+		sh.StartLine = func() {
+			line++
+			sh.Runner.SetVar("PROMPTS", itoa(line))
+		}
+		sh.Runner.SetVar("SH_PROMPT_LEFT_ELEMENTS", "mark prompt_char")
+		sh.Runner.SetVar("SH_PROMPT_ICONS", "none")
+		if !sh.Runner.DefineFunction("mark", `printf '[%s]' "$PROMPTS"`) {
+			t.Fatal("the function would not define")
+		}
+		sh.Theme = NewTheme(sh.Runner.GetVar)
+	})
+
+	// typeLine waits for `[1]`, which only the shell function can have drawn.
+	s.typeLine("echo one-two\n")
+	waitFor(t, s.ran, "one-two", "the command's output")
+	s.end()
+}

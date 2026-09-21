@@ -4,7 +4,9 @@
 package repl
 
 import (
+	"context"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +51,14 @@ type Theme struct {
 	file     *prompttheme.File
 	filePath string
 
+	// preset is the look SH_PROMPT_PRESET names — one this binary carries or
+	// a file somewhere — and presetTrouble is what to say where it named
+	// neither. Under the file in the stack, because a preset is what somebody
+	// started from and a file is what they changed about it.
+	preset        prompttheme.Layer
+	presetName    string
+	presetTrouble string
+
 	settings *prompttheme.Settings
 	engine   *prompttheme.Engine
 
@@ -63,8 +73,10 @@ type Theme struct {
 	// tells the session to draw the prompt again, or nil between sessions.
 	// Written by the session that owns the theme and read by whatever
 	// goroutine did the computing, which is what the lock is for.
-	mu        sync.Mutex
-	published func()
+	mu          sync.Mutex
+	published   func()
+	sessionHas  func(string) bool
+	sessionCall func(string) (string, bool)
 
 	// repos is the repository-status capability this session's prompt draws
 	// from — a resident cache kept honest by a filesystem watch, which opens
@@ -146,6 +158,13 @@ func NewTheme(get func(name string) (string, bool)) *Theme {
 	// is actually in a repository.
 	t.repos = repostatus.New(t.Publish)
 	t.roster.Compile("vcs", prompttheme.Repository(t.repository))
+	// And the session's own functions, ahead of everything compiled in: the
+	// person who defined a segment in their own startup file is the most
+	// present author of it. Nothing is consulted for an element no
+	// configuration named, and a name that is not a function is not a
+	// segment, so a session that defines none pays one map lookup per named
+	// element and nothing else.
+	t.roster.Consult(prompttheme.Functions("a session function", t.hasFunction, t.callFunction))
 	t.engine = &prompttheme.Engine{
 		Roster: t.roster,
 		Screen: prompttheme.Screen{
@@ -202,6 +221,12 @@ func (t *Theme) Problems() []string {
 	for _, element := range t.roster.NotYet() {
 		problems = append(problems, "no segment draws "+element)
 	}
+	if t.presetTrouble != "" {
+		problems = append(problems, t.presetTrouble)
+	}
+	for _, shadow := range t.roster.Shadowed() {
+		problems = append(problems, shadow+" is drawn by a session function and not by the built-in segment")
+	}
 	if trouble := t.repos.Trouble(); trouble != "" {
 		// Behavior where watches are unavailable must degrade to something
 		// honest and never to a silently stale answer. This is the honest
@@ -216,6 +241,102 @@ func (t *Theme) Problems() []string {
 		problems = append(problems, "icon table "+set.Name+" is not carried; served by "+set.Served)
 	}
 	return problems
+}
+
+// useSession points the theme at the shell functions this session has, and at
+// nil when the session ends.
+//
+// Unexported and reached from Shell.Run rather than through an interface,
+// because calling a function needs the session's context and only this
+// package has one — a front end wiring a theme has no moment with one in it.
+// The resolver holds nothing but these two functions, so the end of a session
+// takes the session with it and leaves the theme able to draw.
+func (t *Theme) useSession(has func(string) bool, call func(string) (string, bool)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sessionHas, t.sessionCall = has, call
+}
+
+// hasFunction and callFunction are what the resolver is built on, read under
+// the lock because the session that set them is not always the goroutine
+// asking.
+func (t *Theme) hasFunction(name string) bool {
+	t.mu.Lock()
+	has := t.sessionHas
+	t.mu.Unlock()
+	return has != nil && has(name)
+}
+
+func (t *Theme) callFunction(name string) (string, bool) {
+	t.mu.Lock()
+	call := t.sessionCall
+	t.mu.Unlock()
+	if call == nil {
+		return "", false
+	}
+	return call(name)
+}
+
+// segmentFunctions is how this session's own shell functions are reached as
+// prompt segments: whether a name is one, and what one writes when it is run.
+//
+// **In-process, with no fork**, which is the whole of why this is worth
+// having: the interpreter is right here, so a segment nobody here has thought
+// of costs a person a few lines in their own startup file and no process. It
+// works in whatever dialect the session is running, because the function is
+// that session's.
+//
+// Three things it does that a caller would otherwise get wrong:
+//
+//   - **The status is put back.** A segment is drawn between two commands and
+//     must not be able to change what `$?` says about the one that ran —
+//     which is what the hook chain already does, and for the same reason.
+//   - **Both streams are captured, into one buffer in the order they were
+//     written.** A prompt is drawn with the terminal in raw mode, where a
+//     newline moves down without returning the carriage, so a function that
+//     printed straight through would smear the screen. Capturing standard
+//     error *with* standard output rather than discarding it is deliberate:
+//     a function that complains draws its complaint, which is how the person
+//     finds out, and a diagnostic dropped on the floor is the silent half of
+//     the failure this repository treats as its worst.
+//   - **The panic guard**, the same one a provider and a theme run behind. A
+//     prompt that took the session down over a decorative segment would be
+//     worse than the line that did.
+//
+// The streams are wrapped for the length of one call and put back
+// immediately, which is the bargain lazyDiscipline already documents: an
+// external command a segment function starts is on a pipe for that call. For
+// a segment that is the right answer anyway, since its output is being read.
+func (s Shell) segmentFunctions(ctx context.Context) (func(string) bool, func(string) (string, bool)) {
+	if s.Runner == nil {
+		return nil, nil
+	}
+	r, guard := s.Runner, s.guard()
+	call := func(name string) (string, bool) {
+		var out strings.Builder
+		stdout, stderr := r.Stdout, r.Stderr
+		status := r.ExitStatus()
+		r.Stdout, r.Stderr = &out, &out
+		defer func() {
+			r.Stdout, r.Stderr = stdout, stderr
+			r.SetExitStatus(status)
+		}()
+
+		ran := false
+		if guard.Do(func() { ran, _ = r.CallFunction(ctx, name) }) {
+			// It panicked. The report is already written and the segment
+			// draws nothing, which is what an element with nothing to say
+			// looks like everywhere else.
+			return "", false
+		}
+		if !ran || r.ExitStatus() != 0 {
+			// A name that is not a function and a function that failed are
+			// ordinary outcomes rather than errors to report on a prompt.
+			return "", false
+		}
+		return out.String(), true
+	}
+	return r.HasFunction, call
 }
 
 // repository is the capability's answer in the shape the segment takes.
@@ -256,6 +377,20 @@ func (t *Theme) resolve() *prompttheme.Settings {
 	if t.get != nil {
 		path, _ = t.get(prompttheme.Prefix + "CONFIG")
 	}
+	preset := ""
+	if t.get != nil {
+		preset, _ = t.get(prompttheme.Prefix + "PRESET")
+	}
+	if preset != t.presetName {
+		t.presetName = preset
+		t.preset, t.presetTrouble = prompttheme.LoadPreset(preset)
+		t.settings = nil
+	}
+	if file, ok := t.preset.(*prompttheme.File); ok {
+		// A preset kept in a file is a file somebody is editing, and it is
+		// re-read on the same terms the configuration file is.
+		file.Refresh()
+	}
 	if path != t.filePath {
 		t.filePath, t.file = path, nil
 		if path != "" {
@@ -268,6 +403,9 @@ func (t *Theme) resolve() *prompttheme.Settings {
 	}
 	if t.settings == nil {
 		var layers []prompttheme.Layer
+		if t.preset != nil {
+			layers = append(layers, t.preset)
+		}
 		if t.file != nil {
 			layers = append(layers, t.file)
 		}

@@ -94,6 +94,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.declaredOnlyCompound = maps.Clone(r.declaredOnlyCompound)
 	c.compoundHeldAnElement = maps.Clone(r.compoundHeldAnElement)
 	c.declaredBare = maps.Clone(r.declaredBare)
+	c.unsetLeftItDeclared = maps.Clone(r.unsetLeftItDeclared)
 	c.compoundVariable = maps.Clone(r.compoundVariable)
 	// The namespaces a `namespace NAME { … }` block has declared. A subshell
 	// that opens one must not leave it behind: measured, `( namespace ns {

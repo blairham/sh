@@ -511,3 +511,38 @@ func (r *Runner) everyParameterListing() int {
 	}
 	return 0
 }
+
+// localListingIsTheRunningCallsOwn marks a listing as one the `local` word
+// asked for, which is the only shape the question below is put of, and hands
+// back the undo.
+//
+// A flag on the runner rather than an argument for walkingTheWholeTable's
+// reason: the listing is reached through declarePrint, which every
+// declaration word shares, and threading a parameter through it would put the
+// word's name into five signatures that have no other use for it.
+func (r *Runner) localListingIsTheRunningCallsOwn() func() {
+	outer := r.listingIsALocalsOwn
+	r.listingIsALocalsOwn = true
+	return func() { r.listingIsALocalsOwn = outer }
+}
+
+// localListingSkipsAName reports whether `local`'s own listing has to treat a
+// name it *can* see as one it does not have.
+//
+// The disagreement is exactly here and nowhere earlier, which is why the
+// question is asked here: a `local -p` naming a variable the running call
+// made local is a row in both shells that have the form, and the two part
+// company only over a name that is visible from the call without belonging
+// to it. So a listing of the call's own names never reaches the ask.
+//
+// The innermost scope alone, which is localInTheInnermostScope's own rule and
+// is measured rather than inherited: a name a *calling* function made local
+// is refused here as squarely as a global, so this is "what this call
+// declared" and not "what is local to somebody".
+func (r *Runner) localListingSkipsAName(name string) bool {
+	if r.localInTheInnermostScope(name) {
+		return false
+	}
+	return r.ask(r.sem().LocalListingIsTheRunningCallsOwn,
+		"`local -p` listing only the names the running call made local")
+}

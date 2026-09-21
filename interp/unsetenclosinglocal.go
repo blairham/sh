@@ -54,6 +54,38 @@ import "slices"
 // still local in every column, bash included, so the shadow stays and the
 // ordinary removal below happens. That is the control that keeps this from
 // being "what `unset` does to a local".
+//
+// # What the running scope is left holding
+//
+// The shadow staying is not the whole of that column's answer, and the half
+// that was missing is a *listing*. Measured 2026-09-21, `env -i
+// PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME, from a script file, with
+// `v=global` set outside:
+//
+//	f() { local v; unset v; typeset -p v; echo "st=$?"; echo "[${v-UNSET}]"; }
+//
+//	bash 5.3.20   declare -- v    st=0   [UNSET]
+//	bash 3.2.57   v: not found    st=1   [UNSET]
+//	zsh 5.9.2     (nothing)       st=0   [UNSET]
+//	ksh93u+       (nothing)       st=0   [UNSET]
+//	dash, ash     no listing to ask with
+//
+// So the name is unset, the outer value stays hidden, and in one column the
+// binding is still *declared*: exactly the state a valueless declaration
+// leaves behind, which this engine already keeps and lists — see
+// baredeclaration.go. It is that record rather than a second one, so the
+// question of what a listing does with it is the question that record
+// already asks, and a dialect answers it once.
+//
+// Four shapes say the record is the bare one and carries nothing else. A
+// `local -x v`, a `local -i v` and a `local v=zz` all list as `declare -- v`
+// after the unset — the letters go with the value — and a second `unset` of
+// the same name leaves it exactly where the first did.
+//
+// The record is deliberately not made for a name no scope shadows: `v=1;
+// unset v; typeset -p v` is `v: not found` in that column too, and `declare
+// xyz; xyz=v; unset xyz` is the same — the removal clears the record along
+// with the attributes, which is what clearAttributes already does.
 
 // unsetTakesAnEnclosingLocal takes a caller's local away where the dialect
 // says `unset` removes the binding, and reports whether it did — in which
@@ -246,4 +278,25 @@ func (r *Runner) unsetTakesACallPrefixBinding(name string) bool {
 	f.undo = slices.Delete(slices.Clone(f.undo), i, i+1)
 	f.names = slices.DeleteFunc(slices.Clone(f.names), func(n string) bool { return n == name })
 	return true
+}
+
+// unsetLeavesARunningScopesLocalDeclared records that a local of the scope
+// that is *running* is still declared once its value has gone.
+//
+// Called after the removal rather than before it, because the removal is
+// what takes the record away: clearAttributes drops it with the letters, and
+// a record written first would be deleted a line later.
+//
+// The record is baredeclaration.go's and not one of its own, for the reason
+// the comment at the head of this file gives — the state is the same state,
+// so the listing question is asked once and answered once per dialect.
+func (r *Runner) unsetLeavesARunningScopesLocalDeclared(name string) {
+	sc, enclosing := r.enclosingShadowOf(name)
+	if sc == nil || enclosing {
+		// No scope holds the name, or the one that does is a caller's —
+		// which is the question unsetTakesAnEnclosingLocal already answered
+		// and is not this one.
+		return
+	}
+	setBool(&r.unsetLeftItDeclared, name, true)
 }

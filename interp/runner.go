@@ -946,6 +946,12 @@ type Runner struct {
 	// interp/prefixlisting.go. Not cloned, for the reason above it: it is
 	// live only inside one listing.
 	listingWalksTheWholeTable bool
+	// listingIsALocalsOwn is set while the listing the `local` word asked
+	// for is building its rows, which is the one shape that answers
+	// differently about a name the running call did not declare — see
+	// interp/localbuiltin.go. Not cloned, for the reason above it: it is
+	// live only inside one listing.
+	listingIsALocalsOwn bool
 
 	// producedReading is the value a produced parameter last gave a *script*,
 	// kept for the one listing form that writes the reading rather than
@@ -1105,6 +1111,11 @@ type Runner struct {
 	// See baredeclaration.go for the measurement, and for why the record is
 	// carried by nameAttributes rather than saved and restored again here.
 	declaredBare map[string]bool
+	// unsetLeftItDeclared are names whose binding an `unset` emptied while
+	// the scope that declared them was running — the same state a bare
+	// declaration leaves and the same listing, reached the other way. See
+	// interp/unsetenclosinglocal.go.
+	unsetLeftItDeclared map[string]bool
 
 	// compoundVariable is the set of names that are ksh93 compound
 	// variables — `c=(a=1 b=2)` and `typeset -C c`, the fourth kind of thing

@@ -388,22 +388,22 @@ func printOwnColumn(rep suite.Report) {
 	for _, c := range failed {
 		switch {
 		case !c.Result.Parsed:
-			fmt.Printf("    %-28s our parser refused it: %s\n", c.Name, c.Result.Cause)
+			fmt.Printf("    %-34s our parser refused it: %s\n", c.Name, c.Result.Cause)
 		case c.Result.DialectHung:
-			fmt.Printf("    %-28s ours never finished — a hang we published\n", c.Name)
+			fmt.Printf("    %-34s ours never finished — a hang we published\n", c.Name)
 		case c.Result.OracleHung:
-			fmt.Printf("    %-28s the reference never finished — a harness fault, not a finding\n", c.Name)
+			fmt.Printf("    %-34s the reference never finished — a harness fault, not a finding\n", c.Name)
 		case c.Result.Unstable:
 			// Listed above as well, under BAD CASES, and deliberately: this
 			// line is about the column's score and that one is about the
 			// file. A reader scanning for work needs it in both places.
-			fmt.Printf("    %-28s the case is not deterministic — fix the case, not the shell\n", c.Name)
+			fmt.Printf("    %-34s the case is not deterministic — fix the case, not the shell\n", c.Name)
 		case c.Result.DialectFailed:
-			fmt.Printf("    %-28s ours never started — a harness fault, not a finding\n", c.Name)
+			fmt.Printf("    %-34s ours never started — a harness fault, not a finding\n", c.Name)
 		case c.Result.OracleFailed:
-			fmt.Printf("    %-28s the reference never started — a harness fault, not a finding\n", c.Name)
+			fmt.Printf("    %-34s the reference never started — a harness fault, not a finding\n", c.Name)
 		default:
-			fmt.Printf("    %-28s %d/%d lines · status %d, reference %d\n",
+			fmt.Printf("    %-34s %d/%d lines · status %d, reference %d\n",
 				c.Name, c.Result.Common, c.Result.Longest, c.Result.OurStatus, c.Result.RefStatus)
 		}
 	}

@@ -60,7 +60,7 @@ func TestCompgenDegradesAnActionItCannotGenerate(t *testing.T) {
 		}
 	})
 	t.Run("a letter is the same gap written short", func(t *testing.T) {
-		out, st := compgenRun(t, "compgen -bv cd\n")
+		out, st := compgenRun(t, "compgen -bu cd\n")
 		if !strings.Contains(out, "not implemented") {
 			t.Errorf("said %q, want the gap named", out)
 		}

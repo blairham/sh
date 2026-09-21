@@ -3736,6 +3736,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `compgen/names-of-the-shells-own-builtins` | `st=127` **2>** `<shell>: 1: compgen: not found` | `return~st=0` | `return~st=0` | `return~st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
 | `compgen/the-short-letter-for-builtin` | `st=127` **2>** `<shell>: 1: compgen: not found` | `return~st=0` | `return~st=0` | `return~st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
 | `compgen/names-of-the-defined-functions` | `st=127` **2>** `<shell>: 1: compgen: not found` | `f1~f2~st=0` | `f1~f2~st=0` | `f1~f2~st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
+| `compgen/variable-names-hold-a-value` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `zzs=1~zzd=1~zzn=0~zza=0~st=0` | `zzs=1~zzd=1~zzn=0~zza=0~st=0` | `zzs=1~zzd=1~zzn=1~zza=1~st=0` | `zzs=0~zzd=0~zzn=0~zza=0~st=0` **2>** `<shell>: declare: not found~<shell>: declare: not found~<shell>: compgen: not found~<shell>: compgen: not found~<shell>: compgen: not found~<shell>: compgen: not found` | `zzs=0~zzd=0~zzn=0~zza=0~st=0` **2>** `<shell>:1: command not found: compgen~<shell>:1: command not found: compgen~<shell>:1: command not found: compgen~<shell>:1: command not found: compgen` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `compgen/variable-names-reach-a-displaced-value` | `0~0` **2>** `<shell>: 1: compgen: not found~<shell>: 1: compgen: not found` *(status 1)* | `1~0` *(status 1)* | `1~0` *(status 1)* | `1~0` *(status 1)* | `0~0` **2>** `<shell>: local: not found~<shell>: compgen: not found~<shell>: local: not found~<shell>: compgen: not found` *(status 1)* | `0~0` **2>** `f: command not found: compgen~g: command not found: compgen` *(status 1)* | `0~0` **2>** `<shell>: compgen: not found~<shell>: compgen: not found` *(status 1)* |
+| `declare/print-with-the-function-letter-on-a-missing-name` | `typeset: not found~st=0~<shell>: 1: typeset: not found~plain=127` | `typeset: nosuchzz: not found~st=0~plain=1` | `typeset: nosuchzz: not found~st=0~plain=1` | `typeset: nosuchzz: not found~st=0~plain=1` | `st=0~plain=1` | `st=0~plain=1` | `typeset: not found~st=0~<shell>: typeset: not found~plain=127` |
 | `compgen/there-is-no-short-letter-for-function` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=1` | `st=1` | `st=1` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
 | `compgen/nothing-matched-is-a-failure` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=1` | `st=1` | `st=1` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
 | `compgen/no-action-is-a-quiet-success` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=0` | `st=0` | `st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` | `st=127` **2>** `<shell>: compgen: not found` |
@@ -5526,6 +5529,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `compgen/names-of-the-defined-functions` — the second thing this shell can generate from what it knows, and the one whose contents a case can fix: the functions are defined in the snippet, so the answer does not depend on the build the way the builtin list does
   ```sh
   f1() { :; }; f2() { :; }; compgen -A function f; echo "st=$?"
+  ```
+- `compgen/variable-names-hold-a-value` — what makes a name a completion candidate is a **value** and not a declaration, which is the whole of what separates `compgen -v` from the `declare -p` listing: `declare zzn` and `declare -a zza` are rows there and are not candidates here, while `zzd=()` — an empty literal, so something assigned — is. Counted rather than printed, because the rest of the list is the machine's environment. One shell has the command; the other three answer 127 and the counts are 0, which is the shape every compgen row here has (#4069)
+  ```sh
+  zzs=1; zzd=(); declare zzn; declare -a zza; for n in zzs zzd zzn zza; do printf '%s=%s\n' "$n" "$(compgen -v | grep -c "^$n\$")"; done; echo "st=$?"
+  ```
+- `compgen/variable-names-reach-a-displaced-value` — a value a declaration displaced is still the shell's, so the name is still a candidate — and the record an `unset` leaves on the local is not one. The two lines are the discriminator: with a global underneath the answer is 1 and with nothing underneath it is 0, so what the first line lists is the global rather than the placeholder. #4069 was filed reading that pair the other way round, and the second line is what separates them
+  ```sh
+  zzv=global; f() { local zzv=L; unset zzv; compgen -v | grep -c '^zzv$'; }; f; g() { local zznov=L; unset zznov; compgen -v | grep -c '^zznov$'; }; g
+  ```
+- `declare/print-with-the-function-letter-on-a-missing-name` — it is the `-p` **word** that reports a name that is not there and not the function letter: without it every column is silent at 1, and with it the columns split — one names the missing operand, two say nothing. The field that answers the variable spelling cannot answer this, because one shell reports a missing variable and not a missing function. The location prefix is cut off because it carries the shell's own name and the script's path (#4065)
+  ```sh
+  g() { :; }; typeset -pf nosuchzz 2>&1 | sed 's/.*typeset/typeset/;s/.*declare/declare/'; echo "st=$?"; typeset -f nosuchzz 2>&1; echo "plain=$?"
   ```
 - `compgen/there-is-no-short-letter-for-function` — `-u` is *user* names, not functions, and bash's letters have no short spelling for the function action at all. This shell's letter table said otherwise and answered `f1` where bash answers nothing at 1 — a wrong claim in the one direction nothing catches, since it produces an answer rather than an error
   ```sh
@@ -12404,6 +12419,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `errexit/exemption-reaches-into-functions` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` |
 | `errexit/only-the-last-of-a-chain` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
 | `local/dash-saves-the-shell-options` | `restored` | `restored` | `restored` | `kept` | `kept` | `kept` | `restored` |
+| `local/dash-lists-as-one-of-the-locals` | `no` | `yes` | `yes` | `no` | `no` | `yes` | `no` |
 | `errexit/negation-is-exempt` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
 | `errexit/negation-exemption-reaches-into-a-body` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` |
 | `errexit/negation-exemption-reaches-into-a-function` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner` *(status 1)* | `inner~reached` |
@@ -13052,6 +13068,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `local/dash-saves-the-shell-options` — `local -` is the operand that is not a name: bash 5.3, dash and BusyBox ash put the `set` table back when the function returns, bash 3.2 refuses the operand as a bad name, ksh93 has no `local` at all, and zsh reads `-` as a parameter and declares it. The case asks by presence rather than by printing $-, because the startup letters differ per shell and per route — and the declaration is silenced, because the shell that takes `-` as a name answers it with a listing of every parameter it has, which is this machine's environment rather than a fact about the shell
   ```sh
   f() { local - >/dev/null 2>&1; set -u; }; f; case $- in *u*) echo kept ;; *) echo restored ;; esac
+  ```
+- `local/dash-lists-as-one-of-the-locals` — the save `local -` makes is a row in the call's own listing, written with the word `local` rather than the `declare` a name carries — it is not a declaration of a parameter called `-`, it is the save saying it happened. Asked of a captured listing rather than printed, and the request itself silenced, for the reason the neighboring case gives: the listing is three different things across the panel, and one of them is this machine's environment. bash 5.3 writes the call's locals and the row is among them; dash and BusyBox ash write nothing for a bare `local`; zsh reads the lone `-` as the end of the options, so the request is a listing of every parameter it has and no save is made; bash 3.2 refuses the operand; ksh93 has no `local` to reach (#4048)
+  ```sh
+  f() { local - >/dev/null 2>&1; out=`local 2>/dev/null`; case $out in *"local -"*) echo yes ;; *) echo no ;; esac; }; f
   ```
 - `errexit/negation-is-exempt` — `!` tests a status rather than requiring success, so a failing negation is not a failure
   ```sh

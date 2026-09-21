@@ -144,5 +144,43 @@ func (r *Runner) saveOptionsForThisCall() {
 		return
 	}
 	saved := r.saveShellOptions()
+	sc.shellOptionsSaved = true
 	sc.onReturn = append(sc.onReturn, func() { saved.restore(r) })
+}
+
+// localDashListingRow is the row a bare `local` writes for a save this call
+// already made, or "" where there is none.
+//
+// The save is one of the call's locals as far as the listing is concerned,
+// and it is written **first**, ahead of every name — measured 2026-09-21,
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME, from a script
+// file, on bash 5.3.20:
+//
+//	f() { local -; local; }                     local -
+//	g() { local -; local x=1; local; }          local -
+//	                                            declare -- x="1"
+//	g() { local x=1; local -; local; }          the same two lines, same order
+//	g() { local -; local -; local x=1; local; } one `local -` row, not two
+//	g() { local -; h() { local; }; h; }         nothing — the save is the
+//	                                            outer call's, not h's
+//
+// So it is the running call's own save, exactly as the names are, and the
+// row's own word is `local` rather than the `declare` every name carries:
+// it is not a declaration of a parameter called `-`, it is the save saying
+// it happened. Written here rather than through a wording field because only
+// one column reaches it — the two other shells that save the options list
+// nothing at all for a bare `local`, and the shell that lists every
+// parameter reads `-` as a parameter name and never makes the save (#4048).
+//
+// Two neighboring shapes measured in the same run and deliberately left
+// where they are: a whole-table `declare -p` inside the same call writes the
+// row too, ahead of the table, and `local -p -` writes it where this shell
+// answers `local: -: not found`. Both are the same fact reached through the
+// declaration builtin's own listing rather than through this one, and
+// neither is what the bare form is.
+func (r *Runner) localDashListingRow() string {
+	if len(r.scopes) == 0 || !r.scopes[len(r.scopes)-1].shellOptionsSaved {
+		return ""
+	}
+	return "local -"
 }

@@ -364,6 +364,11 @@ func (r *Runner) bareLocalListing() int {
 		return 0
 	case BareLocalListsLocals:
 		sc := r.scopes[len(r.scopes)-1]
+		if row := r.localDashListingRow(); row != "" {
+			// Ahead of the names, which is where it is measured — see
+			// localDashListingRow.
+			r.printf("%s\n", row)
+		}
 		names := map[string]bool{}
 		for name := range sc.saved {
 			names[name] = true

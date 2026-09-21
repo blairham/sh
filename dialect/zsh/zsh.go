@@ -1351,6 +1351,7 @@ func Semantics() interp.Semantics {
 	// under both signs.
 	s.DeclarationListingFilter = interp.DeclarationFilterAnyLetter
 	s.DeclarePrintReportsAMissingName = interp.Yes
+	s.DeclarePrintReportsAMissingFunctionName = interp.No
 	// `typeset -p s=5` performs nothing there: it is `no such variable: s`
 	// at 1 with `s` still unset, and `typeset -p e=(1 2)` answers the same
 	// way — measured 2026-09-20 on zsh 5.9.2. See

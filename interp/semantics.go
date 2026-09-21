@@ -10462,6 +10462,41 @@ type Semantics struct {
 	// listed fine; ksh93 prints nothing for the missing name and answers 0.
 	DeclarePrintReportsAMissingName Answer
 
+	// DeclarePrintReportsAMissingFunctionName is the same question asked of a
+	// `-p` that carries the **function** letter — `typeset -pf nosuch` — and
+	// it is a second field because the panel splits differently over it.
+	//
+	// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
+	// scratch HOME, from a script file, with a function `g` defined:
+	//
+	//	line                 bash 5.3.20                     zsh 5.9.2        ksh93u+
+	//	`-p nosuch`          declare: nosuch: not found, 1   no such variable, 1   silent, 0
+	//	`-pf nosuch`         declare: nosuch: not found, 1   silent, 1        silent, 1
+	//	`-f nosuch`          silent, 1                       silent, 1        silent, 1
+	//	`-pf g`              the body, 0                     the body, 0      the body, 0
+	//
+	// So it is the **`-p` word** that reports and not the function letter:
+	// without it every column is silent, and with it one column names every
+	// missing operand and two name none. The field above cannot answer both,
+	// because zsh reports for a variable and not for a function — which is
+	// the whole reason this is a field rather than a reading of that one.
+	//
+	// The wording is the same sentence, with this builtin's own word in
+	// front: `declare -pf g nosuch` in bash 5.3.20 prints `g`'s body and then
+	// reports `nosuch` alone.
+	//
+	// `-F` is asked here only where the dialect reads that letter as the
+	// function-names letter. It is the **float** letter in zsh and in ksh93,
+	// so `typeset -pF nosuch` there is a variable listing and the field above
+	// answers it — measured in the same run: zsh writes `no such variable`
+	// for it and is silent for `-pf`.
+	//
+	// unexhibited: bash 3.2.57 is a third answer again, and it is not this
+	// field's — it reports a function that **is** there as `not found` under
+	// `-pf`, so its `-p` and `-f` do not combine at all. There is no bash 3.2
+	// dialect here to hold it (#4065).
+	DeclarePrintReportsAMissingFunctionName Answer
+
 	// DeclarePrintPerformsItsOperand is what a `-p` listing does with an
 	// operand that carries a value — `typeset -p s=5`, `typeset -p e=(1 2)`.
 	// The panel gives three answers: ksh93 performs a bare assignment and

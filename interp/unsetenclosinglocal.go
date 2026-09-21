@@ -290,7 +290,13 @@ func (r *Runner) unsetTakesACallPrefixBinding(name string) bool {
 // The record is baredeclaration.go's and not one of its own, for the reason
 // the comment at the head of this file gives — the state is the same state,
 // so the listing question is asked once and answered once per dialect.
-func (r *Runner) unsetLeavesARunningScopesLocalDeclared(name string) {
+//
+// again says an earlier `unset` in this call had already left the name
+// declared, which is what tells the *first* removal from a later one — see
+// theRunningCallsPrefixHolds, which is the one thing the two do differently.
+// Read by the caller rather than here, because the removal in between is what
+// takes the record away.
+func (r *Runner) unsetLeavesARunningScopesLocalDeclared(name string, again bool) {
 	sc, enclosing := r.enclosingShadowOf(name)
 	if sc == nil || enclosing {
 		// No scope holds the name, or the one that does is a caller's —
@@ -299,4 +305,50 @@ func (r *Runner) unsetLeavesARunningScopesLocalDeclared(name string) {
 		return
 	}
 	setBool(&r.unsetLeftItDeclared, name, true)
+	if !again && r.theRunningCallsPrefixHolds(name) {
+		// The one shape where the placeholder carries a letter. See
+		// theRunningCallsPrefixHolds for the rows.
+		r.exported[name] = true
+	}
+}
+
+// theRunningCallsPrefixHolds reports whether the binding this call's `local`
+// displaced is the call's **own assignment prefix** — `foo=abc c5`, with
+// `local foo` inside `c5`.
+//
+// It is the one shape where the placeholder an `unset` leaves carries an
+// attribute. Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
+// scratch HOME, from a script file, on bash 5.3.20, with
+// `c5() { local foo; unset foo; declare -p foo; }`:
+//
+//	foo=abc c5                                  declare -x foo
+//	foo=abc c5, with `local -i foo`             declare -x foo
+//	foo=abc c5, with `local foo=L`              declare -x foo
+//	export g=G; c(){ local g; unset g; … }      declare -- g
+//	declare -i n=5; c(){ local n; unset n; … }  declare -- n
+//	p=P; c(){ local -x p; unset p; … }          declare -- p
+//	foo=abc c, where c calls the declaring d    declare -- foo
+//	foo=abc c5, unset twice                     declare -- foo
+//
+// So it is the *running* call's prefix and not a caller's, and the letter is
+// gone once a second `unset` has been through — which is the `again` argument
+// above. An exported global underneath is not this: the last three rows of
+// the first block are the controls that say the placeholder is otherwise
+// letter-free whatever it displaced.
+//
+// The letter is not only a listing. The same call's `foo=zz` afterwards is
+// `declare -x foo="zz"` there and reaches a child as `foo=zz`, where a
+// placeholder with no letter leaves the child reading the prefix's own value
+// — see hiddenExports, which is the other half of this (#4050).
+//
+// The innermost frame and the depth together, because a frame and a scope
+// holding the same name are told apart by which took it first: the frame is
+// pushed before the call's scope, so the running call's frame is the one
+// whose scopeDepth is one below the standing scope count.
+func (r *Runner) theRunningCallsPrefixHolds(name string) bool {
+	if len(r.callPrefixes) == 0 || len(r.scopes) == 0 {
+		return false
+	}
+	f := r.callPrefixes[len(r.callPrefixes)-1]
+	return f.scopeDepth == len(r.scopes)-1 && slices.Contains(f.names, name)
 }

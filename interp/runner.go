@@ -7772,6 +7772,24 @@ func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 				// valueless declaration left the outer value showing — so
 				// the loops above have it.
 				continue
+			} else if r.theRunningCallsPrefixHolds(name) {
+				// Removed, and what it would show through to is the running
+				// call's **own assignment prefix** — the one shadow a
+				// removal takes out of a child's view as well as out of the
+				// script's.
+				//
+				// Measured 2026-09-21 on bash 5.3.20, `foo=abc c5` with
+				// `c5() { local foo; unset foo; env | grep '^foo'; }`: no
+				// row at all, and none after a second `unset` either, where
+				// this shell handed the child the prefix's own `foo=abc`
+				// both times. The control is an exported *global* under the
+				// same placeholder — `export gg=G; c(){ local gg; unset gg;
+				// env; }` — which the child is still told about in both
+				// shells, so it is the prefix specifically and not the
+				// placeholder. A `foo=zz` on the line after the unset goes
+				// through the branch above instead, and reaches the child
+				// as `foo=zz` in both (#4050).
+				continue
 			}
 			if !yield(name, value) {
 				return
@@ -8020,6 +8038,16 @@ type scope struct {
 	// where the difference is a trap the parent set being cleared by a
 	// `( … )` written inside the same function.
 	owner *Runner
+
+	// shellOptionsSaved says this call asked for the `set` table to be put
+	// back when it returns — the `local -` operand, see localdash.go.
+	//
+	// A field on the scope rather than something inferred from the restore
+	// hook, because the save is *listable*: a bare `local` writes a row for
+	// it, and the hook list is closures a listing cannot ask what they are
+	// for. One bool and not a count: the request is idempotent, and two
+	// `local -` lines in one call write one row.
+	shellOptionsSaved bool
 
 	// optindShadowed says a declaration in this call made OPTIND local, and
 	// savedOptChar and savedOptindAssigned are the half of the `getopts`

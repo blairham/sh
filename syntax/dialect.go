@@ -3917,6 +3917,89 @@ type Dialect struct {
 	// it.
 	ParamIndirection bool
 
+	// ParamBangNameContinues lists the characters that carry a *name* on when
+	// they stand immediately after `${!`, so the expansion is an indirection
+	// rather than the parameter `!` with an operator behind it.
+	//
+	// A letter, an `_`, and — where [Dialect.DottedName] is on — a `.` carry
+	// it on in every column that has the construct, so they are not listed
+	// here. What is listed is the rest, and the rest is where the panel
+	// splits three ways over the same seventeen characters.
+	//
+	// The empty string is the core's answer and it is a **positive** one
+	// rather than an absence: with no indirection to compete, `${!` is the
+	// parameter `!` and whatever stands behind it is an operator, which is
+	// what `${!#}`, `${!%}` and `${!:-w}` are in four of the five dialects.
+	//
+	// Measured 2026-09-20 over a script file, `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with a scratch HOME, stdin on /dev/null, one character at a
+	// time across the seven-column panel:
+	//
+	//	set -- a b c
+	//	sleep 0 &
+	//	wait
+	//	printf 'bang=[%s]\n' "$!"
+	//	printf 'out=[%s]\n'  "${!C}"
+	//
+	// **`$!` is deliberately set, and that is the whole of why the first
+	// measurement on #3966 read the construct backwards.** With no background
+	// job `$!` is empty in six of the seven columns, and an empty `$!` with a
+	// trim behind it prints exactly what a failed indirection prints — so
+	// `${!#}` was recorded as "the name-of operator answering nothing" when
+	// it is `$!` with a `#` trim of an empty pattern. With a pid in it the two
+	// readings are never the same string.
+	//
+	// `param` below means the `!` was the parameter — the answer was the pid.
+	// `indirect` means the character carried a name on, and the cell says
+	// what through.
+	//
+	//	after ${!   bash 5.3      bash-as-sh   bash 3.2     dash      ksh93          ash       zsh 5.9.2
+	//	: - + =     param         param        param        param     param          param     param
+	//	%           param         param        param        param     param          param     param
+	//	/           param         param        refused      refused   param          param     param
+	//	#           indirect $#   param        indirect $#  param     param          param     param
+	//	?           indirect $?   param        indirect $?  param     param          param     param
+	//	@ *         indirect $@   indirect $@  indirect $@  refused   syntax error   refused   refused
+	//	[           subscript     subscript    refused      refused   syntax error   refused   param
+	//	^ , ~       param         param        refused      refused   syntax error   refused   refused
+	//	$ !         refused       refused      refused      refused   syntax error   refused   refused
+	//	.           refused       refused      refused      refused   name           refused   refused
+	//	0-9         indirect $1   indirect $1  indirect $1  refused   syntax error   refused   refused
+	//	letter _    indirect      indirect     indirect     refused   name-of        refused   refused
+	//
+	// So the dialect answers, with the reason each one is what it is:
+	//
+	//   - bash `0123456789#?@*[`. The specials it indirects *through* — the
+	//     `${!#}` row is `$3` where `$!` is a pid, and `${!@}` complains about
+	//     `a b c: invalid variable name`, which is the value of `$@` and not a
+	//     name — plus a digit, which is an ordinary positional there, and the
+	//     `[` that opens `${!x[@]}`.
+	//   - ksh93 empty. Letters, `_` and its dotted names are the whole of the
+	//     name there: `${!.}` answers `.`, every operator character ends the
+	//     name, and a **digit is a parse failure** — `${!1}` is `` `1'
+	//     unexpected `` and the script ends, where bash indirects through
+	//     `$1`. That is the one column that answers a character here with a
+	//     refusal to read the file at all.
+	//   - dash, ash and zsh empty, and for a different reason: none of them
+	//     has the construct, so nothing competes with the `!` and every one
+	//     of `# % / : - + = ?` is that parameter with an operator behind it.
+	//     zsh takes `[` there too — `${![@]}` is the pid — which is the one
+	//     cell where a column with no indirection still parts from the other
+	//     two.
+	//
+	// A character in none of those sets and in no name is refused under
+	// **both** readings — `${!$}`, `${!!}`, and `^ , ~` outside bash — so it
+	// does not discriminate and is deliberately left out rather than guessed
+	// into one: unlisted makes the `!` the parameter, and the operator scan
+	// refuses what is not an operator.
+	//
+	// Distinct from [Dialect.ParamIndirection], which answers whether the
+	// construct exists at all. This one answers where it *begins*, and the
+	// two are independent: zsh has no indirection and still has an answer
+	// here, because the character after `${!` decides whether there is a
+	// second reading to reject.
+	ParamBangNameContinues string
+
 	// ArithIncDec enables `++` and `--`. Not POSIX; dash rejects them.
 	ArithIncDec bool
 

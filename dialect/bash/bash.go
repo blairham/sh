@@ -127,6 +127,14 @@ func Dialect() syntax.Dialect {
 	// expansion is reached.
 	d.ParamTransformations = true
 	d.ParamIndirection = true
+	// And where that indirection begins: the specials bash indirects *through*
+	// — `${!#}` is `$3` and `${!@}` complains about the value of `$@` rather
+	// than about a name — plus a digit, which is an ordinary positional here,
+	// and the `[` that opens `${!x[@]}`. Every other operator character ends
+	// the name, so `${!%}` and `${!,}` are `$!` with an operator behind them.
+	// See syntax.Dialect.ParamBangNameContinues for the seven columns measured
+	// a character at a time (#3966).
+	d.ParamBangNameContinues = "0123456789#?@*["
 	// A single quote written anywhere inside a double-quoted `${ … }` quotes
 	// what follows it, so the scan for the closing brace runs past a `}`
 	// standing between two quotes: `echo "[${v-'}'}]"` is `['}']` here and

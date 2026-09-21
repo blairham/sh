@@ -14,10 +14,17 @@ import (
 // runIndirect is run() with the grammar an indirection and a subscript need,
 // and nothing else: the default test semantics already answer
 // IndirectionYieldsName with No, which is the dialect these rows are about.
+//
+// ParamBangNameContinues carries the second half of that grammar. Where an
+// indirection *begins* is a dialect answer too, and a digit is on the far side
+// of that split — `${!1}` is an indirection through the first positional under
+// the value set here and the parameter `!` under the empty one. These rows
+// name the positional, so the flag has to say a digit carries the name on.
 func runIndirectRef(t *testing.T, src string) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamBangNameContinues = "0123456789#?@*["
 	}, nil)
 }
 

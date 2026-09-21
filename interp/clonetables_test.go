@@ -277,6 +277,7 @@ func seedTables(r *Runner) {
 	r.dynamicAssocEmptied = map[string]bool{"seed": true}
 	r.dynamicWriters = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.assignmentActions = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
+	r.unsetActions = map[string]func(*Runner){"seed": func(*Runner) {}}
 	r.dynamicPresence = map[string]func(*Runner) bool{"seed": func(*Runner) bool { return true }}
 	r.dynamicDeclarations = map[string]ProducedDeclaration{"seed": {Integer: true}}
 	r.rejoinedOperands = map[string]bool{"seed": true}

@@ -667,6 +667,36 @@ func (r *Runner) SetAssignmentAction(name string, act func(r *Runner, value stri
 	r.assignmentActions[name] = act
 }
 
+// SetUnsetAction says what else happens when `unset` takes an **ordinary**
+// variable away.
+//
+// The other half of SetAssignmentAction, and it is a seam of its own rather
+// than the same callback told twice, because most names that want the first
+// do not want the second: an action that truncates a file where the
+// assignment stands has nothing to do when the name goes, and a dialect
+// should not have to distinguish the two calls to say so.
+//
+// It exists for the names whose state **outside** the variable table outlives
+// the variable. Measured 2026-09-21 on bash 5.3.20 from a script file with no
+// terminal: the size the history list is capped at is not re-read from
+// HISTSIZE on every entry — a value that is not a count leaves the last size
+// that *was* one in force — so the cap is state beside the list, and `unset
+// HISTSIZE` is what lifts it. Without hearing the removal, a dialect keeping
+// that state cannot tell `HISTSIZE=2; unset HISTSIZE; HISTSIZE=abc`, which
+// lifts the cap, from `HISTSIZE=2; HISTSIZE=abc`, which does not (#4054).
+//
+// The action runs after the name is gone, so it reads the variable back as
+// unset; it runs for a name nothing had set, because `unset` of a name that
+// was never there still says the state should be lifted; and it does not run
+// where the removal was refused, or where the panel's one shell takes an
+// enclosing local away instead of the name — nothing went away there.
+func (r *Runner) SetUnsetAction(name string, act func(r *Runner)) {
+	if r.unsetActions == nil {
+		r.unsetActions = map[string]func(*Runner){}
+	}
+	r.unsetActions[name] = act
+}
+
 // RefuseUnset marks a name `unset` refuses without its being readonly.
 //
 // A third state beside readonly and writable, and measured as one rather

@@ -3060,6 +3060,14 @@ func (r *Runner) unsetName(name string) int {
 		r.unsetOneName(other)
 	}
 	r.unsetOneName(name)
+	// And the message that the name has gone, for a dialect keeping state
+	// beside it that the name's removal is about. After the removal, so that
+	// an action reading the name back sees it gone, and for a name nothing
+	// had set, because the state this is about is not the variable. See
+	// SetUnsetAction.
+	if act, ok := r.unsetActions[name]; ok {
+		act(r)
+	}
 	return 0
 }
 

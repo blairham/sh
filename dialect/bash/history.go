@@ -105,6 +105,18 @@ const (
 	// after `echo a`, `echo b`, `echo c` lists `3  HISTSIZE=2` and
 	// `4  history`, and `!1` is then an event the list does not hold.
 	historyDropped = ".bash.history.dropped"
+	// historyInForce is the size the list is capped at, which is **not** what
+	// HISTSIZE says. A value that is not a count leaves the last one that was
+	// in force — see historySize, where the six shapes are written down — so
+	// the cap is state beside the list rather than a reading of the variable.
+	//
+	// A decimal count, or `-1` for a list with no cap at all. Absent until
+	// something sets the size or the list is turned on, which is what lets
+	// the value inherited from the environment be the first one in force.
+	historyInForce = ".bash.history.inforce"
+	// historyNoCap is what historyInForce holds for a list keeping
+	// everything, spelled as the value a script writes to say the same thing.
+	historyNoCap = "-1"
 )
 
 // historyUsage is the line a refused option prints after the complaint, in
@@ -144,8 +156,16 @@ func registerHistory(r *interp.Runner) {
 	// answers the longer list to a `history` that looks first (#4031). See
 	// historyStifle for the numbering, which is the half that makes this
 	// more than dropping entries.
-	r.SetAssignmentAction("HISTSIZE", func(rr *interp.Runner, _ string) {
-		historyStifle(rr)
+	r.SetAssignmentAction("HISTSIZE", func(rr *interp.Runner, value string) {
+		historySizeAssigned(rr, value)
+	})
+	// And the removal, which is the other way the cap is lifted and cannot
+	// be read back off the variable: the size in force outlives a HISTSIZE
+	// that is no longer a count, so a shell that only heard assignments
+	// could not tell an `unset` from a `HISTSIZE=abc` (#4054). See
+	// interp.Runner.SetUnsetAction.
+	r.SetUnsetAction("HISTSIZE", func(rr *interp.Runner) {
+		rr.SetVar(historyInForce, historyNoCap)
 	})
 }
 
@@ -764,34 +784,132 @@ func historyAppend(r *interp.Runner, line string, numbered bool) {
 	r.SetArray(historyStore, entries)
 }
 
-// historySize is HISTSIZE as a count of entries the list keeps, or false where
-// it keeps them all. Measured on bash 5.3.20: `HISTSIZE=2` after three
-// commands lists only the newest two, `HISTSIZE=0` keeps nothing — `history`
-// then lists nothing at all, its own line included — and a negative value
-// keeps everything.
+// historySizeKind is what one HISTSIZE value says about the size of the list.
+type historySizeKind int
+
+const (
+	// historySizeText is a value that is not a count at all, which says
+	// nothing about the size: the one in force stays there.
+	historySizeText historySizeKind = iota
+	// historySizeLifted is a value that takes the cap off — an empty one or
+	// a negative count.
+	historySizeLifted
+	// historySizeCount is a count of entries to keep.
+	historySizeCount
+)
+
+// historyReadSize reads one HISTSIZE value the three ways bash reads it,
+// measured on bash 5.3.20 over lists built with `history -s`.
 //
 // **Whitespace around the digits is not part of the value**, which is one
 // question and not two: measured 2026-09-21 over three entries, `HISTSIZE=" 2
 // "` and a leading tab each leave two, exactly as `HISTSIZE=2` does. So is a
 // sign — `+2` keeps two and `-0` empties the list, where `-1` keeps
-// everything. What is not a count is text after the digits or a value too
-// large to hold: `2x`, `0x2` (bash does not read it as hex here) and
-// `99999999999999999999` all leave a longer list alone.
+// everything.
+//
+// What is **not** a count is text after the digits or a value too large to
+// hold: `2x`, `0x2` (bash does not read it as hex here) and
+// `99999999999999999999`. None of those lifts the cap — see historySize.
+//
+// An **empty** value lifts it and a value that is only whitespace does not,
+// which is the one place the trimming stops: measured 2026-09-21, `HISTSIZE=`
+// over a list capped at two lets it grow, where `HISTSIZE=" "` leaves the cap
+// of two exactly where it was. So the emptiness is tested before the trim and
+// not after it.
+func historyReadSize(value string) (int, historySizeKind) {
+	if value == "" {
+		return 0, historySizeLifted
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, historySizeText
+	}
+	if n < 0 {
+		return 0, historySizeLifted
+	}
+	return n, historySizeCount
+}
+
+// historySize is the count of entries the list keeps, or false where it keeps
+// them all. Measured on bash 5.3.20: `HISTSIZE=2` after three commands lists
+// only the newest two, `HISTSIZE=0` keeps nothing — `history` then lists
+// nothing at all, its own line included — and a negative value keeps
+// everything.
+//
+// **It is not a reading of HISTSIZE.** A value that is not a count leaves the
+// last size that *was* one in force, so the cap is state beside the list
+// rather than something the variable can be asked for — `echo "[$HISTSIZE]"`
+// answers `[abc]` while the list is still being held at two. Measured
+// 2026-09-21 on bash 5.3.20, `env -i` with a scratch HOME and HISTIGNORE
+// keeping the reader's own lines out of the way, after `HISTSIZE=2` and nine
+// entries:
+//
+//	HISTSIZE=abc, then two more entries     10 j · 11 k — still two
+//	HISTSIZE=2x, and 0x2, and an overflow   the same: the cap of two holds
+//	HISTSIZE=abc then =2x, two more         the same again — it is not spent
+//	HISTSIZE=-1, then two more              the list grows: the cap is off
+//	HISTSIZE= (empty), and unset            the same, the cap is off
+//	-1, then HISTSIZE=abc, two more         still off: a lift is remembered
+//
+// So the three ways of saying "no limit" are a **negative**, an **empty
+// value** and **unset**, and "not a number at all" is not one of them: `abc`
+// leaves the cap where it was and the numbering carries on unbroken, which is
+// what says it is the earlier size still being enforced rather than a fresh
+// default (#4054).
+//
+// Which size that is, before any assignment, is the value the list is turned
+// on with: measured, `set -o history` with no HISTSIZE defaults it to 500 and
+// `HISTSIZE=abc` afterwards holds the list at 500, where `unset HISTSIZE`
+// first leaves it unbounded; and a HISTSIZE of 2 inherited from the
+// environment is in force for a `HISTSIZE=abc` that never had an assignment
+// of its own to remember. historyStartFile lays that first value down.
 //
 // One answer for both readers of the size, because they are one question:
 // the cap the insert path enforces and the trim an assignment does — a
 // `HISTSIZE=" 3 "` that trimmed but did not then bound the list, or the
-// reverse, would be the same rule answered twice.
+// reverse, would be the same rule answered twice. The trim reaches this
+// through historySizeAssigned, which has the value being written and so does
+// not need to ask what is in force.
 func historySize(r *interp.Runner) (int, bool) {
 	value, ok := r.GetVar("HISTSIZE")
 	if !ok {
 		return 0, false
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil || n < 0 {
+	n, kind := historyReadSize(value)
+	if kind != historySizeText {
+		return n, kind == historySizeCount
+	}
+	// Not a count, so the variable says nothing and the size in force is
+	// what the last count left. Absent only where nothing has set the size
+	// and the list has never been turned on, which is a list with no cap.
+	held, ok := r.GetVar(historyInForce)
+	if !ok {
 		return 0, false
 	}
-	return n, true
+	n, kind = historyReadSize(held)
+	return n, kind == historySizeCount
+}
+
+// historySizeAssigned is the HISTSIZE assignment seam: it records the size
+// now in force and trims the list where a count was written.
+//
+// The three kinds part company here and nowhere else. A count is the new size
+// and trims (historyStifle); a negative or empty value takes the cap off and
+// is remembered as having done so, which is what makes a later `HISTSIZE=abc`
+// leave the list unbounded rather than resurrect the count before it; and a
+// value that is not a count changes nothing at all — it does not trim, which
+// was already true here, and it does not lift the cap, which is #4054.
+func historySizeAssigned(r *interp.Runner, value string) {
+	n, kind := historyReadSize(value)
+	switch kind {
+	case historySizeText:
+		return
+	case historySizeLifted:
+		r.SetVar(historyInForce, historyNoCap)
+		return
+	}
+	r.SetVar(historyInForce, strconv.Itoa(n))
+	historyStifle(r, n)
 }
 
 // historyStifle trims the list where HISTSIZE is assigned, which is a moment
@@ -827,8 +945,11 @@ func historySize(r *interp.Runner) (int, bool) {
 // off-by-one in the trim reads as correct everywhere except zero.
 //
 // A list already **at** the new size, or under it, is left alone with its
-// numbers untouched, and so is one whose HISTSIZE is not a count — see
-// historySize for which values are counts.
+// numbers untouched, and so is one whose HISTSIZE is not a count — which is
+// why the count arrives as an argument rather than being read back: the
+// caller is historySizeAssigned, which has already told the three kinds of
+// value apart, and a value that is not a count never reaches here even
+// though a cap is still in force for it (#4054).
 //
 // zsh and ksh93 trim on the assignment too and **keep the numbers**: zsh
 // 5.9.2 with `print -s a`, `b`, `c` and `HISTSIZE=2` lists `2 b`, `3 c` where
@@ -838,11 +959,7 @@ func historySize(r *interp.Runner) (int, bool) {
 // on repl.HistoryStyle that nothing would read; the session's own recall list
 // is sized once when it starts and has no assignment to hear, so there is no
 // second reader of this to keep in step.
-func historyStifle(r *interp.Runner) {
-	keep, bounded := historySize(r)
-	if !bounded {
-		return
-	}
+func historyStifle(r *interp.Runner, keep int) {
 	entries := historyEntries(r)
 	if len(entries) <= keep {
 		return

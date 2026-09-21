@@ -1,0 +1,25 @@
+#!/bin/sh
+# A plugin that declares one segment and publishes a different one.
+#
+# The mirror of `sneak`, which claims a command it never declared. A shell
+# that accepted this would draw an element the plugin never said it owned,
+# which is the half of "a collision is named rather than silently resolved"
+# that cannot work if the declaration is not the whole of the surface.
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+
+while IFS= read -r line; do
+	case $line in
+	*'"method":"prompt/context"'*)
+		send '{"jsonrpc":"2.0","method":"prompt/segment","params":{"name":"declared","content":"honest"}}'
+		send '{"jsonrpc":"2.0","method":"prompt/segment","params":{"name":"undeclared","content":"sneaked"}}'
+		continue
+		;;
+	esac
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"sneakysegment\",\"commands\":[],\"segments\":[\"declared\"]}}"
+		;;
+	esac
+done

@@ -164,9 +164,11 @@ Three exceptions, which is why this is a default and not a rule:
   absence. Wrapping an interface nobody can drive produces a plugin with
   the interface still in it.
 
-## The surface: two roles, and what is excluded
+## The surface: three roles, and what is excluded
 
-A plugin declares its roles at the handshake. There are two.
+A plugin declares its roles at the handshake. There are three, and per
+#1315 there will be no more: no `EnvProvider`, no `HistoryBackend`, no
+fourth provider of anything.
 
 ### The command role
 
@@ -291,6 +293,62 @@ choosing when a plugin may be told something, which is a worse trade than
 a plugin owning its own reader. `internal/plugin/testdata/both` is the
 worked example, and it is thirty lines of shell.
 
+### The segment role
+
+The plugin declares a set of prompt element names, and
+`docs/spec/prompt-theme.md` is the design of what it is drawing into.
+Two messages, both notifications, neither carrying a call id — because a
+prompt segment belongs to no command, exactly as an event does not:
+
+| message | direction | what it is |
+| --- | --- | --- |
+| `prompt/context` | host → plugin | what the next prompt is being drawn for: the working directory and the previous one, the last status, the duration, the job count, the terminal width, whether the shell is root or the session is remote |
+| `prompt/segment` | plugin → host | what one of its declared elements now holds: content, an icon *key*, a state, and the fields a content template can reach |
+
+**Nothing is waited on, in either direction.** The host stores what the
+plugin published and says that a redraw would differ; the session
+decides whether anything is actually redrawn, and a prompt that renders
+the same is not written to the screen at all. A prompt drawn before the
+plugin has published draws nothing for the element, which costs no space
+— there is deliberately no placeholder, because inventing one would be
+this implementation's taste presented as behavior and would move the
+prompt twice where an answer moves it once.
+
+So a slow or wedged plugin costs a missing segment rather than a late
+shell, and a plugin that dies loses its segments and they draw nothing.
+The host's existing failure reporting says so once; the prompt does not
+report a dead plugin on every line.
+
+Three properties are worth stating beside the observer role's, because
+each is the same question answered differently:
+
+- **At most one context is ever waiting.** A newer one replaces an older
+  one rather than queueing behind it. That is not a weaker version of the
+  observer role's bounded buffer but an answer to a different question: an
+  event is a record and losing one leaves a gap `seq` can say, while a
+  context is a *state* and only the newest one means anything. The prompt
+  after this one says the same thing again.
+- **Nothing is drained at shutdown.** A record is something the plugin is
+  owed; a context is a statement about a prompt that is not going to be
+  drawn again.
+- **How long a plugin takes to answer is not bounded**, deliberately, and
+  that is the point of it not being asked.
+
+**The names are declared at the handshake and fixed**, exactly as the
+command names are and for a related reason: an element that appeared
+partway through a session would make a prompt's shape depend on what had
+already run, and two sources claiming one name could never be told apart.
+A name outside the declaration is refused and said once through the
+relay. A collision — with another plugin, with a shell function in the
+session, or with a segment compiled into the shell — is **named** rather
+than silently resolved, and the more local source wins: a session
+function, then a plugin, then a built-in.
+
+It is opt-in the way the observer role is, and the disclosure is smaller
+but real: a plugin that declares a segment is told the shell's working
+directory, its exit status and its job count on every prompt line, and a
+plugin that did not ask is told none of it.
+
 ### An observer cannot slow the shell down, and this is why there is no timeout
 
 Worth its own answer, because a seam that runs on the interpreter's own
@@ -399,12 +457,21 @@ something other than what happened (#493), and abandoning a slow
 completer leaks one goroutine per Tab (#690) — and that reasoning is
 exactly what a remote completer would have to answer for.
 
-So the third role is still not taken, and what it needs is now
-statable rather than vague. A remote completer must carry a cancel
+So completions are still excluded, and what a remote completer would
+need is now statable rather than vague. It must carry a cancel
 notification, must be droppable when it stops answering, and must not be
 consulted on the keystroke path without one of those two. None of that
 changes `repl.Completer`, which is the point of having landed it first:
-the role is additive, per the version rules below.
+such a role would be additive, per the version rules below.
+
+**The segment role above is not a counter-example to any of this**, and
+the difference is worth naming because the two look alike from a
+distance. A completer is *asked*, on the editor's own goroutine, with
+the person waiting for the answer. A segment is never asked: it is told
+and it publishes. That is the whole of why one clears the hot-path
+exclusion and the other does not, and it is the same line the gate role
+is on — each role is remotable exactly to the degree that nothing is
+waiting for its answer.
 
 ## Security
 
@@ -678,7 +745,11 @@ that will never come.
 
 The request carries `protocolVersion`, an integer, `1`. The plugin
 answers with the version it speaks, its name, and its declared surface:
-the roles it takes and, for the command role, **every name it claims**.
+the roles it takes and, for the command and segment roles, **every name
+it claims**. A plugin declaring no surface at all — no commands, no
+segments, and not the observer role — is refused, because a plugin
+somebody asked for that does nothing is a configuration error whose
+failure mode is silence.
 
 ### Negotiate capabilities; do not negotiate the version
 
@@ -922,6 +993,7 @@ garbage on its output, one that ignores a cancel.
       host.go           launch, the gate consultation, lifetime, shutdown
       command.go        the command role → interp.Register
       observer.go       the observer role → interp.Sink
+      segments.go       the segment role → repl.PromptSegmentSource
       testdata/         the fixtures, every one a POSIX shell script
     cmd/sh              -plugin PATH, repeatable — plugin.go
 
@@ -1045,7 +1117,13 @@ is genuinely the maintainer's to reverse.
    notifications that drop rather than block, which `seq` makes honest,
    with `cmd/sh` composing an observer plugin's sink onto whatever record
    the invocation already asked for;
-6. ~~a reference plugin in a language that is not Go~~ — **overtaken**.
+6. **Done** — the segment role: a prompt element drawn from another
+   process, told rather than asked, publishing into the contract
+   `repl.PromptPublisher` already carries, with `cmd/sh` attaching a
+   segment plugin's source beside whatever else supplies segments. It is
+   the third and last role — #1315 closed recording that no further
+   provider roles are coming;
+7. ~~a reference plugin in a language that is not Go~~ — **overtaken**.
    Every fixture in `internal/plugin/testdata` and the plugin in
    `cmd/sh/plugin_test.go` is a POSIX shell script, chosen for exactly
    this reason: a fixture written in Go would test the host against a

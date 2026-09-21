@@ -825,6 +825,49 @@ Consequences worth stating before the role is written:
   command role declares its command names, so a name collision is
   **reported rather than silently resolved**.
 
+#### Built, 2026-09-21
+
+The role exists and is the **third and last** — #1315 closed recording
+that no further provider roles are coming, so there is no `EnvProvider`
+and no `HistoryBackend` behind this one.
+
+It is two notifications and neither carries a call id, because a prompt
+segment belongs to no command: `prompt/context` says what the next prompt
+is being drawn for, and `prompt/segment` says what one declared element
+now holds. `docs/design/plugins.md` carries the wire and the disclosure
+argument; what belongs here is what it means for a prompt.
+
+**The seam in `repl` is `PromptSegmentSource`, and it knows no protocol.**
+A front end attaches one through `driver.Shell.PromptSegments`, the way it
+attaches a history recorder, and the engine sees the same `Resolver` a
+session's own shell functions arrive through. That is the teeth of the
+roster rule kept rather than asserted: a segment from outside the binary
+is the same kind of thing whether it is three lines of shell or a daemon,
+because there is one interface and not two.
+
+**The facts it is told are exactly the facts a compiled-in segment may
+read** — working directory and the previous one, status, duration, jobs,
+width, root, remote — and no others. A field a plugin could see and a
+compiled-in segment could not would be the extension path becoming
+second-class from the other direction.
+
+**A source is told and never asked.** The call that hands it the context
+returns immediately whatever the source does with it, and what the prompt
+draws is whatever the source is already holding. Before a first answer
+that is nothing, which costs no space, per *What a not-yet-ready segment
+draws* below.
+
+**One byte and one redraw.** A source publishes through the theme's own
+`Publish`, which is the wake `repl` already owns, so a plugin that fires a
+thousand times while a command runs costs one redraw — and a plugin that
+republishes an identical answer costs none, because the host compares the
+answer before it wakes anything.
+
+**The order is the spec's**, and it needed saying in code: a theme installs
+the session's functions when it is built and a front end attaches a plugin
+afterwards, so "later is more local" would have inverted session and plugin
+exactly. `Roster.ConsultBelow` is what states it instead.
+
 ### How an element name resolves
 
 An element in a configuration is a name, and the name is looked up in

@@ -168,6 +168,22 @@ type Shell struct {
 	HistoryRecorders []repl.HistoryRecorder
 	HistorySources   []repl.HistorySource
 
+	// PromptSegments supply prompt elements computed outside this process,
+	// which is docs/spec/prompt-theme.md's fourth extension layer and the
+	// second user of the publish-and-redraw contract.
+	//
+	// Here for the reason PromptProviders and HistoryRecorders are here, and
+	// not in a dialect package for the same reason either: a source is a code
+	// path and a dialect is a table of values. Nil is every dialect binary,
+	// and a session with no source costs nothing — the theme consults none,
+	// tells none and is told by none.
+	//
+	// Attached to the session's theme rather than to repl.Shell directly,
+	// because the resolution order is fixed and one of its steps is set up
+	// inside the theme: a shell function in the session, then one of these,
+	// then a segment compiled in.
+	PromptSegments []repl.PromptSegmentSource
+
 	// Register adds or removes builtins — the part of a dialect that shell
 	// cannot express. Nil means the dialect needs none, which is the common
 	// case now that cd, pwd and read live in the core.

@@ -114,6 +114,11 @@ type Host struct {
 	// a script's output is what the prefix is for.
 	relayMu sync.Mutex
 
+	// segs is the segment role's state, or nil for a plugin that did not
+	// declare it. Written once during the handshake, on the same terms and
+	// for the same reason as obs below.
+	segs *segments
+
 	// obs is the observer role's feed, or nil for a plugin that did not
 	// declare it. Written once during the handshake, before Launch returns and
 	// therefore before anything else can hold this host, and only read
@@ -130,6 +135,11 @@ type Host struct {
 	sign chan struct{}
 
 	closeOnce sync.Once
+	// noRoleOnce bounds the complaint about a plugin publishing a prompt
+	// segment without having declared the role. A plugin doing that can do
+	// it as often as it likes, and a shell that repeated the sentence would
+	// be the broken thing rather than the plugin.
+	noRoleOnce sync.Once
 
 	mu       sync.Mutex
 	dead     error
@@ -459,14 +469,18 @@ func (h *Host) handshake(ctx context.Context) error {
 	// fatal. This is the whole of what the observer role changed about the
 	// refusal: it used to be "declares no commands", because commands were the
 	// only surface there was.
-	if len(res.Commands) == 0 && !res.Observer {
-		return errors.New("it declared no surface at all: no commands, and not the observer role")
+	if len(res.Commands) == 0 && !res.Observer && len(res.Segments) == 0 {
+		return errors.New("it declared no surface at all: no commands, no segments, and not the observer role")
 	}
 	names, err := commandNames(res.Commands)
 	if err != nil {
 		return err
 	}
 	h.commands = names
+	segmentNames, err := promptSegmentNames(res.Segments)
+	if err != nil {
+		return err
+	}
 	// After the surface is settled, so a plugin that is about to be refused
 	// never has a goroutine started on its behalf: Launch closes the host on a
 	// handshake failure, and a feed created here would be one more thing that
@@ -479,7 +493,53 @@ func (h *Host) handshake(ctx context.Context) error {
 		h.obs = newObserver(h)
 		go h.obs.feed()
 	}
+	// And the segment role, on exactly the same terms: opt-in, started only
+	// once the surface has been accepted, and nothing at all for a plugin
+	// that did not declare one.
+	if len(segmentNames) > 0 {
+		h.segs = newSegments(h, segmentNames)
+		go h.segs.feed()
+	}
 	return nil
+}
+
+// promptSegmentNames checks and de-duplicates a declared segment list.
+//
+// Refused rather than filtered, for commandNames' reason read one surface
+// over: a plugin that declared a name this shell cannot install has
+// misunderstood the protocol, and a shell that silently dropped one would
+// draw nothing for an element the plugin believed it owned — which is the
+// silent-wrong-answer class rather than a missing feature.
+//
+// A segment name is an element name, so it is one word that a configuration
+// can put in an elements list: whitespace would make it two elements and the
+// list is split on whitespace. Lower-cased here because the roster resolves
+// lower-cased and a declaration that did not match its own element would be
+// a plugin that draws nothing for a reason nobody can see.
+func promptSegmentNames(declared []string) ([]string, error) {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(declared))
+	for _, name := range declared {
+		lower := strings.ToLower(strings.TrimSpace(name))
+		if lower == "" {
+			return nil, errors.New("it declared an empty segment name")
+		}
+		if strings.ContainsAny(lower, " \t\n\r") {
+			return nil, fmt.Errorf("it declared the segment %q, which is not one word", name)
+		}
+		if lower == "newline" {
+			// The one reserved element: `newline` is what splits a side into
+			// lines, so a plugin claiming it would be claiming the layout
+			// rather than a segment.
+			return nil, errors.New("it declared the segment `newline`, which is the layout's own")
+		}
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
+		out = append(out, lower)
+	}
+	return out, nil
 }
 
 // commandNames checks and de-duplicates a declared surface.
@@ -603,6 +663,18 @@ func (h *Host) Close() error {
 			case <-time.After(flushWait):
 			}
 		}
+		// The segment feed is told to stop here and waited for at the end,
+		// and the split is not a style choice. It is not *drained*, which is
+		// the difference between the two roles at shutdown — a record is
+		// something the plugin is owed, while a context is a statement about
+		// a prompt that is not going to be drawn again — but it may be
+		// parked inside one write to a plugin that stopped reading, and the
+		// only thing that unblocks that is the stream going, one line down.
+		// Waiting here would be waiting for an event this line has not
+		// caused yet.
+		if h.segs != nil {
+			h.segs.stop()
+		}
 		_ = h.in.Close()
 		if !h.waitForExit() {
 			killGroup(h.cmd)
@@ -649,6 +721,15 @@ func (h *Host) Close() error {
 			// the host starts has a reason to return that the host controls" is
 			// worth less if the host does not wait to see it happen.
 			<-h.obs.done
+		}
+		if h.segs != nil {
+			// The other half of the split above: by here the input is closed
+			// and the process is reaped, so a feed inside a write has had
+			// its error and a feed that was idle saw closing. Waited for
+			// rather than assumed, because a goroutine per plugin that
+			// outlived its host is the leak class #690 is this repository's
+			// standing example of.
+			<-h.segs.done
 		}
 	})
 	return nil

@@ -78,6 +78,12 @@ type Theme struct {
 	sessionHas  func(string) bool
 	sessionCall func(string) (string, bool)
 
+	// sources are the supplies of segments computed outside this process,
+	// attached by a front end through Consult. Read under the lock because a
+	// prompt is drawn on the session's goroutine and a source may be attached
+	// before the session starts.
+	sources []PromptSegmentSource
+
 	// repos is the repository-status capability this session's prompt draws
 	// from — a resident cache kept honest by a filesystem watch, which opens
 	// nothing until something asks it a question. See internal/repostatus.
@@ -105,6 +111,10 @@ func (t *Theme) PublishTo(publish func()) {
 		// it: a watch left running would be a goroutine holding descriptors
 		// on a repository nobody is looking at any more.
 		_ = t.repos.Close()
+		// And every source computing a segment somewhere else is told the
+		// same thing, so one that finishes afterwards publishes into nothing
+		// rather than into a wake that has been closed.
+		t.releaseSources()
 	}
 }
 
@@ -198,6 +208,12 @@ func (t *Theme) DrawPrompt(info PromptInfo) (ThemedPrompt, bool) {
 		return ThemedPrompt{}, false
 	}
 
+	// What the prompt is being drawn for, told to everything computing a
+	// segment elsewhere. Before the render rather than after, so a source
+	// that answers quickly may answer this prompt rather than the next one —
+	// and nothing is waited for either way.
+	t.tellSources(info)
+
 	t.engine.Settings = settings
 	t.engine.Icons = t.icons(settings).Glyph
 	t.engine.Bare = t.Char + " "
@@ -224,9 +240,12 @@ func (t *Theme) Problems() []string {
 	if t.presetTrouble != "" {
 		problems = append(problems, t.presetTrouble)
 	}
-	for _, shadow := range t.roster.Shadowed() {
-		problems = append(problems, shadow+" is drawn by a session function and not by the built-in segment")
-	}
+	// A collision is named rather than quietly resolved, and the sentence
+	// comes from the roster now that there are three kinds of source: two
+	// plugins can collide with each other and with a session function, and
+	// a wording that said "a session function" for all of them would be
+	// wrong for most of them.
+	problems = append(problems, t.roster.Shadowed()...)
 	if trouble := t.repos.Trouble(); trouble != "" {
 		// Behavior where watches are unavailable must degrade to something
 		// honest and never to a silently stale answer. This is the honest

@@ -1242,6 +1242,62 @@ A `!` directly before an *operator* is none of these: `${!:+set}` is the
 special parameter `$!` with an operator, unanimously
 (`param/bang-with-an-operator-is-the-parameter`).
 
+### Which character after `${!` ends the name
+
+`${!:+set}` is unanimous, and the character that ends the name is not.
+Measured 2026-09-20 over a script file, `env -i PATH=/usr/bin:/bin
+LC_ALL=C` with a scratch `HOME`, stdin on `/dev/null`, one character at a
+time:
+
+    set -- a b c
+    sleep 0 &
+    wait
+    printf 'bang=[%s]\n' "$!"
+    printf 'out=[%s]\n'  "${!C}"
+
+**`$!` has to be set before this says anything.** With no background job
+it is empty in six of the seven columns, and an empty `$!` with a trim
+behind it prints exactly what a failed indirection prints — which is how
+`${!#}` came to be recorded as the name-of operator answering nothing
+when it is `$!` with a `#` trim of an empty pattern (#3966). With a pid in
+it the two readings are never the same string.
+
+`param` below means the `!` was the parameter — the answer was the pid.
+`indirect` means the character carried a name on, and the cell says what
+through.
+
+| after `${!` | bash 5.3 | bash-as-sh | bash 3.2 | dash | ksh93 | ash | zsh 5.9.2 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `:` `-` `+` `=` | param | param | param | param | param | param | param |
+| `%` | param | param | param | param | param | param | param |
+| `/` | param | param | refused | refused | param | param | param |
+| `#` | indirect `$#` | param | indirect `$#` | param | param | param | param |
+| `?` | indirect `$?` | param | indirect `$?` | param | param | param | param |
+| `@` `*` | indirect `$@` | indirect `$@` | indirect `$@` | refused | syntax error | refused | refused |
+| `[` | subscript | subscript | refused | refused | syntax error | refused | param |
+| `^` `,` `~` | param | param | refused | refused | syntax error | refused | refused |
+| `$` `!` | refused | refused | refused | refused | syntax error | refused | refused |
+| `.` | refused | refused | refused | refused | name | refused | refused |
+| `0`–`9` | indirect `$1` | indirect `$1` | indirect `$1` | refused | syntax error | refused | refused |
+| letter `_` | indirect | indirect | indirect | refused | name-of | refused | refused |
+
+Three shells partition seventeen characters three ways, and one of them
+answers with a **parse failure** where the others answer with a value or a
+diagnostic: `${!^}` ends the script in ksh93 before anything has run. The
+dotted row is the other end of it — ksh93 takes `${!.}` as a name and
+neither of the others does.
+
+So the rule is *which characters carry a name on*, and it is a grammar
+flag: `Dialect.ParamBangNameContinues`. A letter, an `_` and — where
+`DottedName` is on — a `.` carry it on wherever the construct exists, so
+they are not listed; the set names the rest. bash holds
+`0123456789#?@*[`, and the other four hold nothing: ksh93 because its
+indirection begins at a name and nowhere else, and dash, ash and zsh
+because they have no indirection at all, so the `!` is always the
+parameter. A character in neither the set nor a name is refused under
+*both* readings, so it does not discriminate and is deliberately left out
+rather than guessed into one.
+
 ## Negative subscripts
 
 A negative subscript counts back from the end, and does **not** inherit
@@ -6362,6 +6418,9 @@ reason: `${$((6*7))[1]}`.
     ParamCaseChange        ${x^^} ${x,,} ${x~~} and their single forms — bash only
     ParamIndirection       ${!x}, ${!prefix*}, ${!a[@]} — parses in bash and ksh;
                            what ${!x} then *means* diverges (see above)
+    ParamBangNameContinues which characters after ${!} carry a *name* on
+                           rather than leaving the ! as the parameter —
+                           "0123456789#?@*[" in bash and empty in the rest
     ParamTransformations   ${x@Q} and its letter family — bash only
     ParamExpansionFlags    ${(U)x}           — zsh only
     ParamTildeFlag         ${~x}, the tilde-and-filename flag — zsh only

@@ -860,10 +860,16 @@ scan:
 			p.dialect.ParamLengthOverASpecialNameIsFinal):
 		e.Length = true
 		s = s[1:]
-	case strings.HasPrefix(s, "!") && len(s) > 1 && !strings.ContainsAny(s[1:2], ":-+=?"):
+	case strings.HasPrefix(s, "!") && len(s) > 1 && p.bangNameCarriesOn(s[1]):
 		// Only a `!` that could begin a name is indirection: with an
 		// operator right after it, the `!` is the parameter — `${!:+set}`
-		// is `$!` with `:+` applied, in all four shells.
+		// is `$!` with `:+` applied, in every column of the panel.
+		//
+		// Which characters carry a name on is the dialect's to say and not
+		// this file's, and the set used to be written here as `:-+=?`, which
+		// was one partition standing in for three. See
+		// [Dialect.ParamBangNameContinues] for the seven columns measured a
+		// character at a time (#3966).
 		if !p.dialect.ParamIndirection {
 			// Refused rather than guessed: ksh93 accepts this and means
 			// something else, so a dialect without it cannot pretend.
@@ -1518,6 +1524,17 @@ func hashIsTheParameter(s string, nameless, lengthFinal bool) bool {
 	// operators: `${#$w}` and `${#!w}` are a length with a stray word after
 	// it in all six, because there is no second reading to fall back to.
 	return false
+}
+
+// bangNameCarriesOn reports whether c, standing immediately after `${!`,
+// carries a name on — so the expansion is an indirection rather than the
+// parameter `!` with an operator behind it.
+//
+// A name character is one in every column that has the construct, and the
+// dialect supplies the rest. See [Dialect.ParamBangNameContinues].
+func (p *Parser) bangNameCarriesOn(c byte) bool {
+	return nameByte(c, 0, p.dialect.DottedName) ||
+		strings.IndexByte(p.dialect.ParamBangNameContinues, c) >= 0
 }
 
 func setTestNameStarts(s string) bool {

@@ -152,6 +152,13 @@ func Dialect() syntax.Dialect {
 	// that answers zsh (#930).
 	d.ProcessSubstitutionOnlyWhereACommandTakesAWord = true
 	d.ParamIndirection = true
+	// And it begins at a name and nowhere else, which is why
+	// ParamBangNameContinues is left empty here rather than given bash's set:
+	// letters, `_` and this dialect's dotted names are the whole of what
+	// carries on after `${!`, so `${!#}` and `${!?}` are `$!` with an operator
+	// behind them, `${!.}` answers `.`, and a **digit** is a parse failure —
+	// `${!1}` is `` `1' unexpected `` and the script ends where bash indirects
+	// through `$1`. See syntax.Dialect.ParamBangNameContinues (#3966).
 	// A C-style `for` header may hold more than the two separators its three
 	// expressions need, as in zsh: the leftover text belongs to the third
 	// expression and is refused as arithmetic if the loop ever evaluates it,

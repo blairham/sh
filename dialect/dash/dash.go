@@ -173,6 +173,9 @@ func Semantics() interp.Semantics {
 	// here and in zsh, against `x y z` in bash and ksh93. It has no arrays,
 	// so the positional spelling is the whole of the question here.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
+	// dash 0.5.12 prints `e1: a:b:c` for `${e1?$*}` under `IFS=:`, the
+	// ordinary unsplit reading of a word wanted as a value.
+	s.DiagnosticWordIsFields = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	// `command -v ./bb/tool` is `./bb/tool` here: the operand back, not the
 	// absolute path POSIX asks for. Measured 2026-09-14 against 0.5.12, the
@@ -516,6 +519,11 @@ func Semantics() interp.Semantics {
 	// command to write an attribute letter with. Measured 2026-09-12,
 	// `typeset` is `not found` here, so a frozen name is never reached with
 	// one (#2561).
+	// unanswered TypeLetterOverAFrozenNameWithNoValueIsRefused: the same
+	// wall one question further in. That axis asks what a *type* letter
+	// does over a frozen name holding nothing, and this shell has no letter
+	// and no word to write one with — measured 2026-09-20, `readonly c;
+	// typeset -i c` is `typeset: not found` at 127 (#3937).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: there is no
 	// declaration command, so neither case letter can be written at all.

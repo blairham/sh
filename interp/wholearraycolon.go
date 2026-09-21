@@ -81,7 +81,7 @@ func (r *Runner) wholeListElements(e *syntax.ParamExpr) ([]string, bool, bool) {
 	}
 	if e.Index == nil {
 		if e.Name == "@" || e.Name == "*" {
-			return r.Params, e.Name == "@", true
+			return r.params(), e.Name == "@", true
 		}
 		return nil, false, false
 	}

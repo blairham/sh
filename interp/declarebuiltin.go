@@ -1675,7 +1675,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// to not land either, and a gate inside the store leaves a name
 			// carrying a letter the shell being imitated never gave it
 			// (#2561). See attributeOverFrozenRefused.
-			if r.attributeOverFrozenRefused(name, df) {
+			if r.attributeOverFrozenRefused(name, df, hasValue) {
 				if r.unspecified || r.ctl == controlExit {
 					return r.status
 				}
@@ -2862,6 +2862,23 @@ func (f declareFlags) namesAValueShapingAttribute() bool {
 		f.lower || f.upper || f.array || f.assoc
 }
 
+// namesAValueBearingType is the narrower list one dialect refuses over a
+// frozen name that holds **nothing**: the letters that say what a value of
+// this name *is*, so that declaring one over a name with no value would have
+// to invent the value — an integer zero, a float, a padded field, a compound
+// with no members.
+//
+// Three of namesAValueShapingAttribute's letters are deliberately not here,
+// and they are the discriminator rather than an omission: the two case
+// letters and the two array letters are taken over the same frozen name in
+// that shell, with a value and without. A case letter folds a value that is
+// not there yet and an array letter makes the name a container rather than
+// giving it one. The compound letter is here because it was measured here.
+// See Semantics.TypeLetterOverAFrozenNameWithNoValueIsRefused for the table.
+func (f declareFlags) namesAValueBearingType() bool {
+	return f.integer || f.float || f.widthLetter != 0 || f.compoundVar
+}
+
 // attributeOverFrozenRefused reports whether this operand is refused for
 // naming an attribute over a frozen name, having said so.
 //
@@ -2880,21 +2897,61 @@ func (f declareFlags) namesAValueShapingAttribute() bool {
 //
 // numericTypeLetterRetypesFrozen is asked by the caller first and takes its
 // own names out, so a dialect that exempts a retype never arrives here.
-func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags) bool {
+//
+// **Two axes and not one**, because one dialect's answer is not a constant.
+// The wide one above is asked first and is what bash answers yes to; where it
+// says no, a *narrower* set of letters over a frozen name that holds nothing
+// is still refused in one column, and that is the second question — see
+// Semantics.TypeLetterOverAFrozenNameWithNoValueIsRefused. The second refusal
+// is worded as an attribute's rather than as an assignment's, which is what
+// the form says; the first keeps the declaration's wording it was measured
+// with.
+//
+// The narrow one is the **valueless** form only, and `assigns` is what says
+// so. The wide axis deliberately reaches an operand that also assigns — that
+// is the shape #2561 is about — and the narrow one must not, because an
+// operand carrying a value is decided at the store: measured 2026-09-20,
+// `readonly c; typeset -i c=4` is the plain assignment refusal there, and
+// `readonly c; typeset -C c=(a=1)` is **taken**, which is the rule #3915
+// records. Refusing here would take that one back.
+func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags, assigns bool) bool {
 	if !r.readonly[name] {
 		return false
 	}
-	if !f.namesAValueShapingAttribute() {
+	if f.namesAValueShapingAttribute() {
+		wide := r.sem().AttributeOverAFrozenNameIsRefused
+		if r.ask(wide, "an attribute letter over a frozen name being refused") {
+			if r.unspecified {
+				return true
+			}
+			return r.refuseReadonly(name, assignedByDeclaration)
+		}
+		if wide == Unspecified {
+			// It has just reported itself unanswered, and asking the
+			// narrower question would complain twice about one declaration.
+			return false
+		}
+	}
+	if !f.namesAValueBearingType() || r.nameHoldsSomething(name) {
 		return false
 	}
-	if !r.ask(r.sem().AttributeOverAFrozenNameIsRefused,
-		"an attribute letter over a frozen name being refused") {
+	if assigns || r.literalOperands[name] {
+		// The operand carries a value, so the store decides it. Both halves
+		// of that question, because an array or compound literal is not a
+		// `name=value` word: `typeset -C c=(a=1)` reaches the loop as the
+		// bare name with the parentheses held aside, so `assigns` alone
+		// would read it as carrying nothing — the same pair
+		// compoundKindChanged reads, for the same reason.
+		return false
+	}
+	if !r.ask(r.sem().TypeLetterOverAFrozenNameWithNoValueIsRefused,
+		"a type letter over a frozen name that holds nothing being refused") {
 		return false
 	}
 	if r.unspecified {
 		return true
 	}
-	return r.refuseReadonly(name, assignedByDeclaration)
+	return r.refuseReadonly(name, attributeRatherThanAValue)
 }
 
 func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) bool {
@@ -3479,7 +3536,7 @@ func (r *Runner) removeReadonly(name string, hasValue bool) int {
 	if r.unspecified || hasValue {
 		return r.status
 	}
-	r.refuseReadonly(name, removedAttribute)
+	r.refuseReadonly(name, attributeRatherThanAValue)
 	return r.status
 }
 

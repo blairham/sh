@@ -143,8 +143,8 @@ func TestARemovalWithAValueIsRefusedAsAnAssignment(t *testing.T) {
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
 		// The assignment table leaves `typeset` out and the removal table
 		// puts it in, which is ksh93's own arrangement.
-		ReadonlyRefusalNamesBuiltin: map[string]bool{"set": true},
-		ReadonlyRemovalNamesBuiltin: map[string]bool{"typeset": true},
+		ReadonlyRefusalNamesBuiltin:          map[string]bool{"set": true},
+		ReadonlyAttributeRefusalNamesBuiltin: map[string]bool{"typeset": true},
 	}
 	out, errs, _ := declRun(t, `typeset -r s=1
 typeset +r s=5
@@ -160,10 +160,10 @@ echo end`, refusingRemoval, d)
 // the builtin. One word, two shapes, two sentences.
 func TestTheRemovalRefusalNamesTheBuiltinFromItsOwnTable(t *testing.T) {
 	d := Diagnostics{
-		ReadonlyVariable:              "%s: is read only",
-		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
-		ReadonlyRefusalNamesBuiltin:   map[string]bool{"set": true},
-		ReadonlyRemovalNamesBuiltin:   map[string]bool{"typeset": true},
+		ReadonlyVariable:                     "%s: is read only",
+		ReadonlyVariableInDeclaration:        "%[2]s: %[1]s: is read only",
+		ReadonlyRefusalNamesBuiltin:          map[string]bool{"set": true},
+		ReadonlyAttributeRefusalNamesBuiltin: map[string]bool{"typeset": true},
 	}
 	_, errs, _ := declRun(t, `typeset -r s=1
 typeset +r s`, refusingRemoval, d)

@@ -226,6 +226,7 @@ ash   TransformLetterCheckedOnlyWhenValued
 ash   TwoCaseLettersOnOneDeclarationCancel
 ash   TypeFSaysTheFunctionBack
 ash   TypeLetterAndAnArrayLiteralIsAnInconsistentType
+ash   TypeLetterOverAFrozenNameWithNoValueIsRefused
 ash   TypePSearchesPathPastTheShell
 ash   TypePathAnswerIsASentence
 ash   TypesetLocalNeedsKeywordFunction
@@ -509,6 +510,7 @@ dash  TransformLetterCheckedOnlyWhenValued
 dash  TwoCaseLettersOnOneDeclarationCancel
 dash  TypeFSaysTheFunctionBack
 dash  TypeLetterAndAnArrayLiteralIsAnInconsistentType
+dash  TypeLetterOverAFrozenNameWithNoValueIsRefused
 dash  TypePSearchesPathPastTheShell
 dash  TypePathAnswerIsASentence
 dash  TypesetLocalNeedsKeywordFunction

@@ -242,6 +242,9 @@ func Semantics() interp.Semantics {
 	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split, and
 	// this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
+	// BusyBox ash 1.37 prints `e1: a:b:c` for `${e1?$*}` under `IFS=:`,
+	// so the word is a value here as it is in dash.
+	s.DiagnosticWordIsFields = interp.No
 	// An empty positional list is a set parameter: `set --; "${@-word}"` is
 	// empty and `"${@+word}"` is `word`.
 	// unanswered ConditionWholeArraySubscript: this applet has no `-v`
@@ -1927,6 +1930,10 @@ func Semantics() interp.Semantics {
 	// unanswered AttributeOverAFrozenNameIsRefused: no declaration command
 	// here either. Measured 2026-09-12 on BusyBox in a container, `typeset`
 	// is `not found` — the same wall dash meets (#2561).
+	// unanswered TypeLetterOverAFrozenNameWithNoValueIsRefused: the same
+	// wall one question further in. Measured 2026-09-20 in the pinned
+	// image, `readonly c; typeset -i c` is `typeset: not found` at 127, so
+	// no letter ever meets the frozen name (#3937).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
 	// command here either. Measured 2026-09-12 on BusyBox in a container,

@@ -76,6 +76,29 @@ type Frame struct {
 	// a frame would have moved `$0` with it (#1123).
 	Startup bool
 
+	// outerParams is the positional list that was in effect when this call
+	// was made — the list of the frame *below* this one, saved on the way in
+	// and put back on the way out.
+	//
+	// The same shape scopeBase has and for the same reader: a frame
+	// selection answers `$1`, `$@`, `$*` and `$#` from the frame a script
+	// selected, and the positional list has no save-and-restore structure of
+	// its own for that walk to read. `Runner.Params` is one slice swapped
+	// around a call, so before this nothing on the stack knew what any other
+	// frame's arguments were.
+	//
+	// Kept on the *callee* rather than the caller because that is where it
+	// can be written: the caller's frame is already on the stack and the
+	// list is saved by the call. So the frame standing at level `n+1` is
+	// what answers for level `n`, which is also how level 0 gets an answer
+	// with no frame of its own. See interp/frameparams.go.
+	//
+	// The same slice the call's own restore holds, aliasing included: a
+	// write that reaches into the backing array — `${3}=x` over a standing
+	// list — was always visible to the restore and is visible here in
+	// exactly the same way.
+	outerParams []string
+
 	// scopeBase is the first index of r.scopes that is *inner* to this
 	// frame: the scope the call itself opened is one below it, and every
 	// scope from here up was opened by something this frame went on to run.
@@ -187,9 +210,14 @@ func (r *Runner) pushFrame(f Frame) {
 // The script's own level is not in r.frames — it is the shell rather than a
 // call — so the runner carries that one itself and this is the single place
 // that knows which of the two answers.
-func (r *Runner) heldDollarZero() (string, bool) {
-	if n := len(r.frames); n > 0 {
-		f := r.frames[n-1]
+//
+// It takes the stack as a parameter rather than reading r.frames, because
+// the one reader has a *view* of it to ask: a frame selection cuts the stack
+// at the selected frame, and the answer is then that frame's stored `$0`
+// rather than the running frame's. See interp/frameparams.go.
+func (r *Runner) heldDollarZero(frames []Frame) (string, bool) {
+	if n := len(frames); n > 0 {
+		f := frames[n-1]
 		return f.zeroName, f.zeroNameHeld
 	}
 	return r.zeroName, r.zeroNameHeld
@@ -228,11 +256,16 @@ func (r *Runner) popFrame() {
 //
 // A sourced file answers with the operand rather than the file, which is not
 // the same string for a file found on PATH. See Frame.Operand.
-func (r *Runner) innermostCall() (string, bool) {
-	if len(r.frames) == 0 {
+//
+// The stack is a parameter because `$0` has a *view* of it to ask — a frame
+// selection cuts it at the selected frame — and a diagnostic's location does
+// not: that has a selection mechanism of its own, and passes r.frames. See
+// interp/frameparams.go.
+func (r *Runner) innermostCall(frames []Frame) (string, bool) {
+	if len(frames) == 0 {
 		return "", false
 	}
-	f := r.frames[len(r.frames)-1]
+	f := frames[len(frames)-1]
 	if f.Startup {
 		// A startup file is read by the shell rather than called by a
 		// script, so there is nothing here for `$0` to name — see
@@ -259,9 +292,11 @@ func (r *Runner) innermostCall() (string, bool) {
 // A startup file stops the walk. It is read by the shell rather than called
 // by a script — see [Frame.Startup] — so there is nothing below it a script
 // named, and a function it happens to be running is the shell's own.
-func (r *Runner) innermostKeywordFunction() (string, bool) {
-	for i := len(r.frames) - 1; i >= 0; i-- {
-		f := r.frames[i]
+//
+// The stack is a parameter for the reason innermostCall's is.
+func (r *Runner) innermostKeywordFunction(frames []Frame) (string, bool) {
+	for i := len(frames) - 1; i >= 0; i-- {
+		f := frames[i]
 		if f.Startup {
 			return "", false
 		}
@@ -346,7 +381,7 @@ func (r *Runner) locationFile() string {
 		return r.frames[n-1].File
 	}
 	if r.outsideCall > 0 && r.scriptFile != "" && r.sem().DollarZeroNames == DollarZeroIsTheInnermostCall {
-		if in, ok := r.innermostCall(); ok {
+		if in, ok := r.innermostCall(r.frames); ok {
 			return in
 		}
 	}
@@ -431,10 +466,11 @@ func (f Frame) readsAFile() bool { return f.Name == sourceFrameName || f.Startup
 // in the first was still there in the second. A scalar rather than a stack,
 // so a subshell gets its own copy of it the way every other scalar here does.
 //
-// One measured behavior is deliberately not modeled: selecting a frame in
-// ksh93 moves the *variable scope* with it, so a function that selects its
-// caller reads the caller's locals. That is a second mechanism rather than a
-// second answer from this one, and it is #3115.
+// Two further things move with the selection, and each is a mechanism of its
+// own rather than a second answer from this one: the **variable scope** goes
+// there, so a function that selects its caller reads the caller's locals (see
+// interp/framescope.go, #3115), and so do the **positional parameters and
+// `$0`** (see interp/frameparams.go, #3952).
 
 // FunctionDepth is how many function calls the shell is inside, not counting
 // sourced files or the startup files it read of its own accord.

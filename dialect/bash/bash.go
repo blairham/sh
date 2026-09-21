@@ -347,6 +347,11 @@ func Semantics() interp.Semantics {
 	// `[[ ]]` operand and a here-document body. The `*` spelling is core and
 	// does not come through here — `v=${a[*]}` is `x-y-z` in this shell.
 	s.UnsplitAtListJoinsOnIFS = interp.No
+	// bash 5.3.20 and bash 3.2.57 both print `e1: a b c` for `${e1?$*}`
+	// under `IFS=:`: the word is expanded as an argument list would be and
+	// the sentence made of the fields. The only column in the panel that
+	// reads it this way.
+	s.DiagnosticWordIsFields = interp.Yes
 	// The panel's holdout on the login profile, measured on all four
 	// non-interactive routes and in both bash 5.3 and the 3.2 macOS ships:
 	// `exec -a -bash bash script.sh` reads neither ~/.bash_profile nor
@@ -1561,6 +1566,12 @@ func Semantics() interp.Semantics {
 	// why this preset is bash 5.3's answer and the record carries 3.2's in
 	// its own column (#2561).
 	s.AttributeOverAFrozenNameIsRefused = interp.Yes
+	// And the same with no value, which is the row the axis above was
+	// measured on: `readonly c; typeset -i c` is `typeset: c: readonly
+	// variable` at 1 in bash 5.3.20. Answered rather than left unanswered
+	// because it was measured, though the axis above refuses first here and
+	// this one is never reached (#3937).
+	s.TypeLetterOverAFrozenNameWithNoValueIsRefused = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
 	// An error inside a file `.` read ends the shell here, not just the file:
 	// measured, a sourced file whose third line is `echo X${NOPE}` under

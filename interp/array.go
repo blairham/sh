@@ -2602,7 +2602,7 @@ func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, o
 		// parameters *themselves*, and the next read of `$@` quoted what the
 		// previous read had already quoted — a level of backslashes added per
 		// round trip rather than one taken away, which is #1622.
-		return append([]string(nil), r.Params...), false, true
+		return append([]string(nil), r.params()...), false, true
 	}
 	if _, isArray := r.Arrays[e.Name]; isArray {
 		elems, ok = r.arrayElems(e.Name)

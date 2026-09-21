@@ -1475,6 +1475,10 @@ func Semantics() interp.Semantics {
 	// *value*, which is a different question and reaches refuseReadonly
 	// (#2561).
 	s.AttributeOverAFrozenNameIsRefused = interp.No
+	// And with no value either: measured 2026-09-20, `readonly c; typeset
+	// -i c` is taken at 0 here, exactly as the same line over a frozen name
+	// holding a value is (#3937).
+	s.TypeLetterOverAFrozenNameWithNoValueIsRefused = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is no
 	// `${!prefix@}` in this shell at all — `typeset -A q1; echo "${!q@}"` is
@@ -1713,6 +1717,10 @@ func Semantics() interp.Semantics {
 	// give `x y z`. With IFS set and empty it is `xy`, which is what says
 	// the separator is read from IFS rather than defaulted to a space.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
+	// zsh 5.9.2 prints `e1: a:b:c` for `${e1?$*}` under `IFS=:`. Worth
+	// stating that this shell answered neither reading before the axis: with
+	// zsh's own no-split rule over the fields path it made `a:b c`.
+	s.DiagnosticWordIsFields = interp.No
 	// The separator that closes a value delimits here rather than being
 	// absorbed, so every such split has one more field than it does in the
 	// rest of the panel: `IFS=:; v='a:'` under `shwordsplit` is `[a][]` where

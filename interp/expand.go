@@ -1142,7 +1142,7 @@ func (r *Runner) emptyWholeArrayIsSet(e *syntax.ParamExpr, set bool) bool {
 //     whichever way the set-ness question is answered. `${@:=abc}` is
 //     refused in all six (#1541) and needs no axis to be.
 func (r *Runner) listOfNoPositionalsIsSet(e *syntax.ParamExpr, set bool) bool {
-	if !set || len(r.Params) > 0 || e.Subscript() != nil ||
+	if !set || len(r.params()) > 0 || e.Subscript() != nil ||
 		(e.Name != "@" && e.Name != "*") {
 		return set
 	}
@@ -1729,7 +1729,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// zero fields, the same answer `"$@"` gives.
 	if (e.Name == "@" || e.Name == "*") && e.Op == syntax.ParamTransform &&
 		e.Index == nil && !e.Length && !e.Indirect {
-		elems := r.transformElems(e, r.Params)
+		elems := r.transformElems(e, r.params())
 		ifs, set := r.ifs()
 		if e.Name == "*" {
 			joined := strings.Join(elems, ifsFirst(ifs, set))
@@ -1758,7 +1758,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		if s.Quoting != syntax.Unquoted {
 			return nil, false
 		}
-		return r.tildeFlagElements(s, head, r.elementFields(r.Params, sp, r.globSubstAnswer(s))), true
+		return r.tildeFlagElements(s, head, r.elementFields(r.params(), sp, r.globSubstAnswer(s))), true
 	}
 	if e.Name != "@" {
 		return nil, false
@@ -1767,11 +1767,11 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// Escaped for the same reason every other quoted expansion is: the
 		// fields go on to pathname expansion, and a `*` in a *value* is not
 		// a pattern. Returning them raw made `set -- "$x"` glob.
-		return escapeAll(r.Params), true
+		return escapeAll(r.params()), true
 	}
 	// Unquoted, each parameter goes through the same two stages every other
 	// expansion does.
-	return r.tildeFlagElements(s, head, r.elementFields(r.Params, sp, r.globSubstAnswer(s))), true
+	return r.tildeFlagElements(s, head, r.elementFields(r.params(), sp, r.globSubstAnswer(s))), true
 }
 
 // elementFields is what an unquoted list expansion yields: the fields its
@@ -2501,7 +2501,7 @@ func (r *Runner) transformHasValue(e *syntax.ParamExpr) bool {
 		return ok && len(elems) > 0
 	}
 	if e.Index == nil && wholeArraySubscript(e.Name) {
-		return len(r.Params) > 0
+		return len(r.params()) > 0
 	}
 	_, set, _ := r.paramSource(e)
 	return set
@@ -5254,10 +5254,24 @@ func (r *Runner) substitutedWordText(w *syntax.Word) string {
 // Measured 2026-09-20, `set -- 'a:b' c` under `IFS=:`, `${e?$*}` in a script
 // file: bash 5.3.20 and bash 3.2.57 say `e: a b c` — the word expanded into
 // fields and the message made of them with a space between — where zsh 5.9.2,
-// ksh93u+ and dash 0.5.12 all say `e: a:b:c`, the value. One spelling, two
-// readings, so it is an axis rather than a bug; this answers bash's, which is
-// the answer this shell already gave, and #3876 holds the other three.
+// ksh93u+, dash 0.5.12 and BusyBox ash all say `e: a:b:c`, the value. One
+// spelling, two readings, so it is an axis rather than a bug.
+//
+// The axis is here and not on the shared helper because the *assigning* forms
+// are unanimous: `${u:=$*}` stores the value in every column including bash,
+// so a switch one level up would record a disagreement the panel does not
+// have. See Semantics.DiagnosticWordIsFields for the whole table (#3876).
+//
+// **Read rather than asked**, which is the split the set-ness sentence below
+// makes for the same reason: the operator fires either way and at the same
+// status in every column, so there is no behavior to refuse — only which of
+// two spellings one word comes to, and the two coincide under every IFS that
+// begins with a space. Refusing here would stop a core run over `${x?word}`,
+// which is a construct that has nothing to do with the disagreement.
 func (r *Runner) diagnosticWordText(w *syntax.Word) string {
+	if r.sem().DiagnosticWordIsFields != Yes {
+		return r.substitutedWordText(w)
+	}
 	defer r.withoutGlobbing()()
 	return r.joinWord(w)
 }
@@ -5588,7 +5602,7 @@ func itoa(n int) string { return strconv.Itoa(n) }
 func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 	switch e.Name {
 	case "#":
-		return itoa(len(r.Params)), true
+		return itoa(len(r.params())), true
 	case "?":
 		return itoa(r.status), true
 	case "$":
@@ -5634,7 +5648,8 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		// result as an initialization cycle. The name is the whole answer
 		// here regardless: a subscripted `${*[1,2]}` is answered by the array
 		// path and only reaches this line when it was not an array at all.
-		return strings.Join(r.Params, r.unsplitJoinSeparator(e.Name == "*", len(r.Params))), true
+		p := r.params()
+		return strings.Join(p, r.unsplitJoinSeparator(e.Name == "*", len(p))), true
 	}
 	if n, ok := atoi(e.Name); ok {
 		if n == 0 {
@@ -5650,8 +5665,8 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 			// `$00` as one parameter (Dialect.MultiDigitPositional, #2879).
 			return r.dollarZero()
 		}
-		if n <= len(r.Params) {
-			return r.Params[n-1], true
+		if p := r.params(); n <= len(p) {
+			return p[n-1], true
 		}
 		// Reported as *unset*, not as empty. Saying "set" here made
 		// `${1-default}` yield nothing, because the default only fires for a
@@ -5676,7 +5691,15 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 // function that called it — which is why the two have separate walks rather
 // than one with a filter on it.
 func (r *Runner) dollarZero() (string, bool) {
-	if held, ok := r.heldDollarZero(); ok {
+	// The stack as the frame a script *selected* sees it, which is r.frames
+	// whenever nothing is selected. `$0` names the function standing at the
+	// selected level in the one dialect that has a selection, and it gets
+	// there by asking the ordinary question of a shorter stack rather than
+	// by reading the frame's own name — measured, a `name()` frame at the
+	// selected level answers with the keyword function below it, exactly as
+	// it does with no selection. See interp/frameparams.go.
+	frames := r.framesInSelectedFrame()
+	if held, ok := r.heldDollarZero(frames); ok {
 		// A value this frame was *given*, which answers before any of the
 		// three readings and without consulting the axis: a stored `$0` is
 		// not a question about where the name comes from, it is a name that
@@ -5685,8 +5708,8 @@ func (r *Runner) dollarZero() (string, bool) {
 		// frame it was written on is the only one that answers with it.
 		return held, true
 	}
-	call, inCall := r.innermostCall()
-	keyword, inKeyword := r.innermostKeywordFunction()
+	call, inCall := r.innermostCall(frames)
+	keyword, inKeyword := r.innermostKeywordFunction(frames)
 	if !inCall && !inKeyword {
 		// Nothing on the stack could answer, so the axis is not consulted:
 		// a core that refuses every unanswered axis must not refuse `echo
@@ -5714,9 +5737,9 @@ func (r *Runner) dollarZero() (string, bool) {
 // it worth a switch rather than a majority verdict.
 func (r *Runner) specialLength() int {
 	if r.ask(r.sem().LengthOfSpecialIsCount, "${#@} being the count of parameters") {
-		return len(r.Params)
+		return len(r.params())
 	}
-	return len(strings.Join(r.Params, " "))
+	return len(strings.Join(r.params(), " "))
 }
 
 // expandRawText expands text the lexer kept raw — a here-document body — by
@@ -5956,7 +5979,7 @@ func (r *Runner) paramErrorWord(e *syntax.ParamExpr, set bool) string {
 	// behavior to refuse — only which of a dialect's own two sentences it
 	// picks, and a vector with no dialect has neither.
 	if e.Name == "@" || e.Name == "*" {
-		if e.Subscript() == nil && len(r.Params) == 0 {
+		if e.Subscript() == nil && len(r.params()) == 0 {
 			set = r.sem().PositionalListWithNoneIsSet == Yes
 		}
 	}

@@ -1040,7 +1040,7 @@ func (r *Runner) namerefAttributeRemoved(name string) bool {
 	if !r.isNameref(name) {
 		return false
 	}
-	if r.refuseReadonly(name, removedAttribute) {
+	if r.refuseReadonly(name, attributeRatherThanAValue) {
 		// A **frozen reference** may not be taken apart: measured the same
 		// day, `w=2; declare -rn k=w; declare +n k` is `declare: k: readonly
 		// variable` at 1 in bash 5.3.20 and `typeset: k: is read only` in
@@ -1048,7 +1048,7 @@ func (r *Runner) namerefAttributeRemoved(name string) bool {
 		// the freeze the *reference* carries, which is the half `unset -n`
 		// already asks and the opposite of what a write through one asks.
 		//
-		// removedAttribute is the form this is: a declaration asking a name
+		// attributeRatherThanAValue is the form this is: a declaration asking a name
 		// to give an attribute up, whose sentence is the declaration's and
 		// which gives up nothing of the enclosing line.
 		return true

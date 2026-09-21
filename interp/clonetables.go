@@ -308,6 +308,10 @@ func (c *Runner) ownTables(r *Runner) {
 	c.assignmentActions = maps.Clone(r.assignmentActions)
 	// And the removal half of the same message, for the same reason.
 	c.unsetActions = maps.Clone(r.unsetActions)
+	// And the option half of a tie between a `set -o` name and a parameter,
+	// which is the same message from the other side. See
+	// interp/tiedoption.go.
+	c.optionTies = maps.Clone(r.optionTies)
 	c.dynamicPresence = maps.Clone(r.dynamicPresence)
 	// How each produced parameter lists back travels with the producer it
 	// describes, for the same reason: a subshell that registers one of its

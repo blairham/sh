@@ -2074,6 +2074,21 @@ func (r *Runner) setOption(name string, on bool) bool {
 // written — and it is refused at all because `login_shell`, the name it
 // resolved to, is one a script may not move.
 func (r *Runner) setOptionSpelled(name, spelled string, on bool) bool {
+	moved := r.applySetOption(name, spelled, on)
+	if moved {
+		// And the parameter this name is a second spelling of, where it is
+		// one. After the state has moved and only where the request was
+		// granted, for the reason an assignment action runs after the store:
+		// a refused option moved nothing for a parameter to follow. See
+		// interp/tiedoption.go.
+		r.optionTieMoved(name, on)
+	}
+	return moved
+}
+
+// applySetOption is setOptionSpelled's own work, with the tie above kept out
+// of it so that every road out of the reading below is one return.
+func (r *Runner) applySetOption(name, spelled string, on bool) bool {
 	if name == "pipefail" {
 		// The one name with an axis of its own, because whether the shell
 		// has it was settled before this table existed and the answer is

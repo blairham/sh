@@ -1966,6 +1966,27 @@ func Semantics() interp.Semantics {
 	// The same fact gives the default range: the newest seventeen entries of
 	// the list rather than the sixteen events below a current one.
 	s.FcRelativeEventNeedsTheShellsOwnEventNumber = interp.Yes
+	// And the newest entry is the line this shell is standing on, so the
+	// roads that *run* one stop below it and say why: `fc -s 5` on five
+	// entries is refused, `fc -s 99` and `fc 99` are refused in the same
+	// words rather than named as events, and `fc -s` on a list of one — or
+	// of none — is refused too, where on two or more it runs the oldest
+	// entry and says nothing. A range's far end is brought under the
+	// threshold instead: `fc -e ed 1 5` edits 1 through 4. Measured
+	// 2026-09-21 on the same lists as the axis above (#4058).
+	s.FcNewestEntryIsTheCurrentLine = interp.Yes
+	// And an operand's digits are read past whitespace and a `+`, where
+	// bash wants the sign or the first digit at the front of the word:
+	// `fc -l ' -1'` and `fc -l ' 2'` and `fc -l +3` are all events here and
+	// all `fc: no command found` there. The digit *prefix* itself is not
+	// this axis — both shells read `fc -l 2x` as entry 2, and the core does
+	// that unasked.
+	s.FcNumericOperandSkipsBlanksAndASign = interp.Yes
+	// And the same looseness decides where the options end: `fc -l -1x` is
+	// the operand `-1x` here and `fc: -1: invalid option` at 2 in bash,
+	// which reads a word as an operand only when it is a dash and nothing
+	// but digits.
+	s.FcOptionsEndAtADashAndADigit = interp.Yes
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	// And the monitor alone is what `fg` and `bg` need. Reachable only with
 	// a terminal here, since `set -m` without one is fatal in this shell —
@@ -4532,6 +4553,11 @@ func Diagnostics() interp.Diagnostics {
 		// zzz`, and so is `fc -l -0`, which this shell does not read as a
 		// relative operand at all.
 		FcNoCommandFound: "event not found: %[1]s",
+		// The line this shell is standing on, which `fc -s` and the editor
+		// road may not reach. A sentence about what running it would do,
+		// and it names no operand — `fc -s 5`, `fc -s 99` and a bare
+		// `fc -s` on a one-entry list all come to these words.
+		FcCurrentLineRecurses: "current history line would recurse endlessly, aborted",
 		// The editor's file left empty, named by the path the person never
 		// saw.
 		FcEmptyEdit:                  "read error on %[1]s",

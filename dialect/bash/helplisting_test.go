@@ -24,6 +24,10 @@ func TestTheHelpListingIsTwoColumns(t *testing.T) {
 				t.Fatalf("complained: %q", errs)
 			}
 			lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+			// The one header line, which is the version and is not a row —
+			// see TestTheHelpListingOpensWithOneVersionLine. The geometry
+			// below is the rows'.
+			lines = lines[1:]
 			half := 0
 			for _, c := range columns {
 				half = half*10 + int(c-'0')
@@ -70,7 +74,7 @@ func TestTheHelpListingIsColumnMajorAndHalfAsLong(t *testing.T) {
 	perLine, _ := runOptionScript(t, "help -s ''\n")
 	topics := strings.Split(strings.TrimSuffix(perLine, "\n"), "\n")
 	listing, _ := runOptionScript(t, "COLUMNS=200\nhelp\n")
-	rows := strings.Split(strings.TrimSuffix(listing, "\n"), "\n")
+	rows := strings.Split(strings.TrimSuffix(listing, "\n"), "\n")[1:]
 	if want := (len(topics) + 1) / 2; len(rows) != want {
 		t.Fatalf("%d topics came to %d rows, want %d", len(topics), len(rows), want)
 	}
@@ -134,5 +138,43 @@ func TestAnUnusableColumnsFallsBackToEighty(t *testing.T) {
 	// pass for a shell that ignored COLUMNS entirely.
 	if got, _ := runOptionScript(t, "COLUMNS=8\nhelp\n"); got == eighty {
 		t.Error("COLUMNS=8 laid out as 80, so nothing here reads the parameter")
+	}
+}
+
+// The listing opens with one line that is not a row: this shell's version,
+// spelled the way `--version` spells it.
+//
+// The seven other header lines the real shell writes stay out — four
+// sentences of another project's prose, the sentence about the `*` mark and
+// two blanks — and this one is in because it has a measurable cost when it is
+// missing. A script reaching past the header drops the first line, which is
+// the natural way past a version line; with no header at all that takes a
+// **row of the listing** instead, and the lost row is the first, which
+// carries two topics. Measured 2026-09-21 against bash 5.3.20 over the
+// `builtins.tests` row of #2298: 8 header lines + 39 rows there against
+// 0 + 39 here (#4066).
+//
+// The spelling is `--version`'s and not `--help`'s, which differ by one
+// character in the real shell and differ here for the same reason.
+func TestTheHelpListingOpensWithOneVersionLine(t *testing.T) {
+	listing, _ := runOptionScript(t, "COLUMNS=200\nhelp\n")
+	version, _ := runOptionScript(t, "echo \"$BASH_VERSION\"\n")
+	first, rest, _ := strings.Cut(listing, "\n")
+	if !strings.HasPrefix(first, "GNU bash, version "+strings.TrimSpace(version)) {
+		t.Errorf("the listing opens with %q, want the version line", first)
+	}
+	// And exactly one: the line under it is a row, which opens with the
+	// space every row opens with and no row is blank.
+	second, _, _ := strings.Cut(rest, "\n")
+	if !strings.HasPrefix(second, " ") || strings.TrimSpace(second) == "" {
+		t.Errorf("the line under the version is %q, want the first row", second)
+	}
+	// A script that strips the first line keeps every row, which is the
+	// cost this line is here to remove.
+	perLine, _ := runOptionScript(t, "help -s ''\n")
+	topics := strings.Split(strings.TrimSuffix(perLine, "\n"), "\n")
+	stripped := strings.Split(strings.TrimSuffix(rest, "\n"), "\n")
+	if want := (len(topics) + 1) / 2; len(stripped) != want {
+		t.Errorf("stripping the first line left %d rows, want all %d", len(stripped), want)
 	}
 }

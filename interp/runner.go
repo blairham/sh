@@ -890,6 +890,16 @@ type Runner struct {
 	// SetUnsetAction.
 	unsetActions map[string]func(*Runner)
 
+	// optionTies is the same message from the other side: a `set -o` name
+	// that is a second spelling of a parameter writes it here when it moves.
+	// See TieOptionToParameter and interp/tiedoption.go.
+	optionTies map[string]func(*Runner, bool)
+
+	// inOptionTie stops a tie's write to its other half from arriving back
+	// where it started. One flag serves every tie, because a tie has two
+	// halves and neither write reaches anything but the other.
+	inOptionTie bool
+
 	// dynamicPresence answers whether a produced parameter is *there* at
 	// all, for the handful that are not from the start. A producer returns a
 	// string and has no way to say "unset"; this is the seam beside it, and

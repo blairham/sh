@@ -242,6 +242,24 @@ func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	// operands of a `-s` that found nothing to replace are dropped, and the
 	// mark it never took survives for the next one.
 	if flags.print || flags.store {
+		if len(rest) == 0 {
+			// Nothing after the letter is nothing to do, and it is the
+			// **operand count** that says so rather than emptiness: measured
+			// 2026-09-21 on bash 5.3.20, `history -s ''` stores an empty
+			// entry where `history -s` stores none, so the two are
+			// distinguishable and the join of no words is not an entry.
+			//
+			// The builtin's own line survives it, which is the discriminating
+			// case and is why this stands in front of historyTakeOwnLine
+			// rather than inside the store below: with the reader recording,
+			// `history -s` on its own line leaves that line in the list,
+			// where `history -s a` takes it out. `history -p` answers the
+			// same shape, and `history -s --` is no operands rather than one
+			// empty one — the `--` is eaten by the option reader and nothing
+			// is left behind it. Both at 0, with no diagnostic, and neither
+			// reaches the mark the take above reads. #4068.
+			return 0
+		}
 		if !historyTakeOwnLine(r, flags.store) {
 			if flags.print {
 				return 1

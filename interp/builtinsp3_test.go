@@ -120,6 +120,10 @@ func TestFcAnswersFromItsEmptyHistory(t *testing.T) {
 		// operands rather than from a wording of its own.
 		sem.FcEventOutOfRangeIsAnError = No
 		sem.FcRelativeEventNeedsTheShellsOwnEventNumber = No
+		// And the threshold the roads that run one stop at, which is read
+		// beside them and on the same road: it decides what the default
+		// comes to as much as what a written operand does.
+		sem.FcNewestEntryIsTheCurrentLine = No
 		r.Semantics = &sem
 		dg := Diagnostics{FcNoSuchEvent: "fc: no such event: 1"}
 		r.Diagnostics = &dg

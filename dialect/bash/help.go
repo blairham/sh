@@ -44,9 +44,10 @@ import (
 //   - A bare `help` writes every topic's synopsis in **two columns**, cut to
 //     the column with a `>` where they were cut, which is what the real
 //     shell's listing does and is measured rather than chosen — see
-//     writeHelpListing for the geometry. What is **not** reproduced is the
-//     eight-line header above it: a version line is a claim we must not make
-//     and the four sentences under it are another project's prose. This was
+//     writeHelpListing for the geometry. Of the eight-line header above it,
+//     one line is written here and seven are not: the version line is this
+//     shell's own — the same string `--version` already answers with — and
+//     the four sentences under it are another project's prose. This was
 //     one topic per line for a while, on the reasoning that the header ruled
 //     the whole listing out; the header and the layout are different kinds of
 //     thing, and treating them as one cost 28 lines a call (#3055).
@@ -369,10 +370,31 @@ func helpListingWidth(r *interp.Runner) int {
 // listing opens with a version line and four sentences about itself — both of
 // which this shell must not reproduce, the first being a claim we cannot make
 // and the second being another project's prose. That reasoning still holds for
-// the **header**, and it never applied to the **layout**: how many columns a
-// listing has, how wide a cell is and what marks a truncated one are
+// the **four sentences**, and it never applied to the **layout**: how many
+// columns a listing has, how wide a cell is and what marks a truncated one are
 // measurements about a program's output rather than sentences somebody wrote,
 // and they are what made this shell's listing 75 lines against 47 (#3055).
+//
+// # The one header line
+//
+// The version line is written, and it is the line the rest of the header is
+// not. A version is a claim this shell already makes — `--version` answers
+// with this very string, stamped by the release — so writing it here repeats
+// an existing claim rather than making a new one, and it is ours rather than
+// somebody else's sentence.
+//
+// It has a measurable cost when it is missing, which is what separates it
+// from the seven lines still left out. A script reaching past the header
+// drops the listing's first line, which is the natural way past a version
+// line; with no header at all that takes a **row of the listing** instead,
+// and the lost row is the first, which carries two topics. Measured
+// 2026-09-21 against bash 5.3.20 while working the `builtins.tests` row of
+// #2298: 8 header lines + 39 rows there against 0 + 39 here. #4066.
+//
+// The spelling is `--version`'s and not `--help`'s, which is measured and is
+// a difference of one character: bash writes `5.3.20(1)-release (aarch64-…)`
+// above the listing and `5.3.20(1)-release-(aarch64-…)` under `--help`. See
+// helpVersionLine, which is the other one.
 //
 // The geometry, measured 2026-09-18 at COLUMNS 8, 10, 12, 40, 60, 80, 100 and
 // 200, reading the character positions out of the bytes:
@@ -400,6 +422,8 @@ func writeHelpListing(r *interp.Runner, topics map[string]string) {
 	}
 	sort.Strings(names)
 	off := disabledTopics(r)
+
+	_, _ = fmt.Fprintf(r.Out(), "%s\n", versionLine())
 
 	half := helpListingWidth(r) / 2
 	rows := (len(names) + 1) / 2

@@ -7046,6 +7046,41 @@ that nothing was hashed; since #2554 something is, the option gates it in
 the dialects that read it as a stop, and its state comes from the startup
 letters rather than from this table — see *The command hash*.
 
+**One of the recorded names is also a parameter, and the two are one
+state.** `IGNOREEOF` and `ignoreeof` are two spellings of one thing in bash,
+which is the shape `PATH`/`path` already has with an option on one side
+instead of an array. Measured 2026-09-21 on bash 5.3.20 under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME, from a script file:
+
+| written | `set -o` says | `${IGNOREEOF-unset}` |
+| --- | --- | --- |
+| nothing | `off` | `unset` |
+| `IGNOREEOF=10` | `on` | `10` |
+| `IGNOREEOF=` | `on` | empty |
+| `IGNOREEOF=abc` | `on` | `abc` |
+| `unset IGNOREEOF` | `off` | `unset` |
+| `set -o ignoreeof` | `on` | `10` |
+| `IGNOREEOF=3` then `set -o ignoreeof` | `on` | `10` |
+| `set +o ignoreeof` | `off` | `unset` |
+
+Four facts in that. **Any** assignment turns the option on, the empty one
+included, so the tie reads the assignment and not the value. Turning the
+option on writes `10` and overwrites a value already there. Turning it off
+unsets the name rather than emptying it. And none of it exports the name. A
+value the *environment* carried is not an assignment: `IGNOREEOF=4` in the
+environment shows through with the option still `off`.
+
+It is `set -o` and not `shopt`: `shopt ignoreeof` is `invalid shell option
+name` in bash 5.3.20 and here alike.
+
+`Runner.TieOptionToParameter` is the seam, beside the runner rather than on
+this vector for the reason `Runner.AddSetOptions` is: which pairs a shell
+ties is the same kind of question as which names it has, and an Answer per
+pair would say nothing but "yes". One reentry flag guards both directions,
+because each half writes the other through the ordinary route and a tie has
+exactly two halves — without it a script's `IGNOREEOF=3` would be overwritten
+by the option's own `10` on the way back round (#4047).
+
 **Recorded used to mean refused, and #3128 is where that changed.** A name
 with nothing behind it could be turned *off* — the request had already been
 granted — and turning one on was `set: globstar: not implemented` at 2, on
@@ -10103,10 +10138,25 @@ What was built, all through the extension seam — registered builtins in each
   builtin — which it does, and has since `dialect/bash/logout.go`; it is a
   topic now (#3055).
 
-  **A bare `help` writes the two-column listing** and stops short of the
+  **A bare `help` writes the two-column listing** under one line of the
   header above it, which is where the line really falls. The header is eight
-  lines: a version banner this shell must not claim, and four sentences of
-  another project's prose. The *layout* is neither — how many columns a
+  lines: a version banner, four sentences of another project's prose, the
+  sentence about the `*` mark, and two blanks. Seven of them stay out and the
+  **version line** is written, spelled the way `--version` spells it — which
+  is a claim this shell already makes rather than a new one, and is ours
+  rather than somebody else's sentence.
+
+  It is in because its absence has a measurable cost, which is what separates
+  it from the seven. A script reaching past the header drops the listing's
+  first line, the natural way past a version line; with no header at all that
+  takes a **row of the listing** instead, and the lost row is the first, which
+  carries two topics. Measured 2026-09-21 against bash 5.3.20 while working
+  the `builtins.tests` row of #2298: 8 header lines + 39 rows there against
+  0 + 39 here, and the listing is column-major so nothing else moves (#4066).
+  The spelling is `--version`'s and not `--help`'s, which differ by one
+  character in the real shell and differ here for the same reason.
+
+  The *layout* is neither — how many columns a
   listing has, how wide a cell is and what marks a cut one are measurements
   about a program's output. Read out of the real shell's own bytes on
   2026-09-18 at COLUMNS 8, 10, 12, 40, 60, 80, 100 and 200: a column is

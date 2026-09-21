@@ -1068,6 +1068,24 @@ type Dialect struct {
 	// ordinary fatal status, and a file holding one still reads.
 	NamespaceBlock bool
 
+	// IfClauseStepsOverWhatItCannotUse consumes a token standing where an
+	// `if` or `elif` clause could still go on that no command could begin
+	// with, and refuses the one after it instead.
+	//
+	// One shell in the panel. At the top level, with no substitution
+	// anywhere, `if true; then ) echo X; fi` is ``parse error near `echo' ``
+	// on zsh 5.9.2 and ``syntax error near unexpected token `)' `` on bash
+	// 5.3.20, which names the parenthesis as dash 0.5.12 does. See
+	// [Parser.clauseStepsOverWhatItCannotUse] for the measured rows, for the
+	// three tokens outside the set, and for the pipeline operators that are
+	// in the reference's set and not in this one.
+	//
+	// It is a grammar flag rather than a wording, because the token is
+	// *consumed*: `v=$(echo hi; if true; then)` is a substitution that never
+	// closes in that shell, where the columns that refuse the parenthesis
+	// end the body at it.
+	IfClauseStepsOverWhatItCannotUse bool
+
 	// AnonymousFunction is `() { … }` and `function { … }`: a function with
 	// no name, defined and run where it stands, with the words after it as
 	// its positional parameters. One shell in the panel has it; in the other

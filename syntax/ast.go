@@ -850,8 +850,22 @@ type AnonFunc struct {
 	redirs
 }
 
-func (c *AnonFunc) Pos() Pos     { return c.Start }
-func (c *AnonFunc) End() Pos     { return c.Body.End() }
+func (c *AnonFunc) Pos() Pos { return c.Start }
+
+// End is the body's end, or the parentheses' own start where there is no
+// body, which is [FuncDecl.End]'s answer for the same reason: a nameless
+// function whose body never came keeps its node — the parentheses were read
+// and the error is what the caller acts on — so a nil body here is a normal
+// product of a failed parse rather than a malformed tree. It was unreachable
+// while `()` with nothing after it was read as an empty subshell, and the
+// extent walk through an enclosing construct crashed on the first input that
+// made one (#3961).
+func (c *AnonFunc) End() Pos {
+	if c.Body == nil {
+		return c.Start
+	}
+	return c.Body.End()
+}
 func (c *AnonFunc) commandNode() {}
 
 // RepeatClause is `repeat N; do … done`, and the shorter spellings the same

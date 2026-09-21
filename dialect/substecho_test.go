@@ -363,7 +363,7 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 		{
 			// **A body that ran out where a function's body was due**, which
 			// is the one refusal this dialect locates by the shell's name and
-			// nothing at all — see Diagnostics.MissingFuncBodyOmitsTheLine,
+			// nothing at all — see Diagnostics.MissingFuncBodyCountsFromItsParens,
 			// which the *parse* route has honored since it was written and
 			// this one never reached. Measured 2026-09-21, zsh 5.9.2 (#3961).
 			//
@@ -430,6 +430,129 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 			want: map[string]string{
 				"bash": "s.sh: command substitution: line 2: syntax error near unexpected token `newline'\n" +
 					"s.sh: command substitution: line 2: `echo hi; for'\n",
+			},
+		},
+		{
+			// **A substitution that never closes at all**, where one dialect
+			// lets the body say what was wrong with it before complaining
+			// about the construct — see
+			// Diagnostics.UnterminatedSubstitutionWritesItsBodysRefusal. The
+			// first message is what `echo hi; for` answers as a program of
+			// its own, at the line it answers there, which is what says it
+			// is the body speaking (#3961).
+			//
+			// bash and dash are left out of this row and kept in the one
+			// below: both write a message naming the token for this shape
+			// and this engine writes its end-of-input sentence, which is a
+			// divergence of its own and not this one.
+			name: "a body that ran out speaks before the substitution does",
+			src:  "printf 'start\\n'\nv=$(echo hi; for\n",
+			want: map[string]string{
+				"zsh": "s.sh:3: parse error near `\\n'\n" +
+					"s.sh:3: parse error near `v=$(echo hi; for'\n",
+			},
+		},
+		{
+			// **The discriminator**, and the row the one above is worth
+			// nothing without: a body that *parses* leaves only the
+			// substitution to complain about, and there this shell and the
+			// reference already agreed. A change that wrote a second message
+			// for every unterminated substitution passes the row above and
+			// fails this one.
+			name: "a body that parses leaves the substitution to speak alone",
+			src:  "printf 'start\\n'\nv=$(echo hi\n",
+			want: map[string]string{
+				"zsh":  "s.sh:3: parse error near `v=$(echo hi'\n",
+				"bash": "s.sh: line 3: unexpected EOF while looking for matching `)'\n",
+				"dash": "s.sh: 3: Syntax error: end of file unexpected (expecting \")\")\n",
+			},
+		},
+		{
+			// **An anonymous function with no body**, which is `(` and `((`
+			// in #3961's sweep and is two facts at once: `()` with the
+			// parentheses adjacent is a function rather than an empty
+			// subshell, and a function body that never came is numbered from
+			// those parentheses. Both messages stand at line 1 with the
+			// substitution on line 2.
+			name: "an anonymous function with no body",
+			src:  "printf 'start\\n'\nv=$(echo hi; ()\n",
+			want: map[string]string{
+				"zsh": "s.sh:1: parse error near `\\n'\n" +
+					"s.sh:1: parse error near `v=$(echo hi; ()'\n",
+			},
+		},
+		{
+			// **And the same script one line further down**, which is what
+			// says the number is a distance from the parentheses rather than
+			// a position in the file: it does not move. Every other row here
+			// moves with the substitution, and the control for that is the
+			// last row of this group.
+			name: "an anonymous function with no body, further down the file",
+			src:  "printf 'start\\n'\n: pre\nv=$(echo hi; ()\n",
+			want: map[string]string{
+				"zsh": "s.sh:1: parse error near `\\n'\n" +
+					"s.sh:1: parse error near `v=$(echo hi; ()'\n",
+			},
+		},
+		{
+			// **The parenthesis a `case` pattern spent is no closer.** The
+			// grammar's own read of the body consumes it and runs on to the
+			// end of the input, so the substitution never closes — and the
+			// counting loop that is the older answer for where a body ends
+			// must not spend it a second time. This wrote
+			// `s.sh:2: parse error near `)'` and nothing else (#3961).
+			//
+			// Not a dialect question: bash 5.3.20 and dash 0.5.12 both take
+			// this script as a substitution that never closes, and their
+			// columns here are what they write.
+			name: "the parenthesis a case pattern spent is no closer",
+			src:  "printf 'start\\n'\nv=$(echo hi; case x in y)\n",
+			want: map[string]string{
+				"zsh": "s.sh:3: parse error near `\\n'\n" +
+					"s.sh:3: parse error near `v=$(echo hi; case x ...'\n",
+				"bash": "s.sh: line 3: unexpected EOF while looking for matching `)'\n",
+			},
+		},
+		{
+			// **The distance come to nought**, which is the third answer and
+			// the one the pair of messages has to agree on: text with no
+			// newline at the end — which a script file always has and `-c`
+			// need not — leaves the parentheses and the refusal on one line,
+			// and *both* messages are then the shell's name alone. Measured
+			// 2026-09-21 on zsh 5.9.2.
+			//
+			// The closed-substitution route answers the second message
+			// differently and keeps `s.sh:1:` there — the row further down
+			// this table — which is measured rather than an inconsistency.
+			name: "a nameless function with no body and no newline after it",
+			src:  "printf 'start\\n'\nv=$(echo hi; ()",
+			want: map[string]string{
+				"zsh": "s.sh: parse error near `()'\n" +
+					"s.sh: parse error near `v=$(echo hi; ()'\n",
+			},
+		},
+		{
+			// And its control, the same file one body apart: a refusal that
+			// is not a missing function body keeps both lines with no
+			// trailing newline just as it does with one.
+			name: "a body that ran out with no newline after it keeps its line",
+			src:  "printf 'start\\n'\nv=$(echo hi; for",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `for'\n" +
+					"s.sh:2: parse error near `v=$(echo hi; for'\n",
+			},
+		},
+		{
+			// **The control for the placement rows**: a body that ran out
+			// for any other reason moves with the substitution, both
+			// messages together. Without it, a build that pinned every
+			// unterminated body's messages at line 1 passes the two
+			// anonymous-function rows above.
+			name: "a body that ran out anywhere else moves with the substitution",
+			src:  "printf 'start\\n'\n: pre\nv=$(echo hi; for\n",
+			want: map[string]string{
+				"zsh": "s.sh:4: parse error near `\\n'\n" +
+					"s.sh:4: parse error near `v=$(echo hi; for'\n",
 			},
 		},
 	} {

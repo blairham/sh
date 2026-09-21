@@ -169,7 +169,11 @@ func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure er
 	if !errors.As(failure, &se) || se.Kind != syntax.ErrUnexpected {
 		return "", 0
 	}
-	line := d.ParseFailureLine(failure)
+	// The failure's own line in the text, because everything below indexes
+	// the program by it. What the dialect *writes* can be a different number
+	// — see Diagnostics.parseFailureLineInTheInput — and that answer is
+	// taken at the end, where the line in front of the quote is chosen.
+	line := d.parseFailureLineInTheInput(failure)
 	if line < 1 {
 		return "", 0
 	}
@@ -198,15 +202,17 @@ func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure er
 		return r.substBodyEcho(span, lines, start, own, d.offendingLine(own, failure, text)), line
 	}
 	echo, at := r.substWordEcho(span, lines, textBase, own, line)
-	if echo != "" && d.locatesByNameAlone(failure) {
-		// The refusal in front of this one says where it was by not saying,
-		// so the only line this can honestly be pointed at is the first —
-		// which is the answer Diagnostics.ParseDiagnostic already gives a
-		// failure carrying no line of its own. Measured 2026-09-21 on zsh
-		// 5.9.2: `v=$(echo hi; foo())` is `s.sh:1:` here with one line above
-		// it and with two, where every other body in the sweep moves with
-		// the substitution. See Runner.substFailureLocatedByNameAlone.
-		at = 1
+	if n, counted := d.missingFuncBodyLine(failure); echo != "" && counted {
+		// The refusal in front of this one is counted from the parentheses
+		// rather than placed in the file, and this quote follows it there.
+		// Measured 2026-09-21 on zsh 5.9.2: `v=$(echo hi; foo())` is
+		// `s.sh:1:` here with one line above it and with two, where every
+		// other body in the sweep moves with the substitution. A distance of
+		// nought is written as no line by the message above and as the first
+		// line here, which is the answer Diagnostics.ParseDiagnostic already
+		// gives a failure carrying no line of its own. See
+		// Runner.substFailureLocatedByNameAlone.
+		at = max(n, 1)
 	}
 	return echo, at
 }

@@ -275,7 +275,7 @@ func TestEmptyParensAreOneTokenToTheGrammarThatSaysSo(t *testing.T) {
 
 // TestAMissingFunctionBodyIsMarkedAsOne — the fact one dialect locates
 // differently, recorded on the error rather than deduced from its kind: the
-// two shapes below are an unexpected token and an end of input, and both are a
+// shapes below are an unexpected token and an end of input, and both are a
 // body that never began.
 func TestAMissingFunctionBodyIsMarkedAsOne(t *testing.T) {
 	t.Parallel()
@@ -301,14 +301,42 @@ func TestAMissingFunctionBodyIsMarkedAsOne(t *testing.T) {
 			t.Errorf("%s: wrongly marked as a missing function body", src)
 		}
 	}
-	// Nor is one where a newline came between the parens and the failure:
-	// measured, the dialect that drops the line for this puts it back there.
-	_, err := Parse("f()\n;", Core())
-	var se *Error
-	if !errors.As(err, &se) {
-		t.Fatalf("refusal = %v, want a syntax error", err)
-	}
-	if se.FuncBody {
-		t.Error("a body expected on a later line was marked as a missing one")
+}
+
+// TestAMissingFunctionBodyCountsFromItsParens — the distance the dialect that
+// numbers this failure from the parentheses reads, which is a distance and
+// not a position: the last two rows put the same shape on the third line of a
+// file and answer the same number.
+//
+// A newline between the parentheses and the failure used to unmark the error
+// altogether, on the reading that the dialect merely drops the line for it.
+// `f()` ⏎ `;` is `zsh:1: parse error near `;'` on zsh 5.9.2 under `-c` and
+// was `zsh:2:` here, which is the position the unmarked error left behind
+// (#3961).
+func TestAMissingFunctionBodyCountsFromItsParens(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		src  string
+		want int
+	}{
+		{`f() ;`, 0},
+		{`f()`, 0},
+		{"f()\n;", 1},
+		{"f()\n\n\n;", 3},
+		{"f()\n", 1},
+		{": a\n: b\nf() ;", 0},
+		{": a\n: b\nf()\n;", 1},
+	} {
+		_, err := Parse(c.src, Core())
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Fatalf("%q: refusal = %v, want a syntax error", c.src, err)
+		}
+		if !se.FuncBody {
+			t.Fatalf("%q: not marked as a missing function body", c.src)
+		}
+		if se.FuncBodyLines != c.want {
+			t.Errorf("%q: FuncBodyLines = %d, want %d", c.src, se.FuncBodyLines, c.want)
+		}
 	}
 }

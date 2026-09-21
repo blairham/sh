@@ -4110,19 +4110,29 @@ type Diagnostics struct {
 	// file, which it reads with the script and stops on.
 	SubstitutionParseFailureNamesTheConstruct bool
 
-	// MissingFuncBodyOmitsTheLine drops the line from the location of a parse
-	// failure where a function's body was expected and never began.
+	// MissingFuncBodyCountsFromItsParens locates a parse failure where a
+	// function's body was expected and never began by counting lines from
+	// the parentheses rather than from the top of the input. A distance of
+	// nought is written as no line at all.
 	//
-	//	zsh -c 'f() ;'     zsh: parse error near `;'
-	//	zsh -c 'f()'       zsh: parse error near `()'
-	//	zsh -c 'if true'   zsh:1: parse error near `true'
+	//	zsh -c 'f() ;'                zsh: parse error near `;'
+	//	zsh -c 'f()'                  zsh: parse error near `()'
+	//	`foo()` in a file             s.sh:1: parse error near `\n'
+	//	`foo()` and two blank lines   s.sh:3: parse error near `\n'
+	//	`: a` ⏎ `: b` ⏎ `foo()`       s.sh:1: parse error near `\n'
+	//	zsh -c 'if true'              zsh:1: parse error near `true'
 	//
-	// zsh alone, and only for that one failure: the last of the three is an
-	// input that ran out too, so this is not "an end of input" and not the
-	// kind of failure either. What it is, is `syntax.Error.FuncBody`, which
-	// the parser sets where it knows — see there for the corner a newline
-	// between the parens and the failure opens up.
-	MissingFuncBodyOmitsTheLine bool
+	// zsh alone, and only for that one failure: the last row is an input
+	// that ran out too and is numbered from the file, so this is not "an end
+	// of input" and not the kind of failure either. What it is, is
+	// `syntax.Error.FuncBody`, and the distance is `syntax.Error.FuncBodyLines`.
+	//
+	// **The fifth row is the discriminator**, and it is the one the earlier
+	// reading of this could not hold: the parentheses are on line 3 and the
+	// answer is still `1`. Dropping the line was that reading with the
+	// distance nought, and it left `foo()` on line 1 of a file reported at
+	// line 2 (#3961).
+	MissingFuncBodyCountsFromItsParens bool
 	// NotABuiltin is `builtin`'s refusal of a name that is not one. One verb:
 	// %[1]s the name.
 	NotABuiltin string
@@ -4184,6 +4194,39 @@ type Diagnostics struct {
 	// line quotes the whole line instead, and three write nothing. See
 	// Runner.substWordEcho.
 	SubstitutionParseFailureQuotesTheWord bool
+
+	// UnterminatedSubstitutionWritesItsBodysRefusal writes what the program
+	// between the delimiters had to say for itself in front of the complaint
+	// about the construct that never closed, and places both on that
+	// refusal's own line.
+	//
+	// One dialect does. Measured 2026-09-21 on zsh 5.9.2 from a script file,
+	// `timeout 3 env -i PATH=/usr/bin:/bin LC_ALL=C zsh -f s.sh` with
+	// standard input on the null device, line 1 of which is
+	// `v=$(echo hi; X` with no closing parenthesis anywhere:
+	//
+	//	X                bash 5.3.20              zsh 5.9.2
+	//	`for`            unexpected EOF …         :2: near `\n' then the quote
+	//	`{`              unexpected EOF …         :2: near `\n' then the quote
+	//	`if true; then`  unexpected EOF …         :2: near `\n' then the quote
+	//	`case x in y)`   unexpected EOF …         :2: near `\n' then the quote
+	//	`()`             syntax error near `)'    :1: near `\n' then the quote
+	//	(nothing)        unexpected EOF …         the quote alone, at :2:
+	//
+	// The last row is the discriminator: a body that *parses* leaves only
+	// the substitution to complain about, and there the two already agreed.
+	// So this is the body's refusal where the body has one rather than a
+	// second line on every unterminated substitution.
+	//
+	// **And the first message is the body's own, verbatim.** Written as a
+	// script of its own, `echo hi; for` is `s.sh:2: parse error near `\n'`
+	// there and `echo hi; ()` is `s.sh:1:` — the same sentence at the same
+	// line as the first of the two above, which is what says this is the
+	// body speaking and not a second wording for the substitution. The `()`
+	// rows carry their own line rule with them, since a function body that
+	// never came is counted from its parentheses — see
+	// MissingFuncBodyCountsFromItsParens.
+	UnterminatedSubstitutionWritesItsBodysRefusal bool
 
 	// SubstitutionParseFailureSentence is the second message where the
 	// dialect writes a sentence about the *substitution* in place of the
@@ -7687,6 +7730,26 @@ func (d Diagnostics) locationOnly(line int) string {
 // `eval` and `.` got it right, the two paths disagreeing exactly as one shared
 // front end exists to prevent.
 func (d Diagnostics) ParseFailureLine(err error) int {
+	if n, counted := d.missingFuncBodyLine(err); counted {
+		// A body that never came is numbered from its parentheses in one
+		// dialect rather than from the top of the input, and nought there
+		// means no line at all. See MissingFuncBodyCountsFromItsParens.
+		return n
+	}
+	return d.parseFailureLineInTheInput(err)
+}
+
+// parseFailureLineInTheInput is ParseFailureLine with the one dialect rule
+// that answers a *distance* left out, so the number is always a line of the
+// input the failure was found in.
+//
+// Two questions rather than one, because a caller that indexes the text needs
+// the position and a caller that writes the location needs what the dialect
+// writes, and for a function body that never came those are different numbers
+// — the second is counted from the parentheses. Reading the written one as a
+// position quoted the wrong line, and reading it as "no line" dropped the
+// quote altogether (#3961).
+func (d Diagnostics) parseFailureLineInTheInput(err error) int {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
 		return 0
@@ -8614,15 +8677,81 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 		return d.Report(name, line, d.ParseFailure(err)+"\n")
 	}
 	out := d.condPreamble(name, input, err)
+	if first, at, ok := d.bodyRefusalWrittenFirst(name, input, err); ok {
+		// The program between the delimiters never got to say what was wrong
+		// with it, and one dialect says it first. See
+		// UnterminatedSubstitutionWritesItsBodysRefusal.
+		out += first
+		switch {
+		case at > 0:
+			// The quote follows it, for the one refusal that carries a
+			// numbering of its own. Everything else leaves the quote where
+			// the construct put it.
+			line = at
+		case at < 0:
+			// And where that numbering came to nought the refusal has no
+			// line, so neither has the quote: `v=$(echo hi; ()` with no
+			// newline after it is `s.sh: parse error near `()'` and then
+			// `s.sh: parse error near `v=$(echo hi; ()'` on zsh 5.9.2,
+			// measured 2026-09-21.
+			d.Location = LocationNameOnly
+		}
+	}
 	out += d.ReportFrom(name, input, line, d.ParseFailure(err)+"\n")
 	return out + d.echoLine(name, input, line, err, src)
 }
 
-// missingFuncBody reports whether err is a parse failure at the point where a
-// function's body was expected and never began.
-func missingFuncBody(err error) bool {
+// bodyRefusalWrittenFirst is the message a construct's own contents raised,
+// rendered and located, for the dialect that writes it in front of the
+// complaint that the construct never closed — and the line the complaint
+// under it then stands on: nought to leave that where it was, and -1 to
+// write it with no line at all.
+//
+// ok is false where the dialect writes no such message, where the construct
+// holds no program, or where the contents read to the end of the input
+// without complaining.
+//
+// **The second message moves only for a refusal that carries a numbering of
+// its own**, which is measured rather than tidy. The construct's own line —
+// the one after the input's last — is already what that dialect writes for
+// the quote, over a one-line file and over a body whose refusal is a token
+// on the second line alike. Measured 2026-09-21 on zsh 5.9.2:
+// `v=$(x; if t; then)` ⏎ `q` is `s.sh:2: parse error near `q'` and then the
+// quote at `s.sh:3:`, so the two are *not* one line. A function body that
+// never came is the exception, and it is the exception because it is counted
+// from its parentheses rather than placed in the file: `v=$(echo hi; ()` is
+// `s.sh:1:` twice over. See MissingFuncBodyCountsFromItsParens.
+func (d Diagnostics) bodyRefusalWrittenFirst(name, input string, err error) (string, int, bool) {
 	var se *syntax.Error
-	return errors.As(err, &se) && se.FuncBody
+	if !d.UnterminatedSubstitutionWritesItsBodysRefusal || !errors.As(err, &se) {
+		return "", 0, false
+	}
+	body := se.BodyRefusal
+	if body == nil {
+		return "", 0, false
+	}
+	counted, isFuncBody := d.missingFuncBodyLine(body)
+	at := d.ParseFailureLine(body)
+	if isFuncBody && counted == 0 {
+		// The refusal says where it was by not saying, and so does the quote
+		// under it: -1 is how that is told apart from "leave the quote where
+		// it was". The closed-substitution route answers the second message
+		// differently and keeps a line there — see
+		// Runner.substFailureLocatedByNameAlone — which is measured rather
+		// than an inconsistency: `v=$(echo hi; foo())` is `s.sh:1:` for the
+		// quote and `v=$(echo hi; foo()` is bare.
+		named := d
+		named.Location = LocationNameOnly
+		return named.ReportFrom(name, input, 1, named.ParseFailure(body)+"\n"), -1, true
+	}
+	if at == 0 {
+		at = 1
+	}
+	quoteAt := 0
+	if isFuncBody {
+		quoteAt = at
+	}
+	return d.ReportFrom(name, input, at, d.ParseFailure(body)+"\n"), quoteAt, true
 }
 
 // locatesByNameAlone reports whether this dialect writes err with the shell's
@@ -8643,7 +8772,22 @@ func missingFuncBody(err error) bool {
 // message is not counting from the failure either. See
 // Runner.substFailureLocatedByNameAlone.
 func (d Diagnostics) locatesByNameAlone(err error) bool {
-	return d.MissingFuncBodyOmitsTheLine && missingFuncBody(err)
+	n, counted := d.missingFuncBodyLine(err)
+	return counted && n == 0
+}
+
+// missingFuncBodyLine is the line this dialect writes for a function body
+// that never came, and whether it numbers one that way at all.
+//
+// Nought with counted true is the failure it locates by the shell's name
+// alone — the parentheses and the refusal on one line — which is what
+// locatesByNameAlone reads. See MissingFuncBodyCountsFromItsParens.
+func (d Diagnostics) missingFuncBodyLine(err error) (int, bool) {
+	var se *syntax.Error
+	if !d.MissingFuncBodyCountsFromItsParens || !errors.As(err, &se) || !se.FuncBody {
+		return 0, false
+	}
+	return se.FuncBodyLines, true
 }
 
 // condPreamble is the line one dialect writes in front of a token refused

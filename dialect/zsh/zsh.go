@@ -184,6 +184,12 @@ func Dialect() syntax.Dialect {
 	d.TryAlways = true
 	d.AnonymousFunction = true
 	d.BareFunctionKeyword = true
+	// A token no command could begin with, standing where an `if` or `elif`
+	// clause's first command is due, is stepped over and the one after it is
+	// refused: `if true; then ) echo X; fi` is `parse error near `echo''
+	// here and names the parenthesis in the other four. See
+	// syntax.Parser.clauseStepsOverWhatItCannotUse for the twelve rows.
+	d.IfClauseStepsOverWhatItCannotUse = true
 	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
 	// cond; do done`, and a condition too. Every shape, and this shell alone.
 	d.EmptyCompoundBody = true
@@ -4548,12 +4554,20 @@ func Diagnostics() interp.Diagnostics {
 		// The same echo bash gives, in this shell's sentence: `"zzz"` and
 		// `'a b'` come back with their quotes on (#1239).
 		UnexpectedWordNaming: interp.UnexpectedWordIsSourceText,
-		// zsh names itself and stops when a function's body never began.
-		// `f() ;` reports as zsh: parse error near `;' where `if true` — an
-		// input that ran out just as much — reports the line as well, as
-		// zsh:1: parse error near `true'.
-		MissingFuncBodyOmitsTheLine: true,
-		ForName:                     "parse error near `%[1]s'",
+		// zsh numbers a function body that never began from the parentheses
+		// it was due after rather than from the top of the input, and writes
+		// no line at all where the two stand together. `f() ;` reports as
+		// zsh: parse error near `;', `foo()` on line 3 of a file is still
+		// s.sh:1:, and `if true` — an input that ran out just as much —
+		// reports the file's own line, as zsh:1: parse error near `true'.
+		MissingFuncBodyCountsFromItsParens: true,
+		// zsh lets the body of a `$( … )` that never closed say what was
+		// wrong with it before complaining about the substitution, and puts
+		// both messages on that refusal's line. `v=$(echo hi; for` is
+		// `:2: parse error near `\n'` and then the quote at `:2:`, where
+		// `v=$(echo hi` — a body that parses — is the quote alone.
+		UnterminatedSubstitutionWritesItsBodysRefusal: true,
+		ForName: "parse error near `%[1]s'",
 		// A C-style `for` header with fewer than two separators, named by
 		// the text of its last part and by nothing where that part is blank.
 		// Measured 2026-09-12: `for ((i=0))` is `parse error near `i=0'`,

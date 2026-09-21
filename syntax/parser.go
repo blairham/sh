@@ -2158,10 +2158,17 @@ func (p *Parser) parseCommand() Command {
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():
 		return nil
-	case p.at(TokLeftParen) && p.dialect.AnonymousFunction && p.peekIsRightParen():
+	case p.at(TokLeftParen) && p.dialect.AnonymousFunction && p.peekIsRightParenAdjacent():
 		// `()` where a command begins is an empty parameter list rather than
 		// a subshell with nothing in it — which every dialect refuses, so
 		// nothing is taken away by reading it this way.
+		//
+		// Adjacent, because the blank is the whole of the difference: `( )`
+		// is an empty subshell in the one shell that has both readings and
+		// `()` is the function. Asking the lenient question read `( ) { echo
+		// hi; }` as a function with a body where that shell refuses the
+		// brace, and left `()` alone accepted in silence (#3961). See
+		// Parser.peekIsRightParenAdjacent.
 		return p.withRedirs(p.parseAnonFunc(false))
 	case p.at(TokLeftParen):
 		return p.withRedirs(p.parseSubshell())
@@ -4347,6 +4354,21 @@ func (p *Parser) peekIsRightParen() bool {
 	return p.lex.peekIsRightParen()
 }
 
+// peekIsRightParenAdjacent is peekIsRightParen with nothing allowed between
+// the two parentheses, which is what tells an anonymous function's empty
+// parameter list from an empty subshell. See [Lexer.peekIsRightParenAdjacent]
+// for the seven measured rows.
+//
+// A pending token carries no blank between it and the one before it, so an
+// alias whose body ends at the parentheses is adjacent by construction — the
+// same answer peekIsFuncParensAdjacent gives for the other seam.
+func (p *Parser) peekIsRightParenAdjacent() bool {
+	if len(p.pending) > 0 {
+		return p.pending[0].Kind == TokRightParen
+	}
+	return p.lex.peekIsRightParenAdjacent()
+}
+
 // peekIsFuncParens is the `()` lookahead of a function definition, asked of
 // whatever this parser reads next — which is not always the lexer.
 //
@@ -4478,11 +4500,11 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 		// is the last thing seen.
 		p.lastText = "()"
 	}
-	// Whether the body was allowed to start on a later line, which one dialect
-	// reports differently from a body that never started at all.
+	// The line the parentheses stand on, because one dialect numbers a body
+	// that never came from them rather than from the top of the file. See
+	// Error.FuncBodyLines.
 	atParens := p.tok.Pos.Line
 	p.skipNewlines()
-	sameLine := p.tok.Pos.Line == atParens
 	// The body's first token, kept before the body is read. Both ways of
 	// refusing a body below name it, and neither can be decided until the
 	// parser has moved on: `f() >out` is only known not to be compound once
@@ -4492,8 +4514,8 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 	if fn.Body = p.parseCommand(); fn.Body == nil {
 		hadError := p.err != nil
 		p.failUnexpectedAt(body, "", false)
-		if se, ok := p.err.(*Error); ok && !hadError && sameLine {
-			se.FuncBody = true
+		if se, ok := p.err.(*Error); ok && !hadError {
+			p.noteMissingFuncBody(se, atParens)
 		}
 		return fn
 	}
@@ -4513,6 +4535,32 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 		}
 	}
 	return fn
+}
+
+// noteMissingFuncBody marks a refusal as the one raised where a function's
+// body was due and never began, and records how far from the parentheses it
+// was found.
+//
+// The distance rather than a same-line flag, because the one dialect that
+// treats this failure specially counts it: nought is the reading that omits
+// the line altogether and anything above it is the line that dialect writes.
+// See Error.FuncBodyLines for the four measured rows.
+//
+// at is the line the parentheses stand on. A failure that somehow precedes
+// them leaves the distance at nought rather than going negative, which is the
+// same answer as a body refused on the parentheses' own line.
+//
+// The refused token's own position, and deliberately not Error.EndLine's
+// convention that an input stopping mid-line ends on the line after: the
+// distance counts the newlines that were *written* between the parentheses
+// and the failure, so `f()` with no newline after it is nought and `f()` with
+// one is one. Measured on the dialect that reads it — `zsh -c 'f()'` has no
+// line at all and `f()` alone in a file is `s.sh:1:`.
+func (p *Parser) noteMissingFuncBody(se *Error, at int32) {
+	se.FuncBody = true
+	if n := se.Pos.Line - at; n > 0 {
+		se.FuncBodyLines = int(n)
+	}
 }
 
 // parseFuncPosixNames is parseFuncPosix where the words already read are the
@@ -4799,12 +4847,25 @@ func (p *Parser) peekIsAnonBody() bool {
 func (p *Parser) parseAnonFunc(keyword bool) Command {
 	fn := &AnonFunc{Keyword: keyword, Start: p.tok.Pos}
 	p.next()
+	// The line the parameter list closes on, which is what a body that never
+	// came is counted from. See Error.FuncBodyLines.
+	atParens := fn.Start.Line
 	if !keyword {
 		if !p.at(TokRightParen) {
 			p.failUnexpectedOperand(")")
 			return fn
 		}
+		atParens = p.tok.Pos.Line
 		p.next()
+		if p.dialect.EmptyParensAreOneToken {
+			// The pair is one token to a refusal that names the last thing
+			// read, exactly as it is for a named definition: measured
+			// 2026-09-21, `v=$(echo hi; ()` with no newline after it is
+			// ``parse error near `()' `` on zsh 5.9.2 where this named the
+			// closing parenthesis alone. See Parser.parseFuncPosix, which
+			// has said so since the flag existed.
+			p.lastText = "()"
+		}
 	}
 	p.skipAnonBodySeparators()
 	// A nameless function's body is a function body, which is what says the
@@ -4814,19 +4875,34 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 	// as *arguments* to the call, which is what the word loop below already
 	// does. Without saying so here, the brace group is offered the keyword
 	// the way one standing as a command is (#1216).
+	// The body's first token, kept before the body is read, because the
+	// refusal below names it and the parser has moved on by then. The named
+	// spelling keeps it for the same reason — see Parser.parseFuncPosix.
+	body := p.tok
 	p.funcBody = true
 	fn.Body = p.parseCommand()
 	if fn.Body == nil {
+		hadError := p.err != nil
 		if keyword {
 			p.fail("expected a body after `function`")
 			return fn
 		}
-		// `()` with nothing after it is the empty subshell it has always
-		// been rather than a function with no body — measured, `( ); echo
-		// ok` prints `ok` in the shell that has both readings, which is the
-		// EmptyCompoundBody rule and not this one. The parentheses have been
-		// consumed, so the node is built here rather than parsed again.
-		return &Subshell{Start: fn.Start, Stop: p.tok.Pos}
+		// `()` with nothing after it is a function whose body never came,
+		// and the reference says so: `()` alone at the end of a file is
+		// ``parse error near `\n' `` on zsh 5.9.2 where this accepted it in
+		// silence, and `()` with a command under it makes that command the
+		// *body* rather than a second statement — `()` ⏎ `echo $0` answers
+		// `(anon)` there (#3961).
+		//
+		// The empty subshell is the other spelling and reaches this function
+		// no longer: `( )` is one blank away and is read as a subshell above,
+		// which is where the `( ); echo ok` measurement this used to cite
+		// belongs. See Parser.peekIsRightParenAdjacent.
+		p.failUnexpectedAt(body, "", false)
+		if se, ok := p.err.(*Error); ok && !hadError {
+			p.noteMissingFuncBody(se, atParens)
+		}
+		return fn
 	}
 	for p.tok.Kind == TokWord && !p.atStopWord() {
 		fn.Args = append(fn.Args, p.word())
@@ -5698,6 +5774,7 @@ func (p *Parser) parseIf() Command {
 	p.opensClause("then")
 	p.expectWord("then")
 	c.Then = p.parseBody()
+	p.clauseStepsOverWhatItCannotUse()
 	p.longIfTail(c)
 	return c
 }
@@ -5733,6 +5810,7 @@ func (p *Parser) longIfTail(c *IfClause) {
 		p.requireSep("then")
 		p.expectWord("then")
 		e.Then = p.parseBody()
+		p.clauseStepsOverWhatItCannotUse()
 		c.Elifs = append(c.Elifs, e)
 	}
 	if p.atWord("else") {
@@ -5743,6 +5821,95 @@ func (p *Parser) longIfTail(c *IfClause) {
 	}
 	c.Stop = p.tok.End
 	p.expectWord("fi")
+}
+
+// clauseStepsOverWhatItCannotUse steps over a token standing where an `if` or
+// `elif` clause could still go on that no command could begin with, and
+// refuses the one after it.
+//
+// One dialect does this and it is not about `$( … )`, though that is where it
+// was found: at the top level, with no substitution anywhere,
+// `if true; then ) echo X; fi` is “parse error near `echo' “ on zsh 5.9.2 —
+// the parenthesis is gone and the **next** token is what is named. Measured
+// 2026-09-21 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C zsh -f
+// s.sh` with standard input on the null device:
+//
+//	if true; then ) echo X; fi                      near `echo'
+//	if true; then ) ; fi                            near `fi'
+//	if true; then ) ; ; fi                          near `fi'
+//	if true; then ) )                               near `)'
+//	if true; then } echo X; fi                      near `echo'
+//	if true; then done; fi                          near `fi'
+//	if true; then do X; fi                          near `X'
+//	case x in a) if true; then ;; esac              near `esac'
+//	f() { if true; then } ; }                       near `}' — the second
+//	if true; then :; elif true; then ) echo X; fi   near `echo'
+//	if true; then :; ) echo X; fi                   near `echo'
+//	case x in a) if true; then : ;; esac            near `esac'
+//	if true; then echo a; done; fi                  near `fi'
+//
+// So the separators after it are stepped over with it, and the refusal lands
+// on whatever comes next, end of input included: `if true; then )` alone is
+// “parse error near `\n' “ at the line after.
+//
+// **The clause need not be empty**, which the last three rows are: the
+// question is asked wherever the clause could still go on, not only where it
+// never began. `if true; then :; fi echo X` names `echo` in every shell for
+// an unrelated reason and is not this.
+//
+// Three tokens are outside it and each is measured, not assumed. `fi`, `else`
+// and `elif` are the clause's legal continuations — `if true; then fi`,
+// `if true; then; fi` and `if true; then else echo X; fi` all run — so
+// nothing is refused there to step over. `&` is refused where it stands:
+// `if true; then & echo X; fi` is “parse error near `&' “, which is the
+// same boundary that shell draws for a bare `!`.
+//
+// **The pipeline and and-or operators are in the reference's set and not in
+// this one**, and that is a limit rather than a reading: `if true; then |
+// echo X; fi` names `echo` there and `|` here. They are refused where the
+// body is *read* rather than where the clause ends, so the refusal is
+// already raised by the time this is asked — and taking a refusal that has
+// been raised as leave to step over the token the parser is standing on
+// swallows a `)` the **condition** refused, which turns
+// `if ) echo X; then :; fi` into `echo` where every shell in the panel names
+// the parenthesis. The keyword-standing-next half of that set is answered:
+// `if :; then | fi` is `fi` through Diagnostics.EmptyBodyBlame, which
+// arrives at the same answer this would. See #3961 for the measured rows.
+//
+// **Not a message, and that is why it is here rather than in Diagnostics.**
+// The token is *consumed*, so it is no longer available to close anything
+// around it — which is what makes `v=$(echo hi; if true; then)` a
+// substitution that never closes there, against a body that ends at that
+// parenthesis in bash and dash. The counting loop under Lexer.parseToClose
+// agrees by construction, because its bound is how far this read got; see
+// Lexer.lastBodyStop (#3961).
+func (p *Parser) clauseStepsOverWhatItCannotUse() {
+	if !p.dialect.IfClauseStepsOverWhatItCannotUse || p.err != nil {
+		return
+	}
+	if !p.clauseCannotUse() {
+		return
+	}
+	p.next()
+	for p.at(TokNewline) || p.at(TokSemi) {
+		p.next()
+	}
+	p.failUnexpected("")
+}
+
+// clauseCannotUse reports whether the token the parser is on is one an `if`
+// or `elif` clause has no use for where the clause could still go on. See
+// [Parser.clauseStepsOverWhatItCannotUse] for the measured rows and for the
+// three words that are its legal continuations.
+func (p *Parser) clauseCannotUse() bool {
+	if !p.atListEnd() {
+		return false
+	}
+	switch p.tok.Literal() {
+	case "fi", "else", "elif":
+		return false
+	}
+	return true
 }
 
 // shortIf reads the body of an `if` whose condition ended itself, where the

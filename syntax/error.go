@@ -445,19 +445,38 @@ type Error struct {
 	// the body never began — `f() ;` and `f()` rather than `f() {` with the
 	// input running out inside the braces.
 	//
-	// One dialect reports this one failure without a line: zsh answers `f()
-	// ;` with ``zsh: parse error near `;' `` where it answers `if true` with
-	// ``zsh:1: parse error near `true' ``, and both are an input that ran out.
-	// Whatever decides that is not the kind of failure, so the fact travels
-	// with the error the way Redirect does rather than being worked out from
-	// the text.
-	//
-	// Not set once a newline has come between the parens and the failure:
-	// measured, the line comes back there — `f()` and a newline is
-	// ``zsh:1: parse error near `\n' ``. Which line it then names is a
-	// further divergence and is not modeled: zsh says 1 where the offending
-	// token is on line 2.
+	// One dialect locates this one failure by counting from the parentheses
+	// rather than from the top of the file, which is what FuncBodyLines
+	// carries and what says the fact has to travel with the error the way
+	// Redirect does rather than being worked out from the text.
 	FuncBody bool
+	// FuncBodyLines is how many lines stand between the parentheses a
+	// function body was due after and the failure that says it never came.
+	// Zero where the two are on one line, which is the answer the dialect
+	// below writes as no line at all.
+	//
+	// **One dialect numbers this failure from the parentheses**, and that is
+	// measured rather than derived from the absent line the earlier reading
+	// modeled. Measured 2026-09-21 on zsh 5.9.2 from a script file, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C zsh -f s.sh` with standard input on the
+	// null device:
+	//
+	//	`f() ;`                      zsh: parse error near `;'      — no line
+	//	`foo()` and a newline        s.sh:1: parse error near `\n'
+	//	`foo()` and two blank lines  s.sh:3: parse error near `\n'
+	//	`: a` ⏎ `: b` ⏎ `foo()`      s.sh:1: parse error near `\n'
+	//
+	// The last row is the discriminator: the parentheses are on line 3 of
+	// the file and the failure is still `1`, so the number is a distance and
+	// not a position. `if true` is the control — an input that ran out the
+	// same way, reported at the file's own line — which is what says this is
+	// the function body's rule and not an end-of-input one.
+	//
+	// The line was simply dropped here before (#3961), on the reading that
+	// zsh omits it for this failure. That reading is this one with the
+	// distance nought, and it left `foo()` alone on line 1 of a file
+	// reported at line 2.
+	FuncBodyLines int
 	// Expr is the whole arithmetic expression a failure was inside, and
 	// Token the part of it the failure is attributed to. Every shell quotes
 	// the first; only one names the second.
@@ -485,6 +504,40 @@ type Error struct {
 	// command form is a fifth member of the set that holds a program, and
 	// the brace is what hides it (#1425).
 	HoldsProgram bool
+	// BodyRefusal is what the program between the delimiters had to say for
+	// itself when it was read on its own, for a construct that holds one and
+	// never closed. Nil where the body read to the end of the input without
+	// complaint, and nil for every construct that holds no program.
+	//
+	// It exists because one dialect writes it. A `$( … )` that never closes
+	// is two messages there and one here, and the first of the two is
+	// *exactly* what the body answers as a program of its own — the same
+	// sentence at the same line. Measured 2026-09-21 on zsh 5.9.2 from a
+	// script file, `env -i PATH=/usr/bin:/bin LC_ALL=C zsh -f s.sh` with
+	// standard input on the null device, the body written twice: once as
+	// `v=$(echo hi; X` with no closer at all and once as a script of its own:
+	//
+	//	X                 as a program of its own      inside `v=$(echo hi; `
+	//	`for`             s.sh:2: … near `\n'          s.sh:2: … near `\n'
+	//	`{`               s.sh:2: … near `\n'          s.sh:2: … near `\n'
+	//	`if true`         s.sh:2: … near `\n'          s.sh:2: … near `\n'
+	//	`case x in y)`    s.sh:2: … near `\n'          s.sh:2: … near `\n'
+	//	`()`              s.sh:1: … near `\n'          s.sh:1: … near `\n'
+	//	`foo()`           s.sh:1: … near `\n'          s.sh:1: … near `\n'
+	//
+	// The last two rows are what says the line is the body's own and not the
+	// end of the input: both are a function body that never came, which that
+	// dialect numbers from its parentheses — see FuncBodyLines.
+	//
+	// The discriminator is a body that *parses*: `v=$(echo hi` with no
+	// closer writes the quote alone there, so this is the body's refusal
+	// where the body has one rather than a second line on every unterminated
+	// substitution.
+	//
+	// Carried rather than re-derived, because the read that found it has
+	// already happened: [Lexer.parseToClose] is a real parse of the rest of
+	// the input, and its refusal was being thrown away.
+	BodyRefusal *Error
 	// BraceNameStop is the token that stood where an unterminated `${…}` in
 	// the *parameter* form could read no further — `newline` for a newline,
 	// and the character itself for a space or a tab, spelled the way

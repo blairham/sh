@@ -13,6 +13,11 @@ Read `docs/design.md` first. In particular, read the paragraph that says
 the boundary is drawn around the interpreter and not around the process
 tree, because every limit in this document follows from it.
 
+`docs/shell-injection.md` is the argument for why the decision point is
+here at all, written outward and not published. Where the two disagree,
+this document is right: that one is an argument and this one is the
+specification.
+
 ## What a sandbox here is, and what it is not
 
 **It contains the shell, not the process tree.** A denied `open` stops

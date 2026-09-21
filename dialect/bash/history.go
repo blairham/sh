@@ -137,6 +137,16 @@ func registerHistory(r *interp.Runner) {
 	r.SetAssignmentAction("HISTFILESIZE", func(rr *interp.Runner, _ string) {
 		historyTruncateFile(rr)
 	})
+	// And its sibling, which trims the *list* where it stands rather than
+	// the file. The same seam and for the same reason: the cap on the way in
+	// cannot see an assignment that lands on a list already longer than it,
+	// and a lazy reading — trimming only when the next entry arrives —
+	// answers the longer list to a `history` that looks first (#4031). See
+	// historyStifle for the numbering, which is the half that makes this
+	// more than dropping entries.
+	r.SetAssignmentAction("HISTSIZE", func(rr *interp.Runner, _ string) {
+		historyStifle(rr)
+	})
 }
 
 // historyFlags is the letters one call carried.
@@ -719,18 +729,27 @@ func historyLoadLines(r *interp.Runner, lines []string) {
 //   - `echo a`, `echo b`, `echo c`, `HISTSIZE=3`, `echo d`, `echo e`,
 //     `history` lists `4 echo d`, `5 echo e`, `6 history` — every entry
 //     pushed off a full list moves the numbers on by one;
-//   - the same with `HISTSIZE=2` and then `history` lists `3 HISTSIZE=2`,
-//     `4 history` — a list already longer than the new size loses the
-//     excess at once, and the numbers move on by one fewer than it lost;
 //   - `HISTSIZE=1` before a two-line HISTFILE is read and then `history`
 //     lists `2 history` — an entry read from a file moves nothing.
+//
+// **This is the half that moves the numbers on, and it is not the only
+// route to a shorter list.** An assignment trims where it stands and numbers
+// what it keeps from the count it dropped instead — see historyStifle, which
+// is where the shape this used to carry (`HISTSIZE=2` over a longer list)
+// was measured properly. The two are distinguishable: the same two entries
+// reached this way keep their own numbers.
 func historyAppend(r *interp.Runner, line string, numbered bool) {
 	entries := historyEntries(r)
 	keep, bounded := historySize(r)
 	dropped := historyDroppedCount(r)
 	if bounded && len(entries) > keep {
+		// Over-size with no assignment behind it, which is what is left once
+		// the assignment trims: a `local HISTSIZE` whose restore shrinks the
+		// size back as a function returns. bash trims at the restore and this
+		// shell trims at the next entry (#4045), so the rule applied here is
+		// the assignment's own — the count dropped, not a step.
 		if numbered {
-			dropped += len(entries) - keep - 1
+			dropped = len(entries) - keep - 1
 		}
 		entries = entries[len(entries)-keep:]
 	}
@@ -750,16 +769,86 @@ func historyAppend(r *interp.Runner, line string, numbered bool) {
 // commands lists only the newest two, `HISTSIZE=0` keeps nothing — `history`
 // then lists nothing at all, its own line included — and a negative value
 // keeps everything.
+//
+// **Whitespace around the digits is not part of the value**, which is one
+// question and not two: measured 2026-09-21 over three entries, `HISTSIZE=" 2
+// "` and a leading tab each leave two, exactly as `HISTSIZE=2` does. So is a
+// sign — `+2` keeps two and `-0` empties the list, where `-1` keeps
+// everything. What is not a count is text after the digits or a value too
+// large to hold: `2x`, `0x2` (bash does not read it as hex here) and
+// `99999999999999999999` all leave a longer list alone.
+//
+// One answer for both readers of the size, because they are one question:
+// the cap the insert path enforces and the trim an assignment does — a
+// `HISTSIZE=" 3 "` that trimmed but did not then bound the list, or the
+// reverse, would be the same rule answered twice.
 func historySize(r *interp.Runner) (int, bool) {
 	value, ok := r.GetVar("HISTSIZE")
 	if !ok {
 		return 0, false
 	}
-	n, err := strconv.Atoi(value)
+	n, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil || n < 0 {
 		return 0, false
 	}
 	return n, true
+}
+
+// historyStifle trims the list where HISTSIZE is assigned, which is a moment
+// of its own rather than the cap historyAppend already keeps on the way in.
+// Setting the size *before* a list is built needs nothing of this, which is
+// why it is invisible to anything that sets HISTSIZE in an rc file (#4031).
+//
+// Measured 2026-09-21 on bash 5.3.20, `env -i` with a scratch HOME, over
+// lists built with `history -s` and with HISTIGNORE keeping the reader's own
+// lines out of the way. That last part is what made the rule legible: the
+// line carrying the assignment is itself an entry, and its own insert moves
+// the numbers again before a `history` on the next line can look.
+//
+//	nine entries, `HISTSIZE=5`               4 e · 5 f · 6 g · 7 h · 8 i
+//	nine entries, `HISTSIZE=8`               1 b … 8 i
+//	nine entries, `HISTSIZE=5` then `=2`     3 h · 4 i
+//	three entries, `HISTSIZE=2`              1 b · 2 c
+//	`HISTSIZE=3`, five entries, then `=2`    1 d · 2 e
+//	two entries, `HISTSIZE=0`, `=9`, add c   2 c
+//
+// **The new numbering is absolute rather than a step**, and that is the half
+// a trim that only drops entries gets wrong. The oldest entry the trim keeps
+// is numbered by *how many it dropped*: dropping four of nine leaves the
+// oldest at 4 and dropping seven leaves it at 7, whatever the numbers were
+// beforehand — the fifth row above comes off a list already numbered 3, 4, 5
+// and comes back numbered 1, 2. It is also what tells the two routes to a
+// two-entry list apart, since the same pair reached by the insert path keeps
+// the numbers it had.
+//
+// `HISTSIZE=0` is that rule at its limit rather than a case of its own — the
+// list is emptied and the count still decides where the numbering resumes,
+// which the last row shows. Worth pinning separately all the same, because an
+// off-by-one in the trim reads as correct everywhere except zero.
+//
+// A list already **at** the new size, or under it, is left alone with its
+// numbers untouched, and so is one whose HISTSIZE is not a count — see
+// historySize for which values are counts.
+//
+// zsh and ksh93 trim on the assignment too and **keep the numbers**: zsh
+// 5.9.2 with `print -s a`, `b`, `c` and `HISTSIZE=2` lists `2 b`, `3 c` where
+// bash lists `1 b`, `2 c`, and ksh93u+ driven through `-i` keeps the two it
+// holds at the numbers they had. Neither dialect has a sized list here yet
+// (#4043), so the rule is stated where it was measured rather than as a field
+// on repl.HistoryStyle that nothing would read; the session's own recall list
+// is sized once when it starts and has no assignment to hear, so there is no
+// second reader of this to keep in step.
+func historyStifle(r *interp.Runner) {
+	keep, bounded := historySize(r)
+	if !bounded {
+		return
+	}
+	entries := historyEntries(r)
+	if len(entries) <= keep {
+		return
+	}
+	historySetDropped(r, len(entries)-keep-1)
+	r.SetArray(historyStore, entries[len(entries)-keep:])
 }
 
 // historyFirst is the history number of the oldest entry the list holds.

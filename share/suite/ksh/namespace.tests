@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `namespace NAME { list }` — ksh93's name-resolution region, #3775.
+#
+# One shell on the panel has the word, and the other three cannot read the
+# line at all: `namespace ns { x=1; }` is a syntax error naming `}` in bash
+# 5.3.20, zsh 5.9.2 and dash 0.5.12 alike. So this file is graded whole
+# against a parse diagnostic in every column but this one, which is the
+# sharpest form a dialect tier's claim takes and is the same shape
+# share/suite/zsh/conditions.tests already has.
+#
+# **A file of its own rather than lines added to an existing one**, and that
+# is the reason: a construct three references refuse while *reading* costs
+# every other section of whatever file holds it, because a parse error takes
+# the whole input. A file whose only subject is the construct has no other
+# section to cost. See the note at the top of share/suite/ksh/redirect.tests,
+# which draws the same line for `>;`.
+#
+# The word is reserved **where a command begins and nowhere else**, which is
+# what keeps it a dialect's word rather than a name taken away from the other
+# four — `namespace=5` assigns and an operand spelled `namespace` is a word
+# in every column, this one included. Both are rows below.
+#
+# It was one of the eight surface elements #3990 found that no case anywhere
+# in the tree mentioned, and it arrived with the construct.
+#
+# One row is deliberately absent. `namespace .bad { x=1; }` is `.bad: is not
+# an identifier` in both, at 1, and ksh93u+ 2012-08-01 reports it against the
+# line *before* the one the construct is written on — so the sentences agree
+# and the locations do not. That is its own question and not this file's.
+
+printf -- '--- a namespace is a region, not a scope ---\n'
+namespace ns { x=1; printf 'inside [%s]\n' "$x"; }
+printf 'the outer name is untouched [%s]\n' "${x-unset}"
+printf 'and the region is addressable [%s]\n' "${.ns.x-unset}"
+
+printf -- '--- it stands where a command stands ---\n'
+if true; then namespace inbranch { printf 'in the branch\n'; }; fi
+
+printf -- '--- the block takes redirections ---\n'
+namespace redirected { printf 'into the file\n'; } > ns.out
+printf 'the file holds [%s]\n' "$(cat ns.out)"
+
+printf -- '--- and the word is a word anywhere else ---\n'
+namespace=5; printf 'assigned [%s]\n' "$namespace"
+printf 'as an operand [%s]\n' namespace

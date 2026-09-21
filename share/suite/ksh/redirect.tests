@@ -22,13 +22,24 @@
 # understood — a parse error takes the whole input in every shell here — and
 # a section that stops should cost its own lines rather than the file's.
 #
-# The seek operators are written through `eval` rather than inline. A parse
-# error is the one failure a subshell cannot contain — the whole file is read
-# before any of it runs — so an inline `<#((0))` in a shell without the
-# operator costs every section, including the ones that already agree. Behind
-# an `eval` the refusal is a runtime one and stays inside its own section,
-# which is the same reason share/suite/ksh/status.tests reaches `.sh.pipestatus`
-# that way.
+# The seek operators are written **inline**, and they were behind an `eval`
+# until #3990. The argument for the `eval` was that a parse error is the one
+# failure a subshell cannot contain, so an inline `<#((0))` would cost every
+# section of this file in a shell without the operator — and that argument
+# had already been overtaken by line 44 of this same file. `>;` is inline
+# there, and bash 5.3.20, zsh 5.9.2 and dash 0.5.12 each refuse *this whole
+# file* at that line, so there is nothing left for the `eval` to protect.
+#
+# What it cost was the other reader. `make coverage` parses every file in
+# this tree and asks which elements of the surface no case mentions, and the
+# text inside a single-quoted `eval` is a string to a parser: `<#` and `>#`
+# read as never mentioned by anything, for as long as they have existed,
+# while this file was exercising both. The operator has to be *written* where
+# an instrument that reads rather than runs can see it.
+#
+# share/suite/ksh/status.tests reaches `.sh.pipestatus` through an `eval` for
+# the same reason this file used to, and that one still holds: nothing in the
+# file it lives in is refused while reading.
 #
 # Two spellings are deliberately absent. `<>;` is documented for ksh93 and
 # this build refuses it (`syntax error … `<>;' unexpected`), so there is no
@@ -64,9 +75,9 @@ printf -- '--- <#((expr)) moves a read position ---\n'
   printf 'abcdefghij' > seekable
   exec 3< seekable
   read -n4 v <&3; printf 'the first four: [%s]\n' "$v"
-  eval 'exec 3<#((0))' 2>/dev/null
+  exec 3<#((0))
   read -n2 v <&3; printf 'after seeking back to 0: [%s]\n' "$v"
-  eval 'exec 3<#((6))' 2>/dev/null
+  exec 3<#((6))
   read -n2 v <&3; printf 'after seeking to 6: [%s]\n' "$v"
   exec 3<&-
 )
@@ -76,7 +87,7 @@ printf -- '--- the offset is an arithmetic expression, not a number ---\n'
   printf 'abcdefghij' > computed
   exec 3< computed
   n=2
-  eval 'exec 3<#((n * 3 + 1))' 2>/dev/null
+  exec 3<#((n * 3 + 1))
   read -n2 v <&3; printf 'from 2 * 3 + 1: [%s]\n' "$v"
   exec 3<&-
 )
@@ -85,7 +96,7 @@ printf -- '--- >#((expr)) moves a write position ---\n'
 (
   printf '0123456789' > overwritten
   exec 4<> overwritten
-  eval 'exec 4>#((3))' 2>/dev/null
+  exec 4>#((3))
   printf 'XY' >&4
   exec 4>&-
   printf 'after writing at 3: [%s]\n' "$(cat overwritten)"

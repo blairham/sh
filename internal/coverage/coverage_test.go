@@ -213,13 +213,22 @@ func TestACaseThatWillNotParseIsNotAFinding(t *testing.T) {
 // TestTheReportSaysWhatAMentionIsNot. A coverage number that overstates
 // itself retires the question, so the caveat is part of the output rather
 // than a thing a reader is expected to remember.
+//
+// "Report only" used to be the last line of it and is not any more: the
+// roll-up's zero gates, in internal/cmd/coverage's own test, and a caveat
+// still saying nothing here gates anything would be telling a reader the
+// opposite of what a red build is about to tell them (#3990).
 func TestTheReportSaysWhatAMentionIsNot(t *testing.T) {
 	col, err := coverage.Run("core", syntax.Core(), []string{"echo"}, []coverage.Source{{Label: "x", Text: `echo hi`}})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	out := coverage.Report([]coverage.Column{col}, 5, []coverage.Origin{{Name: "cases", Count: 1}})
-	for _, want := range []string{"A mention is not coverage", "axis-sweep", "Report only"} {
+	for _, want := range []string{
+		"A mention is not coverage", "axis-sweep",
+		"The roll-up's zero is the one thing here that gates",
+		"Every number\n    above it is report-only",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the report does not say %q", want)
 		}

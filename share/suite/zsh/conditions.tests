@@ -16,12 +16,35 @@
 # this file is a parse diagnostic — which is the measurement.
 #
 # `-prefix` and `-suffix` were two of the seventeen surface elements #2293
-# reported that no case anywhere in the tree mentioned.
+# reported that no case anywhere in the tree mentioned. `-after` and
+# `-between`, the other two of the four, were two of the eight #3990 found
+# the same way — they arrived with the grammar and nothing asked.
+#
+# **They are asked differently, and the reason is a crash.** zsh 5.9.2 does
+# not give those two the sentence its two neighbors get: measured 2026-09-21
+# on 5.9.2 here and in the panel's pinned image, `[[ -after x ]]` outside a
+# completion function is a **SIGSEGV** — the subshell holding it ends at 139,
+# and the file runs on. A crash is not a behavior to reproduce, so this shell
+# gives the pair the refusal their neighbors get, and the rows below compare
+# what can honestly be compared: that neither answers *true* where it may not
+# run. Comparing the status itself would be recording a segmentation fault as
+# a shell's answer.
+#
+# `ulimit -c 0` is on each of those two subshells so that the reference's
+# crash does not leave a core file in the directory the run was given.
 
 ( [[ -suffix x ]]; printf 'suffix ran\n' ) 2> /dev/null
 printf 'suffix -> %s\n' "$?"
 ( [[ -prefix x ]]; printf 'prefix ran\n' ) 2> /dev/null
 printf 'prefix -> %s\n' "$?"
+
+# The other two of the four, which are grammar here and nowhere else: a file
+# holding one parses in this column and in no other. Only the shape of the
+# answer is compared, for the reason in the header.
+( ulimit -c 0; [[ -after x ]] ) 2> /dev/null
+if [ "$?" -ne 0 ]; then printf 'after is not true outside a completion\n'; fi
+( ulimit -c 0; [[ -between x y ]] ) 2> /dev/null
+if [ "$?" -ne 0 ]; then printf 'between is not true outside a completion\n'; fi
 
 # Nothing about the operand decides it: a colon, a quoted word and a pattern
 # all reach the same refusal.

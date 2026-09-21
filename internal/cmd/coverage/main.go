@@ -55,15 +55,6 @@ func main() {
 		"a directory of our own .tests files to read alongside the corpus; empty reads the corpus alone")
 	flag.Parse()
 
-	presets := []preset{
-		{"core", syntax.Core, nil},
-		{"bash", bash.Dialect, bash.Apply},
-		{"zsh", zsh.Dialect, zsh.Apply},
-		{"ksh", ksh.Dialect, ksh.Apply},
-		{"dash", dash.Dialect, dash.Apply},
-		{"ash", ash.Dialect, ash.Apply},
-	}
-
 	srcs := corpusSources()
 	read := []coverage.Origin{{Name: "corpus cases", Count: len(srcs)}}
 	if *suiteDir != "" {
@@ -92,20 +83,43 @@ func main() {
 		}
 	}
 
+	cols, err := columns(presets(), srcs)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Print(coverage.Report(cols, *list, read))
+}
+
+// presets is the six columns this command reports, and it is a function so
+// that the guard in main_test.go grades the same six. Two spellings of the
+// column list is how the report and the thing that gates it come apart.
+func presets() []preset {
+	return []preset{
+		{"core", syntax.Core, nil},
+		{"bash", bash.Dialect, bash.Apply},
+		{"zsh", zsh.Dialect, zsh.Apply},
+		{"ksh", ksh.Dialect, ksh.Apply},
+		{"dash", dash.Dialect, dash.Apply},
+		{"ash", ash.Dialect, ash.Apply},
+	}
+}
+
+// columns runs every preset over the same sources.
+func columns(ps []preset, srcs []coverage.Source) ([]coverage.Column, error) {
 	var cols []coverage.Column
-	for _, p := range presets {
+	for _, p := range ps {
 		r := &interp.Runner{}
 		if p.apply != nil {
 			p.apply(r)
 		}
 		col, err := coverage.Run(p.name, p.dialect(), r.BuiltinNames(), srcs)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return nil, err
 		}
 		cols = append(cols, col)
 	}
-	fmt.Print(coverage.Report(cols, *list, read))
+	return cols, nil
 }
 
 // corpusSources is every case the oracle records, which is the body of cases

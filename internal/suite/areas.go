@@ -82,7 +82,16 @@ type Area struct {
 // second mapping to get wrong.
 var Areas = []Area{
 	{"quoting and tokenization", 2300, []string{"quoting", "tokenization", "dollarquote"}},
-	{"command language and compound shapes", 2301, []string{"grammar", "control", "cfor", "casefall", "select"}},
+	{
+		// `namespace` is here because it is a compound shape: a reserved
+		// word, a name, and a brace group that takes redirections, standing
+		// where any other command stands. What it *means* is name
+		// resolution, which would put it beside `variables` — but the area
+		// a file is filed under is the construct it is written in, and the
+		// file is a grammar file (#3990).
+		"command language and compound shapes", 2301,
+		[]string{"grammar", "control", "cfor", "casefall", "select", "namespace"},
+	},
 	{"function definition, scope and return", 2302, []string{"functions", "funcform"}},
 	{"IFS and field splitting", 2303, []string{"word-splitting"}},
 	{

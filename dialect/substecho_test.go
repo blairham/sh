@@ -330,6 +330,37 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 			},
 		},
 		{
+			// A **process substitution's** body, which is read with the line
+			// in the columns that read a `$( … )` body that way — and was
+			// read only by the shell that ran it, so the line was not
+			// refused and the two messages were the body's shell's rather
+			// than the script's (#3962).
+			//
+			// bash alone, because it is the only column that both has the
+			// spelling and reads a body with its line: dash and BusyBox ash
+			// have no `<( … )` at all, and the three that read a body when
+			// it runs are the separate divergence recorded in the row below.
+			name: "a process substitution's body does not parse",
+			src:  "printf 'start\\n'\ncat <(for)\necho after\n",
+			want: map[string]string{
+				"bash": "s.sh: line 2: syntax error near unexpected token `)'\n" +
+					"s.sh: line 2: `cat <(for)'\n",
+			},
+		},
+		{
+			// And a `$( … )` **inside** one, which is the shape #3962 was
+			// filed from. `false &&` is the control that makes it a
+			// statement about reading rather than about running: the
+			// substitution is never reached and the line is refused all the
+			// same.
+			name: "a substitution inside a process substitution, never reached",
+			src:  "printf 'start\\n'\nfalse && cat <(v=$(echo hi; for))\necho after\n",
+			want: map[string]string{
+				"bash": "s.sh: line 2: syntax error near unexpected token `)'\n" +
+					"s.sh: line 2: `false && cat <(v=$(echo hi; for))'\n",
+			},
+		},
+		{
 			// The older spelling's body is its own text, and it is quoted
 			// in place of the script's line.
 			name: "a backquoted body",

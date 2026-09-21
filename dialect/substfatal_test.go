@@ -340,3 +340,50 @@ func TestASubstitutionRefusedInTheLastStatementStillSetsTheStatus(t *testing.T) 
 		})
 	}
 }
+
+// A process substitution's body is read with the line in the columns that
+// read a `$( … )` body that way, and was not (#3962).
+//
+// Measured 2026-09-20 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C
+// <shell> s.sh` with standard input on the null device, over
+// `printf 'start\n'` then the line below then `echo after`:
+//
+//	                                         bash 5.3.20   bash 3.2.57
+//	cat <(for)                               start, 2      start, after, 0
+//	false && cat <(for)                      start, 2      start, after, 0
+//	false && cat <(v=$(echo hi; for))        start, 2      start, after, 0
+//	false && echo hi > >(for)                start, 2      start, after, 0
+//	false && echo hi > >(v=$(echo hi; for))  start, 2      start, after, 0
+//
+// **`false &&` is the whole point of the rows.** The substitution is never
+// reached, so a shell that reads the body when the word is expanded has
+// nothing to refuse — and bash refuses the line regardless, which is what
+// says the body is read with the line rather than run. Without it
+// `while read -r l; do :; done < <(v=$(echo hi; for))` on a script's last
+// line wrote both of bash's messages, byte-identical, and still left 0.
+//
+// bash alone among the columns that read with the line: dash and BusyBox ash
+// have no `<( … )`. The three that read a body when it runs are unmoved, and
+// zsh's own answer to the `false &&` rows — it refuses the line there too,
+// for a `$( … )` as much as for a `<( … )` — is a separate divergence about
+// when *that* shell reads a body, not about this one.
+func TestAProcessSubstitutionsBodyIsReadWithTheLine(t *testing.T) {
+	for _, line := range []string{
+		"cat <(for)",
+		"false && cat <(for)",
+		"false && cat <(v=$(echo hi; for))",
+		"false && echo hi > >(for)",
+		"false && echo hi > >(v=$(echo hi; for))",
+	} {
+		t.Run(line, func(t *testing.T) {
+			src := "printf 'start\\n'\n" + line + "\necho after\n"
+			out, errs, st := splitRun(t, presets["bash"], src)
+			if out != "start\n" || st != 2 {
+				t.Errorf("wrote %q at %d, want %q at 2", out, st, "start\n")
+			}
+			if errs == "" {
+				t.Errorf("nothing was reported; the refusal has to be visible as well as fatal")
+			}
+		})
+	}
+}

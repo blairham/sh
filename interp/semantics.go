@@ -912,6 +912,24 @@ type Semantics struct {
 	// where it is: bash 5.3.20 keeps the reference and bash 3.2.57 writes a
 	// plain scalar, and the two columns that always agreed here do not.
 	//
+	// unpinned bash: no corpus row can reach it. A row would have to put a
+	// prefix in front of a command that *reads* a name carrying a kind or a
+	// letter, and the only one that comes close — `a=(p q); a=x true` — reads
+	// nothing during the command and is given the array back afterwards, so
+	// it pins the take-back and not this. Pinned in dialect/bash by
+	// TestACallsPrefixMakesAFreshPlainScalar and
+	// TestACallsPrefixIsReadAsAPlainScalar, with
+	// TestTheCallsPrefixStillGivesTheBindingBack as the control that says the
+	// fresh cell was not simply thrown away.
+	//
+	// unpinned zsh: the same reach problem, and pinned in dialect/zsh by
+	// TestACallsPrefixKeepsTheLettersOfTheNameItDisplaces — the `-i` and `-u`
+	// rows, because the array rows agree with bash's for a reason that is not
+	// this question.
+	//
+	// unpinned ksh: the same reach problem, and pinned in dialect/ksh by
+	// TestACallsPrefixWritesTheBindingItDisplaces.
+	//
 	// The **take-back** is untouched by this. What the name held comes back
 	// when the command ends under either answer — and a declaration that
 	// *keeps* the entry writes the prefix's value into the binding it

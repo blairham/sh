@@ -297,7 +297,7 @@ push again.** Those two are the only lint output anybody should be reading.
 
 The report targets are `conformance`, `conformance-gated`,
 `conformance-dialects`, `wild`, `wild-run`, `wild-run-contained`, `smoke`,
-`acp`, `acp-wire` and `sandbox`. Each is described below. Only `sandbox`
+`prompt-fidelity`, `acp`, `acp-wire` and `sandbox`. Each is described below. Only `sandbox`
 fails on what it finds, for the reason given there: a conformance number is
 meant to be low and climbing, and a boundary is meant to hold.
 
@@ -963,6 +963,69 @@ Not a gate, for the reasons `make wild-run` is not one and one more: it
 asserts on a job actually resuming, which is timing. `go test` covers the
 instrument's own machinery — the wait discipline, the scratch home, the
 grading — and the session it drives is a target you run.
+
+`make prompt-fidelity` drives this shell's prompt and the prompt of the
+program its configuration was imported from, and compares the two screens
+**cell by cell**. `internal/promptfidelity` is the harness,
+`internal/cellgrid` is the terminal model under it, and
+`internal/cmd/promptfidelity` prints the table.
+
+It exists because `docs/spec/prompt-theme.md` says the claim is testable or
+it is not made: *"it looks the same" is an opinion until something can
+fail*, and until this target existed the theme engine's only user-visible
+promise — that an imported configuration draws what it drew — was asserted
+and not shown. It is the one claim in that document a person can check by
+looking.
+
+**A cell grid and not a byte string**, and that is the difference between a
+comparison and a coincidence. Two SGR spellings paint the same screen:
+`38;5;31` and `31` are the same color, and two attributes can be set in
+either order. `internal/cellgrid` resolves the parameters, so what is
+compared per cell is the grapheme, the foreground, the background and the
+attributes — which is what "looks exactly the same" means, stated so a
+machine can check it.
+
+**And never by stripping.** A harness comparing plain text cannot tell a
+working theme from a colorless one, which is the blind spot that has hidden
+broken rendering in this tree before. The grid's own tests prove a colorless
+render differs from a colored one in every colored cell while comparing
+identical as text.
+
+**Driven through a pty, with a multi-row prompt.** A shell declines to draw
+a prompt without a terminal at all, and a one-row prompt cannot tell a frame
+that is correct in its pieces from one that is wrong in its nesting.
+
+**The context is pinned on both sides by being in it rather than by being
+told it**: the shell changes directory, waits, and exits with the status, so
+what a segment reads is the shell's own answer. A harness that pushed
+numbers into variables and a segment that read the real state would be a
+harness that could not fail.
+
+**One input cannot be pinned across two processes — the clock — so there is
+a general rule rather than a special case for it.** Each side is rendered
+twice and a cell that differs between a side's own two renders is
+*unstable*: it is left out of the comparison and **counted in the report**,
+because a row that agreed by excluding half its cells is a row that says
+nothing. The four renders are **interleaved** — ours, theirs, ours, theirs —
+and that ordering is the whole of whether the rule works: back to back per
+side, a clock is stable within each side and differs between them, and the
+first run of this reported 46 differences with 0 unstable of which four were
+the seconds hand.
+
+Not a gate, for the reason `make wild` is not one: the answer depends on
+what is installed. A comparison needs the other program *and* the
+configuration it was imported from, both of which are one machine's, so
+neither has a default — `PROMPT_CONFIG`, `STARSHIP_CONFIG_FILE`, `P10K_DIR`
+and `P10K_CONFIG` name them, and a source that is not named is a **row
+saying so** rather than a row that is missing. It exits 0 whatever it finds:
+the spec says no preset here is named after another project until this can
+fail, so a nonzero status would be failing a build over work that is openly
+unfinished.
+
+Running another prompt program is reading no source. `CLEANROOM.md`'s green
+list covers "observed behavior of real binaries" in as many words, and that
+is the whole of what the two foreign sources do: drive the program, record
+what it drew.
 
 There is deliberately no `mcp` report target yet, and that is a gap rather
 than a decision: `internal/mcp` is tested end to end over a `net.Pipe` and

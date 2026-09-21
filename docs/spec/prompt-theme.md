@@ -932,6 +932,54 @@ Rules this instrument inherits from the ones already here:
   to pass. A generated 1,720-line file with 280 settings is the case that
   matters; a ten-line file proves nothing about it.
 
+#### Built, 2026-09-21
+
+`make prompt-fidelity`. `internal/cellgrid` is the terminal model,
+`internal/promptfidelity` is the harness, and
+`internal/cmd/promptfidelity` prints the table. Every rule above is a
+property of the code rather than a promise, and each has a test that
+would catch its removal.
+
+**The clock is answered by a general rule rather than a special case.**
+Each side is rendered twice and a cell a side does not draw the same way
+twice is *unstable*: left out of the comparison and **counted in the
+report**, because a row that agreed by excluding half its cells is a row
+that says nothing. The four renders are **interleaved** — ours, theirs,
+ours, theirs — and that ordering is the whole of whether it works. Back
+to back per side, a clock is stable within each side and differs between
+them, and the first run of this reported 46 differences with 0 unstable
+of which four were the seconds hand.
+
+**The context is pinned by being in it.** The shell changes directory,
+waits, and exits with the status, so what a segment reads is the shell's
+own answer — and the order of that one line is load-bearing, since the
+status a prompt reads is the *last* command's and an erase written after
+the exit makes every row read zero.
+
+**A source that is not here is a row saying so.** Neither the other
+program nor the configuration it was imported from can live in this
+tree, so neither has a default and a table listing one source where two
+were asked for would read as a source that agreed.
+
+**It is report-only and exits 0.** No preset here is named after another
+project — the rule under *Presets* — so a nonzero status would be
+failing a build over work this document already says is unfinished.
+
+Measured, 2026-09-21, at 80 columns against the two real configurations
+on the maintainer's machine, each imported by `prompt import` and drawn
+beside the program it came from:
+
+| against | cells | differing | unstable |
+| --- | --- | --- | --- |
+| starship | 800 | 46 | 0 |
+| powerlevel10k | 480 | 46 | 0 |
+
+Both disagreements are the same two facts, and the instrument names them
+cell by cell: this engine's `DIR_MAX_DEPTH` keeps the *trailing* path
+components where both of those programs shorten the *leading* ones, and
+this engine draws a directory icon where neither of them does. Neither
+was known before the instrument existed, which is the argument for it.
+
 ### powerlevel10k: evaluate the file, do not parse it
 
 The file is a zsh program, and this shell has a zsh dialect. So import
@@ -1361,6 +1409,11 @@ guess as a fact is worse than an absent entry:
    person can check by looking.
 2. The per-prompt cost of the render itself, against the plain prompt it
    replaces, on a cold page cache as well as a warm one.
+
+The fidelity claim came off it on 2026-09-21: `make prompt-fidelity`
+exists, it runs against both real configurations, and what it found is
+under *The claim is testable or it is not made*. "Draws what it drew" is
+now a number with two named gaps behind it rather than an assertion.
 
 Two came off this list on 2026-09-19 and are written up where they
 belong rather than here: right-prompt behavior is under *The right

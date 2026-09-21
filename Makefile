@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke acp acp-wire acp-bench startup perfgate suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke prompt-fidelity acp acp-wire acp-bench startup perfgate suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -211,6 +211,30 @@ smoke: ## Drive a realistic interactive session through a pty and report, per fe
 	@go build -o $(BINDIR)/smoke-bash ./cmd/bash
 	@go build -o $(BINDIR)/smoke-zsh ./cmd/zsh
 	@go run ./internal/cmd/smoke -bash $(BINDIR)/smoke-bash -zsh $(BINDIR)/smoke-zsh $(ARGS)
+
+# What a fidelity comparison needs that this repository cannot carry: the
+# other program, and the configuration it was imported from. Both are one
+# machine's, so neither has a default and a source that is not named is a
+# row saying so — the same rule `make wild`'s plugin roots follow.
+#
+# The theme directory has no default and will not get one: a path to
+# somebody's plugin manager baked into this tree is an argument already
+# lost elsewhere here.
+PROMPT_CONFIG ?=
+STARSHIP_CONFIG_FILE ?=
+P10K_DIR ?=
+P10K_CONFIG ?=
+
+prompt-fidelity: ## Drive this shell's prompt and the program its configuration came from, and compare the two screens cell by cell
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/fidelity-zsh ./cmd/zsh
+	@go run ./internal/cmd/promptfidelity \
+		-bin $(BINDIR)/fidelity-zsh \
+		-config "$(PROMPT_CONFIG)" \
+		-starship-config "$(STARSHIP_CONFIG_FILE)" \
+		-p10k "$(P10K_DIR)" \
+		-p10k-config "$(P10K_CONFIG)" \
+		$(ARGS)
 
 # Every dialect a person actually runs the shell as, because the binary's
 # default is `core` and a grade of the core alone was a grade of the one

@@ -117,6 +117,13 @@ func TestEveryTildeRoadReadsTheOneCurrentHome(t *testing.T) {
 				// its subscripts start, and a core vector refuses by name.
 				sem.ArrayBaseIsZero = Yes
 				r.Semantics, r.Dir = &sem, first
+				// The environment carries the same pair, and that is what
+				// makes a freeze falsifiable here: a runner handed no
+				// environment has no startup value to freeze onto, so a
+				// mutation reading one would find nothing and leave the
+				// tilde as written — which fails the test for the wrong
+				// reason and would pass a mutation that froze correctly.
+				r.Env = []string{"HOME=" + first, "PATH=/usr/bin:/bin"}
 				r.Vars = map[string]string{"HOME": first, "PATH": "/usr/bin:/bin"}
 			})
 			if st != 0 {

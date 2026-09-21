@@ -78,9 +78,7 @@ import (
 //
 // Measured with `help -s ”` on bash 5.3.15, and kept to the constructs this
 // parser actually has — a topic listed for a construct we cannot read would
-// be documentation of somebody else's shell. `variables` is deliberately
-// absent: its line is a sentence about what the topic contains rather than a
-// synopsis, so it is description and not behavior.
+// be documentation of somebody else's shell.
 func helpKeywordSynopses() map[string]string {
 	return map[string]string{
 		"!":         "! PIPELINE",
@@ -134,12 +132,31 @@ func helpOtherSynopses() map[string]string {
 		// `logout` had no topic at all, which is one of the two names the
 		// real shell lists and this one did not — measured 2026-09-18,
 		// `help -s logout` is `logout: logout [n]` there and `no help
-		// topics match` here. The other is `variables`, deliberately absent
-		// for the reason above.
+		// topics match` here.
 		"logout":  "logout [n]",
 		"popd":    "popd [-n] [+N | -N]",
 		"pushd":   "pushd [-n] [+N | -N | dir]",
 		"suspend": "suspend [-f]",
+		// The other one, and its entry is **our own sentence** rather than
+		// the real shell's.
+		//
+		// It is the one topic whose line is a description of what the topic
+		// covers rather than a synopsis of a construct, so the text is
+		// CLEANROOM.md's red list and copying it is out. It was left out
+		// altogether for that reason, and leaving it out was the more
+		// expensive of the two mistakes available: the listing is laid out
+		// **column-major**, so the topic count decides how many rows there
+		// are and which name each row's two cells hold. One topic short of
+		// the real shell's 77 moves every row of a 39-row listing, and a
+		// listing of ours that differed in one cell was instead differing in
+		// all of them — measured 2026-09-21 against bash 5.3.20, 76 lines of
+		// a suite file where 2 was available (#2298).
+		//
+		// So the topic is here and the sentence is ours. `help variables`
+		// answers at 0 as it does in the real shell, the geometry is the
+		// real shell's, and the one cell that still differs is a cell we
+		// wrote.
+		"variables": "variables - the parameters this shell keeps, and what each holds",
 	}
 }
 
@@ -337,11 +354,15 @@ func helpListingWidth(r *interp.Runner) int {
 //
 //   - a column is `COLUMNS / 2` wide, rounding down;
 //   - each line opens with one space;
-//   - the left cell is cut to `COLUMNS/2 - 2` characters and padded to that
+//   - the left cell is `COLUMNS/2 - 2` characters wide and padded to that
 //     width, then two spaces;
-//   - the right cell is cut to `COLUMNS/2 - 3` characters and the line ends
-//     where it ends, so the longest line is `COLUMNS - 2`;
-//   - a cut cell's last character is `>`;
+//   - the right cell is `COLUMNS/2 - 3` wide and the line ends where it ends,
+//     so the longest line is `COLUMNS - 2`;
+//   - a cell's **last column is the marker**, so a synopsis is written out
+//     only while it is shorter than the cell by two or more, and one that
+//     reaches the second-to-last column is written to there with a `>` after
+//     it — see helpCell, where reading this as "cut to the width" was worth
+//     one wrong cell per listing;
 //   - a row with no right cell is not padded, which is the last row when the
 //     count is odd.
 //
@@ -366,7 +387,18 @@ func writeHelpListing(r *interp.Runner, topics map[string]string) {
 	}
 }
 
-// helpCell is one synopsis cut to a column, with `>` where it was cut.
+// helpCell is one synopsis in a column, with `>` where the cell ran out.
+//
+// The marker owns the cell's **last column**, whether or not a character was
+// lost to it. Measured 2026-09-21 on bash 5.3.20 over COLUMNS 74 to 84, with
+// a 37-character synopsis in the right column: at a width of 39 it is written
+// out, at 38 it is written out *and* followed by `>`, and at 37 and 36 it
+// loses its tail to the same marker. So the test is `width-1` and not
+// `width`, and a cell is never wider than its column either way.
+//
+// Reading it as "cut to the width" left one synopsis per listing spelled out
+// where the real shell marks it, which is a line of a suite file that nothing
+// else in the listing could account for (#2298).
 //
 // A width with no room for the marker is the whole of the degenerate case,
 // and it is reachable: COLUMNS=8 makes the right column five characters and
@@ -375,7 +407,7 @@ func helpCell(text string, width int) string {
 	if width < 1 {
 		width = 1
 	}
-	if len(text) <= width {
+	if len(text) < width-1 {
 		return text
 	}
 	return text[:width-1] + ">"

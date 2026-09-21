@@ -401,7 +401,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	statuses := map[[2]int]int{}
 	var meanSum float64
 	for i, res := range results {
-		rep.Cases = append(rep.Cases, NamedResult{Name: s.attribute(files[i].Name), Result: res, Moved: moved[i]})
+		rep.Cases = append(rep.Cases, NamedResult{Name: s.attribute(files[i].Tier, files[i].Name), Result: res, Moved: moved[i]})
 		switch {
 		case res.Parsed:
 			rep.Parsed++
@@ -476,6 +476,14 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 // came from. A fetched suite has one and reaches here the same way.
 type file struct {
 	Dir, Name string
+	// Tier is the directory the name was found under, as the column claims
+	// it — `core`, `ext`, or the dialect's own. It is carried because a bare
+	// file name is ambiguous in every one of our columns: `builtins.tests`
+	// exists under `core/` and under four dialect tiers, and a report naming
+	// only the base name says which question failed and not which file asked
+	// it. Attributing three failures in the bash column cost three extra
+	// container sweeps for exactly that reason (#2291).
+	Tier string
 }
 
 // plan is every file a column runs, in a stable order.
@@ -500,7 +508,7 @@ func plan(s Suite, dir string, opts Options) ([]file, error) {
 			if opts.Only != nil && !opts.Only[n] {
 				continue
 			}
-			files = append(files, file{Dir: tests, Name: n})
+			files = append(files, file{Dir: tests, Name: n, Tier: d})
 		}
 	}
 	return files, nil

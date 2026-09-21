@@ -483,11 +483,23 @@ func findOursByName(name string) (Suite, bool) {
 // nowhere to put a name, the name lives on [NamedResult], and the only
 // function that fills one in returns the empty string for every fetched
 // column. TestAFetchedColumnCannotNameAFile is the guard.
-func (s Suite) attribute(name string) string {
+//
+// The tier leads the name for a column of ours, because a bare base name does
+// not identify one of our files. Every one of our columns runs at least two
+// directories, and the areas are named the same in all of them by design:
+// `builtins.tests` is a file under `core/` and a file under four dialect
+// tiers, and a line reading `builtins.tests  119/121` says which question
+// failed while leaving which file asked it to be worked out by sweeping the
+// tiers separately. That cost three extra container runs during #2291's bar
+// measurement, which is the whole argument for the three characters.
+func (s Suite) attribute(tier, name string) string {
 	if !s.Ours {
 		return ""
 	}
-	return name
+	if tier == "" {
+		return name
+	}
+	return tier + "/" + name
 }
 
 // mustRepeat says the reference is asked for a second run of *every* file of

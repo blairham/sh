@@ -22,12 +22,15 @@ import (
 // means something has to fail when somebody builds it wrong.
 func TestAFetchedColumnCannotNameAFile(t *testing.T) {
 	for _, s := range Panel {
-		if got := s.attribute("array.tests"); got != "" {
+		if got := s.attribute("tests", "array.tests"); got != "" {
 			t.Errorf("the fetched %s column named a file: %q", s.Name, got)
 		}
 	}
 	for _, s := range Ours {
-		if got := s.attribute("status.tests"); got != "status.tests" {
+		// The tier leads, because a base name is ambiguous in every one of
+		// our columns — `status.tests` alone does not say whether the core
+		// file or the dialect's own was the one that failed.
+		if got := s.attribute("core", "status.tests"); got != "core/status.tests" {
 			t.Errorf("our own %s column would not name its own case: %q", s.Name, got)
 		}
 	}

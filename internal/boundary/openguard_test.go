@@ -194,6 +194,17 @@ var exempt = map[string]string{
 		"on it is the only way to it. The other medium is an os.Pipe and reaches no name at " +
 		"all. A refusal here would refuse a construct every shell performs and protect " +
 		"nothing.",
+	"interp.fcSpool": "the file `fc` writes the chosen history entries into for an editor to " +
+		"open (#4017). The same class as heredocReader's spool and `=(cmd)`'s file, and the " +
+		"same argument: the name is composed by this shell under r.tempHome(), opened " +
+		"exclusively at 0600, and removed on every road out — a script writes `fc` and can " +
+		"never write that path, so a policy refusing it would refuse the builtin while " +
+		"naming a file the operator has never seen. It is recorded as an EventAccess all " +
+		"the same. What the script does name is the **editor**, and that is an ordinary " +
+		"ActionExec through Runner.exec before it runs.",
+	"interp.edit": "the same file, read back after the editor has been over it and unlinked " +
+		"on the way out, which is the other half of fcSpool and is the same path this shell " +
+		"has just composed.",
 	"interp.finishRenameOnSuccess": "the rename half of ksh93's `>;` (#918), which completes a " +
 		"write two gate consultations have already allowed: applyRedirs asks about the target " +
 		"as an ActionOpen with Write set and about the temporary beside it as a second one, " +

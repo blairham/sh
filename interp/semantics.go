@@ -16559,6 +16559,35 @@ type Semantics struct {
 	// zsh; bash and dash answer a script with silence at 0.
 	FcEmptyHistoryIsAnError Answer
 
+	// FcEmptyEditIsAnError has `fc` complain when the editor left the file
+	// with nothing in it, rather than running nothing and saying so at 0.
+	//
+	// Measured 2026-09-21 under `env -i` with a scratch `HOME` and `TMPDIR`,
+	// the editor a stand-in that truncates the file it is handed:
+	//
+	//	bash 5.3.20   nothing echoed, nothing run, status 0
+	//	zsh 5.9.2     `read error on /tmp/zsh…` at 1, naming the temporary
+	//	              file the person never saw
+	//
+	// ksh93 cannot be asked: its list is empty in a shell nobody is sitting
+	// at, so `fc` there is `hist: 0-0: invalid range` before an editor is
+	// chosen. dash and BusyBox ash have no `fc` builtin at all — both
+	// resolve an external — so the base answers for them in the only way a
+	// question they never reach can be answered.
+	//
+	// An axis rather than bash's answer with a zsh exception, for the
+	// reason the one above it is: a script sees the difference in its exit
+	// status and on its error stream, and there is no ordering of the two
+	// shells in which one derives the other. Quitting an editor without
+	// saving is the ordinary way to reach it.
+	//
+	// unpinned: the corpus cannot reach it. Every route needs an editor to
+	// run, which means a program on PATH that truncates a file, and a corpus
+	// case is a shell snippet with no fixture to put one in.
+	// interp/fceditor_test.go drives both answers with a stand-in built by
+	// the test (#4017).
+	FcEmptyEditIsAnError Answer
+
 	// TestBuiltinComparisonOperandsAreArithmetic reads the operands of
 	// `test`'s and `[`'s word-spelled comparisons as arithmetic
 	// expressions, the way `[[ ]]` reads its own. ksh93 alone; dash, bash
@@ -23424,6 +23453,7 @@ func PosixSemantics() Semantics {
 		// with no exception in it, which is dash's reading and bash's.
 		BareTerminalTestIsDescriptorOne:  No,
 		FcEmptyHistoryIsAnError:          No,
+		FcEmptyEditIsAnError:             No,
 		JobControlAbsenceIsReportedFirst: No,
 		// POSIX has `( )` run "in a subshell environment" and describes that
 		// environment as a copy, which is the forking reading: the copy is

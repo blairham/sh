@@ -6,8 +6,11 @@ package interp
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // `fc`: the history list listed, and a command out of it run again.
@@ -158,8 +161,29 @@ type fcEvent struct {
 // measured, `fc -l echo\ a` on `echo ax`, `echo bx`, `echo ay` starts at
 // `echo ay`, so it is the newest match and a prefix rather than a substring.
 func (h fcHistory) resolve(spec string, def int) fcEvent {
+	return h.resolveWith(spec, def, def)
+}
+
+// resolveWith is the same reading with the two fallbacks told apart: what an
+// *absent* operand comes to, and what an absolute number the list does not
+// hold comes to.
+//
+// One value served both while `-l` was the only caller, because there the two
+// answers coincide — an absent `last` and an out-of-range `last` are both
+// `cur-1`. The editor road is where they part company, measured 2026-09-21 on
+// bash 5.3.20 over a three-entry list:
+//
+//	fc -e ed        the previous command alone — an absent `first` is cur-1
+//	fc -e ed 99     the **oldest** entry — an out-of-range `first` is not
+//	fc -e ed 1      `echo one` alone — an absent `last` is `first`
+//	fc -e ed 1 99   the whole range to cur-1 — an out-of-range `last` is not
+//
+// So `first` absent is cur-1 and `first` out of range is the oldest, and
+// `last` absent is whatever `first` came to and `last` out of range is cur-1.
+// Four answers out of two operands, and a single `def` can carry two of them.
+func (h fcHistory) resolveWith(spec string, absent, outOfRange int) fcEvent {
 	if spec == "" {
-		return fcEvent{num: def, found: true}
+		return fcEvent{num: absent, found: true}
 	}
 	if isDashNumber(spec) {
 		k, _ := strconv.Atoi(spec[1:])
@@ -178,7 +202,7 @@ func (h fcHistory) resolve(spec string, def int) fcEvent {
 		// three list lengths: the command before this one cannot be named
 		// by its number, only counted back to.
 		if n < h.first || n > h.cur-2 {
-			return fcEvent{num: def, found: true}
+			return fcEvent{num: outOfRange, found: true}
 		}
 		return fcEvent{num: n, found: true}
 	}
@@ -188,6 +212,34 @@ func (h fcHistory) resolve(spec string, def int) fcEvent {
 		}
 	}
 	return fcEvent{}
+}
+
+// span is the history numbers between two ends, in the order they are written
+// out: ascending, or descending where the range was written backwards, and
+// then turned around again by `-r`.
+//
+// Shared by `-l` and the editor road because both were measured to arrange
+// themselves the same way — `fc -l 3 1` and `fc -e ed 3 1` both run 3, 2, 1,
+// and `-r` reverses whichever order that produced rather than swapping the
+// two ends.
+func (h fcHistory) span(from, to int, reverse bool) []int {
+	a, b := h.clamp(from), h.clamp(to)
+	nums := make([]int, 0, max(a, b)-min(a, b)+1)
+	if a <= b {
+		for n := a; n <= b; n++ {
+			nums = append(nums, n)
+		}
+	} else {
+		for n := a; n >= b; n-- {
+			nums = append(nums, n)
+		}
+	}
+	if reverse {
+		for i, j := 0, len(nums)-1; i < j; i, j = i+1, j-1 {
+			nums[i], nums[j] = nums[j], nums[i]
+		}
+	}
+	return nums
 }
 
 // fcOperands splits the words after the options into `first` and `last`.
@@ -254,7 +306,7 @@ func biFc(r *Runner, ctx context.Context, args []string) int {
 		// `-e -` is `-s` written the POSIX way: re-run without an editor.
 		return h.rerun(r, ctx, rest)
 	default:
-		return h.edit(r, rest)
+		return h.edit(r, ctx, rest, optArg['e'], strings.ContainsRune(opts, 'r'))
 	}
 }
 
@@ -279,22 +331,7 @@ func (h fcHistory) list(r *Runner, rest []string, bare, reverse bool) int {
 	if !to.found {
 		return h.noCommand(r)
 	}
-	a, b := h.clamp(from.num), h.clamp(to.num)
-	nums := make([]int, 0, max(a, b)-min(a, b)+1)
-	if a <= b {
-		for n := a; n <= b; n++ {
-			nums = append(nums, n)
-		}
-	} else {
-		for n := a; n >= b; n-- {
-			nums = append(nums, n)
-		}
-	}
-	if reverse {
-		for i, j := 0, len(nums)-1; i < j; i, j = i+1, j-1 {
-			nums[i], nums[j] = nums[j], nums[i]
-		}
-	}
+	nums := h.span(from.num, to.num, reverse)
 	layout := r.fcListing()
 	for _, n := range nums {
 		if bare {
@@ -333,24 +370,275 @@ func (h fcHistory) rerun(r *Runner, ctx context.Context, rest []string) int {
 	})
 }
 
-// edit is `fc` with no `-l` and no `-s`: the entry goes to an editor and what
+// edit is `fc` with no `-l` and no `-s`: the entries go to an editor and what
 // comes back is run.
 //
-// The editor is not here. What is here is the refusal that comes before it,
-// because that is the half a script can see without one: `fc -0` names this
-// command and is `fc: history specification out of range` at 1, where the
-// same operand under `-s` is `fc: no command found`. Two shapes of the same
-// fact and the panel words them differently, so neither stands in for the
-// other. The rest — writing the entry to a file, running `${FCEDIT:-…}` over
-// it and running the result — is filed rather than guessed at.
-func (h fcHistory) edit(r *Runner, rest []string) int {
-	firstOp, _ := fcOperands(rest)
-	e := h.resolve(firstOp, h.cur-1)
-	if !e.found {
+// # Measured
+//
+// 2026-09-21 against bash 5.3.20 and zsh 5.9.2 under `env -i` with a scratch
+// `HOME`, a scratch `TMPDIR` and the editor a recording stand-in on `PATH`.
+// bash's list was seeded by running the commands with `set -o history`, zsh's
+// with `print -s`, since zsh fills no list of its own in a script.
+//
+//	fc -e cat        the previous command through `cat`, then run
+//	fc -e ed 1       `echo one` alone — an absent `last` is `first`, where
+//	                 under `-l` an absent `last` is cur-1
+//	fc -e ed 3 1     3, 2, 1 — a range written backwards is written backwards
+//	fc -r -e ed 1 3  the same three, reversed again by `-r`
+//	fc -e ed 1 -0    `fc: history specification out of range`, 1
+//	fc -e ed zzz     `fc: no command found`, 1
+//	fc -n -e ed 1 2  `-n` changes nothing: the file never carries numbers
+//
+// The entries go into the file **unnumbered**, one per line, and the file's
+// name is the editor's last argument — so an editor sees `ed /tmp/…` and can
+// read the name. bash names its file `bash-fc.XXXXXX` under `$TMPDIR` and zsh
+// names its `zshXXXXXX` under `/tmp`; the two disagree, neither documents it,
+// and nothing a script can do makes the spelling a promise, so ours is the
+// one the rest of this interpreter's scratch already uses.
+//
+// # The editor, and its order
+//
+//	fc -e W with FCEDIT and EDITOR both set   W        both columns
+//	FCEDIT=X EDITOR=Y fc                      X        both columns
+//	EDITOR=Y fc                               Y        both columns
+//	fc with neither set                       vi       both columns
+//	set -o posix; fc with neither set         ed       bash; zsh has no
+//	                                                   such option at all
+//
+// So the order is the `-e` operand, then `FCEDIT`, then `EDITOR`, then a
+// fallback — and the fallback is `vi` rather than the `ed` the manuals and
+// bash's own usage line suggest. It was measured rather than read for exactly
+// that reason.
+//
+// The word is **split** before it runs, and the file is appended after the
+// split: `fc -e 'cat -n'` runs `cat -n <file>` in both columns, so this is a
+// command line and not a program name.
+//
+// One divergence is measured and deliberately not modeled: an *empty*
+// `FCEDIT` falls through to `EDITOR` in bash — the `${FCEDIT:-…}` reading —
+// where zsh takes the empty word and ends up trying to run the temporary file
+// itself, `permission denied` at 1. bash's reading is the one POSIX describes
+// and the one a script can rely on, and an axis for an empty variable nobody
+// sets would cost a vector field to record a typo.
+//
+// # The three ways out
+//
+//	the editor exits non-zero      1, and nothing is echoed or run — both
+//	                               columns, measured with an editor exiting 3
+//	the editor cannot be run       the shell's own `command not found`, and
+//	                               `fc` answers 1 rather than 127
+//	the file comes back empty      bash: 0, silently, with nothing run. zsh:
+//	                               `read error on <file>`, and it ends the
+//	                               shell at 1 rather than leaving a status
+//
+// The empty file is the one conflict of the three, so it is an axis —
+// [Semantics.FcEmptyEditIsAnError] — and not bash's answer with a zsh
+// exception written into it. The other two agree across both columns.
+//
+// # What runs, and what is recorded
+//
+// The text is echoed to standard **error** and then run, which is the same
+// pair `-s` does and was measured the same way: `fc -e cat >/dev/null` still
+// writes the command and `2>/dev/null` does not. The line takes the `fc`
+// call's own place in the history list rather than joining it after.
+//
+// Known and not modeled, with the measurement so it can be finished later:
+// bash echoes the edited text a **line at a time as it reads it**, so two
+// separate commands come out as `echo A`, `A`, `echo B`, `B` interleaved,
+// and each is recorded as a history entry of its own. This writes the whole
+// text once and records it as one entry. The two are identical for a
+// single-command edit — which is every case above, and the only shape
+// `share/suite`'s `history.tests` uses — and they differ only when the editor
+// leaves two or more top-level commands behind. See #4030.
+func (h fcHistory) edit(r *Runner, ctx context.Context, rest []string, editor string, reverse bool) int {
+	firstOp, lastOp := fcOperands(rest)
+	// An absent `first` is the previous command and an out-of-range absolute
+	// one is the oldest entry; an absent `last` is whatever `first` came to
+	// and an out-of-range absolute one is the previous command. See
+	// resolveWith for the four measurements.
+	from := h.resolveWith(firstOp, h.cur-1, h.first)
+	if !from.found {
 		return h.noCommand(r)
 	}
-	if e.num >= h.cur || h.cur-1 < h.first {
+	to := h.resolveWith(lastOp, from.num, h.cur-1)
+	if !to.found {
+		return h.noCommand(r)
+	}
+	// This very command, named at either end, is refused rather than run —
+	// `fc -0` and `fc -e ed 1 -0` alike. The wording differs from the one
+	// `-s` gives the same operand, which is why neither stands in for the
+	// other: `fc -0` is `fc: history specification out of range` where
+	// `fc -s -0` is `fc: no command found`.
+	if from.num >= h.cur || to.num >= h.cur || h.cur-1 < h.first {
 		r.diagf("%s\n", Wording(r.diag().FcOutOfRange, "fc: history specification out of range"))
+		return 1
+	}
+	var written strings.Builder
+	for _, n := range h.span(from.num, to.num, reverse) {
+		written.WriteString(h.at(n))
+		written.WriteByte('\n')
+	}
+	path, err := r.fcSpool(ctx, written.String())
+	if err != nil {
+		r.diagf("fc: %s\n", err)
+		return 1
+	}
+	// On every road out, including the one where the editor failed and the
+	// one where the text would not parse.
+	defer func() { _ = os.Remove(path) }()
+	if st := r.fcRunEditor(ctx, editor, path); st != 0 {
+		return st
+	}
+	edited, err := os.ReadFile(path)
+	if err != nil {
+		r.diagf("fc: %s\n", err)
+		return 1
+	}
+	text := string(edited)
+	if strings.TrimSpace(text) == "" {
+		// An editor quit without saving, or one that emptied the file. bash
+		// runs nothing and says nothing at 0; zsh complains, naming the
+		// temporary file. See Semantics.FcEmptyEditIsAnError.
+		if r.ask(r.sem().FcEmptyEditIsAnError, "an editor that left `fc`'s file empty") {
+			// Raised without the builtin's name in front of it, which is
+			// measured and is not how the same shell words its other `fc`
+			// refusals: `fc -l zzz` is `z.sh:fc:3: no such event: 1` and this
+			// one is `z.sh:3: read error on /tmp/zsh…`. The sentence is the
+			// shell's complaint about a file rather than the builtin's about
+			// an operand, and it reads as one. Cleared the way runSourced
+			// clears it for the same reason.
+			outer := r.inBuiltin
+			r.inBuiltin = ""
+			// And it ends the shell rather than leaving a status behind,
+			// measured 2026-09-21 in zsh 5.9.2 three ways: `fc -e trunc ||
+			// print caught` prints nothing and exits 1 — so `||` does not
+			// catch it — a function around it does not either, and inside
+			// `( )` it ends the subshell alone and the parent carries on at
+			// 1. That is the shape Runner.fatal already has, and the same one
+			// `NULLCMD=; >f` has in this dialect.
+			r.fatal("%s\n", Wording(r.diag().FcEmptyEdit, "fc: %[1]s: nothing to run", path))
+			r.inBuiltin = outer
+			return r.status
+		}
+		if r.unspecified {
+			return 2
+		}
+		return 0
+	}
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	r.errf("%s", text)
+	r.DropHistoryOwnLine()
+	r.RecordHistoryEntry(strings.TrimSuffix(text, "\n"))
+	return r.runSourced(ctx, text, sourced{
+		eval:         true,
+		label:        "fc",
+		syntaxStatus: r.diag().SyntaxStatus(),
+	})
+}
+
+// fcSpoolSeq numbers the files this builtin writes, so that two `fc` calls in
+// one process — or in two Runners sharing one — never name the same one.
+var fcSpoolSeq atomic.Uint64
+
+// fcSpool writes the chosen entries where an editor can open them, and hands
+// back the name it chose.
+//
+// # Where, and under what name
+//
+// `r.tempHome()`, which is this Runner's `TMPDIR` and not the process's, for
+// the reason the whole of interp reads variables that way: two Runners in one
+// program must be separable, and a script that moved `TMPDIR` moved its own
+// scratch and nobody else's. `os.CreateTemp` is forbidden in this tree and
+// this is one of the cases it is forbidden for — an empty directory argument
+// there resolves through `os.TempDir`, which is the *process* environment.
+// `heredocReader` names its spool the same way.
+//
+// `O_EXCL` and `0600`, which is what bash and zsh both leave behind — a
+// history entry is what somebody typed, and the editor is the only other
+// program meant to see it.
+//
+// # Why the gate is asked nothing
+//
+// This is the shell's own scaffolding and sits on the same side of the line
+// [ActionOpen] already draws for a process substitution's pipe and for the
+// file `=(cmd)` writes: the path is chosen by the interpreter and never by
+// the script, so a policy refusing it would refuse `fc` itself while
+// believing it had refused an access — and the diagnostic would name a path
+// the operator has never seen. The open is **recorded** all the same, as an
+// EventAccess, so an audit says the shell wrote one and when.
+//
+// What is worth refusing is refused, and it is not this file: the editor is
+// an [ActionExec] the gate is asked about in the ordinary way, before it
+// runs, by Runner.exec — see the `builtin/fc-editor` row in
+// internal/sandboxcheck, which grades exactly that.
+func (r *Runner) fcSpool(ctx context.Context, text string) (string, error) {
+	path := filepath.Join(r.tempHome(),
+		".sh-fc-"+strconv.Itoa(os.Getpid())+"-"+
+			strconv.FormatUint(fcSpoolSeq.Add(1), 10))
+	r.emit(ctx, Event{Kind: EventAccess, Action: r.act(Action{
+		Kind: ActionOpen, Path: path, Write: true,
+	})})
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", err
+	}
+	if _, err := f.WriteString(text); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", err
+	}
+	return path, nil
+}
+
+// fcEditorWords is the command line `fc` runs over the file, split into
+// words.
+//
+// The order is the `-e` operand, `FCEDIT`, `EDITOR`, and then a fallback —
+// each taken only when it is **non-empty**, which is the `${FCEDIT:-…}`
+// reading bash has. See the note on [fcHistory.edit] for zsh's answer to an
+// empty one and for why it is not an axis.
+//
+// The fallback is `vi`, measured in both columns that have the construct, and
+// `ed` while `set -o posix` is on — which is bash's alone, since zsh has no
+// such option to turn on.
+//
+// Split on whitespace rather than on `IFS`. Nothing in the panel exposes the
+// difference from a builtin's own reading of a variable, and a shell whose
+// `IFS` no longer holds a space has bigger problems than its editor.
+func (r *Runner) fcEditorWords(given string) []string {
+	fcedit, _ := r.getVar("FCEDIT")
+	editor, _ := r.getVar("EDITOR")
+	for _, word := range []string{given, fcedit, editor} {
+		if fields := strings.Fields(word); len(fields) > 0 {
+			return fields
+		}
+	}
+	if r.posixMode {
+		return []string{"ed"}
+	}
+	return []string{"vi"}
+}
+
+// fcRunEditor runs the editor over the spooled file, and reports what `fc`
+// should answer when it did not work.
+//
+// Zero means carry on. One is what both columns answer for an editor that
+// exited non-zero and for an editor that could not be run at all — the latter
+// measured as the shell's ordinary `command not found`, on the script's own
+// line, with `fc` answering 1 rather than the 127 the search produced.
+func (r *Runner) fcRunEditor(ctx context.Context, editor, path string) int {
+	argv := append(r.fcEditorWords(editor), path)
+	if err := r.exec(ctx, argv, r.environ()); err != nil {
+		r.diagf("fc: %v\n", err)
+		return 1
+	}
+	if r.status != 0 {
 		return 1
 	}
 	return 0

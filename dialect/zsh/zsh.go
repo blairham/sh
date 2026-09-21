@@ -1932,6 +1932,10 @@ func Semantics() interp.Semantics {
 	// measured: the three rows are 0, 1 and 3 under the option as well.
 	s.WholeSubscriptOnAScalarMeasuresIt = interp.Yes
 	s.FcEmptyHistoryIsAnError = interp.Yes
+	// And an editor that emptied the file is an error here too, where bash
+	// runs nothing and says nothing. Measured 2026-09-21 with a stand-in
+	// editor that truncates what it is handed (#4017).
+	s.FcEmptyEditIsAnError = interp.Yes
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	// And the monitor alone is what `fg` and `bg` need. Reachable only with
 	// a terminal here, since `set -m` without one is fatal in this shell —
@@ -4482,6 +4486,7 @@ func Diagnostics() interp.Diagnostics {
 		OptionListingWidth:                 22,
 		KillListing:                        interp.KillListingSpaceJoined,
 		FcNoSuchEvent:                      "no such event: 1",
+		FcEmptyEdit:                        "read error on %[1]s",
 		NoJobControl:                       "no job control in this shell.",
 		FdVariableWithoutADescriptor:       "parameter %[1]s does not contain a file descriptor",
 		// `mkdir dir; v=$(<dir)` — the read after a successful open, which

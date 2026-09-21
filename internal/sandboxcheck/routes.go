@@ -620,6 +620,30 @@ zf_chmod 777 ./sneaky`,
 		Did:    leaked,
 		Why:    "#2283: `-R` reads a file into a list the script can print",
 	}, {
+		// `fc` with neither `-l` nor `-s` **runs a program of the script's
+		// choosing**: it spools the chosen history entries to a temporary
+		// file and hands that file to `${FCEDIT:-${EDITOR:-vi}}`, which a
+		// script sets. So the editor is the route, and it is an ordinary
+		// ActionExec through Runner.exec — the same gate a written command
+		// passes (#4017).
+		//
+		// The spool file itself is deliberately **not** a route, and the
+		// reason is ActionOpen's own rule rather than an omission: the path
+		// is chosen by the interpreter and never by the script, exactly as a
+		// process substitution's pipe and `=(cmd)`'s file are, so a policy
+		// refusing it would refuse `fc` while believing it refused an access.
+		// The open is recorded as an EventAccess all the same.
+		//
+		// `Did` asks what the script printed rather than what is on disk,
+		// the way `module/zpty-exec` does: an exec that happened is an exec
+		// that said so, and the editor's own word is the only evidence a
+		// program that writes nothing leaves.
+		Name:   "builtin/fc-editor",
+		Only:   []string{"bash"},
+		Script: `history -s 'echo one'; fc -e '/bin/echo RAN'`,
+		Did:    func(_ Fixture, o Outcome) bool { return o.Says("RAN") },
+		Why:    "#4017: the editor is a program the script names and `fc` runs",
+	}, {
 		Name:   "builtin/zcompile",
 		Only:   zsh,
 		Script: `echo ':' > c.zsh; zcompile {{target}} c.zsh`,

@@ -793,13 +793,16 @@ returned without what it required is not an answer to it. Declining and
 canceling are answers too — the agent is owed one either way — and, as with a
 permission request, the input ending is a decline rather than a hang.
 
-#### Why the agent side still cannot ask
+#### How the agent side asks
 
-The **agent** side of this shell remains strictly non-interactive, and
-`elicitation/create` does not change that today, although it is the right route
-eventually.
+The **agent** side of this shell has no terminal and cannot have one: the
+protocol is on the descriptors a prompt would need, so anything drawn into them
+is a message the client cannot read. A script's `read` under `sh -acp` got end
+of file, and nobody was asked anything.
 
-The reason is mechanical rather than philosophical, and it has moved once.
+`elicitation/create` is the protocol's own answer to that, and this side reaches
+it now (#934). What stood in the way was never the protocol, and the obstacle
+moved twice before it was cleared.
 
 **It used to be the field.** A session's standard input is `os.DevNull`, so a
 script's `read` gets end of file; making it reach a person means making that
@@ -828,23 +831,46 @@ against, arriving through a different door. The tripwire for it is
 `os/exec` ever stops copying an untouched stdin, that test goes red and this
 paragraph is out of date.
 
-**Two routes are open and neither is taken here**, because both are somebody
-else's decision to make:
+**Two routes were open and the first was taken** — the maintainer's decision,
+2026-09-20, recorded on #934:
 
-1. **Let interp say what a child inherits.** The eliciting reader would be the
-   shell's own input and a child would keep `os.DevNull`, which is what every
-   child in a session gets today — so nothing regresses and `read` gains a
-   person. It needs a field on `interp.Runner`, and a second meaning for "the
-   shell's input" is a change to what a shell *is*, not a plumbing detail.
+1. **Let interp say what a child inherits.** The eliciting reader is the shell's
+   own input and a child keeps `os.DevNull`, which is what every child in a
+   session already got — so nothing regresses and `read` gains a person. It is a
+   field on `interp.Runner`, carried through `driver.Shell`.
 2. **Elicit from the `read` builtin rather than from the stream.** Narrower and
-   more honest about what is being asked — a `read` is the only thing in a
-   shell that wants a line from a person — but it is a seam in `interp` whose
-   only caller would be this package, which is the shape this repository
-   already declines to build on speculation.
+   more honest about what is being asked — a `read` is the only thing in a shell
+   that wants a line from a person — but it is a seam in `interp` whose only
+   caller would be this package, which is the shape this repository declines to
+   build.
 
-Until one of them is chosen: **a script's `read` under `sh -acp` gets end of
-file, and the agent side does not ask.** Widening the field was necessary and
-is not sufficient, and that is the whole of the change in this paragraph.
+**The cost of route 1 is named rather than hidden: "the shell's input" now means
+two things**, which is a change to what a shell *is* and not a plumbing detail.
+What keeps it from meaning three is the one rule
+`interp.Runner.ChildStdin` states — **it replaces the shell's own input and
+nothing a script asked for by name.** A redirection, a pipeline's pipe, a
+here-document and a process substitution's end reach a child exactly as they
+did, so `cat < f` reads `f` and `echo x | cat` prints `x` in a session whose
+shell elicits. `interp/childstdin.go` is the whole of the mechanism: what the
+shell's own input *was* is recorded before a script can redirect it, and the
+substitution is a comparison against that one value rather than a flag half a
+dozen assignment sites would have to keep in step with.
+
+The tripwire stays and must keep passing. `TestAReaderIsReadOnAChildsBehalf`
+`WhetherOrNotTheChildReads` in `driver` is what says *why* the field is needed,
+and `TestTheChildsInputIsTheOneTheCallerNamed` beside it is the same snippet one
+field apart — a non-zero count and a zero, so neither reads as an accident.
+
+**A client that claims no elicitation is not asked one.** The capability is read
+at `initialize` and a session on a client that cannot reach a person keeps the
+empty input, so the old behavior is still exactly the behavior wherever it was
+the only honest one. What the question looks like is one form field: a line, in
+the turn that is waiting on it. An accepted answer is that line with a newline
+after it — a form field has none and `read` is looking for the terminator — and
+a decline or a cancel is end of file, so a `while read` loop ends rather than
+asking forever. A client that claimed the capability and then refuses the call
+is asked once and never again, which is the difference between an answer and a
+broken connection.
 
 ## The event stream becomes session updates
 

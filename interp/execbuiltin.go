@@ -176,7 +176,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	cmd.Args[0] = r.execArgv(argv, flags)[0]
 	cmd.Dir = r.Dir
 	cmd.Env = r.execEnviron(flags)
-	cmd.Stdin = childIn(r.Stdin)
+	cmd.Stdin = r.childStdin()
 	cmd.Stdout = childOut(r.stdout())
 	cmd.Stderr = childOut(r.stderr())
 	// Standing in for a process replacement means standing in for what one

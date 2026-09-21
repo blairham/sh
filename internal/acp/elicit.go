@@ -17,12 +17,16 @@ import (
 // choice, a name, a confirmation — anything a schema can describe — asks for it
 // here, and a client that can reach a person answers.
 //
-// It matters on this shell's *agent* side too, and by its absence. That side
-// is non-interactive because the protocol occupies the descriptors a prompt
-// would need: ACP is standard input and standard output, and a prompt drawn
-// into them is a message the client cannot read. elicitation/create is the
-// protocol's own answer to that, and it is the direction this file does not
-// go — see docs/design/acp.md for why a script's `read` cannot reach it yet.
+// It matters on this shell's *agent* side too. That side is non-interactive
+// because the protocol occupies the descriptors a prompt would need: ACP is
+// standard input and standard output, and a prompt drawn into them is a
+// message the client cannot read. elicitation/create is the protocol's own
+// answer to that, and the agent side reaches it in elicitinput.go, where a
+// script's `read` becomes one question — see docs/design/acp.md (#934).
+//
+// The shapes below are the wire's and are shared by both directions: this
+// file is where the message is described, and the two sides are the `elicit`
+// method at the bottom, which answers one, and askingReader, which asks.
 
 // MethodCreateElicitation is the client method an agent calls to ask a person.
 const MethodCreateElicitation = "elicitation/create"

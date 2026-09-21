@@ -54,6 +54,11 @@ type Agent struct {
 
 	mu          sync.Mutex
 	initialized bool
+	// client is what the client said it can do, kept because one of those
+	// things decides how a session's standard input is built: a client that
+	// serves form elicitation can be asked for a line on a script's behalf,
+	// and one that cannot leaves `read` at end of file. See askingInput.
+	client      ClientCapabilities
 	sessions    map[string]*session
 	nextSession int
 }
@@ -141,6 +146,7 @@ func (a *Agent) initialize(params json.RawMessage) (any, error) {
 	}
 	a.mu.Lock()
 	a.initialized = true
+	a.client = req.Capabilities
 	a.mu.Unlock()
 	info := a.Info
 	return InitializeResponse{
@@ -204,16 +210,27 @@ func (a *Agent) newSession(params json.RawMessage) (any, error) {
 	// else. One descriptor for the session beats a pipe for every command in
 	// it.
 	//
-	// ACP is non-interactive on this side. The protocol is on the descriptors
-	// a prompt would need, there is no terminal, and where a script genuinely
-	// needs a person the protocol has elicitation — which this side still does
-	// not reach, for a reason that is now one level below this field and is
-	// written down in docs/design/acp.md.
+	// ACP is non-interactive on this side in the sense that matters: the
+	// protocol is on the descriptors a prompt would need and there is no
+	// terminal. Where a script genuinely needs a person, the protocol's own
+	// answer is elicitation, and this side reaches it now — see askingInput
+	// and elicitinput.go (#934). A client that claims no elicitation gets
+	// exactly what every session got before: a `read` at end of file.
 	empty, err := os.Open(os.DevNull)
 	if err != nil {
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInternalError, "no empty input for the session: %v", err)
 	}
 	sh.Stdin = empty
+	if in := s.askingInput(); in != nil {
+		// The shell's own input is the question, and a child keeps the empty
+		// stream — which is what every child in a session already had, so
+		// nothing regresses and no command is handed a form it never asked
+		// for. The split is interp.Runner.ChildStdin, carried through
+		// driver.Shell; without it the copying goroutine os/exec builds for
+		// a non-file stdin would put the question to a person once per
+		// external command.
+		sh.Stdin, sh.ChildStdin = in, empty
+	}
 	// The template's gate goes *inside* this one rather than being replaced by
 	// it. A policy handed to `-acp` is what the invocation asked for, and a
 	// session that assigned over it would take the flag and mean nothing by
@@ -315,6 +332,7 @@ type session struct {
 
 	mu     sync.Mutex
 	stop   context.CancelFunc
+	turn   context.Context
 	inTurn bool
 
 	// Whether the shell this session is has finished, and the status it
@@ -356,12 +374,12 @@ func (s *session) run(ctx context.Context, src string) (any, error) {
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams,
 			"session %s has ended: its shell exited with status %d", s.id, s.endStatus)
 	}
-	s.inTurn, s.stop = true, cancel
+	s.inTurn, s.stop, s.turn = true, cancel, ctx
 	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
-		s.inTurn, s.stop = false, nil
+		s.inTurn, s.stop, s.turn = false, nil, nil
 		s.mu.Unlock()
 		cancel()
 		// Whatever was held back waiting for the rest of a character is

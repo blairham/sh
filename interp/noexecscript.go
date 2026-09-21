@@ -265,17 +265,22 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 	child := &Runner{
 		// The file is the program, which is what decides `$0`'s rule, the
 		// name a diagnostic gives the shell, and the route letters.
-		Route:           RouteScriptFile,
-		Dialect:         r.Dialect,
-		Semantics:       r.Semantics,
-		Diagnostics:     r.Diagnostics,
-		AxisRemedy:      r.AxisRemedy,
-		Name:            name,
-		Invocation:      r.Invocation,
-		Params:          append([]string(nil), argv[1:]...),
-		Env:             env,
-		Dir:             r.Dir,
-		Stdin:           r.Stdin,
+		Route:       RouteScriptFile,
+		Dialect:     r.Dialect,
+		Semantics:   r.Semantics,
+		Diagnostics: r.Diagnostics,
+		AxisRemedy:  r.AxisRemedy,
+		Name:        name,
+		Invocation:  r.Invocation,
+		Params:      append([]string(nil), argv[1:]...),
+		Env:         env,
+		Dir:         r.Dir,
+		Stdin:       r.Stdin,
+		// And what *its* children inherit in place of that, which is the
+		// caller's and not this shell's to change: the script this stands in
+		// for is a child of ours, so everything below it is one too. See
+		// Runner.ChildStdin.
+		ChildStdin:      r.ChildStdin,
 		Stdout:          r.Stdout,
 		Stderr:          r.Stderr,
 		Gate:            r.Gate,

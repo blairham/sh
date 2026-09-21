@@ -855,3 +855,122 @@ func TestDotSearchPathOptionAndSwitch(t *testing.T) {
 		t.Errorf("without the option = %q status %d, want the shared bad-option wording", out, st)
 	}
 }
+
+// TestDotSetCancelsTheRestoreOnlyWhenAsked covers both answers of the axis
+// and the three shapes that are not it.
+//
+// The rows that do not move are the point: a `shift`, a `set` inside a
+// function the file calls and a `set` inside a subshell it opens all leave
+// the caller's parameters coming back whichever way the axis is set, which is
+// what says the axis is about a replacement of the *sourced file's own* list
+// and not about the `set` word appearing anywhere under a `.`.
+func TestDotSetCancelsTheRestoreOnlyWhenAsked(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		body          string
+		cancels, kept string
+	}{
+		{
+			// The discriminator.
+			"a replacement at the file's own level",
+			"set -- m n o p\n",
+			"m n o p", "a b c",
+		},
+		{
+			// The control the panel was measured against: every column
+			// that passes the words restores over a `shift`.
+			"a shift",
+			"shift\n",
+			"a b c", "a b c",
+		},
+		{
+			// A call has a list of its own, so the `set` replaces that one
+			// and the file's is untouched.
+			"a replacement inside a function the file calls",
+			"f() { set -- z; }\nf\n",
+			"a b c", "a b c",
+		},
+		{
+			// And a subshell has a copy, so nothing crosses back.
+			"a replacement inside a subshell the file opens",
+			"( set -- z )\n",
+			"a b c", "a b c",
+		},
+		{
+			// An empty replacement is still a replacement, which is the
+			// row that says this is about the `--` and not about the file
+			// leaving something behind: measured on both bash builds,
+			// `set --` in the sourced file leaves the caller with no
+			// positional parameters at all. An option letter on its own is
+			// the other side of it and is pinned where a dialect has
+			// answered the letter — see dialect/bash.
+			"an empty replacement",
+			"set --\n",
+			"", "a b c",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, ans := range []struct {
+				cancel Answer
+				want   string
+			}{{Yes, tc.cancels}, {No, tc.kept}} {
+				dir := t.TempDir()
+				p := write(t, dir, "g.sh", tc.body)
+				sem := permissive()
+				sem.DotPassesArguments = Yes
+				sem.DotSetCancelsTheRestore = ans.cancel
+				out, _ := sourceRun(t, dir,
+					`set -- a b c; . `+p+` p q; echo "after=[$@]"`, sem, Diagnostics{})
+				want := "after=[" + ans.want + "]"
+				if got := strings.TrimSpace(out); got != want {
+					t.Errorf("DotSetCancelsTheRestore=%v: output = %q, want %q", ans.cancel, got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestDotSetIsNotAskedWithoutAPassedList pins where the axis is *not*
+// consulted, which is the half that keeps the column ignoring the words from
+// being asked a question it has no second list for.
+//
+// An unanswered axis refuses by name wherever it is reached, so leaving it
+// unanswered is the sharpest probe there is: a shell that asks anyway writes
+// the refusal and leaves 2 behind, and one that does not runs the script.
+func TestDotSetIsNotAskedWithoutAPassedList(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		pass Answer
+		call string
+		want string
+	}{
+		{
+			// The words are ignored, so the file's `set` changes the
+			// caller's own list and there is no restore to cancel.
+			"the dialect ignores the words",
+			No, `. %s p q`, "after=[m n o p]",
+		},
+		{
+			// And with no words at all the parameters were never swapped,
+			// in any dialect.
+			"no words after the filename",
+			Yes, `. %s`, "after=[m n o p]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			p := write(t, dir, "g.sh", "set -- m n o p\n")
+			sem := permissive()
+			sem.DotPassesArguments = tc.pass
+			sem.DotSetCancelsTheRestore = Unspecified
+			src := `set -- a b c; ` + strings.Replace(tc.call, "%s", p, 1) + `; echo "after=[$@]"`
+			out, st := sourceRun(t, dir, src, sem, Diagnostics{})
+			if strings.Contains(out, "unanswered") || strings.Contains(out, "no dialect") {
+				t.Errorf("the axis was consulted where there is no restore: %q", out)
+			}
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("output = %q, want %q (status %d)", got, tc.want, st)
+			}
+		})
+	}
+}

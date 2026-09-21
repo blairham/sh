@@ -1327,6 +1327,14 @@ func (r *Runner) readableFile(path string) bool {
 // file become its positional parameters, it runs in a frame of its own, and
 // the RETURN trap fires as it finishes.
 func (r *Runner) runDotText(ctx context.Context, args []string, display string, b []byte) int {
+	// Whether the caller's parameters come back, which is not settled until
+	// the file has run: one dialect lets a `set` the file ran itself stand.
+	// See Semantics.DotSetCancelsTheRestore, asked at the bottom of this
+	// function — after the file, because that is when there is something to
+	// ask about, and not from inside the deferred restore, because the
+	// refusal an unanswered axis writes has a status to leave behind and the
+	// return value is already chosen by then.
+	restoreParams, passedParams := true, false
 	// Arguments after the file become its positional parameters, and are put
 	// back afterwards. dash is the exception: it ignores them, so a script
 	// there still sees the caller's `$1`. With no arguments at all, every
@@ -1346,7 +1354,21 @@ func (r *Runner) runDotText(ctx context.Context, args []string, display string, 
 		if pass {
 			saved := r.Params
 			r.Params = append([]string(nil), args[1:]...)
-			defer func() { r.Params = saved }()
+			// The file gets a list of its own, so it gets a mark of its
+			// own: what the caller had already replaced is not what this
+			// file replaces. Put back below whichever way the restore goes,
+			// so the outer list's mark survives the inner file — measured
+			// on bash 5.3.20, a sourced file whose own sourced file lets a
+			// `set` stand still has its own parameters restored.
+			outerReplaced := r.paramsReplacedBySet
+			r.paramsReplacedBySet = false
+			defer func() {
+				if restoreParams {
+					r.Params = saved
+				}
+				r.paramsReplacedBySet = outerReplaced
+			}()
+			passedParams = true
 		}
 	}
 
@@ -1382,6 +1404,16 @@ func (r *Runner) runDotText(ctx context.Context, args []string, display string, 
 	r.status = st
 	r.line = dotLine
 	r.runReturnTrap(ctx, sourcedFrame)
+	// And now whether the file's own `set` stands. Only a file that was
+	// given parameters of its own has a restore to cancel, and only one that
+	// replaced them has canceled it — so the axis is consulted where both
+	// hold and nowhere else, which keeps the dialect that ignores the words
+	// from being asked a question it has no second list for.
+	if passedParams && r.paramsReplacedBySet &&
+		r.ask(r.sem().DotSetCancelsTheRestore,
+			"a `set` in a sourced file standing rather than the caller's positional parameters coming back") {
+		restoreParams = false
+	}
 	return r.status
 }
 

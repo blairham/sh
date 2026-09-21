@@ -778,3 +778,47 @@ func TestAnErrorInASourcedFileEndsTheShellHere(t *testing.T) {
 		t.Errorf("status = %d, want 1", st)
 	}
 }
+
+// TestASetInASourcedFileStandsHere is the column the axis was filed for: a
+// `set` the sourced file runs itself is not put back.
+//
+// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C`, on bash 5.3.20
+// and bash 3.2.57 alike, with a file holding one line:
+//
+//	file          set -- a b c; . ./g p q; echo "$@"
+//	set -- m n o p    m n o p — zsh, ksh93 and BusyBox ash say `a b c`
+//	shift             a b c   — every column that passes the words
+//	set --            (empty) — an empty replacement still stands
+//	set -f            a b c   — an option is not a replacement
+//	f(){ set -- z; }; f   a b c — the call's own list, not the file's
+//	( set -- z )      a b c   — and a subshell's copy is nobody else's
+//
+// The rows that do not move are what make this a test of the axis rather
+// than of the restore: a shell that had simply stopped restoring would
+// answer the sourced file's list on every one of them.
+func TestASetInASourcedFileStandsHere(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"a replacement stands", "set -- m n o p", "m n o p"},
+		{"an empty replacement stands", "set --", ""},
+		{"a shift is restored over", "shift", "a b c"},
+		{"an option letter replaces nothing", "set -f", "a b c"},
+		{"a call's own list is not the file's", "f() { set -- z; }; f", "a b c"},
+		{"and neither is a subshell's copy", "( set -- z )", "a b c"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "g.sh")
+			if err := os.WriteFile(path, []byte(tc.body+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out, st := runBash(t, dir, `set -- a b c; . `+path+` p q; echo "after=[$@]"`)
+			if st != 0 {
+				t.Errorf("status %d, want 0; output %q", st, out)
+			}
+			want := "after=[" + tc.want + "]"
+			if got := strings.TrimSpace(out); got != want {
+				t.Errorf("output = %q, want %q", got, want)
+			}
+		})
+	}
+}

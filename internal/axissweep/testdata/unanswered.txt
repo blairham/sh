@@ -369,6 +369,7 @@ dash  DollarSingleOctalPastAByteDropsTheLastDigit
 dash  DollarSingleQuestionEscape
 dash  DollarSingleUnicodeEscapes
 dash  DollarSingleUnknownEscape
+dash  DotSetCancelsTheRestore
 dash  DotWithNoOperandIsFatal
 dash  DotWithNoOperandIsFatalInPosixMode
 dash  EarlierDeclarationLetterBlocksALaterPlus

@@ -1799,6 +1799,18 @@ type Runner struct {
 	// unspecified records that a script depended on an axis no dialect had
 	// answered, so a caller can tell that from an ordinary failure.
 	unspecified bool
+	// paramsReplacedBySet records that `set` replaced the positional
+	// parameters of the list in effect right here, which is what one
+	// dialect reads when a sourced file ends — see
+	// Semantics.DotSetCancelsTheRestore and runDotText.
+	//
+	// It is about *this* list and not about the shell, so every place that
+	// swaps the list swaps this with it: a function call saves and clears it
+	// around the body, and a subshell takes its own copy, which is why a
+	// `set` inside either leaves the caller's restore alone exactly as the
+	// shells were measured to. `shift` does not set it, which is the control
+	// the axis was measured against.
+	paramsReplacedBySet bool
 	// globMissed records that a pattern matched nothing, so the no-match
 	// axis can report it once the whole field is known.
 	globMissed bool

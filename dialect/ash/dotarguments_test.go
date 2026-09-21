@@ -82,3 +82,42 @@ func TestDotGivesTheSourcedFileItsOwnParameters(t *testing.T) {
 		})
 	}
 }
+
+// TestASetInASourcedFileIsRestoredOverInBusyBox: the words after the
+// filename are put back over whatever the sourced file did to them, `set`
+// included — BusyBox ash is on zsh's and ksh93's side of the split and not
+// on bash's.
+//
+// Measured 2026-09-21 against BusyBox v1.37.0 in the digest-pinned Alpine
+// image internal/oracle reaches, under `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+// with `set -- a b c; . ./g p q; echo "$@"`:
+//
+//	set -- m n o p in the file    a b c   — bash 5.3.20 and 3.2.57: m n o p
+//	shift in the file             a b c   — the control, unanimous
+//
+// Two bodies rather than one, because the second is what says the first is
+// about a *replacement* being let through: a shell that had stopped
+// restoring at all would answer the file's list on both.
+func TestASetInASourcedFileIsRestoredOverInBusyBox(t *testing.T) {
+	for _, body := range []string{"set -- m n o p", "set --", "shift"} {
+		t.Run(body, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "g.sh"), []byte(body+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			src := `set -- a b c; . ./g.sh p q; echo "after=[$@]"` + "\n"
+			out, st, err := preset.Combined(t, dialecttest.Base{
+				Name: "ash", Dir: dir, Env: []string{"PATH=/usr/bin:/bin"},
+			}, src)
+			if err != nil {
+				t.Fatalf("unsupported: %v", err)
+			}
+			if st != 0 {
+				t.Errorf("status %d, want 0; output %q", st, out)
+			}
+			if out != "after=[a b c]\n" {
+				t.Errorf("got %q, want the caller's parameters back", out)
+			}
+		})
+	}
+}

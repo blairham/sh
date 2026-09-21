@@ -703,3 +703,28 @@ func TestExitInASourcedFileStillEndsTheShell(t *testing.T) {
 		t.Errorf("status = %d, want 7", st)
 	}
 }
+
+// TestASetInASourcedFileDoesNotSurviveTheDotHere: ksh93 restores the
+// caller's positional parameters over the sourced file's own `set`, where
+// bash lets the `set` stand.
+//
+// Measured 2026-09-21 on ksh93u+ 2012-08-01, `env -i PATH=/usr/bin:/bin
+// LC_ALL=C`: `set -- a b c; . ./g p q; echo "$@"` is `a b c` with `set -- m
+// n o p` in the file, with `set --` in it, and with `shift` in it. The three
+// bodies together are the discriminator and its control — a column that let
+// a replacement through would part them.
+func TestASetInASourcedFileDoesNotSurviveTheDotHere(t *testing.T) {
+	for _, body := range []string{"set -- m n o p", "set --", "shift"} {
+		t.Run(body, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "g.sh")
+			if err := os.WriteFile(path, []byte(body+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out, _ := runKsh(t, dir, `set -- a b c; . `+path+` p q; echo "after=[$@]"`)
+			if got := strings.TrimSpace(out); got != "after=[a b c]" {
+				t.Errorf("output = %q, want the caller's parameters back", got)
+			}
+		})
+	}
+}

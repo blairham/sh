@@ -1961,6 +1961,10 @@ func Semantics() interp.Semantics {
 	// is the half of this zsh answers the other way.
 	s.ParamErrorIsAnExitRequest = interp.No
 	s.DotPassesArguments = interp.Yes
+	// And the restore is unconditional here as it is in zsh: measured
+	// 2026-09-21 on ksh93u+ 2012-08-01, a sourced file's own `set -- m n o p`
+	// is gone when the `.` returns and the caller's `a b c` is back (#4063).
+	s.DotSetCancelsTheRestore = interp.No
 	// Reads options and has none to read, which is a different answer from
 	// reading the word as a filename: `unknown option` and a usage line.
 	s.DotReadsOptions = interp.Yes

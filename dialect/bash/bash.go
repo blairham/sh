@@ -1641,6 +1641,14 @@ func Semantics() interp.Semantics {
 	// the departure is the mode's and not argv[0]'s (#3818).
 	s.DotWithNoOperandIsFatalInPosixMode = interp.Yes
 	s.DotPassesArguments = interp.Yes
+	// And the restore yields to the file's own `set`, which is this column
+	// alone among those that pass the words. Measured 2026-09-21 on bash
+	// 5.3.20 and bash 3.2.57, with a file holding `set -- m n o p`:
+	// `set -- a b c; . ./g p q; echo "$@"` writes `m n o p` here and `a b c`
+	// in zsh 5.9.2, ksh93u+ and BusyBox ash. `shift` in place of the `set` is
+	// `a b c` in all four, so what moves is the replacement and not the
+	// restore (#4063).
+	s.DotSetCancelsTheRestore = interp.Yes
 	// A directory operand is an error here and success in zsh and dash.
 	// Measured, `. ./` is `bash: line 1: .: ./: is a directory` at 1, and
 	// the script carries on — the same status and the same survival a file

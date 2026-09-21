@@ -789,6 +789,16 @@ func Semantics() interp.Semantics {
 	// `.` and `eval` is the POSIX answer, which dash keeps and the others have
 	// each moved away from.
 	s.DotWithNoOperandIsAnError = interp.No
+	// unanswered DotSetCancelsTheRestore: that axis is about a restore this
+	// shell never performs. DotPassesArguments is No here — the words after
+	// the filename are ignored, so the sourced file is running on the
+	// caller's own list — and a `set` it runs is therefore an ordinary
+	// change to that list rather than something a restore could undo.
+	// Measured 2026-09-21 on dash 0.5.12: with `set -- m n o p` in the file,
+	// `set -- a b c; . ./g p q; echo "$@"` writes `m n o p`, and the control
+	// with `shift` in the file writes `b c` — the caller's list, shifted,
+	// which is what says the change was never made to a list of its own
+	// (#4063).
 	// unanswered DotWithNoOperandIsFatal: the axis above says a missing
 	// operand is not an error here at all — measured, `.` alone is silent at 0
 	// — so there is no failure for a cost to be asked about.

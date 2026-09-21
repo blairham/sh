@@ -1607,6 +1607,12 @@ func Semantics() interp.Semantics {
 	// line after it writes `[outer1][outer2][3]`. dash writes the caller's
 	// three at both sites.
 	s.DotPassesArguments = interp.Yes
+	// And the restore stands over the file's own `set`, which is the answer
+	// zsh and ksh93 give and not bash's. Measured 2026-09-21 against BusyBox
+	// v1.37.0 in the digest-pinned Alpine image internal/oracle reaches,
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C`: with `set -- m n o p` in
+	// the file, `set -- a b c; . ./g p q; echo "$@"` writes `a b c` (#4063).
+	s.DotSetCancelsTheRestore = interp.No
 	// Only the last of several targets is used: `echo hi >a >b` leaves a
 	// empty.
 	s.RedirectsUseEveryTarget = interp.No

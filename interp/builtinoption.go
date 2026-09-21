@@ -393,3 +393,76 @@ func (r *Runner) builtinUsageLine(name string) {
 		r.diagf("%s\n", usage)
 	}
 }
+
+// builtinOptionsCountingBack is builtinOptions for a builtin whose *operands*
+// can be written the way an option is.
+//
+// `fc` is the one. Its `first` and `last` operands may be an event counted
+// back from the end of the history list, and the spelling of that is a minus
+// sign and a number: measured 2026-09-21 on bash 5.3.20, `fc -l -2` lists the
+// last two entries and `fc -s -1` re-runs the previous command, where reading
+// either as options makes the line `fc: -2: invalid option` and a refusal
+// where bash runs it.
+//
+// The rule is exact and it is the whole word: a dash followed by nothing but
+// digits is an operand, and a dash followed by anything else is options all
+// the way. Measured on the same shell, `fc -s -1x` is `fc: -1: invalid
+// option` — so `-1x` is a bundle whose first letter is not a letter, and not
+// a malformed number. A `--` before the number ends the options first and
+// reaches the same place: `fc -s -- -42` runs an event and refuses nothing.
+//
+// Scanning ahead rather than teaching the reader a new letter shape, because
+// the question is where the options *end* and not what any of them mean: the
+// words up to the first such operand are handed to the ordinary reader, so
+// the bundling, the `--` marker, `--help`, the refusal wording and its usage
+// line are all still that reader's and there is no second copy of them here.
+func (r *Runner) builtinOptionsCountingBack(name string, args []string, known string) (rest []string, opts string, optArg map[byte]string, code int) {
+	cut := len(args)
+	for i := 0; i < len(args); {
+		a := args[i]
+		if len(a) < 2 || a[0] != '-' || a == "--" {
+			break
+		}
+		if isDashNumber(a) {
+			cut = i
+			break
+		}
+		// A letter whose argument is the *next* word takes that word
+		// whatever it looks like — `fc -e -` names the editor `-` — so the
+		// scan has to step over it or it would cut the option reader off
+		// from its own argument. That is the one thing this needs the
+		// optstring for.
+		step := 1
+		for j := 1; j < len(a); j++ {
+			takes, ok := optionLetter(known, a[j])
+			if !ok || takes == argNone {
+				continue
+			}
+			if j+1 == len(a) {
+				step = 2
+			}
+			break
+		}
+		i += step
+	}
+	rest, opts, optArg, _, code = r.builtinOptionsArg(name, args[:cut], known)
+	if code != 0 {
+		return nil, opts, optArg, code
+	}
+	return append(rest[:len(rest):len(rest)], args[cut:]...), opts, optArg, 0
+}
+
+// isDashNumber reports a word that is a minus sign and then only digits, which
+// is at least one digit: a bare `-` is an operand in its own right and is not
+// this.
+func isDashNumber(a string) bool {
+	if len(a) < 2 || a[0] != '-' {
+		return false
+	}
+	for i := 1; i < len(a); i++ {
+		if !isDigit(a[i]) {
+			return false
+		}
+	}
+	return true
+}

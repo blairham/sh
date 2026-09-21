@@ -6108,6 +6108,17 @@ type Diagnostics struct {
 	// it. No verbs.
 	FcNoSuchEvent string
 
+	// FcNoCommandFound is `fc` given an operand that names nothing: a word
+	// no entry begins with, or — under `-s` — an event that would be the
+	// `fc` call itself. No verbs.
+	FcNoCommandFound string
+
+	// FcOutOfRange is `fc` on its way to an editor, given an event past the
+	// end of the list. The wording is not FcNoCommandFound's and the pair
+	// was measured together: `fc -0` says this and `fc -s -0` says that, on
+	// the same list and the same operand. No verbs.
+	FcOutOfRange string
+
 	// OptionListingHeader opens `set -o`'s table where the dialect has one:
 	// dash and ksh93 write "Current option settings" first.
 	OptionListingHeader string

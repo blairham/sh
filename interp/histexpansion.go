@@ -234,6 +234,43 @@ func (r *Runner) SetHistoryListFilledByTheReader(on bool) { r.histFromReader = o
 // HistoryListFilledByTheReader reports it.
 func (r *Runner) HistoryListFilledByTheReader() bool { return r.histFromReader }
 
+// SetHistoryOwnLine hands the Runner the dialect's answer to two questions
+// about the line the builtin now running is written on: whether the list
+// already holds it, and how to take it back off again.
+//
+// The same pair `history -s` and `history -p` have always needed — both are
+// documented to drop their own line before adding what they were given — and
+// `fc` needs both for a third reason each. Its default range ends at the
+// command *before* itself, so where its own line is in the list the newest
+// entry is not the newest answer; and `fc -s` puts the command it re-runs in
+// the list **in place of** the `fc` call, measured 2026-09-21 on bash 5.3.20:
+// `echo a`, `fc -s`, `history` lists `echo a` twice and no `fc` at all.
+//
+// A pair of functions taking a *Runner, for the reason SetHistoryStore gives
+// at length: the list is a dialect's and lives where that dialect keeps it,
+// and a closure over the runner it was registered on would write a subshell's
+// answer into the parent's store.
+//
+// A dialect that leaves these nil says its list never holds the running
+// line — which is the truth for a list nothing but a builtin fills.
+func (r *Runner) SetHistoryOwnLine(has func(*Runner) bool, drop func(*Runner)) {
+	r.histHasOwn, r.histDropOwn = has, drop
+}
+
+// HistoryHasOwnLine reports whether the list already holds the line the
+// builtin now running is written on.
+func (r *Runner) HistoryHasOwnLine() bool {
+	return r.histHasOwn != nil && r.histHasOwn(r)
+}
+
+// DropHistoryOwnLine takes that line back off the list, and does nothing
+// where it was never on it.
+func (r *Runner) DropHistoryOwnLine() {
+	if r.histDropOwn != nil {
+		r.histDropOwn(r)
+	}
+}
+
 // HistoryEntries is the list, oldest first.
 func (r *Runner) HistoryEntries() []string {
 	if r.histEntries == nil {

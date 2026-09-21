@@ -1943,6 +1943,13 @@ type Runner struct {
 	// commands into that list, which is what makes a builtin's own line the
 	// last entry. See SetHistoryListFilledByTheReader.
 	histFromReader bool
+	// histHasOwn and histDropOwn are the dialect's answer to whether that
+	// line is in the list and how to take it off. See SetHistoryOwnLine.
+	histHasOwn  func(*Runner) bool
+	histDropOwn func(*Runner)
+	// fcLayout is how `fc -l` writes one entry, which differs by dialect
+	// where the list itself does not. See Runner.SetHistoryListingLayout.
+	fcLayout fcListingLayout
 	// tracksWindowSize is permission to keep $LINES and $COLUMNS abreast of
 	// the terminal. bash spells it `checkwinsize` and zsh has no name for it
 	// at all because it never stops doing it; the *capability* is neither

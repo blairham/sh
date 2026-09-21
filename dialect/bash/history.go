@@ -1082,14 +1082,24 @@ func historySizeAssigned(r *interp.Runner, value string) {
 // value apart, and a value that is not a count never reaches here even
 // though a cap is still in force for it (#4054).
 //
-// zsh and ksh93 trim on the assignment too and **keep the numbers**: zsh
-// 5.9.2 with `print -s a`, `b`, `c` and `HISTSIZE=2` lists `2 b`, `3 c` where
-// bash lists `1 b`, `2 c`, and ksh93u+ driven through `-i` keeps the two it
-// holds at the numbers they had. Neither dialect has a sized list here yet
-// (#4043), so the rule is stated where it was measured rather than as a field
-// on repl.HistoryStyle that nothing would read; the session's own recall list
-// is sized once when it starts and has no assignment to hear, so there is no
-// second reader of this to keep in step.
+// zsh trims on the assignment too and **keeps the numbers**: 5.9.2 with
+// `print -s a`, `b`, `c` and `HISTSIZE=2` lists `2 b`, `3 c` where bash lists
+// `1 b`, `2 c`. That is dialect/zsh's own rule now (#4043), stated where it
+// was measured rather than as a field on repl.HistoryStyle that nothing would
+// read; the session's own recall list is sized once when it starts and has no
+// assignment to hear, so there is no second reader of this to keep in step.
+//
+// **ksh93 is not a third column of this, and the line that used to say so was
+// wrong.** It does not trim: HISTSIZE narrows what `hist -l` shows and every
+// entry is still there. Measured 2026-09-21 on ksh93u+ at `/bin/ksh` through
+// `-i`, listing at each step, `true 1`, `true 2`, `true 3`, `HISTSIZE=2`,
+// `hist -l`, `HISTSIZE=99`, `hist -l` — the first listing holds two and the
+// second holds all seven, at their own numbers. The history is the file
+// there, which two rows say: a HISTFILE in a directory that does not exist
+// leaves ksh93 with no history at all, and after the assignment the file
+// still holds every line. The numbers surviving, which the original reading
+// leaned on, is a consequence of their being the file's offsets rather than a
+// trimming rule that happens to keep them. #4092 carries the measurement.
 func historyStifle(r *interp.Runner, keep int) {
 	entries := historyEntries(r)
 	if len(entries) <= keep {

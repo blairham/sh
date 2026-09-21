@@ -179,3 +179,119 @@ func TestAnInheritedListSizeIsScannedRatherThanEvaluated(t *testing.T) {
 		})
 	}
 }
+
+// HISTSIZE is this shell's own parameter rather than a name a script has to
+// invent: an integer with a base and a default, whose value is what the
+// arithmetic made of the assignment, floored at one (#4093).
+//
+// The attribute is not decoration. It is what evaluates what is assigned, so
+// the rows below and the sizing rows above are one rule and not two.
+func TestTheListSizeIsAnIntegerParameterOfItsOwn(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"it is there, and it is thirty",
+			`echo "[${HISTSIZE-U}]"` + "\n",
+			"[30]\n",
+		},
+		{
+			"and it describes as an integer in base ten",
+			"typeset -p HISTSIZE\n",
+			"typeset -i10 HISTSIZE=30\n",
+		},
+		{
+			"an assignment is evaluated",
+			`HISTSIZE=1+1; echo "[$HISTSIZE]"` + "\n",
+			"[2]\n",
+		},
+		{
+			"including a base prefix",
+			`HISTSIZE=0x2; echo "[$HISTSIZE]"` + "\n",
+			"[2]\n",
+		},
+		{
+			"and whitespace around it",
+			`HISTSIZE=" 2 "; echo "[$HISTSIZE]"` + "\n",
+			"[2]\n",
+		},
+		{
+			"a word evaluates to nothing, and nothing floors at one",
+			`HISTSIZE=abc; echo "[$HISTSIZE]"` + "\n",
+			"[1]\n",
+		},
+		{
+			"so does none",
+			`HISTSIZE=0; echo "[$HISTSIZE]"` + "\n",
+			"[1]\n",
+		},
+		{
+			"and so does a negative",
+			`HISTSIZE=-1; echo "[$HISTSIZE]"` + "\n",
+			"[1]\n",
+		},
+		{
+			"and a removal takes the name away",
+			`unset HISTSIZE; echo "[${HISTSIZE-U}]"` + "\n",
+			"[U]\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			out, st := fcScript(t, t.TempDir(), c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("out %q status %d, want %q at 0", out, st, c.want)
+			}
+		})
+	}
+}
+
+// A value that is not an expression at all is the bad-math error, which ends
+// a non-interactive shell — the row that says the attribute is the core's
+// reading and not a second one written beside it.
+func TestAnUnreadableListSizeIsTheBadMathError(t *testing.T) {
+	t.Parallel()
+	out, st := fcScript(t, t.TempDir(), `HISTSIZE=2x`+"\necho reached\n")
+	if !strings.Contains(out, "bad math expression") {
+		t.Errorf("out %q, want the bad-math error", out)
+	}
+	if strings.Contains(out, "reached") {
+		t.Errorf("the shell carried on: %q", out)
+	}
+	if st == 0 {
+		t.Errorf("status %d, want a failure", st)
+	}
+}
+
+// An inherited HISTSIZE is what the list is bounded at *and* what the
+// parameter holds: the scan happens before the attribute goes on, so a value
+// the environment carried in is read rather than evaluated and never ends the
+// shell.
+func TestAnInheritedListSizeIsStoredAsWhatWasScanned(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ value, want string }{
+		{"2x", "[2]\n"},
+		{" 2 ", "[2]\n"},
+		{"0x2", "[2]\n"},
+		{"1+1", "[1]\n"},
+		{"abc", "[1]\n"},
+		{"-1", "[1]\n"},
+		{"0", "[1]\n"},
+		{"", "[1]\n"},
+		{"99", "[99]\n"},
+	} {
+		t.Run("["+c.value+"]", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			out, st, err := preset.Combined(t, dialecttest.Base{
+				Dir:  dir,
+				Vars: map[string]string{"PATH": dir, "HISTSIZE": c.value},
+			}, `echo "[$HISTSIZE]"`+"\n")
+			if err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if out != c.want || st != 0 {
+				t.Errorf("out %q status %d, want %q at 0", out, st, c.want)
+			}
+		})
+	}
+}

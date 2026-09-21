@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/prompttheme"
+	"github.com/blairham/sh/internal/repostatus"
 	"github.com/blairham/sh/interp"
 )
 
@@ -64,7 +65,17 @@ type Theme struct {
 	// goroutine did the computing, which is what the lock is for.
 	mu        sync.Mutex
 	published func()
+
+	// repos is the repository-status capability this session's prompt draws
+	// from — a resident cache kept honest by a filesystem watch, which opens
+	// nothing until something asks it a question. See internal/repostatus.
+	repos *repostatus.Cache
 }
+
+// Close stops anything this theme started, which today is the repository
+// watch. A session does it through PublishTo(nil); this is the same thing by
+// name, for an embedder that built a theme and is finished with it.
+func (t *Theme) Close() error { return t.repos.Close() }
 
 // PublishTo satisfies PromptPublisher: a session hands the theme the way to
 // say that a redraw would differ, and takes it back when the session ends.
@@ -75,8 +86,14 @@ type Theme struct {
 // answer here or somewhere else.
 func (t *Theme) PublishTo(publish func()) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.published = publish
+	t.mu.Unlock()
+	if publish == nil {
+		// The session has ended. Everything this theme started stops with
+		// it: a watch left running would be a goroutine holding descriptors
+		// on a repository nobody is looking at any more.
+		_ = t.repos.Close()
+	}
 }
 
 // Publish says that what this theme would draw has changed.
@@ -121,6 +138,14 @@ func NewTheme(get func(name string) (string, bool)) *Theme {
 	// language, for the reason that one is exported: two would drift the
 	// first time a conversion was fixed in either.
 	t.roster.Compile("time", prompttheme.Clock(interp.Strftime))
+	// And the repository, which is the first segment whose answer can change
+	// while nobody is typing. The cache publishes through the theme, so a
+	// branch moved in another terminal redraws the prompt somebody is
+	// sitting in front of — and it opens no descriptor and starts no
+	// goroutine until a configuration names this element in a directory that
+	// is actually in a repository.
+	t.repos = repostatus.New(t.Publish)
+	t.roster.Compile("vcs", prompttheme.Repository(t.repository))
 	t.engine = &prompttheme.Engine{
 		Roster: t.roster,
 		Screen: prompttheme.Screen{
@@ -177,6 +202,13 @@ func (t *Theme) Problems() []string {
 	for _, element := range t.roster.NotYet() {
 		problems = append(problems, "no segment draws "+element)
 	}
+	if trouble := t.repos.Trouble(); trouble != "" {
+		// Behavior where watches are unavailable must degrade to something
+		// honest and never to a silently stale answer. This is the honest
+		// half: the prompt is one prompt late rather than wrong, and it says
+		// which.
+		problems = append(problems, trouble)
+	}
 	if set := t.icons(t.resolve()); !set.Carried() {
 		// Silently substituting a different glyph set is how a prompt ends up
 		// full of boxes with no explanation. The table still draws — a person
@@ -184,6 +216,23 @@ func (t *Theme) Problems() []string {
 		problems = append(problems, "icon table "+set.Name+" is not carried; served by "+set.Served)
 	}
 	return problems
+}
+
+// repository is the capability's answer in the shape the segment takes.
+//
+// Two shapes rather than one because the engine names no capability: a
+// segment is handed facts, and what computed them is this file's business.
+// It is also what lets the segment be driven from a table in a test.
+func (t *Theme) repository(dir string) (prompttheme.Repo, bool) {
+	status, ok := t.repos.Status(dir)
+	if !ok {
+		return prompttheme.Repo{}, false
+	}
+	return prompttheme.Repo{
+		Branch:    status.Branch,
+		Commit:    status.Commit,
+		Operation: status.Operation,
+	}, true
 }
 
 // icons is the table this configuration asked for, parsed once per name.

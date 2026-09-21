@@ -453,3 +453,88 @@ func TestTheIconTableReachesTheDrawnPrompt(t *testing.T) {
 		t.Errorf("ICONS=none still drew %q", glyph)
 	}
 }
+
+// The repository segment draws from the capability, and the capability is
+// this session's — opened when something asks and closed with the session.
+func TestTheRepositorySegmentDrawsTheBranch(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeThemeFile(t, filepath.Join(root, ".git", "HEAD"), "ref: refs/heads/work\n", time.Now())
+
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "vcs",
+		"SH_PROMPT_ICONS":         "none",
+	})
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+
+	drawn, drawing := theme.DrawPrompt(PromptInfo{Dir: root})
+	if !drawing || !strings.Contains(drawn.Text, "work") {
+		t.Errorf("the prompt drew %q, want the branch in it", drawn.Text)
+	}
+
+	// And a directory outside a repository costs no space rather than an
+	// empty box.
+	outside, _ := theme.DrawPrompt(PromptInfo{Dir: t.TempDir()})
+	if strings.Contains(outside.Text, "work") {
+		t.Errorf("a directory outside the repository drew %q", outside.Text)
+	}
+}
+
+// A repository that is in the middle of something says so beside the branch,
+// because that is the state a person can forget they are in.
+func TestTheRepositorySegmentNamesAnOperation(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	writeThemeFile(t, filepath.Join(root, ".git", "HEAD"), "ref: refs/heads/work\n", now)
+	writeThemeFile(t, filepath.Join(root, ".git", "MERGE_HEAD"), "", now)
+
+	runner := newTestRunner(map[string]string{
+		"SH_PROMPT_LEFT_ELEMENTS": "vcs",
+		"SH_PROMPT_ICONS":         "none",
+	})
+	theme := NewTheme(runner.GetVar)
+	t.Cleanup(func() { _ = theme.Close() })
+
+	drawn, _ := theme.DrawPrompt(PromptInfo{Dir: root})
+	if !strings.Contains(drawn.Text, "work (merge)") {
+		t.Errorf("a half-finished merge drew %q", drawn.Text)
+	}
+}
+
+// The end of a session takes down everything the theme started, which is the
+// fourth condition a piece of work here has to meet: nothing it started is
+// still running.
+func TestTheEndOfASessionStopsTheRepositoryWatch(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeThemeFile(t, filepath.Join(root, ".git", "HEAD"), "ref: refs/heads/work\n", time.Now())
+
+	runner := newTestRunner(map[string]string{"SH_PROMPT_LEFT_ELEMENTS": "vcs"})
+	theme := NewTheme(runner.GetVar)
+	theme.PublishTo(func() {})
+	if _, drawing := theme.DrawPrompt(PromptInfo{Dir: root}); !drawing {
+		t.Fatal("the theme did not draw")
+	}
+
+	if !theme.repos.Watching() {
+		t.Skipf("no filesystem watch here: %s", theme.repos.Trouble())
+	}
+
+	theme.PublishTo(nil)
+	if theme.repos.Watching() {
+		t.Error("the session ended and the repository is still being watched")
+	}
+	// The theme still answers afterwards — a prompt drawn after a session has
+	// been taken down is not an error.
+	if _, drawing := theme.DrawPrompt(PromptInfo{Dir: root}); !drawing {
+		t.Error("the theme stopped drawing when the session ended")
+	}
+}

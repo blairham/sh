@@ -1981,6 +1981,13 @@ func Semantics() interp.Semantics {
 	// all `fc: no command found` there. The digit *prefix* itself is not
 	// this axis — both shells read `fc -l 2x` as entry 2, and the core does
 	// that unasked.
+	// And a range whose entries would run newest first is refused on the
+	// editor road rather than run that way: `fc -e ed 3 1` and
+	// `fc -r -e ed 1 3` are both refused where `fc -r -e ed 3 1` edits 1, 2,
+	// 3 at 0, so it is the order they would run in that is judged. `fc -l
+	// 3 1` still lists backwards at 0, so it is the running and not the
+	// range (#4100).
+	s.FcBackwardsRangeIsAnError = interp.Yes
 	s.FcNumericOperandSkipsBlanksAndASign = interp.Yes
 	// And the same looseness decides where the options end: `fc -l -1x` is
 	// the operand `-1x` here and `fc: -1: invalid option` at 2 in bash,
@@ -4564,6 +4571,9 @@ func Diagnostics() interp.Diagnostics {
 		// and it names no operand — `fc -s 5`, `fc -s 99` and a bare
 		// `fc -s` on a one-entry list all come to these words.
 		FcCurrentLineRecurses: "current history line would recurse endlessly, aborted",
+		// And the range this shell will not run in the order it was asked
+		// for, which also names no operand.
+		FcBackwardsRange: "history events can't be executed backwards, aborted",
 		// The editor's file left empty, named by the path the person never
 		// saw.
 		FcEmptyEdit:                  "read error on %[1]s",

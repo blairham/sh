@@ -6301,6 +6301,11 @@ type Diagnostics struct {
 	// Semantics.FcNewestEntryIsTheCurrentLine is yes.
 	FcCurrentLineRecurses string
 
+	// FcBackwardsRange is `fc`'s editor road given a range whose entries
+	// would run newest first. It names no operand, and it is reached only
+	// where Semantics.FcBackwardsRangeIsAnError is yes.
+	FcBackwardsRange string
+
 	// FcEmptyEdit is what the dialect that complains about an emptied
 	// editor file says. `%[1]s` is the file's name, which is the only thing
 	// in the sentence: zsh writes `read error on /tmp/zsh…`, naming a path

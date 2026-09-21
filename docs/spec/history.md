@@ -1246,6 +1246,26 @@ turns whatever order that produced around again.
 
 A word no entry begins with is `fc: no command found` at 1.
 
+**An operand written as the empty string is a search, not an absent one**, and
+every entry begins with the empty string — so it names the newest entry the
+search is allowed to reach. One rule in both columns, measured 2026-09-21 on
+five entries:
+
+| written | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- |
+| `fc -l ''` | `5 e5` alone | `4 e4` · `5 e5` |
+| `fc -l 2 ''` | `2` … `5` | `2` … `4` |
+| `fc -l '' ''` | the newest entry alone | the newest reachable alone |
+| `fc -s ''` | re-runs `e5` | re-runs `e4` |
+| `fc -e ed ''` | edits the newest entry | edits `e4` |
+| `fc -l` | the sixteen-back window | the newest seventeen |
+
+The two columns differ only by where the search stops, which is the threshold
+below and is already an axis; the empty word itself needs none. It is
+`fcOperand` in the implementation, carrying whether the word was written at
+all — a single string cannot tell the two apart and the absent road answered
+for both, on all four of its defaults (#4101).
+
 **A number is the digits at the front of the word**, and what follows them is
 ignored. Measured 2026-09-21 on a five-entry list, in bash 5.3.20 and in
 zsh 5.9.2 alike: `fc -l 2x` starts at entry 2, `fc -l 3abc` at 3, and
@@ -1374,11 +1394,53 @@ is a sentence about what running the line would do rather than about an
 operand that named nothing — one sentence answering the event written down,
 the event past the end of the list and the default alike.
 
-One neighboring refusal is measured and deliberately **not** modeled yet: on
-the editor road this shell answers `fc -e ed 3 1` and `fc -r -e ed 1 3` with
-`history events can't be executed backwards, aborted` at 1, where `fc -l 3 1`
-lists backwards at 0 and bash edits backwards at 0. Written down here so the
-next pass does not re-measure it.
+### The other reading, continued: the editor road's three refusals
+
+The threshold above is one of three answers the editor road can give, and the
+order between them is measured rather than derived. A 26-cell matrix over
+`{1, 2, 4, 5, 6, 99}` paired both ways, plain and under `-r`, on five entries
+(so `curhist` is 5):
+
+| operands | plain | with `-r` |
+| --- | --- | --- |
+| `4 4` | `e4` | `e4` |
+| `2 4` | `e2 e3 e4` | backwards |
+| `4 2` | backwards | `e2 e3 e4` |
+| `5 5` | recurse endlessly | recurse endlessly |
+| `5 4` | backwards | `e4 e5` |
+| `5 1` | backwards | `e1` … `e5` |
+| `1 5` | `e1` … `e4` | backwards |
+| `1 99` | `e1` … `e4` | backwards |
+| `99 1` | backwards | `e1` … `e5` |
+| `6 7`, `7 6` | recurse endlessly | — |
+| `0 0` | `no such event: 0` | — |
+
+The rules all 26 cells agree on, in this order:
+
+1. **Both ends at or past `curhist` is the recursion refusal**, asked of the
+   ends as they were written. `5 5` and `6 7` are that sentence where `5 4` —
+   one end inside — is the backwards one, and a single operand is both ends,
+   which is what makes `fc 5` and `fc -s 5` the same answer.
+2. **Each end is bounded by its position**: `first` at `curhist`, `last` one
+   below it. The asymmetry is one measured pair — `fc -e ed 4 5` edits `e4`
+   alone and `fc -r -e ed 5 4` edits `e4` and `e5`, the same two events named
+   the same two ways — so it is the operand's place and not the range's, and
+   the editor road brings an end in rather than refusing it.
+3. **A range that would run newest first is refused**, which is
+   `FcBackwardsRangeIsAnError` and `Diagnostics.FcBackwardsRange`. The
+   judgement is on the order the entries would **run** in, which `-r` is what
+   separates: `fc -e ed 3 1` and `fc -r -e ed 1 3` are both refused and
+   `fc -r -e ed 3 1` edits 1, 2, 3 at 0. It is the editor road alone — `fc -l
+   3 1` and `fc -lr 1 3` each list backwards at 0 in this same shell, so it is
+   about running entries and not about a range — and bash edits a descending
+   range at 0, which is why it is an axis (#4100).
+4. Then the range refusal above, which is what `0 0` reaches.
+
+One further refusal is measured and deliberately **not** modeled: `fc -s a=`
+on a list holding no `a` is `fc: no substitutions performed` at 1 in this
+shell, where bash and this implementation run the entry unchanged. A fifth
+wording for a fifth question, written down so the next pass does not
+re-measure it.
 
 ### `-s`, and the entry it leaves behind
 

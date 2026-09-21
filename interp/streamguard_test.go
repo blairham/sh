@@ -6,7 +6,6 @@ package interp
 import (
 	"bytes"
 	"io"
-	"sync"
 	"testing"
 	"time"
 )
@@ -38,14 +37,14 @@ func (o *opaqueLayer) Write(p []byte) (int, error) { return o.w.Write(p) }
 // goroutine of its own so that this fails in two seconds rather than hanging
 // the package: a deadlock has nothing to interrupt it.
 func TestAGuardUnderAnotherLayerIsNotTakenTwice(t *testing.T) {
-	var mu sync.Mutex
+	locks := &streamLocks{}
 	var buf bytes.Buffer
 
-	inner := lockWriter(&mu, &buf)
+	inner := lockWriter(locks, &buf)
 	if _, ok := inner.(*lockedWriter); !ok {
 		t.Fatalf("the first guard is %T, want one to have gone on", inner)
 	}
-	outer := lockWriter(&mu, &seeThrough{w: inner})
+	outer := lockWriter(locks, &seeThrough{w: inner})
 	if _, ok := outer.(*lockedWriter); ok {
 		t.Errorf("a second guard went on over the first, which is one mutex twice")
 	}
@@ -76,24 +75,24 @@ func TestAGuardUnderAnotherLayerIsNotTakenTwice(t *testing.T) {
 // an opaque layer leaves the chain unreadable and the guard that is there to
 // be found cannot be.
 func TestWhatTheChainIsAskedAndWhatItCannotSee(t *testing.T) {
-	var mu, other sync.Mutex
+	locks, other := &streamLocks{}, &streamLocks{}
 	var buf bytes.Buffer
 
 	t.Run("a different lock under the layer is not this one", func(t *testing.T) {
-		w := lockWriter(&mu, &seeThrough{w: lockWriter(&other, &buf)})
+		w := lockWriter(locks, &seeThrough{w: lockWriter(other, &buf)})
 		if _, ok := w.(*lockedWriter); !ok {
 			t.Errorf("got %T, want a guard: the lock under it is somebody else's", w)
 		}
 	})
 	t.Run("an opaque layer hides the guard beneath it", func(t *testing.T) {
-		w := lockWriter(&mu, &opaqueLayer{w: lockWriter(&mu, &buf)})
+		w := lockWriter(locks, &opaqueLayer{w: lockWriter(locks, &buf)})
 		if _, ok := w.(*lockedWriter); !ok {
 			t.Errorf("got %T, want a guard: nothing here can see past the layer", w)
 		}
 	})
 	t.Run("a guard that is already outermost is still handed back", func(t *testing.T) {
-		one := lockWriter(&mu, &buf)
-		if again := lockWriter(&mu, one); again != one {
+		one := lockWriter(locks, &buf)
+		if again := lockWriter(locks, one); again != one {
 			t.Errorf("got %p, want the guard that is already there (%p)", again, one)
 		}
 	})

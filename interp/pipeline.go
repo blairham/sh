@@ -39,14 +39,25 @@ import (
 // interface values, which panics for a writer whose type is not comparable,
 // so it assumes they are. Serializing stderr behind stdout costs a mutex on
 // streams a shell writes a line at a time.
+// The lock is reached through the streamLocks it belongs to rather than held
+// as a bare *sync.Mutex, because the *seal* below belongs to the stream on
+// exactly the same argument the lock does, and a writer that could see one
+// without the other would take the lock and then miss the answer it is there
+// to read.
 type lockedWriter struct {
-	mu *sync.Mutex
-	w  io.Writer
+	locks *streamLocks
+	w     io.Writer
 }
 
 func (l *lockedWriter) Write(p []byte) (int, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.locks.write.Lock()
+	defer l.locks.write.Unlock()
+	if l.locks.sealed {
+		// The shell this stream was handed to has finished and the caller
+		// has it back. See streamseal.go for why the bytes are dropped here
+		// rather than written, and why the answer is a success.
+		return len(p), nil
+	}
 	return l.w.Write(p)
 }
 
@@ -58,6 +69,9 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 // lockedWriter, where the reason is the whole point of the type.
 type streamLocks struct {
 	write, in sync.Mutex
+	// sealed says the shell has handed these streams back to whoever gave
+	// them to it, and is read and written under write. See streamseal.go.
+	sealed bool
 }
 
 // lockedReader serializes reads from a stream the shell was handed, for the
@@ -99,11 +113,11 @@ func (r *Runner) streamLocks() *streamLocks {
 
 // lockedStdout and lockedStderr are the shell's streams, guarded.
 func (r *Runner) lockedStdout() io.Writer {
-	return lockWriter(&r.streamLocks().write, r.stdout())
+	return lockWriter(r.streamLocks(), r.stdout())
 }
 
 func (r *Runner) lockedStderr() io.Writer {
-	return lockWriter(&r.streamLocks().write, r.stderr())
+	return lockWriter(r.streamLocks(), r.stderr())
 }
 
 // lockWriter guards a stream, and hands back a guard that is already there.
@@ -130,7 +144,7 @@ func (r *Runner) lockedStderr() io.Writer {
 // child said no, where it said yes on the line before and says yes in all five
 // shells of the panel. That was the price #735 recorded for guarding both
 // sides of a construct, and it is not one that has to be paid.
-func lockWriter(mu *sync.Mutex, w io.Writer) io.Writer {
+func lockWriter(locks *streamLocks, w io.Writer) io.Writer {
 	if _, ok := w.(*os.File); ok {
 		return w
 	}
@@ -143,10 +157,10 @@ func lockWriter(mu *sync.Mutex, w io.Writer) io.Writer {
 	if _, ok := w.(closedFd); ok {
 		return w
 	}
-	if guardedBy(mu, w) {
+	if guardedBy(locks, w) {
 		return w
 	}
-	return &lockedWriter{mu: mu, w: w}
+	return &lockedWriter{locks: locks, w: w}
 }
 
 // WriterUnder is a stream wrapper that can say what it wraps.
@@ -188,9 +202,9 @@ func (l *lockedWriter) Unwrap() io.Writer { return l.w }
 // unserialized and the bytes are still ordered where it matters — which is the
 // same bargain lockWriter makes for an *os.File, where the kernel is the guard
 // and the layers above it are nobody's to serialize.
-func guardedBy(mu *sync.Mutex, w io.Writer) bool {
+func guardedBy(locks *streamLocks, w io.Writer) bool {
 	for w != nil {
-		if l, ok := w.(*lockedWriter); ok && l.mu == mu {
+		if l, ok := w.(*lockedWriter); ok && l.locks == locks {
 			return true
 		}
 		u, ok := w.(WriterUnder)

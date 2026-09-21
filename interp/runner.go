@@ -4555,6 +4555,11 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 			// script ending, and there the trap belongs.
 			r.runExitTrap(ctx)
 		}
+		// This route out does not reach Finish, and a run that stopped is
+		// the one most likely to have left a body writing. See
+		// streamseal.go; a caller that drives the shell on past this takes
+		// the seal off again by asking for the work.
+		r.sealStreams()
 		return r.status, err
 	}
 	return r.Finish(ctx), nil
@@ -4568,6 +4573,11 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 // Nothing is torn down here. Finish does that, once, however many chunks ran.
 func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ctx = ctx
+	// The caller is handing its streams back to the shell, which is the seal
+	// coming off — a Runner that has already finished once and is being
+	// driven on would otherwise write the rest of the session into nothing.
+	// See streamseal.go.
+	r.unsealStreams()
 	// Read once, here, rather than per command: see cancel.go for why that
 	// is the difference between honoring the context and paying for it.
 	r.watch(ctx)
@@ -4725,6 +4735,10 @@ func (r *Runner) OneCommand() bool {
 // parse, which is unanimous: a script whose last line is a syntax error still
 // runs its EXIT trap.
 func (r *Runner) Finish(ctx context.Context) int {
+	// Whatever this shell does below — an EXIT trap, a held body's output —
+	// goes to the caller, so a seal an earlier stop left on comes off first.
+	// See streamseal.go.
+	r.unsealStreams()
 	// A substitution below this shell could not parse its body and nothing
 	// has stopped on it, because the statement that held it was the script's
 	// last: the sequence point in Runner.stmt is reached at the *next*
@@ -4769,6 +4783,13 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// this is about *is* the pipe a body is reading. See endHeldProcSubs.
 	r.endHeldProcSubs()
 	r.cleanUpAtEnd()
+	// Last of the things that touch the caller's streams, and after the join
+	// above rather than before it: endHeldProcSubs is what *delivers* a
+	// `>(cmd)` body's output, and a seal set first would drop it. From here
+	// the streams are the caller's again and no goroutine of this shell's —
+	// an abandoned `<(cmd)` body, a background job still running — can reach
+	// them. See streamseal.go.
+	r.sealStreams()
 	if r.diedOfItsOwnSignal() && !r.inSubshell && r.DieBySignal != nil {
 		// Last, because a shell that is dying still runs its EXIT trap first
 		// where the dialect says so. This does not come back.

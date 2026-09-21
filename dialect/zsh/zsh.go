@@ -1969,7 +1969,14 @@ func Semantics() interp.Semantics {
 	// ever a quoting context, the builtin route cannot part from the
 	// expression's, and the answer exists so that route cannot reach an
 	// unanswered axis (#3871).
-	s.LetOperandSubscriptIsAQuotingContext = interp.No
+	s.ArrivedSubscriptIsAQuotingContext = interp.No
+	// And an apostrophe written inside a subscript stops nothing here
+	// either: measured 2026-09-20 on 5.9.2 from a script file,
+	// `typeset -A m; kq=q; (( m['$kq'] = 42 ))` stores under `'q'` — the
+	// expansion performed and the apostrophes kept, which is
+	// SubscriptIsAQuotingContext's `no` showing through beside this one
+	// (#3942).
+	s.WrittenSubscriptQuotationStopsItsExpansion = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

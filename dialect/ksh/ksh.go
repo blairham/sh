@@ -2691,7 +2691,15 @@ func Semantics() interp.Semantics {
 	// shape a script meets is `k="q'r'z"; let "++a[$k]"`, where the
 	// apostrophes a value carried are two characters of the key here and
 	// bash's quotation to remove (#3871).
-	s.LetOperandSubscriptIsAQuotingContext = interp.No
+	s.ArrivedSubscriptIsAQuotingContext = interp.No
+	// And an apostrophe a script writes inside a subscript does not stop
+	// the expansion it holds: measured 2026-09-20 on ksh93u+ 2012-08-01
+	// from a script file, `typeset -A m; kq=q; (( m['$kq'] = 42 ))` stores
+	// under `q` here where bash 5.3.20 stores under the three characters
+	// `$kq`. Reached through a subscript that arrived already expanded the
+	// two agree on `$kq`, which is what makes the written spelling its own
+	// question (#3942).
+	s.WrittenSubscriptQuotationStopsItsExpansion = interp.No
 	// And the same for a subscript that expanded to nothing, which this
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.

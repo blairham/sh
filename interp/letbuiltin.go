@@ -66,7 +66,7 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 	last := false
 	for _, expr := range args {
 		r.unspecified = false
-		tree, text, perr := r.arithTreeOver(nil, expr)
+		tree, text, perr := r.letOperandTree(expr)
 		if perr != nil {
 			r.mathDiagf("%s", r.diag().ParseFailure(perr))
 			if v, ok := r.valueBeforeAnIllegalByte(perr, text); ok {
@@ -289,4 +289,36 @@ func (r *Runner) valueBeforeAnIllegalByte(perr error, text string) (int, bool) {
 		return 0, true
 	}
 	return v, true
+}
+
+// letOperandTree reads one `let` operand as the expression it already is.
+//
+// An operand reaches this builtin having been through the shell's word
+// expansion like any other argument, so what arrives is a *result*: the
+// substitutions a script wrote in it have been performed once, and a `$`
+// still standing in it came out of a value and begins nothing. Measured
+// 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> f.sh` over a script
+// file with standard input on the null device, `y=5; let 'x = 1+$y'`:
+//
+//	bash 5.3.20  let: x = 1+$y: arithmetic syntax error: operand expected
+//	ksh93u+      let: x = 1+$y: arithmetic syntax error
+//	zsh 5.9.2    bad math expression: operator expected at `y'
+//
+// and `x` unset in all three. The same text through a value — `e='x = 1+$y';
+// let "$e"` — is the same three refusals, and `(( $e ))` is the matching
+// refusal one construct over, which this shell already gave. Unanimous, so it
+// is the core's reading and no axis: handing the operand to the reader that
+// waits for expansions ran a second round over text that had already had one,
+// and answered 6 in every dialect.
+//
+// It is the same distinction [Runner.arithTreeRead] draws for a subscript
+// that arrived out of a word, and it reaches further than the refusal: a
+// subscript inside an operand is now read by the reader that knows its text
+// arrived, so `let` and `$(( $e ))` answer one question in one place rather
+// than two (#3917).
+func (r *Runner) letOperandTree(expr string) (syntax.ArithExpr, string, error) {
+	// Every subscript in it arrived word-expanded, because the whole operand
+	// did. See Runner.markArrivedSubscriptQuoting.
+	tree, err := r.arithTreeRead(r.markArrivedSubscriptQuoting(expr))
+	return tree, expr, err
 }

@@ -11,8 +11,9 @@ import (
 	"github.com/blairham/sh/interp"
 )
 
-// A `let` operand's subscript is the same quoting context the expression's
-// is here, which is the half ksh93 does not share.
+// A subscript whose brackets arrived already word-expanded is the same
+// quoting context a written one is here, which is the half ksh93 does not
+// share.
 //
 // Measured 2026-09-20 against bash 5.3.20 from a script file under
 // `env -i PATH=/usr/bin:/bin LC_ALL=C`, standard input on the null device,
@@ -20,8 +21,11 @@ import (
 // `let '++a["k"]'` leave the bare key at 2 and the quoted key at 2, where
 // ksh93u+ 2012-08-01 answers the first the same way and the second by
 // incrementing the four-character key instead. See
-// interp.Semantics.LetOperandSubscriptIsAQuotingContext (#3871).
-func TestALetOperandsSubscriptIsAQuotingContextHere(t *testing.T) {
+// The value route is the same answer and is the one that says the axis is
+// about arrival rather than about the builtin: `e="a[q'r'z]"; (( ++$e ))`
+// reaches the bare key here and the five-character one in ksh93u+. See
+// interp.Semantics.ArrivedSubscriptIsAQuotingContext (#3871, #3917).
+func TestAnArrivedSubscriptIsAQuotingContextHere(t *testing.T) {
 	const read = `; printf "[%s][%s]" "${a[k]}" "${a[$q]}"`
 	// The quoted key is stored and read back through a value, because a
 	// value's quote characters are characters and not quoting — so the two
@@ -30,6 +34,9 @@ func TestALetOperandsSubscriptIsAQuotingContextHere(t *testing.T) {
 	for _, tc := range []struct{ name, src string }{
 		{"through the builtin", quoted + `let '++a["k"]'`},
 		{"through the expression", quoted + `(( ++a["k"] ))`},
+		// And through a value, which no builtin brought: the brackets came
+		// out of `$e` and the answer is the same one.
+		{"through a value", quoted + `e='a["k"]'; (( ++$e ))`},
 		// The backslash goes with the quotes rather than being spared,
 		// which is what says this is quote removal.
 		{"a backslash rather than a quote", `declare -A a; a[k]=1; q='\k'; a[$q]=2; let '++a[\k]'`},
@@ -104,8 +111,8 @@ func TestAStoreThroughABadSubscriptIsRefusedAsAnOperand(t *testing.T) {
 
 // The axis, pinned so that no preset here drifts off the column it was
 // measured from.
-func TestTheLetOperandsSubscriptQuotingIsAnAxis(t *testing.T) {
-	if got := bash.Semantics().LetOperandSubscriptIsAQuotingContext; got != interp.Yes {
-		t.Errorf("LetOperandSubscriptIsAQuotingContext = %v, want yes", got)
+func TestTheArrivedSubscriptQuotingIsAnAxis(t *testing.T) {
+	if got := bash.Semantics().ArrivedSubscriptIsAQuotingContext; got != interp.Yes {
+		t.Errorf("ArrivedSubscriptIsAQuotingContext = %v, want yes", got)
 	}
 }

@@ -2408,16 +2408,26 @@ func Semantics() interp.Semantics {
 	// key, and `shopt -s assoc_expand_once` moves this column to 5 too —
 	// see interp.Runner.ExpandsAnOperandsSubscriptAgain (#3796).
 	s.ArithSubscriptQuotationMustClose = interp.Yes
-	// And a `let` operand's subscript is the same quoting context the
-	// expression's is here, which is the half ksh93 does not share:
-	// measured 2026-09-20 on 5.3.20 from a script file with
+	// And a subscript that arrived already word-expanded is the same
+	// quoting context a written one is here, which is the half ksh93 does
+	// not share: measured 2026-09-20 on 5.3.20 from a script file with
 	// `typeset -A a; a[k]=1; a['"k"']=2`, both `(( ++a["k"] ))` and
 	// `let '++a["k"]'` leave the bare `k` at 2 and the quoted key at 2,
 	// where ksh93u+ answers the first the same way and the second by
 	// incrementing the three-character key instead. `let '++a[\k]'` is the
-	// bare key here too, so it is quote removal rather than one character
-	// (#3871).
-	s.LetOperandSubscriptIsAQuotingContext = interp.Yes
+	// bare key here too, so it is quote removal rather than one character.
+	// The same holds for brackets that came out of a value — `e="m[q'r'z]";
+	// (( $e = 42 ))` is the key `qrz` here and `q'r'z` there — which is why
+	// the axis is about arrival and not about the builtin (#3871, #3917).
+	s.ArrivedSubscriptIsAQuotingContext = interp.Yes
+	// An apostrophe a script *writes* inside a subscript stops the
+	// expansion it holds here, alone in the panel: measured 2026-09-20 on
+	// 5.3.20 from a script file, `typeset -A m; kq=q; (( m['$kq'] = 42 ))`
+	// leaves the three-character key `$kq`, where ksh93u+ stores under `q`
+	// and zsh 5.9.2 under `'q'`. `(( m["$kq"] = 42 ))` beside it is `q` in
+	// every column, which is the control that says this is the apostrophe
+	// and not quoting in general (#3942).
+	s.WrittenSubscriptQuotationStopsItsExpansion = interp.Yes
 	// A subscript that *expanded* to nothing is the expression that is zero,
 	// so `${a[$w]}` with an empty `$w` is element zero — measured 2026-09-11
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`

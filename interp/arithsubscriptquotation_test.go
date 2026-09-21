@@ -167,7 +167,7 @@ func TestAnUnansweredArithmeticSubscriptQuotationIsRefusedByName(t *testing.T) {
 // the refusal is asserted, because which element the two closed quotes name
 // is a second question and a second axis — the `let` route carries no marks,
 // so whether quote removal takes them off is
-// Semantics.LetOperandSubscriptIsAQuotingContext, pinned in
+// Semantics.ArrivedSubscriptIsAQuotingContext, pinned in
 // letoperandsubscriptquoting_test.go — and neither reading is moved by this
 // axis in either direction.
 func TestAQuotationTheKeyClosesIsNotRefused(t *testing.T) {

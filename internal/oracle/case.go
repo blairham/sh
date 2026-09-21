@@ -18439,6 +18439,41 @@ echo "st=$? alive"`,
 		Why:     "and the same for a name that was never an array at all, which is the form a version check uses before it knows whether the shell set one",
 	},
 	{
+		ID: "arith/an-apostrophe-written-in-a-subscript", Category: "semantics axes",
+		Snippet: `typeset -A m; kq=q; a='$kq'; b="'q'"; (( m['$kq'] = 42 )); printf "[%s][%s][%s]\n" "${m[$kq]}" "${m[$a]}" "${m[$b]}"`,
+		Why:     "which key a subscript names when a quotation a script *wrote* between its brackets holds an expansion, read back under all three spellings the panel can produce. bash leaves the expansion unperformed and stores under the three characters `$kq`; ksh93 performs it and takes the apostrophes off, storing under `q`; zsh performs it and keeps them, storing under `'q'` — which is Semantics.SubscriptIsAQuotingContext showing through beside this one. The read-backs go through values so that the spelling this case is about is the one inside the arithmetic and not the one in the probe. See Semantics.WrittenSubscriptQuotationStopsItsExpansion; `arith/an-arrived-subscripts-apostrophe` is the same characters reached the other way, where bash and ksh93 agree",
+	},
+	{
+		ID: "arith/an-arrived-subscripts-apostrophe", Category: "arithmetic",
+		Snippet: `typeset -A m; kq=q; a='$kq'; b="'q'"; e="m['\$kq']"; (( $e = 42 )); printf "[%s][%s][%s]\n" "${m[$kq]}" "${m[$a]}" "${m[$b]}"`,
+		Why:     "the control that makes the row above an axis rather than one column being wrong: the identical brackets reached through a value, where bash and ksh93 both leave the expansion unperformed and store under `$kq`. So a written apostrophe and an arrived one are two questions, and only the first splits those two columns",
+	},
+	{
+		ID: "arith/an-arrived-subscript-keeps-its-quoting", Category: "semantics axes",
+		Snippet: `typeset -A m; s="q'r'z"; e="m[$s]"; (( $e = 42 )); printf "[%s][%s]\n" "${m[qrz]}" "${m[$s]}"`,
+		Why:     "whether quote removal runs over a subscript whose brackets arrived already word-expanded and that holds no expansion of its own. bash removes the apostrophes and stores under `qrz`; ksh93 and zsh keep them. The same five characters written in the source are `qrz` in bash and ksh93 alike — `arith/a-written-subscripts-quoting-is-removed` is that control — so this is where the text came from and not which characters it holds. See Semantics.ArrivedSubscriptIsAQuotingContext",
+	},
+	{
+		ID: "arith/a-written-subscripts-quoting-is-removed", Category: "arithmetic",
+		Snippet: `typeset -A m; s="q'r'z"; (( m[q'r'z] = 42 )); printf "[%s][%s]\n" "${m[qrz]}" "${m[$s]}"`,
+		Why:     "the control for the row above: the brackets are the source's here, and the two columns that part on an arrived subscript agree on this one",
+	},
+	{
+		ID: "arith/a-re-read-subscripts-double-quotation", Category: "arithmetic",
+		Snippet: `typeset -A m; s="q'r'z"; d="\"$s\""; e="m[$d]"; (( $e = 42 )); printf "[%s][%s][%s]\n" "${m[qrz]}" "${m[$s]}" "${m[$d]}"`,
+		Why:     "a double quotation inside a subscript that arrived out of a value, which is not text the expression's own quote removal is for. bash takes the double quotes off and keeps the apostrophes they held, storing under `q'r'z`; ksh93 and zsh have no such removal and keep all five characters. Removing them with the expression's rule instead reached `qrz`, a key none of the three writes (#3941)",
+	},
+	{
+		ID: "arith/a-let-operand-is-a-result", Category: "arithmetic",
+		Snippet: `y=5; let 'x = 1+$y'; printf "[%s]\n" "$x"`,
+		Why:     "a `$` still standing in a `let` operand came out of a value rather than out of the program, so it begins no operand: all three shells with the builtin refuse the expression and leave the name unset. The operand has been through the shell's word expansion like any other argument, which is the same rule an expanded subscript follows — reading it a second time answered 6",
+	},
+	{
+		ID: "arith/a-values-double-quote-is-not-the-expressions", Category: "arithmetic",
+		Snippet: `x='1"0"'; printf "[%s]\n" "$(( x ))"`,
+		Why:     "the removal that makes a written `1\"0\"` the number ten is for text a script wrote inside the parentheses and for nothing else. Reached through a name's value it is a refusal in every column — the one with the removal included — so a shell applying it here answers ten where three shells stop",
+	},
+	{
 		ID: "arith/assigning-to-an-element", Category: "arithmetic",
 		Snippet: `a=(3 4); (( a[1] = 9 )); echo "${a[1]}"`,
 		Why:     "the subscript belongs to the assignment's target, so `a[1] = 9` writes an element rather than evaluating one and throwing it away",

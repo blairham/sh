@@ -674,21 +674,40 @@ func (p *Parser) parseArithLater(src string, at Pos) ArithExpr {
 // [Parser.ParseArithFor], at the moment the command runs. Everything reading
 // an expression while reading a file goes through parseArithLater instead.
 func (p *Parser) parseArith(src string, at Pos) ArithExpr {
-	return p.parseArithIn(src, at, false)
+	return p.parseArithIn(src, at, false, true)
 }
 
-// parseArithIn is parseArith told whether the text has already been expanded.
+// parseArithIn is parseArith told whether the text has already been expanded,
+// and whether the dialect's double-quote removal is its to run.
 //
 // The two readings differ in one thing and it is the first line: text that is
 // still a *program's* waits for its expansions, and text that is already a
 // *result* does not get a second round of them. See
 // [Parser.ParseArithExpanded] for which callers are which and for the rows
 // (#3047).
-func (p *Parser) parseArithIn(src string, at Pos, expanded bool) ArithExpr {
+//
+// dequote is the second question and it is a different one, because the
+// removal below is a rule about **text a script wrote inside `(( … ))`** and
+// about nothing else. Measured 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C
+// <shell> f.sh` over a script file with standard input on the null device,
+// with the same four characters reached four ways:
+//
+//	                          bash 5.3.20                      ksh93u+  zsh 5.9.2
+//	(( x = 1"0" ))            10                               refused  refused
+//	let 'x = 1"0"'            arithmetic syntax error          refused  refused
+//	e='x = 1"0"'; let "$e"    arithmetic syntax error          refused  refused
+//	e='1"0"'; (( x = $e ))    arithmetic syntax error          refused  refused
+//	x='1"0"'; (( y = x ))     arithmetic syntax error          refused  refused
+//
+// Row one is the whole of the removal and rows two to five are what it does
+// not reach — unanimously, since the two columns without the removal refuse a
+// quote wherever it came from. So a result is read with the quote standing,
+// and this shell answered 10 to all five (#3941).
+func (p *Parser) parseArithIn(src string, at Pos, expanded, dequote bool) ArithExpr {
 	if !expanded && hasExpansion(src) {
 		return nil
 	}
-	if p.dialect.ArithDoubleQuote == ArithDoubleQuoteRemoved {
+	if dequote && p.dialect.ArithDoubleQuote == ArithDoubleQuoteRemoved {
 		// Removed before anything reads the text, which is the whole of that
 		// reading: it is what makes `1"0"` the number 10, and what makes the
 		// text a failure quotes back the one without the quotes in it.
@@ -2001,6 +2020,15 @@ func (s *ArithBracketScan) Content(b byte) bool {
 
 // Unclosed reports whether the text ran out inside a quotation.
 func (s *ArithBracketScan) Unclosed() bool { return s.quote != 0 }
+
+// Quote is the quotation the scan is inside, and 0 outside one.
+//
+// Exported for the reader that has to tell an apostrophe's contents from a
+// double quotation's: one dialect performs the expansion a double quotation
+// holds inside a subscript and not the one an apostrophe holds, which is a
+// question about *which* quotation rather than about being inside one. See
+// interp.Semantics.WrittenSubscriptQuotationStopsItsExpansion.
+func (s *ArithBracketScan) Quote() byte { return s.quote }
 
 // charCode reads `#name`, `#\c` and `##c`, where the dialect has them.
 //

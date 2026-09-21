@@ -235,3 +235,108 @@ func splitRun(t *testing.T, p dialecttest.Preset, src string) (out, errs string,
 	}
 	return o.String(), e.String(), st
 }
+
+// The same fatality one substitution further in: a body refused **inside**
+// another substitution's body, which is where it stopped reaching (#3355).
+//
+// Measured 2026-09-20 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C
+// <shell> s.sh` with standard input on the null device, over
+// `echo A$(echo B$(for)C)D` with a `printf` before it and an `after st=%s`
+// after it:
+//
+//	                     output                  status
+//	bash 5.3.20          start                   2
+//	bash 3.2.57          start, ABCD, after=0    0
+//	zsh 5.9.2            start                   1
+//	ksh93u+ 2012-08-01   start, AD, after=0      0
+//	dash 0.5.12          start                   2
+//
+// Three end the script, and the word holding the outer substitution is never
+// expanded in any of them — `ABCD` is absent from every column but the one
+// that does not stop at all. Here the outer body was abandoned and the
+// *statement* went on, so `AD` was written and the script carried to its end
+// at status 0: the stop was in the box every clone shares and nothing took
+// it until the next command, which was a command the failure should have
+// prevented. See Runner.pendingScriptStop.
+//
+// **ksh93 is the control and it is why the box is peeked rather than
+// widened.** It contains the stop at the subshell, so nothing is recorded for
+// anything to take, and its row is the one that still writes `AD` and carries
+// on. A change that had made the give-up escape the body directly would have
+// moved that column too.
+func TestASubstitutionRefusedInsideAnotherBodyEndsTheScriptToo(t *testing.T) {
+	const src = "printf 'start\\n'\n" +
+		"echo A$(echo B$(for)C)D\n" +
+		"printf 'after st=%s\\n' \"$?\"\n"
+	for _, c := range []struct {
+		preset string
+		out    string
+		status int
+	}{
+		{"bash", "start\n", 2},
+		{"zsh", "start\n", 1},
+		{"dash", "start\n", 2},
+		{"ksh", "start\nAD\nafter st=0\n", 0},
+	} {
+		t.Run(c.preset, func(t *testing.T) {
+			out, errs, st := splitRun(t, presets[c.preset], src)
+			if out != c.out || st != c.status {
+				t.Errorf("wrote %q at %d, want %q at %d", out, st, c.out, c.status)
+			}
+			if errs == "" {
+				t.Errorf("nothing was reported; the failure has to be visible as well as fatal")
+			}
+			if strings.Contains(out, "ABCD") {
+				t.Errorf("the outer word was expanded past the failure: %q", out)
+			}
+		})
+	}
+}
+
+// And the same stop when the statement that held the substitution is the
+// script's **last** one, which is where nothing took it (#3355).
+//
+// The box is drained at the sequence point in Runner.stmt, and that point is
+// the *next* command: a script whose last line holds the failure runs out
+// before it is reached, and a prompt's own drain never comes for a script. So
+// the failure was reported, the shell stopped, and the status it left was
+// whatever the last command had made it.
+//
+// Measured 2026-09-20 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C
+// <shell> s.sh` with standard input on the null device, over `printf 'one\n'`
+// and then `v=$(echo hi; for) | :`:
+//
+//	                     output   status
+//	zsh 5.9.2            one      1
+//	bash 5.3.20          one      2
+//	dash 0.5.12          one      2
+//	bash 3.2.57          one      0
+//	ksh93u+ 2012-08-01   one      0
+//
+// A **pipeline element** because that is a shell of its own whose stop has to
+// travel in the box, and because the pipeline is waited for — so the number
+// is the same every run. It is also the shape scriptStop.status was written
+// for: the pipeline's own status is `:`'s, and reporting that instead of the
+// failure's is exactly the 0 this leaves.
+func TestASubstitutionRefusedInTheLastStatementStillSetsTheStatus(t *testing.T) {
+	const src = "printf 'one\\n'\nv=$(echo hi; for) | :\n"
+	for _, c := range []struct {
+		preset string
+		status int
+	}{
+		{"bash", 2},
+		{"zsh", 1},
+		{"dash", 2},
+		{"ksh", 0},
+	} {
+		t.Run(c.preset, func(t *testing.T) {
+			out, errs, st := splitRun(t, presets[c.preset], src)
+			if out != "one\n" || st != c.status {
+				t.Errorf("wrote %q at %d, want %q at %d", out, st, "one\n", c.status)
+			}
+			if errs == "" {
+				t.Errorf("nothing was reported; the failure has to be visible as well as counted")
+			}
+		})
+	}
+}

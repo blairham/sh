@@ -181,6 +181,34 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		r.diagf("%v\n", err)
 		return ""
 	}
+	// A substitution *inside* this body could not parse its own body, and in
+	// the columns that end the script for that the word holding this one is
+	// never expanded at all. Taken here as well as at the sequence point in
+	// Runner.stmt, because a statement that holds the failing substitution
+	// has already begun: measured 2026-09-20 from a script file,
+	// `echo A$(echo B$(for)C)D` writes nothing on standard output and leaves
+	// 1 in zsh 5.9.2, where this wrote `AD` and left 0 — the stop was in the
+	// box and the next command was the one that never ran (#3355).
+	//
+	// The box rather than the body's own control flow, so the column that
+	// contains such a failure in a subshell still contains it: nothing is
+	// recorded there, so there is nothing here to take. See
+	// Semantics.SubstitutionParseErrorEscapesASubshell and
+	// substitutionstop.go.
+	//
+	// Peeked rather than taken, because every level of nesting is such a
+	// boundary: `echo "$(echo "$(echo "$(for)")")"` has three, and a take at
+	// the innermost would leave the two outside it expanding their words.
+	// The sequence point in Runner.stmt, or the prompt's own drain, still
+	// takes it.
+	if status, stopped := r.pendingScriptStop(); stopped {
+		r.status = status
+		// The same annotation Runner.stmt puts on it: an error the shell
+		// reported rather than a request to stop, so a prompt above draws
+		// the next one (#3300).
+		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonSubstParse, false
+		return ""
+	}
 	// The status of a substitution is the status of what ran inside it, which
 	// `x=$(false)` relies on.
 	r.status = sub.status
@@ -792,7 +820,19 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 			if at > 0 {
 				r.line = at
 			}
-			r.errf("%s", r.diagLineNamed(construct, "%s", echo))
+			// One message per line, because each of them is located: a
+			// refused body two substitutions deep writes a line for every
+			// level that has something open, and zsh puts the file and the
+			// line in front of all of them. Measured 2026-09-20,
+			// `echo "$(echo "$(echo "$(for)")")"` on line 1 of a script:
+			// `s.sh:2: unmatched "` three times over, not one prefix and
+			// three sentences.
+			for _, line := range strings.SplitAfter(echo, "\n") {
+				if line == "" {
+					continue
+				}
+				r.errf("%s", r.diagLineNamed(construct, "%s", line))
+			}
 		}
 		putBack()
 		if span.Backquoted && !r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {

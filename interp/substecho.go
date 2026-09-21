@@ -512,6 +512,9 @@ func (r *Runner) substLevelEcho(span syntax.Span, lines []string, textBase int) 
 // for a refusal on line 2, `word.sh:1` for the same text with no newline at
 // the end of the file, and `zsh:2` under `-c` for a two-line string. That is
 // the reader having taken the newline, which is why it is read off the text.
+// A failure inside a body the shell *ran* is the exception and stands past
+// the last line of the program instead — see Runner.inRunSubstitutionBody —
+// and it is one line for every message, however many levels write one.
 //
 // Only for a span written straight into a word, at the column the word places
 // it. A redirection target is such a word and reaches this — its expansion
@@ -519,16 +522,18 @@ func (r *Runner) substLevelEcho(span syntax.Span, lines []string, textBase int) 
 // call rather than a missing rule, so `echo hi >$(for)` wrote nothing where
 // that shell quotes `$(for)` (#3355).
 //
-// Inside double quotes the second message is `unmatched "` and inside an
-// expansion's operand `closing brace expected`, and those come first, because
-// they are what the *level* has open and this sentence is what a level with
-// nothing open writes. See substLevel for the rows and the three rules.
+// Inside double quotes the message is `unmatched "` and inside an expansion's
+// operand `closing brace expected`, and every level that has one of those
+// open writes its own, innermost outward, before this sentence — which is
+// what the *outermost* level writes when it has neither. See substLevel for
+// the rows and the three rules, and Runner.substLevelEcho for the walk.
 //
-// An arithmetic expansion's text is re-lexed, so the span's column is counted
-// from that text rather than from the line, and a substitution nested in a
-// substitution is placed from the enclosing body; where neither level has a
-// quote or a brace open, neither of those is written, rather than a quote
-// from the wrong place.
+// An arithmetic expansion's text is re-lexed and a substitution's body is
+// parsed on its own, so a span inside either is placed from *that* text and
+// not from the script's line. The sentence is therefore built from what the
+// outermost level recorded at its door rather than from the failing span:
+// `echo $(echo $(for))` and `echo $(( $(for) + 1 ))` each quote the whole
+// outer word, which the runner that raised the refusal never held.
 //
 // Nor inside a function body, where this dialect locates a message by the
 // function and the line within it. It reads a body where the definition is,

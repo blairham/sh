@@ -282,10 +282,32 @@ func (r *Runner) indirectSubject(e *syntax.ParamExpr) string {
 // is given up, which is Semantics.FailedExpansionAbandonsTheLine, and bash as
 // `sh` writes the same two sentences. An empty wording is the reading with no
 // refusal, which is bash 3.2's and the core's (#2891, #3215).
+//
+// **Only a name is ever undeclared.** The first sentence is about a *name*
+// nothing ever brought into being, and a positional parameter is not one: it
+// is unset or it is not, and an unset one is the ordinary unset road with the
+// `!` on its subject. Measured 2026-09-21, bash 5.3.20 from a script file
+// with no positional parameters at all:
+//
+//	                        bash 5.3.20                here, before
+//	set -u; ${!1}           !1: unbound variable       1: invalid indirect expansion
+//	set -u; ${!9}           !9: unbound variable       9: invalid indirect expansion
+//	${!1}                   [] at 0                    1: invalid indirect expansion
+//	set -u; ${!1-D}         D at 0                     1: invalid indirect expansion
+//	set -u; ${!1?msg}       !1: msg                    1: invalid indirect expansion
+//	set -- ""; ${!1}        : invalid variable name    the same
+//	set -- nope; set -u     !1: unbound variable       the same
+//	${!nodecl}              nodecl: invalid …          the same
+//
+// So the refusal that was reached for a digit cost the operators their word,
+// cost `set -u` its own sentence, and refused a line bash runs in silence.
+// The row that says this is the *undeclared* sentence and not the whole road
+// is the fourth: `${!1-D}` is `D`, where a name nothing declared is refused
+// through the operator (#3985).
 func (r *Runner) refuseIndirection(e *syntax.ParamExpr, value string, set bool) bool {
 	d := r.diag()
 	switch {
-	case !set && d.IndirectionUndeclared != "":
+	case !set && d.IndirectionUndeclared != "" && isNameLike(e.Name):
 		if _, declared := r.declarationOf(e.Name); declared || r.nameIsSet(e.Name) {
 			return false
 		}

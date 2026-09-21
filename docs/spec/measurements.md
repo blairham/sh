@@ -19259,6 +19259,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `exec/redirection-is-permanent` | **2>** `one~two` | **2>** `one~two` | **2>** `one~two` | **2>** `one~two` | **2>** `one~two` | **2>** `one~two` | **2>** `one~two` |
 | `exec/successful-exec-runs-no-exit-trap` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `exec/failed-exec-trap-diverges` | `TRAP` *(status 127)* | `TRAP` *(status 127)* | `TRAP` *(status 127)* | `TRAP` | *(no output, status 127)* | *(no output, status 127)* | `TRAP` *(status 127)* |
+| `exec/failed-exec-on-a-pathname-trap-diverges` | `TRAP` *(status 127)* | *(no output, status 127)* | *(no output, status 127)* | *(no output, status 126)* | *(no output, status 127)* | *(no output, status 127)* | `TRAP` *(status 127)* |
+| `exec/failed-exec-on-a-file-found-on-path-trap-diverges` | `TRAP` *(status 126)* | *(no output, status 126)* | *(no output, status 126)* | *(no output, status 126)* | *(no output, status 126)* | *(no output, status 126)* | `TRAP` *(status 126)* |
 | `exec/missing-command-is-127` | **2>** `<shell>: 1: exec: nosuchcmd-xyz: not found` *(status 127)* | **2>** `<shell>: line 1: exec: nosuchcmd-xyz: not found` *(status 127)* | **2>** `<shell>: line 1: exec: nosuchcmd-xyz: not found` *(status 127)* | **2>** `<shell>: line 0: exec: nosuchcmd-xyz: not found` *(status 127)* | **2>** `<shell>: exec: nosuchcmd-xyz: not found` *(status 127)* | **2>** `<shell>:1: command not found: nosuchcmd-xyz` *(status 127)* | **2>** `<shell>: exec: line 0: nosuchcmd-xyz: not found` *(status 127)* |
 | `exec/unrunnable-file-is-126` | **2>** `<shell>: 1: exec: ./ne.sh: Permission denied` *(status 126)* | **2>** `<shell>: line 1: /private<tmp>/ne.sh: Permission denied` *(status 126)* | **2>** `<shell>: line 1: /private<tmp>/ne.sh: Permission denied` *(status 126)* | **2>** `<shell>: /private<tmp>/ne.sh: Permission denied~<shell>: line 0: exec: /private<tmp>/ne.sh: cannot execute: Undefined error: 0` *(status 126)* | **2>** `<shell>: exec: ./ne.sh: cannot execute [Permission denied]` *(status 126)* | **2>** `<shell>:1: permission denied: ./ne.sh` *(status 126)* | **2>** `<shell>: exec: line 0: ./ne.sh: Permission denied` *(status 126)* |
 | `exec/directory-reason-diverges` | **2>** `<shell>: 1: exec: /tmp: Permission denied` *(status 126)* | **2>** `<shell>: line 1: /tmp: Is a directory` *(status 126)* | **2>** `<shell>: line 1: /tmp: Is a directory` *(status 126)* | **2>** `<shell>: /tmp: is a directory~<shell>: line 0: exec: /tmp: cannot execute: Undefined error: 0` *(status 126)* | **2>** `<shell>: exec: /tmp: cannot execute [Is a directory]` *(status 126)* | **2>** `<shell>:1: permission denied: /tmp` *(status 126)* | **2>** `<shell>: exec: line 0: /tmp: Permission denied` *(status 126)* |
@@ -19492,9 +19494,17 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   trap "echo TRAP" EXIT; exec echo hi
   ```
-- `exec/failed-exec-trap-diverges` — the failure is the only case with a shell left to decide anything, and the panel splits: dash and bash run the EXIT trap, ksh93 and zsh drop it
+- `exec/failed-exec-trap-diverges` — the failure is the only case with a shell left to decide anything, and the panel splits: dash, bash and BusyBox ash run the EXIT trap, ksh93 and zsh drop it. Half the question — this is the PATH search coming up with nothing, and the two rows after it are the other half, where bash changes sides
   ```sh
   trap "echo TRAP" EXIT; exec nosuchcmd-xyz 2>/dev/null
+  ```
+- `exec/failed-exec-on-a-pathname-trap-diverges` — the other half of the failure, and the row that parts bash from itself: bash runs the EXIT trap for the search miss above and drops it once the operand is a pathname, so one Yes/No axis for both was wrong about bash whichever way it was set. dash and BusyBox ash run it here too; ksh93 and zsh drop it, as they drop the other
+  ```sh
+  trap "echo TRAP" EXIT; exec /nonexistent-xyz/nope 2>/dev/null
+  ```
+- `exec/failed-exec-on-a-file-found-on-path-trap-diverges` — the same question by the other road, and the row that says the axis is not "the operand contains a slash": this operand has none, the search found the file, and bash drops the trap for it exactly as it does for a slash. What decides is whether a pathname was ever arrived at
+  ```sh
+  mkdir -p p; echo x > p/nx-xyz; chmod -x p/nx-xyz; PATH=p; trap "echo TRAP" EXIT; exec nx-xyz 2>/dev/null
   ```
 - `exec/missing-command-is-127` — 127 and fatal in every shell, so the status is not an axis even though every shell words it differently
   ```sh

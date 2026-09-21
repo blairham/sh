@@ -32,6 +32,8 @@ ash    DebugTrapPipelines                                   -
 ash    DebugTrapRefiresOnEnteringAFunction                  -
 ash    DollarZeroNames                                      DollarZeroIsTheShellsOwnName
 ash    EchoInterpretsEscapes                                No
+ash    ExecFailureOnAPathnameRunsExitTrap                   Yes
+ash    ExecFailureRunsExitTrap                              Yes
 ash    ExitTrapRunsOnSignalDeath                            No
 ash    FailedExpansionAbandonsTheLine                       No
 ash    FatalErrorEndsAtTheCommandWord                       Yes
@@ -79,6 +81,8 @@ bash   DebugTrapPipelines                                   DebugTrapPipelinePer
 bash   DebugTrapRefiresOnEnteringAFunction                  Yes
 bash   DollarZeroNames                                      DollarZeroIsTheShellsOwnName
 bash   EchoInterpretsEscapes                                No
+bash   ExecFailureOnAPathnameRunsExitTrap                   No
+bash   ExecFailureRunsExitTrap                              Yes
 bash   ExitTrapRunsOnSignalDeath                            Yes
 bash   FailedExpansionAbandonsTheLine                       Yes
 bash   FatalErrorEndsAtTheCommandWord                       No
@@ -126,6 +130,8 @@ dash   DebugTrapPipelines                                   -
 dash   DebugTrapRefiresOnEnteringAFunction                  -
 dash   DollarZeroNames                                      DollarZeroIsTheShellsOwnName
 dash   EchoInterpretsEscapes                                Yes
+dash   ExecFailureOnAPathnameRunsExitTrap                   Yes
+dash   ExecFailureRunsExitTrap                              Yes
 dash   ExitTrapRunsOnSignalDeath                            No
 dash   FailedExpansionAbandonsTheLine                       No
 dash   FatalErrorEndsAtTheCommandWord                       Yes
@@ -173,6 +179,8 @@ ksh    DebugTrapPipelines                                   DebugTrapPipelineInE
 ksh    DebugTrapRefiresOnEnteringAFunction                  No
 ksh    DollarZeroNames                                      DollarZeroIsTheInnermostKeywordFunction
 ksh    EchoInterpretsEscapes                                No
+ksh    ExecFailureOnAPathnameRunsExitTrap                   No
+ksh    ExecFailureRunsExitTrap                              No
 ksh    ExitTrapRunsOnSignalDeath                            Yes
 ksh    FailedExpansionAbandonsTheLine                       No
 ksh    FatalErrorEndsAtTheCommandWord                       Yes
@@ -220,6 +228,8 @@ zsh    DebugTrapPipelines                                   DebugTrapPipelineOnc
 zsh    DebugTrapRefiresOnEnteringAFunction                  No
 zsh    DollarZeroNames                                      DollarZeroIsTheInnermostCall
 zsh    EchoInterpretsEscapes                                Yes
+zsh    ExecFailureOnAPathnameRunsExitTrap                   No
+zsh    ExecFailureRunsExitTrap                              No
 zsh    ExitTrapRunsOnSignalDeath                            No
 zsh    FailedExpansionAbandonsTheLine                       No
 zsh    FatalErrorEndsAtTheCommandWord                       No

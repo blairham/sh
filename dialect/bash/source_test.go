@@ -211,6 +211,11 @@ func TestExecAxesAndWording(t *testing.T) {
 	if got := s.ExecFailureRunsExitTrap; got != interp.Yes {
 		t.Errorf("ExecFailureRunsExitTrap = %v, want Yes", got)
 	}
+	// And No on the other half, which is bash alone in the panel: dash and
+	// BusyBox ash answer both halves Yes, ksh93 and zsh both No (#3983).
+	if got := s.ExecFailureOnAPathnameRunsExitTrap; got != interp.No {
+		t.Errorf("ExecFailureOnAPathnameRunsExitTrap = %v, want No", got)
+	}
 	if got := s.ExecTakesOptions; got != interp.Yes {
 		t.Errorf("ExecTakesOptions = %v, want Yes", got)
 	}
@@ -230,8 +235,8 @@ func TestExecAxesAndWording(t *testing.T) {
 	}
 }
 
-// TestAFailedExecRunsTheExitTrap is the axis as behavior. bash and dash run
-// it; ksh93 and zsh drop it.
+// TestAFailedExecRunsTheExitTrap is the axis as behavior, and the half of it
+// bash shares with dash: a bare name the PATH search had nothing for.
 func TestAFailedExecRunsTheExitTrap(t *testing.T) {
 	out, st := runBash(t, t.TempDir(), `trap "echo TRAP" EXIT; exec nosuchcmd-xyz`)
 	if !strings.Contains(out, "TRAP") {
@@ -239,6 +244,51 @@ func TestAFailedExecRunsTheExitTrap(t *testing.T) {
 	}
 	if st != 127 {
 		t.Errorf("status = %d, want 127", st)
+	}
+}
+
+// TestAFailedExecOnAPathnameDropsTheExitTrap is the other half, and it is the
+// one this shell used to get wrong: a single axis said Yes and every failed
+// `exec` ran the trap, where bash runs it for the search miss above and drops
+// it once a *file* has been named (#3983).
+//
+// The test above stays as the control. Together they can only be passed by a
+// shell that parts the two, which is what bash does and what neither answer
+// to one axis could.
+func TestAFailedExecOnAPathnameDropsTheExitTrap(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "plain"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "adir"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A non-executable file reached by the PATH *search* rather than by a
+	// slash. It is the row that says the axis is not "the operand contains a
+	// slash": there is no slash here and bash still drops the trap. runBash
+	// puts dir on PATH, so the bare name finds it.
+	if err := os.WriteFile(filepath.Join(dir, "nonexec-xyz"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, src string
+		want      int
+	}{
+		{"a relative path that is not there", `trap "echo TRAP" EXIT; exec ./nosuchcmd-xyz`, 127},
+		{"an absolute path that is not there", `trap "echo TRAP" EXIT; exec /nope/nosuchcmd-xyz`, 127},
+		{"a file without the execute bit", `trap "echo TRAP" EXIT; exec ./plain`, 126},
+		{"a directory", `trap "echo TRAP" EXIT; exec ./adir`, 126},
+		{"a non-executable file found on PATH", `trap "echo TRAP" EXIT; exec nonexec-xyz`, 126},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runBash(t, dir, tc.src)
+			if strings.Contains(out, "TRAP") {
+				t.Errorf("bash drops the EXIT trap once a file has been named: %q", out)
+			}
+			if st != tc.want {
+				t.Errorf("status = %d, want %d", st, tc.want)
+			}
+		})
 	}
 }
 

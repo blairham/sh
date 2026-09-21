@@ -201,8 +201,7 @@ func (r *Runner) execImageAsScript(ctx context.Context, action Action, path stri
 		return 0, false
 	case imageBinary:
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		return r.execEnds(r.execCannotRun(
-			&pathError{name: argv[0], resolved: path, err: notAnImage})), true
+		return r.execFailed(&pathError{name: argv[0], resolved: path, err: notAnImage}), true
 	}
 	status := r.runImageAsScript(ctx, r.imageZero(argv[0], path, true), path, argv, env, image)
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: status})

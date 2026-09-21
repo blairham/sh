@@ -2318,9 +2318,11 @@ func Semantics() interp.Semantics {
 	// that says the path was never opened — four times in a real startup
 	// (#1577).
 	s.DotDirectoryOperandIsAnError = interp.No
-	// zsh and ksh93 drop the EXIT trap when an exec fails; dash and bash
-	// still run it.
+	// zsh and ksh93 drop the EXIT trap when an exec fails, whichever way it
+	// failed; dash and BusyBox ash still run it either way, and bash runs it
+	// for a PATH-search miss alone (#3983).
 	s.ExecFailureRunsExitTrap = interp.No
+	s.ExecFailureOnAPathnameRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	// Both letters, and `-a` wins over `-l` in either order.
 	s.ExecTakesTheLoginLetter = interp.Yes

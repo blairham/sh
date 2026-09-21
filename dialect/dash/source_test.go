@@ -131,6 +131,12 @@ func TestExecAxes(t *testing.T) {
 	if got := s.ExecFailureRunsExitTrap; got != interp.Yes {
 		t.Errorf("ExecFailureRunsExitTrap = %v, want Yes", got)
 	}
+	// And with BusyBox ash alone on the other half: dash runs the trap
+	// whatever the `exec` could not do, where bash drops it once a file has
+	// been named (#3983).
+	if got := s.ExecFailureOnAPathnameRunsExitTrap; got != interp.Yes {
+		t.Errorf("ExecFailureOnAPathnameRunsExitTrap = %v, want Yes", got)
+	}
 	// Alone: `exec -a name cmd` is a command called "-a" here.
 	if got := s.ExecTakesOptions; got != interp.No {
 		t.Errorf("ExecTakesOptions = %v, want No", got)

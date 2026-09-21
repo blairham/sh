@@ -174,6 +174,11 @@ func TestExecAxes(t *testing.T) {
 	if got := s.ExecFailureRunsExitTrap; got != interp.No {
 		t.Errorf("ExecFailureRunsExitTrap = %v, want No", got)
 	}
+	// Both halves the same way here — bash is the only column that parts
+	// them. See interp.Semantics.ExecFailureOnAPathnameRunsExitTrap (#3983).
+	if got := s.ExecFailureOnAPathnameRunsExitTrap; got != interp.No {
+		t.Errorf("ExecFailureOnAPathnameRunsExitTrap = %v, want No", got)
+	}
 	if got := s.ExecTakesOptions; got != interp.Yes {
 		t.Errorf("ExecTakesOptions = %v, want Yes", got)
 	}

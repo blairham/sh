@@ -1179,6 +1179,36 @@ about the grammar (`Dialect.DeclarationArrayFromTheCommandWord`). They are
 two questions and not one: this decides where the *word ends*, and that
 decides how the operand expands (#3351).
 
+#### And the word does not always end at its `)`
+
+Text written immediately after the closing parenthesis stays part of the
+same word in one column, and the word is then not an array assignment at
+all — no assignment's value can hold an unquoted parenthesis, so what the
+utility gets is one ordinary operand. Measured 2026-09-21, one `-c` per
+row under `env -i PATH=/usr/bin:/bin LC_ALL=C`, with a shell function
+standing in for the builtin so the words it is handed are visible:
+
+| probe | bash 5.3.20, 3.2.57 | ksh93u+, zsh 5.9.2 |
+| --- | --- | --- |
+| `declare a=(1 2)x` | `<a=(1 2)x>` | the array, then `x: not found` |
+| `declare a=(1 2)x y` | `<a=(1 2)x><y>` | the array, then `x y` |
+| `let a=(5+3)x y` | `<a=(5+3)x><y>` | refused while reading |
+| `a=(1 2)x` — a prefix | a **scalar**, `(1 2)x` | the array, then `x` |
+
+So the panel splits, and it is a grammar flag
+(`Dialect.CompoundAssignmentWordRunsPastItsParenthesis`). Only where the
+following token **touches** the parenthesis: `a=(1 2) x` is the array and
+a separate operand everywhere.
+
+**What is folded is rebuilt rather than copied out of the source.** bash
+normalizes it — `a=(1    2)x`, `a=( 1 2 )x` and a newline between the
+elements all reach the utility as `a=(1 2)x` — so the elements are
+written out again with one blank between them, which is the same shape a
+rejoining utility's operand takes. Each element keeps its own spans, so
+the expansions still expand and the quotes still come off where they
+stand: `v=Q; declare a=($v 2)x` is `<a=(Q 2)x>` and
+`declare a=(1 "2 3")x` is `<a=(1 2 3)x>`. #4038.
+
 An **element** of such a literal is still inside the declaration, so a
 `name=( … )` written between the parentheses keeps the reading argument
 position would otherwise take away — which is what a compound variable's

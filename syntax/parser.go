@@ -3667,6 +3667,11 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			return a
 		}
 		a.IsArray = true
+		// Where the parentheses were written, kept for the one dialect whose
+		// word does not end at the closing one: the fold below rebuilds the
+		// assignment as an ordinary word and needs a position for each of
+		// them. See Parser.foldCompoundAssignmentPastItsParenthesis.
+		opening := p.tok.Pos
 		// Between the parentheses an element stands where an argument does,
 		// so a `(` that begins one belongs to the *element* — which is the
 		// flag the lexer already has for it, set here for the same reason
@@ -3865,7 +3870,12 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			return a
 		}
 		a.Stop = p.tok.End
+		closing := p.tok.Pos
 		p.next()
+		// And the text written after the `)`, where a dialect keeps the word
+		// going through it. See
+		// Parser.foldCompoundAssignmentPastItsParenthesis.
+		p.foldCompoundAssignmentPastItsParenthesis(a, opening, closing)
 	}
 	return a
 }
@@ -4136,7 +4146,18 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 	}
 	// Not an array after all, so put the word back the way it came — read
 	// once, by this, and not again by the caller.
-	c.Args = append(c.Args, p.newWord(tok.Spans, tok.Pos, tok.End))
+	spans, end := tok.Spans, tok.End
+	if a != nil && a.Value != nil {
+		// The word did not end at its `)` and the fold put what followed on
+		// the end of it, so what goes back is the whole of it rather than
+		// the `name=` this started at. The two are told apart by the value:
+		// the array branch is only reached with none, so a value here is one
+		// the fold made. See
+		// Parser.foldCompoundAssignmentPastItsParenthesis.
+		spans = append(append([]Span{}, tok.Spans...), a.Value.Spans...)
+		end = a.Value.End()
+	}
+	c.Args = append(c.Args, p.newWord(spans, tok.Pos, end))
 	return nil, true
 }
 

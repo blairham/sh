@@ -116,6 +116,12 @@ func Dialect() syntax.Dialect {
 		// word and not about what the word resolves to.
 		"let": true,
 	}
+	// A compound assignment's word does not end at its `)` here: `declare
+	// a=(1 2)x` is one word and a scalar, where ksh93 and zsh store the
+	// array and then look for a command called `x`. See
+	// [syntax.Dialect.CompoundAssignmentWordRunsPastItsParenthesis], which
+	// carries the panel.
+	d.CompoundAssignmentWordRunsPastItsParenthesis = true
 	d.CaseContinue = true
 	// A subscript written at command position runs to its matching `]`, so
 	// `m[foo bar]=v` is the element keyed `foo bar` rather than the command
@@ -3370,6 +3376,13 @@ func Diagnostics() interp.Diagnostics {
 		// interp.Semantics.DeclarationRereadsAParenthesizedValue — so the
 		// wording is the switch as well as the sentence (#4035).
 		QuotedArrayLiteralFailureNames: "array assign",
+		// And the sentence for a subscripted operand whose value is
+		// parenthesized, which bash declines to re-read and says so about.
+		// Measured 2026-09-21: `declare a[1]="(var)"` writes
+		// `warning: a[1]=(var): quoted compound array assignment deprecated`
+		// and stores the five characters at 1. See
+		// interp.Runner.warnQuotedCompoundAtASubscript.
+		QuotedCompoundArrayAssignmentDeprecated: "warning: %[1]s: quoted compound array assignment deprecated",
 		// A script operand it could not read, worded the same way as `.` and
 		// as a redirection: the path, then the operating system's own text.
 		// The two numbers are the measurement — 127 for a path that names

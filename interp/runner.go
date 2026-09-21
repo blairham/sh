@@ -6031,7 +6031,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// the assignment itself, so what it is handed is the text.
 				// See interp/rejoinedoperand.go.
 				r.operandWasRejoined = true
-				argv = append(argv, r.rejoinedArrayOperand(a))
+				argv = append(argv, r.rejoinedArrayOperand(a)...)
 				continue
 			}
 			// Where the bare name lands is recorded with it, because `set -x`

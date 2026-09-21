@@ -12682,6 +12682,31 @@ echo "st=$?"`,
 		Why:     "an array assignment written as an *operand* of a declaration utility, which is ordinary bash and did not parse at all — found by the wild sweep in three installed bats-core files. dash has no array literal so it is a syntax error there, and the subscript base makes the answer differ between the three that do",
 	},
 	{
+		ID: "decl/an-operand-that-runs-past-its-parenthesis", Category: "parameter expansion",
+		Snippet: `typeset a=(1 2)x; typeset -p a 2>&1; echo "st=$?"`,
+		Why:     "whether a compound assignment's word ends at its closing parenthesis. One column keeps the word going through the text after it, and the word is then no assignment at all — no value can hold an unquoted parenthesis — so the utility is handed one ordinary operand and declares a *scalar* holding seven characters. The others end the word at the `)`, store the array, and go looking for a command called `x`. A grammar flag rather than a rule, and the row that says which reading a column takes",
+	},
+	{
+		ID: "decl/text-after-a-parenthesis-is-more-of-the-same-word", Category: "parameter expansion",
+		Snippet: `let() { printf "<%s>" "$@"; echo; }; let a=(5+3)x y`,
+		Why:     "the same question with the words made visible, which is what tells the two readings apart from the outside: a column that folds hands the utility `a=(5+3)x` and then `y`, and a column that cuts at the `)` hands it something else entirely. Worth having beside the row above because that one is read through a store and this one through the argument list — ours cut the word and put the remainder in *front* of the assignment, which no column does",
+	},
+	{
+		ID: "let/arithmetic-written-after-the-parentheses", Category: "arithmetic",
+		Snippet: `let a=(5 + 3)/2; echo "a=$a st=$?"`,
+		Why:     "the line #2298's array row is about, and the consequence of the two readings above at a value a script reads back. Where the word runs past the `)` the division is part of the arithmetic and `a` is 4; where it is cut there the `/2` is an operand of its own and the shell has a diagnostic instead of an answer",
+	},
+	{
+		ID: "decl/a-parenthesized-value-under-a-subscript", Category: "parameter expansion",
+		Snippet: `typeset a[1]="(var)"; typeset -p a 2>&1; echo "st=$?"`,
+		Why:     "a subscript is the one condition the re-read of a quoted `( … )` value excludes — the characters are stored at 1 in every column that reaches the question — and one column **says so** on the way past, at status 0. So the row is about a sentence rather than a value: the store is unanimous among the shells that get there and only one of them writes a line about it",
+	},
+	{
+		ID: "decl/a-parenthesized-value-under-a-subscript-of-an-array", Category: "parameter expansion",
+		Snippet: `typeset -a a; typeset a[1]="(var)"; typeset -p a 2>&1; echo "st=$?"`,
+		Why:     "the control for the row above, and what keeps it from being read as \"a subscript always earns the sentence\": with the name already an array the same line is silent in the column that writes one. Without this row a shell that wrote the warning unconditionally would pass the row above",
+	},
+	{
 		ID: "decl/a-local-array-stays-local", Category: "parameter expansion",
 		Snippet: `a=(g); f() { local a=(x y); }; f; echo "[${a[0]}]"`,
 		Why:     "the second half, and the one that is silent: making the form parse showed the array outliving the function, because `local` had saved a scalar of that name and nothing had saved the *array*. Arrays are a second table and shadowing has to cover both",

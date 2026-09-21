@@ -189,9 +189,14 @@ func corpusGrammar() syntax.Dialect {
 	d.HeredocEndsAtClosingParen = true
 	// `declare` beside the four the core already reads as declarations, so a
 	// snippet using it keeps the assignment rule when it is printed back.
+	//
+	// And `let`, which declares nothing and takes the operand all the same:
+	// two cases write `let a=(5 + 3)`, and without the word in the list the
+	// `(` ends the word and the grammar stops reading them. See
+	// oracle.Dialect, which makes the same argument.
 	d.DeclarationUtilities = map[string]bool{
 		"declare": true, "export": true, "local": true,
-		"readonly": true, "typeset": true,
+		"readonly": true, "typeset": true, "let": true,
 	}
 	return d
 }

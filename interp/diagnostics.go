@@ -4156,6 +4156,26 @@ type Diagnostics struct {
 	//	( declare -a x="(a;b)"; echo in ); echo after     `after` runs
 	QuotedArrayLiteralFailureNames string
 
+	// QuotedCompoundArrayAssignmentDeprecated is what a shell says when a
+	// declaration utility is given a **subscripted** operand whose value has
+	// the shape of a compound assignment. The characters are stored either
+	// way; this is the sentence beside them. One verb: the operand written
+	// out again as `name[sub]=value`.
+	//
+	// A subscript is the one condition
+	// [Semantics.DeclarationRereadsAParenthesizedValue] excludes, so the
+	// wording is a value here for the same reason
+	// QuotedArrayLiteralFailureNames is: only the column that re-reads a
+	// parenthesized value at all has anything to decline. Empty everywhere
+	// else, and empty means nothing is said.
+	//
+	// Spoken as the *shell* rather than as the builtin, measured: bash writes
+	// `bash: line 1: warning: a[1]=(var): quoted compound array assignment
+	// deprecated` with no `declare:` in it. See
+	// Runner.warnQuotedCompoundAtASubscript for the three conditions and the
+	// rows that fix each.
+	QuotedCompoundArrayAssignmentDeprecated string
+
 	// MissingFuncBodyCountsFromItsParens locates a parse failure where a
 	// function's body was expected and never began by counting lines from
 	// the parentheses rather than from the top of the input. A distance of

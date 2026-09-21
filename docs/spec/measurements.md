@@ -11269,6 +11269,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-failed-expansion-in-an-assignment` | `one` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `one~two st=1 x=[]` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `one~two st=1 x=[]` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `one` **2>** `<script>:2: division by zero` *(status 1)* | `one` **2>** `<script>: line 2: divide by zero` *(status 2)* |
 | `arith/a-failed-expansion-in-a-test-operand` | `one` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `one` **2>** `<script>:2: division by zero` *(status 1)* | `one` **2>** `<script>: line 2: divide by zero` *(status 2)* |
 | `arith/a-failed-expansion-in-a-for-list` | `one` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `one~two st=1` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `one` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `one` **2>** `<script>:2: division by zero` *(status 1)* | `one` **2>** `<script>: line 2: divide by zero` *(status 2)* |
+| `let/arithmetic-written-after-the-parentheses` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `a=4 st=0` | `a=4 st=0` | `a=4 st=0` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: no matches found: a=(5 + 3)/2` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `arith/bare-name-is-a-variable` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` |
 | `arith/unset-is-zero` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `arith/precedence-follows-c` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` |
@@ -11607,6 +11608,10 @@ grades it and nothing drift-checks it either, for the same reason.
   echo one
   for i in $((1/0)); do echo "i=$i"; done
   echo two st=$?
+  ```
+- `let/arithmetic-written-after-the-parentheses` — the line #2298's array row is about, and the consequence of the two readings above at a value a script reads back. Where the word runs past the `)` the division is part of the arithmetic and `a` is 4; where it is cut there the `/2` is an operand of its own and the shell has a diagnostic instead of an answer
+  ```sh
+  let a=(5 + 3)/2; echo "a=$a st=$?"
   ```
 - `arith/bare-name-is-a-variable` — a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words
   ```sh
@@ -13848,6 +13853,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `decl/an-array-letter-over-a-declared-table` | `no-attribute` | `st=1~declare -A h=([k]="v" )~after` **2>** `<shell>: line 2: typeset: h: cannot convert associative to indexed array` | `st=1~declare -A h=([k]="v" )~after` **2>** `<shell>: line 2: typeset: h: cannot convert associative to indexed array` | `no-attribute` | **2>** `<shell>[2]: typeset: cannot change associative array h to index array` *(status 1)* | `st=0~typeset -a h=(  )~after` | `no-attribute` |
 | `decl/a-table-letter-over-a-declared-array` | `no-attribute` | `st=1~[x][y] after` **2>** `<shell>: line 2: typeset: a: cannot convert indexed to associative array` | `st=1~[x][y] after` **2>** `<shell>: line 2: typeset: a: cannot convert indexed to associative array` | `no-attribute` | `st=0~[x][y] after` | `st=0~[][] after` | `no-attribute` |
 | `decl/an-array-assignment-as-an-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[y]` | `[y]` | `[y]` | `[y]` | `[x]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `decl/an-operand-that-runs-past-its-parenthesis` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -- a="(1 2)x"~st=0` | `declare -- a="(1 2)x"~st=0` | `declare -- a="(1 2)x"~st=0` | `typeset -a a=(1 2)~st=0` | `typeset -a a=( 1 2 )~st=0` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `decl/text-after-a-parenthesis-is-more-of-the-same-word` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<a=(5+3)x><y>` | `<a=(5+3)x><y>` | `<a=(5+3)x><y>` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: no matches found: a=(5+3)x` *(status 1)* | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
+| `decl/a-parenthesized-value-under-a-subscript` | `<shell>: 1: typeset: not found~st=127` **2>** `<shell>: 1: typeset: not found` | `declare -a a=([1]="(var)")~st=0` **2>** `<shell>: line 1: warning: a[1]=(var): quoted compound array assignment deprecated` | `declare -a a=([1]="(var)")~st=0` **2>** `<shell>: line 1: warning: a[1]=(var): quoted compound array assignment deprecated` | `declare -a a='([0]="var")'~st=0` | `typeset -a a=([1]='(var)')~st=0` | `typeset -a a=( '(var)' )~st=0` | `<shell>: typeset: not found~st=127` **2>** `<shell>: typeset: not found` |
+| `decl/a-parenthesized-value-under-a-subscript-of-an-array` | `<shell>: 1: typeset: not found~st=127` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `declare -a a=([1]="(var)")~st=0` | `declare -a a=([1]="(var)")~st=0` | `declare -a a='([0]="var")'~st=0` | `typeset -a a=([1]='(var)')~st=0` | `typeset -a a=( '(var)' )~st=0` | `<shell>: typeset: not found~st=127` **2>** `<shell>: typeset: not found~<shell>: typeset: not found` |
 | `decl/a-local-array-stays-local` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[g]` | `[g]` | `[g]` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `[]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `decl/readonly-takes-its-array-first` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q]` | `[q]` | `[q]` | `[q]` | `[p]` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
 | `readonly/a-declarations-own-array-value-survives-its-flag` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 all=[x y]~st=0 k=[v]` | `st=0 all=[x y]~st=0 k=[v]` | `st=0 all=[x y]~st=2 k=[v]` **2>** `<script>: line 3: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<script>[1]: typeset: -ar: invalid variable name` *(status 1)* | `st=0 all=[x y]~st=0 k=[v]` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
@@ -15039,6 +15048,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `decl/an-array-assignment-as-an-operand` — an array assignment written as an *operand* of a declaration utility, which is ordinary bash and did not parse at all — found by the wild sweep in three installed bats-core files. dash has no array literal so it is a syntax error there, and the subscript base makes the answer differ between the three that do
   ```sh
   typeset a=(x y); echo "[${a[1]}]"
+  ```
+- `decl/an-operand-that-runs-past-its-parenthesis` — whether a compound assignment's word ends at its closing parenthesis. One column keeps the word going through the text after it, and the word is then no assignment at all — no value can hold an unquoted parenthesis — so the utility is handed one ordinary operand and declares a *scalar* holding seven characters. The others end the word at the `)`, store the array, and go looking for a command called `x`. A grammar flag rather than a rule, and the row that says which reading a column takes
+  ```sh
+  typeset a=(1 2)x; typeset -p a 2>&1; echo "st=$?"
+  ```
+- `decl/text-after-a-parenthesis-is-more-of-the-same-word` — the same question with the words made visible, which is what tells the two readings apart from the outside: a column that folds hands the utility `a=(5+3)x` and then `y`, and a column that cuts at the `)` hands it something else entirely. Worth having beside the row above because that one is read through a store and this one through the argument list — ours cut the word and put the remainder in *front* of the assignment, which no column does
+  ```sh
+  let() { printf "<%s>" "$@"; echo; }; let a=(5+3)x y
+  ```
+- `decl/a-parenthesized-value-under-a-subscript` — a subscript is the one condition the re-read of a quoted `( … )` value excludes — the characters are stored at 1 in every column that reaches the question — and one column **says so** on the way past, at status 0. So the row is about a sentence rather than a value: the store is unanimous among the shells that get there and only one of them writes a line about it
+  ```sh
+  typeset a[1]="(var)"; typeset -p a 2>&1; echo "st=$?"
+  ```
+- `decl/a-parenthesized-value-under-a-subscript-of-an-array` — the control for the row above, and what keeps it from being read as "a subscript always earns the sentence": with the name already an array the same line is silent in the column that writes one. Without this row a shell that wrote the warning unconditionally would pass the row above
+  ```sh
+  typeset -a a; typeset a[1]="(var)"; typeset -p a 2>&1; echo "st=$?"
   ```
 - `decl/a-local-array-stays-local` — the second half, and the one that is silent: making the form parse showed the array outliving the function, because `local` had saved a scalar of that name and nothing had saved the *array*. Arrays are a second table and shadowing has to cover both
   ```sh

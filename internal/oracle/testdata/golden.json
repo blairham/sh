@@ -65365,6 +65365,108 @@
         "TimedOut": false
       }
     },
+    "decl/a-parenthesized-value-under-a-subscript": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~st=127",
+        "Stderr": "\u003cshell\u003e: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -a a=([1]=\"(var)\")~st=0",
+        "Stderr": "\u003cshell\u003e: line 1: warning: a[1]=(var): quoted compound array assignment deprecated",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -a a=([1]=\"(var)\")~st=0",
+        "Stderr": "\u003cshell\u003e: line 1: warning: a[1]=(var): quoted compound array assignment deprecated",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a a='([0]=\"var\")'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a a=([1]='(var)')~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a a=( '(var)' )~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/a-parenthesized-value-under-a-subscript-of-an-array": {
+      "ash": {
+        "Stdout": "\u003cshell\u003e: typeset: not found~st=127",
+        "Stderr": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -a a=([1]=\"(var)\")~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -a a=([1]=\"(var)\")~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a a='([0]=\"var\")'~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a a=([1]='(var)')~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a a=( '(var)' )~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "decl/a-subscripted-operand-with-no-value": {
       "ash": {
         "Stdout": "",
@@ -65977,6 +66079,57 @@
         "TimedOut": false
       }
     },
+    "decl/an-operand-that-runs-past-its-parenthesis": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -- a=\"(1 2)x\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -- a=\"(1 2)x\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -- a=\"(1 2)x\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a a=(1 2)~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a a=( 1 2 )~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "decl/case-letters-beside-a-numeric-type-letter": {
       "ash": {
         "Stdout": "\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~\u003cshell\u003e: typeset: not found~z=[]~\u003cshell\u003e: typeset: not found",
@@ -66126,6 +66279,57 @@
         "Stdout": "[p]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/text-after-a-parenthesis-is-more-of-the-same-word": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003ca=(5+3)x\u003e\u003cy\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003ca=(5+3)x\u003e\u003cy\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003ca=(5+3)x\u003e\u003cy\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no matches found: a=(5+3)x",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -118819,6 +119023,57 @@
         "Stdout": "one=0~zero=1~sum=0~alone=1",
         "Stderr": "\u003cshell\u003e:1: bad math expression: illegal character: @~\u003cshell\u003e:1: bad math expression: illegal character: @~\u003cshell\u003e:1: bad math expression: illegal character: @~\u003cshell\u003e:1: bad math expression: illegal character: @",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "let/arithmetic-written-after-the-parentheses": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "a=4 st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=4 st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=4 st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no matches found: a=(5 + 3)/2",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

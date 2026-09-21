@@ -162,6 +162,9 @@ type Roster struct {
 	outside  []Resolver
 	unknown  []string
 	shadowed []string
+	// checked is the elements whose collisions have already been recorded,
+	// so a session's every prompt does not append the same sentence again.
+	checked map[string]bool
 }
 
 // Resolver finds a segment that is not compiled in — one defined as a shell
@@ -193,6 +196,23 @@ func (r *Roster) Consult(resolver Resolver) {
 	r.outside = append(r.outside, resolver)
 }
 
+// ConsultBelow adds a resolver that is asked *after* every resolver already
+// added and still before the compiled-in segments.
+//
+// It exists because the spec's resolution order is fixed — a shell function
+// in the session, then a segment declared by a plugin, then one compiled in —
+// and the two are wired at different moments. A theme installs the session's
+// functions when it is built and a front end attaches whatever supplies
+// segments afterwards, so the later arrival is the *less* local one and
+// Consult's rule would invert the spec exactly.
+//
+// Stated as its own method rather than left to the order of two calls,
+// because an ordering that depends on when a front end happens to wire
+// something is an ordering nobody can read off the source.
+func (r *Roster) ConsultBelow(resolver Resolver) {
+	r.outside = append([]Resolver{resolver}, r.outside...)
+}
+
 // Resolve answers an element name, and records the ones nothing answered.
 //
 // A configured element with no segment renders nothing and is named under
@@ -207,16 +227,7 @@ func (r *Roster) Resolve(element string) (Segment, bool) {
 		if !ok {
 			continue
 		}
-		if _, also := r.compiled[name]; also && !slices.Contains(r.shadowed, name) {
-			// A collision is named rather than quietly resolved. Somebody
-			// whose segment stopped drawing because a release added a
-			// built-in of the same name has been silently overruled by their
-			// own shell, and the reverse — a built-in that stopped drawing
-			// because a startup file defined a function — is the same
-			// surprise from the other side. The local one still wins; what
-			// changes is that it is said out loud.
-			r.shadowed = append(r.shadowed, r.outside[i].Name()+" "+name)
-		}
+		r.noteCollisions(name, i)
 		return segment, true
 	}
 	if segment, ok := r.compiled[name]; ok {
@@ -226,6 +237,45 @@ func (r *Roster) Resolve(element string) (Segment, bool) {
 		r.unknown = append(r.unknown, name)
 	}
 	return nil, false
+}
+
+// noteCollisions records that something else also answers this element.
+//
+// A collision is named rather than quietly resolved. Somebody whose segment
+// stopped drawing because a release added a built-in of the same name has
+// been silently overruled by their own shell, and the reverse — a built-in
+// that stopped drawing because a startup file defined a function — is the
+// same surprise from the other side. The more local one still wins; what
+// changes is that it is said out loud.
+//
+// Every loser is named and not only the compiled-in one, because with three
+// kinds of source there are collisions in which nothing compiled in is
+// involved at all: two plugins claiming one element, or a session function
+// and a plugin. A report that named only the first kind would be silent on
+// exactly the case a person cannot otherwise diagnose.
+//
+// Asked once per element per session. The scan is cheap, but the *record* is
+// not idempotent — appending on every prompt would grow a slice for the life
+// of a session and, since the report drops a repeated sentence, would do it
+// invisibly.
+func (r *Roster) noteCollisions(name string, winner int) {
+	if r.checked == nil {
+		r.checked = map[string]bool{}
+	}
+	if r.checked[name] {
+		return
+	}
+	r.checked[name] = true
+	for i := winner - 1; i >= 0; i-- {
+		if _, also := r.outside[i].Resolve(name); also {
+			r.shadowed = append(r.shadowed,
+				r.outside[winner].Name()+" draws "+name+" in place of "+r.outside[i].Name())
+		}
+	}
+	if _, also := r.compiled[name]; also {
+		r.shadowed = append(r.shadowed,
+			r.outside[winner].Name()+" draws "+name+" in place of the built-in segment")
+	}
 }
 
 // Source names what would draw an element, without drawing it and without

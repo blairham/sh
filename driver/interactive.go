@@ -111,6 +111,13 @@ func (sh Shell) session(argv []string, in source) int {
 	// the theme a question.
 	theme := repl.NewTheme(r.GetVar)
 	r.SetPromptEngine(theme.Engine)
+	// And whatever the binary attached that supplies segments from outside
+	// this process. Consulted below the session's own functions and above
+	// the compiled-in segments, which Theme.Consult is what states — see
+	// repl/themesegments.go.
+	for _, source := range sh.PromptSegments {
+		theme.Consult(source)
+	}
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

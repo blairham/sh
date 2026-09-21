@@ -125,7 +125,30 @@ func launchPlugins(sh driver.Shell, paths []string, stderr io.Writer) (driver.Sh
 		}
 	}
 	sh = watched(sh, hosts.hosts)
+	sh = drawn(sh, hosts.hosts)
 	return sh, hosts, nil
+}
+
+// drawn attaches the segment role of every plugin that declared one.
+//
+// Appended rather than replacing, exactly as watched is and for the same
+// reason: a person who added a second plugin did not ask the first one's
+// segments to stop drawing. A plugin that did not declare the role
+// contributes nothing and its PromptSegments is nil, so a shell running only
+// command plugins consults nobody and is told by nobody — which is what it
+// did before any of this.
+//
+// The order is the invocation's, which is the only order there is to use,
+// and it decides a collision between two plugins claiming one element name.
+// The roster names such a collision rather than resolving it quietly, so the
+// arbitrary part is visible where a person can read it.
+func drawn(sh driver.Shell, hosts []*plugin.Host) driver.Shell {
+	for _, h := range hosts {
+		if source := h.PromptSegments(); source != nil {
+			sh.PromptSegments = append(sh.PromptSegments, source)
+		}
+	}
+	return sh
 }
 
 // watched composes the observer plugins onto whatever sink the invocation

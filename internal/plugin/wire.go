@@ -99,6 +99,22 @@ const (
 	// than as a feature of one consumer, and this is the third consumer taking
 	// it as it stands.
 	MethodEvent = "observer/event"
+	// MethodPromptContext says what the next prompt is being drawn for, for a
+	// plugin that declared the segment role.
+	//
+	// A notification, and it is **told rather than asked** — which is the
+	// whole of how the segment role clears the hot-path exclusion in
+	// docs/design/plugins.md. A request would put a process boundary on the
+	// path between pressing return and seeing a prompt; a notification the
+	// shell does not wait for puts nothing there at all.
+	//
+	// At most one is ever waiting, and a plugin that is behind loses the ones
+	// it was behind on rather than making the shell queue them. That is not a
+	// weaker guarantee than the observer role's bounded buffer, it is a
+	// different question: an event is a record and losing one is a gap, while
+	// a context is a *state* and the newest one is the only one that means
+	// anything. The prompt after this one says the same thing again.
+	MethodPromptContext = "prompt/context"
 )
 
 // The methods a plugin calls on the host. Each is here because a process that
@@ -129,6 +145,16 @@ const (
 	// chunk — and handled on the read loop in order, which is what makes
 	// `echo one; echo two` arrive in that order.
 	MethodOutput = "command/output"
+	// MethodPromptSegment is a plugin saying what one of its segments now
+	// holds. A notification, from the plugin, whenever it has something —
+	// nothing asked for it and nothing is waiting for it.
+	//
+	// The host stores it and says a redraw would differ; the session decides
+	// whether anything is actually redrawn, and a prompt that renders the
+	// same is not written to the screen. So a plugin that publishes a
+	// thousand times while a command runs costs one redraw, and a plugin that
+	// never publishes costs a segment that draws nothing.
+	MethodPromptSegment = "prompt/segment"
 )
 
 // initializeRequest is what the host sends first.
@@ -163,6 +189,66 @@ type initializeResult struct {
 	// every refusal a policy made; a plugin that did not ask for it does not
 	// receive it, and Host.Sink answers nil for one that did not.
 	Observer bool `json:"observer"`
+
+	// Segments is every prompt element this plugin draws, and a non-empty
+	// list is the declaration of the segment role — the third and, per #1315,
+	// the last. Declared by the field that carries it for the reason Commands
+	// is: a `roles` array beside it would be a second spelling of one fact,
+	// with a case where the two disagree and no rule for it.
+	//
+	// Declared once and fixed for the plugin's life, exactly as the command
+	// names are, and for a related reason: a segment name that appeared
+	// partway through a session would make a prompt's shape depend on what
+	// had already run, and a collision between two sources could not be named
+	// because there would be no moment at which both were known.
+	//
+	// Opt-in the way the observer role is, and the disclosure is smaller but
+	// real: a plugin that declares a segment is told the shell's working
+	// directory, its exit status and its job count on every prompt line, and
+	// a plugin that did not ask is told none of it.
+	Segments []string `json:"segments"`
+}
+
+// promptContextParams is what a prompt is being drawn for.
+//
+// Deliberately the same facts internal/prompttheme lets a compiled-in segment
+// read, and no more — the roster is not a privileged class, so a segment
+// arriving from outside the binary must be able to reach what one compiled in
+// can and nothing a compiled-in one cannot. A field here that a compiled-in
+// segment has no way to see would be the extension path becoming
+// second-class from the other direction.
+//
+// The duration is milliseconds because JSON has one number type and a
+// nanosecond count of a long command is past the range a double holds
+// exactly. A prompt draws seconds; nothing here needs more.
+type promptContextParams struct {
+	Dir        string `json:"dir"`
+	PrevDir    string `json:"prevDir,omitempty"`
+	Status     int    `json:"status"`
+	DurationMS int64  `json:"durationMs"`
+	Jobs       int    `json:"jobs"`
+	Columns    int    `json:"columns"`
+	Root       bool   `json:"root,omitempty"`
+	Remote     bool   `json:"remote,omitempty"`
+	Continued  bool   `json:"continued,omitempty"`
+}
+
+// promptSegmentParams is what a plugin says one of its segments holds.
+//
+// An empty Content with no Fields is **declining**, which is what every other
+// segment does with nothing to say and is how a plugin retracts one: there is
+// no separate "clear" message, because a second spelling of one fact is a
+// pair that can disagree.
+//
+// Icon names an entry in the icon table and is never a glyph. A plugin that
+// drew its own would make `SH_PROMPT_ICONS=ascii` a lie, which is the same
+// rule that keeps a compiled-in segment from carrying one.
+type promptSegmentParams struct {
+	Name    string            `json:"name"`
+	Content string            `json:"content"`
+	Icon    string            `json:"icon,omitempty"`
+	State   string            `json:"state,omitempty"`
+	Fields  map[string]string `json:"fields,omitempty"`
 }
 
 // invokeRequest is one call of one of the plugin's commands.

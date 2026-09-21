@@ -406,6 +406,7 @@ func (h *Host) Handle(_ context.Context, method string, params json.RawMessage) 
 		// argument and never as a format.
 		c.r.Diagnosef("%s", p.Text)
 		return struct{}{}, nil
+
 	}
 	return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "this shell does not serve %s", method)
 }
@@ -470,6 +471,17 @@ func (c *call) read(maxBytes int) (any, error) {
 // A notification for a call that has ended is dropped in silence. There is
 // nobody to tell, which is what a notification means.
 func (h *Host) Notify(_ context.Context, method string, params json.RawMessage) {
+	if method == MethodPromptSegment {
+		// The segment role's one inbound message, and it is a notification
+		// for the reason the whole role is one: nothing is waiting for it.
+		// A reply here would be the first step back toward a shell that
+		// waits on a process to draw a prompt.
+		//
+		// It names no call, as observer/event names none, because a prompt
+		// segment belongs to no command.
+		h.promptSegment(params)
+		return
+	}
 	if method != MethodOutput {
 		// Unknown notifications are ignored rather than reported, which is
 		// rule three of the event schema's stability rules adopted wholesale:

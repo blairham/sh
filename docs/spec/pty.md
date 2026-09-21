@@ -8,12 +8,15 @@ environment can be driven from a script.
 This is the **spec half** of that work. Nothing here is implemented yet;
 it is written down first because `CLEANROOM.md` says the wall comes
 before the code, and because the demand for the module turned out to be
-different from what the issue that asked for it recorded — see the last
-section, which is the part to read before starting.
+different from what the issue that asked for it recorded — see *What the
+module is worth here*, and then *The one thing that has to be decided
+before any of it is written*, which are the two parts to read before
+starting.
 
 Sources: `zshmodules(1)`, section *THE ZSH/ZPTY MODULE*, and an oracle
 run against zsh 5.9.2 (`/opt/homebrew/bin/zsh`, aarch64-apple-darwin25)
-on 2026-09-19. Every table below is that run unless it says otherwise.
+on 2026-09-19, extended on 2026-09-20 with the probes that carry that
+date. Every table below is the first run unless it says otherwise.
 
 ## The forms
 
@@ -75,8 +78,30 @@ not discriminate* and is recorded as such rather than as evidence:
     zpty -e B cat; zpty -w B one; zpty -r B l    →  one\r\n
 
 The `\r` in both is the terminal's output discipline turning the newline
-into a carriage return and a newline. A probe that tells `-e` from the
-default has to run a command that does **not** echo its input.
+into a carriage return and a newline.
+
+**The probe that does discriminate runs a command that neither reads nor
+writes**, so that anything coming back is the terminal's own echo and
+nothing else. Measured 2026-09-20 on zsh 5.9.2, every pty non-blocking so
+that no read can hang:
+
+    zpty -b -e E 'sleep 2'; zpty -w E hello; sleep 0.4; zpty -r E l
+    status 0, l = "hello\r\n"
+
+    zpty -b    D 'sleep 2'; zpty -w D hello; sleep 0.4; zpty -r D l
+    status 1, l unset
+
+So the manual's sentence holds and **echo is off by default**, which is
+the setting an implementation has to reach for rather than inherit:
+`internal/tty` has `Raw` and `Cbreak` and neither is echo-off with output
+post-processing left on.
+
+`read` is the other non-discriminating command and is worth naming
+beside `cat`, because it looks like it should work. `zpty -b D 'read -r
+x'` answers `hello` too, without `-e`: the *command* puts the terminal
+into a mode of its own, so what comes back says nothing about how the
+pty was set up. The tell for a usable probe is a command that touches
+the terminal not at all.
 
 `-b` makes the pseudo-terminal non-blocking in both directions, which is
 what changes the reading rules below.
@@ -163,6 +188,24 @@ confused about the state — which is a statement about the *parent's*
 bookkeeping, and is the reason the table below cannot simply be cloned
 into a subshell here.
 
+**Measured, 2026-09-20**, since the shape of that confusion is what an
+implementation has to choose about:
+
+    zpty -b P 'sleep 3'
+    ( zpty )            lists `(pid) P: 'sleep 3'`, status 0
+    ( zpty -d P )       status 0
+    zpty -t P           status 1 — the command is gone
+    zpty -d P           status 0 — and the **name** is still the parent's
+
+So a subshell **sees** the table and its delete reaches the process,
+while the parent keeps the entry: `-d` there succeeds rather than
+answering `no such pty command`. That is a live child killed out from
+under a table that still names it, and it is the half of this module
+that a cloned runner here would have to be told about explicitly — the
+subshells in this tree are cloned Runners in one process rather than
+forks, so the sharing is not something that happens by default and has
+to be arranged.
+
 `zpty -t name` without `-r` is whether the command is still running: 0
 while it is, non-zero once it is not, and it says nothing about whether
 output is waiting.
@@ -222,24 +265,57 @@ read waits for. The refusal a script can act on — pinned by
 **The order of work, therefore:** the completion system first, this
 module after it, and the whole builtin rather than a part of it.
 
-## What an implementation will need that this tree does not have
+**Re-checked 2026-09-20 and unchanged.** Three of the prerequisites that
+sentence rests on have since arrived as builtins — `vared`, `zle -N` and
+`compstate` are all answered here now — so the claim is worth re-testing
+rather than restating. It survives: `comppostfuncs` is nowhere in this
+tree, and the shipped completion system does not load, measured with the
+host's own `FPATH` rather than an empty one:
+
+    autoload -Uz compinit; compinit -u -d …; whence -w _main_complete
+    _main_complete: none        and `compdef: none` beside it
+
+## The one thing that has to be decided before any of it is written
+
+`zpty NAME cmd` runs a command **on a goroutine with the pseudo-terminal
+as its three descriptors, under a handle the shell keeps**. That is a
+subshell boundary, and this package reconstructs those by hand because
+its subshells are cloned Runners in one process rather than forks — see
+`interp/concurrent.go` and `interp/coproc.go`, which is the same shape
+with pipes instead of a terminal and runs to 741 lines.
+
+**No dialect can reach it.** The three extension points a dialect has
+are the vectors, a registered builtin and a sourced prelude; a builtin
+is handed an `*interp.Runner` and there is nothing public on it that
+starts a command concurrently with descriptors of the caller's choosing.
+`startCoproc` is unexported, `Jobs` only lists, and `Runner.Run` is
+synchronous. So `zsh/zpty` is not a builtin somebody can write against
+today — **it needs a new public seam on the substrate**, and what shape
+that seam takes is a design decision rather than an implementation
+detail. That, and not the size of the builtin, is what this issue is
+waiting on.
+
+## What an implementation will need besides that
 
 Recorded so the size is visible rather than discovered:
 
 - A **pseudo-terminal pair**, which `internal/pty` already opens, plus
   a line discipline with echo off by default and output post-processing
   left on — `internal/tty` has `Raw` and `Cbreak` and neither is that
-  pair of settings.
-- A way to run a command **on a goroutine with the pty as its three
-  descriptors**, which is a subshell boundary this package reconstructs
-  by hand (see `interp/concurrent.go`) and which no dialect can reach
-  through the public seams today.
+  pair of settings. The measurement that pins the default is in
+  *Starting* above.
 - **Per-runner state holding an `*os.File` and a live child**, which no
   dialect keeps: `zmodload`, `sched` and `zstyle` all keep theirs in a
   shell parameter under a name no script can reach, and a descriptor
   cannot go in one. `$REPLY` being the master's descriptor number is a
   hint that the master wants registering with `Runner.SetDescriptor`,
   which would leave only the name-to-descriptor map in a parameter.
-- A decision about **subshells**, which the manual raises and does not
-  settle for us: a cloned runner that inherited the table would delete
-  its parent's commands.
+- An answer for **subshells** matching the rows in *Deleting, testing
+  and listing* above: the table is visible in one and a delete there
+  reaches the process while the parent keeps the name.
+- A **sandbox row before the feature**, per `AGENTS.md`. `zpty NAME cmd`
+  starts a program on a terminal the shell owns, `-w` writes to its
+  standard input and `-r` reads its output, and there is no path
+  anywhere in it — the `${(k)mapfile}` shape the ledger keeps missing. A
+  row in `internal/sandboxcheck` that lands `inert` and moves to
+  `contained` is what keeps it from landing as `ESCAPED`.

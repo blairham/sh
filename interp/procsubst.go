@@ -98,7 +98,14 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 
 	sub, releaseFds := r.substRunner(kind)
 	if kind == syntax.ProcSubstOut {
-		sub.Stdout = r.Stdout
+		// The body's own, on the terms substRunner gives for its stderr: the
+		// same lock and the same destination, sealable where the shell's is
+		// not. This direction is joined at the command or at the end of the
+		// scope that owns the stream, so the seal is never what stops it —
+		// it is marked for the reason substRunner prepares all three
+		// spellings alike, so that a stream rule does not hold for two of
+		// them and read as an accident to whoever arrives next.
+		sub.Stdout = bodyWriter(r.Stdout)
 	}
 	// The body is parsed on its own and counts from one, and the script it
 	// was written in did not start there: `cat <(echo $LINENO)` on line 3 is
@@ -350,8 +357,15 @@ func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	// *os.File case does not even take, and a stream rule that held for two
 	// of three spellings would be read as an accident by whoever arrives
 	// next.
-	sub.Stderr = r.lockedStderr()
-	r.Stderr, r.Stdout = sub.Stderr, r.lockedStdout()
+	//
+	// The body's writer is a *sibling* of the shell's rather than the same
+	// object, which is the one thing here that is not #735's arrangement.
+	// They share the lock and the destination, so the exclusion is exactly
+	// as it was; what the split buys is that the body's can be sealed when
+	// the shell ends and the shell's cannot. See bodyWriter and
+	// streamseal.go.
+	r.Stderr, r.Stdout = r.lockedStderr(), r.lockedStdout()
+	sub.Stderr = bodyWriter(r.Stderr)
 	return sub, releaseFds
 }
 

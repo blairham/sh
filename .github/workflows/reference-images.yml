@@ -1,0 +1,96 @@
+name: Reference images
+
+# The two reference builds `make suite` grades a column against and no public
+# image carries: zsh 5.9.2 and an unpatched dash 0.5.12. images/README.md is
+# the argument for why they have to exist at all; this is how they get built.
+#
+# Publishing is a **deliberate act on a branch of its own**, not something a
+# merge does. The recipes are not reproducible byte for byte — zsh comes from
+# sid, which moves — so a rebuild of the same Dockerfile would push a
+# different index under the same tag and quietly leave the digest a column is
+# pinned to untagged. Publishing therefore fires only for a `refimages/`
+# branch, and a pull request that touches a recipe builds it without pushing,
+# which is what keeps the recipe itself checked.
+#
+# `workflow_dispatch` is the same act by hand, and it works only from the
+# default branch's copy of this file — which is why the branch trigger exists
+# as well: the first publish has to happen before this file has ever been on
+# main. #3480.
+on:
+  push:
+    branches: ['refimages/**']
+  pull_request:
+    paths:
+    - 'images/**'
+    - '.github/workflows/reference-images.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reference-images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    # Both builds are small — an apt install and a 240KB C program — but the
+    # arm64 half of each runs under emulation, so the bound is generous rather
+    # than tight.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - dir: zsh-5.9.2
+          package: sh/zsh
+          tag: 5.9.2
+        - dir: dash-0.5.12
+          package: sh/dash
+          tag: 0.5.12
+    steps:
+    - uses: actions/checkout@v6
+    # Both architectures from one runner. A column is pinned by an *index*
+    # digest so that one pin covers the amd64 runner and the arm64 laptop, the
+    # way the bash column's does; building each arch on a runner of its own
+    # would be faster and would need a manifest-merge job to produce that one
+    # index, which is more moving parts than two small builds are worth.
+    - uses: docker/setup-qemu-action@v3
+    - uses: docker/setup-buildx-action@v3
+    - name: Log in to ghcr.io
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build, and push when this is a publish
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        context: images/${{ matrix.dir }}
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.package }}:${{ matrix.tag }}
+        # Links the package to this repository, which is what gives it the
+        # repository's own visibility and permissions rather than a second
+        # thing to keep in sync.
+        labels: |
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.description=A reference build make suite grades a column against (#3480)
+          org.opencontainers.image.licenses=Apache-2.0
+        # An index of exactly the two platforms and nothing else. With
+        # provenance on, buildx adds an attestation manifest carrying no
+        # platform, and the thing a column writes down is this index's digest.
+        provenance: false
+    - name: Say what to pin
+      if: github.event_name != 'pull_request'
+      run: |
+        echo "ghcr.io/${{ github.repository_owner }}/${{ matrix.package }}" >> "$GITHUB_STEP_SUMMARY"
+        echo '`${{ steps.build.outputs.digest }}`' >> "$GITHUB_STEP_SUMMARY"
+        echo "::notice title=${{ matrix.package }}::${{ steps.build.outputs.digest }}"

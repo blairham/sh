@@ -137,20 +137,24 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			},
 		},
 		{
-			// zsh's cell here is **this shell's answer and not that shell's**,
-			// and it is left standing with the divergence named rather than
-			// quietly asserted: measured 2026-09-20, zsh 5.9.2 writes
-			// `s.sh: parse error near `)'` with **no line at all** — the one
-			// failure it locates by name alone, which is
-			// Diagnostics.MissingFuncBodyOmitsTheLine — and then places the
-			// quote at line 1 of a body refused on line 2. The first half is
-			// modeled and does not reach this route; the second is a
-			// numbering nothing in this tree explains. Both are open in
-			// #3961.
+			// zsh's cell is that shell's own again, and it is the one row of
+			// the sweep where the line is dropped rather than moved: the body
+			// ran out where a function's body was due, which is the single
+			// failure this dialect locates by the shell's name alone — see
+			// Diagnostics.MissingFuncBodyOmitsTheLine and
+			// Runner.substFailureLocatedByNameAlone.
+			//
+			// Measured 2026-09-21, zsh 5.9.2, from a script file whose line 1
+			// is `v=$(echo hi; foo())`: `s.sh: parse error near `)'` and then
+			// `s.sh:1: parse error near `v=$(echo hi; foo())'`. The quote is
+			// at line 1 with one line above the substitution and with two, so
+			// the second message is not counting from the failure either —
+			// TestASubstitutionRefusalQuotesTheScript holds that half, since
+			// this harness hands the runner no program text (#3961).
 			body: "f()",
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
-				"zsh":   "zsh:2: parse error near `)'\n",
+				"zsh":   "zsh: parse error near `)'\n",
 				"ksh":   "ksh: line 2: syntax error at line 2: `)' unexpected\n",
 				"dash":  "dash: 2: Syntax error: \")\" unexpected\n",
 				"ash":   "ash: syntax error: unexpected \")\"\n",

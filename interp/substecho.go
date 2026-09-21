@@ -197,7 +197,18 @@ func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure er
 	if d.EchoesTheOffendingLine {
 		return r.substBodyEcho(span, lines, start, own, d.offendingLine(own, failure, text)), line
 	}
-	return r.substWordEcho(span, lines, textBase, own, line)
+	echo, at := r.substWordEcho(span, lines, textBase, own, line)
+	if echo != "" && d.locatesByNameAlone(failure) {
+		// The refusal in front of this one says where it was by not saying,
+		// so the only line this can honestly be pointed at is the first —
+		// which is the answer Diagnostics.ParseDiagnostic already gives a
+		// failure carrying no line of its own. Measured 2026-09-21 on zsh
+		// 5.9.2: `v=$(echo hi; foo())` is `s.sh:1:` here with one line above
+		// it and with two, where every other body in the sweep moves with
+		// the substitution. See Runner.substFailureLocatedByNameAlone.
+		at = 1
+	}
+	return echo, at
 }
 
 // substTextLines is the program's text split into lines, or nil where the text

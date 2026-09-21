@@ -2893,6 +2893,17 @@ type Runner struct {
 	// where a trap fired rather than where in its body a failure was.
 	linePin int
 
+	// locatedByNameAlone drops the line from the one message it is set
+	// around, for a refusal the dialect locates by the shell's name and
+	// nothing else. See Runner.substFailureLocatedByNameAlone and
+	// Diagnostics.MissingFuncBodyOmitsTheLine.
+	//
+	// A flag around one write rather than an answer read at the prefix,
+	// because the message *after* it keeps a line — zsh writes
+	// `s.sh: parse error near `)'` and then `s.sh:1: …`, so a rule applied
+	// to the whole refusal would take the second one's line away too.
+	locatedByNameAlone bool
+
 	// suppressedHead says the next command dispatched is a function's body
 	// and fires no compound head of its own. Set by callFuncAs and cleared
 	// by the dispatch it was set for, so nothing deeper inherits it.
@@ -4150,6 +4161,15 @@ func (r *Runner) lineNow() int {
 // that asks for it and for what it is measured against.
 func (r *Runner) locationPrefixNamed(construct string) string {
 	d := r.diag()
+	if r.locatedByNameAlone {
+		// One refusal this dialect locates by name alone, and it reaches
+		// here by the route Diagnostics.ParseDiagnostic does not: a body
+		// refused when the substitution is *expanded*. Answered the same way
+		// there and here — the style is moved rather than the prefix
+		// rewritten, so the shell's name, the builtin naming rule and a
+		// borrowed text's own name all stay whatever they already were.
+		d.Location = LocationNameOnly
+	}
 	name, line, inBody := r.locationNameAndLine(r.speaker == "")
 	if construct != "" {
 		name += ": " + construct

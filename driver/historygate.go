@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/blairham/sh/internal/histexpand"
+	"github.com/blairham/sh/internal/histjoin"
 	"github.com/blairham/sh/interp"
 )
 
@@ -95,23 +96,11 @@ type histGate struct {
 	// one, so what has been collected is a command and belongs in the list.
 	flush bool
 
-	// cur is the physical lines of the command being read and seps the
-	// separator before each one after the first. Kept apart so that joining
-	// happens once, when the command is complete.
-	cur  []string
-	seps []string
-	// heredoc records that one of those separators was a here-document's,
-	// which changes how the whole entry is joined. See join.
-	heredoc bool
-	// endsInBody records that the newest collected line was read inside a
-	// here-document — its body or its delimiter — which is what puts a
-	// newline at the end of the entry. See join.
-	endsInBody bool
-	// spaceNext makes the next separator a space. One thing sets it: a `:p`
-	// line inside a compound command, which is in the entry and was never
-	// handed to the parser — measured, bash writes `if true; then echo echo
-	// abc echo inside; fi` there, with no `;` after the line it did not run.
-	spaceNext bool
+	// cur is the command being read, one physical line at a time. The rule
+	// for joining those lines into the single entry a list holds is
+	// internal/histjoin's, shared with `fc`'s editor road — which reaches
+	// the same question through bash's same input stream.
+	cur histjoin.Entry
 
 	r *interp.Runner
 	// report words a complaint about a reference the list does not hold, in
@@ -159,8 +148,9 @@ func (g *histGate) next() (string, bool) {
 			// expanded: measured with a quoted delimiter and an unquoted one.
 			// It still belongs to the command, and the list holds it.
 			g.at++
+			// keep reads `g.open` and takes the newline separator and the
+			// trailing one from it, which is what a body line needs.
 			g.keep(body)
-			g.endsInBody = true
 			return line, true
 		}
 		if !g.r.HistoryRecording() {
@@ -210,7 +200,7 @@ func (g *histGate) next() (string, bool) {
 			// as an unanswered reference is: measured, a `$LINENO` on the
 			// line after a `:p` reads one less than the file's.
 			g.keep(res.Line)
-			if len(g.cur) == 1 {
+			if g.cur.Len() == 1 {
 				// It stood on its own, so it is a command and the list takes
 				// it now — there will be no later flush for it, because the
 				// parser is handed nothing and hands back no command for the
@@ -220,7 +210,7 @@ func (g *histGate) next() (string, bool) {
 				// in the list.
 				g.record()
 			} else {
-				g.spaceNext = true
+				g.cur.SpaceNext()
 			}
 			continue
 		}
@@ -253,136 +243,20 @@ func (g *histGate) take() (string, bool) {
 	return line, true
 }
 
-// keep adds one physical line to the command being read, with the separator
-// that will join it to the one before.
-func (g *histGate) keep(line string) {
-	if len(g.cur) > 0 {
-		g.seps = append(g.seps, g.separator())
-	}
-	g.cur = append(g.cur, line)
-	g.endsInBody = false
-}
-
-// separator is what goes between the line already collected and the one
-// arriving, measured on bash 5.3.20 by reading its own list back:
-//
-//	if true / then / echo hi / fi        -> `if true; then echo hi; fi`
-//	for i in 1 2 / do / echo $i / done   -> `for i in 1 2; do echo $i; done`
-//	case x in / x) echo y ;; / esac      -> `case x in x) echo y ;; esac`
-//	f() { / echo c / }                   -> `f() { echo c; }`
-//	echo a | / cat                       -> `echo a | cat`
-//
-// So a `;` is written unless the text so far already ends in something that
-// cannot take one — a keyword or operator still waiting for its command —
-// where a space is written instead. A boundary the parser was inside a quote
-// or a here-document at takes a newline, because a `;` there would be text
-// rather than a separator.
-func (g *histGate) separator() string {
-	if g.spaceNext {
-		g.spaceNext = false
-		return " "
-	}
-	if g.open != "" {
-		if g.open == "<<" {
-			g.heredoc = true
-		}
-		return "\n"
-	}
-	last := strings.TrimRight(g.cur[len(g.cur)-1], " \t")
-	if last == "" {
-		// A blank line inside a command contributes nothing that a `;` could
-		// follow. Measured: `if true` / (blank) / `then` / `echo hi` / `fi`
-		// comes back as `if true;  then echo hi; fi`, with the two spaces
-		// that says the blank was kept and the semicolon was not doubled.
-		return " "
-	}
-	if strings.HasSuffix(last, ")") && g.unclosedParen() {
-		// A `case` pattern, which is the one `)` that is still waiting for a
-		// command. Measured: `case foo in` / `foo)` / `echo one two` / `;;` /
-		// `esac` comes back as `case foo in foo) echo one two; ;; esac`, with
-		// no `;` after the pattern.
-		//
-		// The balance rather than the character, because a line ending in `)`
-		// is far more often a substitution that closed, and that one *does*
-		// take a `;`. Two shapes measured, and each is why one half of this
-		// test is there: `if true; then` / `echo $(echo x)` / `fi` is `echo
-		// $(echo x); fi`, so the character alone is not enough; and `echo
-		// $((1 +` / `2))` / `echo after` is `2)); echo after`, so the balance
-		// has to be read over the whole command and not over the line, where
-		// `2))` looks unmatched on its own.
-		return " "
-	}
-	for _, word := range awaitingACommand {
-		if strings.HasSuffix(last, word) {
-			// A word only counts as a word: `dado` does not end in `do`.
-			head := last[:len(last)-len(word)]
-			if isWordish(word) && head != "" && !isSeparatorByte(head[len(head)-1]) {
-				continue
-			}
-			return " "
-		}
-	}
-	return "; "
-}
-
-// unclosedParen reports whether the command collected so far has more `)`
-// than `(` — which a case pattern does and a closed substitution does not.
-func (g *histGate) unclosedParen() bool {
-	opens, closes := 0, 0
-	for _, line := range g.cur {
-		opens += strings.Count(line, "(")
-		closes += strings.Count(line, ")")
-	}
-	return closes > opens
-}
-
-// awaitingACommand are the line endings that take a space rather than a `;`,
-// longest spelling first so that `||` is not read as `|`.
-var awaitingACommand = []string{"&&", "||", ";;", "|", "{", "(", "then", "else", "do", "in"}
-
-func isWordish(word string) bool {
-	return word[0] >= 'a' && word[0] <= 'z'
-}
-
-func isSeparatorByte(b byte) bool {
-	return b == ' ' || b == '\t' || b == ';' || b == '&' || b == '|' || b == '(' || b == '{'
-}
+// keep adds one physical line to the command being read, with what the parser
+// was still inside when it asked for it.
+func (g *histGate) keep(line string) { g.cur.Add(line, g.open) }
 
 // record puts the command that has been collected into the list.
 func (g *histGate) record() {
-	if len(g.cur) == 0 {
+	if g.cur.Len() == 0 {
 		return
 	}
-	entry := g.join()
-	g.cur, g.seps, g.heredoc, g.spaceNext, g.endsInBody = nil, nil, false, false, false
+	entry := g.cur.Take()
 	if !g.r.HistoryRecording() {
 		return
 	}
 	g.r.RecordHistoryEntry(entry)
-}
-
-// join makes one entry out of the physical lines of one command.
-//
-// A command holding a here-document keeps its newlines and ends with one,
-// which is measured: `cat <<EOD` / `body` / `EOD` comes back out of `history`
-// over three lines with a blank one after it. Nothing else can — a `;` inside
-// a here-document's body would be body text.
-func (g *histGate) join() string {
-	var b strings.Builder
-	for i, line := range g.cur {
-		if i > 0 {
-			b.WriteString(g.seps[i-1])
-		}
-		b.WriteString(line)
-	}
-	if g.heredoc && g.endsInBody {
-		// Only where the command *ends* on the document's last line.
-		// Measured: `echo $(cat <<EOF` / `x` / `EOF` / `)` comes back as the
-		// four lines with no blank one after them, because the `)` that
-		// closed the command was read after the document had ended.
-		b.WriteString("\n")
-	}
-	return b.String()
 }
 
 // quoteOf reads the lexer's answer as the expander's.

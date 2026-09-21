@@ -11,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+
+	"github.com/blairham/sh/internal/histjoin"
+	"github.com/blairham/sh/syntax"
 )
 
 // `fc`: the history list listed, and a command out of it run again.
@@ -605,14 +608,32 @@ func (h fcHistory) rerun(r *Runner, ctx context.Context, rest []string) int {
 // writes the command and `2>/dev/null` does not. The line takes the `fc`
 // call's own place in the history list rather than joining it after.
 //
-// Known and not modeled, with the measurement so it can be finished later:
-// bash echoes the edited text a **line at a time as it reads it**, so two
-// separate commands come out as `echo A`, `A`, `echo B`, `B` interleaved,
-// and each is recorded as a history entry of its own. This writes the whole
-// text once and records it as one entry. The two are identical for a
-// single-command edit — which is every case above, and the only shape
-// `share/suite`'s `history.tests` uses — and they differ only when the editor
-// leaves two or more top-level commands behind. See #4030.
+// # A line at a time, where the dialect reads a line at a time
+//
+// bash pushes the edited file onto its input stream, so it echoes the text a
+// **line at a time as it reads it** and records each command it finds as an
+// entry of its own. zsh reads the whole of it first: measured 2026-09-21,
+// zsh 5.9.2 writes `echo A`, `echo B`, `A`, `B` where bash 5.3.20 writes
+// `echo A`, `A`, `echo B`, `B` for the same two-command edit.
+//
+// That is the same split [Semantics.EvalRunsWhatItParsed] already records —
+// bash runs the commands it has read before a later line fails to parse and
+// zsh does not — so the granularity follows the axis rather than being a new
+// one, and runSourced's own reader decides it. See sourced.read and #4030.
+//
+// The unit is the **line** and not the statement, which the compound case is
+// what says: an editor leaving `for i in a b` / `do` / `echo $i` / `done`
+// makes bash echo all four lines before running any of it, because all four
+// had to be read to find the end of one command. `echo A; echo B` on one
+// line is the same fact from the other side — one echo and one entry for two
+// statements. A fix built on a statement's reconstructed text passes the
+// two-command case and fails both of those.
+//
+// What the list holds is the lines joined the way the list joins them
+// anywhere else — `for i in a b; do echo $i; done` — which is
+// internal/histjoin's rule, shared with the history gate `driver` reads a
+// script through. bash reaches both through one input stream, so there is
+// one rule and not two.
 func (h fcHistory) edit(r *Runner, ctx context.Context, rest []string, editor string, reverse bool) int {
 	firstOp, lastOp := fcOperands(rest)
 	// An absent `first` is the previous command and an out-of-range absolute
@@ -699,14 +720,70 @@ func (h fcHistory) edit(r *Runner, ctx context.Context, rest []string, editor st
 	if !strings.HasSuffix(text, "\n") {
 		text += "\n"
 	}
-	r.errf("%s", text)
 	r.DropHistoryOwnLine()
-	r.RecordHistoryEntry(strings.TrimSuffix(text, "\n"))
 	return r.runSourced(ctx, text, sourced{
 		eval:         true,
 		label:        "fc",
 		syntaxStatus: r.diag().SyntaxStatus(),
+		read:         r.fcRead,
 	})
+}
+
+// fcRead echoes and records one group of lines the reader has consumed.
+//
+// The echo goes to standard **error**, which is the same stream `-s` writes
+// its one line to and was measured the same way: `fc -e cat >/dev/null` still
+// writes the command and `2>/dev/null` does not.
+func (r *Runner) fcRead(b borrowedLines) {
+	r.errf("%s", b.text)
+	if b.whole {
+		// Read through before any of it ran, so there were no boundaries to
+		// record it at: the text is one entry, which is what this road did
+		// before it read anything a line at a time and is what every
+		// single-command edit comes to either way. Nothing measures the
+		// multi-command shape here — see borrowedLines.whole.
+		r.RecordHistoryEntry(strings.TrimSuffix(b.text, "\n"))
+		return
+	}
+	lines := strings.Split(strings.TrimSuffix(b.text, "\n"), "\n")
+	var entry histjoin.Entry
+	for i, line := range lines {
+		if b.body < 0 || i < b.body {
+			// A line the reader stepped over on its way to a command is an
+			// entry of its own — measured, an editor leaving `# c` / `echo
+			// A` makes bash record two. Where it holds nothing at all it is
+			// no entry, which is RecordHistoryEntry's one guard and is
+			// emptiness rather than blankness: a line of three spaces is an
+			// entry there too.
+			r.RecordHistoryEntry(line)
+			continue
+		}
+		open := ""
+		if i > b.body {
+			open = openAfter(lines[b.body:i], b.dialect)
+		}
+		entry.Add(line, open)
+	}
+	if entry.Len() > 0 {
+		r.RecordHistoryEntry(entry.Take())
+	}
+}
+
+// openAfter is what the lexer is still inside having read these lines, which
+// is what the line after them begins inside.
+//
+// Asked of the parser rather than worked out here, which is the rule
+// driver's history gate already states: `$'`, a backquote, a `'` inside a
+// double-quoted string and a here-document body are four separate answers and
+// the lexer holds all of them. The gate feeds one parser a line at a time and
+// can simply ask it between two lines; `fc` reads the editor's text through
+// one parser over the whole of it, so the question goes to a second parser
+// over the lines before the boundary. The text is one person's edit buffer,
+// which is what makes reading it again affordable.
+func openAfter(lines []string, d syntax.Dialect) string {
+	p := syntax.NewParser(strings.Join(lines, "\n")+"\n", d)
+	p.Parse()
+	return p.OpenQuote()
 }
 
 // fcSpoolSeq numbers the files this builtin writes, so that two `fc` calls in

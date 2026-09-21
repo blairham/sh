@@ -22978,6 +22978,45 @@ call's own place in the history list. An editor that exits non-zero, and
 one that cannot be run at all, are both 1 with nothing echoed and nothing
 run.
 
+**How the edited text is read** is a second disagreement, and it is not a
+new axis: it is `EvalRunsWhatItParsed` above, read on the same text. bash
+pushes the file onto its input stream, so it echoes a line at a time as it
+reads it and records each command it finds as an entry of its own; zsh
+reads the whole of it first. Measured 2026-09-21 with an editor leaving
+`echo A` and `echo B`, both streams in order:
+
+| | what it writes | the list afterwards |
+| --- | --- | --- |
+| bash 5.3.20 | `echo A` · `A` · `echo B` · `B` | `echo A` · `echo B` |
+| zsh 5.9.2 | `echo A` · `echo B` · `A` · `B` | unchanged: a script's list takes nothing from `fc` there |
+
+Each stream **alone** is the same in both columns, so the difference in
+the first row is an interleaving and nothing in a corpus whose streams are
+captured apart can see it. The second row can be seen by any case that
+lists the history afterwards.
+
+The unit is the **line** and not the statement, which the compound case is
+what says: an editor leaving `for i in a b` / `do` / `echo $i` / `done`
+makes bash echo all four lines before running any of it — it had to read
+them to find the end of one command — and then record the single entry
+`for i in a b; do echo $i; done`. `echo A; echo B` on one line is the same
+fact from the other side: one echo and one entry for two statements. So
+what is wanted is the lines a command consumed, joined the way the list
+joins lines anywhere else, and never the statement's reconstructed text.
+
+A line the reader stepped over on its way to a command is its own entry
+where it holds anything: `# c` / `echo A` is two entries, a blank line is
+none, and a line of three spaces is one. A run that stops being readable
+records what it got through and no more — `for i in a b` / `do` / `fi` /
+`done` echoes three lines, records `for i in a b; do fi`, and never
+reaches the fourth.
+
+What a list should hold where the whole text was read first is not
+measurable from a script: neither column that reads text that way records
+anything from `fc` in one, and ksh93 refuses the editor road there before
+an editor is chosen. So that reading keeps the whole text as one entry,
+which is what every single-command edit comes to either way.
+
 **OPTIND is 1 before `getopts` has ever run.** Not an axis — every shell
 in the panel initializes it at startup rather than when the builtin first
 executes (`getopts/optind-starts-at-one`), so a script that reads it

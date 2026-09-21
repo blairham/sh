@@ -75,6 +75,11 @@ type sourced struct {
 	// status the error itself carried.
 	fatalStatus int
 
+	// read, when set, is handed each group of physical lines as the reader
+	// consumes it, before those lines run. Only `fc`'s editor road fills it
+	// in; see fcHistory.edit and #4030.
+	read func(borrowedLines)
+
 	// catchReturn stops at `return` instead of letting it unwind the function
 	// around it.
 	//
@@ -84,6 +89,42 @@ type sourced struct {
 	// run in any shell in the panel. So eval is transparent to control flow
 	// and `.` is a boundary for exactly one kind of it.
 	catchReturn bool
+}
+
+// borrowedLines is one group of physical lines as the reader consumed them.
+//
+// It exists because the two things a shell does with the input it is reading
+// — echo it under the verbose option, and put it in the history list — are
+// both about the *lines* and not about the commands they parsed into, and a
+// reader that hands back a tree has thrown the lines away. Measured 2026-09-21
+// on bash 5.3.20, an `fc` editor leaving `for i in a b` / `do` / `echo $i` /
+// `done`: all four lines are echoed before any of it runs, because all four
+// had to be read to find the end of one command. So the echo is per line as
+// read, and the statement's reconstructed text would be one line where bash
+// writes four.
+type borrowedLines struct {
+	// text is the physical lines, each with the newline that ended it.
+	text string
+
+	// body is the index among those lines of the one the command begins on,
+	// or -1 where the group held no command at all — the blank and comment
+	// lines a reader steps over on its way to one. Measured, and the reason
+	// this is not simply zero: an editor leaving `# c` / `echo A` makes bash
+	// record *two* entries, where the same two lines leading a `for` are one.
+	body int
+
+	// whole says these are the whole text, handed over because the dialect
+	// reads borrowed text through before running any of it rather than a
+	// line at a time. What a list should then hold is not measurable from a
+	// script — the two shells that read text whole record nothing from `fc`
+	// in one, and ksh93 refuses the editor road there before an editor is
+	// chosen — so the caller keeps what it did before rather than inventing
+	// an answer. See fcHistory.edit.
+	whole bool
+
+	// dialect is the grammar these lines were read under, for a reader that
+	// has to ask where a line boundary falls inside them.
+	dialect syntax.Dialect
 }
 
 // sourceName is what a diagnostic calls this text.
@@ -191,6 +232,28 @@ func nextBorrowedLine(p *syntax.Parser, whole **syntax.File) (*syntax.File, bool
 		return f, true
 	}
 	return p.NextLine()
+}
+
+// bodyLineOf is which of the lines from at onwards the command in f begins
+// on, counting from zero, or -1 where the group holds no command.
+//
+// A line before it is one the reader stepped over — blank, or a comment — and
+// those are not part of the command that follows: measured, an editor leaving
+// `# c` / `echo A` has bash record `# c` and `echo A` as two entries.
+func bodyLineOf(src string, at int, f *syntax.File) int {
+	if len(f.Stmts) == 0 {
+		if f.Refused != nil {
+			// A line the reader gave up on is still a line it read as a
+			// command's, and the list holds it as one.
+			return 0
+		}
+		return -1
+	}
+	begins := int(f.Stmts[0].Pos().Offset)
+	if begins < at {
+		return 0
+	}
+	return strings.Count(src[at:begins], "\n")
 }
 
 // borrowedTextFailed reports a parse failure in borrowed text and says what
@@ -382,7 +445,44 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 			return 2
 		}
 	}
+	// Where the reader has got to in the text, for the caller that is shown
+	// the lines rather than the tree. A whole-text read consumes all of it
+	// before any of it runs, which is the reading that makes one echo of the
+	// whole text right in the dialects that do it — measured 2026-09-21, zsh
+	// 5.9.2 writes `echo A` and `echo B` and only then `A` and `B`, where
+	// bash interleaves them. So the granularity is this axis's and not a new
+	// one.
+	consumed := 0
+	consume := func(through, body int, whole bool) {
+		if s.read == nil || through < consumed {
+			// Nothing new was read. A failure can point back at a line
+			// already handed over — the construct it left open began there
+			// — and consuming from a position behind the cursor would hand
+			// over the *next* line, which nobody has read.
+			return
+		}
+		end := min(through, len(src))
+		if i := strings.IndexByte(src[end:], '\n'); i >= 0 {
+			// Through the newline that ended the last line read, since a
+			// reader that stopped at one has read it.
+			end += i + 1
+		} else {
+			end = len(src)
+		}
+		if end <= consumed {
+			return
+		}
+		s.read(borrowedLines{
+			text: src[consumed:end], body: body, whole: whole, dialect: d,
+		})
+		consumed = end
+	}
 	if !byLine {
+		// Before the parse rather than after it, because text that will not
+		// parse was still read: measured, an editor leaving a line bash
+		// cannot parse has that line echoed and recorded before the syntax
+		// error is reported.
+		consume(len(src), 0, true)
 		whole = p.Parse()
 		if err := p.Err(); err != nil {
 			if whole != nil && err == whole.Refused {
@@ -452,6 +552,14 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		f, ok := nextBorrowedLine(p, &whole)
 		if !ok {
 			break
+		}
+		if p.Err() == nil {
+			// A line the reader stopped inside comes back with its
+			// statements taken off it and the error on the parser, so what
+			// it consumed is not f.Last but where the failure is. The clause
+			// below the loop hands that over; here it would look like a line
+			// with no command in it and become an entry per physical line.
+			consume(int(f.Last.Offset), bodyLineOf(src, consumed, f), false)
 		}
 		if f.Refused != nil {
 			// A construct in the line did not read and only the line goes
@@ -532,8 +640,21 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// never met the line.
 	if !stopped {
 		if err := p.Err(); err != nil {
+			// The lines the reader got through before it gave up, which it
+			// read and which therefore count: measured, an editor leaving
+			// `for i in a b` / `do` / `fi` / `done` has bash echo the first
+			// three and record `for i in a b; do fi`, and never reach the
+			// fourth.
+			var se *syntax.Error
+			if errors.As(err, &se) {
+				consume(int(se.Pos.Offset), 0, false)
+			}
 			return r.borrowedTextFailed(err, s, src)
 		}
+		// And the lines after the last command, which a reader looking for
+		// another one reads and finds nothing in. Not after a stop: a shell
+		// that has stopped reading never meets them.
+		consume(len(src), -1, false)
 	}
 	// Cleared only when there was nothing to run, which is where the two
 	// measured facts part company. `false; eval ""` and `false; . empty.sh`

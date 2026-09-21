@@ -1819,6 +1819,16 @@ func Semantics() interp.Semantics {
 	// The same answer as bash, measured the same day on 5.9.2: `s+=5 kf` in
 	// front of a `function`-form function shows the body `base5` (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.No
+	// And it writes the binding the name already has rather than a cell of its
+	// own, which is where this shell parts from bash. Measured 2026-09-21 on
+	// 5.9.2 with `ff() { typeset -p foo; }`: `typeset -i foo=7; foo=bar ff`
+	// lists `export -i foo=0` and `typeset -u foo=abc; foo=bar ff` lists
+	// `export -u foo=BAR` — the letters still on, and the word read through
+	// them. The array rows agree with bash's for a reason that is not this
+	// question: a plain scalar assignment replaces an array here anyway, so
+	// `foo=(asdf fdsa); foo=bar ff` lists `export foo=bar` under the overlay
+	// too (#4087).
+	s.AssignmentPrefixMakesAFreshCell = interp.No
 	// A prefix to a *builtin* is the other question and this shell answers it
 	// the other way: the attribute is left exactly where it was. `export z=1;
 	// z=2 typeset -p z` lists `export z=2` and `c=1; c=2 typeset -p c` lists a

@@ -240,6 +240,10 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// unanswered AssignmentPrefixMakesAFreshCell: as in dash — no arrays and
+	// no `typeset`, so there is no binding here a prefix could overlay that a
+	// fresh cell would not match exactly, and the axis is asked only where a
+	// name carries a kind or a letter (#4087).
 	// And not at a builtin, measured 2026-09-16 in the pinned alpine image:
 	// `v=1; v=9 eval 'env | grep "^v="'` shows the child nothing, and the
 	// attribute is left where it was. Its sibling's two lines, for the same

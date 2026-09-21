@@ -28303,6 +28303,82 @@ value is stored, so `s=5 kf` fires nothing in the column that scopes the
 prefix: the store lands in a cell the call just made and nothing was
 watching it (#3161).
 
+### What a call's prefix's entry *is*
+
+A prefix is an entry the command is shown, and the panel does not agree
+about whether that entry is a **cell of its own** or a write over the
+binding the name already had. Measured 2026-09-21 from a script file
+under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME, every row
+`ff() { typeset -p foo; }` called as `foo=bar ff`:
+
+    outer declaration        bash 5.3.20      zsh 5.9.2       ksh93u+ 2012
+    foo=(asdf fdsa)          -x foo="bar"     foo=bar         -a foo=(bar fdsa)
+    typeset -A foo=([k]=v)   -x foo="bar"     foo=bar         —
+    typeset -i foo=7         -x foo="bar"     -i foo=0        foo=bar
+    typeset -u foo=abc       -x foo="bar"     -u foo=BAR      -u foo=BAR
+
+bash answers every row with a **fresh, plain, exported scalar**: the
+elements the name held are not underneath it and the letters it carried
+are gone. bash 3.2.57 answers identically on every row it can be asked —
+it has no `-A`, `-u`, `-l` or `-n` — so the two bash columns do not split
+here. `AssignmentPrefixMakesAFreshCell` is the axis.
+
+**It is a reading and not only a listing**, which is what makes the two
+answers worth an axis rather than a spelling. With no `typeset -p` in
+them at all, under bash's answer against the overlay:
+
+    foo=(asdf fdsa); ff(){ echo "[${foo[*]}]"; }; foo=bar ff   [bar]      [bar fdsa]
+    foo=(asdf fdsa); ff(){ echo "${#foo[@]}"; };  foo=bar ff   1          2
+    typeset -i foo=7; ff(){ echo "[$foo]"; };     foo=bar ff   [bar]      [0]
+
+The integer row is the sharpest: under the overlay the prefix's word is
+read as an arithmetic expression because the *displaced* name carried the
+letter, so a call given `foo=bar` is handed `0` (#4087).
+
+zsh is the No that makes this an axis rather than the core's. Its array
+rows agree with bash's for a reason that is not this question — a plain
+scalar assignment replaces an array there — and its `-i` and `-u` rows
+are the overlay, letters and all. ksh93 overlays as well, with an `-i`
+row that is neither answer and wants its own measurement: the body reads
+`bar` where every other letter is kept, and a *child* is handed `foo=0`
+where bash's column hands it `foo=bar`.
+
+**Asked only where the two readings can part.** A name holding a plain
+scalar with no letters on it reaches the same place under either answer,
+which is every prefix a script in the common language writes, so dash and
+ash are never asked rather than answering: neither has a way to make a
+binding that could reach the question.
+
+A prefix over a **name reference** is not this question and is left where
+it is. bash 5.3.20 answers `declare -n foo="target"`, keeping the
+reference, where bash 3.2.57 writes the plain scalar every other row
+gets — so the one column that agrees with itself everywhere else does not
+agree here.
+
+**The take-back is the same under both answers.** What the name held comes
+back when the command ends, kind and letters and elements alike. Two
+moments need the displaced binding back *early*, and both are
+`Runner.prefixEntryTakesTheDisplacedShapeBack`:
+
+    foo=(a b);        foo=bar readonly foo   -arx foo=([0]="bar" [1]="b")
+    typeset -i foo=7; foo=bar readonly foo   -irx foo="0"
+
+A declaration that **keeps** the entry keeps the prefix's *value*, written
+into the binding it displaced through the ordinary assignment rules — the
+array is back with element zero written, and the integer letter is back
+with `bar` read through it. A declaration that takes the entry into a
+**scope** of its own is the second: the scope gives back what it found, so
+one that found the fresh cell would hand the shell a plain scalar where
+its array had been.
+
+An **append** is the one shape where the fresh cell is not empty when the
+value is computed. `foo=(asdf fdsa); foo+=bar ff` answers `declare -x
+foo="asdfbar"` in bash 5.3.20 — element zero of the displaced array,
+joined, and landed in a plain exported scalar — so the join reads the old
+binding and the store lands in the new cell. bash 3.2.57 answers `declare
+-x foo="bar"` for the same line, emptying the cell before the join rather
+than after; that is the one row of this where the two builds part.
+
 ### Two prefixes over one name, and which take-back runs
 
 A call's prefix and an inner command's prefix can stand over the same

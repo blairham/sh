@@ -25,11 +25,18 @@ import (
 // literal standing over a scalar — or a scalar prefix standing over an array —
 // puts on its way through, so that these rows read the letter's answer rather
 // than an unanswered axis beside it.
-func globalLiteral(reaches Answer) func(*Semantics) {
+func globalLiteral(reaches, fresh Answer) func(*Semantics) {
 	return func(s *Semantics) {
 		globalLetter(reaches)(s)
 		s.ScalarUnderAnArrayDeclaration = ScalarUnderACompoundDiscardsIt
 		s.ScalarAssignedOverACompoundReplacesTheName = Yes
+		// One row below writes a prefix over a name holding an array, which
+		// is a second question about the same moment — see
+		// Semantics.AssignmentPrefixMakesAFreshCell. It is swept rather than
+		// chosen, because the letter's answer is the same under both: what
+		// the `-g` write goes *under* is the prefix's entry, whether that
+		// entry is the binding it displaced or a cell of its own.
+		s.AssignmentPrefixMakesAFreshCell = fresh
 	}
 }
 
@@ -93,10 +100,12 @@ w=7 h; echo "[${w[@]}]"`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, errs, st := declRun(t, tc.src, globalLiteral(tc.reaches), Diagnostics{})
-			if out != tc.want || st != 0 || errs != "" {
-				t.Errorf("%v = %q (stderr %q, status %d), want %q",
-					tc.reaches, out, errs, st, tc.want)
+			for _, fresh := range []Answer{Yes, No} {
+				out, errs, st := declRun(t, tc.src, globalLiteral(tc.reaches, fresh), Diagnostics{})
+				if out != tc.want || st != 0 || errs != "" {
+					t.Errorf("%v (fresh=%v) = %q (stderr %q, status %d), want %q",
+						tc.reaches, fresh, out, errs, st, tc.want)
+				}
 			}
 		})
 	}

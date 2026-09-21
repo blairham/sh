@@ -870,6 +870,75 @@ type Semantics struct {
 	// asked.
 	PrefixToAKeywordFunctionIsScopedToTheCall Answer
 
+	// AssignmentPrefixMakesAFreshCell gives an assignment prefix an entry of
+	// its own — a plain scalar, holding nothing until the prefix stores into
+	// it — rather than a write over the binding the name already had. So the
+	// command sees neither the elements the name held nor the letters it
+	// carried, and the store obeys none of them.
+	//
+	// Every row is `ff() { declare -p foo; }` called as `foo=bar ff`, with
+	// the outer declaration on the left. Measured 2026-09-21 from a script
+	// file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME:
+	//
+	//	                       bash 5.3.20        zsh 5.9.2        ksh93u+ 2012
+	//	foo=(asdf fdsa)        -x foo="bar"       foo=bar          -a foo=(bar fdsa)
+	//	declare -A foo=([k]=v) -x foo="bar"       foo=bar          —
+	//	declare -i foo=7       -x foo="bar"       -i foo=0         foo=bar
+	//	declare -u foo=abc     -x foo="bar"       -u foo=BAR       -u foo=BAR
+	//
+	// bash 3.2.57 answers every row it can be asked exactly as 5.3 does, so
+	// the two bash columns do not split here.
+	//
+	// **It is a wrong reading and not only a wrong listing** where the answer
+	// is No and bash is being spoken: `${foo[*]}` gives `bar fdsa` under the
+	// overlay and `bar` under the fresh cell, `${#foo[@]}` 2 against 1, and
+	// the integer row is the sharpest — the prefix's word is read as an
+	// arithmetic expression because the *displaced* name carried the letter,
+	// so a call given `foo=bar` is handed `0` (#4087).
+	//
+	// zsh is the No that makes this an axis rather than the core's. Its
+	// array rows agree with bash's for a reason that is not this question —
+	// a plain scalar assignment replaces an array there — and its `-i` and
+	// `-u` rows are the overlay, letters and all. ksh93 overlays as well,
+	// with an `-i` row of its own that is neither answer and wants its own
+	// measurement.
+	//
+	// **Asked only where the two readings can part.** A name holding a plain
+	// scalar and carrying no letter reaches the same place either way, which
+	// is every prefix a script in the common language writes, so dash and ash
+	// are never asked rather than answering. See Runner.prefixEntryIsFresh.
+	//
+	// A prefix over a **name reference** is not this question and is left
+	// where it is: bash 5.3.20 keeps the reference and bash 3.2.57 writes a
+	// plain scalar, and the two columns that always agreed here do not.
+	//
+	// unpinned bash: no corpus row can reach it. A row would have to put a
+	// prefix in front of a command that *reads* a name carrying a kind or a
+	// letter, and the only one that comes close — `a=(p q); a=x true` — reads
+	// nothing during the command and is given the array back afterwards, so
+	// it pins the take-back and not this. Pinned in dialect/bash by
+	// TestACallsPrefixMakesAFreshPlainScalar and
+	// TestACallsPrefixIsReadAsAPlainScalar, with
+	// TestTheCallsPrefixStillGivesTheBindingBack as the control that says the
+	// fresh cell was not simply thrown away.
+	//
+	// unpinned zsh: the same reach problem, and pinned in dialect/zsh by
+	// TestACallsPrefixKeepsTheLettersOfTheNameItDisplaces — the `-i` and `-u`
+	// rows, because the array rows agree with bash's for a reason that is not
+	// this question.
+	//
+	// unpinned ksh: the same reach problem, and pinned in dialect/ksh by
+	// TestACallsPrefixWritesTheBindingItDisplaces.
+	//
+	// The **take-back** is untouched by this. What the name held comes back
+	// when the command ends under either answer — and a declaration that
+	// *keeps* the entry writes the prefix's value into the binding it
+	// displaced, through the ordinary rules, so `foo=(a b); foo=bar readonly
+	// foo` leaves `declare -arx foo=([0]="bar" [1]="b")` and `declare -i
+	// foo=7; foo=bar readonly foo` leaves `declare -irx foo="0"`. See
+	// Runner.prefixEntryTakesTheDisplacedShapeBack.
+	AssignmentPrefixMakesAFreshCell Answer
+
 	// PrefixExportAtABuiltin is what an assignment prefix does to the export
 	// attribute of the name it stands in front of, for the length of a
 	// *builtin* — so it decides what a builtin that reads the attribute back

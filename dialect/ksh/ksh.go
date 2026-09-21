@@ -1346,6 +1346,17 @@ func Semantics() interp.Semantics {
 	// 5. The same split this shell makes for a `typeset` inside the body,
 	// read from the prefix's side (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.Yes
+	// A prefix in front of a POSIX-form function writes the binding the name
+	// already has, elements and letters and all. Measured 2026-09-21 on
+	// ksh93u+ 2012 from a script file under `env -i` with a scratch HOME:
+	// `foo=(asdf fdsa); ff() { print "[${foo[*]}]"; }; foo=bar ff` shows the
+	// body `[bar fdsa]`, and `typeset -u foo=abc; foo=bAr ff` lists `typeset
+	// -u foo=BAR` — the case letter still folding the prefix's word. The
+	// integer row is neither answer here and is not this axis: `typeset -i
+	// foo=7; foo=bar ff` shows the body `bar` where every other letter is
+	// kept, and hands a *child* `foo=0` where the fresh-cell column hands it
+	// `foo=bar`. It wants its own measurement (#4087).
+	s.AssignmentPrefixMakesAFreshCell = interp.No
 	// The same direction at a builtin, and the same reading: a prefix is an
 	// ordinary assignment to this shell, so a name that had the export
 	// attribute *loses* it for the length of the command. `export z=1; z=2

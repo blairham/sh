@@ -5,6 +5,7 @@ package interp_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -175,11 +176,18 @@ func TestTheSealDoesNotEatWhatTheShellWroteInTime(t *testing.T) {
 	})
 
 	t.Run("a runner driven on past an end", func(t *testing.T) {
-		f, err := syntax.Parse("echo again\n", syntax.Core())
+		// Both runs name a substitution, because the seal is over what a
+		// body writes and nothing else: a second run whose output came from
+		// the shell's own goroutine would pass whether the seal came off or
+		// not. The loop is what makes the body's write land before the run
+		// returns — it reads the pipe to end-of-file, which is the body
+		// having finished.
+		const src = "while read -r l; do :; done < <(echo %s >&2)\n"
+		first, err := syntax.Parse(fmt.Sprintf(src, "once"), syntax.Core())
 		if err != nil {
 			t.Fatal(err)
 		}
-		first, err := syntax.Parse(": <(:)\n", syntax.Core())
+		f, err := syntax.Parse(fmt.Sprintf(src, "again"), syntax.Core())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -192,7 +200,7 @@ func TestTheSealDoesNotEatWhatTheShellWroteInTime(t *testing.T) {
 		deadline(t, "two runs", func() {
 			// The first one wraps the streams — a substitution is what puts
 			// a guard over them — and then ends, which is what arms the
-			// seal. Without it there would be no lockedWriter to read one.
+			// seal. Without it there would be no sealable writer at all.
 			if _, err := r.Run(context.Background(), first); err != nil {
 				t.Error(err)
 				return

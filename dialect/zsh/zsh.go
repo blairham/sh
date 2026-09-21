@@ -1002,6 +1002,12 @@ func Semantics() interp.Semantics {
 	// `/etc/zlogin` exists on the machine this was measured on, so no probe
 	// can see them read. The slot each occupies *is* measured, because the
 	// two files that do exist each land first in theirs.
+	//
+	// Both have since been *seen* read, on the other platform, which is the
+	// half of the blind spot the sentence above could not close: a Debian
+	// zsh keeps all four in `/etc/zsh` and traces `/etc/zsh/zshenv` on every
+	// invocation. Names and not paths, so this is unchanged by that — see
+	// [SystemStartupDirectory], which is where the directory differs (#3987).
 	s.SystemStartupFiles = interp.SystemStartupFiles{
 		Unconditional: "zshenv",
 		Login:         "zprofile",

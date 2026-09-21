@@ -204,7 +204,7 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// rather than in pickDialect for the reason the default is empty at all:
 	// it is the install's answer and not the dialect's, and a caller that
 	// picked a dialect to inspect it has not asked to read `/etc`.
-	sh.SystemStartupDirectory = "/etc"
+	sh.SystemStartupDirectory = systemStartupDirectory(own.dialect)
 	sh = withHighlighting(sh, own)
 	// And a second line for a name that is another preset's builtin, at a
 	// prompt and in this binary alone — see cmd/sh/dialecthint.go.
@@ -601,6 +601,23 @@ func pickDialect(name string) (driver.Shell, error) {
 	}
 	return driver.Shell{},
 		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh, dash or ash", name)
+}
+
+// systemStartupDirectory is where this machine keeps the administrator's
+// startup files for the dialect that was picked.
+//
+// `/etc` for four of the five, and zsh's own answer for zsh, which is a
+// subdirectory on the Linux installs that build it that way — a constant
+// `/etc` read the administrator's files in none of zsh's four slots there
+// (#3987). The dialect answers it rather than this switch guessing, so the
+// `-dialect zsh` route and the `zsh` binary cannot drift apart; see
+// zsh.SystemStartupDirectory for the measurements and for why it is a probe
+// rather than a build tag.
+func systemStartupDirectory(dialect string) string {
+	if dialect == "zsh" {
+		return zsh.SystemStartupDirectory("/etc")
+	}
+	return "/etc"
 }
 
 // coreSemantics is the core's own vector with the one answer this *binary*

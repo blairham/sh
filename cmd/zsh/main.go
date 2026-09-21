@@ -37,7 +37,15 @@ func shell() driver.Shell {
 		// Where this machine keeps the administrator's startup files. It
 		// is the install's answer rather than the dialect's, which is why
 		// it is named here; see driver.Shell.SystemStartupDirectory.
-		SystemStartupDirectory: "/etc",
+		//
+		// This shell is the one that cannot answer it with a constant.
+		// zsh's system directory is chosen when zsh is built, and the two
+		// platforms this runs on disagree — `/etc` on macOS, `/etc/zsh` on
+		// Debian, where a constant `/etc` read the administrator's files
+		// in none of the four slots (#3987). So the binary still names
+		// where to look and the dialect says which of the two it is; see
+		// zsh.SystemStartupDirectory for the measurements.
+		SystemStartupDirectory: zsh.SystemStartupDirectory("/etc"),
 		Dialect:                zsh.Dialect(),
 		Semantics:              zsh.Semantics(),
 		Diagnostics:            zsh.Diagnostics(),

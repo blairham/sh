@@ -652,11 +652,22 @@ func normalize(s string, sh Found, dir string) string {
 		s = usageBlock(s, sh.SelfName)
 	}
 	// A shell asked to be interactive with no terminal names the process
-	// group it could not set, which is this run's own process id: a different
-	// number every time, and one that says nothing about the shell. Masked
-	// rather than dropped, because *that it named one* is part of the
-	// complaint — and left in, it made every regeneration of the record a
-	// diff on every case that asks about `-i`.
+	// group it could not set, which is this run's own: a different number
+	// every time, and one that says nothing about the shell. Masked rather
+	// than dropped, because *that it named one* is part of the complaint —
+	// and left in, it made every regeneration of the record a diff on every
+	// case that asks about `-i`.
+	//
+	// The number can also be `-1`, which is what a shell that already leads
+	// its own process group writes there — measured 2026-09-21, bash 5.3.20,
+	// the same binary and command string started once into a group of its own
+	// and once into its caller's. Whether the runner puts a case in a group of
+	// its own is the harness's business and not the shell's, so the two have
+	// to mask alike: a pattern that took only the digits would record `(N)` on
+	// one arrangement and `(-1)` on the other, and a record that moves with
+	// how it was collected cannot tell a shell that changed from a shell that
+	// was run differently. See interp's terminalProcessGroup for the
+	// measurement and #4012 for what found it.
 	s = processGroupID.ReplaceAllString(s, "process group (N)")
 	s = strings.TrimRight(s, "\n")
 	// Newlines are shown as ~ so a result stays one table cell. Real output
@@ -669,9 +680,11 @@ func normalize(s string, sh Found, dir string) string {
 // same way `sed -E "s/[0-9]+/N/g"` spells it.
 var digitRuns = regexp.MustCompile(`[0-9]+`)
 
-// processGroupID matches the process id in a job-control complaint. See
-// normalize, which explains why it is masked rather than kept.
-var processGroupID = regexp.MustCompile(`process group \(\d+\)`)
+// processGroupID matches the process group in a job-control complaint,
+// including the `-1` a shell that already leads its own group writes there.
+// See normalize, which explains why it is masked rather than kept and why
+// both spellings have to mask alike.
+var processGroupID = regexp.MustCompile(`process group \(-?\d+\)`)
 
 // diagPrefix matches a shell naming itself at the start of a diagnostic.
 // tracePrefix matches a shell naming itself inside a `set -x` line, which is

@@ -84,3 +84,96 @@ func TestAReferenceReproducesItsRunUpToTheProcessGroup(t *testing.T) {
 		t.Error("the order tolerance did not survive being folded in")
 	}
 }
+
+// The floor, counted. It is reported beside the differing lines and corrects
+// nothing, so what it has to be right about is the two ends: the line two
+// shells can never agree on is counted, and an ordinary disagreement is not.
+//
+// The seven-line figure #4012 records is this function over `history.tests`,
+// whose inner interactive shells each write the remark once.
+func TestTheProcessGroupFigureCountsTheRemarkAndNotContent(t *testing.T) {
+	const remark = "bash: cannot set terminal process group (%s): Inappropriate ioctl for device"
+	ours := func(n string) string { return replaceOnce(remark, "%s", n) }
+	for _, c := range []struct {
+		name         string
+		mine, theirs []string
+		want         int
+	}{
+		{
+			"two processes naming their own groups is entirely the floor",
+			[]string{ours("34551")},
+			[]string{ours("34608")},
+			1,
+		},
+		{
+			"and so is one standing against the other",
+			[]string{ours("34551")},
+			[]string{ours("-1")},
+			1,
+		},
+		{
+			"seven inner shells are seven lines, which is the figure #4012 records",
+			[]string{ours("1"), ours("2"), ours("3"), ours("4"), ours("5"), ours("6"), ours("7")},
+			[]string{ours("8"), ours("9"), ours("10"), ours("11"), ours("12"), ours("13"), ours("14")},
+			7,
+		},
+		{
+			"a real disagreement beside it is not counted",
+			[]string{ours("34551"), "one"},
+			[]string{ours("34608"), "two"},
+			1,
+		},
+		{
+			"an ordinary disagreement on its own is not",
+			[]string{"one", "two"},
+			[]string{"one", "three"},
+			0,
+		},
+		{
+			"runs that already agree have nothing to report",
+			[]string{ours("34551")},
+			[]string{ours("34551")},
+			0,
+		},
+		{
+			// The anchor again, from the counting side: a line number that
+			// happens to look like a pid is a disagreement we own.
+			"and a number nobody named a group is not reached",
+			[]string{"./f.tests: line 34551: oops"},
+			[]string{"./f.tests: line 34608: oops"},
+			0,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			common, longest, _ := agreement(c.mine, c.theirs)
+			if got := processGroups(c.mine, c.theirs, longest-common); got != c.want {
+				t.Errorf("processGroups(%q, %q) = %d, want %d", c.mine, c.theirs, got, c.want)
+			}
+		})
+	}
+}
+
+// The figure may never claim more than there were, whatever the masking does
+// to the alignment — the bound [reordered] is held to, for the same reason.
+func TestTheProcessGroupFigureStaysInsideTheDifferingLines(t *testing.T) {
+	const remark = "bash: cannot set terminal process group (%s): Inappropriate ioctl for device"
+	mine := []string{replaceOnce(remark, "%s", "1"), "one", "two"}
+	theirs := []string{replaceOnce(remark, "%s", "2"), "three"}
+	common, longest, _ := agreement(mine, theirs)
+	differing := longest - common
+	got := processGroups(mine, theirs, differing)
+	if got < 0 || got > differing {
+		t.Errorf("processGroups = %d, outside 0..%d", got, differing)
+	}
+}
+
+// replaceOnce keeps the rows above readable without pulling `strings` in for
+// one call.
+func replaceOnce(s, old, with string) string {
+	for i := 0; i+len(old) <= len(s); i++ {
+		if s[i:i+len(old)] == old {
+			return s[:i] + with + s[i+len(old):]
+		}
+	}
+	return s
+}

@@ -7,9 +7,8 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strconv"
+	"regexp"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/blairham/sh/driver"
@@ -211,10 +210,16 @@ func TestTheShellNamesTheProcessGroupItCouldNotSet(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("wrote %q, want two lines", errs)
 	}
-	want := "testsh: cannot set terminal process group (" +
-		strconv.Itoa(syscall.Getpgrp()) + "): Inappropriate ioctl for device"
-	if lines[0] != want {
-		t.Errorf("the first line was %q, want %q", lines[0], want)
+	// The shape and not the digits. Which number goes in there is two
+	// answers rather than one — the group the shell is in, or -1 where it
+	// already leads that group — and both are measured and asserted where
+	// the rule lives, in interp's terminalProcessGroup. A copy of the rule
+	// here would be a second place for it to be wrong; what this route owns
+	// is that the line is written, is first, and names a group at all.
+	want := regexp.MustCompile(
+		`^testsh: cannot set terminal process group \(-?\d+\): Inappropriate ioctl for device$`)
+	if !want.MatchString(lines[0]) {
+		t.Errorf("the first line was %q, want %v", lines[0], want)
 	}
 	if want := "testsh: no job control in this shell"; lines[1] != want {
 		t.Errorf("the second line was %q, want %q", lines[1], want)

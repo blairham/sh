@@ -26,13 +26,54 @@ import "regexp"
 // [repeats] only, exactly as [canonicalOrder] is. Against the reference's own
 // second run there is nothing to argue about: one shell disagreeing with
 // *itself* about a number the kernel chose is not a fact about either shell.
-// Against **our** run it is not applied, and that is not an oversight. The
-// two shells do not always write the same number there — measured the same
-// day with all three streams redirected, bash 5.3.20 writes `(-1)` where
-// this shell writes its own process group — so a mask over the comparison
-// would hide a real disagreement about what the shell reports. So the
-// number stays in the differing-line count as a floor, and #4012 is where
-// that arithmetic is written down.
+//
+// Against **our** run it is not applied, and [processGroups] counts what that
+// costs instead of hiding it. That is a floor and not a defect, which took
+// measuring twice to establish — see below.
+//
+// # The floor, and why the route matters (#4012)
+//
+// The number bash writes there is **two answers**, and which one a run sees
+// is decided by the shell's standing in its own session rather than by
+// anything about the shell. Measured 2026-09-21 against bash 5.3.20, one
+// harness starting the same binary with the same command string twice and
+// changing exactly one thing between them:
+//
+//	started into a group of its own    cannot set terminal process group (-1)
+//	started into its caller's group    cannot set terminal process group (78796)
+//
+// The second is the group and not the parent — a run with a wrapper between
+// the leader and the shell, leader 84507 and wrapper 84516, wrote 84507 — and
+// three alternating repeats gave the same pair every time.
+//
+// Only the first of those was measured when this file was written, and it
+// read as a plain disagreement: bash wrote `-1` where this shell wrote its
+// own process group, so a mask over the comparison would have hidden a real
+// difference in what the two shells report. It was a real difference, it was
+// on the **leader** route, and it is fixed — interp's terminalProcessGroup
+// now writes what bash writes on both standings.
+//
+// **The suite's inner shells are on the other route**, which is what makes
+// the seven lines a floor. [runFile] gives each suite file's shell a process
+// group of its own so the run can be ended as a group, and every inner
+// `$THIS_SH -i` a file starts inherits that group rather than leading one. So
+// both shells take the second branch, both write their own process group
+// correctly, and the two numbers still differ — because they are two
+// different processes, which is not a thing any implementation can close.
+// Fixing the disagreement removed a parity bug and did not remove one of the
+// seven lines.
+//
+// So the arithmetic is: the fetched bash column's differing-line figure
+// carries seven lines that no change to this shell can ever take out, and
+// [Report.ProcessGroups] is where that is counted on every run rather than
+// being rediscovered by the next pass.
+//
+// **Whether a matching number is now worth masking in the comparison is left
+// open**, and it is a decision rather than an oversight. With both standings
+// answered alike there is less for a mask to hide than there was, but a mask
+// works on a line and cannot tell which of the two routes produced it, so it
+// would also cover a future disagreement on either. The count below says what
+// masking would be worth without spending anything to find out.
 //
 // # Anchored on the role, not on the digits
 //
@@ -64,4 +105,36 @@ func withoutTheRunsPid(out string) string {
 // reorder.go, the process group above.
 func reproduced(a, b string) bool {
 	return sameButForOrder(withoutTheRunsPid(a), withoutTheRunsPid(b))
+}
+
+// processGroups is how many of two runs' differing lines go away when the
+// process group's number is ignored.
+//
+// The floor the file comment argues, counted. It is the same shape as
+// [reordered] and stands on the same terms: a per-side rewrite, clamped into
+// the differing lines it is reported beside, **subtracted from nothing**. The
+// raw count stays what the two runs did.
+//
+// Unlike [reordered] it is neither an upper nor a lower bound but the figure
+// itself, and the reason is the anchor above: the only lines it can reach are
+// lines where both runs wrote a remark naming a process group in the same
+// place, which is a line neither shell was asked for and neither can match.
+// It is still reported rather than applied, because what a report may
+// subtract is a question for whoever reads it.
+func processGroups(mine, theirs []string, differing int) int {
+	if differing <= 0 {
+		return 0
+	}
+	common, longest, _ := agreement(withoutThePids(mine), withoutThePids(theirs))
+	return min(max(differing-(longest-common), 0), differing)
+}
+
+// withoutThePids is [withoutTheRunsPid] over one side's lines. A pure
+// function of one run, so it cannot be told what the other one wrote.
+func withoutThePids(ls []string) []string {
+	out := make([]string, len(ls))
+	for i, line := range ls {
+		out[i] = withoutTheRunsPid(line)
+	}
+	return out
 }

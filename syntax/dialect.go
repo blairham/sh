@@ -5050,6 +5050,38 @@ type Dialect struct {
 	// one is safe to be wrong about loudly.
 	ArrayLiteral bool
 
+	// CompoundAssignmentWordRunsPastItsParenthesis keeps a compound
+	// assignment's word going after its closing parenthesis, so `a=(1 2)x`
+	// is **one word** — and so not an array assignment at all, since no
+	// assignment's value can hold an unquoted parenthesis.
+	//
+	// Measured 2026-09-21, one `-c` per row under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, with a shell function standing
+	// in for the builtin so the words it is handed are visible:
+	//
+	//	declare() { printf "<%s>" "$@"; echo; }
+	//	declare a=(1 2)x     bash 5.3.20, 3.2.57  <a=(1 2)x>
+	//	declare a=(1 2)x y   bash 5.3.20          <a=(1 2)x><y>
+	//	let a=(5+3)x y       bash 5.3.20          <a=(5+3)x><y>
+	//	a=(1 2)x             bash 5.3.20          a scalar, `(1 2)x`
+	//
+	// where ksh93u+ 2012-08-01 and zsh 5.9.2 end the word at the `)`, store
+	// the array and go looking for a command called `x`. So the panel splits
+	// and this is a grammar flag rather than a rule.
+	//
+	// **What is folded is rebuilt rather than copied out of the source.**
+	// bash normalizes: `a=(1    2)x`, `a=( 1 2 )x` and a newline between the
+	// elements all reach the utility as `a=(1 2)x`. So the elements are
+	// written out again with one blank between them — the shape a rejoining
+	// utility's operand already takes — and each keeps its own spans, which
+	// is what makes the result a word and not a string: `v=Q; declare
+	// a=($v 2)x` is `<a=(Q 2)x>` and `declare a=(1 "2 3")x` is
+	// `<a=(1 2 3)x>`.
+	//
+	// Only where the following token *touches* the parenthesis. `a=(1 2) x`
+	// is the array and a separate operand in every column.
+	CompoundAssignmentWordRunsPastItsParenthesis bool
+
 	// NestedArrayLiteral reads a parenthesized element inside an array
 	// literal as a literal of its own rather than as a syntax error —
 	// `a=( (1 2) (3 4) )`, which is one shell's multi-dimensional array.

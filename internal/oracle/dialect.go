@@ -235,5 +235,25 @@ func Dialect() syntax.Dialect {
 	// other half of what this shell alone does to a descriptor. Measured
 	// 2026-09-16 on ksh93u+ 2012-08-01 (#3034).
 	d.SeekRedirect = true
+	// `let a=(5 + 3)` — the arithmetic utility taking a compound assignment
+	// as an operand, which one of the seven columns has and the other six
+	// refuse while reading the line. The core's list holds the five
+	// declarations; this adds the sixth word for the same reason every flag
+	// above is set, since the grammar that has to *read* every case is the
+	// one that takes the construct. Added rather than replaced, so the five
+	// the core names stay.
+	d.DeclarationUtilities = withDeclarationUtility(d.DeclarationUtilities, "let")
 	return d
+}
+
+// withDeclarationUtility is d.DeclarationUtilities plus one word, copied
+// rather than written through: the map came out of syntax.Core() and a
+// caller that holds one of its own must not find a word this file added.
+func withDeclarationUtility(words map[string]bool, name string) map[string]bool {
+	out := make(map[string]bool, len(words)+1)
+	for w, ok := range words {
+		out[w] = ok
+	}
+	out[name] = true
+	return out
 }

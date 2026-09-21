@@ -86,19 +86,56 @@ func (r *Runner) rejoinsArrayOperand(word string) bool {
 	return r.rejoinedOperands[word]
 }
 
-// rejoinedArrayOperand is the one word a rejoining utility is handed: the
-// assignment written out again, with each element expanded.
+// rejoinedArrayOperand is the assignment written out again, with each element
+// expanded — and it is **words** rather than one word, because the utility is
+// handed an ordinary word and an ordinary word is field-split.
 //
 // Nothing is quoted on the way out, which is the measurement above and not an
 // omission — the text is what the utility goes on to read, so a quote a value
 // was carrying is syntax there.
-func (r *Runner) rejoinedArrayOperand(a *syntax.Assign) string {
+//
+// The literal text of the assignment is not a split point and the fields an
+// expansion produced are: `a=(`, the blank between two elements and `)` are
+// written where they stand, and a break is taken only *between* the fields of
+// one element. Measured 2026-09-21 on bash 5.3.20, with a shell function
+// standing in for the builtin and `x="p q"`:
+//
+//	eval a=("p q" r)   <a=(p q r)>        one field each, so one word
+//	eval a=($x)        <a=(p><q)>         the break the expansion made
+//	eval a=($x r)      <a=(p><q r)>       ` r)` is literal and joins `q`
+//	eval a=(r $x)      <a=(r p><q)>       the same from the other side
+//	eval a=($x $y)     <a=(p><q s><t)>    two elements, `y="s t"`
+//	x=""; eval a=($x r)   <a=( r)>        the separator stands with no field
+//
+// The third row is the discriminator between the two readings that survive
+// the second: a rule that split one word per *element* would give three words
+// there and bash gives two. The last row is why the separator is written per
+// element rather than before each field — an element that expanded to nothing
+// still had a blank written after it.
+//
+// The subscripted spelling stays one field: `[sub]=value` is read with the
+// value expanded as an assignment's, so `eval a=([2]=$x r)` is `a=([2]=p q r)`
+// here where bash — which never reads the subscript in a word it is only
+// going to hand on — splits it. The two are the same text once a rejoining
+// utility joins its arguments with a blank, which is what `eval` does, so the
+// difference is reachable only through `let`. Not modeled, and recorded here
+// rather than left silent.
+func (r *Runner) rejoinedArrayOperand(a *syntax.Assign) []string {
 	var b strings.Builder
 	b.WriteString(a.Name)
 	if a.Append {
 		b.WriteString("+")
 	}
 	b.WriteString("=(")
+	words := []string{}
+	// open is the word still being written, which every literal run joins and
+	// only a field boundary closes.
+	open := func(s string) { b.WriteString(s) }
+	brk := func(s string) {
+		words = append(words, b.String())
+		b.Reset()
+		b.WriteString(s)
+	}
 	elems, ok := r.literalElems(a.Elems,
 		r.literalReadsSubscripts(a.Name, a.Elems, a.Append))
 	if !ok {
@@ -107,30 +144,31 @@ func (r *Runner) rejoinedArrayOperand(a *syntax.Assign) string {
 		// either way; the word is closed so that what is handed on is at
 		// least a shape, rather than an unterminated parenthesis that would
 		// make the utility's own diagnostic the one a reader sees.
-		b.WriteString(")")
-		return b.String()
+		open(")")
+		return append(words, b.String())
 	}
-	first := true
-	write := func(s string) {
-		if !first {
-			b.WriteString(" ")
+	for i, el := range elems {
+		if i > 0 {
+			// The blank between two elements, which is the assignment's own
+			// text and so never a split point.
+			open(" ")
 		}
-		first = false
-		b.WriteString(s)
-	}
-	for _, el := range elems {
 		if el.subscripted {
 			op := "="
 			if el.appendValue {
 				op = "+="
 			}
-			write("[" + el.sub + "]" + op + el.value)
+			open("[" + el.sub + "]" + op + el.value)
 			continue
 		}
-		for _, f := range el.fields {
-			write(f)
+		for j, f := range el.fields {
+			if j == 0 {
+				open(f)
+				continue
+			}
+			brk(f)
 		}
 	}
-	b.WriteString(")")
-	return b.String()
+	open(")")
+	return append(words, b.String())
 }

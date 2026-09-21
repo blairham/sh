@@ -1532,6 +1532,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if base, subs, subscripted := r.operandSubscripts(r.inBuiltin, name); subscripted {
 			sub := subs[len(subs)-1]
 			if hasValue {
+				// A parenthesized value under a subscript is the one shape
+				// the re-read excludes, and one column says so before
+				// storing the characters. Ahead of the store because it is
+				// about the operand as written. See
+				// interp/subscriptedcompound.go.
+				r.warnQuotedCompoundAtASubscript(base, sub, value, appends, df)
 				// The operand names an element, so the attributes and the
 				// scope are about `a` and the value is about `a[1]`.
 				// Splitting at the `=` and handing `a[1]` to the variable

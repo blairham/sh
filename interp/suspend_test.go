@@ -76,9 +76,23 @@ func jobSessionShaped(t *testing.T, f *fakeJobs, src string, jobControl bool, sh
 			t.Fatalf("set -m: status %d", code)
 		}
 	}
-	t.Cleanup(func() { f.reapSaidStopped(t) })
+	t.Cleanup(func() {
+		// A hold nothing continued is let go here rather than left blocking
+		// a goroutine: a regression in what `fg` sends should fail the
+		// assertion below it, not hang the package out to the test binary's
+		// timeout.
+		f.releaseHeld()
+		f.reapSaidStopped(t)
+	})
 	r.WaitForCommand = f.waitFor
-	r.SignalGroup = func(int, syscall.Signal) error { return nil }
+	r.SignalGroup = func(_ int, sig syscall.Signal) error {
+		// The continue is what lets a held job go — see fakeJobs.held. The
+		// signals themselves are nobody's subject here; the notices are.
+		if sig == syscall.SIGCONT {
+			f.releaseHeld()
+		}
+		return nil
+	}
 	r.Foreground = func(pgid int) error {
 		f.foreground = append(f.foreground, pgid)
 		return nil

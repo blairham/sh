@@ -1976,6 +1976,9 @@ func Semantics() interp.Semantics {
 	// companion would refuse a line this shell answers (#3818).
 	s.DotWithNoOperandIsFatalInPosixMode = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.No
+	// And the other half the same way: this shell drops the trap whatever
+	// the exec could not do.
+	s.ExecFailureOnAPathnameRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	// `-a` and `-c`, and no `-l`: this shell reports the letter as an
 	// option it does not know and ends the script, `exec` being special.

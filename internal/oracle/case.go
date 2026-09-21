@@ -14831,7 +14831,17 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "exec/failed-exec-trap-diverges", Category: "eval and dot",
 		Snippet: `trap "echo TRAP" EXIT; exec nosuchcmd-xyz 2>/dev/null`,
-		Why:     "the failure is the only case with a shell left to decide anything, and the panel splits: dash and bash run the EXIT trap, ksh93 and zsh drop it",
+		Why:     "the failure is the only case with a shell left to decide anything, and the panel splits: dash, bash and BusyBox ash run the EXIT trap, ksh93 and zsh drop it. Half the question — this is the PATH search coming up with nothing, and the two rows after it are the other half, where bash changes sides",
+	},
+	{
+		ID: "exec/failed-exec-on-a-pathname-trap-diverges", Category: "eval and dot",
+		Snippet: `trap "echo TRAP" EXIT; exec /nonexistent-xyz/nope 2>/dev/null`,
+		Why:     "the other half of the failure, and the row that parts bash from itself: bash runs the EXIT trap for the search miss above and drops it once the operand is a pathname, so one Yes/No axis for both was wrong about bash whichever way it was set. dash and BusyBox ash run it here too; ksh93 and zsh drop it, as they drop the other",
+	},
+	{
+		ID: "exec/failed-exec-on-a-file-found-on-path-trap-diverges", Category: "eval and dot",
+		Snippet: `mkdir -p p; echo x > p/nx-xyz; chmod -x p/nx-xyz; PATH=p; trap "echo TRAP" EXIT; exec nx-xyz 2>/dev/null`,
+		Why:     "the same question by the other road, and the row that says the axis is not \"the operand contains a slash\": this operand has none, the search found the file, and bash drops the trap for it exactly as it does for a slash. What decides is whether a pathname was ever arrived at",
 	},
 	{
 		ID: "exec/missing-command-is-127", Category: "eval and dot",

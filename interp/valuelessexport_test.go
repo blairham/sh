@@ -172,8 +172,13 @@ func TestAValuelessDeclarationThatHidesNothingHandsOverOneEntry(t *testing.T) {
 		func(r *Runner) {
 			sem := CoreSemantics()
 			set(&sem)
-			// The one axis the route itself asks, and not the subject here.
+			// The two axes the route itself asks, and not the subject here.
+			// The replacement fails with a *resolved* path in hand, so it is
+			// the pathname half that is consulted — both are answered so a
+			// change to which one this road takes cannot turn this test into
+			// a refusal about an unanswered axis.
 			sem.ExecFailureRunsExitTrap = Yes
+			sem.ExecFailureOnAPathnameRunsExitTrap = Yes
 			r.Semantics = &sem
 			r.Env = append(r.Env, "IMPORTED=arrived")
 			r.ReplaceProcess = func(_ string, _, env []string, _ []*os.File) error {

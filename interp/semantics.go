@@ -15317,14 +15317,50 @@ type Semantics struct {
 	// there are some.
 	DotPassesArguments Answer
 
-	// ExecFailureRunsExitTrap runs a `trap … EXIT` handler when `exec` could
-	// not run the command it was given. True in dash and bash, false in ksh93
-	// and zsh.
+	// ExecFailureRunsExitTrap runs a `trap … EXIT` handler when `exec` was
+	// given a bare name and the PATH search found nothing at all. True in
+	// dash, bash and BusyBox ash, false in ksh93 and zsh.
 	//
 	// A *successful* exec runs no handler anywhere, and that is not an axis:
 	// the trap died with the process the exec replaced. Only the failure has
 	// a shell left to decide anything, and the panel splits on it.
+	//
+	// **The search miss is only half the failure**, and this axis used to be
+	// asked for both halves. It said "true in dash and bash", which is true
+	// of a name PATH never had and false in bash of everything else — see
+	// ExecFailureOnAPathnameRunsExitTrap for the other half and for the
+	// measurement that parted them (#3983).
 	ExecFailureRunsExitTrap Answer
+
+	// ExecFailureOnAPathnameRunsExitTrap runs a `trap … EXIT` handler when
+	// `exec` had a *file* in hand and could not start it. Yes in dash and
+	// BusyBox ash, No in bash, ksh93 and zsh.
+	//
+	// The companion of ExecFailureRunsExitTrap, and the pair covers every way
+	// an `exec` can fail: either the lookup named a file — the operand had a
+	// slash in it, so PATH was never consulted, or the search kept a
+	// candidate — or it named nothing at all.
+	//
+	// **bash is the reason there are two axes**, and it is not a version
+	// move: 5.3.20 and 3.2.57 answer alike. Measured 2026-09-21 with
+	// `( trap 'printf TRAPRAN\n' EXIT; exec WORD ); printf 'after=%s\n' $?`:
+	//
+	//	WORD                            bash        dash/ash
+	//	nosuchcmd-xyz (PATH miss)       TRAPRAN     TRAPRAN
+	//	./nosuchcmd-xyz                 —           TRAPRAN
+	//	/nope/false                     —           TRAPRAN
+	//	./plain (no execute bit)        —           TRAPRAN
+	//	./adir (a directory)            —           TRAPRAN
+	//	nonexec-xyz (found on PATH)     —           TRAPRAN
+	//
+	// **The last row is why the axis is not "the operand contains a slash"**,
+	// which is the reading #3983 was filed with and the reading the first
+	// five rows cannot tell apart. `nonexec-xyz` has no slash, so under that
+	// reading bash would run the trap; it does not. What decides in bash is
+	// whether a pathname was ever arrived at, and a directory found on PATH
+	// belongs on the other side of that line for the same reason — bash
+	// reports it as nothing found, and runs the trap.
+	ExecFailureOnAPathnameRunsExitTrap Answer
 
 	// TimesRejectsArguments makes `times` refuse an argument rather than
 	// ignore it. True in zsh, false in dash and bash.
@@ -23048,11 +23084,15 @@ func PosixSemantics() Semantics {
 		// The standard says a special builtin's failure is fatal and says
 		// nothing about a trap on the way out; dash, the panel's
 		// POSIX-faithful member, runs it, so the preset follows the shell
-		// rather than the silence. `exec` takes no options in the standard —
+		// rather than the silence. It runs it for both halves of the
+		// failure — a name PATH never had and a file that would not start —
+		// and so, measured, does BusyBox ash, which is what makes one answer
+		// right for both axes here. `exec` takes no options in the standard —
 		// -a is an extension four of the five dialects grew, dash alone
 		// reading the letter as a command name.
-		ExecFailureRunsExitTrap: Yes,
-		ExecTakesOptions:        No,
+		ExecFailureRunsExitTrap:            Yes,
+		ExecFailureOnAPathnameRunsExitTrap: Yes,
+		ExecTakesOptions:                   No,
 		// The standard says an empty element is the current directory and
 		// makes no exception for the whole variable being empty, so the
 		// preset follows the text and the majority together.

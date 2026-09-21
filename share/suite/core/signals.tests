@@ -42,6 +42,15 @@
 #   `exit` from inside a *signal* trap, which ends the shell and so cannot be
 #     asked from the middle of a file that has more to ask. The EXIT trap's
 #     `exit` is asked instead, in a subshell, where ending it is the point.
+#   an EXIT trap set before an `exec` that *failed*, which is two questions
+#     and neither is unanimous. A bare name the PATH search had nothing for
+#     runs the handler in dash, bash and BusyBox ash and not in ksh93 or zsh,
+#     so it belongs in no tier here and is pinned by the corpus and by
+#     interp.Semantics.ExecFailureRunsExitTrap. An `exec` that named a *file*
+#     and could not start it runs it in dash and ash alone — bash changes
+#     sides — and the three shells that agree are exactly the ext/ tier, so
+#     that half is in ext/signals.tests. The *successful* exec below is the
+#     unanimous part and is what this file asks (#3983).
 
 # A trap fires when the signal arrives, the command after it runs, and the
 # status the trap leaves behind is not the signalled command's.
@@ -245,8 +254,14 @@ f() { ( exit 3 ); }
 
 # `exec` replaces this shell with the command, so an EXIT trap set before it
 # never runs and the status is the command's.
+#
+# Both operands are bare names looked up on PATH. `/usr/bin/false` stood here
+# until #3983 and was the one line in this tier that could not be asked in
+# every image: the bash column runs in Alpine, where `false` is `/bin/false`,
+# so the `exec` failed there and the row measured the *failure* — which is not
+# unanimous — instead of the success it was written for.
 ( trap 'printf "never runs\n"' EXIT; exec true ); printf 'after exec true -> %s\n' "$?"
-( trap 'printf "never runs\n"' EXIT; exec /usr/bin/false ); printf 'after exec false -> %s\n' "$?"
+( trap 'printf "never runs\n"' EXIT; exec false ); printf 'after exec false -> %s\n' "$?"
 
 # An EXIT trap may be ignored outright, which is the one disposition `trap ''`
 # has that makes no sense for a signal — there is nothing to deliver.

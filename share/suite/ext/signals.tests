@@ -67,3 +67,24 @@ printf 'errexit -> %s\n' "$?"
 
 # DEBUG runs once per command, before it.
 ( trap 'printf "debug\n"' DEBUG; :; : ) 2> /dev/null
+
+# ---- an `exec` that could not happen, and the EXIT trap ----
+
+# An EXIT trap set before an `exec` that named a *file* it could not start
+# does not run: these three drop the handler once a pathname has been arrived
+# at, and dash is the holdout that runs it — BusyBox ash with it, and neither
+# runs this tier.
+#
+# The other half of the same failure is not here and is in no tier, because
+# the three columns split on it: a bare name the PATH search had nothing for
+# runs the handler in bash and not in zsh or ksh93. bash parting company with
+# itself across the two halves is what #3983 is, and a single semantics axis
+# for both is what hid it.
+( trap 'printf "never runs\n"' EXIT; exec ./nosuchcmd-xyz ) 2> /dev/null
+printf 'after a pathname that is not there -> %s\n' "$?"
+
+# And the same once the file is there and merely will not start, which is the
+# other status and the same answer about the handler.
+printf 'x\n' > notexec; chmod -x notexec
+( trap 'printf "never runs\n"' EXIT; exec ./notexec ) 2> /dev/null
+printf 'after a file without the execute bit -> %s\n' "$?"

@@ -22,6 +22,7 @@ import (
 func execSemantics() Semantics {
 	s := permissive()
 	s.ExecFailureRunsExitTrap = Yes
+	s.ExecFailureOnAPathnameRunsExitTrap = Yes
 	s.ExecTakesOptions = Yes
 	return s
 }
@@ -165,8 +166,9 @@ func TestASuccessfulExecRunsNoExitTrap(t *testing.T) {
 	}
 }
 
-// TestAFailedExecRunsTheExitTrapOnlyWhenTheDialectSaysSo is the axis, in both
-// directions. The failure is the only case with a shell left to decide.
+// TestAFailedExecRunsTheExitTrapOnlyWhenTheDialectSaysSo is the PATH-search
+// half of the axis, in both directions. The failure is the only case with a
+// shell left to decide.
 func TestAFailedExecRunsTheExitTrapOnlyWhenTheDialectSaysSo(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -194,6 +196,67 @@ func TestAFailedExecRunsTheExitTrapOnlyWhenTheDialectSaysSo(t *testing.T) {
 			}
 			if got := strings.Contains(buf.String(), "TRAP"); got != tc.want {
 				t.Errorf("trap ran = %v, want %v (output %q)", got, tc.want, buf.String())
+			}
+		})
+	}
+}
+
+// TestTheTwoExitTrapAxesAreAskedApart is the pair, and the point of the pair:
+// one `exec` failure is two questions and a shell may answer them
+// differently. bash does — it runs the trap for a name PATH did not have and
+// drops it once a file has been named — and while there was one axis this
+// shell could not say that at all (#3983).
+//
+// Each half is moved with the other held, so a site reading the wrong field
+// fails here whichever way it is wrong. A single axis passes the two diagonal
+// rows and fails both of the other two.
+func TestTheTwoExitTrapAxesAreAskedApart(t *testing.T) {
+	dir := t.TempDir()
+	// The pathname operand is a file that is there and will not run rather
+	// than one that is absent, so the row cannot be answered by anything
+	// about existence: both halves of the pair are a failure to *start*
+	// something, and only the road to it differs.
+	if err := os.WriteFile(filepath.Join(dir, "plain"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name                 string
+		search, pathname     Answer
+		searchTrap, pathTrap bool
+	}{
+		{"both halves run it", Yes, Yes, true, true},
+		{"both halves drop it", No, No, false, false},
+		{"bash: the search miss only", Yes, No, true, false},
+		{"and the other way round, which no shell holds", No, Yes, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withAxes := func(search, pathname Answer, src string) string {
+				t.Helper()
+				f, err := syntax.Parse(src, syntax.Core())
+				if err != nil {
+					t.Fatal(err)
+				}
+				sem := execSemantics()
+				sem.ExecFailureRunsExitTrap = search
+				sem.ExecFailureOnAPathnameRunsExitTrap = pathname
+				var buf bytes.Buffer
+				dg := Diagnostics{}
+				r := newTestRunner(t, &Runner{
+					Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
+					Dir: dir, Name: "testsh", Env: testPATH(),
+				})
+				if _, err := r.Run(context.Background(), f); err != nil {
+					t.Fatal(err)
+				}
+				return buf.String()
+			}
+			out := withAxes(tc.search, tc.pathname, `trap "echo TRAP" EXIT; exec nosuchcmd-xyz`)
+			if got := strings.Contains(out, "TRAP"); got != tc.searchTrap {
+				t.Errorf("PATH-search miss: trap ran = %v, want %v (output %q)", got, tc.searchTrap, out)
+			}
+			out = withAxes(tc.search, tc.pathname, `trap "echo TRAP" EXIT; exec ./plain`)
+			if got := strings.Contains(out, "TRAP"); got != tc.pathTrap {
+				t.Errorf("a file that will not run: trap ran = %v, want %v (output %q)", got, tc.pathTrap, out)
 			}
 		})
 	}

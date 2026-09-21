@@ -22563,14 +22563,51 @@ catches. `command . /nonexistent` and `command . -Z f` were already going
 through it; a missing operand was the one route into this builtin that was
 not (#3473).
 
-**`ExecFailureRunsExitTrap`** — bash yes · dash yes · ksh93 no · zsh no
+**`ExecFailureRunsExitTrap`** — bash yes · dash yes · ksh93 no · zsh no · ash yes
 
-Runs a `trap … EXIT` handler when `exec` could not run the command it
-was given. True in dash and bash, false in ksh93 and zsh.
+Runs a `trap … EXIT` handler when `exec` was given a bare name and the
+PATH search found nothing at all.
 
 A *successful* exec runs no handler anywhere, and that is not an axis:
 the trap died with the process the exec replaced. Only the failure has a
 shell left to decide anything, and the panel splits on it.
+
+**`ExecFailureOnAPathnameRunsExitTrap`** — bash **no** · dash yes · ksh93 no · zsh no · ash yes
+
+The other half: runs the handler when `exec` had a *file* in hand and
+could not start it. The two axes together cover every way an `exec` can
+fail — either the lookup named a file or it named nothing.
+
+**bash is the reason there are two**, and it is not a version move:
+5.3.20 and 3.2.57 answer alike. Measured 2026-09-21 with
+`( trap 'printf TRAPRAN\n' EXIT; exec WORD ); printf 'after=%s\n' $?`:
+
+| `WORD` | bash | dash, ash | ksh93, zsh |
+|---|---|---|---|
+| `nosuchcmd-xyz`, nothing on PATH | `TRAPRAN`, 127 | `TRAPRAN`, 127 | —, 127 |
+| `./nosuchcmd-xyz` | —, 127 | `TRAPRAN`, 127 | —, 127 |
+| `/nope/false` | —, 127 | `TRAPRAN`, 127 | —, 127 |
+| a file without the execute bit | —, 126 | `TRAPRAN`, 126 | —, 126 |
+| a directory | —, 126 | `TRAPRAN`, 126 | —, 126 |
+| a non-executable file **found on PATH** | —, 126 | `TRAPRAN`, 126 | —, 126 |
+
+**The last row is why this is not "the operand contains a slash"**, which
+is the reading #3983 was filed with and the reading the first five rows
+cannot tell apart. `nonexec-xyz` has no slash and bash still drops the
+handler; a *directory* found on PATH has no slash either and bash runs
+it, because bash reports that one as nothing found at all. What decides
+is whether a pathname was ever arrived at, which is one predicate over
+three roads — an operand with a slash, a search that kept a candidate,
+and a lookup that succeeded before the execve did not.
+
+**This is the shape a Yes/No axis hides**, and it hid for as long as it
+did because nothing asked. The doc comment said "true in dash and bash",
+which was true of one failure in six; the Go test exercised the one form
+bash agrees on; `core/signals.tests` put the question by hard-coding
+`/usr/bin/false`, which exists in the zsh and dash images and not in the
+bash one, so the only column that would have answered differently was the
+only column where the row asked something else. Both axes have a
+`graded.txt` probe now (#3983).
 
 **`ExecTakesOptions`** — bash yes · dash no · ksh93 yes · zsh yes
 

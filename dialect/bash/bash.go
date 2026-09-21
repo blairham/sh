@@ -1634,7 +1634,14 @@ func Semantics() interp.Semantics {
 	s.EvalOptions = interp.EvalReadsOptions
 	// See interp.Semantics.BuiltinReadsOptions.
 	s.BuiltinReadsOptions = interp.Yes
+	// Only for the half where the PATH search came up with nothing. bash is
+	// the one column that parts the two, and it is not a version move —
+	// 5.3.20 and 3.2.57 answer alike. Measured 2026-09-21: `exec
+	// nosuchcmd-xyz` runs the trap, and `exec ./nosuchcmd-xyz`, `exec
+	// /nope/false`, a file without the execute bit, a directory, and a
+	// non-executable file found *on PATH* all drop it (#3983).
 	s.ExecFailureRunsExitTrap = interp.Yes
+	s.ExecFailureOnAPathnameRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	// Both letters, and `-l` reaches the name `-a` chose: `exec -l -a NAME`
 	// hands the replacement `-NAME`, where zsh hands it `NAME`.

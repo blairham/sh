@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 )
@@ -91,7 +92,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	}
 	if lookErr != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: lookErr})
-		return r.execEnds(r.execCannotRun(lookErr))
+		return r.execFailed(lookErr)
 	}
 
 	// A subshell must never replace the *process*.
@@ -163,9 +164,10 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		// A start that failed rather than a lookup that did: wrapped so the
-		// shared reporter has a name and a resolved path to work from.
-		return r.execEnds(r.execCannotRun(
-			&pathError{name: argv[0], resolved: path, err: err}))
+		// shared reporter has a name and a resolved path to work from. The
+		// resolved path is also what puts this on the pathname side of the
+		// exit-trap question, which is right — the file was found.
+		return r.execFailed(&pathError{name: argv[0], resolved: path, err: err})
 	}
 
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
@@ -190,9 +192,10 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		// A start that failed rather than a lookup that did: wrapped so the
-		// shared reporter has a name and a resolved path to work from.
-		return r.execEnds(r.execCannotRun(
-			&pathError{name: argv[0], resolved: path, err: err}))
+		// shared reporter has a name and a resolved path to work from. The
+		// resolved path is also what puts this on the pathname side of the
+		// exit-trap question, which is right — the file was found.
+		return r.execFailed(&pathError{name: argv[0], resolved: path, err: err})
 	}
 	status := r.exitStatus(cmd.Wait())
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: status})
@@ -287,19 +290,58 @@ func (r *Runner) execCannotRun(err error) int {
 	})
 }
 
+// execFailed reports an exec that could not happen and stops the script.
+//
+// The two halves are together here because the second reads the *error* the
+// first was given: which EXIT-trap axis applies depends on whether a pathname
+// was ever arrived at, and that is a property of the failure rather than of
+// the call site. See execEnds.
+func (r *Runner) execFailed(err error) int {
+	return r.execEnds(err, r.execCannotRun(err))
+}
+
 // execEnds stops the script after an exec that could not happen.
 //
 // It always stops it — `exec nosuchcmd; echo REACHED` prints nothing in any
 // shell in the panel, so unlike almost everything else here that is not an
-// axis. Whether the EXIT trap runs on the way out *is* one: dash and bash run
-// it, ksh93 and zsh drop it.
-func (r *Runner) execEnds(status int) int {
-	if !r.ask(r.sem().ExecFailureRunsExitTrap, "an EXIT trap running after a failed exec") {
+// axis. Whether the EXIT trap runs on the way out is **two** axes, because
+// bash answers the two halves of the failure differently: it runs the trap
+// when the PATH search came up with nothing and drops it when a file was
+// named and would not start. dash and BusyBox ash run it either way, ksh93
+// and zsh drop it either way. See Semantics.ExecFailureRunsExitTrap and
+// Semantics.ExecFailureOnAPathnameRunsExitTrap (#3983).
+func (r *Runner) execEnds(err error, status int) int {
+	axis, what := r.sem().ExecFailureRunsExitTrap,
+		"an EXIT trap running after an `exec` whose name PATH did not have"
+	if execNamedAFile(err) {
+		axis, what = r.sem().ExecFailureOnAPathnameRunsExitTrap,
+			"an EXIT trap running after an `exec` that could not start the file it named"
+	}
+	if !r.ask(axis, what) {
 		r.exitTrap = nil
 	}
 	r.status = status
 	r.stopTheShell()
 	return status
+}
+
+// execNamedAFile reports whether a failed exec ever arrived at a pathname.
+//
+// **A resolved path is the whole of the question**, which is what lets one
+// predicate stand for three different roads into the same failure: an operand
+// with a slash in it, which never consults PATH; a search that kept a
+// candidate it could not run; and a lookup that succeeded and an execve that
+// did not. The remaining road — a bare name PATH had nothing for — is the one
+// that leaves resolved empty, and it is the one the other axis answers.
+//
+// Not "the operand contains a slash", which is the reading #3983 was filed
+// with. A non-executable file *found on PATH* has no slash in its operand and
+// bash drops the trap for it; a directory found on PATH has no slash either
+// and bash runs the trap, because bash reports that as nothing found at all.
+// Both fall out of the resolved path and neither falls out of the slash.
+func execNamedAFile(err error) bool {
+	var pe *pathError
+	return errors.As(err, &pe) && pe.resolved != ""
 }
 
 // orElse is the empty-means-fall-back rule these wording fields use, in one

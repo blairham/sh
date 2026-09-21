@@ -90101,6 +90101,108 @@
         "TimedOut": false
       }
     },
+    "exec/failed-exec-on-a-file-found-on-path-trap-diverges": {
+      "ash": {
+        "Stdout": "TRAP",
+        "Stderr": "",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "TRAP",
+        "Stderr": "",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/failed-exec-on-a-pathname-trap-diverges": {
+      "ash": {
+        "Stdout": "TRAP",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 126,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "TRAP",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "exec/failed-exec-trap-diverges": {
       "ash": {
         "Stdout": "TRAP",

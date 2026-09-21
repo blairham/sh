@@ -239,6 +239,58 @@ func Probes() []Probe {
 			},
 		},
 		{
+			Field:   "ExecFailureRunsExitTrap",
+			Cases:   []string{"exec/failed-exec-trap-diverges"},
+			Reading: "an EXIT trap set before an `exec` of a bare name the PATH search had nothing for prints its `TRAP` in a shell that still runs the handler",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				// Ungraded until #3983, which is half of why the axis went
+				// on saying "true in dash and bash" while bash disagreed
+				// with it on four failures out of five. A pair nothing
+				// grades reads exactly like a pair that agrees.
+				r := cells["exec/failed-exec-trap-diverges"]
+				if strings.Contains(r.Stdout, "TRAP") {
+					return "Yes", ""
+				}
+				return "No", ""
+			},
+		},
+		{
+			Field: "ExecFailureOnAPathnameRunsExitTrap",
+			Cases: []string{
+				"exec/failed-exec-on-a-pathname-trap-diverges",
+				"exec/failed-exec-on-a-file-found-on-path-trap-diverges",
+			},
+			Reading: "an EXIT trap set before an `exec` that had a *file* in hand and could not start it prints its `TRAP` in a shell that still runs the handler — read from the two roads to a pathname together, an operand with a slash and a name the PATH search resolved, which must agree",
+			Read: func(cells map[string]oracle.Result) (string, string) {
+				// Both rows or neither. They are the same question asked by
+				// the two ways a pathname can be arrived at, and a column
+				// that answered them differently would mean the axis is
+				// about the *slash* after all rather than about the
+				// pathname — which is the reading #3983 was filed with and
+				// the second row exists to rule out. Saying so is better
+				// than picking one and grading a preset against half a
+				// disagreement.
+				slash := strings.Contains(cells["exec/failed-exec-on-a-pathname-trap-diverges"].Stdout, "TRAP")
+				found := strings.Contains(cells["exec/failed-exec-on-a-file-found-on-path-trap-diverges"].Stdout, "TRAP")
+				if slash != found {
+					return "", "this shell ran the trap by one road to a pathname and not the other, so the rows are measuring the slash rather than the pathname and no single answer reads off them"
+				}
+				if slash {
+					return "Yes", ""
+				}
+				// The rows end the shell in every column — an `exec` that
+				// could not happen is fatal everywhere, which is not an
+				// axis — so silence here is the handler having been
+				// dropped and not the row failing to reach it. Checked
+				// rather than assumed: a status of 0 would mean the `exec`
+				// succeeded and neither row asked anything.
+				if cells["exec/failed-exec-on-a-pathname-trap-diverges"].Status == 0 {
+					return "", "the `exec` did not fail at all here, so the row never reached the question of what a failure does to the handler"
+				}
+				return "No", ""
+			},
+		},
+		{
 			Field:   "FatalErrorStatusIsOne",
 			Cases:   []string{"axis/arith-error-status"},
 			Reading: "a division by zero is a fatal shell error, and the status it leaves is the status every fatal error in that shell leaves",

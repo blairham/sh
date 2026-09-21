@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
 )
 
 // `fc`'s three file letters, and the history list they move in and out of.
@@ -44,7 +45,10 @@ import (
 //	fc -W [file]   the whole list, truncating. No operand means $HISTFILE.
 //	fc -A [file]   the whole list, appended — so twice over a one-entry
 //	               list leaves that entry twice, measured.
-//	fc -R file     the file's lines, appended to the list.
+//	fc -R file     the file's entries, appended to the list — entries and not
+//	               lines, because this dialect's file joins a continued line
+//	               and may put a timestamp in front of a command. See
+//	               fcLoadLines.
 //
 // Three more measurements decide the edges, and each is a case below:
 //
@@ -148,7 +152,7 @@ func fcFile(r *interp.Runner, letter byte, rest []string) int {
 		if !ok {
 			return 1
 		}
-		r.SetArray(fcHistoryStore, append(fcEntries(r), lines...))
+		fcLoadLines(r, lines)
 		return 0
 	}
 	// A write that zsh would not perform is not an error and says nothing —
@@ -187,6 +191,48 @@ func fcEntries(r *interp.Runner) []string {
 		return nil
 	}
 	return append([]string(nil), entries...)
+}
+
+// fcLoadLines is a file's physical lines becoming entries, which is not one
+// for one in this dialect and is one for one in the substrate's default.
+//
+// zsh states two encodings about its own history file and `fc -R` used to
+// apply neither, because it split the text on newlines and put the pieces
+// straight in the list. So a `for` loop stored across backslash-continued
+// lines came back as four entries, and an `EXTENDED_HISTORY` header came back
+// as the front of the command (#4028).
+//
+// Both answers already existed: `EntriesContinueOnABackslash` and
+// `EntriesMayCarryATimestampHeader` are set in HistoryStyle, measured under a
+// pty in #2452, and `repl.HistoryEntries` is the decoder that reads them —
+// the same call the **session's** reader makes, against the same style. That
+// is the whole of the fix, and spelling the rules out here instead would have
+// been the third copy of a decoder for one file: the session's, the one
+// `dialect/bash` reaches through `historyLoadLines`, and this.
+//
+// Measured 2026-09-21, zsh 5.9.2, `env -i` with a scratch `HOME`, each file
+// read by `fc -R` and listed with `fc -l 1` — and read again by the route
+// `$HISTFILE` names, under a pty, which answers every shape identically:
+//
+//	echo one / for i in 1 2\ / do\ / echo $i\ / done / echo two
+//	                                     three entries, the loop one of them
+//	: 1700000000:0;echo a / : 1700000001:0;echo b
+//	                                     echo a, echo b
+//	echo a / <blank> / echo b            three entries, the blank kept
+//	: 1700000000:0;echo a / : 1700000001:0;
+//	                                     echo a, and an empty entry
+//
+// The last one is why the order inside the decoder matters rather than being
+// an implementation detail: a header with nothing after it leaves an empty
+// entry, which this dialect keeps because `EmptyLinesAreEntries` says so
+// (#4024). A decoder that dropped empties before the headers came off would
+// have kept that line whole instead.
+//
+// Every route a file reaches this list by goes through here, which today is
+// `-R` alone: `print -s` is a line the script typed rather than a file, and
+// this dialect deliberately has no startup read into a script's list.
+func fcLoadLines(r *interp.Runner, lines []string) {
+	r.SetArray(fcHistoryStore, append(fcEntries(r), repl.HistoryEntries(HistoryStyle(), lines)...))
 }
 
 // fcRemember appends one line to the list. `print -s` is the caller, which is
@@ -233,8 +279,12 @@ func fcWriteFile(r *interp.Runner, name string, entries []string, appendTo bool)
 	return 0
 }
 
-// fcReadFile reads a history file's lines, having asked whether the script
-// may read that path.
+// fcReadFile reads a history file's **physical lines**, having asked whether
+// the script may read that path.
+//
+// Lines and not entries: what a line means is the dialect's encoding, which
+// fcLoadLines asks the one decoder about. Keeping the two apart is what stops
+// the gate and the encoding from having to be right in the same place.
 //
 // A refused read is reported by AllowReadPath the way a refused redirection's
 // is — reading a file's contents is an open, and answering with an empty list

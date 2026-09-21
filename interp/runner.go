@@ -8498,16 +8498,22 @@ const (
 	// assignedByDeclaration is an assignment made through a declaration
 	// utility — `export x=2`, `typeset x=2`, `readonly x=2`.
 	assignedByDeclaration
-	// removedAttribute is not an assignment at all: it is `typeset +r x`
-	// asking for an attribute the name may not give up, in a dialect that
-	// does not let it — see Semantics.ReadonlyAttributeCanBeRemoved.
+	// attributeRatherThanAValue is not an assignment at all: it is a
+	// declaration refused over a frozen name's **attribute**, with no value
+	// anywhere in the line. Two shapes reach it and one shell words them
+	// alike, which is why they are one form:
+	//
+	//	typeset +r x    an attribute the name may not give up — see
+	//	                Semantics.ReadonlyAttributeCanBeRemoved
+	//	typeset -i x    a type letter over a frozen name holding nothing —
+	//	                see TypeLetterOverAFrozenNameWithNoValueIsRefused
 	//
 	// A form rather than a refusal of its own, because everything the
 	// refusal decides it already decides the same way: the sentence is the
 	// declaration's, and so is the fatality, and so is giving up nothing of
 	// the enclosing line. Only which builtins name themselves differs, and
-	// that is one table — see Diagnostics.ReadonlyRemovalNamesBuiltin.
-	removedAttribute
+	// that is one table — see Diagnostics.ReadonlyAttributeRefusalNamesBuiltin.
+	attributeRatherThanAValue
 	// assignedAsTheCompoundView is not a script's assignment at all: it is
 	// the store that keeps a plain `$a` answering for an array or a table
 	// `a`, written by storeArray and setAssocElem after every element write.
@@ -8540,7 +8546,7 @@ const (
 // utility wrote, which is the question three of refuseReadonly's answers turn
 // on: the wording, the fatality, and whether the rest of the line is given up.
 func (f assignForm) declaresRatherThanAssigns() bool {
-	return f == assignedByDeclaration || f == removedAttribute
+	return f == assignedByDeclaration || f == attributeRatherThanAValue
 }
 
 // namesTheBuiltin reports whether the refusal's *sentence* may carry the name
@@ -8797,10 +8803,10 @@ func (r *Runner) appendedValue(name, old, add string) (string, bool) {
 // name in this refusal. A plus form refused the attribute it wanted to remove
 // asks a different table, because one shell answers the two shapes
 // differently through the identical word — see
-// Diagnostics.ReadonlyRemovalNamesBuiltin.
+// Diagnostics.ReadonlyAttributeRefusalNamesBuiltin.
 func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm) bool {
-	if form == removedAttribute && r.diag().ReadonlyRemovalNamesBuiltin != nil {
-		return r.diag().ReadonlyRemovalNamesBuiltin[r.inBuiltin]
+	if form == attributeRatherThanAValue && r.diag().ReadonlyAttributeRefusalNamesBuiltin != nil {
+		return r.diag().ReadonlyAttributeRefusalNamesBuiltin[r.inBuiltin]
 	}
 	return r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin]
 }

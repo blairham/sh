@@ -2835,6 +2835,23 @@ func (f declareFlags) namesAValueShapingAttribute() bool {
 		f.lower || f.upper || f.array || f.assoc
 }
 
+// namesAValueBearingType is the narrower list one dialect refuses over a
+// frozen name that holds **nothing**: the letters that say what a value of
+// this name *is*, so that declaring one over a name with no value would have
+// to invent the value — an integer zero, a float, a padded field, a compound
+// with no members.
+//
+// Three of namesAValueShapingAttribute's letters are deliberately not here,
+// and they are the discriminator rather than an omission: the two case
+// letters and the two array letters are taken over the same frozen name in
+// that shell, with a value and without. A case letter folds a value that is
+// not there yet and an array letter makes the name a container rather than
+// giving it one. The compound letter is here because it was measured here.
+// See Semantics.TypeLetterOverAFrozenNameWithNoValueIsRefused for the table.
+func (f declareFlags) namesAValueBearingType() bool {
+	return f.integer || f.float || f.widthLetter != 0 || f.compoundVar
+}
+
 // attributeOverFrozenRefused reports whether this operand is refused for
 // naming an attribute over a frozen name, having said so.
 //
@@ -2853,21 +2870,44 @@ func (f declareFlags) namesAValueShapingAttribute() bool {
 //
 // numericTypeLetterRetypesFrozen is asked by the caller first and takes its
 // own names out, so a dialect that exempts a retype never arrives here.
+//
+// **Two axes and not one**, because one dialect's answer is not a constant.
+// The wide one above is asked first and is what bash answers yes to; where it
+// says no, a *narrower* set of letters over a frozen name that holds nothing
+// is still refused in one column, and that is the second question — see
+// Semantics.TypeLetterOverAFrozenNameWithNoValueIsRefused. The second refusal
+// is worded as an attribute's rather than as an assignment's, which is what
+// the form says; the first keeps the declaration's wording it was measured
+// with.
 func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags) bool {
 	if !r.readonly[name] {
 		return false
 	}
-	if !f.namesAValueShapingAttribute() {
+	if f.namesAValueShapingAttribute() {
+		wide := r.sem().AttributeOverAFrozenNameIsRefused
+		if r.ask(wide, "an attribute letter over a frozen name being refused") {
+			if r.unspecified {
+				return true
+			}
+			return r.refuseReadonly(name, assignedByDeclaration)
+		}
+		if wide == Unspecified {
+			// It has just reported itself unanswered, and asking the
+			// narrower question would complain twice about one declaration.
+			return false
+		}
+	}
+	if !f.namesAValueBearingType() || r.nameHoldsSomething(name) {
 		return false
 	}
-	if !r.ask(r.sem().AttributeOverAFrozenNameIsRefused,
-		"an attribute letter over a frozen name being refused") {
+	if !r.ask(r.sem().TypeLetterOverAFrozenNameWithNoValueIsRefused,
+		"a type letter over a frozen name that holds nothing being refused") {
 		return false
 	}
 	if r.unspecified {
 		return true
 	}
-	return r.refuseReadonly(name, assignedByDeclaration)
+	return r.refuseReadonly(name, attributeRatherThanAValue)
 }
 
 func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) bool {
@@ -3452,7 +3492,7 @@ func (r *Runner) removeReadonly(name string, hasValue bool) int {
 	if r.unspecified || hasValue {
 		return r.status
 	}
-	r.refuseReadonly(name, removedAttribute)
+	r.refuseReadonly(name, attributeRatherThanAValue)
 	return r.status
 }
 

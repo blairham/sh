@@ -519,6 +519,11 @@ func Semantics() interp.Semantics {
 	// command to write an attribute letter with. Measured 2026-09-12,
 	// `typeset` is `not found` here, so a frozen name is never reached with
 	// one (#2561).
+	// unanswered TypeLetterOverAFrozenNameWithNoValueIsRefused: the same
+	// wall one question further in. That axis asks what a *type* letter
+	// does over a frozen name holding nothing, and this shell has no letter
+	// and no word to write one with — measured 2026-09-20, `readonly c;
+	// typeset -i c` is `typeset: not found` at 127 (#3937).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: there is no
 	// declaration command, so neither case letter can be written at all.

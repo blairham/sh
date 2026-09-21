@@ -1566,6 +1566,12 @@ func Semantics() interp.Semantics {
 	// why this preset is bash 5.3's answer and the record carries 3.2's in
 	// its own column (#2561).
 	s.AttributeOverAFrozenNameIsRefused = interp.Yes
+	// And the same with no value, which is the row the axis above was
+	// measured on: `readonly c; typeset -i c` is `typeset: c: readonly
+	// variable` at 1 in bash 5.3.20. Answered rather than left unanswered
+	// because it was measured, though the axis above refuses first here and
+	// this one is never reached (#3937).
+	s.TypeLetterOverAFrozenNameWithNoValueIsRefused = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
 	// An error inside a file `.` read ends the shell here, not just the file:
 	// measured, a sourced file whose third line is `echo X${NOPE}` under

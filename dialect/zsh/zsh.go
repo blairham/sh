@@ -1475,6 +1475,10 @@ func Semantics() interp.Semantics {
 	// *value*, which is a different question and reaches refuseReadonly
 	// (#2561).
 	s.AttributeOverAFrozenNameIsRefused = interp.No
+	// And with no value either: measured 2026-09-20, `readonly c; typeset
+	// -i c` is taken at 0 here, exactly as the same line over a frozen name
+	// holding a value is (#3937).
+	s.TypeLetterOverAFrozenNameWithNoValueIsRefused = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is no
 	// `${!prefix@}` in this shell at all — `typeset -A q1; echo "${!q@}"` is

@@ -18,15 +18,15 @@ import (
 // over a script file (#1168).
 //
 // The sentence is this shell's own arrangement and the reason
-// ReadonlyRemovalNamesBuiltin exists: the plus form takes the *builtin's*
+// ReadonlyAttributeRefusalNamesBuiltin exists: the plus form takes the *builtin's*
 // location with the builtin named, where an assignment through the identical
 // word takes the plain line form.
 func TestTheReadonlyAttributeWillNotComeOffHere(t *testing.T) {
 	if got := ksh.Semantics().ReadonlyAttributeCanBeRemoved; got != interp.No {
 		t.Errorf("ReadonlyAttributeCanBeRemoved = %v, want No", got)
 	}
-	if !ksh.Diagnostics().ReadonlyRemovalNamesBuiltin["typeset"] {
-		t.Error("ReadonlyRemovalNamesBuiltin has no `typeset` entry, so a refused " +
+	if !ksh.Diagnostics().ReadonlyAttributeRefusalNamesBuiltin["typeset"] {
+		t.Error("ReadonlyAttributeRefusalNamesBuiltin has no `typeset` entry, so a refused " +
 			"plus form loses the builtin's name and its location — this shell puts " +
 			"both there for the plus form and neither for an assignment")
 	}

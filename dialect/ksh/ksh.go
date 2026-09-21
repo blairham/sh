@@ -1445,6 +1445,14 @@ func Semantics() interp.Semantics {
 	// lists `typeset -r -i q=1` and `typeset -u q` lists `typeset -r -u
 	// q=1`, where bash 5.3 refuses both (#2561).
 	s.AttributeOverAFrozenNameIsRefused = interp.No
+	// But the same letter over a frozen name holding **nothing** is
+	// refused: measured 2026-09-20, `readonly c; typeset -i c` is
+	// `typeset: c: is read only` at 1 and the script ends, where the same
+	// line after `c=1; readonly c` is taken in silence. The complement of
+	// the axis above rather than a restatement of it — `typeset -u c` and
+	// `typeset -a c` are taken over the valueless frozen name, so it is the
+	// type letters alone (#3937).
+	s.TypeLetterOverAFrozenNameWithNoValueIsRefused = interp.Yes
 	// An exported name whose declaration named a numeric type reaches a
 	// child as `0`, even though the shell itself reads the name as unset:
 	// `typeset -ix Z; env` hands over `Z=0` where `${Z+set}` is empty.
@@ -4181,8 +4189,8 @@ func Diagnostics() interp.Diagnostics {
 		// only` where `typeset x=2` on the same name is `<script>: line 2:
 		// x: is read only`. One word, two shapes, two sentences — which is
 		// what the second table is for.
-		ReadonlyRemovalNamesBuiltin: map[string]bool{"typeset": true},
-		ReadBadFileDescriptor:       "read: bad file unit number [Bad file descriptor]",
+		ReadonlyAttributeRefusalNamesBuiltin: map[string]bool{"typeset": true},
+		ReadBadFileDescriptor:                "read: bad file unit number [Bad file descriptor]",
 		// ksh93 calls the coprocess the query process, and `read -p` with
 		// none running says so — the only reachable answer here, this
 		// grammar having no `|&`.

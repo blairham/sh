@@ -1930,6 +1930,10 @@ func Semantics() interp.Semantics {
 	// unanswered AttributeOverAFrozenNameIsRefused: no declaration command
 	// here either. Measured 2026-09-12 on BusyBox in a container, `typeset`
 	// is `not found` — the same wall dash meets (#2561).
+	// unanswered TypeLetterOverAFrozenNameWithNoValueIsRefused: the same
+	// wall one question further in. Measured 2026-09-20 in the pinned
+	// image, `readonly c; typeset -i c` is `typeset: not found` at 127, so
+	// no letter ever meets the frozen name (#3937).
 	// unanswered UpperCaseLetterBesideANumericTypeLetterRecordsNothing and
 	// unanswered TwoCaseLettersOnOneDeclarationCancel: no declaration
 	// command here either. Measured 2026-09-12 on BusyBox in a container,

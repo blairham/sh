@@ -7862,6 +7862,61 @@ type Semantics struct {
 	// both, so there is no listing after it.
 	AttributeOverAFrozenNameIsRefused Answer
 
+	// TypeLetterOverAFrozenNameWithNoValueIsRefused refuses a declaration
+	// that would give a **frozen name holding nothing** a type its value has
+	// to be built for — where the same letter over the same frozen name with
+	// a value is taken.
+	//
+	// The exact complement of the axis above, and the reason it is a second
+	// field rather than a third value of that one: there a dialect's answer
+	// is a constant, and here it turns on what the name holds. Asked only
+	// where the axis above said no, so a dialect that refuses every attribute
+	// over a frozen name never reaches it.
+	//
+	// **A narrower set of letters, measured rather than inherited.** The
+	// letters that make the name a container are outside it, and so are the
+	// case letters, which the axis above counts as value-shaping. Measured
+	// 2026-09-20, `env -i PATH=/usr/bin:/bin LC_ALL=C /bin/ksh x.sh`, each
+	// row a `readonly c` and then the line named, against the same row with
+	// `c=1` in front of the freeze:
+	//
+	//	              no value           holding `1`
+	//	typeset -i    is read only, 1    taken
+	//	typeset -si   is read only, 1    taken
+	//	typeset -E    is read only, 1    taken
+	//	typeset -F    is read only, 1    taken
+	//	typeset -X    is read only, 1    taken
+	//	typeset -L3   is read only, 1    taken
+	//	typeset -R3   is read only, 1    taken
+	//	typeset -Z3   is read only, 1    taken
+	//	typeset -C    is read only, 1    is read only, 1
+	//	typeset -u    taken              taken
+	//	typeset -l    taken              taken
+	//	typeset -a    taken              taken
+	//	typeset -x    taken              taken
+	//	typeset -t    taken              taken
+	//	typeset -r    taken              taken
+	//	typeset c     taken              taken
+	//
+	// The `-u`, `-l` and `-a` rows are the discriminator that says this is
+	// not the axis above wearing a condition: those three are in *its* set
+	// and are taken here in both columns. The right-hand column is the one
+	// that says the rule is about the value and not about the letter. And
+	// `c=; readonly c` is the row that says "holds nothing" means unset and
+	// not empty — `typeset -i c` after it is taken.
+	//
+	// `-C` is in the set because it is refused over a name with no value,
+	// which is what this axis asks; that it is *also* refused over a name
+	// with one is a fact this field does not carry, and that column is left
+	// as it was rather than guessed at.
+	//
+	// The refusal is worded as an attribute's rather than as an assignment's
+	// — `<file>[2]: typeset: c: is read only`, the shape `typeset +r c`
+	// takes in the same shell — which is why it goes through the assignForm
+	// attributeRatherThanAValue. See Runner.attributeOverFrozenRefused
+	// (#3937).
+	TypeLetterOverAFrozenNameWithNoValueIsRefused Answer
+
 	// SetArrayBadNameLeavesZero makes `set -A` refuse a name that is not one
 	// and leave **0** behind, where every other refusal that shell makes
 	// leaves 1.

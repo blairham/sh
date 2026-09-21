@@ -231,3 +231,24 @@ printf 'compquote -p and a name -> %s\n' "$?"
 # whether one is an option or not.
 compdescribe a b c 2>&1
 printf 'compdescribe three operands -> %s\n' "$?"
+
+# `zpty` runs a program on a pseudo-terminal of its own. It comes from a
+# module like the `zf_` builtins above, and it answers before the `zmodload`
+# here for the same reason they do — #1670, which recorded that and decided
+# nothing — so the module is loaded first and no row below asks that
+# question.
+#
+# What is asked is the bookkeeping rather than a session: the listing with
+# nothing to list, and the refusal for a name the table has not got. Starting
+# a program on a pty and reading from it is a timing question, and the note
+# on determinism in internal/suite/own.go is why a case here may not hold
+# one — `internal/smoke` drives the pty surface instead.
+#
+# It was one of the eight surface elements #3990 found that no case anywhere
+# in the tree mentioned, and it arrived with the builtin.
+zmodload zsh/zpty
+printf 'zmodload zsh/zpty -> %s\n' "$?"
+zpty -L
+printf 'the listing with nothing to list -> %s\n' "$?"
+( zpty -d nosuch_zz ) 2>&1 > /dev/null
+printf 'deleting a name it has not got -> %s\n' "$?"

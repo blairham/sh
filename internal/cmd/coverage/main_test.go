@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/blairham/sh/internal/coverage"
 	"github.com/blairham/sh/internal/suite"
 )
 
@@ -84,5 +85,62 @@ func TestANamedSuiteThatIsNotThereIsAnError(t *testing.T) {
 	_, err := suiteSources(filepath.Join(t.TempDir(), "nothing-here"))
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("suiteSources on a missing directory returned %v, want a not-exist error main can recognize", err)
+	}
+}
+
+// TestNothingEntersTheSurfaceWithoutACase is leg 3 of #2291, and it is here
+// because the number it holds had already moved back.
+//
+// `make coverage` is a report: it prints how many elements of the shell's
+// surface no case anywhere in the tree mentions, and exits 0 whatever that
+// number is. The reading was **0 of 237 reachable** on 2026-09-17 and **8 of
+// 251** four days later, and nothing in between said a word — seven merges,
+// each of which added a builtin, an operator or a node kind and wrote no
+// case for it (#3990). A number that is meant to be zero and is watched by
+// nobody is a number that drifts, which is the same shape as every other
+// "it was measured once" in this tree.
+//
+// So the *zero* is gated and the rest of the report is not. That split is
+// the package's own: a mention is an upper bound and says nothing about how
+// well an element is covered, but an element nothing mentions at all is
+// covered by nothing at all, and that half is a fact rather than a proxy.
+//
+// The ledger is the pressure valve and it is checked in both directions.
+// An element no case can ask without stopping the harness goes in
+// coverage.UnreachableByConstruction with its measurement and is subtracted
+// here; an entry the columns contradict — mentioned after all, or gone from
+// every surface — fails this test too, so the ledger cannot become a place
+// to put things.
+func TestNothingEntersTheSurfaceWithoutACase(t *testing.T) {
+	root := filepath.Join("..", "..", "..", filepath.FromSlash(DefaultSuite))
+	fromSuite, err := suiteSources(root)
+	if err != nil {
+		t.Fatalf("reading the suite at %s: %v", root, err)
+	}
+	srcs := append(corpusSources(), fromSuite...)
+	// Both bodies, because either alone understates: the corpus is snippets
+	// and the suite is files, and an element asked only by the other reads
+	// as unasked. That understatement is #2630 and it is what this guard
+	// would report as a work item if it graded one body.
+	if len(srcs) == len(fromSuite) || len(fromSuite) == 0 {
+		t.Fatalf("read %d corpus cases and %d suite files, want both bodies",
+			len(srcs)-len(fromSuite), len(fromSuite))
+	}
+
+	cols, err := columns(presets(), srcs)
+	if err != nil {
+		t.Fatalf("running the columns: %v", err)
+	}
+	roll := coverage.Unmentioned(cols, coverage.UnreachableByConstruction)
+	if roll.Surface == 0 {
+		t.Fatal("the columns hold no surface between them, so this test is measuring nothing")
+	}
+	for _, e := range roll.Never {
+		t.Errorf("%s is in the surface and no case in the tree mentions it — write one, or "+
+			"measure why none can and add it to coverage.UnreachableByConstruction", e)
+	}
+	for _, u := range roll.Stale {
+		t.Errorf("%s is listed unreachable (#%d) and the columns say otherwise; delete the entry",
+			u.Element, u.Issue)
 	}
 }

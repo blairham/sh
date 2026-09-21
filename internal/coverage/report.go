@@ -203,43 +203,13 @@ func rollup(cols []Column, list int, ledger []Unreachable) string {
 	if len(cols) == 0 {
 		return ""
 	}
-	mentioned := map[Element]bool{}
-	union := map[Element]bool{}
-	for _, c := range cols {
-		for _, e := range c.Surface {
-			union[e] = true
-			if c.Mentions[e] > 0 {
-				mentioned[e] = true
-			}
-		}
-	}
-	ledgered := map[Element]Unreachable{}
-	for _, u := range ledger {
-		ledgered[u.Element] = u
-	}
-	var never []Element
-	var unreachable, stale []Unreachable
-	for e := range union {
-		if mentioned[e] {
-			continue
-		}
-		if u, ok := ledgered[e]; ok {
-			unreachable = append(unreachable, u)
-			continue
-		}
-		never = append(never, e)
-	}
-	for _, u := range ledger {
-		if !union[u.Element] || mentioned[u.Element] {
-			stale = append(stale, u)
-		}
-	}
-	byKindThenName(never)
-	byLedgerOrder(unreachable)
+	roll := Unmentioned(cols, ledger)
+	union, never := roll.Surface, roll.Never
+	unreachable, stale := roll.Unreachable, roll.Stale
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "  no dialect mentions these at all — %d of %d reachable\n", len(never), len(union)-len(unreachable))
-	fmt.Fprintf(&b, "    (%d in the surface, %d unreachable by construction and listed below)\n\n", len(union), len(unreachable))
+	fmt.Fprintf(&b, "  no dialect mentions these at all — %d of %d reachable\n", len(never), union-len(unreachable))
+	fmt.Fprintf(&b, "    (%d in the surface, %d unreachable by construction and listed below)\n\n", union, len(unreachable))
 	byKind := map[string][]string{}
 	for _, e := range never {
 		byKind[e.Kind] = append(byKind[e.Kind], e.Name)
@@ -277,7 +247,7 @@ func rollup(cols []Column, list int, ledger []Unreachable) string {
 		fmt.Fprintf(&b, "  STALE ledger entries — %d: listed as unreachable, and the columns say otherwise\n\n", len(stale))
 		for _, u := range stale {
 			why := "some case mentions it"
-			if !union[u.Element] {
+			if !roll.InSurface[u.Element] {
 				why = "no dialect's surface holds it"
 			}
 			fmt.Fprintf(&b, "    %s (#%d) — %s; delete the entry\n", u.Element, u.Issue, why)
@@ -285,6 +255,71 @@ func rollup(cols []Column, list int, ledger []Unreachable) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// Rollup is the roll-up the report prints, as data rather than as text.
+//
+// One computation for the report and for the guard that gates it, because
+// two would be two answers: [Report] renders this and
+// internal/cmd/coverage's own test fails when [Rollup.Never] is not empty.
+// See [Unmentioned].
+type Rollup struct {
+	// Surface is how many distinct elements the columns hold between them.
+	Surface int
+	// InSurface is that set, for asking about one element.
+	InSurface map[Element]bool
+	// Never is every reachable element no column mentions — the work-list,
+	// and the number that is meant to be zero.
+	Never []Element
+	// Unreachable is the ledger entries the columns agree with: an element
+	// nothing mentions and nothing can. Subtracted from the headline.
+	Unreachable []Unreachable
+	// Stale is the ledger entries the columns contradict — mentioned after
+	// all, or gone from every surface. A ledger that could only grow is the
+	// overstatement this instrument exists to prevent.
+	Stale []Unreachable
+}
+
+// Unmentioned is the roll-up: what no column mentions, split by whether the
+// ledger accounts for it.
+//
+// Exported because it is the one number worth gating, and a gate that
+// recomputed it from the printed report would be reading its own prose. See
+// [Rollup] and internal/cmd/coverage.
+func Unmentioned(cols []Column, ledger []Unreachable) Rollup {
+	roll := Rollup{InSurface: map[Element]bool{}}
+	mentioned := map[Element]bool{}
+	for _, c := range cols {
+		for _, e := range c.Surface {
+			roll.InSurface[e] = true
+			if c.Mentions[e] > 0 {
+				mentioned[e] = true
+			}
+		}
+	}
+	roll.Surface = len(roll.InSurface)
+	ledgered := map[Element]Unreachable{}
+	for _, u := range ledger {
+		ledgered[u.Element] = u
+	}
+	for e := range roll.InSurface {
+		if mentioned[e] {
+			continue
+		}
+		if u, ok := ledgered[e]; ok {
+			roll.Unreachable = append(roll.Unreachable, u)
+			continue
+		}
+		roll.Never = append(roll.Never, e)
+	}
+	for _, u := range ledger {
+		if !roll.InSurface[u.Element] || mentioned[u.Element] {
+			roll.Stale = append(roll.Stale, u)
+		}
+	}
+	byKindThenName(roll.Never)
+	byLedgerOrder(roll.Unreachable)
+	return roll
 }
 
 func byLedgerOrder(us []Unreachable) {
@@ -353,5 +388,10 @@ const caveat = `  What this counts, and what it does not
     without stopping the harness is listed with its measurement instead,
     and a listing the columns contradict is printed as stale.
 
-    Report only. Nothing here gates anything.
+    The roll-up's zero is the one thing here that gates. Every number
+    above it is report-only and is meant to be read rather than met, but
+    an element nothing mentions at all is covered by nothing at all, and
+    a test in internal/cmd/coverage fails while one exists — which is
+    what this report did not have when the count went from 0 to 8 across
+    seven merges and nothing said so (#3990).
 `

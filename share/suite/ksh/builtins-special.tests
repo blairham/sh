@@ -104,11 +104,36 @@ set +x
 # special at all: a command that replaces the shell has no status to hand back
 # and nothing after it to run.
 #
-# Only the sentence is asked here. **Running it is deliberately left out**: the
-# program the word reaches changes a process's group, and a suite file that ran
-# it would be asking the operating system a question rather than the shell. The
-# `exec` road is graded in dialect/ksh's own Go tests, against a fixture on a
-# PATH of their own.
+# The machine's own `newgrp` is deliberately never run: it changes a process's
+# group, and a file that ran it would be asking the operating system a
+# question rather than the shell. What is run instead is a **fixture on a
+# PATH of this file's own**, which is the same arrangement dialect/ksh's Go
+# tests use — the word is looked up like any other command, so a directory
+# made here is where it lands, and the shell is replaced by a program whose
+# whole behavior is written three lines above the row that reads it.
+#
+# That is the row this file was missing. `type newgrp` names it as an
+# *operand*, which says nothing about the builtin: `make coverage` counts a
+# builtin only where it is the **command word**, and until #3990 nothing in
+# the tree had `newgrp` standing there.
 type newgrp
 command -V newgrp
 whence -v newgrp
+
+# Replaced, and not called: `NOT REACHED` never runs, and the status that
+# comes back to the parent is the *program's* own rather than a builtin's.
+(
+  mkdir -p ngbin
+  printf '#!/bin/sh\nprintf "the program got [%%s]\n" "$*"\nexit 3\n' > ngbin/newgrp
+  chmod +x ngbin/newgrp
+  PATH=$PWD/ngbin
+  printf 'before\n'
+  newgrp -l agroup
+  printf 'NOT REACHED\n'
+)
+printf 'the subshell was replaced -> %s\n' "$?"
+
+# And a redirection that cannot be opened is refused in front of all of that,
+# so the word never reaches a lookup at all.
+( newgrp < nosuchfile_zz ) 2>&1 > /dev/null
+printf 'a redirection it cannot open -> %s\n' "$?"

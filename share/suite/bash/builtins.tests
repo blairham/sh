@@ -299,3 +299,20 @@ kill -l 32 2> /dev/null; printf '32 -> %s\n' "$?"
 ( REPLY=R; readonly REPLY
   printf 'x\n' | { read; printf 'bare   st=%s [%s]\n' "$?" "$REPLY"; }
 ) 2> /dev/null
+
+# `logout` is the exit a **login** shell has and an ordinary one refuses, and
+# the refusal names the word a script should have written instead. A suite
+# file is never a login shell, so the refusal is the whole of what can be
+# asked here — and it is not a gap, because that refusal is the behavior a
+# script written for a login shell meets when it is sourced somewhere else.
+#
+# In a subshell, because it exits the one it succeeds in.
+#
+# It was one of the eight surface elements #3990 found that no case anywhere
+# in the tree mentioned. It had been read as unreachable without the word
+# being run: it is reachable, it agrees, and it takes nothing but a subshell.
+( logout ) 2>&1 > /dev/null
+printf 'logout outside a login shell -> %s\n' "$?"
+( logout 3 ) 2>&1 > /dev/null
+printf 'and with a status operand -> %s\n' "$?"
+printf 'the file kept going\n'

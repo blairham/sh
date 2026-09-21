@@ -198,10 +198,108 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 			},
 		},
 		{
-			name: "an unquoted arithmetic level writes no second line",
-			src:  "echo $(( $(for) + 1 ))\n",
+			// The unquoted spelling of the same row, where no level holds a
+			// quote or a brace and the sentence is the **outermost** level's:
+			// the whole arithmetic expansion, quoted from the word. It wrote
+			// nothing at all until the levels were unwound rather than
+			// searched, because the innermost level with something open was
+			// the only one asked (#3355).
+			name: "an unquoted arithmetic level takes the word's own sentence",
+			src:  "printf 'start\\n'\necho $(( $(for) + 1 ))\necho after\n",
 			want: map[string]string{
-				"zsh": "s.sh:1: parse error near `)'\n",
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: parse error near `$(( $(for) + 1 ))'\n",
+			},
+		},
+		{
+			// A substitution inside a substitution, with nothing open at
+			// either level: the script's level writes the sentence and the
+			// intermediate body writes nothing, and the sentence quotes the
+			// *outer* word — which is neither the failing span nor anything
+			// the body's runner ever held.
+			//
+			// The line is the one after the last line of the program rather
+			// than one past the failure, which is the half a three-line
+			// script cannot tell apart from the other rule. See
+			// Runner.inRunSubstitutionBody.
+			name: "a substitution nested in a substitution",
+			src:  "printf 'start\\n'\necho A$(echo B$(for)C)D\necho after\necho after2\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:5: parse error near `A$(echo B$(for)C)D'\n",
+			},
+		},
+		{
+			// Two levels with something open, and they are written innermost
+			// outward: the brace is the body's and the quote is the script's.
+			// A build that stops at the first level writes one of them.
+			name: "a brace inside a quote, one line each",
+			src:  "printf 'start\\n'\necho \"x $(echo ${y:-$(for)})\"\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: closing brace expected\n" +
+					"s.sh:3: unmatched \"\n",
+			},
+		},
+		{
+			// The same two contexts in the other order, which is the pair
+			// that says the order is the levels' and not a ranking between
+			// the two sentences.
+			name: "a quote inside a brace, the other order",
+			src:  "printf 'start\\n'\necho ${x:-$(echo \"$(for)\")}\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: unmatched \"\n" +
+					"s.sh:3: closing brace expected\n",
+			},
+		},
+		{
+			// Three levels, each holding a quote of its own: three lines,
+			// all at the one line. A walk that wrote the innermost level and
+			// stopped wrote one.
+			name: "three quoted levels write three lines",
+			src:  "printf 'start\\n'\necho \"$(echo \"$(echo \"$(for)\")\")\"\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: unmatched \"\n" +
+					"s.sh:3: unmatched \"\n" +
+					"s.sh:3: unmatched \"\n",
+			},
+		},
+		{
+			// A level with a brace open and the script's level with nothing:
+			// the brace's sentence and then the word's, which is the pair
+			// that says a level with nothing open is not the end of the walk.
+			name: "a brace level and then the word",
+			src:  "printf 'start\\n'\necho $(echo ${y:-$(for)})\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: closing brace expected\n" +
+					"s.sh:3: parse error near `$(echo ${y:-$(for)})...'\n",
+			},
+		},
+		{
+			// The word the quote starts at is on a line the failure is not
+			// on: the outer body opens on line 1 and the inner one is
+			// refused on line 2, and the sentence is still the outer word's
+			// own line to its end.
+			name: "the outer word begins on an earlier line",
+			src:  "x=$(echo a\necho b; v=$(echo hi; for))\n",
+			want: map[string]string{
+				"zsh": "s.sh:2: parse error near `)'\n" +
+					"s.sh:3: parse error near `x=$(echo a'\n",
+			},
+		},
+		{
+			// A **process substitution** body is a body of its own in the
+			// same way, and it had no level at all: the sentence quotes the
+			// word from its `<(`, which is a second opener the check for
+			// where the substitution begins has to know (#3355).
+			name: "the substitution is inside a process substitution",
+			src:  "echo one\necho two\ncat <(v=$(echo hi; for))\n",
+			want: map[string]string{
+				"zsh": "s.sh:3: parse error near `)'\n" +
+					"s.sh:4: parse error near `<(v=$(echo hi; for))...'\n",
 			},
 		},
 		{

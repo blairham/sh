@@ -62,6 +62,13 @@ import (
 // `=(cmd)`.
 func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	kind := span.Kind
+	// A body of its own is a lexing level of its own, exactly as a command
+	// substitution's is: what the text around `<( … )` left open is not open
+	// inside it, and a refusal in there is quoted from the `<(` and not from
+	// whatever the enclosing word had. Pushed before the clone, so the shell
+	// that runs the body carries the level it was entered at. See substLevel
+	// (#3355).
+	defer r.atFreshSubstLevel(span)()
 	f, ok := r.substBody(span)
 	if !ok {
 		return "", false

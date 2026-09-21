@@ -90,6 +90,21 @@ func (r *Runner) takeScriptStop() (status int, ok bool) {
 	return status, true
 }
 
+// pendingScriptStop reports such a stop **without taking it**: the status it
+// carries, and whether one is waiting.
+//
+// The peek exists because a substitution's body is not the only boundary the
+// stop has to cross. `echo "$(echo "$(echo "$(for)")")"` is three of them,
+// and a take at the first would leave the two outside it expanding their
+// words and the script running on — the box is drained once, and once is not
+// enough when the levels are nested. Whoever finally stops on it takes it.
+func (r *Runner) pendingScriptStop() (status int, ok bool) {
+	if r.scriptStop == nil || !r.scriptStop.stopped.Load() {
+		return 0, false
+	}
+	return int(r.scriptStop.status.Load()), true
+}
+
 // holdScriptStop hides a pending stop for the length of a trap body and hands
 // back what puts it there again.
 //

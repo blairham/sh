@@ -4633,6 +4633,24 @@ func (r *Runner) OneCommand() bool {
 // parse, which is unanimous: a script whose last line is a syntax error still
 // runs its EXIT trap.
 func (r *Runner) Finish(ctx context.Context) int {
+	// A substitution below this shell could not parse its body and nothing
+	// has stopped on it, because the statement that held it was the script's
+	// last: the sequence point in Runner.stmt is reached at the *next*
+	// command and a prompt's drain never comes for a script. Measured
+	// 2026-09-20, `echo one` / `echo two` / `cat <(v=$(echo hi; for))` from a
+	// script file: zsh 5.9.2 leaves 1 and this left 0, with both diagnostics
+	// written either way (#3355).
+	//
+	// Before the EXIT trap, so the handler sees the status the script died
+	// of — the same order takeScriptStop's own note measures — and only for
+	// the shell at the top, because every body that runs in a clone reaches
+	// Finish too and one of them draining the box is one the shell above it
+	// would never see.
+	if !r.inSubshell {
+		if status, stopped := r.takeScriptStop(); stopped {
+			r.status = status
+		}
+	}
 	// Anything that arrived during the last command still runs, before the
 	// EXIT trap does.
 	r.ctx = ctx

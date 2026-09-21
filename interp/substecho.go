@@ -178,7 +178,7 @@ func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure er
 	if d.EchoesTheOffendingLine {
 		return r.substBodyEcho(span, lines, start, own, d.offendingLine(own, failure, text)), line
 	}
-	return r.substWordEcho(span, lines, r.lineBase+int(span.Pos.Line)-textBase, own, line)
+	return r.substWordEcho(span, lines, textBase, own, line)
 }
 
 // substTextLines is the program's text split into lines, or nil where the text
@@ -261,9 +261,9 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 // has a sentence for that case, which is the `parse error near` line #3331
 // and #3731 already build.
 //
-// This shell writes one of those lines rather than all of them, because one
-// refusal is written from one place. The one it writes is the innermost
-// level's, which is the first zsh writes.
+// All of them are written, innermost outward, from the one place the refusal
+// is written: a level is a frame on a stack the expander already keeps, so
+// unwinding it costs the walk and nothing else.
 type substLevel struct {
 	// quoted is a double quote still open at this level, whether it is
 	// around the failing substitution or around an expansion holding it.
@@ -281,6 +281,75 @@ type substLevel struct {
 	// span's own `Quoting` to fold in below and produced `unmatched "` for a
 	// row with no quote in it.
 	arith bool
+	// entry is where this level was left: the substitution whose body was
+	// entered from it, and the word of *this* level's text that held it.
+	//
+	// Recorded at the door rather than read at the failure, because the
+	// sentence a level with nothing open writes quotes that word, and by the
+	// time a body two levels down has been refused the runner is holding the
+	// innermost of them. `echo $(echo $(for))` is the shape: the sentence is
+	// the script level's and quotes `$(echo $(for))`, which is neither the
+	// failing span nor a word the body's runner ever had.
+	entry substEntry
+}
+
+// substEntry is the substitution a level was left through, and everything the
+// sentence about it needs that the runner will have moved on from.
+//
+// Positions and two word pointers, so that entering a substitution costs four
+// words of copying and no work at all. What it would cost to compute the
+// sentence here instead is a split of the whole program's text, on every
+// `$( … )` a script runs, for a message almost none of them will write.
+type substEntry struct {
+	// at is the substitution's span, and word the word of the enclosing text
+	// that holds it — nil where the expansion was reached from something
+	// that is not a word.
+	at   syntax.Span
+	word *syntax.Word
+	// outer is the outermost word of that nesting as the level held it. The
+	// sentence is only written for a span the word places directly, which is
+	// the pair being equal. See Runner.expandingOuterWord.
+	outer *syntax.Word
+	// lineBase and fragment are how far into the program this level's text
+	// began, which is what turns the span's own line into a line of the text
+	// the sentence quotes. See Runner.spanLineBase for the two roads.
+	lineBase int
+	fragment int
+	// body says the level was left through a substitution the shell *runs*
+	// — a `$( … )` or a `<( … )` — rather than through a text it merely
+	// lexes again, which an arithmetic expansion is. See
+	// Runner.inRunSubstitutionBody for what turns on it.
+	body bool
+}
+
+// inRunSubstitutionBody reports whether what is being expanded now is inside
+// the body of a substitution the shell ran, at any depth.
+//
+// It decides where the second message stands, and it is the one thing about
+// that placement which is not read off the failure. Measured 2026-09-20,
+// `env -i PATH=/usr/bin:/bin LC_ALL=C zsh -f s.sh`, standard input on the
+// null device, the failure always on line 2 and `echo after` lines below it:
+//
+//	                               3 lines   4 lines
+//	echo ${x:-$(for)}                    3         3
+//	echo "$(for)"                        3         3
+//	echo $(( $(for) + 1 ))               3         3
+//	echo "$(echo $(for))"                4         5
+//	echo A$(echo B$(for)C)D              4         5
+//	cat <(v=$(echo hi; for))             4         5
+//
+// So a body the shell ran is the line **after the last line of the program**
+// however far up the failure is, and everything else is one past the
+// failure's own line. An arithmetic expansion is on the second side of that
+// and a process substitution on the first, which is why the question is
+// "did the shell run this body" and not "is this a level".
+func (r *Runner) inRunSubstitutionBody() bool {
+	for _, level := range r.substLevelsOut {
+		if level.entry.body {
+			return true
+		}
+	}
+	return false
 }
 
 // inBraceOperand records that what is being expanded now is an expansion's
@@ -316,7 +385,9 @@ func (r *Runner) inBraceOperand(q syntax.Quoting) func() {
 func (r *Runner) atFreshSubstLevel(span syntax.Span) func() {
 	saved, savedOuter := r.substLevel, r.substLevelsOut
 	savedFragment := r.substFragmentLine
-	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), outerLevel(saved, span))
+	door := r.outerLevel(saved, span)
+	door.entry.body = true
+	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), door)
 	r.substLevel = substLevel{}
 	// And the body's lines are its own from here: whatever re-lexed text
 	// this substitution was written in, the body is parsed separately and
@@ -329,10 +400,17 @@ func (r *Runner) atFreshSubstLevel(span syntax.Span) func() {
 }
 
 // outerLevel is the level a nested text is entered from, with the entering
-// span's own quoting folded in. See atFreshSubstLevel.
-func outerLevel(at substLevel, span syntax.Span) substLevel {
+// span's own quoting folded in and the entry recorded. See atFreshSubstLevel.
+func (r *Runner) outerLevel(at substLevel, span syntax.Span) substLevel {
 	if !at.arith && span.Quoting != syntax.Unquoted {
 		at.quoted = true
+	}
+	at.entry = substEntry{
+		at:       span,
+		word:     r.expandingWord,
+		outer:    r.expandingOuterWord,
+		lineBase: r.lineBase,
+		fragment: r.substFragmentLine,
 	}
 	return at
 }
@@ -342,7 +420,7 @@ func outerLevel(at substLevel, span syntax.Span) substLevel {
 func (r *Runner) inArithText(span syntax.Span) func() {
 	saved, savedOuter := r.substLevel, r.substLevelsOut
 	savedFragment := r.substFragmentLine
-	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), outerLevel(saved, span))
+	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), r.outerLevel(saved, span))
 	r.substLevel = substLevel{arith: true}
 	// The text is lexed again here, so what it yields is numbered from the
 	// expansion's own line rather than from the file's, and how far in that
@@ -372,23 +450,25 @@ func (r *Runner) inArithCommandText(at syntax.Pos) func() {
 	return func() { r.substFragmentLine = saved }
 }
 
-// substLevelEcho is the line a level with something open writes, or the empty
-// string where the level holds neither a quote nor a brace.
+// substLevelEcho is what the open levels write, one line each, innermost
+// outward — or the empty string where none of them has anything to say.
 //
 // The failing span's own quoting is folded in here rather than at the door,
 // because it is the one context that is on the span: `echo "$(for)"` has the
 // quote around the substitution itself, where `"${x:-$(for)}"` has it around
 // the expansion the substitution is an operand of.
-func (r *Runner) substLevelEcho(span syntax.Span) string {
+//
+// A level holding neither a quote nor a brace writes nothing and the level
+// outside it still writes its own — the intermediate `$( )` of
+// `echo "$(echo $(for))"` and the `$(( ))` of `echo "$(( $(for) + 1 ))"` are
+// both such a level. The **outermost** level is the exception: what it writes
+// with nothing open is the sentence that quotes the word, which is the line
+// `echo $(echo $(for))` and `echo $(( $(for) + 1 ))` get and their only one.
+func (r *Runner) substLevelEcho(span syntax.Span, lines []string, textBase int) string {
 	d := r.diag()
-	// The innermost level first, and outward past every level that holds
-	// nothing. A level with neither a quote nor a brace writes no line at
-	// all — the intermediate `$( )` of `echo "$(echo $(for))"` and the
-	// `$(( ))` of `echo "$(( $(for) + 1 ))"` are both such a level — and the
-	// level outside it still writes its own, which in both of those is the
-	// script's `unmatched "`.
 	// The one context that is on the span rather than around it.
-	inner := outerLevel(r.substLevel, span)
+	inner := r.outerLevel(r.substLevel, span)
+	var b strings.Builder
 	for at := len(r.substLevelsOut); ; at-- {
 		level := inner
 		if at < len(r.substLevelsOut) {
@@ -399,15 +479,17 @@ func (r *Runner) substLevelEcho(span syntax.Span) string {
 			if d.UnmatchedQuote == "" {
 				return ""
 			}
-			return Wording(d.UnmatchedQuote, `unmatched %[1]s`, `"`, `"`, "", 0, 0) + "\n"
+			b.WriteString(Wording(d.UnmatchedQuote, `unmatched %[1]s`, `"`, `"`, "", 0, 0) + "\n")
 		case level.braced:
 			if d.UnmatchedBraceSubst == "" {
 				return ""
 			}
-			return Wording(d.UnmatchedBraceSubst, "closing brace expected", "${", "}", "", 0, 0) + "\n"
+			b.WriteString(Wording(d.UnmatchedBraceSubst, "closing brace expected", "${", "}", "", 0, 0) + "\n")
+		case at == 0:
+			b.WriteString(r.substWordSentence(level.entry, lines, textBase))
 		}
 		if at == 0 {
-			return ""
+			return b.String()
 		}
 	}
 }
@@ -455,34 +537,66 @@ func (r *Runner) substLevelEcho(span syntax.Span) string {
 // called has no location that says that. A trap body is the same case from
 // the other side: this dialect reads the action when the trap is *set*, and
 // refuses it there with a message of its own.
-func (r *Runner) substWordEcho(span syntax.Span, lines []string, start, own, line int) (string, int) {
-	w := r.expandingWord
+func (r *Runner) substWordEcho(span syntax.Span, lines []string, textBase, own, line int) (string, int) {
 	if r.inTrapBody || r.diag().LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {
 		return "", 0
 	}
 	if own < 1 || own > len(lines) {
 		return "", 0
 	}
-	if own < len(lines) {
+	switch {
+	case r.inRunSubstitutionBody():
+		// A body the shell ran has read the program to its end, so the
+		// message stands past the last line of it however far up the
+		// failure is. See Runner.inRunSubstitutionBody for the six rows.
+		line = len(lines)
+	case own < len(lines):
 		// A newline ends the failure's line and the reader has taken it, so
 		// the message stands one line past it. Read off the text here for
 		// the reason the word's own sentence reads it off below: it is the
 		// same end of input and there is one rule for where it is placed.
 		line++
 	}
-	if echo := r.substLevelEcho(span); echo != "" {
-		return echo, line
-	}
-	if w == nil || w != r.expandingOuterWord || span.Quoting != syntax.Unquoted ||
-		w.Start.Line != span.Pos.Line || w.Start.Col > span.Pos.Col {
+	// Every line the levels write stands at that one line, measured:
+	// `echo "$(echo "$(echo "$(for)")")"` is three `unmatched "` at `s.sh:2`
+	// and not one per level.
+	echo := r.substLevelEcho(span, lines, textBase)
+	if echo == "" {
 		return "", 0
+	}
+	return echo, line
+}
+
+// substWordSentence is the sentence a level with nothing open writes when it
+// is the outermost one: the script quoted from the start of the word that
+// holds the substitution this level was left through.
+//
+// Only for a span the word places directly, at the column the word places it —
+// which is the opener being where the entry says, and a process substitution's
+// `<(` or `>(` counting as one of them: measured 2026-09-20, `cat <(v=$(echo
+// hi; for))` on line 3 of a script is `s.sh:4: parse error near
+// `<(v=$(echo hi; for))...'` in zsh 5.9.2, quoted from the `<(`.
+//
+// An arithmetic expansion's text and a substitution's body are both re-lexed,
+// so a span *inside* one is placed from that text and not from the line —
+// which is why the entry is the one recorded at the door of the outermost
+// level rather than anything the failing span carries.
+func (r *Runner) substWordSentence(e substEntry, lines []string, textBase int) string {
+	w := e.word
+	if w == nil || w != e.outer || e.at.Quoting != syntax.Unquoted ||
+		w.Start.Line != e.at.Pos.Line || w.Start.Col > e.at.Pos.Col {
+		return ""
+	}
+	start := e.lineBase + e.fragment + int(e.at.Pos.Line) - textBase
+	if start < 1 || start > len(lines) {
+		return ""
 	}
 	row := lines[start-1]
-	from, at := int(w.Start.Col)-1, int(span.Pos.Col)-1
-	if at+2 > len(row) || row[at:at+2] != "$(" {
-		return "", 0
+	from, at := int(w.Start.Col)-1, int(e.at.Pos.Col)-1
+	if at+2 > len(row) || row[at+1] != '(' || !strings.ContainsRune("$<>", rune(row[at])) {
+		return ""
 	}
-	return Wording(r.diag().SyntaxUnexpected, `"%[1]s" unexpected`, r.diag().nearText(row[from:])) + "\n", line
+	return Wording(r.diag().SyntaxUnexpected, `"%[1]s" unexpected`, r.diag().nearText(row[from:])) + "\n"
 }
 
 // substBodyEcho cuts the echoed line back to the text the shell was reading,

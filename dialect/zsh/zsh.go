@@ -3853,6 +3853,12 @@ func Semantics() interp.Semantics {
 	// {a}>/dev/null {b}>/dev/null {c}>/dev/null` answers `11 12 13` with no
 	// coprocess running and `12 13 15` with one (#2596).
 	s.CoprocessEndPlacement = interp.CoprocEndsWhereAnyDescriptorGoes
+	// And a process substitution's far end goes there too, which is the
+	// reading that makes 11 the base rather than a number of its own:
+	// measured 2026-09-21, `echo <(true) <(true) <(true)` is `/dev/fd/11
+	// /dev/fd/12 /dev/fd/13`, and an `exec {a}</dev/null` first moves the
+	// substitution to 12.
+	s.SubstitutionEndPlacement = interp.SubstitutionEndsWhereAnyDescriptorGoes
 	// And nothing is taken back when the coprocess ends: both ends stay open
 	// and stay reachable by their letters. Measured 2026-09-12 — a `print -p`
 	// after the coprocess has gone writes into a pipe with no reader and the

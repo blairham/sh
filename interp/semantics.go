@@ -10404,6 +10404,81 @@ type Semantics struct {
 	// axis holds (#2596).
 	CoprocessEndPlacement CoprocEndPlacement
 
+	// SubstitutionEndPlacement is where in the descriptor table a process
+	// substitution's far end is parked — which is to say, the number in the
+	// `/dev/fd/N` that `<(cmd)` and `>(cmd)` expand to. It is a separate
+	// question from where a coprocess's ends go, and the four shells that
+	// have a process substitution give four different answers.
+	//
+	// Measured 2026-09-21 with `echo <(true) <(true) <(true)`, which
+	// publishes the numbers without needing a probe. ash is read through the
+	// pinned BusyBox image, not derived from dash:
+	//
+	//	bash 5.3.20    /dev/fd/63 /dev/fd/62 /dev/fd/61
+	//	bash 3.2.57    /dev/fd/63 /dev/fd/62 /dev/fd/61
+	//	zsh 5.9.2      /dev/fd/11 /dev/fd/12 /dev/fd/13
+	//	ksh93 93u+     /dev/fd/3 /dev/fd/4 /dev/fd/5
+	//	BusyBox 1.37.0 /dev/fd/64 /dev/fd/65 /dev/fd/66
+	//
+	// The four are four *rules*, and parking a descriptor in the way is what
+	// tells them apart rather than the first number doing it:
+	//
+	//	bash     counts DOWN from 63 and skips what is held: with 63 parked
+	//	         it answers `62 61`.
+	//	zsh      counts UP FROM ITS OWN ALLOCATION BASE, which is the 11
+	//	         Semantics.FirstAllocatedDescriptor already records for it —
+	//	         `exec {a}</dev/null` first and the substitution answers 12,
+	//	         so this is that allocation rather than a base of its own.
+	//	ksh93    counts UP FROM THE LOWEST NUMBER a shell is not started
+	//	         with: 3 with nothing held, `4 5` with 3 parked, `6 7` with
+	//	         3, 4 and 5 parked. That is *below* the 10 its own
+	//	         `exec {a}<` allocates from, so for ksh93 alone these are two
+	//	         different allocations rather than one.
+	//	BusyBox  counts UP FROM 64 and skips what is held — past the region
+	//	         bash descends through rather than into it: with 64 parked it
+	//	         answers `65 66`.
+	//
+	// **Two of them are conditional on the limit, and both fall back to
+	// ksh93's answer.** Measured by sweeping `ulimit -n` the same day, two
+	// substitutions in one command:
+	//
+	//	bash     `63 62` at every limit of 64 and above, including 1048576;
+	//	         `3 4` at 63 and below. So the test is whether 63 is a legal
+	//	         descriptor — the same constant and the same condition
+	//	         Semantics.CoprocessEndPlacement records, which is why the two
+	//	         axes share topOfTheDescriptorTable.
+	//	BusyBox  `64 65` at 66 and above, `3 4` at 64 and below — and at 65
+	//	         exactly, `64 3`: the first substitution takes 64 and the
+	//	         second finds nothing legal above it and falls back on its
+	//	         own. So the fallback is per substitution rather than per
+	//	         command, which is how this is implemented here.
+	//
+	// The fallback being ksh93's value rather than an invention is the reason
+	// it is a value of this axis at all, and a Runner with no GetRlimit has no
+	// limit to be asked about and takes the unbounded answer — the same
+	// reasoning Semantics.FdNumberBoundedByOpenFileLimit is read under.
+	//
+	// **There is no unanswered value.** A substitution that expanded is going
+	// to be handed a number — the path is the whole of what the construct
+	// produces — so a refusal would have nothing to attach itself to. The
+	// zero value is therefore an answer, and it is the one this shell gave in
+	// every dialect before the axis existed.
+	//
+	// unpinned dash: dash has no process substitution of any spelling.
+	// `echo <(true)` is `Syntax error: "(" unexpected` in dash 0.5.12, so the
+	// dialect never reaches this allocation and no row could object however
+	// the axis was written.
+	//
+	// It is the only column of the five that is out, and that is the finding
+	// rather than a detail. The neighboring coprocess axis is unpinned in
+	// dash *and* in ash, so the shape of this one was assumed to match and
+	// the ash row was written as unpinned before it was run. It is not:
+	// BusyBox ash has no `coproc` and no `|&` and does have `<(cmd)`, and its
+	// answer here agrees with neither bash, nor zsh, nor ksh93. The container
+	// costs one `docker run`, and deriving a column from its neighbor has
+	// been wrong in this tree before.
+	SubstitutionEndPlacement SubstEndPlacement
+
 	// ReapedCoprocessEnds is what becomes of those near ends when the
 	// coprocess itself has been reaped, which is a separate question from how
 	// a script reached them and is answered three ways by the three shells
@@ -27014,6 +27089,56 @@ const (
 func (p CoprocEndPlacement) String() string {
 	if p == CoprocEndsAtTheTopOfTheTable {
 		return "at the top of the table"
+	}
+	return "where any descriptor goes"
+}
+
+// SubstEndPlacement is where in the descriptor table a shell parks the end of
+// a process substitution's pipe that the command opens — the N of the
+// `/dev/fd/N` the word expands to. See Semantics.SubstitutionEndPlacement,
+// which holds the measurements and the reason there is no unanswered value.
+type SubstEndPlacement uint8
+
+const (
+	// SubstitutionEndsWhereAnyDescriptorGoes parks it where `exec {v}>f` would
+	// put a descriptor — the first free entry from the dialect's allocation
+	// base up.
+	//
+	// zsh 5.9.2, and the zero value because it is what this shell did in every
+	// dialect before the axis existed.
+	SubstitutionEndsWhereAnyDescriptorGoes SubstEndPlacement = iota
+
+	// SubstitutionEndsAtTheLowestFreeNumber parks it at the first free entry
+	// above the three a shell is started with, below the region a script
+	// allocates from rather than above it.
+	//
+	// ksh93 (AJM 93u+ 2012-08-01), and the answer bash falls back to where the
+	// top of the table is out of reach.
+	SubstitutionEndsAtTheLowestFreeNumber
+
+	// SubstitutionEndsAtTheTopOfTheTable parks it at the highest free entry at
+	// or below 63, counting down, so the numbers a script allocates for itself
+	// stay clear.
+	//
+	// bash 5.3.20 and bash 3.2.57, and bash invoked as sh.
+	SubstitutionEndsAtTheTopOfTheTable
+
+	// SubstitutionEndsAboveTheTopOfTheTable parks it at the first free entry
+	// at or above 64, counting up — past the region bash counts down through
+	// rather than into it.
+	//
+	// BusyBox ash 1.37.0.
+	SubstitutionEndsAboveTheTopOfTheTable
+)
+
+func (p SubstEndPlacement) String() string {
+	switch p {
+	case SubstitutionEndsAtTheLowestFreeNumber:
+		return "at the lowest free number"
+	case SubstitutionEndsAtTheTopOfTheTable:
+		return "at the top of the table"
+	case SubstitutionEndsAboveTheTopOfTheTable:
+		return "above the top of the table"
 	}
 	return "where any descriptor goes"
 }

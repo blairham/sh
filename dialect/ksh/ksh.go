@@ -3467,6 +3467,12 @@ func Semantics() interp.Semantics {
 	// exec {c}>/dev/null` answers `10 11 12` with no coprocess and `11 12 13`
 	// with one, so the coprocess is in that region and bash's is not (#2596).
 	s.CoprocessEndPlacement = interp.CoprocEndsWhereAnyDescriptorGoes
+	// A process substitution's far end does not go where any descriptor
+	// goes, and ksh93 is the only shell measured where the two differ.
+	// Measured 2026-09-21: `echo <(true) <(true) <(true)` is `/dev/fd/3
+	// /dev/fd/4 /dev/fd/5`, `4 5` with 3 parked and `6 7` with 3, 4 and 5
+	// parked — below the 10 this shell's own `exec {a}<` allocates from.
+	s.SubstitutionEndPlacement = interp.SubstitutionEndsAtTheLowestFreeNumber
 
 	// A `{name}>f` descriptor goes back with the command's other
 	// redirections, and closing through a name that holds nothing is not

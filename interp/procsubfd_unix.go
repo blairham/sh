@@ -82,14 +82,23 @@ type procSubEnds struct {
 	path  string
 }
 
-// firstProcSubFd is where the search for a number to park a substitution's end
-// on begins.
+// firstProcSubFd is the floor the search falls back to when every number the
+// dialect asked for is taken.
 //
 // Above the nine a script names by hand, which is not tidiness: the number is
 // where the table childFiles builds will place the descriptor in the command,
 // and a script's own `exec 3>out` is an entry in that same table. Two things
 // on one number is one of them lost, and which one would depend on map
 // iteration order.
+//
+// It used to be where the search *began*, in every dialect, which is what made
+// every process substitution in this shell `/dev/fd/10` whatever it was
+// imitating. Where it begins is the dialect's now — see
+// Semantics.SubstitutionEndPlacement and Runner.substEndCandidates — and one
+// of the four answers, ksh93's, is deliberately *below* this number. That is
+// not a hole in the reasoning above: substEndCandidates skips what the
+// runner's own table holds, so the collision this constant was chosen to
+// avoid is ruled out by the wish list rather than by the floor.
 const firstProcSubFd = 10
 
 // devFdDir and procFdDir are the two directories a substitution's path can be
@@ -132,7 +141,7 @@ func (r *Runner) procSubFdDir() string {
 // between the two spellings: `>(cmd)` hands the command the writing end and
 // keeps the reading one, `<(cmd)` the other way about. dir is the directory
 // the path is named after — see Runner.procSubFdDir.
-func newProcSubPipe(childWrites bool, dir string) (procSubEnds, error) {
+func newProcSubPipe(childWrites bool, dir string, want []int) (procSubEnds, error) {
 	rd, wr, err := os.Pipe()
 	if err != nil {
 		return procSubEnds{}, err
@@ -141,7 +150,7 @@ func newProcSubPipe(childWrites bool, dir string) (procSubEnds, error) {
 	if childWrites {
 		shell, child = rd, wr
 	}
-	parked, err := parkDescriptor(child, dir)
+	parked, err := parkDescriptor(child, dir, want)
 	// The original is closed either way: on success the parked duplicate is
 	// the one the path names, and on failure there is nothing to hand over.
 	_ = child.Close()
@@ -152,8 +161,24 @@ func newProcSubPipe(childWrites bool, dir string) (procSubEnds, error) {
 	return procSubEnds{shell: shell, child: parked, path: parked.Name()}, nil
 }
 
-// parkDescriptor duplicates a file onto the lowest free number at or above
-// firstProcSubFd, and names it the way the path will.
+// parkDescriptor duplicates a file onto one of the numbers want asks for, and
+// names it the way the path will.
+//
+// want is the dialect's ordered wish list — see Runner.substEndCandidates and
+// Semantics.SubstitutionEndPlacement, which is where the four shells' four
+// rules are recorded. It is a wish list rather than an instruction because
+// only the kernel knows which numbers this process actually has free:
+// F_DUPFD answers with the lowest free number *at or above* the one it is
+// given, so a number that came back different from the one asked for is a
+// number that was taken, and the duplicate is closed and the next wish tried.
+// That is also what makes this safe where dup2 would not be — dup2 onto a
+// taken number closes whatever was there, silently, and what was there could
+// be the shell's own.
+//
+// The list ends with firstProcSubFd, which is not a wish but a floor: if
+// every number the dialect wanted is taken, the substitution still needs a
+// descriptor, and the lowest free one at or above the region a script names
+// by hand is the answer every shell measured falls back to.
 //
 // F_DUPFD_CLOEXEC rather than a dup and a flag, because the pair is not atomic
 // and a fork on another goroutine between them is a descriptor leaked into a
@@ -182,7 +207,7 @@ func newProcSubPipe(childWrites bool, dir string) (procSubEnds, error) {
 // Cleared on the duplicate, which is the end nothing in this process reads or
 // writes through: the shell's own end is the pipe's *other* description and
 // keeps the mode Go gave it, so the poller is untouched.
-func parkDescriptor(f *os.File, dir string) (*os.File, error) {
+func parkDescriptor(f *os.File, dir string, want []int) (*os.File, error) {
 	conn, err := f.SyscallConn()
 	if err != nil {
 		return nil, err
@@ -190,6 +215,26 @@ func parkDescriptor(f *os.File, dir string) (*os.File, error) {
 	var parked int
 	var parkErr error
 	if cerr := conn.Control(func(fd uintptr) {
+		for _, n := range want {
+			got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, n)
+			if err != nil {
+				// A wish the kernel refuses is a wish that missed, not the
+				// end of the search. The refusal that matters is EMFILE from
+				// asking high under a low `ulimit -n`: bash's own rule takes
+				// it as a signal to stop reaching for the top of the table,
+				// and a list that gave up here would turn what every shell
+				// answers into `too many open files`.
+				continue
+			}
+			if got == n {
+				parked = got
+				return
+			}
+			// The number was taken. What came back is a working duplicate at
+			// the wrong number, so it is closed rather than kept: keeping it
+			// would leak one descriptor per wish that missed.
+			_ = syscall.Close(got)
+		}
 		parked, parkErr = fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, firstProcSubFd)
 	}); cerr != nil {
 		return nil, cerr

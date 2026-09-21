@@ -83,7 +83,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// expands, is compared against, and never starts its command. See
 	// Runner.PipesMadeForTest.
 	r.procSubHomeBox().seq.Add(1)
-	ends, err := newProcSubPipe(kind == syntax.ProcSubstOut, r.procSubFdDir())
+	ends, err := newProcSubPipe(kind == syntax.ProcSubstOut, r.procSubFdDir(), r.substEndCandidates())
 	if err != nil {
 		r.diagf("%v\n", err)
 		r.expandErr = true
@@ -1391,3 +1391,72 @@ func (r *Runner) procSubJob() *Job {
 	}
 	return job
 }
+
+// substEndCandidates is the ordered list of numbers this dialect would like
+// the far end of a process substitution parked on, best first.
+//
+// It is the whole of Semantics.SubstitutionEndPlacement's effect, and that
+// field is where the four shells' four rules are measured and written down.
+// Here they are four ways of filling one slice:
+//
+//	where any descriptor goes   up from the dialect's allocation base
+//	at the lowest free number   up from the first number above stdio
+//	at the top of the table     down from 63, then the lowest free
+//	above the top of the table  up from 64, then the lowest free
+//
+// The two that start high append the low answer behind their own, which is
+// not a tidy-up: it is what bash and BusyBox were *measured* doing when the
+// open-file limit puts their region out of reach, and for BusyBox it was
+// measured happening halfway through a command — at `ulimit -n 65` the first
+// substitution takes 64 and the second falls back to 3. A list that runs out
+// and continues into the low numbers reproduces that without a second rule.
+//
+// Numbers the runner's own table holds are skipped rather than offered and
+// rejected, because that table is the virtual one: `exec 3>out` is an entry
+// in r.fds and need not be a descriptor of this process at all, so the kernel
+// would hand this number out happily and childFiles would then have two files
+// for one entry. Which of the two survived would depend on map iteration
+// order, which is the bug firstProcSubFd was originally set to 10 to avoid.
+func (r *Runner) substEndCandidates() []int {
+	free := func(fd int) bool { _, held := r.fds[fd]; return !held }
+	up := func(from int, out []int) []int {
+		for fd := from; fd < from+substEndSearch && len(out) < substEndSearch; fd++ {
+			if free(fd) {
+				out = append(out, fd)
+			}
+		}
+		return out
+	}
+	lowest := func(out []int) []int { return up(firstExtraFd, out) }
+
+	switch r.sem().SubstitutionEndPlacement {
+	case SubstitutionEndsAtTheLowestFreeNumber:
+		return lowest(nil)
+	case SubstitutionEndsAtTheTopOfTheTable:
+		if !r.topOfTableIsReachable() {
+			return lowest(nil)
+		}
+		var out []int
+		base := r.sem().FirstAllocatedDescriptor.number()
+		for fd := topOfTheDescriptorTable; fd >= base; fd-- {
+			if free(fd) {
+				out = append(out, fd)
+			}
+		}
+		return lowest(out)
+	case SubstitutionEndsAboveTheTopOfTheTable:
+		if !r.fdWithinOpenFileLimit(topOfTheDescriptorTable + 1) {
+			return lowest(nil)
+		}
+		return lowest(up(topOfTheDescriptorTable+1, nil))
+	}
+	return up(r.sem().FirstAllocatedDescriptor.number(), nil)
+}
+
+// substEndSearch bounds how far up a wish list looks.
+//
+// A bound rather than a loop to exhaustion, because the list is built per
+// substitution and its only job is to find one free number: past a few dozen
+// misses the floor in parkDescriptor is a better answer than a longer list,
+// and every shell measured here is answering with its first or second wish.
+const substEndSearch = 64

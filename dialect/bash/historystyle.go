@@ -33,7 +33,19 @@ func HistoryStyle() repl.HistoryStyle {
 	return repl.HistoryStyle{
 		SearchPrompt:       "(reverse-i-search)`%s': ",
 		SearchFailedPrompt: "(failed reverse-i-search)`%s': ",
-		Control:            "HISTCONTROL",
-		Ignore:             "HISTIGNORE",
+		// The file's own encoding, measured 2026-09-21 on bash 5.3.20 from
+		// script files with no terminal and a scratch HOME. bash writes a
+		// `#<epoch>` line in front of each entry when it was told to record
+		// when a line ran, and leaves those lines out of the list when it
+		// reads such a file back — see EntriesMayCarryAHashTimestampLine for
+		// what counts as one and why the decision is the file's rather than
+		// each line's. Neither of the other two encodings is bash's, and the
+		// backslash one was measured in the same probe as a control: bash
+		// reading `cat <<EOF\`, `a\`, `EOF` hands back three entries, so a
+		// trailing backslash is text here and not a join (#4013).
+		EntriesMayCarryAHashTimestampLine: true,
+
+		Control: "HISTCONTROL",
+		Ignore:  "HISTIGNORE",
 	}
 }

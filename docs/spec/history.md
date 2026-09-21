@@ -658,6 +658,43 @@ moment sets `HISTSIZE` to 500 where the script has not set it and
 `HISTFILESIZE` to HISTSIZE's value where it has not set that; a HISTFILESIZE
 that is a count keeps only the newest that many lines of the file.
 
+**A `#<seconds>` line is a time bash wrote, not an entry.** A file bash wrote
+with `HISTTIMEFORMAT` set carries one in front of each command, and reading
+such a file back leaves those lines out of the list. Measured 2026-09-21 on
+bash 5.3.20, `env -i` with a scratch `HOME`, one file shape at a time through
+`history -r` (#4013):
+
+| the file | the list |
+| --- | --- |
+| `#1699999999`, `echo a`, `#1700000000`, `echo b` | `echo a`, `echo b` |
+| `echo a`, `#1700000000`, `echo b` | all three, the `#` line an entry |
+| `#x`, `echo a`, `#1700000000`, `echo b` | all four |
+| `#1`, `echo a`, `#2` | `echo a` |
+| `#1` | nothing |
+
+**The rule is decided per read, by the first line of what is being read**, and
+is not a test each line takes for itself — which is the half that keeps a
+comment somebody typed. It does not carry between reads either: reading the
+first file above and then the second, in one shell, keeps the second file's
+`#` line. And what counts as one is narrow — `#` as the first character of the
+line and a digit straight after it, so `#1abc` and `#1700000000 extra` are
+times where `#`, `#-5`, `# 1700000000`, `#comment here` and an indented
+`  #1700000000` are commands.
+
+Every route into the list reads a file the same way — `-r`, `-n`, and the read
+at the first `set -o history` — and `HISTFILESIZE` cuts the file's *physical*
+lines before the decision is taken, so a two-line tail beginning with a time
+line yields one entry. Setting `HISTTIMEFORMAT` to anything, the empty string
+included, also puts a read that would not otherwise be in this mode into it;
+that half is not implemented, because this shell has no `HISTTIMEFORMAT` and
+giving the name one effect out of three would be a knob that half works.
+
+The other shell with a text history file spells its times differently — zsh's
+`: <start>:<elapsed>;` in front of the command on the same line — and keeps a
+`#` line as an ordinary entry, measured in the same session through `fc -R`.
+ksh93 has no text encoding to ask the question of: its `$HISTFILE` is a binary
+format, and pointing it at a file of lines overwrites it.
+
 **The shell's ending appends to `$HISTFILE`** — the one it names then — what
 `history -a` would: the entries this session added that no `-a` has written,
 counted from the end of the list. A line the reader recorded and an entry `-s`

@@ -30,7 +30,11 @@ func historyFileRun(t *testing.T, src string, lines ...string) (string, string) 
 		t.Errorf("stderr %q", errs)
 	}
 	data, _ := os.ReadFile(f)
-	return out, string(data)
+	// The path goes back to `$F` on the way out, so a want can be the whole
+	// listing even where the script names the file as an operand: the list
+	// keeps the line as it was typed, and in bash's own run of the same
+	// script that line reads `$F` because bash records it before expansion.
+	return strings.ReplaceAll(out, f, "$F"), string(data)
 }
 
 func TestTurningTheListOnReadsTheHistoryFile(t *testing.T) {
@@ -212,5 +216,91 @@ func TestACommentIsLeftAsWritten(t *testing.T) {
 	out, errs, _ := historyRun(t, "set -o history\nset -H\necho a\necho ab c # !nosuch\necho a;#!!\n")
 	if wantOut := "a\nab c\na\n"; out != wantOut || errs != "" {
 		t.Errorf("out %q err %q, want %q and nothing", out, errs, wantOut)
+	}
+}
+
+// A file bash wrote with HISTTIMEFORMAT set carries a `#<seconds>` line in
+// front of each entry, and reading one back leaves those lines out (#4013).
+//
+// Measured 2026-09-21 on bash 5.3.20 with `env -i`, a scratch HOME and the
+// same files read by both shells. Every want here is the full listing bash
+// printed, because the defect is an entry *added* at the front — an assertion
+// that only looked for the commands would have passed throughout.
+func TestReadingAFileOfTimestampedEntries(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		lines []string
+		want  string
+	}{{
+		// The issue's own case, backslash lines and all: the `#` lines go and
+		// nothing else does. bash does not rejoin a continued line, which is
+		// the control that makes this about the header alone.
+		name:  "the headers go and the continuation lines stay",
+		lines: []string{"#1700000000", "echo one", `cat <<EOF\`, `a\`, "EOF", "#2", "echo two"},
+		want: "    1  history -r \"$F\"\n    2  echo one\n    3  cat <<EOF\\\n" +
+			"    4  a\\\n    5  EOF\n    6  echo two\n    7  history\n",
+	}, {
+		// The decision is the file's, taken from its first line, and is not a
+		// test each line takes for itself. A file that does not open with one
+		// keeps the `#` line it holds — which is a comment somebody typed.
+		name:  "a file that does not open with a header keeps its hash lines",
+		lines: []string{"echo one", "#1700000000", "echo two"},
+		want: "    1  history -r \"$F\"\n    2  echo one\n    3  #1700000000\n" +
+			"    4  echo two\n    5  history\n",
+	}, {
+		// What counts as a header is narrow: `#` first and a digit after it.
+		name:  "a line that only resembles a header is an entry",
+		lines: []string{"#1", "#comment here", "#", "#-5", "# 1700000000", "echo one"},
+		want: "    1  history -r \"$F\"\n    2  #comment here\n    3  #\n    4  #-5\n" +
+			"    5  # 1700000000\n    6  echo one\n    7  history\n",
+	}, {
+		// A header with no command after it is a file cut between the halves
+		// of an entry, and goes with the rest.
+		name:  "a dangling header at the end is dropped",
+		lines: []string{"#1", "echo one", "#2"},
+		want:  "    1  history -r \"$F\"\n    2  echo one\n    3  history\n",
+	}, {
+		name:  "a file of nothing but headers reads as nothing",
+		lines: []string{"#1"},
+		want:  "    1  history -r \"$F\"\n    2  history\n", // nothing but the builtin's own line
+	}} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := historyFileRun(t, "F=$F\nset -o history\nhistory -r \"$F\"\nhistory\n", c.lines...)
+			if out != c.want {
+				t.Errorf("listing %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// Every route a file reaches the list by reads it the same way — `-r`, `-n`,
+// and the read a script's first `set -o history` does — because they go
+// through one decoder rather than each holding the rule.
+//
+// The mode is per read and does not carry between reads, measured: reading a
+// header file and then a file without one keeps the second file's `#` line.
+func TestEveryRouteIntoTheListReadsTheHeadersAlike(t *testing.T) {
+	seed := []string{"#1", "echo one", "#2", "echo two"}
+	for _, c := range []struct{ name, src, want string }{{
+		name: "the read at the first set -o history",
+		src:  "HISTFILE=$F\nset -o history\nhistory\n",
+		want: "    1  echo one\n    2  echo two\n    3  history\n",
+	}, {
+		name: "the -n letter",
+		src:  "F=$F\nset -o history\nhistory -n \"$F\"\nhistory\n",
+		want: "    1  history -n \"$F\"\n    2  echo one\n    3  echo two\n    4  history\n",
+	}, {
+		// HISTFILESIZE keeps the newest lines of the *file*, and the decision
+		// is then taken on what is left: the last two lines here open with a
+		// header, so one entry survives.
+		name: "what HISTFILESIZE left of the file",
+		src:  "HISTFILE=$F\nHISTFILESIZE=2\nset -o history\nhistory\n",
+		want: "    1  echo two\n    2  history\n",
+	}} {
+		t.Run(c.name, func(t *testing.T) {
+			if out, _ := historyFileRun(t, c.src, seed...); out != c.want {
+				t.Errorf("listing %q, want %q", out, c.want)
+			}
+		})
 	}
 }

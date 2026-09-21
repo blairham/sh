@@ -71,17 +71,58 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			},
 		},
 		{
-			// Every other construct, where all five name the closer. `if` is
-			// the one the three suite files grade, because it is the shape
-			// that moves in dash and BusyBox as well as in ksh93.
+			// Every other construct, where four of the five name the closer.
+			// `if` is the one the three suite files grade, because it is the
+			// shape that moves in dash and BusyBox as well as in ksh93.
+			//
+			// **zsh is the exception and it is measured rather than
+			// inherited.** A body that runs out with an `if` or `elif`
+			// condition still open is the one shape that shell does not
+			// answer with the closer: it names the last token it read and
+			// follows with a sentence about the substitution. This row read
+			// `` `)' `` until then, which was never what zsh writes (#3961).
+			// See Diagnostics.SubstitutionParseFailureSentence.
 			body: "if",
 			want: map[string]string{
-				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
-				"zsh":   "zsh:2: parse error near `)'\n",
+				"bash": "bash: line 2: syntax error near unexpected token `)'\n",
+				"zsh": "zsh:2: parse error near `if'\n" +
+					"zsh:2: parse error in command substitution\n",
 				"ksh":   "ksh: line 2: syntax error at line 2: `)' unexpected\n",
 				"dash":  "dash: 2: Syntax error: \")\" unexpected\n",
 				"ash":   "ash: syntax error: unexpected \")\"\n",
 				"posix": "sh: \")\" unexpected\n",
+			},
+		},
+		{
+			// A condition that has been *read* and still has no `then`,
+			// which is the same shape one token on and the row that says the
+			// rule is about the clause rather than about the keyword.
+			body: "if true",
+			want: map[string]string{
+				"zsh": "zsh:2: parse error near `true'\n" +
+					"zsh:2: parse error in command substitution\n",
+			},
+		},
+		{
+			// And the pair one token apart that bounds it: `elif` is a
+			// condition and `else` is not, so the first takes the sentence
+			// and the second the closer. Measured 2026-09-20; a rule keyed
+			// on the keyword that opened the construct gets both wrong.
+			body: "if true; then :; elif",
+			want: map[string]string{
+				"zsh": "zsh:2: parse error near `elif'\n" +
+					"zsh:2: parse error in command substitution\n",
+			},
+		},
+		{
+			body: "if true; then :; else",
+			want: map[string]string{
+				// The closer, and the quote that follows it in the real
+				// shell is absent here for the reason every other row's is:
+				// this harness hands the runner no program text. What the
+				// row pins is that the *first* message is the closer, which
+				// is the half that moves between an `elif` and an `else`.
+				"zsh": "zsh:2: parse error near `)'\n",
 			},
 		},
 		{
@@ -96,6 +137,16 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			},
 		},
 		{
+			// zsh's cell here is **this shell's answer and not that shell's**,
+			// and it is left standing with the divergence named rather than
+			// quietly asserted: measured 2026-09-20, zsh 5.9.2 writes
+			// `s.sh: parse error near `)'` with **no line at all** — the one
+			// failure it locates by name alone, which is
+			// Diagnostics.MissingFuncBodyOmitsTheLine — and then places the
+			// quote at line 1 of a body refused on line 2. The first half is
+			// modeled and does not reach this route; the second is a
+			// numbering nothing in this tree explains. Both are open in
+			// #3961.
 			body: "f()",
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
@@ -198,7 +249,15 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 //
 // bash follows its sentence with the body quoted back — “ `echo hi; for' “ —
 // and that needs no program text, because the older spelling's quote is the
-// body's own (#3331).
+// body's own (#3331). zsh follows its own with a sentence about the
+// substitution rather than a quote of anything, and it does so for **every**
+// construct in this spelling: measured 2026-09-20, `for`, `if`, `case`, `{`
+// and `do` all write `:2: parse error near `<token>'` and then
+// `:2: parse error in command substitution`, where the parenthesised
+// spelling of the first four writes the quote (#3961). The row read one line
+// here until that was written, which is the first message alone and is what
+// this row is about — the second is asserted with it so that neither can
+// move unnoticed.
 //
 // The row is not decoration: appending a backquote to the body instead would
 // have changed every one of these, and appending the parenthesis to a body
@@ -208,7 +267,8 @@ func TestABackquotedRefusalIsLeftAtItsOwnToken(t *testing.T) {
 	for preset, want := range map[string]string{
 		"bash": "bash: command substitution: line 2: syntax error near unexpected token `newline'\n" +
 			"bash: command substitution: line 2: `echo hi; for'\n",
-		"zsh": "zsh:2: parse error near `for'\n",
+		"zsh": "zsh:2: parse error near `for'\n" +
+			"zsh:2: parse error in command substitution\n",
 		"ksh": "ksh: line 2: syntax error at line 2: `for' unmatched\n",
 		// The **body's** line and not the script's, which is this shell's own
 		// pair of answers for the two spellings: measured 2026-09-18 from a

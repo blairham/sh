@@ -4554,6 +4554,7 @@ func Diagnostics() interp.Diagnostics {
 		// And the same cut on the second message a substitution body refused
 		// at expansion time is given — see the field.
 		SubstitutionParseFailureQuotesTheWord: true,
+		SubstitutionParseFailureSentence:      "parse error in command substitution",
 		// The word again, the same as for `$(` — and for `$[` too, which
 		// this shell has and refuses the same way.
 		UnmatchedArithSubst: "parse error near `%[3]s'",

@@ -4185,6 +4185,38 @@ type Diagnostics struct {
 	// Runner.substWordEcho.
 	SubstitutionParseFailureQuotesTheWord bool
 
+	// SubstitutionParseFailureSentence is the second message where the
+	// dialect writes a sentence about the *substitution* in place of the
+	// quote SubstitutionParseFailureQuotesTheWord writes — zsh's
+	// `parse error in command substitution`.
+	//
+	// It is written on two occasions, and the split is measured rather than
+	// derived. Measured 2026-09-20 on zsh 5.9.2 from a script file, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C zsh -f s.sh` with standard input on the
+	// null device, each body on line 2 of a script:
+	//
+	//   - **The older spelling, always.** `` v=`echo hi; for` `` and
+	//     `` v=`echo hi; if` `` both write `:2: parse error near `<token>'`
+	//     and then this sentence, where the parenthesised spelling of the
+	//     first writes the quote.
+	//   - **The parenthesised spelling where the body ran out with an `if`
+	//     or `elif` condition still open.** Nine bodies write it — `if`,
+	//     `if true`, `if true;`, `if echo x`, `if if`, `! if`, `time if`,
+	//     `[[ 1 ]] && if`, `if true; then :; fi; if` — and
+	//     `if true; then :; elif` is the tenth. One token further on,
+	//     `if true; then :; else` writes the quote, and so do `if true; then`,
+	//     `if for` and `if { :`. That pair one token apart is what makes it a
+	//     rule rather than a list of keywords.
+	//
+	// Both messages stand on the failure's own line where this is written,
+	// and the quote stands on the line after it — see Runner.substWordEcho.
+	//
+	// The first message moves with it: a body that ran out inside a
+	// condition names the last token it read, where every other body's
+	// refusal is re-read with the parenthesis that closed it and names that.
+	// See Runner.substParseErrorAtItsCloser.
+	SubstitutionParseFailureSentence string
+
 	// ScriptNotFound is what a shell says when the script operand names
 	// nothing at all. Two verbs, positional because the shells order them
 	// differently and two do not use the second: %[1]s is the path as the

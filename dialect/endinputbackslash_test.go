@@ -172,7 +172,12 @@ func TestAnUnbalancedNestedBackquoteNamesTheBackquote(t *testing.T) {
 		status     int
 	}{
 		{"bash", "A\nbash: command substitution: line 1: unexpected EOF while looking for matching ``'\n\nB\n", 0},
-		{"zsh", "A\nzsh:1: unmatched `\n", 1},
+		// zsh follows it with a sentence about the substitution, which it
+		// writes for **every** construct in the older spelling — measured
+		// 2026-09-20 under `-c` and from a script file alike, and the row
+		// carried the first line alone until then (#3961). See
+		// Diagnostics.SubstitutionParseFailureSentence.
+		{"zsh", "A\nzsh:1: unmatched `\nzsh:1: parse error in command substitution\n", 1},
 		{"ksh", "A\nksh: syntax error at line 1: ``' unmatched\n", 3},
 		{"dash", "dash: 1: Syntax error: EOF in backquote substitution\n", 2},
 	} {

@@ -43,7 +43,8 @@ func TestABackquotedRefusalIsPlacedAtItsFailuresLine(t *testing.T) {
 			want: map[string]string{
 				"bash": "bash: command substitution: line 4: syntax error near unexpected token `newline'\n" +
 					"bash: command substitution: line 4: `for'\n",
-				"zsh":   "zsh:3: parse error near `for'\n",
+				"zsh": "zsh:3: parse error near `for'\n" +
+					"zsh:2: parse error in command substitution\n",
 				"ksh":   "ksh: line 2: syntax error at line 3: `for' unmatched\n",
 				"dash":  "dash: 2: Syntax error: Bad for loop variable\n",
 				"ash":   "ash: syntax error: bad for loop variable\n",
@@ -57,7 +58,8 @@ func TestABackquotedRefusalIsPlacedAtItsFailuresLine(t *testing.T) {
 			want: map[string]string{
 				"bash": "bash: command substitution: line 3: syntax error near unexpected token `newline'\n" +
 					"bash: command substitution: line 3: `for'\n",
-				"zsh":   "zsh:3: parse error near `for'\n",
+				"zsh": "zsh:3: parse error near `for'\n" +
+					"zsh:2: parse error in command substitution\n",
 				"ksh":   "ksh: line 2: syntax error at line 3: `for' unmatched\n",
 				"dash":  "dash: 2: Syntax error: Bad for loop variable\n",
 				"ash":   "ash: syntax error: bad for loop variable\n",
@@ -73,7 +75,8 @@ func TestABackquotedRefusalIsPlacedAtItsFailuresLine(t *testing.T) {
 			want: map[string]string{
 				"bash": "bash: command substitution: line 5: syntax error near unexpected token `newline'\n" +
 					"bash: command substitution: line 5: `for'\n",
-				"zsh":   "zsh:4: parse error near `\\n'\n",
+				"zsh": "zsh:4: parse error near `\\n'\n" +
+					"zsh:2: parse error in command substitution\n",
 				"ksh":   "ksh: line 2: syntax error at line 4: `newline' unexpected\n",
 				"dash":  "dash: 3: Syntax error: Bad for loop variable\n",
 				"ash":   "ash: syntax error: bad for loop variable\n",

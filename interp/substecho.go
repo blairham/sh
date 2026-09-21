@@ -146,6 +146,25 @@ func (r *Runner) substFailureAtItsLine(span syntax.Span, body string, failure er
 // same refusal in the body's own.
 func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure error, failureBase int) (string, int) {
 	d := r.diag()
+	// The sentence about the substitution, where the dialect writes one in
+	// place of the quote. See Diagnostics.SubstitutionParseFailureSentence
+	// for the rows and for the pair one token apart that separates the
+	// second occasion from the quote.
+	//
+	// Before the kind is asked, and that is the point of it: every row it
+	// covers is an input that **ran out**, where the quote below is written
+	// only for a token the grammar did not want.
+	//
+	// It stands at the line the **substitution opened on** and not at the
+	// failure's, which is the one thing about it a one-line body cannot
+	// show. Measured 2026-09-20 on zsh 5.9.2 from script files whose line 2
+	// opens the substitution: `` v=`echo hi ⏎ for` `` is `:3:` and then
+	// `:2:`, a three-line backquoted body failing on its second is `:4:`
+	// then `:2:`, and `v=$(echo hi ⏎ echo b ⏎ if)` is `:4:` then `:2:`.
+	if d.SubstitutionParseFailureSentence != "" && (span.Backquoted || ranOutInACondition(raw)) {
+		return Wording(d.SubstitutionParseFailureSentence,
+			"parse error in command substitution") + "\n", failureBase + 1
+	}
 	var se *syntax.Error
 	if !errors.As(failure, &se) || se.Kind != syntax.ErrUnexpected {
 		return "", 0

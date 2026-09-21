@@ -95,6 +95,45 @@ type HistoryStyle struct {
 	// substrate could hold. It is here for the reason SearchPrompt is.
 	EntriesMayCarryATimestampHeader bool
 
+	// EntriesMayCarryAHashTimestampLine is that other spelling: a whole
+	// physical line of `#` and digits *before* the command, which is what
+	// bash writes when it was told to record when each line ran, and what it
+	// leaves out of the list when it reads one back.
+	//
+	// Measured 2026-09-21, bash 5.3.20, `env -i` with a scratch HOME, one
+	// file shape at a time read by `history -r` and listed with `history`.
+	// The fact worth stating is that the rule is **decided per read, by the
+	// first line of what is being read**, and is not a line-by-line test:
+	//
+	//	#1699999999 / echo a / #1700000000 / echo b     echo a, echo b
+	//	echo a / #1700000000 / echo b                   all three, the
+	//	                                                `#` line an entry
+	//	#x / echo a / #1700000000 / echo b              all four
+	//
+	// and it does not carry between reads — reading the first file and then
+	// the second in one shell keeps the second file's `#` line. So a file
+	// that opens with one of these is a file of them, and a file that does
+	// not is a file where `#` is the first character of a command somebody
+	// typed. Reading it line by line would eat that command.
+	//
+	// What counts as one is narrow, and every part of it was measured: the
+	// `#` is the first character of the line — `  #1700000000` is a command —
+	// and the character after it is a digit. `#1abc` and `#1700000000 extra`
+	// are headers; `#`, `#-5`, `# 1700000000` and `#comment here` are not.
+	//
+	// A dangling one at the end of a header file, with no command after it,
+	// is dropped with the rest: `#1 / echo a / #2` is one entry.
+	//
+	// bash reads a header file this way whether or not HISTTIMEFORMAT is
+	// set — measured with it unset, and with `unset HISTTIMEFORMAT` — and
+	// setting HISTTIMEFORMAT to anything, the empty string included, *also*
+	// puts a read that would not otherwise be in this mode into it. That
+	// second half is not implemented, because this shell has no
+	// HISTTIMEFORMAT at all and giving the name one effect out of three is
+	// the half-implemented knob the ksh dialect's HistoryStyle argues
+	// against. The file's own shape is the whole of what is read here.
+	EntriesMayCarryAHashTimestampLine bool
+
 	// Control names the variable holding a colon-separated list of what not
 	// to record — `ignorespace`, `ignoredups`, `ignoreboth`. bash calls it
 	// HISTCONTROL. zsh spells the same two rules as options rather than as a

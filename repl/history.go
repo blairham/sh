@@ -73,6 +73,38 @@ type historyFile struct {
 type historyEncoding struct {
 	continuesOnABackslash bool
 	mayCarryATimestamp    bool
+	mayCarryAHashLine     bool
+}
+
+// historyEncodingFrom reads the encoding off the style a dialect stated.
+//
+// One place rather than one per reader. A history file is read by more than
+// one thing in this repository — this package reads the session's, and a
+// dialect's own `history -r` and `fc -R` read a script's — and the encoding is
+// a property of the *file*, so a reader that answered the question for itself
+// would be a second answer to it.
+func historyEncodingFrom(style HistoryStyle) historyEncoding {
+	return historyEncoding{
+		continuesOnABackslash: style.EntriesContinueOnABackslash,
+		mayCarryATimestamp:    style.EntriesMayCarryATimestampHeader,
+		mayCarryAHashLine:     style.EntriesMayCarryAHashTimestampLine,
+	}
+}
+
+// HistoryEntries turns a history file's physical lines into the entries it
+// holds, under the encoding the dialect stated.
+//
+// The public half of the decoder, for a front end or a dialect that reads a
+// history file of its own — `history -r`, `history -n`, `fc -R`, and the read
+// a script's first `set -o history` does. They pass the same HistoryStyle the
+// session is built from, so a file this shell's prompt can read is a file its
+// builtins read the same way, and an encoding learned for one is not a rule
+// the other is missing.
+//
+// Blank entries are left in: what to do with one is the caller's, and the
+// session drops them while a script's list keeps the shape of its file.
+func HistoryEntries(style HistoryStyle, lines []string) []string {
+	return decodeEntries(lines, historyEncodingFrom(style))
 }
 
 // historyFrom reads the settings a session should use.
@@ -173,7 +205,17 @@ func decodeEntries(lines []string, enc historyEncoding) []string {
 	var out []string
 	var held strings.Builder
 	continuing := false
+	// Whether this read is one of the files that puts its times on lines of
+	// their own, which is decided once by the first line and not per line.
+	// See EntriesMayCarryAHashTimestampLine, where the measurement is.
+	hashed := enc.mayCarryAHashLine && len(lines) > 0 && isHashTimestampLine(lines[0])
 	for _, line := range lines {
+		if hashed && isHashTimestampLine(line) {
+			// The header is not part of any entry and there is nothing here
+			// that keeps a time, so it goes. A dangling one at the end of the
+			// file goes with the rest.
+			continue
+		}
 		if enc.continuesOnABackslash && strings.HasSuffix(line, `\`) {
 			// The backslash is the mark and not part of the command: what was
 			// typed had a newline there.
@@ -225,6 +267,17 @@ func withoutTimestamp(entry string, enc historyEncoding) string {
 		return entry
 	}
 	return command
+}
+
+// isHashTimestampLine reports whether a physical line is one of the `#` time
+// lines, which is `#` as the first character and a digit straight after it.
+//
+// Narrow on purpose, and measured that way: `#1abc` is one and `#-5`, `#`,
+// `# 1700000000`, `#comment here` and an indented `  #1700000000` are not. A
+// wider test would eat a comment somebody typed at a prompt.
+func isHashTimestampLine(line string) bool {
+	rest, ok := strings.CutPrefix(line, "#")
+	return ok && rest != "" && rest[0] >= '0' && rest[0] <= '9'
 }
 
 // allDigits reports whether s is a run of at least one digit. A header with an

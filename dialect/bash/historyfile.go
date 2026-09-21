@@ -67,9 +67,7 @@ func historyStartFile(r *interp.Runner) {
 	if keep, ok := historyFileSize(r); ok && keep < len(lines) {
 		lines = lines[len(lines)-keep:]
 	}
-	for _, line := range lines {
-		historyLoad(r, line)
-	}
+	historyLoadLines(r, lines)
 	r.SetAssocElement(historyReadAt, shellPath(r, name), strconv.Itoa(read))
 }
 

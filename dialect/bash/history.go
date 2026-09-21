@@ -435,9 +435,7 @@ func historyFile(r *interp.Runner, letter byte, rest []string) int {
 		if !ok {
 			return 1
 		}
-		for _, line := range lines {
-			historyLoad(r, line)
-		}
+		historyLoadLines(r, lines)
 		return 0
 	default: // 'n'
 		lines, ok := historyReadFile(r, name, false)
@@ -448,9 +446,7 @@ func historyFile(r *interp.Runner, letter byte, rest []string) int {
 		if at > len(lines) {
 			at = len(lines)
 		}
-		for _, line := range lines[at:] {
-			historyLoad(r, line)
-		}
+		historyLoadLines(r, lines[at:])
 		r.SetAssocElement(historyReadAt, shellPath(r, name), strconv.Itoa(len(lines)))
 		return 0
 	}
@@ -553,6 +549,25 @@ func historyAdd(r *interp.Runner, line string) {
 // not counted.
 func historyLoad(r *interp.Runner, line string) {
 	historyAppend(r, line, false)
+}
+
+// historyLoadLines is a file's physical lines becoming entries, which is not
+// one for one: a `#<epoch>` line is a time bash wrote and not a command
+// anybody typed, and it is left out of the list (#4013).
+//
+// The decoding is `repl.HistoryEntries` against this dialect's own
+// HistoryStyle — the same call the session's reader makes, against the same
+// style — rather than a rule spelled out here. The two readers were the thing
+// to be careful about: a script's list and a prompt's come off one file, and
+// a `#` rule that only one of them knew would be the next helper that omits
+// the other's fix.
+//
+// Every route a file reaches the list by goes through here: `-r`, `-n`, and
+// the read a script's first `set -o history` does.
+func historyLoadLines(r *interp.Runner, lines []string) {
+	for _, entry := range repl.HistoryEntries(HistoryStyle(), lines) {
+		historyLoad(r, entry)
+	}
 }
 
 // historyAppend puts one entry at the end of the list, keeping no more than

@@ -21,6 +21,7 @@ var (
 	continued   = historyEncoding{continuesOnABackslash: true}
 	stampedOnly = historyEncoding{mayCarryATimestamp: true}
 	zshLikeFile = historyEncoding{continuesOnABackslash: true, mayCarryATimestamp: true}
+	hashLines   = historyEncoding{mayCarryAHashLine: true}
 )
 
 func TestDecodingAHistoryFile(t *testing.T) {
@@ -119,6 +120,51 @@ func TestDecodingAHistoryFile(t *testing.T) {
 			[]string{`echo trailing\`, "echo next"},
 			[]string{`echo trailing\`, "echo next"},
 		},
+		{
+			// The third encoding: the time on a line of its own in front of
+			// the command. The file opens with one, so the file is one of
+			// those, and every one of them goes.
+			"a file of hash time lines keeps only the commands",
+			hashLines,
+			[]string{"#1699999999", "echo one", "#1700000000", "echo two"},
+			[]string{"echo one", "echo two"},
+		},
+		{
+			// The decision is the file's and not each line's, which is the
+			// half that keeps a typed comment. This file does not open with a
+			// time line, so the one in the middle is a command.
+			"a hash line in a file that does not open with one is a command",
+			hashLines,
+			[]string{"echo one", "#1700000000", "echo two"},
+			[]string{"echo one", "#1700000000", "echo two"},
+		},
+		{
+			// What counts as one is narrow, and each of these fails a
+			// different part of it: the character after the `#` is not a
+			// digit, there is nothing after it at all, a space intervenes, and
+			// the `#` is not the first character. The file opens with a real
+			// one, so the mode is on and these are still commands.
+			"a line that resembles a hash time line is left alone",
+			hashLines,
+			[]string{"#1", "#comment here", "#", "#-5", "# 1700000000", "  #1700000000"},
+			[]string{"#comment here", "#", "#-5", "# 1700000000", "  #1700000000"},
+		},
+		{
+			// A time line with no command after it — a file cut between the
+			// two halves of an entry — goes with the rest rather than becoming
+			// an entry of its own.
+			"a dangling time line at the end is dropped",
+			hashLines,
+			[]string{"#1", "echo one", "#2"},
+			[]string{"echo one"},
+		},
+		{
+			// And a file of nothing but time lines holds no entries.
+			"a file of only time lines is empty",
+			hashLines,
+			[]string{"#1"},
+			nil,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := decodeEntries(tc.in, tc.enc)
@@ -142,6 +188,49 @@ func TestEachEncodingAnswerMovesOnItsOwn(t *testing.T) {
 	joined := []string{`echo one\`, "two"}
 	if got := decodeEntries(joined, stampedOnly); !slices.Equal(got, joined) {
 		t.Errorf("decoded %q with no continuation answer, want it left alone", got)
+	}
+	// The third answer likewise: a file of `#` time lines is a file of
+	// commands beginning with `#` to anything that was not told otherwise,
+	// and the other two answers do not imply it.
+	hashed := []string{"#100", "echo one"}
+	if got := decodeEntries(hashed, zshLikeFile); !slices.Equal(got, hashed) {
+		t.Errorf("decoded %q with no hash answer, want it left alone", got)
+	}
+	if got, want := decodeEntries(hashed, hashLines), []string{"echo one"}; !slices.Equal(got, want) {
+		t.Errorf("decoded %q, want %q", got, want)
+	}
+}
+
+// The encoding a reader uses comes off the style the dialect stated, and
+// every reader asks the same question of the same value.
+//
+// This is the whole of what keeps a script's `history -r` and the session's
+// own load from drifting: a rule added to one of them and not the other is
+// the shape this repository keeps rediscovering, so there is one decoder and
+// the fact lives on HistoryStyle rather than inside either caller.
+func TestTheEncodingComesOffTheStatedStyle(t *testing.T) {
+	var none HistoryStyle
+	if got := historyEncodingFrom(none); got != (historyEncoding{}) {
+		t.Errorf("a style that said nothing gave %+v, want the zero encoding", got)
+	}
+	all := HistoryStyle{
+		EntriesContinueOnABackslash:       true,
+		EntriesMayCarryATimestampHeader:   true,
+		EntriesMayCarryAHashTimestampLine: true,
+	}
+	want := historyEncoding{continuesOnABackslash: true, mayCarryATimestamp: true, mayCarryAHashLine: true}
+	if got := historyEncodingFrom(all); got != want {
+		t.Errorf("historyEncodingFrom = %+v, want %+v", got, want)
+	}
+	// And the exported decoder is that construction and the same decode, so a
+	// dialect reading a file of its own gets the session's answer.
+	lines := []string{"#100", "echo one"}
+	got := HistoryEntries(HistoryStyle{EntriesMayCarryAHashTimestampLine: true}, lines)
+	if !slices.Equal(got, []string{"echo one"}) {
+		t.Errorf("HistoryEntries = %q, want [echo one]", got)
+	}
+	if got := HistoryEntries(none, lines); !slices.Equal(got, lines) {
+		t.Errorf("HistoryEntries with a silent style = %q, want %q", got, lines)
 	}
 }
 

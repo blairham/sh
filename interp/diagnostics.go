@@ -4780,9 +4780,17 @@ type Diagnostics struct {
 	// operator that was waiting, and %[4]d the line.
 	//
 	// Empty means the dialect says what it says about any token the grammar
-	// did not want, which is three of the four: `\`(' unexpected`, with
-	// nothing about the condition. bash is the exception and words it as a
-	// statement about the operator rather than about the token.
+	// did not want — `\`(' unexpected`, with nothing about the condition.
+	// bash is the exception and words it as a statement about the operator
+	// rather than about the token.
+	//
+	// BusyBox ash is outside the question rather than inside it with the
+	// group, which is what the count here used to hide: `[[` is a builtin
+	// there rather than a keyword — see
+	// Semantics.UnknownConditionOptionIsAStatus — so nothing is parsing a
+	// condition to complain about. Measured 2026-09-21 in the pinned image,
+	// `[[ p q ]]` is `q: unknown operand` raised at the run and `[[ -n ]]`
+	// is taken in silence.
 	CondOperand string
 
 	// ConditionExpected is what one dialect says about a `[[ ]]` whose words
@@ -4825,8 +4833,11 @@ type Diagnostics struct {
 	// and three-word groups their words say they are. `[[ ( p q r ) ]]` is
 	// the same again inside the parentheses.
 	//
-	// Empty is the other three columns, which name the token the parser
-	// stopped on and say nothing about conditions (#2846).
+	// Empty is bash and ksh93, which name the token the parser stopped on and
+	// say nothing about conditions — and BusyBox ash, which has no parser to
+	// stop here at all, `[[` being a builtin there: `[[ p q ]]` is
+	// `q: unknown operand` at the run, measured 2026-09-21 in the pinned
+	// image (#2846).
 	ConditionExpected string
 
 	// ConditionExpectedPrefixed is the other of that pair — the same
@@ -7522,7 +7533,7 @@ const (
 	// reports the argument count when the expression runs out with words
 	// left over: bash 5.3, and the substrate's own. It is the answer that
 	// hides which word was the problem, and it is bash's, so it must not be
-	// swept up by a fix aimed at the other three.
+	// swept up by a fix aimed at the other three answers.
 	TestUnknownOperatorCounted TestUnknownOperatorReport = iota
 	// TestUnknownOperatorLeavesAnOperand also declines to read the word as
 	// an operator, but complains about the *primary* rather than the count:

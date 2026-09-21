@@ -1613,7 +1613,13 @@ func Semantics() interp.Semantics {
 	s.UnsetFunctionChecksTheName = interp.No
 	s.UnsetFunctionReportsMissing = interp.No
 	s.UnsetReachesTheFunctionTable = interp.No
-	s.StdinProgramReadInBlocks = false
+	// A program on standard input is read as much at a time as the descriptor
+	// will give, exactly as dash reads one. Measured 2026-09-21 in the pinned
+	// image: `printf 'read x\necho "[$x]"\nDATA\n' | ash` prints `[]` and
+	// then fails to find `DATA` as a command, where bash, ksh93 and zsh hand
+	// the second line to `read` and never parse it. This had been dash's
+	// neighbor holding bash's answer, and nothing exercised it (#3228).
+	s.StdinProgramReadInBlocks = true
 	s.StdinOptionNamesTheOperands = interp.No
 	s.LoneDashIsAnOption = interp.No
 	// A lone `+` is a name to `export`: `export +` is `+: bad variable name`.

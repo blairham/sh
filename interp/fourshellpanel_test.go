@@ -348,12 +348,61 @@ import (
 // column that agreed, and rolling it into the count is how a four-shell
 // sentence gets written in the first place.
 //
+// # The tenth pass, which takes every budget to zero
+//
+// 2026-09-21. Three lines of semantics.go and four across the two files were
+// what was left, and they close the campaign #3228 opened at 115. Every
+// remaining line is one of the two shapes the last few passes have been
+// finding, and the split between them is the whole of what this section has
+// to say:
+//
+//   - **Five were measured, and one of them found a wrong value.**
+//     StdinProgramReadInBlocks said `dash alone` and the panel was `four to
+//     one`. BusyBox ash reads a piped program in blocks exactly as dash
+//     does — `printf 'read x\necho "[$x]"\nDATA\n' | ash` prints `[]` and
+//     then cannot find `DATA` — and **dialect/ash held bash's answer**, so
+//     this is the campaign's second live defect and the first on this file.
+//     The other four are corrected records: FatalErrorUnderErrexitSkipsTheExitTrap
+//     runs the trap in ash too, MultibyteEncodingIsHonored is six columns
+//     against one rather than four (ash counts characters under
+//     `LC_ALL=C.UTF-8`, the UTF-8 locale musl has),
+//     EndedJobIsListedAsRunningWithoutTheMonitor has ash writing its `Done`
+//     row with the rest, and PrintfHexFloatDefaultIsTwelveDigits is reached
+//     by three dialects and not by four — zsh and ash have no `%a` at all,
+//     so the count of the ones that never reach it was doubled.
+//
+//   - **Four were counting something other than columns**, and the fix is a
+//     noun rather than a measurement: three refusals of an enum, three
+//     answers of another, and two `[[ ]]` sentences whose "three of the
+//     four" left BusyBox ash inside a group it is not in — `[[` is a
+//     builtin there rather than a keyword, so `[[ p q ]]` is
+//     `q: unknown operand` raised at the run and there is no parser to stop.
+//     A column that reaches the question by another road is not a column
+//     that agreed, which is the same rule JobResumedInForeground drew above
+//     for a column that could not be asked.
+//
+// Two more were corrected on the way past without being counted by the
+// ratchet, because their nouns already exempted them and they were wrong
+// anyway: InteractiveMonitorNeedsATerminal's *first* table was a dialect
+// short in the direction opposite to the one the sixth pass fixed — ash puts
+// `m` in `$-` with a terminal, and the campaign had only ever read the
+// no-terminal half — and LoginProfileWhenNonInteractive's `dash, ksh93 and
+// zsh read theirs` left out an ash that reads `~/.profile` on both routes.
+// The file header's own `measured across four shells` was the oldest of the
+// lot.
+//
+// The budgets are zero and the ratchet now bans the phrase outright in these
+// three files. That is the right end state rather than an accident of
+// arithmetic: a new four-shell sentence in an axis doc has no honest form,
+// since the honest ones all name which four and are exempted by
+// fourShellSubset.
+//
 // Per file rather than one total, because a single number lets a file that
 // gets worse hide behind a file that gets better — and these three are worked
 // on separately, so that trade would be made by accident rather than chosen.
 var fourShellPhraseBudget = map[string]int{
-	"semantics.go":   3,
-	"diagnostics.go": 3,
+	"semantics.go":   0,
+	"diagnostics.go": 0,
 	filepath.Join("..", "syntax", "dialect.go"): 0,
 }
 

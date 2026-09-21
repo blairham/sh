@@ -602,13 +602,15 @@ func TestDollarSingleIsAbsent(t *testing.T) {
 	}
 }
 
-// The one shell in the panel that takes a program arriving on standard input
-// in blocks rather than a line at a time, so that a `read` in the script finds
-// end of input where the other three find the next line of the input. The
-// difference is not `read`'s: it is who holds the bytes.
+// Takes a program arriving on standard input in blocks rather than a line at
+// a time, so that a `read` in the script finds end of input where bash, ksh93
+// and zsh find the next line of the input. The difference is not `read`'s: it
+// is who holds the bytes.
 //
-// Asserted against the other three by their absence — this is the only preset
-// that sets it, and the substrate's own answer is the line.
+// BusyBox ash is the second of the two and was measured onto this side on
+// 2026-09-21 (#3228), so the panel is three to two rather than four to one —
+// see TestAshTakesAProgramOnStandardInputInBlocks. The substrate's own answer
+// is still the line, which is what is asserted here beside it.
 func TestDashTakesAProgramOnStandardInputInBlocks(t *testing.T) {
 	if !dash.Semantics().StdinProgramReadInBlocks {
 		t.Error("StdinProgramReadInBlocks = false, want true")

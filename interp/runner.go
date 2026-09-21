@@ -885,6 +885,11 @@ type Runner struct {
 	// happened. See SetAssignmentAction.
 	assignmentActions map[string]func(*Runner, string)
 
+	// unsetActions is the other half of that message, for a name whose state
+	// outside the variable table outlives the name itself. See
+	// SetUnsetAction.
+	unsetActions map[string]func(*Runner)
+
 	// dynamicPresence answers whether a produced parameter is *there* at
 	// all, for the handful that are not from the start. A producer returns a
 	// string and has no way to say "unset"; this is the seam beside it, and

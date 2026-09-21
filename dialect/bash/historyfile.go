@@ -55,6 +55,23 @@ func historyStartFile(r *interp.Runner) {
 	if _, ok := r.GetVar("HISTFILESIZE"); !ok {
 		r.SetVar("HISTFILESIZE", size)
 	}
+	// And the first size in force, which is not the same as the variable and
+	// cannot be read back off it once a value that is not a count has been
+	// written over it. Only where nothing has set it yet: an assignment the
+	// script made before turning the list on has already said what the size
+	// is, and measured 2026-09-21, `HISTSIZE=2; HISTSIZE=abc; set -o history`
+	// holds the list at two rather than letting it grow. What this lays down
+	// is the other two first values — the default above, so that
+	// `HISTSIZE=abc` after `set -o history` holds the list at 500, and a
+	// HISTSIZE inherited from the environment, which no assignment saw. See
+	// historySize (#4054).
+	if _, ok := r.GetVar(historyInForce); !ok {
+		if n, kind := historyReadSize(size); kind == historySizeCount {
+			r.SetVar(historyInForce, strconv.Itoa(n))
+		} else {
+			r.SetVar(historyInForce, historyNoCap)
+		}
+	}
 	name, ok := r.GetVar("HISTFILE")
 	if !ok || name == "" {
 		return

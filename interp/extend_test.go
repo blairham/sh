@@ -267,3 +267,52 @@ func TestAnAssignmentActionIsToldWhereItStands(t *testing.T) {
 		t.Errorf("an unset told the action %v, want nothing — it is an assignment's message", seen)
 	}
 }
+
+// The other half of that seam, for a name whose state outside the variable
+// table outlives the variable: the removal is a message of its own.
+//
+// Registered apart from the assignment's, and this test is as much about the
+// split as about the call — a dialect that wants only the assignment must not
+// have to tell two calls apart, which is what the test above pins from the
+// other side.
+func TestAnUnsetActionIsToldTheNameHasGone(t *testing.T) {
+	var out bytes.Buffer
+	r := newDialect(t, &out)
+	var gone int
+	r.SetUnsetAction("WATCHED", func(rr *interp.Runner) {
+		// The name reads back as gone, so the action can tell what state it
+		// is being asked to drop.
+		if _, there := rr.GetVar("WATCHED"); there {
+			t.Errorf("the action ran before the name was removed")
+		}
+		gone++
+	})
+
+	if got := runDialect(t, r, &out, `WATCHED=one; unset WATCHED; printf '%s' "[${WATCHED-gone}]"`); got != "[gone]" {
+		t.Errorf("after unset the name read back as %q, want [gone]", got)
+	}
+	if gone != 1 {
+		t.Errorf("the action ran %d times, want once", gone)
+	}
+
+	// A name nothing had set still says the state should be dropped: the
+	// action is about what is kept beside the variable, not about the
+	// variable.
+	gone = 0
+	if got := runDialect(t, r, &out, `unset WATCHED; printf '%s' "[${WATCHED-gone}]"`); got != "[gone]" {
+		t.Errorf("read back as %q, want [gone]", got)
+	}
+	if gone != 1 {
+		t.Errorf("unsetting a name nothing had set ran the action %d times, want once", gone)
+	}
+
+	// And an assignment is not a removal: the two seams do not hear each
+	// other.
+	gone = 0
+	if got := runDialect(t, r, &out, `WATCHED=two; printf '%s' "[$WATCHED]"`); got != "[two]" {
+		t.Errorf("read back as %q, want [two]", got)
+	}
+	if gone != 0 {
+		t.Errorf("an assignment ran the unset action %d times, want none", gone)
+	}
+}

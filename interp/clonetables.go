@@ -305,6 +305,8 @@ func (c *Runner) ownTables(r *Runner) {
 	// subshell registering one of its own must not put an action on the
 	// parent's name, which is the split every table above this one avoids.
 	c.assignmentActions = maps.Clone(r.assignmentActions)
+	// And the removal half of the same message, for the same reason.
+	c.unsetActions = maps.Clone(r.unsetActions)
 	c.dynamicPresence = maps.Clone(r.dynamicPresence)
 	// How each produced parameter lists back travels with the producer it
 	// describes, for the same reason: a subshell that registers one of its

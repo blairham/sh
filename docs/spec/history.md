@@ -822,6 +822,40 @@ zsh over `print -s a b c` with `HISTSIZE=2` lists `2 b`, `3 c` where bash
 lists `1 b`, `2 c` — so the numbering is a per-dialect answer rather than a
 property of the trim (#4043).
 
+**The size in force is state beside the list, not a reading of HISTSIZE**
+(#4054). A value that is not a count leaves the last size that *was* one in
+force for every entry after it, and `echo "[$HISTSIZE]"` still answers `[abc]`
+— so the cap cannot be read off the variable at all. Measured 2026-09-21 the
+same way, after `HISTSIZE=2` and nine entries:
+
+| written, then two more entries | listed |
+| --- | --- |
+| `HISTSIZE=abc` | `10 j` · `11 k` — the cap of two holds |
+| `HISTSIZE=2x`, `0x2`, and a value too large to hold | the same |
+| `HISTSIZE=" "`, which is whitespace and not empty | the same |
+| `HISTSIZE=abc` then `=2x` | the same: one non-count does not spend it |
+| `HISTSIZE=-1` | `8 h` … `11 k` — the cap is off |
+| `HISTSIZE=` (empty), and `unset HISTSIZE` | the same, the cap is off |
+| `-1` first, then `HISTSIZE=abc` | still off: a lift is remembered too |
+
+So the three ways of saying "no limit" are a **negative**, an **empty value**
+and **unset**, and "not a number at all" is not one of them. The trim above
+and this are the same split seen twice: a value that is not a count neither
+trims the list nor changes what bounds it.
+
+The first size in force is the one the list was turned on with, which arrives
+three ways and is not an assignment this shell heard: `set -o history` with no
+HISTSIZE defaults it to 500 and a later `HISTSIZE=abc` holds the list at 500,
+a HISTSIZE of 2 inherited from the environment does the same, and a value
+assigned *before* the list existed is already in force when it is turned on.
+`unset HISTSIZE` first leaves the list unbounded in all three.
+
+A `local HISTSIZE` is the one route back to a size nothing assigned. bash
+re-reads it as the frame is restored — so the outer size is in force again and
+the list is trimmed to it at the return, where this shell trims at the next
+entry (#4045) — and the *cap* agrees either way, because a HISTSIZE that is a
+count is what the size in force is read from.
+
 **The builtin's three refusals are three different costs**, measured
 2026-09-18 with `; echo a=$?` behind the call and `echo b=$?` on the next line
 (#3468):

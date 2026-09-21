@@ -29,7 +29,6 @@ import (
 type ptySession struct {
 	cmd     *exec.Cmd
 	control *os.File
-	tty     *os.File
 
 	mu    sync.Mutex
 	bytes []byte
@@ -81,7 +80,17 @@ func startPty(program string, argv []string, ctx Context, env []string) (*ptySes
 		return nil, err
 	}
 
-	s := &ptySession{cmd: cmd, control: control, tty: tty, done: make(chan struct{})}
+	// The child holds the terminal end now, and this lets go of it.
+	//
+	// **Held open here as well, the control end's read could not finish even
+	// after the shell it was driving was gone.** A read on the control end
+	// ends when the *last* holder of the terminal end closes, so a harness
+	// that keeps one for the life of the session has made itself into the
+	// holder that keeps its own read alive. internal/smoke's session says
+	// the same thing in the same place and for the same reason.
+	_ = tty.Close()
+
+	s := &ptySession{cmd: cmd, control: control, done: make(chan struct{})}
 	go s.read()
 	return s, nil
 }
@@ -140,7 +149,7 @@ func (s *ptySession) line(text string) {
 func (s *ptySession) background(deadline time.Duration) error {
 	n := strconv.Itoa(len(s.jobs))
 	mark, said := "job-"+n+"-is", "job-"+n+"-said"
-	s.line("sleep 600 & printf 'job-%s-is[%s]\\njob-%s-said\\n' " + n + " $! " + n)
+	s.line(jobLine(n))
 	if err := s.await(said, deadline); err != nil {
 		return err
 	}
@@ -151,6 +160,73 @@ func (s *ptySession) background(deadline time.Duration) error {
 	s.jobs = append(s.jobs, pid)
 	startedJobs = append(startedJobs, pid)
 	return nil
+}
+
+// jobLine is the line background types to start one job and have the shell
+// say what it started.
+//
+// **The job's own streams go to the null device, and that is the whole of
+// #4026's second failure rather than tidiness.** A background job is in a
+// process group of its own, so one this harness failed to learn the pid of
+// survives close's kills — and a surviving holder of the terminal end keeps
+// the control end's read blocked, because a read there ends only when the
+// *last* holder lets go. Measured: an orphaned `sleep 600` did exactly
+// that, and close waited out the sleep — 9m57s against the package's ten
+// minute budget, which costs the whole leg its timeout rather than costing
+// a rerun.
+//
+// Linux-only, and the reason is worth writing down because it is why this
+// never showed here: macOS revokes the terminal end when the control end
+// closes, so the same orphan's three streams read `(revoked)` and the read
+// returns at once. Linux has no revoke and the read waits for the sleep.
+//
+// A job holding none of the terminal cannot cause it, however else a render
+// goes wrong. What the prompt reads is the shell's job table, which a
+// redirection does not touch, so the count this pins is the same count.
+//
+// A function, and not the line spelled out at its one call site, so the
+// property can be asserted without a terminal — see session_test.go.
+func jobLine(n string) string {
+	return "sleep 600 </dev/null >/dev/null 2>&1 & " +
+		"printf 'job-%s-is[%s]\\njob-%s-said\\n' " + n + " $! " + n
+}
+
+// jobPids is every background pid the shell said it started, read back off
+// the screen.
+//
+// close needs this because background records a pid only when it managed to
+// read one, and the render that fails is the render that started a job and
+// did not.
+//
+// A pid counts only where the screen shows the **whole** handshake —
+// `job-N-is[<pid>]` and then the `job-N-said` that follows it. Both, because
+// what is found here is killed, and a kill is not a thing to aim with a
+// pattern that a half-drawn field or another program's output could
+// satisfy. The second mark is already there for the same ordering reason
+// background waits on it for.
+func jobPids(screen []byte) []int {
+	var pids []int
+	for n := 0; ; n++ {
+		number := strconv.Itoa(n)
+		mark := []byte("job-" + number + "-is[")
+		i := bytes.Index(screen, mark)
+		if i < 0 {
+			return pids
+		}
+		rest := screen[i+len(mark):]
+		end := bytes.IndexByte(rest, ']')
+		if end < 0 {
+			return pids
+		}
+		if !bytes.Contains(rest[end:], []byte("job-"+number+"-said")) {
+			return pids
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(rest[:end])))
+		if err != nil || pid <= 1 {
+			return pids
+		}
+		pids = append(pids, pid)
+	}
 }
 
 // startedJobs is every background process any session here has started, so
@@ -272,7 +348,18 @@ func (s *ptySession) screen(cols int) *cellgrid.Grid {
 func (s *ptySession) close() {
 	// The jobs first and by pid, because job control put each of them in a
 	// process group of its own and the group kill below cannot reach them.
-	for _, pid := range s.jobs {
+	//
+	// Read off the **screen** as well as from what background recorded,
+	// because background records a pid only when it managed to read one and
+	// the render that fails is exactly the render that started a job and did
+	// not. That orphan is a `sleep 600` at ppid 1 in a process group of its
+	// own, which is the thing this repository's own rules were most recently
+	// tightened about — and, before the redirections above, the thing that
+	// held the terminal for ten minutes.
+	s.mu.Lock()
+	drawn := jobPids(s.bytes)
+	s.mu.Unlock()
+	for _, pid := range append(append([]int{}, s.jobs...), drawn...) {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
 	if s.cmd.Process != nil {
@@ -283,7 +370,31 @@ func (s *ptySession) close() {
 		}
 	}
 	_ = s.control.Close()
-	_ = s.tty.Close()
 	_ = s.cmd.Wait()
-	<-s.done
+	// Bounded, and that bound is the difference between a row that fails
+	// and a package that times out.
+	//
+	// The read above ends when the last holder of the terminal end lets go,
+	// and nothing takes that hold away from a process this did not manage to
+	// kill — so an unbounded wait here is an unbounded wait on somebody
+	// else's process. Measured as the whole of #4026's second failure: one
+	// row spending the package's ten-minute budget, which costs the leg its
+	// timeout rather than costing a rerun. Everything above is aimed at
+	// making sure no such holder exists; this is what keeps the harness
+	// honest if one ever does again.
+	//
+	// Abandoning the reader is safe and is not a leak. It appends under the
+	// mutex to a session nothing reads again, and it ends of its own accord
+	// the moment the terminal end is finally let go.
+	select {
+	case <-s.done:
+	case <-time.After(closeWait):
+	}
 }
+
+// closeWait bounds how long close waits for the reader to finish.
+//
+// It bounds a hang rather than measuring work: the read ends as soon as the
+// last holder of the terminal is gone, so anything reaching this number is
+// a holder that outlived the kills above — a finding, not a slow machine.
+const closeWait = 10 * time.Second

@@ -74,6 +74,19 @@ import (
 // the oldest entry and as `last` it comes to `cur-1`, which is why the two
 // roles pass different fallbacks below.
 
+// # The other reading
+//
+// Every line above is bash's, and two of the questions have a second answer.
+// [Semantics.FcEventOutOfRangeIsAnError] refuses an operand the list cannot
+// reach where bash clamps it, and
+// [Semantics.FcRelativeEventNeedsTheShellsOwnEventNumber] counts `-k` back
+// from the shell's own event number — which a script has none of — rather
+// than from the end of the list. Both were measured against zsh 5.9.2 on
+// 2026-09-21 and both are carried on the vector rather than here, because
+// neither is decided by naming a shell: a dialect whose `fc` had a current
+// event to count from would want the first answer with the second one's
+// refusals. #4018, and the measurements are on the two fields.
+
 // fcListingLayout is how one entry of `fc -l` is written: the format with the
 // number, and the format `-n` uses with the command alone.
 //
@@ -124,6 +137,14 @@ type fcHistory struct {
 	// `fc -l` on a four-entry list writes all four, and without it the same
 	// call writes three and keeps its own line out.
 	cur int
+	// refuse is Semantics.FcEventOutOfRangeIsAnError, read once: an operand
+	// the list cannot reach is refused rather than brought to the nearest
+	// end.
+	refuse bool
+	// ownEvent is Semantics.FcRelativeEventNeedsTheShellsOwnEventNumber,
+	// read once: `-k` counts back from the shell's own event number, which a
+	// script has none of, rather than from the end of the list.
+	ownEvent bool
 }
 
 func (r *Runner) fcHistory(entries []string) fcHistory {
@@ -132,6 +153,13 @@ func (r *Runner) fcHistory(entries []string) fcHistory {
 	if r.HistoryHasOwnLine() {
 		h.cur--
 	}
+	// Both are asked once per call rather than at each operand, and both are
+	// asked on every road: the reading of an operand is the same reading
+	// whether `-l`, `-s` or an editor is what the entry is wanted for.
+	h.refuse = r.ask(r.sem().FcEventOutOfRangeIsAnError,
+		"`fc` given an event the history list does not hold")
+	h.ownEvent = r.ask(r.sem().FcRelativeEventNeedsTheShellsOwnEventNumber,
+		"`fc` given an event counted back from the current one")
 	return h
 }
 
@@ -185,33 +213,137 @@ func (h fcHistory) resolveWith(spec string, absent, outOfRange int) fcEvent {
 	if spec == "" {
 		return fcEvent{num: absent, found: true}
 	}
-	if isDashNumber(spec) {
-		k, _ := strconv.Atoi(spec[1:])
-		return fcEvent{num: h.cur - k, found: true}
+	if e, ok := h.countedBack(spec); ok {
+		return e
 	}
 	if n, err := strconv.Atoi(spec); err == nil && n >= 0 {
-		if n == 0 {
-			// Zero is not a history number and is not read as one: it comes
-			// to the command before this one, which is what an operand that
-			// was never written comes to under `-s`. Measured, and it is
-			// the one place `0` and `-0` part company — `fc -l 0` writes the
-			// previous command and `fc -l -0` writes this one.
-			return fcEvent{num: h.cur - 1, found: true}
-		}
 		// The upper bound is cur-2 and not the newest entry, measured on
 		// three list lengths: the command before this one cannot be named
-		// by its number, only counted back to.
-		if n < h.first || n > h.cur-2 {
+		// by its number, only counted back to. Both bounds belong to the
+		// clamping answer — where an event out of range is refused instead,
+		// the number is kept and the *range* is what the roads below decide
+		// about, because `fc -l 6 3` on five entries writes `5 4 3` where
+		// `fc -l 6 6` refuses.
+		if !h.refuse && (n < h.first || n > h.cur-2) {
 			return fcEvent{num: outOfRange, found: true}
 		}
 		return fcEvent{num: n, found: true}
 	}
+	return h.search(spec)
+}
+
+// countedBack reads the operands that count back from a current event rather
+// than naming one — the `-k` spelling, and the `0` that is a count of none
+// rather than a history number — and says whether this was one of them.
+//
+// [Semantics.FcRelativeEventNeedsTheShellsOwnEventNumber] is the whole of the
+// difference, and it is three differences at the surface. Measured 2026-09-21
+// against zsh 5.9.2, `zsh -f` on a script file, the list planted with
+// `print -s`, beside bash 5.3.20 on the same shapes:
+//
+//   - `-k` comes to the same place whatever k is, floored where the count
+//     runs out: `fc -l -1`, `fc -l -2` and `fc -l -20` each write the whole
+//     list, on five entries and on thirty, where bash's `-1` is the newest
+//     entry and its `-2` the newest two. `fc -l -2 -2` refuses naming the
+//     event `0` rather than `-2`, which is what the floor is visible as.
+//   - `0` is the number zero, which is where that count already ended: `fc
+//     -l 0` and `fc -l -1` write the same list, and `fc -l 0 0` and `fc -l
+//     -1 -1` refuse alike. bash reads it as the command before this one.
+//   - `-0` is not a count at all. It is a word, and no entry begins with it:
+//     `fc -l -0` is `event not found: -0` where bash reads the same operand
+//     as the `fc` line itself.
+func (h fcHistory) countedBack(spec string) (fcEvent, bool) {
+	if h.ownEvent {
+		if !isDashNumber(spec) {
+			return fcEvent{}, false
+		}
+		if k, _ := strconv.Atoi(spec[1:]); k != 0 {
+			// The floor rather than cur-k: there is no current event to
+			// count back from, so every relative operand lands here, below
+			// the oldest event this shell numbers.
+			return fcEvent{num: fcBeforeTheOldest, found: true}, true
+		}
+		return h.search(spec), true
+	}
+	if isDashNumber(spec) {
+		k, _ := strconv.Atoi(spec[1:])
+		return fcEvent{num: h.cur - k, found: true}, true
+	}
+	if n, err := strconv.Atoi(spec); err == nil && n == 0 {
+		// Zero is not a history number and is not read as one: it comes to
+		// the command before this one, which is what an operand that was
+		// never written comes to under `-s`. Measured, and it is the one
+		// place `0` and `-0` part company — `fc -l 0` writes the previous
+		// command and `fc -l -0` writes this one.
+		return fcEvent{num: h.cur - 1, found: true}, true
+	}
+	return fcEvent{}, false
+}
+
+// fcBeforeTheOldest is the number a relative operand comes to where there is
+// no current event to count back from. Below every history number a shell
+// gives out, so a range that reaches the list clamps to its oldest entry and
+// a range that does not is refused naming this.
+const fcBeforeTheOldest = 0
+
+// search is the word operand: the newest entry that begins with it, and no
+// event at all when none does.
+func (h fcHistory) search(spec string) fcEvent {
 	for n := min(h.cur-1, h.last()); n >= h.first; n-- {
 		if strings.HasPrefix(h.at(n), spec) {
 			return fcEvent{num: n, found: true}
 		}
 	}
 	return fcEvent{}
+}
+
+// defaultFirst is where a listing with no `first` operand starts.
+//
+// The two readings part here for the reason they part over `-k`, which is
+// why one axis answers both: a shell with a current event takes the sixteen
+// events below it, and a shell with none counts on the list instead and
+// takes the newest seventeen entries. Measured against zsh 5.9.2: `fc -l` on
+// thirty entries writes 14 through 30, on eighteen writes 2 through 18, and
+// on seventeen or fewer writes all of them.
+func (h fcHistory) defaultFirst() int {
+	if h.ownEvent {
+		return max(h.first, h.last()-16)
+	}
+	return h.cur - 16
+}
+
+// oneDefault is the entry a road wanting a single event takes when no operand
+// named one.
+//
+// The command before this one, where there is a current event to count back
+// from. Where there is not, the count back lands below the list and the
+// default — unlike a written operand — is brought into it rather than
+// refused: measured, `fc -s` on a five-entry list re-runs the *oldest* entry
+// where `fc -s 0`, the same number written down, is refused.
+func (h fcHistory) oneDefault() int {
+	if h.ownEvent {
+		return h.clamp(fcBeforeTheOldest)
+	}
+	return h.cur - 1
+}
+
+// refuseOutsideTheList is Semantics.FcEventOutOfRangeIsAnError applied to a
+// resolved range: nothing is said while the range still meets an entry,
+// however far past the list either end is.
+//
+// The two wordings are one measurement apart. Where the ends resolved to the
+// same number there is an event to name and it is named; where they differ
+// there is not, and the refusal says only that the range is empty.
+func (h fcHistory) refuseOutsideTheList(r *Runner, from, to int) (code int, ok bool) {
+	if max(from, to) >= h.first && min(from, to) <= h.last() {
+		return 0, true
+	}
+	if from == to {
+		r.diagf("%s\n", Wording(r.diag().FcNoSuchEvent, "fc: no such event: %[1]d", from))
+		return 1, false
+	}
+	r.diagf("%s\n", Wording(r.diag().FcNoEventsInRange, "fc: no events in that range"))
+	return 1, false
 }
 
 // span is the history numbers between two ends, in the order they are written
@@ -275,8 +407,11 @@ func fcRerunOperands(rest []string) (subs []fcSubstitution, spec string) {
 	return subs, spec
 }
 
-func (h fcHistory) noCommand(r *Runner) int {
-	r.diagf("%s\n", Wording(r.diag().FcNoCommandFound, "fc: no command found"))
+// noCommand is the operand that named nothing: a word no entry begins with.
+// The word is passed because the dialect that refuses names it, where bash's
+// wording names no operand at all and ignores what it is given.
+func (h fcHistory) noCommand(r *Runner, spec string) int {
+	r.diagf("%s\n", Wording(r.diag().FcNoCommandFound, "fc: no command found", spec))
 	return 1
 }
 
@@ -286,19 +421,29 @@ func biFc(r *Runner, ctx context.Context, args []string) int {
 		return code
 	}
 	entries := r.HistoryEntries()
-	if len(entries) == 0 {
-		// Nothing to list, edit or re-run, which two of the columns answer
-		// with silence and one with the event it could not find.
-		if r.ask(r.sem().FcEmptyHistoryIsAnError, "`fc` with no history to answer from") {
-			r.diagf("%s\n", Wording(r.diag().FcNoSuchEvent, "fc: no such event: 1"))
-			return 1
-		}
+	// Nothing to list, edit or re-run, which two of the columns answer with
+	// silence and one with the event it could not find. Asked before the
+	// reading below is, so that a shell answering this one with silence —
+	// and a shell with no list at all, which is every call it ever gets — is
+	// never asked how it would have read an operand.
+	if len(entries) == 0 && !r.ask(r.sem().FcEmptyHistoryIsAnError, "`fc` with no history to answer from") {
 		if r.unspecified {
 			return 2
 		}
 		return 0
 	}
 	h := r.fcHistory(entries)
+	if len(entries) == 0 && !h.refuse {
+		// Where an operand out of range is refused, an empty list is not a
+		// case of its own: every range misses a list with nothing in it, and
+		// the roads below already word that refusal — from the operands, so
+		// the event named is the one that was asked for. Measured, `fc -l`
+		// on an empty list is `no such event: 1`, `fc -l -1` on the same
+		// list is `no such event: 0`, `fc -l 2 5` is `no events in that
+		// range` and `fc -l zzz` is `event not found: zzz`.
+		r.diagf("%s\n", Wording(r.diag().FcNoSuchEvent, "fc: no such event: %[1]d", h.first))
+		return 1
+	}
 	switch {
 	case strings.ContainsRune(opts, 'l'):
 		return h.list(r, rest, strings.ContainsRune(opts, 'n'), strings.ContainsRune(opts, 'r'))
@@ -319,17 +464,28 @@ func biFc(r *Runner, ctx context.Context, args []string) int {
 // the two ends.
 func (h fcHistory) list(r *Runner, rest []string, bare, reverse bool) int {
 	firstOp, lastOp := fcOperands(rest)
-	from := h.resolve(firstOp, h.cur-16)
+	from := h.resolve(firstOp, h.defaultFirst())
 	if !from.found {
-		return h.noCommand(r)
+		return h.noCommand(r, firstOp)
 	}
 	// An absent `last` never falls before `first`: measured, `fc -l -0` on a
 	// list whose newest entry is this very command writes that one entry and
 	// not a two-line range running backwards into it, where the `1` of
-	// `fc -l 3 1` — written down — does run the range backwards.
+	// `fc -l 3 1` — written down — does run the range backwards. The same
+	// rule is what makes `fc -l 99` name 99 in the other reading rather than
+	// running a range backwards from it.
 	to := h.resolve(lastOp, max(h.cur-1, from.num))
 	if !to.found {
-		return h.noCommand(r)
+		return h.noCommand(r, lastOp)
+	}
+	if h.refuse {
+		// Asked of the range and applied before the clamp, which is the one
+		// ordering that answers both shells: bash's clamp makes every range
+		// reach the list, so asking first would refuse nothing there, and
+		// asking after it would refuse nothing in the other reading either.
+		if code, ok := h.refuseOutsideTheList(r, from.num, to.num); !ok {
+			return code
+		}
 	}
 	nums := h.span(from.num, to.num, reverse)
 	layout := r.fcListing()
@@ -350,11 +506,18 @@ func (h fcHistory) list(r *Runner, rest []string, bare, reverse bool) int {
 // the `fc` call's own place in the list rather than joining it after.
 func (h fcHistory) rerun(r *Runner, ctx context.Context, rest []string) int {
 	subs, spec := fcRerunOperands(rest)
-	e := h.resolve(spec, h.cur-1)
-	if !e.found || e.num >= h.cur || h.cur-1 < h.first {
+	e := h.resolve(spec, h.oneDefault())
+	if !e.found {
+		return h.noCommand(r, spec)
+	}
+	if h.refuse {
+		if code, ok := h.refuseOutsideTheList(r, e.num, e.num); !ok {
+			return code
+		}
+	} else if e.num >= h.cur || h.cur-1 < h.first {
 		// Naming this very command is refused rather than run, which is
 		// what `fc -s -0` is: `-0` counts back none of the way.
-		return h.noCommand(r)
+		return h.noCommand(r, spec)
 	}
 	line := h.at(h.clamp(e.num))
 	for _, s := range subs {
@@ -456,20 +619,28 @@ func (h fcHistory) edit(r *Runner, ctx context.Context, rest []string, editor st
 	// one is the oldest entry; an absent `last` is whatever `first` came to
 	// and an out-of-range absolute one is the previous command. See
 	// resolveWith for the four measurements.
-	from := h.resolveWith(firstOp, h.cur-1, h.first)
+	from := h.resolveWith(firstOp, h.oneDefault(), h.first)
 	if !from.found {
-		return h.noCommand(r)
+		return h.noCommand(r, firstOp)
 	}
 	to := h.resolveWith(lastOp, from.num, h.cur-1)
 	if !to.found {
-		return h.noCommand(r)
+		return h.noCommand(r, lastOp)
 	}
-	// This very command, named at either end, is refused rather than run —
-	// `fc -0` and `fc -e ed 1 -0` alike. The wording differs from the one
-	// `-s` gives the same operand, which is why neither stands in for the
-	// other: `fc -0` is `fc: history specification out of range` where
-	// `fc -s -0` is `fc: no command found`.
-	if from.num >= h.cur || to.num >= h.cur || h.cur-1 < h.first {
+	if h.refuse {
+		// The other reading refuses the range rather than the line it would
+		// have edited, and words it from the operands: measured, `fc -1` and
+		// `fc 0 0` are both `fc: no such event: 0` at 1 where the wording
+		// below is the clamping shell's.
+		if code, ok := h.refuseOutsideTheList(r, from.num, to.num); !ok {
+			return code
+		}
+	} else if from.num >= h.cur || to.num >= h.cur || h.cur-1 < h.first {
+		// This very command, named at either end, is refused rather than run
+		// — `fc -0` and `fc -e ed 1 -0` alike. The wording differs from the
+		// one `-s` gives the same operand, which is why neither stands in
+		// for the other: `fc -0` is `fc: history specification out of range`
+		// where `fc -s -0` is `fc: no command found`.
 		r.diagf("%s\n", Wording(r.diag().FcOutOfRange, "fc: history specification out of range"))
 		return 1
 	}

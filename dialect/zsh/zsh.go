@@ -1936,6 +1936,19 @@ func Semantics() interp.Semantics {
 	// runs nothing and says nothing. Measured 2026-09-21 with a stand-in
 	// editor that truncates what it is handed (#4017).
 	s.FcEmptyEditIsAnError = interp.Yes
+	// And an event this list cannot reach is refused rather than brought to
+	// the nearest end, which is the other shell's answer: `fc -l 99` on five
+	// entries is `fc: no such event: 99` at 1 where bash writes all five at
+	// 0. Measured 2026-09-21 against zsh 5.9.2, `zsh -f` on a script file
+	// under `env -i` with a scratch `HOME`, the list planted with `print -s`
+	// (#4018).
+	s.FcEventOutOfRangeIsAnError = interp.Yes
+	// A relative operand is counted back from this shell's own event number,
+	// and a shell reading a script has none — so `fc -l -1`, `fc -l -2` and
+	// `fc -l -20` all write the whole list, on five entries and on thirty.
+	// The same fact gives the default range: the newest seventeen entries of
+	// the list rather than the sixteen events below a current one.
+	s.FcRelativeEventNeedsTheShellsOwnEventNumber = interp.Yes
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	// And the monitor alone is what `fg` and `bg` need. Reachable only with
 	// a terminal here, since `set -m` without one is fatal in this shell —
@@ -4485,10 +4498,24 @@ func Diagnostics() interp.Diagnostics {
 		ArithRecursionBlamesTheWrittenName: true,
 		OptionListingWidth:                 22,
 		KillListing:                        interp.KillListingSpaceJoined,
-		FcNoSuchEvent:                      "no such event: 1",
-		FcEmptyEdit:                        "read error on %[1]s",
-		NoJobControl:                       "no job control in this shell.",
-		FdVariableWithoutADescriptor:       "parameter %[1]s does not contain a file descriptor",
+		// The event a refused range names, which is not always the `1` an
+		// empty list used to be the only route to: `fc -l -1` on that same
+		// empty list says `no such event: 0`, and `fc -l 99` says 99.
+		FcNoSuchEvent: "no such event: %[1]d",
+		// Its pair, for a refused range whose two ends are different
+		// numbers — `fc -l 6 7` on five entries — where there is no one
+		// event to name.
+		FcNoEventsInRange: "no events in that range",
+		// And the operand that named nothing is named here, where bash says
+		// only that it found no command: `fc -l zzz` is `event not found:
+		// zzz`, and so is `fc -l -0`, which this shell does not read as a
+		// relative operand at all.
+		FcNoCommandFound: "event not found: %[1]s",
+		// The editor's file left empty, named by the path the person never
+		// saw.
+		FcEmptyEdit:                  "read error on %[1]s",
+		NoJobControl:                 "no job control in this shell.",
+		FdVariableWithoutADescriptor: "parameter %[1]s does not contain a file descriptor",
 		// `mkdir dir; v=$(<dir)` — the read after a successful open, which
 		// this shell alone words. The name is the word as it expanded, not
 		// the path the working directory made of it (#1778).

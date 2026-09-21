@@ -84,11 +84,14 @@ func historyStartFile(r *interp.Runner) {
 	if keep, ok := historyFileSize(r); ok && keep < len(lines) {
 		lines = lines[len(lines)-keep:]
 	}
-	historyLoadLines(r, lines)
+	// Not numbered: the startup read is the one route into the list that
+	// moves the numbering by nothing, however many lines the cap drops. See
+	// historyLoadLines, where the six rows are.
+	historyLoadLines(r, lines, false)
 	r.SetAssocElement(historyReadAt, shellPath(r, name), strconv.Itoa(read))
 }
 
-// historyFinishFile runs as a script whose list is still on ends, and appends
+// historyFinishFile runs as a script whose list is still on ends, and writes
 // what `history -a` would: the entries this session made and no `-a` wrote.
 //
 // To the HISTFILE of the moment the shell ends, not the one the list was read
@@ -97,13 +100,58 @@ func historyStartFile(r *interp.Runner) {
 // subshell's ending, after a fatal signal, or with the list turned off again;
 // `exec` never reaches it. A file that cannot be written is not a complaint
 // either: a HISTFILE in a missing directory ends the run silently.
+//
+// # It appends, except where unwritten entries were lost
+//
+// Normally an append, and that is what leaves an earlier `history -a`'s lines
+// and another shell's lines alone. But once the list has been made **shorter
+// than the count of entries waiting to be written** — which is what a
+// HISTSIZE trim does, and what a `local HISTSIZE` restore does (#4045) — the
+// ending stops appending and puts the list down as the whole file.
+//
+// Measured 2026-09-21 on bash 5.3.20, `env -i`, a scratch HOME, HISTIGNORE
+// keeping the reader's own lines out, and the file shown as it stands when
+// the shell ends. `p q r` is a file the session never read; `-a` after `a`
+// writes it:
+//
+//	p q r, -s a, -a, -s b, -s c                        p q r a b c
+//	p q r, -s a, -a, -s b, -s c, HISTSIZE=2            p q r a b c
+//	p q r, -s a, -a, -s b, -s c, HISTSIZE=1            c
+//	p q r, -s a, -s b, -s c, HISTSIZE=1                c
+//	p q r read at startup, -s a,b,c, HISTSIZE=1        c
+//	p q r read at startup, -s a,b,c, HISTSIZE=4        p q r a b c
+//	p q r, -s a, -a, -s b, -s c, HISTSIZE=1, -a        p q r a c
+//	p q r, -s a, -a, -s b, -s c, HISTSIZE=1, -s d      e — the list again
+//	p q r, -s a, -s b, HISTSIZE=0                      empty
+//	p q r, -s a, -a, HISTSIZE=0                        p q r a
+//	p q r, HISTSIZE=0 with no entries                  p q r
+//
+// Row three is the one that names the rule, and rows one and two are the
+// controls: a trim that drops only entries an `-a` had already written leaves
+// the ending appending, and a trim that drops an **unwritten** one does not.
+// Rows five and six say the same of a file the session read at startup, and
+// row five is what rules a truncation out — `p q r` are lines the list still
+// held a moment earlier and they are gone, so the ending wrote the list
+// rather than keeping the file's newest lines.
+//
+// Row seven says the whole-file write belongs to the **ending** and not to
+// the loss: a `history -a` straight after the trim appends the one entry the
+// list still has and clears the count, and the ending then has nothing to do.
+// Row eight is the same rule after two more entries. Rows nine to eleven are
+// `HISTSIZE=0` at its limit — an empty list still writes, which empties the
+// file, unless nothing was waiting to be written at all.
+//
+// The condition is the unwritten count exceeding the list, which is exactly
+// the loss: entries are written oldest first, so a count larger than the list
+// can supply is a count that was still counting something the list dropped.
 func historyFinishFile(r *interp.Runner) {
 	name, ok := r.GetVar("HISTFILE")
 	if !ok || name == "" {
 		return
 	}
 	entries := historyNewest(r)
-	if len(entries) == 0 {
+	whole := historyUnwrittenCount(r) > len(historyEntries(r))
+	if len(entries) == 0 && !whole {
 		// Nothing to append, and the ending then does nothing at all:
 		// measured 2026-09-18, `HISTFILE=missing; set -o history` leaves no
 		// file behind, where an unconditional append had created an empty
@@ -112,7 +160,7 @@ func historyFinishFile(r *interp.Runner) {
 		// when the shell ends with nothing to write.
 		return
 	}
-	if historyWriteFile(r, name, entries, true, true) == 0 {
+	if historyWriteFile(r, name, entries, !whole, true) == 0 {
 		historySetUnwritten(r, 0)
 		historyTruncateFile(r)
 	}
@@ -168,14 +216,37 @@ func historyTruncateFile(r *interp.Runner) {
 
 // historyFileSize is HISTFILESIZE as a count of lines to keep, or false where
 // it is not one — measured, `-1` and `abc` both keep everything.
+//
+// **One reading for both sizes.** HISTSIZE and HISTFILESIZE are the same
+// question asked of two things and bash reads their values the same way, so
+// the value arrives through historyReadSize rather than through a second
+// `strconv.Atoi` beside it. That second copy was the bug: the whitespace
+// historyReadSize learned to ignore (#4060) was still part of the value here,
+// and the two rows that differed were exactly the two it had gained (#4074).
+//
+// Measured 2026-09-21 on bash 5.3.20, from a script file with no terminal,
+// `env -i`, a scratch HOME and a three-line HISTFILE, as the lines the file
+// holds when the shell ends:
+//
+//	" 2 ", a leading tab, +2                  two — the digits are the value
+//	-0                                        none
+//	2x, 0x2, 99999999999999999999             five: not a count, and nothing
+//	-1, abc                                   five, the same way
+//
+// Where the two part company is **retention**, which is why the kinds are
+// folded here rather than handed on. A HISTSIZE that is not a count leaves
+// the last size that was one in force (see historySize); a HISTFILESIZE that
+// is not a count truncates nothing and leaves nothing behind. Measured beside
+// the rows above: `HISTFILESIZE=3` over a three-line file, then
+// `HISTFILESIZE=abc`, then three commands ends with every line on disk, where
+// the same script without the `abc` ends at three. So a lifted value and a
+// value that is not a count both mean "truncate nothing" here, and neither is
+// remembered.
 func historyFileSize(r *interp.Runner) (int, bool) {
 	value, ok := r.GetVar("HISTFILESIZE")
 	if !ok {
 		return 0, false
 	}
-	n, err := strconv.Atoi(value)
-	if err != nil || n < 0 {
-		return 0, false
-	}
-	return n, true
+	n, kind := historyReadSize(value)
+	return n, kind == historySizeCount
 }

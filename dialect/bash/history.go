@@ -640,7 +640,7 @@ func historyFile(r *interp.Runner, letter byte, rest []string) int {
 		if !ok {
 			return 1
 		}
-		historyLoadLines(r, lines)
+		historyLoadLines(r, lines, true)
 		return 0
 	default: // 'n'
 		lines, ok := historyReadFile(r, name, false)
@@ -651,7 +651,7 @@ func historyFile(r *interp.Runner, letter byte, rest []string) int {
 		if at > len(lines) {
 			at = len(lines)
 		}
-		historyLoadLines(r, lines[at:])
+		historyLoadLines(r, lines[at:], true)
 		r.SetAssocElement(historyReadAt, shellPath(r, name), strconv.Itoa(len(lines)))
 		return 0
 	}
@@ -824,10 +824,11 @@ func historyAdd(r *interp.Runner, line string) {
 	historySetUnwritten(r, historyUnwrittenCount(r)+1)
 }
 
-// historyLoad is an entry read from a file, which is already written and is
-// not counted.
-func historyLoad(r *interp.Runner, line string) {
-	historyAppend(r, line, false)
+// historyLoad is an entry read from a file, which is already written and so
+// is never counted as unwritten. Whether it moves the *numbering* is the
+// caller's to say — see historyLoadLines.
+func historyLoad(r *interp.Runner, line string, numbered bool) {
+	historyAppend(r, line, numbered)
 }
 
 // historyLoadLines is a file's physical lines becoming entries, which is not
@@ -842,10 +843,30 @@ func historyLoad(r *interp.Runner, line string) {
 // the other's fix.
 //
 // Every route a file reaches the list by goes through here: `-r`, `-n`, and
-// the read a script's first `set -o history` does.
-func historyLoadLines(r *interp.Runner, lines []string) {
+// the read a script's first `set -o history` does. **They do not agree about
+// the numbering**, which is what `numbered` carries: a line `-r` or `-n`
+// pushes off a full list moves the numbers on exactly as an entry the script
+// made does, and a line the startup read pushes off moves nothing.
+//
+// Measured 2026-09-21 on bash 5.3.20, `env -i`, a scratch HOME and HISTIGNORE
+// keeping the reader's own lines out of the list:
+//
+//	HISTSIZE=2, `-s a`,`b`,`c`, then `-r` of x,y,z,w        6 z · 7 w
+//	the same with `-n` (one more entry for the HISTFILE=)   7 z · 8 w
+//	an empty list, `-r` of x,y,z,w into HISTSIZE=2          3 z · 4 w
+//	that `-r` twice                                         7 z · 8 w
+//	an unbounded list, `-r` of x,y,z,w                      1 x … 4 w
+//	HISTSIZE=2 and a four-line HISTFILE read at startup     1 z · 2 w
+//
+// The last row is the one that pays for the flag. Four lines into a list held
+// at two move the numbering by four when `-r` reads them and by nothing when
+// the startup read does, so a single answer would be wrong for one of them
+// (#4073). The row the comment above historyAppend was written from —
+// `HISTSIZE=1` before a two-line HISTFILE reads `2 history` — is the startup
+// read again, and the entry the reader adds afterwards is what moved it.
+func historyLoadLines(r *interp.Runner, lines []string, numbered bool) {
 	for _, entry := range repl.HistoryEntries(HistoryStyle(), lines) {
-		historyLoad(r, entry)
+		historyLoad(r, entry, numbered)
 	}
 }
 

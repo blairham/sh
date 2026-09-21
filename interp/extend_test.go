@@ -268,6 +268,84 @@ func TestAnAssignmentActionIsToldWhereItStands(t *testing.T) {
 	}
 }
 
+// And the moment no *written* assignment reaches: the frame being popped,
+// where the value a name resolves to changes with nothing being stored.
+//
+// Restoring a `local` is an assignment moment. Two of one dialect's history
+// parameters act on the value moving — one trims its list and one truncates a
+// file — and both were wrong at exactly the return, because the store is the
+// only thing that had ever spoken (#4045). The alternative is catching up at
+// the next entry, which is the lazy reading this seam exists to avoid: a
+// reader that looks first sees the old answer.
+//
+// Three rules, and the test is as much about the two that stay quiet: only
+// where the visible value moved, nothing for a name the restore leaves unset,
+// and the value itself for one it leaves set.
+func TestAnAssignmentActionIsToldWhenARestorePutsAValueBack(t *testing.T) {
+	var out bytes.Buffer
+	r := newDialect(t, &out)
+	var seen []string
+	r.SetAssignmentAction("WATCHED", func(_ *interp.Runner, value string) {
+		seen = append(seen, value)
+	})
+
+	// The declaration on the way in is a store and was always heard; the
+	// return is the one this pins, and the action reads the caller's value
+	// back rather than the one going away.
+	runDialect(t, r, &out, `WATCHED=outer
+fn() { WATCHED=inner; }
+fn`)
+	if strings.Join(seen, ",") != "outer,inner" {
+		t.Errorf("without a declaration the action saw %v, want the two stores", seen)
+	}
+
+	seen = nil
+	runDialect(t, r, &out, `WATCHED=outer
+fn() { local WATCHED=inner; }
+fn
+printf '%s' "[$WATCHED]"`)
+	if strings.Join(seen, ",") != "outer,inner,outer" {
+		t.Errorf("the action saw %v, want the return to have put outer back", seen)
+	}
+	if got := out.String(); got != "[outer]" {
+		t.Errorf("the name read back as %q, want [outer]", got)
+	}
+
+	// A restore to the same text has moved nothing, and says nothing.
+	seen = nil
+	runDialect(t, r, &out, `WATCHED=same
+fn() { local WATCHED=same; }
+fn`)
+	if strings.Join(seen, ",") != "same,same" {
+		t.Errorf("an unchanged restore told the action %v, want only the two stores", seen)
+	}
+
+	// A name the restore leaves unset has gone rather than moved: an
+	// assignment is not what happened, and the reader already knows what an
+	// absent name means.
+	seen = nil
+	runDialect(t, r, &out, `unset WATCHED
+fn() { local WATCHED=inner; }
+fn
+printf '%s' "[${WATCHED-gone}]"`)
+	if strings.Join(seen, ",") != "inner" {
+		t.Errorf("a restore to nothing told the action %v, want only the declaration", seen)
+	}
+	if got := out.String(); got != "[gone]" {
+		t.Errorf("the name read back as %q, want [gone]", got)
+	}
+
+	// And a call that declared nothing this dialect registered says nothing
+	// at its return, however many locals it made.
+	seen = nil
+	runDialect(t, r, &out, `WATCHED=outer
+fn() { local OTHER=x; }
+fn`)
+	if strings.Join(seen, ",") != "outer" {
+		t.Errorf("an unrelated local told the action %v, want only the store", seen)
+	}
+}
+
 // The other half of that seam, for a name whose state outside the variable
 // table outlives the variable: the removal is a message of its own.
 //

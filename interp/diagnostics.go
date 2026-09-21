@@ -8754,13 +8754,6 @@ func (d Diagnostics) bodyRefusalWrittenFirst(name, input string, err error) (str
 	return d.ReportFrom(name, input, at, d.ParseFailure(body)+"\n"), quoteAt, true
 }
 
-// missingFuncBody reports whether err is a parse failure at the point where a
-// function's body was expected and never began.
-func missingFuncBody(err error) bool {
-	var se *syntax.Error
-	return errors.As(err, &se) && se.FuncBody
-}
-
 // locatesByNameAlone reports whether this dialect writes err with the shell's
 // name and no line at all.
 //

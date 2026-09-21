@@ -361,6 +361,68 @@ func TestASubstitutionRefusalQuotesTheScript(t *testing.T) {
 			},
 		},
 		{
+			// **A body that ran out where a function's body was due**, which
+			// is the one refusal this dialect locates by the shell's name and
+			// nothing at all — see Diagnostics.MissingFuncBodyOmitsTheLine,
+			// which the *parse* route has honored since it was written and
+			// this one never reached. Measured 2026-09-21, zsh 5.9.2 (#3961).
+			//
+			// bash is the control column and keeps its line, so a rule
+			// written here cannot be a rule about the failure.
+			//
+			// One sub-case is left out rather than folded in, because it is
+			// a third answer: text with **no newline at the end** — which a
+			// script file always has and `-c` need not — takes the line off
+			// the second message as well, `zsh -c 'v=$(echo hi; foo())'`
+			// being the shell's name twice over. Measured the same day; a
+			// newline on the end of that same string puts `zsh:1:` back and
+			// is byte-identical here.
+			name: "a body refused where a function's body was due",
+			src:  "printf 'start\\n'\nv=$(echo hi; foo())\necho after\n",
+			want: map[string]string{
+				"zsh": "s.sh: parse error near `)'\n" +
+					"s.sh:1: parse error near `v=$(echo hi; foo())'\n",
+				"bash": "s.sh: line 2: syntax error near unexpected token `)'\n" +
+					"s.sh: line 2: `v=$(echo hi; foo())'\n",
+			},
+		},
+		{
+			// **The discriminator for the second message**, and the row the
+			// change is worth nothing without: the quote stands at line 1
+			// however far down the substitution is, where every other row in
+			// this test moves with it. A build that dropped the line from the
+			// first message alone writes `s.sh:4:` here and passes the row
+			// above.
+			//
+			// One line and not "the failure's", because the failure says
+			// where it was by not saying — the same answer
+			// Diagnostics.ParseDiagnostic gives a failure carrying no line.
+			// bash again keeps its own, at 3.
+			name: "the quote after it stands at line 1 wherever the body is",
+			src:  "printf 'start\\n'\n: pre\nv=$(echo hi; foo())\n",
+			want: map[string]string{
+				"zsh": "s.sh: parse error near `)'\n" +
+					"s.sh:1: parse error near `v=$(echo hi; foo())'\n",
+				"bash": "s.sh: line 3: syntax error near unexpected token `)'\n" +
+					"s.sh: line 3: `v=$(echo hi; foo())'\n",
+			},
+		},
+		{
+			// **The control.** The same script one body apart: a refusal
+			// that is not a missing function body keeps both lines and both
+			// move with the substitution. Without it, a build that dropped
+			// the line from every `$( … )` refusal in this dialect passes the
+			// two rows above.
+			name: "a body refused for anything else keeps its line",
+			src:  "printf 'start\\n'\n: pre\nv=$(echo hi; for)\n",
+			want: map[string]string{
+				"zsh": "s.sh:3: parse error near `)'\n" +
+					"s.sh:4: parse error near `v=$(echo hi; for)'\n",
+				"bash": "s.sh: line 3: syntax error near unexpected token `)'\n" +
+					"s.sh: line 3: `v=$(echo hi; for)'\n",
+			},
+		},
+		{
 			// The older spelling's body is its own text, and it is quoted
 			// in place of the script's line.
 			name: "a backquoted body",

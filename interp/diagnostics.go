@@ -8596,7 +8596,7 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 		// was read before anything asked which kind this was (#1076).
 		d.Location = LocationNone
 	}
-	if d.MissingFuncBodyOmitsTheLine && missingFuncBody(err) {
+	if d.locatesByNameAlone(err) {
 		// One failure this dialect locates by name alone. Not LocationNone,
 		// which is a different answer with the same rendering here and would
 		// take the shell's name away from a dialect that prints one.
@@ -8623,6 +8623,27 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 func missingFuncBody(err error) bool {
 	var se *syntax.Error
 	return errors.As(err, &se) && se.FuncBody
+}
+
+// locatesByNameAlone reports whether this dialect writes err with the shell's
+// name and no line at all.
+//
+// One reader for the two routes a parse failure reaches a user by, because a
+// substitution's body is refused when the word is *expanded* and so never
+// passes through [Diagnostics.ParseDiagnostic]. Measured 2026-09-21 on zsh
+// 5.9.2 from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C zsh -f s.sh`
+// with standard input on the null device, line 1 of which is
+// `v=$(echo hi; foo())`:
+//
+//	s.sh: parse error near `)'
+//	s.sh:1: parse error near `v=$(echo hi; foo())'
+//
+// The same two lines wherever in the file the substitution stands — measured
+// with one and with two lines above it — which is what says the second
+// message is not counting from the failure either. See
+// Runner.substFailureLocatedByNameAlone.
+func (d Diagnostics) locatesByNameAlone(err error) bool {
+	return d.MissingFuncBodyOmitsTheLine && missingFuncBody(err)
 }
 
 // condPreamble is the line one dialect writes in front of a token refused

@@ -629,6 +629,35 @@ func ranOutInACondition(err error) bool {
 	return se.Innermost == "if" || se.Innermost == "elif"
 }
 
+// substFailureLocatedByNameAlone drops the line from a body's refusal where
+// the dialect locates that one failure by the shell's name and nothing else,
+// and hands back the undo.
+//
+// The flag is scoped to the one write rather than to the refusal, and that is
+// the measurement rather than a convenience. Measured 2026-09-21 on zsh 5.9.2
+// from a script file, `env -i PATH=/usr/bin:/bin LC_ALL=C zsh -f s.sh` with
+// standard input on the null device, `v=$(echo hi; foo())` on line 1:
+//
+//	s.sh: parse error near `)'
+//	s.sh:1: parse error near `v=$(echo hi; foo())'
+//
+// So the first message has no line and the second has one. A rule applied to
+// the whole refusal writes the second one bare as well, which is a row of its
+// own rather than a detail — the two messages are what the sweep in #3961
+// compares.
+//
+// Reached only from the expansion route. The *parse* route asks the same
+// question in Diagnostics.ParseDiagnostic, through the same predicate, so the
+// two cannot drift: a body read with the script is refused there and a body
+// read when the word is expanded is refused here.
+func (r *Runner) substFailureLocatedByNameAlone(failure error) func() {
+	if !r.diag().locatesByNameAlone(failure) {
+		return func() {}
+	}
+	r.locatedByNameAlone = true
+	return func() { r.locatedByNameAlone = false }
+}
+
 // leadingNewlines counts the newlines a substitution's body opens with, which
 // is how far one dialect's numbering of it is out from the file's.
 //
@@ -840,8 +869,12 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 		putBack := r.substFailureAtItsLine(span, src, failure)
 		// The sentence, with the clause one dialect adds while it is still
 		// looking for the closing parenthesis — see Runner.substBodyExpecting.
+		// Around this write alone, because the refusal one dialect locates by
+		// name is followed by a message that still carries a line.
+		byName := r.substFailureLocatedByNameAlone(failure)
 		r.errf("%s", r.diagLineNamed(construct, "%s%s\n",
 			r.diag().ParseFailure(failure), r.substBodyExpecting(span, failure)))
+		byName()
 		if echo, at := r.substFailureEcho(span, src, raw, failure, failureBase); echo != "" {
 			if at > 0 {
 				r.line = at

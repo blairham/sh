@@ -150,7 +150,7 @@ func (r *Runner) fileTable(asACommand bool) []*os.File {
 		if p.hold == nil {
 			continue
 		}
-		if fd := int(p.hold.Fd()); fd >= firstExtraFd && fd <= maxInheritedFd && fd > highest {
+		if fd := p.fd; fd >= firstExtraFd && fd <= maxInheritedFd && fd > highest {
 			highest = fd
 		}
 	}
@@ -176,7 +176,10 @@ func (r *Runner) fileTable(asACommand bool) []*os.File {
 		if p.hold == nil {
 			continue
 		}
-		if fd := int(p.hold.Fd()); fd >= firstExtraFd && fd <= highest {
+		// The number it *published*, which is the number the path is made of
+		// and so the only one the command can open. It is hold's own outside
+		// a substitution body and a borrowed one inside — see substFdView.
+		if fd := p.fd; fd >= firstExtraFd && fd <= highest {
 			files[fd-firstExtraFd] = p.hold
 		}
 	}

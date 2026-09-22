@@ -10494,6 +10494,14 @@ type Semantics struct {
 	// limit to be asked about and takes the unbounded answer — the same
 	// reasoning Semantics.FdNumberBoundedByOpenFileLimit is read under.
 	//
+	// **A substitution nested inside another one's body re-uses the
+	// enclosing number**, and that is not a fifth rule. Measured 2026-09-21,
+	// bash 5.3.20: `cat <(echo <(true))` is `/dev/fd/63` — the outer's own
+	// number, handed out twice — because the body runs in a fork where the
+	// outer end is closed. It is this same rule asked in a table with one
+	// fewer descriptor in it, so it is answered by releasing the number
+	// rather than by an axis. See interp.substFdView (#4119).
+	//
 	// **There is no unanswered value.** A substitution that expanded is going
 	// to be handed a number — the path is the whole of what the construct
 	// produces — so a refusal would have nothing to attach itself to. The

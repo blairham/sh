@@ -1754,9 +1754,11 @@ func (s Shell) historyFile() historyFile {
 	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}
 	// How this shell's file spells an entry, which is the dialect's answer —
 	// see HistoryStyle, and decodeEntries for what is done with it.
-	// The style and the way to read this shell's variables, rather than an
-	// encoding settled now: one of the style's answers is a variable's, and a
-	// session sets that variable at the prompt.
+	//
+	// The style and a way to read this shell's variables, rather than an
+	// encoding settled here: one of the style's answers is a variable's, and
+	// a session sets that variable at the prompt, so the question is put at
+	// each read and each write instead of once when the session was built.
 	h.style, h.vars = s.History, s.Runner.GetVar
 	return h
 }

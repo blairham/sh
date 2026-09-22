@@ -17832,7 +17832,7 @@ say so. The name is taken for what it moves rather than refused for what
 it does not, which is the same partial honesty `set -o posix` keeps —
 and with the record above, #2476's itemized remainder is closed.
 
-**`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
+**`ExitTrapFiresPastTheEnd`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Counts the EXIT trap as having fired on the line after the script's
 last, rather than on its first.
@@ -17841,6 +17841,17 @@ Only asked by a dialect whose TrapBodyLine needs a firing line at all,
 and only for EXIT, which has no line of its own. zsh says yes: its EXIT
 trap reports the line the parser stopped at. ksh93 says no, which makes
 an EXIT body read like a small script of its own.
+
+bash says no too, and reaches the question by the other door: a DEBUG
+body's lines are counted from where its condition fired
+(`CommandTrapBodyLine`), and a DEBUG trap fires for the commands of the
+EXIT body — so a script with both traps set asks this on every run.
+Measured 2026-09-22 on 5.3.20, from a script file and under `-c` alike, a
+two-line DEBUG body inside the EXIT trap reports `1` and `2` where
+counting past a five-line script's end would report `6` and `7`. dash and
+BusyBox ash refuse the DEBUG condition and number every body from its own
+first line, so neither can be asked; the reason is recorded in their
+presets (#4193).
 
 **`ExitTrapIsFunctionLocal`** — bash no · dash no · ksh93 no · zsh yes
 

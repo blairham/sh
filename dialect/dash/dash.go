@@ -1276,6 +1276,14 @@ func Semantics() interp.Semantics {
 	s.TestTrailingConnectiveTakesAMissingOperand = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.No
+	// unanswered ExitTrapFiresPastTheEnd: the axis is the line a trap body
+	// counts as having fired on, and it is only asked where a body's lines
+	// are numbered from that line at all. Every trap body here counts from
+	// its own first line — TrapBodyLine and CommandTrapBodyLine are both
+	// left alone — and the one other reader is a body's parse failure being
+	// located at the firing line, which is ksh93's alone. Measured 2026-09-22:
+	// the shell refuses `trap … DEBUG` outright, so the route bash reaches it
+	// by does not exist here either (#4193).
 	s.TrapBodyRunsWhatParsed = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
 	// The standard's reading, and dash takes it: a substitution's body is a

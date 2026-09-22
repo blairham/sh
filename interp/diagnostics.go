@@ -7493,6 +7493,28 @@ type Diagnostics struct {
 	// a literal whether or not the ordinary rule would — `typeset b=(3 4)`
 	// written as `+ b=('3' '4')`. One column; see the same file.
 	TraceArrayOperandQuotesEveryElement bool
+	// TraceArrayLiteralDecodesAnsiCQuoting writes a `$'…'` element of a
+	// **bare** array literal as the characters it stands for, inside ordinary
+	// single quotes, instead of as the `$'…'` the script wrote.
+	//
+	// The bare literal alone, because that is the one place the trace is the
+	// words as written rather than the values — see
+	// Semantics.TraceArrayLiteralShowsTheExpandedElements. An operand's
+	// literal is already quoted from its value and reads the same either way.
+	//
+	// Measured 2026-09-22 on bash 5.3.20 from a script file, `set -x` on line
+	// 1, with the trace shown byte for byte: `a=( $'\t' )` traces a literal
+	// tab inside single quotes, `a=( x$'\t'y )` traces `x'<tab>'y` — so it is
+	// the span and not the word — and `a=( $'a\'b' )` traces `'a'\''b'`,
+	// which is the ordinary single-quoted spelling of a value holding a
+	// quote. Every other element keeps the spelling the script gave it:
+	// `"d\$q"`, `''`, `"*"` and `'a'b` all come back as written.
+	//
+	// The decoder is this dialect's, which is why the field is a bool here
+	// and a function in syntax.Layout.AnsiCQuotedWordIsItsValue: what `\e`
+	// or `\cX` comes to is a semantics answer and nothing under syntax may
+	// hold one.
+	TraceArrayLiteralDecodesAnsiCQuoting bool
 	// TraceRepeatsAScalarOperandAfter names the utilities that write a
 	// `name=value` operand **again** on a line of its own behind the command
 	// line: `export ev=1` traces `+ export ev=1` and then `+ ev=1`.

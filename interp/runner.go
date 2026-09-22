@@ -3337,6 +3337,13 @@ type Runner struct {
 	traceOnce *sync.Once
 	// xtrace is `set -x`: every simple command is printed before it runs.
 	xtrace bool
+	// traceSink is where a trace line goes when it is not standard error,
+	// and nil — the default — is standard error. One shell in the panel lets
+	// a script move the whole stream with a parameter, and which parameter
+	// and what a bad value costs are that shell's; where the stream *is* is
+	// the core's, because every trace this package writes goes through it.
+	// See Runner.SetTraceSink.
+	traceSink func(*Runner) io.Writer
 	// condTrace is the `[[ … ]]` being traced, or nil. See condTrace.
 	condTrace *condTrace
 	// nounset is `set -u`: expanding an unset parameter is an error.

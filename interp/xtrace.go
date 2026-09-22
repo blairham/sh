@@ -4,6 +4,8 @@
 package interp
 
 import (
+	"fmt"
+	"io"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -373,7 +375,7 @@ func (r *Runner) traceCommand(words []string) {
 		return
 	}
 	for _, line := range tail {
-		r.errf("%s", line)
+		r.tracef("%s", line)
 	}
 }
 
@@ -560,7 +562,8 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 	}
 	b.WriteString("=")
 	if a.IsArray {
-		b.WriteString(traceArrayLiteral(a.Elems, expandedElemsOf(e), d.TraceArrayLiteral, d))
+		b.WriteString(traceArrayLiteral(a.Elems, expandedElemsOf(e),
+			d.TraceArrayLiteral, d, r.traceWordLayout(d)))
 		return b.String()
 	}
 	if value == "" && d.TraceEmptyAssignmentValueIsBare {
@@ -628,7 +631,9 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 // modeled here, for the reason traceAssign gives about the subscript:
 // expanding the elements to print them would expand them twice. Tracked as
 // #1959.
-func traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style TraceArrayLiteral, d Diagnostics) string {
+func traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style TraceArrayLiteral,
+	d Diagnostics, l syntax.Layout,
+) string {
 	var words []string
 	for i, e := range elems {
 		if e.Word == nil {
@@ -636,7 +641,7 @@ func traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style Tr
 			// written, which is the same answer the `[sub]=value` shape gets
 			// below: what it expanded to is a value with a shape, and a trace
 			// is a line of words.
-			words = append(words, syntax.PrintArrayElem(e))
+			words = append(words, syntax.PrintArrayElemWith(e, l))
 			continue
 		}
 		w := e.Word
@@ -644,7 +649,7 @@ func traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style Tr
 			// The words as written, which is one dialect's whole answer —
 			// and, in the dialect that prints the values, the fallback for a
 			// `[sub]=value` element, whose own shape is #2866's.
-			words = append(words, syntax.PrintWord(w))
+			words = append(words, syntax.PrintWordWith(w, l))
 			continue
 		}
 		// A bare element is however many *fields* it expanded to, which is
@@ -742,7 +747,7 @@ func (r *Runner) traceForIteration(header, name, value string) {
 	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.errf("%s%s\n", r.tracePrefix(), line)
+	r.tracef("%s%s\n", r.tracePrefix(), line)
 }
 
 // condTrace is what a `[[ … ]]` has traced so far.
@@ -828,7 +833,7 @@ func (r *Runner) traceConditionOp(op string) {
 func (r *Runner) traceConditionLine(text string) {
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.errf("%s[[ %s ]]\n", r.tracePrefix(), text)
+	r.tracef("%s[[ %s ]]\n", r.tracePrefix(), text)
 }
 
 // traceCondOperand renders a condition operand that is a value rather than a
@@ -870,7 +875,7 @@ func (r *Runner) traceArithCommand(text string, spelling TraceArithSpelling) {
 	default:
 		line = "(( " + text + " ))"
 	}
-	r.errf("%s%s\n", r.tracePrefix(), line)
+	r.tracef("%s%s\n", r.tracePrefix(), line)
 }
 
 // traceCaseHeader writes what `case` prints before it tries its arms.
@@ -880,7 +885,7 @@ func (r *Runner) traceCaseHeader(header string) {
 	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.errf("%s%s\n", r.tracePrefix(), header)
+	r.tracef("%s%s\n", r.tracePrefix(), header)
 }
 
 // traceCaseArm writes what `case` prints for one arm it is about to try.
@@ -896,11 +901,11 @@ func (r *Runner) traceCaseArm(subject string, patterns []string) {
 	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.errf("%scase %s (%s)\n", r.tracePrefix(), subject, strings.Join(patterns, " | "))
+	r.tracef("%scase %s (%s)\n", r.tracePrefix(), subject, strings.Join(patterns, " | "))
 }
 
 func (r *Runner) traceLine(line string, d Diagnostics) {
-	r.errf("%s", r.traceLineText(line, d))
+	r.tracef("%s", r.traceLineText(line, d))
 }
 
 // traceLineText is the text traceLine would write, without choosing a moment
@@ -1310,3 +1315,50 @@ func (r *Runner) releaseTraceTurn() {
 // the call in f's body and nothing for g's own. See
 // Runner.SetTracedFunctions.
 func (r *Runner) tracing() bool { return r.xtrace || r.xtraceByMark }
+
+// SetTraceSink says where an `xtrace` line goes, and nil — the default —
+// is standard error.
+//
+// The seam exists because one shell in the panel lets a script move the whole
+// stream while it runs: bash reads `BASH_XTRACEFD` and writes every trace line
+// to the descriptor it names, so a script can keep its trace out of the
+// stderr a caller is reading. Which parameter, and what a value naming nothing
+// costs, are that dialect's — the core is asked only for a writer, at the
+// moment of the write, so an `exec 4>f` after the assignment is honored and an
+// `unset` puts the stream back with no second call.
+//
+// It is read per line rather than resolved once for the same reason: the
+// descriptor the parameter names is a *number in the script's table*, and that
+// table moves under it.
+func (r *Runner) SetTraceSink(pick func(*Runner) io.Writer) { r.traceSink = pick }
+
+// tracef writes one trace line to wherever the trace goes.
+//
+// Not r.errf where the sink has moved: the hold that lets a `printf`
+// conversion finish before a diagnostic lands is about the *error* stream's
+// ordering, and a trace going to a descriptor of the script's own is not in
+// that ordering at all.
+func (r *Runner) tracef(format string, args ...any) {
+	if r.traceSink != nil {
+		if w := r.traceSink(r); w != nil {
+			_, _ = fmt.Fprintf(w, format, args...)
+			return
+		}
+	}
+	r.errf(format, args...)
+}
+
+// traceWordLayout is how a word is written into a trace line where it is
+// written as the script wrote it rather than as the value it came to.
+//
+// Empty for every dialect but the one that decodes a `$'…'` there — see
+// Diagnostics.TraceArrayLiteralDecodesAnsiCQuoting, and
+// syntax.Layout.AnsiCQuotedWordIsItsValue for why the decoder has to be
+// handed over rather than named.
+func (r *Runner) traceWordLayout(d Diagnostics) syntax.Layout {
+	var l syntax.Layout
+	if d.TraceArrayLiteralDecodesAnsiCQuoting {
+		l.AnsiCQuotedWordIsItsValue = r.AnsiCValue
+	}
+	return l
+}

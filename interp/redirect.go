@@ -760,7 +760,11 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// first act blocks would otherwise leave the shell waiting for a pid
 			// that is not coming.
 			r.settleBackgroundJobBeforeABlockingOpen(path)
-			f, fellBack, err := r.openThroughNoclobber(ctx, &action, path, flags)
+			// The path as the shell must open it, which is the path the
+			// command was given in all but one shape: a substitution inside
+			// another one's body publishes a number the enclosing pipe is
+			// still parked on here. See Runner.substOpenPath.
+			f, fellBack, err := r.openThroughNoclobber(ctx, &action, r.substOpenPath(path), flags)
 			if errors.Is(err, errRefused) {
 				// The gate let the *name* through and refused what the name
 				// reached — a link into a denied place. Reported here rather

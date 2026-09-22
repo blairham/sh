@@ -709,6 +709,37 @@ on the filesystem for anything to remove: `p=$(echo <(true)); [ -e "$p" ]` is
 false afterwards because the number is closed, not because a file was
 unlinked.
 
+### The number a nested substitution takes
+
+A substitution inside another one's **body** takes the number the enclosing
+one published. Measured 2026-09-22, bash 5.3.20:
+
+| written | bash 5.3.20 |
+| --- | --- |
+| `cat <(echo <(true))` | `/dev/fd/63` |
+| `cat <(echo <(true) <(true))` | `/dev/fd/63 /dev/fd/62` |
+| `cat <(true) <(echo <(true))` | `/dev/fd/62` |
+
+The rule descending from 63 has not changed; the **table** has. bash runs a
+body in a fork and closes that substitution's own end there, so the number is
+free again inside and the next one takes it. The third row is what says it is
+the substitution's own end and not the command's: the first substitution's 63
+is still open in the second one's fork, and the body re-uses 62.
+
+A body here is a **clone of the Runner rather than a fork**, in the one
+descriptor table the process has, so the enclosing end is still parked when
+the inner one asks and the descent stepped over it — `/dev/fd/62` where bash
+writes 63, one differing line per nesting level (#4119). What answers it is
+the fork's arithmetic without the fork: the body is told which numbers a fork
+would have closed, publishes one of them, and parks its descriptor above the
+region the dialect can publish from. The number the path is made of is
+therefore not always the descriptor's own, which costs two things and no
+more. A command is handed the pipe **at the published number**, through the
+table rebuilt for it, so nothing a script or a command can see has moved. And
+an open done by the **shell itself** — the redirection of `read x < <(cmd)` —
+goes through the real table, so it is mapped back to the descriptor first;
+without that it would reach the enclosing pipe.
+
 ### Which directory the path names
 
 The number is the shell's own and is not promised, but the **directory** in

@@ -7,6 +7,7 @@ package interp
 
 import (
 	"os"
+	"slices"
 	"strconv"
 	"sync"
 	"syscall"
@@ -75,12 +76,49 @@ import (
 //
 // shell is the end this shell reads or writes through — the body's output for
 // `<(cmd)`, the body's input for `>(cmd)`. child is the other end, parked on a
-// descriptor number, which is the whole of what path names.
+// descriptor number.
+//
+// fd is the number path is made of, and it is *published* rather than raw:
+// the number the child's table is built at, which is child's own number in
+// every shape but one. See substFdView for the shape where the two part
+// company, and real for the path that names the raw one.
 type procSubEnds struct {
 	shell *os.File
 	child *os.File
+	fd    int
 	path  string
+	// real names child's actual descriptor where that is not fd. Empty when
+	// the two agree, which is every substitution outside another one's body.
+	real string
 }
+
+// substFdView is how the shell making a substitution sees the descriptor
+// table, in the two places the kernel cannot answer for it.
+//
+// released are numbers this process holds that a *fork* would have closed:
+// the parked ends of the substitutions this body is running inside. bash runs
+// a substitution's body in a fork and closes the outer end there, so the
+// number comes free and a nested substitution takes it — `cat <(echo
+// <(true))` is `/dev/fd/63` twice over in bash 5.3.20, the outer's number
+// re-used inside. A body here is a clone rather than a fork and the outer end
+// is still open in the one descriptor table there is, so asking the kernel
+// answers about a descriptor the body is not supposed to be able to see.
+//
+// taken are numbers already published in this view whose descriptor is *not*
+// on them — the other half of the same split. Once a nested substitution has
+// published a number it borrowed from released, the kernel will hand that
+// number out again, and the next substitution in the same body would publish
+// it a second time.
+//
+// Both are short — one entry per enclosing substitution — so they are walked
+// rather than hashed.
+type substFdView struct {
+	released []int
+	taken    []int
+}
+
+func (v substFdView) isReleased(fd int) bool { return slices.Contains(v.released, fd) }
+func (v substFdView) isTaken(fd int) bool    { return slices.Contains(v.taken, fd) }
 
 // firstProcSubFd is the floor the search falls back to when every number the
 // dialect asked for is taken.
@@ -141,7 +179,7 @@ func (r *Runner) procSubFdDir() string {
 // between the two spellings: `>(cmd)` hands the command the writing end and
 // keeps the reading one, `<(cmd)` the other way about. dir is the directory
 // the path is named after — see Runner.procSubFdDir.
-func newProcSubPipe(childWrites bool, dir string, want []int) (procSubEnds, error) {
+func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) (procSubEnds, error) {
 	rd, wr, err := os.Pipe()
 	if err != nil {
 		return procSubEnds{}, err
@@ -154,7 +192,7 @@ func newProcSubPipe(childWrites bool, dir string, want []int) (procSubEnds, erro
 	// Before the park, because the number it gives up is one of the numbers
 	// the park is about to ask for.
 	shell = raiseShellEnd(shell, want)
-	parked, err := parkDescriptor(child, dir, want)
+	parked, pub, err := parkDescriptor(child, dir, want, view)
 	// The original is closed either way: on success the parked duplicate is
 	// the one the path names, and on failure there is nothing to hand over.
 	_ = child.Close()
@@ -162,10 +200,20 @@ func newProcSubPipe(childWrites bool, dir string, want []int) (procSubEnds, erro
 		_ = shell.Close()
 		return procSubEnds{}, err
 	}
-	// And now that both of this pipe's own originals are gone, the number the
-	// dialect actually wanted may have come free — see reparkPreferred.
-	parked = reparkPreferred(parked, dir, want)
-	return procSubEnds{shell: shell, child: parked, path: parked.Name()}, nil
+	if pub == int(parked.Fd()) {
+		// And now that both of this pipe's own originals are gone, the number
+		// the dialect actually wanted may have come free — see
+		// reparkPreferred. Only where the published number *is* the
+		// descriptor's: a borrowed number was never the kernel's to give, so
+		// there is nothing to ask it again about.
+		parked = reparkPreferred(parked, dir, want, view)
+		pub = int(parked.Fd())
+	}
+	ends := procSubEnds{shell: shell, child: parked, fd: pub, path: dir + "/" + strconv.Itoa(pub)}
+	if raw := int(parked.Fd()); raw != pub {
+		ends.real = dir + "/" + strconv.Itoa(raw)
+	}
+	return ends, nil
 }
 
 // raiseShellEnd moves this shell's end of the pipe above every number the
@@ -253,11 +301,16 @@ func raiseShellEnd(f *os.File, want []int) *os.File {
 //
 // Failure is not one here either: the number in hand is already a working
 // descriptor, and every refusal simply leaves it.
-func reparkPreferred(parked *os.File, dir string, want []int) *os.File {
+func reparkPreferred(parked *os.File, dir string, want []int, view substFdView) *os.File {
 	cur := int(parked.Fd())
 	for _, n := range want {
 		if n == cur {
 			return parked
+		}
+		if view.isTaken(n) {
+			// Published already, by a substitution whose descriptor is
+			// somewhere else. The kernel would hand this number over.
+			continue
 		}
 		got, err := fcntlInt(cur, syscall.F_DUPFD_CLOEXEC, n)
 		if err != nil {
@@ -279,7 +332,13 @@ func reparkPreferred(parked *os.File, dir string, want []int) *os.File {
 }
 
 // parkDescriptor duplicates a file onto one of the numbers want asks for, and
-// names it the way the path will.
+// answers both the descriptor and the number to publish.
+//
+// The two are one number in every substitution that is not inside another
+// one's body, and the second answer exists for the ones that are: a number
+// view.released says a fork would have freed is published without being
+// taken, and the descriptor goes above the published region instead. See
+// substFdView.
 //
 // want is the dialect's ordered wish list — see Runner.substEndCandidates and
 // Semantics.SubstitutionEndPlacement, which is where the four shells' four
@@ -324,15 +383,43 @@ func reparkPreferred(parked *os.File, dir string, want []int) *os.File {
 // Cleared on the duplicate, which is the end nothing in this process reads or
 // writes through: the shell's own end is the pipe's *other* description and
 // keeps the mode Go gave it, so the poller is untouched.
-func parkDescriptor(f *os.File, dir string, want []int) (*os.File, error) {
+func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.File, int, error) {
 	conn, err := f.SyscallConn()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	var parked int
+	// Where a borrowed number's descriptor goes: above everything this
+	// dialect could publish, which is raiseShellEnd's floor and is chosen for
+	// the same reason. A raw number nothing can name only has to be out of
+	// the way, and leaving it inside the published region would put it in
+	// front of the next substitution's wish.
+	floor := shellEndFloor(want)
+	if floor < firstProcSubFd {
+		floor = firstProcSubFd
+	}
+	var parked, published int
 	var parkErr error
 	if cerr := conn.Control(func(fd uintptr) {
 		for _, n := range want {
+			if view.isTaken(n) {
+				// Published already by a substitution of this same body,
+				// whose descriptor is not on it. The kernel would say the
+				// number is free and two paths would name one pipe.
+				continue
+			}
+			if view.isReleased(n) {
+				// A number a fork would have freed, so this shell publishes
+				// it and parks the descriptor out of the way. The command
+				// this substitution is handed to gets it *at* n through the
+				// table childFiles builds, which is the only place the
+				// number has to be true.
+				got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, floor)
+				if err != nil {
+					continue
+				}
+				parked, published = got, n
+				return
+			}
 			got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, n)
 			if err != nil {
 				// A wish the kernel refuses is a wish that missed, not the
@@ -344,7 +431,7 @@ func parkDescriptor(f *os.File, dir string, want []int) (*os.File, error) {
 				continue
 			}
 			if got == n {
-				parked = got
+				parked, published = got, n
 				return
 			}
 			// The number was taken. What came back is a working duplicate at
@@ -353,17 +440,18 @@ func parkDescriptor(f *os.File, dir string, want []int) (*os.File, error) {
 			_ = syscall.Close(got)
 		}
 		parked, parkErr = fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, firstProcSubFd)
+		published = parked
 	}); cerr != nil {
-		return nil, cerr
+		return nil, 0, cerr
 	}
 	if parkErr != nil {
-		return nil, parkErr
+		return nil, 0, parkErr
 	}
 	if err := syscall.SetNonblock(parked, false); err != nil {
 		_ = syscall.Close(parked)
-		return nil, err
+		return nil, 0, err
 	}
-	return os.NewFile(uintptr(parked), dir+"/"+strconv.Itoa(parked)), nil
+	return os.NewFile(uintptr(parked), dir+"/"+strconv.Itoa(parked)), published, nil
 }
 
 // fcntlInt is the one fcntl this package needs, with the errno turned into an

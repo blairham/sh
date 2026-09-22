@@ -867,7 +867,9 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	if !r.ownPipe(path) && r.openQuietlyDenied(action) {
 		return r.dotFailed(args[0], errRefused)
 	}
-	b, err := r.readFileGated(ctx, &action, path)
+	// Opened by the shell itself, so the one shape where the published name
+	// is not the one this process opens applies — see Runner.substOpenPath.
+	b, err := r.readFileGated(ctx, &action, r.substOpenPath(path))
 	if errors.Is(err, errRefused) {
 		// A link that reached a file the policy withholds, reported exactly
 		// as the withheld name above is — same diagnostic, same fatality

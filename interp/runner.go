@@ -471,6 +471,14 @@ type Runner struct {
 	// in bash 5.3.20 and was a bad file descriptor here, because the `local`
 	// took the call's pipes with it on its way out.
 	enclosingProcSubs []procSubPipe
+	// releasedSubstFds are the descriptors a *fork* would have closed on the
+	// way into a process substitution's body: the parked ends of the
+	// substitutions this shell is running inside. A substitution nested in
+	// another one's body takes the outer's number in bash, because the fork
+	// that runs the body closes it there; a body here is a clone in the one
+	// process there is, so the number has to be released by bookkeeping. See
+	// substFdView, which is what this becomes at the park.
+	releasedSubstFds []int
 	// heldProcSubs are the ones removeProcSubs could not finish with, because
 	// one of this shell's *own* descriptors was still open on the pipe —
 	// `exec > >(cmd)` is the shape. They keep until the shell itself ends,

@@ -85,7 +85,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// Runner.PipesMadeForTest.
 	r.procSubHomeBox().seq.Add(1)
 	ends, err := newProcSubPipe(kind == syntax.ProcSubstOut, r.procSubFdDir(),
-		r.substEndCandidates())
+		r.substEndCandidates(), r.substFdView())
 	if err != nil {
 		r.diagf("%v\n", err)
 		r.expandErr = true
@@ -99,6 +99,10 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	action := r.act(Action{Kind: ActionOpen, Path: ends.path, Write: kind != syntax.ProcSubstOut})
 
 	sub, releaseFds := r.substRunner(kind)
+	// Including this substitution's own end, which is the one the nesting is
+	// about and the one substRunner cannot see: procSubs does not hold this
+	// pipe until the entry below is made.
+	sub.releasedSubstFds = append(sub.releasedSubstFds, int(ends.child.Fd()))
 	if kind == syntax.ProcSubstOut {
 		// The body's own, on the terms substRunner gives for its stderr: the
 		// same lock and the same destination, sealable where the shell's is
@@ -198,7 +202,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// shell.
 	ident, _ := ends.child.Stat()
 	r.procSubs = append(r.procSubs, procSubPipe{
-		path: ends.path, ident: ident, hold: ends.child,
+		path: ends.path, real: ends.real, fd: ends.fd, ident: ident, hold: ends.child,
 		body: body, captured: captured, keep: keep,
 	})
 	return ends.path, true
@@ -262,6 +266,13 @@ func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	// one's writing end in every command it runs is the `tee >(cat)` hang
 	// newProcSubPipe exists to rule out.
 	sub.enclosingProcSubs = nil
+	// And their *numbers* come free with them, which is the same statement
+	// made to the allocator rather than to childFiles. bash runs the body in
+	// a fork and closes the ends there, so a substitution nested inside one
+	// finds the outer's number free and takes it; here the fork is a clone
+	// and the descriptor is still open in the one table there is, so the
+	// release is recorded. See Runner.releasedSubstFds (#4119).
+	sub.releasedSubstFds = r.bodyReleasedFds()
 	sub.inheritJobs(jobBoundarySubstitution)
 	// **Which input the body reads is one question, asked once.** `<(cmd)`
 	// and `=(cmd)` keep what this chooses; `>(cmd)` replaces it in procSub
@@ -678,6 +689,18 @@ func (r *Runner) tempHome() string {
 // owns, and that goes away with it.
 type procSubPipe struct {
 	path string
+	// fd is the number path is made of: where the end this substitution was
+	// handed to finds it, in the table childFiles builds for a command. The
+	// same number as hold's own outside a substitution body, and a borrowed
+	// one inside — see substFdView and real.
+	fd int
+	// real is the path that names hold's actual descriptor, where that is not
+	// the number path publishes. It is what *this shell* opens for `read <
+	// <(cmd)` inside another substitution's body, whose published number is
+	// still the enclosing pipe's in the one descriptor table there is. Empty
+	// wherever the two agree, which is everywhere else. See
+	// Runner.substOpenPath.
+	real string
 	// file says the path leads to a regular file on disk — `=(cmd)`, the one
 	// spelling of the three that writes one — so removeProcSubs has a name to
 	// unlink. The other two name a descriptor rather than a place, and
@@ -1066,15 +1089,20 @@ func (r *Runner) closeOwnPipe(v any) {
 	if r.fdAliased(v) {
 		return
 	}
+	// Either name: what this shell opened is the *real* path wherever the
+	// published one names an enclosing pipe, so a substitution's own stream
+	// inside another body would otherwise go unrecognized here. See
+	// Runner.substOpenPath.
 	name := f.Name()
+	named := func(p procSubPipe) bool { return p.path == name || (p.real != "" && p.real == name) }
 	for _, p := range r.procSubs {
-		if p.path == name {
+		if named(p) {
 			_ = f.Close()
 			return
 		}
 	}
 	for _, p := range r.heldProcSubs {
-		if p.path == name {
+		if named(p) {
 			_ = f.Close()
 			return
 		}
@@ -1520,6 +1548,71 @@ func shellEndFloor(want []int) int {
 // this dialect publish" and not two that can drift apart.
 func (r *Runner) privateFdFloor() int {
 	return shellEndFloor(r.substEndCandidates())
+}
+
+// substFdView is what the allocator has to be told that the kernel cannot
+// answer: the numbers a fork would have freed on the way into this body, and
+// the ones already published here without a descriptor on them.
+//
+// Empty in every shell that is not running a substitution's body, which is
+// the common path and is why the two lists are slices rather than sets.
+func (r *Runner) substFdView() substFdView {
+	v := substFdView{released: r.releasedSubstFds}
+	// Only the borrowed numbers. A number a live substitution both published
+	// *and* holds is already refused by the kernel, so offering it and being
+	// told no costs one fcntl and needs no bookkeeping to stay true.
+	for _, p := range r.handedProcSubs() {
+		if p.hold != nil && p.fd != int(p.hold.Fd()) {
+			v.taken = append(v.taken, p.fd)
+		}
+	}
+	return v
+}
+
+// bodyReleasedFds is what a fork into a substitution's body would have closed
+// before this substitution's own end is added to it: the chain of bodies this
+// one is nested inside, and nothing else.
+//
+// **The chain and not the command.** Measured 2026-09-22 on bash 5.3.20, `cat
+// <(true) <(echo <(true))` is `/dev/fd/62` — the second substitution's body
+// re-uses *its own* number and steps over the first's, which the fork left
+// open. Releasing every end the command had made answered 63 there, and the
+// cost of the wrong reading is a number, not a pipe: both are correct
+// descriptors, one of them is bash's.
+//
+// A fresh slice each time, because the body appends its own end to it and a
+// shared array would put that number in a sibling's view as well.
+func (r *Runner) bodyReleasedFds() []int {
+	return slices.Clone(r.releasedSubstFds)
+}
+
+// substOpenPath is the path *this shell* opens for a name it published.
+//
+// The same name in all but one shape. A substitution inside another one's
+// body publishes a number the enclosing pipe is still parked on — see
+// substFdView — so `/dev/fd/63` in there names the outer pipe to an open done
+// by this process, and the inner one to every command, which gets its table
+// built at the published number. `cat <(read x < <(echo hi); echo $x)` is the
+// shape: the `read`'s redirection is the shell's own open.
+//
+// The commands are the ones that must see the published number, so the
+// mapping goes here rather than the other way about.
+func (r *Runner) substOpenPath(path string) string {
+	find := func(pipes []procSubPipe) string {
+		for _, p := range pipes {
+			if p.real != "" && p.path == path {
+				return p.real
+			}
+		}
+		return ""
+	}
+	if real := find(r.procSubs); real != "" {
+		return real
+	}
+	if real := find(r.enclosingProcSubs); real != "" {
+		return real
+	}
+	return path
 }
 
 // substEndSearch bounds how far up a wish list looks.

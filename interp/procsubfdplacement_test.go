@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -376,4 +377,89 @@ func TestABodysOwnCopyOfTheTableIsNotInTheAnswer(t *testing.T) {
 	}
 	t.Errorf("got %v over %d attempts, want %v — a body's private copy of the table "+
 		"is being counted in the answer", got, attempts, want)
+}
+
+// A substitution nested inside another one's body takes the number the
+// enclosing one published — not the number below it.
+//
+// Measured 2026-09-21 on bash 5.3.20: `cat <(echo <(true))` is `/dev/fd/63`,
+// the outer's own number handed out a second time. bash runs the body in a
+// **fork** and closes the outer end there, so the number is genuinely free by
+// the time the inner one asks. A body here is a clone of the Runner in the one
+// process there is, so the outer end is still parked in the real table and the
+// descent stepped over it to 62 — one differing line per nested substitution
+// (#4119). See substFdView, which is what releases the number instead.
+//
+// # Against the shell's own flat answer, not against digits
+//
+// The numbers come from the table for the whole test binary, so the neighbors
+// in this file assert regions — and a region cannot see this fault, which is
+// one number wide. What is compared instead is the **same script's flat
+// answer**: a substitution of its own on the line before, whose pipe is gone
+// again by the time the nested one runs, so the two must land on the same
+// number whatever number that is. Before the fix the second line was one
+// below the first; a parallel test taking a descriptor moves both together.
+func TestANestedSubstitutionTakesTheEnclosingNumber(t *testing.T) {
+	got := substNumbers(t, runSubstPlacement(t, SubstitutionEndsAtTheTopOfTheTable,
+		AllocateDescriptorsFromTen, nil,
+		"echo <(true)\nread line < <(echo <(true))\necho \"$line\"", nil))
+	if len(got) != 2 {
+		t.Fatalf("got %v, want two numbers", got)
+	}
+	if got[0] != got[1] {
+		t.Errorf("got %v, want the nested substitution on the same number as the flat "+
+			"one — the enclosing end is being stepped over rather than released", got)
+	}
+}
+
+// And the shell's own open of that number reaches the pipe it named.
+//
+// The other half of the release, and the half that is not cosmetic. A nested
+// substitution publishes a number the enclosing pipe is *still parked on* in
+// this process, because a clone is not a fork: commands get the published
+// number through the table childFiles builds, but an open done by the shell
+// itself — the redirection of `read x < <(cmd)` — goes through the real
+// table and would reach the enclosing pipe. See Runner.substOpenPath.
+//
+// Mutation-proven 2026-09-22: with the mapping removed this script does not
+// finish at all, because the shell reads the outer pipe and nothing is ever
+// going to write the line it is waiting for. So it is run on a goroutine
+// under a deadline, and a regression is a failure rather than a hang.
+func TestTheShellsOwnOpenOfANestedSubstitutionReachesIt(t *testing.T) {
+	const src = "read outer < <(read inner < <(echo deep); echo \"[$inner]\")\necho \"$outer\""
+	d := syntax.Core()
+	d.ProcessSubstitution = true
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sem := PosixSemantics()
+	sem.SubstitutionEndPlacement = SubstitutionEndsAtTheTopOfTheTable
+	sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
+	out := &strings.Builder{}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+		Stdout: out, Stderr: &strings.Builder{},
+	})
+	// The run on a goroutine and the assertions on this one: t.Fatal belongs
+	// to the goroutine running the test, and the buffer is read only after
+	// the channel says the run is over.
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.Run(context.Background(), f)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(out.String()); got != "[deep]" {
+			t.Errorf("got %q, want %q — the shell opened the published number and "+
+				"reached the enclosing pipe", got, "[deep]")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the run did not finish: the shell is reading a pipe nobody is going " +
+			"to write, which is the enclosing substitution's rather than its own")
+	}
 }

@@ -2945,7 +2945,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				return ""
 			}
 			r.storeThroughExpansion(e.Name, v)
-			return v
+			return r.assignedThrough(e.Name, v)
 		}
 		return value
 	case syntax.ParamAssignAlways:
@@ -3085,6 +3085,31 @@ func (r *Runner) assignAlways(e *syntax.ParamExpr, subscript bool) string {
 // than being dropped, which is the half that moves `$#`; and `0` is a
 // position like any other to the assignment, though it is the shell's name
 // rather than a member of the list and leaves `$#` alone.
+// assignedThrough is what an assignment written inside an expansion *yields*,
+// which is the value the variable ended up holding and not the word.
+//
+// The two part company wherever the name carries an attribute that rewrites
+// what is stored. Measured 2026-09-22 against bash 5.3.20:
+//
+//	declare -i a; echo ${a:=4+3}        7      and `declare -p a` is `a="7"`
+//	declare -u A; A=; echo ${A:=foo}    FOO    and `A="FOO"`
+//
+// Both halves were already right here — the variable held `7` and `FOO` — and
+// the expansion handed back `4+3` and `foo`, so a line that assigns and reads
+// in one breath disagreed with the very next line that read the name.
+//
+// A positional parameter carries no attributes and cannot be read back by
+// name, so it keeps the word it was given.
+func (r *Runner) assignedThrough(name, v string) string {
+	if isPositional(name) {
+		return v
+	}
+	if stored, ok := r.getVar(name); ok {
+		return stored
+	}
+	return v
+}
+
 func (r *Runner) storeThroughExpansion(name, v string) {
 	n, ok := atoi(name)
 	if !ok || !isPositional(name) {

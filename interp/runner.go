@@ -2010,7 +2010,10 @@ type Runner struct {
 	// histStart and histFinish are what the dialect does with its history
 	// file when a script first turns the list on and when the shell ends,
 	// and histStarted says the first of them has happened. See
-	// SetHistoryFile.
+	// SetHistoryFile. histSeed is the same list reached from the other
+	// side — a front end handing over what a previous session left, which
+	// is the one route an interactive shell has into it. See
+	// SetHistorySeed.
 	histFirst   func(*Runner) int
 	histSeed    func(*Runner, []string)
 	histStart   func(*Runner)

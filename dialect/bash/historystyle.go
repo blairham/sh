@@ -84,8 +84,10 @@ func HistoryStyle() repl.HistoryStyle {
 //
 // Every reader and writer of a history file in this dialect goes through
 // here rather than through [HistoryStyle], so a file this shell wrote a
-// moment ago is one it reads back the same way. The static one is left for
-// the front end, which states a style once when the session is built.
+// moment ago is one it reads back the same way. [HistoryStyle] is what the
+// front end is handed, once, when the session is built — and it puts the
+// same question at each of its own reads and writes, through
+// [repl.HistoryStyle.InForce], which is the one place either side asks.
 func historyStyle(r *interp.Runner) repl.HistoryStyle {
 	return HistoryStyle().InForce(r.GetVar)
 }

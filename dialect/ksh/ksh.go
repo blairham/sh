@@ -2331,6 +2331,12 @@ func Semantics() interp.Semantics {
 	// a zero byte, which this shell's truncation then makes into nothing.
 	s.DollarSingleHexReadsEveryDigit = interp.Yes
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
+	// And the braced spelling is the same reading with the braces doing the
+	// ending: `$'a\x{263a}'` is a then e2 98 ba and `$'a\x{FF}'` is a then
+	// ff, so a run past two digits is a code point here where bash keeps the
+	// low byte. Measured 2026-09-22 under `LC_ALL=C` on ksh93u+ 2012-08-01
+	// (#4165).
+	s.DollarSingleBracedHex = interp.DollarSingleBracedHexIsACodePoint
 	// An octal escape past 255 keeps the low byte, as in bash: `$'\401'` is
 	// 01. Measured 2026-09-18 by `od` (#3415).
 	s.DollarSingleOctalPastAByteDropsTheLastDigit = interp.No

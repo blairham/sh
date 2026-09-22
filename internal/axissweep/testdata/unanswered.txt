@@ -364,6 +364,7 @@ dash  DeclareZeroFillLetter
 dash  DisownAlwaysFails
 dash  DisownRemovesTheJob
 dash  DollarSingleBackslashC
+dash  DollarSingleBracedHex
 dash  DollarSingleCaretMeta
 dash  DollarSingleDigitlessEscapeIsAZeroByte
 dash  DollarSingleEscEscape

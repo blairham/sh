@@ -185,7 +185,7 @@ vector rather than a decision taken here:
   happens" are different questions**, and a two-valued axis has quietly
   committed to the first.
 
-Two more places the panel splits, both about the hexadecimal escape's
+Three more places the panel splits, all about the hexadecimal escape's
 digits, and each an axis:
 
 - **How many digits `\x` reads** — `DollarSingleHexReadsEveryDigit`.
@@ -212,6 +212,35 @@ digits, and each an axis:
   this reading as one of its four values. The two are separate fields
   because a shell answers the two sites differently — ksh93 reads `\x41`
   in a format and leaves it alone in a `%b` argument.
+
+- **Whether `\x{…}` is an escape at all** — `DollarSingleBracedHex`, and
+  a policy rather than an answer, because the two columns that have the
+  form do not read it the same way. The braces end the digit run
+  themselves, so both take every digit they hold whatever the axis above
+  says; bash then keeps the **low byte** and ksh93 reads a run past two
+  digits as a **code point**. zsh and BusyBox ash have no brace form, and
+  reach that through the axis below rather than through this one — the
+  `\x` simply has no digit after it and the braces are ordinary text, so
+  the two look different in a terminal while agreeing here. Measured
+  2026-09-22 under `LC_ALL=C` by `cat -v`:
+
+  | written | bash 5.3, bash 3.2 | ksh93 | zsh | BusyBox ash |
+  | --- | --- | --- | --- | --- |
+  | `$'a\x{41}b'` | `aAb` | `aAb` | `a`, 00, `{41}b` | `a\x{41}b` |
+  | `$'a\x{FF}'` | `a` then ff | `a` then ff | `a`, 00, `{FF}` | `a\x{FF}` |
+  | `$'a\x{263a}'` | `a` then 3a | `a` then e2 98 ba | `a`, 00, `{263a}` | `a\x{263a}` |
+  | `$'a\x{100}b'` | `a`, the zero ending the span | `a` then c4 80 then `b` | `a`, 00, `{100}b` | `a\x{100}b` |
+  | `$'a\x{4z'` | `a` then 04 then `z` | `a` then 04 then `z` | `a`, 00, `{4z` | `a\x{4z` |
+  | `$'a\x{41'` | `aA` | `aA` | `a`, 00, `{41` | `a\x{41` |
+
+  Rows two and three are the pair that parts the columns that have it:
+  the same 0xFF is a byte at two digits in both, and four digits are a
+  byte in one and a character in the other. The closing brace is consumed
+  when it is what stopped the run and anything else is left where it was
+  written, so `$'a\x{41}{42}'` is `aA{42}`. An **empty** run — `$'\x{}'`
+  and `$'\x{'` alike — is a zero byte in both, and that is the brace
+  form's own rule and not the axis below: bash answers that one `No` and
+  still reads this as a zero. dash has no `$'…'` at all to ask any of it.
 
 - **An escape with no digit after it** —
   `DollarSingleDigitlessEscapeIsAZeroByte`. bash keeps `\xzz` as written;

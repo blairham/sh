@@ -1965,6 +1965,11 @@ func Semantics() interp.Semantics {
 	// (#554).
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
+	// And no braced spelling either, which here means the whole `\x{41}` is
+	// kept as written — the same absence zsh has, reached through the
+	// opposite answer to the axis above. Measured 2026-09-22 under `LC_ALL=C`
+	// on BusyBox 1.37.0 in the digest-pinned Alpine image (#4165).
+	s.DollarSingleBracedHex = interp.DollarSingleBracedHexAbsent
 	// A three-digit octal escape past 255 is the first two digits' byte here
 	// and the third digit is dropped: `$'\401'` is a space rather than 01,
 	// and `$'\4001'` is a space then a `1`. Measured 2026-09-18 by `od`

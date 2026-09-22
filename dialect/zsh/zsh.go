@@ -2725,6 +2725,10 @@ func Semantics() interp.Semantics {
 	// bytes.
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.Yes
+	// There is no braced spelling at all, so `$'a\x{41}b'` is the zero byte
+	// the axis above gives a digitless `\x`, and then `{41}b` as ordinary
+	// text. Measured 2026-09-22 under `LC_ALL=C` on zsh 5.9.2 (#4165).
+	s.DollarSingleBracedHex = interp.DollarSingleBracedHexAbsent
 	// An octal escape past 255 keeps the low byte: `$'\401'` is 01, and
 	// `$'\400'` is the zero byte this shell holds as a character of the
 	// text. Measured 2026-09-18 by `od` (#3415).

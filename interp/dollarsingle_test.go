@@ -419,3 +419,135 @@ func TestDollarSingleEscapeWithNoDigits(t *testing.T) {
 		})
 	}
 }
+
+// The braced hexadecimal escape, `$'\x{…}'` (#4165).
+//
+// A second spelling of one escape rather than a wider version of it: the
+// braces end the run themselves, so every digit is read whatever
+// DollarSingleHexReadsEveryDigit says, and the two columns that have the form
+// then disagree about what a long run means. bash keeps the low byte; ksh93
+// reads a code point, exactly as it reads an undelimited run past two digits.
+//
+// The rows are the shapes the suite's own file puts to it — a closed run, an
+// unclosed one, a run stopped by a letter, an empty one, and a value past a
+// byte — measured 2026-09-22 under `LC_ALL=C`.
+func TestDollarSingleBracedHex(t *testing.T) {
+	bracedSem := func(p DollarSingleBracedHexPolicy, nul DollarSingleNulPolicy) Semantics {
+		s := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, nul)
+		s.DollarSingleBracedHex = p
+		return s
+	}
+	for _, tc := range []struct {
+		name, src         string
+		aByte, aCodePoint string
+	}{
+		{
+			"a closed run of two digits", `printf '[%s]' $'a\x{41}b'`,
+			"[aAb]", "[aAb]",
+		},
+		{
+			// The control that says the digit *count* decides the code-point
+			// reading and not the value: 0xFF at two digits is the byte in
+			// both columns.
+			"the high byte at two digits", `printf '[%s]' $'a\x{FF}'`,
+			"[a\xff]", "[a\xff]",
+		},
+		{
+			// The sharpest row, and the one the two columns part on: the
+			// same four digits are one byte under the first reading and a
+			// three-byte character under the second.
+			"a run past a byte", `printf '[%s]' $'a\x{263a}'`,
+			"[a:]", "[a☺]",
+		},
+		{
+			// And a value whose low byte is zero, so the byte reading takes
+			// the NUL road while the code-point reading writes a character.
+			"a value one past a byte", `printf '[%s]' $'a\x{100}b'`,
+			"[a\x00b]", "[aĀb]",
+		},
+		{
+			// Something that is not a digit ends the run and stays where it
+			// was written — the brace is not required to close.
+			"a run stopped by a letter", `printf '[%s]' $'a\x{4z'`,
+			"[a\x04z]", "[a\x04z]",
+		},
+		{
+			"a run stopped by the end of the text", `printf '[%s]' $'a\x{41'`,
+			"[aA]", "[aA]",
+		},
+		{
+			// The brace form's own rule, and not
+			// DollarSingleDigitlessEscapeIsAZeroByte: bash answers that No
+			// and still reads an empty run as a zero.
+			"an empty run", `printf '[%s]' $'a\x{}b'`,
+			"[a\x00b]", "[a\x00b]",
+		},
+		{
+			// The closing brace is consumed and a second one is text, so a
+			// run cannot swallow what follows it.
+			"a brace after the escape", `printf '[%s]' $'a\x{41}{42}'`,
+			"[aA{42}]", "[aA{42}]",
+		},
+		{
+			// Longer than any value holds: the low bits survive, which is
+			// `#` under the byte reading.
+			"more digits than a value holds", `printf '[%s]' $'a\x{0123456789abcdef0123}Z'`,
+			"[a#Z]", "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := bracedSem(DollarSingleBracedHexIsAByte, DollarSingleNulIsAByte)
+			if got, _ := run(t, tc.src, withSem(sem)); got != tc.aByte {
+				t.Errorf("a byte: got %q, want %q", got, tc.aByte)
+			}
+			if tc.aCodePoint == "" {
+				// A value past what the accumulator holds is the one row
+				// with nothing to assert on the other side: the reading is
+				// an encoder's answer to a number that overflowed, which is
+				// not a fact about a shell.
+				return
+			}
+			sem = bracedSem(DollarSingleBracedHexIsACodePoint, DollarSingleNulIsAByte)
+			if got, _ := run(t, tc.src, withSem(sem)); got != tc.aCodePoint {
+				t.Errorf("a code point: got %q, want %q", got, tc.aCodePoint)
+			}
+		})
+	}
+}
+
+// And the dialect without the form, which is two shapes and not one: the `\x`
+// has no digit after it, so what happens next is
+// DollarSingleDigitlessEscapeIsAZeroByte's answer and the braces are ordinary
+// text either way.
+func TestDollarSingleBracedHexAbsent(t *testing.T) {
+	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulIsAByte)
+	sem.DollarSingleBracedHex = DollarSingleBracedHexAbsent
+	const src = `printf '[%s]' $'a\x{41}b'`
+	sem.DollarSingleDigitlessEscapeIsAZeroByte = No
+	if got, _ := run(t, src, withSem(sem)); got != `[a\x{41}b]` {
+		t.Errorf("as written: got %q, want %q", got, `[a\x{41}b]`)
+	}
+	sem.DollarSingleDigitlessEscapeIsAZeroByte = Yes
+	if got, _ := run(t, src, withSem(sem)); got != "[a\x00{41}b]" {
+		t.Errorf("a zero byte: got %q, want %q", got, "[a\x00{41}b]")
+	}
+}
+
+// A NUL an empty braced run produced is the ordinary road to one, so the
+// dialect that ends a span at a zero byte ends it here.
+func TestDollarSingleBracedHexEmptyRunEndsTheSpan(t *testing.T) {
+	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulEndsTheSpan)
+	sem.DollarSingleBracedHex = DollarSingleBracedHexIsAByte
+	if got, _ := run(t, `printf '[%s]' $'a\x{}b'`, withSem(sem)); got != "[a]" {
+		t.Errorf("got %q, want %q", got, "[a]")
+	}
+}
+
+// And an unanswered axis is refused rather than defaulted, which is the whole
+// discipline: a dialect that has not said is not a dialect without the escape.
+func TestDollarSingleBracedHexUnanswered(t *testing.T) {
+	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulIsAByte)
+	if _, st := run(t, `printf '[%s]' $'a\x{41}b'`, withSem(sem)); st == 0 {
+		t.Errorf("status %d, want a refusal", st)
+	}
+}

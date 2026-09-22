@@ -1365,6 +1365,60 @@ type Semantics struct {
 	// character under one reading and a truncated word under the other,
 	// with nothing said about it.
 	DollarSingleHexReadsEveryDigit Answer
+	// DollarSingleBracedHex is whether `\x{…}` inside `$'…'` is a
+	// brace-delimited hexadecimal escape, and — where it is — what the value
+	// between the braces stands for. See DollarSingleBracedHexPolicy for the
+	// three values.
+	//
+	// It is a *second* spelling of the hexadecimal escape and not a wider
+	// version of the first: the braces end the digit run themselves, so a run
+	// of any length is read whatever DollarSingleHexReadsEveryDigit says, and
+	// the two columns that have the form then disagree about what a long run
+	// means. That is why this is a policy and not an Answer — "does the brace
+	// form exist" cannot hold "and its value is a byte here and a code point
+	// there".
+	//
+	// Measured 2026-09-22 under `LC_ALL=C` from `printf '%s' $'…'`, read
+	// through `cat -v`, on bash 5.3.20, bash 3.2.57, zsh 5.9.2, ksh93u+
+	// 2012-08-01 and BusyBox ash 1.37.0 in the digest-pinned Alpine image:
+	//
+	//	              bash 5.3, bash 3.2   ksh93            zsh              ash
+	//	$'a\x{41}b'   aAb                  aAb              a NUL {41}b      a\x{41}b
+	//	$'a\x{}b'     a                    a                a NUL {}b        a\x{}b
+	//	$'a\x{263a}'  a then 3a            a then e2 98 ba  a NUL {263a}     a\x{263a}
+	//	$'a\x{100}b'  a                    a then c4 80 b   a NUL {100}b     a\x{100}b
+	//	$'a\x{FF}'    a then ff            a then ff        a NUL {FF}       a\x{FF}
+	//	$'a\x{4z'     a then 04 then z     a then 04 then z a NUL {4z        a\x{4z
+	//	$'a\x{41'     aA                   aA               a NUL {41        a\x{41
+	//
+	// The third row and the fourth are the pair that parts the two columns
+	// that have the escape: bash keeps the **low byte** of whatever the
+	// digits came to — 0x263a is `:` and 0x100 is the zero byte that ends the
+	// span — where ksh93 reads a run past two digits as a **code point**,
+	// exactly as it reads an undelimited one. The fifth row is the control
+	// that says it is the digit count and not the value: 0xFF written with
+	// two digits is the byte in both.
+	//
+	// The two columns without the form are not one answer with two faces.
+	// zsh's `\x` has no digits after it, so DollarSingleDigitlessEscapeIsAZero-
+	// Byte gives a NUL and the braces are ordinary text; ash's same escape
+	// with the opposite answer keeps `\x` as written. Both reach that through
+	// the escape they already have, which is why Absent means "not this
+	// escape" rather than "produces nothing".
+	//
+	// An empty run inside the braces is a zero byte in both columns that have
+	// the form — `$'\x{}'` and `$'\x{'` alike — and that is *not*
+	// DollarSingleDigitlessEscapeIsAZeroByte, which bash answers No: the
+	// brace form has its own rule and the undelimited one is untouched.
+	//
+	// Asked only where a `\x` is actually followed by a `{`, so every
+	// ordinary `$'\x41'` puts no question to the dialect.
+	//
+	// Silent and wrong either way it is answered wrongly, and in the
+	// direction that costs most: a shell without the form writes the escape
+	// back as text, so a script that meant one byte carries five characters
+	// forward at status 0.
+	DollarSingleBracedHex DollarSingleBracedHexPolicy
 	// DollarSingleOctalPastAByteDropsTheLastDigit is what a three-digit octal
 	// escape inside `$'…'` comes to when its value is past 255: the *first
 	// two digits'* byte, with the third read and thrown away, rather than the
@@ -25848,6 +25902,63 @@ func (r *Runner) dollarSingleNul() DollarSingleNulPolicy {
 	if p == DollarSingleNulUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered(`a NUL inside $'…'`)))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// DollarSingleBracedHexPolicy is whether `\x{…}` inside `$'…'` is an escape
+// at all, and what the digits between the braces come to — see
+// Semantics.DollarSingleBracedHex for the measured panel.
+//
+// Three values rather than a yes-or-no because the two columns that have the
+// form do not agree about it: the braces end the run themselves, so both read
+// every digit, and bash then keeps the low byte where ksh93 reads a code
+// point. An Answer could have recorded only one of them.
+type DollarSingleBracedHexPolicy int
+
+const (
+	// DollarSingleBracedHexUnspecified is no answer, and is refused like any
+	// other.
+	DollarSingleBracedHexUnspecified DollarSingleBracedHexPolicy = iota
+	// DollarSingleBracedHexAbsent is a dialect where `\x{` is not this
+	// escape: the `\x` has no digit after it and falls to
+	// Semantics.DollarSingleDigitlessEscapeIsAZeroByte, with the braces and
+	// whatever they hold left as ordinary text. zsh and BusyBox ash, which
+	// answer that axis opposite ways and so look different while agreeing
+	// here.
+	DollarSingleBracedHexAbsent
+	// DollarSingleBracedHexIsAByte keeps the low eight bits of whatever the
+	// digits came to, however many there were: bash, where `$'\x{263a}'` is
+	// the byte 3a and `$'\x{100}'` is the zero byte.
+	DollarSingleBracedHexIsAByte
+	// DollarSingleBracedHexIsACodePoint reads a run past two digits as a code
+	// point and writes it in UTF-8, one or two digits staying a byte: ksh93,
+	// where `$'\x{263a}'` is e2 98 ba and `$'\x{FF}'` is the single byte ff.
+	// The same reading its undelimited `\x` already has.
+	DollarSingleBracedHexIsACodePoint
+)
+
+func (p DollarSingleBracedHexPolicy) String() string {
+	switch p {
+	case DollarSingleBracedHexAbsent:
+		return "absent"
+	case DollarSingleBracedHexIsAByte:
+		return "a byte"
+	case DollarSingleBracedHexIsACodePoint:
+		return "a code point"
+	}
+	return "unspecified"
+}
+
+// dollarSingleBracedHex resolves the axis, and only for a `$'…'` that really
+// has a `\x{` in it.
+func (r *Runner) dollarSingleBracedHex() DollarSingleBracedHexPolicy {
+	p := r.sem().DollarSingleBracedHex
+	if p == DollarSingleBracedHexUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered(`$'\x{…}': a brace-delimited hexadecimal escape`)))
 		r.status = 2
 		r.unspecified = true
 	}

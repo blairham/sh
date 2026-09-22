@@ -5681,6 +5681,34 @@ type Semantics struct {
 	// there is no character for the backslash to have been in front of.
 	PrintfUnknownEscapeDropsTheBackslash Answer
 
+	// PrintfQuoteAndQuestionEscapes gives a printf *format* C's own three
+	// punctuation escapes — `\'`, `\"` and `\?` — each standing for the
+	// character alone, where the rest of the panel leaves the backslash in
+	// front of it.
+	//
+	// Measured 2026-09-22 under `LC_ALL=C` from a script file: bash 5.3.20
+	// and bash 3.2.57 write `'`, `"` and `?`, and zsh 5.9.2, dash 0.5.12 and
+	// BusyBox ash 1.37.0 write the two characters as they stand. The three
+	// move together in every column, which is what keeps them one axis.
+	//
+	// **ksh93's column cannot tell the two readings apart**, and that is why
+	// it rides the standing answer rather than being measured: it drops the
+	// backslash from *every* undefined escape — see
+	// PrintfUnknownEscapeDropsTheBackslash, which it alone answers `Yes` —
+	// so `\'` is `'` there whatever this says, exactly as `\q` is `q`. The
+	// order in expandPrintfEscape is what makes that true rather than
+	// assumed: this is asked first and a `No` falls through to that axis.
+	//
+	// The format's site alone. `printf '%b' "\'"` is the two characters in
+	// all six, bash included, which is the same two-site split
+	// PrintfEscEscape and PrintfBEscEscape record one escape over.
+	//
+	// Answered wrongly it is silent and wrong at status 0: a format written
+	// for C's reading carries a backslash into the output that nothing
+	// reports, which is one line of bash's own nquote suite file and how
+	// this was found (#4169).
+	PrintfQuoteAndQuestionEscapes Answer
+
 	// RedirectsUseEveryTarget makes a stream redirected more than once use
 	// *every* file it names rather than only the last, in both directions:
 	// output goes to all of them and input arrives as all of them in the
@@ -23353,6 +23381,11 @@ func PosixSemantics() Semantics {
 		// answer is the one five of the six columns give: the two
 		// characters as they were written.
 		PrintfUnknownEscapeDropsTheBackslash: No,
+		// And C's `\'`, `\"` and `\?` are undefined escapes of a shell's
+		// format for the same reason — XCU's table has no row for them — so
+		// the standing answer is again what the columns that keep a
+		// backslash give. bash is the one that reads them as C does.
+		PrintfQuoteAndQuestionEscapes: No,
 		// A floating conversion is C's `printf()` again, and C rounds to the
 		// current rounding direction — to nearest, ties to even, on every
 		// machine this is built for.

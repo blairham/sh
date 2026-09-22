@@ -1992,6 +1992,20 @@ func (p *Parser) unterminatedQuote(text string) int {
 				l.scanBraces(Unquoted)
 				continue
 			}
+			if l.dialect.DollarSingleQuote && l.peekAt(1) == '\'' {
+				// `$'…'` is one construct, and its backslash quotes the
+				// quote behind it. Left to the `'` case above — which reads
+				// a plain run, where a backslash is ordinary — the run of
+				// `$'\''` ends at the backslashed quote, the one after it
+				// looks like an opener nothing closes, and the pattern is
+				// cut in two at a character that was never a quote: the
+				// operand of `${v/$'\''/x}` came out as the escape's text
+				// followed by a stray `'`, so it matched nothing and the
+				// subject came back unreplaced (#4169).
+				l.advance() // $
+				l.skipQuoted('\'', true)
+				continue
+			}
 			l.advance()
 		default:
 			l.advance()
@@ -2014,7 +2028,7 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 	case ParamReplace, ParamElementReplace:
 		// The separator is an unquoted slash, so a slash inside quotes or
 		// after a backslash belongs to the pattern.
-		if i := indexUnquoted(rest, '/'); i >= 0 {
+		if i := indexUnquoted(rest, '/', p.dialect.DollarSingleQuote); i >= 0 {
 			e.Arg = p.patternFrom(rest[:i], start)
 			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
 			// And the same text read as content of the quoting around the
@@ -2132,18 +2146,34 @@ func replacementReadingsCanDiffer(text string) bool {
 // with it, because the character being skipped is itself an unquoted colon —
 // nothing about the quoting at index one depends on it.
 func (p *Parser) rangeSeparator(rest string) int {
-	i := indexUnquoted(rest, ':')
+	i := indexUnquoted(rest, ':', p.dialect.DollarSingleQuote)
 	if i != 0 || !p.dialect.ParamSubstringOffsetTakesALeadingColon {
 		return i
 	}
-	if j := indexUnquoted(rest[1:], ':'); j >= 0 {
+	if j := indexUnquoted(rest[1:], ':', p.dialect.DollarSingleQuote); j >= 0 {
 		return j + 1
 	}
 	return -1
 }
 
 // indexUnquoted finds c outside quotes and not backslash-escaped.
-func indexUnquoted(s string, c byte) int {
+//
+// dollarSingle says the dialect has `$'…'`, where a backslash quotes the byte
+// behind it and the run therefore ends at the first *unescaped* quote. Read as
+// a plain `'…'` run instead, the run ends at the backslashed quote, the one
+// behind it opens a second run, and that one swallows everything left —
+// separator included. Measured 2026-09-22 under `LC_ALL=C` from a script file,
+// with a variable holding one quote:
+//
+//	v="'"; printf '[%s]' ${v/$'\''/x}
+//
+// is `[x]` in bash 5.3.20, zsh 5.9.2 and ksh93u+ alike — the pattern is the
+// one quote and it matches — where this shell found no separator, took the
+// whole operand for a pattern, matched nothing and handed the subject back as
+// `[']` (#4169). The same shape one escape along, `$'\x27'`, was right all
+// along, which is what says the defect is in finding the run's end and not in
+// decoding it.
+func indexUnquoted(s string, c byte, dollarSingle bool) int {
 	var quote byte
 	for i := 0; i < len(s); i++ {
 		switch ch := s[i]; {
@@ -2153,6 +2183,10 @@ func indexUnquoted(s string, c byte) int {
 			if ch == quote {
 				quote = 0
 			}
+		case dollarSingle && ch == '$' && i+1 < len(s) && s[i+1] == '\'':
+			// One construct and not a `$` beside a quote, so the scan steps
+			// over it whole rather than letting the `'` open an ordinary run.
+			i = endOfDollarSingle(s, i+1)
 		case ch == '\'' || ch == '"':
 			quote = ch
 		case ch == c:
@@ -2160,6 +2194,23 @@ func indexUnquoted(s string, c byte) int {
 		}
 	}
 	return -1
+}
+
+// endOfDollarSingle returns the offset of the quote closing the `$'…'` whose
+// opening quote stands at i, or the end of the text where nothing closes it.
+//
+// A backslash quotes whatever follows, the closing quote included, which is
+// the one rule that separates this from a plain single-quoted run.
+func endOfDollarSingle(s string, i int) int {
+	for j := i + 1; j < len(s); j++ {
+		switch s[j] {
+		case '\\':
+			j++
+		case '\'':
+			return j
+		}
+	}
+	return len(s)
 }
 
 // wordFrom lexes text as a word, so an operand keeps its structure: the word
@@ -2285,6 +2336,9 @@ func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 // than an unterminated quote.
 func (p *Parser) quotedWordFrom(text string, at Pos) *Word {
 	sub := NewLexer(text, p.operandDialect())
+	// Whether the quoting around this operand is a pair of quotes somebody
+	// wrote or a body's mark. See Parser.inRawBody.
+	sub.inRawBody = p.inRawBody
 	spans := sub.scanDoubleBody(at, false)
 	if err := sub.Err(); err != nil && p.err == nil {
 		p.err = err
@@ -2340,6 +2394,20 @@ func (p *Parser) singleQuotedRunsIn(text string) [][2]int {
 			}
 			if l.peekAt(1) == '{' {
 				l.scanBraces(Unquoted)
+				continue
+			}
+			if l.dialect.DollarSingleQuote && l.peekAt(1) == '\'' {
+				// `$'…'` is one construct, and its backslash quotes the
+				// quote behind it. Left to the `'` case above — which reads
+				// a plain run, where a backslash is ordinary — the run of
+				// `$'\''` ends at the backslashed quote, the one after it
+				// looks like an opener nothing closes, and the pattern is
+				// cut in two at a character that was never a quote: the
+				// operand of `${v/$'\''/x}` came out as the escape's text
+				// followed by a stray `'`, so it matched nothing and the
+				// subject came back unreplaced (#4169).
+				l.advance() // $
+				l.skipQuoted('\'', true)
 				continue
 			}
 			l.advance()

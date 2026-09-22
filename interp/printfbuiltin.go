@@ -2864,6 +2864,19 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, printfPassEnd) {
 		// is 0xc0 alone in every shell in the panel.
 		return string([]byte{byte(n)}), 1 + digits, printfPassRan
 	}
+	// C's own three punctuation escapes — `\'`, `\"` and `\?` — which one
+	// column defines in a format and the rest leave to the fall-through
+	// below. In front of it rather than as a case of the table above,
+	// because that *is* the shape of the disagreement: where the answer is
+	// no, the two characters go on to be whatever an undefined escape is
+	// here. It is also what keeps the axis unasked where it could not be
+	// measured — the column that drops a backslash from every undefined
+	// escape writes the character either way. See
+	// Semantics.PrintfQuoteAndQuestionEscapes.
+	if q := s[1]; (q == '\'' || q == '"' || q == '?') &&
+		r.ask(r.sem().PrintfQuoteAndQuestionEscapes, "`printf` reading C's `\\'`, `\\\"` and `\\?` in a format") {
+		return string(s[1]), 2, printfPassRan
+	}
 	// An escape the format does not define. Five columns write the two
 	// characters as they stand and one writes the character alone, so the
 	// axis is asked here — where the table has run out — and nowhere on the

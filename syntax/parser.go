@@ -150,6 +150,14 @@ type Parser struct {
 	// inside such a run in its own turn, so everything under it was hidden
 	// from the script's read whatever this fragment's own quoting says.
 	allHiddenFromTheScriptsRead bool
+	// inRawBody says the text being parsed is a here-document's body, or a
+	// value a flag is re-evaluating, rather than a word somebody wrote
+	// quotes around. It is [Lexer.inRawBody] on the parsing side, carried
+	// for the same reason: such a body is marked double-quoted so that
+	// nothing in it is field-split, and a reader that takes the mark for a
+	// pair of quotes answers a question about characters nobody typed. See
+	// ParseParamExpFor, which is the only door it comes in by.
+	inRawBody bool
 	// aliasDone are the names already expanded in the command being read. It
 	// is a field rather than a local because the command word is not always
 	// reached from one place: assignment prefixes stand in front of it, so
@@ -7156,6 +7164,16 @@ func (p *Parser) emptyPattern() *Word {
 // output and the `$v` between them still substituted, exactly as inside a
 // pair of double quotes.
 func (p *Parser) ParseParamExpFor(src string, at Pos) *ParamExpr {
+	// Double-quoted *context* and not a pair of quotes, which is the whole
+	// of Parser.inRawBody: the operand reads as one inside quotes would,
+	// while a construct that needs a real `"` around it to exist — `$'…'` in
+	// a word operand, in the one column that has that reading — is not
+	// reached here. Measured 2026-09-22 on bash 5.3.20 under `LC_ALL=C`:
+	// `unset u; echo "${u:-$'\t'}"` is a tab and the same expansion written
+	// in a here-document body is the four characters `$'\t'` (#4169).
+	outer := p.inRawBody
+	p.inRawBody = true
+	defer func() { p.inRawBody = outer }()
 	return p.parseParamExp(src, at, DoubleQuoted, false)
 }
 

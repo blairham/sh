@@ -2696,6 +2696,9 @@ func Semantics() interp.Semantics {
 	// no element written in it — `typeset -A m=()` — is taken, and a
 	// replacing literal onto a table that **has** an element converts the
 	// name instead of complaining. The axis carries those rows (#2611).
+	// unanswered BareElementsInATableLiteralAreEachOneValue: the line below
+	// is the reason — a bare element in a table literal is refused here
+	// before anything expands it, so there is no field to count.
 	s.BareElementsInATableLiteralEndTheScript = true
 	// `a[@]=Z` is refused for either kind of name, in a sentence about the
 	// *subscript* rather than about the name, and the input ends under both

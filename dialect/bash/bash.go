@@ -663,6 +663,11 @@ func Semantics() interp.Semantics {
 	// keyed `0`, which is nothing at all where no such key was written.
 	s.KeyedTableScalarIsTheFirstValue = interp.No
 	s.ArrayNameWithoutSubscriptIsTheList = interp.No
+	// A keyed literal's bare elements are each one field: `typeset -A m=($k
+	// $v)` with `k='1 2'` is the single key `1 2`, and `typeset -A m=(a *)`
+	// keeps the star. See
+	// Semantics.BareElementsInATableLiteralAreEachOneValue.
+	s.BareElementsInATableLiteralAreEachOneValue = interp.Yes
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
 	// A `[k]+=` element of a replacing keyed literal joins the value the

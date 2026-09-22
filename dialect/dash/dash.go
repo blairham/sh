@@ -1373,6 +1373,8 @@ func Semantics() interp.Semantics {
 	// no tables either, so the keyed half of that question is one further
 	// out of reach again.
 	s.StoreOperandTakesASubscript = interp.No
+	// unanswered BareElementsInATableLiteralAreEachOneValue: a keyed literal
+	// needs a table to be written over, and this shell has none.
 	// And `getopts` no more than `read` does: this shell has no arrays
 	// (#3555).
 	s.GetoptsOperandTakesASubscript = interp.No

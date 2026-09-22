@@ -2354,6 +2354,13 @@ func Semantics() interp.Semantics {
 	// shape the axis is about rather than answering it — measured 2026-09-12,
 	// `typeset -A m[k]=v` is `m[k]: inconsistent type for assignment` and
 	// fatal, so there is no key and no evaluated subscript to choose between.
+	// A keyed literal's bare element is an ordinary word here, and comes to
+	// one field only because this shell does not split an unquoted expansion.
+	// The empty word is the discriminator: `e=; typeset -A m=(p $e q)` is
+	// `typeset -A m=( [p]=q )`, the null removed, where an assignment's value
+	// would have kept it. See
+	// Semantics.BareElementsInATableLiteralAreEachOneValue.
+	s.BareElementsInATableLiteralAreEachOneValue = interp.No
 	s.ArrayLiteralSubscriptIsAKey = interp.No
 	// A `[k]+=` element joins what the literal has built, not the table it
 	// replaced: `typeset -A m; m[k]=v; m=([k]+=x)` is `x`.

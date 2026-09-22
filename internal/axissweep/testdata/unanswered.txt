@@ -57,6 +57,7 @@ ash   BadSubscriptEscapesAnArithmeticCommand
 ash   BadSubscriptToADeclaration
 ash   BadSubscriptToAnOutputOperand
 ash   BadSubscriptToUnset
+ash   BareElementsInATableLiteralAreEachOneValue
 ash   BareFloatLetterResetsThePrecision
 ash   BareSubscriptIsASubscript
 ash   BareTypesetListing
@@ -320,6 +321,7 @@ dash  BadSubscriptEscapesAnArithmeticCommand
 dash  BadSubscriptToADeclaration
 dash  BadSubscriptToAnOutputOperand
 dash  BadSubscriptToUnset
+dash  BareElementsInATableLiteralAreEachOneValue
 dash  BareFloatLetterResetsThePrecision
 dash  BareSubscriptIsASubscript
 dash  BareTypesetListing
@@ -547,6 +549,7 @@ ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
 ksh   BadNameToPrintfFatal
+ksh   BareElementsInATableLiteralAreEachOneValue
 ksh   BareSubscriptIsASubscript
 ksh   BuiltinReadsOptions
 ksh   CompoundPipelineStatusRecord

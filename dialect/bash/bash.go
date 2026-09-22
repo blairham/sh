@@ -279,6 +279,7 @@ func Dialect() syntax.Dialect {
 	// cannot read the line at all — `conditional binary operator expected`.
 	// This preset is 5.3, which has it.
 	d.ParameterIsSetTest = true
+	d.NameReferenceTest = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.
 	d.RegexTakesAlternation = true
 	// `time -p`, the POSIX report format. bash and ksh93 read the flag;

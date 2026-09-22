@@ -50218,6 +50218,57 @@
         "TimedOut": false
       }
     },
+    "cond/a-name-reference-test-asks-about-the-binding": {
+      "ash": {
+        "Stdout": "noref~noref~nobref~nobref",
+        "Stderr": "\u003cshell\u003e: r: unknown operand~\u003cshell\u003e: v: unknown operand~\u003cshell\u003e: r: unknown operand~\u003cshell\u003e: nope: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "ref~noref~bref~nobref",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ref~noref~bref~nobref",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: conditional binary operator expected~\u003cshell\u003e: -c: line 0: syntax error near `r'~\u003cshell\u003e: -c: line 0: `v=1; typeset -n r=v 2\u003e/dev/null; [[ -R r ]] \u0026\u0026 echo ref || echo noref; [[ -R v ]] \u0026\u0026 echo ref || echo noref; [ -R r ] \u0026\u0026 echo bref || echo nobref; [ -R nope ] \u0026\u0026 echo bref || echo nobref'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "noref~noref~nobref~nobref",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [: -R: unexpected operator~\u003cshell\u003e: 1: [: -R: unexpected operator",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ref~noref~bref~nobref",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: unknown condition: -R",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/a-newline-at-every-point": {
       "ash": {
         "Stdout": "",

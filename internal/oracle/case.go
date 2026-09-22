@@ -11219,6 +11219,11 @@ echo "st=$?"`,
 		Why:     "`-v` asks whether a parameter is *set* and never anything about its value, which is why the second arm is the one that matters: a name holding the empty string is set. Not core by one column — bash 3.2 is the only panel shell with `[[ ]]` and no `-v`, and it cannot read the line at all rather than answering differently, so the head count that made `-o` core fails here. dash has no `[[ ]]` (#1255)",
 	},
 	{
+		ID: "cond/a-name-reference-test-asks-about-the-binding", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `v=1; typeset -n r=v 2>/dev/null; [[ -R r ]] && echo ref || echo noref; [[ -R v ]] && echo ref || echo noref; [ -R r ] && echo bref || echo nobref; [ -R nope ] && echo bref || echo nobref`,
+		Why:     "`-R` asks whether a name is a *reference* — the binding rather than what it points at — so the reference answers true and its target answers false. The third arm is the one that matters: it is the builtin spelling beside the condition, and the two reach the answer by different routes, so the case fails if they ever come apart. Not core by the same one column that keeps `-v` out: bash 3.2 cannot read the line at all, zsh says `unknown condition: -R`, and dash has no `[[ ]]` (#4228)",
+	},
+	{
 		ID: "cond/an-is-set-test-and-the-test-builtin-agree", Category: "[[ ]] and (( ))",
 		Snippet: `x=1; [ -v x ] && echo set || echo unset; [ -v nope ] && echo set || echo unset; y=; [ -v y ] && echo set || echo unset`,
 		Why:     "the same question through the builtin rather than the condition, and every shell that has the operator gives the two the same answer — which is what makes one implementation right and two a drift waiting to happen. The columns that lack it refuse by name here, `[: -v: unary operator expected`, and that refusal is the honest answer rather than a guess",

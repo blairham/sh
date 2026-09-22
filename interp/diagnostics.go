@@ -9210,6 +9210,14 @@ func (d Diagnostics) offendingLine(line int, err error, src string) string {
 	if !d.EchoesTheOffendingLine {
 		return ""
 	}
+	if body, _, ok := d.substitutionBodyReplacesTheQuote(se); ok {
+		// The sentence above is the body's, so the line quoted under it is
+		// the body's too — a construct that never closed has no offending
+		// line of its own and the refused token does. Measured 2026-09-22,
+		// bash 5.3.20: `$(a=( ;` and `$(esac` each write the complaint and
+		// then the whole line back, where this wrote the complaint alone.
+		se = body
+	}
 	if se.Kind != syntax.ErrUnexpected {
 		return ""
 	}

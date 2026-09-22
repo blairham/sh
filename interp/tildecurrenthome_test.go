@@ -32,11 +32,20 @@ import (
 //	BusyBox ash 1.37.0   /h
 //
 // Six of the seven read the variable, and the seventh disagrees with its own
-// older build, so this is recorded rather than modeled — see
-// docs/spec/grammar/expansion.md and #3484. What is pinned here is that the
-// answer is the variable and that it is *stable*: a guard against arriving at
-// the divergent reading by accident, in which `HOME=/x; cd ~` would go to the
-// old home for as long as a script runs nothing but builtins.
+// older build. That seventh is modeled now — as
+// [Semantics.TildeReadsACachedHome], answered Yes in one dialect and No in
+// every other — and what is pinned here is the **No** answer: that the six
+// columns' reading is the variable and that it is *stable*, a guard against
+// the divergent reading arriving by accident or by a flipped default, in
+// which `HOME=/x; cd ~` would go to the old home for as long as a script runs
+// nothing but builtins.
+//
+// The two are one pair and neither half stands alone. The Yes answer has a
+// test of its own beside the dialect that takes it —
+// dialect/bash/cachedhome_test.go — and it is the *twelve* rows there that
+// say what the cache is, because a cache a child's environment refreshes and
+// a home frozen at startup agree on everything this file asks. See
+// docs/spec/grammar/expansion.md, #3484 and #4039.
 func TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild(t *testing.T) {
 	dir := t.TempDir()
 	// Three reads, and the order is what makes them discriminate. One before
@@ -51,6 +60,12 @@ func TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild(t *testing.T) {
 	// A probe with only the last two lines cannot tell any of them apart,
 	// which is how the first draft of this test passed a runner mutated to
 	// freeze the home it first read.
+	// The axis is read off the core vector rather than set here, so that a
+	// default flipped to the one column's reading fails this test instead of
+	// quietly changing what it measures. See Semantics.TildeReadsACachedHome.
+	if a := CoreSemantics().TildeReadsACachedHome; a != No {
+		t.Fatalf("the core answers TildeReadsACachedHome %v, want No", a)
+	}
 	out, st := run(t, "echo ~\nHOME=/h\necho ~\n/usr/bin/true\necho ~\n", func(r *Runner) {
 		sem := CoreSemantics()
 		r.Semantics, r.Dir = &sem, dir

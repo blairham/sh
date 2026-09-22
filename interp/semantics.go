@@ -14576,6 +14576,154 @@ type Semantics struct {
 	// take the standard's value, which expands nothing (#2298).
 	SubscriptKeyExpandsALeadingTilde Answer
 
+	// TildeReadsACachedHome answers a bare `~` from a copy of `HOME` that the
+	// shell's own assignments do not reach, rather than from the variable as
+	// it stands. bash 5.3 alone in the panel — its own 3.2 reads the
+	// variable, and so do zsh, ksh93, dash and BusyBox ash.
+	//
+	// **The copy is not the home the shell started with**, and that is the
+	// whole reason this axis is named for a cache. It is refreshed as a side
+	// effect of building an environment for a child, so the same `~` is one
+	// answer before an external command on the line and another after it.
+	// Measured 2026-09-22 on bash 5.3.20, `env -i PATH=/usr/bin:/bin LC_ALL=C
+	// HOME=/orig`, `--norc --noprofile`, every line from `-c` and every one
+	// of them ending `HOME=/h; … ; echo ~`:
+	//
+	//	nothing between                 /orig
+	//	a builtin (`true`)              /orig
+	//	`export HOME` / `export FOO=1`  /orig
+	//	`eval "x=1"` / `. /dev/null`    /orig
+	//	a subshell `( true )`           /orig
+	//	`unset HOME`                    /orig
+	//	a function call                 /orig
+	//
+	//	an external command             /h
+	//	a pipeline                      /h
+	//	a background job and a `wait`   /h
+	//	a command substitution          /h
+	//
+	// Three readings are separated by those rows and only the last survives:
+	// the variable would answer `/h` throughout, a home frozen at startup
+	// would answer `/orig` throughout, and a cache a child's environment
+	// refreshes answers the split above. #3484 was filed on the first reading
+	// of it — "the HOME the shell started with" — and #4039 on the same, and
+	// both were wrong about a `HOME=/h; date >/dev/null; cd ~`, which goes to
+	// the **new** home there.
+	//
+	// It is the exported environment that is read and not the variable:
+	// `HOME=/h; export -n HOME; /usr/bin/true; echo ~` is the password
+	// database's answer in bash, the name having left the environment, and
+	// `HOME=/h; HOME=/z /usr/bin/true; echo ~` is `/h` rather than `/z`, so a
+	// command's own assignment prefix is not what the copy is taken from.
+	// This package carries no password database — see Runner.UserHomeDir —
+	// so a `~` whose cached home is absent is left as written, which is what
+	// a run with no `HOME` at all already does.
+	//
+	// `~+`, `~-`, `~user` and a bare `cd` are outside it: measured the same
+	// day, `~+` and `~-` still read `PWD` and `OLDPWD`, `~root` still reads
+	// the password database, and `cd` with no operand uses the current
+	// `$HOME` while `cd ~` on the same line uses the cached one. So it is
+	// `$HOME` behind a written `~` alone.
+	//
+	// Every other column answers No, which is their current behavior and what
+	// interp/tildecurrenthome_test.go pins: a shell that took this by
+	// accident would have `HOME=/x; cd ~` going to the old home for as long
+	// as a script runs nothing but builtins.
+	TildeReadsACachedHome Answer
+
+	// TildePrefixStopsAtAQuoteOrAnExpansion leaves a `~` as written where the
+	// tilde prefix — the run from the tilde to the first unquoted `/`, or to
+	// the end of the word — is not plain unwritten text throughout. A quoted
+	// character anywhere in it, or an expansion, and the whole word is the
+	// characters it was written as.
+	//
+	// The standard says as much for the quoting half — XCU 2.6.1 gives the
+	// tilde prefix to a login name only "if none of the characters in the
+	// tilde-prefix are quoted" — and the panel extends it to an expansion.
+	// Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with `HOME=/usr/xyz`, `USER`/`x` assigned on the line before:
+	//
+	//	word            bash 5.3   as sh    bash 3.2   dash     ash      ksh93     zsh 5.9.2
+	//	~\chet/bar      as written  same    same       same     same     same      looks up `chet`
+	//	~"chet"/bar     as written  same    same       same     same     same      looks up `chet`
+	//	~\/bar          as written  same    same       same     same     same      the home
+	//	~\-             as written  same    same       same     same     same      $OLDPWD
+	//	~$USER          `~root`     same    same       same     same     ~root's home
+	//	~"$x"           `~root`     same    same       same     same     ~root's home
+	//	~$x   (x=/y)    `~/y`       same    same       same     same     same      the home
+	//	y=~$HOME        `~` kept    same    same       same     same     same      the home
+	//	~"/bar"         as written  same    same       same     same     the home  the home
+	//	~$x/y (x=)      `~/y`       same    same       same     same     the home  the home
+	//	~+"/x"          `~+/x`      same    same       same     same     the home  $PWD
+	//
+	//	the controls, where the prefix *is* plain and every column expands:
+	//	~/bar  ~/"bar"  ~/$x  ~
+	//
+	// Six of the seven answer yes throughout. zsh answers no throughout — it
+	// takes the quotes off and looks the name up, so `~\chet` is an error
+	// there rather than a word. ksh93 is yes on the first eight rows and no
+	// on the last three, which is a split between its reading of a backslash
+	// and its reading of a quoted span that no second axis would pay for: the
+	// yes answer is right for it six rows out of eleven and the no answer
+	// three, so it takes yes and the three are recorded here.
+	//
+	// It is asked of the **word** and not of the tilde, which is why it lives
+	// beside expandTilde rather than inside tildeSplit: what decides is
+	// whether anything but plain text stands between the tilde and the slash
+	// that ends the prefix, and a value on its own has lost that. The `~`,
+	// `~+`, `~-` and `~user` spellings all take it together — the row with
+	// `~\-` is the one that says so (#4156).
+	TildePrefixStopsAtAQuoteOrAnExpansion Answer
+
+	// AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode expands the
+	// tilde after the `=` — and after every unquoted `:` that follows it — in
+	// an ordinary word that merely *looks* like an assignment, so
+	// `make -k FOO=~/x` hands make the home directory. One column, and only
+	// while it is not in POSIX mode.
+	//
+	// Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with `HOME=/usr/xyz`, each word passed to `echo`:
+	//
+	//	word            bash 5.3      as sh     bash 3.2    dash/zsh/ksh93/ash
+	//	FOO=~/mumble    expanded      `~` kept  expanded    `~` kept
+	//	FOO=~           expanded      `~` kept  expanded    `~` kept
+	//	foo=~:~         both expanded `~` kept  both        `~` kept
+	//	FOO=x:~/m       expanded      `~` kept  expanded    `~` kept
+	//	xFOO=~/m        expanded      `~` kept  expanded    `~` kept
+	//	_f=~/m          expanded      `~` kept  expanded    `~` kept
+	//	FOO+=~/m        expanded      `~` kept  expanded    `~` kept
+	//
+	//	the boundary, where every column leaves the word alone:
+	//	--opt=~/m   1abc=~/m   f.g=~/m   FOO==~/m   FOO=a=~/m   "FOO=~/m"
+	//
+	// The last line is what makes this a rule about the *shape* of an
+	// assignment rather than about a word with an `=` in it: the text in
+	// front of the first `=` has to be a name, the `~` has to stand at the
+	// head of the value or straight after one of its colons, and a word whose
+	// `=` arrived quoted is not this at all.
+	//
+	// `as sh` is the same 5.3.20 binary under the `sh` name, which is POSIX
+	// mode, where the expansion is restricted to the assignment statements in
+	// front of a command — so the answer is read together with
+	// [Runner.PosixMode] and a script that turns the option on loses it mid
+	// run. bash 3.2 agrees with 5.3 here, which is the opposite of how the
+	// two split over the cached home.
+	//
+	// It reaches every road a word takes: a command's arguments, a `for`
+	// list, a `case` word and a redirection target all expand it in that
+	// shell, which is why the answer is applied in the word pipeline and not
+	// at the argument list.
+	//
+	// **One road is written down rather than answered.** An array literal's
+	// element is the shape the two builds disagree about: `a=(FOO=~/m)` keeps
+	// the tilde in 5.3.20 and expands it in 3.2.57, and this shell expands
+	// it — 3.2's answer — because the word pipeline is where the rule lives
+	// and an element is an ordinary word through it. Separating them needs a
+	// second piece of state threaded through the expansion for one row of one
+	// build, and the row it would buy is a shape scripts do not write. It is
+	// here so that it is a known answer rather than an unnoticed one (#4213).
+	AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode Answer
+
 	// SubscriptIsAQuotingContext runs an associative array's subscript
 	// through quote removal, so the key is the text *inside* its quotes and
 	// escapes. True in bash and ksh93; false in zsh, where the subscript is
@@ -24798,6 +24946,23 @@ func PosixSemantics() Semantics {
 		// tilde to stand at the front of; the standard's shell expands
 		// nothing there and the two columns that have the container override.
 		SubscriptKeyExpandsALeadingTilde: No,
+		// And a `~` is the home the shell holds now. The standard describes
+		// the tilde prefix as being replaced by the value of `HOME`, with no
+		// copy of it anywhere in the description, and six of the seven
+		// columns read the variable. bash 5.3 is the one that overrides it.
+		TildeReadsACachedHome: No,
+		// And a tilde prefix that is not plain text throughout stops the
+		// expansion: XCU 2.6.1 hands the prefix to a login name only "if none
+		// of the characters in the tilde-prefix are quoted", which is the
+		// quoting half outright, and the three POSIX columns extend it to an
+		// expansion. zsh is the one column that overrides it.
+		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
+		// And a word that merely looks like an assignment is not a tilde
+		// context. XCU 2.6.1 gives the expansion to the assignments in front
+		// of a command and to nothing else, which is what dash, ksh93,
+		// BusyBox ash, zsh and bash under the `sh` name all do. bash outside
+		// POSIX mode is the one column that overrides it.
+		AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode: No,
 		// And a descriptor the shell has nothing open at is not a terminal,
 		// however the number was spelled: no narrowing, and no value that
 		// answers true on its own.
@@ -25079,6 +25244,25 @@ func CoreSemantics() Semantics {
 		// refusing a shape five columns agree about. ksh93 and zsh are the
 		// departures and say so themselves. See interp/prefixoperandorder.go.
 		PrefixExpandedBeforeADeclarationsOperand: No,
+		// A bare `~` is the home the shell holds *now*. Answered here rather
+		// than left to refuse because the question is asked of every written
+		// tilde, so a refusal would be the substrate refusing `~/bin` — and
+		// because six of the seven columns read the variable, bash's own 3.2
+		// among them. The seventh says so itself; see
+		// Semantics.TildeReadsACachedHome and interp/cachedhome.go.
+		TildeReadsACachedHome: No,
+		// And a `~` whose prefix carries a quote or an expansion is the text
+		// it was written as. Six of the seven columns, the standard's own
+		// words for the quoting half, and answered here for the reason above
+		// it: `~$USER` is an ordinary thing to write, so a refusal would be
+		// the substrate refusing it. zsh is the holdout and says so itself.
+		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
+		// And a word that merely looks like an assignment is not a tilde
+		// context: six of the seven columns leave `make FOO=~/x` alone, and
+		// the seventh does it only outside POSIX mode. Answered here for the
+		// reason above it — the shape is ordinary enough that a refusal would
+		// be the substrate refusing `cc -DX=1`.
+		AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode: No,
 		// A clustered `-abc` leaves OPTIND naming the word until its last
 		// letter has been read, which is what four of the six columns do and
 		// what a script shifting by `OPTIND-1` between calls needs. dash and

@@ -157,6 +157,14 @@ func Dialect() syntax.Dialect {
 	// of `$-` in all six, which is why the flag is about the leftover rather
 	// than about the name (#1242).
 	d.ParamLengthOverASpecialNameIsFinal = true
+	// And an operator behind that `${#` with nothing after it keeps the `#`
+	// as the parameter here, where the other five scan the operator as a
+	// name and refuse the whole expansion for not finding one: `${#+}` is
+	// empty here and `${#=}` is `$#`, and both are bad substitutions in bash
+	// 5.3, bash as `sh`, bash 3.2, dash and ksh93. With an operand every
+	// column agrees — `${#+w}` is `w` and `${#=w}` is `$#` everywhere — so
+	// the split is the empty word and not the operator (#4166).
+	d.ParamLengthBareOperatorIsTheParameter = true
 	// And a length over `$!` is not a shape this shell has at all: `${#!}` is
 	// a bad substitution here where the other six answer `0`, the length of
 	// an empty `$!`. Not because there is nothing to measure — `$!` reads

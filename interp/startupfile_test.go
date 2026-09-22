@@ -103,6 +103,11 @@ func TestAStartupFileDoesNotLeaveTheShellLookingSourced(t *testing.T) {
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.ReturnOutsideAFunctionIsRefused = Yes
+	// Refused and not fatal, which is the one column that refuses at all —
+	// see TestARefusedReturnEndsTheScriptWhereAFailedSpecialBuiltinDoes for
+	// the other pairing. This test is about the *depth*, and a script that
+	// ended at the return could not show the line after it.
+	sem.BadOptionToSpecialBuiltinFatal = No
 	sem.StartupFileReturnCarriesItsArgument = No
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})

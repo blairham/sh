@@ -3588,6 +3588,40 @@ type Dialect struct {
 	// entries missing from it because they can begin a name as well (#1242).
 	ParamLengthOverASpecialNameIsFinal bool
 
+	// ParamLengthBareOperatorIsTheParameter keeps the `#` at the front of an
+	// expansion as the parameter `$#` when an operator stands behind it with
+	// **no operand at all**, so `${#+}` and `${#=}` are `$#` with an
+	// operator that has nothing to substitute rather than a length over a
+	// character that names nothing.
+	//
+	// zsh alone, and it is the bare form that splits the panel rather than
+	// the operator: with an operand every column agrees, which is what makes
+	// this a rule about the empty word. Measured 2026-09-22 with
+	// `set -- p q`, so `$#` is 2:
+	//
+	//	probe      bash 5.3   bash-as-sh   bash 3.2   dash   ksh93   zsh 5.9.2
+	//	${#+}      bad subst  bad subst    bad subst  bad    bad     (empty)
+	//	${#=}      bad subst  bad subst    bad subst  bad    bad     2
+	//	${#+w}     w          w            w          w      w       w
+	//	${#=w}     2          2            2          2      2       2
+	//
+	// So five of the six read a bare `+` or `=` as a *name* behind a length
+	// prefix — and neither character can begin a name, so the expansion has
+	// none and the whole of it is refused. zsh keeps the parameter reading
+	// it takes for the operand rows and substitutes the empty word.
+	//
+	// The same shape [hashIsTheParameter] already requires of `%`, `/`, `#`,
+	// `-` and `?`, which have wanted an operand since they were measured;
+	// `=` and `+` were the two rows of that table written without one, and
+	// `${#+}` inside a `$THIS_SH -c` is where the difference shows — bash
+	// abandons the command the expansion was a word of, so what follows it
+	// on that line never runs (#4166).
+	//
+	// BusyBox ash is not in the measurement above: it needs a container and
+	// none was running. It takes the default, which is the reading dash —
+	// the shell it is closest to — was measured to hold.
+	ParamLengthBareOperatorIsTheParameter bool
+
 	// ParamLengthRefusesTheBangName makes a length over the special name `!`
 	// unreadable, so `${#!}` is a bad substitution rather than the length of
 	// `$!`.

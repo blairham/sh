@@ -104,7 +104,17 @@ func (f ForNameRunForm) String() string {
 // redirected says the clause carries a redirection, which one dialect's answer
 // turns on — the caller knows, and asking it here would mean holding the
 // clause rather than the two facts about it.
-func (r *Runner) refuseForName(word string, redirected bool) {
+//
+// selectSpelling says the clause is the `select` one, which decides nothing
+// about *what* happens and one thing about where it is reported: one dialect
+// locates this refusal at its reader rather than at the clause, and only for
+// that spelling. See [Diagnostics.SelectNameIsLocatedAtTheReader].
+func (r *Runner) refuseForName(word string, redirected, selectSpelling bool) {
+	if selectSpelling && r.diag().SelectNameIsLocatedAtTheReader {
+		was := r.line
+		r.line = r.readerLine()
+		defer func() { r.line = was }()
+	}
 	form := r.sem().ForNameWhenTheLoopRuns
 	if form == ForNameRunUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
@@ -151,4 +161,14 @@ func (r *Runner) forNameStatus() int {
 		return st
 	}
 	return 1
+}
+
+// readerLine is where this dialect's reader stands: whatever the innermost
+// function call or `for` clause moved it to, and the end of the top-level
+// statement where neither has. See [Runner.readersLine].
+func (r *Runner) readerLine() int {
+	if r.readersLine != 0 {
+		return r.readersLine
+	}
+	return r.inputLine
 }

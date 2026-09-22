@@ -33,7 +33,7 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			// answer in both shells that reach it: re-measured, ksh93 ends
 			// the script for `select $n` exactly as it does for `for $n`,
 			// which #1110 had recorded the other way.
-			r.refuseForName(c.RefusedName, len(c.Redirs) > 0)
+			r.refuseForName(c.RefusedName, len(c.Redirs) > 0, true)
 			return nil
 		}
 		var items []string

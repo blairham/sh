@@ -468,8 +468,25 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 		if r.ask(r.sem().ReturnOutsideAFunctionIsRefused, "a `return` with nothing to return from") {
 			r.diagf("%s\n", Wording(r.diag().ReturnOutsideAFunction,
 				"return: can only `return' from a function or sourced script"))
-			// Reported and not obeyed: no control flow is set, so the next
-			// statement runs.
+			// And whether the script ends there is the axis refusedReturnOperand
+			// asks one failure over, for the reason given on it: this is a
+			// special builtin declining the way it was called, and POSIX makes
+			// such a failure fatal. The three columns that do not refuse at all
+			// never reach this line, so bash is the only shell the answer moves
+			// — measured 2026-09-22, `return; echo after` from `-c` writes
+			// `after` at 2 under bash's own name and stops at 2 under the `sh`
+			// name, and `set -o posix` and `set +o posix` move the same binary
+			// between the two, which is exactly what
+			// BadOptionToSpecialBuiltinFatalInPosixMode carries (#4166).
+			if r.ask(r.sem().BadOptionToSpecialBuiltinFatal,
+				"a special builtin's usage error ending the script") {
+				// fatalUsageQuiet and not a status written here, for the
+				// reason refusedReturnOperand gives: the dispatcher writes
+				// the return value and it is the status the panel ends at.
+				r.fatalUsageQuiet()
+			}
+			// Reported and not obeyed where it is not fatal: no control flow
+			// is set, so the next statement runs.
 			return 2
 		}
 		if r.unspecified {

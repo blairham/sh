@@ -750,6 +750,34 @@ type patternOpts struct {
 	// alternation (#2168). markWrittenBars escapes it at the one place a
 	// pattern is built, so the invariant the matcher relies on holds again.
 	topGroup bool
+	// period says the subject begins with a character only a period
+	// *written* in the pattern may consume — the other half of the
+	// leading-period rule, and the half that is about this name rather than
+	// about the pattern.
+	//
+	// interp/globhidden.go answers the first half: whether a pattern begins
+	// with an explicit period at all, which decides whether a directory's
+	// hidden names are offered to the matcher. That answer is about the
+	// pattern alone, so it is the same for every name — and on its own it
+	// lets an arm that has nothing to do with the period take one. Measured
+	// 2026-09-22 in a directory holding `.a`, `.b`, `.foo`, `bar` and `x`,
+	// where all three shells with groups agree:
+	//
+	//	                  bash 5.3.20   ksh93u+       zsh 5.9.2
+	//	echo @(.foo|*)    .foo bar      .foo bar x    (.foo|*) → .foo bar x
+	//	echo @(?|.?)      .a .b x       .. .a .b x    (?|.?)   → .a .b x
+	//
+	// So the `*` arm reaches `bar` and not `.a`: a period the *subject*
+	// begins with has to be taken by a period the pattern wrote, on the
+	// branch that actually matched. A wildcard, a bracket or a negation
+	// standing there does not take it, however the pattern begins.
+	//
+	// Set per name by the walk, because it is the name's own question: the
+	// option that lifts it — bash's `dotglob`, zsh's `globdots` — lifts it
+	// for an ordinary hidden name and never for `.` and `..`, which is why
+	// `echo *` under `dotglob` lists `.a` and not `.`.
+	period bool
+
 	// bad is set when the pattern is one the dialect rejects outright. It is
 	// a field rather than a return value because matchHere recurses, and
 	// threading a second result through every branch obscured the matching.
@@ -1015,6 +1043,12 @@ func swapCase(c byte) byte {
 		return c - 'A' + 'a'
 	}
 	return c
+}
+
+// periodHere reports that the matcher stands at a leading period only a
+// written period may consume. See patternOpts.period.
+func (o *patternOpts) periodHere(s string, at int) bool {
+	return o.period && at == 0 && len(s) > 0 && s[0] == '.'
 }
 
 func matchPattern(pattern, s string, o patternOpts) bool {
@@ -1342,8 +1376,33 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			// script to read. Measured against zsh 5.9.2: `*(*)` over
 			// `abc93` leaves the group **empty**, because the star took the
 			// lot. Shortest first gives the group the whole subject. #2513.
-			for len(p) > 0 && p[0] == '*' {
+			//
+			// The run stops at a star that opens a *group*: `**(e|f)` is a
+			// wildcard followed by the closure `*(e|f)`, not two wildcards
+			// followed by a bare group — and the dialect with quantified
+			// groups has no bare ones, so collapsing both left `(e|f)` to be
+			// read as five ordinary characters. Measured 2026-09-22 on bash
+			// 5.3.20 with `extglob`, in a directory holding `ab`, `abef`,
+			// `abcdef` and `abcfef`: `ab**(e|f)` lists all four where
+			// `ab*+(e|f)` lists the three that end in one.
+			//
+			// The first star is this branch's own and is taken whatever
+			// stands behind it — the group reading was already tried and
+			// declined before the switch, and a `*(` nothing closes would
+			// otherwise leave the pattern where it was and recur forever.
+			p, pp = p[1:], pp+1
+			for len(p) > 0 && p[0] == '*' && !quantifierOpensAGroup(p, o) {
 				p, pp = p[1:], pp+1
+			}
+			// A star may stand in front of a leading period and still not
+			// take it: the only split left is the empty one.
+			if o.periodHere(s, at) {
+				mark := o.where.caps.mark()
+				if matchHere(p, s, pp, at, o) {
+					return true
+				}
+				o.where.caps.rollback(mark)
+				return false
 			}
 			if p == "" {
 				return true
@@ -1389,14 +1448,16 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			return false
 
 		case '?':
-			if s == "" {
+			if s == "" || o.periodHere(s, at) {
 				return false
 			}
 			w := o.unitWidth(s)
 			p, s, pp, at = p[1:], s[w:], pp+1, at+w
 
 		case '[':
-			if s == "" {
+			// A bracket is not a written period however its members read,
+			// which is the row `[.]hidden` has always answered.
+			if s == "" || o.periodHere(s, at) {
 				return false
 			}
 			w := o.unitWidth(s)
@@ -1722,6 +1783,25 @@ func splitGroup(p string, pp int, o *patternOpts) (body string, quant byte, rest
 // had no closing parenthesis at all here, so the group was not a group and
 // the text was read as ordinary characters (#3075). The prepared table in
 // matchWhere.prepare is built from this, so the two cannot disagree.
+//
+// A `[` that nothing closes takes the rest of the pattern with it, and the
+// group is then never closed at all. This scan is looking for a `)` and a
+// bracket is where a `)` is not one — so the question is how far the bracket
+// reaches, and a bracket with no `]` reaches the end. Standing still there
+// instead let the `)` behind it close a group, which is what made
+// `@(ab|[)` match `ab`. Measured 2026-09-22, and unanimous where it can be
+// asked:
+//
+//	                      bash 5.3.20  ksh93u+
+//	[[ ab   == @(ab|[)  ]]     no          no
+//	[[ a)b  == @(a[)]b) ]]     yes         yes    the bracket took the `)`
+//	[[ ab   == @(a[)b]|x) ]]   yes         yes    and `a` then `b`, a member
+//	[[ a[   == @(a\[)   ]]     yes         yes    an escaped one is not a
+//	                                             bracket and closes nothing
+//
+// The second and third rows are what say this is the bracket *reaching* past
+// the parenthesis rather than the group being poisoned by it: a group whose
+// bracket does close is a group, and it holds the `)` the bracket swallowed.
 func closingParen(p string) (int, bool) {
 	depth := 0
 	for i := 0; i < len(p); i++ {
@@ -1729,7 +1809,11 @@ func closingParen(p string) (int, bool) {
 		case '\\':
 			i++
 		case '[':
-			i = skipBracket(p, i)
+			end, ok := bracketEnd(p, i)
+			if !ok {
+				return 0, false
+			}
+			i = end
 		case '(':
 			depth++
 		case ')':
@@ -1809,7 +1893,13 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 	// answered by asking the ordinary question and inverting it rather than
 	// by trying the arms one at a time.
 	if quant == '!' {
-		for i := splitFloor(rest, s, rp, &o); i <= len(s); i++ {
+		lo, hi := splitFloor(rest, s, rp, &o), len(s)
+		if o.periodHere(s, at) {
+			// A negation is not a written period either, so the only text
+			// it may take here is none.
+			lo, hi = 0, 0
+		}
+		for i := lo; i <= hi; i++ {
 			mark := o.where.caps.mark()
 			if !matchesAnyArm(arms, armAt, s[:i], at, o) && matchHere(rest, s[i:], rp, at+i, o) {
 				// The text the negation consumed is what the group matched,

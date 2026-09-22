@@ -1515,7 +1515,10 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	if err != nil {
 		return nil
 	}
-	hidden := seeHidden || patternBeginsWithPeriod(pattern, o.group)
+	hidden := seeHidden || patternBeginsWithPeriod(pattern, o.group, o.quantified)
+	// Whether `.` and `..` are in this dialect's listings at all, which is
+	// what separates the two ways they reach the match below.
+	listsDotAndDotDot := r.sem().GlobListsDotAndDotDot == Yes
 
 	// Whether a unit is a character is a question about the subject as well
 	// as the pattern, and here the subjects are the names in this directory —
@@ -1525,13 +1528,32 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	o.chars = r.patternCountsCharacters(append(entryNames(entries), pattern)...)
 
 	var out []string
-	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group)) {
+	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group, o.quantified)) {
 		// Only a *leading* period is special, and only in pathname
 		// expansion: `*.b` matches `a.b`, and `.hid` needs `.*id`.
 		if strings.HasPrefix(name, ".") && !hidden {
 			continue
 		}
-		if !matchPattern(pattern, name, o) {
+		// And the other half of the rule, which is this name's rather than
+		// the pattern's: the period has to be taken by a period the pattern
+		// wrote, on the branch that matched. A pattern is offered a hidden
+		// name because *some* place it could start writes one — the arm that
+		// reaches this name still has to. See patternOpts.period.
+		//
+		// The switch that reveals hidden names lifts it, and for `.` and
+		// `..` that depends on how the two got into the listing. Where the
+		// dialect's listing simply holds them — GlobListsDotAndDotDot — they
+		// are ordinary hidden names and the switch reveals them with the
+		// rest: ksh93's `FIGNORE=x; echo *` lists `.` and `..`. Where they
+		// are there only because *this pattern* wrote a leading period —
+		// PeriodPatternListsDotAndDotDot — the switch does not reach them,
+		// and that is measured on bash 5.3.20 with `globskipdots` off, where
+		// `dotglob` makes `echo *` list `.a` and never `.`, and `@(.foo|*)`
+		// lists `.a` through its star and still not `.`.
+		no := o
+		no.period = strings.HasPrefix(name, ".") &&
+			(!seeHidden || (!listsDotAndDotDot && (name == "." || name == "..")))
+		if !matchPattern(pattern, name, no) {
 			continue
 		}
 		// The names the dialect's ignore parameter takes back out, in the

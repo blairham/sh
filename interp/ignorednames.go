@@ -47,7 +47,7 @@ func (r *Runner) ignoredNamePatterns() []string {
 		return nil
 	}
 	var out []string
-	for _, p := range strings.Split(value, ":") {
+	for _, p := range splitIgnorePatterns(value, r.readsQuantifiedGroups(false)) {
 		// An empty element is not a pattern that matches an empty name: it
 		// is nothing, so `:b` and `b:` ignore exactly what `b` ignores.
 		// Measured, and it is what keeps a value ending in a colon from
@@ -69,6 +69,105 @@ func (r *Runner) ignoredNamePatterns() []string {
 		}
 	}
 	return out
+}
+
+// splitIgnorePatterns cuts the parameter's value at the colons that separate
+// its patterns, which is not every colon in it.
+//
+// A colon is also an ordinary member of a bracket expression, the delimiter a
+// character class is written with, and a character a group may hold — and a
+// value whose patterns use any of those is cut to pieces by a plain split. A
+// list of three patterns built from a class, a quantified group and a bracket
+// holds eight colons of which only two separate, and a plain split makes nine
+// pieces of it, none of which ignores anything.
+//
+// Measured 2026-09-22 on bash 5.3.20, in a directory holding `(a`, `:`, `[a`,
+// `a`, `a:b`, `ab`, `b`, `b)` and `b]`, by what `echo *` then leaves:
+//
+//	GLOBIGNORE=      takes out           so the value is
+//	[a:b]            : a b               one pattern, colon and all
+//	a:b              a b                 two, as a plain split gives
+//	[a:b]:ab         : a b ab            one bracket and one word
+//	@(a:b)           a:b                 one group — with `extglob` on
+//	@(a:b)           b)                  two, with it off
+//	(a:b)            (a b)               two either way: no bare groups
+//	@(a:b            nothing             an unclosed group takes the rest
+//	[a:b             nothing             and so does an unclosed bracket
+//	a\:b             a:b                 an escaped colon does not cut
+//
+// The `[` scan is the plain one — the next `]`, wherever it stands — rather
+// than the matcher's, which reads a `]` written first as a member. `[]:a]`
+// takes nothing out, where the matcher's reading would have made it one
+// bracket holding `]`, `:` and `a` and taken both `:` and `a`.
+func splitIgnorePatterns(value string, quantified bool) []string {
+	var out []string
+	start := 0
+	for i := 0; i < len(value); i++ {
+		switch value[i] {
+		case '\\':
+			i++
+		case '[':
+			end, ok := ignoreBracketEnd(value, i)
+			if !ok {
+				i = len(value)
+				continue
+			}
+			i = end
+		case '@', '?', '*', '+', '!':
+			if !quantified || i+1 >= len(value) || value[i+1] != '(' {
+				continue
+			}
+			end, ok := ignoreGroupEnd(value, i+1)
+			if !ok {
+				i = len(value)
+				continue
+			}
+			i = end
+		case ':':
+			out = append(out, value[start:i])
+			start = i + 1
+		}
+	}
+	return append(out, value[start:])
+}
+
+// ignoreBracketEnd is where the bracket opening at i closes, and false where
+// nothing closes it — in which case it reaches the end of the value and no
+// colon behind it separates anything.
+func ignoreBracketEnd(value string, i int) (int, bool) {
+	j := strings.IndexByte(value[i+1:], ']')
+	if j < 0 {
+		return 0, false
+	}
+	return i + 1 + j, true
+}
+
+// ignoreGroupEnd is where the group opening at the `(` at i closes. A bracket
+// inside one is stepped over whole, because a `)` in a bracket is a member;
+// an unclosed bracket leaves the group unclosed too, which is the same
+// reading closingParen takes.
+func ignoreGroupEnd(value string, i int) (int, bool) {
+	depth := 0
+	for j := i; j < len(value); j++ {
+		switch value[j] {
+		case '\\':
+			j++
+		case '[':
+			end, ok := ignoreBracketEnd(value, j)
+			if !ok {
+				return 0, false
+			}
+			j = end
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return j, true
+			}
+		}
+	}
+	return 0, false
 }
 
 // ignoredNamesFilterTheListing answers *where* the patterns are applied: to

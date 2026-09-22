@@ -1531,7 +1531,18 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 		if strings.HasPrefix(name, ".") && !hidden {
 			continue
 		}
-		if !matchPattern(pattern, name, o) {
+		// And the other half of the rule, which is this name's rather than
+		// the pattern's: the period has to be taken by a period the pattern
+		// wrote, on the branch that matched. A pattern is offered a hidden
+		// name because *some* place it could start writes one — the arm that
+		// reaches this name still has to. See patternOpts.period.
+		//
+		// The option that lifts it lifts it for an ordinary hidden name and
+		// never for `.` and `..`: `echo *` under `dotglob` lists `.a` and
+		// not `.`, measured on bash 5.3.20 with `globskipdots` off.
+		no := o
+		no.period = strings.HasPrefix(name, ".") && (!seeHidden || name == "." || name == "..")
+		if !matchPattern(pattern, name, no) {
 			continue
 		}
 		// The names the dialect's ignore parameter takes back out, in the

@@ -27,6 +27,11 @@ func Dialect() syntax.Dialect {
 	// writes `before` for the second of them. See
 	// syntax.Dialect.SubstitutionBodyRead (#2857).
 	d.SubstitutionBodyRead = syntax.EverySubstitutionBodyReadWithItsLine
+	// And a body it refuses settles the read, exactly as in bash: measured
+	// 2026-09-22, `echo before; : $(case x in esac|in) foo;; esac)` answers
+	// `"in" unexpected` and never writes `before`. See
+	// syntax.Dialect.SubstitutionBodyRefusalEndsTheRead (#4134).
+	d.SubstitutionBodyRefusalEndsTheRead = true
 	d.AliasesExpandUnlessTold = true
 	d.ExpandAliasesInProgramText = syntax.RouteOnEveryRoute
 	// And it splices the body's text, so a newline in one is a line of the
@@ -1798,8 +1803,16 @@ func Diagnostics() interp.Diagnostics {
 		UnterminatedNoConstruct: "Syntax error: end of file unexpected",
 		UnmatchedQuote:          "Syntax error: Unterminated quoted string",
 		UnmatchedBackquote:      "Syntax error: EOF in backquote substitution",
-		UnmatchedCmdSubst:       "Syntax error: end of file unexpected (expecting \")\")",
-		UnmatchedBraceSubst:     "Syntax error: Missing '}'",
+		// A body this shell refused replaces the sentence above rather than
+		// standing beside it, exactly as in bash. Measured 2026-09-22,
+		// dash 0.5.12 under `-c`, each body written closed and unclosed:
+		// `v=$(esac)` and `v=$(esac` both answer `"esac" unexpected`, where
+		// `v=$(echo hi` with no closer is the end-of-file sentence — which
+		// is the same discriminator bash draws. See
+		// UnterminatedSubstitutionIsItsBodysRefusal.
+		UnterminatedSubstitutionIsItsBodysRefusal: true,
+		UnmatchedCmdSubst:                         "Syntax error: end of file unexpected (expecting \")\")",
+		UnmatchedBraceSubst:                       "Syntax error: Missing '}'",
 		// `echo ${x` with the input running out at the newline after the
 		// name is a line earlier here than `echo ${ echo hi` is, although
 		// this shell has no command form and reads both as an ordinary

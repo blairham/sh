@@ -81,6 +81,42 @@ type Lexer struct {
 	// counting loop finds. See Dialect.HeredocLastLineIsADelimiterPrefix,
 	// whose cases are what caught this.
 	lastBodyStop int
+	// lastBodyOpenParens is how many subshell parentheses that read still
+	// had open when it stopped, beside lastBodyStop and cleared with it.
+	//
+	// The counting loop steps over the text that read already spent, on the
+	// reasoning that the grammar accounted for every parenthesis in it. That
+	// is true of the ones it *closed* and not of the ones it did not: a `(`
+	// the read entered and never left is still standing where the counting
+	// resumes, so the count has to start above it. `: $( ( fi ) )` is the
+	// shape — the grammar opens the subshell, refuses the `fi` inside it,
+	// and counting from one closed the substitution at the subshell's own
+	// `)`, leaving a truncated body and a leftover `)` where bash 5.3.20
+	// reports the `fi` (#4134).
+	lastBodyOpenParens int
+	// lastBodyRanOut says that read stopped because the text ended rather
+	// than because a token stood where the grammar could not take one. Kept
+	// beside lastBodyStop and cleared with it; see
+	// Lexer.bodyRefusalSettlesTheRead, which is the one thing that asks.
+	lastBodyRanOut bool
+	// settledBodyRefusal is a `$( … )` whose body the grammar refused at a
+	// token, in a dialect where that settles the read — see
+	// Dialect.SubstitutionBodyRefusalEndsTheRead.
+	//
+	// It is kept rather than raised, because the counting loop below finds
+	// the *right* closer for most such bodies and the body then speaks for
+	// itself through the route the dialect appoints, which is where every
+	// measured wording for the shape already comes from. What it cannot do
+	// is speak when counting closed the construct in the wrong place: `: $(case
+	// x in esac|in) foo;; esac)` has its first parenthesis inside text the
+	// grammar had already judged, so the leftovers were a `;;` the enclosing
+	// line complained about, where bash 5.3.20 and dash 0.5.12 both name the
+	// `in` (#4134).
+	//
+	// So it stands in for the line's error only where the line failed to read
+	// *after* it — see Parser.NextLine. A line that read is a line whose
+	// closer was found where it should have been.
+	settledBodyRefusal *Error
 	// lastBodyRefusal is what the most recent failed read of a program
 	// between parentheses had to say for itself, waiting for scanParens to
 	// run out of the same input. Nil where that read raised nothing — a body
@@ -828,6 +864,18 @@ func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
 		Token: opener, Expected: closer, LastToken: near,
 		EndLine: after, EofLine: l.line,
 	}
+}
+
+// unmatchedError is what failUnmatched would have raised, built and handed
+// back instead of stored — for the one caller that keeps a refusal rather
+// than raising it. See Lexer.settledBodyRefusal.
+func (l *Lexer) unmatchedError(open Pos, opener, closer, msg string) *Error {
+	saved := l.err
+	l.err = nil
+	l.failUnmatched(open, opener, closer, msg)
+	built, _ := l.err.(*Error)
+	l.err = saved
+	return built
 }
 
 // closesQuotesAtEOF reports whether an unterminated `'`, `"` or backquote
@@ -3665,6 +3713,49 @@ func skipQuotedFrom(src string, i int) int {
 	return i
 }
 
+// bodyRefusalSettlesTheRead reports whether the grammar's refusal of a
+// `$( … )` body is the whole answer, so that no closing parenthesis is worth
+// looking for.
+//
+// Two conditions, and both are needed. The dialect has to be one that settles
+// a read this way — see Dialect.SubstitutionBodyRefusalEndsTheRead for the
+// panel. And the read has to have stopped on a **token** rather than on the
+// end of the text: input that ran out is the half-a-line-at-a-prompt shape
+// the counting loop below is kept for, and a substitution that never closed
+// is what it should be reported as.
+// settleBodyRefusal keeps the refusal of a `$( … )` body for the line that
+// holds it, in the shape the construct having no closer would have had.
+//
+// The first one only, which is the rule every refusal here follows: the
+// earliest thing that went wrong is what a shell reports.
+func (l *Lexer) settleBodyRefusal(open Pos, kind SpanKind, body *Error) {
+	if l.settledBodyRefusal != nil {
+		return
+	}
+	e := l.unmatchedError(open, openingOf(kind), closingOf(kind), "unterminated "+kind.String())
+	if e == nil {
+		return
+	}
+	e.BodyRefusal = body
+	l.settledBodyRefusal = e
+}
+
+func (l *Lexer) bodyRefusalSettlesTheRead() bool {
+	if !l.dialect.SubstitutionBodyRefusalEndsTheRead {
+		return false
+	}
+	e := l.lastBodyRefusal
+	if e == nil || e.Kind != ErrUnexpected || l.lastBodyRanOut {
+		return false
+	}
+	// And never the closer itself, which is the token the read was looking
+	// for: `$(if)` refuses the `)` and every column reports that `)`, so the
+	// construct did close and counting is right about where. The same carve
+	// out the closed case makes — see
+	// Diagnostics.substitutionBodyReplacesTheQuote.
+	return e.Token != closingOf(CommandSubst)
+}
+
 // scanParens reads $( … ) or $(( … )).
 //
 // The closing delimiter is not found by counting parens. A `)` inside quotes
@@ -3712,6 +3803,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// to where a body ends, for all three kinds that hold a program.
 		l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
 		l.lastBodyGaveUp = nil
+		l.lastBodyOpenParens, l.lastBodyRanOut = 0, false
 		l.lastInnerHeredocExpands = false
 		if end, remarks, ok := l.parseToClose(start); ok {
 			// What that read had to say comes back with it. A parse inside a
@@ -3745,6 +3837,11 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			l.carryHeredocsOut(kind, open)
 			return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 		}
+		if kind == CommandSubst && l.bodyRefusalSettlesTheRead() {
+			// Kept in case the line does not read. See
+			// Lexer.settledBodyRefusal.
+			l.settleBodyRefusal(open, kind, l.lastBodyRefusal)
+		}
 		// Not something the parser could read — half a line at a prompt,
 		// most often. Counting is the older answer and is kept for it: it
 		// gets the common shapes right and reports the rest as unterminated,
@@ -3764,8 +3861,12 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	// which is the answer ahead of this construct's own rather than beside
 	// it. See the eof branch below and Lexer.refused.
 	gaveUp := l.lastBodyGaveUp
+	// And what that read still had open where it stopped, which the count
+	// below has to start above. See Lexer.lastBodyOpenParens.
+	depth += l.lastBodyOpenParens
 	l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
 	l.lastBodyGaveUp = nil
+	l.lastBodyOpenParens = 0
 	l.lastInnerHeredocExpands = false
 	joined := l.collectContinuations()
 	for depth > 0 {
@@ -4353,6 +4454,8 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 		// turned `v=$(cat <<E⏎w⏎E )` into an unterminated substitution.
 		if sub.err != nil {
 			l.lastBodyStop = from + int(sub.tok.Pos.Offset)
+			l.lastBodyOpenParens = sub.subshellsLeftOpen
+			l.lastBodyRanOut = sub.lex.incomplete
 		}
 		if sub.err == nil && !sub.at(TokEOF) {
 			// The read *stopped* rather than refusing, which is what a

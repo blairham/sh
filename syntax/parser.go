@@ -364,6 +364,21 @@ type Parser struct {
 	// in front of a refusal; see Error.CondGroupsOpen.
 	condGroups int
 
+	// subshellsLeftOpen is how many `(` of a *subshell* this read entered
+	// and never closed. Unlike [Parser.open] it is not unwound when a frame
+	// returns, so after a refusal it still says what the read had standing
+	// open at the moment it stopped.
+	//
+	// One caller: the scan for where a `$( … )` body ends. Where the
+	// grammar's read of that body refused, the older counting loop takes
+	// over from the offset that read reached — and every parenthesis in the
+	// text behind it has been accounted for *except* the ones still open, so
+	// the count has to start above them. Without it `: $( ( fi ) )` closed
+	// the substitution at the subshell's own `)`, truncated the body, and
+	// reported the leftover `)` where every shell in the panel reports the
+	// `fi`. See Lexer.lastBodyOpenParens.
+	subshellsLeftOpen int
+
 	inCaseWord bool
 }
 
@@ -695,6 +710,12 @@ func (p *Parser) atStopWord() bool {
 	// dialect and an ordinary word for the other four.
 	if p.dialect.Foreach && p.tok.Literal() == "end" {
 		return true
+	}
+	// `in` is the mirror image: reserved where a command may begin in every
+	// dialect but the one that takes it back. See
+	// Dialect.InStandsAsACommandName for the panel.
+	if p.tok.Literal() == "in" {
+		return !p.dialect.InStandsAsACommandName
 	}
 	return stopWords[p.tok.Literal()]
 }
@@ -1322,6 +1343,16 @@ func (p *Parser) NextLine() (*File, bool) {
 	}
 	f.Substitutions, p.lineSubsts = p.lineSubsts, nil
 	f.CarriedHeredocs, p.lex.carried = p.lex.carried, nil
+	if settled := p.lex.settledBodyRefusal; settled != nil {
+		p.lex.settledBodyRefusal = nil
+		// A substitution earlier in the line whose body the grammar refused,
+		// in a dialect where that settles the read. The line did not read, so
+		// what stopped it is text the shell would never have reached — the
+		// body is what it is reporting. See Lexer.settledBodyRefusal.
+		if se, ok := p.err.(*Error); ok && settled.Pos.Offset < se.Pos.Offset {
+			p.err = settled
+		}
+	}
 	if p.err != nil {
 		// The line did not read, so none of it runs. That is this function's
 		// own rule — everything up to the newline is parsed before any of it
@@ -5261,6 +5292,9 @@ func (p *Parser) funcKeywordBodyIsTakenHere(body Command) bool {
 func (p *Parser) parseSubshell() Command {
 	c := &Subshell{Start: p.tok.Pos}
 	defer p.opens("(")()
+	// Counted up here and down only where the `)` is actually read, so a
+	// refusal inside leaves it standing. See Parser.subshellsLeftOpen.
+	p.subshellsLeftOpen++
 	p.next()
 	c.List = p.parseBody()
 	if !p.at(TokRightParen) {
@@ -5284,6 +5318,7 @@ func (p *Parser) parseSubshell() Command {
 		p.failUnexpected(expected)
 		return c
 	}
+	p.subshellsLeftOpen--
 	c.Stop = p.tok.End
 	p.next()
 	return c

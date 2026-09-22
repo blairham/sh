@@ -22,6 +22,12 @@ func Dialect() syntax.Dialect {
 	// what made the failure `no matches found`, which points a
 	// person at globbing rather than at arithmetic (#900).
 	d.DollarBracketArith = true
+	// `in` is an ordinary command name here, where bash, dash and ksh93 all
+	// refuse it wherever a command may begin. Measured 2026-09-22: `in` on
+	// its own and `echo | in` are both `command not found` and `in() { :; }`
+	// defines a function, against a syntax error naming the word in the
+	// other three. See syntax.Dialect.InStandsAsACommandName (#4134).
+	d.InStandsAsACommandName = true
 	// A here-document body line joined out of two physical ones is compared
 	// against the delimiter whole, as it is in bash: `A\` over `BC` ends an
 	// `ABC` document. dash and BusyBox ash take only a join that began at

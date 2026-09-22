@@ -1029,7 +1029,40 @@ func (a *arithParser) assign() ArithExpr {
 		}
 	}
 	a.off = save
-	return a.ternary()
+	x := a.ternary()
+	if x != nil {
+		a.assignedToNonPlace()
+	}
+	return x
+}
+
+// assignedToNonPlace refuses an assignment operator standing after something
+// that is not a place: `$(( 7=4 ))`, `$(( 1+2=3 ))`, `$(( (1)=2 ))`.
+//
+// The value has already been read when this is asked, so what is left is the
+// operator and everything behind it — which is the text every shell in the
+// panel names. Before this it was leftover text that could not be an operator,
+// and every dialect said so with the sentence it keeps for `1 @`.
+func (a *arithParser) assignedToNonPlace() {
+	if a.p.err != nil {
+		return
+	}
+	a.space()
+	if a.off >= len(a.src) {
+		return
+	}
+	for _, op := range a.assignOps() {
+		// `==` is equality and `<=`, `>=` and `!=` are comparisons, none of
+		// which the ladder left behind — but `=` is a prefix of the first, so
+		// the same guard the target path uses is needed here.
+		if op == "=" && a.has("==") {
+			continue
+		}
+		if a.has(op) {
+			a.failArith(ErrArithAssignToNonPlace, a.src[a.off:])
+			return
+		}
+	}
 }
 
 // ternary reads `cond ? then : else`, and the three ways it can be
@@ -1169,6 +1202,17 @@ func (a *arithParser) longerOperator(cand string) bool {
 			return true
 		}
 	}
+	// A compound assignment is not its operator with an `=` behind it. The
+	// target path takes `x += 1` before the ladder ever sees it, so what
+	// reaches here is an assignment to something that cannot hold a value —
+	// and the panel blames the whole operator, not the half the ladder would
+	// have left: bash 5.3.20 names `+=4 ` for `$(( 7+=4 ))`, measured
+	// 2026-09-22. See arithParser.assignedToNonPlace.
+	for _, longer := range a.assignOps() {
+		if len(longer) > len(cand) && a.has(longer) && strings.HasPrefix(longer, cand) {
+			return true
+		}
+	}
 	// `x =` after an operator candidate like `<` is fine; only compound
 	// assignment matters, and those are caught above.
 	//
@@ -1223,6 +1267,20 @@ func (a *arithParser) unary() ArithExpr {
 		op := a.src[a.off : a.off+2]
 		at := a.off
 		a.off += 2
+		if a.dial.ArithIncDecNeedsAPlace && !a.placeAhead() {
+			// The dialect has the operator but not against a literal, so
+			// the two characters are two signs: `$(( ++7 ))` is 7 and
+			// `$(( --7 ))` is 7, exactly as in the dialect with no operator
+			// at all. Read as one sign here and one in the recursion rather
+			// than built by hand, so the failure a missing operand earns is
+			// the ordinary one and the blamed text is the second sign.
+			a.off = at + 1
+			x := a.unary()
+			if x == nil {
+				return nil
+			}
+			return &ArithUnary{Op: op[:1], X: x, Start: start}
+		}
 		x := a.unary()
 		if x == nil {
 			// Nothing to increment is the same refusal a sign with nothing
@@ -1259,11 +1317,51 @@ func (a *arithParser) postfix() ArithExpr {
 	}
 	a.space()
 	if (a.has("++") || a.has("--")) && a.dial.ArithIncDec {
+		if a.dial.ArithIncDecNeedsAPlace && !isArithPlace(x) {
+			// Not an operator here, so the first character is left to the
+			// binary ladder and the second to the sign it then wants an
+			// operand for: `$(( 7++ ))` is `operand expected` blamed on
+			// `+ `. See [Dialect.ArithIncDecNeedsAPlace].
+			return x
+		}
 		op := a.src[a.off : a.off+2]
 		a.off += 2
 		return &ArithUnary{Op: op, Postfix: true, X: x, Start: x.Pos()}
 	}
 	return x
+}
+
+// isArithPlace reports whether an expression is something a value can be
+// stored in — a name, or an element of one.
+//
+// The parser's half of the question interp answers with arithPlaceOf: it is
+// asked here only where a dialect refuses to read `++` as an operator against
+// anything else, which is [Dialect.ArithIncDecNeedsAPlace].
+func isArithPlace(x ArithExpr) bool {
+	switch x.(type) {
+	case *ArithVar, *ArithIndex:
+		return true
+	}
+	return false
+}
+
+// placeAhead reports whether what stands at the cursor could begin a name,
+// which is the only thing a prefix `++` can be applied to where the dialect
+// wants a place.
+//
+// A look at the first character rather than a parse that is taken back: a
+// place begins with a name and nothing else does, so the character settles it
+// without the parser having to unwind a failure it caused itself.
+func (a *arithParser) placeAhead() bool {
+	off := a.off
+	for off < len(a.src) && (a.src[off] == ' ' || a.src[off] == '\t' || a.src[off] == '\n') {
+		off++
+	}
+	if off >= len(a.src) {
+		return false
+	}
+	c := a.src[off]
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 func (a *arithParser) primary() ArithExpr {

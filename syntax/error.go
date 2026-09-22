@@ -271,6 +271,17 @@ const (
 	// other refusal of a token it did not want says `unexpected`. Token is
 	// the two brackets.
 	ErrEmptyAssignSubscript
+	// ErrArithAssignToNonPlace is an arithmetic assignment whose left side is
+	// not something a value can be stored in: `$(( 7=4 ))`, `$(( 1+2=3 ))`,
+	// `$(( (1)=2 ))`.
+	//
+	// Its own kind because every shell in the panel has a sentence for it and
+	// none of them is the leftover-text one this used to earn here — bash
+	// `attempted assignment to non-variable`, zsh `bad math expression: lvalue
+	// required`, ksh93 `assignment requires lvalue`, measured 2026-09-22 under
+	// `env -i PATH=/usr/bin:/bin`. Token is the operator and everything after
+	// it, which is what bash names: `=4 ` for `7=4 `.
+	ErrArithAssignToNonPlace
 )
 
 // TokenClass is what sort of thing a token is, for the dialect that words an

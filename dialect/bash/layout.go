@@ -111,6 +111,7 @@ func common() syntax.Layout {
 		// not the printer's.
 		DoAfterArithmeticOnItsOwnLine:     true,
 		EmptyArithmeticForExpressionIsOne: true,
+		ArithmeticForExpressionsAsWritten: true,
 		HereDocumentWordSingleQuoted:      true,
 
 		// A subshell stays on one line, and the line a here-document body

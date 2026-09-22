@@ -21,6 +21,12 @@ func Dialect() syntax.Dialect {
 	// bash has documented it as deprecated for years and both builds
 	// in the panel still take it (#900).
 	d.DollarBracketArith = true
+	// `++` and `--` are operators here only against something that can be
+	// assigned to. Measured 2026-09-22: `$(( ++7 ))` is **7** — two signs —
+	// and `$(( 7++ ))` is `operand expected` blamed on `+ `, where ksh93 and
+	// zsh take the operator and then refuse the target. See
+	// syntax.Dialect.ArithIncDecNeedsAPlace (#2420).
+	d.ArithIncDecNeedsAPlace = true
 	// A `$( … )` body is parsed while the line that holds it is read, so a
 	// body that will not parse refuses the line before any of it runs — and
 	// refuses it even where the substitution is in a branch nothing takes.
@@ -3632,6 +3638,7 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:    "arithmetic syntax error: operand expected",
 		ArithOperatorExpected:   "arithmetic syntax error in expression",
 		ArithBadOperator:        "arithmetic syntax error: invalid arithmetic operator",
+		ArithAssignToNonPlace:   "attempted assignment to non-variable",
 		ArithMissingCloseParen:  "missing `)'",
 		ArithFailureStatus:      1,
 		SyntaxUnexpected:        "syntax error near unexpected token `%[1]s'",

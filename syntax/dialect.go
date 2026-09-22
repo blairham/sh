@@ -4028,6 +4028,25 @@ type Dialect struct {
 	// ArithIncDec enables `++` and `--`. Not POSIX; dash rejects them.
 	ArithIncDec bool
 
+	// ArithIncDecNeedsAPlace makes `++` and `--` operators only where they
+	// stand against something a value can be stored in. Everywhere else the
+	// two characters are two signs, exactly as they are in a dialect with no
+	// [Dialect.ArithIncDec] at all.
+	//
+	// A grammar question and not an evaluation one, because the shells that
+	// answer it this way never reach an lvalue complaint: measured 2026-09-22
+	// on bash 5.3.20, `$(( ++7 ))` is **7** — two signs read — and `$(( 7++ ))`
+	// is `arithmetic syntax error: operand expected (error token is "+ ")`,
+	// which is the second sign standing with nothing behind it. The shells
+	// that take the operator and then refuse the target say so instead, and
+	// name the whole text: ksh93 `assignment requires lvalue` and zsh `bad
+	// math expression: lvalue required` for all of `7++`, `++7` and `7--`.
+	//
+	// So this parts the panel where interp.Diagnostics.ArithIncrementNeedsAPlace
+	// words it — that field is what the other half says, and reaching it at all
+	// is what this flag turns off (#2420).
+	ArithIncDecNeedsAPlace bool
+
 	// ArithComma enables the sequence operator. Not POSIX; dash rejects it.
 	ArithComma bool
 

@@ -2062,6 +2062,33 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 			return true, 1
 		}
 		return true, 0
+	case UnsetArraySpanRemovesTheVariable:
+		// The older reading: where the name **is** an array the span takes
+		// the whole variable rather than its contents, so it is gone
+		// afterwards and a later `declare -p` reports it missing where the
+		// modern reading prints an empty array at 0.
+		//
+		// Only where it is an array. A scalar is refused here at both
+		// readings — `unset: a: not an array variable` at status 1, measured
+		// 2026-09-22 on bash 5.3.20 with BASH_COMPAT=51 — so the level
+		// changes what happens to an array and nothing about what counts as
+		// one. A name holding nothing at all is neither, and goes quietly.
+		//
+		// Through unsetName rather than a removal of its own, because that
+		// is precisely the claim: at this level `unset a[@]` on an array
+		// *is* `unset a`, so it has to take the references, the disciplines
+		// and the compound members with it exactly as the plain spelling
+		// does. A second removal here would be a second place for the plain
+		// one's rules to go missing.
+		if _, ok := r.Arrays[name]; ok {
+			return true, r.unsetName(name)
+		}
+		if _, held := r.getVar(name); held {
+			r.diagf("%s\n", Wording(r.diag().UnsetNotAnArray,
+				"unset: %[1]s: not an array variable", name))
+			return true, 1
+		}
+		return true, 0
 	case UnsetArraySpanLeavesOneEmptyElement:
 		// The span becomes one empty string, which is the same rule this
 		// shell applies to a single element — `unset a[2]` blanks it in place

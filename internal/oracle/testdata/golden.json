@@ -26091,6 +26091,57 @@
         "TimedOut": false
       }
     },
+    "arrays/the-compatibility-level-chooses-what-a-whole-array-unset-takes": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -a a=()~gone",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -a a=()~gone",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "gone~gone",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "gone~gone",
+        "Stderr": "\u003cshell\u003e: unset: @: arithmetic syntax error~\u003cshell\u003e: unset: @: arithmetic syntax error",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a a=( '' )~typeset -a b=( '' )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arrays/the-integer-attribute-and-a-nested-array": {
       "ash": {
         "Stdout": "\u003cscript\u003e: line 1: typeset: not found",

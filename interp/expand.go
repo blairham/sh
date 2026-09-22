@@ -949,7 +949,7 @@ func (r *Runner) readParamSource(e *syntax.ParamExpr) (value string, set, subscr
 		// nestedFields, and both go through nestedWords so the two cannot
 		// come to different values.
 		words, iset, _ := r.nestedWords(e)
-		return strings.Join(words, ifsFirst(r.ifs())), iset, false
+		return strings.Join(words, r.ifsFirst(r.ifs())), iset, false
 	}
 	// A name reference aimed at the *whole* of an array is the expansion it
 	// names, so the node becomes that expansion and everything below answers
@@ -1431,7 +1431,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		}
 		ifs, set := r.ifs()
 		if e.Prefix == '*' {
-			joined := strings.Join(names, ifsFirst(ifs, set))
+			joined := strings.Join(names, r.ifsFirst(ifs, set))
 			if s.Quoting != syntax.Unquoted {
 				return []string{globEscape(joined)}, true
 			}
@@ -1539,7 +1539,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// `(1 2 3)` and `(x y z)` is the two fields `1 2 3` and `x`, and
 			// why that falls out of the rule rather than needing one.
 			if s.Quoting != syntax.Unquoted {
-				elems = []string{strings.Join(elems, ifsFirst(r.ifs()))}
+				elems = []string{strings.Join(elems, r.ifsFirst(r.ifs()))}
 				elems = r.zipElements(e, elems)
 				if len(elems) == 0 {
 					// The same guarantee the element filter below
@@ -1577,7 +1577,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// that has the operator, against `n=0` for the unquoted
 			// spelling and for `[@]`.
 			if s.Quoting != syntax.Unquoted && r.subscriptJoinsElements(e) {
-				elems = []string{r.reshapeScalar(e, strings.Join(elems, ifsFirst(r.ifs())))}
+				elems = []string{r.reshapeScalar(e, strings.Join(elems, r.ifsFirst(r.ifs())))}
 			} else {
 				elems = r.reshapeElements(e, elems)
 			}
@@ -1626,7 +1626,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 				// distributed. The axis is only ever reached in the one
 				// grammar that reads a comma as a range, which is the same
 				// grammar `[*]` already asks it in.
-				sep := ifsFirst(ifs, set)
+				sep := r.ifsFirst(ifs, set)
 				perElement := strings.Join(mapped, sep)
 				joinedFirst := apply(strings.Join(elems, sep))
 				if perElement == joinedFirst ||
@@ -1656,7 +1656,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// one field per parameter, because `@` keeps its fields
 			// however it is subscripted.
 			if s.Quoting != syntax.Unquoted {
-				return []string{globEscape(strings.Join(elems, ifsFirst(ifs, set)))}, true
+				return []string{globEscape(strings.Join(elems, r.ifsFirst(ifs, set)))}, true
 			}
 			// Unquoted, the join is a dialect's answer rather than the
 			// spelling's, and it is the same answer `[@]` asks — measured,
@@ -1732,7 +1732,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		elems := r.transformElems(e, r.params())
 		ifs, set := r.ifs()
 		if e.Name == "*" {
-			joined := strings.Join(elems, ifsFirst(ifs, set))
+			joined := strings.Join(elems, r.ifsFirst(ifs, set))
 			if s.Quoting != syntax.Unquoted {
 				return []string{globEscape(joined)}, true
 			}
@@ -1807,7 +1807,7 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []st
 		return perElement
 	}
 	ifs, set := r.ifs()
-	joined := r.splitEachElement([]string{strings.Join(elems, ifsFirst(ifs, set))}, sp, glob)
+	joined := r.splitEachElement([]string{strings.Join(elems, r.ifsFirst(ifs, set))}, sp, glob)
 	if slices.Equal(perElement, joined) {
 		// The two readings coincide, which is the common case: under a
 		// whitespace IFS a run of separators is one delimiter and an empty
@@ -1858,7 +1858,7 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []st
 // bash. What does make the readings coincide is a first character that is
 // already a space, and a list too short to use a separator at all.
 func (r *Runner) unsplitJoinSeparator(star bool, n int) string {
-	sep := ifsFirst(r.ifs())
+	sep := r.ifsFirst(r.ifs())
 	if n < 2 || sep == " " {
 		// No separator is used, or IFS already begins with the space the
 		// other reading would have supplied. Either way there is nothing to
@@ -1956,7 +1956,7 @@ func (r *Runner) bracedWholeArrayReference(e, aimed *syntax.ParamExpr) (string, 
 // demanding a dialect.
 func (r *Runner) listCouldJoinDifferently(elems []string) bool {
 	ifs, set := r.ifs()
-	if len(elems) < 2 || ifsFirst(ifs, set) == "" {
+	if len(elems) < 2 || r.ifsFirst(ifs, set) == "" {
 		return false
 	}
 	for _, el := range elems {
@@ -2547,7 +2547,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		if !ok {
 			return ""
 		}
-		return strings.Join(words, ifsFirst(r.ifs()))
+		return strings.Join(words, r.ifsFirst(r.ifs()))
 	}
 	// `${+name}` is the is-it-set question, answered before anything reads a
 	// value: it takes the same source every conditional expansion takes, and
@@ -5209,7 +5209,7 @@ const positionalBoundary = "\x00"
 func (r *Runner) substringOfTheJoinedList(e *syntax.ParamExpr, params []string, quoted bool) []string {
 	off := r.numOf(e.Arg, e, e.Arg2)
 	if quoted && e.Name == "*" {
-		joined := strings.Join(params, ifsFirst(r.ifs()))
+		joined := strings.Join(params, r.ifsFirst(r.ifs()))
 		return []string{strings.Join(substringUnits(r.units(joined), off, e, r), "")}
 	}
 	var units []string
@@ -7083,16 +7083,29 @@ func digitValue(c byte) int {
 	return -1
 }
 
-// ifsFirst is the character `*` joins with: the first of IFS, a space when
-// IFS is unset, and nothing at all when IFS is set but empty.
-func ifsFirst(ifs string, set bool) string {
+// ifsFirst is the separator `*` joins with: the first character of IFS, a
+// space when IFS is unset, and nothing at all when IFS is set but empty.
+//
+// A **character** and not a byte, which is Semantics.JoinTakesTheFirstCharacterOfIFS
+// — a separator taken by the byte writes half a character between every pair
+// of words, and the joined value then holds a sequence the encoding refuses.
+//
+// The question is put only where it can matter: an `IFS` whose first byte is
+// ASCII is the same separator under either reading, so the space, the tab,
+// the newline and the colon a script actually sets never reach an axis, and
+// neither does anything under the corpus harness's `LC_ALL=C`.
+func (r *Runner) ifsFirst(ifs string, set bool) string {
 	if !set {
 		return " "
 	}
 	if ifs == "" {
 		return ""
 	}
-	return ifs[:1]
+	if isASCII(ifs[:1]) || !r.countsTheLocalesCharacters() ||
+		!r.ask(r.sem().JoinTakesTheFirstCharacterOfIFS, "a list joining on a whole character of `IFS`") {
+		return ifs[:1]
+	}
+	return ifs[:characterWidth(ifs)]
 }
 
 // namesWithPrefix is every variable name beginning with prefix, sorted.
@@ -7709,7 +7722,7 @@ func modifierSubjects(elems []string, e *syntax.ParamExpr, quoted bool, r *Runne
 	if !quoted || wholeArrayFieldsSurvive(e, r) {
 		return elems
 	}
-	return []string{strings.Join(elems, ifsFirst(r.ifs()))}
+	return []string{strings.Join(elems, r.ifsFirst(r.ifs()))}
 }
 
 // wholeArrayFieldsSurvive reports whether a quoted expansion still has one

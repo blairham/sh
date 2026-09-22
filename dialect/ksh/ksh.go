@@ -683,6 +683,14 @@ func Semantics() interp.Semantics {
 	// `x-y-z`. The two axes partition the panel differently, which is why
 	// neither can stand in for the other.
 	s.UnsplitAtListJoinsOnIFS = interp.No
+	// And the separator a join uses is the first **byte** of `IFS` here, not
+	// its first character — this shell alone, and at odds with its own
+	// multibyte reading everywhere else. Measured 2026-09-22 under
+	// `LC_ALL=en_US.UTF-8` with `IFS` assigned after the locale,
+	// `set -- a b c; printf '%s' "$*"` is `61 c3 62 c3 63` in 93u+
+	// 2012-08-01, half of the two-byte separator between each pair of words,
+	// where bash 5.3.20 and zsh 5.9.2 write both its bytes.
+	s.JoinTakesTheFirstCharacterOfIFS = interp.No
 	// ksh93u+ prints `e1: a:b:c` for `${e1?$*}` under `IFS=:`.
 	s.DiagnosticWordIsFields = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No

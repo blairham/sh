@@ -195,7 +195,7 @@ func (r *Runner) padArg(e *syntax.ParamExpr, flag rune, text string, set bool, a
 		// character of IFS in either slot. An IFS with no first character
 		// leaves the slot contributing nothing, which is measured too:
 		// `IFS=; ${(l:5:::)v}` is `ab`, unpadded.
-		return ifsFirst(r.ifs())
+		return r.ifsFirst(r.ifs())
 	}
 	return r.flagArgument(e, flag, text)
 }

@@ -619,7 +619,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// The last row is why this is not rule 10's join reached twice: that one
 	// honors the separator the group asked for and this one does not.
 	if scalarContext && isList {
-		words, isList = []string{strings.Join(words, ifsFirst(r.ifs()))}, false
+		words, isList = []string{strings.Join(words, r.ifsFirst(r.ifs()))}, false
 	}
 
 	// The ordering step is last of all, which is *later* than the rule
@@ -741,7 +741,7 @@ func (r *Runner) flagJoinSep(e *syntax.ParamExpr) string {
 	if strings.ContainsRune(e.Flags, 'j') {
 		return r.flagArgument(e, 'j', e.JoinSep)
 	}
-	return ifsFirst(r.ifs())
+	return r.ifsFirst(r.ifs())
 }
 
 // SetFlagArgumentEscapes installs the escape set the `(p)` expansion flag

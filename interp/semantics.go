@@ -15267,6 +15267,37 @@ type Semantics struct {
 	// every pattern under `LC_ALL=C` put the question to nobody.
 	UndecodablePatternComparesBytes Answer
 
+	// JoinTakesTheFirstCharacterOfIFS joins a list with the first
+	// **character** of `IFS` rather than with its first byte.
+	//
+	// `$*`, `${a[*]}` and every other site that joins on `IFS` take the same
+	// answer — it is one separator, chosen once.
+	//
+	// Measured 2026-09-22, `set -- a b c; printf '%s' "$*"` with `IFS`
+	// assigned to a two-byte character *after* the locale was set, bytes read
+	// with `od -b`:
+	//
+	//	locale             bash 5.3.20     zsh 5.9.2       ksh93u+
+	//	en_US.UTF-8        a c3 a9 b …     the same        a c3 b c3 c
+	//	C                  a c3 b c3 c     the same        the same
+	//
+	// The order of the two lines matters and is why the probe assigns `IFS`
+	// after the locale: bash settles the separator when `IFS` is assigned, so
+	// setting the locale afterwards leaves the character it already chose and
+	// a probe written the other way round reads as locale-blind.
+	//
+	// A byte is not a smaller version of the right answer. Half of a
+	// character between every pair of words is a sequence the encoding
+	// refuses, so the joined value cannot be measured, matched or written
+	// back — which is what the shell that does it is measurably wrong about
+	// rather than merely different.
+	//
+	// Asked only where `IFS` begins with a byte above ASCII and the locale
+	// has characters at all: a separator of ASCII is one byte under either
+	// reading, so the ordinary space, tab, newline and colon put the question
+	// to nobody.
+	JoinTakesTheFirstCharacterOfIFS Answer
+
 	// UnsetLocaleIsUnicodeAware is what a locale *nothing names* is: the
 	// encoding the environment would have chosen, or the C locale.
 	//
@@ -23894,6 +23925,17 @@ func PosixSemantics() Semantics {
 		// ksh93u+ both find nothing for `[[ $e == *$b* ]]` on the euro sign
 		// and its middle byte, where bash 5.3.20 matches.
 		UndecodablePatternComparesBytes: No,
+		// `$*` joins on the first *character* of IFS, which is XCU's own word
+		// for it — "the first character of the IFS variable". A separator
+		// taken as the first byte cuts a multi-byte one in half and puts a
+		// sequence in the value that nothing can decode, so the preset follows
+		// the text. Measured 2026-09-22 with `IFS` assigned after the locale,
+		// `set -- a b c; printf '%s' "$*"`: under `LC_ALL=en_US.UTF-8` bash
+		// 5.3.20 and zsh 5.9.2 both write the whole two-byte separator between
+		// the words and ksh93u+ writes its lead byte alone; under `LC_ALL=C`
+		// all three write the lead byte, which is the right answer there and
+		// the reason the question is asked only where a locale has characters.
+		JoinTakesTheFirstCharacterOfIFS: Yes,
 		// XBD ranks the locale variables and then leaves the case where none
 		// of them is set to the implementation: what applies is the
 		// implementation-defined default locale. The default a C program

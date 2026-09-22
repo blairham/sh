@@ -568,6 +568,23 @@ type Semantics struct {
 	// than one, and the second is filed rather than guessed at. See
 	// IgnoredNamesRevealHiddenNames for the half they agree on.
 	IgnoredNamesVariable string
+
+	// CompatibilityLevelVariable names the parameter that selects an older
+	// release's behavior, and is empty in every dialect that has no such
+	// parameter. A name rather than a value, for the reason
+	// IgnoredNamesVariable is one: the substrate names no shell.
+	//
+	// Measured 2026-09-22 on bash 5.3.20 under `LC_ALL=C`. The value is a
+	// release with the dot optional — `51` and `5.1` are one level — and it
+	// selects *every* behavior of that release and below, so a row asks
+	// whether the level is at most the release the behavior changed in.
+	// Out of range (`abc`, `0`, `99`) is complained about and leaves the
+	// level unset, which is the modern reading.
+	//
+	// Only the one row #4256 measured is answered against it today; the
+	// parameter has many. See UnsetArraySpanRemovesTheVariable, and #4262
+	// for the two spellings of the same state that are not yet joined up.
+	CompatibilityLevelVariable string
 	// SortOrderVariable names the parameter that says which order a pathname
 	// expansion comes back in, and it is empty in every dialect that has no
 	// such parameter.
@@ -27791,6 +27808,17 @@ const (
 	// scalar comes back empty, and a single subscript comes back blank in
 	// place with the array's length unchanged.
 	UnsetArraySpanLeavesOneEmptyElement
+	// UnsetArraySpanRemovesTheVariable takes the whole variable away rather
+	// than emptying it, so a later `declare -p` reports the name as not
+	// found at status 1 where the modern reading prints an empty array at 0.
+	//
+	// Not a dialect's answer but a *compatibility* one: bash reads the span
+	// this way at level 5.1 and below and the modern way above it, so it is
+	// reached through CompatibilityLevelVariable at run time rather than set
+	// on a preset. Measured 2026-09-22 on bash 5.3.20, where the threshold
+	// is exactly 51: every level 31 through 51 removes and 52 and above
+	// empty (#4256).
+	UnsetArraySpanRemovesTheVariable
 )
 
 func (p UnsetArraySpanPolicy) String() string {
@@ -27801,6 +27829,8 @@ func (p UnsetArraySpanPolicy) String() string {
 		return "removes every element"
 	case UnsetArraySpanLeavesOneEmptyElement:
 		return "leaves one empty element"
+	case UnsetArraySpanRemovesTheVariable:
+		return "removes the variable"
 	}
 	return "unspecified"
 }
@@ -27810,6 +27840,13 @@ func (p UnsetArraySpanPolicy) String() string {
 // leave three different arrays behind.
 func (r *Runner) unsetArraySpan() UnsetArraySpanPolicy {
 	p := r.sem().UnsetArraySpan
+	// A compatibility level at or below the release that changed the reading
+	// takes the older one, whatever the preset says. Asked before the
+	// unanswered check so that a dialect with no answer is still refused:
+	// the level only chooses between readings a dialect has.
+	if p != UnsetArraySpanUnspecified && r.compatAtMost(51) {
+		return UnsetArraySpanRemovesTheVariable
+	}
 	if p == UnsetArraySpanUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered("`unset a[@]`")))

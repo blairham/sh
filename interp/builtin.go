@@ -3043,6 +3043,18 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			// was deleted from a table it was never in and nothing happened
 			// at all.
 			if r.assocDeclared(base) {
+				// The compatibility level reaches a keyed array too, and it
+				// is the one place the span spelling is not the key's:
+				// measured 2026-09-22 on bash 5.3.20, `declare -A a=([k]=1);
+				// BASH_COMPAT=51; unset a[@]` removes the variable at status
+				// 0, where the modern reading takes the element called `@`
+				// and leaves the table standing. Asked before the key
+				// reading rather than inside it, because the older answer is
+				// not about a key at all.
+				if everyElement && r.compatAtMost(51) {
+					status = r.carryUnsetStatus(status, r.unsetName(base))
+					continue
+				}
 				// `[@]` is a key like any other where the attribute is on:
 				// no shell measured clears a keyed array through it, so the
 				// whole-array reading below is the indexed array's alone.

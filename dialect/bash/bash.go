@@ -426,6 +426,10 @@ func Semantics() interp.Semantics {
 	// facility under another name and does not answer alike; it is filed
 	// rather than guessed at.
 	s.IgnoredNamesVariable = "GLOBIGNORE"
+	// The compatibility level, which selects an older release's reading of a
+	// behavior. Only #4256's row is answered against it so far; see
+	// Semantics.CompatibilityLevelVariable.
+	s.CompatibilityLevelVariable = "BASH_COMPAT"
 	// And the order the expansion comes back in, which is 5.3's and is this
 	// column's alone: no other shell in the panel has a parameter for it.
 	// See interp.Semantics.SortOrderVariable.

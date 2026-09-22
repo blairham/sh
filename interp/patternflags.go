@@ -353,6 +353,31 @@ func bracketEnd(p string, i int) (int, bool) {
 		j++
 	}
 	for ; j < len(p); j++ {
+		if p[j] == '\\' {
+			// A backslash protects the character behind it, so the `]` of a
+			// `\]` is a member and does not close the expression. The loop's
+			// own increment carries past the protected byte.
+			//
+			// [closesBracket] in glob.go has always done this and this scan
+			// never did, which is the whole of #4212: the two helpers answer
+			// the same question and disagreed on `[\]~#]`. bracketEnd
+			// stopped at the `]` of the `\]`, so [splitExclusion] saw the
+			// `~` behind it standing at top level, cut the pattern into
+			// `[\]` and `#]`, and [scanExtendedPattern] reached a `#` with
+			// nothing closable in front of it and called the pattern bad.
+			// zsh-autosuggestions writes exactly that bracket, so every
+			// keystroke printed `bad pattern` (#4212).
+			//
+			// Not a dialect question, though [Semantics.BracketEscape] is
+			// one. Two of its three readings protect the member outright,
+			// and the third — BusyBox ash's, where the backslash is only an
+			// ordinary member — has no `(#…)` flags, no groups and no `~`
+			// exclusion, so no walker in this family runs over one of its
+			// patterns. The matcher is where that axis is read, and
+			// [matchBracket] reads it there unchanged.
+			j++
+			continue
+		}
 		if end, ok := classEnd(p, j); ok {
 			// Past the whole `[:class:]`; the loop's own increment then
 			// carries on from the character after it.

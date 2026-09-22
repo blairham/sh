@@ -124,7 +124,21 @@ func (r *Runner) setPseudoTrap(name, body string) {
 		// bound ERR, so a trap set inside one belongs to that file.
 		r.debugTrapFrame = r.currentFrameSerial()
 	case "RETURN":
-		r.returnTrapFrame = r.currentFrameSerial()
+		// The innermost *function* frame rather than the file, which is the
+		// reading ERR takes and DEBUG does not. Measured 2026-09-22 on bash
+		// 5.3.20 with no `set -T`, over a `t.inc` whose first line sets this
+		// trap:
+		//
+		//	. ./t.inc               fires once, as the file ends
+		//	f(){ . ./t.inc; }; f    fires twice — the file's end, then f's
+		//	                        own return
+		//	g(){ :; }; g            fires nothing, afterwards
+		//
+		// So a trap a sourced file sets belongs to the function that sourced
+		// it, and the function's own return fires it as well as the file's
+		// end. Recorded against the file's frame, the second firing was
+		// missing and the third was there.
+		r.returnTrapFrame = r.currentFunctionFrameSerial()
 	}
 }
 
@@ -366,6 +380,18 @@ func (r *Runner) fireDebugTrap(ctx context.Context, entering bool) {
 	if body == nil || *body == "" || r.inDebugTrap {
 		return
 	}
+	// A RETURN body is part of a call unwinding, so the trace carries the
+	// DEBUG trap into it on exactly the terms it carries it into a call.
+	// Measured 2026-09-22 on bash 5.3.20 from a script file, with both traps
+	// set at the top level and the RETURN body calling a function: with no
+	// `set -T` the body's own command fires nothing, and with it the body
+	// fires one and the function it calls fires its own. The other bodies do
+	// not share it — an ERR body, a signal body and an EXIT body each fire
+	// the DEBUG trap with tracing off, measured in the same run — which is
+	// what says this is about the *return* and not about trap bodies.
+	if r.inReturnTrap && !r.functrace {
+		return
+	}
 	if cur := r.currentFrameSerial(); cur != 0 && cur != r.debugTrapFrame && !r.functrace &&
 		!r.ask(r.sem().DebugTrapRunsInsideCalls, "the DEBUG trap inside a call it was not set in") {
 		return
@@ -430,7 +456,19 @@ func (r *Runner) runReturnTrap(ctx context.Context, serial int) {
 	// It matters out of proportion to how narrow it reads, because a DEBUG
 	// body runs before *every* command: a traced script with both traps set
 	// carried two extra lines of output per command for its whole run.
-	if serial != sourcedFrame && r.returnTrapFrame != serial && (!r.functrace || r.inDebugTrap) {
+	// A sourced file fires it wherever the trap was set — the half of the
+	// rule functions do not share — but *wherever* is still a scope. With
+	// tracing off, a function that did not set the trap has not got one, so
+	// a file it sources has none to fire either: measured 2026-09-22 on bash
+	// 5.3.20 with the trap set at the top level and no `set -T`, `f(){ .
+	// ./inc; }; f` fires nothing where `. ./inc` at the top level fires once.
+	// The file's own frame is gone by now — see the pop in interp/source.go —
+	// so this asks about the frame it returned to.
+	frame := serial
+	if serial == sourcedFrame {
+		frame = r.currentFunctionFrameSerial()
+	}
+	if r.returnTrapFrame != frame && (!r.functrace || r.inDebugTrap) {
 		return
 	}
 	if r.ctl != controlNone && r.ctl != controlReturn {

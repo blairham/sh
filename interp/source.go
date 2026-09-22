@@ -1383,7 +1383,19 @@ func (r *Runner) runDotText(ctx context.Context, args []string, display string, 
 	// diagnostic takes the second, and a PATH search is where they part
 	// company. See Frame.Operand.
 	r.pushFrame(Frame{File: display, Name: sourceFrameName, Operand: args[0]})
-	defer r.popFrame()
+	// Popped once, wherever the file ends. The RETURN trap below wants the
+	// frame already gone and an early return wants it gone too, so the pop
+	// is a closure the defer and the ordinary path share rather than two
+	// pops that could both run.
+	popped := false
+	popSourceFrame := func() {
+		if popped {
+			return
+		}
+		popped = true
+		r.popFrame()
+	}
+	defer popSourceFrame()
 
 	// Where the `.` itself stands, because that is where a RETURN trap
 	// fired from here counts as having fired and the file's own lines are
@@ -1403,6 +1415,24 @@ func (r *Runner) runDotText(ctx context.Context, args []string, display string, 
 	// action sees the file's status, and an `exit` of its own wins.
 	r.status = st
 	r.line = dotLine
+	// The frame goes **before** the trap body runs, which is the half of
+	// this rule a function's RETURN does not share. Measured 2026-09-22 on
+	// bash 5.3.20, `set -o functrace` with the trap set at the top level:
+	//
+	//	fn3(){ . ./inc; }; fn3     the trap fires twice, and the firing that
+	//	                           ends the *file* reports `${FUNCNAME[@]}`
+	//	                           as `fn3 main` and `${BASH_SOURCE[0]}` as
+	//	                           the caller's file
+	//	. ./inc  at the top level  `${FUNCNAME[@]}` empty, BASH_SOURCE[0] the
+	//	                           caller's file
+	//	g(){ :; }; g               `g main` — the function's own frame is
+	//	                           still there for its own firing
+	//
+	// So a sourced file's trap runs in the frame that sourced it, and a
+	// function's runs in its own. Here the file's frame stood through both,
+	// so the action saw `source` where bash saw the caller — and the DEBUG
+	// firing in front of the action saw it too.
+	popSourceFrame()
 	r.runReturnTrap(ctx, sourcedFrame)
 	// And now whether the file's own `set` stands. Only a file that was
 	// given parameters of its own has a restore to cancel, and only one that

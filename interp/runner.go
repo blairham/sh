@@ -1886,6 +1886,17 @@ type Runner struct {
 	// here and the stopping lives in the front end: this package runs what
 	// it is handed and has no say in whether there is more.
 	onecmd bool
+	// restricted is `set -r`, and it is the one option in this table that
+	// can never be turned back off: a shell that has entered restricted mode
+	// stays in it for the rest of its life, and the `+r` that would undo it
+	// is refused as an option the shell has not got. See restricted.go for
+	// what the state costs a script and for why the refusal is worded that
+	// way rather than as a request declined.
+	//
+	// Inherited by a subshell because a clone copies it, which is the
+	// measured answer: a restricted shell's subshell is restricted too, so
+	// `( cd / )` is refused exactly as a bare `cd /` is.
+	restricted bool
 	// keywordAssignments is `set -k`: with it on, a `name=value` word
 	// standing *after* the command name is a prefix assignment rather than a
 	// positional argument. See keywordassign.go, which carries the panel and
@@ -7246,6 +7257,22 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	r.execSerial = r.stmtSerial
+	if r.restricted && restrictedPath(argv[0]) {
+		// A restricted shell runs what its PATH finds and nothing a script
+		// points at. Before the lookup, which is measured and is the whole
+		// point of the rule: `/no/such` is this sentence and not `No such
+		// file or directory`, so the shell never goes and looks — and a
+		// search is exactly what the mode is confining. See
+		// Runner.restrictedCommandName.
+		//
+		// Here rather than at the word's other readers, because this is the
+		// one place a word becomes a command to start: a builtin and a
+		// function are reached by name and no name of either carries a
+		// separator, and `command /bin/sh` and `eval /bin/sh` arrive here
+		// exactly as a bare word does. Measured on all three spellings.
+		r.status = r.restrictedCommandName(argv[0])
+		return nil
+	}
 	// This runner's PATH, not the process's — see lookpath.go for why that
 	// distinction is the whole bug and not a detail.
 	path, lookErr := r.lookPath(argv[0])

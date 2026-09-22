@@ -847,6 +847,18 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		return r.dotNoOperand()
 	}
 
+	if r.restricted && restrictedPath(args[0]) {
+		// A path rather than a bare name, which is the whole of the rule: a
+		// restricted shell still reads a file its own PATH finds, and
+		// refuses one the script *points* at. Measured — `. f` is silent at
+		// 0 while `. ./f`, `. d/g` and `. /etc/profile` are all this
+		// sentence at 1 — and the builtin names itself by the word the
+		// script invoked it with, so `source d/g` says `source`.
+		//
+		// Before the resolution rather than after, so a refused path is
+		// never looked for: the search is what the mode is confining.
+		return r.restrictedOperandRefusal(orElse(r.inBuiltin, "."), args[0])
+	}
 	display, path, err := r.resolveDotPath(args[0], here, search)
 	if err != nil {
 		return r.dotFailed(args[0], err)

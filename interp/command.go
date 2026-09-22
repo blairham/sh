@@ -91,6 +91,26 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	if len(args) == 0 {
 		return 0
 	}
+	if defaultPath && r.restricted {
+		// The letter names a PATH the script did not choose, which is the
+		// one thing the mode's frozen PATH is for: a restricted shell that
+		// took `-p` would hand back the search it had just been confined
+		// away from. Measured, the letter is refused and named — `command:
+		// -p: restricted` at 1 — rather than the operand behind it, so a
+		// script is told which word to drop.
+		//
+		// **Behind the operand count**, which is measured and is not where
+		// this was first written: `command -p` with nothing after it is a
+		// silent 0 in a restricted bash, exactly as it is in an ordinary
+		// one, and only `command -p cmd` and the reporting `command -pv cmd`
+		// are refused. So the refusal is about a search that would happen
+		// and not about the letter appearing.
+		//
+		// After the whole option word is read, so a bundle refuses the same
+		// way a letter of its own does: `command -vp sed` and `command -pv
+		// sed` are one sentence, naming `-p` either way round.
+		return r.restrictedOperandRefusal("command", "-p")
+	}
 	if !verbose && !sentence && r.expandedCommandOnlyReports() {
 		// The word `command` arrived through an expansion rather than being
 		// written, and one dialect gives it no power to run anything there:

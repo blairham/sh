@@ -115,11 +115,19 @@ func TestBashRefusesAnInvocationOptionWithItsOwnUsageBlock(t *testing.T) {
 // shell is already in the state it asks for, and `set -p` is refused by the
 // name rather than by the letter. A letter routed to a name must not also be
 // listed here, or the two would give different sentences for one question.
+//
+// `-r` left in #4168 for the first reason again: restricted mode is built, so
+// the letter is the whole of how a script enters it and a line here would
+// refuse what the mode grants. It is the one letter to have left for a reason
+// with a *plus* form that is still refused, and refused differently — `set +r`
+// in a restricted shell is `invalid option` at 1 rather than `not
+// implemented`, because that shell has no way back out. See
+// interp/restricted.go.
 func TestBashKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "brP"; got != want {
+	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "bP"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "brP" {
+	for _, l := range "bP" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than invalid", src, got)

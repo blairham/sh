@@ -58,6 +58,17 @@ func registerBashCmds(r *interp.Runner) {
 			if !set {
 				return
 			}
+			// An assignment is a `hash -p` by another spelling, so the
+			// restricted shell's refusal of one is its refusal of the other
+			// — with no builtin named and at the assignment's own status.
+			// Measured 2026-09-22 on 5.3.20: `BASH_CMDS[a]=/bin/sh` is
+			// `/bin/sh: restricted`, `BASH_CMDS[a]=zz` is `zz: not found`,
+			// both at 0 and with nothing hashed, and `BASH_CMDS[a]=sh` is
+			// silent because `sh` is on PATH. See
+			// interp.Runner.RestrictedHashPath.
+			if rr.RestrictedHashPath(value) {
+				return
+			}
 			rr.HashCommand(key, value)
 		})
 }

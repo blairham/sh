@@ -7730,6 +7730,94 @@ than to the name (#3154). Turning the editor **on** needs a terminal as well
 as a prompt and turning it off does not, which is only reachable in the
 shell `-o interactive` on a pipe makes.
 
+### The restricted shell, and the letter `set -r`
+
+**One shell in the panel has this mode and this shell has built it.** Measured
+2026-09-22 on bash 5.3.20 with a scratch HOME and no startup files, each
+spelling run from a script file with `echo st=$?` behind it. ksh93 has the
+letter and a restricted mode of its own, with different refusals and different
+wording, and this shell has not built that one — so `r` stays in that
+dialect's unimplemented letters. zsh, dash and BusyBox ash have no such
+letter and refuse it outright.
+
+`Semantics.SetHasTheRestrictedLetter` is the axis, and it is deliberately one
+question about the letter **and** the mode rather than two. A dialect
+answering yes without the refusals behind it would take `set -r` at 0 and then
+run every command the mode forbids, which is a worse answer than the refusal
+it replaces: a script told `-r is not implemented yet` can still stop.
+
+**The mode is entered and never left.** `set -r` is silent at 0, `$-` grows an
+`r` between `k` and `t` — measured by turning the other letters on around it —
+and `set +r` afterwards is `set: +r: invalid option` with `set`'s own usage
+block, at **1**. That status is the measurement and not an oversight: the same
+shell's `set -q` is 2. The long spelling is a different refusal again, because
+bash has never had a `restricted` name in `set -o`: `set +o restricted` is
+`set: restricted: invalid option name` at 2.
+
+And a shell that never entered the mode grants `set +r` silently at 0, which
+is the same bargain every unimplemented `set -o` name keeps — a request for
+the state the shell is already in. So the refusal hangs on the state and not
+on the letter.
+
+**Ten refusals, each of them 1 and none of them fatal**, bar the last, which is
+an assignment and reports an assignment's 0:
+
+| what | what it says |
+| --- | --- |
+| `cd`, any operand or none | `cd: restricted` |
+| assigning `PATH`, `SHELL`, `ENV`, `BASH_ENV`, `HISTFILE` | `PATH: readonly variable` |
+| a command word with a `/` in it | ``/bin/sh: restricted: cannot specify `/' in command names`` |
+| `.` or `source` on a path with a `/` | `.: ./f: restricted` |
+| a redirection that opens a file to write | `f: restricted: cannot redirect output` |
+| `exec cmd` | `exec: restricted` |
+| `command -p cmd` | `command: -p: restricted` |
+| `hash -p path name` | `hash: /bin/sh: restricted` |
+| an assignment to the hash's parameter | `/bin/sh: restricted` |
+| `enable -d name` | `enable: restricted` |
+
+Five things about that table are measurements rather than readings of it.
+
+- **The frozen names are frozen, not special-cased.** `PATH=/bin` earns the
+  ordinary readonly refusal and `unset PATH` earns `unset: PATH: cannot unset:
+  readonly variable`, so the state is what the mode writes and the two
+  spellings cannot disagree. A name with no value is frozen all the same:
+  `readonly -p` in a restricted shell with no `$ENV` set lists `declare -r ENV`.
+- **The command word is refused before the search.** `/no/such` is the
+  separator sentence and not `No such file or directory`, so the shell never
+  looks — which is the point of the rule, since the search is exactly what the
+  mode is confining.
+- **A descriptor duplication is not a redirection that opens anything.**
+  `echo x >&2` and `echo x 2>&1` are silent at 0 where `echo x > f`,
+  `>> f`, `>| f`, `<> f` and `&> f` are all refused. Neither is a
+  here-document or a here-string, and neither is any form of input.
+- **`exec`'s redirection form is untouched.** `exec 3< f` is 0; the mode is
+  about the shell being replaced. What it does stop is `exec > f`, and it
+  stops that as an output redirection like any other.
+- **`command -p` with no operand behind it is taken**, at 0, because nothing
+  would be searched for. Only `command -p cmd` and `command -pv cmd` are
+  refused, and the letter is named either way round in a bundle.
+
+**The hash gets a second check, and it is the one that would have been missed
+by reading a manual.** A hand-written entry whose path has no separator is
+looked for on PATH, and a name nothing answers to is refused as missing —
+`hash -p zznosuchcmd zz` is `hash: zznosuchcmd: not found` at 1, where the
+same line in an ordinary shell is silent at 0 with the entry made. So a
+restricted shell will not take a hash entry it could not have reached on its
+own. What that buys is the third line of the same measurement: with the entry
+refused, `hash -p /bin/sh a; a -c 'echo hello'` is `a: command not found` at
+127, where an ordinary shell prints `hello`.
+
+**The parameter spelling of the hash is the same door and is guarded the same
+way**, with two differences that are measured: it names no builtin —
+`BASH_CMDS[a]=/bin/sh` is `/bin/sh: restricted` and `BASH_CMDS[a]=zz` is
+`zz: not found` — and both report **0**, an assignment's own status, with
+nothing hashed. A mode that reached only the builtin would have left the hash
+writable, which is the door a script looking for a way out tries second.
+
+**The mode reaches inside a nested shell.** `( cd / )`, `x=$(cd /)` and a
+function body are each the refusal at 1, which here is a clone copying the
+state rather than a check of its own.
+
 ### What an emulation resets, and what it leaves standing
 
 `emulate` does not put the whole option table back. Measured on zsh 5.9.2,

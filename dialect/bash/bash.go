@@ -652,7 +652,12 @@ func Semantics() interp.Semantics {
 	// shell never shows both, being the one that answers `No` to
 	// CommandStringShowsSInDollarDash — so the pair is written in the order
 	// the substrate produces them.
-	s.DollarDashLetterOrder = "aefhkilmntuvxBCEHTcs"
+	// `r` sits between the interactive letters and `t`, which is measured
+	// rather than guessed: `set -r` then `set -aefhkuvxBCEHT` is
+	// `aefhkruvxBCEHTc`, a shell started `-i` reads `hirBHc`, and `set -r`
+	// followed by `set -t` is `hrtBc`. So `k` is in front of it, `i` is in
+	// front of it, and `t` and `u` are behind it.
+	s.DollarDashLetterOrder = "aefhkilmnrtuvxBCEHTcs"
 	s.ArrayScalarIsTheWholeArray = interp.No
 	// And the one element a plain `$m` on a keyed table gives is the one
 	// keyed `0`, which is nothing at all where no such key was written.
@@ -1193,6 +1198,11 @@ func Semantics() interp.Semantics {
 	// standard input and at the invocation — `bash -t script.sh` runs the
 	// first line of it and stops.
 	s.SetHasTheTLetter = interp.Yes
+	// `set -r`: restricted mode, and the one option in this shell that can
+	// never be turned back off. Measured 2026-09-22 on bash 5.3.20 — see
+	// Semantics.SetHasTheRestrictedLetter for what each of the nine
+	// refusals was measured doing, and interp/restricted.go for the sites.
+	s.SetHasTheRestrictedLetter = interp.Yes
 	// And the one route it does not reach. Measured: a `-c` string that turns
 	// the option on runs to its end anyway, with `$-` showing `t` throughout.
 	// The other shell with the letter stops there, which is what makes this
@@ -3491,7 +3501,18 @@ func Diagnostics() interp.Diagnostics {
 		// (#2024).
 		PromptBuiltinLocation: interp.LocationNameOnly,
 		NotFound:              "%s: command not found",
-		UnboundVariable:       "%s: unbound variable",
+		// The four restricted-shell refusals, measured a spelling at a time
+		// on bash 5.3.20, 2026-09-22. Each reports 1 and leaves the shell
+		// running; see interp/restricted.go.
+		Restricted:            "%[1]s: restricted",
+		RestrictedOperand:     "%[1]s: %[2]s: restricted",
+		RestrictedCommandName: "%[1]s: restricted: cannot specify `/' in command names",
+		RestrictedRedirect:    "%[1]s: restricted: cannot redirect output",
+		// The parameter spelling of the hash names no builtin, which is
+		// measured: `BASH_CMDS[a]=zz` in a restricted shell is `zz: not
+		// found` where `hash -p zz a` is `hash: zz: not found`.
+		RestrictedHashNotFound: "%[1]s: not found",
+		UnboundVariable:        "%s: unbound variable",
 		// And the **count** of a whole array names the bare name where every
 		// other subscripted refusal here writes the brackets back:
 		// `${#a[@]}` is `a: unbound variable` and `${a[@]}` on the same
@@ -3925,7 +3946,13 @@ func Diagnostics() interp.Diagnostics {
 			// the same request, so a letter listed here while the name is
 			// wired would refuse what the name grants — see
 			// Semantics.SetHasTheTLetter.
-			"set": "brP",
+			//
+			// `r` left this list when restricted mode was built (#4168):
+			// the letter is the whole of how that mode is entered, so a
+			// letter listed here while the mode exists would refuse what
+			// the mode grants — the same pairing `-t` and `-H` describe
+			// above.
+			"set": "bP",
 			// Options these builtins have here and this shell does not.
 			"wait": "f",
 			// disown's sweepers: -a for every job, -h for HUP shielding

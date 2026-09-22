@@ -394,6 +394,40 @@ func (r *Runner) readThroughNamerefElement(base, sub string) (string, bool) {
 // it was a **silent wrong answer**, the script exiting 0 with the element it
 // meant to write still holding its old value (#4085).
 func (r *Runner) storeThroughNamerefElement(base, sub, value string, form assignForm) {
+	// The base is taken **literally**, and a base that is itself a reference
+	// gives the attribute up rather than redirecting once more.
+	//
+	// Measured 2026-09-22 on bash 5.3.20, script files under `env -i`:
+	//
+	//	typeset -n a=v; typeset -n b='a[1]'; b=foo
+	//	   warning: a: removing nameref attribute, and `a` is then
+	//	   `declare -a a=([1]="foo")` while `v` is not there at all
+	//	typeset -n a=b; typeset -n b='a[1]'; b=foo   the same
+	//
+	// So an element the *reference* named is an element of the name it wrote
+	// down, whoever that name turns out to be. The direct spelling is the
+	// other way and is left alone — `typeset -n a=v; a[1]=foo` writes `v[1]`
+	// there and here, because that subscript is the script's own and the
+	// name in front of it is a name a reference may redirect.
+	//
+	// This walked the base's reference too, so the value landed in the far
+	// name and the near one kept an attribute bash had taken off — a wrong
+	// cell at status 0, with nothing said.
+	//
+	// Except where the base's own reference names an **element of the base
+	// itself** — `typeset -n a='a[0]'`, which is the circular shape. There
+	// is no second name there to take an attribute off, and bash reports the
+	// cycle instead. The discriminator is the *immediate* target and not the
+	// resolved one, because the resolved one is this same element in both
+	// shapes: measured 2026-09-22, `typeset -n a=b; typeset -n b='a[1]';
+	// a=foo` drops `a`'s reference and writes the element, where a local
+	// `typeset -n a='a[1]'` warns twice about the cycle and writes nothing.
+	if target, is := r.nameref[base]; is && target != "" && !r.namesAnElementOf(base, target) {
+		if w := r.diag().NamerefArrayLiteralDropsTheAttribute; w != "" {
+			r.DiagnoseAsTheShellf("%s\n", Wording(w, "warning: %[1]s: removing nameref attribute", base))
+		}
+		r.unsetNameref(base)
+	}
 	if r.storeWholeArraySubscriptThroughAReference(base, sub, value, form) {
 		// `declare -n b='a[@]'; b=Z` — brackets that name the whole array
 		// rather than an element, which walked on to the arithmetic
@@ -1552,4 +1586,70 @@ func (r *Runner) namerefRefusesACompoundLiteral(builtin, name string) bool {
 	// and would stop the very assignment this is meant to leave alone.
 	r.lettersRefusedTheOperand = true
 	return true
+}
+
+// namesAnElementOf reports whether target is an element of name — the shape a
+// reference aimed at its own subscript has.
+func (r *Runner) namesAnElementOf(name, target string) bool {
+	b, _, element := r.indirectElement(target)
+	return element && b == name
+}
+
+// elementWriteRefusesAReferenceToAnElement reports — and refuses — a
+// subscripted write whose name resolved, through a reference, to an element
+// rather than to a name.
+//
+// `typeset -n r='A[0]'` aims at one cell, so `r[1]=v` has two subscripts and
+// names nothing. Measured 2026-09-22 on bash 5.3.20, from a file, with no
+// `A` anywhere: the target is quoted back as `not a valid identifier` at 1,
+// the next line runs, and no `A` and no `A[0]` come into being.
+//
+// This stored under the resolved text, so a parameter literally called
+// `A[0]` appeared — invisible to `${A[0]}` and to `typeset -p A`, at status
+// 0. The same shape #1380 fixed for a valueless subscripted operand, on the
+// other route in.
+//
+// Worded as the shell rather than as a builtin, because the routes that
+// reach it are statements: [Runner.refuseNamerefAim] is the same sentence
+// with the same speakers, and this reuses it so that `(( r[1] = 5 ))` and a
+// builtin's own store name themselves here exactly as they do there.
+func (r *Runner) elementWriteRefusesAReferenceToAnElement(name string) bool {
+	if isNameLike(name) {
+		return false
+	}
+	if _, _, element := r.indirectElement(name); !element {
+		return false
+	}
+	r.refuseNamerefAim(name, assignedByBuiltin)
+	return true
+}
+
+// namerefGivesUpForAContainer is the half of namerefArrayLiteralTarget a
+// builtin that fills an **array** needs on its own: a reference with nothing
+// to point at gives the attribute up and the container lands in the name
+// itself.
+//
+// Measured 2026-09-22 on bash 5.3.20, from a file:
+//
+//	typeset -n r; mapfile r < /dev/null   warning: r: removing nameref
+//	                                      attribute, then `declare -a r=()`
+//	typeset -n x; coproc x { :; }         the same warning, and the ends
+//	                                      land in `x`
+//
+// Both refused the operand here instead, because the store walked on to the
+// scalar write — where a reference with nothing to point at is *aimed* by
+// what is assigned to it, and a file descriptor is not a name. So `mapfile`
+// answered the empty-name refusal and `coproc` said it twice, once per end,
+// and neither array was ever written.
+//
+// The aimed cases are each builtin's own: one refuses a reference to an
+// element in its own words, the other in the shell's.
+func (r *Runner) namerefGivesUpForAContainer(name string) {
+	if target, is := r.nameref[name]; !is || target != "" {
+		return
+	}
+	if w := r.diag().NamerefArrayLiteralDropsTheAttribute; w != "" {
+		r.DiagnoseAsTheShellf("%s\n", Wording(w, "warning: %[1]s: removing nameref attribute", name))
+	}
+	r.unsetNameref(name)
 }

@@ -525,6 +525,13 @@ func (r *Runner) markIndexed(name string) {
 // has both, and that is why one rule needs two spellings to show it.
 func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 	name = r.throughNameref(name)
+	if r.elementWriteRefusesAReferenceToAnElement(name) {
+		// A reference aimed at an element, with a subscript of its own
+		// written after it — `typeset -n r='A[0]'; r[1]=v`. Two subscripts
+		// name nothing, and the store below would make a parameter literally
+		// called `A[0]`. See interp/nameref.go.
+		return
+	}
 	// An element write is a `.set` event with a subscript on it — measured,
 	// `a=(x y); a[1]=z` enters `a.set` with `${.sh.name}` as `a` and
 	// `${.sh.subscript}` as `1`, and a hook that rewrites `${.sh.value}` is

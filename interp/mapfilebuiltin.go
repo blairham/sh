@@ -145,6 +145,11 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 	// `declare -n r=A[0]; mapfile -t r` is ``mapfile: `A[0]': not a valid
 	// identifier`` at 1, and no `A[0]` comes into being; here it did, and the
 	// array the script meant was never written.
+	// A reference with nothing to point at gives the attribute up and takes
+	// the array itself — the same rule an array literal follows. Ahead of the
+	// walk, which answers nothing for an unaimed reference and left the store
+	// below trying to *aim* it at a file descriptor. See interp/nameref.go.
+	r.namerefGivesUpForAContainer(target)
 	if aimed, is := r.namerefTarget(target); is {
 		target = aimed
 	}

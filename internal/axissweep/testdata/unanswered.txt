@@ -267,7 +267,6 @@ bash  DeclareMatchingLetter
 bash  DeclareNumberDetachedOnlyAtTheWordEnd
 bash  DeclareTypeLetter
 bash  DeclareZeroFillLetter
-bash  ExitTrapFiresPastTheEnd
 bash  ExportThroughASubscriptedOperandRecordsTheLetter
 bash  FloatFormatLetterE
 bash  ImmovableOptionsSetAtInvocation

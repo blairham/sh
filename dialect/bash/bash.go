@@ -1005,6 +1005,15 @@ func Semantics() interp.Semantics {
 	// trap prints 1 and locates the failure at line 2. bash 5.3,
 	// bash-as-sh and bash 3.2 all answer this way.
 	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
+	// And an EXIT body, which has no line of its own, counts as having
+	// fired on the first rather than past the script's last. Reachable here
+	// through the clause above: a DEBUG trap fires for the commands of an
+	// EXIT body, and that body's line base is the EXIT trap's firing line.
+	// Measured 2026-09-22 on bash 5.3.20 from a five-line script file with
+	// a two-line DEBUG body and an EXIT trap, `echo $LINENO` on each body
+	// line: inside the EXIT trap the pair is `1`/`2`, not the `6`/`7` that
+	// counting past the end would give (#4193).
+	s.ExitTrapFiresPastTheEnd = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
 	// `set -e` is the one option a `$(…)` body does not simply inherit
 	// here. Measured 2026-09-15, `set -e; echo "end[$(false; echo no)]"` is

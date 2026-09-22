@@ -1399,6 +1399,14 @@ func Semantics() interp.Semantics {
 	s.TrapSingleUnknownConditionIsUsage = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
+	// unanswered ExitTrapFiresPastTheEnd: the axis is the line a trap body
+	// counts as having fired on, and it is only asked where a body's lines
+	// are numbered from that line at all. Every trap body here counts from
+	// its own first line — TrapBodyLine and CommandTrapBodyLine are both
+	// left alone — and the one other reader is a body's parse failure being
+	// located at the firing line, which is ksh93's alone. Measured 2026-09-22:
+	// the shell refuses `trap … DEBUG` outright, so the route bash reaches it
+	// by does not exist here either (#4193).
 	s.TrapBodyRunsWhatParsed = interp.Yes
 	// A subshell's listing shows only what survived the entry, which is the
 	// POSIX answer and is measured rather than assumed.

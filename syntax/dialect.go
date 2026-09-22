@@ -3415,6 +3415,42 @@ type Dialect struct {
 	// columns, single quotes opening no run at all inside a quoted operand.
 	NestedQuoteResetsOperandEscapes bool
 
+	// NestedQuoteInAQuotedOperandEscapesAnything says that inside a `"` run
+	// written in a `${ }` operand that *itself* stands in double quotes, a
+	// backslash escapes whatever follows it, the way one outside quotes does
+	// — rather than only the four characters double quotes make special.
+	//
+	// A different row from NestedQuoteResetsOperandEscapes above, which asks
+	// only whether the closing brace stays escapable in that run. This one
+	// asks what the rest of the alphabet does there, and the panel splits
+	// along a different line.
+	//
+	// Measured 2026-09-22, `u` unset:
+	//
+	//	printf '[%s]' "${u-"A\pB"}"     and     "${u-"A\'B"}"
+	//
+	//	bash 5.3.20               [ApB]    [A'B]
+	//	that build as `sh`        [ApB]    [A'B]
+	//	bash 3.2.57               [ApB]    [A'B]
+	//	ksh93u+ 93u+ 2012         [ApB]    [A'B]
+	//	dash 0.5.12               [A\pB]   [A\'B]
+	//	zsh 5.9.2                 [A\pB]   [A\'B]
+	//	BusyBox ash 1.37.0        [A\pB]   [A\'B]
+	//
+	// The enclosing quotes are what decides it: written without them the
+	// operand is an ordinary word, and there the same nested run keeps the
+	// double-quote set in every column — `${u-"A\pB"}` unquoted is `A\pB`
+	// for all seven. So this is a property of the *quoted* operand's reading
+	// and not of the nested quote alone.
+	//
+	// A grammar flag for the reason the row above is one: it decides which
+	// bytes are in the word at the stage that reads it, and by the time a
+	// value could switch on it the backslash is either kept or gone.
+	//
+	// False is the core's answer and the wider half of the panel. bash and
+	// ksh set it, which is what bash's own `rhs-exp` questions measure.
+	NestedQuoteInAQuotedOperandEscapesAnything bool
+
 	// ParamLengthTakesAnOperator lets `${#name}` carry an operator as well:
 	// `${#v#a}` is the length of what the trim leaves. One shell in the
 	// panel accepts it; the other four call the whole expansion a bad

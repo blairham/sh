@@ -23,6 +23,12 @@ func Dialect() syntax.Dialect {
 	// expression here, so `${x::2}` is the expression `:2` and a refusal
 	// rather than an offset of nothing (#2818).
 	d.ParamSubstringOffsetTakesALeadingColon = true
+	// A backslash inside a `"` run written in an operand that itself stands
+	// in double quotes escapes whatever follows it: with `u` unset,
+	// `"${u-"A\pB"}"` is `ApB` here as in bash, and `A\pB` in dash, zsh and
+	// BusyBox ash. Measured 2026-09-22 against ksh93u+. See
+	// syntax.Dialect.NestedQuoteInAQuotedOperandEscapesAnything.
+	d.NestedQuoteInAQuotedOperandEscapesAnything = true
 	d.AliasesExpandUnlessTold = true
 	// An alias standing where a function name is being defined is declined
 	// where the `(` is immediately after the word, and expanded where a

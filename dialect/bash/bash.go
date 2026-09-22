@@ -27,6 +27,13 @@ func Dialect() syntax.Dialect {
 	// zsh take the operator and then refuse the target. See
 	// syntax.Dialect.ArithIncDecNeedsAPlace (#2420).
 	d.ArithIncDecNeedsAPlace = true
+	// Inside a `"` run written in an operand that itself stands in double
+	// quotes, a backslash escapes whatever follows it: with `u` unset,
+	// `"${u-"A\pB"}"` is `ApB` here and `A\pB` in dash, zsh and BusyBox ash.
+	// Measured 2026-09-22 in 5.3.20, under the `sh` name and in 3.2.57 alike,
+	// so it is not a version line. See
+	// syntax.Dialect.NestedQuoteInAQuotedOperandEscapesAnything.
+	d.NestedQuoteInAQuotedOperandEscapesAnything = true
 	// A `$( … )` body is parsed while the line that holds it is read, so a
 	// body that will not parse refuses the line before any of it runs — and
 	// refuses it even where the substitution is in a branch nothing takes.

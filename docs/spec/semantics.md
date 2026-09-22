@@ -6766,6 +6766,62 @@ actually runs out of digits. It is the same split `PrintfHexEscapePolicy`
 records at the two `printf` sites, where it is one of the three details that
 made a policy out of a bool.
 
+## Two shells have `$'\x{…}'` and mean different things by it
+
+The hexadecimal escape has a **second spelling** inside `$'…'`, and it is
+an axis of its own rather than a wider reading of the first:
+`Semantics.DollarSingleBracedHex`, a `DollarSingleBracedHexPolicy`. The
+braces end the digit run themselves, so both columns that have the form
+take every digit the braces hold whatever
+`DollarSingleHexReadsEveryDigit` says about an undelimited one — and then
+they part on what a long run means. Measured 2026-09-22 under `LC_ALL=C`
+through `cat -v`, on bash 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01, zsh
+5.9.2 and BusyBox 1.37.0:
+
+    $'a\x{41}b'    bash 5.3, bash 3.2   aAb
+                   ksh93u+              aAb
+                   zsh 5.9.2            a, the zero byte, {41}b
+                   BusyBox ash          a\x{41}b, as written
+                   dash                 no `$'…'` at all
+
+    $'a\x{263a}'   bash                 a then 3a — the low byte
+                   ksh93u+              a then e2 98 ba — U+263A
+
+**bash's** — `DollarSingleBracedHexIsAByte`. However many digits the
+braces hold, what comes out is the low eight bits of their value:
+`$'\x{263a}'` is `:` and `$'\x{100}'` is the zero byte, which then ends
+the span. `$'\x{0123456789abcdef0123}'` is `#`, so a run too long for the
+value to hold keeps the low bits rather than being refused.
+
+**ksh93's** — `DollarSingleBracedHexIsACodePoint`. A run past two digits
+is a code point written in UTF-8, exactly as its undelimited `\x` reads
+one: `$'\x{263a}'` is `e2 98 ba` and `$'\x{100}'` is `c4 80`. One and two
+digits stay a byte, so `$'\x{FF}'` is `ff` in both columns — the pair of
+rows that says the **digit count** decides and not the value.
+
+**zsh and BusyBox ash have no brace form** — `DollarSingleBracedHexAbsent`
+— and they reach it through a different axis. The `\x` simply has no digit
+after it, so `DollarSingleDigitlessEscapeIsAZeroByte` answers, and the
+braces and their contents are ordinary text: zsh writes a zero byte and
+then `{41}`, ash keeps all six characters. They look nothing alike in a
+terminal and are the same answer here, which is why `Absent` means "not
+this escape" rather than "produces nothing".
+
+Where the run ends is one rule in both columns that have it: a closing
+brace is consumed, anything else that is not a digit is left where it was
+written, and the end of the text closes it. So `$'a\x{41}{42}'` is
+`aA{42}`, `$'a\x{4z'` is `a`, `04`, `z`, and `$'a\x{41'` is `aA`. An
+**empty** run — `$'\x{}'` and `$'\x{'` alike — is a zero byte in both, and
+that is the brace form's own rule and not
+`DollarSingleDigitlessEscapeIsAZeroByte`, which bash answers `No` while
+still reading this as a zero.
+
+It is asked only where a `\x` is really followed by a `{`, so every
+ordinary `$'\x41'` puts no question to the dialect. Answered wrongly it is
+silent and wrong at status 0 in the direction that costs most: a shell
+without the form writes the escape back as text, so a script that meant
+one byte carries five characters forward and nothing says so (#4165).
+
 ## Two shells spell `\C-A` alike and mean different bytes by it
 
 Inside a `$'…'`, `\C` and `\M` are **three** things across the panel, and
@@ -16046,7 +16102,8 @@ type's own values are documented beside it in `interp/semantics.go`:
 `StatusArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
 `DeclarationListingForm`, `KillStatusStyle`, `BracketPolicy`,
 `DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`,
-`DollarSingleCaretMetaPolicy`, `UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of
+`DollarSingleCaretMetaPolicy`, `DollarSingleBracedHexPolicy`,
+`UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of
 those.
 
 **This catalog is not the whole of the vector.** The axes with their own

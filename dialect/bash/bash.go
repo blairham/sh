@@ -2071,6 +2071,14 @@ func Semantics() interp.Semantics {
 	// two characters it was written as: `$'\xzz'` is `\xzz` here.
 	s.DollarSingleHexReadsEveryDigit = interp.No
 	s.DollarSingleDigitlessEscapeIsAZeroByte = interp.No
+	// The braced spelling is the exception to both of those: `\x{…}` takes
+	// every digit the braces hold and keeps the **low byte** of it, and an
+	// empty run is a zero rather than the characters written. Measured
+	// 2026-09-22 under `LC_ALL=C` on bash 5.3.20 and bash 3.2.57 alike —
+	// `$'a\x{41}b'` is `aAb`, `$'a\x{263a}'` is `a` then 3a, `$'a\x{100}b'`
+	// is `a` alone because the zero byte ends the span, and `$'a\x{}b'` is
+	// `a` for the same reason (#4165).
+	s.DollarSingleBracedHex = interp.DollarSingleBracedHexIsAByte
 	// An octal escape past 255 keeps the low byte: `$'\401'` is 01 and
 	// `$'\777'` is ff. Measured 2026-09-18 by `od` (#3415).
 	s.DollarSingleOctalPastAByteDropsTheLastDigit = interp.No

@@ -421,6 +421,11 @@ func Semantics() interp.Semantics {
 	// `\e`, three bytes, where every other column writes one. The six other
 	// axes of that construct are unanswered here for the same reason and have
 	// been since the dialect was written (#3270, #3415).
+	// unanswered DollarSingleBracedHex: the same absence one escape further
+	// in — there is no hexadecimal escape for a brace to delimit. Measured
+	// 2026-09-22 under `LC_ALL=C`, `printf '%s' $'\x{41}'` writes `$` then
+	// `\x{41}`, seven bytes, where bash writes the one byte 41 (#4165).
+	//
 	// unanswered ReplacementAnchors: dash has no span replacement at all, so
 	// there is no `/` for an anchor to stand after. Measured 2026-09-16 from
 	// a script file, `v=abcabc; printf '%s' "${v/b/X}"` is `Bad

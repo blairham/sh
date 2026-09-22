@@ -6357,6 +6357,38 @@ func (r *Runner) expandDollarSingle(s string) string {
 		}
 		switch c := s[i+1]; {
 		case c == 'x':
+			if i+2 < len(s) && s[i+2] == '{' {
+				if p := r.dollarSingleBracedHex(); bracedHexIsAnEscape(p) {
+					n, used, next := bracedHexRun(s, i+2)
+					if used > 2 && p == DollarSingleBracedHexIsACodePoint {
+						// A run past two digits is a code point in the
+						// reading that takes one, written by the shell's
+						// own encoder — the same road the undelimited
+						// escape takes there, since the braces changed
+						// where the digits end and not what they mean.
+						b.WriteString(EncodeCodePoint(n))
+						i = next
+						continue
+					}
+					// Otherwise a byte: the low eight bits of whatever the
+					// digits came to, however many there were, and a zero
+					// for no digits at all — `$'\x{}'` and `$'\x{'` are the
+					// NUL that DollarSingleNul then answers for. The brace
+					// form has that rule of its own, which is why an empty
+					// run here does not ask
+					// DollarSingleDigitlessEscapeIsAZeroByte: bash answers
+					// that No and still reads this as a zero.
+					if !r.writeDecodedByte(&b, byte(n)) {
+						return b.String()
+					}
+					i = next
+					continue
+				}
+				// Not this dialect's escape, so the `\x` has no digit after
+				// it and the braces are ordinary text. Falling through
+				// rather than deciding here keeps the two readings of a
+				// digitless escape in one place.
+			}
 			n, used := hexEscapeRun(s[i+2:], r.dollarSingleHexEveryDigit(s[i+2:]))
 			if used == 0 {
 				if !r.digitlessEscape(&b, `\x`) {
@@ -6861,6 +6893,32 @@ func controlByte(p DollarSingleControlPolicy, x byte) byte {
 // allowed to overflow: ksh93 keeps the low bits of a run past what an integer
 // holds, so `$'\x41414141414141414141'` and `$'\x41414141'` are the same six
 // bytes there.
+// bracedHexIsAnEscape reports whether the policy has the `\x{…}` form at all.
+// A dialect without it and one that has not said reach the same place — the
+// undelimited escape, with no digit after it — and they are told apart by the
+// report dollarSingleBracedHex has already made.
+func bracedHexIsAnEscape(p DollarSingleBracedHexPolicy) bool {
+	return p == DollarSingleBracedHexIsAByte || p == DollarSingleBracedHexIsACodePoint
+}
+
+// bracedHexRun reads the `\x{…}` whose brace is at i, and returns the value of
+// the digits, how many there were, and the offset past the escape.
+//
+// The brace is what ends the run, so every digit is taken however many there
+// are: it is the one hexadecimal escape whose length no axis bounds. A run
+// that meets something else stops there and leaves it — `$'\x{4z'` is 04 and
+// then a `z` in both columns that have the form — and the closing brace is
+// consumed when it is the thing that stopped it, so `$'\x{41}b'` is `Ab` and
+// `$'\x{41'` at the end of the text is `A`.
+func bracedHexRun(s string, i int) (n, used, next int) {
+	n, used = scanBase(s[i+1:], 16, len(s)-(i+1))
+	next = i + 1 + used
+	if next < len(s) && s[next] == '}' {
+		next++
+	}
+	return n, used, next
+}
+
 func hexEscapeRun(digits string, everyDigit bool) (int, int) {
 	if !everyDigit {
 		return scanBase(digits, 16, 2)

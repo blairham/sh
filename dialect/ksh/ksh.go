@@ -3793,6 +3793,7 @@ func Diagnostics() interp.Diagnostics {
 		ScriptNotReadableStatus: 126,
 		Location:                interp.LocationLineWordAfterFirst,
 		TraceQuoting:            interp.QuoteDollar,
+		TraceEscape:             interp.TraceEscapeHex,
 		// The tilde and the hash count anywhere here rather than only at the
 		// front, `=` counts only at the front, and `^` and `!` do not count
 		// at all — three splits from bash in one set. Measured 2026-09-12.

@@ -4811,7 +4811,7 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		notDir := &fs.PathError{Op: "chdir", Path: dir, Err: syscall.ENOTDIR}
 		r.NoteErrno(notDir)
 		r.diagf("%s\n", Wording(r.diag().CdCannotChange, "cd: %[1]s: %[2]s",
-			named, r.diag().reasonText(reason(notDir))))
+			r.NamedWord(named), r.diag().reasonText(reason(notDir))))
 		return orDefault(r.diag().CdStatus, 1)
 	}
 	announced := false
@@ -4914,7 +4914,7 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		// directory` for the path it could not finish correcting, naming what
 		// the person typed rather than how far it got.
 		r.diagf("%s\n", Wording(r.diag().CdCannotChange, "cd: %[1]s: %[2]s",
-			named, r.diag().reasonText(reason(err))))
+			r.NamedWord(named), r.diag().reasonText(reason(err))))
 		return orDefault(r.diag().CdStatus, 1)
 	}
 	// Only the runner's own directory moves. Calling os.Chdir would move the
@@ -5014,7 +5014,7 @@ func (r *Runner) cdNotThere(named string) int {
 	err := &fs.PathError{Op: "chdir", Path: named, Err: syscall.ENOENT}
 	r.NoteErrno(err)
 	r.diagf("%s\n", Wording(r.diag().CdCannotChange, "cd: %[1]s: %[2]s",
-		named, r.diag().reasonText(reason(err))))
+		r.NamedWord(named), r.diag().reasonText(reason(err))))
 	return orDefault(r.diag().CdStatus, 1)
 }
 

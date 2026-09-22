@@ -4537,6 +4537,7 @@ func Diagnostics() interp.Diagnostics {
 		// bash 5.3.15; the two shared a value until #2695 because the corpus
 		// row used `it's`, the one shape they agree on.
 		TraceQuoting: interp.QuoteShellLazy,
+		TraceEscape:  interp.TraceEscapeControlNotation,
 		// The path inside a `type`, `command -V` or `whence -v` sentence is
 		// written back the way this shell writes a word — the same spelling,
 		// against the same alphabet below — while `command -v`, `whence`,

@@ -3664,10 +3664,11 @@ func Diagnostics() interp.Diagnostics {
 		// set -o pads to fifteen and tabs; kill -l numbers five to a row.
 		// The width is named rather than written, because `shopt -o -s`
 		// writes this listing narrowed and has to pad it the same way.
-		OptionListingWidth:  setOptionListingWidth,
-		OptionListingTabbed: true,
-		KillListing:         interp.KillListingNumbered,
-		TraceQuoting:        interp.QuoteShell,
+		OptionListingWidth:          setOptionListingWidth,
+		OptionListingTabbed:         true,
+		KillListing:                 interp.KillListingNumbered,
+		TraceQuoting:                interp.QuoteShell,
+		DiagnosticNamesAWordEscaped: true,
 		// And the widest character set of the three, with a position rule
 		// the other two do not have: `~a` and `#a` are quoted and `a~b` and
 		// `a#b` are not, so the tilde and the hash count only where they

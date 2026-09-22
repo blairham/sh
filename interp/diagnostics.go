@@ -7533,6 +7533,44 @@ type Diagnostics struct {
 	// about `!`, about `=` and about whether a `~` counts anywhere or only
 	// at the front (#2141).
 	TraceMetacharacters TraceMetacharacters
+	// TraceEscape is how the bytes *inside* that `$'…'` are spelled, and
+	// which words reach it at all. A third field because the panel splits
+	// three ways on the spelling where TraceQuoting splits it two — see the
+	// type, and TraceEscape.consultsTheLocale for the half about which words.
+	//
+	// Zero is TraceEscapeOctal, which is bash's answer and the substrate's own.
+	TraceEscape TraceEscape
+	// DiagnosticNamesAWordEscaped writes a word a *runtime diagnostic* names
+	// — a command that was not found, a directory `cd` could not reach — in
+	// the `$'…'` form when it holds a byte the locale cannot write, rather
+	// than putting the bytes on the stream as they are.
+	//
+	// The same device the trace reaches for and the same TraceEscape spelling,
+	// but a **narrower trigger**: a word that merely needs quoting is named
+	// bare. Measured 2026-09-22 on bash 5.3.20 under `LC_ALL=en_US.UTF-8`,
+	// each word run as a command:
+	//
+	//	`a b`            `a b: command not found`
+	//	`a'b`            `a'b: command not found`
+	//	`a<0x01>b`       `$'a\001b': command not found`
+	//	`a<0xff>b`       `$'a\377b': command not found`
+	//	`café` in UTF-8  `café: command not found`
+	//	`café` under C   `$'caf\303\251': command not found`
+	//
+	// so the space and the quote rows are what separate this from
+	// TraceQuoting, and the last two are the locale reading TraceEscape
+	// already carries. `cd` names its operand the same way, and the *word* of
+	// a `${x:?word}` does not — that is message text rather than a name.
+	//
+	// False — the zero value and the substrate's own — writes the bytes as
+	// they are, which is ksh93u+, dash and BusyBox ash. **zsh is a third
+	// answer and is not modeled here**: it escapes the bytes with a caret
+	// notation of its own and no quotes around them —
+	// `command not found: 5\M-^Y…` — which is a spelling nothing else in this
+	// tree writes and which its own trace does not use. It stays on False, so
+	// that column names the word as written; a measured gap rather than a
+	// hidden one.
+	DiagnosticNamesAWordEscaped bool
 	// TraceBareBracket is the one exemption from all of that: how much of a
 	// `[ … ]` test is printed without quotes even though the same character
 	// is quoted everywhere else.

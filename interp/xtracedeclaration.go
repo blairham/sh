@@ -160,7 +160,7 @@ func (r *Runner) traceOperandsBefore(words []string, d Diagnostics) []string {
 		if at >= len(words) {
 			continue
 		}
-		line, ok := traceAssignmentOperand(words[at], d)
+		line, ok := r.traceAssignmentOperand(words[at], d)
 		if !ok {
 			continue
 		}
@@ -209,7 +209,7 @@ func (r *Runner) traceOperandsAfter(words []string, d Diagnostics) []string {
 	}
 	var lines []string
 	for _, w := range words[k+1:] {
-		line, ok := traceAssignmentOperand(w, d)
+		line, ok := r.traceAssignmentOperand(w, d)
 		if !ok {
 			continue
 		}

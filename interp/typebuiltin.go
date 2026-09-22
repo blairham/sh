@@ -278,7 +278,7 @@ func (r *Runner) typeNotFoundWording(name string) string {
 // brings its own `whence` writes some of those sentences itself.
 func (r *Runner) NameReportWord(name string) string {
 	d := r.diag()
-	return traceQuote(name, d.NameReportQuoting, d.TraceMetacharacters)
+	return r.traceQuote(name, d.NameReportQuoting, d.TraceMetacharacters)
 }
 
 // typePath is `-p`: the path alone. Which names it answers for, and in what

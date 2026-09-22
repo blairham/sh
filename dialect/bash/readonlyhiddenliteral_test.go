@@ -79,16 +79,3 @@ func TestAFrozenNameRefusesAHiddenLiteralOnce(t *testing.T) {
 		}
 	}
 }
-
-func countLines(out, want string) int {
-	n, start := 0, 0
-	for i := 0; i <= len(out); i++ {
-		if i == len(out) || out[i] == '\n' {
-			if out[start:i] == want {
-				n++
-			}
-			start = i + 1
-		}
-	}
-	return n
-}

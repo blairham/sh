@@ -294,7 +294,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				}
 				hfd = r.nextFreeFd(-1)
 			}
-			if r.refuseFdOverLimit(hfd) || r.unspecified {
+			if r.refuseFdOverLimitFor(fdVar, hfd, "") || r.unspecified {
 				r.redirErr = true
 				return closers, nil
 			}
@@ -522,7 +522,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// The number, before the duplication that would use it. There is
 			// no file here for a refusal to have created, which is the whole
 			// of why this side is checked earlier than the other.
-			if r.refuseFdOverLimit(fd) || r.unspecified {
+			if r.refuseFdOverLimitFor(fdVar, fd, name) || r.unspecified {
 				r.redirErr = true
 				return closers, nil
 			}
@@ -856,7 +856,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// limit of twenty, `exec 20>fresh` complains and the file is there
 			// afterwards. The open happens and the descriptor it produces is what
 			// cannot be moved to the number the script asked for.
-			if r.refuseFdOverLimit(fd) || r.unspecified {
+			if r.refuseFdOverLimitFor(fdVar, fd, name) || r.unspecified {
 				_ = f.Close()
 				r.redirErr = true
 				return closers, nil
@@ -1439,6 +1439,60 @@ func (r *Runner) refuseFdOverLimit(fd int) bool {
 	r.diagf("%s\n", Wording(r.diag().FdNumberOverLimit, "%[1]d: %[2]s",
 		fd, r.diag().reasonText(reason(syscall.EBADF))))
 	r.status = r.diag().redirectFailureStatus()
+	return true
+}
+
+// refuseFdOverLimitFor routes the two refusals a number over the process's
+// limit can get: a number the **script** wrote is the dialect's axis above,
+// and a number this shell **picked** for a `{name}` redirection is the event
+// below, which every shell with the construct refuses.
+func (r *Runner) refuseFdOverLimitFor(fdVar string, fd int, target string) bool {
+	if fdVar != "" {
+		return r.refusePickedFdOverLimit(fd, target)
+	}
+	return r.refuseFdOverLimit(fd)
+}
+
+// refusePickedFdOverLimit reports a descriptor the *shell* picked for a
+// `{name}` redirection that this process could not hold.
+//
+// A different event from [Runner.refuseFdOverLimit], and the panel splits
+// differently on it. A number the script wrote is refused by two of the five;
+// a number the shell picked is refused by **all three that have the
+// construct** — measured 2026-09-22 under `ulimit -n 8` from a script file,
+// where bash 5.3.20, ksh93 and zsh 5.9.2 each refuse `exec {v}</dev/null` at
+// 1, and dash and BusyBox ash have no such redirection to refuse. So there is
+// no axis here: what the three disagree about is the wording, which
+// Diagnostics.FdPickedNumberUnusable carries beside CannotOpen.
+//
+// Only reachable under a limit below ten, since that is where the picking
+// starts — and the open has already happened where there is one, which is the
+// order the sentences describe: the file is opened and the descriptor it
+// produced is what cannot be moved to the number.
+func (r *Runner) refusePickedFdOverLimit(fd int, target string) bool {
+	if fd <= 2 || r.GetRlimit == nil {
+		return false
+	}
+	soft, _, err := r.GetRlimit(ResourceOpenFiles)
+	if err != nil || soft == RlimitInfinity || int64(fd) < soft {
+		return false
+	}
+	d := r.diag()
+	why := d.reasonText(reason(syscall.EINVAL))
+	if w := d.FdPickedNumberUnusable; w != "" {
+		// Located by name alone, which is the whole of what is special about
+		// this sentence: the shell that writes it leaves the line out of
+		// this one message and puts it back for the refusal underneath.
+		located := r.locatedByNameAlone
+		r.locatedByNameAlone = true
+		r.diagf("%s\n", Wording(w, "cannot duplicate fd: %[1]s", why))
+		r.locatedByNameAlone = located
+	}
+	if target == "" {
+		target = d.RedirectWithoutATargetName
+	}
+	r.diagf("%s\n", Wording(d.CannotOpen, "%[1]s: %[2]s", target, why))
+	r.status = d.redirectFailureStatus()
 	return true
 }
 

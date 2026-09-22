@@ -138,7 +138,7 @@ func (r *Runner) rejoinedArrayOperand(a *syntax.Assign) []string {
 	}
 	elems, ok := r.literalElems(a.Elems,
 		r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
-		r.bareLiteralElementIsOneValue(a.Name, false))
+		r.bareLiteralElementIsOneValue(a.Name, a.Elems, false))
 	if !ok {
 		// The element list failed — a division by zero, an unmatched pattern
 		// where the dialect calls that an error. The command does not run

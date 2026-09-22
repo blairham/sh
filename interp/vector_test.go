@@ -121,6 +121,10 @@ func testSemantics() Semantics {
 	// The suite that is *about* it sets both — see assoc_test.go.
 	s.KeyedTableScalarIsTheFirstValue = No
 	s.ArrayLiteralSubscriptIsAKey = No
+	// And a keyed literal's bare elements are each one value, which is bash's
+	// answer and the floor here as everywhere else in this function. The
+	// suite that is *about* it sets both sides — see tableliteralvalue_test.go.
+	s.BareElementsInATableLiteralAreEachOneValue = Yes
 	s.NegativeSubscriptPastTheStartInserts = No
 	// `a+=x` over a name holding an array, and the two array letters given to
 	// a name holding a scalar. bash's answers, which is the floor these

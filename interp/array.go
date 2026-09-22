@@ -1719,7 +1719,7 @@ func (r *Runner) storeOperandWholeArraySubscript(base, sub, value string) (statu
 // stopped a script that two of the three columns finish. See
 // Semantics.BadSubscriptToAnOutputOperand for the rows.
 func (r *Runner) storeThroughOperand(name, value string) (status int, refused bool) {
-	base, sub, ok := r.subscriptOperand(name)
+	base, sub, ok := r.subscriptOperandRead(name, r.outputOperandBracketsAreLexed(name))
 	if !ok || !isPlainName(base) {
 		r.setOperandValue(name, value)
 		return 0, false

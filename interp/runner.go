@@ -10229,7 +10229,7 @@ func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAs
 			"an array literal traced as what its elements expanded to") {
 		if parsed, ok := r.literalElems(a.Elems,
 			r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
-			r.bareLiteralElementIsOneValue(a.Name, false)); ok {
+			r.bareLiteralElementIsOneValue(a.Name, a.Elems, false)); ok {
 			e.elems, e.elemsSet = parsed, true
 		}
 	}

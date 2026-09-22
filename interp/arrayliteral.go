@@ -198,12 +198,62 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 //
 // An indexed literal never reaches the axis at all, which is the control the
 // axis's own comment records: `a=($k)` is four fields in every column.
-func (r *Runner) bareLiteralElementIsOneValue(name string, tableLetterAhead bool) bool {
+func (r *Runner) bareLiteralElementIsOneValue(name string, elems []*syntax.ArrayElem, tableLetterAhead bool) bool {
 	if name == "" || (!tableLetterAhead && !r.assocDeclared(name) && !r.tableLetterHere[name]) {
+		return false
+	}
+	if !aBareElementCanDiffer(elems) {
+		// Asked at the disagreement and not on the common path. A literal
+		// whose every element names its key does not put the question at
+		// all, and neither does one whose bare elements are plain words:
+		// `typeset -A m=(k v)` is the same table under both readings, so
+		// asking there would refuse the ordinary spelling in every dialect
+		// that has no answer.
 		return false
 	}
 	return r.ask(r.sem().BareElementsInATableLiteralAreEachOneValue,
 		"each bare element of a keyed literal being one field rather than a word list")
+}
+
+// aBareElementCanDiffer reports whether any element of the literal carries no
+// `[key]=` head **and** could come to other than exactly one field.
+//
+// The first half is read off the written word for the reason
+// indexArrayIntoATable reads it that way: the shape is decided before
+// anything expands.
+//
+// The second half is what keeps the axis off the common path. The two
+// readings of a bare element part company only where an ordinary word
+// expansion would split it, drop it or match it against the directory, and a
+// word made of literal text with no pattern character in it does none of
+// those — `typeset -A m=(k v)` is one table under both readings, and a
+// question put there would refuse the ordinary spelling in the four dialects
+// that have no answer to it.
+func aBareElementCanDiffer(elems []*syntax.ArrayElem) bool {
+	for _, el := range elems {
+		if el.Nested != nil || (el.Word != nil && syntax.SubscriptedElement(el.Word)) {
+			continue
+		}
+		if el.Word == nil || wordCanSplitOrMatch(el.Word) {
+			return true
+		}
+	}
+	return false
+}
+
+// wordCanSplitOrMatch reports whether a word holds anything an ordinary
+// expansion could split, remove or match with: a span that is not literal
+// text, or unquoted literal text carrying a pattern character.
+func wordCanSplitOrMatch(w *syntax.Word) bool {
+	for _, s := range w.Spans {
+		if s.Kind != syntax.Literal {
+			return true
+		}
+		if s.Quoting == syntax.Unquoted && strings.ContainsAny(s.Value, "*?[") {
+			return true
+		}
+	}
+	return false
 }
 
 // takeExpandedElements is an element list somebody has already expanded for
@@ -328,7 +378,7 @@ func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.ArrayElem) bool {
 // it, so the array looked populated and was not.
 func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
 	parsed, ok := r.literalElems(elems, r.literalReadsSubscripts(name, elems, appendTo),
-		r.bareLiteralElementIsOneValue(name, false))
+		r.bareLiteralElementIsOneValue(name, elems, false))
 	if !ok {
 		// The elements were not read, so there is nothing to store and the
 		// name keeps whatever it was holding. Before literalSubscriptIsAKey,

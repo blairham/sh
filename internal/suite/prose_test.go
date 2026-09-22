@@ -141,3 +141,59 @@ esac`)
 		}
 	}
 }
+
+// TestAPageIsAttributedAndNotOnlyItsSentences is the undercount this walk
+// exists to fix. A page of documentation is sentences with blank lines
+// between them and one-word headings over them, and every one of those fails
+// the length-and-a-space rule that keeps a file's own `done` out of the
+// dictionary. Counted a line at a time, the headings and the blanks of a page
+// already attributed came back as work.
+func TestAPageIsAttributedAndNotOnlyItsSentences(t *testing.T) {
+	var doc Doc
+	doc.add("NAME\n    tool - do a thing that is described here\n\nSYNOPSIS\n    tool [-x]\n")
+
+	theirs := []string{
+		"NAME",
+		"    tool - do a thing that is described here",
+		"",
+		"SYNOPSIS",
+		"    tool [-x]",
+	}
+	if got, want := doc.Attribute(nil, theirs), len(theirs); got != want {
+		t.Errorf("attributed %d lines of one page, want %d — the headings and the blank "+
+			"are the page's, not work", got, want)
+	}
+}
+
+// TestALineTheShellWroteCannotStartAnAttribution is the guard that keeps the
+// walk from running away. Crossing a blank line or a bare `done` is only ever
+// allowed *from* a sentence already attributed; either one on its own is far
+// more likely to be a file's own output, and a discount that started there
+// would write off real disagreement as documentation.
+func TestALineTheShellWroteCannotStartAnAttribution(t *testing.T) {
+	var doc Doc
+	doc.add("done\n\na long line of manual text here\n")
+
+	theirs := []string{"done", "", "the file printed this itself", "a long line of manual text here"}
+	if got := doc.Attribute(nil, theirs); got != 1 {
+		t.Errorf("attributed %d lines, want 1: the run stops at a line the shell never wrote, "+
+			"and a blank on the far side of it starts nothing", got)
+	}
+}
+
+// TestAttributionDoesNotCrossALineWeAlsoPrinted keeps the walk on the side it
+// claims to be on. A line both shells printed is not a differing line, so it
+// is not part of any page this counts — and it ends the run rather than being
+// stepped over, which would let one page's anchor reach the next file's
+// output.
+func TestAttributionDoesNotCrossALineWeAlsoPrinted(t *testing.T) {
+	var doc Doc
+	doc.add("a long line of manual text here\nboth shells printed this line\n\n")
+
+	mine := []string{"both shells printed this line"}
+	theirs := []string{"a long line of manual text here", "both shells printed this line", ""}
+	if got := doc.Attribute(mine, theirs); got != 1 {
+		t.Errorf("attributed %d lines, want 1: the shared line is not ours to discount "+
+			"and the blank behind it is out of reach", got)
+	}
+}

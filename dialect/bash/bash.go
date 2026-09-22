@@ -1843,6 +1843,17 @@ func Semantics() interp.Semantics {
 	// 2026-09-19 (#3717).
 	s.TestThreeWordsNegateBeforeAConnective = interp.No
 	s.TestFailureInsideAnUnclosedGroupIsTheParen = interp.No
+	// An operator with nothing behind it at the end of a long expression is
+	// the word it is spelled with: `test -n xx -a -f` is 0 here, where bash
+	// 3.2 and ksh93 refuse it (#4162).
+	// `test -R r` asks whether the name is a reference: bash 3.2 has neither
+	// name references nor the operator, which is what makes it an axis.
+	s.TestHasTheNameReferenceOperator = interp.Yes
+	s.TestTrailingUnaryOperatorIsAWord = interp.Yes
+	// And a group holding one or two words is read by the counts: a lone
+	// operator inside it is the word it is spelled with, where four words
+	// inside is the grammar and the operator takes the parenthesis (#4162).
+	s.TestShortGroupIsReadByTheCounts = interp.Yes
 	// And a group with nothing in it is refused rather than false:
 	// `[ ( ) ]` is `[: (: unary operator expected` at 2 (#3687).
 	s.TestEmptyGroupIsFalse = interp.No
@@ -3845,6 +3856,18 @@ func Diagnostics() interp.Diagnostics {
 		TestTooManyArguments: "%[2]s: too many arguments",
 		TestOperandExpected:  "%[2]s: argument expected",
 		TestMissingBracket:   "[: missing `]'",
+		// A group the reading never closed. Two sentences, because this shell
+		// names the word it found where the parenthesis belonged and has
+		// nothing to name when the arguments simply ran out — and its `[`
+		// always has one, since the `]` is that word. Measured 2026-09-22 on
+		// 5.3.20 and on 3.2.57 under the `sh` name, which answer alike.
+		// A leftover word spelled like an operator is a second sentence:
+		// `test 1 -ne 2 -ne 3` names the `-ne` where `test a = b = c` is the
+		// ordinary count. Measured 2026-09-22 on 5.3.20; 3.2.57 writes the
+		// count for both, so this is 5.3's alone.
+		TestLeftoverOperator:          "%[2]s: syntax error: `%[1]s' unexpected",
+		TestClosingParenExpected:      "%[2]s: `)' expected",
+		TestClosingParenExpectedFound: "%[2]s: `)' expected, found %[1]s",
 		// An empty `=~` right operand, which this shell names the construct
 		// for and quotes the operand back in — the operand being empty, so
 		// the quotes close on nothing. Status 2, the construct's own failure,

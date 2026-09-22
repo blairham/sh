@@ -17521,6 +17521,113 @@ type Semantics struct {
 	// construct refuses it as a syntax error.
 	BareTerminalTestIsDescriptorOne Answer
 
+	// TestHasTheNameReferenceOperator gives `test` the `-R` operator, which
+	// asks whether a name is a **reference** rather than anything about what
+	// it points at.
+	//
+	// Measured 2026-09-22 with `v=1` and a reference `r` aimed at it,
+	// `test -R r` then `test -R v`:
+	//
+	//	bash 5.3.20          0 then 1      the reference, and not its target
+	//	bash 5.3.20 as `sh`  0 then 1
+	//	ksh93u+ 2012-08-01   0 then 1
+	//	bash 3.2.57 as `sh`  `-R: unary operator expected` at 2
+	//	zsh 5.9.2            `unknown condition: -R` at 2
+	//	dash 0.5.12          `-R: unexpected operator` at 2
+	//
+	// So the three shells with name references have it and the three without
+	// refuse it by name. An axis rather than a rule for that reason, and a
+	// shell that has not got it keeps the refusal it already gave.
+	//
+	// The `[[ -R r ]]` spelling is the same operator and is **not** here
+	// yet: it is grammar rather than a builtin's operand, so it is a flag on
+	// syntax.Dialect and a corpus case measuring the panel — see #4228.
+	//
+	// unpinned ash: not measured; no container runtime on the day this was
+	// written. It keeps the refusal it already gave, and both readings are
+	// pinned in Go by TestANameReferenceTestAsksAboutTheBinding.
+	TestHasTheNameReferenceOperator Answer
+
+	// TestTrailingUnaryOperatorIsAWord reads a unary operator standing as the
+	// **last** word of a grammar-length expression as an ordinary word, the
+	// way the one-argument rule reads it, rather than refusing it for a
+	// missing operand.
+	//
+	// The counts settle a `test` of four words or fewer, so this is only
+	// about the reading past them — and there the panel splits three ways.
+	// Measured 2026-09-22, `test -n xx -a -f` and `test -n xx -a -t`, with
+	// `test -n xx -a "(" -t ")"` as the control that says it is the *end* of
+	// the expression and not the end of a primary:
+	//
+	//	                     -a -f   -a -t   -a ( -t )
+	//	bash 5.3.20          0       0       0
+	//	dash 0.5.12          0       0       2
+	//	zsh 5.9.2            0       1       2
+	//	ksh93u+ 2012-08-01   2       2       2
+	//	bash 3.2.57 as `sh`  2       1       1
+	//
+	// So three shells read the trailing operator as a word and two refuse
+	// it, and the `-t` column is that reading crossed with
+	// BareTerminalTestIsDescriptorOne rather than a rule of its own — zsh
+	// reads the word and then answers `-t 1` about it, which is why the two
+	// axes are asked in that order and this one is not written in terms of
+	// `-t`.
+	//
+	// The control row is what keeps it about the end: every column refuses
+	// the same operator with a `)` behind it, so a primary that merely runs
+	// out of *its* operand is not this.
+	//
+	// unpinned ash: not measured. This machine had no container runtime on
+	// the day the axis was written, so BusyBox keeps the refusal it already
+	// gave rather than being handed dash's answer on the strength of the two
+	// being siblings — which is the inherited-value mistake #2441 was about.
+	// It is one `make suite` column away from an answer, and both readings
+	// are pinned in Go by TestATrailingOperatorIsAWordWhereTheAxisSaysSo.
+	TestTrailingUnaryOperatorIsAWord Answer
+
+	// TestShortGroupIsReadByTheCounts reads a `( … )` holding **one, two or
+	// three** words the way the argument counts read the same words with no
+	// parentheses round them, rather than handing them to the grammar.
+	//
+	// The difference is what an operator standing alone inside the group
+	// means: by the counts it is the word it is spelled with, and by the
+	// grammar it is an operator that takes whatever follows — which is the
+	// closing parenthesis. Measured 2026-09-22, with a connective in front
+	// so the group is not the whole expression and the top-level counts are
+	// not what answer it:
+	//
+	//	                     true -a ( -n )   true -a ( ! -a )   ( -n xx -a -n )
+	//	bash 5.3.20          0                1                  `)' expected
+	//	dash 0.5.12          2                1                  `)' expected
+	//	zsh 5.9.2            2                2                  …
+	//	ksh93u+ 2012-08-01   2                2                  …
+	//	bash 3.2.57 as `sh`  2                2                  …
+	//
+	// **dash's middle column is not this rule**, which is what makes the
+	// answer bash's alone: that shell has no unary `-a` at all, so the word
+	// there is a word by the ordinary reading and the row agrees with bash
+	// by arriving from the other side. The third column is the control that
+	// stops the rule at three words — four words inside is the grammar in
+	// every column, and the operator does take the parenthesis.
+	//
+	// Three is where it stops rather than two, measured the same day over
+	// the shapes whose *inner* reading is what a reader wants named:
+	//
+	//	[ ( x y ) ]        x: unary operator expected     two words
+	//	[ ( x y z ) ]      y: binary operator expected    three
+	//	[ ( -n x y ) ]     x: binary operator expected    three
+	//	[ ( -n xx -a -n ) ]  `)' expected                 four — the grammar
+	//
+	// dash names the parenthesis for the three-word rows and the operator
+	// for the two-word one, which is that shell answering No here and having
+	// a sentence of its own for the group it could not close.
+	//
+	// unpinned ash: not measured, for the reason the trailing-operator axis
+	// above gives — no container runtime on the day this was written. It
+	// keeps the grammar reading it already had, and both readings are pinned
+	// in Go by TestAShortGroupIsReadByTheCountsWhereTheAxisSaysSo.
+	TestShortGroupIsReadByTheCounts Answer
+
 	// TerminalTestDescriptorNarrowsToThirtyTwoBits reads `-t`'s operand the
 	// width a C `int` is: a value too wide for the shell's own integer
 	// saturates, and what is left is then taken modulo 2**32 as a signed
@@ -24422,6 +24529,20 @@ func PosixSemantics() Semantics {
 		// POSIX gives the one-argument form of `test` to the string rule
 		// with no exception in it, which is dash's reading and bash's.
 		BareTerminalTestIsDescriptorOne: No,
+		// And an operator with no operand left at the end of a long
+		// expression is refused rather than read as a word: the standard
+		// leaves the reading past four arguments unspecified, so the preset
+		// takes the narrower of the two readings and each dialect that was
+		// measured to widen it says so.
+		// `-R` is bash's and ksh93's; the standard has no such operator and
+		// the shells without name references refuse it by name.
+		TestHasTheNameReferenceOperator:  No,
+		TestTrailingUnaryOperatorIsAWord: No,
+		// And a group holding one or two words is the grammar's like any
+		// other: the standard says nothing about parentheses past the
+		// four-argument form, so the preset keeps one reading for every
+		// length and the one column measured to split says so.
+		TestShortGroupIsReadByTheCounts: No,
 		FcEmptyHistoryIsAnError:         No,
 		FcEmptyEditIsAnError:            No,
 		// POSIX has `fc -l` list "the commands" a range names and says

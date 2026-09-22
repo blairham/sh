@@ -725,6 +725,10 @@ func Semantics() interp.Semantics {
 	// And a parenthesized unary standing alone is read here, where the
 	// sibling cannot close the group: `[ ( -n x ) ]` is 0.
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
+	// A trailing operator with nothing behind it is read as a word:
+	// `test -n xx -a -f` and `test -n xx -a -t` are both 0 here, measured
+	// 2026-09-22 (#4162).
+	s.TestTrailingUnaryOperatorIsAWord = interp.Yes
 	// At exactly four words, a leading `!` in front of a negation takes the
 	// three-word reading of the rest and does not negate it again:
 	// `[ ! ! -n x ]` is 1 here and 0 in the other four, which is the answer
@@ -2088,6 +2092,12 @@ func Diagnostics() interp.Diagnostics {
 		// `a: unexpected operator` (#2917).
 		TestTrailingBinaryOperandExpected: "%[2]s: %[1]s: argument expected",
 		TestMissingBracket:                "[: missing ]",
+		// A group the reading never closed names the parenthesis here rather
+		// than the missing operand: measured 2026-09-22 on dash 0.5.12,
+		// `test "(" 1 = 2` is `test: closing paren expected` at 2 and
+		// `[ "(" 1 = 2 ]` is the same sentence under the other name. One
+		// sentence for every shape — there is no word named.
+		TestClosingParenExpected: "%[2]s: closing paren expected",
 		// Six decimal places, the most of any shell in the panel.
 		TimesDecimals: 6,
 		// dash hands the path to execve rather than checking first, so a

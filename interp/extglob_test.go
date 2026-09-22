@@ -394,28 +394,39 @@ func TestAQuantifierDoesNotSuspendTheLeadingPeriodRule(t *testing.T) {
 		{`*(.)`, `[*(.)]`},
 		{`@(.)`, `[@(.)]`},
 		// A group whose own first character is a literal period is a
-		// **second axis** and is not this fix's. Two answers, and they
-		// split a shell rather than two shells — measured 2026-09-07 in a
-		// directory holding `a` and `.hid`:
+		// **second axis**, and this now answers it the way the shells this
+		// tree models do. Re-measured 2026-09-22 in a directory holding `a`
+		// and `.hid`:
 		//
-		//	                  bash 5.3.15  bash 3.2.57  ksh93u+
+		//	                  bash 5.3.20  bash 3.2.57  ksh93u+
 		//	echo @(.hid)      .hid         @(.hid)      .hid
 		//	echo @(a|.hid)    .hid a       a            .hid a
 		//	echo *(.hid)      .hid         *(.hid)      .hid
 		//	echo .@(hid)      .hid         .hid         .hid
 		//
 		// So bash 5.3 and ksh93 look *inside* the group for a literal
-		// period and any alternative will do, where bash 3.2 does not —
-		// and the last row, whose period is outside the group, is the one
-		// all three agree on. A version difference inside one preset is
-		// the shape `${x^^}` has and it is not answerable by a grammar
-		// flag, so it is measured here and left as it stands rather than
-		// guessed at. This answers as bash 3.2 does.
-		{`@(.hid)`, `[@(.hid)]`},
-		{`@(a|.hid)`, `[a]`},
+		// period and any alternative will do, where bash 3.2 does not.
+		// This used to answer as bash 3.2 does, on the reading that a
+		// version difference inside one preset is not answerable by a
+		// grammar flag — but the two presets that *have* quantified groups
+		// are bash 5.3 and ksh93, they agree, and nothing in this tree
+		// claims to be bash 3.2 (see Semantics.GlobListsDotAndDotDot, which
+		// records the same split and resolves it the same way). So it is one
+		// answer after all, and it is theirs.
+		{`@(.hid)`, `[.hid]`},
+		{`@(a|.hid)`, `[.hid][a]`},
+		{`*(.hid)`, `[.hid]`},
 		// The period outside the group is the row every shell agrees on,
 		// and it works here.
 		{`.@(hid)`, `[.hid]`},
+		// A closure standing in front of the period may draw nothing, so the
+		// period behind it is still the first thing the pattern writes —
+		// where `!` and `+` are not stepped over. Same directory, same two
+		// shells, same answers.
+		{`*(x).hid`, `[.hid]`},
+		{`?(x).hid`, `[.hid]`},
+		{`!(x).hid`, `[!(x).hid]`},
+		{`+(x).hid`, `[+(x).hid]`},
 	} {
 		if got := runExtendedIn(t, dir, `printf "[%s]" `+tc.pattern); got != tc.want {
 			t.Errorf("%s = %q, want %q", tc.pattern, got, tc.want)

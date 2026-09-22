@@ -49,14 +49,15 @@ import "strings"
 // begins with a period.
 //
 // group says a parenthesized group is a group in this dialect rather than
-// literal parentheses; where it is not, only the front of the pattern is a
-// place a pattern can start, which is the reading this had before groups were
-// looked into.
-func patternBeginsWithPeriod(pattern string, group bool) bool {
-	if !group {
+// literal parentheses, and quantified says a `@?+*!` in front of one makes it
+// one; where neither holds, only the front of the pattern is a place a
+// pattern can start, which is the reading this had before groups were looked
+// into.
+func patternBeginsWithPeriod(pattern string, group, quantified bool) bool {
+	if !group && !quantified {
 		return strings.HasPrefix(globUnescape(pattern), ".")
 	}
-	return periodStartsAt(pattern, 0, 0)
+	return periodStartsAt(pattern, 0, group, quantified, 0)
 }
 
 // periodStartsAt is that question asked at one position, following groups
@@ -65,7 +66,7 @@ func patternBeginsWithPeriod(pattern string, group bool) bool {
 // depth bounds the recursion rather than the nesting: a pattern is a string a
 // script wrote, and a thousand nested parentheses is not a shell behavior to
 // model but a stack to run out of.
-func periodStartsAt(pattern string, i, depth int) bool {
+func periodStartsAt(pattern string, i int, group, quantified bool, depth int) bool {
 	if i >= len(pattern) || depth > 32 {
 		return false
 	}
@@ -74,7 +75,17 @@ func periodStartsAt(pattern string, i, depth int) bool {
 		// says the character is literal and says nothing about where it is.
 		return pattern[i] == '.'
 	}
-	if pattern[i] != '(' {
+	// The quantified reading is tried first, exactly as splitGroup tries it:
+	// `*` is the one byte both readings claim, and taking it as a wildcard
+	// here would leave `(bar)` to be read as a bare group in a dialect that
+	// has none.
+	if quantified && i+1 < len(pattern) && pattern[i+1] == '(' && !escapedAt(pattern, i+1) {
+		switch pattern[i] {
+		case '@', '?', '+', '*', '!':
+			return periodStartsAtQuantified(pattern, i, group, quantified, depth)
+		}
+	}
+	if !group || pattern[i] != '(' {
 		return pattern[i] == '.'
 	}
 	end, ok := groupEndsAt(pattern, i)
@@ -84,12 +95,57 @@ func periodStartsAt(pattern string, i, depth int) bool {
 	if i+1 < end && pattern[i+1] == '#' && !escapedAt(pattern, i+1) {
 		// A pattern-flag group draws nothing, so the start of the pattern is
 		// whatever stands after it.
-		return periodStartsAt(pattern, end+1, depth+1)
+		return periodStartsAt(pattern, end+1, group, quantified, depth+1)
 	}
 	for _, alt := range groupAlternatives(pattern, i+1, end) {
-		if periodStartsAt(pattern, alt, depth+1) {
+		if periodStartsAt(pattern, alt, group, quantified, depth+1) {
 			return true
 		}
+	}
+	return false
+}
+
+// Whether a *quantified* group stands at a place a pattern can start, and
+// what else does. The three answers are the quantifier's, and they are not
+// the reading a bare group gets — measured 2026-09-22 on bash 5.3.20 with
+// `extglob` and on ksh93u+, in a directory holding `.a`, `.b`, `.foo`, `bar`
+// and `x`, which agree row for row:
+//
+//	@(.foo)       .foo            an arm may begin with one
+//	+(.foo)       .foo            under any quantifier but `!`
+//	@(x|.foo)     .foo x          and it need not be the first arm
+//	*(bar).foo    .foo            a closure may draw nothing, so the
+//	?(bar).foo    .foo            period behind it still stands first
+//	+(bar).foo    nothing         where `+` and `@` must draw something
+//	@(bar).foo    nothing
+//	!(bar).foo    nothing         and `!` is opaque either way
+//	!(.foo)       bar x
+//	@(x|).foo     nothing         an empty *arm* is not the same answer
+//	*(x|y).foo    .foo            as an empty closure
+//	@([.])a       nothing         a bracket is not explicit, as ever
+//
+// The two rows worth naming are the last four. Whether the group can draw
+// nothing is decided by the quantifier alone and not by its arms: `@(x|)`
+// matches the empty string and still refuses the period behind it, where
+// `*(x|y)` matches no empty arm and allows it. And `!` neither lends its arms
+// nor steps aside, though it plainly matches the empty string — so this is a
+// rule about which bytes are written, not about what the group can match.
+func periodStartsAtQuantified(pattern string, i int, group, quantified bool, depth int) bool {
+	end, ok := groupEndsAt(pattern, i+1)
+	if !ok {
+		// Nothing closes it, so the quantifier and the parenthesis are
+		// ordinary text and neither is a period.
+		return false
+	}
+	if pattern[i] != '!' {
+		for _, alt := range groupAlternatives(pattern, i+2, end) {
+			if periodStartsAt(pattern, alt, group, quantified, depth+1) {
+				return true
+			}
+		}
+	}
+	if pattern[i] == '*' || pattern[i] == '?' {
+		return periodStartsAt(pattern, end+1, group, quantified, depth+1)
 	}
 	return false
 }

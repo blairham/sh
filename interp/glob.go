@@ -1515,7 +1515,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	if err != nil {
 		return nil
 	}
-	hidden := seeHidden || patternBeginsWithPeriod(pattern, o.group)
+	hidden := seeHidden || patternBeginsWithPeriod(pattern, o.group, o.quantified)
 
 	// Whether a unit is a character is a question about the subject as well
 	// as the pattern, and here the subjects are the names in this directory —
@@ -1525,7 +1525,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	o.chars = r.patternCountsCharacters(append(entryNames(entries), pattern)...)
 
 	var out []string
-	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group)) {
+	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group, o.quantified)) {
 		// Only a *leading* period is special, and only in pathname
 		// expansion: `*.b` matches `a.b`, and `.hid` needs `.*id`.
 		if strings.HasPrefix(name, ".") && !hidden {

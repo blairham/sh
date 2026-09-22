@@ -100,3 +100,63 @@ func TestAParenthesisInsideABracketDoesNotEndTheGroup(t *testing.T) {
 		})
 	}
 }
+
+// quantifiedDir is the directory the rows below are measured in: two hidden
+// names, a plain one, and a one-character plain one so a `?` arm has
+// something to reach.
+func quantifiedDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, n := range []string{".a", ".b", ".foo", "bar", "x"} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// The same question for the dialect with *quantified* groups, where the
+// quantifier decides two things the bare group never had to answer.
+//
+// Every row is measured 2026-09-22 on bash 5.3.20 with `extglob` and on
+// ksh93u+, in exactly the directory quantifiedDir builds, and the two agree
+// row for row. See interp/globhidden.go for the reading.
+func TestAQuantifiedGroupsArmsCanBeginWithAPeriod(t *testing.T) {
+	dir := quantifiedDir(t)
+	for _, tc := range []struct{ pattern, want string }{
+		// An arm may begin with one, under any quantifier but `!`.
+		{`@(.foo)`, `[.foo]`},
+		{`+(.foo)`, `[.foo]`},
+		{`*(.foo)`, `[.foo]`},
+		{`?(.foo)`, `[.foo]`},
+		{`@(x|.foo)`, `[.foo][x]`},
+		{`@(.*)`, `[.a][.b][.foo]`},
+		{`@(@(.foo))`, `[.foo]`},
+		{`@(\.a)`, `[.a]`},
+		// A closure may draw nothing, so a period standing behind one is
+		// still the first thing the pattern writes. `@` and `+` must draw
+		// something and are not stepped over.
+		{`*(bar).foo`, `[.foo]`},
+		{`?(bar).foo`, `[.foo]`},
+		{`+(bar).foo`, `[+(bar).foo]`},
+		{`@(bar).foo`, `[@(bar).foo]`},
+		{`*(x)@(.foo)`, `[.foo]`},
+		// Whether the group can draw nothing is the quantifier's answer and
+		// not its arms': `@(x|)` matches the empty string and still refuses
+		// the period behind it, where `*(x|y)` matches no empty arm and
+		// allows it. The pair is what says this is a rule about which bytes
+		// are written.
+		{`@(x|).foo`, `[@(x|).foo]`},
+		{`*(x|y).foo`, `[.foo]`},
+		// `!` neither lends its arms nor steps aside, though it plainly
+		// matches the empty string.
+		{`!(bar).foo`, `[!(bar).foo]`},
+		{`!(.foo)`, `[bar][x]`},
+		// And a bracket is still not explicit, inside a group as out.
+		{`@([.])a`, `[@([.])a]`},
+	} {
+		if got := runExtendedIn(t, dir, `printf "[%s]" `+tc.pattern); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.pattern, got, tc.want)
+		}
+	}
+}

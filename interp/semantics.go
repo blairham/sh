@@ -14600,6 +14600,99 @@ type Semantics struct {
 	// as a script runs nothing but builtins.
 	TildeReadsACachedHome Answer
 
+	// TildePrefixStopsAtAQuoteOrAnExpansion leaves a `~` as written where the
+	// tilde prefix — the run from the tilde to the first unquoted `/`, or to
+	// the end of the word — is not plain unwritten text throughout. A quoted
+	// character anywhere in it, or an expansion, and the whole word is the
+	// characters it was written as.
+	//
+	// The standard says as much for the quoting half — XCU 2.6.1 gives the
+	// tilde prefix to a login name only "if none of the characters in the
+	// tilde-prefix are quoted" — and the panel extends it to an expansion.
+	// Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with `HOME=/usr/xyz`, `USER`/`x` assigned on the line before:
+	//
+	//	word            bash 5.3   as sh    bash 3.2   dash     ash      ksh93     zsh 5.9.2
+	//	~\chet/bar      as written  same    same       same     same     same      looks up `chet`
+	//	~"chet"/bar     as written  same    same       same     same     same      looks up `chet`
+	//	~\/bar          as written  same    same       same     same     same      the home
+	//	~\-             as written  same    same       same     same     same      $OLDPWD
+	//	~$USER          `~root`     same    same       same     same     ~root's home
+	//	~"$x"           `~root`     same    same       same     same     ~root's home
+	//	~$x   (x=/y)    `~/y`       same    same       same     same     same      the home
+	//	y=~$HOME        `~` kept    same    same       same     same     same      the home
+	//	~"/bar"         as written  same    same       same     same     the home  the home
+	//	~$x/y (x=)      `~/y`       same    same       same     same     the home  the home
+	//	~+"/x"          `~+/x`      same    same       same     same     the home  $PWD
+	//
+	//	the controls, where the prefix *is* plain and every column expands:
+	//	~/bar  ~/"bar"  ~/$x  ~
+	//
+	// Six of the seven answer yes throughout. zsh answers no throughout — it
+	// takes the quotes off and looks the name up, so `~\chet` is an error
+	// there rather than a word. ksh93 is yes on the first eight rows and no
+	// on the last three, which is a split between its reading of a backslash
+	// and its reading of a quoted span that no second axis would pay for: the
+	// yes answer is right for it six rows out of eleven and the no answer
+	// three, so it takes yes and the three are recorded here.
+	//
+	// It is asked of the **word** and not of the tilde, which is why it lives
+	// beside expandTilde rather than inside tildeSplit: what decides is
+	// whether anything but plain text stands between the tilde and the slash
+	// that ends the prefix, and a value on its own has lost that. The `~`,
+	// `~+`, `~-` and `~user` spellings all take it together — the row with
+	// `~\-` is the one that says so (#4156).
+	TildePrefixStopsAtAQuoteOrAnExpansion Answer
+
+	// AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode expands the
+	// tilde after the `=` — and after every unquoted `:` that follows it — in
+	// an ordinary word that merely *looks* like an assignment, so
+	// `make -k FOO=~/x` hands make the home directory. One column, and only
+	// while it is not in POSIX mode.
+	//
+	// Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with `HOME=/usr/xyz`, each word passed to `echo`:
+	//
+	//	word            bash 5.3      as sh     bash 3.2    dash/zsh/ksh93/ash
+	//	FOO=~/mumble    expanded      `~` kept  expanded    `~` kept
+	//	FOO=~           expanded      `~` kept  expanded    `~` kept
+	//	foo=~:~         both expanded `~` kept  both        `~` kept
+	//	FOO=x:~/m       expanded      `~` kept  expanded    `~` kept
+	//	xFOO=~/m        expanded      `~` kept  expanded    `~` kept
+	//	_f=~/m          expanded      `~` kept  expanded    `~` kept
+	//	FOO+=~/m        expanded      `~` kept  expanded    `~` kept
+	//
+	//	the boundary, where every column leaves the word alone:
+	//	--opt=~/m   1abc=~/m   f.g=~/m   FOO==~/m   FOO=a=~/m   "FOO=~/m"
+	//
+	// The last line is what makes this a rule about the *shape* of an
+	// assignment rather than about a word with an `=` in it: the text in
+	// front of the first `=` has to be a name, the `~` has to stand at the
+	// head of the value or straight after one of its colons, and a word whose
+	// `=` arrived quoted is not this at all.
+	//
+	// `as sh` is the same 5.3.20 binary under the `sh` name, which is POSIX
+	// mode, where the expansion is restricted to the assignment statements in
+	// front of a command — so the answer is read together with
+	// [Runner.PosixMode] and a script that turns the option on loses it mid
+	// run. bash 3.2 agrees with 5.3 here, which is the opposite of how the
+	// two split over the cached home.
+	//
+	// It reaches every road a word takes: a command's arguments, a `for`
+	// list, a `case` word and a redirection target all expand it in that
+	// shell, which is why the answer is applied in the word pipeline and not
+	// at the argument list.
+	//
+	// **One road is written down rather than answered.** An array literal's
+	// element is the shape the two builds disagree about: `a=(FOO=~/m)` keeps
+	// the tilde in 5.3.20 and expands it in 3.2.57, and this shell expands
+	// it — 3.2's answer — because the word pipeline is where the rule lives
+	// and an element is an ordinary word through it. Separating them needs a
+	// second piece of state threaded through the expansion for one row of one
+	// build, and the row it would buy is a shape scripts do not write. It is
+	// here so that it is a known answer rather than an unnoticed one (#4213).
+	AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode Answer
+
 	// SubscriptIsAQuotingContext runs an associative array's subscript
 	// through quote removal, so the key is the text *inside* its quotes and
 	// escapes. True in bash and ksh93; false in zsh, where the subscript is
@@ -24827,6 +24920,18 @@ func PosixSemantics() Semantics {
 		// copy of it anywhere in the description, and six of the seven
 		// columns read the variable. bash 5.3 is the one that overrides it.
 		TildeReadsACachedHome: No,
+		// And a tilde prefix that is not plain text throughout stops the
+		// expansion: XCU 2.6.1 hands the prefix to a login name only "if none
+		// of the characters in the tilde-prefix are quoted", which is the
+		// quoting half outright, and the three POSIX columns extend it to an
+		// expansion. zsh is the one column that overrides it.
+		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
+		// And a word that merely looks like an assignment is not a tilde
+		// context. XCU 2.6.1 gives the expansion to the assignments in front
+		// of a command and to nothing else, which is what dash, ksh93,
+		// BusyBox ash, zsh and bash under the `sh` name all do. bash outside
+		// POSIX mode is the one column that overrides it.
+		AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode: No,
 		// And a descriptor the shell has nothing open at is not a terminal,
 		// however the number was spelled: no narrowing, and no value that
 		// answers true on its own.
@@ -25115,6 +25220,18 @@ func CoreSemantics() Semantics {
 		// among them. The seventh says so itself; see
 		// Semantics.TildeReadsACachedHome and interp/cachedhome.go.
 		TildeReadsACachedHome: No,
+		// And a `~` whose prefix carries a quote or an expansion is the text
+		// it was written as. Six of the seven columns, the standard's own
+		// words for the quoting half, and answered here for the reason above
+		// it: `~$USER` is an ordinary thing to write, so a refusal would be
+		// the substrate refusing it. zsh is the holdout and says so itself.
+		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
+		// And a word that merely looks like an assignment is not a tilde
+		// context: six of the seven columns leave `make FOO=~/x` alone, and
+		// the seventh does it only outside POSIX mode. Answered here for the
+		// reason above it — the shape is ordinary enough that a refusal would
+		// be the substrate refusing `cc -DX=1`.
+		AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode: No,
 		// A clustered `-abc` leaves OPTIND naming the word until its last
 		// letter has been read, which is what four of the six columns do and
 		// what a script shifting by `OPTIND-1` between calls needs. dash and

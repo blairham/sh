@@ -420,6 +420,13 @@ func (r *Runner) patternTilde(w *syntax.Word, b *strings.Builder) []syntax.Span 
 		!strings.HasPrefix(s.Value, "~") {
 		return w.Spans
 	}
+	// The same question a word asks, asked here for the same reason the rest
+	// of this function exists: a `case` arm and a `[[ ]]` operand are words
+	// and a rule written into one road only is a shell no column has. See
+	// Runner.tildePrefixIsPlain.
+	if !r.tildePrefixIsPlain(s.Value, w.Spans[1:], tildeEndsAtASlash) {
+		return w.Spans
+	}
 	dir, tail, ok := r.tildeSplit(s.Value)
 	if !ok {
 		return w.Spans

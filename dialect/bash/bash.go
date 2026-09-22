@@ -857,6 +857,18 @@ func Semantics() interp.Semantics {
 	// separate the three readings, and #3484 and #4039, which were each
 	// filed on the reading this is not (#4156).
 	s.TildeReadsACachedHome = interp.Yes
+	// And a word that merely *looks* like an assignment is a tilde context
+	// here, which is this shell's alone: `echo make -k FOO=~/mumble` prints
+	// the home directory, as does `foo=~:~` after each colon, while dash,
+	// zsh, ksh93, BusyBox ash and this same binary under the `sh` name all
+	// keep the two characters. Measured 2026-09-22 on 5.3.20 and 3.2.57,
+	// which agree, over seven shapes and six boundary cases — the left side
+	// has to be a name, so `--opt=~/m` and `1abc=~/m` are left alone
+	// everywhere. POSIX mode takes it away and the axis is read with
+	// Runner.PosixMode; see
+	// Semantics.AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode
+	// (#4213).
+	s.AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode = interp.Yes
 	// The three bytes the panel does not agree about in a listed word.
 	// Measured 2026-09-14 over `set` and over a keyed `typeset -p`, which
 	// agree: `=` is ordinary here — `v=a=b` and the keys `[a=b]`, `[=x]`,

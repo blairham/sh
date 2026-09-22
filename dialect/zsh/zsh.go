@@ -1330,6 +1330,14 @@ func Semantics() interp.Semantics {
 	// key here, where bash and ksh93 expand it. Measured 2026-09-17 on
 	// 5.9.2, with `typeset -p` beside the store (#2298).
 	s.SubscriptKeyExpandsALeadingTilde = interp.No
+	// And a tilde prefix carrying a quote or an expansion still expands here,
+	// which is this shell alone: the quotes come off and the name is looked
+	// up, so `~\chet/bar` is an error about a user called `chet` where the
+	// other six columns print the word as written, and `~"/bar"`, `~$x` and
+	// `~+"/x"` all reach the directory. Measured 2026-09-22 against the panel
+	// on eleven shapes; see Semantics.TildePrefixStopsAtAQuoteOrAnExpansion
+	// (#4156).
+	s.TildePrefixStopsAtAQuoteOrAnExpansion = interp.No
 	s.ListedNonAsciiIsOrdinary = interp.Yes
 	s.ListedAssignmentPrefixIsBare = interp.No
 	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a

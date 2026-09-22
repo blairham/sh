@@ -239,6 +239,92 @@ works as intended.
 
 All four agree. **Core behavior, no vector field.**
 
+### Where a tilde prefix ends
+
+The prefix runs from the `~` to the first unquoted `/`, or to the end of the
+word. **Inside an assignment's value a `:` closes it too**, which is the same
+character that opens one after it — and that half is unanimous. Measured
+2026-09-22, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with
+`HOME=/usr/xyz`:
+
+| written | all seven columns |
+| --- | --- |
+| `foo=~:~` | both homes |
+| `foo=~:x` | the home, then `:x` |
+| `foo=~:` | the home, then `:` |
+| `foo=~/a:~` | both homes |
+
+Core behavior, no vector field — and it was wrong here: the leading tilde
+looked for a slash, found none, and asked for a user named `:~`, so `foo=~:~`
+came to `~:$HOME` rather than to two homes.
+
+Whether a colon closes one in an **ordinary** word is a different question and
+the panel splits on it: `echo ~:x` is the home in bash (every build, POSIX
+mode included) and in ksh93, and the characters as written in dash, zsh and
+BusyBox ash, which is this shell's answer. Recorded and filed as #4251.
+
+### A quote or an expansion inside the prefix
+
+Six of the seven columns leave the whole word as written where the prefix is
+not plain unwritten text the whole way. The standard says it for the quoting
+half — XCU 2.6.1 hands the prefix to a login name only "if none of the
+characters in the tilde-prefix are quoted" — and the panel extends it to an
+expansion. Measured the same day, `USER`/`x` assigned on the line before:
+
+| written | bash 5.3 / as `sh` / bash 3.2 / dash / ash | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `~\chet/bar` | as written | as written | looks `chet` up |
+| `~"chet"/bar` | as written | as written | looks `chet` up |
+| `~\/bar` | as written | as written | the home |
+| `~\-` | as written | as written | `$OLDPWD` |
+| `~$USER` | `~root` | ~root's home | ~root's home |
+| `~"$x"` | `~root` | ~root's home | ~root's home |
+| `~$x`  (`x=/y`) | `~/y` | `~/y` | the home |
+| `y=~$HOME` | `~` kept | `~` kept | the home |
+| `~"/bar"` | as written | the home | the home |
+| `~$x/y` (`x=`) | `~/y` | the home | the home |
+| `~+"/x"` | `~+/x` | `$PWD/x` | `$PWD/x` |
+
+and the controls, where the prefix *is* plain and every column expands:
+`~/bar`, `~/"bar"`, `~/$x`, `~`.
+
+`TildePrefixStopsAtAQuoteOrAnExpansion`: yes for `posix`, `bash`, `dash`,
+`ksh` and `ash`; no for `zsh`. ksh93 is yes on the first eight rows and no on
+the last three — a split between its reading of a backslash and its reading of
+a quoted span — so it takes the majority answer and the three are recorded
+here.
+
+### A word merely *shaped* like an assignment
+
+One column expands the tilde after the `=`, and after every unquoted `:` that
+follows it, in a word that is an ordinary argument. Measured the same day,
+each word passed to `echo`:
+
+| written | bash 5.3.20 | as `sh` | bash 3.2.57 | dash, zsh, ksh93, ash |
+| --- | --- | --- | --- | --- |
+| `FOO=~/mumble` | expanded | `~` kept | expanded | `~` kept |
+| `FOO=~` | expanded | `~` kept | expanded | `~` kept |
+| `foo=~:~` | both expanded | `~` kept | both | `~` kept |
+| `FOO=x:~/m` | expanded | `~` kept | expanded | `~` kept |
+| `xFOO=~/m` | expanded | `~` kept | expanded | `~` kept |
+| `_f=~/m` | expanded | `~` kept | expanded | `~` kept |
+| `FOO+=~/m` | expanded | `~` kept | expanded | `~` kept |
+
+The boundary, where every column leaves the word alone: `--opt=~/m`,
+`1abc=~/m`, `f.g=~/m`, `FOO==~/m`, `FOO=a=~/m`, `"FOO=~/m"`. So it is the
+**shape** of an assignment that decides — a name, then an `=` — and not a word
+with an `=` in it.
+
+`AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode`: yes for `bash`
+and no everywhere else. `as sh` is the same 5.3.20 binary under the `sh` name,
+which is POSIX mode, so the answer is read together with `Runner.PosixMode`
+and a script turning the option on loses it mid run.
+
+It reaches every road a word takes — a command's arguments, a `for` list, a
+`case` word, a redirection target. One road is written down rather than
+answered: an array literal's element, `a=(FOO=~/m)`, keeps the tilde in 5.3.20
+and expands it in 3.2.57, and this shell expands it (#4213).
+
 ### A bare `~` after the script has assigned to `HOME`
 
 One build answers this with a home the script has already replaced, and the

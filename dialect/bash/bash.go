@@ -4541,6 +4541,18 @@ func Apply(r *interp.Runner) {
 	// on rather than installing a sentence, and the listing reads the
 	// capability back (#3465).
 	r.SetReportsShiftPastTheEnd(false)
+	// And the two history defaults this preset holds the other way round from
+	// the core, which is the side every shell with no such option is on. A
+	// command typed over several lines is **one joined entry** here, with a
+	// `;` where each newline was, and `shopt -s lithist` is what keeps the
+	// lines; and the history file is written from the session's list rather
+	// than appended to where the two differ, which `shopt -s histappend` puts
+	// back. Both measured on bash 5.3.20 through a pseudo-terminal — see
+	// interp.Runner.HistoryJoinsATypedCommand and RewritesTheHistoryFile for
+	// the tables, and shopt.go for why neither could stay a recorded state
+	// (#4149).
+	r.SetHistoryJoinsATypedCommand(true)
+	r.SetRewritesTheHistoryFile(true)
 	// `declare` is `typeset` under a second name rather than a second
 	// implementation. ksh93 has only the older name and dash has neither, so
 	// which names exist is a dialect's answer and not an axis.

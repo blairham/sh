@@ -1985,6 +1985,16 @@ type Runner struct {
 	// expansion itself: the same call gives the same answer and only what is
 	// done with it moves. See HistoryExpansionVerifies.
 	histVerify bool
+	// histJoinLines is whether a command typed over several physical lines
+	// becomes one joined entry rather than an entry holding the newlines it
+	// was typed with — bash's `shopt lithist` read the other way round. See
+	// HistoryJoinsATypedCommand, where the measurement is.
+	histJoinLines bool
+	// histRewrite is whether the history file is written from the session's
+	// list rather than appended to, where the two differ — bash's
+	// `shopt histappend` read the other way round. See
+	// RewritesTheHistoryFile, where the measurement is.
+	histRewrite bool
 	// histMemory is the last substitution and search history expansion made,
 	// which the next line's `:&` and `%` read. See histexpand.Memory.
 	histMemory *histexpand.Memory

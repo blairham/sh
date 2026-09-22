@@ -527,6 +527,37 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).HistoryExpansionVerifies,
 		set: (*interp.Runner).SetHistoryExpansionVerifies,
 	},
+	// The two history names this table gained last, and the third and fourth
+	// entries here whose sense is inverted: what the core holds is the state
+	// every shell *without* the option is in, so the option is its negative.
+	// See interp.Runner.HistoryJoinsATypedCommand and RewritesTheHistoryFile,
+	// which carry the measurements; what follows is why each could not stay a
+	// recorded state.
+	//
+	// `lithist` asks that a command typed over several lines keep those lines
+	// in the history rather than be joined into one entry. This shell kept
+	// them, so it sat on the option's **on** side with the option reported
+	// on, and `shopt -u lithist` — which a script runs to put a known shell
+	// in front of itself — was refused for asking for bash's own default. The
+	// join is internal/histjoin's, which a script's history gate and `fc`'s
+	// editor road already reached; a prompt is its third reader (#4149).
+	"lithist": {
+		get: func(r *interp.Runner) bool { return !r.HistoryJoinsATypedCommand() },
+		set: func(r *interp.Runner, on bool) { r.SetHistoryJoinsATypedCommand(!on) },
+	},
+	// `histappend` is the one of the pair whose refusal was argued at length
+	// and was wrong for a reason only a measurement could show. The table
+	// recorded it **on** because this shell appends to HISTFILE and never
+	// rewrites it — which is true — and read bash's `off` as a promise to
+	// rewrite. Measured 2026-09-22, bash 5.3.20 with the option off appends
+	// too, in every case but one: it rewrites the file from its list where
+	// the list no longer holds every line the session added. So the two
+	// shells differed in exactly that corner and the listing was describing
+	// the wrong half of the option.
+	"histappend": {
+		get: func(r *interp.Runner) bool { return !r.RewritesTheHistoryFile() },
+		set: func(r *interp.Runner, on bool) { r.SetRewritesTheHistoryFile(!on) },
+	},
 }
 
 // shoptReadOnly are the two names that are indicators rather than switches:
@@ -666,34 +697,26 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 // The handful that are on are on because the behavior they name is simply
 // how this shell works: ranges match by byte, `*` never yields `.` or `..`,
 // comments are honored everywhere, `$'…'` is decoded inside `${…}`, the
-// prompt expands parameters, `.` searches PATH, and the three history names
-// below describe the history this shell already keeps.
+// prompt expands parameters, `.` searches PATH, and `cmdhist` describes the
+// history this shell already keeps.
 //
-// Which side a name falls on is measured, never assumed, and the three
-// history names were measured through a terminal rather than through `-c`:
+// Which side a name falls on is measured, never assumed, and the history
+// names have to be measured through a terminal rather than through `-c`:
 // `-i -c` runs one command and exits without entering the prompt loop, so it
-// never reaches the editor that keeps the history at all. The observables,
-// against bash 5.3.15 driven the same way:
+// never reaches the editor that keeps the history at all.
 //
-//   - histappend. Ours appends and never rewrites: repl/history.go opens the
-//     file O_APPEND|O_CREATE|O_WRONLY and writes only the lines this session
-//     added. Measured — a line another process appended to HISTFILE while a
-//     session was live was still there after that session exited, with our
-//     lines after it. A writer that rewrote the file from its own list would
-//     have dropped it.
 //   - cmdhist. A command typed over four lines is one entry here, not four:
 //     typing a `for` loop and pressing Up recalls the whole loop. bash with
-//     `shopt -u cmdhist` recalls only `done`.
-//   - lithist. That one entry keeps its newlines rather than being joined
-//     with semicolons: ours recalls `for q in ZZ`, `do`, `echo MARK$q`,
-//     `done` across four lines, byte-for-byte what bash under
-//     `shopt -s lithist` recalls, where bash's default recalls the
-//     semicolon-joined `for q in ZZ; do echo MARK$q; done`.
+//     `shopt -u cmdhist` recalls only `done`. So turning it *on* is a request
+//     that has been granted, and turning it off is refused: this shell cannot
+//     promise to split a construct into a line each.
 //
-// So turning those three *on* is a request that has been granted, and
-// turning one *off* is refused: this shell cannot promise to rewrite the
-// history file, to split a construct into a line each, or to join one with
-// semicolons.
+// `histappend` and `lithist` were here beside it, recorded **on** because
+// this shell appended to the file and kept a construct's newlines, and both
+// are in shoptSwitches above now — the two names the suite file `shopt.tests`
+// was refused on (#4149). Neither moved because the honest reading changed:
+// they moved because the behavior each names was built, so the name is a
+// switch with bash's own default instead of a state nothing could leave.
 //
 // Every name #1429 and #1445 collected is now wired; nothing in the table
 // below is a behavior somebody asked for and did not get. The last two,
@@ -738,11 +761,9 @@ var shoptStates = map[string]bool{
 	"extquote":             true,
 	"globasciiranges":      true,
 	"gnu_errfmt":           false,
-	"histappend":           true,
 	"histreedit":           false,
 	"huponexit":            false,
 	"interactive_comments": true,
-	"lithist":              true,
 	"mailwarn":             false,
 	"noexpand_translation": false,
 	"progcomp_alias":       false,

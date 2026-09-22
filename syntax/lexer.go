@@ -3126,6 +3126,27 @@ const heredocEscapes = "$`\\"
 // readings of `${u-A\}B}` rather than a rule of its own.
 const operandEscapes = dquoteEscapes + "}"
 
+// escapeSet is what a backslash escapes in a double-quoted run.
+//
+// A list of bytes says it for the three sets above. It does not say it for
+// the widened reading a nested `"` gets inside a double-quoted operand, where
+// a backslash escapes *whatever* follows it — there is no byte list for "all
+// of them" — so that one is a flag rather than a longer string.
+type escapeSet struct {
+	bytes string
+	all   bool
+}
+
+func (e escapeSet) covers(c byte) bool {
+	return e.all || strings.IndexByte(e.bytes, c) >= 0
+}
+
+var (
+	dquoteEscapeSet  = escapeSet{bytes: dquoteEscapes}
+	operandEscapeSet = escapeSet{bytes: operandEscapes}
+	anyEscapeSet     = escapeSet{all: true}
+)
+
 // HeredocSpans splits an unquoted here-document body into spans.
 //
 // A body is not a word and not a double-quoted string, though it is much
@@ -3244,9 +3265,9 @@ func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 	// Without a closing quote to find, this text is a `${ }` operand — the one
 	// place a backslash also escapes the brace that would end the expansion.
 	// See operandEscapes.
-	escapes := dquoteEscapes
+	escapes := dquoteEscapeSet
 	if !closing {
-		escapes = operandEscapes
+		escapes = operandEscapeSet
 	}
 	return l.scanDoubleEscaping(open, closing, escapes)
 }
@@ -3264,9 +3285,12 @@ func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 func (l *Lexer) scanNestedDoubleInOperand() []Span {
 	open := l.pos()
 	l.advance() // "
-	escapes := operandEscapes
+	escapes := operandEscapeSet
 	if l.dialect.NestedQuoteResetsOperandEscapes {
-		escapes = dquoteEscapes
+		escapes = dquoteEscapeSet
+	}
+	if l.dialect.NestedQuoteInAQuotedOperandEscapesAnything {
+		escapes = anyEscapeSet
 	}
 	return l.scanDoubleEscaping(open, true, escapes)
 }
@@ -3279,7 +3303,7 @@ func (l *Lexer) scanNestedDoubleInOperand() []Span {
 // Measured 2026-09-12, `"${u-$(printf %s "A\}B")}"` is `A\}B` in bash 5.3.15
 // and zsh 5.9.2 alike — the two columns that disagree about the plain nested
 // run agree here, which is what says the substitution starts over.
-func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Span {
+func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []Span {
 	var out []Span
 	var b strings.Builder
 	litPos := l.pos()
@@ -3374,7 +3398,7 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes string) []Spa
 		case c == '\\' && l.peekAt(1) == '\n':
 			l.advance()
 			l.advance()
-		case c == '\\' && strings.IndexByte(escapes, l.peekAt(1)) >= 0:
+		case c == '\\' && escapes.covers(l.peekAt(1)):
 			l.advance()
 			if b.Len() == 0 {
 				litPos = l.pos()

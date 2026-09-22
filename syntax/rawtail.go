@@ -92,7 +92,7 @@ func RereadWordTail(tail string, at Pos, d Dialect) ([]Span, error) {
 	// where a brace ends an expansion and nothing else. Handing it the
 	// operand's wider set would make `\}` an escape in text that was read as
 	// two characters.
-	spans := p.lex.scanDoubleEscaping(at, false, dquoteEscapes)
+	spans := p.lex.scanDoubleEscaping(at, false, dquoteEscapeSet)
 	if err := p.lex.Err(); err != nil {
 		return nil, err
 	}

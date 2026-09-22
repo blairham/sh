@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
 )
 
 // The history file of a **script**: read the first time the list is turned
@@ -160,7 +161,7 @@ func historyFinishFile(r *interp.Runner) {
 		// when the shell ends with nothing to write.
 		return
 	}
-	if historyWriteFile(r, name, entries, !whole, true) == 0 {
+	if historyWriteFile(r, name, entries, historyNewestTimes(r), !whole, true) == 0 {
 		historySetUnwritten(r, 0)
 		historyTruncateFile(r)
 	}
@@ -208,10 +209,21 @@ func historyTruncateFile(r *interp.Runner) {
 		return
 	}
 	lines, ok := historyReadFile(r, name, true)
-	if !ok || len(lines) <= keep {
+	if !ok {
 		return
 	}
-	_ = historyWriteFile(r, name, lines[len(lines)-keep:], false, true)
+	// By entries rather than by lines where the file carries a time on a line
+	// of its own — see repl.HistoryFileTail, where both readings were
+	// measured against the shell.
+	kept := repl.HistoryFileTail(historyStyle(r), lines, keep)
+	if len(kept) == len(lines) {
+		return
+	}
+	// The file's own physical lines, put back as they stand: a `#<epoch>`
+	// line among them is one of the file's lines and is written as itself,
+	// not re-derived from the list. So no times are handed over here — an
+	// entry's time is already in the text.
+	_ = historyWriteFile(r, name, kept, nil, false, true)
 }
 
 // historyFileSize is HISTFILESIZE as a count of lines to keep, or false where

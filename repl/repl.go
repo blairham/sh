@@ -507,6 +507,20 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// `!4 #1` at its first prompt, editor or no editor.
 	hist := s.historyFile()
 	earlier := s.recalled(ctx, hist)
+	// And into the dialect's list, once, before either loop: `history`, `fc`
+	// and every `!` reference read that one, and a session whose earlier
+	// lines were only in the front end's answered a `history` with nothing
+	// while the up arrow walked them (#4177). Seeded rather than recorded —
+	// they are already in the file. See interp.Runner.SetHistorySeed.
+	if s.Runner != nil {
+		s.Runner.SeedHistoryEntries(earlier)
+		// And that this reader is the one filling that list, which is what
+		// lets a builtin drop the line it is written on. Said here rather
+		// than derived, exactly as the script's front end says it: the
+		// answer is about who is recording, and until this session did, a
+		// prompt was the state the flag was *false* for.
+		s.Runner.SetHistoryListFilledByTheReader(true)
+	}
 	s.counts = &counts{history: len(earlier)}
 	s.hooks = &hookState{reported: map[string]bool{}, themeReported: map[string]bool{}}
 	// Where this session records a command and what came of it. Opened here
@@ -618,13 +632,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// and they cannot be, because a dialect exists in which an ignored line is
 	// still recallable and still not written. Kept here, so that the only
 	// thing the file's contents depend on is what went into this slice.
-	var added []string
+	var added, addedAt []string
 	defer func() {
-		if err := hist.save(ctx, earlier, added, s.rewritesHistory()); err != nil {
+		if err := hist.save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
-	record := s.recording(ed, &added)
+	record := s.recording(ed, &added, &addedAt)
 	var pending strings.Builder
 	// And what the editor draws again when the wake fires. After `pending`
 	// exists, because a re-render has to know whether it is drawing the
@@ -1305,15 +1319,16 @@ func (s Shell) runPlain(
 	// There is no editor here to hold the list, so the list is its own type
 	// and the recorder, the rules and the file are the same ones (#2298).
 	recall := &lineList{lines: earlier}
-	var added []string
+	var added, addedAt []string
 	defer func() {
-		if err := hist.save(ctx, earlier, added, s.rewritesHistory()); err != nil {
+		if err := hist.save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
-	record := s.recording(recall, &added)
+	record := s.recording(recall, &added, &addedAt)
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
+	var seeded string
 	for {
 		drawn := s.beforeReading(ctx, nil, &pending)
 		if s.Runner.Exited() {
@@ -1362,6 +1377,31 @@ func (s Shell) runPlain(
 			return s.status(), nil
 		}
 		line = strings.TrimSuffix(line, "\n")
+		// What a `histverify` expansion left for this read to be added to.
+		// There is no editing line here to draw it on, so it is carried and
+		// joined to what comes next — which is what the real shell does on
+		// this route too: measured 2026-09-22, `shopt -s histverify`, `echo
+		// hello`, `!!`, `echo done` on a pipe runs `echo helloecho done`,
+		// because the line buffer the expansion was put back into was still
+		// holding it when the next line arrived.
+		line, seeded = seeded+line, ""
+
+		// History expansion, before anything has looked at the line, exactly
+		// as the editor's loop does it and for the reason written there. It
+		// was missing here entirely: this loop kept a list from #4007 and
+		// never consulted it, so `!!` on a pipe reached the parser as two
+		// characters nobody could run (#4177).
+		expanded, outcome := s.expanded(line, recall.lines, recall.remember)
+		switch outcome {
+		case dropLine:
+			pending.Reset()
+			continue
+		case verifyLine:
+			seeded = expanded
+			continue
+		case runLine:
+			line = expanded
+		}
 
 		stmts, text, perr, ready := s.take(&pending, record, line)
 		if !ready {
@@ -1714,7 +1754,12 @@ func (s Shell) historyFile() historyFile {
 	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}
 	// How this shell's file spells an entry, which is the dialect's answer —
 	// see HistoryStyle, and decodeEntries for what is done with it.
-	h.encoding = historyEncodingFrom(s.History)
+	//
+	// The style and a way to read this shell's variables, rather than an
+	// encoding settled here: one of the style's answers is a variable's, and
+	// a session sets that variable at the prompt, so the question is put at
+	// each read and each write instead of once when the session was built.
+	h.style, h.vars = s.History, s.Runner.GetVar
 	return h
 }
 
@@ -1977,7 +2022,7 @@ func (s Shell) take(pending *strings.Builder, remember func(string), line string
 // its own reasons — so the two paths look alike here and are decided
 // separately, which is why they are written separately rather than folded
 // together.
-func (s Shell) recording(recall recalls, added *[]string) func(string) {
+func (s Shell) recording(recall recalls, added, at *[]string) func(string) {
 	if recall == nil {
 		return nil
 	}
@@ -2010,7 +2055,16 @@ func (s Shell) recording(recall recalls, added *[]string) func(string) {
 		// what the session will write — which is what makes a recorder
 		// protected by the credential check above rather than obliged to
 		// repeat it.
-		s.recorded(sessionRecorder{added: added}, line)
+		s.recorded(sessionRecorder{added: added, at: at}, line)
+		// And into the *dialect's* list, which is the one `history`, `fc`
+		// and every `!` reference read. The two lists are not one — see
+		// interp.Runner.SetHistoryStore for why the dialect keeps its own —
+		// and until this the session's went only into the front end's, so a
+		// shell at a prompt drew a line back with the up arrow that its own
+		// `history` could not see (#4177).
+		if s.Runner != nil {
+			s.Runner.RecordHistoryEntry(line)
+		}
 	}
 }
 
@@ -2060,10 +2114,24 @@ func (l *lineList) newest() string {
 // rather than a test's, which is the point of it being written this way. The
 // file's contents are what this collects and nothing else, so a recorder added
 // beside it cannot change them and cannot be forgotten by them.
-type sessionRecorder struct{ added *[]string }
+type sessionRecorder struct {
+	added *[]string
+	at    *[]string
+}
 
-// Record adds the line to what the session will write.
-func (r sessionRecorder) Record(e HistoryEntry) { *r.added = append(*r.added, e.Command) }
+// Record adds the line, and when it was accepted, to what the session will
+// write. The time is kept beside the line rather than derived at the write,
+// because the file is written as the shell exits and a session is long.
+// Every line, with no question asked about whether this session was told to
+// record times: measured 2026-09-22, a shell at a prompt stamps what it reads
+// whether HISTTIMEFORMAT was ever set or not, and the variable decides only
+// whether the stamps are *written*. The other reader — a script's, in the one
+// dialect that has one — gates the stamp on the variable instead, and the two
+// disagreeing is the measurement rather than a gap here.
+func (r sessionRecorder) Record(e HistoryEntry) {
+	*r.added = append(*r.added, e.Command)
+	*r.at = append(*r.at, strconv.FormatInt(e.At.Unix(), 10))
+}
 
 // recorded tells the file and then every recorder the front end contributed.
 //

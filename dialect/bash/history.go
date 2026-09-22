@@ -141,6 +141,11 @@ func registerHistory(r *interp.Runner) {
 	// interp.Runner.SetHistoryOwnLine.
 	r.SetHistoryOwnLine(historyHasOwnLine, historyDropOwnLine)
 	r.SetHistoryFile(historyStartFile, historyFinishFile)
+	// And the seam for the one shell that route leaves out: an interactive
+	// session, whose file the front end keeps. Its lines still belong in this
+	// list, because `history`, `fc` and every `!` reference read this one.
+	// See interp.Runner.SetHistorySeed.
+	r.SetHistorySeed(historySeed)
 	r.SetHistoryNumbering(historyFirst)
 	// And the parameter whose assignment truncates the file where it
 	// stands, which is the moment nothing else could reach: see
@@ -168,6 +173,14 @@ func registerHistory(r *interp.Runner) {
 	r.SetUnsetAction("HISTSIZE", func(rr *interp.Runner) {
 		rr.SetVar(historyInForce, historyNoCap)
 	})
+	// And the variable that decides whether an entry keeps the time it ran
+	// at. A seam rather than a reading, because the answer outlives the
+	// variable: an `unset` does not stop the recording, so a shell that only
+	// ever read HISTTIMEFORMAT could not tell an entry made before it was
+	// first assigned from one made after. See historytimes.go.
+	r.SetAssignmentAction("HISTTIMEFORMAT", func(rr *interp.Runner, _ string) {
+		historyTimesAssigned(rr)
+	})
 }
 
 // historyFlags is the letters one call carried.
@@ -183,8 +196,11 @@ type historyFlags struct {
 	store  bool
 }
 
-// fileLetter reports whether one of the four letters that name a file was
-// given, and refuses the combination bash refuses by taking the last.
+// fileLetter reports which of the four letters that name a file was given.
+//
+// At most one can have been, because [historyFlags.tooManyFileLetters] has
+// already refused the call where two were — so the order of the cases below
+// decides nothing and is not a precedence.
 func (f historyFlags) fileLetter() (byte, bool) {
 	switch {
 	case f.append:
@@ -199,10 +215,36 @@ func (f historyFlags) fileLetter() (byte, bool) {
 	return 0, false
 }
 
+// tooManyFileLetters reports the combination bash refuses: two *different*
+// letters out of `-anrw` on one call.
+//
+// Different, not repeated — measured 2026-09-22 on bash 5.3.20, `history -a
+// -a` is accepted and does the append once, while `-an`, `-na`, `-anrw` and
+// `-c -a -r` are each `history: cannot use more than one of -anrw` at status
+// 1. The refusal stands in front of the whole builtin and not only in front
+// of the file work: the `-c` of that last one does not clear the list.
+//
+// No usage block under it, which is the difference between a complaint about
+// a *combination* and one about a letter the builtin does not have: `-Z` is
+// status 2 with the usage line, this is status 1 without it.
+func (f historyFlags) tooManyFileLetters() bool {
+	n := 0
+	for _, given := range []bool{f.append, f.unread, f.read, f.write} {
+		if given {
+			n++
+		}
+	}
+	return n > 1
+}
+
 func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	flags, rest, code := historyOptions(r, args)
 	if code != 0 {
 		return code
+	}
+	if flags.tooManyFileLetters() {
+		r.Diagnosef("history: cannot use more than one of -anrw\n")
+		return 1
 	}
 
 	// `-p` and `-s` take every remaining operand and answer on their own,
@@ -283,7 +325,7 @@ func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	}
 
 	if flags.clear {
-		r.SetArray(historyStore, nil)
+		historySetList(r, nil, nil)
 		// The count goes with it: a cleared list holds nothing for `-a` to
 		// write, and measured, `echo 1; history -c; echo 2` leaves only
 		// `echo 2` appended when the shell ends.
@@ -429,8 +471,17 @@ func historyList(r *interp.Runner, rest []string) int {
 			from = len(entries) - count
 		}
 	}
+	// The time in front of the command where this shell was told to draw
+	// one, and the `??` an entry with none gets. See historytimes.go, where
+	// the three rules HISTTIMEFORMAT carries are measured.
+	format, timed := historyTimeFormat(r)
+	times := historyTimesOf(r, len(entries))
 	for i := from; i < len(entries); i++ {
-		_, _ = fmt.Fprintf(r.Out(), "%5d  %s\n", historyFirst(r)+i, entries[i])
+		stamp := ""
+		if timed {
+			stamp = historyDrawnTime(format, times[i])
+		}
+		_, _ = fmt.Fprintf(r.Out(), "%5d  %s%s\n", historyFirst(r)+i, stamp, entries[i])
 	}
 	return 0
 }
@@ -593,7 +644,10 @@ func historyPosition(n, first, last int) (num int, inRange bool) {
 // it whichever entries it removed, and which never goes below nothing.
 func historyRemove(r *interp.Runner, i, j int) {
 	entries := historyEntries(r)
-	r.SetArray(historyStore, append(entries[:i:i], entries[j+1:]...))
+	times := historyTimesOf(r, len(entries))
+	historySetList(r,
+		append(entries[:i:i], entries[j+1:]...),
+		append(times[:i:i], times[j+1:]...))
 	historySetUnwritten(r, historyUnwrittenCount(r)-(j-i+1))
 }
 
@@ -647,9 +701,10 @@ func historyFile(r *interp.Runner, letter byte, rest []string) int {
 	}
 	switch letter {
 	case 'w':
-		return historyWriteFile(r, name, historyEntries(r), false, false)
+		entries := historyEntries(r)
+		return historyWriteFile(r, name, entries, historyTimesOf(r, len(entries)), false, false)
 	case 'a':
-		if code := historyWriteFile(r, name, historyNewest(r), true, false); code != 0 {
+		if code := historyWriteFile(r, name, historyNewest(r), historyNewestTimes(r), true, false); code != 0 {
 			return code
 		}
 		historySetUnwritten(r, 0)
@@ -707,7 +762,8 @@ func historyTakeOwnLine(r *interp.Runner, take bool) bool {
 	if len(entries) == 0 {
 		return false
 	}
-	r.SetArray(historyStore, entries[:len(entries)-1])
+	times := historyTimesOf(r, len(entries))
+	historySetList(r, entries[:len(entries)-1], times[:len(times)-1])
 	historySetUnwritten(r, historyUnwrittenCount(r)-1)
 	if take {
 		r.SetVar(historyOwnLine, "0")
@@ -812,14 +868,16 @@ func historyWanted(r *interp.Runner, line string) bool {
 		return false
 	}
 	if historyErasesDups(r) {
-		kept := entries[:0]
-		for _, entry := range entries {
+		times := historyTimesOf(r, len(entries))
+		kept, keptTimes := entries[:0], times[:0]
+		for i, entry := range entries {
 			if entry != line {
 				kept = append(kept, entry)
+				keptTimes = append(keptTimes, times[i])
 			}
 		}
 		if len(kept) != len(entries) {
-			r.SetArray(historyStore, kept)
+			historySetList(r, kept, keptTimes)
 		}
 	}
 	return true
@@ -839,15 +897,15 @@ func historyErasesDups(r *interp.Runner) bool {
 // historyAdd is an entry this session made — a line the reader recorded or
 // one `-s` stored — which a later `-a`, or the shell ending, will write.
 func historyAdd(r *interp.Runner, line string) {
-	historyAppend(r, line, true)
+	historyAppend(r, line, historyTimeNow(r), true)
 	historySetUnwritten(r, historyUnwrittenCount(r)+1)
 }
 
 // historyLoad is an entry read from a file, which is already written and so
 // is never counted as unwritten. Whether it moves the *numbering* is the
 // caller's to say — see historyLoadLines.
-func historyLoad(r *interp.Runner, line string, numbered bool) {
-	historyAppend(r, line, numbered)
+func historyLoad(r *interp.Runner, line, stamp string, numbered bool) {
+	historyAppend(r, line, stamp, numbered)
 }
 
 // historyLoadLines is a file's physical lines becoming entries, which is not
@@ -884,8 +942,24 @@ func historyLoad(r *interp.Runner, line string, numbered bool) {
 // `HISTSIZE=1` before a two-line HISTFILE reads `2 history` — is the startup
 // read again, and the entry the reader adds afterwards is what moved it.
 func historyLoadLines(r *interp.Runner, lines []string, numbered bool) {
-	for _, entry := range repl.HistoryEntries(HistoryStyle(), lines) {
-		historyLoad(r, entry, numbered)
+	entries, times := repl.HistoryEntriesTimed(historyStyle(r), lines)
+	for i, entry := range entries {
+		historyLoad(r, entry, times[i], numbered)
+	}
+}
+
+// historySeed is a previous session's lines joining the list, which is what
+// an interactive front end hands over once, at the start.
+//
+// The same call `-r` makes and with the same `numbered` answer the startup
+// read uses: these lines were read from a file, so nothing counts them as
+// waiting to be written and the numbering does not move for the ones a size
+// drops. No times come with them — the front end's decoder hands back the
+// commands — so a listing under a format draws `??` for a line an earlier
+// session wrote, which is what this shell knows about it.
+func historySeed(r *interp.Runner, lines []string) {
+	for _, line := range lines {
+		historyLoad(r, line, "", false)
 	}
 }
 
@@ -908,8 +982,9 @@ func historyLoadLines(r *interp.Runner, lines []string, numbered bool) {
 // is where the shape this used to carry (`HISTSIZE=2` over a longer list)
 // was measured properly. The two are distinguishable: the same two entries
 // reached this way keep their own numbers.
-func historyAppend(r *interp.Runner, line string, numbered bool) {
+func historyAppend(r *interp.Runner, line, stamp string, numbered bool) {
 	entries := historyEntries(r)
+	times := historyTimesOf(r, len(entries))
 	keep, bounded := historySize(r)
 	dropped := historyDroppedCount(r)
 	if bounded && len(entries) > keep {
@@ -921,17 +996,17 @@ func historyAppend(r *interp.Runner, line string, numbered bool) {
 		if numbered {
 			dropped = len(entries) - keep - 1
 		}
-		entries = entries[len(entries)-keep:]
+		entries, times = entries[len(entries)-keep:], times[len(times)-keep:]
 	}
-	entries = append(entries, line)
+	entries, times = append(entries, line), append(times, stamp)
 	if bounded && len(entries) > keep {
 		if numbered {
 			dropped += len(entries) - keep
 		}
-		entries = entries[len(entries)-keep:]
+		entries, times = entries[len(entries)-keep:], times[len(times)-keep:]
 	}
 	historySetDropped(r, dropped)
-	r.SetArray(historyStore, entries)
+	historySetList(r, entries, times)
 }
 
 // historySizeKind is what one HISTSIZE value says about the size of the list.
@@ -1124,8 +1199,9 @@ func historyStifle(r *interp.Runner, keep int) {
 	if len(entries) <= keep {
 		return
 	}
+	times := historyTimesOf(r, len(entries))
 	historySetDropped(r, len(entries)-keep-1)
-	r.SetArray(historyStore, entries[len(entries)-keep:])
+	historySetList(r, entries[len(entries)-keep:], times[len(times)-keep:])
 }
 
 // historyFirst is the history number of the oldest entry the list holds.
@@ -1169,6 +1245,14 @@ func historyNewest(r *interp.Runner) []string {
 	return entries[len(entries)-n:]
 }
 
+// historyNewestTimes is the times of exactly those entries.
+func historyNewestTimes(r *interp.Runner) []string {
+	entries := historyEntries(r)
+	times := historyTimesOf(r, len(entries))
+	n := min(historyUnwrittenCount(r), len(entries))
+	return times[len(times)-n:]
+}
+
 func historyReadMark(r *interp.Runner, name string) int {
 	table, ok := r.GetAssoc(historyReadAt)
 	if !ok {
@@ -1198,7 +1282,7 @@ func historyReadMark(r *interp.Runner, name string) int {
 //
 // A refusal is silent here because AllowModify has already reported it, in
 // the same words a refused redirection gets.
-func historyWriteFile(r *interp.Runner, name string, entries []string, appendTo, quiet bool) int {
+func historyWriteFile(r *interp.Runner, name string, entries, times []string, appendTo, quiet bool) int {
 	path := shellPath(r, name)
 	if !r.AllowModify(r.ShellContext(), path) {
 		return 1
@@ -1222,7 +1306,7 @@ func historyWriteFile(r *interp.Runner, name string, entries []string, appendTo,
 	// answer and is measured, not a gap left here. Going through the one
 	// encoder is what stops the next fact about the file from landing in one
 	// writer and not the others (#4034).
-	if _, err := io.WriteString(f, repl.HistoryText(HistoryStyle(), entries)); err != nil {
+	if _, err := io.WriteString(f, repl.HistoryTextTimed(historyStyle(r), entries, times)); err != nil {
 		historyFileComplaint(r, quiet, name, err)
 		return 1
 	}

@@ -66,7 +66,7 @@ func TestTheHistoryRewriteAsksBeforeItReplacesTheFile(t *testing.T) {
 		path := overLimit(t, 4)
 		g := &gateFor{path: filepath.Join(t.TempDir(), "nothing")}
 		h := historyFile{path: path, size: 4, file: 4, bound: boundary.Boundary{Gate: g}}
-		if err := h.save(t.Context(), []string{"echo typed"}); err != nil {
+		if err := h.save(t.Context(), nil, []string{"echo typed"}, false); err != nil {
 			t.Fatal(err)
 		}
 		if got := lines(t, path); got != 4 {
@@ -99,7 +99,7 @@ func TestTheHistoryRewriteAsksBeforeItReplacesTheFile(t *testing.T) {
 		// which is the state this asserts.
 		g := &gateFor{path: path}
 		h := historyFile{path: path, size: 4, file: 4, bound: boundary.Boundary{Gate: g}}
-		if err := h.save(t.Context(), []string{"echo typed"}); err != nil {
+		if err := h.save(t.Context(), nil, []string{"echo typed"}, false); err != nil {
 			t.Fatal(err)
 		}
 		if got := lines(t, path); got != before {
@@ -121,7 +121,7 @@ func TestARefusedRewriteTakesItsTemporaryWithIt(t *testing.T) {
 	// append lands, the temporary is built, and only the rename is refused.
 	g := &writeGateExcept{path: path}
 	h := historyFile{path: path, size: 4, file: 4, bound: boundary.Boundary{Gate: g}}
-	if err := h.save(t.Context(), []string{"echo typed"}); err != nil {
+	if err := h.save(t.Context(), nil, []string{"echo typed"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := leftovers(t, path); got != 0 {

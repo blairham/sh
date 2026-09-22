@@ -51,7 +51,7 @@ func TestARefusedHistoryFileIsNeitherReadNorWritten(t *testing.T) {
 	if got := h.load(t.Context()); got != nil {
 		t.Errorf("load returned %q, want a refused history to read as none", got)
 	}
-	if err := h.save(t.Context(), []string{"echo typed"}); err != nil {
+	if err := h.save(t.Context(), nil, []string{"echo typed"}, false); err != nil {
 		t.Fatal(err)
 	}
 	// The file is untouched: what was there is there, and nothing was added.
@@ -93,7 +93,7 @@ func TestAnUngatedHistoryIsReadAndWritten(t *testing.T) {
 	if got := h.load(t.Context()); len(got) != 1 || got[0] != "echo earlier" {
 		t.Errorf("load returned %q, want the earlier line", got)
 	}
-	if err := h.save(t.Context(), []string{"echo typed"}); err != nil {
+	if err := h.save(t.Context(), nil, []string{"echo typed"}, false); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(path)

@@ -42,7 +42,7 @@ func TestACredentialIsNotWrittenToTheHistoryFile(t *testing.T) {
 		"curl -H \"Authorization: Bearer " + strings.Repeat("z", 40) + "\" https://api.example.com",
 		"echo two",
 	}
-	if err := h.save(t.Context(), added); err != nil {
+	if err := h.save(t.Context(), nil, added, false); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(path)
@@ -76,7 +76,7 @@ func TestACredentialIsNotWrittenToTheHistoryFile(t *testing.T) {
 // than an empty one that says a shell was here and reveals when.
 func TestNothingButCredentialsWritesNoFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), []string{"export GH_TOKEN=" + fakeToken}); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), nil, []string{"export GH_TOKEN=" + fakeToken}, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -125,7 +125,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 	// And it still does not reach the file, which is the part that outlives
 	// the session.
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), e.history); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), nil, e.history, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {

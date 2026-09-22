@@ -76,7 +76,7 @@ func TestAHistoryFileThatIsALinkIsCheckedOnWhatItReached(t *testing.T) {
 	if got := h.load(t.Context()); got != nil {
 		t.Errorf("the session recalled %q through a link into a denied place", got)
 	}
-	if err := h.save(t.Context(), []string{"echo typed"}); err != nil {
+	if err := h.save(t.Context(), nil, []string{"echo typed"}, false); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(target)
@@ -113,7 +113,7 @@ func TestAHistoryFileThroughAnAllowedLinkStillWorks(t *testing.T) {
 	if got := h.load(t.Context()); len(got) != 1 || got[0] != "echo earlier" {
 		t.Fatalf("loaded %q, want the earlier line", got)
 	}
-	if err := h.save(t.Context(), []string{"echo typed"}); err != nil {
+	if err := h.save(t.Context(), nil, []string{"echo typed"}, false); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(target)

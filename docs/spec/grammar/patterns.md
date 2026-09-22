@@ -1999,12 +1999,11 @@ bash 3.2's 34 — so nothing here is missing the way zsh's `setopt` names
 were (#856). What is missing is behavior: most of the rest are held at the
 state this shell is already in, and asking one of them to *move* is
 refused out loud with `shopt: name: not implemented`, status 1. The ones
-that refuse `-u` rather than `-s` — `complete_fullquote`, `extquote`,
-`globasciiranges`, `globskipdots`, `histappend`, `interactive_comments`,
-`lithist`, `promptvars` and `sourcepath` — refuse it because the behavior
-they name is simply how this shell works. Asking for the state already
-held is granted in both directions, which is the same bargain `set +o
-posix` strikes.
+that refuse `-u` rather than `-s` — `cmdhist`, `complete_fullquote`,
+`extquote`, `globasciiranges`, `interactive_comments` and `promptvars` —
+refuse it because the behavior they name is simply how this shell works. Asking for
+the state already held is granted in both directions, which is the same
+bargain `set +o posix` strikes.
 
 **Three names are recorded instead**, which is the bargain zsh's `setopt`
 table already strikes over 151 of its 185 names, arrived at here from the
@@ -2028,11 +2027,22 @@ script can reach, so `(shopt -u progcomp)` stays inside the subshell.
 A fourth, `complete_fullquote`, is not recorded and that is the point of
 having the category at all: this shell really does backslash every shell
 metacharacter in a name it offers, so bash's `on` is this implementation's
-own state and it belongs with the rest of what is true. `histappend` and
-`lithist` read **on** against bash's off because this shell's history
-really does append to the file and really does keep a multi-line entry's
-newlines, measured through a terminal — divergences reported honestly
-rather than defaults to copy.
+own state and it belongs with the rest of what is true.
+
+`histappend` and `lithist` sat beside it reading **on** against bash's off,
+on the same argument — this shell's history appended to the file and kept a
+multi-line entry's newlines, measured through a terminal. Both are switches
+now, at bash's own default, and neither moved because the argument was
+dropped: the behavior each names was built, so the name is a switch rather
+than a state nothing could leave (#4149). `lithist` was the honest half —
+this shell really did keep the newlines, which is the option's own side —
+and `histappend` was the half only a sharper measurement could settle. bash
+with that option **off** appends too, in every case but one: it rewrites the
+file from its list where HISTSIZE has trimmed the list below the number of
+lines the session added. So the two shells differed in exactly that corner
+and the table was describing the wrong half of the option. See
+`interp.Runner.HistoryJoinsATypedCommand` and `RewritesTheHistoryFile` for
+the rows.
 
 The seventh, `patsub_replacement`, was the one left reporting **off**
 because the behavior it gates was unbuilt, and reporting it on would have

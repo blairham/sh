@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blairham/sh/internal/histjoin"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -384,6 +385,18 @@ type counts struct {
 	// open is what the parser was still inside when the line so far ran out,
 	// for a continuation prompt that says what it is waiting for.
 	open []syntax.Open
+
+	// entry is the physical lines of the command being typed, collected so
+	// that a command written over several of them can be recorded as the one
+	// joined entry bash keeps — see interp.Runner.HistoryJoinsATypedCommand.
+	// Beside open rather than beside pending, because it is filled from the
+	// same parse that answers open and is emptied at the same three moments:
+	// the command is accepted, or ^C or a dropped expansion abandons it.
+	entry histjoin.Entry
+	// entryAt is what the parser was still inside when the *previous* line
+	// was taken, which is what says whether the newline after it is a
+	// separator or text. The zero value is a line that begins a command.
+	entryAt histjoin.At
 
 	// tty is the terminal's name once it has been looked for, and looked
 	// says it has been. Kept for the session rather than for the package: a

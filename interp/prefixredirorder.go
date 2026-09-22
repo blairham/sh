@@ -143,6 +143,13 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, tr
 		return false
 	}
 	d := r.diag()
+	// What this walk has expanded so far, visible to the entries behind it
+	// and put back before the route below makes the stores for real. The
+	// walk is the one place the two columns that take it expand *every*
+	// value before any of them has been applied, which is what made
+	// `K=v1 A=${K#v} f` hand the body nothing. See interp/prefixsees.go.
+	var held heldPrefix
+	defer held.release(r)
 	wrote := false
 	for _, a := range assigns {
 		if a.Operand {
@@ -162,6 +169,9 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, tr
 		value := r.prefixExpansion(a)
 		r.prefixTraceAssigns = append(r.prefixTraceAssigns, a)
 		r.prefixTraceValues = append(r.prefixTraceValues, value)
+		if name, ok := r.prefixHoldableName(a); ok {
+			held.hold(r, name, r.prefixJoined(a, value))
+		}
 		if !traceEach {
 			continue
 		}

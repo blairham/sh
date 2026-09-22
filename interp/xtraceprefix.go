@@ -207,6 +207,15 @@ func (r *Runner) tracePrefixRepeatsBeforeTheCommand(argv []string) bool {
 // every prefixed command's expansion earlier, past the redirections, for the
 // overwhelming majority of runs that have no `set -x` on at all.
 func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
+	// What this pass has expanded so far, visible to the entries behind it
+	// and put back before the route below stores any of them for real. Same
+	// rule and same helper as the ordered walk — see interp/prefixsees.go —
+	// and needed here for the same reason: this pass expands every value
+	// before the route has applied one, so without it `set -x` alone would
+	// make `K=v1 A=${K#v} f` hand the body nothing in the dialects whose
+	// routes expand as they store.
+	var held heldPrefix
+	defer held.release(r)
 	for _, a := range assigns {
 		if a.Operand {
 			continue
@@ -251,6 +260,9 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 		value := r.prefixExpansion(a)
 		r.prefixTraceAssigns = append(r.prefixTraceAssigns, a)
 		r.prefixTraceValues = append(r.prefixTraceValues, value)
+		if name, ok := r.prefixHoldableName(a); ok {
+			held.hold(r, name, r.prefixJoined(a, value))
+		}
 	}
 }
 
